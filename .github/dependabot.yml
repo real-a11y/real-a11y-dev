@@ -1,0 +1,56 @@
+# Dependabot version updates.
+# Security updates run separately and are always on for public repos.
+#
+# Two ecosystems:
+#   1. npm   — workspace deps (root + packages/* + examples/* + website)
+#   2. github-actions — pinned action versions in our workflows
+#
+# Cadence: weekly. A daily cadence here would create more noise than the
+# project can absorb solo, and security advisories already trigger their
+# own immediate PRs regardless of this schedule.
+#
+# All PRs land against `main` with the bot as author. The branch protection
+# ruleset still requires test/CodeQL/etc. to pass before merge.
+
+version: 2
+
+updates:
+  # ── Workspace npm packages (root + every workspace) ────────────────────
+  # `directory: /` with pnpm workspaces covers the whole monorepo. Dependabot
+  # follows `pnpm-workspace.yaml` automatically.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Mexico_City"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    # Group small, low-risk updates into a single PR per ecosystem to cut
+    # review noise. Major bumps still get individual PRs so we can vet
+    # breaking changes one at a time.
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ── GitHub Actions in workflows ─────────────────────────────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Mexico_City"
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "chore(ci)"
