@@ -1,6 +1,12 @@
-import { useMemo, useState, useRef, useCallback, useEffect } from "preact/hooks";
 import type { SemanticNode } from "@real-a11y-dev/core";
 import { getTabSequence, getPrimaryAction } from "@real-a11y-dev/core";
+import {
+  useMemo,
+  useState,
+  useRef,
+  useCallback,
+  useEffect,
+} from "preact/hooks";
 
 function tabindexOf(node: SemanticNode): number | null {
   const raw = node.dom.attributes?.tabindex;
@@ -35,8 +41,13 @@ export function TabSequenceView({
       const name = (node.a11y.name || "").toLowerCase();
       const text = (node.dom.textContent || "").toLowerCase();
       const role = (node.a11y.role || "").toLowerCase();
-      const tag  = (node.dom.tagName || "").toLowerCase();
-      return name.includes(lq) || text.includes(lq) || role.includes(lq) || tag.includes(lq);
+      const tag = (node.dom.tagName || "").toLowerCase();
+      return (
+        name.includes(lq) ||
+        text.includes(lq) ||
+        role.includes(lq) ||
+        tag.includes(lq)
+      );
     });
   }, [nodes, rootId, query]);
 
@@ -48,7 +59,9 @@ export function TabSequenceView({
 
   useEffect(() => {
     if (!listRef.current || selectedIndex < 0) return;
-    const el = listRef.current.querySelector(`[data-tab-index="${selectedIndex}"]`);
+    const el = listRef.current.querySelector(
+      `[data-tab-index="${selectedIndex}"]`,
+    );
     el?.scrollIntoView({ block: "nearest" });
   }, [selectedIndex]);
 
@@ -166,8 +179,7 @@ export function TabSequenceView({
         <button
           class="sn-list-action-btn"
           disabled={
-            !selectedNode ||
-            !getPrimaryAction(selectedNode.interaction.actions)
+            !selectedNode || !getPrimaryAction(selectedNode.interaction.actions)
           }
           onClick={() => selectedNode && onActivate(selectedNode.id)}
         >

@@ -101,8 +101,7 @@ export class ActionDispatcher {
 
   private handleSubmit(element: Element): ActionResult {
     const form =
-      element.closest("form") ||
-      (element.tagName === "FORM" ? element : null);
+      element.closest("form") || (element.tagName === "FORM" ? element : null);
 
     if (!form) {
       return { success: false, error: "No form found" };
@@ -116,8 +115,8 @@ export class ActionDispatcher {
     const tag = element.tagName.toLowerCase();
 
     if (tag === "details") {
-      (element as HTMLDetailsElement).open =
-        !(element as HTMLDetailsElement).open;
+      (element as HTMLDetailsElement).open = !(element as HTMLDetailsElement)
+        .open;
       return { success: true };
     }
 

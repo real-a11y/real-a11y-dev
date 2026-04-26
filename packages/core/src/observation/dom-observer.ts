@@ -25,8 +25,8 @@ const OBSERVED_ATTRIBUTES = [
   "inert",
   "tabindex",
   "contenteditable",
-  "open",   // <details open>
-  "style",  // CSS visibility/display changes (e.g., captcha showing/hiding content)
+  "open", // <details open>
+  "style", // CSS visibility/display changes (e.g., captcha showing/hiding content)
 ];
 
 /**
@@ -48,10 +48,7 @@ const DEFAULT_INTERNAL_IDS: ReadonlySet<string> = new Set([
  * True if `node` is an Element with one of the sentinel ids — meaning
  * mutations involving it are our own and should be ignored.
  */
-function isInternalNode(
-  node: Node,
-  internalIds: ReadonlySet<string>,
-): boolean {
+function isInternalNode(node: Node, internalIds: ReadonlySet<string>): boolean {
   if (node.nodeType !== 1 /* ELEMENT_NODE */) return false;
   const el = node as Element;
   return internalIds.has(el.id);
@@ -142,7 +139,7 @@ export class DomObserver {
       subtree: true,
       attributes: true,
       attributeFilter: OBSERVED_ATTRIBUTES,
-      characterData: true,       // catches text node updates (streaming content)
+      characterData: true, // catches text node updates (streaming content)
       characterDataOldValue: false,
     });
 

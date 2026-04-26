@@ -1,6 +1,12 @@
-import { useMemo, useState, useRef, useCallback, useEffect } from "preact/hooks";
 import type { SemanticNode, RoleFilter } from "@real-a11y-dev/core";
-import { ROLE_FILTER_GROUPS, getPrimaryAction, ACTION_LABELS } from "@real-a11y-dev/core";
+import { ROLE_FILTER_GROUPS, getPrimaryAction } from "@real-a11y-dev/core";
+import {
+  useMemo,
+  useState,
+  useRef,
+  useCallback,
+  useEffect,
+} from "preact/hooks";
 
 // Filters whose items have meaningful activate actions
 const INTERACTIVE_FILTERS: Set<string> = new Set(["link", "button", "form"]);
@@ -59,9 +65,7 @@ export function FilteredList({
   // Scroll selected item into view
   useEffect(() => {
     if (!listRef.current || selectedIndex < 0) return;
-    const el = listRef.current.querySelector(
-      `[data-index="${selectedIndex}"]`,
-    );
+    const el = listRef.current.querySelector(`[data-index="${selectedIndex}"]`);
     el?.scrollIntoView({ block: "nearest" });
   }, [selectedIndex]);
 
@@ -114,7 +118,15 @@ export function FilteredList({
         }
       }
     },
-    [matches, selectedIndex, selectedNode, roleFilter, onHighlight, onActivate, onGoToTree],
+    [
+      matches,
+      selectedIndex,
+      selectedNode,
+      roleFilter,
+      onHighlight,
+      onActivate,
+      onGoToTree,
+    ],
   );
 
   return (
@@ -168,12 +180,12 @@ export function FilteredList({
                 <span class="sn-level-badge">H{level}</span>
               )}
               <span class="sn-filtered-name">
-                {node.a11y.name || node.dom.textContent || `(${node.dom.tagName})`}
+                {node.a11y.name ||
+                  node.dom.textContent ||
+                  `(${node.dom.tagName})`}
               </span>
               {states.length > 0 && (
-                <span class="sn-filtered-states">
-                  {states.join(", ")}
-                </span>
+                <span class="sn-filtered-states">{states.join(", ")}</span>
               )}
             </div>
           );
@@ -190,7 +202,9 @@ export function FilteredList({
         <span class="sn-list-count">{matches.length} items</span>
         <button
           class="sn-list-action-btn"
-          disabled={!selectedNode || !getPrimaryAction(selectedNode.interaction.actions)}
+          disabled={
+            !selectedNode || !getPrimaryAction(selectedNode.interaction.actions)
+          }
           onClick={() => selectedNode && onActivate(selectedNode.id)}
         >
           Activate

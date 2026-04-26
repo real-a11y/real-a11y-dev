@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+
 import { ADDON_ID, EVENTS, PANEL_ID } from "./index.js";
 
 describe("addon constants", () => {

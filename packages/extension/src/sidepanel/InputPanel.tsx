@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "preact/hooks";
+
 import type { SelectOption } from "../types.js";
 
 export interface InputPanelState {

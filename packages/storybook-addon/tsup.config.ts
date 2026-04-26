@@ -1,11 +1,12 @@
-import { defineConfig } from "tsup";
-import path from "path";
 import fs from "fs";
+import path from "path";
+
+import { defineConfig } from "tsup";
 
 const stylesDir = path.resolve(__dirname, "../../packages/ui/src/styles");
-const treeCSS   = fs.readFileSync(path.join(stylesDir, "tree.css"),   "utf-8");
+const treeCSS = fs.readFileSync(path.join(stylesDir, "tree.css"), "utf-8");
 const themesCSS = fs.readFileSync(path.join(stylesDir, "themes.css"), "utf-8");
-const allCSS    = JSON.stringify(themesCSS + "\n" + treeCSS);
+const allCSS = JSON.stringify(themesCSS + "\n" + treeCSS);
 
 /** Peer deps that must NEVER be bundled. */
 const PEER_EXTERNALS = [

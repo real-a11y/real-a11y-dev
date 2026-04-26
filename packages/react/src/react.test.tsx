@@ -1,15 +1,26 @@
-import { describe, it, expect, afterEach } from "vitest";
 import { act, cleanup, render } from "@testing-library/react";
 import { useRef } from "react";
+import { describe, it, expect, afterEach } from "vitest";
+
 import { SemanticNavigator, useSemanticTree, useActiveModal } from "./index.js";
 
 afterEach(() => cleanup());
 
-function Harness({ html, child }: { html: string; child?: (ref: React.RefObject<HTMLDivElement>) => React.ReactNode }) {
+function Harness({
+  html,
+  child,
+}: {
+  html: string;
+  child?: (ref: React.RefObject<HTMLDivElement>) => React.ReactNode;
+}) {
   const rootRef = useRef<HTMLDivElement>(null);
   return (
     <>
-      <div ref={rootRef} data-testid="page-root" dangerouslySetInnerHTML={{ __html: html }} />
+      <div
+        ref={rootRef}
+        data-testid="page-root"
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
       {child?.(rootRef)}
     </>
   );
@@ -21,7 +32,9 @@ describe("<SemanticNavigator />", () => {
       const rootRef = useRef<HTMLDivElement>(null);
       return (
         <>
-          <div ref={rootRef}><button>Go</button></div>
+          <div ref={rootRef}>
+            <button>Go</button>
+          </div>
           {/* Pass the ref object directly — the component reads .current after commit */}
           <SemanticNavigator root={rootRef} />
         </>

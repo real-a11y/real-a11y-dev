@@ -20,13 +20,19 @@ function renderDomLabel(node: SemanticNode) {
     const classes = attributes["class"].split(/\s+/).slice(0, 3).join(" ");
     displayAttrs.push({ key: "class", val: classes });
   }
-  if (attributes["href"]) displayAttrs.push({ key: "href", val: attributes["href"] });
-  if (attributes["role"]) displayAttrs.push({ key: "role", val: attributes["role"] });
-  if (attributes["aria-label"]) displayAttrs.push({ key: "aria-label", val: attributes["aria-label"] });
+  if (attributes["href"])
+    displayAttrs.push({ key: "href", val: attributes["href"] });
+  if (attributes["role"])
+    displayAttrs.push({ key: "role", val: attributes["role"] });
+  if (attributes["aria-label"])
+    displayAttrs.push({ key: "aria-label", val: attributes["aria-label"] });
 
   return (
     <>
-      <span class="sn-tag">{"<"}{tagName}</span>
+      <span class="sn-tag">
+        {"<"}
+        {tagName}
+      </span>
       {displayAttrs.map((attr) => (
         <span key={attr.key}>
           {" "}
@@ -36,9 +42,7 @@ function renderDomLabel(node: SemanticNode) {
         </span>
       ))}
       <span class="sn-tag">{">"}</span>
-      {textContent && (
-        <span class="sn-text-content">{textContent}</span>
-      )}
+      {textContent && <span class="sn-text-content">{textContent}</span>}
     </>
   );
 }

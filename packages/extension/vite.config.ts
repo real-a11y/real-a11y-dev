@@ -1,5 +1,6 @@
-import { defineConfig } from "vite";
 import { resolve } from "path";
+
+import { defineConfig } from "vite";
 
 // Chrome extension needs two builds:
 // 1. Content script: must be IIFE (no ES module imports allowed)

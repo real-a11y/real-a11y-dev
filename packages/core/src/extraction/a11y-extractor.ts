@@ -1,4 +1,5 @@
 import type { ExtractionResult, SemanticNode } from "../types.js";
+
 import { extractDomTree } from "./dom-extractor.js";
 
 /**

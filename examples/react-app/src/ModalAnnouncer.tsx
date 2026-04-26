@@ -26,9 +26,7 @@ export function ModalAnnouncer({ rootRef }: Props) {
         whiteSpace: "nowrap",
       }}
     >
-      {modal
-        ? `Dialog opened: ${modal.a11y.name || "unnamed dialog"}`
-        : ""}
+      {modal ? `Dialog opened: ${modal.a11y.name || "unnamed dialog"}` : ""}
     </div>
   );
 }

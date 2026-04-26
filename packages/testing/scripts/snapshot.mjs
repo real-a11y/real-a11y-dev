@@ -19,10 +19,11 @@
  *   node packages/testing/scripts/snapshot.mjs
  */
 
-import { chromium } from "@playwright/test";
 import { writeFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { chromium } from "@playwright/test";
 
 // Dynamic import from the built dist — works after `pnpm build`
 const { attach } = await import("../dist/playwright.js");
@@ -55,15 +56,10 @@ const PAGES = process.env.A11Y_PAGES
 // ─── helpers ────────────────────────────────────────────────────────────────
 
 function slugify(name) {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-}
-
-/** Prefix each line with indent for Markdown code block indentation. */
-function indented(text, prefix = "  ") {
-  return text
-    .split("\n")
-    .map((l) => prefix + l)
-    .join("\n");
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 // ─── main ───────────────────────────────────────────────────────────────────

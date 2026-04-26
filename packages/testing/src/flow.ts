@@ -1,5 +1,6 @@
 import type { ActionType, SemanticNode } from "@real-a11y-dev/core";
 import { findByRole, type FindByRoleOptions } from "@real-a11y-dev/core";
+
 import { dispatch } from "./dispatch.js";
 import { extract } from "./extract.js";
 import { serializeTree } from "./serialize.js";
@@ -145,7 +146,9 @@ export class FlowChain implements PromiseLike<void> {
   }
 
   /** Run an arbitrary assertion against the live tree. */
-  expect(predicate: (tree: ReturnType<typeof extract>) => void | Promise<void>): this {
+  expect(
+    predicate: (tree: ReturnType<typeof extract>) => void | Promise<void>,
+  ): this {
     this.steps.push(async () => {
       const tree = extract(this.root, "a11y");
       await predicate(tree);

@@ -4,7 +4,6 @@
  * For a version that accepts pre-extracted data (e.g. in the Storybook addon
  * manager panel), use `TreePanel` directly.
  */
-import { useState, useCallback, useRef, useEffect } from "preact/hooks";
 import type {
   SemanticNode,
   TreeViewMode,
@@ -20,6 +19,8 @@ import {
   DomObserver,
   getElementRefs,
 } from "@real-a11y-dev/core";
+import { useState, useCallback, useRef, useEffect } from "preact/hooks";
+
 import { TreePanel } from "./TreePanel.js";
 
 export interface TreeViewProps {
@@ -68,9 +69,9 @@ export function TreeView({
   const [viewMode, setViewMode] = useState<TreeViewMode>(initialViewMode);
   const [treeData, setTreeData] = useState<ExtractionResult | null>(null);
 
-  const dispatcherRef   = useRef<ActionDispatcher | null>(null);
+  const dispatcherRef = useRef<ActionDispatcher | null>(null);
   const focusManagerRef = useRef<FocusManager | null>(null);
-  const observerRef     = useRef<DomObserver | null>(null);
+  const observerRef = useRef<DomObserver | null>(null);
 
   // Extract tree on mount and when view mode changes.
   // Tab mode reuses the a11y tree — no re-extraction needed.
@@ -84,7 +85,7 @@ export function TreeView({
     extract();
 
     const refs = getElementRefs();
-    dispatcherRef.current   = new ActionDispatcher(refs);
+    dispatcherRef.current = new ActionDispatcher(refs);
     focusManagerRef.current = new FocusManager(refs);
 
     observerRef.current = new DomObserver(root, extract);
@@ -141,9 +142,11 @@ export function TreeView({
 
   if (!treeData) {
     const themeClass =
-      theme === "dark" ? "sn-theme-dark"
-      : theme === "light" ? "sn-theme-light"
-      : "sn-theme-auto";
+      theme === "dark"
+        ? "sn-theme-dark"
+        : theme === "light"
+          ? "sn-theme-light"
+          : "sn-theme-auto";
     return (
       <div class={`sn-root ${themeClass}`}>
         <div class="sn-empty">Extracting tree…</div>

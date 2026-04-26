@@ -109,7 +109,10 @@ function matchesNode(
 }
 
 /** Check if a node matches a role filter */
-function matchesRoleFilter(node: SemanticNode, roleFilter: RoleFilter): boolean {
+function matchesRoleFilter(
+  node: SemanticNode,
+  roleFilter: RoleFilter,
+): boolean {
   if (!roleFilter) return true;
   const roles = ROLE_FILTER_GROUPS[roleFilter];
   return roles ? roles.includes(node.a11y.role) : true;
@@ -137,9 +140,7 @@ export function applySearchFilter(
   }
 
   // Find nodes matching search query
-  const searchMatchedIds = hasQuery
-    ? searchTree(nodes, query, viewMode)
-    : null;
+  const searchMatchedIds = hasQuery ? searchTree(nodes, query, viewMode) : null;
 
   // Find nodes matching role filter (include ancestors for path visibility)
   const roleMatchedIds = new Set<string>();

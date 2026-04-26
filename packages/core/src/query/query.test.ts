@@ -1,11 +1,13 @@
 import { describe, it, expect, beforeEach } from "vitest";
+
 import { extractDomTree } from "../extraction/dom-extractor.js";
 import { resetIdCounter } from "../utils/id-generator.js";
+
+import { diffTrees } from "./diff.js";
 import { findByRole, findAllByRole } from "./find-by-role.js";
 import { linearize } from "./linearize.js";
 import { getOutline } from "./outline.js";
 import { getTabSequence } from "./tab-sequence.js";
-import { diffTrees } from "./diff.js";
 
 beforeEach(() => {
   resetIdCounter();
@@ -34,10 +36,12 @@ describe("findByRole", () => {
       <button>Save changes</button>
     `);
     const tree = extractDomTree(root);
-    expect(findByRole(tree, "button", { name: "save" })?.a11y.name).toBe("Save");
-    expect(findByRole(tree, "button", { name: "SAVE CHANGES" })?.a11y.name).toBe(
-      "Save changes",
+    expect(findByRole(tree, "button", { name: "save" })?.a11y.name).toBe(
+      "Save",
     );
+    expect(
+      findByRole(tree, "button", { name: "SAVE CHANGES" })?.a11y.name,
+    ).toBe("Save changes");
   });
 
   it("filters by accessible name (RegExp)", () => {
@@ -122,7 +126,9 @@ describe("getOutline", () => {
     `);
     const tree = extractDomTree(root);
     const [entry] = getOutline(tree);
-    expect(entry).toEqual(expect.objectContaining({ level: 2, name: "Custom" }));
+    expect(entry).toEqual(
+      expect.objectContaining({ level: 2, name: "Custom" }),
+    );
   });
 });
 
@@ -171,9 +177,7 @@ describe("diffTrees", () => {
     const diff = diffTrees(before, after);
 
     // Menu button's expanded state changed
-    const btnChange = diff.changed.find(
-      (c) => c.before.a11y.role === "button",
-    );
+    const btnChange = diff.changed.find((c) => c.before.a11y.role === "button");
     expect(btnChange?.changes).toContain("a11y.states.expanded");
 
     // New menuitem added

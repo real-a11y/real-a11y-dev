@@ -31,7 +31,9 @@ export function App() {
           zIndex: 10,
         }}
       >
-        <strong style={{ marginRight: "auto" }}>Real A11y — React example</strong>
+        <strong style={{ marginRight: "auto" }}>
+          Real A11y — React example
+        </strong>
         <IssuesBadge rootRef={rootRef} />
         <button
           type="button"

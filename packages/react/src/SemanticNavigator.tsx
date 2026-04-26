@@ -1,3 +1,13 @@
+import type {
+  SemanticNode,
+  TreeViewMode,
+  ActionRequest,
+  ActionResult,
+} from "@real-a11y-dev/core";
+import {
+  createInspector,
+  type InspectorInstance,
+} from "@real-a11y-dev/inspector";
 import {
   type RefObject,
   useCallback,
@@ -6,22 +16,12 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import {
-  createInspector,
-  type InspectorInstance,
-} from "@real-a11y-dev/inspector";
-import type {
-  SemanticNode,
-  TreeViewMode,
-  ActionRequest,
-  ActionResult,
-} from "@real-a11y-dev/core";
 
 // ─── Panel constants ──────────────────────────────────────────────────────────
 
-const PANEL_GAP   = 16;   // px gap from viewport edges
-const TITLE_H     = 40;   // px — title bar height
-const HANDLE_SIZE = 6;    // px — resize grip thickness
+const PANEL_GAP = 16; // px gap from viewport edges
+const TITLE_H = 40; // px — title bar height
+const HANDLE_SIZE = 6; // px — resize grip thickness
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -145,12 +145,15 @@ function FloatingPanel({
 
       const onMove = (ev: MouseEvent) => {
         setPanel((prev) => {
-          const maxW = window.innerWidth  * 0.92;
+          const maxW = window.innerWidth * 0.92;
           const maxH = window.innerHeight * 0.92;
           const next = { ...prev };
 
           if (axis === "y" || axis === "both") {
-            next.h = Math.max(TITLE_H, Math.min(maxH, startH - (ev.clientY - startY)));
+            next.h = Math.max(
+              TITLE_H,
+              Math.min(maxH, startH - (ev.clientY - startY)),
+            );
             // Dragging the top edge downward past the title bar auto-expands.
             if (next.h > TITLE_H && prev.collapsed) {
               next.collapsed = false;
@@ -158,7 +161,10 @@ function FloatingPanel({
             }
           }
           if (axis === "x" || axis === "both") {
-            next.w = Math.max(260, Math.min(maxW, startW - (ev.clientX - startX)));
+            next.w = Math.max(
+              260,
+              Math.min(maxW, startW - (ev.clientX - startX)),
+            );
           }
           return next;
         });
@@ -188,13 +194,13 @@ function FloatingPanel({
     const startX = e.clientX;
     const startY = e.clientY;
     // Track how far the panel is from the viewport edges.
-    const startRight  = window.innerWidth  - rect.right;
+    const startRight = window.innerWidth - rect.right;
     const startBottom = window.innerHeight - rect.bottom;
 
     const onMove = (ev: MouseEvent) => {
       setPanel((prev) => ({
         ...prev,
-        right:  Math.max(0, startRight  - (ev.clientX - startX)),
+        right: Math.max(0, startRight - (ev.clientX - startX)),
         bottom: Math.max(0, startBottom - (ev.clientY - startY)),
       }));
     };
@@ -231,17 +237,16 @@ function FloatingPanel({
       style={{
         position: "fixed",
         bottom: panel.bottom,
-        right:  panel.right,
-        width:  panel.w,
+        right: panel.right,
+        width: panel.w,
         height: panel.h,
-        minWidth:  260,
+        minWidth: 260,
         minHeight: TITLE_H,
         zIndex: 9999,
         display: "flex",
         flexDirection: "column",
         borderRadius: 10,
-        boxShadow:
-          "0 8px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.10)",
+        boxShadow: "0 8px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.10)",
         border: "1px solid rgba(0,0,0,0.12)",
         background: "#ffffff",
         overflow: "hidden",
@@ -257,8 +262,13 @@ function FloatingPanel({
       <div
         aria-hidden
         style={{
-          position: "absolute", top: 0, left: hs, right: 0,
-          height: hs, cursor: "n-resize", zIndex: 10,
+          position: "absolute",
+          top: 0,
+          left: hs,
+          right: 0,
+          height: hs,
+          cursor: "n-resize",
+          zIndex: 10,
         }}
         onMouseDown={(e) => startResize(e, "y")}
       />
@@ -266,8 +276,13 @@ function FloatingPanel({
       <div
         aria-hidden
         style={{
-          position: "absolute", top: hs, left: 0, bottom: 0,
-          width: hs, cursor: "w-resize", zIndex: 10,
+          position: "absolute",
+          top: hs,
+          left: 0,
+          bottom: 0,
+          width: hs,
+          cursor: "w-resize",
+          zIndex: 10,
         }}
         onMouseDown={(e) => startResize(e, "x")}
       />
@@ -275,8 +290,13 @@ function FloatingPanel({
       <div
         aria-hidden
         style={{
-          position: "absolute", top: 0, left: 0,
-          width: hs, height: hs, cursor: "nw-resize", zIndex: 10,
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: hs,
+          height: hs,
+          cursor: "nw-resize",
+          zIndex: 10,
         }}
         onMouseDown={(e) => startResize(e, "both")}
       />
@@ -292,9 +312,7 @@ function FloatingPanel({
           height: TITLE_H,
           flexShrink: 0,
           background: "#f8f9fa",
-          borderBottom: panel.collapsed
-            ? "none"
-            : "1px solid rgba(0,0,0,0.08)",
+          borderBottom: panel.collapsed ? "none" : "1px solid rgba(0,0,0,0.08)",
           cursor: "move",
         }}
         onMouseDown={startMove}
@@ -303,7 +321,8 @@ function FloatingPanel({
         <span
           aria-hidden
           style={{
-            width: 8, height: 8,
+            width: 8,
+            height: 8,
             borderRadius: "50%",
             background: "#2e79ff",
             flexShrink: 0,
@@ -443,7 +462,6 @@ export function SemanticNavigator({
       instanceRef.current = null;
     };
     // Callbacks and flags are updated imperatively below — not a remount trigger.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [root.current, mount]);
 
   // Cheap prop update — swap view mode without remounting.
@@ -458,11 +476,7 @@ export function SemanticNavigator({
     <div
       ref={hostRef}
       className={floating ? undefined : className}
-      style={
-        floating
-          ? { height: "100%", flex: 1, minHeight: 0 }
-          : style
-      }
+      style={floating ? { height: "100%", flex: 1, minHeight: 0 } : style}
     />
   );
 

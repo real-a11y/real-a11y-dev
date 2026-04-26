@@ -1,6 +1,7 @@
 /// <reference types="chrome" />
 
 import type { SemanticNode } from "@real-a11y-dev/core";
+
 import {
   prefixNodeId,
   parseNodeId,
@@ -58,7 +59,10 @@ async function mergeAndSendTree(tabId: number) {
   }
 
   // Build a map of frameId → frame info
-  const frameInfoMap = new Map<number, { parentFrameId: number; url: string }>();
+  const frameInfoMap = new Map<
+    number,
+    { parentFrameId: number; url: string }
+  >();
   for (const f of allFrames) {
     frameInfoMap.set(f.frameId, { parentFrameId: f.parentFrameId, url: f.url });
   }
@@ -73,7 +77,9 @@ async function mergeAndSendTree(tabId: number) {
   }
 
   // Process child frames — sorted by parent depth to handle nesting
-  const childFrameIds = Array.from(state.frames.keys()).filter((id) => id !== 0);
+  const childFrameIds = Array.from(state.frames.keys()).filter(
+    (id) => id !== 0,
+  );
 
   for (const childFrameId of childFrameIds) {
     const childTree = state.frames.get(childFrameId);
@@ -83,9 +89,8 @@ async function mergeAndSendTree(tabId: number) {
     const parentFrameId = frameInfo?.parentFrameId ?? 0;
 
     // Find the parent frame's tree to locate the <iframe> attachment point
-    const parentTree = parentFrameId === 0
-      ? topFrame
-      : state.frames.get(parentFrameId);
+    const parentTree =
+      parentFrameId === 0 ? topFrame : state.frames.get(parentFrameId);
     if (!parentTree) continue;
 
     // Find the iframe node in the parent tree that matches this frame's URL
@@ -137,7 +142,9 @@ async function mergeAndSendTree(tabId: number) {
         id: prefId,
         parentId: isRoot
           ? iframeNodeId // Root's parent is the iframe node
-          : (node.parentId ? prefixNodeId(prefix, node.parentId) : null),
+          : node.parentId
+            ? prefixNodeId(prefix, node.parentId)
+            : null,
         childIds: node.childIds.map((cid) => prefixNodeId(prefix, cid)),
         depth: node.depth + depthOffset,
         ui: { ...node.ui, expanded: node.depth + depthOffset < 3 },
@@ -164,17 +171,19 @@ async function mergeAndSendTree(tabId: number) {
 
   // Send merged tree to side panel with page info
   const serialized = Array.from(mergedNodes.entries());
-  chrome.runtime.sendMessage({
-    type: "TREE_DATA",
-    payload: {
-      nodes: serialized,
-      rootId: topFrame.rootId,
-      pageTitle: topFrame.pageTitle,
-      pageUrl: topFrame.frameUrl,
-    },
-  }).catch(() => {
-    // Side panel might not be open
-  });
+  chrome.runtime
+    .sendMessage({
+      type: "TREE_DATA",
+      payload: {
+        nodes: serialized,
+        rootId: topFrame.rootId,
+        pageTitle: topFrame.pageTitle,
+        pageUrl: topFrame.frameUrl,
+      },
+    })
+    .catch(() => {
+      // Side panel might not be open
+    });
 }
 
 function scheduleMerge(tabId: number) {
@@ -195,14 +204,15 @@ function scheduleMerge(tabId: number) {
  * overlays and focus-tracker state would otherwise drift on panel close.
  */
 async function broadcastToAllFrames(tabId: number, message: unknown) {
-  let frames: chrome.webNavigation.GetAllFrameResultDetails[] | null = null;
-  try {
-    frames = await chrome.webNavigation.getAllFrames({ tabId });
-  } catch { return; /* tab closed */ }
-  if (!frames) return;
+  const frames = await chrome.webNavigation
+    .getAllFrames({ tabId })
+    .catch(() => null);
+  if (!frames) return; /* tab closed or query failed */
   for (const { frameId } of frames) {
     chrome.tabs.sendMessage(tabId, message, { frameId }, () => {
-      if (chrome.runtime.lastError) { /* frame may have no content script */ }
+      if (chrome.runtime.lastError) {
+        /* frame may have no content script */
+      }
     });
   }
 }
@@ -288,10 +298,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
         for (const item of plan) {
           const cb = () => {
-            if (chrome.runtime.lastError) { /* ignore */ }
+            if (chrome.runtime.lastError) {
+              /* ignore */
+            }
           };
           if (item.frameId !== undefined) {
-            chrome.tabs.sendMessage(item.tabId, item.body, { frameId: item.frameId }, cb);
+            chrome.tabs.sendMessage(
+              item.tabId,
+              item.body,
+              { frameId: item.frameId },
+              cb,
+            );
           } else {
             chrome.tabs.sendMessage(item.tabId, item.body, cb);
           }
@@ -304,13 +321,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       case "FOCUS_CHANGED": {
         // Prefix the nodeId and forward to side panel
         const prefixedNodeId = prefixNodeId(frameId, message.payload.nodeId);
-        chrome.runtime.sendMessage({
-          type: "FOCUS_CHANGED",
-          payload: { nodeId: prefixedNodeId },
-        }).catch((err) => {
-          // Panel may be closed; benign, but log so real routing bugs aren't invisible.
-          console.debug("[SN background] FOCUS_CHANGED forward failed:", err?.message ?? err);
-        });
+        chrome.runtime
+          .sendMessage({
+            type: "FOCUS_CHANGED",
+            payload: { nodeId: prefixedNodeId },
+          })
+          .catch((err) => {
+            // Panel may be closed; benign, but log so real routing bugs aren't invisible.
+            console.debug(
+              "[SN background] FOCUS_CHANGED forward failed:",
+              err?.message ?? err,
+            );
+          });
         sendResponse({ received: true });
         return false;
       }
@@ -327,7 +349,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // Forward any other content script messages to side panel.
         chrome.runtime.sendMessage(message).catch((err) => {
           // Panel may be closed; benign, but log so real routing bugs aren't invisible.
-          console.debug("[SN background] forward to panel failed:", err?.message ?? err);
+          console.debug(
+            "[SN background] forward to panel failed:",
+            err?.message ?? err,
+          );
         });
         sendResponse({ received: true });
         return false;
@@ -338,7 +363,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // ---- Messages from side panel → route to content scripts ----
 
   // Broadcast messages: send to ALL frames
-  if (message.type === "REQUEST_TREE" || message.type === "SET_VIEW_MODE" || message.type === "SET_FOCUS_TRACKER") {
+  if (
+    message.type === "REQUEST_TREE" ||
+    message.type === "SET_VIEW_MODE" ||
+    message.type === "SET_FOCUS_TRACKER"
+  ) {
     if (activeTabId) {
       // Clear old frame data on fresh request
       if (message.type === "REQUEST_TREE") {
@@ -363,7 +392,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             state.nodeToFrame.clear();
           }
           chrome.tabs.sendMessage(tabId, message, () => {
-            if (chrome.runtime.lastError) { /* ignore */ }
+            if (chrome.runtime.lastError) {
+              /* ignore */
+            }
           });
           sendResponse({ success: true });
         } else {
@@ -381,7 +412,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const closingTabId = activeTabId;
       chrome.tabs.remove(closingTabId, () => {
         if (chrome.runtime.lastError) {
-          sendResponse({ success: false, error: chrome.runtime.lastError.message });
+          sendResponse({
+            success: false,
+            error: chrome.runtime.lastError.message,
+          });
           return;
         }
         // Focus the last focused window and update activeTabId
@@ -390,12 +424,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             activeTabId = tabs[0].id;
             chrome.windows.update(tabs[0].windowId!, { focused: true });
             // Request fresh tree from the now-active tab
-            chrome.tabs.sendMessage(activeTabId, {
-              type: "REQUEST_TREE",
-              payload: { viewMode: "a11y" },
-            }, () => {
-              if (chrome.runtime.lastError) { /* ignore */ }
-            });
+            chrome.tabs.sendMessage(
+              activeTabId,
+              {
+                type: "REQUEST_TREE",
+                payload: { viewMode: "a11y" },
+              },
+              () => {
+                if (chrome.runtime.lastError) {
+                  /* ignore */
+                }
+              },
+            );
           }
           sendResponse({ success: true });
         });
@@ -411,7 +451,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (activeTabId) {
       tabCurtainOn.set(activeTabId, message.payload.visible);
       chrome.tabs.sendMessage(activeTabId, message, () => {
-        if (chrome.runtime.lastError) { /* ignore */ }
+        if (chrome.runtime.lastError) {
+          /* ignore */
+        }
       });
     }
     sendResponse({ success: true });
@@ -422,7 +464,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "CLEAR_HIGHLIGHT") {
     if (activeTabId) {
       chrome.tabs.sendMessage(activeTabId, message, () => {
-        if (chrome.runtime.lastError) { /* ignore */ }
+        if (chrome.runtime.lastError) {
+          /* ignore */
+        }
       });
     }
     sendResponse({ success: true });
@@ -432,13 +476,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Send keyboard event to top frame
   if (message.type === "SEND_KEY") {
     if (activeTabId) {
-      chrome.tabs.sendMessage(activeTabId, message, { frameId: 0 }, (response) => {
-        if (chrome.runtime.lastError) {
-          sendResponse({ success: false, error: "Content script not available" });
-        } else {
-          sendResponse(response);
-        }
-      });
+      chrome.tabs.sendMessage(
+        activeTabId,
+        message,
+        { frameId: 0 },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            sendResponse({
+              success: false,
+              error: "Content script not available",
+            });
+          } else {
+            sendResponse(response);
+          }
+        },
+      );
     } else {
       sendResponse({ success: false, error: "No active tab" });
     }
@@ -482,13 +534,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   // Fallback: forward to active tab (top frame)
   if (activeTabId) {
-    chrome.tabs.sendMessage(activeTabId, message, { frameId: 0 }, (response) => {
-      if (chrome.runtime.lastError) {
-        sendResponse({ success: false, error: "Content script not available" });
-      } else {
-        sendResponse(response);
-      }
-    });
+    chrome.tabs.sendMessage(
+      activeTabId,
+      message,
+      { frameId: 0 },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          sendResponse({
+            success: false,
+            error: "Content script not available",
+          });
+        } else {
+          sendResponse(response);
+        }
+      },
+    );
   } else {
     sendResponse({ success: false, error: "No active tab" });
   }
@@ -529,5 +589,8 @@ chrome.sidePanel
   .setPanelBehavior({ openPanelOnActionClick: true })
   .catch((err) => {
     // Non-fatal: extension still works, user just has to click the icon twice.
-    console.warn("[SN background] setPanelBehavior failed:", err?.message ?? err);
+    console.warn(
+      "[SN background] setPanelBehavior failed:",
+      err?.message ?? err,
+    );
   });

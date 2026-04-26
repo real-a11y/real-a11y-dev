@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { render } from "preact";
 import type { SemanticNode } from "@real-a11y-dev/core";
+import { render } from "preact";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+
 import { FilteredList } from "./FilteredList.js";
 
 /**
@@ -24,9 +25,7 @@ function makeNode(overrides: {
       role: overrides.role,
       name: overrides.name ?? "",
       description: "",
-      properties: overrides.level
-        ? { level: overrides.level }
-        : {},
+      properties: overrides.level ? { level: overrides.level } : {},
       states: {},
     },
     dom: {
@@ -86,26 +85,35 @@ describe("FilteredList (smoke)", () => {
 
   it("renders heading matches with level badges and includes query in empty text", () => {
     const nodes = new Map<string, SemanticNode>();
-    nodes.set("n1", makeNode({
-      id: "n1",
-      role: "heading",
-      name: "Alpha",
-      tagName: "h1",
-      level: "1",
-    }));
-    nodes.set("n2", makeNode({
-      id: "n2",
-      role: "heading",
-      name: "Beta",
-      tagName: "h2",
-      level: "2",
-    }));
-    nodes.set("n3", makeNode({
-      id: "n3",
-      role: "button",
-      name: "Irrelevant",
-      tagName: "button",
-    }));
+    nodes.set(
+      "n1",
+      makeNode({
+        id: "n1",
+        role: "heading",
+        name: "Alpha",
+        tagName: "h1",
+        level: "1",
+      }),
+    );
+    nodes.set(
+      "n2",
+      makeNode({
+        id: "n2",
+        role: "heading",
+        name: "Beta",
+        tagName: "h2",
+        level: "2",
+      }),
+    );
+    nodes.set(
+      "n3",
+      makeNode({
+        id: "n3",
+        role: "button",
+        name: "Irrelevant",
+        tagName: "button",
+      }),
+    );
 
     render(
       <FilteredList

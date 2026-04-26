@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+
 import {
   auditSnapshot,
   outlineSnapshot,
@@ -72,7 +73,9 @@ describe("assertions", () => {
 
   it("assertNoUnlabeledInteractive throws on unlabeled button", () => {
     const root = mount(`<button></button>`);
-    expect(() => assertNoUnlabeledInteractive(root)).toThrow(A11yAssertionError);
+    expect(() => assertNoUnlabeledInteractive(root)).toThrow(
+      A11yAssertionError,
+    );
   });
 
   it("assertHeadingOrder flags missing h1", () => {
@@ -102,7 +105,9 @@ describe("assertions", () => {
     expect(() => assertLandmarkStructure(rootNone)).toThrow(/Missing <main>/);
 
     const rootTwo = mount(`<main>A</main><main>B</main>`);
-    expect(() => assertLandmarkStructure(rootTwo)).toThrow(/exactly one <main>/);
+    expect(() => assertLandmarkStructure(rootTwo)).toThrow(
+      /exactly one <main>/,
+    );
   });
 });
 

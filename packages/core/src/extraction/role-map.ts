@@ -89,8 +89,7 @@ const ROLE_MAP: Record<string, RoleResolver> = {
   html: "document",
   i: "generic",
   iframe: "group",
-  img: (el) =>
-    el.getAttribute("alt") === "" ? "presentation" : "img",
+  img: (el) => (el.getAttribute("alt") === "" ? "presentation" : "img"),
   input: (el) => {
     const type = (el as HTMLInputElement).type || "text";
     return INPUT_TYPE_ROLE_MAP[type] || "textbox";
@@ -118,8 +117,7 @@ const ROLE_MAP: Record<string, RoleResolver> = {
   samp: "generic",
   search: "search",
   section: (el) => (hasAccessibleName(el) ? "region" : "generic"),
-  select: (el) =>
-    (el as HTMLSelectElement).multiple ? "listbox" : "combobox",
+  select: (el) => ((el as HTMLSelectElement).multiple ? "listbox" : "combobox"),
   slot: "generic",
   small: "generic",
   span: "generic",
@@ -164,7 +162,8 @@ export function getImplicitRole(element: Element): string {
   // keep its children in the AT tree" — map to "generic" so the a11y
   // extractor's normal flattening logic promotes children rather than
   // suppressing the entire subtree.
-  if (explicitRole === "presentation" || explicitRole === "none") return "generic";
+  if (explicitRole === "presentation" || explicitRole === "none")
+    return "generic";
   if (explicitRole) return explicitRole;
 
   const tag = element.tagName.toLowerCase();

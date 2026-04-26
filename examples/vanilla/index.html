@@ -5,53 +5,116 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Real A11y — Vanilla Example</title>
     <style>
-      * { box-sizing: border-box; margin: 0; padding: 0; }
-      body { font-family: system-ui, sans-serif; background: #f8f9fa; }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: system-ui, sans-serif;
+        background: #f8f9fa;
+      }
 
-      .app { max-width: 760px; margin: 0 auto; padding: 32px 24px 120px; }
+      .app {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 32px 24px 120px;
+      }
 
-      h1 { font-size: 1.75rem; margin-bottom: 8px; }
-      h2 { font-size: 1.25rem; margin: 32px 0 12px; }
-      p  { color: #555; margin-bottom: 16px; line-height: 1.6; }
+      h1 {
+        font-size: 1.75rem;
+        margin-bottom: 8px;
+      }
+      h2 {
+        font-size: 1.25rem;
+        margin: 32px 0 12px;
+      }
+      p {
+        color: #555;
+        margin-bottom: 16px;
+        line-height: 1.6;
+      }
 
       .controls {
-        display: flex; gap: 8px; flex-wrap: wrap;
-        padding: 12px; background: #fff;
-        border: 1px solid #ddd; border-radius: 8px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        padding: 12px;
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 8px;
         margin-bottom: 24px;
       }
       button {
-        padding: 6px 14px; border: 1px solid #2e79ff;
-        background: rgba(46,121,255,0.08); border-radius: 4px;
-        cursor: pointer; font: inherit; color: #2e79ff;
+        padding: 6px 14px;
+        border: 1px solid #2e79ff;
+        background: rgba(46, 121, 255, 0.08);
+        border-radius: 4px;
+        cursor: pointer;
+        font: inherit;
+        color: #2e79ff;
       }
-      button:hover { background: rgba(46,121,255,0.15); }
+      button:hover {
+        background: rgba(46, 121, 255, 0.15);
+      }
 
-      form { display: flex; flex-direction: column; gap: 16px; max-width: 400px; }
-      label { display: flex; flex-direction: column; gap: 4px; font-weight: 500; }
-      input, select {
-        padding: 8px 12px; border: 1px solid #ccc;
-        border-radius: 4px; font: inherit;
+      form {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        max-width: 400px;
       }
-      input:focus, select:focus {
-        outline: 2px solid #2e79ff; outline-offset: 2px; border-color: #2e79ff;
+      label {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-weight: 500;
+      }
+      input,
+      select {
+        padding: 8px 12px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font: inherit;
+      }
+      input:focus,
+      select:focus {
+        outline: 2px solid #2e79ff;
+        outline-offset: 2px;
+        border-color: #2e79ff;
       }
 
       dialog {
-        border: none; border-radius: 8px;
-        padding: 24px; box-shadow: 0 8px 32px rgba(0,0,0,0.2);
-        max-width: 400px; width: 90%;
+        border: none;
+        border-radius: 8px;
+        padding: 24px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        max-width: 400px;
+        width: 90%;
       }
-      dialog::backdrop { background: rgba(0,0,0,0.4); }
+      dialog::backdrop {
+        background: rgba(0, 0, 0, 0.4);
+      }
       .dialog-header {
-        display: flex; justify-content: space-between; align-items: center;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
         margin-bottom: 16px;
       }
-      .dialog-header h2 { margin: 0; }
-      .dialog-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 24px; }
+      .dialog-header h2 {
+        margin: 0;
+      }
+      .dialog-footer {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+        margin-top: 24px;
+      }
 
       /* Deliberately conflicting CSS to prove shadow DOM isolation */
-      button { background: rgba(46,121,255,0.08) !important; }
+      button {
+        background: rgba(46, 121, 255, 0.08) !important;
+      }
     </style>
   </head>
   <body>
@@ -96,7 +159,7 @@
 
       <h2>Navigation example</h2>
       <nav aria-label="Site navigation">
-        <ul style="list-style:none; display:flex; gap:16px; padding:0">
+        <ul style="list-style: none; display: flex; gap: 16px; padding: 0">
           <li><a href="#">Home</a></li>
           <li><a href="#">About</a></li>
           <li><a href="#">Contact</a></li>
@@ -107,10 +170,14 @@
     <dialog id="sample-dialog" aria-labelledby="dialog-title">
       <div class="dialog-header">
         <h2 id="dialog-title">Confirm action</h2>
-        <button type="button" id="btn-close-dialog" aria-label="Close dialog">✕</button>
+        <button type="button" id="btn-close-dialog" aria-label="Close dialog">
+          ✕
+        </button>
       </div>
-      <p>This is a sample dialog. Notice how the panel updates to show the dialog
-         in the semantic tree when it opens.</p>
+      <p>
+        This is a sample dialog. Notice how the panel updates to show the dialog
+        in the semantic tree when it opens.
+      </p>
       <div class="dialog-footer">
         <button type="button" id="btn-cancel">Cancel</button>
         <button type="button" id="btn-confirm">Confirm</button>

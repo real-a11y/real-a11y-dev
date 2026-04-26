@@ -12,7 +12,6 @@
  * All DOM side-effects (highlight overlay, focus, action dispatch) are proxied
  * back to the caller via optional callbacks rather than being applied here.
  */
-import { useState, useMemo, useCallback, useRef, useEffect } from "preact/hooks";
 import type {
   SemanticNode,
   TreeViewMode,
@@ -21,13 +20,22 @@ import type {
   ExtractionResult,
 } from "@real-a11y-dev/core";
 import { applySearchFilter, getPrimaryAction } from "@real-a11y-dev/core";
-import { TreeNode } from "./TreeNode.js";
-import { TreeToolbar } from "./TreeToolbar.js";
+import {
+  useState,
+  useMemo,
+  useCallback,
+  useRef,
+  useEffect,
+} from "preact/hooks";
+
+import { useInputModality } from "../hooks/useInputModality.js";
+import { useSearch } from "../hooks/useSearch.js";
+import { useTreeKeyboard } from "../hooks/useTreeKeyboard.js";
+
 import { FilteredList } from "./FilteredList.js";
 import { TabSequenceView } from "./TabSequenceView.js";
-import { useTreeKeyboard } from "../hooks/useTreeKeyboard.js";
-import { useSearch } from "../hooks/useSearch.js";
-import { useInputModality } from "../hooks/useInputModality.js";
+import { TreeNode } from "./TreeNode.js";
+import { TreeToolbar } from "./TreeToolbar.js";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -91,8 +99,8 @@ export function TreePanel({
   onHover,
   onNodeSelect,
 }: TreePanelProps) {
-  const [selectedId, setSelectedId]   = useState<string | null>(null);
-  const [roleFilter, setRoleFilter]   = useState<RoleFilter>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>(null);
   // Monotonic counter used to invalidate useMemo after in-place node mutations.
   const [renderCount, setRenderCount] = useState(0);
   const forceRender = useCallback(() => setRenderCount((c) => c + 1), []);
@@ -107,7 +115,12 @@ export function TreePanel({
 
   // Apply search + role filter whenever the data or filter criteria change
   useEffect(() => {
-    const count = applySearchFilter(treeData.nodes, query, viewMode, roleFilter);
+    const count = applySearchFilter(
+      treeData.nodes,
+      query,
+      viewMode,
+      roleFilter,
+    );
     updateMatchCount(count);
     forceRender();
   }, [query, treeData, viewMode, roleFilter, updateMatchCount, forceRender]);
@@ -116,7 +129,6 @@ export function TreePanel({
   const visibleNodeIds = useMemo(
     () => getVisibleNodeIds(treeData.nodes, treeData.rootId),
     // renderCount changes on every forceRender() call — intentional invalidation.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [treeData, renderCount],
   );
 
@@ -207,9 +219,11 @@ export function TreePanel({
   // ── Render ──────────────────────────────────────────────────────────────────
 
   const themeClass =
-    theme === "dark" ? "sn-theme-dark"
-    : theme === "light" ? "sn-theme-light"
-    : "sn-theme-auto";
+    theme === "dark"
+      ? "sn-theme-dark"
+      : theme === "light"
+        ? "sn-theme-light"
+        : "sn-theme-auto";
 
   return (
     <div class={`sn-root ${themeClass}`}>

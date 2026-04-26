@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { render } from "preact";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+
 import { TreeView } from "./TreeView.js";
 
 /**

@@ -11,7 +11,12 @@ export function Form({ includeUnlabeledField = false }: FormProps) {
   return (
     <form
       aria-label="Contact form"
-      style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 360 }}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 16,
+        maxWidth: 360,
+      }}
       onSubmit={(e) => {
         e.preventDefault();
         setSubmitted(true);
@@ -46,9 +51,13 @@ export function Form({ includeUnlabeledField = false }: FormProps) {
       )}
 
       {submitted ? (
-        <p role="status" style={{ color: "green" }}>✓ Message sent!</p>
+        <p role="status" style={{ color: "green" }}>
+          ✓ Message sent!
+        </p>
       ) : (
-        <button type="submit" style={btnStyle}>Send message</button>
+        <button type="submit" style={btnStyle}>
+          Send message
+        </button>
       )}
     </form>
   );

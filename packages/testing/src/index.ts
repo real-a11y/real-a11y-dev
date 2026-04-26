@@ -1,5 +1,9 @@
 // Snapshots
-export { auditSnapshot, outlineSnapshot, tabSequenceSnapshot } from "./snapshot.js";
+export {
+  auditSnapshot,
+  outlineSnapshot,
+  tabSequenceSnapshot,
+} from "./snapshot.js";
 export { serializeTree } from "./serialize.js";
 export type { SerializeOptions } from "./serialize.js";
 

@@ -1,4 +1,5 @@
 import { findAllByRole, getOutline, linearize } from "@real-a11y-dev/core";
+
 import { extract } from "./extract.js";
 
 /** Roles we consider intrinsically interactive for labeling checks. */
@@ -56,7 +57,9 @@ export function assertHeadingOrder(root: Element): void {
 
   const h1s = outline.filter((e) => e.level === 1);
   if (h1s.length === 0) {
-    throw new A11yAssertionError("Missing <h1>: every document should have exactly one top-level heading.");
+    throw new A11yAssertionError(
+      "Missing <h1>: every document should have exactly one top-level heading.",
+    );
   }
   if (h1s.length > 1) {
     throw new A11yAssertionError(
@@ -101,7 +104,9 @@ export function assertLandmarkStructure(root: Element): void {
   const tree = extract(root, "a11y");
   const mains = findAllByRole(tree, "main");
   if (mains.length === 0) {
-    throw new A11yAssertionError("Missing <main>: every page needs a main landmark.");
+    throw new A11yAssertionError(
+      "Missing <main>: every page needs a main landmark.",
+    );
   }
   if (mains.length > 1) {
     throw new A11yAssertionError(

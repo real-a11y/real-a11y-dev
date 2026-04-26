@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { extractA11yTree } from "./a11y-extractor.js";
+
 import { resetIdCounter } from "../utils/id-generator.js";
+
+import { extractA11yTree } from "./a11y-extractor.js";
 
 beforeEach(() => {
   resetIdCounter();

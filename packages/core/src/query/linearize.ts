@@ -1,4 +1,5 @@
 import type { SemanticNode } from "../types.js";
+
 import { nodesOf, rootIdOf, type QueryInput } from "./types.js";
 
 export interface LinearizeOptions {

@@ -18,7 +18,7 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write   # needed to post/update PR comments
+  pull-requests: write # needed to post/update PR comments
 
 jobs:
   # ── 1a. Snapshot: base branch (main) ───────────────────────────────────────

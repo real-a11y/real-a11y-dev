@@ -5,10 +5,11 @@
 // card. Most scrapers (Twitter, LinkedIn, Slack, Facebook) parse PNG
 // reliably; SVG support in OG scrapers is inconsistent.
 
-import { chromium } from "@playwright/test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { chromium } from "@playwright/test";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "..", "..", "..");
@@ -32,10 +33,7 @@ const html = `<!DOCTYPE html><html><head><style>
 await page.setContent(html);
 await page.setViewportSize({ width: WIDTH, height: HEIGHT });
 
-const buf = await page
-  .locator("svg")
-  .first()
-  .screenshot({ type: "png" });
+const buf = await page.locator("svg").first().screenshot({ type: "png" });
 
 writeFileSync(OUT, buf);
 console.log(`  wrote ${OUT}`);

@@ -98,9 +98,7 @@ export function TreeToolbar({
             class="sn-filter-btn"
             aria-pressed={roleFilter === key}
             disabled={viewMode === "tab"}
-            onClick={() =>
-              onRoleFilterChange(roleFilter === key ? null : key)
-            }
+            onClick={() => onRoleFilterChange(roleFilter === key ? null : key)}
           >
             {ROLE_FILTER_LABELS[key]}
           </button>

@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { getImplicitRole, isHiddenFromAT, getHeadingLevel } from "./role-map.js";
+
+import {
+  getImplicitRole,
+  isHiddenFromAT,
+  getHeadingLevel,
+} from "./role-map.js";
 
 function el(html: string): Element {
   const div = document.createElement("div");
@@ -108,9 +113,7 @@ describe("getImplicitRole", () => {
   });
 
   it("returns complementary for <aside>", () => {
-    expect(getImplicitRole(el("<aside>Sidebar</aside>"))).toBe(
-      "complementary",
-    );
+    expect(getImplicitRole(el("<aside>Sidebar</aside>"))).toBe("complementary");
   });
 
   it("returns dialog for <dialog>", () => {
