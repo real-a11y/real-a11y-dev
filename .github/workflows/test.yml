@@ -27,22 +27,12 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      # Build publishable packages first so workspace:* deps resolve via the
-      # published surface (dist/index.d.ts) for both typecheck and tests.
-      - name: Build packages
-        run: pnpm -r --filter='./packages/*' build
-
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Test
-        run: |
-          pnpm --filter @real-a11y-dev/core test
-          pnpm --filter @real-a11y-dev/inspector test
-          pnpm --filter @real-a11y-dev/testing test
-          pnpm --filter @real-a11y-dev/react test
-          pnpm --filter @real-a11y-dev/storybook-addon test
-          pnpm --filter @real-a11y-dev/semantic-navigator-ui test
+      # Single gate: build → typecheck → format:check → lint → test.
+      # Mirrors the local `pre-push` hook so "passes locally" guarantees
+      # "passes CI" — and any check we add to `pnpm verify` automatically
+      # extends CI without touching this workflow.
+      - name: Verify
+        run: pnpm verify
 
       # The testing example has its own audit tests; include them in CI so
       # snapshot drift is caught here, not only manually.
