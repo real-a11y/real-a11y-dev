@@ -22,6 +22,10 @@ on:
         description: "npm dist-tag to publish under (e.g. `beta`, `latest`)"
         required: false
         default: "beta"
+      otp:
+        description: "6-digit OTP from your authenticator (required if your npm account/org enforces 2FA on publish — leave blank otherwise)"
+        required: false
+        default: ""
   push:
     tags:
       - "v*"
@@ -65,12 +69,25 @@ jobs:
       # pnpm's `publish -r` publishes every package whose version/tag is new,
       # skips the rest. `--no-git-checks` lets tag-triggered runs proceed even
       # when the working tree does not match main exactly.
+      #
+      # OTP: only added to the command line when the dispatcher supplied one.
+      # Granular Access Tokens don't bypass 2FA when the account or org
+      # enforces "Authorization and write actions" — passing --otp at publish
+      # time is the workaround. A single 30-second OTP covers the entire
+      # `publish -r` cascade because pnpm sends all six requests inside the
+      # same window. Once first publish lands and Trusted Publishers are set
+      # up per-package, OIDC takes over and OTP becomes unnecessary.
       - name: Publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
         run: |
+          OTP_FLAG=""
+          if [ -n "${{ github.event.inputs.otp }}" ]; then
+            OTP_FLAG="--otp=${{ github.event.inputs.otp }}"
+          fi
           pnpm publish -r \
             --access public \
             --tag ${{ steps.tag.outputs.value }} \
-            --no-git-checks
+            --no-git-checks \
+            $OTP_FLAG
