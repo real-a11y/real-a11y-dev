@@ -120,13 +120,11 @@ async function main() {
     }
   }
 
+  // Deliberately no generation timestamp here — including one would make
+  // every diff show a "change" even when the a11y tree is identical, which
+  // is exactly what surfaced as a false positive in PR #2's diff bot run.
   const report =
-    [
-      "# A11y Snapshots",
-      "",
-      `_Generated ${new Date().toISOString()}_`,
-      "",
-    ].join("\n") + sections.join("\n");
+    ["# A11y Snapshots", ""].join("\n") + sections.join("\n");
 
   writeFileSync(outFile, report, "utf8");
   console.log(`\n✓ Snapshots written to ${outFile}`);
