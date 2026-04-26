@@ -8,6 +8,7 @@
     "build": "vite build && cross-env BUILD_TARGET=content vite build",
     "dev": "vite build --watch",
     "package": "pnpm build && node scripts/zip-for-cws.mjs",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
   },

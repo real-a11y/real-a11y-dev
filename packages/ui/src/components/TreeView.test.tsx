@@ -14,7 +14,11 @@ import { TreeView } from "./TreeView.js";
 async function waitFor(
   root: ParentNode,
   selector: string,
-  timeoutMs = 200,
+  // 2s — generous on purpose. Linux jsdom on CI takes noticeably longer
+  // to flush Preact's effect chain (extract → setState → rerender → render
+  // toolbar) than local Windows jsdom does. The previous 200ms was tight
+  // enough to flake on the Linux runners.
+  timeoutMs = 2000,
 ): Promise<Element> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {

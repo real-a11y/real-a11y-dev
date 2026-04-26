@@ -975,7 +975,7 @@ export function App() {
                               badges.push({ label: "readonly", cls: "sn-state--info" });
                             if (states.busy === true)
                               badges.push({ label: "busy", cls: "sn-state--info" });
-                            if (states.current && states.current !== false)
+                            if (states.current)
                               badges.push({ label: `current: ${states.current}`, cls: "sn-state--info" });
                             if (badges.length === 0) return null;
                             return (
