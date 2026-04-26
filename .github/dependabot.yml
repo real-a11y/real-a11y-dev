@@ -54,3 +54,16 @@ updates:
       - "ci"
     commit-message:
       prefix: "chore(ci)"
+    # Bundle every actions bump — including majors — into one PR. For
+    # first-party `actions/*`, the recent major-version skips (v4→v6, v3→v5,
+    # v7→v9) are runtime upgrades (Node 20 deprecation → Node 24), not API
+    # changes. Reviewing them as a single batch is faster and matches how
+    # they actually need to be tested (rerun the workflow, see if it works).
+    groups:
+      actions:
+        patterns:
+          - "*"
+        update-types:
+          - "major"
+          - "minor"
+          - "patch"
