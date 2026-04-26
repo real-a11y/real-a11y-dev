@@ -1,5 +1,3 @@
-import { useCallback, useEffect, useRef } from "preact/hooks";
-
 export type InputModality = "mouse" | "keyboard";
 
 /**
@@ -17,35 +15,55 @@ export type InputModality = "mouse" | "keyboard";
  * `mousemove`. Synthetic mouseenters from layout-shift have no preceding
  * mousemove, so the flag stays at `"keyboard"` and hover handlers no-op.
  *
+ * Implementation: input modality is process-global (the user only has one
+ * active input device at a time), so we keep state in module scope. The
+ * `mousemove` listener is installed once on first call and never torn down.
+ * This deliberately avoids depending on `useEffect` timing — fixtures that
+ * dispatch events synchronously inside a test's act() can otherwise see
+ * stale state because Preact schedules effects after commit.
+ *
  * Usage:
  *
  *     const { isMouseModality, markKeyboard } = useInputModality();
  *
  *     onMouseEnter={() => { if (isMouseModality()) handleHover(id); }}
  *     onKeyDown={(e) => { markKeyboard(); handleKeyDown(e); }}
- *
- * The `mousemove` listener is attached on `window` for the lifetime of the
- * component. It's `passive` and amounts to a single ref write per event.
  */
+
+let modality: InputModality = "mouse";
+let listenerInstalled = false;
+
+function ensureListener(): void {
+  if (listenerInstalled) return;
+  if (typeof window === "undefined") return;
+  listenerInstalled = true;
+  window.addEventListener(
+    "mousemove",
+    () => {
+      modality = "mouse";
+    },
+    { passive: true },
+  );
+}
+
 export function useInputModality(): {
   isMouseModality: () => boolean;
   markKeyboard: () => void;
 } {
-  const modality = useRef<InputModality>("mouse");
+  ensureListener();
+  return {
+    isMouseModality: () => modality === "mouse",
+    markKeyboard: () => {
+      modality = "keyboard";
+    },
+  };
+}
 
-  useEffect(() => {
-    const onMove = () => {
-      modality.current = "mouse";
-    };
-    window.addEventListener("mousemove", onMove, { passive: true });
-    return () => window.removeEventListener("mousemove", onMove);
-  }, []);
-
-  const markKeyboard = useCallback(() => {
-    modality.current = "keyboard";
-  }, []);
-
-  const isMouseModality = useCallback(() => modality.current === "mouse", []);
-
-  return { isMouseModality, markKeyboard };
+/**
+ * Test-only: reset the module state so individual tests start from the
+ * default `"mouse"` modality. Not exported from the package's public entry —
+ * tests import directly from this file.
+ */
+export function __resetInputModalityForTesting(): void {
+  modality = "mouse";
 }
