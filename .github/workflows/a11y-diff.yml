@@ -103,11 +103,11 @@ jobs:
     needs: [snapshot-base, snapshot-pr]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: base-snapshots
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: pr-snapshots
 
