@@ -125,9 +125,13 @@ for (const { name, url, rootSelector } of pages) {
   }
 }
 
+// Deliberately no generation timestamp in the file — including one would
+// make every PR's diff show a "change" even when the a11y tree is byte
+// identical, because the base + PR snapshot jobs run a few seconds apart.
+// CI logs and Git already record run/commit time.
 writeFileSync(
   outFile,
-  `# A11y Snapshots\n\n_Generated ${new Date().toISOString()}_\n\n` + sections.join("\n"),
+  `# A11y Snapshots\n\n` + sections.join("\n"),
   "utf8",
 );
 console.log(`\n✓ Snapshots written to ${outFile}`);
