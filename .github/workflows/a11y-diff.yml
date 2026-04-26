@@ -121,7 +121,7 @@ jobs:
       # Post or update a single sticky comment on the PR.
       # Uses a <!-- real-a11y-diff --> marker to find and overwrite existing comments.
       - name: Post PR comment
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
