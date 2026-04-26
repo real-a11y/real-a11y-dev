@@ -18,13 +18,13 @@ import { createInspector } from "@real-a11y-dev/inspector";
 // Resize grows UP and LEFT (anchored to the bottom-right corner).
 // Title bar is the drag-to-move handle.
 
-const PANEL_GAP    = 16;   // px gap from viewport edges
-const DEFAULT_W    = 380;  // px
-const DEFAULT_H    = 420;  // px
-const TITLE_H      = 40;   // px — title bar height
-const HANDLE_SIZE  = 6;    // px — resize grip thickness
-const MIN_W        = 260;
-const MIN_H        = TITLE_H;   // collapsed = title bar only
+const PANEL_GAP = 16; // px gap from viewport edges
+const DEFAULT_W = 380; // px
+const DEFAULT_H = 420; // px
+const TITLE_H = 40; // px — title bar height
+const HANDLE_SIZE = 6; // px — resize grip thickness
+const MIN_W = 260;
+const MIN_H = TITLE_H; // collapsed = title bar only
 
 // ── Wrapper ────────────────────────────────────────────────────────────────
 
@@ -34,10 +34,10 @@ wrapper.setAttribute("aria-label", "Semantic Navigator panel");
 Object.assign(wrapper.style, {
   position: "fixed",
   bottom: `${PANEL_GAP}px`,
-  right:  `${PANEL_GAP}px`,
-  width:  `${DEFAULT_W}px`,
+  right: `${PANEL_GAP}px`,
+  width: `${DEFAULT_W}px`,
   height: `${DEFAULT_H}px`,
-  minWidth:  `${MIN_W}px`,
+  minWidth: `${MIN_W}px`,
   minHeight: `${TITLE_H}px`,
   zIndex: "9999",
   display: "flex",
@@ -55,9 +55,7 @@ document.body.appendChild(wrapper);
 
 // ── Resize handles ─────────────────────────────────────────────────────────
 
-function makeHandle(
-  styles: Partial<CSSStyleDeclaration>,
-): HTMLDivElement {
+function makeHandle(styles: Partial<CSSStyleDeclaration>): HTMLDivElement {
   const el = document.createElement("div");
   el.setAttribute("aria-hidden", "true");
   Object.assign(el.style, {
@@ -96,27 +94,27 @@ const cornerHandle = makeHandle({
   cursor: "nw-resize",
 });
 
-function attachResizeDrag(
-  handle: HTMLElement,
-  axis: "y" | "x" | "both",
-) {
+function attachResizeDrag(handle: HTMLElement, axis: "y" | "x" | "both") {
   handle.addEventListener("mousedown", (e) => {
     e.preventDefault();
     e.stopPropagation();
 
-    const startX  = e.clientX;
-    const startY  = e.clientY;
-    const startW  = wrapper.getBoundingClientRect().width;
-    const startH  = wrapper.getBoundingClientRect().height;
-    const maxW    = window.innerWidth  * 0.92;
-    const maxH    = window.innerHeight * 0.92;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startW = wrapper.getBoundingClientRect().width;
+    const startH = wrapper.getBoundingClientRect().height;
+    const maxW = window.innerWidth * 0.92;
+    const maxH = window.innerHeight * 0.92;
 
     wrapper.style.transition = "none";
 
     const onMove = (ev: MouseEvent) => {
       if (axis === "y" || axis === "both") {
         // Drag up → bigger (anchor is bottom-right, so dy is inverted)
-        const newH = Math.max(MIN_H, Math.min(maxH, startH - (ev.clientY - startY)));
+        const newH = Math.max(
+          MIN_H,
+          Math.min(maxH, startH - (ev.clientY - startY)),
+        );
         wrapper.style.height = `${newH}px`;
         if (newH > TITLE_H) {
           collapsed = false;
@@ -127,7 +125,10 @@ function attachResizeDrag(
       }
       if (axis === "x" || axis === "both") {
         // Drag left → bigger
-        const newW = Math.max(MIN_W, Math.min(maxW, startW - (ev.clientX - startX)));
+        const newW = Math.max(
+          MIN_W,
+          Math.min(maxW, startW - (ev.clientX - startX)),
+        );
         wrapper.style.width = `${newW}px`;
       }
     };
@@ -143,8 +144,8 @@ function attachResizeDrag(
   });
 }
 
-attachResizeDrag(topHandle,    "y");
-attachResizeDrag(leftHandle,   "x");
+attachResizeDrag(topHandle, "y");
+attachResizeDrag(leftHandle, "x");
 attachResizeDrag(cornerHandle, "both");
 
 // ── Title bar ──────────────────────────────────────────────────────────────
@@ -203,8 +204,14 @@ Object.assign(collapseBtn.style, {
   flexShrink: "0",
   transition: "color 120ms",
 });
-collapseBtn.addEventListener("mouseenter", () => (collapseBtn.style.color = "#374151"));
-collapseBtn.addEventListener("mouseleave", () => (collapseBtn.style.color = "#9ca3af"));
+collapseBtn.addEventListener(
+  "mouseenter",
+  () => (collapseBtn.style.color = "#374151"),
+);
+collapseBtn.addEventListener(
+  "mouseleave",
+  () => (collapseBtn.style.color = "#9ca3af"),
+);
 
 titleBar.appendChild(dot);
 titleBar.appendChild(titleText);
@@ -218,11 +225,11 @@ titleBar.addEventListener("mousedown", (e) => {
   if ((e.target as HTMLElement).closest("button")) return;
   e.preventDefault();
 
-  const rect    = wrapper.getBoundingClientRect();
-  const startX  = e.clientX;
-  const startY  = e.clientY;
+  const rect = wrapper.getBoundingClientRect();
+  const startX = e.clientX;
+  const startY = e.clientY;
   // Anchor is bottom-right — track those offsets from the viewport
-  const startRight  = window.innerWidth  - rect.right;
+  const startRight = window.innerWidth - rect.right;
   const startBottom = window.innerHeight - rect.bottom;
 
   wrapper.style.transition = "none";
@@ -230,9 +237,9 @@ titleBar.addEventListener("mousedown", (e) => {
   document.body.style.userSelect = "none";
 
   const onMove = (ev: MouseEvent) => {
-    const newRight  = Math.max(0, startRight  - (ev.clientX - startX));
+    const newRight = Math.max(0, startRight - (ev.clientX - startX));
     const newBottom = Math.max(0, startBottom - (ev.clientY - startY));
-    wrapper.style.right  = `${newRight}px`;
+    wrapper.style.right = `${newRight}px`;
     wrapper.style.bottom = `${newBottom}px`;
   };
 

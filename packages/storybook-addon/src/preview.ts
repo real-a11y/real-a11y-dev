@@ -8,7 +8,6 @@
  * Also listens for highlight / activate requests from the manager panel and
  * applies them to the real story DOM via FocusManager / ActionDispatcher.
  */
-import { addons } from "@storybook/preview-api";
 import {
   extractDomTree,
   extractA11yTree,
@@ -17,6 +16,8 @@ import {
   ActionDispatcher,
   getElementRefs,
 } from "@real-a11y-dev/core";
+import { addons } from "@storybook/preview-api";
+
 import {
   EVENTS,
   type TreeMode,
@@ -37,17 +38,19 @@ let focusManager: FocusManager | null = null;
 let dispatcher: ActionDispatcher | null = null;
 let currentMode: TreeMode = "a11y";
 
-function buildSerializableTree(root: Element, mode: TreeMode): SerializableTree {
+function buildSerializableTree(
+  root: Element,
+  mode: TreeMode,
+): SerializableTree {
   // "tab" mode displays data from the a11y tree — no separate extraction.
-  const result =
-    mode === "dom" ? extractDomTree(root) : extractA11yTree(root);
+  const result = mode === "dom" ? extractDomTree(root) : extractA11yTree(root);
 
   // Reset ui state so the manager always starts fresh (expanded, visible, etc.)
   for (const node of result.nodes.values()) {
-    node.ui.expanded        = true;
-    node.ui.highlighted     = false;
-    node.ui.matchesFilter   = true;
-    node.ui.selected        = false;
+    node.ui.expanded = true;
+    node.ui.highlighted = false;
+    node.ui.matchesFilter = true;
+    node.ui.selected = false;
   }
 
   return {
@@ -75,13 +78,17 @@ function start() {
 
   const refs = getElementRefs();
   focusManager = new FocusManager(refs);
-  dispatcher   = new ActionDispatcher(refs);
+  dispatcher = new ActionDispatcher(refs);
 
   // Re-extract (and refresh the element WeakMap) on every DOM mutation.
-  observer = new DomObserver(root, () => {
-    // Re-extraction rebuilds the WeakMap so highlight refs stay fresh.
-    publish();
-  }, 200);
+  observer = new DomObserver(
+    root,
+    () => {
+      // Re-extraction rebuilds the WeakMap so highlight refs stay fresh.
+      publish();
+    },
+    200,
+  );
   observer.start();
   publish();
 }
@@ -89,9 +96,9 @@ function start() {
 function stop() {
   observer?.stop();
   focusManager?.destroy();
-  observer     = null;
+  observer = null;
   focusManager = null;
-  dispatcher   = null;
+  dispatcher = null;
 }
 
 // ── Bootstrap ────────────────────────────────────────────────────────────────

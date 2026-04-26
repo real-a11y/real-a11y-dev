@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+
 import {
   prefixNodeId,
   parseNodeId,
@@ -92,23 +93,20 @@ describe("normalizeUrl", () => {
 
 describe("urlsMatch", () => {
   it("returns true for identical urls", () => {
-    expect(
-      urlsMatch("https://example.com/a", "https://example.com/a"),
-    ).toBe(true);
+    expect(urlsMatch("https://example.com/a", "https://example.com/a")).toBe(
+      true,
+    );
   });
 
   it("returns true ignoring trailing slash", () => {
-    expect(
-      urlsMatch("https://example.com/a/", "https://example.com/a"),
-    ).toBe(true);
+    expect(urlsMatch("https://example.com/a/", "https://example.com/a")).toBe(
+      true,
+    );
   });
 
   it("returns true ignoring search and hash", () => {
     expect(
-      urlsMatch(
-        "https://example.com/a?q=1#top",
-        "https://example.com/a",
-      ),
+      urlsMatch("https://example.com/a?q=1#top", "https://example.com/a"),
     ).toBe(true);
   });
 
@@ -131,15 +129,15 @@ describe("urlsMatch", () => {
   });
 
   it("returns false for different origins", () => {
-    expect(
-      urlsMatch("https://other.com/a", "https://example.com/a"),
-    ).toBe(false);
+    expect(urlsMatch("https://other.com/a", "https://example.com/a")).toBe(
+      false,
+    );
   });
 
   it("returns false for different paths on same origin", () => {
-    expect(
-      urlsMatch("https://example.com/a", "https://example.com/b"),
-    ).toBe(false);
+    expect(urlsMatch("https://example.com/a", "https://example.com/b")).toBe(
+      false,
+    );
   });
 });
 
@@ -211,9 +209,7 @@ describe("planFrameAnnouncementResponse", () => {
       curtainOn: true,
     });
 
-    expect(
-      plan.find((m) => m.body.type === "TOGGLE_CURTAIN"),
-    ).toBeUndefined();
+    expect(plan.find((m) => m.body.type === "TOGGLE_CURTAIN")).toBeUndefined();
   });
 
   it("does not re-apply the curtain if it was off", () => {
@@ -223,9 +219,7 @@ describe("planFrameAnnouncementResponse", () => {
       curtainOn: false,
     });
 
-    expect(
-      plan.find((m) => m.body.type === "TOGGLE_CURTAIN"),
-    ).toBeUndefined();
+    expect(plan.find((m) => m.body.type === "TOGGLE_CURTAIN")).toBeUndefined();
   });
 
   it("combines curtain + tracker messages when both conditions apply", () => {

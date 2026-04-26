@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { render } from "preact";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+
 import { TreeToolbar } from "./TreeToolbar.js";
 
 describe("TreeToolbar (smoke)", () => {
@@ -60,7 +61,7 @@ describe("TreeToolbar (smoke)", () => {
     );
     expect(filterToolbar).not.toBeNull();
     const filterButtons = filterToolbar?.querySelectorAll("button");
-    expect((filterButtons?.length ?? 0)).toBeGreaterThan(0);
+    expect(filterButtons?.length ?? 0).toBeGreaterThan(0);
   });
 
   it("shows a match count only when a query or filter is active", () => {

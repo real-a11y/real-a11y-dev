@@ -20,7 +20,9 @@ const pkgRoot = resolve(here, "..");
 const distDir = resolve(pkgRoot, "dist");
 
 async function main() {
-  const pkg = JSON.parse(await readFile(resolve(pkgRoot, "package.json"), "utf8"));
+  const pkg = JSON.parse(
+    await readFile(resolve(pkgRoot, "package.json"), "utf8"),
+  );
   const manifest = JSON.parse(
     await readFile(resolve(pkgRoot, "public", "manifest.json"), "utf8"),
   );
@@ -50,38 +52,38 @@ async function main() {
 
     const nameBuf = Buffer.from(name, "utf8");
     const local = Buffer.alloc(30);
-    local.writeUInt32LE(0x04034b50, 0);          // local file header sig
-    local.writeUInt16LE(20, 4);                  // version needed
-    local.writeUInt16LE(0, 6);                   // flags
-    local.writeUInt16LE(method, 8);              // method
-    local.writeUInt16LE(0, 10);                  // time
-    local.writeUInt16LE(0x21, 12);               // date (1980-01-01)
-    local.writeUInt32LE(crc, 14);                // crc-32
-    local.writeUInt32LE(body.length, 18);        // compressed size
-    local.writeUInt32LE(data.length, 22);        // uncompressed size
-    local.writeUInt16LE(nameBuf.length, 26);     // filename length
-    local.writeUInt16LE(0, 28);                  // extra length
+    local.writeUInt32LE(0x04034b50, 0); // local file header sig
+    local.writeUInt16LE(20, 4); // version needed
+    local.writeUInt16LE(0, 6); // flags
+    local.writeUInt16LE(method, 8); // method
+    local.writeUInt16LE(0, 10); // time
+    local.writeUInt16LE(0x21, 12); // date (1980-01-01)
+    local.writeUInt32LE(crc, 14); // crc-32
+    local.writeUInt32LE(body.length, 18); // compressed size
+    local.writeUInt32LE(data.length, 22); // uncompressed size
+    local.writeUInt16LE(nameBuf.length, 26); // filename length
+    local.writeUInt16LE(0, 28); // extra length
 
     entries.push(local, nameBuf, body);
 
     const cd = Buffer.alloc(46);
-    cd.writeUInt32LE(0x02014b50, 0);             // central dir sig
-    cd.writeUInt16LE(20, 4);                     // version made by
-    cd.writeUInt16LE(20, 6);                     // version needed
-    cd.writeUInt16LE(0, 8);                      // flags
+    cd.writeUInt32LE(0x02014b50, 0); // central dir sig
+    cd.writeUInt16LE(20, 4); // version made by
+    cd.writeUInt16LE(20, 6); // version needed
+    cd.writeUInt16LE(0, 8); // flags
     cd.writeUInt16LE(method, 10);
-    cd.writeUInt16LE(0, 12);                     // time
-    cd.writeUInt16LE(0x21, 14);                  // date
+    cd.writeUInt16LE(0, 12); // time
+    cd.writeUInt16LE(0x21, 14); // date
     cd.writeUInt32LE(crc, 16);
     cd.writeUInt32LE(body.length, 20);
     cd.writeUInt32LE(data.length, 24);
     cd.writeUInt16LE(nameBuf.length, 28);
-    cd.writeUInt16LE(0, 30);                     // extra length
-    cd.writeUInt16LE(0, 32);                     // comment length
-    cd.writeUInt16LE(0, 34);                     // disk number
-    cd.writeUInt16LE(0, 36);                     // internal attrs
-    cd.writeUInt32LE(0, 38);                     // external attrs
-    cd.writeUInt32LE(offset, 42);                // local header offset
+    cd.writeUInt16LE(0, 30); // extra length
+    cd.writeUInt16LE(0, 32); // comment length
+    cd.writeUInt16LE(0, 34); // disk number
+    cd.writeUInt16LE(0, 36); // internal attrs
+    cd.writeUInt32LE(0, 38); // external attrs
+    cd.writeUInt32LE(offset, 42); // local header offset
 
     centralDir.push(cd, nameBuf);
     offset += local.length + nameBuf.length + body.length;
@@ -90,19 +92,21 @@ async function main() {
   const centralBuf = Buffer.concat(centralDir);
   const end = Buffer.alloc(22);
   end.writeUInt32LE(0x06054b50, 0);
-  end.writeUInt16LE(0, 4);                        // disk number
-  end.writeUInt16LE(0, 6);                        // start disk
-  end.writeUInt16LE(files.length, 8);             // entries on this disk
-  end.writeUInt16LE(files.length, 10);            // total entries
-  end.writeUInt32LE(centralBuf.length, 12);       // size of central dir
-  end.writeUInt32LE(offset, 16);                  // offset to central dir
-  end.writeUInt16LE(0, 20);                       // comment length
+  end.writeUInt16LE(0, 4); // disk number
+  end.writeUInt16LE(0, 6); // start disk
+  end.writeUInt16LE(files.length, 8); // entries on this disk
+  end.writeUInt16LE(files.length, 10); // total entries
+  end.writeUInt32LE(centralBuf.length, 12); // size of central dir
+  end.writeUInt32LE(offset, 16); // offset to central dir
+  end.writeUInt16LE(0, 20); // comment length
 
   const zip = Buffer.concat([...entries, centralBuf, end]);
   await writeFile(outZip, zip);
 
   const kb = (zip.length / 1024).toFixed(1);
-  console.log(`Wrote ${relative(pkgRoot, outZip)} (${files.length} files, ${kb} KB)`);
+  console.log(
+    `Wrote ${relative(pkgRoot, outZip)} (${files.length} files, ${kb} KB)`,
+  );
 }
 
 async function collect(dir, out) {

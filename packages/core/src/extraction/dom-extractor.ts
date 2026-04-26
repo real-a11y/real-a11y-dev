@@ -1,6 +1,7 @@
 import type { SemanticNode, ExtractionResult, ActionType } from "../types.js";
-import { getNodeId } from "../utils/id-generator.js";
 import { ElementRefMap } from "../utils/element-ref.js";
+import { getNodeId } from "../utils/id-generator.js";
+
 import {
   getImplicitRole,
   isHiddenFromAT,
@@ -8,21 +9,32 @@ import {
 } from "./role-map.js";
 
 /** Tags to skip entirely during extraction */
-const SKIP_TAGS = new Set([
-  "script",
-  "style",
-  "noscript",
-  "template",
-  "head",
-]);
+const SKIP_TAGS = new Set(["script", "style", "noscript", "template", "head"]);
 
 /** Tags/roles that are focusable by default */
-const NATIVELY_FOCUSABLE = new Set(["a", "button", "input", "select", "textarea"]);
+const NATIVELY_FOCUSABLE = new Set([
+  "a",
+  "button",
+  "input",
+  "select",
+  "textarea",
+]);
 
 /** Input types that accept text entry */
 const TEXT_INPUT_TYPES = new Set([
-  "text", "email", "password", "tel", "url", "search", "number",
-  "date", "time", "datetime-local", "month", "week", "color",
+  "text",
+  "email",
+  "password",
+  "tel",
+  "url",
+  "search",
+  "number",
+  "date",
+  "time",
+  "datetime-local",
+  "month",
+  "week",
+  "color",
 ]);
 
 /** Input types that toggle on click (no text entry) */
@@ -141,7 +153,13 @@ function isSubtreeHidden(element: Element): boolean {
 
 /** Tags that are natively interactive — never treated as visually hidden */
 const INTERACTIVE_TAGS = new Set([
-  "input", "button", "select", "textarea", "a", "details", "summary",
+  "input",
+  "button",
+  "select",
+  "textarea",
+  "a",
+  "details",
+  "summary",
 ]);
 
 /**
@@ -161,7 +179,8 @@ function isSrOnly(element: Element): boolean {
   if (element.hasAttribute("tabindex")) return false;
 
   const computed = window.getComputedStyle(element as HTMLElement);
-  if (computed.position !== "absolute" && computed.position !== "fixed") return false;
+  if (computed.position !== "absolute" && computed.position !== "fixed")
+    return false;
 
   // Classic clip: rect(0,0,0,0) or rect(1px,1px,1px,1px)
   const clip = computed.clip;
@@ -173,7 +192,10 @@ function isSrOnly(element: Element): boolean {
 
   // Modern: clip-path: inset(50%) or inset(100%)
   const clipPath = computed.clipPath;
-  if (clipPath && (clipPath.startsWith("inset(5") || clipPath.startsWith("inset(1"))) {
+  if (
+    clipPath &&
+    (clipPath.startsWith("inset(5") || clipPath.startsWith("inset(1"))
+  ) {
     return true;
   }
 
@@ -300,17 +322,33 @@ function computeAccessibleName(element: Element): string {
   //    "name from content" (headings, links, buttons, table cells, options).
   //    NOT for generic containers (div, span, p) which would grab huge text blobs.
   const NAMES_FROM_CONTENT_TAGS = new Set([
-    "a", "button", "summary",
-    "h1", "h2", "h3", "h4", "h5", "h6",
-    "label", "legend", "caption", "figcaption",
-    "option", "td", "th",
+    "a",
+    "button",
+    "summary",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "label",
+    "legend",
+    "caption",
+    "figcaption",
+    "option",
+    "td",
+    "th",
   ]);
   const explicitRole = element.getAttribute("role");
   const namesFromContentRole =
-    explicitRole === "button" || explicitRole === "link" ||
-    explicitRole === "heading" || explicitRole === "option" ||
-    explicitRole === "treeitem" || explicitRole === "tab" ||
-    explicitRole === "menuitem" || explicitRole === "cell";
+    explicitRole === "button" ||
+    explicitRole === "link" ||
+    explicitRole === "heading" ||
+    explicitRole === "option" ||
+    explicitRole === "treeitem" ||
+    explicitRole === "tab" ||
+    explicitRole === "menuitem" ||
+    explicitRole === "cell";
 
   if (NAMES_FROM_CONTENT_TAGS.has(tag) || namesFromContentRole) {
     const fullText = (element.textContent || "").trim();
@@ -410,7 +448,12 @@ function getAriaStates(element: Element): Record<string, string | boolean> {
 
   // Native HTML states
   const htmlEl = element as HTMLInputElement;
-  if (tag === "input" || tag === "button" || tag === "select" || tag === "textarea") {
+  if (
+    tag === "input" ||
+    tag === "button" ||
+    tag === "select" ||
+    tag === "textarea"
+  ) {
     if (htmlEl.disabled) states["disabled"] = true;
     if ("checked" in htmlEl && htmlEl.checked) states["checked"] = true;
     if ("required" in htmlEl && htmlEl.required) states["required"] = true;
@@ -446,8 +489,8 @@ function isActuallyVisible(element: Element): boolean {
   // and content-visibility — exactly what we need here.
   if (typeof (element as any).checkVisibility === "function") {
     return (element as any).checkVisibility({
-      checkOpacity: false,        // opacity:0 is not an AT-hiding mechanism
-      checkVisibilityCSS: true,   // catches display:none and visibility:hidden on any ancestor
+      checkOpacity: false, // opacity:0 is not an AT-hiding mechanism
+      checkVisibilityCSS: true, // catches display:none and visibility:hidden on any ancestor
     });
   }
   // Fallback: walk the ancestor chain and apply our own isSubtreeHidden check
@@ -499,7 +542,9 @@ export function extractDomTree(root: Element): ExtractionResult {
   // (Elements that are labelledby targets are visible content — they label something.)
   const labelTargetIds = new Set<string>();
   for (const el of effectiveRoot.querySelectorAll("[aria-labelledby]")) {
-    for (const id of (el.getAttribute("aria-labelledby") || "").split(/\s+/).filter(Boolean)) {
+    for (const id of (el.getAttribute("aria-labelledby") || "")
+      .split(/\s+/)
+      .filter(Boolean)) {
       labelTargetIds.add(id);
     }
   }
@@ -509,14 +554,20 @@ export function extractDomTree(root: Element): ExtractionResult {
   // Hide them from the tree to avoid redundancy — unless they're also labelledby targets.
   const descriptionTargetIds = new Set<string>();
   for (const el of effectiveRoot.querySelectorAll("[aria-describedby]")) {
-    for (const id of (el.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean)) {
+    for (const id of (el.getAttribute("aria-describedby") || "")
+      .split(/\s+/)
+      .filter(Boolean)) {
       if (!labelTargetIds.has(id)) {
         descriptionTargetIds.add(id);
       }
     }
   }
 
-  function walk(element: Element, parentId: string | null, depth: number): string | null {
+  function walk(
+    element: Element,
+    parentId: string | null,
+    depth: number,
+  ): string | null {
     const tag = element.tagName.toLowerCase();
     if (SKIP_TAGS.has(tag)) return null;
 
@@ -537,8 +588,7 @@ export function extractDomTree(root: Element): ExtractionResult {
     const role = getImplicitRole(element);
     const actions = getActions(element);
     const isFocusable =
-      NATIVELY_FOCUSABLE.has(tag) ||
-      element.getAttribute("tabindex") !== null;
+      NATIVELY_FOCUSABLE.has(tag) || element.getAttribute("tabindex") !== null;
 
     const node: SemanticNode = {
       id,

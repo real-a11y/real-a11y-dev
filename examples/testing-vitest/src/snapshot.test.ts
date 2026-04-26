@@ -1,5 +1,9 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { auditSnapshot, outlineSnapshot, tabSequenceSnapshot } from "@real-a11y-dev/testing";
+import {
+  auditSnapshot,
+  outlineSnapshot,
+  tabSequenceSnapshot,
+} from "@real-a11y-dev/testing";
 import { fixture, cleanup } from "./fixtures.js";
 
 afterEach(cleanup);

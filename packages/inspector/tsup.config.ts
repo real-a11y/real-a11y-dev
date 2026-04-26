@@ -1,6 +1,7 @@
-import { defineConfig } from "tsup";
-import path from "path";
 import fs from "fs";
+import path from "path";
+
+import { defineConfig } from "tsup";
 
 const stylesDir = path.resolve(__dirname, "../ui/src/styles");
 const treeCSS = fs.readFileSync(path.join(stylesDir, "tree.css"), "utf-8");

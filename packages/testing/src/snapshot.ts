@@ -1,4 +1,5 @@
 import { getOutline, getTabSequence } from "@real-a11y-dev/core";
+
 import { extract } from "./extract.js";
 import { serializeTree, type SerializeOptions } from "./serialize.js";
 

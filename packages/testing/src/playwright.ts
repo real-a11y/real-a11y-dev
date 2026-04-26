@@ -120,7 +120,8 @@ export async function attach(
 
   // Verify the injection succeeded before returning the handle.
   const ready = await page.evaluate(
-    () => typeof (globalThis as Record<string, unknown>).__realA11y__ === "object",
+    () =>
+      typeof (globalThis as Record<string, unknown>).__realA11y__ === "object",
   );
   if (!ready) {
     throw new Error(
@@ -133,15 +134,19 @@ export async function attach(
 
   function evalFn<T>(fnName: string, extraArgs: unknown[] = []): Promise<T> {
     type EvalArg = { selector: string; fn: string; args: unknown[] };
-    return page.evaluate((arg) => {
-      const { selector, fn, args } = arg as EvalArg;
-      const ra = (globalThis as Record<string, unknown>).__realA11y__ as Record<
-        string,
-        (root: Element, ...a: unknown[]) => unknown
-      >;
-      const root = document.querySelector(selector) ?? document.body;
-      return ra[fn](root, ...args) as T;
-    }, { selector: rootSelector, fn: fnName, args: extraArgs } satisfies EvalArg);
+    return page.evaluate(
+      (arg) => {
+        const { selector, fn, args } = arg as EvalArg;
+        const ra = (globalThis as Record<string, unknown>)
+          .__realA11y__ as Record<
+          string,
+          (root: Element, ...a: unknown[]) => unknown
+        >;
+        const root = document.querySelector(selector) ?? document.body;
+        return ra[fn](root, ...args) as T;
+      },
+      { selector: rootSelector, fn: fnName, args: extraArgs } satisfies EvalArg,
+    );
   }
 
   return {

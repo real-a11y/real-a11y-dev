@@ -1,4 +1,5 @@
 import type { SemanticNode } from "../types.js";
+
 import { linearize } from "./linearize.js";
 import {
   normalizeName,
@@ -35,16 +36,25 @@ function matches(
   if (options.checked !== undefined && state("checked") !== options.checked) {
     return false;
   }
-  if (options.expanded !== undefined && state("expanded") !== options.expanded) {
+  if (
+    options.expanded !== undefined &&
+    state("expanded") !== options.expanded
+  ) {
     return false;
   }
-  if (options.selected !== undefined && state("selected") !== options.selected) {
+  if (
+    options.selected !== undefined &&
+    state("selected") !== options.selected
+  ) {
     return false;
   }
   if (options.pressed !== undefined && state("pressed") !== options.pressed) {
     return false;
   }
-  if (options.disabled !== undefined && state("disabled") !== options.disabled) {
+  if (
+    options.disabled !== undefined &&
+    state("disabled") !== options.disabled
+  ) {
     return false;
   }
 

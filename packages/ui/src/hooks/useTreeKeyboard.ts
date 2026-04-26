@@ -1,5 +1,5 @@
-import { useCallback } from "preact/hooks";
 import type { SemanticNode } from "@real-a11y-dev/core";
+import { useCallback } from "preact/hooks";
 
 interface UseTreeKeyboardOptions {
   nodes: Map<string, SemanticNode>;
@@ -127,7 +127,11 @@ export function useTreeKeyboard({
             if (parent) {
               for (const siblingId of parent.childIds) {
                 const sibling = nodes.get(siblingId);
-                if (sibling && sibling.childIds.length > 0 && !sibling.ui.expanded) {
+                if (
+                  sibling &&
+                  sibling.childIds.length > 0 &&
+                  !sibling.ui.expanded
+                ) {
                   onToggle(siblingId);
                 }
               }

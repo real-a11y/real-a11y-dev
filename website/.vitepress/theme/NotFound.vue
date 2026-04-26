@@ -4,8 +4,8 @@
       <p class="NotFound__code" aria-hidden="true">404</p>
       <h1 class="NotFound__title">Page not found</h1>
       <p class="NotFound__lead">
-        The page you're looking for has moved or was never here.
-        You didn't do anything wrong.
+        The page you're looking for has moved or was never here. You didn't do
+        anything wrong.
       </p>
 
       <ul class="NotFound__links">
@@ -14,8 +14,11 @@
         <li><a href="/packages/core">Browse packages</a></li>
         <li><a href="/recipes/nextjs">Framework recipes</a></li>
         <li>
-          <a href="https://github.com/real-a11y/real-a11y-dev/issues/new"
-             rel="noopener">Report a broken link</a>
+          <a
+            href="https://github.com/real-a11y/real-a11y-dev/issues/new"
+            rel="noopener"
+            >Report a broken link</a
+          >
         </li>
       </ul>
     </div>
@@ -79,7 +82,9 @@
   font-size: 16px;
   font-weight: 500;
   text-decoration: none;
-  transition: color 0.15s ease, padding-left 0.15s ease;
+  transition:
+    color 0.15s ease,
+    padding-left 0.15s ease;
 }
 
 .NotFound__links a:hover,

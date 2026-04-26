@@ -1,4 +1,3 @@
-import { useEffect, useRef, useSyncExternalStore } from "react";
 import {
   DomObserver,
   extractA11yTree,
@@ -6,6 +5,7 @@ import {
   type ExtractionResult,
   type TreeViewMode,
 } from "@real-a11y-dev/core";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 
 export interface UseSemanticTreeOptions {
   /** `"a11y"` (default) or `"dom"`. */

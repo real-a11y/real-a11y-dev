@@ -1,11 +1,5 @@
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-  afterEach,
-  vi,
-} from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+
 import { DomObserver } from "./dom-observer.js";
 
 /**
@@ -31,9 +25,9 @@ describe("DomObserver", () => {
     observer?.stop();
     vi.useRealTimers();
     document.body.innerHTML = "";
-    document.documentElement.querySelectorAll(
-      "#__sn-highlight, #__sn-curtain",
-    ).forEach((el) => el.remove());
+    document.documentElement
+      .querySelectorAll("#__sn-highlight, #__sn-curtain")
+      .forEach((el) => el.remove());
   });
 
   it("fires the callback after a real DOM mutation", async () => {

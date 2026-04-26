@@ -7,12 +7,17 @@
  * - proxies hover / activate events back to the preview so the real story DOM
  *   responds (highlight overlay, interactions)
  */
+import type {
+  SemanticNode,
+  TreeViewMode,
+  ActionType,
+} from "@real-a11y-dev/core";
+import { TreePanel } from "@real-a11y-dev/semantic-navigator-ui";
+import { addons, types } from "@storybook/manager-api";
+import { render, h } from "preact";
 import * as React from "react";
 import { useEffect, useRef, useState, useCallback } from "react";
-import { render, h } from "preact";
-import { addons, types } from "@storybook/manager-api";
-import { TreePanel } from "@real-a11y-dev/semantic-navigator-ui";
-import type { SemanticNode, TreeViewMode, ActionType } from "@real-a11y-dev/core";
+
 import {
   ADDON_ID,
   PANEL_ID,
@@ -25,9 +30,10 @@ declare const __SN_STYLES__: string;
 
 // ── Deserialization ───────────────────────────────────────────────────────────
 
-function deserializeTree(
-  serializable: SerializableTree,
-): { nodes: Map<string, SemanticNode>; rootId: string } {
+function deserializeTree(serializable: SerializableTree): {
+  nodes: Map<string, SemanticNode>;
+  rootId: string;
+} {
   return {
     nodes: new Map(serializable.nodes),
     rootId: serializable.rootId,
@@ -37,10 +43,10 @@ function deserializeTree(
 // ── Panel component ───────────────────────────────────────────────────────────
 
 function Panel() {
-  const containerRef   = useRef<HTMLDivElement>(null);
-  const preactHostRef  = useRef<HTMLElement | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const preactHostRef = useRef<HTMLElement | null>(null);
   const [isReady, setIsReady] = useState(false);
-  const [payload,  setPayload]  = useState<TreeUpdatePayload | null>(null);
+  const [payload, setPayload] = useState<TreeUpdatePayload | null>(null);
   const [viewMode, setViewMode] = useState<TreeViewMode>("a11y");
 
   // ── Mode handler (defined early so effects can reference it) ───────────────

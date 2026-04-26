@@ -1,0 +1,25 @@
+node_modules/
+**/dist/
+**/.vitepress/cache/
+**/.vitepress/dist/
+coverage/
+test-results/
+playwright-report/
+pnpm-lock.yaml
+*.min.js
+*.min.css
+
+# Generated SVG/PNG assets
+website/public/og-image.png
+packages/extension/public/icons/
+
+# Markdown content — keep manual line wrapping in docs
+website/**/*.md
+README.md
+CHANGELOG.md
+CONTRIBUTING.md
+SECURITY.md
+SUPPORT.md
+CODE_OF_CONDUCT.md
+LICENSE
+docs/

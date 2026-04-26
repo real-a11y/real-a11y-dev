@@ -1,5 +1,3 @@
-import { render, h } from "preact";
-import { TreeView } from "@real-a11y-dev/semantic-navigator-ui";
 import {
   extractDomTree,
   extractA11yTree,
@@ -10,6 +8,8 @@ import {
   type ExtractionResult,
   type SemanticNavigatorConfig,
 } from "@real-a11y-dev/core";
+import { TreeView } from "@real-a11y-dev/semantic-navigator-ui";
+import { render, h } from "preact";
 
 declare const __SN_STYLES__: string;
 
@@ -86,7 +86,6 @@ export function createInspector(
   // Monotonic counter used to force a re-extraction when `refresh()` is called.
   let refreshKey = 0;
 
-
   function ensureRenderTarget(): Element | ShadowRoot {
     if (renderTarget) return renderTarget;
 
@@ -95,8 +94,11 @@ export function createInspector(
       // runs effects twice: mount → cleanup → mount on the same container
       // element, and `attachShadow` throws if a root is already attached).
       const existingShadow = container.shadowRoot;
-      const shadow = existingShadow ??
-        (container.attachShadow ? container.attachShadow({ mode: "open" }) : null);
+      const shadow =
+        existingShadow ??
+        (container.attachShadow
+          ? container.attachShadow({ mode: "open" })
+          : null);
 
       if (!shadow) {
         // Environment without shadow DOM support — fall back to light DOM.
@@ -112,14 +114,16 @@ export function createInspector(
 
         // Reuse the existing host div, or create one if this is the first mount.
         // Preact needs a real Element (not the ShadowRoot) as its mount point.
-        const existingHost = shadow.querySelector<HTMLElement>(".sn-shadow-host");
+        const existingHost =
+          shadow.querySelector<HTMLElement>(".sn-shadow-host");
         const host = existingHost ?? document.createElement("div");
         if (!existingHost) {
           host.className = "sn-shadow-host";
           // height:100% lets .sn-root resolve its own height:100% against the
           // shadow host element's computed size (set by the caller via flex/grid).
           // Without this the tree grows to fit content and never scrolls.
-          host.style.cssText = "height:100%;display:flex;flex-direction:column;";
+          host.style.cssText =
+            "height:100%;display:flex;flex-direction:column;";
           shadow.appendChild(host);
         }
         renderHost = host;

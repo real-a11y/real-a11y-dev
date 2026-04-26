@@ -1,7 +1,10 @@
-import { test, expect } from "@playwright/test";
-import { attach } from "../src/playwright.js";
 import path from "node:path";
+
 import { fileURLToPath } from "node:url";
+
+import { test, expect } from "@playwright/test";
+
+import { attach } from "../src/playwright.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -32,25 +35,29 @@ test.describe("good fixture", () => {
     expect(snapshot).toContain("Contact form");
   });
 
-  test("auditSnapshot in dom mode uses role names for semantic elements", async ({ page }) => {
+  test("auditSnapshot in dom mode uses role names for semantic elements", async ({
+    page,
+  }) => {
     const sn = await attach(page);
     const snapshot = await sn.auditSnapshot({ mode: "dom" });
     // DOM mode still serializes using ARIA role names (banner, main, contentinfo)
     // derived from the element's implicit role — not raw tag names.
-    expect(snapshot).toContain("banner");       // <header>
-    expect(snapshot).toContain("main");          // <main>
-    expect(snapshot).toContain("contentinfo");   // <footer>
+    expect(snapshot).toContain("banner"); // <header>
+    expect(snapshot).toContain("main"); // <main>
+    expect(snapshot).toContain("contentinfo"); // <footer>
   });
 
   test("outlineSnapshot captures heading structure", async ({ page }) => {
     const sn = await attach(page);
     const outline = await sn.outlineSnapshot();
-    expect(outline).toContain("Test fixture");     // h1
-    expect(outline).toContain("Contact form");      // h2
-    expect(outline).toContain("Navigation links");  // h2
+    expect(outline).toContain("Test fixture"); // h1
+    expect(outline).toContain("Contact form"); // h2
+    expect(outline).toContain("Navigation links"); // h2
   });
 
-  test("tabSequenceSnapshot lists focusable elements in order", async ({ page }) => {
+  test("tabSequenceSnapshot lists focusable elements in order", async ({
+    page,
+  }) => {
     const sn = await attach(page);
     const seq = await sn.tabSequenceSnapshot();
     expect(seq).toContain("Home");
@@ -64,7 +71,9 @@ test.describe("good fixture", () => {
     await expect(sn.assertHeadingOrder()).resolves.toBeUndefined();
   });
 
-  test("assertNoUnlabeledInteractive passes for fully labeled form", async ({ page }) => {
+  test("assertNoUnlabeledInteractive passes for fully labeled form", async ({
+    page,
+  }) => {
     const sn = await attach(page);
     await expect(sn.assertNoUnlabeledInteractive()).resolves.toBeUndefined();
   });
@@ -74,7 +83,9 @@ test.describe("good fixture", () => {
     await expect(sn.assertLandmarkStructure()).resolves.toBeUndefined();
   });
 
-  test("assertDialogsLabeled passes when dialog is hidden", async ({ page }) => {
+  test("assertDialogsLabeled passes when dialog is hidden", async ({
+    page,
+  }) => {
     // The dialog is not open by default — assertDialogsLabeled should still
     // inspect it (dialog elements are in the DOM even when closed)
     const sn = await attach(page);
@@ -110,7 +121,9 @@ test.describe("bad fixture — assertions should throw", () => {
     await expect(sn.assertHeadingOrder()).rejects.toThrow();
   });
 
-  test("assertNoUnlabeledInteractive throws on unlabeled button", async ({ page }) => {
+  test("assertNoUnlabeledInteractive throws on unlabeled button", async ({
+    page,
+  }) => {
     const sn = await attach(page);
     await expect(sn.assertNoUnlabeledInteractive()).rejects.toThrow();
   });
@@ -120,7 +133,9 @@ test.describe("bad fixture — assertions should throw", () => {
     await expect(sn.assertLandmarkStructure()).rejects.toThrow();
   });
 
-  test("assertDialogsLabeled throws on unlabeled open dialog", async ({ page }) => {
+  test("assertDialogsLabeled throws on unlabeled open dialog", async ({
+    page,
+  }) => {
     const sn = await attach(page);
     await expect(sn.assertDialogsLabeled()).rejects.toThrow();
   });

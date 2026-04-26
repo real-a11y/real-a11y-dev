@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { FocusManager } from "./focus-manager.js";
+
 import { ElementRefMap } from "../utils/element-ref.js";
+
+import { FocusManager } from "./focus-manager.js";
 
 function mkFocusable() {
   const button = document.createElement("button");
@@ -31,7 +33,8 @@ describe("FocusManager", () => {
     })) as unknown as Element["getBoundingClientRect"];
     // jsdom doesn't implement scrollIntoView — default options call it, so
     // stub to a no-op so tests don't crash.
-    Element.prototype.scrollIntoView = vi.fn() as unknown as Element["scrollIntoView"];
+    Element.prototype.scrollIntoView =
+      vi.fn() as unknown as Element["scrollIntoView"];
   });
 
   afterEach(() => {
@@ -89,7 +92,9 @@ describe("FocusManager", () => {
       // vertically puts the user's attention in the middle of the viewport.
       const btn = mkFocusable();
       refs.set("sn-1", btn);
-      const scrollSpy = btn.scrollIntoView as unknown as ReturnType<typeof vi.fn>;
+      const scrollSpy = btn.scrollIntoView as unknown as ReturnType<
+        typeof vi.fn
+      >;
       scrollSpy.mockClear();
 
       fm.highlightElement("sn-1");
@@ -103,7 +108,9 @@ describe("FocusManager", () => {
     it("does not scroll when { scroll: false }", () => {
       const btn = mkFocusable();
       refs.set("sn-1", btn);
-      const scrollSpy = btn.scrollIntoView as unknown as ReturnType<typeof vi.fn>;
+      const scrollSpy = btn.scrollIntoView as unknown as ReturnType<
+        typeof vi.fn
+      >;
       scrollSpy.mockClear();
 
       fm.highlightElement("sn-1", { scroll: false });
@@ -126,9 +133,7 @@ describe("FocusManager", () => {
       // Same DOM element re-positioned, not a new one
       expect(first).toBe(second);
       // Still only one in the document
-      expect(
-        document.querySelectorAll("#__sn-highlight").length,
-      ).toBe(1);
+      expect(document.querySelectorAll("#__sn-highlight").length).toBe(1);
     });
   });
 

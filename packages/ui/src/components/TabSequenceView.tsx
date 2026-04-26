@@ -1,6 +1,12 @@
-import { useMemo, useState, useRef, useCallback, useEffect } from "preact/hooks";
 import type { SemanticNode } from "@real-a11y-dev/core";
 import { getTabSequence, getPrimaryAction } from "@real-a11y-dev/core";
+import {
+  useMemo,
+  useState,
+  useRef,
+  useCallback,
+  useEffect,
+} from "preact/hooks";
 
 interface TabSequenceViewProps {
   nodes: Map<string, SemanticNode>;
@@ -37,9 +43,14 @@ export function TabSequenceView({
     return seq.filter((node) => {
       const name = (node.a11y.name || "").toLowerCase();
       const text = (node.dom.textContent || "").toLowerCase();
-      const tag  = (node.dom.tagName || "").toLowerCase();
+      const tag = (node.dom.tagName || "").toLowerCase();
       const role = (node.a11y.role || "").toLowerCase();
-      return name.includes(lq) || text.includes(lq) || tag.includes(lq) || role.includes(lq);
+      return (
+        name.includes(lq) ||
+        text.includes(lq) ||
+        tag.includes(lq) ||
+        role.includes(lq)
+      );
     });
   }, [nodes, rootId, query]);
 
@@ -53,7 +64,9 @@ export function TabSequenceView({
   // Scroll selected item into view
   useEffect(() => {
     if (!listRef.current || selectedIndex < 0) return;
-    const el = listRef.current.querySelector(`[data-tab-index="${selectedIndex}"]`);
+    const el = listRef.current.querySelector(
+      `[data-tab-index="${selectedIndex}"]`,
+    );
     el?.scrollIntoView({ block: "nearest" });
   }, [selectedIndex]);
 
@@ -116,8 +129,12 @@ export function TabSequenceView({
           const isSelected = index === selectedIndex;
           const explicitTabindex = tabindexOf(node);
           // Positive tabindex is a common accessibility anti-pattern — flag it
-          const isPositiveTabindex = explicitTabindex !== null && explicitTabindex > 0;
-          const label = node.a11y.name || node.dom.textContent?.trim() || `<${node.dom.tagName?.toLowerCase()}>`;
+          const isPositiveTabindex =
+            explicitTabindex !== null && explicitTabindex > 0;
+          const label =
+            node.a11y.name ||
+            node.dom.textContent?.trim() ||
+            `<${node.dom.tagName?.toLowerCase()}>`;
 
           return (
             <div
@@ -137,9 +154,7 @@ export function TabSequenceView({
               onMouseEnter={() => onHover(node.id)}
             >
               {/* Position number */}
-              <span class="sn-tab-number">
-                {index + 1}
-              </span>
+              <span class="sn-tab-number">{index + 1}</span>
 
               {/* Role */}
               <span class="sn-tab-role">{node.a11y.role}</span>
@@ -151,7 +166,10 @@ export function TabSequenceView({
 
               {/* Explicit positive tabindex warning badge */}
               {isPositiveTabindex && (
-                <span class="sn-tab-tabindex-badge" title="Explicit positive tabindex — avoid if possible">
+                <span
+                  class="sn-tab-tabindex-badge"
+                  title="Explicit positive tabindex — avoid if possible"
+                >
                   tabindex={explicitTabindex}
                 </span>
               )}
@@ -164,7 +182,9 @@ export function TabSequenceView({
 
         {items.length === 0 && (
           <div class="sn-empty">
-            {query ? `No tab stops matching "${query}"` : "No focusable elements found"}
+            {query
+              ? `No tab stops matching "${query}"`
+              : "No focusable elements found"}
           </div>
         )}
       </div>
@@ -176,7 +196,9 @@ export function TabSequenceView({
         </span>
         <button
           class="sn-list-action-btn"
-          disabled={!selectedNode || !getPrimaryAction(selectedNode.interaction.actions)}
+          disabled={
+            !selectedNode || !getPrimaryAction(selectedNode.interaction.actions)
+          }
           onClick={() => selectedNode && onActivate(selectedNode.id)}
         >
           Activate

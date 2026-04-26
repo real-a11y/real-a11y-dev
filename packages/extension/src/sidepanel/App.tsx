@@ -1,6 +1,5 @@
 /// <reference types="chrome" />
 
-import { useState, useEffect, useCallback, useRef } from "preact/hooks";
 import type {
   SemanticNode,
   TreeViewMode,
@@ -13,13 +12,19 @@ import {
   applySearchFilter,
   ROLE_FILTER_LABELS,
 } from "@real-a11y-dev/core";
-import { useTreeKeyboard, useInputModality } from "@real-a11y-dev/semantic-navigator-ui";
+import {
+  useTreeKeyboard,
+  useInputModality,
+} from "@real-a11y-dev/semantic-navigator-ui";
 import { useSearch } from "@real-a11y-dev/semantic-navigator-ui";
+import { useState, useEffect, useCallback, useRef } from "preact/hooks";
+
+import type { ContentToPanel } from "../types.js";
+
 import { FilteredList } from "./FilteredList.js";
-import { TabSequenceView } from "./TabSequenceView.js";
 import { InputPanel } from "./InputPanel.js";
 import type { InputPanelState } from "./InputPanel.js";
-import type { ContentToPanel } from "../types.js";
+import { TabSequenceView } from "./TabSequenceView.js";
 
 /**
  * Map HTML tag names to a human-readable display role when the ARIA role
@@ -110,7 +115,6 @@ export function App() {
     };
     // Intentionally empty deps: toggleFocusTracker handles subsequent changes;
     // this effect only handles the initial panel-open hand-off.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Listen for tree data and focus changes from content script
@@ -192,16 +196,13 @@ export function App() {
     };
   }, []);
 
-  const handleViewModeChange = useCallback(
-    (mode: TreeViewMode) => {
-      setViewMode(mode);
-      chrome.runtime.sendMessage({
-        type: "SET_VIEW_MODE",
-        payload: { viewMode: mode },
-      });
-    },
-    [],
-  );
+  const handleViewModeChange = useCallback((mode: TreeViewMode) => {
+    setViewMode(mode);
+    chrome.runtime.sendMessage({
+      type: "SET_VIEW_MODE",
+      payload: { viewMode: mode },
+    });
+  }, []);
 
   // Apply search + role filter
   useEffect(() => {
@@ -228,16 +229,13 @@ export function App() {
   const scopedDepthOffset = scopedRootNode ? scopedRootNode.depth : 0;
   if (effectiveRootId) walkVisible(effectiveRootId);
 
-  const handleSelect = useCallback(
-    (id: string) => {
-      setSelectedId(id);
-      chrome.runtime.sendMessage({
-        type: "HIGHLIGHT_NODE",
-        payload: { nodeId: id },
-      });
-    },
-    [],
-  );
+  const handleSelect = useCallback((id: string) => {
+    setSelectedId(id);
+    chrome.runtime.sendMessage({
+      type: "HIGHLIGHT_NODE",
+      payload: { nodeId: id },
+    });
+  }, []);
 
   const handleToggle = useCallback(
     (id: string) => {
@@ -276,9 +274,7 @@ export function App() {
       // Wait for the tree to render (filter → tree transition needs an extra frame)
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          const el = treeRef.current?.querySelector(
-            `[data-node-id="${id}"]`,
-          );
+          const el = treeRef.current?.querySelector(`[data-node-id="${id}"]`);
           if (el) {
             el.scrollIntoView({ block: "center" });
             // Focus the tree so keyboard navigation works immediately
@@ -357,9 +353,7 @@ export function App() {
       let feedback: string;
       if (role === "checkbox" || role === "switch") {
         const wasChecked = node.a11y.states.checked === true;
-        feedback = wasChecked
-          ? `Unchecked: ${name}`
-          : `Checked: ${name}`;
+        feedback = wasChecked ? `Unchecked: ${name}` : `Checked: ${name}`;
       } else if (role === "radio") {
         feedback = `Selected: ${name}`;
       } else {
@@ -371,7 +365,7 @@ export function App() {
 
       chrome.runtime.sendMessage(
         { type: "DISPATCH_ACTION", payload: request },
-        (response) => {
+        (_response) => {
           if (chrome.runtime.lastError) {
             setLastAction(`Failed: ${chrome.runtime.lastError.message}`);
             setTimeout(() => setLastAction(null), 3000);
@@ -402,9 +396,7 @@ export function App() {
         () => {
           const name = node?.a11y.name || nodeId;
           setLastAction(
-            actionType === "select"
-              ? `Selected: ${value}`
-              : `Typed in ${name}`,
+            actionType === "select" ? `Selected: ${value}` : `Typed in ${name}`,
           );
           setTimeout(() => setLastAction(null), 2000);
           // Re-extract tree to reflect new values
@@ -477,33 +469,46 @@ export function App() {
     forceRender((n) => n + 1);
   }, [nodes]);
 
-  const handleScopeToNode = useCallback((id: string | null) => {
-    if (id) {
-      const node = nodes.get(id);
-      if (node) node.ui.expanded = true;
-    }
-    setScopedRootId(id);
-    forceRender((n) => n + 1);
-  }, [nodes]);
+  const handleScopeToNode = useCallback(
+    (id: string | null) => {
+      if (id) {
+        const node = nodes.get(id);
+        if (node) node.ui.expanded = true;
+      }
+      setScopedRootId(id);
+      forceRender((n) => n + 1);
+    },
+    [nodes],
+  );
 
-  const handleSendKey = useCallback((key: string, code: string, keyCode: number, modifiers?: { shift?: boolean }) => {
-    chrome.runtime.sendMessage(
-      { type: "SEND_KEY", payload: { key, code, keyCode, modifiers } },
-      (response) => {
-        if (response?.success) {
-          const label = modifiers?.shift ? `Shift+${key === "Tab" ? "Tab" : key}` : key;
-          setLastAction(`Sent key: ${label}`);
-          setTimeout(() => setLastAction(null), 1500);
-        }
-      },
-    );
-    setTimeout(() => {
-      chrome.runtime.sendMessage({
-        type: "REQUEST_TREE",
-        payload: { viewMode },
-      });
-    }, 300);
-  }, [viewMode]);
+  const handleSendKey = useCallback(
+    (
+      key: string,
+      code: string,
+      keyCode: number,
+      modifiers?: { shift?: boolean },
+    ) => {
+      chrome.runtime.sendMessage(
+        { type: "SEND_KEY", payload: { key, code, keyCode, modifiers } },
+        (response) => {
+          if (response?.success) {
+            const label = modifiers?.shift
+              ? `Shift+${key === "Tab" ? "Tab" : key}`
+              : key;
+            setLastAction(`Sent key: ${label}`);
+            setTimeout(() => setLastAction(null), 1500);
+          }
+        },
+      );
+      setTimeout(() => {
+        chrome.runtime.sendMessage({
+          type: "REQUEST_TREE",
+          payload: { viewMode },
+        });
+      }, 300);
+    },
+    [viewMode],
+  );
 
   const { handleKeyDown } = useTreeKeyboard({
     nodes,
@@ -519,7 +524,9 @@ export function App() {
   useEffect(() => {
     if (!selectedId) return;
     requestAnimationFrame(() => {
-      const el = treeRef.current?.querySelector(`[data-node-id="${selectedId}"]`);
+      const el = treeRef.current?.querySelector(
+        `[data-node-id="${selectedId}"]`,
+      );
       el?.scrollIntoView({ block: "nearest" });
     });
   }, [selectedId]);
@@ -566,21 +573,27 @@ export function App() {
 
   // Extract hostname for display
   const pageHost = (() => {
-    try { return new URL(pageUrl).hostname; } catch { return ""; }
+    try {
+      return new URL(pageUrl).hostname;
+    } catch {
+      return "";
+    }
   })();
 
   // Detect if tree root is a dialog (modal scoping from dom-extractor)
   const rootNode = rootId ? nodes.get(rootId) : null;
-  const isDialogScoped = rootNode?.a11y.role === "dialog" || rootNode?.a11y.role === "alertdialog";
+  const isDialogScoped =
+    rootNode?.a11y.role === "dialog" || rootNode?.a11y.role === "alertdialog";
 
   // Build scope breadcrumb path
-  const scopeBreadcrumb: Array<{id: string; label: string}> = [];
+  const scopeBreadcrumb: Array<{ id: string; label: string }> = [];
   if (scopedRootId) {
     let current: SemanticNode | undefined = nodes.get(scopedRootId);
     while (current) {
-      const lbl = viewMode === "a11y"
-        ? `${getDisplayRole(current)}${current.a11y.name ? ` "${current.a11y.name}"` : ""}`
-        : `<${current.dom.tagName}>`;
+      const lbl =
+        viewMode === "a11y"
+          ? `${getDisplayRole(current)}${current.a11y.name ? ` "${current.a11y.name}"` : ""}`
+          : `<${current.dom.tagName}>`;
       scopeBreadcrumb.unshift({ id: current.id, label: lbl });
       current = current.parentId ? nodes.get(current.parentId) : undefined;
     }
@@ -602,7 +615,11 @@ export function App() {
                 BETA
               </span>
             </span>
-            {pageHost && <span class="sn-page-url" title={pageUrl}>{pageHost}</span>}
+            {pageHost && (
+              <span class="sn-page-url" title={pageUrl}>
+                {pageHost}
+              </span>
+            )}
           </div>
           <button
             class="sn-close-tab-btn"
@@ -668,9 +685,11 @@ export function App() {
           class="sn-focus-tracker-btn"
           aria-pressed={focusTrackerOn}
           onClick={toggleFocusTracker}
-          title={focusTrackerOn
-            ? "Focus sync ON — click to disable (useful on focus-heavy pages)"
-            : "Focus sync OFF — click to enable"}
+          title={
+            focusTrackerOn
+              ? "Focus sync ON — click to disable (useful on focus-heavy pages)"
+              : "Focus sync OFF — click to enable"
+          }
         >
           {focusTrackerOn ? "Focus sync" : "Focus OFF"}
         </button>
@@ -713,27 +732,27 @@ export function App() {
 
       {/* Role filters — disabled in tab sequence view */}
       <div class="sn-filters" role="toolbar" aria-label="Filter by role">
-        {(Object.keys(ROLE_FILTER_LABELS) as Array<Exclude<RoleFilter, null>>).map(
-          (key) => (
-            <button
-              key={key}
-              class="sn-filter-btn"
-              aria-pressed={roleFilter === key}
-              disabled={viewMode === "tab"}
-              onClick={() =>
-                setRoleFilter(roleFilter === key ? null : key)
-              }
-            >
-              {ROLE_FILTER_LABELS[key]}
-            </button>
-          ),
-        )}
+        {(
+          Object.keys(ROLE_FILTER_LABELS) as Array<Exclude<RoleFilter, null>>
+        ).map((key) => (
+          <button
+            key={key}
+            class="sn-filter-btn"
+            aria-pressed={roleFilter === key}
+            disabled={viewMode === "tab"}
+            onClick={() => setRoleFilter(roleFilter === key ? null : key)}
+          >
+            {ROLE_FILTER_LABELS[key]}
+          </button>
+        ))}
       </div>
 
       {/* Dialog scope indicator */}
       {isDialogScoped && (
         <div class="sn-dialog-indicator" role="status">
-          <span class="sn-dialog-label">Dialog: {rootNode?.a11y.name || "Modal"}</span>
+          <span class="sn-dialog-label">
+            Dialog: {rootNode?.a11y.name || "Modal"}
+          </span>
           <button
             class="sn-key-btn"
             onClick={() => handleSendKey("Escape", "Escape", 27)}
@@ -769,7 +788,9 @@ export function App() {
                       handleScopeToNode(item.id);
                     }
                   }}
-                  aria-current={item.id === scopedRootId ? "location" : undefined}
+                  aria-current={
+                    item.id === scopedRootId ? "location" : undefined
+                  }
                 >
                   {item.label}
                 </button>
@@ -817,7 +838,9 @@ export function App() {
       ) : (
         /* ---- Tree view ---- */
         <>
-          <div class={`sn-tree-container${isDialogScoped ? " sn-tree-container--dialog" : ""}${scopedRootId ? " sn-tree-container--scoped" : ""}`}>
+          <div
+            class={`sn-tree-container${isDialogScoped ? " sn-tree-container--dialog" : ""}${scopedRootId ? " sn-tree-container--scoped" : ""}`}
+          >
             <div
               ref={treeRef}
               class="sn-tree"
@@ -838,7 +861,9 @@ export function App() {
                   node.interaction.actions,
                 );
                 const isSelected = id === selectedId;
-                const displayDepth = scopedRootId ? node.depth - scopedDepthOffset : node.depth;
+                const displayDepth = scopedRootId
+                  ? node.depth - scopedDepthOffset
+                  : node.depth;
 
                 return (
                   <div
@@ -910,9 +935,7 @@ export function App() {
                       ) : (
                         <>
                           {/* Role — semantic display name */}
-                          <span class="sn-role">
-                            {getDisplayRole(node)}
-                          </span>
+                          <span class="sn-role">{getDisplayRole(node)}</span>
                           {/* Heading level badge */}
                           {node.a11y.properties.level && (
                             <span class="sn-level-badge">
@@ -938,50 +961,94 @@ export function App() {
                             </span>
                           )}
                           {/* Current value for editable fields */}
-                          {node.interaction.isEditable && (() => {
-                            const val = node.dom.attributes.value;
-                            const inputType = node.dom.attributes.type || "text";
-                            if (val) {
-                              const display = inputType === "password"
-                                ? "\u2022".repeat(val.length)
-                                : val;
-                              return (
-                                <span class="sn-field-value">= "{display}"</span>
-                              );
-                            }
-                            return null;
-                          })()}
+                          {node.interaction.isEditable &&
+                            (() => {
+                              const val = node.dom.attributes.value;
+                              const inputType =
+                                node.dom.attributes.type || "text";
+                              if (val) {
+                                const display =
+                                  inputType === "password"
+                                    ? "\u2022".repeat(val.length)
+                                    : val;
+                                return (
+                                  <span class="sn-field-value">
+                                    = "{display}"
+                                  </span>
+                                );
+                              }
+                              return null;
+                            })()}
                           {/* State badges: disabled, checked, required, expanded, etc. */}
                           {(() => {
                             const states = node.a11y.states;
-                            const badges: Array<{ label: string; cls: string }> = [];
+                            const badges: Array<{
+                              label: string;
+                              cls: string;
+                            }> = [];
                             if (states.disabled === true)
-                              badges.push({ label: "disabled", cls: "sn-state--disabled" });
+                              badges.push({
+                                label: "disabled",
+                                cls: "sn-state--disabled",
+                              });
                             if (states.checked === true)
-                              badges.push({ label: "checked", cls: "sn-state--on" });
+                              badges.push({
+                                label: "checked",
+                                cls: "sn-state--on",
+                              });
                             if (states.checked === "mixed")
-                              badges.push({ label: "mixed", cls: "sn-state--mixed" });
+                              badges.push({
+                                label: "mixed",
+                                cls: "sn-state--mixed",
+                              });
                             if (states.pressed === true)
-                              badges.push({ label: "pressed", cls: "sn-state--on" });
+                              badges.push({
+                                label: "pressed",
+                                cls: "sn-state--on",
+                              });
                             if (states.selected === true)
-                              badges.push({ label: "selected", cls: "sn-state--on" });
+                              badges.push({
+                                label: "selected",
+                                cls: "sn-state--on",
+                              });
                             if (states.expanded === true)
-                              badges.push({ label: "expanded", cls: "sn-state--info" });
+                              badges.push({
+                                label: "expanded",
+                                cls: "sn-state--info",
+                              });
                             if (states.expanded === false)
-                              badges.push({ label: "collapsed", cls: "sn-state--info" });
+                              badges.push({
+                                label: "collapsed",
+                                cls: "sn-state--info",
+                              });
                             if (states.required === true)
-                              badges.push({ label: "required", cls: "sn-state--required" });
+                              badges.push({
+                                label: "required",
+                                cls: "sn-state--required",
+                              });
                             if (states.readonly === true)
-                              badges.push({ label: "readonly", cls: "sn-state--info" });
+                              badges.push({
+                                label: "readonly",
+                                cls: "sn-state--info",
+                              });
                             if (states.busy === true)
-                              badges.push({ label: "busy", cls: "sn-state--info" });
+                              badges.push({
+                                label: "busy",
+                                cls: "sn-state--info",
+                              });
                             if (states.current)
-                              badges.push({ label: `current: ${states.current}`, cls: "sn-state--info" });
+                              badges.push({
+                                label: `current: ${states.current}`,
+                                cls: "sn-state--info",
+                              });
                             if (badges.length === 0) return null;
                             return (
                               <span class="sn-state-badges">
                                 {badges.map((b) => (
-                                  <span key={b.label} class={`sn-state-badge ${b.cls}`}>
+                                  <span
+                                    key={b.label}
+                                    class={`sn-state-badge ${b.cls}`}
+                                  >
                                     {b.label}
                                   </span>
                                 ))}
@@ -1023,15 +1090,61 @@ export function App() {
             </div>
           </div>
 
-          <div class="sn-keyboard-bar" role="toolbar" aria-label="Send keyboard events to page">
+          <div
+            class="sn-keyboard-bar"
+            role="toolbar"
+            aria-label="Send keyboard events to page"
+          >
             <span class="sn-keyboard-label">Send key:</span>
-            <button class="sn-key-btn" onClick={() => handleSendKey("Escape", "Escape", 27)} title="Send Escape key">Esc</button>
-            <button class="sn-key-btn" onClick={() => handleSendKey("Tab", "Tab", 9)} title="Send Tab key">Tab</button>
-            <button class="sn-key-btn" onClick={() => handleSendKey("Tab", "Tab", 9, { shift: true })} title="Send Shift+Tab">Shift+Tab</button>
-            <button class="sn-key-btn" onClick={() => handleSendKey("Enter", "Enter", 13)} title="Send Enter key">Enter</button>
-            <button class="sn-key-btn" onClick={() => handleSendKey(" ", "Space", 32)} title="Send Space key">Space</button>
-            <button class="sn-key-btn" onClick={() => handleSendKey("ArrowDown", "ArrowDown", 40)} title="Send Down arrow">{"\u2193"}</button>
-            <button class="sn-key-btn" onClick={() => handleSendKey("ArrowUp", "ArrowUp", 38)} title="Send Up arrow">{"\u2191"}</button>
+            <button
+              class="sn-key-btn"
+              onClick={() => handleSendKey("Escape", "Escape", 27)}
+              title="Send Escape key"
+            >
+              Esc
+            </button>
+            <button
+              class="sn-key-btn"
+              onClick={() => handleSendKey("Tab", "Tab", 9)}
+              title="Send Tab key"
+            >
+              Tab
+            </button>
+            <button
+              class="sn-key-btn"
+              onClick={() => handleSendKey("Tab", "Tab", 9, { shift: true })}
+              title="Send Shift+Tab"
+            >
+              Shift+Tab
+            </button>
+            <button
+              class="sn-key-btn"
+              onClick={() => handleSendKey("Enter", "Enter", 13)}
+              title="Send Enter key"
+            >
+              Enter
+            </button>
+            <button
+              class="sn-key-btn"
+              onClick={() => handleSendKey(" ", "Space", 32)}
+              title="Send Space key"
+            >
+              Space
+            </button>
+            <button
+              class="sn-key-btn"
+              onClick={() => handleSendKey("ArrowDown", "ArrowDown", 40)}
+              title="Send Down arrow"
+            >
+              {"\u2193"}
+            </button>
+            <button
+              class="sn-key-btn"
+              onClick={() => handleSendKey("ArrowUp", "ArrowUp", 38)}
+              title="Send Up arrow"
+            >
+              {"\u2191"}
+            </button>
           </div>
 
           <div class="sn-hints">

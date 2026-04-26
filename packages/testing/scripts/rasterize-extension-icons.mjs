@@ -11,10 +11,11 @@
 // Uses Playwright's bundled Chromium to rasterize. No separate image-magick
 // or rsvg-convert needed because Playwright is already a dev dep of testing.
 
-import { chromium } from "@playwright/test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { chromium } from "@playwright/test";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // packages/testing/scripts/ → repoRoot is three levels up
@@ -23,8 +24,8 @@ const repoRoot = resolve(__dirname, "..", "..", "..");
 const OUT_DIR = resolve(repoRoot, "packages/extension/public/icons");
 
 const SOURCES = [
-  { size: 16,  svg: resolve(repoRoot, "website/public/logo.svg") },
-  { size: 48,  svg: resolve(repoRoot, "website/public/logo.svg") },
+  { size: 16, svg: resolve(repoRoot, "website/public/logo.svg") },
+  { size: 48, svg: resolve(repoRoot, "website/public/logo.svg") },
   { size: 128, svg: resolve(repoRoot, "website/public/logo.svg") },
 ];
 
@@ -46,7 +47,9 @@ for (const { size, svg: svgPath } of SOURCES) {
     .screenshot({ omitBackground: true, type: "png" });
   const out = resolve(OUT_DIR, `icon-${size}.png`);
   writeFileSync(out, buf);
-  console.log(`  ${size.toString().padStart(3)}px ← ${svgPath.replace(repoRoot + "\\", "").replace(repoRoot + "/", "")}  →  ${buf.length} bytes`);
+  console.log(
+    `  ${size.toString().padStart(3)}px ← ${svgPath.replace(repoRoot + "\\", "").replace(repoRoot + "/", "")}  →  ${buf.length} bytes`,
+  );
 }
 
 await browser.close();

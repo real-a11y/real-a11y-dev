@@ -1,5 +1,6 @@
 import { findByRole, type SemanticNode } from "@real-a11y-dev/core";
 import { useMemo } from "react";
+
 import { useSemanticTree } from "./useSemanticTree.js";
 
 /**

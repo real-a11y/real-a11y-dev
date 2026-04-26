@@ -1,5 +1,6 @@
 import type { SemanticNode } from "@real-a11y-dev/core";
 import { linearize } from "@real-a11y-dev/core";
+
 import { extract } from "./extract.js";
 
 export interface SerializeOptions {

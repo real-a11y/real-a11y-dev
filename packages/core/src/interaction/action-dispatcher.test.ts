@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { ActionDispatcher } from "./action-dispatcher.js";
+
 import { ElementRefMap } from "../utils/element-ref.js";
+
+import { ActionDispatcher } from "./action-dispatcher.js";
 
 describe("ActionDispatcher", () => {
   let refs: ElementRefMap;

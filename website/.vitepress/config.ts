@@ -35,7 +35,8 @@ export default defineConfig({
       "meta",
       {
         property: "og:title",
-        content: "Real A11y — accessibility tooling that works in the real world",
+        content:
+          "Real A11y — accessibility tooling that works in the real world",
       },
     ],
     [
@@ -54,10 +55,19 @@ export default defineConfig({
   // Per-page canonical URL.  Avoids duplicate-content signals when Google
   // indexes both the www and apex variant of the domain.
   transformHead({ pageData }) {
-    const path = pageData.relativePath.replace(/\.md$/, "").replace(/(^|\/)index$/, "");
+    const path = pageData.relativePath
+      .replace(/\.md$/, "")
+      .replace(/(^|\/)index$/, "");
     const href = `https://real-a11y.dev/${path}`.replace(/\/$/, "/");
     const tags: [string, Record<string, string>][] = [
-      ["link", { rel: "canonical", href: href === "https://real-a11y.dev/" ? "https://real-a11y.dev/" : href }],
+      [
+        "link",
+        {
+          rel: "canonical",
+          href:
+            href === "https://real-a11y.dev/" ? "https://real-a11y.dev/" : href,
+        },
+      ],
     ];
     // Rich results: SoftwareApplication schema on the homepage.
     if (pageData.relativePath === "index.md") {
@@ -156,14 +166,20 @@ export default defineConfig({
           { text: "@real-a11y-dev/inspector", link: "/packages/inspector" },
           { text: "@real-a11y-dev/testing", link: "/packages/testing" },
           { text: "@real-a11y-dev/react", link: "/packages/react" },
-          { text: "@real-a11y-dev/storybook-addon", link: "/packages/storybook-addon" },
+          {
+            text: "@real-a11y-dev/storybook-addon",
+            link: "/packages/storybook-addon",
+          },
         ],
       },
       {
         text: "Recipes",
         items: [
           { text: "Next.js (App Router + React 19)", link: "/recipes/nextjs" },
-          { text: "Storybook 8 + React 19", link: "/recipes/storybook-react-19" },
+          {
+            text: "Storybook 8 + React 19",
+            link: "/recipes/storybook-react-19",
+          },
           { text: "Peer Dependencies", link: "/recipes/peer-dependencies" },
           { text: "CI Diff Bot", link: "/guide/ci-diff-bot" },
         ],

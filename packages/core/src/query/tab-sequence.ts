@@ -1,4 +1,5 @@
 import type { SemanticNode } from "../types.js";
+
 import { linearize } from "./linearize.js";
 import type { QueryInput } from "./types.js";
 
@@ -28,7 +29,11 @@ function tabindexOf(node: SemanticNode): number | null {
  * it is good enough for snapshot-based tab-order audits on a document tree.
  */
 export function getTabSequence(input: QueryInput): SemanticNode[] {
-  const focusable: Array<{ node: SemanticNode; tabindex: number; order: number }> = [];
+  const focusable: Array<{
+    node: SemanticNode;
+    tabindex: number;
+    order: number;
+  }> = [];
   let order = 0;
 
   for (const node of linearize(input)) {

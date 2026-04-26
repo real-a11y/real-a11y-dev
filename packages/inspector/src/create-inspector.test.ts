@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
+
 import { createInspector } from "./index.js";
 
 function mountDoc(html: string): { root: HTMLElement; container: HTMLElement } {

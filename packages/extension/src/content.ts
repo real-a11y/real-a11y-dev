@@ -9,6 +9,7 @@ import {
   getElementRefs,
 } from "@real-a11y-dev/core";
 import type { TreeViewMode } from "@real-a11y-dev/core";
+
 import type { PanelToContent } from "./types.js";
 
 const isSubFrame = window !== window.top;
@@ -21,7 +22,7 @@ let focusingFromTree = false;
 // gate, the focusin listener below would keep redrawing the highlight overlay
 // on every tab keystroke, even with no panel to receive the updates.
 let focusTrackerEnabled = false;
-let curtainVisible = false;      // whether the screen curtain is currently on
+let curtainVisible = false; // whether the screen curtain is currently on
 const elementRefs = getElementRefs();
 const dispatcher = new ActionDispatcher(elementRefs);
 const focusManager = new FocusManager(elementRefs);
@@ -179,7 +180,12 @@ chrome.runtime.onMessage.addListener(
             label: opt.textContent?.trim() || opt.value,
             selected: opt.selected,
           }));
-          sendResponse({ success: true, type: "select", value: select.value, options });
+          sendResponse({
+            success: true,
+            type: "select",
+            value: select.value,
+            options,
+          });
         } else if (tag === "input" || tag === "textarea") {
           const input = el as HTMLInputElement;
           sendResponse({
@@ -197,18 +203,32 @@ chrome.runtime.onMessage.addListener(
       case "SEND_KEY": {
         const p = (message as any).payload;
         const target = document.activeElement || document.body;
-        target.dispatchEvent(new KeyboardEvent("keydown", {
-          key: p.key, code: p.code, keyCode: p.keyCode,
-          bubbles: true, cancelable: true,
-          shiftKey: !!p.modifiers?.shift, ctrlKey: !!p.modifiers?.ctrl,
-          altKey: !!p.modifiers?.alt, metaKey: !!p.modifiers?.meta,
-        } as KeyboardEventInit));
-        target.dispatchEvent(new KeyboardEvent("keyup", {
-          key: p.key, code: p.code, keyCode: p.keyCode,
-          bubbles: true, cancelable: true,
-          shiftKey: !!p.modifiers?.shift, ctrlKey: !!p.modifiers?.ctrl,
-          altKey: !!p.modifiers?.alt, metaKey: !!p.modifiers?.meta,
-        } as KeyboardEventInit));
+        target.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key: p.key,
+            code: p.code,
+            keyCode: p.keyCode,
+            bubbles: true,
+            cancelable: true,
+            shiftKey: !!p.modifiers?.shift,
+            ctrlKey: !!p.modifiers?.ctrl,
+            altKey: !!p.modifiers?.alt,
+            metaKey: !!p.modifiers?.meta,
+          } as KeyboardEventInit),
+        );
+        target.dispatchEvent(
+          new KeyboardEvent("keyup", {
+            key: p.key,
+            code: p.code,
+            keyCode: p.keyCode,
+            bubbles: true,
+            cancelable: true,
+            shiftKey: !!p.modifiers?.shift,
+            ctrlKey: !!p.modifiers?.ctrl,
+            altKey: !!p.modifiers?.alt,
+            metaKey: !!p.modifiers?.meta,
+          } as KeyboardEventInit),
+        );
         sendResponse({ success: true });
         setTimeout(() => sendTree(), 200);
         break;
@@ -260,9 +280,7 @@ if (!isSubFrame) {
         const role = region.getAttribute("role") || "status";
         const ariaLive = region.getAttribute("aria-live");
         const level =
-          ariaLive === "assertive" || role === "alert"
-            ? "assertive"
-            : "polite";
+          ariaLive === "assertive" || role === "alert" ? "assertive" : "polite";
 
         chrome.runtime.sendMessage({
           type: "LIVE_REGION",

@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
+
 import { extractDomTree } from "../extraction/dom-extractor.js";
-import { searchTree, applySearchFilter } from "./tree-search.js";
+
 import { resetIdCounter } from "../utils/id-generator.js";
+
+import { searchTree, applySearchFilter } from "./tree-search.js";
 
 beforeEach(() => {
   resetIdCounter();

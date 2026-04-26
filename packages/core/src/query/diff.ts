@@ -1,4 +1,5 @@
 import type { SemanticNode } from "../types.js";
+
 import { nodesOf, type QueryInput } from "./types.js";
 
 /** A single field whose value changed between two extractions of the same node. */
@@ -41,7 +42,10 @@ function collectChanges(before: SemanticNode, after: SemanticNode): string[] {
   }
 
   // Shallow record diffs
-  const recordKeys = (a: Record<string, unknown>, b: Record<string, unknown>) => {
+  const recordKeys = (
+    a: Record<string, unknown>,
+    b: Record<string, unknown>,
+  ) => {
     const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
     const diffs: string[] = [];
     for (const k of keys) if (a[k] !== b[k]) diffs.push(k);
