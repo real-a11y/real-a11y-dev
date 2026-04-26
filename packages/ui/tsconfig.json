@@ -6,6 +6,5 @@
     "jsx": "react-jsx",
     "jsxImportSource": "preact"
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"],
-  "references": [{ "path": "../core" }]
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

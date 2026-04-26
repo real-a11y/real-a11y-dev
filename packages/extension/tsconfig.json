@@ -8,6 +8,5 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"],
-  "references": [{ "path": "../core" }, { "path": "../ui" }]
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

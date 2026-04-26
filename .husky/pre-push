@@ -1,0 +1,6 @@
+# Run the full verify gate (build + typecheck + tests) before allowing a push.
+# Catches CI failures locally so the pipeline doesn't fail on review-time
+# issues (missing types, JSX config, broken tests).
+#
+# Skip in emergencies with `git push --no-verify`.
+pnpm verify

@@ -8,7 +8,7 @@ import {
   DomObserver,
   getElementRefs,
 } from "@real-a11y-dev/core";
-import type { TreeViewMode, SemanticNode } from "@real-a11y-dev/core";
+import type { TreeViewMode } from "@real-a11y-dev/core";
 import type { PanelToContent } from "./types.js";
 
 const isSubFrame = window !== window.top;
