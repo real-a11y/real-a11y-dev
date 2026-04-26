@@ -2,9 +2,18 @@
 
 [![Status: Beta](https://img.shields.io/badge/status-beta-orange)](#status)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
-[![npm (@real-a11y-dev/core)](https://img.shields.io/npm/v/@real-a11y-dev/core?label=%40real-a11y%2Fcore)](https://www.npmjs.com/package/@real-a11y-dev/core)
-[![npm (@real-a11y-dev/inspector)](https://img.shields.io/npm/v/@real-a11y-dev/inspector?label=%40real-a11y%2Finspector)](https://www.npmjs.com/package/@real-a11y-dev/inspector)
-[![Node](https://img.shields.io/node/v/@real-a11y-dev/core)](https://nodejs.org)
+
+<!--
+  npm version + Node-engine badges intentionally omitted until first
+  publish. They render as `invalid` / `package not found` for unpublished
+  packages, which makes the README look broken during the review phase.
+  Restore at publish time:
+
+  [![npm (@real-a11y-dev/core)](https://img.shields.io/npm/v/@real-a11y-dev/core)](https://www.npmjs.com/package/@real-a11y-dev/core)
+  [![npm (@real-a11y-dev/inspector)](https://img.shields.io/npm/v/@real-a11y-dev/inspector)](https://www.npmjs.com/package/@real-a11y-dev/inspector)
+  [![Node](https://img.shields.io/node/v/@real-a11y-dev/core)](https://nodejs.org)
+-->
+
 
 Accessibility tooling that works in the real world — semantic tree extraction, testing utilities, React integration, a Storybook panel, and a Chrome extension, all powered by the same engine.
 
