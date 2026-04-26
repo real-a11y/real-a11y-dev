@@ -1,0 +1,61 @@
+{
+  "name": "@real-a11y-dev/inspector",
+  "version": "0.1.0-beta.0",
+  "description": "Framework-agnostic interactive accessibility tree panel — embed into any app with Shadow DOM isolation",
+  "license": "MIT",
+  "author": "Juan Crisostomo (Real A11y)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/real-a11y/real-a11y-dev.git",
+    "directory": "packages/inspector"
+  },
+  "homepage": "https://real-a11y.dev/packages/inspector",
+  "bugs": {
+    "url": "https://github.com/real-a11y/real-a11y-dev/issues"
+  },
+  "keywords": [
+    "a11y",
+    "accessibility",
+    "aria",
+    "accessibility-tree",
+    "inspector",
+    "devtools",
+    "shadow-dom"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "preact": "^10.24.0"
+  },
+  "devDependencies": {
+    "@real-a11y-dev/core": "workspace:*",
+    "@real-a11y-dev/semantic-navigator-ui": "workspace:*",
+    "tsup": "^8.3.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "@real-a11y-dev/example-testing",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@real-a11y-dev/core": "workspace:*",
+    "@real-a11y-dev/testing": "workspace:*",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.0.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "jsdom": "^29.0.2",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

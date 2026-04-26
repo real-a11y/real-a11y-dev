@@ -1,0 +1,94 @@
+/* Semantic Navigator — Theme Variables */
+/*
+ * :root covers the light-DOM mount path (document.head style injection).
+ * .sn-theme-light  covers an explicit light theme.
+ * .sn-theme-auto   defaults to light; the @media block below overrides to dark.
+ * NOTE: inside a Shadow DOM, :root does NOT match (scoped to shadow tree), so
+ * shadow mounts MUST rely on the class selectors — not :root — for variables.
+ */
+:root,
+.sn-theme-light,
+.sn-theme-auto {
+  --sn-bg: #ffffff;
+  --sn-bg-hover: #f3f4f6;
+  --sn-bg-selected: #eff6ff;
+  --sn-bg-toolbar: #f9fafb;
+  --sn-text: #111827;
+  --sn-text-muted: #6b7280;
+  --sn-text-tag: #7c3aed;
+  --sn-text-role: #0369a1;
+  --sn-text-name: #047857;
+  --sn-text-attr-key: #b45309;
+  --sn-text-attr-val: #c2410c;
+  --sn-text-state: #7e22ce;
+  --sn-border: #e5e7eb;
+  --sn-border-focus: #3b82f6;
+  --sn-accent: hsl(221 83% 53%);
+  --sn-accent-bg: hsl(221 83% 53% / 0.1);
+  --sn-badge-bg: #f3f4f6;
+  --sn-badge-text: #374151;
+  --sn-badge-interactive-bg: #dbeafe;
+  --sn-badge-interactive-text: #1d4ed8;
+  --sn-search-bg: #ffffff;
+  --sn-search-border: #d1d5db;
+  --sn-guide-line: #e5e7eb;
+  --sn-font: system-ui, -apple-system, sans-serif;
+  --sn-font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+  --sn-font-size: 13px;
+  --sn-line-height: 24px;
+  --sn-indent: 20px;
+}
+
+.sn-theme-dark {
+  --sn-bg: #1a1a2e;
+  --sn-bg-hover: #252540;
+  --sn-bg-selected: #1e3a5f;
+  --sn-bg-toolbar: #16162a;
+  --sn-text: #e2e8f0;
+  --sn-text-muted: #94a3b8;
+  --sn-text-tag: #c084fc;
+  --sn-text-role: #38bdf8;
+  --sn-text-name: #34d399;
+  --sn-text-attr-key: #fbbf24;
+  --sn-text-attr-val: #fb923c;
+  --sn-text-state: #a78bfa;
+  --sn-border: #334155;
+  --sn-border-focus: #60a5fa;
+  --sn-accent: hsl(221 83% 63%);
+  --sn-accent-bg: hsl(221 83% 53% / 0.15);
+  --sn-badge-bg: #334155;
+  --sn-badge-text: #cbd5e1;
+  --sn-badge-interactive-bg: #1e3a5f;
+  --sn-badge-interactive-text: #93c5fd;
+  --sn-search-bg: #1e293b;
+  --sn-search-border: #475569;
+  --sn-guide-line: #334155;
+}
+
+@media (prefers-color-scheme: dark) {
+  .sn-theme-auto {
+    --sn-bg: #1a1a2e;
+    --sn-bg-hover: #252540;
+    --sn-bg-selected: #1e3a5f;
+    --sn-bg-toolbar: #16162a;
+    --sn-text: #e2e8f0;
+    --sn-text-muted: #94a3b8;
+    --sn-text-tag: #c084fc;
+    --sn-text-role: #38bdf8;
+    --sn-text-name: #34d399;
+    --sn-text-attr-key: #fbbf24;
+    --sn-text-attr-val: #fb923c;
+    --sn-text-state: #a78bfa;
+    --sn-border: #334155;
+    --sn-border-focus: #60a5fa;
+    --sn-accent: hsl(221 83% 63%);
+    --sn-accent-bg: hsl(221 83% 53% / 0.15);
+    --sn-badge-bg: #334155;
+    --sn-badge-text: #cbd5e1;
+    --sn-badge-interactive-bg: #1e3a5f;
+    --sn-badge-interactive-text: #93c5fd;
+    --sn-search-bg: #1e293b;
+    --sn-search-border: #475569;
+    --sn-guide-line: #334155;
+  }
+}

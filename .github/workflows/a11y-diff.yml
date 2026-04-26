@@ -1,0 +1,200 @@
+name: A11y Tree Diff
+
+# Posts a PR comment when the accessibility tree of any audited page changes.
+# Two snapshot jobs run in parallel (base branch + PR branch); a third job
+# diffs the outputs and either posts or updates a single sticky comment.
+#
+# The comment is updated on every new push — not spammed with duplicates.
+
+on:
+  pull_request:
+    branches: [main]
+    # Only run when source files change — skip pure-docs, config, etc.
+    paths:
+      - "packages/core/src/**"
+      - "packages/testing/src/**"
+      - "packages/testing/e2e/fixture*.html"
+      - "packages/testing/scripts/**"
+
+permissions:
+  contents: read
+  pull-requests: write   # needed to post/update PR comments
+
+jobs:
+  # ── 1a. Snapshot: base branch (main) ───────────────────────────────────────
+  snapshot-base:
+    name: Snapshot (base)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.base_ref }}
+
+      # pnpm version is read from `packageManager` in package.json.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm -r --filter='./packages/*' build
+
+      - name: Install Playwright browser
+        run: pnpm --filter @real-a11y-dev/testing exec playwright install chromium --with-deps
+
+      - name: Generate a11y snapshots
+        run: pnpm --filter @real-a11y-dev/testing snapshot
+        env:
+          # A11Y_SNAPSHOT_OUT is relative to where the command runs (repo root
+          # when using --filter, but pnpm changes cwd to the package dir).
+          # The script uses `process.cwd()` implicitly — set an absolute path.
+          A11Y_SNAPSHOT_OUT: ${{ github.workspace }}/base-snapshots.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: base-snapshots
+          path: base-snapshots.md
+          if-no-files-found: error
+
+  # ── 1b. Snapshot: PR branch (head) ─────────────────────────────────────────
+  snapshot-pr:
+    name: Snapshot (PR)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        # Default checkout = PR head — no ref needed
+
+      # pnpm version is read from `packageManager` in package.json.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm -r --filter='./packages/*' build
+
+      - name: Install Playwright browser
+        run: pnpm --filter @real-a11y-dev/testing exec playwright install chromium --with-deps
+
+      - name: Generate a11y snapshots
+        run: pnpm --filter @real-a11y-dev/testing snapshot
+        env:
+          A11Y_SNAPSHOT_OUT: ${{ github.workspace }}/pr-snapshots.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr-snapshots
+          path: pr-snapshots.md
+          if-no-files-found: error
+
+  # ── 2. Diff + post comment ──────────────────────────────────────────────────
+  diff-and-comment:
+    name: Diff & comment
+    needs: [snapshot-base, snapshot-pr]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: base-snapshots
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: pr-snapshots
+
+      # Produce a unified diff.  Exit code 1 = files differ (expected), 0 = same.
+      - name: Compute diff
+        id: diff
+        run: |
+          diff --unified=3 base-snapshots.md pr-snapshots.md > a11y.diff || true
+          echo "has_diff=$([ -s a11y.diff ] && echo true || echo false)" >> $GITHUB_OUTPUT
+
+      # Post or update a single sticky comment on the PR.
+      # Uses a <!-- real-a11y-diff --> marker to find and overwrite existing comments.
+      - name: Post PR comment
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const hasDiff = '${{ steps.diff.outputs.has_diff }}' === 'true';
+            const MARKER = '<!-- real-a11y-diff -->';
+
+            // Build the comment body
+            let body;
+            if (!hasDiff) {
+              body = [
+                MARKER,
+                '## ✅ A11y tree unchanged',
+                '',
+                'No accessibility tree changes detected in this PR.',
+                '',
+                '_Powered by [Real A11y](https://github.com/real-a11y/real-a11y-dev)_',
+              ].join('\n');
+            } else {
+              const diff = fs.readFileSync('a11y.diff', 'utf8');
+
+              // Summarise how many sections changed
+              const added   = (diff.match(/^\+[^+]/gm) || []).length;
+              const removed = (diff.match(/^-[^-]/gm) || []).length;
+              const summary = `${added} line${added !== 1 ? 's' : ''} added, ${removed} removed`;
+
+              // Keep the diff under GitHub's 65 kB comment limit
+              const MAX = 60_000;
+              const diffBlock = diff.length > MAX
+                ? diff.slice(0, MAX) + '\n... (truncated — see artifacts for full diff)'
+                : diff;
+
+              body = [
+                MARKER,
+                '## 🔍 A11y tree changed',
+                '',
+                `**${summary}** — review to confirm changes are intentional.`,
+                '',
+                '<details>',
+                '<summary>Show full diff</summary>',
+                '',
+                '```diff',
+                diffBlock,
+                '```',
+                '',
+                '</details>',
+                '',
+                '_Powered by [Real A11y](https://github.com/real-a11y/real-a11y-dev)_',
+              ].join('\n');
+            }
+
+            // Find existing comment from a previous push to this PR
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body?.includes(MARKER));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+              console.log('Updated existing a11y-diff comment:', existing.id);
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+              console.log('Posted new a11y-diff comment');
+            }

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Real A11y — Bad fixture (intentional issues)</title>
+  </head>
+  <body>
+    <!--
+      Intentionally broken fixture for testing that assertions *fail*:
+      - No main landmark
+      - No h1
+      - h3 directly after h2 (skipped level would be bad, but here h4 after h2 is skipped)
+      - Unlabeled interactive elements
+      - Dialog without accessible name
+    -->
+    <div>
+      <h2>Section title (no h1 above)</h2>
+      <h4>Skipped to h4 directly</h4>
+
+      <!-- No label on this button -->
+      <button type="button"></button>
+
+      <!-- No label on this input -->
+      <input type="text" />
+
+      <!-- Dialog with no name -->
+      <dialog id="bad-dialog" open>
+        <p>No label on this dialog</p>
+        <button type="button">OK</button>
+      </dialog>
+    </div>
+
+    <footer>Footer</footer>
+  </body>
+</html>

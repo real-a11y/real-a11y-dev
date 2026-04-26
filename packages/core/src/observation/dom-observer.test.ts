@@ -1,0 +1,328 @@
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  vi,
+} from "vitest";
+import { DomObserver } from "./dom-observer.js";
+
+/**
+ * jsdom delivers MutationObserver callbacks asynchronously (microtask).
+ * Helper that flushes a microtask + advances the debounce timer.
+ */
+async function settleObserver(debounceMs = 300) {
+  await Promise.resolve(); // let MutationObserver flush its queued records
+  vi.advanceTimersByTime(debounceMs + 10);
+}
+
+describe("DomObserver", () => {
+  let onTreeChange: ReturnType<typeof vi.fn>;
+  let observer: DomObserver;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    document.body.innerHTML = "";
+    onTreeChange = vi.fn();
+  });
+
+  afterEach(() => {
+    observer?.stop();
+    vi.useRealTimers();
+    document.body.innerHTML = "";
+    document.documentElement.querySelectorAll(
+      "#__sn-highlight, #__sn-curtain",
+    ).forEach((el) => el.remove());
+  });
+
+  it("fires the callback after a real DOM mutation", async () => {
+    observer = new DomObserver(document.body, onTreeChange, 100);
+    observer.start();
+
+    const btn = document.createElement("button");
+    btn.textContent = "click me";
+    document.body.appendChild(btn);
+
+    await settleObserver(100);
+
+    expect(onTreeChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("debounces rapid mutations into a single callback", async () => {
+    observer = new DomObserver(document.body, onTreeChange, 100);
+    observer.start();
+
+    for (let i = 0; i < 5; i++) {
+      const div = document.createElement("div");
+      document.body.appendChild(div);
+    }
+
+    await settleObserver(100);
+
+    expect(onTreeChange).toHaveBeenCalledTimes(1);
+  });
+
+  // ── Internal-sentinel filtering ────────────────────────────────────────────
+  // These tests cover the bug fix where drawing the focus-highlight overlay
+  // (or the screen curtain) on the host page would itself be a DOM mutation
+  // observed by DomObserver, causing a feedback loop of re-extractions.
+
+  describe("ignores mutations from internal sentinel elements", () => {
+    it("skips when only the highlight overlay is added", async () => {
+      observer = new DomObserver(document.documentElement, onTreeChange, 100);
+      observer.start();
+
+      const overlay = document.createElement("div");
+      overlay.id = "__sn-highlight";
+      document.documentElement.appendChild(overlay);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+
+    it("skips when the highlight overlay is removed", async () => {
+      // Pre-existing overlay (would have been added before observer started)
+      const overlay = document.createElement("div");
+      overlay.id = "__sn-highlight";
+      document.documentElement.appendChild(overlay);
+
+      observer = new DomObserver(document.documentElement, onTreeChange, 100);
+      observer.start();
+
+      overlay.remove();
+      await settleObserver(100);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+
+    it("skips when the overlay's position/style changes", async () => {
+      const overlay = document.createElement("div");
+      overlay.id = "__sn-highlight";
+      document.documentElement.appendChild(overlay);
+
+      observer = new DomObserver(document.documentElement, onTreeChange, 100);
+      observer.start();
+
+      // Simulate the FocusManager moving the highlight to a new element.
+      overlay.style.top = "42px";
+      overlay.style.left = "100px";
+      overlay.style.width = "200px";
+      overlay.style.height = "30px";
+
+      await settleObserver(100);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+
+    it("skips when only the screen curtain is added", async () => {
+      observer = new DomObserver(document.documentElement, onTreeChange, 100);
+      observer.start();
+
+      const curtain = document.createElement("div");
+      curtain.id = "__sn-curtain";
+      curtain.innerHTML = "<div>Screen Curtain</div>";
+      document.documentElement.appendChild(curtain);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+
+    it("skips when only the curtain is removed", async () => {
+      const curtain = document.createElement("div");
+      curtain.id = "__sn-curtain";
+      document.documentElement.appendChild(curtain);
+
+      observer = new DomObserver(document.documentElement, onTreeChange, 100);
+      observer.start();
+
+      curtain.remove();
+      await settleObserver(100);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+
+    it("STILL fires on a real mutation that arrives in the same batch as an overlay change", async () => {
+      // Critical: we can't drop a whole batch just because *some* of it was
+      // ours — a real user mutation in the same microtask must still be
+      // delivered. This is the "mixed batch" guarantee.
+      observer = new DomObserver(document.documentElement, onTreeChange, 100);
+      observer.start();
+
+      const overlay = document.createElement("div");
+      overlay.id = "__sn-highlight";
+      document.documentElement.appendChild(overlay);
+
+      const btn = document.createElement("button");
+      btn.textContent = "real user mutation";
+      document.body.appendChild(btn);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not skip mutations on unrelated elements that happen to be empty", async () => {
+      // Regression guard: an empty addedNodes/removedNodes record should
+      // not be misclassified as internal.
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      // Cause a `characterData` mutation on a normal text node — the
+      // total of addedNodes + removedNodes is 0, but the mutation type is
+      // "characterData", not "childList". Our impl handles each type.
+      const p = document.createElement("p");
+      const txt = document.createTextNode("before");
+      p.appendChild(txt);
+      document.body.appendChild(p);
+      await settleObserver(100);
+      onTreeChange.mockClear();
+
+      txt.data = "after";
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("custom internalIds extends the default sentinel set", async () => {
+      observer = new DomObserver(
+        document.documentElement,
+        onTreeChange,
+        100,
+        new Set(["__custom-overlay"]),
+      );
+      observer.start();
+
+      const overlay = document.createElement("div");
+      overlay.id = "__custom-overlay";
+      document.documentElement.appendChild(overlay);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── Form-control value observation ────────────────────────────────────────
+  // MutationObserver doesn't see typing — `.value` is a property, not a DOM
+  // attribute or text node. Without listening for `input`/`change`, the tree
+  // would render stale values whenever a user typed into a field directly.
+  describe("form-control value tracking", () => {
+    it("fires onTreeChange when an input fires the input event", async () => {
+      const input = document.createElement("input");
+      document.body.appendChild(input);
+
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      vi.advanceTimersByTime(110);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("fires onTreeChange when a textarea fires the input event", async () => {
+      const ta = document.createElement("textarea");
+      document.body.appendChild(ta);
+
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+      vi.advanceTimersByTime(110);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("fires onTreeChange when a select fires the change event", async () => {
+      const select = document.createElement("select");
+      const opt = document.createElement("option");
+      opt.value = "a";
+      select.appendChild(opt);
+      document.body.appendChild(select);
+
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+      vi.advanceTimersByTime(110);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("debounces a burst of keystrokes into one re-extract", async () => {
+      const input = document.createElement("input");
+      document.body.appendChild(input);
+
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      for (let i = 0; i < 5; i++) {
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      vi.advanceTimersByTime(110);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("still hears input events that stop propagation (capture phase)", async () => {
+      const input = document.createElement("input");
+      document.body.appendChild(input);
+      // A page handler that swallows the event before it bubbles.
+      input.addEventListener("input", (e) => e.stopPropagation());
+
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      vi.advanceTimersByTime(110);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("removes the input listener on stop()", async () => {
+      const input = document.createElement("input");
+      document.body.appendChild(input);
+
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+      observer.stop();
+
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      vi.advanceTimersByTime(110);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("stop", () => {
+    it("disconnects and cancels pending debounce", async () => {
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      const div = document.createElement("div");
+      document.body.appendChild(div);
+
+      // Stop before the debounce fires
+      observer.stop();
+
+      await settleObserver(100);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+
+    it("is safe to call before start", () => {
+      observer = new DomObserver(document.body, onTreeChange);
+      expect(() => observer.stop()).not.toThrow();
+    });
+
+    it("is safe to call multiple times", () => {
+      observer = new DomObserver(document.body, onTreeChange);
+      observer.start();
+      observer.stop();
+      expect(() => observer.stop()).not.toThrow();
+    });
+  });
+});

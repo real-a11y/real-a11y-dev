@@ -1,0 +1,76 @@
+name: Publish to npm
+
+# Triggered manually or by pushing a version tag (e.g. `v0.1.0-beta.0`).
+# Publishes every public workspace package with npm provenance.
+#
+# Setup required before first use:
+#   1. Create the `@real-a11y-dev` org on npmjs.com.
+#   2. Generate a Granular Access Token scoped to `@real-a11y-dev/*`
+#      with Read and Write permission on packages.
+#   3. Add it as a repository secret named `NPM_TOKEN`.
+#   4. (Optional) Set `tag` input when dispatching to override the
+#      dist-tag. Defaults to `beta` while we're pre-1.0.
+#
+# After first successful publish, consider switching to Trusted Publishers:
+#   npmjs.com/package/@real-a11y-dev/<name>/access → Publishing access →
+#   Trusted Publisher → GitHub Actions → this workflow. Then delete NPM_TOKEN.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "npm dist-tag to publish under (e.g. `beta`, `latest`)"
+        required: false
+        default: "beta"
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      # Required for `npm publish --provenance` via OIDC attestations.
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm version is read from `packageManager` in package.json.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build all packages
+        run: pnpm -r --filter='./packages/*' build
+
+      - name: Resolve dist-tag
+        id: tag
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          if [ -z "$TAG" ]; then TAG="beta"; fi
+          echo "value=$TAG" >> "$GITHUB_OUTPUT"
+
+      # pnpm's `publish -r` publishes every package whose version/tag is new,
+      # skips the rest. `--no-git-checks` lets tag-triggered runs proceed even
+      # when the working tree does not match main exactly.
+      - name: Publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"
+        run: |
+          pnpm publish -r \
+            --access public \
+            --tag ${{ steps.tag.outputs.value }} \
+            --no-git-checks

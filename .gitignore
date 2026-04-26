@@ -1,0 +1,18 @@
+node_modules/
+dist/
+.turbo/
+*.tsbuildinfo
+.env
+.env.*
+coverage/
+**/.vitepress/cache/
+**/.vitepress/dist/
+a11y-snapshots.md
+a11y.diff
+
+# playwright run artifacts (per-package)
+test-results/
+playwright-report/
+
+# Claude Code project settings (user-specific)
+.claude/

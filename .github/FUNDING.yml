@@ -1,0 +1,15 @@
+# Funding options shown as the "Sponsor" button on the repo.
+#
+# Uncomment and fill in once the corresponding account is created.
+# All fields are optional — leave the line commented until the account exists,
+# otherwise GitHub renders a broken link.
+#
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/displaying-a-sponsor-button-in-your-repository
+
+# github: [real-a11y]        # GitHub Sponsors username or org (requires approval)
+# open_collective: real-a11y # Open Collective slug
+# patreon: real-a11y         # Patreon username
+# ko_fi: real-a11y           # Ko-fi username
+# tidelift: npm/real-a11y    # Tidelift subscription
+# custom:                    # Any URL(s) you host yourself
+#   - https://real-a11y.dev/sponsor

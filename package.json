@@ -1,0 +1,29 @@
+{
+  "name": "real-a11y",
+  "private": true,
+  "description": "Real A11y monorepo — accessibility tooling that works in the real world. Semantic tree extraction, testing utilities, React integration, Storybook panel, and Chrome extension.",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm -r --parallel dev",
+    "test": "vitest",
+    "lint": "eslint packages/",
+    "typecheck": "tsc -b",
+    "a11y:snapshot": "pnpm --filter @real-a11y-dev/testing snapshot",
+    "rasterize-icons": "pnpm --filter @real-a11y-dev/testing exec node scripts/rasterize-extension-icons.mjs",
+    "rasterize-og": "pnpm --filter @real-a11y-dev/testing exec node scripts/rasterize-og-image.mjs"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.287",
+    "@vitest/browser": "^4.1.4",
+    "eslint": "^9.0.0",
+    "jsdom": "^29.0.2",
+    "prettier": "^3.3.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20"
+  }
+}

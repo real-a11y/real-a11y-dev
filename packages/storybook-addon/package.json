@@ -1,0 +1,107 @@
+{
+  "name": "@real-a11y-dev/storybook-addon",
+  "version": "0.1.0-beta.0",
+  "description": "Storybook addon — Semantic Navigator A11y tree panel for every story",
+  "license": "MIT",
+  "author": "Juan Crisostomo (Real A11y)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/real-a11y/real-a11y-dev.git",
+    "directory": "packages/storybook-addon"
+  },
+  "homepage": "https://real-a11y.dev/packages/storybook-addon",
+  "bugs": {
+    "url": "https://github.com/real-a11y/real-a11y-dev/issues"
+  },
+  "keywords": [
+    "storybook",
+    "storybook-addon",
+    "storybook-addons",
+    "a11y",
+    "accessibility",
+    "aria",
+    "accessibility-tree"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./preview": {
+      "types": "./dist/preview.d.ts",
+      "import": "./dist/preview.js",
+      "require": "./dist/preview.cjs"
+    },
+    "./manager": {
+      "types": "./dist/manager.d.ts",
+      "import": "./dist/manager.js",
+      "require": "./dist/manager.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "preview.js",
+    "manager.js"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@real-a11y-dev/core": "workspace:*",
+    "@real-a11y-dev/semantic-navigator-ui": "workspace:*",
+    "@real-a11y-dev/testing": "workspace:*"
+  },
+  "peerDependencies": {
+    "@storybook/manager-api": "^8.0.0",
+    "@storybook/preview-api": "^8.0.0",
+    "@storybook/theming": "^8.0.0",
+    "react": ">=18",
+    "react-dom": ">=18",
+    "storybook": "^8.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@storybook/manager-api": {
+      "optional": false
+    },
+    "@storybook/preview-api": {
+      "optional": false
+    },
+    "@storybook/theming": {
+      "optional": true
+    },
+    "react": {
+      "optional": false
+    },
+    "react-dom": {
+      "optional": false
+    },
+    "storybook": {
+      "optional": false
+    }
+  },
+  "devDependencies": {
+    "@storybook/manager-api": "^8.6.0",
+    "@storybook/preview-api": "^8.6.0",
+    "@types/react": "^18.3.0",
+    "preact": "^10.24.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or help using Real A11y
+    url: https://github.com/real-a11y/real-a11y-dev/discussions/categories/q-a
+    about: "Please ask questions in Discussions — not Issues. Issues are for confirmed bugs and feature requests."
+  - name: Security vulnerability
+    url: https://github.com/real-a11y/real-a11y-dev/security/advisories/new
+    about: "Do not file public issues for security problems. Use a private security advisory or email security@real-a11y.dev."
+  - name: Share what you built
+    url: https://github.com/real-a11y/real-a11y-dev/discussions/categories/show-and-tell
+    about: "Built something with Real A11y? Post it in Show & Tell."

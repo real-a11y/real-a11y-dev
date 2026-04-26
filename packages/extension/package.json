@@ -1,0 +1,28 @@
+{
+  "name": "@real-a11y-dev/semantic-navigator-extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Semantic Navigator — Chrome extension for the Real A11y project. Inspect and interact with the accessibility tree of any page.",
+  "type": "module",
+  "scripts": {
+    "build": "vite build && cross-env BUILD_TARGET=content vite build",
+    "dev": "vite build --watch",
+    "package": "pnpm build && node scripts/zip-for-cws.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@real-a11y-dev/core": "workspace:*",
+    "@real-a11y-dev/semantic-navigator-ui": "workspace:*",
+    "preact": "^10.24.0"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.9.0",
+    "@types/chrome": "^0.0.287",
+    "cross-env": "^10.1.0",
+    "jsdom": "^29.0.2",
+    "typescript": "^5.6.0",
+    "vite": "^6.0.0",
+    "vitest": "^2.1.0"
+  }
+}

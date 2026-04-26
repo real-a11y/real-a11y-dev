@@ -1,0 +1,69 @@
+{
+  "name": "@real-a11y-dev/react",
+  "version": "0.1.0-beta.0",
+  "description": "React wrapper around @real-a11y-dev/inspector — component plus tree/modal hooks",
+  "license": "MIT",
+  "author": "Juan Crisostomo (Real A11y)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/real-a11y/real-a11y-dev.git",
+    "directory": "packages/react"
+  },
+  "homepage": "https://real-a11y.dev/packages/react",
+  "bugs": {
+    "url": "https://github.com/real-a11y/real-a11y-dev/issues"
+  },
+  "keywords": [
+    "a11y",
+    "accessibility",
+    "aria",
+    "react",
+    "hooks",
+    "accessibility-tree",
+    "inspector"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@real-a11y-dev/core": "workspace:*",
+    "@real-a11y-dev/inspector": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.0.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

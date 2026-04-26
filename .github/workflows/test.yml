@@ -1,0 +1,56 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm version is read from `packageManager` in package.json.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # Build publishable packages first so workspace:* deps resolve before tests.
+      - name: Build packages
+        run: pnpm -r --filter='./packages/*' build
+
+      - name: Test
+        run: |
+          pnpm --filter @real-a11y-dev/core test
+          pnpm --filter @real-a11y-dev/inspector test
+          pnpm --filter @real-a11y-dev/testing test
+          pnpm --filter @real-a11y-dev/react test
+          pnpm --filter @real-a11y-dev/storybook-addon test
+          pnpm --filter @real-a11y-dev/semantic-navigator-ui test
+
+      # The testing example has its own audit tests; include them in CI so
+      # snapshot drift is caught here, not only manually.
+      - name: Test examples
+        run: pnpm --filter @real-a11y-dev/example-testing test
+
+      # Confirm the website and runnable examples still build end-to-end.
+      - name: Build examples and docs
+        run: |
+          pnpm --filter @real-a11y-dev/example-vanilla build
+          pnpm --filter @real-a11y-dev/example-react build
+          pnpm --filter @real-a11y-dev/website build

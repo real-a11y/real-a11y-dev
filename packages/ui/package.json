@@ -1,0 +1,60 @@
+{
+  "name": "@real-a11y-dev/semantic-navigator-ui",
+  "version": "0.1.0-beta.0",
+  "description": "Preact tree-view components for Semantic Navigator (used by the inspector, React wrapper, Storybook addon, and Chrome extension)",
+  "license": "MIT",
+  "author": "Juan Crisostomo (Real A11y)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/real-a11y/real-a11y-dev.git",
+    "directory": "packages/ui"
+  },
+  "homepage": "https://real-a11y.dev",
+  "bugs": {
+    "url": "https://github.com/real-a11y/real-a11y-dev/issues"
+  },
+  "keywords": [
+    "a11y",
+    "accessibility",
+    "aria",
+    "preact",
+    "tree-view",
+    "accessibility-tree"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./styles": "./dist/styles/tree.css"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@real-a11y-dev/core": "workspace:*",
+    "preact": "^10.24.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.3.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "Semantic Navigator",
+  "version": "0.1.0",
+  "description": "Navigate and interact with web pages through their semantic tree structure. Experience the web the way assistive technology does.",
+  "permissions": [
+    "activeTab",
+    "sidePanel",
+    "scripting",
+    "webNavigation"
+  ],
+  "side_panel": {
+    "default_path": "src/sidepanel/index.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+  "action": {
+    "default_title": "Open Semantic Navigator"
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  }
+}
