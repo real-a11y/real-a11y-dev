@@ -1,19 +1,23 @@
 name: Publish to npm
 
-# Triggered manually or by pushing a version tag (e.g. `v0.1.0-beta.0`).
+# Triggered manually or by pushing a version tag (e.g. `v0.1.1-beta.0`).
 # Publishes every public workspace package with npm provenance.
 #
-# Setup required before first use:
-#   1. Create the `@real-a11y-dev` org on npmjs.com.
-#   2. Generate a Granular Access Token scoped to `@real-a11y-dev/*`
-#      with Read and Write permission on packages.
-#   3. Add it as a repository secret named `NPM_TOKEN`.
-#   4. (Optional) Set `tag` input when dispatching to override the
-#      dist-tag. Defaults to `beta` while we're pre-1.0.
+# Auth: Trusted Publisher (npm OIDC).
+# Each `@real-a11y-dev/*` package has GitHub Actions configured as a trusted
+# publisher pointing at this workflow. npm validates the OIDC token issued
+# by GitHub on every publish — no NPM_TOKEN, no OTP, no security key tap.
 #
-# After first successful publish, consider switching to Trusted Publishers:
-#   npmjs.com/package/@real-a11y-dev/<name>/access → Publishing access →
-#   Trusted Publisher → GitHub Actions → this workflow. Then delete NPM_TOKEN.
+# Configure once per package at:
+#   npmjs.com/package/@real-a11y-dev/<name>/access
+#   → Publishing access → GitHub Actions → Add Trusted Publisher
+#     - Organization or user: real-a11y
+#     - Repository:           real-a11y-dev
+#     - Workflow filename:    publish.yml
+#     - Environment name:     (blank)
+#
+# Provenance attestations land in the public Sigstore transparency log and
+# show as a verified badge on the package page.
 
 on:
   workflow_dispatch:
@@ -34,7 +38,9 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      # Required for `npm publish --provenance` via OIDC attestations.
+      # Required for OIDC: lets npm validate the GitHub Actions identity
+      # against each package's Trusted Publisher config, and lets npm
+      # publish attach a provenance attestation.
       id-token: write
       contents: read
     steps:
@@ -64,10 +70,10 @@ jobs:
 
       # pnpm's `publish -r` publishes every package whose version/tag is new,
       # skips the rest. `--no-git-checks` lets tag-triggered runs proceed even
-      # when the working tree does not match main exactly.
+      # when the working tree does not match main exactly. No auth env vars
+      # — OIDC handles authentication via the Trusted Publisher config above.
       - name: Publish
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
         run: |
           pnpm publish -r \
