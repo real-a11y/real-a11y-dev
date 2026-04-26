@@ -1,0 +1,15 @@
+# Force LF line endings for all text files. Without this, Git on Windows
+# checks files out with CRLF (per `core.autocrlf=true`), which conflicts
+# with the Prettier `endOfLine: "lf"` setting and breaks `pnpm format:check`
+# locally. CI runs on Linux and is unaffected, but the local pre-push hook
+# fails with 80+ false positives. This file is the standard fix.
+* text=auto eol=lf
+
+# Binary files — never normalize
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.zip binary
