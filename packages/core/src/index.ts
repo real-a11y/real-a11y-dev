@@ -43,6 +43,8 @@ export {
 // Utils
 export { ElementRefMap } from "./utils/element-ref.js";
 export { getNodeId, resetIdCounter } from "./utils/id-generator.js";
+export { buildControlsIndex } from "./utils/controls-index.js";
+export type { ControlsIndex } from "./utils/controls-index.js";
 
 // Query helpers (for testing / audits / Storybook)
 export {
