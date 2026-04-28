@@ -79,6 +79,100 @@ describe("ActionDispatcher", () => {
 
       expect(delegated).toHaveBeenCalledTimes(1);
     });
+
+    it("redirects clicks on a treeitem container to its inner role=link descendant (Drive shape)", () => {
+      // Regression: Drive's tree wraps each row in `<div role="treeitem">`
+      // with no event handler. The actual click handler is delegated and
+      // looks for `event.target.closest('[data-target="node"]')` on a
+      // descendant `<div role="link" data-target="node">`. Dispatching on
+      // the wrapper made event.target the wrapper, the closest() walk went
+      // upward, the handler returned null, and every Drive tree click was
+      // a silent no-op even after the pointer-sequence fix in #21.
+      document.body.innerHTML = `
+        <div role="treeitem" id="row">
+          <div role="link" data-target="node" id="link">
+            <div data-target="expander" id="exp">▸</div>
+            <span>Home</span>
+          </div>
+        </div>
+      `;
+      const row = document.getElementById("row")!;
+      const link = document.getElementById("link")!;
+      const exp = document.getElementById("exp")!;
+      refs.set("n1", row);
+
+      const linkClicks = vi.fn();
+      const expanderClicks = vi.fn();
+      link.addEventListener("click", (e) => linkClicks(e.target));
+      exp.addEventListener("click", expanderClicks);
+
+      dispatcher.dispatch({ nodeId: "n1", action: "click" });
+
+      expect(linkClicks).toHaveBeenCalledTimes(1);
+      // event.target should be the link (or a descendant of it), not the
+      // expander — the resolver explicitly skips expander descendants.
+      const target = linkClicks.mock.calls[0]![0] as Element;
+      expect(link.contains(target)).toBe(true);
+      expect(exp.contains(target)).toBe(false);
+    });
+
+    it("falls through to the wrapper when no interactive descendant is present", () => {
+      // For well-formed ARIA where the treeitem itself owns the click
+      // handler (ARIA Authoring Practices reference impl, Material UI),
+      // the resolver should NOT redirect.
+      document.body.innerHTML = `
+        <div role="treeitem" id="row">
+          <span>Home</span>
+        </div>
+      `;
+      const row = document.getElementById("row")!;
+      refs.set("n1", row);
+
+      const onClick = vi.fn();
+      row.addEventListener("click", (e) => onClick(e.target));
+
+      dispatcher.dispatch({ nodeId: "n1", action: "click" });
+
+      expect(onClick).toHaveBeenCalledTimes(1);
+      expect(onClick.mock.calls[0]![0]).toBe(row);
+    });
+
+    it("does not redirect for non-composite-child roles", () => {
+      // A regular button containing a span shouldn't have its click
+      // redirected to the span — the button is the natural target.
+      document.body.innerHTML = `
+        <button id="btn"><span id="inner">Click me</span></button>
+      `;
+      const btn = document.getElementById("btn")!;
+      refs.set("n1", btn);
+
+      const onClick = vi.fn();
+      btn.addEventListener("click", (e) => onClick(e.target));
+
+      dispatcher.dispatch({ nodeId: "n1", action: "click" });
+
+      expect(onClick).toHaveBeenCalledTimes(1);
+      expect(onClick.mock.calls[0]![0]).toBe(btn);
+    });
+
+    it("redirects menuitem container clicks to a nested role=button child", () => {
+      // Same shape as treeitem — Gmail-style menuitem wrappers.
+      document.body.innerHTML = `
+        <div role="menuitem" id="row">
+          <div role="button" id="action">Open</div>
+        </div>
+      `;
+      const row = document.getElementById("row")!;
+      const action = document.getElementById("action")!;
+      refs.set("n1", row);
+
+      const onAction = vi.fn();
+      action.addEventListener("click", onAction);
+
+      dispatcher.dispatch({ nodeId: "n1", action: "click" });
+
+      expect(onAction).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("type action", () => {

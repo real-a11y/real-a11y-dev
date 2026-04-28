@@ -2,6 +2,63 @@ import type { ActionRequest, ActionResult } from "../types.js";
 import { ElementRefMap } from "../utils/element-ref.js";
 
 /**
+ * ARIA composite-widget child roles. Elements with these roles are commonly
+ * implemented as containers — the actual click handler lives on a more
+ * specific descendant (a `role="link"`, an `<a href>`, or a Google-style
+ * `[data-target="node"]` hint).
+ */
+const COMPOSITE_CHILD_ROLES = new Set([
+  "treeitem",
+  "menuitem",
+  "menuitemcheckbox",
+  "menuitemradio",
+  "option",
+  "tab",
+  "row",
+  "gridcell",
+  "cell",
+]);
+
+/**
+ * Pick the element the page is actually listening for a click on.
+ *
+ * For composite-widget children (Drive's `<div role="treeitem">`, Gmail's
+ * `<div role="menuitem">`, etc.) the role-bearing wrapper has no event
+ * handler — the handler is delegated and looks for a specific descendant
+ * via `event.target.closest('[data-target="node"]')` or similar. Dispatching
+ * on the wrapper sets `event.target = wrapper`, the closest() walk goes
+ * upward (away from the descendant), and the handler returns null. We have
+ * to dispatch on the descendant instead.
+ *
+ * Heuristic — return the first match in this order, scoped to the wrapper
+ * and excluding any descendant that's the expand/collapse toggle:
+ *   1. `[role="link"]` or `[role="button"]`
+ *   2. `[data-target="node"]` (observed in Google Drive)
+ *   3. `<a href>` or `<button>`
+ *
+ * If nothing matches, return the original element — for well-formed ARIA
+ * trees where the treeitem itself is interactive this is the correct
+ * behavior.
+ */
+export function resolveClickTarget(element: Element): Element {
+  const role = element.getAttribute("role") ?? "";
+  if (!COMPOSITE_CHILD_ROLES.has(role)) return element;
+
+  const isExpander = (el: Element): boolean =>
+    el.getAttribute("data-target") === "expander" ||
+    el.closest('[data-target="expander"]') !== null;
+
+  const candidates: NodeListOf<Element> = element.querySelectorAll(
+    '[role="link"], [role="button"], [data-target="node"], a[href], button',
+  );
+  for (const candidate of candidates) {
+    if (isExpander(candidate)) continue;
+    return candidate;
+  }
+  return element;
+}
+
+/**
  * Maps tree actions to real DOM operations.
  * This is the bridge between the tree UI and the actual page.
  */
@@ -37,12 +94,12 @@ export class ActionDispatcher {
   }
 
   private handleClick(element: Element): ActionResult {
-    this.dispatchPointerSequence(element);
+    this.dispatchPointerSequence(resolveClickTarget(element));
     return { success: true };
   }
 
   private handleNavigate(element: Element): ActionResult {
-    this.dispatchPointerSequence(element);
+    this.dispatchPointerSequence(resolveClickTarget(element));
     return { success: true };
   }
 
