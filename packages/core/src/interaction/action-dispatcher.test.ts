@@ -18,6 +18,69 @@ describe("ActionDispatcher", () => {
     document.body.innerHTML = "";
   });
 
+  describe("click action", () => {
+    it("fires the full pointer/mouse/click sequence in order", () => {
+      // Regression: handleClick used to dispatch only a synthetic
+      // MouseEvent("click"). Google apps (Drive, Gmail) wire their handlers
+      // through jsaction + Material ripple, which expects pointerdown →
+      // mousedown → pointerup → mouseup → click. Bare clicks no-op'd silently
+      // on every treeitem and tab in the Drive side panel.
+      const el = document.createElement("button");
+      document.body.appendChild(el);
+      refs.set("n1", el);
+
+      const seen: string[] = [];
+      for (const type of [
+        "pointerdown",
+        "mousedown",
+        "pointerup",
+        "mouseup",
+        "click",
+      ]) {
+        el.addEventListener(type, () => seen.push(type));
+      }
+
+      const result = dispatcher.dispatch({ nodeId: "n1", action: "click" });
+
+      expect(result.success).toBe(true);
+      expect(seen).toEqual([
+        "pointerdown",
+        "mousedown",
+        "pointerup",
+        "mouseup",
+        "click",
+      ]);
+    });
+
+    it("triggers a pointerdown-only handler (the jsaction failure mode)", () => {
+      const el = document.createElement("div");
+      document.body.appendChild(el);
+      refs.set("n1", el);
+
+      const handler = vi.fn();
+      el.addEventListener("pointerdown", handler);
+
+      dispatcher.dispatch({ nodeId: "n1", action: "click" });
+
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    it("bubbles so delegated listeners on ancestors fire", () => {
+      const root = document.createElement("div");
+      const target = document.createElement("button");
+      root.appendChild(target);
+      document.body.appendChild(root);
+      refs.set("n1", target);
+
+      const delegated = vi.fn();
+      root.addEventListener("click", delegated);
+
+      dispatcher.dispatch({ nodeId: "n1", action: "click" });
+
+      expect(delegated).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe("type action", () => {
     it("writes the value into an <input>", () => {
       const input = document.createElement("input");

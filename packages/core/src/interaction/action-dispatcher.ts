@@ -37,24 +37,26 @@ export class ActionDispatcher {
   }
 
   private handleClick(element: Element): ActionResult {
-    const event = new MouseEvent("click", {
-      bubbles: true,
-      cancelable: true,
-      view: element.ownerDocument.defaultView,
-    });
-    element.dispatchEvent(event);
+    this.dispatchPointerSequence(element);
     return { success: true };
   }
 
   private handleNavigate(element: Element): ActionResult {
-    // For links, dispatch a real click which triggers natural navigation
-    const event = new MouseEvent("click", {
-      bubbles: true,
-      cancelable: true,
-      view: element.ownerDocument.defaultView,
-    });
-    element.dispatchEvent(event);
+    this.dispatchPointerSequence(element);
     return { success: true };
+  }
+
+  // Many modern UIs (Google's jsaction, Material ripple, etc.) gate their
+  // click handlers on a full pointer/mouse sequence rather than a bare
+  // synthetic click. Fire the whole sequence so those handlers run.
+  private dispatchPointerSequence(element: Element): void {
+    const base = { bubbles: true, cancelable: true, composed: true, button: 0 };
+    const pointer = { ...base, pointerType: "mouse", isPrimary: true };
+    element.dispatchEvent(new PointerEvent("pointerdown", pointer));
+    element.dispatchEvent(new MouseEvent("mousedown", base));
+    element.dispatchEvent(new PointerEvent("pointerup", pointer));
+    element.dispatchEvent(new MouseEvent("mouseup", base));
+    element.dispatchEvent(new MouseEvent("click", base));
   }
 
   private handleFocus(element: Element): ActionResult {
