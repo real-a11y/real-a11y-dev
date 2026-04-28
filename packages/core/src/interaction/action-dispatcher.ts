@@ -2,6 +2,51 @@ import type { ActionRequest, ActionResult } from "../types.js";
 import { ElementRefMap } from "../utils/element-ref.js";
 
 /**
+ * ARIA composite-widget child roles. Elements with these roles are commonly
+ * implemented as containers — the actual click handler lives on a more
+ * specific descendant (a `role="link"`, an `<a href>`, or a Google-style
+ * `[data-target="node"]` hint).
+ */
+const COMPOSITE_CHILD_ROLES = new Set([
+  "treeitem",
+  "menuitem",
+  "menuitemcheckbox",
+  "menuitemradio",
+  "option",
+  "tab",
+  "row",
+  "gridcell",
+  "cell",
+]);
+
+/**
+ * Pick the element the page is actually listening for a click on.
+ *
+ * Composite-widget children (treeitem, menuitem, option, tab, …) are
+ * commonly implemented as containers wrapping an interactive descendant —
+ * a `role="link"` / `role="button"`, an `<a href>`, or a `<button>`. The
+ * wrapper itself often has no handler; delegated handlers look for the
+ * descendant via `event.target.closest(…)`. Dispatching on the wrapper
+ * sets `event.target = wrapper`, the `closest()` walk goes upward (away
+ * from the descendant), the handler returns null, and the click no-ops.
+ *
+ * `querySelector` returns the first match in document order, which is the
+ * outermost interactive descendant — typically the row's primary action,
+ * not an inner secondary control like an expand/collapse chevron. If
+ * nothing matches (well-formed ARIA where the wrapper itself is
+ * interactive — Reach UI, Radix UI, ARIA APG reference impl), return the
+ * wrapper unchanged.
+ */
+export function resolveClickTarget(element: Element): Element {
+  const role = element.getAttribute("role") ?? "";
+  if (!COMPOSITE_CHILD_ROLES.has(role)) return element;
+  const candidate = element.querySelector(
+    '[role="link"], [role="button"], a[href], button',
+  );
+  return candidate ?? element;
+}
+
+/**
  * Maps tree actions to real DOM operations.
  * This is the bridge between the tree UI and the actual page.
  */
@@ -37,12 +82,12 @@ export class ActionDispatcher {
   }
 
   private handleClick(element: Element): ActionResult {
-    this.dispatchPointerSequence(element);
+    this.dispatchPointerSequence(resolveClickTarget(element));
     return { success: true };
   }
 
   private handleNavigate(element: Element): ActionResult {
-    this.dispatchPointerSequence(element);
+    this.dispatchPointerSequence(resolveClickTarget(element));
     return { success: true };
   }
 
