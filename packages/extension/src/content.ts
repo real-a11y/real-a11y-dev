@@ -26,6 +26,7 @@ let curtainVisible = false; // whether the screen curtain is currently on
 const elementRefs = getElementRefs();
 const dispatcher = new ActionDispatcher(elementRefs);
 const focusManager = new FocusManager(elementRefs);
+let liveObserver: MutationObserver | null = null;
 
 /** Check if an element can receive focus */
 function isFocusable(el: Element): boolean {
@@ -40,6 +41,41 @@ function isFocusable(el: Element): boolean {
   return false;
 }
 
+/**
+ * Send a message to the background, surviving the "orphaned content script"
+ * case where the extension was reloaded/updated while this page was still
+ * open. After invalidation, `chrome.runtime.id` is undefined and any
+ * sendMessage call throws synchronously. We detect that, tear down our
+ * observers once, and silently no-op subsequent sends — otherwise every
+ * DOM mutation on the page keeps throwing forever.
+ */
+function safeSendMessage(message: unknown): void {
+  try {
+    if (!chrome.runtime?.id) {
+      teardown();
+      return;
+    }
+    chrome.runtime.sendMessage(message);
+  } catch (err) {
+    if (
+      err instanceof Error &&
+      err.message.includes("Extension context invalidated")
+    ) {
+      teardown();
+      return;
+    }
+    throw err;
+  }
+}
+
+let tornDown = false;
+function teardown(): void {
+  if (tornDown) return;
+  tornDown = true;
+  observer.stop();
+  liveObserver?.disconnect();
+}
+
 /** Extract tree and send to background as per-frame data */
 function sendTree() {
   const result =
@@ -49,7 +85,7 @@ function sendTree() {
 
   const serialized = Array.from(result.nodes.entries());
 
-  chrome.runtime.sendMessage({
+  safeSendMessage({
     type: "FRAME_TREE_DATA",
     payload: {
       frameUrl: location.href,
@@ -251,7 +287,7 @@ document.addEventListener("focusin", (e) => {
     const nodeId = elementRefs.findId(el);
     if (nodeId) {
       focusManager.highlightElement(nodeId);
-      chrome.runtime.sendMessage({
+      safeSendMessage({
         type: "FOCUS_CHANGED",
         payload: { nodeId },
       });
@@ -266,7 +302,7 @@ if (!isSubFrame) {
   let liveDebounce: ReturnType<typeof setTimeout> | null = null;
   const lastLiveText = new WeakMap<Element, string>();
 
-  const liveObserver = new MutationObserver(() => {
+  liveObserver = new MutationObserver(() => {
     if (liveDebounce) clearTimeout(liveDebounce);
     liveDebounce = setTimeout(() => {
       const regions = document.querySelectorAll(
@@ -282,7 +318,7 @@ if (!isSubFrame) {
         const level =
           ariaLive === "assertive" || role === "alert" ? "assertive" : "polite";
 
-        chrome.runtime.sendMessage({
+        safeSendMessage({
           type: "LIVE_REGION",
           payload: { text, level, role },
         });
