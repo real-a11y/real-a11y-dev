@@ -239,6 +239,11 @@ chrome.runtime.onConnect.addListener((port) => {
 
   sidepanelConnected = true;
 
+  // The freshly-mounted panel needs to know which tab it's bound to before
+  // it can request a tree or filter inbound messages. Push the current
+  // activeTabId immediately on connect.
+  broadcastActiveTabToPanel();
+
   port.onDisconnect.addListener(() => {
     sidepanelConnected = false;
     if (!activeTabId) return;
@@ -279,16 +284,38 @@ async function refreshActiveTabFromLastFocusedWindow(): Promise<void> {
       active: true,
       lastFocusedWindow: true,
     });
-    if (tab?.id !== undefined) activeTabId = tab.id;
+    if (tab?.id !== undefined) {
+      activeTabId = tab.id;
+      broadcastActiveTabToPanel();
+    }
   } catch {
     // Service worker can be invoked before any window exists; ignore.
   }
+}
+
+/**
+ * Tell the side panel which tab is currently active. The panel uses this
+ * as the source of truth for `myTabId` rather than its own
+ * `chrome.tabs.onActivated` listener — the panel context's listener is
+ * unreliable in some Chrome configurations (no `"tabs"` permission, plus
+ * historical sidepanel quirks), but the background's listener is
+ * authoritative because that's what tracks `activeTabId` in the first
+ * place. Idempotent and cheap; safe to fire often.
+ */
+function broadcastActiveTabToPanel(): void {
+  if (activeTabId === null) return;
+  chrome.runtime
+    .sendMessage({ type: "ACTIVE_TAB_CHANGED", tabId: activeTabId })
+    .catch(() => {
+      // Panel may be closed; benign.
+    });
 }
 
 void refreshActiveTabFromLastFocusedWindow();
 
 chrome.tabs.onActivated.addListener((activeInfo) => {
   activeTabId = activeInfo.tabId;
+  broadcastActiveTabToPanel();
 });
 
 // Switching between windows doesn't fire onActivated, so refresh here too.

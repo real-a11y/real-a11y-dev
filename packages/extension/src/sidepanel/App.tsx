@@ -153,12 +153,13 @@ export function App() {
     [nodes],
   );
 
-  // The tab this side-panel instance is bound to. Chrome's side panel is
-  // window-scoped — there's one panel per browser window, and "its tab" is
-  // whatever tab is active in that window. We track it so we can drop
-  // broadcast messages that aren't for our tab (otherwise a background
-  // tab's content script announcing itself would scribble its tree into
-  // every open panel).
+  // The tab this side-panel instance is bound to. Source of truth lives in
+  // the background — it pushes ACTIVE_TAB_CHANGED on port connect and on
+  // every tab/window activation. We don't try to read tab state from the
+  // panel context directly because `chrome.tabs.onActivated` doesn't
+  // reliably fire here (the manifest doesn't request the `"tabs"`
+  // permission, and the side-panel context's event delivery has been
+  // historically quirky regardless).
   const [myTabId, setMyTabId] = useState<number | null>(null);
   // Latest myTabId for use inside the long-lived onMessage listener,
   // which closes over the value at registration time.
@@ -166,34 +167,6 @@ export function App() {
   useEffect(() => {
     myTabIdRef.current = myTabId;
   }, [myTabId]);
-
-  // Discover myTabId on mount and follow tab activations within our window.
-  useEffect(() => {
-    let myWindowId: number | undefined;
-
-    chrome.windows
-      .getCurrent()
-      .then((win) => {
-        myWindowId = win.id;
-        if (myWindowId === undefined) return;
-        return chrome.tabs.query({ active: true, windowId: myWindowId });
-      })
-      .then((tabs) => {
-        const id = tabs?.[0]?.id;
-        if (id !== undefined) setMyTabId(id);
-      })
-      .catch(() => {
-        // Service worker can be in flux; ignore.
-      });
-
-    const onActivated = (info: chrome.tabs.TabActiveInfo) => {
-      // Only track activations within our own window.
-      if (myWindowId !== undefined && info.windowId !== myWindowId) return;
-      setMyTabId(info.tabId);
-    };
-    chrome.tabs.onActivated.addListener(onActivated);
-    return () => chrome.tabs.onActivated.removeListener(onActivated);
-  }, []);
 
   // When our tab changes, request a fresh tree for the new tab. Tag the
   // message with `tabId` so the background routes to the tab the panel
@@ -243,7 +216,21 @@ export function App() {
         const messageTabId = (message as { tabId?: number }).tabId;
         const senderTabId = sender.tab?.id;
         const provenance = messageTabId ?? senderTabId;
-        if (provenance !== undefined && provenance !== myId) return;
+        // ACTIVE_TAB_CHANGED is the one message type that's intentionally
+        // about a tab other than ours — it's how we LEARN about tab
+        // changes. Don't filter it.
+        if (
+          message.type !== "ACTIVE_TAB_CHANGED" &&
+          provenance !== undefined &&
+          provenance !== myId
+        ) {
+          return;
+        }
+      }
+
+      if (message.type === "ACTIVE_TAB_CHANGED") {
+        setMyTabId(message.tabId);
+        return;
       }
 
       if (message.type === "TREE_DATA" || message.type === "TREE_UPDATED") {

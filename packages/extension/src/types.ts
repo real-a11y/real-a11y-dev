@@ -55,6 +55,14 @@ export type ContentToPanel =
       type: "LIVE_REGION";
       tabId?: number;
       payload: { text: string; level: "polite" | "assertive"; role: string };
+    }
+  | {
+      // Background → panel push: the active tab in the panel's window
+      // has changed. Panel uses this as its source of truth for myTabId
+      // because the background's `chrome.tabs.onActivated` listener is
+      // the canonical writer for activeTabId.
+      type: "ACTIVE_TAB_CHANGED";
+      tabId: number;
     };
 
 /** Select option for GET_FIELD_STATE response */
