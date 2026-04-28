@@ -169,11 +169,14 @@ async function mergeAndSendTree(tabId: number) {
   // Store the mapping for action routing
   state.nodeToFrame = nodeToFrame;
 
-  // Send merged tree to side panel with page info
+  // Send merged tree to side panel with page info. `tabId` lets the side
+  // panel filter out broadcasts for tabs it isn't bound to — without that
+  // any background tab's tree update leaks into every open panel.
   const serialized = Array.from(mergedNodes.entries());
   chrome.runtime
     .sendMessage({
       type: "TREE_DATA",
+      tabId,
       payload: {
         nodes: serialized,
         rootId: topFrame.rootId,
@@ -236,6 +239,11 @@ chrome.runtime.onConnect.addListener((port) => {
 
   sidepanelConnected = true;
 
+  // The freshly-mounted panel needs to know which tab it's bound to before
+  // it can request a tree or filter inbound messages. Push the current
+  // activeTabId immediately on connect.
+  broadcastActiveTabToPanel();
+
   port.onDisconnect.addListener(() => {
     sidepanelConnected = false;
     if (!activeTabId) return;
@@ -276,16 +284,38 @@ async function refreshActiveTabFromLastFocusedWindow(): Promise<void> {
       active: true,
       lastFocusedWindow: true,
     });
-    if (tab?.id !== undefined) activeTabId = tab.id;
+    if (tab?.id !== undefined) {
+      activeTabId = tab.id;
+      broadcastActiveTabToPanel();
+    }
   } catch {
     // Service worker can be invoked before any window exists; ignore.
   }
+}
+
+/**
+ * Tell the side panel which tab is currently active. The panel uses this
+ * as the source of truth for `myTabId` rather than its own
+ * `chrome.tabs.onActivated` listener — the panel context's listener is
+ * unreliable in some Chrome configurations (no `"tabs"` permission, plus
+ * historical sidepanel quirks), but the background's listener is
+ * authoritative because that's what tracks `activeTabId` in the first
+ * place. Idempotent and cheap; safe to fire often.
+ */
+function broadcastActiveTabToPanel(): void {
+  if (activeTabId === null) return;
+  chrome.runtime
+    .sendMessage({ type: "ACTIVE_TAB_CHANGED", tabId: activeTabId })
+    .catch(() => {
+      // Panel may be closed; benign.
+    });
 }
 
 void refreshActiveTabFromLastFocusedWindow();
 
 chrome.tabs.onActivated.addListener((activeInfo) => {
   activeTabId = activeInfo.tabId;
+  broadcastActiveTabToPanel();
 });
 
 // Switching between windows doesn't fire onActivated, so refresh here too.
@@ -347,11 +377,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
 
       case "FOCUS_CHANGED": {
-        // Prefix the nodeId and forward to side panel
+        // Prefix the nodeId and forward to side panel. Stamp `tabId` so
+        // the panel can drop focus events for tabs it isn't bound to.
         const prefixedNodeId = prefixNodeId(frameId, message.payload.nodeId);
         chrome.runtime
           .sendMessage({
             type: "FOCUS_CHANGED",
+            tabId,
             payload: { nodeId: prefixedNodeId },
           })
           .catch((err) => {
@@ -374,8 +406,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
 
       default: {
-        // Forward any other content script messages to side panel.
-        chrome.runtime.sendMessage(message).catch((err) => {
+        // Forward any other content script messages to side panel, stamping
+        // tabId so the panel can filter by its bound tab.
+        chrome.runtime.sendMessage({ ...message, tabId }).catch((err) => {
           // Panel may be closed; benign, but log so real routing bugs aren't invisible.
           console.debug(
             "[SN background] forward to panel failed:",
@@ -390,20 +423,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   // ---- Messages from side panel → route to content scripts ----
 
-  // Broadcast messages: send to ALL frames
+  // Broadcast messages: send to ALL frames. Prefer the tabId the panel
+  // explicitly tagged the message with (it knows its own tab) over the
+  // background's `activeTabId` (which races with `chrome.tabs.onActivated`
+  // — REQUEST_TREE fired right after a tab switch can land before
+  // activeTabId has been updated, routing to the previous tab).
   if (
     message.type === "REQUEST_TREE" ||
     message.type === "SET_VIEW_MODE" ||
     message.type === "SET_FOCUS_TRACKER"
   ) {
-    if (activeTabId) {
+    const targetTabId =
+      (message as { tabId?: number }).tabId ?? activeTabId ?? null;
+    if (targetTabId !== null) {
       // Clear old frame data on fresh request
       if (message.type === "REQUEST_TREE") {
-        const state = getTabState(activeTabId);
+        const state = getTabState(targetTabId);
         state.frames.clear();
         state.nodeToFrame.clear();
       }
-      chrome.tabs.sendMessage(activeTabId, message, () => {
+      chrome.tabs.sendMessage(targetTabId, message, () => {
         if (chrome.runtime.lastError) {
           // Some frames might not have the content script
         }

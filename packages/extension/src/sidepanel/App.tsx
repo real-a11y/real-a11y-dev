@@ -153,6 +153,50 @@ export function App() {
     [nodes],
   );
 
+  // The tab this side-panel instance is bound to. Source of truth lives in
+  // the background — it pushes ACTIVE_TAB_CHANGED on port connect and on
+  // every tab/window activation. We don't try to read tab state from the
+  // panel context directly because `chrome.tabs.onActivated` doesn't
+  // reliably fire here (the manifest doesn't request the `"tabs"`
+  // permission, and the side-panel context's event delivery has been
+  // historically quirky regardless).
+  const [myTabId, setMyTabId] = useState<number | null>(null);
+  // Latest myTabId for use inside the long-lived onMessage listener,
+  // which closes over the value at registration time.
+  const myTabIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    myTabIdRef.current = myTabId;
+  }, [myTabId]);
+
+  // First time we learn our tab: auto-fetch the tree so the panel
+  // populates on open. On subsequent tab changes we deliberately do NOT
+  // auto-fetch — too many edge cases made it unreliable (restricted
+  // pages with no content script, lazy-injected content scripts that
+  // aren't ready, races between the panel learning about the tab change
+  // and the content script being reachable). Instead we clear the stale
+  // tree so the user sees the empty state, and they hit the refresh
+  // button to load the new tab's tree explicitly.
+  const hasRequestedInitial = useRef(false);
+  useEffect(() => {
+    if (myTabId === null) return;
+    if (!hasRequestedInitial.current) {
+      hasRequestedInitial.current = true;
+      chrome.runtime.sendMessage({
+        type: "REQUEST_TREE",
+        tabId: myTabId,
+        payload: { viewMode },
+      });
+      return;
+    }
+    setNodes(new Map());
+    setRootId("");
+    setSelectedId(null);
+    setScopedRootId(null);
+    setConnected(false);
+    setPageTitle("");
+    setPageUrl("");
+  }, [myTabId, viewMode]);
+
   // Keep a port alive so the background knows when the side panel closes.
   // On disconnect the background clears the highlight overlay AND disables
   // the focus tracker across every frame. On mount we push the panel's
@@ -173,7 +217,36 @@ export function App() {
 
   // Listen for tree data and focus changes from content script
   useEffect(() => {
-    const handler = (message: ContentToPanel) => {
+    const handler = (
+      message: ContentToPanel,
+      sender: chrome.runtime.MessageSender,
+    ) => {
+      // Drop broadcasts that aren't for our tab. Background-relayed
+      // messages carry an explicit `tabId`; content-direct messages
+      // (LIVE_REGION) carry their tab in `sender.tab`. When neither is
+      // present, accept (e.g., panel-internal messages, future types).
+      const myId = myTabIdRef.current;
+      if (myId !== null) {
+        const messageTabId = (message as { tabId?: number }).tabId;
+        const senderTabId = sender.tab?.id;
+        const provenance = messageTabId ?? senderTabId;
+        // ACTIVE_TAB_CHANGED is the one message type that's intentionally
+        // about a tab other than ours — it's how we LEARN about tab
+        // changes. Don't filter it.
+        if (
+          message.type !== "ACTIVE_TAB_CHANGED" &&
+          provenance !== undefined &&
+          provenance !== myId
+        ) {
+          return;
+        }
+      }
+
+      if (message.type === "ACTIVE_TAB_CHANGED") {
+        setMyTabId(message.tabId);
+        return;
+      }
+
       if (message.type === "TREE_DATA" || message.type === "TREE_UPDATED") {
         const nodeMap = new Map<string, SemanticNode>(message.payload.nodes);
 
@@ -239,11 +312,8 @@ export function App() {
 
     chrome.runtime.onMessage.addListener(handler);
 
-    // Request initial tree
-    chrome.runtime.sendMessage({
-      type: "REQUEST_TREE",
-      payload: { viewMode },
-    });
+    // No initial REQUEST_TREE here — the [myTabId, viewMode] effect above
+    // sends one as soon as we know which tab we're bound to.
 
     return () => {
       chrome.runtime.onMessage.removeListener(handler);
@@ -751,8 +821,12 @@ export function App() {
         <button
           class="sn-toolbar-btn"
           onClick={() => {
+            // Tag with myTabId so this doesn't race the background's
+            // activeTabId update — without that, hitting refresh right
+            // after a tab switch would route to the previous tab.
             chrome.runtime.sendMessage({
               type: "REQUEST_TREE",
+              tabId: myTabId ?? undefined,
               payload: { viewMode },
             });
             setLastAction("Tree refreshed");
