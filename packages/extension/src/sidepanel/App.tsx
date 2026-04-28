@@ -168,19 +168,33 @@ export function App() {
     myTabIdRef.current = myTabId;
   }, [myTabId]);
 
-  // When our tab changes, request a fresh tree for the new tab. Tag the
-  // message with `tabId` so the background routes to the tab the panel
-  // intends — without that, this message races `chrome.tabs.onActivated`
-  // updating the background's `activeTabId` and can land on the previous
-  // tab. The reply (TREE_DATA tagged with the previous tabId) then fails
-  // the panel's myTabId filter and the panel never updates.
+  // First time we learn our tab: auto-fetch the tree so the panel
+  // populates on open. On subsequent tab changes we deliberately do NOT
+  // auto-fetch — too many edge cases made it unreliable (restricted
+  // pages with no content script, lazy-injected content scripts that
+  // aren't ready, races between the panel learning about the tab change
+  // and the content script being reachable). Instead we clear the stale
+  // tree so the user sees the empty state, and they hit the refresh
+  // button to load the new tab's tree explicitly.
+  const hasRequestedInitial = useRef(false);
   useEffect(() => {
     if (myTabId === null) return;
-    chrome.runtime.sendMessage({
-      type: "REQUEST_TREE",
-      tabId: myTabId,
-      payload: { viewMode },
-    });
+    if (!hasRequestedInitial.current) {
+      hasRequestedInitial.current = true;
+      chrome.runtime.sendMessage({
+        type: "REQUEST_TREE",
+        tabId: myTabId,
+        payload: { viewMode },
+      });
+      return;
+    }
+    setNodes(new Map());
+    setRootId("");
+    setSelectedId(null);
+    setScopedRootId(null);
+    setConnected(false);
+    setPageTitle("");
+    setPageUrl("");
   }, [myTabId, viewMode]);
 
   // Keep a port alive so the background knows when the side panel closes.
@@ -807,8 +821,12 @@ export function App() {
         <button
           class="sn-toolbar-btn"
           onClick={() => {
+            // Tag with myTabId so this doesn't race the background's
+            // activeTabId update — without that, hitting refresh right
+            // after a tab switch would route to the previous tab.
             chrome.runtime.sendMessage({
               type: "REQUEST_TREE",
+              tabId: myTabId ?? undefined,
               payload: { viewMode },
             });
             setLastAction("Tree refreshed");
