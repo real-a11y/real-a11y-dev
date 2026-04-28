@@ -527,6 +527,65 @@
   color: var(--sn-text-muted);
 }
 
+/* aria-controls cross-link chips: clickable jump from trigger ↔ controlled */
+.sn-controls-link {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  padding: 0 6px;
+  height: 16px;
+  border: 1px solid var(--sn-accent);
+  border-radius: 3px;
+  background: var(--sn-accent-bg);
+  color: var(--sn-accent);
+  font-family: var(--sn-font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition:
+    background 0.1s,
+    color 0.1s;
+}
+
+.sn-controls-link:hover,
+.sn-controls-link:focus-visible {
+  background: var(--sn-accent);
+  color: #ffffff;
+}
+
+.sn-controls-link--reverse {
+  border-color: var(--sn-text-muted);
+  background: var(--sn-badge-bg);
+  color: var(--sn-text-muted);
+}
+
+.sn-controls-link--reverse:hover,
+.sn-controls-link--reverse:focus-visible {
+  background: var(--sn-text-muted);
+  color: var(--sn-bg);
+}
+
+/* Brief background flash applied to a row after a cross-link jump lands on it. */
+@keyframes sn-flash {
+  0% {
+    background: var(--sn-accent);
+    color: #ffffff;
+  }
+  100% {
+    background: transparent;
+  }
+}
+
+.sn-node--flash {
+  animation: sn-flash 700ms ease-out;
+}
+
 /* Action activate button (Enter symbol) */
 .sn-action {
   opacity: 0;

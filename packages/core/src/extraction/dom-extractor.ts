@@ -390,6 +390,8 @@ function getKeyAttributes(element: Element): Record<string, string> {
     "aria-checked",
     "aria-disabled",
     "aria-required",
+    "aria-controls",
+    "aria-haspopup",
     "alt",
     "title",
     "for",

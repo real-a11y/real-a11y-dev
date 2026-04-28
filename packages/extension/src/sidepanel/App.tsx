@@ -11,13 +11,20 @@ import {
   ACTION_LABELS,
   applySearchFilter,
   ROLE_FILTER_LABELS,
+  buildControlsIndex,
 } from "@real-a11y-dev/core";
 import {
   useTreeKeyboard,
   useInputModality,
 } from "@real-a11y-dev/semantic-navigator-ui";
 import { useSearch } from "@real-a11y-dev/semantic-navigator-ui";
-import { useState, useEffect, useCallback, useRef } from "preact/hooks";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+} from "preact/hooks";
 
 import type { ContentToPanel } from "../types.js";
 
@@ -98,6 +105,37 @@ export function App() {
 
   const treeRef = useRef<HTMLDivElement>(null);
   const { query, matchCount, updateQuery, updateMatchCount } = useSearch();
+
+  // aria-controls cross-link index (trigger ↔ controlled element). Used to
+  // render clickable jump chips on disclosure pairs (button ↔ menu, tab ↔
+  // panel, etc.) so the relationship is reachable without scroll-hunting.
+  const controlsIndex = useMemo(() => buildControlsIndex(nodes), [nodes]);
+
+  // Tree-node id currently flashing after a cross-link jump. Cleared by a
+  // timeout so the flash plays once.
+  const [flashingId, setFlashingId] = useState<string | null>(null);
+
+  const handleJumpToNode = useCallback(
+    (targetId: string) => {
+      // Expand every collapsed ancestor so the target is in `visibleNodeIds`
+      // before the existing scroll-into-view effect fires on selection.
+      let cur: SemanticNode | undefined = nodes.get(targetId);
+      let mutated = false;
+      while (cur && cur.parentId) {
+        const parent = nodes.get(cur.parentId);
+        if (parent && !parent.ui.expanded) {
+          parent.ui.expanded = true;
+          mutated = true;
+        }
+        cur = parent;
+      }
+      if (mutated) forceRender((c) => c + 1);
+      setSelectedId(targetId);
+      setFlashingId(targetId);
+      setTimeout(() => setFlashingId(null), 700);
+    },
+    [nodes],
+  );
 
   // Keep a port alive so the background knows when the side panel closes.
   // On disconnect the background clears the highlight overlay AND disables
@@ -873,6 +911,7 @@ export function App() {
                       isSelected && "sn-node--selected",
                       node.dom.isHidden && "sn-node--hidden",
                       node.interaction.isInteractive && "sn-node--interactive",
+                      id === flashingId && "sn-node--flash",
                     ]
                       .filter(Boolean)
                       .join(" ")}
@@ -1055,6 +1094,52 @@ export function App() {
                               </span>
                             );
                           })()}
+                          {/* aria-controls cross-links: jump to controlled element(s) */}
+                          {controlsIndex.forward.get(id)?.map((targetId) => {
+                            const target = nodes.get(targetId);
+                            if (!target) return null;
+                            const role = getDisplayRole(target);
+                            const name = target.a11y.name;
+                            return (
+                              <button
+                                key={`controls-${targetId}`}
+                                class="sn-controls-link"
+                                tabIndex={-1}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleJumpToNode(targetId);
+                                }}
+                                title={`Jump to the ${role} this element controls`}
+                              >
+                                {"→ "}
+                                {role}
+                                {name && ` "${name.length > 24 ? name.slice(0, 24) + "…" : name}"`}
+                              </button>
+                            );
+                          })}
+                          {/* Reverse cross-links: jump back to the trigger(s) controlling this element */}
+                          {controlsIndex.reverse.get(id)?.map((triggerId) => {
+                            const trigger = nodes.get(triggerId);
+                            if (!trigger) return null;
+                            const role = getDisplayRole(trigger);
+                            const name = trigger.a11y.name;
+                            return (
+                              <button
+                                key={`controlled-by-${triggerId}`}
+                                class="sn-controls-link sn-controls-link--reverse"
+                                tabIndex={-1}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleJumpToNode(triggerId);
+                                }}
+                                title={`Jump to the ${role} that controls this element`}
+                              >
+                                {"← "}
+                                {role}
+                                {name && ` "${name.length > 24 ? name.slice(0, 24) + "…" : name}"`}
+                              </button>
+                            );
+                          })}
                         </>
                       )}
 
