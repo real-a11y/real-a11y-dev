@@ -381,15 +381,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       default: {
         // Forward any other content script messages to side panel, stamping
         // tabId so the panel can filter by its bound tab.
-        chrome.runtime
-          .sendMessage({ ...message, tabId })
-          .catch((err) => {
-            // Panel may be closed; benign, but log so real routing bugs aren't invisible.
-            console.debug(
-              "[SN background] forward to panel failed:",
-              err?.message ?? err,
-            );
-          });
+        chrome.runtime.sendMessage({ ...message, tabId }).catch((err) => {
+          // Panel may be closed; benign, but log so real routing bugs aren't invisible.
+          console.debug(
+            "[SN background] forward to panel failed:",
+            err?.message ?? err,
+          );
+        });
         sendResponse({ received: true });
         return false;
       }
