@@ -13,7 +13,12 @@ function makeNode(
     parentId: null,
     childIds: [],
     depth: 0,
-    dom: { tagName: "div", attributes: attrs, textContent: null, isHidden: false },
+    dom: {
+      tagName: "div",
+      attributes: attrs,
+      textContent: null,
+      isHidden: false,
+    },
     a11y: {
       role: "generic",
       name: "",

@@ -1113,7 +1113,8 @@ export function App() {
                               >
                                 {"→ "}
                                 {role}
-                                {name && ` "${name.length > 24 ? name.slice(0, 24) + "…" : name}"`}
+                                {name &&
+                                  ` "${name.length > 24 ? name.slice(0, 24) + "…" : name}"`}
                               </button>
                             );
                           })}
@@ -1136,7 +1137,8 @@ export function App() {
                               >
                                 {"← "}
                                 {role}
-                                {name && ` "${name.length > 24 ? name.slice(0, 24) + "…" : name}"`}
+                                {name &&
+                                  ` "${name.length > 24 ? name.slice(0, 24) + "…" : name}"`}
                               </button>
                             );
                           })}
