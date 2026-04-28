@@ -1094,22 +1094,27 @@ export function App() {
                               </span>
                             );
                           })()}
-                          {/* aria-controls cross-links: jump to controlled element(s) */}
+                          {/* Forward cross-links (aria-controls or heuristic): jump to controlled element(s) */}
                           {controlsIndex.forward.get(id)?.map((targetId) => {
                             const target = nodes.get(targetId);
                             if (!target) return null;
                             const role = getDisplayRole(target);
                             const name = target.a11y.name;
+                            const isInferred = controlsIndex.inferred.has(id);
                             return (
                               <button
                                 key={`controls-${targetId}`}
-                                class="sn-controls-link"
+                                class={`sn-controls-link${isInferred ? " sn-controls-link--inferred" : ""}`}
                                 tabIndex={-1}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleJumpToNode(targetId);
                                 }}
-                                title={`Jump to the ${role} this element controls`}
+                                title={
+                                  isInferred
+                                    ? `Likely controls this ${role} (inferred from aria-haspopup + aria-expanded; no aria-controls set)`
+                                    : `Jump to the ${role} this element controls`
+                                }
                               >
                                 {"→ "}
                                 {role}
@@ -1124,16 +1129,22 @@ export function App() {
                             if (!trigger) return null;
                             const role = getDisplayRole(trigger);
                             const name = trigger.a11y.name;
+                            const isInferred =
+                              controlsIndex.inferred.has(triggerId);
                             return (
                               <button
                                 key={`controlled-by-${triggerId}`}
-                                class="sn-controls-link sn-controls-link--reverse"
+                                class={`sn-controls-link sn-controls-link--reverse${isInferred ? " sn-controls-link--inferred" : ""}`}
                                 tabIndex={-1}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleJumpToNode(triggerId);
                                 }}
-                                title={`Jump to the ${role} that controls this element`}
+                                title={
+                                  isInferred
+                                    ? `Likely controlled by this ${role} (inferred; no aria-controls set on the trigger)`
+                                    : `Jump to the ${role} that controls this element`
+                                }
                               >
                                 {"← "}
                                 {role}
