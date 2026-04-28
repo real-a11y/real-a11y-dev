@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
   "name": "Semantic Navigator",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Navigate and interact with web pages through their semantic tree structure. Experience the web the way assistive technology does.",
   "homepage_url": "https://real-a11y.dev",
-  "permissions": ["activeTab", "sidePanel", "scripting", "webNavigation"],
+  "permissions": ["activeTab", "sidePanel", "webNavigation"],
   "side_panel": {
     "default_path": "src/sidepanel/index.html"
   },
