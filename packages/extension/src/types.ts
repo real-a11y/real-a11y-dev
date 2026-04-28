@@ -64,9 +64,20 @@ export interface SelectOption {
   selected: boolean;
 }
 
-/** Messages from side panel → background → content script */
+/**
+ * Messages from side panel → background → content script.
+ *
+ * `REQUEST_TREE` carries an optional `tabId` so the background routes to
+ * exactly the tab the panel intends — without it, the request races
+ * `chrome.tabs.onActivated`'s update of the background's `activeTabId`,
+ * and a tab-switch-triggered REQUEST_TREE may target the previous tab.
+ */
 export type PanelToContent =
-  | { type: "REQUEST_TREE"; payload: { viewMode: TreeViewMode } }
+  | {
+      type: "REQUEST_TREE";
+      tabId?: number;
+      payload: { viewMode: TreeViewMode };
+    }
   | { type: "DISPATCH_ACTION"; payload: ActionRequest }
   | { type: "HIGHLIGHT_NODE"; payload: { nodeId: string } }
   | { type: "CLEAR_HIGHLIGHT" }

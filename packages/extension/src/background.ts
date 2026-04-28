@@ -396,20 +396,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   // ---- Messages from side panel → route to content scripts ----
 
-  // Broadcast messages: send to ALL frames
+  // Broadcast messages: send to ALL frames. Prefer the tabId the panel
+  // explicitly tagged the message with (it knows its own tab) over the
+  // background's `activeTabId` (which races with `chrome.tabs.onActivated`
+  // — REQUEST_TREE fired right after a tab switch can land before
+  // activeTabId has been updated, routing to the previous tab).
   if (
     message.type === "REQUEST_TREE" ||
     message.type === "SET_VIEW_MODE" ||
     message.type === "SET_FOCUS_TRACKER"
   ) {
-    if (activeTabId) {
+    const targetTabId =
+      (message as { tabId?: number }).tabId ?? activeTabId ?? null;
+    if (targetTabId !== null) {
       // Clear old frame data on fresh request
       if (message.type === "REQUEST_TREE") {
-        const state = getTabState(activeTabId);
+        const state = getTabState(targetTabId);
         state.frames.clear();
         state.nodeToFrame.clear();
       }
-      chrome.tabs.sendMessage(activeTabId, message, () => {
+      chrome.tabs.sendMessage(targetTabId, message, () => {
         if (chrome.runtime.lastError) {
           // Some frames might not have the content script
         }

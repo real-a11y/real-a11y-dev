@@ -195,11 +195,17 @@ export function App() {
     return () => chrome.tabs.onActivated.removeListener(onActivated);
   }, []);
 
-  // When our tab changes, request a fresh tree for the new tab.
+  // When our tab changes, request a fresh tree for the new tab. Tag the
+  // message with `tabId` so the background routes to the tab the panel
+  // intends — without that, this message races `chrome.tabs.onActivated`
+  // updating the background's `activeTabId` and can land on the previous
+  // tab. The reply (TREE_DATA tagged with the previous tabId) then fails
+  // the panel's myTabId filter and the panel never updates.
   useEffect(() => {
     if (myTabId === null) return;
     chrome.runtime.sendMessage({
       type: "REQUEST_TREE",
+      tabId: myTabId,
       payload: { viewMode },
     });
   }, [myTabId, viewMode]);
