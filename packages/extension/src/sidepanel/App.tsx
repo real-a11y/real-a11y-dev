@@ -118,7 +118,7 @@ export function App() {
   const handleJumpToNode = useCallback(
     (targetId: string) => {
       // Expand every collapsed ancestor so the target is in `visibleNodeIds`
-      // before the existing scroll-into-view effect fires on selection.
+      // before we try to scroll to it.
       let cur: SemanticNode | undefined = nodes.get(targetId);
       let mutated = false;
       while (cur && cur.parentId) {
@@ -133,6 +133,22 @@ export function App() {
       setSelectedId(targetId);
       setFlashingId(targetId);
       setTimeout(() => setFlashingId(null), 700);
+
+      // The selection effect at the bottom of this component already calls
+      // `scrollIntoView({ block: "nearest" })` on the new selection, but
+      // when ancestors expanded in the same tick that scroll runs against
+      // a layout that just changed and "nearest" frequently no-ops — the
+      // target stays offscreen. Schedule an explicit center-scroll after
+      // two RAFs (Preact has rendered + browser has done layout) so the
+      // row always lands in the viewport.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const el = treeRef.current?.querySelector(
+            `[data-node-id="${CSS.escape(targetId)}"]`,
+          );
+          el?.scrollIntoView({ block: "center" });
+        });
+      });
     },
     [nodes],
   );
