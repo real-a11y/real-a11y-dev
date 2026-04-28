@@ -22,10 +22,20 @@ export type FrameToBackground =
       payload: { text: string; level: "polite" | "assertive"; role: string };
     };
 
-/** Messages from background → side panel (merged tree) */
+/**
+ * Messages from background → side panel (merged tree).
+ *
+ * The side panel filters by `tabId` to discard updates that aren't for the
+ * tab it's currently bound to — without that, a background tab's content
+ * script announcing itself broadcasts to every open side panel and a panel
+ * pointed at tab A starts showing tab B's tree. `tabId` is optional only
+ * because LIVE_REGION rides directly from content → panel and the side
+ * panel can read `sender.tab.id` instead.
+ */
 export type ContentToPanel =
   | {
       type: "TREE_DATA";
+      tabId?: number;
       payload: {
         nodes: Array<[string, SemanticNode]>;
         rootId: string;
@@ -35,13 +45,15 @@ export type ContentToPanel =
     }
   | {
       type: "TREE_UPDATED";
+      tabId?: number;
       payload: { nodes: Array<[string, SemanticNode]>; rootId: string };
     }
-  | { type: "ACTION_RESULT"; payload: ActionResult }
-  | { type: "NAVIGATION"; payload: { url: string } }
-  | { type: "FOCUS_CHANGED"; payload: { nodeId: string } }
+  | { type: "ACTION_RESULT"; tabId?: number; payload: ActionResult }
+  | { type: "NAVIGATION"; tabId?: number; payload: { url: string } }
+  | { type: "FOCUS_CHANGED"; tabId?: number; payload: { nodeId: string } }
   | {
       type: "LIVE_REGION";
+      tabId?: number;
       payload: { text: string; level: "polite" | "assertive"; role: string };
     };
 

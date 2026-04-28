@@ -169,11 +169,14 @@ async function mergeAndSendTree(tabId: number) {
   // Store the mapping for action routing
   state.nodeToFrame = nodeToFrame;
 
-  // Send merged tree to side panel with page info
+  // Send merged tree to side panel with page info. `tabId` lets the side
+  // panel filter out broadcasts for tabs it isn't bound to — without that
+  // any background tab's tree update leaks into every open panel.
   const serialized = Array.from(mergedNodes.entries());
   chrome.runtime
     .sendMessage({
       type: "TREE_DATA",
+      tabId,
       payload: {
         nodes: serialized,
         rootId: topFrame.rootId,
@@ -347,11 +350,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
 
       case "FOCUS_CHANGED": {
-        // Prefix the nodeId and forward to side panel
+        // Prefix the nodeId and forward to side panel. Stamp `tabId` so
+        // the panel can drop focus events for tabs it isn't bound to.
         const prefixedNodeId = prefixNodeId(frameId, message.payload.nodeId);
         chrome.runtime
           .sendMessage({
             type: "FOCUS_CHANGED",
+            tabId,
             payload: { nodeId: prefixedNodeId },
           })
           .catch((err) => {
@@ -374,14 +379,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
 
       default: {
-        // Forward any other content script messages to side panel.
-        chrome.runtime.sendMessage(message).catch((err) => {
-          // Panel may be closed; benign, but log so real routing bugs aren't invisible.
-          console.debug(
-            "[SN background] forward to panel failed:",
-            err?.message ?? err,
-          );
-        });
+        // Forward any other content script messages to side panel, stamping
+        // tabId so the panel can filter by its bound tab.
+        chrome.runtime
+          .sendMessage({ ...message, tabId })
+          .catch((err) => {
+            // Panel may be closed; benign, but log so real routing bugs aren't invisible.
+            console.debug(
+              "[SN background] forward to panel failed:",
+              err?.message ?? err,
+            );
+          });
         sendResponse({ received: true });
         return false;
       }

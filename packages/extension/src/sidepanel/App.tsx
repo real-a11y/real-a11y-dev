@@ -153,6 +153,57 @@ export function App() {
     [nodes],
   );
 
+  // The tab this side-panel instance is bound to. Chrome's side panel is
+  // window-scoped — there's one panel per browser window, and "its tab" is
+  // whatever tab is active in that window. We track it so we can drop
+  // broadcast messages that aren't for our tab (otherwise a background
+  // tab's content script announcing itself would scribble its tree into
+  // every open panel).
+  const [myTabId, setMyTabId] = useState<number | null>(null);
+  // Latest myTabId for use inside the long-lived onMessage listener,
+  // which closes over the value at registration time.
+  const myTabIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    myTabIdRef.current = myTabId;
+  }, [myTabId]);
+
+  // Discover myTabId on mount and follow tab activations within our window.
+  useEffect(() => {
+    let myWindowId: number | undefined;
+
+    chrome.windows
+      .getCurrent()
+      .then((win) => {
+        myWindowId = win.id;
+        if (myWindowId === undefined) return;
+        return chrome.tabs.query({ active: true, windowId: myWindowId });
+      })
+      .then((tabs) => {
+        const id = tabs?.[0]?.id;
+        if (id !== undefined) setMyTabId(id);
+      })
+      .catch(() => {
+        // Service worker can be in flux; ignore.
+      });
+
+    const onActivated = (info: chrome.tabs.TabActiveInfo) => {
+      // Only track activations within our own window.
+      if (myWindowId !== undefined && info.windowId !== myWindowId) return;
+      setMyTabId(info.tabId);
+    };
+    chrome.tabs.onActivated.addListener(onActivated);
+    return () => chrome.tabs.onActivated.removeListener(onActivated);
+  }, []);
+
+  // When our tab changes, request a fresh tree for the new tab.
+  useEffect(() => {
+    if (myTabId === null) return;
+    chrome.runtime.sendMessage({
+      type: "REQUEST_TREE",
+      payload: { viewMode },
+    });
+  }, [myTabId, viewMode]);
+
   // Keep a port alive so the background knows when the side panel closes.
   // On disconnect the background clears the highlight overlay AND disables
   // the focus tracker across every frame. On mount we push the panel's
@@ -173,7 +224,22 @@ export function App() {
 
   // Listen for tree data and focus changes from content script
   useEffect(() => {
-    const handler = (message: ContentToPanel) => {
+    const handler = (
+      message: ContentToPanel,
+      sender: chrome.runtime.MessageSender,
+    ) => {
+      // Drop broadcasts that aren't for our tab. Background-relayed
+      // messages carry an explicit `tabId`; content-direct messages
+      // (LIVE_REGION) carry their tab in `sender.tab`. When neither is
+      // present, accept (e.g., panel-internal messages, future types).
+      const myId = myTabIdRef.current;
+      if (myId !== null) {
+        const messageTabId = (message as { tabId?: number }).tabId;
+        const senderTabId = sender.tab?.id;
+        const provenance = messageTabId ?? senderTabId;
+        if (provenance !== undefined && provenance !== myId) return;
+      }
+
       if (message.type === "TREE_DATA" || message.type === "TREE_UPDATED") {
         const nodeMap = new Map<string, SemanticNode>(message.payload.nodes);
 
@@ -239,11 +305,8 @@ export function App() {
 
     chrome.runtime.onMessage.addListener(handler);
 
-    // Request initial tree
-    chrome.runtime.sendMessage({
-      type: "REQUEST_TREE",
-      payload: { viewMode },
-    });
+    // No initial REQUEST_TREE here — the [myTabId, viewMode] effect above
+    // sends one as soon as we know which tab we're bound to.
 
     return () => {
       chrome.runtime.onMessage.removeListener(handler);
