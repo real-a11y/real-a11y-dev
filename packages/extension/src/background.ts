@@ -260,9 +260,38 @@ chrome.action.onClicked.addListener((tab) => {
   }
 });
 
-// When the active tab changes, update tracking
+// `activeTabId` tracks the user-visible active tab so panel-originated
+// messages get routed to the right page. Three legitimate writers:
+//  - startup query below (cold start before any tab event fires)
+//  - chrome.tabs.onActivated (user switches tabs within a window)
+//  - chrome.windows.onFocusChanged (user switches windows)
+// It used to also be rewritten on every inbound content-script message,
+// which let any background tab silently steal active-tab status the
+// moment one of its frames announced itself — so the side panel ended
+// up showing the tree of an unrelated tab.
+
+async function refreshActiveTabFromLastFocusedWindow(): Promise<void> {
+  try {
+    const [tab] = await chrome.tabs.query({
+      active: true,
+      lastFocusedWindow: true,
+    });
+    if (tab?.id !== undefined) activeTabId = tab.id;
+  } catch {
+    // Service worker can be invoked before any window exists; ignore.
+  }
+}
+
+void refreshActiveTabFromLastFocusedWindow();
+
 chrome.tabs.onActivated.addListener((activeInfo) => {
   activeTabId = activeInfo.tabId;
+});
+
+// Switching between windows doesn't fire onActivated, so refresh here too.
+chrome.windows.onFocusChanged.addListener((windowId) => {
+  if (windowId === chrome.windows.WINDOW_ID_NONE) return;
+  void refreshActiveTabFromLastFocusedWindow();
 });
 
 // Route messages between frames, side panel, and content scripts
@@ -271,7 +300,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (sender.tab?.id) {
     const tabId = sender.tab.id;
     const frameId = sender.frameId ?? 0;
-    activeTabId = tabId;
 
     switch (message.type) {
       case "FRAME_TREE_DATA": {
