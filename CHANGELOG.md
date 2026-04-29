@@ -13,6 +13,135 @@ publishable package ships together and is documented here.
 
 _No changes yet._
 
+## [0.1.0-beta.4] — 2026-04-28
+
+Consolidates everything shipped between `0.1.0-beta.0` and now. Earlier
+beta-1, beta-2, and beta-3 were published via manual `workflow_dispatch`
+runs without changelog entries or git tags; this entry covers the full
+delta since beta-0. The Chrome extension bumps to `0.1.2` (CWS doesn't
+accept pre-release tags).
+
+### Added
+
+#### `@real-a11y-dev/core`
+
+- `buildControlsIndex(nodes)` and the `ControlsIndex` type — disclosure-pair
+  index resolving `aria-controls` references to tree-node ids in both
+  directions, plus a heuristic fallback for triggers that expose
+  `aria-haspopup` + `aria-expanded="true"` without `aria-controls`. The
+  `inferred` set distinguishes heuristic links from explicit ones so callers
+  can render them with a "likely" affordance ([#26], [#27]).
+- `aria-controls` and `aria-haspopup` are now captured into
+  `node.dom.attributes` ([#26]).
+
+#### `@real-a11y-dev/semantic-navigator-ui`
+
+- `sn-controls-link`, `sn-controls-link--reverse`, `sn-controls-link--inferred`
+  chip classes and an `sn-flash` keyframe in `tree.css`. Used by the Chrome
+  extension's cross-link chips; available to anyone rolling their own UI on
+  top of the engine ([#26], [#27]).
+
+#### `@real-a11y-dev/semantic-navigator-extension` (`0.1.2`)
+
+- Cross-link chips on disclosure pairs: `→ <role> "<name>"` chip on the
+  trigger row, `← <role> "<name>"` chip on the controlled-element row.
+  Click either chip to expand every collapsed ancestor of the target,
+  scroll-center it, and flash its row briefly. Solid border for explicit
+  `aria-controls`; dashed border (with hedged tooltip) for the heuristic
+  fallback ([#26], [#27], [#28]).
+
+#### Repo / CI
+
+- ESLint flat config + Prettier ([#2]).
+- Dependabot grouping for `github-actions` updates so weekly bumps land in
+  one PR ([#16]).
+
+### Changed
+
+#### `@real-a11y-dev/core`
+
+- `ActionDispatcher.handleClick` and `handleNavigate` now dispatch the full
+  `pointerdown → mousedown → pointerup → mouseup → click` sequence rather
+  than a single synthetic `click`. Required for handlers that gate on the
+  pointer sequence — Google's `jsaction`, Material ripple, and many in-house
+  component libraries silently no-op'd a bare synthetic click ([#21]).
+- `ActionDispatcher.handleClick` and `handleNavigate` now redirect clicks on
+  composite-widget wrappers (`treeitem`, `menuitem`, `menuitemcheckbox`,
+  `menuitemradio`, `option`, `tab`, `row`, `gridcell`, `cell`) to their
+  interactive descendant — `[role="link"]`, `[role="button"]`, `<a href>`,
+  or `<button>` — so delegated handlers find the target. Falls through to
+  the wrapper unchanged when no descendant matches (well-formed ARIA where
+  the wrapper itself is interactive) ([#29]).
+
+#### `@real-a11y-dev/semantic-navigator-extension` (`0.1.2`)
+
+- Switching browser tabs now clears the displayed tree and shows the empty
+  "Connecting…" state instead of stale content from the previous tab.
+  Click the ↻ refresh button to load the new tab's tree. Auto-refresh on
+  tab switch was unreliable across the long tail of pages (restricted URLs
+  with no content script, lazy-injected content scripts, races between the
+  panel learning the tab change and the content script being reachable) —
+  manual refresh is one extra click for predictability ([#30]).
+
+#### Repo / CI
+
+- Publish workflow switched to npm Trusted Publisher / OIDC auth — no
+  `NPM_TOKEN`, no OTP. Provenance attestations attach automatically via the
+  same OIDC token ([#18]).
+
+### Fixed
+
+#### `@real-a11y-dev/testing`
+
+- Snapshot output no longer includes a generation timestamp. Timestamps
+  caused snapshots to churn on every run, defeating their purpose ([#3]).
+
+#### `@real-a11y-dev/semantic-navigator-extension` (`0.1.2`)
+
+- Side panel no longer leaks tree data between tabs. Background tags every
+  outbound broadcast with `tabId`; panel filters incoming messages by
+  `myTabId`; the panel's `myTabId` is sourced from a background
+  `ACTIVE_TAB_CHANGED` broadcast (the panel context's own
+  `chrome.tabs.onActivated` doesn't reliably fire). Panel `REQUEST_TREE`
+  outbound is also tagged so the manual refresh button doesn't race the
+  background's `activeTabId` update ([#22], [#30]).
+- Orphaned content script after an extension reload no longer floods the
+  page console with `Extension context invalidated`. The content script
+  detects the dead context, tears down its `DomObserver` and live-region
+  `MutationObserver`, and silently no-ops further `sendMessage` calls
+  ([#25]).
+- Cross-link chip clicks now reliably scroll the target into view even
+  when ancestors had to expand in the same tick — explicit
+  `block: "center"` scroll deferred two RAFs ([#28]).
+
+#### Repo / CI
+
+- Eight Dependabot vulnerability alerts patched via `pnpm overrides`;
+  ongoing scans wired up ([#5]).
+
+### Removed
+
+#### `@real-a11y-dev/semantic-navigator-extension`
+
+- `"scripting"` permission from the manifest. Was never actually used; was
+  the cause of a Chrome Web Store rejection (Purple Potassium violation)
+  on the first 0.1.0 submission ([#20]).
+
+[#2]: https://github.com/real-a11y/real-a11y-dev/pull/2
+[#3]: https://github.com/real-a11y/real-a11y-dev/pull/3
+[#5]: https://github.com/real-a11y/real-a11y-dev/pull/5
+[#16]: https://github.com/real-a11y/real-a11y-dev/pull/16
+[#18]: https://github.com/real-a11y/real-a11y-dev/pull/18
+[#20]: https://github.com/real-a11y/real-a11y-dev/pull/20
+[#21]: https://github.com/real-a11y/real-a11y-dev/pull/21
+[#22]: https://github.com/real-a11y/real-a11y-dev/pull/22
+[#25]: https://github.com/real-a11y/real-a11y-dev/pull/25
+[#26]: https://github.com/real-a11y/real-a11y-dev/pull/26
+[#27]: https://github.com/real-a11y/real-a11y-dev/pull/27
+[#28]: https://github.com/real-a11y/real-a11y-dev/pull/28
+[#29]: https://github.com/real-a11y/real-a11y-dev/pull/29
+[#30]: https://github.com/real-a11y/real-a11y-dev/pull/30
+
 ## [0.1.0-beta.0] — 2026-04-18
 
 First public beta of the Real A11y monorepo. Everything below ships as
