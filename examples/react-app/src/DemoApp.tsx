@@ -143,6 +143,20 @@ export function DemoApp() {
             </label>
           </fieldset>
         </section>
+
+        {/* Section 3 — Disclosure widgets, drives the cross-link chips */}
+        <section
+          aria-labelledby="disclosure-heading"
+          style={{ marginBottom: 40 }}
+        >
+          <h2 id="disclosure-heading">Disclosure widgets</h2>
+          <p style={{ color: "#666", marginBottom: 16 }}>
+            Open either menu and look for the <strong>→ menu</strong> chip on
+            the trigger row in the panel and the <strong>← button</strong> chip
+            on the menu row. Click either to jump.
+          </p>
+          <DisclosureDemo />
+        </section>
       </main>
 
       {/* Confirmation dialog */}
@@ -186,6 +200,82 @@ export function DemoApp() {
     </>
   );
 }
+
+/**
+ * Two disclosure triggers — one wired with `aria-controls`, one with only
+ * `aria-haspopup`. The Real A11y panel renders the explicit one with a solid
+ * chip and the heuristic one with a dashed (inferred) chip.
+ */
+function DisclosureDemo() {
+  const [explicitOpen, setExplicitOpen] = useState(false);
+  const [inferredOpen, setInferredOpen] = useState(false);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div>
+        <button
+          type="button"
+          aria-haspopup="menu"
+          aria-controls="settings-menu"
+          aria-expanded={explicitOpen}
+          onClick={() => setExplicitOpen((v) => !v)}
+          style={secondaryBtnStyle}
+        >
+          {explicitOpen ? "Close" : "Open"} settings (aria-controls)
+        </button>
+        {explicitOpen && (
+          <div
+            id="settings-menu"
+            role="menu"
+            aria-label="Settings menu"
+            style={menuStyle}
+          >
+            <div role="menuitem" tabIndex={-1}>
+              Account
+            </div>
+            <div role="menuitem" tabIndex={-1}>
+              Notifications
+            </div>
+            <div role="menuitem" tabIndex={-1}>
+              Sign out
+            </div>
+          </div>
+        )}
+      </div>
+      <div>
+        <button
+          type="button"
+          aria-haspopup="menu"
+          aria-expanded={inferredOpen}
+          onClick={() => setInferredOpen((v) => !v)}
+          style={secondaryBtnStyle}
+        >
+          {inferredOpen ? "Close" : "Open"} profile (no aria-controls)
+        </button>
+        {inferredOpen && (
+          <div role="menu" aria-label="Profile menu" style={menuStyle}>
+            <div role="menuitem" tabIndex={-1}>
+              View profile
+            </div>
+            <div role="menuitem" tabIndex={-1}>
+              Edit profile
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const menuStyle: React.CSSProperties = {
+  marginTop: 8,
+  border: "1px solid #ccc",
+  borderRadius: 6,
+  padding: 8,
+  background: "#fff",
+  display: "flex",
+  flexDirection: "column",
+  gap: 4,
+};
 
 const labelStyle: React.CSSProperties = {
   display: "flex",

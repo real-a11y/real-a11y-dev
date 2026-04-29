@@ -165,6 +165,71 @@
           <li><a href="#">Contact</a></li>
         </ul>
       </nav>
+
+      <h2>Disclosure widgets — cross-link chips</h2>
+      <p>
+        Two disclosure patterns. Open either and look for the
+        <strong>→ menu</strong> chip on the trigger row in the panel and the
+        <strong>← button</strong> chip on the menu row. Click either chip to
+        jump.
+      </p>
+
+      <div class="controls" aria-label="Disclosure examples">
+        <!-- Explicit aria-controls — chip renders with a SOLID border -->
+        <button
+          id="btn-explicit"
+          type="button"
+          aria-haspopup="menu"
+          aria-controls="explicit-menu"
+          aria-expanded="false"
+        >
+          Open settings (aria-controls)
+        </button>
+        <!-- aria-haspopup only — chip renders with a DASHED border (inferred) -->
+        <button
+          id="btn-inferred"
+          type="button"
+          aria-haspopup="menu"
+          aria-expanded="false"
+        >
+          Open profile (no aria-controls)
+        </button>
+      </div>
+
+      <div
+        id="explicit-menu"
+        role="menu"
+        aria-label="Settings menu"
+        hidden
+        style="
+          margin-top: 8px;
+          border: 1px solid #ccc;
+          border-radius: 6px;
+          padding: 8px;
+          background: #fff;
+        "
+      >
+        <div role="menuitem" tabindex="-1">Account</div>
+        <div role="menuitem" tabindex="-1">Notifications</div>
+        <div role="menuitem" tabindex="-1">Sign out</div>
+      </div>
+
+      <div
+        id="profile-menu"
+        role="menu"
+        aria-label="Profile menu"
+        hidden
+        style="
+          margin-top: 8px;
+          border: 1px solid #ccc;
+          border-radius: 6px;
+          padding: 8px;
+          background: #fff;
+        "
+      >
+        <div role="menuitem" tabindex="-1">View profile</div>
+        <div role="menuitem" tabindex="-1">Edit profile</div>
+      </div>
     </main>
 
     <dialog id="sample-dialog" aria-labelledby="dialog-title">

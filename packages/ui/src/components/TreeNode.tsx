@@ -1,14 +1,34 @@
 import type { SemanticNode, TreeViewMode } from "@real-a11y-dev/core";
 import { getPrimaryAction, ACTION_LABELS } from "@real-a11y-dev/core";
 
+import type { ControlsLink } from "./TreePanel.js";
+
 interface TreeNodeProps {
   node: SemanticNode;
   viewMode: TreeViewMode;
   isSelected: boolean;
+  /**
+   * True for the row currently mid-flash after a cross-link jump landed on
+   * it. Adds an `sn-node--flash` class that drives a brief background
+   * animation.
+   */
+  isFlashing?: boolean;
   onSelect: (id: string) => void;
   onToggle: (id: string) => void;
   onActivate: (id: string) => void;
   onHover: (id: string | null) => void;
+  /**
+   * Cross-links rendered on the trigger row of a disclosure pair (this
+   * node controls these elements). Pre-resolved by TreePanel.
+   */
+  controlsLinks?: ControlsLink[];
+  /**
+   * Cross-links rendered on the controlled-element row (these triggers
+   * control this node). Pre-resolved by TreePanel.
+   */
+  controlledByLinks?: ControlsLink[];
+  /** Called when the user clicks a cross-link chip. */
+  onJumpToNode?: (id: string) => void;
 }
 
 function renderDomLabel(node: SemanticNode) {
@@ -93,14 +113,48 @@ function renderBadges(node: SemanticNode) {
   );
 }
 
+function renderControlsChip(
+  link: ControlsLink,
+  direction: "forward" | "reverse",
+  onJumpToNode: (id: string) => void,
+) {
+  const arrow = direction === "forward" ? "→ " : "← ";
+  const reverseClass =
+    direction === "reverse" ? " sn-controls-link--reverse" : "";
+  const inferredClass = link.inferred ? " sn-controls-link--inferred" : "";
+  const verb = direction === "forward" ? "controls" : "is controlled by";
+  const title = link.inferred
+    ? `Likely ${verb} ${link.label} (inferred from aria-haspopup; no aria-controls set)`
+    : `Jump to ${link.label} — ${verb} this element`;
+  return (
+    <button
+      key={`${direction}-${link.id}`}
+      class={`sn-controls-link${reverseClass}${inferredClass}`}
+      tabIndex={-1}
+      onClick={(e) => {
+        e.stopPropagation();
+        onJumpToNode(link.id);
+      }}
+      title={title}
+    >
+      {arrow}
+      {link.label}
+    </button>
+  );
+}
+
 export function TreeNode({
   node,
   viewMode,
   isSelected,
+  isFlashing,
   onSelect,
   onToggle,
   onActivate,
   onHover,
+  controlsLinks,
+  controlledByLinks,
+  onJumpToNode,
 }: TreeNodeProps) {
   const hasChildren = node.childIds.length > 0;
   const primaryAction = getPrimaryAction(node.interaction.actions);
@@ -108,6 +162,7 @@ export function TreeNode({
   const classNames = [
     "sn-node",
     isSelected && "sn-node--selected",
+    isFlashing && "sn-node--flash",
     !node.ui.matchesFilter && "sn-node--filtered-out",
     node.dom.isHidden && "sn-node--hidden",
     node.interaction.isInteractive && "sn-node--interactive",
@@ -158,6 +213,15 @@ export function TreeNode({
       <span class="sn-label">
         {viewMode === "dom" ? renderDomLabel(node) : renderA11yLabel(node)}
         {renderBadges(node)}
+        {/* Cross-link chips for disclosure pairs (button ↔ menu, tab ↔ panel) */}
+        {onJumpToNode &&
+          controlsLinks?.map((link) =>
+            renderControlsChip(link, "forward", onJumpToNode),
+          )}
+        {onJumpToNode &&
+          controlledByLinks?.map((link) =>
+            renderControlsChip(link, "reverse", onJumpToNode),
+          )}
       </span>
 
       {/* Action button */}
