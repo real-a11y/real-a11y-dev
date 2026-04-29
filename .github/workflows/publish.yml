@@ -3,12 +3,19 @@ name: Publish to npm
 # Triggered manually or by pushing a version tag (e.g. `v0.1.1-beta.0`).
 # Publishes every public workspace package with npm provenance.
 #
-# Auth: Trusted Publisher (npm OIDC).
-# Each `@real-a11y-dev/*` package has GitHub Actions configured as a trusted
-# publisher pointing at this workflow. npm validates the OIDC token issued
-# by GitHub on every publish — no NPM_TOKEN, no OTP, no security key tap.
+# Auth: NPM_TOKEN (granular automation token) for the publish itself,
+# OIDC for the provenance attestation.
 #
-# Configure once per package at:
+# Trusted Publisher (npm OIDC for the publish auth path) is configured on
+# every @real-a11y-dev/* package and works for the provenance signing
+# step, but pnpm 9.x + Node 20's npm 10.x don't fully wire OIDC into the
+# `PUT /<pkg>` publish call yet — they fall through to the .npmrc
+# `_authToken` (which `actions/setup-node` reads from `NODE_AUTH_TOKEN`).
+# Without the token the publish 404s after provenance succeeds. Once
+# pnpm 10.x + npm 11.5+ are on the runner we can drop NODE_AUTH_TOKEN
+# again and rely purely on Trusted Publisher.
+#
+# Trusted Publisher binding to keep in place per package:
 #   npmjs.com/package/@real-a11y-dev/<name>/access
 #   → Publishing access → GitHub Actions → Add Trusted Publisher
 #     - Organization or user: real-a11y
@@ -16,8 +23,9 @@ name: Publish to npm
 #     - Workflow filename:    publish.yml
 #     - Environment name:     (blank)
 #
-# Provenance attestations land in the public Sigstore transparency log and
-# show as a verified badge on the package page.
+# Provenance attestations land in the public Sigstore transparency log
+# regardless of the publish-auth path and show as a verified badge on
+# the package page.
 
 on:
   workflow_dispatch:
@@ -70,11 +78,17 @@ jobs:
 
       # pnpm's `publish -r` publishes every package whose version/tag is new,
       # skips the rest. `--no-git-checks` lets tag-triggered runs proceed even
-      # when the working tree does not match main exactly. No auth env vars
-      # — OIDC handles authentication via the Trusted Publisher config above.
+      # when the working tree does not match main exactly.
+      #
+      # NODE_AUTH_TOKEN feeds the .npmrc `_authToken=${NODE_AUTH_TOKEN}` line
+      # that `actions/setup-node` writes; pnpm reads it from there for the
+      # `PUT /<pkg>` call. NPM_CONFIG_PROVENANCE keeps provenance attestation
+      # signing on (uses GHA OIDC under the hood — independent of the
+      # publish-auth path).
       - name: Publish
         env:
           NPM_CONFIG_PROVENANCE: "true"
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           pnpm publish -r \
             --access public \
