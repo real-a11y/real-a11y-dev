@@ -84,6 +84,18 @@ describe("getImplicitRole", () => {
     expect(getImplicitRole(el('<img alt="">'))).toBe("presentation");
   });
 
+  it("returns presentation for explicit role=presentation", () => {
+    expect(getImplicitRole(el('<div role="presentation">Decor</div>'))).toBe(
+      "presentation",
+    );
+  });
+
+  it("returns presentation for explicit role=none (synonym)", () => {
+    expect(getImplicitRole(el('<span role="none">Decor</span>'))).toBe(
+      "presentation",
+    );
+  });
+
   it("returns generic for <div>", () => {
     expect(getImplicitRole(el("<div>Content</div>"))).toBe("generic");
   });
@@ -148,8 +160,9 @@ describe("isHiddenFromAT", () => {
     );
   });
 
-  // role="presentation" / role="none" are NOT hidden — they are remapped to
-  // "generic" in getImplicitRole so their children are promoted into the tree.
+  // role="presentation" / role="none" are NOT hidden — getImplicitRole maps
+  // them to the "presentation" role and the a11y extractor flattens the
+  // element from the tree (children are promoted to the parent).
   it("does not hide role=presentation elements (children are kept)", () => {
     expect(isHiddenFromAT(el('<div role="presentation">Decor</div>'))).toBe(
       false,

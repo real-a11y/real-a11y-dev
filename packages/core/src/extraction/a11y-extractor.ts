@@ -26,6 +26,16 @@ export function extractA11yTree(root: Element): ExtractionResult {
   const keepNode = (node: SemanticNode): boolean => {
     if (!node.a11y.isExposedToAT) return false;
 
+    // role="presentation" / role="none" / <img alt=""> — element is
+    // decorative and drops out of the AT tree per ARIA spec. Children are
+    // still walked and promoted to the parent via the flattening branch.
+    // Carve-out: a focusable element with role="presentation" keeps its
+    // implicit role per spec (presenting it as decorative would lose
+    // keyboard access), so we keep interactive presentational elements.
+    if (node.a11y.role === "presentation") {
+      return node.interaction.isInteractive;
+    }
+
     // Keep nodes with meaningful roles (not generic)
     if (node.a11y.role !== "generic") return true;
 
