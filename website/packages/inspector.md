@@ -63,6 +63,10 @@ Returns an `InspectorInstance`.
 With `mount: "shadow"`, the panel's styles live inside the ShadowRoot and cannot conflict with your app. Your app's CSS cannot accidentally override the panel's layout. Keep this default unless you have a specific reason to opt out.
 :::
 
+::: tip Why `highlightOnHover` / `scrollHostOnSelect` / `focusHostOnActivate` default to false
+The inspector renders into the same document as your app, so activating a tree row could steal focus from the panel or scroll the page underneath you. The panel itself stays fully interactive either way — selection, chip navigation, keyboard movement — what's gated is the side effect on the *real* DOM element. See [Panel interaction vs. host side effects](/guide/panel-features#panel-interaction-vs-host-side-effects) for the full rationale and when to flip them on.
+:::
+
 ---
 
 ## Instance API

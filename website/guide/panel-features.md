@@ -50,8 +50,8 @@ Six chip-style toggles that hide every node except the matching role (and the an
 
 When focus tracking is **on**, the panel and the host page stay in sync **bidirectionally**:
 
-- **Page → panel** — when focus moves on the page (Tab, click on a focusable element), the panel draws the highlight overlay on that element, scrolls the tree to its node, and selects the row. **This is what the "Focus sync" toggle controls.**
-- **Panel → page** — when you click a tree node in the panel, the corresponding element on the page gets `.focus()` and the highlight overlay draws. **Always on.** Doesn't toggle.
+- **Page → panel** — when focus moves on the page (Tab, click on a focusable element), the panel draws the highlight overlay on that element, scrolls the tree to its node, and selects the row. **This is what the "Focus sync" toggle controls.** Implemented by the [Chrome extension](/guide/chrome-extension) via a `focusin` listener in its content script; the in-page surfaces don't ship this auto-sync (the host app would have to wire it up itself).
+- **Panel → page** — selecting a tree node draws the highlight overlay on the corresponding element. The Chrome extension *also* moves real focus to that element on selection — its DevTools panel lives in a separate window, so it can do that without disrupting panel navigation. For the in-page surfaces (`inspector`, React `<SemanticNavigator />`), focus and scroll side effects on the host element are **opt-in**, to avoid stealing focus from the panel itself. See [Panel interaction vs. host side effects](#panel-interaction-vs-host-side-effects).
 
 ### When to leave it on
 The default. It's the single strongest feature for understanding "what a keyboard user is looking at right now." Tab through a form with the panel open and you'll see the experience.
@@ -68,10 +68,10 @@ Focus the page itself first (click anywhere on the page, not the panel), then pr
 
 | Surface | API |
 |---|---|
-| Chrome extension | "Focus sync" / "Focus OFF" toggle in the toolbar |
-| `inspector` | `createInspector({ root, container })` — focus tracking is on by default; pass `highlightOnHover: false` to disable just the hover overlay |
-| React `<SemanticNavigator />` | `<SemanticNavigator highlightOnHover focusHostOnActivate />` — see [the package reference](/packages/react#semanticnavigator) |
-| Storybook addon | On by default — toggle via the panel header |
+| Chrome extension | "Focus sync" / "Focus OFF" toggle in the toolbar — controls page → panel sync; panel → page focus is always on (separate window, no conflict) |
+| `inspector` | `createInspector({ root, container, highlightOnHover: true, scrollHostOnSelect: true, focusHostOnActivate: true })` — opt in to overlay / scroll / focus on the host page; all three default to off, see [the rationale](#panel-interaction-vs-host-side-effects) |
+| React `<SemanticNavigator />` | `<SemanticNavigator highlightOnHover scrollHostOnSelect focusHostOnActivate />` — same opt-ins as the inspector; see [the package reference](/packages/react#props) |
+| Storybook addon | Selection draws an overlay on the story preview by default; the addon hardcodes safe values since the manager iframe is isolated from the preview |
 
 ---
 
@@ -133,6 +133,53 @@ The panel itself is fully keyboard-operable.
 | `Esc` | Clear scope, then clear search, then close the panel |
 
 Implemented in `@real-a11y-dev/semantic-navigator-ui` via `useTreeKeyboard` — every package that mounts the tree gets the same keymap.
+
+---
+
+## Panel interaction vs. host side effects
+
+A distinction worth pinning down before wiring up an in-page panel for the first time, because the framing "interaction is opt-in" gets it backwards:
+
+- **Panel-internal interaction is always on, in every surface.** Selecting a row, clicking a cross-link chip and jumping to its target, expanding / collapsing, arrow-key tree movement — all of this mutates panel state only. Nothing you do *inside* the panel reaches the real DOM until you ask it to. This is identical across the Chrome extension, the inspector embed, the React component, and the Storybook addon.
+- **Host-page side effects are what's gated.** Calling `.focus()` or `.scrollIntoView()` on the *real* element in response to a panel action — that's opt-in for the in-page surfaces and on by default for the isolated ones.
+
+| Surface | Where the panel renders | `highlightOnHover` / `scrollHostOnSelect` / `focusHostOnActivate` |
+|---|---|---|
+| Chrome extension | DevTools panel (separate window) | On by default — no focus/scroll conflict possible |
+| Storybook addon | Manager iframe (separate document from story preview) | Hardcoded to safe values — addon doesn't expose the props |
+| `@real-a11y-dev/inspector` | Same document as the audited app | **Off by default** — opt in via config |
+| React `<SemanticNavigator />` | Same document as the audited app | **Off by default** — opt in via props |
+
+### Why the in-page surfaces default to off
+
+If activating a tree row stole focus to the host element, every Enter / Space on a row would yank focus out of the panel and break tree-pattern keyboard navigation. Same for scroll — every arrow-key step would scroll the page out from under you. The extension and Storybook addon don't have that problem because the panel and the inspected DOM live in different windows / iframes; `.focus()` on a host element in one document can't pull focus out of a panel in another.
+
+The broader principle, recorded in the changelog when these defaults were established: *opt-in host-app side effects so audits and test harnesses don't disturb the app under test.*
+
+### Opting in for the in-page surfaces
+
+```ts
+// Vanilla
+createInspector({
+  root,
+  container,
+  highlightOnHover: true,
+  scrollHostOnSelect: true,
+  focusHostOnActivate: true,
+});
+```
+
+```tsx
+// React
+<SemanticNavigator
+  root={rootRef}
+  highlightOnHover
+  scrollHostOnSelect
+  focusHostOnActivate
+/>
+```
+
+`highlightOnHover` is the safest of the three to enable — the overlay just paints over the host page without touching its layout or focus. `scrollHostOnSelect` and `focusHostOnActivate` are the ones that affect the page underneath; turn them on when the panel is set up as an active inspection tool, leave them off when the panel is mounted in production for end users.
 
 ---
 
