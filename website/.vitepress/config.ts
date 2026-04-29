@@ -1,4 +1,23 @@
 import { defineConfig } from "vitepress";
+import type { ShikiTransformer } from "shiki";
+
+// Shiki wraps every syntax token in a <span> for color. With no role on the
+// spans, each one becomes a separate "generic" node in the a11y tree —
+// turning a single code block into 30+ rows when inspected with a screen
+// reader or our own panel. role="presentation" keeps the DOM intact (so the
+// colors keep working) but drops the spans from the a11y tree, leaving the
+// <pre><code> as a single accessible code block whose text the user can
+// read or copy as one chunk. Same recipe we recommend to consumers in
+// /accessibility.
+const hideTokenSpans: ShikiTransformer = {
+  name: "real-a11y:hide-token-spans",
+  span(node) {
+    node.properties.role = "presentation";
+  },
+  line(node) {
+    node.properties.role = "presentation";
+  },
+};
 
 export default defineConfig({
   title: "Real A11y",
@@ -13,6 +32,10 @@ export default defineConfig({
 
   // Drop .html extensions — friendlier URLs, cleaner sitemap.
   cleanUrls: true,
+
+  markdown: {
+    codeTransformers: [hideTokenSpans],
+  },
 
   head: [
     ["link", { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" }],

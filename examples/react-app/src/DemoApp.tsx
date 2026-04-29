@@ -157,6 +157,25 @@ export function DemoApp() {
           </p>
           <DisclosureDemo />
         </section>
+
+        {/* Section 4 — Code blocks, decorative tokens via role="presentation" */}
+        <section
+          aria-labelledby="codeblocks-heading"
+          style={{ marginBottom: 40 }}
+        >
+          <h2 id="codeblocks-heading">Code blocks — decorative tokens</h2>
+          <p style={{ color: "#666", marginBottom: 16 }}>
+            Two snippets with identical token spans. The first leaves the spans
+            unstyled, so each token shows up as a separate <code>generic</code>{" "}
+            node in the accessibility tree. The second sets{" "}
+            <code>role="presentation"</code> on each span — the browser drops
+            them and the whole <code>&lt;pre&gt;</code> reads as a single
+            accessible code block. Open Chrome DevTools' Accessibility panel (or
+            the Real A11y panel after 0.1.0-beta.5 ships the extractor fix) to
+            see the difference.
+          </p>
+          <CodeBlockDemo />
+        </section>
       </main>
 
       {/* Confirmation dialog */}
@@ -265,6 +284,81 @@ function DisclosureDemo() {
     </div>
   );
 }
+
+/**
+ * Two `<pre><code>` blocks with the same token spans. The "noisy" one has no
+ * role on the spans, so each token is its own `generic` node in the a11y
+ * tree. The "decorative" one sets `role="presentation"` on each span — per
+ * the ARIA spec the element is then dropped from the tree and its text
+ * content rolls up into the parent `<pre>`.
+ */
+function CodeBlockDemo() {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div>
+        <p style={codeLabelStyle}>Noisy — token spans without a role</p>
+        <pre tabIndex={0} style={codeBlockStyle}>
+          <code>
+            <span style={tokenKw}>const</span> <span style={tokenVar}>sn</span>{" "}
+            = <span style={tokenFn}>createInspector</span>({"{"} root, container{" "}
+            {"}"});{"\n"}
+            <span style={tokenVar}>sn</span>.<span style={tokenFn}>mount</span>
+            ();
+          </code>
+        </pre>
+      </div>
+      <div>
+        <p style={codeLabelStyle}>
+          Decorative tokens — <code>role="presentation"</code>
+        </p>
+        <pre tabIndex={0} style={codeBlockStyle}>
+          <code>
+            <span role="presentation" style={tokenKw}>
+              const
+            </span>{" "}
+            <span role="presentation" style={tokenVar}>
+              sn
+            </span>{" "}
+            ={" "}
+            <span role="presentation" style={tokenFn}>
+              createInspector
+            </span>
+            ({"{"} root, container {"}"});{"\n"}
+            <span role="presentation" style={tokenVar}>
+              sn
+            </span>
+            .
+            <span role="presentation" style={tokenFn}>
+              mount
+            </span>
+            ();
+          </code>
+        </pre>
+      </div>
+    </div>
+  );
+}
+
+const codeLabelStyle: React.CSSProperties = {
+  fontWeight: 600,
+  marginBottom: 4,
+  color: "#444",
+  fontSize: "0.95rem",
+};
+
+const codeBlockStyle: React.CSSProperties = {
+  background: "#fff",
+  border: "1px solid #ddd",
+  borderRadius: 6,
+  padding: 12,
+  overflowX: "auto",
+  margin: 0,
+  font: "13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace",
+};
+
+const tokenKw: React.CSSProperties = { color: "#d73a49" };
+const tokenVar: React.CSSProperties = { color: "#005cc5" };
+const tokenFn: React.CSSProperties = { color: "#6f42c1" };
 
 const menuStyle: React.CSSProperties = {
   marginTop: 8,
