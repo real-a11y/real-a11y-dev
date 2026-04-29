@@ -152,8 +152,8 @@ export function DemoApp() {
           <h2 id="disclosure-heading">Disclosure widgets</h2>
           <p style={{ color: "#666", marginBottom: 16 }}>
             Open either menu and look for the <strong>→ menu</strong> chip on
-            the trigger row in the panel and the <strong>← button</strong>{" "}
-            chip on the menu row. Click either to jump.
+            the trigger row in the panel and the <strong>← button</strong> chip
+            on the menu row. Click either to jump.
           </p>
           <DisclosureDemo />
         </section>

@@ -32,9 +32,7 @@ describe("buildControlsIndex (disclosure pairs)", () => {
     const trigger = [...tree.nodes.values()].find(
       (n) => n.a11y.role === "button" && n.a11y.name === "Settings",
     );
-    const menu = [...tree.nodes.values()].find(
-      (n) => n.a11y.role === "menu",
-    );
+    const menu = [...tree.nodes.values()].find((n) => n.a11y.role === "menu");
     expect(trigger).toBeDefined();
     expect(menu).toBeDefined();
 
@@ -62,9 +60,7 @@ describe("buildControlsIndex (disclosure pairs)", () => {
     const trigger = [...tree.nodes.values()].find(
       (n) => n.a11y.role === "button" && n.a11y.name === "Profile",
     );
-    const menu = [...tree.nodes.values()].find(
-      (n) => n.a11y.role === "menu",
-    );
+    const menu = [...tree.nodes.values()].find((n) => n.a11y.role === "menu");
 
     expect(forward.get(trigger!.id)).toContain(menu!.id);
     // Heuristic — flagged so callers can render with a "likely" affordance.
