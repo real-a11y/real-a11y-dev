@@ -11,6 +11,28 @@ publishable package ships together and is documented here.
 
 ## [Unreleased]
 
+### Added
+
+#### `@real-a11y-dev/core`
+
+- `node.dom.descendantText` on every `SemanticNode` — recursive text
+  content of the element with whitespace collapsed and a 240-character
+  cap. Captures text nested inside spans, presentational wrappers, and
+  other non-text-bearing tags. Useful for any consumer that needs a
+  "what's in this element" preview when the accessible name is empty
+  by spec (`<code>`, `<pre>`, `<svg>` containing `<text>`, decorative
+  wrappers).
+
+#### `@real-a11y-dev/semantic-navigator-ui`
+
+- `TreeNode` now falls back to a muted preview of `dom.descendantText`
+  in the a11y view when `a11y.name` is empty. Rendered with an `≈` prefix
+  and italic styling so the user can tell it's a preview, not a real
+  accessible name. Closes the visual gap created when role=presentation
+  spans correctly drop out of the tree but the parent (e.g. `<code>`,
+  `<pre>`) has no spec-allowed name of its own. New `.sn-name-preview`
+  class in `tree.css`.
+
 ### Fixed
 
 #### `@real-a11y-dev/core`

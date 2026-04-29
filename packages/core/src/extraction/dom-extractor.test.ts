@@ -243,4 +243,69 @@ describe("extractDomTree", () => {
 
     document.body.innerHTML = ""; // cleanup
   });
+
+  // descendantText is a recursive textContent preview that consumers
+  // (and the panel) can use to display "what's in this element" when
+  // the accessible name is empty by spec — e.g. a Shiki-highlighted
+  // <code> block whose tokens all live inside spans.
+  describe("descendantText preview", () => {
+    it("captures recursive text content from nested spans", () => {
+      const root = createPage(`
+        <pre>
+          <code>
+            <span>npm</span>
+            <span> install</span>
+            <span> @real-a11y-dev/inspector</span>
+          </code>
+        </pre>
+      `);
+
+      const { nodes } = extractDomTree(root);
+      const code = [...nodes.values()].find((n) => n.dom.tagName === "code")!;
+
+      expect(code.dom.descendantText).toBe(
+        "npm install @real-a11y-dev/inspector",
+      );
+      // Direct textContent stays empty — the spans are children, not text nodes.
+      expect(code.dom.textContent).toBe("");
+    });
+
+    it("collapses whitespace in descendantText", () => {
+      const root = createPage(`
+        <div>
+          <span>line one</span>
+          <span>line two</span>
+        </div>
+      `);
+
+      const div = [...extractDomTree(root).nodes.values()].find(
+        (n) => n.dom.tagName === "div" && n.parentId !== null,
+      )!;
+
+      // Newlines + indentation between spans collapse to a single space.
+      expect(div.dom.descendantText).toBe("line one line two");
+    });
+
+    it("truncates very long text with an ellipsis", () => {
+      const longText = "x".repeat(500);
+      const root = createPage(
+        `<pre><code><span>${longText}</span></code></pre>`,
+      );
+
+      const code = [...extractDomTree(root).nodes.values()].find(
+        (n) => n.dom.tagName === "code",
+      )!;
+
+      expect(code.dom.descendantText.length).toBeLessThanOrEqual(240);
+      expect(code.dom.descendantText.endsWith("…")).toBe(true);
+    });
+
+    it("returns empty string for elements with no text", () => {
+      const root = createPage(`<div><img alt="" /><br /></div>`);
+      const div = [...extractDomTree(root).nodes.values()].find(
+        (n) => n.dom.tagName === "div" && n.parentId !== null,
+      )!;
+      expect(div.dom.descendantText).toBe("");
+    });
+  });
 });

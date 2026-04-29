@@ -70,12 +70,18 @@ function renderDomLabel(node: SemanticNode) {
 function renderA11yLabel(node: SemanticNode) {
   const { role, name } = node.a11y;
   const level = node.a11y.properties["level"];
+  // When the element has no accessible name (e.g. <code>, <pre>, <svg>),
+  // fall back to a muted preview of the descendant text so the row isn't
+  // visually empty. Styled differently from `sn-name` so the user can tell
+  // it isn't a real accessible name.
+  const preview = !name ? node.dom.descendantText : "";
 
   return (
     <>
       <span class="sn-role">{role}</span>
       {level && <span class="sn-text-muted"> level {level}</span>}
       {name && <span class="sn-name">{name}</span>}
+      {preview && <span class="sn-name-preview">{preview}</span>}
     </>
   );
 }
