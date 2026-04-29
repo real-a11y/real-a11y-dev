@@ -64,6 +64,10 @@ function App() {
 
 The component creates its own internal `<div>` host and passes it to `createSemanticNavigator`. Changing `root` or `mount` remounts the navigator; changing `mode` uses the imperative `setViewMode()` API without remounting.
 
+::: tip Why `highlightOnHover` / `scrollHostOnSelect` / `focusHostOnActivate` default to false
+`<SemanticNavigator />` renders into the same document as your app, so activating a tree row could steal focus from the panel or scroll the page underneath you. The panel itself stays fully interactive either way — row selection, cross-link chip navigation, keyboard movement — what's gated is the side effect on the *real* DOM element. See [Panel interaction vs. host side effects](/guide/panel-features#panel-interaction-vs-host-side-effects) for the full rationale and when to flip them on.
+:::
+
 ---
 
 ## `useSemanticTree(rootRef, options?)`
