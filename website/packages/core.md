@@ -139,6 +139,48 @@ const sequence = getTabSequence(tree);
 
 ---
 
+## Disclosure-pair index
+
+### `buildControlsIndex(nodes)`
+
+Resolves the `aria-controls` relationship across a tree and returns adjacency maps in both directions, so callers can render cross-links between disclosure triggers (button, tab, combobox) and the elements they open (menu, panel, listbox).
+
+```ts
+import { extractA11yTree, buildControlsIndex } from "@real-a11y-dev/core";
+
+const tree = extractA11yTree(root);
+const { forward, reverse, inferred } = buildControlsIndex(tree.nodes);
+
+// forward.get(triggerNodeId) → tree-node ids the trigger controls
+// reverse.get(controlledNodeId) → tree-node ids of triggers pointing at it
+// inferred.has(triggerNodeId) → true when the link came from the heuristic
+//                               fallback rather than an explicit aria-controls
+```
+
+The lookup happens entirely in tree-node id space — DOM ids are resolved internally so callers never deal with them.
+
+**Two link sources, merged into the same maps:**
+
+1. **Explicit `aria-controls`** — the principled relationship. Always preferred.
+2. **Heuristic fallback** — for triggers that expose `aria-haspopup` + `aria-expanded="true"` but no `aria-controls`, paired with the next visible element of the matching role (`aria-haspopup="menu"` → `role="menu"`, `aria-haspopup="listbox"` → `role="listbox"`, etc.). Common in apps that skip `aria-controls`. Conservative by design: skipped when the trigger already has `aria-controls`, won't poach an element that's already an explicit target, and excludes hidden candidates.
+
+The `inferred` set lists trigger ids whose link came from the heuristic — render those cross-links with a "likely" affordance (different style, hedged tooltip) instead of presenting them as ground truth.
+
+### `ControlsIndex`
+
+```ts
+interface ControlsIndex {
+  /** trigger tree-node id → tree-node ids it controls */
+  forward: Map<string, string[]>;
+  /** controlled tree-node id → tree-node ids of triggers pointing at it */
+  reverse: Map<string, string[]>;
+  /** subset of `forward` keys whose link came from the heuristic */
+  inferred: Set<string>;
+}
+```
+
+---
+
 ## Tree diffing
 
 ### `diffTrees(before, after)`
