@@ -29,6 +29,11 @@
         font-size: 1.25rem;
         margin: 32px 0 12px;
       }
+      h3 {
+        font-size: 1rem;
+        margin: 16px 0 6px;
+        color: #444;
+      }
       p {
         color: #555;
         margin-bottom: 16px;
@@ -230,6 +235,53 @@
         <div role="menuitem" tabindex="-1">View profile</div>
         <div role="menuitem" tabindex="-1">Edit profile</div>
       </div>
+
+      <h2>Code blocks — decorative tokens</h2>
+      <p>
+        Two snippets with identical token spans. The first leaves the spans
+        unstyled, so each token shows up as a separate
+        <code>generic</code> node in the accessibility tree. The second sets
+        <code>role="presentation"</code> on each span — the browser drops them
+        and the whole <code>&lt;pre&gt;</code> reads as a single accessible code
+        block. Open Chrome DevTools' Accessibility panel (or the Real A11y panel
+        after 0.1.0-beta.5 ships the extractor fix) to see the difference.
+      </p>
+
+      <h3>Noisy — token spans without a role</h3>
+      <pre
+        tabindex="0"
+        style="
+          background: #fff;
+          border: 1px solid #ddd;
+          border-radius: 6px;
+          padding: 12px;
+          overflow-x: auto;
+          font:
+            13px/1.5 ui-monospace,
+            SFMono-Regular,
+            Menlo,
+            monospace;
+        "
+      ><code><span style="color:#d73a49;">const</span> <span style="color:#005cc5;">sn</span> = <span style="color:#6f42c1;">createInspector</span>({ root, container });
+<span style="color:#005cc5;">sn</span>.<span style="color:#6f42c1;">mount</span>();</code></pre>
+
+      <h3>Decorative tokens — role="presentation"</h3>
+      <pre
+        tabindex="0"
+        style="
+          background: #fff;
+          border: 1px solid #ddd;
+          border-radius: 6px;
+          padding: 12px;
+          overflow-x: auto;
+          font:
+            13px/1.5 ui-monospace,
+            SFMono-Regular,
+            Menlo,
+            monospace;
+        "
+      ><code><span role="presentation" style="color:#d73a49;">const</span> <span role="presentation" style="color:#005cc5;">sn</span> = <span role="presentation" style="color:#6f42c1;">createInspector</span>({ root, container });
+<span role="presentation" style="color:#005cc5;">sn</span>.<span role="presentation" style="color:#6f42c1;">mount</span>();</code></pre>
     </main>
 
     <dialog id="sample-dialog" aria-labelledby="dialog-title">
