@@ -348,3 +348,18 @@ document.getElementById("sample-form")!.addEventListener("submit", (e) => {
   e.preventDefault();
   alert("Form submitted! (This is just a demo.)");
 });
+
+// ─── Disclosure widgets — drives the cross-link chips in the panel ─────────
+
+function wireDisclosure(triggerId: string, menuId: string) {
+  const trigger = document.getElementById(triggerId) as HTMLButtonElement;
+  const menu = document.getElementById(menuId) as HTMLElement;
+  trigger.addEventListener("click", () => {
+    const open = trigger.getAttribute("aria-expanded") === "true";
+    trigger.setAttribute("aria-expanded", String(!open));
+    menu.hidden = open;
+  });
+}
+
+wireDisclosure("btn-explicit", "explicit-menu");
+wireDisclosure("btn-inferred", "profile-menu");

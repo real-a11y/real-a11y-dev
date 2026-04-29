@@ -19,7 +19,11 @@ import type {
   ActionType,
   ExtractionResult,
 } from "@real-a11y-dev/core";
-import { applySearchFilter, getPrimaryAction } from "@real-a11y-dev/core";
+import {
+  applySearchFilter,
+  getPrimaryAction,
+  buildControlsIndex,
+} from "@real-a11y-dev/core";
 import {
   useState,
   useMemo,
@@ -54,6 +58,26 @@ function getVisibleNodeIds(
   }
   walk(rootId);
   return result;
+}
+
+/**
+ * Build the chip data TreeNode renders for cross-link jumps. Pre-resolved
+ * here so TreeNode doesn't need access to the nodes Map.
+ */
+export interface ControlsLink {
+  id: string;
+  /** "<role> "<name>"" or just "<role>" — what the chip displays. */
+  label: string;
+  /** True when the link came from the haspopup heuristic, not aria-controls. */
+  inferred: boolean;
+}
+
+function makeLinkLabel(node: SemanticNode): string {
+  const role = node.a11y.role;
+  const name = node.a11y.name;
+  if (!name) return role;
+  const truncated = name.length > 24 ? name.slice(0, 24) + "…" : name;
+  return `${role} "${truncated}"`;
 }
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -107,6 +131,19 @@ export function TreePanel({
 
   const treeRef = useRef<HTMLDivElement>(null);
   const { query, matchCount, updateQuery, updateMatchCount } = useSearch();
+
+  // aria-controls cross-link index (trigger ↔ controlled element). Used to
+  // render clickable jump chips on disclosure pairs (button ↔ menu, tab ↔
+  // panel, combobox ↔ listbox) so the relationship is reachable without
+  // scroll-hunting.
+  const controlsIndex = useMemo(
+    () => buildControlsIndex(treeData.nodes),
+    [treeData],
+  );
+
+  // Tree-node id currently flashing after a cross-link jump. Cleared by a
+  // timeout so the flash plays once.
+  const [flashingId, setFlashingId] = useState<string | null>(null);
 
   // Clear role filter when entering tab mode
   useEffect(() => {
@@ -177,6 +214,42 @@ export function TreePanel({
       onActivate?.(id, action);
     },
     [treeData, handleToggle, onActivate],
+  );
+
+  const handleJumpToNode = useCallback(
+    (targetId: string) => {
+      // Expand every collapsed ancestor so the target is in `visibleNodeIds`
+      // before we try to scroll to it.
+      let cur: SemanticNode | undefined = treeData.nodes.get(targetId);
+      let mutated = false;
+      while (cur && cur.parentId) {
+        const parent = treeData.nodes.get(cur.parentId);
+        if (parent && !parent.ui.expanded) {
+          parent.ui.expanded = true;
+          mutated = true;
+        }
+        cur = parent;
+      }
+      if (mutated) forceRender();
+      setSelectedId(targetId);
+      setFlashingId(targetId);
+      setTimeout(() => setFlashingId(null), 700);
+
+      // Two RAFs ensure Preact has rendered AND the browser has done layout
+      // accounting for the newly-expanded ancestors before we measure. The
+      // selection effect below uses `block: "nearest"`, which can no-op
+      // when the row was JUST inserted via ancestor expansion — explicit
+      // center-scroll guarantees the target lands in the viewport.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const el = treeRef.current?.querySelector(
+            `[data-node-id="${CSS.escape(targetId)}"]`,
+          );
+          el?.scrollIntoView({ block: "center" });
+        });
+      });
+    },
+    [treeData, forceRender],
   );
 
   const { isMouseModality, markKeyboard } = useInputModality();
@@ -271,16 +344,50 @@ export function TreePanel({
             {visibleNodeIds.map((id) => {
               const node = treeData.nodes.get(id);
               if (!node) return null;
+              const forwardIds = controlsIndex.forward.get(id);
+              const reverseIds = controlsIndex.reverse.get(id);
+              const controlsLinks: ControlsLink[] | undefined =
+                forwardIds && forwardIds.length > 0
+                  ? (forwardIds
+                      .map((targetId) => {
+                        const target = treeData.nodes.get(targetId);
+                        if (!target) return null;
+                        return {
+                          id: targetId,
+                          label: makeLinkLabel(target),
+                          inferred: controlsIndex.inferred.has(id),
+                        };
+                      })
+                      .filter(Boolean) as ControlsLink[])
+                  : undefined;
+              const controlledByLinks: ControlsLink[] | undefined =
+                reverseIds && reverseIds.length > 0
+                  ? (reverseIds
+                      .map((triggerId) => {
+                        const trigger = treeData.nodes.get(triggerId);
+                        if (!trigger) return null;
+                        return {
+                          id: triggerId,
+                          label: makeLinkLabel(trigger),
+                          inferred: controlsIndex.inferred.has(triggerId),
+                        };
+                      })
+                      .filter(Boolean) as ControlsLink[])
+                  : undefined;
               return (
                 <TreeNode
                   key={id}
                   node={node}
                   viewMode={viewMode}
                   isSelected={id === selectedId}
+                  isFlashing={id === flashingId}
                   onSelect={handleSelect}
                   onToggle={handleToggle}
                   onActivate={handleActivate}
                   onHover={handleHover}
+                  controlsLinks={controlsLinks}
+                  controlledByLinks={controlledByLinks}
+                  onJumpToNode={handleJumpToNode}
                 />
               );
             })}
