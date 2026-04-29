@@ -127,6 +127,28 @@ Buttons that dispatch a synthetic `KeyboardEvent` to whatever element currently 
 
 Closes the current browser tab. Handy for dismissing popups, login windows, or test tabs without reaching for the mouse. Extension-only because it uses `chrome.tabs.remove`.
 
+### Cross-link chips on disclosure pairs
+
+Disclosure widgets — a button that opens a menu, a tab that controls a panel, a combobox bound to a listbox — render as two separate rows in the tree, often far apart. The relationship between them is the most useful piece of information when debugging the widget, and it's the easiest to miss.
+
+The panel renders that relationship as paired clickable chips:
+
+- On the **trigger** row: `→ <role> "<name>"` pointing at the controlled element.
+- On the **controlled** row: `← <role> "<name>"` pointing back at the trigger.
+
+Click either chip and the panel expands every collapsed ancestor of the target, scrolls it to the center of the viewport, and briefly flashes its row.
+
+**Two link sources, distinguished visually:**
+
+- **Solid border** — the link comes from an explicit `aria-controls` attribute. Properly authored disclosure pattern.
+- **Dashed border** — the link is **inferred** from `aria-haspopup` + `aria-expanded="true"` plus DOM proximity, because the trigger has no `aria-controls`. Common in apps that skip `aria-controls` (Drive, Gmail, plenty of in-house component libraries). The hedged tooltip ("Likely controls …") sets the right expectation — when two unrelated menus are open at once, the inferred pairing can be wrong.
+
+### Manual refresh on tab switch — `↻` toolbar button
+
+When you switch browser tabs, the panel **clears its tree** and shows the empty "Connecting…" state instead of stale content from the previous tab. Hit the `↻` refresh button to load the new tab's tree.
+
+This is intentional: auto-refresh on tab switch was unreliable across the long tail of pages (restricted URLs with no content script, lazy-injected content scripts that aren't ready yet, races between the panel and the content script becoming reachable). The manual refresh trades one extra click for predictability — you always know what you're seeing.
+
 ### BETA pill in the panel header
 
 Sets expectations during the pre-1.0 phase. Linked to the GitHub issues page. Goes away at v1.0.
