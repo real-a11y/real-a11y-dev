@@ -11,7 +11,25 @@ publishable package ships together and is documented here.
 
 ## [Unreleased]
 
-_No changes yet._
+### Fixed
+
+#### `@real-a11y-dev/core`
+
+- `extractA11yTree` now flattens elements with `role="presentation"` /
+  `role="none"` (and `<img alt="">`) from the accessibility tree per ARIA
+  spec, even when the element has text content. Previously the role was
+  remapped to `"generic"`, which kept the element in the tree whenever its
+  text content gave it an accessible name — Shiki-style syntax highlighters
+  (and any other site that correctly marks decorative spans with
+  `role="presentation"`) showed one generic node per token in our panel.
+  Children are still walked and promoted to the parent. Focusable elements
+  with `role="presentation"` are kept (spec carve-out: presenting a real
+  interactive control as decorative would lose keyboard access).
+
+  **Behavior change for consumers:** any subtree containing
+  `role="presentation"` / `role="none"` / `<img alt="">` produces a
+  smaller tree. Snapshot tests asserting the prior shape will need to be
+  re-snapshotted.
 
 ## [0.1.0-beta.4] — 2026-04-28
 

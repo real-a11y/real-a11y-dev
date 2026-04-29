@@ -158,12 +158,13 @@ const HIDDEN_FROM_AT = new Set([
 /** Resolve the implicit ARIA role for an element */
 export function getImplicitRole(element: Element): string {
   const explicitRole = element.getAttribute("role")?.trim().split(/\s+/)[0];
-  // role="presentation" and role="none" mean "strip this element's role but
-  // keep its children in the AT tree" — map to "generic" so the a11y
-  // extractor's normal flattening logic promotes children rather than
-  // suppressing the entire subtree.
+  // role="presentation" and role="none" are synonyms — mark with the
+  // canonical "presentation" role so the a11y extractor flattens the
+  // element from the tree (children are promoted to the parent). This
+  // matches what <img alt=""> already returns and what assistive tech /
+  // browser a11y trees do per ARIA spec.
   if (explicitRole === "presentation" || explicitRole === "none")
-    return "generic";
+    return "presentation";
   if (explicitRole) return explicitRole;
 
   const tag = element.tagName.toLowerCase();
@@ -182,8 +183,9 @@ export function isHiddenFromAT(element: Element): boolean {
   // aria-hidden="true" hides element AND entire subtree from AT
   if (element.getAttribute("aria-hidden") === "true") return true;
 
-  // role=presentation/none are handled in getImplicitRole (mapped to "generic")
-  // and let through normal flattening — they do NOT hide children.
+  // role=presentation/none are NOT hidden — they map to the "presentation"
+  // role in getImplicitRole and the a11y extractor flattens them (the
+  // element drops out, children are promoted to the parent).
 
   const htmlEl = element as HTMLElement;
   if (htmlEl.hidden) return true;

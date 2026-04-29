@@ -198,4 +198,107 @@ describe("extractA11yTree", () => {
     const pw = allNodes.find((n) => n.dom.tagName === "input");
     expect(pw).toBeDefined();
   });
+
+  // role="presentation" / role="none" / <img alt=""> — the element drops out
+  // of the a11y tree per ARIA spec, even when it has text content that would
+  // otherwise count as an accessible name. Regression test for the panel
+  // showing every Shiki syntax token as a separate `generic` row even though
+  // the spans were marked `role="presentation"`.
+  describe('presentational elements (role=presentation/none/img alt="")', () => {
+    it("flattens role=presentation spans with text content (Shiki syntax tokens)", () => {
+      const root = createPage(`
+        <pre tabindex="0">
+          <code>
+            <span role="presentation">const</span>
+            <span role="presentation">sn</span>
+            <span role="presentation">=</span>
+            <span role="presentation">createInspector</span>
+          </code>
+        </pre>
+      `);
+
+      const { nodes } = extractA11yTree(root);
+      const allNodes = Array.from(nodes.values());
+
+      // No "presentation" or token-text generic node leaks through.
+      expect(
+        allNodes.find((n) => n.a11y.role === "presentation"),
+      ).toBeUndefined();
+      expect(
+        allNodes.find(
+          (n) => n.a11y.role === "generic" && n.a11y.name === "createInspector",
+        ),
+      ).toBeUndefined();
+
+      // The <code> element is still in the tree — it has the meaningful "code" role.
+      const code = allNodes.find((n) => n.a11y.role === "code");
+      expect(code).toBeDefined();
+    });
+
+    it("treats role=none identically to role=presentation", () => {
+      const root = createPage(`
+        <div>
+          <span role="none">Decor</span>
+          <button>Real action</button>
+        </div>
+      `);
+
+      const { nodes } = extractA11yTree(root);
+      const allNodes = Array.from(nodes.values());
+
+      expect(
+        allNodes.find((n) => n.a11y.role === "presentation"),
+      ).toBeUndefined();
+      // The decorative span's text must not surface as a standalone generic row.
+      expect(
+        allNodes.find(
+          (n) => n.a11y.role === "generic" && n.a11y.name === "Decor",
+        ),
+      ).toBeUndefined();
+      // The button is unaffected.
+      expect(allNodes.find((n) => n.a11y.role === "button")).toBeDefined();
+    });
+
+    it('flattens <img alt=""> from the tree (decorative image)', () => {
+      const root = createPage(`
+        <main>
+          <img alt="" src="decor.png" />
+          <h1>Real heading</h1>
+        </main>
+      `);
+
+      const { nodes } = extractA11yTree(root);
+      const allNodes = Array.from(nodes.values());
+
+      // No img and no leftover "presentation" node.
+      expect(allNodes.find((n) => n.dom.tagName === "img")).toBeUndefined();
+      expect(
+        allNodes.find((n) => n.a11y.role === "presentation"),
+      ).toBeUndefined();
+
+      // Real heading still present.
+      expect(allNodes.find((n) => n.a11y.role === "heading")).toBeDefined();
+    });
+
+    it("keeps focusable elements with role=presentation (spec carve-out)", () => {
+      // Per ARIA spec, role=presentation is ignored when the element is
+      // focusable — presenting a real interactive control as decorative
+      // would lose keyboard access. So an <a href> with role=presentation
+      // stays in the tree (as the presentation role itself, since the
+      // implicit role isn't restored — but it's kept rather than flattened).
+      const root = createPage(`
+        <nav aria-label="Main">
+          <a href="/about" role="presentation">About</a>
+        </nav>
+      `);
+
+      const { nodes } = extractA11yTree(root);
+      const allNodes = Array.from(nodes.values());
+
+      // The link is still in the tree (focusable carve-out).
+      const link = allNodes.find((n) => n.dom.tagName === "a");
+      expect(link).toBeDefined();
+      expect(link!.interaction.isInteractive).toBe(true);
+    });
+  });
 });
