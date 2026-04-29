@@ -1078,6 +1078,17 @@ export function App() {
                           {node.a11y.name && (
                             <span class="sn-name">{node.a11y.name}</span>
                           )}
+                          {/* Descendant-text preview when the element's name
+                              is empty or fragmented (e.g. `<code>` whose direct
+                              text is just connectors between role=presentation
+                              spans). Mirrors the shared TreeNode in
+                              @real-a11y-dev/semantic-navigator-ui. */}
+                          {node.dom.descendantText !== "" &&
+                            node.dom.descendantText !== node.a11y.name && (
+                              <span class="sn-name-preview">
+                                {node.dom.descendantText}
+                              </span>
+                            )}
                           {/* Accessible description — from aria-describedby / aria-description */}
                           {node.a11y.description && (
                             <span

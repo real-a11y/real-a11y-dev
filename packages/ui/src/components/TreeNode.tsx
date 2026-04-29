@@ -70,18 +70,24 @@ function renderDomLabel(node: SemanticNode) {
 function renderA11yLabel(node: SemanticNode) {
   const { role, name } = node.a11y;
   const level = node.a11y.properties["level"];
-  // When the element has no accessible name (e.g. <code>, <pre>, <svg>),
-  // fall back to a muted preview of the descendant text so the row isn't
-  // visually empty. Styled differently from `sn-name` so the user can tell
-  // it isn't a real accessible name.
-  const preview = !name ? node.dom.descendantText : "";
+  // Show a muted preview of the descendant text whenever it differs from
+  // the accessible name. Two cases this catches:
+  //   - name === ""   — `<code>`, `<pre>`, `<svg>`, etc. (no spec-allowed name).
+  //   - name is fragmented — e.g. `<code>` whose direct text is just the
+  //     connector tokens between role=presentation spans, showing
+  //     `"= ({ root, container }); .();"` while the full descendant text
+  //     is `"const sn = createInspector({ root, container }); sn.mount();"`.
+  // Both cases are informative: the user sees what AT will announce AND
+  // what's actually inside the element.
+  const { descendantText } = node.dom;
+  const showPreview = descendantText !== "" && descendantText !== name;
 
   return (
     <>
       <span class="sn-role">{role}</span>
       {level && <span class="sn-text-muted"> level {level}</span>}
       {name && <span class="sn-name">{name}</span>}
-      {preview && <span class="sn-name-preview">{preview}</span>}
+      {showPreview && <span class="sn-name-preview">{descendantText}</span>}
     </>
   );
 }

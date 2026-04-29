@@ -354,9 +354,11 @@
   color: var(--sn-text-muted);
 }
 
-/* Fallback preview for elements with no accessible name but meaningful
-   descendant text (e.g. <code>, <pre>, <svg>). Visually distinct from
-   .sn-name so the user can tell it isn't a real accessible name. */
+/* Preview of descendant text for any element whose accessible name is
+   absent or fragmented (e.g. <code>, <pre>, a <p> with mixed inline
+   content). Visually distinct from .sn-name — italic + muted + a
+   middle-dot separator — so the reader can tell this isn't the actual
+   accessible name, just a "what's inside" hint. */
 .sn-name-preview {
   color: var(--sn-text-muted);
   font-style: italic;
@@ -368,7 +370,7 @@
 }
 
 .sn-name-preview::before {
-  content: "≈ ";
+  content: "· ";
   font-style: normal;
   opacity: 0.6;
 }
