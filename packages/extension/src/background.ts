@@ -1,46 +1,32 @@
 /// <reference types="chrome" />
 
-import type { SemanticNode } from "@real-a11y-dev/core";
-
 import {
   prefixNodeId,
   parseNodeId,
-  urlsMatch,
   planFrameAnnouncementResponse,
   planPanelDisconnectCleanup,
 } from "./routing.js";
+import { buildFrameInfoMap, mergeFrameTrees } from "./frame-merger.js";
+import {
+  type TabState,
+  clearTabFrames,
+  disposeTabState,
+  getOrCreateTabState,
+  recordFrameTree,
+  removeFrame,
+} from "./tab-state.js";
 
 // ---- Per-tab frame state ----
-
-interface FrameTree {
-  frameId: number;
-  frameUrl: string;
-  pageTitle: string;
-  nodes: Array<[string, SemanticNode]>;
-  rootId: string;
-}
-
-interface TabState {
-  frames: Map<number, FrameTree>;
-  nodeToFrame: Map<string, number>; // prefixed nodeId → frameId
-  mergeTimer: ReturnType<typeof setTimeout> | null;
-}
+// Pure state-machine helpers live in ./tab-state, the merge algorithm in
+// ./frame-merger, and the Chrome side-effects below.
 
 const tabStates = new Map<number, TabState>();
 const tabCurtainOn = new Map<number, boolean>(); // curtain state per tab
 let activeTabId: number | null = null;
 
 function getTabState(tabId: number): TabState {
-  let state = tabStates.get(tabId);
-  if (!state) {
-    state = { frames: new Map(), nodeToFrame: new Map(), mergeTimer: null };
-    tabStates.set(tabId, state);
-  }
-  return state;
+  return getOrCreateTabState(tabStates, tabId);
 }
-
-// Node-id prefixing, url-normalize, and url-match helpers live in ./routing
-// so they can be unit-tested without pulling in the Chrome APIs.
 
 // ---- Frame tree merging ----
 
@@ -49,7 +35,6 @@ async function mergeAndSendTree(tabId: number) {
   const topFrame = state.frames.get(0);
   if (!topFrame) return;
 
-  // Get frame hierarchy from Chrome
   let allFrames: chrome.webNavigation.GetAllFrameResultDetails[] = [];
   try {
     const frames = await chrome.webNavigation.getAllFrames({ tabId });
@@ -58,121 +43,18 @@ async function mergeAndSendTree(tabId: number) {
     // Tab might be closed or invalid
   }
 
-  // Build a map of frameId → frame info
-  const frameInfoMap = new Map<
-    number,
-    { parentFrameId: number; url: string }
-  >();
-  for (const f of allFrames) {
-    frameInfoMap.set(f.frameId, { parentFrameId: f.parentFrameId, url: f.url });
-  }
+  const result = mergeFrameTrees({
+    frames: state.frames,
+    frameInfoMap: buildFrameInfoMap(allFrames),
+  });
+  if (!result) return; // top frame went away between schedule and run
 
-  // Start with top frame nodes
-  const mergedNodes = new Map<string, SemanticNode>();
-  const nodeToFrame = new Map<string, number>();
-
-  for (const [nodeId, node] of topFrame.nodes) {
-    mergedNodes.set(nodeId, { ...node });
-    nodeToFrame.set(nodeId, 0);
-  }
-
-  // Process child frames — sorted by parent depth to handle nesting
-  const childFrameIds = Array.from(state.frames.keys()).filter(
-    (id) => id !== 0,
-  );
-
-  for (const childFrameId of childFrameIds) {
-    const childTree = state.frames.get(childFrameId);
-    if (!childTree) continue;
-
-    const frameInfo = frameInfoMap.get(childFrameId);
-    const parentFrameId = frameInfo?.parentFrameId ?? 0;
-
-    // Find the parent frame's tree to locate the <iframe> attachment point
-    const parentTree =
-      parentFrameId === 0 ? topFrame : state.frames.get(parentFrameId);
-    if (!parentTree) continue;
-
-    // Find the iframe node in the parent tree that matches this frame's URL
-    const parentFrameUrl = parentTree.frameUrl;
-    let iframeNodeId: string | null = null;
-    let iframeDepth = 0;
-
-    for (const [nodeId, node] of parentTree.nodes) {
-      if (node.dom.tagName === "iframe") {
-        const src = node.dom.attributes.src || "";
-        if (urlsMatch(src, childTree.frameUrl, parentFrameUrl)) {
-          // Prefix the parent node ID if it's not the top frame
-          iframeNodeId = prefixNodeId(parentFrameId, nodeId);
-          const parentNode = mergedNodes.get(iframeNodeId);
-          iframeDepth = parentNode?.depth ?? node.depth;
-          break;
-        }
-      }
-    }
-
-    if (!iframeNodeId) {
-      // Fallback: try matching by URL from webNavigation
-      if (frameInfo) {
-        for (const [nodeId, node] of parentTree.nodes) {
-          if (node.dom.tagName === "iframe") {
-            const prefId = prefixNodeId(parentFrameId, nodeId);
-            const parentNode = mergedNodes.get(prefId);
-            // Check if this iframe node already has frame children attached
-            if (parentNode && parentNode.childIds.length === 0) {
-              iframeNodeId = prefId;
-              iframeDepth = parentNode.depth;
-              break;
-            }
-          }
-        }
-      }
-    }
-
-    // Prefix child frame node IDs and adjust depths
-    const prefix = childFrameId;
-    const depthOffset = iframeNodeId ? iframeDepth + 1 : 0;
-
-    for (const [nodeId, node] of childTree.nodes) {
-      const prefId = prefixNodeId(prefix, nodeId);
-      const isRoot = nodeId === childTree.rootId;
-
-      const adjustedNode: SemanticNode = {
-        ...node,
-        id: prefId,
-        parentId: isRoot
-          ? iframeNodeId // Root's parent is the iframe node
-          : node.parentId
-            ? prefixNodeId(prefix, node.parentId)
-            : null,
-        childIds: node.childIds.map((cid) => prefixNodeId(prefix, cid)),
-        depth: node.depth + depthOffset,
-        ui: { ...node.ui, expanded: node.depth + depthOffset < 3 },
-      };
-
-      mergedNodes.set(prefId, adjustedNode);
-      nodeToFrame.set(prefId, childFrameId);
-    }
-
-    // Attach child frame root as child of iframe node
-    if (iframeNodeId) {
-      const iframeNode = mergedNodes.get(iframeNodeId);
-      if (iframeNode) {
-        const childRootPrefId = prefixNodeId(prefix, childTree.rootId);
-        if (!iframeNode.childIds.includes(childRootPrefId)) {
-          iframeNode.childIds = [...iframeNode.childIds, childRootPrefId];
-        }
-      }
-    }
-  }
-
-  // Store the mapping for action routing
-  state.nodeToFrame = nodeToFrame;
+  state.nodeToFrame = result.nodeToFrame;
 
   // Send merged tree to side panel with page info. `tabId` lets the side
   // panel filter out broadcasts for tabs it isn't bound to — without that
   // any background tab's tree update leaks into every open panel.
-  const serialized = Array.from(mergedNodes.entries());
+  const serialized = Array.from(result.nodes.entries());
   chrome.runtime
     .sendMessage({
       type: "TREE_DATA",
@@ -335,8 +217,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       case "FRAME_TREE_DATA": {
         // Store this frame's tree and schedule a merge
         const state = getTabState(tabId);
-        const isNewTopFrame = frameId === 0 && !state.frames.has(0);
-        state.frames.set(frameId, {
+        const { isNewTopFrame } = recordFrameTree(state, {
           frameId,
           frameUrl: message.payload.frameUrl,
           pageTitle: message.payload.pageTitle || "",
@@ -438,9 +319,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (targetTabId !== null) {
       // Clear old frame data on fresh request
       if (message.type === "REQUEST_TREE") {
-        const state = getTabState(targetTabId);
-        state.frames.clear();
-        state.nodeToFrame.clear();
+        clearTabFrames(getTabState(targetTabId));
       }
       chrome.tabs.sendMessage(targetTabId, message, () => {
         if (chrome.runtime.lastError) {
@@ -454,9 +333,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (tabId) {
           activeTabId = tabId;
           if (message.type === "REQUEST_TREE") {
-            const state = getTabState(tabId);
-            state.frames.clear();
-            state.nodeToFrame.clear();
+            clearTabFrames(getTabState(tabId));
           }
           chrome.tabs.sendMessage(tabId, message, () => {
             if (chrome.runtime.lastError) {
@@ -632,22 +509,17 @@ chrome.webNavigation.onBeforeNavigate.addListener((details) => {
 
   if (details.frameId === 0) {
     // Top frame navigating — clear ALL frame data for this tab
-    state.frames.clear();
-    state.nodeToFrame.clear();
+    clearTabFrames(state);
   } else {
     // Subframe navigating — remove just this frame's data
-    state.frames.delete(details.frameId);
-    if (state.frames.size > 0) {
-      scheduleMerge(details.tabId);
-    }
+    const { shouldRemerge } = removeFrame(state, details.frameId);
+    if (shouldRemerge) scheduleMerge(details.tabId);
   }
 });
 
 // Clean up on tab removal
 chrome.tabs.onRemoved.addListener((tabId) => {
-  const state = tabStates.get(tabId);
-  if (state?.mergeTimer) clearTimeout(state.mergeTimer);
-  tabStates.delete(tabId);
+  disposeTabState(tabStates, tabId);
   tabCurtainOn.delete(tabId);
 });
 
