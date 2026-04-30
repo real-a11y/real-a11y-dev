@@ -1,0 +1,41 @@
+[
+  {
+    "name": "@real-a11y-dev/core (esm)",
+    "path": "packages/core/dist/index.js",
+    "limit": "10 KB",
+    "gzip": true
+  },
+  {
+    "name": "@real-a11y-dev/semantic-navigator-ui (esm)",
+    "path": "packages/ui/dist/index.js",
+    "import": "{ TreeView }",
+    "limit": "7 KB",
+    "gzip": true,
+    "ignore": ["preact", "preact/hooks", "@real-a11y-dev/core"]
+  },
+  {
+    "name": "@real-a11y-dev/inspector (esm)",
+    "path": "packages/inspector/dist/index.js",
+    "limit": "30 KB",
+    "gzip": true
+  },
+  {
+    "name": "@real-a11y-dev/react (esm)",
+    "path": "packages/react/dist/index.js",
+    "limit": "3 KB",
+    "gzip": true,
+    "ignore": [
+      "react",
+      "react-dom",
+      "@real-a11y-dev/inspector",
+      "@real-a11y-dev/core"
+    ]
+  },
+  {
+    "name": "@real-a11y-dev/testing (esm)",
+    "path": "packages/testing/dist/index.js",
+    "limit": "3 KB",
+    "gzip": true,
+    "ignore": ["@real-a11y-dev/core"]
+  }
+]
