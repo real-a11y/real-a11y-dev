@@ -6,7 +6,7 @@ Thanks for your interest in contributing to Real A11y. This guide covers how to 
 
 ### Prerequisites
 
-- Node.js >= 20
+- Node.js >= 20 (a `.nvmrc` is provided — run `nvm use` or `fnm use`)
 - pnpm >= 9
 
 ### Setup
@@ -72,6 +72,20 @@ pnpm --filter @real-a11y-dev/core test:watch  # Watch mode
 - `fix/description` — Bug fixes
 - `docs/description` — Documentation changes
 - `refactor/description` — Code refactoring
+
+### Commit messages
+
+This repo follows [Conventional Commits](https://www.conventionalcommits.org/) — enforced by a `commit-msg` git hook running [`commitlint`](https://commitlint.js.org/). Examples from our log:
+
+```
+fix(core): flatten role=presentation/none from a11y tree per ARIA spec
+feat(ui+examples): decorative code-block tokens via role=presentation
+chore(ci): pass NODE_AUTH_TOKEN on publish
+```
+
+Allowed types: `feat`, `fix`, `docs`, `chore`, `refactor`, `test`, `style`, `perf`, `build`, `ci`, `revert`. Scope is optional and may combine packages with `+` (e.g. `ui+examples`).
+
+If a hook complains, run `pnpm commitlint --edit .git/COMMIT_EDITMSG` to see the exact rule that fired.
 
 ### Code style
 
