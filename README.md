@@ -153,7 +153,9 @@ pnpm dev
 
 ## Status
 
-Real A11y is in **public beta** (`0.1.x`). The core extraction engine and the Chrome extension are stable and used in production; the npm packages (`@real-a11y-dev/inspector`, `@real-a11y-dev/testing`, `@real-a11y-dev/react`, `@real-a11y-dev/storybook-addon`) are newer and may have minor API changes before `0.2.0`. Breaking changes will ship behind a minor bump and be called out in the changelog.
+Real A11y is in **public beta** (`0.1.x`). The core extraction engine and the Chrome extension are stable and used in production; the npm packages (`@real-a11y-dev/inspector`, `@real-a11y-dev/testing`, `@real-a11y-dev/react`, `@real-a11y-dev/storybook-addon`) are newer and may have minor API changes before `0.2.0`.
+
+The contract for what counts as a breaking change, what's internal vs. public, and how deprecations work is in [docs/STABILITY.md](./docs/STABILITY.md).
 
 See [SECURITY.md](./SECURITY.md) for how to report security issues, and [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) before opening an issue or PR.
 
