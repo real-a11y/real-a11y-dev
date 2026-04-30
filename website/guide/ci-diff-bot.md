@@ -160,6 +160,13 @@ Output goes to `a11y-snapshots.md` by default — add that to `.gitignore`.
 
 ### 3. Add the workflow
 
+> **Land steps 1 and 2 on `main` first.** The workflow runs `npm run a11y:snapshot` against **both** the PR head **and** the base branch. If the script and its devDependencies don't yet exist on `main`, the `Snapshot (base)` job fails with `Missing script: a11y:snapshot` (or an `ECONNREFUSED` from `npm ci` if the lockfile points at a private registry). The diff comment never posts and you'll think the workflow is broken.
+>
+> Order of operations:
+>
+> 1. PR (or direct commit) to `main`: install `@real-a11y-dev/testing` + `@playwright/test`, add `scripts/a11y-snapshot.mjs`, add the `a11y:snapshot` npm script. **No workflow yet.**
+> 2. Once that's merged, open a second PR adding `.github/workflows/a11y-diff.yml`. Both jobs now have the tooling they need.
+
 Create `.github/workflows/a11y-diff.yml`. Pick the template that matches your project:
 
 - [Next.js (dev server)](#template-nextjs)
@@ -201,6 +208,8 @@ The CLI reads its inputs from environment variables.
 Each template shares the same final step — a **diff & comment** job that downloads both snapshot artifacts and posts the sticky PR comment. That step is identical across setups and is shown once at the end of this section.
 
 ### <a id="template-nextjs"></a>Next.js (dev server)
+
+> Using `output: "export"` in `next.config`? `next start` errors out with *"does not work with output: export"* — use the [Static site](#template-static) template instead, which serves the build output via `npx serve`.
 
 ```yaml
 # .github/workflows/a11y-diff.yml
