@@ -15,9 +15,13 @@
     "a11y:snapshot": "pnpm --filter @real-a11y-dev/testing snapshot",
     "rasterize-icons": "pnpm --filter @real-a11y-dev/testing exec node scripts/rasterize-extension-icons.mjs",
     "rasterize-og": "pnpm --filter @real-a11y-dev/testing exec node scripts/rasterize-og-image.mjs",
-    "prepare": "husky"
+    "prepare": "husky",
+    "changeset": "changeset",
+    "changeset:status": "changeset status --since=origin/main",
+    "version-packages": "changeset version && pnpm install --lockfile-only"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.27.10",
     "@eslint/js": "^10.0.1",
     "@types/chrome": "^0.0.287",
     "@vitest/browser": "^4.1.4",
