@@ -37,34 +37,28 @@
   ],
   "exports": {
     ".": {
-      "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
+      "types": {
+        "import": "./dist/index.d.ts",
+        "require": "./dist/index.d.cts"
       },
-      "require": {
-        "types": "./dist/index.d.cts",
-        "default": "./dist/index.cjs"
-      }
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
     },
     "./preview": {
-      "import": {
-        "types": "./dist/preview.d.ts",
-        "default": "./dist/preview.js"
+      "types": {
+        "import": "./dist/preview.d.ts",
+        "require": "./dist/preview.d.cts"
       },
-      "require": {
-        "types": "./dist/preview.d.cts",
-        "default": "./dist/preview.cjs"
-      }
+      "import": "./dist/preview.js",
+      "require": "./dist/preview.cjs"
     },
     "./manager": {
-      "import": {
-        "types": "./dist/manager.d.ts",
-        "default": "./dist/manager.js"
+      "types": {
+        "import": "./dist/manager.d.ts",
+        "require": "./dist/manager.d.cts"
       },
-      "require": {
-        "types": "./dist/manager.d.cts",
-        "default": "./dist/manager.cjs"
-      }
+      "import": "./dist/manager.js",
+      "require": "./dist/manager.cjs"
     }
   },
   "files": [
