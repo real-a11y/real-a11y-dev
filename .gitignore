@@ -14,5 +14,8 @@ a11y.diff
 test-results/
 playwright-report/
 
+# storybook build output (per-package)
+storybook-static/
+
 # Claude Code project settings (user-specific)
 .claude/
