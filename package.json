@@ -22,7 +22,8 @@
     "size": "pnpm build && size-limit",
     "size:why": "pnpm build && size-limit --why",
     "commitlint": "commitlint",
-    "packaging:check": "node scripts/check-packaging.mjs"
+    "packaging:check": "node scripts/check-packaging.mjs",
+    "examples:dev-smoke": "node scripts/check-examples-dev.mjs"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.17.0",
