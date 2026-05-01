@@ -128,10 +128,26 @@ function smokeOne(example, port) {
       // Give Vite a moment to surface deferred transform errors.
       await new Promise((r) => setTimeout(r, 1500));
 
-      child.kill("SIGTERM");
-      setTimeout(() => child.kill("SIGKILL"), 2_000);
+      // Tear down the Vite process tree. On POSIX `child.kill` is enough,
+      // but on Windows it's a no-op for SIGTERM and doesn't cascade to
+      // esbuild/rollup children that Vite spawns — so the smoke-test
+      // process hangs forever waiting for `exit`. `taskkill /T /F` walks
+      // the full tree and kills it. Followed by a hard SIGKILL escape
+      // hatch in case taskkill itself fails.
+      killTree(child);
 
-      child.on("exit", () => {
+      const exitTimeoutId = setTimeout(() => {
+        log.push(
+          "\n[timeout] child did not exit after kill; resolving anyway\n",
+        );
+        finalize(false);
+      }, 5_000);
+
+      let finalized = false;
+      function finalize(_unused) {
+        if (finalized) return;
+        finalized = true;
+        clearTimeout(exitTimeoutId);
         const captured = log.join("");
         const plain = captured.replace(/\x1b\[[0-9;]*m/g, "");
         const matched = FAILURE_PATTERNS.find((p) => p.test(plain));
@@ -149,9 +165,30 @@ function smokeOne(example, port) {
           console.log(`──────── ${example.name}: OK ────────`);
           resolveOne(true);
         }
-      });
+      }
+
+      child.on("exit", () => finalize(true));
     });
   });
+}
+
+function killTree(child) {
+  if (process.platform === "win32") {
+    // Best-effort: spawn taskkill, ignore its result. We still SIGKILL
+    // afterward as a fallback — node's child.kill on Windows uses
+    // TerminateProcess which doesn't cascade but does kill the parent.
+    try {
+      const tk = spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], {
+        stdio: "ignore",
+      });
+      tk.on("error", () => {});
+    } catch {
+      /* ignore */
+    }
+  } else {
+    child.kill("SIGTERM");
+    setTimeout(() => child.kill("SIGKILL"), 2_000).unref();
+  }
 }
 
 // Pick a `@real-a11y-dev/*` workspace dep from the example's package.json
@@ -185,3 +222,7 @@ if (failed > 0) {
   process.exit(1);
 }
 console.log(`\nAll ${examples.length} example(s) start cleanly.`);
+// Explicit exit: Vite/esbuild on Windows can leave file-watcher handles
+// open even after the child tree is killed, which keeps the Node event
+// loop alive indefinitely. Force-exiting here avoids a hung CI job.
+process.exit(0);
