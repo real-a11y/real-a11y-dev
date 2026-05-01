@@ -101,8 +101,25 @@ This is an accessibility tool — the tool itself must be fully accessible:
 1. Fork the repo and create your branch from `main`
 2. Make your changes and ensure all tests pass (`pnpm test`)
 3. Ensure the build succeeds (`pnpm build`)
-4. Write a clear PR description explaining what changed and why
-5. Link any related issues
+4. **Add a changeset** if you touched any `@real-a11y-dev/*` package (see below)
+5. Write a clear PR description explaining what changed and why
+6. Link any related issues
+
+### Changesets
+
+Versioning and per-package CHANGELOGs are managed by [Changesets](https://github.com/changesets/changesets). If your PR changes a publishable package, run:
+
+```bash
+pnpm changeset
+```
+
+…and follow the prompts. The CLI writes a `.changeset/<random-name>.md` file describing the bump — commit it with the rest of your changes.
+
+Notes:
+
+- All `@real-a11y-dev/*` packages are **linked** — they bump together so consumers see a consistent version across `core`, `ui`, `inspector`, `react`, `testing`, and `storybook-addon`.
+- The extension, website, and examples are ignored — no changeset is needed for them.
+- Docs-only or tooling-only PRs don't need a changeset.
 
 ## Reporting issues
 
