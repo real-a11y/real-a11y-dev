@@ -71,6 +71,12 @@ jobs:
       - name: Size limit
         run: pnpm size-limit
 
+      # publint + attw — checks the published exports map, types
+      # resolution from CJS/ESM consumers, and the dual-package hazard.
+      # Surfaces packaging mistakes that aren't visible in the source.
+      - name: Packaging checks
+        run: pnpm packaging:check
+
   # Playwright e2e for @real-a11y-dev/testing's `attach()` API. Single OS
   # + Node combo — the e2e suite tests our adapter, not Node/OS portability,
   # and the `test` matrix already covers those for the libraries themselves.

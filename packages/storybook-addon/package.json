@@ -29,19 +29,34 @@
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "sideEffects": [
+    "./dist/preview.js",
+    "./dist/preview.cjs",
+    "./dist/manager.js",
+    "./dist/manager.cjs"
+  ],
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": {
+        "import": "./dist/index.d.ts",
+        "require": "./dist/index.d.cts"
+      },
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
     "./preview": {
-      "types": "./dist/preview.d.ts",
+      "types": {
+        "import": "./dist/preview.d.ts",
+        "require": "./dist/preview.d.cts"
+      },
       "import": "./dist/preview.js",
       "require": "./dist/preview.cjs"
     },
     "./manager": {
-      "types": "./dist/manager.d.ts",
+      "types": {
+        "import": "./dist/manager.d.ts",
+        "require": "./dist/manager.d.cts"
+      },
       "import": "./dist/manager.js",
       "require": "./dist/manager.cjs"
     }
@@ -52,7 +67,8 @@
     "manager.js"
   ],
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   },
   "scripts": {
     "build": "tsup",

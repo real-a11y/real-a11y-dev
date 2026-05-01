@@ -31,14 +31,21 @@
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "sideEffects": false,
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": {
+        "import": "./dist/index.d.ts",
+        "require": "./dist/index.d.cts"
+      },
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
     "./playwright": {
-      "types": "./dist/playwright.d.ts",
+      "types": {
+        "import": "./dist/playwright.d.ts",
+        "require": "./dist/playwright.d.cts"
+      },
       "import": "./dist/playwright.js",
       "require": "./dist/playwright.cjs"
     }
@@ -47,7 +54,8 @@
     "dist"
   ],
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   },
   "scripts": {
     "build": "tsup",
