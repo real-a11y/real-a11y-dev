@@ -1,3 +1,15 @@
+/**
+ * Public entry point for `@real-a11y-dev/core`.
+ *
+ * Everything re-exported from this file is part of the package's public
+ * API and follows the version contract documented in
+ * [docs/STABILITY.md](https://github.com/real-a11y/real-a11y-dev/blob/main/docs/STABILITY.md).
+ *
+ * Symbols tagged `@internal` may change in any release, including patch
+ * versions. Anything reachable only through a deep import of a
+ * `dist/<file>.js` is internal even if not tagged.
+ */
+
 // Types
 export type {
   ActionType,

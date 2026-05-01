@@ -94,6 +94,12 @@ If a hook complains, run `pnpm commitlint --edit .git/COMMIT_EDITMSG` to see the
 - Keep functions focused and small
 - Add JSDoc comments only where the intent isn't obvious from the code
 
+### Public vs. internal API
+
+Real A11y has a documented [stability policy](./docs/STABILITY.md). Anything re-exported from a package's `src/index.ts` is **public** and follows the version contract. Helpers that exist only to make the public API work — node-id generators, deep utility classes, the extension's pure helpers — should be tagged `@internal` in their JSDoc so consumers know not to depend on them.
+
+If you're touching a public symbol, ask whether the change is breaking. If it is, the PR needs a Changeset with a `minor` bump and a "Breaking change" section in the body (see [Changesets](#changesets)).
+
 ### Testing expectations
 
 - New features in `packages/core` should include unit tests
