@@ -1078,12 +1078,16 @@ export function App() {
                           {node.a11y.name && (
                             <span class="sn-name">{node.a11y.name}</span>
                           )}
-                          {/* Descendant-text preview when the element's name
-                              is empty or fragmented (e.g. `<code>` whose direct
-                              text is just connectors between role=presentation
-                              spans). Mirrors the shared TreeNode in
-                              @real-a11y-dev/semantic-navigator-ui. */}
-                          {node.dom.descendantText !== "" &&
+                          {/* Descendant-text preview — leaf-only to avoid
+                              duplicating what's already in child rows
+                              (table/rowgroup, paragraphs with strong/em
+                              children, etc.). Fires for `<code>` whose
+                              role=presentation spans flattened, `<svg>`
+                              with descendant `<text>`, decorative
+                              wrappers, etc. Mirrors the shared TreeNode
+                              in @real-a11y-dev/semantic-navigator-ui. */}
+                          {node.childIds.length === 0 &&
+                            node.dom.descendantText !== "" &&
                             node.dom.descendantText !== node.a11y.name && (
                               <span class="sn-name-preview">
                                 {node.dom.descendantText}

@@ -70,17 +70,20 @@ function renderDomLabel(node: SemanticNode) {
 function renderA11yLabel(node: SemanticNode) {
   const { role, name } = node.a11y;
   const level = node.a11y.properties["level"];
-  // Show a muted preview of the descendant text whenever it differs from
-  // the accessible name. Two cases this catches:
-  //   - name === ""   — `<code>`, `<pre>`, `<svg>`, etc. (no spec-allowed name).
-  //   - name is fragmented — e.g. `<code>` whose direct text is just the
-  //     connector tokens between role=presentation spans, showing
-  //     `"= ({ root, container }); .();"` while the full descendant text
-  //     is `"const sn = createInspector({ root, container }); sn.mount();"`.
-  // Both cases are informative: the user sees what AT will announce AND
-  // what's actually inside the element.
+  // Show a muted preview of descendant text only when the element is a
+  // leaf in the a11y tree (no kept children) AND its text content isn't
+  // already represented by the accessible name. The leaf gate prevents
+  // duplication: if children survived as their own rows, their text is
+  // already visible — repeating it at the parent (e.g. table/rowgroup
+  // concatenating every cell, paragraph repeating its strong/em
+  // children) is just noise. The leaf case covers the cases the preview
+  // was designed for: `<code>` whose role=presentation token spans were
+  // flattened, an `<svg>` containing `<text>`, decorative wrappers
+  // around copy.
   const { descendantText } = node.dom;
-  const showPreview = descendantText !== "" && descendantText !== name;
+  const isLeaf = node.childIds.length === 0;
+  const showPreview =
+    isLeaf && descendantText !== "" && descendantText !== name;
 
   return (
     <>
