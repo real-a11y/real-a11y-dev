@@ -11,8 +11,13 @@ permissions:
   pages: write
   id-token: write
 
+# Per-ref concurrency: each branch / PR gets its own group, so PR runs and
+# main runs no longer cancel each other. Within a single ref the lock still
+# holds — a new push supersedes any in-flight run on the same branch.
+# (The previous repo-wide `pages` group was killing every concurrent PR
+# build whenever any sibling PR or main push triggered this workflow.)
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
