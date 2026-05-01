@@ -39,9 +39,17 @@ Web Page
 |------------|-----|
 | `activeTab` | Access the current tab's DOM for tree extraction |
 | `sidePanel` | Register and open the Side Panel UI |
-| `scripting` | Inject the content script when needed |
+| `webNavigation` | Detect SPA route changes so the tree refreshes when the page does |
 
-No data leaves your browser. The extension does not make any network requests.
+The content script is declared in the manifest with `<all_urls>` and `all_frames: true` so the tree is ready the moment the user opens the side panel. No data leaves your browser; the extension makes no network requests.
+
+### Content Security Policy
+
+`extension_pages` is locked to `script-src 'self'; object-src 'self'; base-uri 'self'` — the side panel cannot load remote scripts, embed `<object>`/`<embed>` from third parties, or be re-based to a different origin. See `public/manifest.json`.
+
+### Versioning
+
+`public/manifest.json`'s `version` is the source of truth shipped to the Chrome Web Store. It's kept in sync with `package.json` automatically by `scripts/sync-manifest-version.mjs`, which runs as `prebuild`. CI runs the same script with `--check` (via `pnpm typecheck`) and fails if the two have drifted.
 
 ## Development
 
