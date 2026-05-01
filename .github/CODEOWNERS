@@ -1,0 +1,25 @@
+# CODEOWNERS for real-a11y/real-a11y-dev
+#
+# Each line is a file pattern followed by one or more owners. The last
+# matching pattern wins. Owners are auto-requested for review when a PR
+# touches matching files, and can be enforced via branch protection.
+#
+# Docs: https://docs.github.com/en/repositories/managing-your-repositories-settings-and-security/customizing-your-repository/about-code-owners
+
+# Default — every PR
+*                                   @darcusfenix
+
+# Workflows and repo-wide configuration are particularly sensitive.
+/.github/                           @darcusfenix
+/.github/workflows/                 @darcusfenix
+/.changeset/                        @darcusfenix
+
+# Public packages — listed explicitly so future co-maintainers can be
+# added per-package without touching the global default.
+/packages/core/                     @darcusfenix
+/packages/ui/                       @darcusfenix
+/packages/inspector/                @darcusfenix
+/packages/testing/                  @darcusfenix
+/packages/react/                    @darcusfenix
+/packages/storybook-addon/          @darcusfenix
+/packages/extension/                @darcusfenix
