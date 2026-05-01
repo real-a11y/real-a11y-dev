@@ -26,7 +26,17 @@ export type RoleFilter =
 export interface DomInfo {
   tagName: string;
   attributes: Record<string, string>;
+  /** Text directly inside this element (text-node children only). */
   textContent: string | null;
+  /**
+   * Recursive text content of the element, truncated. Captures text from
+   * descendants — including text nested inside spans, presentational
+   * wrappers, and other non-text-bearing tags. Useful as a panel preview
+   * for elements whose accessible name is empty by spec (`<code>`,
+   * `<pre>`, `<svg>` containing `<text>`, etc.) but which carry
+   * meaningful text content.
+   */
+  descendantText: string;
   isHidden: boolean;
 }
 

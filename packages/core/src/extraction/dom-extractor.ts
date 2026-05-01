@@ -373,6 +373,22 @@ function getDirectTextContent(element: Element): string {
   return text.trim();
 }
 
+/** Hard cap so we don't store huge text blobs on every node. */
+const DESCENDANT_TEXT_MAX = 240;
+
+/**
+ * Recursive text content with whitespace collapsed and a hard length cap.
+ * Used as a panel preview for elements whose accessible name is empty per
+ * spec but which carry meaningful descendant text (`<code>`, `<pre>`,
+ * `<svg>` with `<text>`, decorative wrappers around copy, etc.).
+ */
+function getDescendantText(element: Element): string {
+  const raw = element.textContent ?? "";
+  const collapsed = raw.replace(/\s+/g, " ").trim();
+  if (collapsed.length <= DESCENDANT_TEXT_MAX) return collapsed;
+  return collapsed.slice(0, DESCENDANT_TEXT_MAX - 1) + "…";
+}
+
 /** Get key attributes for display */
 function getKeyAttributes(element: Element): Record<string, string> {
   const attrs: Record<string, string> = {};
@@ -601,6 +617,7 @@ export function extractDomTree(root: Element): ExtractionResult {
         tagName: tag,
         attributes: getKeyAttributes(element),
         textContent: getDirectTextContent(element),
+        descendantText: getDescendantText(element),
         isHidden: isVisuallyHidden(element),
       },
       a11y: {

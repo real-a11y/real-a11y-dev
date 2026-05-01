@@ -1078,6 +1078,21 @@ export function App() {
                           {node.a11y.name && (
                             <span class="sn-name">{node.a11y.name}</span>
                           )}
+                          {/* Descendant-text preview — leaf-only to avoid
+                              duplicating what's already in child rows
+                              (table/rowgroup, paragraphs with strong/em
+                              children, etc.). Fires for `<code>` whose
+                              role=presentation spans flattened, `<svg>`
+                              with descendant `<text>`, decorative
+                              wrappers, etc. Mirrors the shared TreeNode
+                              in @real-a11y-dev/semantic-navigator-ui. */}
+                          {node.childIds.length === 0 &&
+                            node.dom.descendantText !== "" &&
+                            node.dom.descendantText !== node.a11y.name && (
+                              <span class="sn-name-preview">
+                                {node.dom.descendantText}
+                              </span>
+                            )}
                           {/* Accessible description — from aria-describedby / aria-description */}
                           {node.a11y.description && (
                             <span
