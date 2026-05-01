@@ -114,7 +114,7 @@ extension ──→ ui ──→ core
 ```
 
 - **core** — Zero UI dependencies. Tree extraction (TreeWalker), role mapping (80+ HTML elements to ARIA roles), interaction engine (ActionDispatcher), DOM observation, query helpers (`findByRole`, `linearize`, `getOutline`, `getTabSequence`, `diffTrees`)
-- **ui** — Preact components (≈3KB gzipped). TreeView, TreeNode, TreeToolbar with self-contained CSS and light/dark themes
+- **ui** — Preact components (≈5KB gzipped — TreeView entry, see `.size-limit.json`). TreeView, TreeNode, TreeToolbar with self-contained CSS and light/dark themes
 - **inspector** — Framework-agnostic embed. Shadow-DOM isolation by default; opt-in host-app side effects
 - **testing** — Headless audit helpers (`auditSnapshot`, `assertHeadingOrder`, `flow()`, Vitest serializer, Playwright adapter). No UI dependency
 - **react** — `useSemanticTree` and `useActiveModal` hooks (concurrent-mode safe via `useSyncExternalStore`) plus `<SemanticNavigator />` component

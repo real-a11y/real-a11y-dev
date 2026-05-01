@@ -2,7 +2,7 @@
 
 Preact tree rendering components for [Semantic Navigator](https://github.com/real-a11y/semantic-navigator).
 
-Provides the interactive tree view UI used by both the Chrome extension and the npm package. Built with Preact (3KB gzipped) for minimal bundle size.
+Provides the interactive tree view UI used by both the Chrome extension and the npm package. Built with Preact for minimal bundle size — the `TreeView` entry point measures ~5 KB gzipped (excluding `preact` and `@real-a11y-dev/core`, which consumers usually share).
 
 ## Installation
 

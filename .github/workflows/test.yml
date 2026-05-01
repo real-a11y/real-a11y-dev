@@ -45,3 +45,9 @@ jobs:
           pnpm --filter @real-a11y-dev/example-vanilla build
           pnpm --filter @real-a11y-dev/example-react build
           pnpm --filter @real-a11y-dev/website build
+
+      # Bundle-size budget gate. `pnpm verify` already built the public
+      # packages, so size-limit operates on fresh dist/ output. Budgets
+      # live in .size-limit.json — tighten as the libraries shrink.
+      - name: Size limit
+        run: pnpm size-limit
