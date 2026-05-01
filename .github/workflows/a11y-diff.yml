@@ -26,14 +26,14 @@ jobs:
     name: Snapshot (base)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.base_ref }}
 
       # pnpm version is read from `packageManager` in package.json.
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: pnpm
@@ -55,7 +55,7 @@ jobs:
           # The script uses `process.cwd()` implicitly — set an absolute path.
           A11Y_SNAPSHOT_OUT: ${{ github.workspace }}/base-snapshots.md
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: base-snapshots
           path: base-snapshots.md
@@ -66,13 +66,13 @@ jobs:
     name: Snapshot (PR)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         # Default checkout = PR head — no ref needed
 
       # pnpm version is read from `packageManager` in package.json.
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: pnpm
@@ -91,7 +91,7 @@ jobs:
         env:
           A11Y_SNAPSHOT_OUT: ${{ github.workspace }}/pr-snapshots.md
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: pr-snapshots
           path: pr-snapshots.md
@@ -103,11 +103,11 @@ jobs:
     needs: [snapshot-base, snapshot-pr]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: base-snapshots
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: pr-snapshots
 
@@ -121,7 +121,7 @@ jobs:
       # Post or update a single sticky comment on the PR.
       # Uses a <!-- real-a11y-diff --> marker to find and overwrite existing comments.
       - name: Post PR comment
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
