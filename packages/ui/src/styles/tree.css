@@ -362,9 +362,6 @@
 .sn-name-preview {
   color: var(--sn-text-muted);
   font-style: italic;
-  max-width: 320px;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   margin-left: 6px;
 }
