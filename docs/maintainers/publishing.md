@@ -5,9 +5,8 @@
 The extension is technically complete and build-ready. This guide covers everything needed to go from a local build to a published Chrome Web Store listing.
 
 **Extension package:** `packages/extension`
-**Manifest:** `packages/extension/public/manifest.json`
+**Manifest:** `packages/extension/public/manifest.json` (kept in sync with `packages/extension/package.json` automatically by the `prebuild` script)
 **Build output:** `packages/extension/dist/`
-**Current version:** 0.1.0
 
 > The npm packages have their own publish flow via `.github/workflows/publish.yml` — see `@real-a11y-dev` organization on npm. This document covers only the Chrome extension.
 
@@ -15,13 +14,35 @@ The extension is technically complete and build-ready. This guide covers everyth
 
 ## Step 1 — Build and zip
 
-Everything on the code side is already in place. From the extension package:
+There are two ways to produce the upload zip. Use the automated flow for any release that's actually going to ship; the local flow is for ad-hoc testing.
+
+### A. Automated (recommended)
+
+Push a tag matching `extension-v*` from `main`. The `extension-release.yml` workflow runs `pnpm install`, builds every workspace dep, packages the extension, and attaches the zip to a **draft** GitHub Release.
+
+```bash
+# from a clean main with the version already bumped in packages/extension/package.json
+git tag extension-v0.1.3
+git push origin extension-v0.1.3
+```
+
+When the workflow finishes, the zip is at:
+
+> https://github.com/real-a11y/real-a11y-dev/releases — the new draft release named `extension-v<version>`.
+
+Download the attached `semantic-navigator-v<version>.zip` for upload (Step 3) and publish the draft release once the CWS submission is in.
+
+The same workflow also runs from the Actions tab via **Run workflow** (workflow_dispatch) for one-off rebuilds without a tag.
+
+### B. Local
+
+For ad-hoc testing without cutting a release:
 
 ```bash
 pnpm --filter @real-a11y-dev/semantic-navigator-extension package
 ```
 
-That runs `pnpm build` then produces `packages/extension/semantic-navigator-v<version>.zip` (uses the pure-Node zip script at `packages/extension/scripts/zip-for-cws.mjs` — no devDependency required).
+Produces `packages/extension/semantic-navigator-v<version>.zip` (uses the pure-Node zip script at `packages/extension/scripts/zip-for-cws.mjs` — no devDependency required).
 
 ### What's already wired up
 
@@ -29,11 +50,14 @@ That runs `pnpm build` then produces `packages/extension/semantic-navigator-v<ve
 |---|---|
 | Manifest V3 | ✅ |
 | Icons 16 / 48 / 128 | ✅ `packages/extension/public/icons/` |
-| Minimal permissions (`activeTab`, `sidePanel`, `scripting`, `webNavigation`) | ✅ |
+| Minimal permissions (`activeTab`, `sidePanel`, `webNavigation`) | ✅ |
+| Content Security Policy (`script-src 'self'; object-src 'self'; base-uri 'self'`) | ✅ |
 | `homepage_url` | ✅ Points to `https://real-a11y.dev` |
+| `author` | ✅ `Real A11y` |
 | Content script `<all_urls>` | ✅ Required for the tool to work on any page |
 | BETA pill in side panel | ✅ Sets expectations during pre-1.0 |
 | Zip script | ✅ `pnpm package` |
+| Automated zip + GitHub Release on `extension-v*` tag | ✅ `extension-release.yml` |
 
 ---
 
@@ -115,11 +139,10 @@ Reuse the monochrome brand: black typography on a white background, echoing the 
 7. **Permission justifications** (Google will ask for each):
    - `activeTab` — read the current page's DOM to build the semantic tree
    - `sidePanel` — the extension's UI lives in the side panel
-   - `scripting` — inject the content script that extracts the tree
-   - `webNavigation` — detect iframe lifecycle to merge their trees
+   - `webNavigation` — detect iframe lifecycle and SPA route changes to refresh the tree
 8. Submit for review
 
-**Review time:** Typically 1–3 business days. Extensions using `scripting` + `activeTab` may trigger manual review (up to 7 days).
+**Review time:** Typically 1–3 business days. Extensions using `<all_urls>` content scripts + `activeTab` may trigger manual review (up to 7 days).
 
 ---
 
