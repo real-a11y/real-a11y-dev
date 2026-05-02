@@ -163,9 +163,15 @@ jobs:
                 '<details>',
                 '<summary>Show full diff</summary>',
                 '',
-                '```diff',
+                // 4-backtick fence: the snapshot file's per-section blocks
+                // (A11y tree, Heading outline, Tab sequence) are 3-backtick
+                // ``` fences. Wrapping the diff in ```diff (3 backticks) lets
+                // those inner closing fences terminate the outer block early —
+                // only the first section ends up `diff`-coloured. 4 backticks
+                // outside, 3 inside, nests cleanly.
+                '````diff',
                 diffBlock,
-                '```',
+                '````',
                 '',
                 '</details>',
                 '',
