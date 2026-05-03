@@ -2,7 +2,13 @@
 
 Chrome extension that adds a Side Panel with an interactive DOM/accessibility tree view for any web page.
 
-## Installation (development)
+## Installation
+
+[Install from the Chrome Web Store](https://chromewebstore.google.com/detail/semantic-navigator/gnnepgbbecnlomngfemkadnbeaopleom).
+
+> **Note on the install warning.** Chrome may show *"Proceed with caution — not trusted by Enhanced Safe Browsing"* before install. ESB classifies new extensions as untrusted by default until Google's systems have built enough signal on the listing; the notice is unrelated to anything specific in this extension. Click **Continue to install**.
+
+## Installation (from source)
 
 1. Clone the [Semantic Navigator](https://github.com/real-a11y/semantic-navigator) repo
 2. Install dependencies and build:

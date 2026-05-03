@@ -152,3 +152,17 @@ Reuse the monochrome brand: black typography on a white background, echoing the 
 - Test the zip: extract `semantic-navigator-v<version>.zip` and load in Chrome via `chrome://extensions` → Load unpacked — verify all features work
 - Before submit: use Chrome's pre-publish validator in the Developer Console (flags missing fields)
 - After publish: install from Web Store in a clean Chrome profile and test end-to-end
+
+---
+
+## Enhanced Safe Browsing trust
+
+For users who have **Enhanced Safe Browsing** enabled, Chrome shows a *"Proceed with caution — not trusted by Enhanced Safe Browsing"* interstitial on the listing. This is expected for any newly-published extension and **not fixable via a manifest change** — the manifest is already minimal-permissions, MV3, locked CSP, no remote code (`packages/extension/public/manifest.json`).
+
+ESB classifies an extension as trusted when Google's automated systems (and/or their Trust & Safety reviewers) have accumulated enough signal on the publisher and the listing. To shorten that runway:
+
+- **Verify the publisher.** [Developer Console](https://chrome.google.com/webstore/devconsole) → Account → set a primary contact email and verify domain ownership for `real-a11y.dev`.
+- **Apply for the Featured badge** once the listing has accrued a few weeks of clean usage. Featured is the main lever for ESB trust; it requires manual review by Google's team. See [Featured criteria](https://developer.chrome.com/docs/webstore/best_practices).
+- **Don't churn permissions or host scopes between versions** — trust is rebuilt slowly each time those change. Coordinate any permission deltas with a `CHANGELOG` entry on the package.
+
+The warning is a soft caution, not a block — users can click **Continue to install**. It's documented in the user-facing READMEs (`packages/extension/README.md`, root `README.md`, `website/guide/chrome-extension.md`) so it doesn't read as a security signal during onboarding.

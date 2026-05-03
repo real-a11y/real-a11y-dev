@@ -166,9 +166,13 @@ These behaviors are shared with `@real-a11y-dev/inspector` (and every package bu
 
 ## Install
 
+**Chrome Web Store** — [Semantic Navigator](https://chromewebstore.google.com/detail/semantic-navigator/gnnepgbbecnlomngfemkadnbeaopleom).
+
+> Chrome may show *"Proceed with caution — not trusted by Enhanced Safe Browsing"* on first install. That's ESB's default for any newly-listed extension until Google's systems have built up enough signal on the listing — it's not a specific issue with this extension. Click **Continue to install**.
+
 **Load unpacked (developer mode)**
 
-Until the extension reaches the Chrome Web Store:
+To run from source instead of the Web Store build:
 
 ```sh
 git clone https://github.com/real-a11y/real-a11y-dev.git
@@ -180,8 +184,6 @@ pnpm --filter @real-a11y-dev/semantic-navigator-extension build
 1. Open Chrome → `chrome://extensions`
 2. Enable **Developer mode**
 3. Click **Load unpacked** → select `packages/extension/dist`
-
-**Chrome Web Store** — coming soon.
 
 ---
 

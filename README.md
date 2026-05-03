@@ -52,6 +52,10 @@ nav.mount();
 
 ### Chrome extension
 
+[Install from the Chrome Web Store](https://chromewebstore.google.com/detail/semantic-navigator/gnnepgbbecnlomngfemkadnbeaopleom). Chrome may show a "Proceed with caution — not trusted by Enhanced Safe Browsing" notice on first install; this is the default for any newly listed extension and not a specific signal about this one — click **Continue to install**.
+
+To run from source instead:
+
 1. Clone this repo
 2. Run `pnpm install && pnpm build`
 3. Open `chrome://extensions`, enable Developer mode
