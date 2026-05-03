@@ -35,7 +35,6 @@ The extension reads the DOM of the page you're currently viewing in order to bui
 |------------|-----|
 | `activeTab` | Read the DOM of the page you're viewing to build the tree |
 | `sidePanel` | The extension's UI is a persistent side panel |
-| `scripting` | Inject the content script that extracts the tree |
 | `webNavigation` | Detect iframe load events to merge subtree data from cross-origin frames |
 
 No other permissions are requested.
