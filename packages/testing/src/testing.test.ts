@@ -250,8 +250,9 @@ describe("flow", () => {
 
     it("throws with a diff when the serialized tree differs", async () => {
       const root = mount(`<main><h1>Hi</h1></main>`);
-      await expect(flow(root).expectTree(`main\n  heading "Bye"`)).rejects
-        .toThrow(/tree does not match expected snapshot/);
+      await expect(
+        flow(root).expectTree(`main\n  heading "Bye"`),
+      ).rejects.toThrow(/tree does not match expected snapshot/);
     });
   });
 
@@ -301,9 +302,9 @@ describe("flow", () => {
 
     it("throws when a predicate is given but no dialog is open", async () => {
       const root = mount(`<main><h1>Hi</h1></main>`);
-      await expect(
-        flow(root).expectActiveModal(() => true),
-      ).rejects.toThrow(/no open dialog/);
+      await expect(flow(root).expectActiveModal(() => true)).rejects.toThrow(
+        /no open dialog/,
+      );
     });
   });
 
