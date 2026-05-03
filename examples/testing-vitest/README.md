@@ -8,6 +8,7 @@ Uses `@real-a11y-dev/testing` inside plain Vitest + jsdom to audit rendered Reac
 - `outlineSnapshot(root)` — heading outline audits (regression-catches missing `<h1>`, skipped levels)
 - `tabSequenceSnapshot(root)` — focus-order regression tests
 - `assertHeadingOrder`, `assertNoUnlabeledInteractive`, `assertDialogsLabeled`, `assertLandmarkStructure` as one-liner assertions inside `expect`
+- `flow()` interaction chains — `select`, `submit`, `toggle`, `click`, plus `expectActiveModal` for dialog open/close assertions
 - Using the Vitest serializer so `toMatchSnapshot()` produces semantic, not DOM, output
 
 ## Run it
@@ -30,6 +31,7 @@ pnpm --filter @real-a11y-dev/example-testing test:watch
 - [`src/fixtures.ts`](./src/fixtures.ts) — small rendered components used by the tests
 - [`src/snapshot.test.ts`](./src/snapshot.test.ts) — `auditSnapshot` / `outlineSnapshot` / `tabSequenceSnapshot`
 - [`src/assertions.test.ts`](./src/assertions.test.ts) — the assertion helpers
+- [`src/flow.test.ts`](./src/flow.test.ts) — `flow()` chains: `select`, `submit`, `toggle`, dialog open/close with `expectActiveModal`
 - [`src/__snapshots__/`](./src/__snapshots__) — committed snapshots; edit them intentionally, never blindly
 
 ## See also

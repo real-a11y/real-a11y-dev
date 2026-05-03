@@ -197,7 +197,7 @@ assertLandmarkStructure(document.body);
 Fluent interaction chains — the Testing Library-style alternative for accessibility-level flows.
 
 ```ts
-import { flow } from "@real-a11y-dev/testing";
+import { flow, findByRole } from "@real-a11y-dev/testing";
 
 test("country combobox", async () => {
   render(<CountrySelector />);
@@ -220,15 +220,49 @@ test("country combobox", async () => {
 |---|---|
 | `.findByRole(role, opts?)` | Move the cursor to the first matching node. Throws if not found. |
 | `.click()` | Dispatch a click action on the current node. |
-| `.submit()` | Dispatch a submit action. |
-| `.toggle()` | Dispatch a toggle action (checkbox, switch, disclosure). |
-| `.select(value)` | Dispatch a select action with the given value (option, listbox item). |
+| `.submit()` | Dispatch a submit action (form). |
+| `.toggle()` | Dispatch a toggle action (`<details>`/`<summary>`; falls back to click for ARIA disclosures). |
+| `.select(value)` | Dispatch a select action with the given value (native `<select>`). |
 | `.type(text)` | Dispatch a type action with the given text (textbox, searchbox). |
-| `.expectTree(snapshot)` | Assert that `auditSnapshot(root) === snapshot`. |
-| `.expectActiveModal(role?)` | Assert the active modal role (`"dialog"`, `"alertdialog"`, or `null`). |
+| `.expectTree(snapshot)` | Assert the current tree's serialization matches `snapshot` (see caveat below). |
+| `.expectActiveModal(predicate)` | Assert the active dialog. Pass `null` to assert no dialog is open, or `(name) => boolean` to assert one is open and its accessible name satisfies the predicate. |
 | `.expect(fn)` | Run a custom assertion with the current tree as argument. |
 
 The flow is lazy — steps queue up and run when you `await` the chain.
+
+#### `expectActiveModal` — examples
+
+```ts
+// Assert a dialog is open and its name matches a string/regex
+await flow(root)
+  .findByRole("button", { name: /delete/i })
+  .click()
+  .expectActiveModal((name) => /confirm/i.test(name));
+
+// Assert no dialog is open
+await flow(root)
+  .findByRole("button", { name: /cancel/i })
+  .click()
+  .expectActiveModal(null);
+```
+
+The first `role="dialog"` or `role="alertdialog"` in document order is treated as the active modal.
+
+#### `expectTree` — caveat
+
+`expectTree` re-serializes the tree with **default options** (no `redact`, `mode: "a11y"`, generic nodes flattened). A snapshot captured via `auditSnapshot(root, { redact: [...] })` or `{ mode: "dom" }` will not match. For redacted or DOM-mode comparisons, use `.expect((tree) => { … })` and call `serializeTree`/`auditSnapshot` yourself.
+
+### `flow(root, options?)`
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `waitTimeout` | `number` | `200` ms | Max wait for the post-action debounced mutation cycle. Increase for slow async UIs; decrease for tighter feedback in pure-DOM flows. |
+
+```ts
+await flow(root, { waitTimeout: 500 })
+  .findByRole("button", { name: /save/i })
+  .click();
+```
 
 ---
 

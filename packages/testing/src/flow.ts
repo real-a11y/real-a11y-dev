@@ -76,7 +76,9 @@ export class FlowChain implements PromiseLike<void> {
           `flow.${action}: dispatch failed on ${this.current.a11y.role} "${this.current.a11y.name}": ${result.error ?? "unknown error"}`,
         );
       }
-      await waitForMutations(this.root, { timeout: this.options.waitTimeout });
+      await waitForMutations(this.root, {
+        timeout: this.options.waitTimeout ?? 200,
+      });
     });
     return this;
   }
