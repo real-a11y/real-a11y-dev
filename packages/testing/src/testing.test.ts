@@ -135,4 +135,186 @@ describe("flow", () => {
       flow(root).findByRole("button", { name: "Missing" }),
     ).rejects.toThrow(/no node with role "button"/);
   });
+
+  it("click() actually dispatches a click on the resolved element", async () => {
+    const root = mount(`<main><button>Save</button></main>`);
+    let clicks = 0;
+    root.querySelector("button")!.addEventListener("click", () => {
+      clicks += 1;
+    });
+    await flow(root).findByRole("button", { name: "Save" }).click();
+    expect(clicks).toBe(1);
+  });
+
+  it("rejects when an action runs before findByRole", async () => {
+    const root = mount(`<main><button>Save</button></main>`);
+    await expect(flow(root).click()).rejects.toThrow(
+      /call findByRole\(\) first/,
+    );
+  });
+
+  it("type() writes into a textbox and fires input/change", async () => {
+    const root = mount(`
+      <main>
+        <label>Name<input type="text" /></label>
+      </main>
+    `);
+    const input = root.querySelector("input")!;
+    let lastChange = "";
+    input.addEventListener("change", () => {
+      lastChange = input.value;
+    });
+    await flow(root).findByRole("textbox", { name: "Name" }).type("Ada");
+    expect(input.value).toBe("Ada");
+    expect(lastChange).toBe("Ada");
+  });
+
+  it("select(value) sets a native <select>'s value and fires change", async () => {
+    const root = mount(`
+      <main>
+        <label>
+          Country
+          <select>
+            <option value="">--</option>
+            <option value="es">Spain</option>
+            <option value="pt">Portugal</option>
+          </select>
+        </label>
+      </main>
+    `);
+    const select = root.querySelector("select")!;
+    let changed = false;
+    select.addEventListener("change", () => {
+      changed = true;
+    });
+    await flow(root).findByRole("combobox", { name: "Country" }).select("es");
+    expect(select.value).toBe("es");
+    expect(changed).toBe(true);
+  });
+
+  it("toggle() flips a <details> open/closed", async () => {
+    const root = mount(`
+      <main>
+        <details><summary>More</summary><p>Body</p></details>
+      </main>
+    `);
+    const details = root.querySelector("details") as HTMLDetailsElement;
+    expect(details.open).toBe(false);
+    await flow(root).findByRole("group", { name: "More" }).toggle();
+    expect(details.open).toBe(true);
+  });
+
+  it("submit() requestSubmits the enclosing form", async () => {
+    const root = mount(`
+      <main>
+        <form aria-label="Login"><button type="submit">Sign in</button></form>
+      </main>
+    `);
+    let submitted = false;
+    root.querySelector("form")!.addEventListener("submit", (e) => {
+      submitted = true;
+      e.preventDefault();
+    });
+    await flow(root).findByRole("button", { name: "Sign in" }).submit();
+    expect(submitted).toBe(true);
+  });
+
+  it("propagates dispatch failures with a descriptive error", async () => {
+    // <select> needs a string value; passing through the type-action codepath
+    // on a select isn't supported, but we can force a failure by selecting
+    // without a value via a forced cast.
+    const root = mount(`
+      <main>
+        <label>Pick<select><option value="a">A</option></select></label>
+      </main>
+    `);
+    // Dispatch path: select with no payload value → handleSelect returns
+    // { success: false, error: "No value provided for select action" }.
+    await expect(
+      flow(root)
+        .findByRole("combobox", { name: "Pick" })
+        // Cast away the required arg to trigger the runtime failure path.
+        .select(undefined as unknown as string),
+    ).rejects.toThrow(/dispatch failed.*No value provided/);
+  });
+
+  describe("expectTree", () => {
+    it("passes when the serialized tree matches", async () => {
+      const root = mount(`<main><h1>Hi</h1><button>Go</button></main>`);
+      // The wrapper <div> from mount() is generic (filtered out), so <main>
+      // serializes at depth 1 (two-space indent), its children at depth 2.
+      await flow(root).expectTree(`  main
+    heading "Hi" (level 1)
+    button "Go"`);
+    });
+
+    it("throws with a diff when the serialized tree differs", async () => {
+      const root = mount(`<main><h1>Hi</h1></main>`);
+      await expect(flow(root).expectTree(`main\n  heading "Bye"`)).rejects
+        .toThrow(/tree does not match expected snapshot/);
+    });
+  });
+
+  describe("expectActiveModal", () => {
+    it("passes when an open dialog's name satisfies the predicate", async () => {
+      const root = mount(`
+        <main>
+          <button id="open">Open</button>
+        </main>
+      `);
+      const main = root.querySelector("main")!;
+      root.querySelector("#open")!.addEventListener("click", () => {
+        const dlg = document.createElement("div");
+        dlg.setAttribute("role", "dialog");
+        dlg.setAttribute("aria-label", "Confirm delete");
+        dlg.textContent = "Are you sure?";
+        main.appendChild(dlg);
+      });
+      await flow(root)
+        .findByRole("button", { name: "Open" })
+        .click()
+        .expectActiveModal((name) => /confirm/i.test(name));
+    });
+
+    it("throws when an open dialog's name does NOT satisfy the predicate", async () => {
+      const root = mount(`
+        <main><div role="dialog" aria-label="Confirm">x</div></main>
+      `);
+      await expect(
+        flow(root).expectActiveModal((name) => name === "Other"),
+      ).rejects.toThrow(/did not satisfy predicate/);
+    });
+
+    it("passes with predicate=null when no dialog is open", async () => {
+      const root = mount(`<main><h1>Hi</h1></main>`);
+      await flow(root).expectActiveModal(null);
+    });
+
+    it("throws with predicate=null when a dialog IS open", async () => {
+      const root = mount(`
+        <main><div role="dialog" aria-label="Surprise">x</div></main>
+      `);
+      await expect(flow(root).expectActiveModal(null)).rejects.toThrow(
+        /unexpected open dialog "Surprise"/,
+      );
+    });
+
+    it("throws when a predicate is given but no dialog is open", async () => {
+      const root = mount(`<main><h1>Hi</h1></main>`);
+      await expect(
+        flow(root).expectActiveModal(() => true),
+      ).rejects.toThrow(/no open dialog/);
+    });
+  });
+
+  it("respects a custom waitTimeout option", async () => {
+    const root = mount(`<main><button>Go</button></main>`);
+    const start = Date.now();
+    // 50ms waitTimeout — no mutation will fire, so the wait resolves at the
+    // timeout. Confirms options.waitTimeout is wired through to waitForMutations.
+    await flow(root, { waitTimeout: 50 })
+      .findByRole("button", { name: "Go" })
+      .click();
+    expect(Date.now() - start).toBeLessThan(150);
+  });
 });
