@@ -193,7 +193,7 @@ That's it. A **Semantic Navigator** panel appears next to Controls and A11y for 
 
 ## Keep it out of production
 
-`@real-a11y-dev/inspector` and `@real-a11y-dev/react` render a full tree view (~30 KB gzipped, plus Preact). If you drop `<SemanticNavigator />` or `createInspector()` into a component that ships to production, bundlers can't tree-shake the renderer away — *the reference exists at runtime*. You want it dev-only.
+`@real-a11y-dev/inspector` and `@real-a11y-dev/react` render a full tree view (~23 KB gzipped for `inspector`, plus Preact; see [`.size-limit.json`](https://github.com/real-a11y/real-a11y-dev/blob/main/.size-limit.json) for the gated budgets). If you drop `<SemanticNavigator />` or `createInspector()` into a component that ships to production, bundlers can't tree-shake the renderer away — *the reference exists at runtime*. You want it dev-only.
 
 Two patterns, pick the one that matches your toolchain.
 
