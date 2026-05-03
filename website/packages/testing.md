@@ -194,7 +194,7 @@ assertLandmarkStructure(document.body);
 
 ## Flow API
 
-Fluent interaction chains — the Testing Library-style alternative for accessibility-level flows.
+Fluent interaction chains that assert about the **accessibility tree** after each step. Each `.click()` / `.type()` / etc. dispatches a real DOM action, then re-extracts the tree so the next step sees the post-interaction state.
 
 ```ts
 import { flow, findByRole } from "@real-a11y-dev/testing";
@@ -213,6 +213,67 @@ test("country combobox", async () => {
     });
 });
 ```
+
+### Why `flow()` (vs Testing Library)?
+
+Testing Library asserts about the **rendered DOM**. `flow()` asserts about the **extracted accessibility tree** — the same tree screen-reader users perceive and the same tree the Real A11y panel shows. That difference changes which tests are easy to write.
+
+`flow()` is **not** a Testing Library replacement. They compose well: `userEvent` for input-fidelity (real keyboard/pointer sequences); `flow()` for tree-shape and "is the right region active" assertions.
+
+#### Side-by-side: same test, both libraries
+
+A common flow — open a confirm dialog, dismiss it, assert it closed:
+
+```ts
+// Testing Library
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+
+test("delete-confirm dialog", async () => {
+  render(<AccountSettings />);
+  const user = userEvent.setup();
+
+  await user.click(screen.getByRole("button", { name: /delete account/i }));
+
+  const dialog = screen.getByRole("dialog");
+  expect(dialog).toHaveAccessibleName(/confirm/i);
+
+  await user.click(within(dialog).getByRole("button", { name: /cancel/i }));
+
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+});
+```
+
+```ts
+// flow()
+import { flow } from "@real-a11y-dev/testing";
+
+test("delete-confirm dialog", async () => {
+  render(<AccountSettings />);
+
+  await flow(document.body)
+    .findByRole("button", { name: /delete account/i })
+    .click()
+    .expectActiveModal((name) => /confirm/i.test(name))
+    .findByRole("button", { name: /cancel/i })
+    .click()
+    .expectActiveModal(null);
+});
+```
+
+Both pass on the same component. The Flow version is shorter because `expectActiveModal` is a single tree-level invariant — "exactly one dialog is open AND its name matches." Expressing the same in RTL stitches `getByRole` + `within` + `toHaveAccessibleName` + `queryByRole` together. And because Flow re-extracts the tree after `.click()`, the next `findByRole` already sees the new dialog without an explicit `within(dialog)` scope.
+
+#### When to use which
+
+| Reach for Testing Library when… | Reach for `flow()` when… |
+|---|---|
+| You need `userEvent` keyboard/pointer fidelity (`tab()`, `keyboard("{Enter}")`, hover, paste, etc.) | The assertion is about the a11y tree shape, not a single element |
+| Per-element matchers fit (`toHaveValue`, `toBeChecked`, `toBeDisabled`) | You want to assert "the right modal is now open" or "no modal is open" in one step |
+| Your codebase is already deep in RTL idioms and you want to stay consistent | The same audit logic must also run in a real browser via the [Playwright adapter](#playwright-adapter) |
+| Testing one component in isolation | The test traces a flow that crosses multiple components/regions |
+| You care about the simulated input (e.g. testing a custom keyboard handler) | You care about the **outcome** in the a11y tree (states, structure, active modal) |
+
+The two libraries see different things. RTL sees what *sighted users using a mouse and keyboard* experience. `flow()` sees what *AT users* experience after the same actions. For most teams the right answer is **both, in the same suite**.
 
 ### Available steps
 
