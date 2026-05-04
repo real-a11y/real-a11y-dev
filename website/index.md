@@ -4,7 +4,7 @@ layout: home
 hero:
   name: "Real A11y"
   text: "Accessibility tooling\nthat works in the real world"
-  tagline: "Beta (v0.1) — A Chrome extension, Storybook panel, React integration, and testing library, all powered by the same semantic engine."
+  tagline: "Beta (v0.1) — Extracts the accessibility tree as plain data. Use it through a Chrome extension, Storybook panel, React component, or testing library — one engine, every surface."
   image:
     src: /logo.svg
     alt: Real A11y
