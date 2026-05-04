@@ -11,6 +11,10 @@ publishable package ships together and is documented here.
 
 ## [Unreleased]
 
+## [0.1.0-beta.5] — 2026-05-04
+
+The Chrome extension bumps to `0.1.3`.
+
 ### Added
 
 #### `@real-a11y-dev/core`
@@ -52,6 +56,26 @@ publishable package ships together and is documented here.
   `role="presentation"` / `role="none"` / `<img alt="">` produces a
   smaller tree. Snapshot tests asserting the prior shape will need to be
   re-snapshotted.
+
+- Accessible-name computation now skips hidden subtrees per
+  [WAI-ARIA accname-1.2 §4.3.2 step 2A](https://www.w3.org/TR/accname-1.2/#computation-steps).
+  Descendants that are `aria-hidden="true"`, `[hidden]`, `inert`, or
+  CSS-hidden (`display: none`, `visibility: hidden`,
+  `content-visibility: hidden`) no longer leak into name-from-content,
+  `aria-labelledby` resolution, `<label>`, `<legend>`, `<summary>`, or
+  `aria-describedby` text. Previously, decorative `<svg>` `<text>`
+  fallbacks and other intentionally-hidden subtrees were being announced
+  alongside the real label, producing snapshots that diverged from what
+  AT (NVDA, JAWS, VoiceOver, TalkBack) actually reads ([#60], [#61]).
+
+#### `@real-a11y-dev/semantic-navigator-extension`
+
+- Picks up the accessible-name fix above — the side panel now reflects
+  what AT announces for icon-only buttons, logo links, and any element
+  with decorative `aria-hidden` subtrees.
+
+[#60]: https://github.com/real-a11y/real-a11y-dev/issues/60
+[#61]: https://github.com/real-a11y/real-a11y-dev/pull/61
 
 ## [0.1.0-beta.4] — 2026-04-28
 
