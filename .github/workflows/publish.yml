@@ -38,6 +38,12 @@ on:
     tags:
       - "v*"
 
+# Default to read-only for any token derived from this workflow. The
+# publish job below escalates to `id-token: write` for npm OIDC and keeps
+# `contents: read` — least-privilege per OpenSSF Scorecard's
+# Token-Permissions check.
+permissions: read-all
+
 concurrency:
   group: publish
   cancel-in-progress: false
