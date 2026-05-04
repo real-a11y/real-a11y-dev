@@ -42,9 +42,14 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      # Builds workspace packages first (the extension consumes
-      # @real-a11y-dev/core + ui as workspace deps) and then the
-      # extension itself, then runs scripts/zip-for-cws.mjs.
+      # The extension consumes @real-a11y-dev/core + ui as workspace deps
+      # via vite. Their dist/ has to exist before the extension's vite
+      # build can resolve the imports — `^...` selects the extension's
+      # upstream deps without running the extension's own build.
+      - name: Build workspace dependencies
+        run: pnpm --filter "@real-a11y-dev/semantic-navigator-extension^..." build
+
+      # Builds the extension itself and runs scripts/zip-for-cws.mjs.
       - name: Build + zip
         run: pnpm --filter @real-a11y-dev/semantic-navigator-extension package
 
