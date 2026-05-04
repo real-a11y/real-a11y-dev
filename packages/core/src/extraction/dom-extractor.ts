@@ -143,7 +143,7 @@ function isSubtreeHidden(element: Element): boolean {
     if (computed.display === "none") return true;
     // content-visibility:hidden skips rendering AND hides from AT
     // (used by frameworks like Yahoo Atomizer as Cntv(h))
-    if ((computed as any).contentVisibility === "hidden") return true;
+    if (computed.contentVisibility === "hidden") return true;
   } else if (htmlEl.style?.display === "none") {
     return true;
   }
@@ -546,8 +546,8 @@ export function getElementRefs(): ElementRefMap {
 function isActuallyVisible(element: Element): boolean {
   // checkVisibility() considers the full ancestor chain for display, visibility,
   // and content-visibility — exactly what we need here.
-  if (typeof (element as any).checkVisibility === "function") {
-    return (element as any).checkVisibility({
+  if (typeof element.checkVisibility === "function") {
+    return element.checkVisibility({
       checkOpacity: false, // opacity:0 is not an AT-hiding mechanism
       checkVisibilityCSS: true, // catches display:none and visibility:hidden on any ancestor
     });

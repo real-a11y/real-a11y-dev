@@ -200,7 +200,7 @@ export function isHiddenFromAT(element: Element): boolean {
     if (computed.display === "none" || computed.visibility === "hidden") {
       return true;
     }
-    if ((computed as any).contentVisibility === "hidden") return true;
+    if (computed.contentVisibility === "hidden") return true;
   }
 
   return false;
