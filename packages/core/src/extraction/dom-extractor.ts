@@ -236,12 +236,42 @@ function computeAccessibleDescription(element: Element): string {
     const texts = describedBy
       .split(/\s+/)
       .filter(Boolean)
-      .map((id) => doc.getElementById(id)?.textContent?.trim())
+      .map((id) => {
+        const target = doc.getElementById(id);
+        return target ? getAccessibleTextContent(target).trim() : undefined;
+      })
       .filter((t): t is string => !!t);
     if (texts.length) return texts.join(" ");
   }
   // 2. aria-description — inline string (ARIA 1.3+)
   return element.getAttribute("aria-description") || "";
+}
+
+/**
+ * Recursive text-content walker for accessible name/description computation.
+ *
+ * Per WAI-ARIA accname-1.2 §4.3.2 step 2A, hidden subtrees contribute the
+ * empty string. Skip element descendants that are aria-hidden, hidden,
+ * inert, or display/visibility/content-visibility-hidden.
+ *
+ * The root element itself is NOT checked — callers reach this with an
+ * element that is either already exposed to AT (name-from-content) or
+ * directly referenced by aria-labelledby / a host-language label (the
+ * spec's "directly referenced" carve-out).
+ */
+function getAccessibleTextContent(element: Element): string {
+  let text = "";
+  for (const child of element.childNodes) {
+    if (child.nodeType === Node.TEXT_NODE) {
+      text += child.textContent || "";
+    } else if (child.nodeType === Node.ELEMENT_NODE) {
+      const childEl = child as Element;
+      if (childEl.getAttribute("aria-hidden") === "true") continue;
+      if (isSubtreeHidden(childEl)) continue;
+      text += getAccessibleTextContent(childEl);
+    }
+  }
+  return text;
 }
 
 /** Compute the accessible name for an element (simplified) */
@@ -256,7 +286,10 @@ function computeAccessibleName(element: Element): string {
     const doc = element.ownerDocument;
     const names = labelledBy
       .split(/\s+/)
-      .map((id) => doc.getElementById(id)?.textContent?.trim())
+      .map((id) => {
+        const target = doc.getElementById(id);
+        return target ? getAccessibleTextContent(target).trim() : "";
+      })
       .filter(Boolean);
     if (names.length) return names.join(" ");
   }
@@ -274,7 +307,7 @@ function computeAccessibleName(element: Element): string {
     const id = element.getAttribute("id");
     if (id) {
       const label = element.ownerDocument.querySelector(`label[for="${id}"]`);
-      if (label) return label.textContent?.trim() || "";
+      if (label) return getAccessibleTextContent(label).trim();
     }
     // Wrapping label pattern: <label>Full name<input /></label>
     // Walk the label's child nodes and collect text from everything that is
@@ -284,11 +317,19 @@ function computeAccessibleName(element: Element): string {
       const FORM_CONTROL_TAGS = new Set(["input", "select", "textarea"]);
       const parts: string[] = [];
       for (const child of wrappingLabel.childNodes) {
-        if ((child as Element) === element) continue;
-        const childTag = (child as Element).tagName?.toLowerCase();
-        if (childTag && FORM_CONTROL_TAGS.has(childTag)) continue;
-        const text = child.textContent?.trim();
-        if (text) parts.push(text);
+        if (child.nodeType === Node.TEXT_NODE) {
+          const text = child.textContent?.trim();
+          if (text) parts.push(text);
+        } else if (child.nodeType === Node.ELEMENT_NODE) {
+          const childEl = child as Element;
+          if (childEl === element) continue;
+          const childTag = childEl.tagName.toLowerCase();
+          if (FORM_CONTROL_TAGS.has(childTag)) continue;
+          if (childEl.getAttribute("aria-hidden") === "true") continue;
+          if (isSubtreeHidden(childEl)) continue;
+          const text = getAccessibleTextContent(childEl).trim();
+          if (text) parts.push(text);
+        }
       }
       const labelText = parts.join(" ");
       if (labelText) return labelText;
@@ -298,13 +339,13 @@ function computeAccessibleName(element: Element): string {
   // 4a. Fieldset — accessible name comes from its direct <legend> child
   if (tag === "fieldset") {
     const legend = element.querySelector(":scope > legend");
-    if (legend) return legend.textContent?.trim() || "";
+    if (legend) return getAccessibleTextContent(legend).trim();
   }
 
   // 4b. Details — accessible name comes from its direct <summary> child
   if (tag === "details") {
     const summary = element.querySelector(":scope > summary");
-    if (summary) return summary.textContent?.trim() || "";
+    if (summary) return getAccessibleTextContent(summary).trim();
   }
 
   // 5. Value/placeholder for inputs
@@ -351,7 +392,7 @@ function computeAccessibleName(element: Element): string {
     explicitRole === "cell";
 
   if (NAMES_FROM_CONTENT_TAGS.has(tag) || namesFromContentRole) {
-    const fullText = (element.textContent || "").trim();
+    const fullText = getAccessibleTextContent(element).trim();
     if (fullText) return fullText;
   }
 

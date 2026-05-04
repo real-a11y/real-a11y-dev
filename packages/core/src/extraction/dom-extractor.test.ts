@@ -308,4 +308,113 @@ describe("extractDomTree", () => {
       expect(div.dom.descendantText).toBe("");
     });
   });
+
+  // accname-1.2 §4.3.2 step 2A: hidden subtrees contribute the empty string
+  // to name-from-content. The previous extractor used element.textContent
+  // directly and walked into aria-hidden / hidden / display:none descendants,
+  // producing names that didn't match what real AT (NVDA, JAWS, VoiceOver)
+  // reads. See https://github.com/real-a11y/real-a11y-dev/issues/60.
+  describe("accessible name skips hidden descendants", () => {
+    it("skips an aria-hidden SVG descendant in name-from-content", () => {
+      const root = createPage(`
+        <a href="/">
+          <svg aria-hidden="true"><text>brand</text></svg>
+          <span>Go home</span>
+        </a>
+      `);
+      const link = [...extractDomTree(root).nodes.values()].find(
+        (n) => n.dom.tagName === "a",
+      )!;
+      expect(link.a11y.name.replace(/\s+/g, " ").trim()).toBe("Go home");
+    });
+
+    it("skips an aria-hidden span inside a button name", () => {
+      const root = createPage(`
+        <button>
+          <span aria-hidden="true">×</span>
+          <span>Close dialog</span>
+        </button>
+      `);
+      const btn = [...extractDomTree(root).nodes.values()].find(
+        (n) => n.dom.tagName === "button",
+      )!;
+      expect(btn.a11y.name.replace(/\s+/g, " ").trim()).toBe("Close dialog");
+    });
+
+    it("skips a [hidden] descendant in a heading's name-from-content", () => {
+      const root = createPage(`
+        <h1>
+          <span hidden>draft</span>
+          Real A11y
+        </h1>
+      `);
+      const h1 = [...extractDomTree(root).nodes.values()].find(
+        (n) => n.dom.tagName === "h1",
+      )!;
+      expect(h1.a11y.name.replace(/\s+/g, " ").trim()).toBe("Real A11y");
+    });
+
+    it("skips a display:none descendant in name-from-content", () => {
+      const root = createPage(`
+        <button>
+          <span style="display: none">hidden bit</span>
+          Submit
+        </button>
+      `);
+      // Need the element attached to a document so getComputedStyle resolves
+      document.body.appendChild(root);
+      try {
+        const btn = [...extractDomTree(root).nodes.values()].find(
+          (n) => n.dom.tagName === "button",
+        )!;
+        expect(btn.a11y.name.replace(/\s+/g, " ").trim()).toBe("Submit");
+      } finally {
+        document.body.removeChild(root);
+      }
+    });
+
+    it("skips aria-hidden subtree of an aria-labelledby target", () => {
+      document.body.innerHTML = `
+        <div id="lbl">
+          Real A11y
+          <span aria-hidden="true">decoration</span>
+        </div>
+        <button aria-labelledby="lbl">x</button>
+      `;
+      try {
+        const btn = [...extractDomTree(document.body).nodes.values()].find(
+          (n) => n.dom.tagName === "button",
+        )!;
+        expect(btn.a11y.name.replace(/\s+/g, " ").trim()).toBe("Real A11y");
+      } finally {
+        document.body.innerHTML = "";
+      }
+    });
+
+    it("skips aria-hidden text inside a wrapping label", () => {
+      const root = createPage(`
+        <label>
+          <span>Email</span>
+          <span aria-hidden="true">*</span>
+          <input type="email" />
+        </label>
+      `);
+      const input = [...extractDomTree(root).nodes.values()].find(
+        (n) => n.dom.tagName === "input",
+      )!;
+      expect(input.a11y.name.replace(/\s+/g, " ").trim()).toBe("Email");
+    });
+
+    it("aria-label override still wins over hidden-skipped content", () => {
+      const root = createPage(`
+        <a href="/" aria-label="Real A11y — go to home">
+          <svg aria-hidden="true"><text>real a11y</text></svg>
+        </a>
+      `);
+      const link = [...extractDomTree(root).nodes.values()].find(
+        (n) => n.dom.tagName === "a",
+      )!;
+      expect(link.a11y.name).toBe("Real A11y — go to home");
+    });
+  });
 });
