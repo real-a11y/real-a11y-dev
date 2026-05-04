@@ -176,6 +176,23 @@ export function DemoApp() {
           </p>
           <CodeBlockDemo />
         </section>
+
+        {/* Section 5 — aria-hidden decorative graphics inside named ancestors */}
+        <section aria-labelledby="aria-hidden-heading">
+          <h2 id="aria-hidden-heading">
+            Icon links — <code>aria-hidden</code> decorative graphics
+          </h2>
+          <p style={{ color: "#666", marginBottom: 16 }}>
+            Decorative SVGs sit inside a named link or button. The SVG carries{" "}
+            <code>aria-hidden="true"</code> so its text content is excluded from
+            the accessible name. Per WAI-ARIA accname-1.2 §4.3.2 step 2A, hidden
+            subtrees contribute the empty string — the link should announce as{" "}
+            <em>"Real A11y — go to home"</em>, not{" "}
+            <em>"real a11y Real A11y — go to home"</em>. Watch the panel's{" "}
+            <code>name</code> column.
+          </p>
+          <AriaHiddenIconDemo />
+        </section>
       </main>
 
       {/* Confirmation dialog */}
@@ -338,6 +355,128 @@ function CodeBlockDemo() {
     </div>
   );
 }
+
+/**
+ * Three accessible-name patterns where a decorative SVG / icon sits next to
+ * the real label. The SVG is `aria-hidden="true"`, so its text content is
+ * skipped in name-from-content. Open the inspector panel and check the
+ * `name` column on each — the decorative glyph never appears in the name.
+ */
+function AriaHiddenIconDemo() {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {/* 1. Logo link — aria-label override + aria-hidden SVG wordmark */}
+      <a
+        href="#"
+        aria-label="Real A11y — go to home"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          width: "fit-content",
+          textDecoration: "none",
+          color: "#111",
+        }}
+      >
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 100 24"
+          width="100"
+          height="24"
+          style={{ display: "block" }}
+        >
+          <text
+            x="0"
+            y="18"
+            fontFamily="ui-monospace, monospace"
+            fontSize="18"
+            fontWeight="700"
+          >
+            real a11y
+          </text>
+        </svg>
+      </a>
+
+      {/* 2. Icon-only button — sr-only label + aria-hidden glyph */}
+      <button
+        type="button"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          width: "fit-content",
+          padding: "6px 10px",
+          border: "1px solid #ccc",
+          borderRadius: 6,
+          background: "#fff",
+          cursor: "pointer",
+        }}
+      >
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 16 16"
+          width="16"
+          height="16"
+          style={{ display: "block" }}
+        >
+          <path
+            d="M8 1.5L15 14.5H1z"
+            fill="#d97706"
+            stroke="#92400e"
+            strokeWidth="1"
+            strokeLinejoin="round"
+          />
+          <text
+            x="6"
+            y="13"
+            fontFamily="ui-monospace, monospace"
+            fontSize="9"
+            fill="#fff"
+          >
+            !
+          </text>
+        </svg>
+        <span style={srOnlyStyle}>Show warnings</span>
+      </button>
+
+      {/* 3. Status badge link — aria-hidden dot, real label */}
+      <a
+        href="#"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          width: "fit-content",
+          color: "#0050b3",
+        }}
+      >
+        <span
+          aria-hidden="true"
+          style={{
+            display: "inline-block",
+            width: 8,
+            height: 8,
+            borderRadius: "50%",
+            background: "#d97706",
+          }}
+        />
+        <span>Status: degraded</span>
+      </a>
+    </div>
+  );
+}
+
+const srOnlyStyle: React.CSSProperties = {
+  position: "absolute",
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: "hidden",
+  clip: "rect(0, 0, 0, 0)",
+  whiteSpace: "nowrap",
+  border: 0,
+};
 
 const codeLabelStyle: React.CSSProperties = {
   fontWeight: 600,

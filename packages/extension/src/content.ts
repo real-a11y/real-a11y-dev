@@ -237,7 +237,7 @@ chrome.runtime.onMessage.addListener(
       }
 
       case "SEND_KEY": {
-        const p = (message as any).payload;
+        const p = message.payload;
         const target = document.activeElement || document.body;
         target.dispatchEvent(
           new KeyboardEvent("keydown", {
