@@ -1,12 +1,12 @@
 /// <reference types="chrome" />
 
+import { buildFrameInfoMap, mergeFrameTrees } from "./frame-merger.js";
 import {
   prefixNodeId,
   parseNodeId,
   planFrameAnnouncementResponse,
   planPanelDisconnectCleanup,
 } from "./routing.js";
-import { buildFrameInfoMap, mergeFrameTrees } from "./frame-merger.js";
 import {
   type TabState,
   clearTabFrames,
