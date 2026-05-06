@@ -112,10 +112,13 @@ jobs:
           name: pr-snapshots
 
       # Produce a unified diff.  Exit code 1 = files differ (expected), 0 = same.
+      # `-F '^## '` (--show-function-line) appends the most-recent page heading
+      # to each hunk header, so reviewers can see *which* audited page changed
+      # without scrolling up to find the section.
       - name: Compute diff
         id: diff
         run: |
-          diff --unified=3 base-snapshots.md pr-snapshots.md > a11y.diff || true
+          diff --unified=3 -F '^## ' base-snapshots.md pr-snapshots.md > a11y.diff || true
           echo "has_diff=$([ -s a11y.diff ] && echo true || echo false)" >> $GITHUB_OUTPUT
 
       # Post or update a single sticky comment on the PR.
@@ -148,6 +151,37 @@ jobs:
               const removed = (diff.match(/^-[^-]/gm) || []).length;
               const summary = `${added} line${added !== 1 ? 's' : ''} added, ${removed} removed`;
 
+              // Per-page attribution. The `-F '^## '` flag we passed to diff
+              // appends the most-recent `## page heading` to each hunk header
+              // (e.g. `@@ -16,7 +16,7 @@ ## fixture.html (well-structured)`).
+              // Walk the diff line-by-line, keep track of which page's hunk
+              // we're inside, and tally added/removed lines per page.
+              const HUNK = /^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@ ## (.+)$/;
+              // Pre-seed a synthetic bucket for any +/- line that lands before
+              // the first hunk anchor (shouldn't happen in normal diff output,
+              // but keeps `byPage.get(current)` from being undefined).
+              const byPage = new Map([['(file header)', { added: 0, removed: 0 }]]);
+              let current = '(file header)';
+              for (const line of diff.split('\n')) {
+                const hunk = line.match(HUNK);
+                if (hunk) {
+                  current = hunk[1].trim();
+                  if (!byPage.has(current)) byPage.set(current, { added: 0, removed: 0 });
+                  continue;
+                }
+                if (line.startsWith('+++') || line.startsWith('---')) continue;
+                if (line.startsWith('+')) byPage.get(current).added++;
+                else if (line.startsWith('-')) byPage.get(current).removed++;
+              }
+              // Drop the synthetic bucket if every diff line was attributed.
+              const fileHeader = byPage.get('(file header)');
+              if (fileHeader && fileHeader.added === 0 && fileHeader.removed === 0) {
+                byPage.delete('(file header)');
+              }
+              const pageRows = [...byPage.entries()].map(([page, { added, removed }]) =>
+                `- **${page}** — ${added} added, ${removed} removed`,
+              );
+
               // Keep the diff under GitHub's 65 kB comment limit
               const MAX = 60_000;
               const diffBlock = diff.length > MAX
@@ -159,6 +193,10 @@ jobs:
                 '## 🔍 A11y tree changed',
                 '',
                 `**${summary}** — review to confirm changes are intentional.`,
+                '',
+                '**Changed pages:**',
+                '',
+                ...pageRows,
                 '',
                 '<details>',
                 '<summary>Show full diff</summary>',
