@@ -30,8 +30,11 @@ export default [
       "**/coverage/**",
       "**/test-results/**",
       "**/playwright-report/**",
+      "**/*.spec.ts-snapshots/**",
       "pnpm-lock.yaml",
-      "website/**",
+      // Lint website TS source (tests/scripts) but skip generated
+      // VitePress chrome and the Vue/MD content.
+      "website/.vitepress/**",
       "examples/**",
     ],
   },
