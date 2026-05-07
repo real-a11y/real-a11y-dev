@@ -16,7 +16,9 @@ export default defineConfig({
   // `auditSnapshot()` output is platform-stable (same Chromium, identical
   // tree shape — theme/contrast/font-rendering don't enter the tree),
   // so committing one baseline per shape works on every contributor OS.
-  snapshotPathTemplate: "{testFileDir}/{testFileName}-snapshots/{arg}{ext}",
+  // This template is the documented Playwright default minus the
+  // `{-projectName}` and `{-snapshotSuffix}` tokens.
+  snapshotPathTemplate: "{snapshotDir}/{testFilePath}-snapshots/{arg}{ext}",
   use: {
     baseURL: "http://localhost:5173",
     trace: "retain-on-failure",
