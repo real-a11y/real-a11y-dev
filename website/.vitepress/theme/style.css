@@ -31,12 +31,18 @@
   --vp-c-text-2: hsl(var(--color-text-secondary));
   --vp-c-text-3: hsl(var(--color-text-muted));
 
-  /* Brand / accent. VitePress uses `-1`/`-2`/`-3` as a small ramp
-   * (lightest → darkest, applied to backgrounds, hovers, and text). */
+  /* Brand / accent. VitePress uses `-1`/`-2`/`-3`/`-soft` for a small
+   * ramp (text + hovers + solids + translucent overlays).
+   *
+   * Important: only the `--color-accent*` semantic tokens flip on
+   * `.dark`. The `--primary-N` ramp is a static swatch set — using it
+   * here breaks dark mode (the soft "important" callout background
+   * stays pale blue while text flips to light, dropping contrast to
+   * ~1:1). All four levels here must reference flipping tokens. */
   --vp-c-brand-1: hsl(var(--color-accent));
   --vp-c-brand-2: hsl(var(--color-accent-hover));
-  --vp-c-brand-3: hsl(var(--primary-700));
-  --vp-c-brand-soft: hsl(var(--primary-100));
+  --vp-c-brand-3: hsl(var(--color-accent-hover));
+  --vp-c-brand-soft: hsl(var(--color-accent) / 0.14);
 
   /* Borders / dividers */
   --vp-c-border: hsl(var(--color-border));
