@@ -324,7 +324,7 @@
   contentinfo
     link "Edit this page on GitHub"
     paragraph "Last updated:"
-      time "4/28/26, 6:42 PM"
+      time "[redacted]"
     navigation "Pager"
       link "Previous pageOverview & Install"
       link "Next page@real-a11y-dev/inspector"

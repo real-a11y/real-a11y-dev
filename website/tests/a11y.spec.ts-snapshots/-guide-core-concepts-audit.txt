@@ -262,7 +262,7 @@
   contentinfo
     link "Edit this page on GitHub"
     paragraph "Last updated:"
-      time "5/6/26, 10:35 PM"
+      time "[redacted]"
     navigation "Pager"
       link "Previous pageGetting Started"
       link "Next pageWhy Real A11y?"

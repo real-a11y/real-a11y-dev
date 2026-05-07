@@ -465,7 +465,7 @@
   contentinfo
     link "Edit this page on GitHub"
     paragraph "Last updated:"
-      time "4/28/26, 10:54 PM"
+      time "[redacted]"
     navigation "Pager"
       link "Previous pageTAB View"
       link "Next pageOverview & Install"

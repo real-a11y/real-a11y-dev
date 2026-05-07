@@ -126,6 +126,6 @@
   contentinfo
     link "Edit this page on GitHub"
     paragraph "Last updated:"
-      time "4/25/26, 7:01 PM"
+      time "[redacted]"
     navigation "Pager"
       link "Next pageGetting Started"

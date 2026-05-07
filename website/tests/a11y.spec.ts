@@ -92,12 +92,20 @@ for (const theme of THEMES) {
 // Snapshots: per route only. Structural shape doesn't depend on
 // `prefers-color-scheme` for a static docs site, so doubling by theme
 // would just duplicate the same content.
+// VitePress renders the file's git mtime into a `<time>` element on
+// every doc page ("Last updated: 4/25/26, 7:01 PM"). The text changes
+// every time the docs rebuild — so we redact the content before
+// snapshotting. Anything inside `time "..."` becomes a placeholder.
+function redactTimes(audit: string): string {
+  return audit.replace(/time "[^"]*"/g, 'time "[redacted]"');
+}
+
 test.describe("a11y tree snapshot", () => {
   for (const route of ROUTES) {
     test(route, async ({ page }) => {
       await page.goto(route, { waitUntil: "load" });
       const sn = await attach(page);
-      const audit = await sn.auditSnapshot();
+      const audit = redactTimes(await sn.auditSnapshot());
       expect(audit).toMatchSnapshot(`${slugFor(route)}.audit.txt`);
     });
   }

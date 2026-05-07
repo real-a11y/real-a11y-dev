@@ -303,7 +303,7 @@
   contentinfo
     link "Edit this page on GitHub"
     paragraph "Last updated:"
-      time "4/30/26, 3:38 AM"
+      time "[redacted]"
     navigation "Pager"
       link "Previous pagePeer Dependencies"
       link "Next pageAccessible Names"

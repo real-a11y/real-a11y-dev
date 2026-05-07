@@ -269,7 +269,7 @@
   contentinfo
     link "Edit this page on GitHub"
     paragraph "Last updated:"
-      time "5/3/26, 11:58 AM"
+      time "[redacted]"
     navigation "Pager"
       link "Previous pagePanel features"
       link "Next page@real-a11y-dev/core"
