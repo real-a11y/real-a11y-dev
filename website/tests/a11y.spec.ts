@@ -25,6 +25,82 @@ import { attach } from "@real-a11y-dev/testing/playwright";
 
 import { AXE_TAGS, ROUTES, THEMES } from "../scripts/audit-routes.mjs";
 
+// How much per-node detail to include in the failure log. Capping the
+// node count keeps a 70-violation contrast failure from burying the
+// stdout; capping the HTML length keeps a single `<table>` from
+// taking 500 columns.
+const MAX_NODES_PER_VIOLATION = 5;
+const MAX_HTML_LEN = 160;
+
+// Minimal local shape — avoids pulling axe-core's type package into
+// website devDeps just for the formatter. Matches what
+// `AxeBuilder({ page }).analyze()` returns at runtime.
+interface AxeNodeLike {
+  target: string[] | string;
+  html: string;
+  failureSummary?: string;
+}
+interface AxeViolationLike {
+  id: string;
+  impact?: string | null;
+  help: string;
+  helpUrl: string;
+  nodes: AxeNodeLike[];
+}
+
+// Build a human-readable failure message from axe's `violations`.
+// Each violation gets a header line (impact, id, help, count, doc URL)
+// followed by per-node detail: selector, truncated outerHTML, and the
+// concrete reason from `failureSummary`. The previous version only
+// printed the header, which meant every CI failure required a follow-
+// up "show me the element" round-trip.
+function formatAxeViolations(violations: AxeViolationLike[]): string {
+  return violations
+    .map((v) => {
+      const header =
+        `[${v.impact ?? "unknown"}] ${v.id}: ${v.help} ` +
+        `(${v.nodes.length} node${v.nodes.length === 1 ? "" : "s"})\n` +
+        `   ${v.helpUrl}`;
+
+      const nodeLines = v.nodes
+        .slice(0, MAX_NODES_PER_VIOLATION)
+        .map((n, i) => {
+          const selector = Array.isArray(n.target)
+            ? n.target.join(" > ")
+            : String(n.target);
+
+          // axe's `failureSummary` is multi-line and starts with
+          // "Fix any of the following:" — strip that header and
+          // collapse the remaining bullets onto one line.
+          const detail = n.failureSummary
+            ?.split("\n")
+            .map((line) => line.trim())
+            .filter((line) => line && !line.startsWith("Fix "))
+            .join(" · ");
+
+          // outerHTML — truncated so a `<table>` doesn't bury the log.
+          const html =
+            n.html.length > MAX_HTML_LEN
+              ? `${n.html.slice(0, MAX_HTML_LEN - 1)}…`
+              : n.html;
+
+          return [
+            `   ${i + 1}. ${selector}`,
+            `      ${html}`,
+            `      ${detail ?? "(no detail)"}`,
+          ].join("\n");
+        });
+
+      const more =
+        v.nodes.length > MAX_NODES_PER_VIOLATION
+          ? `\n   … and ${v.nodes.length - MAX_NODES_PER_VIOLATION} more node(s)`
+          : "";
+
+      return [header, ...nodeLines].join("\n") + more;
+    })
+    .join("\n\n");
+}
+
 // Snapshot file name: route with `/` replaced by `_`, then the suffix.
 // `/` becomes `_root`, `/guide/why` becomes `_guide_why`.
 function slugFor(route: string): string {
@@ -63,19 +139,9 @@ for (const theme of THEMES) {
           .analyze();
 
         if (results.violations.length > 0) {
-          // Custom failure message that fits in a single Playwright
-          // report line per violation. Prevents the default `toEqual`
-          // from dumping multi-page JSON for a single missing label.
-          const summary = results.violations
-            .map(
-              (v) =>
-                `[${v.impact ?? "unknown"}] ${v.id}: ${v.help} (${v.nodes.length} node${
-                  v.nodes.length === 1 ? "" : "s"
-                })\n   ${v.helpUrl}`,
-            )
-            .join("\n");
           throw new Error(
-            `axe found ${results.violations.length} violation(s):\n${summary}`,
+            `axe found ${results.violations.length} violation(s):\n` +
+              formatAxeViolations(results.violations),
           );
         }
       });
