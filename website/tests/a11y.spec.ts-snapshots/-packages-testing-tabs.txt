@@ -1,0 +1,151 @@
+01. link "Skip to content"
+02. link "Real A11y"
+03. button "Search"
+04. link "Guide"
+05. link "Recipes"
+06. link "Packages"
+07. button "v0.1 · Beta"
+08. switch "Switch to dark theme"
+09. link "github"
+10. button "Introduction"
+11. link "Getting Started"
+12. link "Core Concepts"
+13. link "Why Real A11y?"
+14. button "Reading the Tree"
+15. link "DOM View"
+16. link "A11y View"
+17. link "TAB View"
+18. link "Panel features"
+19. button "Chrome Extension"
+20. link "Overview & Install"
+21. button "Packages"
+22. link "@real-a11y-dev/core"
+23. link "@real-a11y-dev/inspector"
+24. link "@real-a11y-dev/testing"
+25. link "@real-a11y-dev/react"
+26. link "@real-a11y-dev/storybook-addon"
+27. button "Recipes"
+28. link "Next.js (App Router + React 19)"
+29. link "Storybook 8 + React 19"
+30. link "Peer Dependencies"
+31. link "CI Diff Bot"
+32. button "Reference"
+33. link "Accessible Names"
+34. link "Architecture"
+35. link "Troubleshooting"
+36. link "Install"
+37. link "Snapshots"
+38. link "Assertions"
+39. link "Flow API"
+40. link "Utilities"
+41. link "Playwright adapter"
+42. link "TypeScript"
+43. link "See it running"
+44. link "Permalink to "@real-a11y-dev/testing""
+45. link "Permalink to "Install""
+46. button "Copy Code"
+47. generic
+48. link "Permalink to "Snapshots""
+49. link "Permalink to "`auditSnapshot(root, options?)`""
+50. button "Copy Code"
+51. generic
+52. table
+53. button "Copy Code"
+54. generic
+55. link "Permalink to "Using `redact` — realistic patterns""
+56. button "Copy Code"
+57. generic
+58. button "Copy Code"
+59. generic
+60. link "Permalink to "`outlineSnapshot(root)`""
+61. button "Copy Code"
+62. generic
+63. button "Copy Code"
+64. generic
+65. link "Permalink to "`tabSequenceSnapshot(root)`""
+66. button "Copy Code"
+67. generic
+68. button "Copy Code"
+69. generic
+70. link "Permalink to "Assertions""
+71. link "Permalink to "`assertNoUnlabeledInteractive(root)`""
+72. button "Copy Code"
+73. generic
+74. button "Copy Code"
+75. generic
+76. link "Permalink to "`assertHeadingOrder(root)`""
+77. button "Copy Code"
+78. generic
+79. link "Permalink to "`assertDialogsLabeled(root)`""
+80. button "Copy Code"
+81. generic
+82. link "Permalink to "`assertLandmarkStructure(root)`""
+83. button "Copy Code"
+84. generic
+85. link "Permalink to "Flow API""
+86. button "Copy Code"
+87. generic
+88. link "Permalink to "Why `flow()` (vs Testing Library)?""
+89. link "Permalink to "Side-by-side: same test, both libraries""
+90. button "Copy Code"
+91. generic
+92. button "Copy Code"
+93. generic
+94. link "Permalink to "When to use which""
+95. table
+96. link "Playwright adapter"
+97. link "Permalink to "Available steps""
+98. table
+99. link "Permalink to "`expectActiveModal` — examples""
+100. button "Copy Code"
+101. generic
+102. link "Permalink to "`expectTree` — caveat""
+103. link "Permalink to "`flow(root, options?)`""
+104. table
+105. button "Copy Code"
+106. generic
+107. link "Permalink to "Utilities""
+108. link "Permalink to "`waitForMutations(root, options?)`""
+109. button "Copy Code"
+110. generic
+111. table
+112. link "Permalink to "`dispatch(node, action?, payload?)`""
+113. button "Copy Code"
+114. generic
+115. link "Permalink to "Playwright adapter""
+116. link "Permalink to "Install""
+117. button "Copy Code"
+118. generic
+119. link "Permalink to "`attach(page, options?)`""
+120. button "Copy Code"
+121. generic
+122. table
+123. link "Permalink to "Narrowing the root""
+124. button "Copy Code"
+125. generic
+126. link "Permalink to "Testing that assertions fail on broken pages""
+127. button "Copy Code"
+128. generic
+129. link "Permalink to "Determinism""
+130. button "Copy Code"
+131. generic
+132. link "redact"
+133. link "Permalink to "How it works""
+134. button "Copy Code"
+135. generic
+136. link "Permalink to "Error propagation""
+137. button "Copy Code"
+138. generic
+139. link "Permalink to "`SemanticNavigatorPageHandle` type""
+140. button "Copy Code"
+141. generic
+142. link "Permalink to "TypeScript""
+143. button "Copy Code"
+144. generic
+145. link "Permalink to "See it running""
+146. link "examples/testing-vitest/"
+147. link "examples/playwright/"
+148. link "CI Diff Bot recipe"
+149. link "Edit this page on GitHub"
+150. link "Previous page@real-a11y-dev/inspector"
+151. link "Next page@real-a11y-dev/react"

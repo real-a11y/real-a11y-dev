@@ -1,0 +1,23 @@
+  h2 Introduction
+  h2 Reading the Tree
+  h2 Chrome Extension
+  h2 Packages
+  h2 Recipes
+  h2 Reference
+  h2 On this page
+h1 Semantic Navigator ​
+  h2 The problem ​
+  h2 The test ​
+  h2 This is not a replacement for real testing ​
+  h2 The screen curtain ​
+  h2 How it works ​
+  h2 What's unique to the Chrome extension ​
+    h3 Screen curtain — Curtain / Curtain ON ​
+    h3 Cross-iframe tree merging ​
+    h3 Keyboard bar — Esc · Tab · Shift+Tab · Enter · Space · ↑ · ↓ ​
+    h3 Close tab — × next to the page title ​
+    h3 Cross-link chips on disclosure pairs ​
+    h3 Manual refresh on tab switch — ↻ toolbar button ​
+    h3 BETA pill in the panel header ​
+  h2 Reading the tree, scoping, filtering, focus tracking ​
+  h2 Install ​

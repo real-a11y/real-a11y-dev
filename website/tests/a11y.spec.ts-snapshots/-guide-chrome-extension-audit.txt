@@ -1,0 +1,275 @@
+  link "Skip to content"
+  banner
+    link "Real A11y"
+    button "Search"
+    navigation "Main Navigation"
+      link "Guide"
+      link "Recipes"
+      link "Packages"
+      button "v0.1 · Beta"
+    switch "Switch to dark theme"
+    link "github"
+  complementary
+    navigation "Sidebar Navigation"
+      button "Introduction"
+        heading "Introduction" (level 2)
+      link "Getting Started"
+        paragraph "Getting Started"
+      link "Core Concepts"
+        paragraph "Core Concepts"
+      link "Why Real A11y?"
+        paragraph "Why Real A11y?"
+      button "Reading the Tree"
+        heading "Reading the Tree" (level 2)
+      link "DOM View"
+        paragraph "DOM View"
+      link "A11y View"
+        paragraph "A11y View"
+      link "TAB View"
+        paragraph "TAB View"
+      link "Panel features"
+        paragraph "Panel features"
+      button "Chrome Extension"
+        heading "Chrome Extension" (level 2)
+      link "Overview & Install"
+        paragraph "Overview & Install"
+      button "Packages"
+        heading "Packages" (level 2)
+      link "@real-a11y-dev/core"
+        paragraph "@real-a11y-dev/core"
+      link "@real-a11y-dev/inspector"
+        paragraph "@real-a11y-dev/inspector"
+      link "@real-a11y-dev/testing"
+        paragraph "@real-a11y-dev/testing"
+      link "@real-a11y-dev/react"
+        paragraph "@real-a11y-dev/react"
+      link "@real-a11y-dev/storybook-addon"
+        paragraph "@real-a11y-dev/storybook-addon"
+      button "Recipes"
+        heading "Recipes" (level 2)
+      link "Next.js (App Router + React 19)"
+        paragraph "Next.js (App Router + React 19)"
+      link "Storybook 8 + React 19"
+        paragraph "Storybook 8 + React 19"
+      link "Peer Dependencies"
+        paragraph "Peer Dependencies"
+      link "CI Diff Bot"
+        paragraph "CI Diff Bot"
+      button "Reference"
+        heading "Reference" (level 2)
+      link "Accessible Names"
+        paragraph "Accessible Names"
+      link "Architecture"
+        paragraph "Architecture"
+      link "Troubleshooting"
+        paragraph "Troubleshooting"
+  navigation "On this page"
+    heading "On this page" (level 2)
+    list
+      listitem
+        link "The problem"
+      listitem
+        link "The test"
+      listitem
+        link "This is not a replacement for real testing"
+      listitem
+        link "The screen curtain"
+      listitem
+        link "How it works"
+      listitem
+        link "What's unique to the Chrome extension"
+      listitem
+        link "Reading the tree, scoping, filtering, focus tracking"
+      listitem
+        link "Install"
+  main
+    heading "Semantic Navigator ​" (level 1)
+      link "Permalink to "Semantic Navigator""
+    paragraph "Navigate the web the way your users have to."
+    paragraph "Most accessibility problems don't look like problems — until you remove the visual layer. Semantic Navigator replaces the page with its accessibility tree. You can still click, navigate, fill forms, and complete tasks. The structure is all you get."
+    link "View on GitHub"
+    separator
+    blockquote
+      paragraph "— Testing Library"
+        emphasis ""The more your tests resemble the way your software is used, the more confidence they can give you.""
+    paragraph "The more your navigation resembles how screen reader users experience your product, the more confidence it can give you."
+    separator
+    heading "The problem ​" (level 2)
+      link "Permalink to "The problem""
+    paragraph "You build, test, and ship products you have never actually experienced."
+    paragraph "Not the way a screen reader user experiences them."
+    paragraph "You navigate with your eyes. You click what you can see, skip what doesn't look relevant, and scan for what matters. Your users navigate with structure — headings to orient, landmarks to jump to, roles and names to understand what each element does. They hear the tree, one element at a time, in the order the DOM gives it to them."
+    paragraph "That's not a different preference. That's a completely different product."
+    paragraph "Most teams have never experienced their own product that way. Not because they don't care — but because nothing has ever made them sit down and try it."
+    separator
+    heading "The test ​" (level 2)
+      link "Permalink to "The test""
+    paragraph
+      strong "If you can complete the task through the accessibility tree, your users probably can too."
+    paragraph
+      strong "If you can't — that's the bug."
+    paragraph "Try to check out. Try to book an appointment. Try to find the error message after a failed form submission. Try to close the dialog that just opened. Try to understand where you are in the page."
+    paragraph "Do it through the tree. Without looking at the UI."
+    paragraph "When it's hard — when you can't find the button, can't figure out what a control does, can't tell if the action worked — stop there."
+    paragraph "That's not a usability problem. That's your accessibility bug. And your screen reader users hit it every day."
+    separator
+    heading "This is not a replacement for real testing ​" (level 2)
+      link "Permalink to "This is not a replacement for real testing""
+    paragraph "NVDA. JAWS. VoiceOver. TalkBack. These are the tools your users actually depend on. Each one has its own quirks, its own keyboard model, its own way of announcing dynamic content. None of that is simulated here."
+    paragraph "Semantic Navigator does not reproduce what a screen reader sounds like, how it moves, or what it announces in response to focus changes. What it does is expose the raw material — the semantic tree — that screen readers consume."
+    paragraph "Think of it as the difference between reading a recipe and tasting the dish. The tree tells you what's there. A real screen reader tells you how it's experienced."
+    paragraph "Missing names, broken tab order, incorrect roles, unlabeled landmarks — these are findable here, in your normal development workflow, without spinning up AT."
+      strong "Use this tool to catch structural problems early and often."
+    paragraph "Test with NVDA on Firefox. Test with VoiceOver on Safari. Test with JAWS if your users depend on it. There is no tool — this one or any other — that substitutes for that."
+      strong "Use real screen readers before you ship."
+    paragraph "This extension makes those sessions less painful. It does not make them optional."
+    separator
+    heading "The screen curtain ​" (level 2)
+      link "Permalink to "The screen curtain""
+    paragraph "Semantic Navigator includes a screen curtain — a single toggle that blacks out the entire page."
+    paragraph "The tree stays. The panel stays. You can still interact with the full product."
+    paragraph "The visual layer is just gone."
+    paragraph "This is the closest a sighted developer gets to the experience. It's uncomfortable. It should be. That discomfort is information."
+    separator
+    heading "How it works ​" (level 2)
+      link "Permalink to "How it works""
+    paragraph "Click the extension icon in your Chrome toolbar. The side panel opens next to the current page and populates immediately."
+      strong "1. Open the side panel"
+    paragraph "The page renders as an interactive tree — DOM view (raw HTML elements) or A11y view (roles, accessible names, states). This is what assistive technology perceives."
+      strong "2. See the semantic structure"
+    paragraph "Click links, fill forms, submit, expand menus, complete flows. You're using the real product — just through its structure instead of its visual layer."
+      strong "3. Navigate your product"
+    paragraph "When something is hard to locate, hard to understand, or impossible to complete — that's a real accessibility failure. Not a hypothetical. Not a lint warning. Something your users have been hitting silently for months."
+      strong "4. Find where it breaks"
+    separator
+    heading "What's unique to the Chrome extension ​" (level 2)
+      link "Permalink to "What's unique to the Chrome extension""
+    paragraph "The extension surfaces the same engine as , , and . Everything  is shared across those — see  for filters, search, focus tracking, scoping, and live region monitoring."
+      code "@real-a11y-dev/inspector"
+      code "@real-a11y-dev/react"
+      code "@real-a11y-dev/storybook-addon"
+      emphasis "about reading the tree"
+      link "the panel features guide"
+    paragraph "What only an extension can give you, and what's documented below, is the handful of capabilities that require a browser extension to reach across tabs and frames:"
+    heading "Screen curtain — Curtain / Curtain ON ​" (level 3)
+      code "Curtain"
+      code "Curtain ON"
+      link "Permalink to "Screen curtain — `Curtain` / `Curtain ON`""
+    paragraph "A full-viewport overlay that blacks out the host page. Only an extension can paint over the entire tab. The tree stays, the panel stays, the page remains fully interactive through the tree — you just can't see it."
+    paragraph "When you want to audit a flow with zero visual fallback. Clicking "Curtain ON" is the fastest way to find out whether a task is actually completable through structure alone. If you can't check out, can't close the dialog, can't find the submit button — that's the accessibility bug."
+      strong "When to use it."
+    paragraph "While the curtain is on, the focus-ring overlay is suppressed too (no point drawing on a blacked-out page), so lean on the panel's tree selection to orient yourself."
+      strong "Note."
+    heading "Cross-iframe tree merging ​" (level 3)
+      link "Permalink to "Cross-iframe tree merging""
+    paragraph "iframes are merged into the parent tree at the correct depth. The extension's background script reaches across frame boundaries (a privilege only extensions have) and stitches each iframe's locally-extracted tree onto its  placeholder in the parent. Embedded widgets, third-party flows, payment forms — all in scope."
+      code "<iframe>"
+    paragraph "In-page packages (, ) only see their own document and can't merge across origins. The extension is the only surface that gives you the full picture for sites that use iframes heavily."
+      code "inspector"
+      code "react"
+    heading "Keyboard bar — Esc · Tab · Shift+Tab · Enter · Space · ↑ · ↓ ​" (level 3)
+      code "Esc"
+      code "Tab"
+      code "Shift+Tab"
+      code "Enter"
+      code "Space"
+      code "↑"
+      code "↓"
+      link "Permalink to "Keyboard bar — `Esc` · `Tab` · `Shift+Tab` · `Enter` · `Space` · `↑` · `↓`""
+    paragraph "Buttons that dispatch a synthetic  to whatever element currently has focus on the host page. Possible only because the extension's content script can  against the page's DOM from outside."
+      code "KeyboardEvent"
+      code "dispatchEvent"
+    paragraph "navigate to a combobox in the tree → press Enter (in the tree) to activate it → the combobox opens on the page → use the keyboard bar's / to move through options →  to select →  to dismiss."
+      strong "Common flow:"
+      code "↓"
+      code "↑"
+      code "Enter"
+      code "Esc"
+    heading "Close tab — × next to the page title ​" (level 3)
+      code "×"
+      link "Permalink to "Close tab — `×` next to the page title""
+    paragraph "Closes the current browser tab. Handy for dismissing popups, login windows, or test tabs without reaching for the mouse. Extension-only because it uses ."
+      code "chrome.tabs.remove"
+    heading "Cross-link chips on disclosure pairs ​" (level 3)
+      link "Permalink to "Cross-link chips on disclosure pairs""
+    paragraph "Disclosure widgets — a button that opens a menu, a tab that controls a panel, a combobox bound to a listbox — render as two separate rows in the tree, often far apart. The relationship between them is the most useful piece of information when debugging the widget, and it's the easiest to miss."
+    paragraph "The panel renders that relationship as paired clickable chips:"
+    list
+      listitem "On the  row:  pointing at the controlled element."
+        strong "trigger"
+        code "→ <role> "<name>""
+      listitem "On the  row:  pointing back at the trigger."
+        strong "controlled"
+        code "← <role> "<name>""
+    paragraph "Click either chip and the panel expands every collapsed ancestor of the target, scrolls it to the center of the viewport, and briefly flashes its row."
+    paragraph
+      strong "Two link sources, distinguished visually:"
+    list
+      listitem "— the link comes from an explicit  attribute. Properly authored disclosure pattern."
+        strong "Solid border"
+        code "aria-controls"
+      listitem "— the link is  from  +  plus DOM proximity, because the trigger has no . Common in apps that skip  (Drive, Gmail, plenty of in-house component libraries). The hedged tooltip ("Likely controls …") sets the right expectation — when two unrelated menus are open at once, the inferred pairing can be wrong."
+        strong "Dashed border"
+        strong "inferred"
+        code "aria-haspopup"
+        code "aria-expanded="true""
+        code "aria-controls"
+        code "aria-controls"
+    heading "Manual refresh on tab switch — ↻ toolbar button ​" (level 3)
+      code "↻"
+      link "Permalink to "Manual refresh on tab switch — `↻` toolbar button""
+    paragraph "When you switch browser tabs, the panel  and shows the empty "Connecting…" state instead of stale content from the previous tab. Hit the  refresh button to load the new tab's tree."
+      strong "clears its tree"
+      code "↻"
+    paragraph "This is intentional: auto-refresh on tab switch was unreliable across the long tail of pages (restricted URLs with no content script, lazy-injected content scripts that aren't ready yet, races between the panel and the content script becoming reachable). The manual refresh trades one extra click for predictability — you always know what you're seeing."
+    heading "BETA pill in the panel header ​" (level 3)
+      link "Permalink to "BETA pill in the panel header""
+    paragraph "Sets expectations during the pre-1.0 phase. Linked to the GitHub issues page. Goes away at v1.0."
+    separator
+    heading "Reading the tree, scoping, filtering, focus tracking ​" (level 2)
+      link "Permalink to "Reading the tree, scoping, filtering, focus tracking""
+    paragraph "These behaviors are shared with  (and every package built on it). They work the same way in the extension's panel as they do anywhere else the tree is rendered:"
+      code "@real-a11y-dev/inspector"
+    list
+      listitem "·  ·  — what each view shows"
+        strong
+          link "Reading the DOM view"
+        strong
+          link "A11y view"
+        strong
+          link "TAB view"
+      listitem "— filters, search, focus tracking, scoping, live region monitoring, keyboard navigation"
+        strong
+          link "Panel features"
+    separator
+    heading "Install ​" (level 2)
+      link "Permalink to "Install""
+    paragraph "— ."
+      strong "Chrome Web Store"
+      link "Semantic Navigator"
+    blockquote
+      paragraph "Chrome may show  on first install. That's ESB's default for any newly-listed extension until Google's systems have built up enough signal on the listing — it's not a specific issue with this extension. Click ."
+        emphasis ""Proceed with caution — not trusted by Enhanced Safe Browsing""
+        strong "Continue to install"
+    paragraph
+      strong "Load unpacked (developer mode)"
+    paragraph "To run from source instead of the Web Store build:"
+    button "Copy Code"
+      code
+    list
+      listitem "Open Chrome →"
+        code "chrome://extensions"
+      listitem "Enable"
+        strong "Developer mode"
+      listitem "Click  → select"
+        strong "Load unpacked"
+        code "packages/extension/dist"
+    separator
+    paragraph "Open source. MIT license. No tracking. No accounts."
+  contentinfo
+    link "Edit this page on GitHub"
+    paragraph "Last updated:"
+      time "[redacted]"
+    navigation "Pager"
+      link "Previous pagePanel features"
+      link "Next page@real-a11y-dev/core"

@@ -1,0 +1,268 @@
+  link "Skip to content"
+  banner
+    link "Real A11y"
+    button "Search"
+    navigation "Main Navigation"
+      link "Guide"
+      link "Recipes"
+      link "Packages"
+      button "v0.1 · Beta"
+    switch "Switch to dark theme"
+    link "github"
+  complementary
+    navigation "Sidebar Navigation"
+      button "Introduction"
+        heading "Introduction" (level 2)
+      link "Getting Started"
+        paragraph "Getting Started"
+      link "Core Concepts"
+        paragraph "Core Concepts"
+      link "Why Real A11y?"
+        paragraph "Why Real A11y?"
+      button "Reading the Tree"
+        heading "Reading the Tree" (level 2)
+      link "DOM View"
+        paragraph "DOM View"
+      link "A11y View"
+        paragraph "A11y View"
+      link "TAB View"
+        paragraph "TAB View"
+      link "Panel features"
+        paragraph "Panel features"
+      button "Chrome Extension"
+        heading "Chrome Extension" (level 2)
+      link "Overview & Install"
+        paragraph "Overview & Install"
+      button "Packages"
+        heading "Packages" (level 2)
+      link "@real-a11y-dev/core"
+        paragraph "@real-a11y-dev/core"
+      link "@real-a11y-dev/inspector"
+        paragraph "@real-a11y-dev/inspector"
+      link "@real-a11y-dev/testing"
+        paragraph "@real-a11y-dev/testing"
+      link "@real-a11y-dev/react"
+        paragraph "@real-a11y-dev/react"
+      link "@real-a11y-dev/storybook-addon"
+        paragraph "@real-a11y-dev/storybook-addon"
+      button "Recipes"
+        heading "Recipes" (level 2)
+      link "Next.js (App Router + React 19)"
+        paragraph "Next.js (App Router + React 19)"
+      link "Storybook 8 + React 19"
+        paragraph "Storybook 8 + React 19"
+      link "Peer Dependencies"
+        paragraph "Peer Dependencies"
+      link "CI Diff Bot"
+        paragraph "CI Diff Bot"
+      button "Reference"
+        heading "Reference" (level 2)
+      link "Accessible Names"
+        paragraph "Accessible Names"
+      link "Architecture"
+        paragraph "Architecture"
+      link "Troubleshooting"
+        paragraph "Troubleshooting"
+  navigation "On this page"
+    heading "On this page" (level 2)
+    list
+      listitem
+        link "The Semantic Tree"
+      listitem
+        link "Roles"
+      listitem
+        link "Accessible Names"
+      listitem
+        link "Stable Node IDs"
+      listitem
+        link "Tab Order"
+      listitem
+        link "Heading Outline"
+      listitem
+        link "Tree Diffing"
+  main
+    heading "Core Concepts ​" (level 1)
+      link "Permalink to "Core Concepts""
+    paragraph "Understanding how Real A11y models the DOM will help you use every package more effectively."
+    heading "The Semantic Tree ​" (level 2)
+      link "Permalink to "The Semantic Tree""
+    paragraph "When you call any Real A11y API on a DOM root, it builds a  — a tree of  objects that mirrors what assistive technologies perceive, not the raw HTML structure."
+      strong "semantic tree"
+      code "SemanticNode"
+    button "Copy Code"
+      code
+    paragraph "Heading level lives on"
+      code "properties"
+    paragraph "Heading level isn't a typed field — it's stored as a string (–) on . You don't usually read it directly; , , and  parse it for you."
+      code ""1""
+      code ""6""
+      code "a11y.properties.level"
+      code "outlineSnapshot()"
+      code "getOutline()"
+      code "findByRole(tree, "heading", { level: 2 })"
+    heading "Two tree modes ​" (level 3)
+      link "Permalink to "Two tree modes""
+    table
+      rowgroup
+        row
+          rowheader "Mode"
+          rowheader "What it shows"
+      rowgroup
+        row
+          cell ""a11y""
+            code ""a11y""
+          cell "Accessibility tree — roles, names, ARIA states. Mirrors what a screen reader sees."
+        row
+          cell ""dom""
+            code ""dom""
+          cell "DOM tree — raw tag names and text content. Useful for structural audits."
+    paragraph "Both modes produce the same  shape; only the  and  computation differs."
+      code "SemanticNode"
+      code "a11y.role"
+      code "a11y.name"
+    separator
+    heading "Roles ​" (level 2)
+      link "Permalink to "Roles""
+    paragraph "Roles follow the . Real A11y maps every HTML element to its implicit ARIA role, then overrides with an explicit  attribute if present."
+      link "WAI-ARIA specification"
+      code "role"
+    paragraph "Examples:"
+    table
+      rowgroup
+        row
+          rowheader "Element"
+          rowheader "Implicit role"
+      rowgroup
+        row
+          cell "<button>"
+            code "<button>"
+          cell "button"
+            code "button"
+        row
+          cell "<a href="…">"
+            code "<a href="…">"
+          cell "link"
+            code "link"
+        row
+          cell "<input type="text">"
+            code "<input type="text">"
+          cell "textbox"
+            code "textbox"
+        row
+          cell "<input type="checkbox">"
+            code "<input type="checkbox">"
+          cell "checkbox"
+            code "checkbox"
+        row
+          cell "<h1> – <h6>"
+            code "<h1>"
+            code "<h6>"
+          cell "heading (with level)"
+            code "heading"
+            code "level"
+        row
+          cell "<nav>"
+            code "<nav>"
+          cell "navigation"
+            code "navigation"
+        row
+          cell "<main>"
+            code "<main>"
+          cell "main"
+            code "main"
+        row
+          cell "<dialog>"
+            code "<dialog>"
+          cell "dialog"
+            code "dialog"
+        row
+          cell "<div> (no role)"
+            code "<div>"
+          cell "generic"
+            code "generic"
+    paragraph "and  strip the element's role from the tree — the element is still present, but its children are re-parented."
+      code "role="presentation""
+      code "role="none""
+    separator
+    heading "Accessible Names ​" (level 2)
+      link "Permalink to "Accessible Names""
+    paragraph "The  computation follows the  algorithm, in priority order:"
+      code "a11y.name"
+      link "Accessible Name and Description Computation (ANDC)"
+    list
+      listitem "— references another element's text content"
+        code "aria-labelledby"
+      listitem "— inline string"
+        code "aria-label"
+      listitem "Native label —  or wrapping"
+        code "<label for="…">"
+        code "<label>"
+      listitem "Text content — for buttons, links, headings"
+      listitem "attribute — last-resort fallback"
+        code "title"
+    button "Copy Code"
+      code
+    paragraph "Deep dive"
+    paragraph "The full rules — including multi-ID  concatenation, what  contribute (placeholders, CSS generated content,  subtrees), and a debugging checklist — live in ."
+      code "aria-labelledby"
+      emphasis "doesn't"
+      code "aria-hidden"
+      link "Accessible Names"
+    separator
+    heading "Stable Node IDs ​" (level 2)
+      link "Permalink to "Stable Node IDs""
+    paragraph "Each node gets a stable  derived from a . The same DOM node always gets the same ID within a page session — even across re-extractions — so  can reliably report what changed vs. what's new."
+      code "id"
+      code "WeakMap<Node, string>"
+      code "diffTrees()"
+    paragraph "IDs are  stable across page reloads; they're designed for in-session diffing, not persistence."
+      strong "not"
+    separator
+    heading "Tab Order ​" (level 2)
+      link "Permalink to "Tab Order""
+    paragraph "computes the tab order using the same algorithm browsers use:"
+      code "getTabSequence(tree)"
+    list
+      listitem "Elements with positive  values, ascending by value, then in DOM order for ties."
+        code "tabindex"
+      listitem "Elements with  or no tabindex, in DOM order."
+        code "tabindex="0""
+      listitem "Elements with  are skipped (reachable programmatically, not by Tab key)."
+        code "tabindex="-1""
+      listitem "Disabled elements and  subtrees are skipped."
+        code "aria-hidden"
+    separator
+    heading "Heading Outline ​" (level 2)
+      link "Permalink to "Heading Outline""
+    paragraph "returns a flat list of  entries for all  nodes in DOM order. This is the data behind  and ."
+      code "getOutline(tree)"
+      code "{ id, level, name }"
+      code "heading"
+      code "outlineSnapshot()"
+      code "assertHeadingOrder()"
+    paragraph "A well-structured heading outline:"
+    list
+      listitem "Has exactly one"
+        code "h1"
+      listitem "Never skips a level (e.g.,  with no  in between)"
+        code "h1 → h3"
+        code "h2"
+    separator
+    heading "Tree Diffing ​" (level 2)
+      link "Permalink to "Tree Diffing""
+    paragraph "compares two serialized trees and returns:"
+      code "diffTrees(before, after)"
+    button "Copy Code"
+      code
+    paragraph "Changes detected: role, name, description, textContent, isHidden, isFocusable, aria states, aria properties, and child order."
+    paragraph "This powers the  assertion and the  utility in ."
+      code "flow().expectTree()"
+      code "waitForMutations()"
+      code "@real-a11y-dev/testing"
+  contentinfo
+    link "Edit this page on GitHub"
+    paragraph "Last updated:"
+      time "[redacted]"
+    navigation "Pager"
+      link "Previous pageGetting Started"
+      link "Next pageWhy Real A11y?"

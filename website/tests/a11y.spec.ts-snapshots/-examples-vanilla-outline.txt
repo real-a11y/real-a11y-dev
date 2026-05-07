@@ -1,0 +1,11 @@
+  h2 Introduction
+  h2 Reading the Tree
+  h2 Chrome Extension
+  h2 Packages
+  h2 Recipes
+  h2 Reference
+  h2 On this page
+h1 Example: Vanilla / Vite ​
+  h2 What it shows ​
+  h2 Run it locally ​
+  h2 Key code ​

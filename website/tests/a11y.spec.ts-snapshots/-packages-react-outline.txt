@@ -1,0 +1,21 @@
+  h2 Introduction
+  h2 Reading the Tree
+  h2 Chrome Extension
+  h2 Packages
+  h2 Recipes
+  h2 Reference
+  h2 On this page
+h1 @real-a11y-dev/react ​
+  h2 Install ​
+  h2 <SemanticNavigator /> ​
+    h3 Props ​
+  h2 useSemanticTree(rootRef, options?) ​
+    h3 Concurrent-mode safety ​
+  h2 useActiveModal(rootRef) ​
+    h3 Announcing modal opens in an aria-live region ​
+  h2 Patterns ​
+    h3 Audit overlay in development ​
+    h3 Reacting to tree changes ​
+  h2 TypeScript ​
+  h2 See it running ​
+  h2 Panel features ​

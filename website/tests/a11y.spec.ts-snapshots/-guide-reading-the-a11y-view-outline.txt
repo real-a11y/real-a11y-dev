@@ -1,0 +1,19 @@
+  h2 Introduction
+  h2 Reading the Tree
+  h2 Chrome Extension
+  h2 Packages
+  h2 Recipes
+  h2 Reference
+  h2 On this page
+h1 Reading the A11y View ​
+  h2 What you see ​
+  h2 How the A11y view differs from the DOM view ​
+  h2 What to look for ​
+    h3 Interactive elements with no name ​
+    h3 Everything is generic ​
+    h3 Heading levels that jump ​
+    h3 Images with no name ​
+    h3 ARIA states that don't match reality ​
+    h3 Elements that should be in the tree but aren't ​
+  h2 Reading a well-structured tree ​
+  h2 Quick sanity checks ​

@@ -1,0 +1,16 @@
+  h2 Introduction
+  h2 Reading the Tree
+  h2 Chrome Extension
+  h2 Packages
+  h2 Recipes
+  h2 Reference
+  h2 On this page
+h1 Example: Playwright E2E ​
+  h2 What it shows ​
+  h2 Run it locally ​
+  h2 Setup ​
+  h2 Good fixture — assertions pass ​
+  h2 Bad fixture — assertions throw ​
+  h2 Narrowing the audit root ​
+  h2 Snapshot test ​
+  h2 How the adapter works ​

@@ -1,0 +1,240 @@
+  link "Skip to content"
+  banner
+    link "Real A11y"
+    button "Search"
+    navigation "Main Navigation"
+      link "Guide"
+      link "Recipes"
+      link "Packages"
+      button "v0.1 · Beta"
+    switch "Switch to dark theme"
+    link "github"
+  complementary
+    navigation "Sidebar Navigation"
+      button "Introduction"
+        heading "Introduction" (level 2)
+      link "Getting Started"
+        paragraph "Getting Started"
+      link "Core Concepts"
+        paragraph "Core Concepts"
+      link "Why Real A11y?"
+        paragraph "Why Real A11y?"
+      button "Reading the Tree"
+        heading "Reading the Tree" (level 2)
+      link "DOM View"
+        paragraph "DOM View"
+      link "A11y View"
+        paragraph "A11y View"
+      link "TAB View"
+        paragraph "TAB View"
+      link "Panel features"
+        paragraph "Panel features"
+      button "Chrome Extension"
+        heading "Chrome Extension" (level 2)
+      link "Overview & Install"
+        paragraph "Overview & Install"
+      button "Packages"
+        heading "Packages" (level 2)
+      link "@real-a11y-dev/core"
+        paragraph "@real-a11y-dev/core"
+      link "@real-a11y-dev/inspector"
+        paragraph "@real-a11y-dev/inspector"
+      link "@real-a11y-dev/testing"
+        paragraph "@real-a11y-dev/testing"
+      link "@real-a11y-dev/react"
+        paragraph "@real-a11y-dev/react"
+      link "@real-a11y-dev/storybook-addon"
+        paragraph "@real-a11y-dev/storybook-addon"
+      button "Recipes"
+        heading "Recipes" (level 2)
+      link "Next.js (App Router + React 19)"
+        paragraph "Next.js (App Router + React 19)"
+      link "Storybook 8 + React 19"
+        paragraph "Storybook 8 + React 19"
+      link "Peer Dependencies"
+        paragraph "Peer Dependencies"
+      link "CI Diff Bot"
+        paragraph "CI Diff Bot"
+      button "Reference"
+        heading "Reference" (level 2)
+      link "Accessible Names"
+        paragraph "Accessible Names"
+      link "Architecture"
+        paragraph "Architecture"
+      link "Troubleshooting"
+        paragraph "Troubleshooting"
+  navigation "On this page"
+    heading "On this page" (level 2)
+    list
+      listitem
+        link "The priority order"
+      listitem
+        link "Concrete examples"
+      listitem
+        link "What does not contribute"
+      listitem
+        link "Debugging an unexpected name"
+      listitem
+        link "Why this matters"
+  main
+    heading "Accessible Names ​" (level 1)
+      link "Permalink to "Accessible Names""
+    paragraph "The  is the string a screen reader announces for an element. It's what your user actually hears — and it's almost never just the element's text content. This page explains how that name is computed, what contributes, and what wins when multiple sources compete."
+      strong "accessible name"
+    paragraph "Every  in a Real A11y tree comes from this algorithm."
+      code "SemanticNode.a11y.name"
+    separator
+    heading "The priority order ​" (level 2)
+      link "Permalink to "The priority order""
+    paragraph "For any element, the accessible name is picked from the  in this list:"
+      strong "first non-empty source"
+    list
+      listitem "— references another element's text content"
+        code "aria-labelledby"
+      listitem "— literal string on the element itself"
+        code "aria-label"
+      listitem "Native host-language label:"
+        list
+          listitem "or ancestor  for form controls"
+            code "<label for="…">"
+            code "<label>"
+          listitem "for grouped controls"
+            code "<fieldset><legend>"
+          listitem "for tables"
+            code "<caption>"
+          listitem "for images,  for iframes"
+            code "alt"
+            code "title"
+      listitem "— inner text, including text inside descendants"
+        strong "Text content"
+      listitem "attribute — last-resort fallback"
+        code "title"
+      listitem "Empty string (element has no accessible name)"
+    paragraph "If #1 resolves to a non-empty string, #2–#5 are ignored — even if #2 looks "more specific" from a CSS or developer perspective."
+    separator
+    heading "Concrete examples ​" (level 2)
+      link "Permalink to "Concrete examples""
+    heading "Button with only text ​" (level 3)
+      link "Permalink to "Button with only text""
+    button "Copy Code"
+      code
+    paragraph "→  (from #4, text content)."
+      code ""Save changes""
+    heading "Button with an icon and hidden text ​" (level 3)
+      link "Permalink to "Button with an icon and hidden text""
+    button "Copy Code"
+      code
+    paragraph "→  (from #4). The  SVG contributes nothing; the visually-hidden  does because screen readers read it."
+      code ""Close dialog""
+      code "aria-hidden"
+      code "<span>"
+    heading "Button with only an icon ​" (level 3)
+      link "Permalink to "Button with only an icon""
+    button "Copy Code"
+      code
+    paragraph "→  — no name. This fails . Fix with :"
+      code """"
+      code "assertNoUnlabeledInteractive()"
+      code "aria-label"
+    button "Copy Code"
+      code
+    heading "Form control with a wrapping label ​" (level 3)
+      link "Permalink to "Form control with a wrapping label""
+    button "Copy Code"
+      code
+    paragraph "→ input's name is  (from #3 — native label association). Real A11y's label handling prunes the label text from the tree so it doesn't surface as a redundant  sibling."
+      code ""Email""
+      code "generic "Email""
+    heading "Form control with for / id ​" (level 3)
+      code "for"
+      code "id"
+      link "Permalink to "Form control with `for` / `id`""
+    button "Copy Code"
+      code
+    paragraph "→ input's name is  (same path)."
+      code ""Search""
+    heading "aria-label beats text content ​" (level 3)
+      code "aria-label"
+      link "Permalink to "`aria-label` beats text content""
+    button "Copy Code"
+      code
+    paragraph "→  (from #2). The visible text  is ignored by screen readers here — a classic footgun if the two drift apart."
+      code ""Go to homepage""
+      code ""Home""
+    heading "aria-labelledby beats everything ​" (level 3)
+      code "aria-labelledby"
+      link "Permalink to "`aria-labelledby` beats everything""
+    button "Copy Code"
+      code
+    paragraph "→ region's name is  (from #1). The  is ignored."
+      code ""Pricing plans""
+      code "aria-label"
+    paragraph "can reference multiple IDs — their text content is concatenated with spaces:"
+      code "aria-labelledby"
+    button "Copy Code"
+      code
+    paragraph "→ input's name is ."
+      code ""First name (required)""
+    separator
+    heading "What does not contribute ​" (level 2)
+      emphasis "not"
+      link "Permalink to "What does *not* contribute""
+    list
+      listitem "— by the spec, placeholders are a fallback name , and many screen readers ignore them entirely. Don't rely on placeholders as labels."
+        strong
+          code "placeholder"
+        emphasis "only if nothing else is available"
+      listitem "— the last fallback. It surfaces as a tooltip in desktop browsers, but many AT users (mobile, voice control) never see it. Treat it as documentation, not a label."
+        strong
+          code "title"
+      listitem "— excluded from name computation."
+        strong "Text inside  subtrees"
+          code "aria-hidden="true""
+      listitem "(,  ) — spec says it  contribute, but engine support is inconsistent. Don't rely on it for critical labels."
+        strong "CSS-generated content"
+        code "::before"
+        code "::after"
+        code "content"
+        emphasis "should"
+      listitem "— the image is treated as decorative and contributes no name."
+        strong "with empty alt"
+          code "<img alt="">"
+    separator
+    heading "Debugging an unexpected name ​" (level 2)
+      link "Permalink to "Debugging an unexpected name""
+    paragraph "When  shows a name you didn't expect:"
+      code "auditSnapshot()"
+    list
+      listitem "on the element or an ancestor — #1 and #2 override everything else."
+        strong "Check for  /"
+          code "aria-label"
+          code "aria-labelledby"
+      listitem "The referenced IDs might be missing, hidden, or pointing at the wrong element."
+        strong "Follow the  chain."
+          code "aria-labelledby"
+      listitem "inside the element — , . Often intentional, sometimes accidental."
+        strong "Look for visually-hidden text"
+        code ".sr-only"
+        code ".visually-hidden"
+      listitem "on ancestors — a hidden wrapper removes the element's subtree from name computation."
+        strong "Check"
+          code "aria-hidden"
+      listitem "If the extension shows the same name, it's what real AT will announce."
+        strong "Compare against the Chrome extension."
+    separator
+    heading "Why this matters ​" (level 2)
+      link "Permalink to "Why this matters""
+    paragraph "The accessible name is the only piece of text a screen reader user has to distinguish one element from another. Two buttons labeled  in a list of items are indistinguishable — not because the user is confused, but because from their perspective ."
+      code ""Edit""
+      emphasis "there is no more information"
+    paragraph "Real A11y's assertions (, ) and snapshots () all surface the accessible name as the primary identifier — because that's what the user hears, and that's what your tests should lock in."
+      code "assertNoUnlabeledInteractive"
+      code "assertDialogsLabeled"
+      code "auditSnapshot"
+  contentinfo
+    link "Edit this page on GitHub"
+    paragraph "Last updated:"
+      time "[redacted]"
+    navigation "Pager"
+      link "Previous pageCI Diff Bot"
+      link "Next pageArchitecture"

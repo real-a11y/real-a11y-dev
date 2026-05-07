@@ -1,0 +1,25 @@
+  h2 Introduction
+  h2 Reading the Tree
+  h2 Chrome Extension
+  h2 Packages
+  h2 Recipes
+  h2 Reference
+  h2 On this page
+h1 @real-a11y-dev/inspector ​
+  h2 Install ​
+  h2 Quick start ​
+  h2 createInspector(config) ​
+    h3 Config ​
+  h2 Instance API ​
+    h3 mount() ​
+    h3 unmount() / destroy() ​
+    h3 setViewMode(mode) ​
+    h3 setRoot(root) ​
+    h3 refresh() ​
+    h3 getTree() ​
+  h2 Shadow DOM explained ​
+    h3 Opting out ​
+  h2 Interaction flags ​
+  h2 Example: dev-tools overlay ​
+  h2 See it running ​
+  h2 Panel features ​

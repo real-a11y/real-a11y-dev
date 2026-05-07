@@ -1,0 +1,307 @@
+  link "Skip to content"
+  banner
+    link "Real A11y"
+    button "Search"
+    navigation "Main Navigation"
+      link "Guide"
+      link "Recipes"
+      link "Packages"
+      button "v0.1 · Beta"
+    switch "Switch to dark theme"
+    link "github"
+  complementary
+    navigation "Sidebar Navigation"
+      button "Introduction"
+        heading "Introduction" (level 2)
+      link "Getting Started"
+        paragraph "Getting Started"
+      link "Core Concepts"
+        paragraph "Core Concepts"
+      link "Why Real A11y?"
+        paragraph "Why Real A11y?"
+      button "Reading the Tree"
+        heading "Reading the Tree" (level 2)
+      link "DOM View"
+        paragraph "DOM View"
+      link "A11y View"
+        paragraph "A11y View"
+      link "TAB View"
+        paragraph "TAB View"
+      link "Panel features"
+        paragraph "Panel features"
+      button "Chrome Extension"
+        heading "Chrome Extension" (level 2)
+      link "Overview & Install"
+        paragraph "Overview & Install"
+      button "Packages"
+        heading "Packages" (level 2)
+      link "@real-a11y-dev/core"
+        paragraph "@real-a11y-dev/core"
+      link "@real-a11y-dev/inspector"
+        paragraph "@real-a11y-dev/inspector"
+      link "@real-a11y-dev/testing"
+        paragraph "@real-a11y-dev/testing"
+      link "@real-a11y-dev/react"
+        paragraph "@real-a11y-dev/react"
+      link "@real-a11y-dev/storybook-addon"
+        paragraph "@real-a11y-dev/storybook-addon"
+      button "Recipes"
+        heading "Recipes" (level 2)
+      link "Next.js (App Router + React 19)"
+        paragraph "Next.js (App Router + React 19)"
+      link "Storybook 8 + React 19"
+        paragraph "Storybook 8 + React 19"
+      link "Peer Dependencies"
+        paragraph "Peer Dependencies"
+      link "CI Diff Bot"
+        paragraph "CI Diff Bot"
+      button "Reference"
+        heading "Reference" (level 2)
+      link "Accessible Names"
+        paragraph "Accessible Names"
+      link "Architecture"
+        paragraph "Architecture"
+      link "Troubleshooting"
+        paragraph "Troubleshooting"
+  navigation "On this page"
+    heading "On this page" (level 2)
+    list
+      listitem
+        link "Install"
+      listitem
+        link "Quick start"
+      listitem
+        link "createInspector(config)"
+      listitem
+        link "Instance API"
+      listitem
+        link "Shadow DOM explained"
+      listitem
+        link "Interaction flags"
+      listitem
+        link "Example: dev-tools overlay"
+      listitem
+        link "See it running"
+      listitem
+        link "Panel features"
+  main
+    heading "@real-a11y-dev/inspector ​" (level 1)
+      link "Permalink to "@real-a11y-dev/inspector""
+    blockquote
+      paragraph "— A drop-in, framework-agnostic tree-inspector panel. Call  and you get an interactive A11y / DOM / TAB view rendered into any DOM node, CSS-isolated via Shadow DOM. Reach for this in , or when you want the panel without framework coupling."
+        strong "TL;DR"
+        code "createInspector({ root, container })"
+        strong "vanilla / non-React projects"
+    paragraph "Framework-agnostic interactive accessibility tree panel. Mounts into any container element, isolated via Shadow DOM by default."
+    heading "Install ​" (level 2)
+      link "Permalink to "Install""
+    button "Copy Code"
+      code
+    paragraph "none (Preact is bundled)."
+      strong "Peer dependencies:"
+    paragraph "Install as a dev dependency"
+    paragraph "is a developer audit panel (~40 KB gzipped, Preact + tree view). Keep it in  and load it via a dynamic  behind a build flag so it never ships to end users."
+      code "@real-a11y-dev/inspector"
+      code "devDependencies"
+      code "import()"
+    paragraph "See  for the Vite / webpack / vanilla gating patterns."
+      link "Keep it out of production"
+    separator
+    heading "Quick start ​" (level 2)
+      link "Permalink to "Quick start""
+    button "Copy Code"
+      code
+    paragraph "The panel renders inside a  attached to . Your app's CSS cannot leak in; the panel's CSS cannot leak out. Toggle mode, switch view, or unmount programmatically at any time."
+      code "ShadowRoot"
+      code "#inspector-panel"
+    separator
+    heading "createInspector(config) ​" (level 2)
+      code "createInspector(config)"
+      link "Permalink to "`createInspector(config)`""
+    paragraph "Returns an ."
+      code "InspectorInstance"
+    heading "Config ​" (level 3)
+      link "Permalink to "Config""
+    table
+      rowgroup
+        row
+          rowheader "Option"
+          rowheader "Type"
+          rowheader "Default"
+          rowheader "Description"
+      rowgroup
+        row
+          cell "root"
+            code "root"
+          cell "Element"
+            code "Element"
+          cell "—"
+          cell "Required. The DOM subtree to observe and render."
+            strong "Required."
+        row
+          cell "container"
+            code "container"
+          cell "Element"
+            code "Element"
+          cell "—"
+          cell "Required. The element that will host the panel."
+            strong "Required."
+        row
+          cell "mode"
+            code "mode"
+          cell ""a11y" | "dom""
+            code ""a11y" | "dom""
+          cell ""a11y""
+            code ""a11y""
+          cell "Initial tree mode."
+        row
+          cell "mount"
+            code "mount"
+          cell ""shadow" | "light""
+            code ""shadow" | "light""
+          cell ""shadow""
+            code ""shadow""
+          cell ""shadow" isolates styles via ShadowRoot. "light" renders directly into container (useful if you need to restyle)."
+            code ""shadow""
+            code ""light""
+            code "container"
+        row
+          cell "highlightOnHover"
+            code "highlightOnHover"
+          cell "boolean"
+            code "boolean"
+          cell "false"
+            code "false"
+          cell "Highlight the corresponding DOM element when hovering a tree node."
+        row
+          cell "scrollHostOnSelect"
+            code "scrollHostOnSelect"
+          cell "boolean"
+            code "boolean"
+          cell "false"
+            code "false"
+          cell "Scroll the host DOM element into view when selecting a tree node."
+        row
+          cell "focusHostOnActivate"
+            code "focusHostOnActivate"
+          cell "boolean"
+            code "boolean"
+          cell "false"
+            code "false"
+          cell "Move focus to the host DOM element when activating a tree node action."
+        row
+          cell "styleNonce"
+            code "styleNonce"
+          cell "string"
+            code "string"
+          cell "—"
+          cell "CSP nonce applied to injected <style> elements."
+            code "<style>"
+    paragraph "Shadow DOM is the right default"
+    paragraph "With , the panel's styles live inside the ShadowRoot and cannot conflict with your app. Your app's CSS cannot accidentally override the panel's layout. Keep this default unless you have a specific reason to opt out."
+      code "mount: "shadow""
+    paragraph "Why  /  /  default to false"
+      code "highlightOnHover"
+      code "scrollHostOnSelect"
+      code "focusHostOnActivate"
+    paragraph "The inspector renders into the same document as your app, so activating a tree row could steal focus from the panel or scroll the page underneath you. The panel itself stays fully interactive either way — selection, chip navigation, keyboard movement — what's gated is the side effect on the  DOM element. See  for the full rationale and when to flip them on."
+      emphasis "real"
+      link "Panel interaction vs. host side effects"
+    separator
+    heading "Instance API ​" (level 2)
+      link "Permalink to "Instance API""
+    button "Copy Code"
+      code
+    heading "mount() ​" (level 3)
+      code "mount()"
+      link "Permalink to "`mount()`""
+    paragraph "Attaches the panel to  and starts observing  for DOM mutations."
+      code "container"
+      code "root"
+    heading "unmount() / destroy() ​" (level 3)
+      code "unmount()"
+      code "destroy()"
+      link "Permalink to "`unmount()` / `destroy()`""
+    paragraph "Removes the panel from , stops the observer, and cleans up all event listeners. Safe to call multiple times."
+      code "container"
+    heading "setViewMode(mode) ​" (level 3)
+      code "setViewMode(mode)"
+      link "Permalink to "`setViewMode(mode)`""
+    paragraph "Switches between , , and  modes without remounting."
+      code ""a11y""
+      code ""dom""
+      code ""tab""
+    heading "setRoot(root) ​" (level 3)
+      code "setRoot(root)"
+      link "Permalink to "`setRoot(root)`""
+    paragraph "Swaps the observed root element. The observer is restarted on the new root; the panel re-renders immediately."
+    button "Copy Code"
+      code
+    heading "refresh() ​" (level 3)
+      code "refresh()"
+      link "Permalink to "`refresh()`""
+    paragraph "Forces an immediate re-extraction without waiting for the next DOM mutation. Useful in tests or after programmatic DOM changes."
+    heading "getTree() ​" (level 3)
+      code "getTree()"
+      link "Permalink to "`getTree()`""
+    paragraph "Returns the most recently extracted tree as an ."
+      code "ExtractionResult"
+    button "Copy Code"
+      code
+    separator
+    heading "Shadow DOM explained ​" (level 2)
+      link "Permalink to "Shadow DOM explained""
+    paragraph "When  (the default), the inspector:"
+      code "mount: "shadow""
+    list
+      listitem "Calls ."
+        code "container.attachShadow({ mode: "open" })"
+      listitem "Injects a  element with the bundled panel CSS inside the shadow root."
+        code "<style>"
+      listitem "Renders the tree panel into an inner  inside the shadow root."
+        code "<div>"
+    paragraph "Your application's CSS does not pierce the shadow boundary. The panel's CSS does not leak out. If you set , the same nonce is applied to the injected style element for CSP compliance."
+      code "styleNonce"
+    heading "Opting out ​" (level 3)
+      link "Permalink to "Opting out""
+    button "Copy Code"
+      code
+    paragraph "With , a  element is injected into  instead."
+      code "mount: "light""
+      code "<style id="sn-styles">"
+      code "document.head"
+    separator
+    heading "Interaction flags ​" (level 2)
+      link "Permalink to "Interaction flags""
+    paragraph "All host-side effects are opt-in:"
+    button "Copy Code"
+      code
+    paragraph "These are off by default so that using the panel during testing never disturbs the host app's own focus or scroll state."
+    separator
+    heading "Example: dev-tools overlay ​" (level 2)
+      link "Permalink to "Example: dev-tools overlay""
+    button "Copy Code"
+      code
+    separator
+    heading "See it running ​" (level 2)
+      link "Permalink to "See it running""
+    list
+      listitem "— : mode switcher,  to narrow the audit to an open dialog,  after programmatic DOM changes."
+        strong "Vanilla / Vite"
+        link "examples/vanilla/"
+          code "examples/vanilla/"
+        code "setRoot()"
+        code "refresh()"
+    separator
+    heading "Panel features ​" (level 2)
+      link "Permalink to "Panel features""
+    paragraph "Once the inspector is mounted, all the same in-panel behaviors as the Chrome extension and Storybook addon are available — search, role filters, focus tracking, scoping, live region monitoring, keyboard navigation. They're shared across every Real A11y surface."
+    paragraph "→"
+      link "Panel features reference"
+  contentinfo
+    link "Edit this page on GitHub"
+    paragraph "Last updated:"
+      time "[redacted]"
+    navigation "Pager"
+      link "Previous page@real-a11y-dev/core"
+      link "Next page@real-a11y-dev/testing"
