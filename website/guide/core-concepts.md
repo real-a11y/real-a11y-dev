@@ -13,29 +13,38 @@ When you call any Real A11y API on a DOM root, it builds a **semantic tree** —
 
 ```ts
 interface SemanticNode {
-  id: string;           // stable WeakMap-based fingerprint
+  id: string;                    // stable WeakMap-based fingerprint
+  parentId: string | null;       // null only for the root node
+  childIds: string[];            // ordered child node IDs
+  depth: number;                 // 0 at the root, child = parent + 1
   a11y: {
-    role: string;       // ARIA role (resolved from element + explicit role attr)
-    name: string;       // accessible name (label, aria-label, aria-labelledby…)
+    role: string;                // ARIA role (resolved from element + explicit role attr)
+    name: string;                // accessible name (label, aria-label, aria-labelledby…)
     description: string;
-    level?: number;     // heading level, etc.
-    states: Record<string, boolean>;     // checked, expanded, selected, pressed…
-    properties: Record<string, unknown>; // aria-* properties
+    states: Record<string, string | boolean>; // checked, expanded, selected, pressed…
+    properties: Record<string, string>;       // aria-* properties (incl. heading "level")
+    isExposedToAT: boolean;      // false when aria-hidden, role="presentation", etc.
   };
   dom: {
-    tag: string;
-    textContent: string;
-    isHidden: boolean;  // aria-hidden or display:none subtree
+    tagName: string;
     attributes: Record<string, string>;
+    textContent: string | null;  // direct text-node children only
+    descendantText: string;      // truncated recursive text — useful for elements whose
+                                 // accessible name is empty by spec (<code>, <pre>, <svg>)
+    isHidden: boolean;           // aria-hidden or display:none subtree
   };
   interaction: {
+    isInteractive: boolean;
     isFocusable: boolean;
-    tabIndex: number;
-    actions: ActionType[]; // click, focus, type, toggle, select…
+    isEditable: boolean;
+    actions: ActionType[];       // click, focus, type, toggle, select…
   };
-  childIds: string[];   // ordered child node IDs
 }
 ```
+
+::: tip Heading level lives on `properties`
+Heading level isn't a typed field — it's stored as a string (`"1"`–`"6"`) on `a11y.properties.level`. You don't usually read it directly; `outlineSnapshot()`, `getOutline()`, and `findByRole(tree, "heading", { level: 2 })` parse it for you.
+:::
 
 ### Two tree modes
 
