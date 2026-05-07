@@ -68,4 +68,19 @@
   --vp-button-brand-text: hsl(var(--color-text-inverse));
   --vp-button-brand-hover-text: hsl(var(--color-text-inverse));
   --vp-button-brand-active-text: hsl(var(--color-text-inverse));
+
+  /* Code-block diff-line backgrounds. VitePress defaults the
+   * `[!code ++]` / `[!code --]` line bg to `--vp-c-success-soft` /
+   * `--vp-c-danger-soft`, which are translucent — the resulting green
+   * (`#d8f1ea`) drops Shiki's comment color (`#66707b`) to 4.24:1.
+   * Override to a lighter solid that lets the comment color clear AA
+   * with margin (~4.6:1+). Same in dark, picking a deeper green/red
+   * that pairs with Shiki's dark-theme comment color (`#BDC4CC`). */
+  --vp-code-line-diff-add-color: hsl(142 65% 95%);
+  --vp-code-line-diff-remove-color: hsl(0 80% 96%);
+}
+
+.dark {
+  --vp-code-line-diff-add-color: hsl(142 30% 18%);
+  --vp-code-line-diff-remove-color: hsl(0 50% 22%);
 }
