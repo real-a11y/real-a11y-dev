@@ -57,4 +57,15 @@
   /* Typography — system font stack already, no Google Fonts runtime. */
   --vp-font-family-base: var(--font-sans);
   --vp-font-family-mono: var(--font-mono);
+
+  /* VitePress brand button defaults to white text on `--vp-c-brand-3`.
+   * That works in light mode (white on dark accent), but our accent
+   * flips LIGHTER in dark mode (per design tokens), so white-on-light
+   * fails contrast (~1.5:1). `--color-text-inverse` is purpose-built
+   * for this — white in light, near-black in dark — so the text auto-
+   * inverts with the button bg. Same override for hover and active
+   * states so the entire interaction stays AA. */
+  --vp-button-brand-text: hsl(var(--color-text-inverse));
+  --vp-button-brand-hover-text: hsl(var(--color-text-inverse));
+  --vp-button-brand-active-text: hsl(var(--color-text-inverse));
 }
