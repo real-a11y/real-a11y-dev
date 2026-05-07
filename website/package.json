@@ -6,9 +6,13 @@
   "scripts": {
     "dev": "vitepress dev",
     "build": "vitepress build",
-    "preview": "vitepress preview"
+    "preview": "vitepress preview",
+    "axe": "playwright test"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.10.0",
+    "@playwright/test": "^1.51.1",
+    "@real-a11y-dev/testing": "workspace:*",
     "vitepress": "^1.6.3"
   }
 }
