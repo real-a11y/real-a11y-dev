@@ -84,3 +84,19 @@
   --vp-code-line-diff-add-color: hsl(142 30% 18%);
   --vp-code-line-diff-remove-color: hsl(0 50% 22%);
 }
+
+/* `@real-a11y-dev/design`'s `tokens.css` isn't strictly tokens — it
+ * also applies `font-family: var(--font-display)` to
+ * `body, h1, h2, h3, .font-display` directly. With DM Serif Display
+ * not loaded (we deliberately skipped `fonts.css`), headings fall
+ * through to `ui-serif` → Times-y serif fallback, which clashes with
+ * VitePress's Inter chrome and looks dated. Until the design system
+ * splits its base styles out of tokens.css OR we self-host DM Serif
+ * Display, opt out by pointing those rules at the same Inter stack
+ * the rest of the page uses. Reported upstream. */
+body,
+h1,
+h2,
+h3 {
+  font-family: var(--vp-font-family-base);
+}
