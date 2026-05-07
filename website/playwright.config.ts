@@ -9,6 +9,11 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? "list" : "list",
+  // Drop the default `-{platform}` suffix from snapshot file names. The
+  // `auditSnapshot()` output is platform-stable (same Chromium, identical
+  // tree shape — theme/contrast/font-rendering don't enter the tree),
+  // so committing one baseline per shape works on every contributor OS.
+  snapshotPathTemplate: "{testFileDir}/{testFileName}-snapshots/{arg}{ext}",
   use: {
     baseURL: "http://localhost:5173",
     trace: "retain-on-failure",
