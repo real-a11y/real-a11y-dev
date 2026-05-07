@@ -8,7 +8,10 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? "list" : "list",
+  // Local: list (compact stdout). CI: list AND html, so the failed
+  // report uploads as an artifact (the workflow's `if: failure()`
+  // step looks for `website/playwright-report/`).
+  reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
   // Drop the default `-{platform}` suffix from snapshot file names. The
   // `auditSnapshot()` output is platform-stable (same Chromium, identical
   // tree shape — theme/contrast/font-rendering don't enter the tree),
