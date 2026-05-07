@@ -56,16 +56,7 @@ for (const theme of THEMES) {
 
         const results = await new AxeBuilder({ page })
           .withTags([...AXE_TAGS])
-          // TODO: re-enable color-contrast once the design system
-          // tokens land — the current docs theme has known contrast
-          // violations across many routes that the pending tokens fix
-          // at the source. Structural rules (labels, ARIA, keyboard,
-          // landmarks, etc.) stay enforced for every route below the
-          // per-route allowlist.
-          .disableRules([
-            "color-contrast",
-            ...(ROUTE_DISABLED_RULES[route] ?? []),
-          ])
+          .disableRules(ROUTE_DISABLED_RULES[route] ?? [])
           .analyze();
 
         if (results.violations.length > 0) {

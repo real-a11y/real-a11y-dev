@@ -1,0 +1,54 @@
+/* Bridge between the @real-a11y-dev/design tokens and VitePress's
+ * default-theme `--vp-*` variables.
+ *
+ * The design tokens are HSL triplets without the `hsl()` wrapper
+ * (e.g. `--color-bg: 0 0% 100%`), which is the modern Tailwind-style
+ * pattern that lets consumers compose alpha at the call site
+ * (`hsl(var(--color-bg) / 0.5)`). VitePress reads its `--vp-c-*` vars
+ * directly as colors, so we wrap with `hsl(...)` here.
+ *
+ * Dark mode is automatic: both VitePress and the design system flip
+ * tokens when `.dark` is on `<html>`. Our `--vp-*` mappings re-read
+ * the design tokens, so they follow without needing a `.dark` block
+ * of their own.
+ *
+ * Fonts.css and recipes.css from the design package are intentionally
+ * not imported — the docs site is offline-friendly (no Google Fonts
+ * runtime fetch) and uses VitePress's component classes, not the
+ * design system's `.ra-*` utilities.
+ */
+@import "@real-a11y-dev/design/tokens.css";
+
+:root {
+  /* Surfaces */
+  --vp-c-bg: hsl(var(--color-bg));
+  --vp-c-bg-alt: hsl(var(--color-bg-subtle));
+  --vp-c-bg-elv: hsl(var(--color-surface));
+  --vp-c-bg-soft: hsl(var(--color-bg-subtle));
+
+  /* Text */
+  --vp-c-text-1: hsl(var(--color-text-primary));
+  --vp-c-text-2: hsl(var(--color-text-secondary));
+  --vp-c-text-3: hsl(var(--color-text-muted));
+
+  /* Brand / accent. VitePress uses `-1`/`-2`/`-3` as a small ramp
+   * (lightest → darkest, applied to backgrounds, hovers, and text). */
+  --vp-c-brand-1: hsl(var(--color-accent));
+  --vp-c-brand-2: hsl(var(--color-accent-hover));
+  --vp-c-brand-3: hsl(var(--primary-700));
+  --vp-c-brand-soft: hsl(var(--primary-100));
+
+  /* Borders / dividers */
+  --vp-c-border: hsl(var(--color-border));
+  --vp-c-divider: hsl(var(--color-border));
+  --vp-c-gutter: hsl(var(--color-border));
+
+  /* Status colors — feed VitePress's tip/warning/danger callouts. */
+  --vp-c-success-1: hsl(var(--color-success));
+  --vp-c-warning-1: hsl(var(--color-warning));
+  --vp-c-danger-1: hsl(var(--color-danger));
+
+  /* Typography — system font stack already, no Google Fonts runtime. */
+  --vp-font-family-base: var(--font-sans);
+  --vp-font-family-mono: var(--font-mono);
+}
