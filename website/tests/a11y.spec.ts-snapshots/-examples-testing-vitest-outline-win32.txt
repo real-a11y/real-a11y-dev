@@ -1,0 +1,15 @@
+  h2 Introduction
+  h2 Reading the Tree
+  h2 Chrome Extension
+  h2 Packages
+  h2 Recipes
+  h2 Reference
+  h2 On this page
+h1 Example: Vitest Integration ​
+  h2 What it shows ​
+  h2 Run it locally ​
+  h2 Key code ​
+    h3 Snapshot test ​
+    h3 Structural assertions ​
+    h3 Flow chain — combobox interaction ​
+    h3 Tab sequence test ​

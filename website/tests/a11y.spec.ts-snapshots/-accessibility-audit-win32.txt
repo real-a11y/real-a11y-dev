@@ -1,0 +1,160 @@
+  link "Skip to content"
+  banner
+    link "Real A11y"
+    button "Search"
+    navigation "Main Navigation"
+      link "Guide"
+      link "Recipes"
+      link "Packages"
+      button "v0.1 · Beta"
+    switch "Switch to dark theme"
+    link "github"
+  complementary
+    navigation "Sidebar Navigation"
+      button "Introduction"
+        heading "Introduction" (level 2)
+      link "Getting Started"
+        paragraph "Getting Started"
+      link "Core Concepts"
+        paragraph "Core Concepts"
+      link "Why Real A11y?"
+        paragraph "Why Real A11y?"
+      button "Reading the Tree"
+        heading "Reading the Tree" (level 2)
+      link "DOM View"
+        paragraph "DOM View"
+      link "A11y View"
+        paragraph "A11y View"
+      link "TAB View"
+        paragraph "TAB View"
+      link "Panel features"
+        paragraph "Panel features"
+      button "Chrome Extension"
+        heading "Chrome Extension" (level 2)
+      link "Overview & Install"
+        paragraph "Overview & Install"
+      button "Packages"
+        heading "Packages" (level 2)
+      link "@real-a11y-dev/core"
+        paragraph "@real-a11y-dev/core"
+      link "@real-a11y-dev/inspector"
+        paragraph "@real-a11y-dev/inspector"
+      link "@real-a11y-dev/testing"
+        paragraph "@real-a11y-dev/testing"
+      link "@real-a11y-dev/react"
+        paragraph "@real-a11y-dev/react"
+      link "@real-a11y-dev/storybook-addon"
+        paragraph "@real-a11y-dev/storybook-addon"
+      button "Recipes"
+        heading "Recipes" (level 2)
+      link "Next.js (App Router + React 19)"
+        paragraph "Next.js (App Router + React 19)"
+      link "Storybook 8 + React 19"
+        paragraph "Storybook 8 + React 19"
+      link "Peer Dependencies"
+        paragraph "Peer Dependencies"
+      link "CI Diff Bot"
+        paragraph "CI Diff Bot"
+      button "Reference"
+        heading "Reference" (level 2)
+      link "Accessible Names"
+        paragraph "Accessible Names"
+      link "Architecture"
+        paragraph "Architecture"
+      link "Troubleshooting"
+        paragraph "Troubleshooting"
+  navigation "On this page"
+    heading "On this page" (level 2)
+    list
+      listitem
+        link "Standards we target"
+      listitem
+        link "Known gaps"
+      listitem
+        link "How we test"
+      listitem
+        link "Reporting a problem"
+      listitem
+        link "Our commitment"
+      listitem
+        link "Scope"
+      listitem
+        link "Feedback"
+  main
+    heading "Accessibility Statement ​" (level 1)
+      link "Permalink to "Accessibility Statement""
+    paragraph
+      emphasis "Last updated: 2026-04-18"
+    paragraph "Real A11y builds accessibility tooling. Holding our own website, docs, and products to the same standard is table stakes — and also the best dogfood there is."
+    heading "Standards we target ​" (level 2)
+      link "Permalink to "Standards we target""
+    list
+      listitem "for the website and all product UI (Chrome extension side panel, Storybook addon panel, Inspector embed)."
+        strong "Web Content Accessibility Guidelines (WCAG) 2.2, level AA"
+      listitem "for all interactive patterns (tree view, toolbar, listbox, dialog)."
+        strong "WAI-ARIA Authoring Practices"
+      listitem "for every interactive surface. Nothing is mouse-only."
+        strong "Keyboard operability"
+    paragraph "The accessibility tree the tools surface is built on top of the same HTML/ARIA semantics we expect our own surfaces to follow."
+    heading "Known gaps ​" (level 2)
+      link "Permalink to "Known gaps""
+    list
+      listitem "The tree view in the Chrome extension uses the WAI-ARIA  pattern. On very large pages (10K+ elements) the virtualization gap can cause noticeable delay for screen-reader users. Tracked as an open issue."
+        code "tree"
+      listitem "The "Curtain" mode (hide page visuals to audit purely from the tree) intentionally hides page content; this is a feature, not a regression, but it is incompatible with external screen-reader workflows that rely on sighted co-operation."
+      listitem "The Storybook addon panel inherits whatever theme Storybook provides; contrast on custom Storybook themes is the theme author's responsibility."
+    heading "How we test ​" (level 2)
+      link "Permalink to "How we test""
+    list
+      listitem "Automated:  assertions (, , , ) run in CI on every PR."
+        code "@real-a11y-dev/testing"
+        code "assertNoUnlabeledInteractive"
+        code "assertHeadingOrder"
+        code "assertDialogsLabeled"
+        code "assertLandmarkStructure"
+      listitem "Automated: a11y tree diff bot comments on PRs when the extracted tree for fixture pages changes in any measurable way."
+      listitem "Manual: keyboard-only walkthrough of the website and extension side panel before every release."
+      listitem "Manual: NVDA + Firefox, VoiceOver + Safari, JAWS + Chrome for major features before release."
+    heading "Reporting a problem ​" (level 2)
+      link "Permalink to "Reporting a problem""
+    paragraph "If you hit an accessibility barrier on our website or in any product:"
+    list
+      listitem "— open a GitHub issue with the  label: ."
+        strong "Preferred"
+        code "a11y"
+        link "github.com/real-a11y/real-a11y-dev/issues/new?labels=a11y"
+      listitem "—  if GitHub isn't an option for you."
+        strong "Email"
+        code "a11y@real-a11y.dev"
+    paragraph "Please include:"
+    list
+      listitem "Where the barrier is (URL, extension view, story name, code snippet)"
+      listitem "What assistive technology / browser you're using"
+      listitem "What happened vs. what you expected"
+    heading "Our commitment ​" (level 2)
+      link "Permalink to "Our commitment""
+    list
+      listitem "We acknowledge a11y reports within ."
+        strong "72 hours"
+      listitem "Regressions from our own released code get priority over new features."
+      listitem "We will post-mortem in the changelog when we ship an a11y fix that affected users."
+    heading "Scope ​" (level 2)
+      link "Permalink to "Scope""
+    paragraph "This statement covers:"
+    list
+      listitem "and any subdomain we operate"
+        code "real-a11y.dev"
+      listitem "Semantic Navigator Chrome extension"
+      listitem "packages' default UI (shipped components — your own styling/usage is your responsibility)"
+        code "@real-a11y-dev/*"
+    paragraph "It does not cover third-party content we link to from the docs."
+    heading "Feedback ​" (level 2)
+      link "Permalink to "Feedback""
+    paragraph "This statement is a living document. If you think we're overstating our coverage, understating a gap, or missing a pattern — open an issue or email ."
+      code "a11y@real-a11y.dev"
+  contentinfo
+    link "Edit this page on GitHub"
+    paragraph "Last updated:"
+      time "4/25/26, 7:01 PM"
+    navigation "Pager"
+      link "Next pageGetting Started"

@@ -1,0 +1,17 @@
+  h2 Introduction
+  h2 Reading the Tree
+  h2 Chrome Extension
+  h2 Packages
+  h2 Recipes
+  h2 Reference
+  h2 On this page
+h1 Peer Dependencies ​
+  h2 Compatibility matrix ​
+  h2 Companion libraries ​
+    h3 @testing-library/react ​
+    h3 @playwright/test in Next.js 15 projects ​
+  h2 @real-a11y-dev/storybook-addon — Storybook version ​
+  h2 @real-a11y-dev/react — React version ​
+  h2 @real-a11y-dev/testing/playwright — browser install ​
+  h2 Single React instance ​
+  h2 Clean install recipe ​

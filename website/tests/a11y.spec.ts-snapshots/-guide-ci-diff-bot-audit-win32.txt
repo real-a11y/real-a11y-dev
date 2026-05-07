@@ -1,0 +1,309 @@
+  link "Skip to content"
+  banner
+    link "Real A11y"
+    button "Search"
+    navigation "Main Navigation"
+      link "Guide"
+      link "Recipes"
+      link "Packages"
+      button "v0.1 · Beta"
+    switch "Switch to dark theme"
+    link "github"
+  complementary
+    navigation "Sidebar Navigation"
+      button "Introduction"
+        heading "Introduction" (level 2)
+      link "Getting Started"
+        paragraph "Getting Started"
+      link "Core Concepts"
+        paragraph "Core Concepts"
+      link "Why Real A11y?"
+        paragraph "Why Real A11y?"
+      button "Reading the Tree"
+        heading "Reading the Tree" (level 2)
+      link "DOM View"
+        paragraph "DOM View"
+      link "A11y View"
+        paragraph "A11y View"
+      link "TAB View"
+        paragraph "TAB View"
+      link "Panel features"
+        paragraph "Panel features"
+      button "Chrome Extension"
+        heading "Chrome Extension" (level 2)
+      link "Overview & Install"
+        paragraph "Overview & Install"
+      button "Packages"
+        heading "Packages" (level 2)
+      link "@real-a11y-dev/core"
+        paragraph "@real-a11y-dev/core"
+      link "@real-a11y-dev/inspector"
+        paragraph "@real-a11y-dev/inspector"
+      link "@real-a11y-dev/testing"
+        paragraph "@real-a11y-dev/testing"
+      link "@real-a11y-dev/react"
+        paragraph "@real-a11y-dev/react"
+      link "@real-a11y-dev/storybook-addon"
+        paragraph "@real-a11y-dev/storybook-addon"
+      button "Recipes"
+        heading "Recipes" (level 2)
+      link "Next.js (App Router + React 19)"
+        paragraph "Next.js (App Router + React 19)"
+      link "Storybook 8 + React 19"
+        paragraph "Storybook 8 + React 19"
+      link "Peer Dependencies"
+        paragraph "Peer Dependencies"
+      link "CI Diff Bot"
+        paragraph "CI Diff Bot"
+      button "Reference"
+        heading "Reference" (level 2)
+      link "Accessible Names"
+        paragraph "Accessible Names"
+      link "Architecture"
+        paragraph "Architecture"
+      link "Troubleshooting"
+        paragraph "Troubleshooting"
+  navigation "On this page"
+    heading "On this page" (level 2)
+    list
+      listitem
+        link "How it works"
+      listitem
+        link "What the comment looks like"
+      listitem
+        link "Setup"
+      listitem
+        link "Configuration"
+      listitem
+        link "Workflow templates"
+      listitem
+        link "Output format"
+      listitem
+        link "What it catches"
+      listitem
+        link "Combine with assertions"
+  main
+    heading "CI A11y Diff Bot ​" (level 1)
+      link "Permalink to "CI A11y Diff Bot""
+    paragraph "Post a PR comment whenever the accessibility tree of any audited page changes. The bot catches regressions that no linter can: roles disappearing, labels silently emptied, landmarks removed, dialogs becoming unreachable."
+    heading "How it works ​" (level 2)
+      link "Permalink to "How it works""
+    button "Copy Code"
+      code
+    paragraph "Two jobs run in parallel — one on , one on the PR branch. A third job diffs the text output of  and  on the PR."
+      code "main"
+      code "auditSnapshot()"
+      strong "posts or updates a single sticky comment"
+    heading "What the comment looks like ​" (level 2)
+      link "Permalink to "What the comment looks like""
+    paragraph
+      strong "No changes:"
+    blockquote
+      paragraph "✅ A11y tree unchanged — No accessibility tree changes detected in this PR."
+    paragraph
+      strong "Changes detected:"
+    blockquote
+      paragraph "🔍 A11y tree changed —"
+        strong "3 lines added, 1 removed"
+      group "Show full diff"
+        button "Copy Code"
+          code
+    paragraph "The comment is  — not spammed. If the PR is fixed and re-pushed, the comment updates to ✅."
+      strong "updated in place"
+    separator
+    heading "Setup ​" (level 2)
+      link "Permalink to "Setup""
+    heading "1. Install ​" (level 3)
+      link "Permalink to "1. Install""
+    button "Copy Code"
+      code
+    heading "2. Drop in the snapshot script ​" (level 3)
+      link "Permalink to "2. Drop in the snapshot script""
+    paragraph "Copy this file into your repo at  — it's yours to customize, version-control, and extend as your audit grows:"
+      code "scripts/a11y-snapshot.mjs"
+    button "Copy Code"
+      code
+    paragraph "Then wire it into your :"
+      code "package.json"
+    button "Copy Code"
+      code
+    paragraph "Run it locally whenever you want:"
+    button "Copy Code"
+      code
+    paragraph "Output goes to  by default — add that to ."
+      code "a11y-snapshots.md"
+      code ".gitignore"
+    blockquote
+      paragraph "is the public surface —  plus the handle methods. Your snapshot  (which pages, what order, how to redact, whether to fail on network errors) belongs in your repo, not in a dependency."
+        strong "Why an owned script?"
+        code "@real-a11y-dev/testing/playwright"
+        code "attach()"
+        emphasis "policy"
+    heading "3. Add the workflow ​" (level 3)
+      link "Permalink to "3. Add the workflow""
+    blockquote
+      paragraph "The workflow runs  against  the PR head  the base branch. If the script and its devDependencies don't yet exist on , the  job fails with  (or an  from  if the lockfile points at a private registry). The diff comment never posts and you'll think the workflow is broken."
+        strong "Land steps 1 and 2 on  first."
+          code "main"
+        code "npm run a11y:snapshot"
+        strong "both"
+        strong "and"
+        code "main"
+        code "Snapshot (base)"
+        code "Missing script: a11y:snapshot"
+        code "ECONNREFUSED"
+        code "npm ci"
+      paragraph "Order of operations:"
+      list
+        listitem "PR (or direct commit) to : install  + , add , add the  npm script."
+          code "main"
+          code "@real-a11y-dev/testing"
+          code "@playwright/test"
+          code "scripts/a11y-snapshot.mjs"
+          code "a11y:snapshot"
+          strong "No workflow yet."
+        listitem "Once that's merged, open a second PR adding . Both jobs now have the tooling they need."
+          code ".github/workflows/a11y-diff.yml"
+    paragraph "Create . Pick the template that matches your project:"
+      code ".github/workflows/a11y-diff.yml"
+    list
+      listitem
+        link "Next.js (dev server)"
+      listitem
+        link "Vite / CRA SPA (preview server)"
+      listitem
+        link "Static site (serve build output)"
+      listitem
+        link "pnpm monorepo"
+    paragraph "All templates call the same two helpers —  (your owned script) for the snapshot job,  for the PR comment. Only the "start the app" step changes."
+      code "npm run a11y:snapshot"
+      code "actions/github-script"
+    separator
+    heading "Configuration ​" (level 2)
+      link "Permalink to "Configuration""
+    paragraph "The CLI reads its inputs from environment variables."
+    table
+      rowgroup
+        row
+          rowheader "Variable"
+          rowheader "Default"
+          rowheader "Description"
+      rowgroup
+        row
+          cell "A11Y_PAGES"
+            code "A11Y_PAGES"
+          cell "(library fixtures)"
+          cell "JSON array of { name, url, rootSelector? } objects describing each page to audit."
+            code "{ name, url, rootSelector? }"
+        row
+          cell "A11Y_SNAPSHOT_OUT"
+            code "A11Y_SNAPSHOT_OUT"
+          cell "a11y-snapshots.md"
+            code "a11y-snapshots.md"
+          cell "Absolute or relative path where the markdown report is written."
+    heading "A11Y_PAGES shape ​" (level 3)
+      code "A11Y_PAGES"
+      link "Permalink to "`A11Y_PAGES` shape""
+    button "Copy Code"
+      code
+    paragraph "is a CSS selector passed to . Scope-narrowed audits are useful when only part of a page is relevant to the PR (a component, a form, a specific region)."
+      code "rootSelector"
+      code "attach()"
+    separator
+    heading "Workflow templates ​" (level 2)
+      link "Permalink to "Workflow templates""
+    paragraph "Each template shares the same final step — a  job that downloads both snapshot artifacts and posts the sticky PR comment. That step is identical across setups and is shown once at the end of this section."
+      strong "diff & comment"
+    heading "Next.js (dev server) ​" (level 3)
+      link "Permalink to "<a id="template-nextjs"></a>Next.js (dev server)""
+    blockquote
+      paragraph "Using  in ?  errors out with  — use the  template instead, which serves the build output via ."
+        code "output: "export""
+        code "next.config"
+        code "next start"
+        emphasis ""does not work with output: export""
+        link "Static site"
+        code "npx serve"
+    button "Copy Code"
+      code
+    heading "Vite / CRA SPA (preview server) ​" (level 3)
+      link "Permalink to "<a id="template-vite"></a>Vite / CRA SPA (preview server)""
+    paragraph "Same structure as Next.js — only the build + serve step differs:"
+    button "Copy Code"
+      code
+    heading "Static site (serve build output) ​" (level 3)
+      link "Permalink to "<a id="template-static"></a>Static site (serve build output)""
+    paragraph "For static exports (Next.js , Astro, SvelteKit adapter-static, etc.):"
+      code "output: "export""
+    button "Copy Code"
+      code
+    heading "pnpm monorepo ​" (level 3)
+      link "Permalink to "<a id="template-pnpm-monorepo"></a>pnpm monorepo""
+    paragraph "Replace 's npm cache with pnpm's action and update the install / build steps:"
+      code "actions/setup-node"
+    button "Copy Code"
+      code
+    heading "Shared: diff & comment job ​" (level 3)
+      link "Permalink to "<a id="diff-and-comment"></a>Shared: diff & comment job""
+    button "Copy Code"
+      code
+    separator
+    heading "Output format ​" (level 2)
+      link "Permalink to "Output format""
+    paragraph "Each page produces three blocks: the a11y tree, the heading outline, and the tab sequence. Example:"
+    button "Copy Code"
+      code
+    paragraph "Deterministic — the same DOM always produces the same bytes. Safe to commit as a fixture if you'd rather diff against a static file than against ."
+      code "main"
+    separator
+    heading "What it catches ​" (level 2)
+      link "Permalink to "What it catches""
+    table
+      rowgroup
+        row
+          rowheader "Regression"
+          rowheader "Caught?"
+      rowgroup
+        row
+          cell "Input loses its label"
+          cell "✅"
+        row
+          cell "Role changed (button → div)"
+            code "button"
+            code "div"
+          cell "✅"
+        row
+          cell "Landmark removed (<main> deleted)"
+            code "<main>"
+          cell "✅"
+        row
+          cell "Heading level skipped"
+          cell "✅ (outline section)"
+        row
+          cell "Focusable element removed from tab order"
+          cell "✅ (tab sequence section)"
+        row
+          cell "Dialog no longer has accessible name"
+          cell "✅"
+        row
+          cell "ARIA state silently cleared"
+          cell "✅"
+    separator
+    heading "Combine with assertions ​" (level 2)
+      link "Permalink to "Combine with assertions""
+    paragraph "The diff bot tells you  — pair it with , , etc. to fail the build immediately on known-bad patterns:"
+      emphasis "something changed"
+      code "assertHeadingOrder"
+      code "assertNoUnlabeledInteractive"
+    button "Copy Code"
+      code
+    paragraph "The diff bot catches ; the assertions catch . Together they give you defense in depth."
+      emphasis "unexpected regressions"
+      emphasis "known-bad patterns"
+  contentinfo
+    link "Edit this page on GitHub"
+    paragraph "Last updated:"
+      time "4/30/26, 3:38 AM"
+    navigation "Pager"
+      link "Previous pagePeer Dependencies"
+      link "Next pageAccessible Names"

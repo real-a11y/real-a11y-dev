@@ -1,0 +1,346 @@
+  link "Skip to content"
+  banner
+    link "Real A11y"
+    button "Search"
+    navigation "Main Navigation"
+      link "Guide"
+      link "Recipes"
+      link "Packages"
+      button "v0.1 · Beta"
+    switch "Switch to dark theme"
+    link "github"
+  complementary
+    navigation "Sidebar Navigation"
+      button "Introduction"
+        heading "Introduction" (level 2)
+      link "Getting Started"
+        paragraph "Getting Started"
+      link "Core Concepts"
+        paragraph "Core Concepts"
+      link "Why Real A11y?"
+        paragraph "Why Real A11y?"
+      button "Reading the Tree"
+        heading "Reading the Tree" (level 2)
+      link "DOM View"
+        paragraph "DOM View"
+      link "A11y View"
+        paragraph "A11y View"
+      link "TAB View"
+        paragraph "TAB View"
+      link "Panel features"
+        paragraph "Panel features"
+      button "Chrome Extension"
+        heading "Chrome Extension" (level 2)
+      link "Overview & Install"
+        paragraph "Overview & Install"
+      button "Packages"
+        heading "Packages" (level 2)
+      link "@real-a11y-dev/core"
+        paragraph "@real-a11y-dev/core"
+      link "@real-a11y-dev/inspector"
+        paragraph "@real-a11y-dev/inspector"
+      link "@real-a11y-dev/testing"
+        paragraph "@real-a11y-dev/testing"
+      link "@real-a11y-dev/react"
+        paragraph "@real-a11y-dev/react"
+      link "@real-a11y-dev/storybook-addon"
+        paragraph "@real-a11y-dev/storybook-addon"
+      button "Recipes"
+        heading "Recipes" (level 2)
+      link "Next.js (App Router + React 19)"
+        paragraph "Next.js (App Router + React 19)"
+      link "Storybook 8 + React 19"
+        paragraph "Storybook 8 + React 19"
+      link "Peer Dependencies"
+        paragraph "Peer Dependencies"
+      link "CI Diff Bot"
+        paragraph "CI Diff Bot"
+      button "Reference"
+        heading "Reference" (level 2)
+      link "Accessible Names"
+        paragraph "Accessible Names"
+      link "Architecture"
+        paragraph "Architecture"
+      link "Troubleshooting"
+        paragraph "Troubleshooting"
+  navigation "On this page"
+    heading "On this page" (level 2)
+    list
+      listitem
+        link "Install"
+      listitem
+        link "<SemanticNavigator />"
+      listitem
+        link "useSemanticTree(rootRef, options?)"
+      listitem
+        link "useActiveModal(rootRef)"
+      listitem
+        link "Patterns"
+      listitem
+        link "TypeScript"
+      listitem
+        link "See it running"
+      listitem
+        link "Panel features"
+  main
+    heading "@real-a11y-dev/react ​" (level 1)
+      link "Permalink to "@real-a11y-dev/react""
+    blockquote
+      paragraph "—  component plus  /  hooks. Built on  for concurrent-mode safety, SSR-safe in floating mode. Reach for this when your app is  — for anything else use ."
+        strong "TL;DR"
+        code "<SemanticNavigator />"
+        code "useSemanticTree()"
+        code "useActiveModal()"
+        code "useSyncExternalStore"
+        strong "React"
+        link "@real-a11y-dev/inspector"
+          code "@real-a11y-dev/inspector"
+    paragraph "Native React integration — hooks and a component. Built on  for React 18 concurrent-mode safety."
+      code "useSyncExternalStore"
+    heading "Install ​" (level 2)
+      link "Permalink to "Install""
+    button "Copy Code"
+      code
+    paragraph ","
+      strong "Peer dependencies:"
+      code "react >= 18"
+      code "react-dom >= 18"
+    paragraph "Install as a dev dependency"
+    paragraph "bundles a tree extractor and a Preact-based renderer (~40 KB gzipped). It's a developer audit tool, not runtime infrastructure — keep it in  and gate  on a build flag so it never ships to end users."
+      code "@real-a11y-dev/react"
+      code "devDependencies"
+      code "<SemanticNavigator />"
+    paragraph "See  for the common Vite / Next.js / vanilla gating patterns."
+      link "Keep it out of production"
+    separator
+    heading "<SemanticNavigator /> ​" (level 2)
+      code "<SemanticNavigator />"
+      link "Permalink to "`<SemanticNavigator />`""
+    paragraph "Drop-in tree panel component. Renders into a Shadow DOM by default."
+    button "Copy Code"
+      code
+    heading "Props ​" (level 3)
+      link "Permalink to "Props""
+    table
+      rowgroup
+        row
+          rowheader "Prop"
+          rowheader "Type"
+          rowheader "Default"
+          rowheader "Description"
+      rowgroup
+        row
+          cell "root"
+            code "root"
+          cell "RefObject<Element | null>"
+            code "RefObject<Element | null>"
+          cell "—"
+          cell "Required. Ref to the DOM element to observe."
+            strong "Required."
+        row
+          cell "mode"
+            code "mode"
+          cell ""a11y" | "dom""
+            code ""a11y" | "dom""
+          cell ""a11y""
+            code ""a11y""
+          cell "Tree extraction mode. Can be changed at runtime."
+        row
+          cell "mount"
+            code "mount"
+          cell ""shadow" | "light""
+            code ""shadow" | "light""
+          cell ""shadow""
+            code ""shadow""
+          cell "Shadow DOM isolation mode."
+        row
+          cell "highlightOnHover"
+            code "highlightOnHover"
+          cell "boolean"
+            code "boolean"
+          cell "false"
+            code "false"
+          cell "Highlight host element on tree node hover."
+        row
+          cell "scrollHostOnSelect"
+            code "scrollHostOnSelect"
+          cell "boolean"
+            code "boolean"
+          cell "false"
+            code "false"
+          cell "Scroll host element into view on selection."
+        row
+          cell "focusHostOnActivate"
+            code "focusHostOnActivate"
+          cell "boolean"
+            code "boolean"
+          cell "false"
+            code "false"
+          cell "Focus host element on action activation."
+        row
+          cell "styleNonce"
+            code "styleNonce"
+          cell "string"
+            code "string"
+          cell "—"
+          cell "CSP nonce for injected styles."
+        row
+          cell "className"
+            code "className"
+          cell "string"
+            code "string"
+          cell "—"
+          cell "Class name applied to the host <div>."
+            code "<div>"
+        row
+          cell "style"
+            code "style"
+          cell "CSSProperties"
+            code "CSSProperties"
+          cell "—"
+          cell "Inline styles for the host <div>."
+            code "<div>"
+    paragraph "The component creates its own internal  host and passes it to . Changing  or  remounts the navigator; changing  uses the imperative  API without remounting."
+      code "<div>"
+      code "createSemanticNavigator"
+      code "root"
+      code "mount"
+      code "mode"
+      code "setViewMode()"
+    paragraph "Why  /  /  default to false"
+      code "highlightOnHover"
+      code "scrollHostOnSelect"
+      code "focusHostOnActivate"
+    paragraph "renders into the same document as your app, so activating a tree row could steal focus from the panel or scroll the page underneath you. The panel itself stays fully interactive either way — row selection, cross-link chip navigation, keyboard movement — what's gated is the side effect on the  DOM element. See  for the full rationale and when to flip them on."
+      code "<SemanticNavigator />"
+      emphasis "real"
+      link "Panel interaction vs. host side effects"
+    separator
+    heading "useSemanticTree(rootRef, options?) ​" (level 2)
+      code "useSemanticTree(rootRef, options?)"
+      link "Permalink to "`useSemanticTree(rootRef, options?)`""
+    paragraph "Subscribes to the semantic tree for a given DOM element. Re-renders whenever the DOM mutates and the debounce settles."
+    button "Copy Code"
+      code
+    paragraph "—  before the first extraction."
+      strong "Returns:"
+      code "SemanticTree | null"
+      code "null"
+    paragraph
+      strong "Options:"
+    table
+      rowgroup
+        row
+          rowheader "Option"
+          rowheader "Type"
+          rowheader "Default"
+          rowheader "Description"
+      rowgroup
+        row
+          cell "mode"
+            code "mode"
+          cell ""a11y" | "dom""
+            code ""a11y" | "dom""
+          cell ""a11y""
+            code ""a11y""
+          cell "Tree extraction mode."
+        row
+          cell "debounceMs"
+            code "debounceMs"
+          cell "number"
+            code "number"
+          cell "300"
+            code "300"
+          cell "Debounce delay for DOM mutation callbacks."
+    heading "Concurrent-mode safety ​" (level 3)
+      link "Permalink to "Concurrent-mode safety""
+    paragraph "uses  internally. The subscription and snapshot functions satisfy React 18's requirements:"
+      code "useSemanticTree"
+      code "useSyncExternalStore"
+    list
+      listitem "Snapshot is stable when the tree hasn't changed."
+      listitem "Subscription calls the listener synchronously on mutation flush."
+      listitem "No tearing between render and paint."
+    separator
+    heading "useActiveModal(rootRef) ​" (level 2)
+      code "useActiveModal(rootRef)"
+      link "Permalink to "`useActiveModal(rootRef)`""
+    paragraph "Convenience hook — returns the active modal node ( or ) or ."
+      code "dialog"
+      code "alertdialog"
+      code "null"
+    button "Copy Code"
+      code
+    paragraph
+      strong "Returns:"
+      code "SemanticNode | null"
+    heading "Announcing modal opens in an aria-live region ​" (level 3)
+      code "aria-live"
+      link "Permalink to "Announcing modal opens in an `aria-live` region""
+    paragraph "A static  only announces the  state. To tell screen-reader users that a dialog , wrap the output in a polite  region so each change is announced:"
+      code "role="status""
+      emphasis "current"
+      emphasis "just opened"
+      code "aria-live"
+    button "Copy Code"
+      code
+    paragraph "Drop this near the top of your layout alongside the  host. Users of assistive tech get a courteous notification every time a dialog opens — useful when your app's own announcement logic is still under construction."
+      code "<SemanticNavigator />"
+    separator
+    heading "Patterns ​" (level 2)
+      link "Permalink to "Patterns""
+    heading "Audit overlay in development ​" (level 3)
+      link "Permalink to "Audit overlay in development""
+    paragraph "Gate the import itself so the inspector code is  (a top-level  import prevents that — the reference survives even inside an )."
+      strong "tree-shaken from production bundles"
+      code "SemanticNavigator"
+      code "if (DEV)"
+    button "Copy Code"
+      code
+    paragraph "Production builds: the  branch is dead-code-eliminated and  never enters the final bundle. Dev builds: the inspector loads on demand as its own chunk."
+      code "DEV"
+      code "@real-a11y-dev/react"
+    heading "Reacting to tree changes ​" (level 3)
+      link "Permalink to "Reacting to tree changes""
+    button "Copy Code"
+      code
+    separator
+    heading "TypeScript ​" (level 2)
+      link "Permalink to "TypeScript""
+    paragraph "All hooks and components are fully typed. Import types from  for tree node types:"
+      code "@real-a11y-dev/core"
+    button "Copy Code"
+      code
+    separator
+    heading "See it running ​" (level 2)
+      link "Permalink to "See it running""
+    list
+      listitem "— : split-panel layout with a mode toggle,  driving a live "issues" badge, and  with an  announcer."
+        strong "Vite + React 18"
+        link "examples/react-app/"
+          code "examples/react-app/"
+        code "useSemanticTree"
+        code "useActiveModal"
+        code "aria-live"
+      listitem "— the  covers the client-component and SSR-gating patterns specific to Next."
+        strong "Next.js (App Router + React 19)"
+        link "Next.js recipe"
+    separator
+    heading "Panel features ​" (level 2)
+      link "Permalink to "Panel features""
+    paragraph "exposes the same in-panel behaviors as the Chrome extension and Storybook addon — search, role filters, focus tracking, scoping, live region monitoring, keyboard navigation. The props on this component (, , , , ) configure them."
+      code "<SemanticNavigator />"
+      code "highlightOnHover"
+      code "scrollHostOnSelect"
+      code "focusHostOnActivate"
+      code "mode"
+      code "mount"
+    paragraph "→"
+      link "Panel features reference"
+  contentinfo
+    link "Edit this page on GitHub"
+    paragraph "Last updated:"
+      time "4/28/26, 10:54 PM"
+    navigation "Pager"
+      link "Previous page@real-a11y-dev/testing"
+      link "Next page@real-a11y-dev/storybook-addon"

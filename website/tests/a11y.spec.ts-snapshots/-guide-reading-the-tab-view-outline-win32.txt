@@ -1,0 +1,18 @@
+  h2 Introduction
+  h2 Reading the Tree
+  h2 Chrome Extension
+  h2 Packages
+  h2 Recipes
+  h2 Reference
+  h2 On this page
+h1 Reading the TAB View ​
+  h2 What you see ​
+  h2 How tab order works ​
+  h2 What to check ​
+    h3 Order matches the visual flow ​
+    h3 Every interactive element is reachable ​
+    h3 Nothing unreachable appears in the list ​
+    h3 Amber badges — positive tabindex ​
+    h3 Focus traps inside modals and dialogs ​
+  h2 Common patterns and what they look like ​
+  h2 The relationship to the A11y view ​

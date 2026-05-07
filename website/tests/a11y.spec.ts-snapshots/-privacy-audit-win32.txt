@@ -1,0 +1,199 @@
+  link "Skip to content"
+  banner
+    link "Real A11y"
+    button "Search"
+    navigation "Main Navigation"
+      link "Guide"
+      link "Recipes"
+      link "Packages"
+      button "v0.1 · Beta"
+    switch "Switch to dark theme"
+    link "github"
+  complementary
+    navigation "Sidebar Navigation"
+      button "Introduction"
+        heading "Introduction" (level 2)
+      link "Getting Started"
+        paragraph "Getting Started"
+      link "Core Concepts"
+        paragraph "Core Concepts"
+      link "Why Real A11y?"
+        paragraph "Why Real A11y?"
+      button "Reading the Tree"
+        heading "Reading the Tree" (level 2)
+      link "DOM View"
+        paragraph "DOM View"
+      link "A11y View"
+        paragraph "A11y View"
+      link "TAB View"
+        paragraph "TAB View"
+      link "Panel features"
+        paragraph "Panel features"
+      button "Chrome Extension"
+        heading "Chrome Extension" (level 2)
+      link "Overview & Install"
+        paragraph "Overview & Install"
+      button "Packages"
+        heading "Packages" (level 2)
+      link "@real-a11y-dev/core"
+        paragraph "@real-a11y-dev/core"
+      link "@real-a11y-dev/inspector"
+        paragraph "@real-a11y-dev/inspector"
+      link "@real-a11y-dev/testing"
+        paragraph "@real-a11y-dev/testing"
+      link "@real-a11y-dev/react"
+        paragraph "@real-a11y-dev/react"
+      link "@real-a11y-dev/storybook-addon"
+        paragraph "@real-a11y-dev/storybook-addon"
+      button "Recipes"
+        heading "Recipes" (level 2)
+      link "Next.js (App Router + React 19)"
+        paragraph "Next.js (App Router + React 19)"
+      link "Storybook 8 + React 19"
+        paragraph "Storybook 8 + React 19"
+      link "Peer Dependencies"
+        paragraph "Peer Dependencies"
+      link "CI Diff Bot"
+        paragraph "CI Diff Bot"
+      button "Reference"
+        heading "Reference" (level 2)
+      link "Accessible Names"
+        paragraph "Accessible Names"
+      link "Architecture"
+        paragraph "Architecture"
+      link "Troubleshooting"
+        paragraph "Troubleshooting"
+  navigation "On this page"
+    heading "On this page" (level 2)
+    list
+      listitem
+        link "Short version"
+      listitem
+        link "Chrome extension — Semantic Navigator"
+      listitem
+        link "npm packages"
+      listitem
+        link "Website"
+      listitem
+        link "Data we might receive anyway"
+      listitem
+        link "Your rights"
+      listitem
+        link "Changes to this policy"
+      listitem
+        link "Contact"
+  main
+    heading "Privacy Policy ​" (level 1)
+      link "Permalink to "Privacy Policy""
+    paragraph
+      emphasis "Last updated: 2026-04-18"
+    paragraph "This policy covers the Real A11y website (), the Semantic Navigator Chrome extension, and the  npm packages."
+      code "real-a11y.dev"
+      code "@real-a11y-dev/*"
+    heading "Short version ​" (level 2)
+      link "Permalink to "Short version""
+    list
+      listitem "We don't collect personal data."
+      listitem "The Chrome extension runs entirely on your device. It does not send page content, URLs, or any other data to any server — ours or anyone else's."
+      listitem "The npm packages run on your device / in your CI. They make no network requests."
+      listitem "The website may use privacy-respecting aggregate analytics (no cookies, no personal identifiers). If enabled, it's disclosed here."
+    heading "Chrome extension — Semantic Navigator ​" (level 2)
+      link "Permalink to "Chrome extension — Semantic Navigator""
+    paragraph "The extension reads the DOM of the page you're currently viewing in order to build and display a semantic / accessibility tree in a side panel. It acts locally in your browser."
+    paragraph
+      strong "What it does on the page:"
+    list
+      listitem "Reads the page's DOM (including iframes you can access) to extract roles, accessible names, states, and interaction info."
+      listitem "On your explicit action (clicking a tree node's action button, pressing , etc.), dispatches the corresponding event on the element — e.g. click a button, focus a field, submit a form."
+        code "Enter"
+      listitem "Draws a highlight overlay on the element under the cursor in the tree."
+    paragraph
+      strong "What it does NOT do:"
+    list
+      listitem "It does not send page content, URLs, DOM snapshots, or any other data to any external server."
+      listitem "It does not read from or write to the clipboard."
+      listitem "It does not use cookies, local storage, or IndexedDB for any personal data."
+      listitem "It does not track you across sites or sessions."
+      listitem "It contains no analytics, telemetry, advertising, or third-party scripts."
+    paragraph
+      strong "Permissions and why they're needed:"
+    table
+      rowgroup
+        row
+          rowheader "Permission"
+          rowheader "Why"
+      rowgroup
+        row
+          cell "activeTab"
+            code "activeTab"
+          cell "Read the DOM of the page you're viewing to build the tree"
+        row
+          cell "sidePanel"
+            code "sidePanel"
+          cell "The extension's UI is a persistent side panel"
+        row
+          cell "webNavigation"
+            code "webNavigation"
+          cell "Detect iframe load events to merge subtree data from cross-origin frames"
+    paragraph "No other permissions are requested."
+    heading "npm packages ​" (level 2)
+      link "Permalink to "npm packages""
+    paragraph "The , , , , , and  packages are pure libraries. They:"
+      code "@real-a11y-dev/core"
+      code "@real-a11y-dev/inspector"
+      code "@real-a11y-dev/testing"
+      code "@real-a11y-dev/react"
+      code "@real-a11y-dev/storybook-addon"
+      code "@real-a11y-dev/semantic-navigator-ui"
+    list
+      listitem "Run where you run them (browser, Node, jsdom, Playwright)."
+      listitem "Make no network requests."
+      listitem "Do not "phone home," collect usage data, or check for updates."
+      listitem "Have no side effects at install time beyond what  /  /  does normally."
+        code "pnpm"
+        code "npm"
+        code "yarn"
+    heading "Website ​" (level 2)
+      link "Permalink to "Website""
+    paragraph "The site at  is a static VitePress documentation site. The only first-party state is the search index and local preferences (theme selection) stored in your browser's ."
+      code "real-a11y.dev"
+      code "localStorage"
+    paragraph "If we enable analytics in the future, we will:"
+    list
+      listitem "Use a privacy-respecting, cookie-free provider (e.g. Plausible, Fathom, or Cloudflare Web Analytics)."
+      listitem "Update this page to name the provider and what data is collected before enabling."
+      listitem "Never use Google Analytics or any product that requires a cookie banner in the EU."
+    heading "Data we might receive anyway ​" (level 2)
+      link "Permalink to "Data we might receive anyway""
+    paragraph "If you open an issue, comment, or send email:"
+    list
+      listitem "GitHub issues / discussions / PRs — subject to . Anything you post there is public."
+        link "GitHub's privacy policy"
+      listitem "Security reports to  or the private GitHub security advisory — handled per ; the email address and content are retained only as long as needed to investigate and fix the reported issue."
+        code "security@real-a11y.dev"
+        link "SECURITY.md"
+      listitem "Code of Conduct reports to  — handled confidentially per ."
+        code "conduct@real-a11y.dev"
+        link "CODE_OF_CONDUCT.md"
+    heading "Your rights ​" (level 2)
+      link "Permalink to "Your rights""
+    paragraph "If you have questions about this policy or want us to delete any data you've shared with us directly, email . We'll respond within 30 days."
+      code "privacy@real-a11y.dev"
+    heading "Changes to this policy ​" (level 2)
+      link "Permalink to "Changes to this policy""
+    paragraph "Changes are tracked in the git history of . Material changes will bump the "Last updated" date at the top of the page."
+      code "website/privacy.md"
+    heading "Contact ​" (level 2)
+      link "Permalink to "Contact""
+    list
+      listitem "Maintainer: Juan Crisostomo (Real A11y)"
+      listitem "Email:"
+        code "privacy@real-a11y.dev"
+      listitem "GitHub:"
+        link "github.com/real-a11y/real-a11y-dev"
+  contentinfo
+    link "Edit this page on GitHub"
+    paragraph "Last updated:"
+      time "5/2/26, 8:29 PM"
+    navigation "Pager"
+      link "Next pageGetting Started"

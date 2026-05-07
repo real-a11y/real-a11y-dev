@@ -1,0 +1,229 @@
+  link "Skip to content"
+  banner
+    link "Real A11y"
+    button "Search"
+    navigation "Main Navigation"
+      link "Guide"
+      link "Recipes"
+      link "Packages"
+      button "v0.1 · Beta"
+    switch "Switch to dark theme"
+    link "github"
+  complementary
+    navigation "Sidebar Navigation"
+      button "Introduction"
+        heading "Introduction" (level 2)
+      link "Getting Started"
+        paragraph "Getting Started"
+      link "Core Concepts"
+        paragraph "Core Concepts"
+      link "Why Real A11y?"
+        paragraph "Why Real A11y?"
+      button "Reading the Tree"
+        heading "Reading the Tree" (level 2)
+      link "DOM View"
+        paragraph "DOM View"
+      link "A11y View"
+        paragraph "A11y View"
+      link "TAB View"
+        paragraph "TAB View"
+      link "Panel features"
+        paragraph "Panel features"
+      button "Chrome Extension"
+        heading "Chrome Extension" (level 2)
+      link "Overview & Install"
+        paragraph "Overview & Install"
+      button "Packages"
+        heading "Packages" (level 2)
+      link "@real-a11y-dev/core"
+        paragraph "@real-a11y-dev/core"
+      link "@real-a11y-dev/inspector"
+        paragraph "@real-a11y-dev/inspector"
+      link "@real-a11y-dev/testing"
+        paragraph "@real-a11y-dev/testing"
+      link "@real-a11y-dev/react"
+        paragraph "@real-a11y-dev/react"
+      link "@real-a11y-dev/storybook-addon"
+        paragraph "@real-a11y-dev/storybook-addon"
+      button "Recipes"
+        heading "Recipes" (level 2)
+      link "Next.js (App Router + React 19)"
+        paragraph "Next.js (App Router + React 19)"
+      link "Storybook 8 + React 19"
+        paragraph "Storybook 8 + React 19"
+      link "Peer Dependencies"
+        paragraph "Peer Dependencies"
+      link "CI Diff Bot"
+        paragraph "CI Diff Bot"
+      button "Reference"
+        heading "Reference" (level 2)
+      link "Accessible Names"
+        paragraph "Accessible Names"
+      link "Architecture"
+        paragraph "Architecture"
+      link "Troubleshooting"
+        paragraph "Troubleshooting"
+  navigation "On this page"
+    heading "On this page" (level 2)
+    list
+      listitem
+        link "My audit returned nothing"
+      listitem
+        link "Snapshot flaps between runs or between local and CI"
+      listitem
+        link "Heading outline has no h1"
+      listitem
+        link "Tab sequence is empty"
+      listitem
+        link "React hydration mismatch when rendering the panel"
+      listitem
+        link "Tests pass in jsdom but fail in Playwright (or vice versa)"
+      listitem
+        link "A11yAssertionError with a message I don't understand"
+      listitem
+        link "Still stuck?"
+  main
+    heading "Troubleshooting ​" (level 1)
+      link "Permalink to "Troubleshooting""
+    paragraph "The library is designed to fail loudly —  exceptions include the offending element, its location in the tree, and a suggested fix. Most problems are caught there. This page covers the edge cases that look like bugs but usually aren't."
+      code "A11yAssertionError"
+    heading "My audit returned nothing ​" (level 2)
+      link "Permalink to "My audit returned nothing""
+    button "Copy Code"
+      code
+    paragraph "Three usual causes:"
+    list
+      listitem "If you call the extractor from a component's body (rather than inside  / ), the ref may not be attached to the DOM. Extract on mount, not during render."
+        strong "Root element doesn't exist yet."
+        code "useEffect"
+        code "onMount"
+      listitem "returns  if there's no  landmark yet. Check the return value."
+        strong "Selector didn't match."
+        code "document.querySelector("main")"
+        code "null"
+        code "<main>"
+      listitem ", , or  on an ancestor excludes the subtree from the a11y tree by design. That's what a screen reader sees — nothing."
+        strong "Whole subtree is hidden."
+        code "display: none"
+        code "visibility: hidden"
+        code "aria-hidden="true""
+    paragraph "If the tree genuinely is empty but you expect content, open the Chrome extension on the same page and check the A11y view — the same extraction runs there."
+    separator
+    heading "Snapshot flaps between runs or between local and CI ​" (level 2)
+      link "Permalink to "Snapshot flaps between runs or between local and CI""
+    paragraph "is deterministic, but it surfaces text that isn't. Common culprits:"
+      code "auditSnapshot()"
+    list
+      listitem "— "2 hours ago", "Updated: 2026-04-23T14:00"."
+        strong "Timestamps / relative times"
+      listitem "— names, emails, IDs."
+        strong "User-generated content"
+      listitem "— i18n strings that differ between en/es runs."
+        strong "Locale-variable copy"
+      listitem "— React's , auth tokens, request IDs."
+        strong "Random IDs / correlation tokens"
+        code "useId"
+      listitem "— "Good morning, Alice"."
+        strong "Time-of-day greetings"
+    paragraph "Use the  option to replace the noisy patterns with :"
+      code "redact"
+      code "[redacted]"
+    button "Copy Code"
+      code
+    paragraph "The same option is on the Playwright adapter: ."
+      code "sn.auditSnapshot({ redact: [...] })"
+    separator
+    heading "Heading outline has no h1 ​" (level 2)
+      code "h1"
+      link "Permalink to "Heading outline has no `h1`""
+    paragraph "throws if there is not exactly one . That's correct for top-level pages. For  — a portaled dialog, a docs widget, an email preview iframe — scope the assertion to the subtree that should have its own hierarchy, or skip it."
+      code "assertHeadingOrder()"
+      code "h1"
+      strong "embedded content"
+    button "Copy Code"
+      code
+    paragraph "If your page legitimately has multiple h1s (rare — usually an anti-pattern), the rule doesn't fit your design and  isn't the right check."
+      code "assertHeadingOrder"
+    separator
+    heading "Tab sequence is empty ​" (level 2)
+      link "Permalink to "Tab sequence is empty""
+    paragraph "lists only  elements. Common reasons for an empty sequence:"
+      code "tabSequenceSnapshot()"
+      strong "keyboard-focusable"
+    list
+      listitem "The root is wrapped in , which removes the whole subtree from the focus order (Chrome, Safari, Firefox all honor this)."
+        code "[inert]"
+      listitem "Every focusable element has  — some design systems over-use this to disable default focus."
+        code "tabindex="-1""
+      listitem "The subtree is  or ."
+        code "display: none"
+        code "aria-hidden="true""
+      listitem "You're passing a root that doesn't contain the expected elements (e.g. a portaled modal that mounts elsewhere in the DOM)."
+    paragraph "If the tab order  be empty on a given route (a 404, a splash screen with no interactive content), suppress the assertion for that route rather than the whole suite."
+      emphasis "should"
+    separator
+    heading "React hydration mismatch when rendering the panel ​" (level 2)
+      link "Permalink to "React hydration mismatch when rendering the panel""
+    paragraph "If you drop  into an SSR-rendered component tree, the server renders the wrapper  but no inspector content — the inspector mounts on the client. That's fine. Hydration warnings typically come from  sources in the same tree; the panel itself is hydration-safe."
+      code "<SemanticNavigator />"
+      code "<div>"
+      strong "other"
+    paragraph "If you're specifically seeing a mismatch on a  that should be an  or , check whether you have Chrome extensions injecting markup into the page — they're a common cause of hydration warnings that look library-related."
+      code "<div>"
+      code "aside"
+      code "nav"
+    paragraph "If you're adding your own wrapper around  that uses  during render, wrap that in a mount effect or use ."
+      code "<SemanticNavigator />"
+      code "document.*"
+      code "next/dynamic({ ssr: false })"
+    separator
+    heading "Tests pass in jsdom but fail in Playwright (or vice versa) ​" (level 2)
+      link "Permalink to "Tests pass in jsdom but fail in Playwright (or vice versa)""
+    paragraph "jsdom implements most of the accessibility tree, but a few areas diverge from real browsers:"
+    list
+      listitem "— jsdom's  computation is limited. If your test depends on  or complex CSS-driven visibility, trust Playwright."
+        strong "Computed style"
+        code "display"
+        code "display: contents"
+      listitem "— support landed in jsdom later than in browsers. Upgrade to ."
+        strong "attribute"
+          code "inert"
+        code "jsdom ≥ 23"
+      listitem "— jsdom's rAF queue differs from browsers; focus traps can look flaky."
+        strong "inside"
+          code "element.focus()"
+          code "requestAnimationFrame"
+      listitem "— jsdom is mostly correct but has been known to drop  listeners in edge cases."
+        strong "Shadow DOM event retargeting"
+        code "composed: true"
+    paragraph "The rule: jsdom covers ~95% of cases at jsdom speed. When it diverges, the truth is in Playwright. Use  for the remaining 5%."
+      code "@real-a11y-dev/testing/playwright"
+    separator
+    heading "A11yAssertionError with a message I don't understand ​" (level 2)
+      code "A11yAssertionError"
+      link "Permalink to "`A11yAssertionError` with a message I don't understand""
+    paragraph "The error message includes the , the  (path from the root), and the . If the reason is still unclear, pair the assertion with a snapshot of the same root — the snapshot shows the element in context."
+      strong "element type"
+      strong "location in the tree"
+      strong "reason"
+    button "Copy Code"
+      code
+    paragraph "Every assertion is documented with an example in ."
+      link "@real-a11y-dev/testing"
+        code "@real-a11y-dev/testing"
+    separator
+    heading "Still stuck? ​" (level 2)
+      link "Permalink to "Still stuck?""
+    list
+      listitem "Check the  recipe — most "it doesn't install" issues are peer version mismatches."
+        link "Peer Dependencies"
+      listitem "Check the relevant recipe (, ) if you're on one of those stacks."
+        link "Next.js"
+        link "Storybook + React 19"
+      listitem "Reproduce in the Chrome extension against the same URL — if the extension also produces the unexpected output, it's a real tree extraction question (open an issue with the minimal HTML). If the extension matches your expectation but the library disagrees, it's likely a config or environment issue."
+  contentinfo
+    link "Edit this page on GitHub"
+    paragraph "Last updated:"
+      time "4/25/26, 7:01 PM"
+    navigation "Pager"
+      link "Previous pageArchitecture"

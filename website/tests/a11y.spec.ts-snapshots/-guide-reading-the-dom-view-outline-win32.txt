@@ -1,0 +1,15 @@
+  h2 Introduction
+  h2 Reading the Tree
+  h2 Chrome Extension
+  h2 Packages
+  h2 Recipes
+  h2 Reference
+  h2 On this page
+h1 Reading the DOM View ​
+  h2 What you see ​
+  h2 When to use it ​
+  h2 What to look for ​
+    h3 Semantic HTML vs. fake HTML ​
+    h3 Nesting that doesn't make sense ​
+    h3 Too many <div>s between meaningful elements ​
+  h2 How it relates to the other views ​

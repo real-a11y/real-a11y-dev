@@ -1,0 +1,124 @@
+  link "Skip to content"
+  banner
+    link "Real A11y"
+    button "Search"
+    navigation "Main Navigation"
+      link "Guide"
+      link "Recipes"
+      link "Packages"
+      button "v0.1 · Beta"
+    switch "Switch to dark theme"
+    link "github"
+  complementary
+    navigation "Sidebar Navigation"
+      button "Introduction"
+        heading "Introduction" (level 2)
+      link "Getting Started"
+        paragraph "Getting Started"
+      link "Core Concepts"
+        paragraph "Core Concepts"
+      link "Why Real A11y?"
+        paragraph "Why Real A11y?"
+      button "Reading the Tree"
+        heading "Reading the Tree" (level 2)
+      link "DOM View"
+        paragraph "DOM View"
+      link "A11y View"
+        paragraph "A11y View"
+      link "TAB View"
+        paragraph "TAB View"
+      link "Panel features"
+        paragraph "Panel features"
+      button "Chrome Extension"
+        heading "Chrome Extension" (level 2)
+      link "Overview & Install"
+        paragraph "Overview & Install"
+      button "Packages"
+        heading "Packages" (level 2)
+      link "@real-a11y-dev/core"
+        paragraph "@real-a11y-dev/core"
+      link "@real-a11y-dev/inspector"
+        paragraph "@real-a11y-dev/inspector"
+      link "@real-a11y-dev/testing"
+        paragraph "@real-a11y-dev/testing"
+      link "@real-a11y-dev/react"
+        paragraph "@real-a11y-dev/react"
+      link "@real-a11y-dev/storybook-addon"
+        paragraph "@real-a11y-dev/storybook-addon"
+      button "Recipes"
+        heading "Recipes" (level 2)
+      link "Next.js (App Router + React 19)"
+        paragraph "Next.js (App Router + React 19)"
+      link "Storybook 8 + React 19"
+        paragraph "Storybook 8 + React 19"
+      link "Peer Dependencies"
+        paragraph "Peer Dependencies"
+      link "CI Diff Bot"
+        paragraph "CI Diff Bot"
+      button "Reference"
+        heading "Reference" (level 2)
+      link "Accessible Names"
+        paragraph "Accessible Names"
+      link "Architecture"
+        paragraph "Architecture"
+      link "Troubleshooting"
+        paragraph "Troubleshooting"
+  navigation "On this page"
+    heading "On this page" (level 2)
+    list
+      listitem
+        link "What it shows"
+      listitem
+        link "Run it locally"
+      listitem
+        link "Key code"
+  main
+    heading "Example: React App ​" (level 1)
+      link "Permalink to "Example: React App""
+    paragraph "A Vite + React 18 application demonstrating  hooks and the  component."
+      code "@real-a11y-dev/react"
+      code "<SemanticNavigator />"
+    paragraph
+      strong "Source:"
+      link "examples/react-app/"
+        code "examples/react-app/"
+    heading "What it shows ​" (level 2)
+      link "Permalink to "What it shows""
+    list
+      listitem "mounted alongside the app in a split-panel layout"
+        code "<SemanticNavigator />"
+      listitem "powering a live "issues" badge (unlabeled buttons, missing headings)"
+        code "useSemanticTree()"
+      listitem "announcing when a dialog is open via an  region"
+        code "useActiveModal()"
+        code "aria-live"
+      listitem "Runtime mode switching (A11y / DOM) via props"
+      listitem "Shadow DOM isolation — host app CSS does not affect the panel"
+    heading "Run it locally ​" (level 2)
+      link "Permalink to "Run it locally""
+    button "Copy Code"
+      code
+    paragraph "Opens at ."
+      code "http://localhost:5175"
+    heading "Key code ​" (level 2)
+      link "Permalink to "Key code""
+    heading "Split-panel layout ​" (level 3)
+      link "Permalink to "Split-panel layout""
+    button "Copy Code"
+      code
+    heading "Issues badge with useSemanticTree ​" (level 3)
+      code "useSemanticTree"
+      link "Permalink to "Issues badge with `useSemanticTree`""
+    button "Copy Code"
+      code
+    heading "Modal announcer with useActiveModal ​" (level 3)
+      code "useActiveModal"
+      link "Permalink to "Modal announcer with `useActiveModal`""
+    button "Copy Code"
+      code
+  contentinfo
+    link "Edit this page on GitHub"
+    paragraph "Last updated:"
+      time "4/25/26, 7:01 PM"
+    navigation "Pager"
+      link "Next pageGetting Started"

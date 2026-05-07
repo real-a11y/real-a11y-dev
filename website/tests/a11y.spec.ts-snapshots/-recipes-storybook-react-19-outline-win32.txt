@@ -1,0 +1,15 @@
+  h2 Introduction
+  h2 Reading the Tree
+  h2 Chrome Extension
+  h2 Packages
+  h2 Recipes
+  h2 Reference
+  h2 On this page
+h1 Storybook 8 + React 19 ​
+  h2 Install ​
+  h2 Register the addon ​
+  h2 React 19 — pin the JSX runtime ​
+  h2 When you don't need this ​
+  h2 Clear the cache after adding the addon ​
+  h2 CI ​
+  h2 Known constraints ​
