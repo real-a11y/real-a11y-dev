@@ -35,6 +35,17 @@ export default defineConfig({
 
   markdown: {
     codeTransformers: [hideTokenSpans],
+    // VitePress's default Shiki themes (`github-light` / `github-dark`)
+    // ship a few token colors that fall just under WCAG AA's 4.5:1 on
+    // our `--color-bg-subtle` background — e.g. `#d73a49` red at 4.37:1.
+    // The `*-high-contrast` variants are designed for AAA (≥7:1), so
+    // they clear AA on every token with margin to spare. Surfaced by
+    // the website-a11y CI gate — see the @real-a11y-dev/design
+    // integration PR thread.
+    theme: {
+      light: "github-light-high-contrast",
+      dark: "github-dark-high-contrast",
+    },
   },
 
   head: [

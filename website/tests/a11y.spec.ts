@@ -50,22 +50,16 @@ for (const theme of THEMES) {
 
     for (const route of ROUTES) {
       test(route, async ({ page }) => {
-        // `load` (not just `domcontentloaded`) so VitePress finishes
-        // hydrating; otherwise axe sees a transient pre-hydration DOM.
-        await page.goto(route, { waitUntil: "load" });
+        // `networkidle` waits for 500ms of no network activity — VitePress's
+        // Vue hydration sets `document.title` and `<html lang>` reactively,
+        // so `waitUntil: "load"` would catch the page mid-hydration and
+        // intermittently see empty title / missing lang / orphaned main.
+        // `networkidle` is the standard fix for "axe sees a transient DOM."
+        await page.goto(route, { waitUntil: "networkidle" });
 
         const results = await new AxeBuilder({ page })
           .withTags([...AXE_TAGS])
-          // TODO: re-enable color-contrast once the design system
-          // tokens land — the current docs theme has known contrast
-          // violations across many routes that the pending tokens fix
-          // at the source. Structural rules (labels, ARIA, keyboard,
-          // landmarks, etc.) stay enforced for every route below the
-          // per-route allowlist.
-          .disableRules([
-            "color-contrast",
-            ...(ROUTE_DISABLED_RULES[route] ?? []),
-          ])
+          .disableRules(ROUTE_DISABLED_RULES[route] ?? [])
           .analyze();
 
         if (results.violations.length > 0) {

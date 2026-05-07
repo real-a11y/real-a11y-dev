@@ -409,6 +409,9 @@ importers:
       '@playwright/test':
         specifier: ^1.51.1
         version: 1.59.1
+      '@real-a11y-dev/design':
+        specifier: ^0.1.0
+        version: 0.1.0
       '@real-a11y-dev/testing':
         specifier: workspace:*
         version: link:../packages/testing
@@ -1318,6 +1321,10 @@ packages:
 
   '@publint/pack@0.1.4':
     resolution: {integrity: sha512-HDVTWq3H0uTXiU0eeSQntcVUTPP3GamzeXI41+x7uU9J65JgWQh3qWZHblR1i0npXfFtF+mxBiU2nJH8znxWnQ==}
+    engines: {node: '>=18'}
+
+  '@real-a11y-dev/design@0.1.0':
+    resolution: {integrity: sha512-1GOCHZyJk7gKL5KnbepMF7u3BIrRvv1Y1RrwMBAWCioQxUJfWUQZzKVMXynpVz1sMnJVlDoWGHdD5QxCLNeqpQ==}
     engines: {node: '>=18'}
 
   '@rolldown/pluginutils@1.0.0-beta.27':
@@ -5417,6 +5424,8 @@ snapshots:
       - supports-color
 
   '@publint/pack@0.1.4': {}
+
+  '@real-a11y-dev/design@0.1.0': {}
 
   '@rolldown/pluginutils@1.0.0-beta.27': {}
 
