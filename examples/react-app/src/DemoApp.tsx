@@ -1,4 +1,9 @@
 import { useRef, useState } from "react";
+import {
+  TabsCorrect,
+  TabsBroken,
+  type TabsExampleProps,
+} from "@real-a11y-dev/example-patterns";
 
 /**
  * A realistic-looking mini app with:
@@ -193,6 +198,21 @@ export function DemoApp() {
           </p>
           <AriaHiddenIconDemo />
         </section>
+
+        {/* Section 6 — APG Tabs: correct vs broken side-by-side */}
+        <section aria-labelledby="tabs-heading" style={{ marginBottom: 40 }}>
+          <h2 id="tabs-heading">APG Tabs — correct vs broken</h2>
+          <p style={{ color: "#666", marginBottom: 16 }}>
+            Same UI, two implementations. The left tabs use{" "}
+            <code>@radix-ui/react-tabs</code> — APG-correct{" "}
+            <code>tablist / tab / tabpanel</code> with roving tabindex and ←/→
+            keyboard nav. The right tabs are plain <code>{"<button>"}</code>s
+            with no roles or
+            <code>aria-controls</code>. Open the inspector and compare the
+            trees, or press Tab to feel the keyboard difference.
+          </p>
+          <TabsDemo />
+        </section>
       </main>
 
       {/* Confirmation dialog */}
@@ -234,6 +254,59 @@ export function DemoApp() {
         </div>
       </dialog>
     </>
+  );
+}
+
+/**
+ * APG Tabs side-by-side: Radix-backed (correct) on the left,
+ * hand-rolled (broken) on the right. Shares props for symmetry.
+ * Comes from `@real-a11y-dev/example-patterns`, the workspace lib
+ * shared across all four example apps.
+ */
+const tabsPanels: TabsExampleProps["panels"] = [
+  {
+    id: "overview",
+    label: "Overview",
+    content: <p>Real A11y in one paragraph.</p>,
+  },
+  {
+    id: "install",
+    label: "Install",
+    content: <p>npm install @real-a11y-dev/inspector</p>,
+  },
+  {
+    id: "usage",
+    label: "Usage",
+    content: <p>Mount the inspector against your app's root.</p>,
+  },
+];
+
+function TabsDemo() {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gap: 24,
+      }}
+    >
+      <div>
+        <p style={{ fontWeight: 600, marginBottom: 8, color: "#444" }}>
+          ✓ Correct (Radix)
+        </p>
+        <TabsCorrect
+          defaultValue="overview"
+          label="Documentation sections"
+          panels={tabsPanels}
+        />
+      </div>
+      <div>
+        <p style={{ fontWeight: 600, marginBottom: 8, color: "#444" }}>
+          ⚠ Broken (hand-rolled, missing roles)
+        </p>
+        <TabsBroken defaultValue="overview" panels={tabsPanels} />
+      </div>
+    </div>
   );
 }
 

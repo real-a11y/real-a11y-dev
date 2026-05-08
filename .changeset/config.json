@@ -12,6 +12,7 @@
     "@real-a11y-dev/example-react",
     "@real-a11y-dev/example-storybook",
     "@real-a11y-dev/example-testing",
+    "@real-a11y-dev/example-patterns",
     "@real-a11y-dev/website",
     "@real-a11y-dev/semantic-navigator-extension"
   ],

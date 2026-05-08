@@ -1,0 +1,15 @@
+// APG-coverage components shared across the example apps.
+//
+// Each pattern ships TWO surfaces:
+//   - `*Correct` — uses an off-the-shelf primitive (Radix, React Aria) so
+//     the demo says "Real A11y audits whatever you ship, including the
+//     libraries you actually use." No reinvention; tree-correct.
+//   - `*Broken` — hand-rolled, deliberately missing or wrong on a single
+//     ARIA / keyboard / focus axis so a Real A11y consumer can see
+//     exactly which signal catches it (panel role chip, tree-diff,
+//     audit-snapshot, IssuesBadge, etc.).
+//
+// Visually identical wherever practical; structurally different in the
+// one detail the broken variant is illustrating.
+
+export * from "./tabs/index.js";
