@@ -8,6 +8,7 @@
     "build-storybook": "storybook build"
   },
   "dependencies": {
+    "@real-a11y-dev/example-patterns": "workspace:*",
     "@real-a11y-dev/storybook-addon": "workspace:*",
     "react": "^18.3.0",
     "react-dom": "^18.3.0"
