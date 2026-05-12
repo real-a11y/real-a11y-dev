@@ -111,6 +111,7 @@ function isInternalMutation(
  */
 export class DomObserver {
   private observer: MutationObserver | null = null;
+  private portalObserver: MutationObserver | null = null;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private inputListener: ((e: Event) => void) | null = null;
 
@@ -151,12 +152,43 @@ export class DomObserver {
     this.inputListener = () => this.scheduleChange();
     this.root.addEventListener("input", this.inputListener, true);
     this.root.addEventListener("change", this.inputListener, true);
+
+    // Modal dialogs from React Portal, Vue Teleport, etc. mount into
+    // `document.body` — *outside* `this.root`, so the primary observer
+    // above doesn't see them. The extractor's `findActiveModal()`
+    // scans the whole document for `[aria-modal="true"]` and pivots to
+    // it as the effective root, but only when extraction *runs* —
+    // nothing triggers a run unless mutations are observed.
+    //
+    // This secondary observer watches `document.body` at top level only
+    // (no `subtree: true`) for childList changes, then filters for
+    // portal mounts whose subtree contains a modal-shaped element.
+    // Bounded surface — fires when Radix/Headless UI/Vue Teleport
+    // mounts/unmounts a portal, not on every internal DOM tweak.
+    const body = this.root.ownerDocument?.body;
+    if (body && body !== this.root && !this.root.contains(body)) {
+      this.portalObserver = new MutationObserver((mutations) => {
+        for (const m of mutations) {
+          for (const node of [...m.addedNodes, ...m.removedNodes]) {
+            if (isPortalModalContainer(node, this.internalIds)) {
+              this.scheduleChange();
+              return;
+            }
+          }
+        }
+      });
+      this.portalObserver.observe(body, { childList: true });
+    }
   }
 
   stop(): void {
     if (this.observer) {
       this.observer.disconnect();
       this.observer = null;
+    }
+    if (this.portalObserver) {
+      this.portalObserver.disconnect();
+      this.portalObserver = null;
     }
     if (this.inputListener) {
       this.root.removeEventListener("input", this.inputListener, true);
@@ -176,4 +208,35 @@ export class DomObserver {
       this.onTreeChange();
     }, this.debounceMs);
   }
+}
+
+/**
+ * True if `node` looks like a portal-mounted modal container — that is,
+ * an element added/removed at the top level of `<body>` whose subtree
+ * carries any of the signals the extractor uses to scope to a modal:
+ *
+ *   - `[aria-modal="true"]` (Radix, Headless UI, most custom dialogs)
+ *   - native `<dialog>` (open via `.showModal()` and matching `:modal`)
+ *   - `[role="dialog"]` or `[role="alertdialog"]`
+ *
+ * Skips our own injected elements (focus highlight, curtain).
+ */
+function isPortalModalContainer(
+  node: Node,
+  internalIds: ReadonlySet<string>,
+): boolean {
+  if (node.nodeType !== 1 /* ELEMENT_NODE */) return false;
+  const el = node as Element;
+  if (internalIds.has(el.id)) return false;
+
+  if (
+    el.matches?.(
+      '[aria-modal="true"], dialog, [role="dialog"], [role="alertdialog"]',
+    )
+  ) {
+    return true;
+  }
+  return !!el.querySelector?.(
+    '[aria-modal="true"], dialog, [role="dialog"], [role="alertdialog"]',
+  );
 }

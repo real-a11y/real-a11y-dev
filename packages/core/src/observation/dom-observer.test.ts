@@ -319,4 +319,124 @@ describe("DomObserver", () => {
       expect(() => observer.stop()).not.toThrow();
     });
   });
+
+  // Modal dialogs from React Portal (Radix, Headless UI), Vue Teleport,
+  // etc. mount into `document.body` outside the configured root. Without
+  // the secondary `document.body` observer, the extractor never knew the
+  // modal had opened and the panel stayed on the trigger's pre-open state.
+  describe("portal-mounted modals", () => {
+    let appRoot: HTMLElement;
+
+    beforeEach(() => {
+      appRoot = document.createElement("div");
+      appRoot.id = "app-root";
+      document.body.appendChild(appRoot);
+    });
+
+    it("fires when an [aria-modal] element is appended to <body> outside the root", async () => {
+      observer = new DomObserver(appRoot, onTreeChange, 100);
+      observer.start();
+
+      // Simulate what Radix does on open: render a portal wrapper into
+      // document.body containing the dialog with aria-modal="true".
+      const portal = document.createElement("div");
+      const dialog = document.createElement("div");
+      dialog.setAttribute("role", "dialog");
+      dialog.setAttribute("aria-modal", "true");
+      dialog.textContent = "Modal content";
+      portal.appendChild(dialog);
+      document.body.appendChild(portal);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("fires when the portal wrapper is itself the [aria-modal] element", async () => {
+      observer = new DomObserver(appRoot, onTreeChange, 100);
+      observer.start();
+
+      const dialog = document.createElement("div");
+      dialog.setAttribute("role", "dialog");
+      dialog.setAttribute("aria-modal", "true");
+      document.body.appendChild(dialog);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalled();
+    });
+
+    it("fires when a native <dialog> is appended to <body>", async () => {
+      observer = new DomObserver(appRoot, onTreeChange, 100);
+      observer.start();
+
+      const dialog = document.createElement("dialog");
+      document.body.appendChild(dialog);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalled();
+    });
+
+    it("fires on removal of a portal-mounted modal (close)", async () => {
+      const portal = document.createElement("div");
+      const dialog = document.createElement("div");
+      dialog.setAttribute("role", "dialog");
+      dialog.setAttribute("aria-modal", "true");
+      portal.appendChild(dialog);
+      document.body.appendChild(portal);
+
+      observer = new DomObserver(appRoot, onTreeChange, 100);
+      observer.start();
+
+      portal.remove();
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalled();
+    });
+
+    it("ignores body-level mutations that are not modal-shaped", async () => {
+      observer = new DomObserver(appRoot, onTreeChange, 100);
+      observer.start();
+
+      // A plain script/style/div appended to body — not a portal modal.
+      const plain = document.createElement("div");
+      plain.textContent = "just a div";
+      document.body.appendChild(plain);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+
+    it("ignores our own injected overlay/curtain elements", async () => {
+      observer = new DomObserver(appRoot, onTreeChange, 100);
+      observer.start();
+
+      const highlight = document.createElement("div");
+      highlight.id = "__sn-highlight";
+      // Even if this element somehow contained an aria-modal descendant
+      // (it shouldn't, but defense-in-depth), it's filtered out by id.
+      document.body.appendChild(highlight);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+
+    it("stop() disconnects the portal observer", async () => {
+      observer = new DomObserver(appRoot, onTreeChange, 100);
+      observer.start();
+      observer.stop();
+
+      const dialog = document.createElement("div");
+      dialog.setAttribute("aria-modal", "true");
+      document.body.appendChild(dialog);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+  });
 });
