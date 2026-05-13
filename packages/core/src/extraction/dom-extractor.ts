@@ -589,13 +589,53 @@ function findActiveModal(doc: Document): Element | null {
   return null;
 }
 
+/**
+ * Find portal-mounted *overlay* content sitting outside the configured
+ * root. Returns `document.body` (the natural superset of root +
+ * portals) when any non-modal overlay role exists outside root — i.e.
+ * a dropdown menu, a listbox popover, a tooltip, or a live-region
+ * toast that mounted via React Portal / Vue Teleport.
+ *
+ * Modal dialogs are handled separately by `findActiveModal()`: when a
+ * modal is open, AT scoping is exclusive to the modal, not "root +
+ * modal" — so the modal path takes precedence over this one.
+ *
+ * Returns `null` when there's nothing portal-mounted outside `root`
+ * — extraction stays scoped to `root` as before.
+ */
+function findPortalOverlay(doc: Document, root: Element): Element | null {
+  const body = doc.body;
+  if (!body || body === root || root.contains(body)) return null;
+
+  // Non-modal portal roles. Modals are handled by findActiveModal().
+  const overlays = doc.querySelectorAll(
+    '[role="menu"], [role="menubar"], [role="listbox"], [role="tooltip"], ' +
+      '[role="status"], [role="alert"], [role="log"], [aria-live]',
+  );
+  for (const el of overlays) {
+    if (!root.contains(el) && isActuallyVisible(el)) {
+      return body;
+    }
+  }
+  return null;
+}
+
 /** Extract a complete DOM tree from a root element */
 export function extractDomTree(root: Element): ExtractionResult {
   const nodes = new Map<string, SemanticNode>();
 
-  // If a modal dialog is active, scope extraction to within it
+  // Scope selection, in priority order:
+  //   1. Active modal — scopes exclusively to the modal (content
+  //      behind a modal is inert to AT).
+  //   2. Portal overlay outside root — non-modal overlay (menu,
+  //      tooltip, toast, listbox) mounted into body by React Portal
+  //      etc. Pivot to body so the portal content joins the tree.
+  //   3. Configured root — the default.
   const activeModal = findActiveModal(root.ownerDocument);
-  const effectiveRoot = activeModal || root;
+  const portalRoot = activeModal
+    ? null
+    : findPortalOverlay(root.ownerDocument, root);
+  const effectiveRoot = activeModal || portalRoot || root;
 
   // Pre-collect aria-labelledby targets so we don't accidentally hide them.
   // (Elements that are labelledby targets are visible content — they label something.)

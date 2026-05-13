@@ -155,22 +155,26 @@ export class DomObserver {
 
     // Modal dialogs from React Portal, Vue Teleport, etc. mount into
     // `document.body` — *outside* `this.root`, so the primary observer
-    // above doesn't see them. The extractor's `findActiveModal()`
-    // scans the whole document for `[aria-modal="true"]` and pivots to
-    // it as the effective root, but only when extraction *runs* —
-    // nothing triggers a run unless mutations are observed.
+    // above doesn't see them. Same for non-modal overlays: dropdown
+    // menus, listboxes (Select / Combobox), tooltips, and toasts
+    // (role="status" / role="alert" live regions).
     //
-    // This secondary observer watches `document.body` at top level only
-    // (no `subtree: true`) for childList changes, then filters for
-    // portal mounts whose subtree contains a modal-shaped element.
-    // Bounded surface — fires when Radix/Headless UI/Vue Teleport
-    // mounts/unmounts a portal, not on every internal DOM tweak.
+    // The extractor's `findActiveModal()` and `findPortalOverlay()`
+    // both scan the whole document and pivot the effective root
+    // accordingly — but only when extraction *runs*. Nothing
+    // triggers a run unless mutations are observed.
+    //
+    // This secondary observer watches `document.body` at top level
+    // only (no `subtree: true`) for childList changes, then filters
+    // for portal mounts whose subtree contains an overlay-shaped
+    // element. Bounded surface — fires when Radix / Headless UI /
+    // Vue Teleport mounts a portal, not on every internal DOM tweak.
     const body = this.root.ownerDocument?.body;
     if (body && body !== this.root && !this.root.contains(body)) {
       this.portalObserver = new MutationObserver((mutations) => {
         for (const m of mutations) {
           for (const node of [...m.addedNodes, ...m.removedNodes]) {
-            if (isPortalModalContainer(node, this.internalIds)) {
+            if (isPortalOverlayContainer(node, this.internalIds)) {
               this.scheduleChange();
               return;
             }
@@ -210,33 +214,39 @@ export class DomObserver {
   }
 }
 
+// Selectors for portal-mounted *overlay* content the extractor cares
+// about. Covers every common React-Portal / Vue-Teleport pattern in
+// production design systems:
+//
+//   - Modals: `[aria-modal="true"]`, native `<dialog>`, `[role="dialog"]`,
+//     `[role="alertdialog"]`
+//   - Dropdown menus: `[role="menu"]`, `[role="menubar"]`
+//   - Listboxes (Select / Combobox popovers): `[role="listbox"]`
+//   - Tooltips: `[role="tooltip"]`
+//   - Live regions: `[role="status"]`, `[role="alert"]`, `[role="log"]`,
+//     `[aria-live]`
+//
+// Plain analytics divs / script-injected widgets don't carry these
+// roles, so they don't trigger spurious re-extracts.
+const PORTAL_OVERLAY_SELECTOR =
+  '[aria-modal="true"], dialog, [role="dialog"], [role="alertdialog"], ' +
+  '[role="menu"], [role="menubar"], [role="listbox"], [role="tooltip"], ' +
+  '[role="status"], [role="alert"], [role="log"], [aria-live]';
+
 /**
- * True if `node` looks like a portal-mounted modal container — that is,
- * an element added/removed at the top level of `<body>` whose subtree
- * carries any of the signals the extractor uses to scope to a modal:
- *
- *   - `[aria-modal="true"]` (Radix, Headless UI, most custom dialogs)
- *   - native `<dialog>` (open via `.showModal()` and matching `:modal`)
- *   - `[role="dialog"]` or `[role="alertdialog"]`
- *
- * Skips our own injected elements (focus highlight, curtain).
+ * True if `node` looks like a portal-mounted overlay container — that
+ * is, an element added/removed at the top level of `<body>` whose
+ * subtree carries one of the role/attribute signals the extractor
+ * uses to scope onto portal content. Skips our own injected overlay
+ * sentinels.
  */
-function isPortalModalContainer(
+function isPortalOverlayContainer(
   node: Node,
   internalIds: ReadonlySet<string>,
 ): boolean {
   if (node.nodeType !== 1 /* ELEMENT_NODE */) return false;
   const el = node as Element;
   if (internalIds.has(el.id)) return false;
-
-  if (
-    el.matches?.(
-      '[aria-modal="true"], dialog, [role="dialog"], [role="alertdialog"]',
-    )
-  ) {
-    return true;
-  }
-  return !!el.querySelector?.(
-    '[aria-modal="true"], dialog, [role="dialog"], [role="alertdialog"]',
-  );
+  if (el.matches?.(PORTAL_OVERLAY_SELECTOR)) return true;
+  return !!el.querySelector?.(PORTAL_OVERLAY_SELECTOR);
 }
