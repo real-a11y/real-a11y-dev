@@ -199,7 +199,7 @@ describe("DomObserver", () => {
     });
   });
 
-  // ── Form-control value observation ────────────────────────────────────────
+  // ── Form-control value observation ──────────────────────────────────────────────
   // MutationObserver doesn't see typing — `.value` is a property, not a DOM
   // attribute or text node. Without listening for `input`/`change`, the tree
   // would render stale values whenever a user typed into a field directly.
@@ -433,6 +433,91 @@ describe("DomObserver", () => {
       const dialog = document.createElement("div");
       dialog.setAttribute("aria-modal", "true");
       document.body.appendChild(dialog);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+  });
+
+  // The selector that drives the secondary observer covers non-modal
+  // overlays too: dropdown menus, listboxes, tooltips, and live-region
+  // toasts. These tests pin the wider role set so a typo or accidental
+  // narrowing would surface here.
+  describe("portal-mounted non-modal overlays", () => {
+    let appRoot: HTMLElement;
+
+    beforeEach(() => {
+      appRoot = document.createElement("div");
+      appRoot.id = "app-root";
+      document.body.appendChild(appRoot);
+    });
+
+    it("fires when a [role='menu'] is portal-mounted to <body>", async () => {
+      observer = new DomObserver(appRoot, onTreeChange, 100);
+      observer.start();
+
+      const portal = document.createElement("div");
+      const menu = document.createElement("div");
+      menu.setAttribute("role", "menu");
+      portal.appendChild(menu);
+      document.body.appendChild(portal);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("fires when a [role='listbox'] popover is portal-mounted", async () => {
+      observer = new DomObserver(appRoot, onTreeChange, 100);
+      observer.start();
+
+      const listbox = document.createElement("div");
+      listbox.setAttribute("role", "listbox");
+      document.body.appendChild(listbox);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalled();
+    });
+
+    it("fires when a [role='status'] live-region toast is portal-mounted", async () => {
+      observer = new DomObserver(appRoot, onTreeChange, 100);
+      observer.start();
+
+      const toast = document.createElement("div");
+      toast.setAttribute("role", "status");
+      toast.textContent = "Saved successfully";
+      document.body.appendChild(toast);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalled();
+    });
+
+    it("fires when an [aria-live] element is portal-mounted", async () => {
+      observer = new DomObserver(appRoot, onTreeChange, 100);
+      observer.start();
+
+      const live = document.createElement("div");
+      live.setAttribute("aria-live", "polite");
+      document.body.appendChild(live);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalled();
+    });
+
+    it("still ignores plain body-level mutations with no overlay role", async () => {
+      observer = new DomObserver(appRoot, onTreeChange, 100);
+      observer.start();
+
+      // Generic widgets (analytics pixel, third-party script wrapper) carry
+      // none of the overlay roles in the selector — must not trigger a re-extract.
+      const widget = document.createElement("div");
+      widget.className = "analytics-pixel";
+      widget.textContent = "tracking";
+      document.body.appendChild(widget);
 
       await settleObserver(100);
 
