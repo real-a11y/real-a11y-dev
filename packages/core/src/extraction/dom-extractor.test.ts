@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
 import { resetIdCounter } from "../utils/id-generator.js";
 
@@ -415,6 +415,115 @@ describe("extractDomTree", () => {
         (n) => n.dom.tagName === "a",
       )!;
       expect(link.a11y.name).toBe("Real A11y — go to home");
+    });
+  });
+
+  // React Portal / Vue Teleport / Headless UI mount overlay content
+  // (menus, listboxes, tooltips, toasts, modals) into `document.body`
+  // — outside the configured root. The extractor pivots scope so the
+  // inspector panel reflects the portal content.
+  describe("portal-mounted overlays outside root", () => {
+    let appRoot: HTMLElement;
+
+    beforeEach(() => {
+      document.body.innerHTML = "";
+      appRoot = document.createElement("div");
+      appRoot.id = "app-root";
+      appRoot.innerHTML = "<button>Open menu</button>";
+      document.body.appendChild(appRoot);
+    });
+
+    function appendOverlay(html: string): Element {
+      const portal = document.createElement("div");
+      portal.innerHTML = html;
+      const overlay = portal.firstElementChild!;
+      document.body.appendChild(portal);
+      return overlay;
+    }
+
+    it("scopes to body when a [role='menu'] is portal-mounted outside root", () => {
+      appendOverlay(`
+        <div role="menu">
+          <div role="menuitem">Edit profile</div>
+          <div role="menuitem">Sign out</div>
+        </div>
+      `);
+
+      const tree = extractDomTree(appRoot);
+      const allNodes = [...tree.nodes.values()];
+      // The menu (outside appRoot) is included alongside the trigger.
+      expect(allNodes.some((n) => n.a11y.role === "menu")).toBe(true);
+      expect(
+        allNodes.some(
+          (n) => n.a11y.role === "menuitem" && n.a11y.name === "Edit profile",
+        ),
+      ).toBe(true);
+    });
+
+    it("scopes to body when a [role='listbox'] popover is portal-mounted", () => {
+      appendOverlay(`
+        <div role="listbox">
+          <div role="option">One</div>
+          <div role="option">Two</div>
+        </div>
+      `);
+
+      const tree = extractDomTree(appRoot);
+      const allNodes = [...tree.nodes.values()];
+      expect(allNodes.some((n) => n.a11y.role === "listbox")).toBe(true);
+    });
+
+    it("scopes to body when a [role='status'] toast appears outside root", () => {
+      appendOverlay(`
+        <div role="status">Saved successfully</div>
+      `);
+
+      const tree = extractDomTree(appRoot);
+      const allNodes = [...tree.nodes.values()];
+      expect(allNodes.some((n) => n.a11y.role === "status")).toBe(true);
+    });
+
+    it("active modal still wins over portal overlay (modal scope is exclusive)", () => {
+      // Both a modal AND a separate menu/toast outside root.
+      appendOverlay(`
+        <div role="dialog" aria-modal="true">
+          <p>Are you sure?</p>
+          <button>OK</button>
+        </div>
+      `);
+      appendOverlay(`<div role="status">Pending…</div>`);
+
+      const tree = extractDomTree(appRoot);
+      const allNodes = [...tree.nodes.values()];
+      // Modal scope is exclusive: dialog yes, status no.
+      expect(allNodes.some((n) => n.a11y.role === "dialog")).toBe(true);
+      expect(allNodes.some((n) => n.a11y.role === "status")).toBe(false);
+    });
+
+    it("stays scoped to root when no portal overlay is present", () => {
+      const tree = extractDomTree(appRoot);
+      const rootNode = tree.nodes.get(tree.rootId)!;
+      // Without portals, the root is appRoot itself, not body.
+      expect(rootNode.dom.attributes["id"]).toBe("app-root");
+    });
+
+    it("ignores hidden portal overlays (no pivot)", () => {
+      const overlay = appendOverlay(`
+        <div role="menu" style="display: none">
+          <div role="menuitem">Should not appear</div>
+        </div>
+      `);
+      // Confirm jsdom respects the style
+      expect((overlay as HTMLElement).style.display).toBe("none");
+
+      const tree = extractDomTree(appRoot);
+      const rootNode = tree.nodes.get(tree.rootId)!;
+      // Hidden overlay shouldn't trigger the pivot.
+      expect(rootNode.dom.attributes["id"]).toBe("app-root");
+    });
+
+    afterEach(() => {
+      document.body.innerHTML = "";
     });
   });
 });
