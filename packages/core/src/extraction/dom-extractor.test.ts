@@ -500,6 +500,33 @@ describe("extractDomTree", () => {
       expect(allNodes.some((n) => n.a11y.role === "status")).toBe(false);
     });
 
+    it("pivots to [role='dialog'] without aria-modal (Radix Dialog ≥1.1)", () => {
+      // Radix Dialog 1.1+ and several modern libs (Headless UI, Reach UI)
+      // omit aria-modal — they enforce modality via sibling-aria-hidden +
+      // focus trap instead. The extractor must still recognise a visible
+      // role="dialog" as the modal scope, otherwise pivot silently fails
+      // and the panel shows page chrome instead of the dialog content.
+      appendOverlay(`
+        <div role="dialog" aria-labelledby="t">
+          <h2 id="t">Confirm deletion</h2>
+          <p>This action cannot be undone.</p>
+          <button>Close</button>
+        </div>
+      `);
+
+      const tree = extractDomTree(appRoot);
+      const allNodes = [...tree.nodes.values()];
+      expect(allNodes.some((n) => n.a11y.role === "dialog")).toBe(true);
+      expect(
+        allNodes.some(
+          (n) => n.a11y.role === "button" && n.a11y.name === "Close",
+        ),
+      ).toBe(true);
+      // Modal scope is exclusive — the original "Open menu" trigger inside
+      // appRoot must NOT appear when the dialog is the effective root.
+      expect(allNodes.some((n) => n.a11y.name === "Open menu")).toBe(false);
+    });
+
     it("stays scoped to root when no portal overlay is present", () => {
       const tree = extractDomTree(appRoot);
       const rootNode = tree.nodes.get(tree.rootId)!;

@@ -567,13 +567,21 @@ function isActuallyVisible(element: Element): boolean {
  * scope navigation exclusively to the modal content.
  */
 function findActiveModal(doc: Document): Element | null {
-  // Custom modal dialogs: aria-modal="true" (most common pattern)
-  const ariaModals = doc.querySelectorAll('[aria-modal="true"]');
-  for (let i = ariaModals.length - 1; i >= 0; i--) {
+  // Visible dialog elements:
+  //   - [aria-modal="true"]: explicit modal hint.
+  //   - [role="dialog"] / [role="alertdialog"]: any rendered dialog.
+  //     Radix Dialog ≥1.1 and several modern libs no longer set
+  //     aria-modal — they rely on sibling-aria-hidden + focus trap
+  //     instead. AT still scopes to a visible role="dialog", so we do
+  //     too. Visibility check filters out closed/unmounted dialogs.
+  const dialogs = doc.querySelectorAll(
+    '[aria-modal="true"], [role="dialog"], [role="alertdialog"]',
+  );
+  for (let i = dialogs.length - 1; i >= 0; i--) {
     // Must check full ancestor chain — parent may have display:none even if
     // the dialog element itself has no hiding style (isSubtreeHidden only
     // checks the element itself, not ancestors).
-    if (isActuallyVisible(ariaModals[i])) return ariaModals[i];
+    if (isActuallyVisible(dialogs[i])) return dialogs[i];
   }
 
   // Native <dialog> opened with showModal() — matches :modal pseudo-class
