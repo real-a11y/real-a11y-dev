@@ -1,9 +1,53 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import {
-  TabsCorrect,
+  DialogBroken,
+  DialogCorrect,
+  DisclosureBroken,
+  DisclosureCorrect,
+  MenuBroken,
+  MenuCorrect,
+  SliderBroken,
+  SliderCorrect,
   TabsBroken,
+  TabsCorrect,
+  ToastBroken,
+  ToastCorrect,
+  ToolbarBroken,
+  ToolbarCorrect,
   type TabsExampleProps,
 } from "@real-a11y-dev/example-patterns";
+
+const toolbarItems = [
+  { id: "bold", label: "Bold" },
+  { id: "italic", label: "Italic" },
+  { id: "underline", label: "Underline" },
+];
+
+const menuItems = [
+  { id: "profile", label: "Edit profile" },
+  { id: "settings", label: "Settings" },
+  { id: "signout", label: "Sign out" },
+];
+
+/** Two-column wrapper for the correct-vs-broken APG demo sections. */
+function SideBySide({ left, right }: { left: ReactNode; right: ReactNode }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+      <div>
+        <p style={{ fontWeight: 600, marginBottom: 8, color: "#444" }}>
+          ✓ Correct
+        </p>
+        {left}
+      </div>
+      <div>
+        <p style={{ fontWeight: 600, marginBottom: 8, color: "#444" }}>
+          ⚠ Broken
+        </p>
+        {right}
+      </div>
+    </div>
+  );
+}
 
 /**
  * A realistic-looking mini app with:
@@ -212,6 +256,138 @@ export function DemoApp() {
             trees, or press Tab to feel the keyboard difference.
           </p>
           <TabsDemo />
+        </section>
+
+        {/* Section 7 — APG Slider */}
+        <section aria-labelledby="slider-heading" style={{ marginBottom: 40 }}>
+          <h2 id="slider-heading">APG Slider — correct vs broken</h2>
+          <p style={{ color: "#666", marginBottom: 16 }}>
+            Radix slider on the left has <code>role="slider"</code> +
+            <code>aria-valuemin/max/now</code> + full keyboard. The hand-rolled
+            version on the right is just a styled <code>{"<div>"}</code> — no
+            role, no value, no keyboard.
+          </p>
+          <SideBySide
+            left={<SliderCorrect label="Volume" defaultValue={50} />}
+            right={<SliderBroken label="Volume" defaultValue={50} />}
+          />
+        </section>
+
+        {/* Section 8 — APG Disclosure */}
+        <section
+          aria-labelledby="disclosure-pattern-heading"
+          style={{ marginBottom: 40 }}
+        >
+          <h2 id="disclosure-pattern-heading">
+            APG Disclosure — correct vs broken
+          </h2>
+          <p style={{ color: "#666", marginBottom: 16 }}>
+            Both triggers toggle a panel below. The left one carries{" "}
+            <code>aria-expanded</code> + <code>aria-controls</code>; the right
+            one carries neither. Watch the inspector's chip on each trigger row.
+          </p>
+          <SideBySide
+            left={
+              <DisclosureCorrect trigger="What is Real A11y?">
+                <p>Accessibility tooling that works in the real world.</p>
+              </DisclosureCorrect>
+            }
+            right={
+              <DisclosureBroken trigger="What is Real A11y?">
+                <p>Accessibility tooling that works in the real world.</p>
+              </DisclosureBroken>
+            }
+          />
+        </section>
+
+        {/* Section 9 — APG Dialog */}
+        <section aria-labelledby="dialog-heading" style={{ marginBottom: 40 }}>
+          <h2 id="dialog-heading">APG Modal Dialog — correct vs broken</h2>
+          <p style={{ color: "#666", marginBottom: 16 }}>
+            Open each dialog and try Tab + Escape. Radix on the left traps
+            focus, returns it on close, and announces itself as a modal. The
+            hand-rolled one is just a positioned <code>{"<div>"}</code>.
+          </p>
+          <SideBySide
+            left={
+              <DialogCorrect
+                trigger="Open correct dialog"
+                title="Confirm deletion"
+                description="This action cannot be undone."
+              >
+                <p>All your data will be permanently deleted.</p>
+              </DialogCorrect>
+            }
+            right={
+              <DialogBroken
+                trigger="Open broken dialog"
+                title="Confirm deletion"
+                description="This action cannot be undone."
+              >
+                <p>All your data will be permanently deleted.</p>
+              </DialogBroken>
+            }
+          />
+        </section>
+
+        {/* Section 10 — APG Toolbar */}
+        <section aria-labelledby="toolbar-heading" style={{ marginBottom: 40 }}>
+          <h2 id="toolbar-heading">APG Toolbar — correct vs broken</h2>
+          <p style={{ color: "#666", marginBottom: 16 }}>
+            Press Tab into each toolbar. The correct one uses roving tabindex —
+            Tab enters once and ←/→ moves within. The broken one walks through
+            every button.
+          </p>
+          <SideBySide
+            left={
+              <ToolbarCorrect label="Text formatting" items={toolbarItems} />
+            }
+            right={
+              <ToolbarBroken label="Text formatting" items={toolbarItems} />
+            }
+          />
+        </section>
+
+        {/* Section 11 — APG Toast / Live region */}
+        <section aria-labelledby="toast-heading" style={{ marginBottom: 40 }}>
+          <h2 id="toast-heading">APG Toast — correct vs broken</h2>
+          <p style={{ color: "#666", marginBottom: 16 }}>
+            Click each button. Both show a toast visually, but only the correct
+            one announces via a live region — a screen reader user has no idea
+            anything happened on the right.
+          </p>
+          <SideBySide
+            left={
+              <ToastCorrect
+                trigger="Save (correct)"
+                title="Saved"
+                description="Your changes were saved."
+              />
+            }
+            right={
+              <ToastBroken
+                trigger="Save (broken)"
+                title="Saved"
+                description="Your changes were saved."
+              />
+            }
+          />
+        </section>
+
+        {/* Section 12 — APG Menu */}
+        <section aria-labelledby="menu-heading" style={{ marginBottom: 40 }}>
+          <h2 id="menu-heading">APG Menu — correct vs broken</h2>
+          <p style={{ color: "#666", marginBottom: 16 }}>
+            Both triggers open a dropdown. The correct one announces itself as a
+            popup-opening button (<code>aria-haspopup</code> +
+            <code>aria-expanded</code>) and renders <code>role="menu"</code>{" "}
+            with proper focus management. The broken one is just buttons inside
+            a positioned <code>{"<div>"}</code>.
+          </p>
+          <SideBySide
+            left={<MenuCorrect trigger="Account ▾" items={menuItems} />}
+            right={<MenuBroken trigger="Account ▾" items={menuItems} />}
+          />
         </section>
       </main>
 
