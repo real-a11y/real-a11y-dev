@@ -199,7 +199,7 @@ describe("DomObserver", () => {
     });
   });
 
-  // ── Form-control value observation ────────────────────────────────────────
+  // ── Form-control value observation ──────────────────────────────────────────────
   // MutationObserver doesn't see typing — `.value` is a property, not a DOM
   // attribute or text node. Without listening for `input`/`change`, the tree
   // would render stale values whenever a user typed into a field directly.
@@ -317,6 +317,211 @@ describe("DomObserver", () => {
       observer.start();
       observer.stop();
       expect(() => observer.stop()).not.toThrow();
+    });
+  });
+
+  // Modal dialogs from React Portal (Radix, Headless UI), Vue Teleport,
+  // etc. mount into `document.body` outside the configured root. Without
+  // the secondary `document.body` observer, the extractor never knew the
+  // modal had opened and the panel stayed on the trigger's pre-open state.
+  describe("portal-mounted modals", () => {
+    let appRoot: HTMLElement;
+
+    beforeEach(() => {
+      appRoot = document.createElement("div");
+      appRoot.id = "app-root";
+      document.body.appendChild(appRoot);
+    });
+
+    it("fires when an [aria-modal] element is appended to <body> outside the root", async () => {
+      observer = new DomObserver(appRoot, onTreeChange, 100);
+      observer.start();
+
+      // Simulate what Radix does on open: render a portal wrapper into
+      // document.body containing the dialog with aria-modal="true".
+      const portal = document.createElement("div");
+      const dialog = document.createElement("div");
+      dialog.setAttribute("role", "dialog");
+      dialog.setAttribute("aria-modal", "true");
+      dialog.textContent = "Modal content";
+      portal.appendChild(dialog);
+      document.body.appendChild(portal);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("fires when the portal wrapper is itself the [aria-modal] element", async () => {
+      observer = new DomObserver(appRoot, onTreeChange, 100);
+      observer.start();
+
+      const dialog = document.createElement("div");
+      dialog.setAttribute("role", "dialog");
+      dialog.setAttribute("aria-modal", "true");
+      document.body.appendChild(dialog);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalled();
+    });
+
+    it("fires when a native <dialog> is appended to <body>", async () => {
+      observer = new DomObserver(appRoot, onTreeChange, 100);
+      observer.start();
+
+      const dialog = document.createElement("dialog");
+      document.body.appendChild(dialog);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalled();
+    });
+
+    it("fires on removal of a portal-mounted modal (close)", async () => {
+      const portal = document.createElement("div");
+      const dialog = document.createElement("div");
+      dialog.setAttribute("role", "dialog");
+      dialog.setAttribute("aria-modal", "true");
+      portal.appendChild(dialog);
+      document.body.appendChild(portal);
+
+      observer = new DomObserver(appRoot, onTreeChange, 100);
+      observer.start();
+
+      portal.remove();
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalled();
+    });
+
+    it("ignores body-level mutations that are not modal-shaped", async () => {
+      observer = new DomObserver(appRoot, onTreeChange, 100);
+      observer.start();
+
+      // A plain script/style/div appended to body — not a portal modal.
+      const plain = document.createElement("div");
+      plain.textContent = "just a div";
+      document.body.appendChild(plain);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+
+    it("ignores our own injected overlay/curtain elements", async () => {
+      observer = new DomObserver(appRoot, onTreeChange, 100);
+      observer.start();
+
+      const highlight = document.createElement("div");
+      highlight.id = "__sn-highlight";
+      // Even if this element somehow contained an aria-modal descendant
+      // (it shouldn't, but defense-in-depth), it's filtered out by id.
+      document.body.appendChild(highlight);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+
+    it("stop() disconnects the portal observer", async () => {
+      observer = new DomObserver(appRoot, onTreeChange, 100);
+      observer.start();
+      observer.stop();
+
+      const dialog = document.createElement("div");
+      dialog.setAttribute("aria-modal", "true");
+      document.body.appendChild(dialog);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+  });
+
+  // The selector that drives the secondary observer covers non-modal
+  // overlays too: dropdown menus, listboxes, tooltips, and live-region
+  // toasts. These tests pin the wider role set so a typo or accidental
+  // narrowing would surface here.
+  describe("portal-mounted non-modal overlays", () => {
+    let appRoot: HTMLElement;
+
+    beforeEach(() => {
+      appRoot = document.createElement("div");
+      appRoot.id = "app-root";
+      document.body.appendChild(appRoot);
+    });
+
+    it("fires when a [role='menu'] is portal-mounted to <body>", async () => {
+      observer = new DomObserver(appRoot, onTreeChange, 100);
+      observer.start();
+
+      const portal = document.createElement("div");
+      const menu = document.createElement("div");
+      menu.setAttribute("role", "menu");
+      portal.appendChild(menu);
+      document.body.appendChild(portal);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("fires when a [role='listbox'] popover is portal-mounted", async () => {
+      observer = new DomObserver(appRoot, onTreeChange, 100);
+      observer.start();
+
+      const listbox = document.createElement("div");
+      listbox.setAttribute("role", "listbox");
+      document.body.appendChild(listbox);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalled();
+    });
+
+    it("fires when a [role='status'] live-region toast is portal-mounted", async () => {
+      observer = new DomObserver(appRoot, onTreeChange, 100);
+      observer.start();
+
+      const toast = document.createElement("div");
+      toast.setAttribute("role", "status");
+      toast.textContent = "Saved successfully";
+      document.body.appendChild(toast);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalled();
+    });
+
+    it("fires when an [aria-live] element is portal-mounted", async () => {
+      observer = new DomObserver(appRoot, onTreeChange, 100);
+      observer.start();
+
+      const live = document.createElement("div");
+      live.setAttribute("aria-live", "polite");
+      document.body.appendChild(live);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalled();
+    });
+
+    it("still ignores plain body-level mutations with no overlay role", async () => {
+      observer = new DomObserver(appRoot, onTreeChange, 100);
+      observer.start();
+
+      // Generic widgets (analytics pixel, third-party script wrapper) carry
+      // none of the overlay roles in the selector — must not trigger a re-extract.
+      const widget = document.createElement("div");
+      widget.className = "analytics-pixel";
+      widget.textContent = "tracking";
+      document.body.appendChild(widget);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
     });
   });
 });
