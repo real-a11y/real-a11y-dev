@@ -1,4 +1,8 @@
-import type { SemanticNode, TreeViewMode } from "@real-a11y-dev/core";
+import type {
+  ActionType,
+  SemanticNode,
+  TreeViewMode,
+} from "@real-a11y-dev/core";
 import { getPrimaryAction, ACTION_LABELS } from "@real-a11y-dev/core";
 
 import type { ControlsLink } from "./TreePanel.js";
@@ -15,7 +19,13 @@ interface TreeNodeProps {
   isFlashing?: boolean;
   onSelect: (id: string) => void;
   onToggle: (id: string) => void;
-  onActivate: (id: string) => void;
+  /**
+   * Called when the row's action surface is invoked (button click). The
+   * optional `action` overrides the primary-action lookup the panel does
+   * by default — used by the slider/spinbutton ▲/▼ pair so each button
+   * dispatches its own increment/decrement instead of the primary.
+   */
+  onActivate: (id: string, action?: ActionType) => void;
   onHover: (id: string | null) => void;
   /**
    * Cross-links rendered on the trigger row of a disclosure pair (this
@@ -172,7 +182,17 @@ export function TreeNode({
   onJumpToNode,
 }: TreeNodeProps) {
   const hasChildren = node.childIds.length > 0;
-  const primaryAction = getPrimaryAction(node.interaction.actions);
+  const actions = node.interaction.actions;
+  // Slider / spinbutton rows surface a paired ▲/▼ control instead of a
+  // single primary-action button — so users can step the value in either
+  // direction (and the Screen Curtain still works because the panel
+  // drives the keystroke end-to-end). When the pair is shown, suppress
+  // the primary button to avoid duplicating "Increment" alongside ▲.
+  const showStepPair =
+    actions.includes("increment") && actions.includes("decrement");
+  const primaryAction = showStepPair
+    ? null
+    : getPrimaryAction(node.interaction.actions);
 
   const classNames = [
     "sn-node",
@@ -251,6 +271,38 @@ export function TreeNode({
         >
           {ACTION_LABELS[primaryAction]}
         </button>
+      )}
+
+      {/* Slider / spinbutton: paired ▼/▲ stepper. The order is
+          decrement-then-increment so the visible glyphs read as a single
+          range control (▼ ▲) rather than as two unrelated buttons. */}
+      {showStepPair && (
+        <span class="sn-action-pair">
+          <button
+            class="sn-action sn-action--step"
+            tabIndex={-1}
+            aria-label={ACTION_LABELS.decrement}
+            title={ACTION_LABELS.decrement}
+            onClick={(e) => {
+              e.stopPropagation();
+              onActivate(node.id, "decrement");
+            }}
+          >
+            {"▼"}
+          </button>
+          <button
+            class="sn-action sn-action--step"
+            tabIndex={-1}
+            aria-label={ACTION_LABELS.increment}
+            title={ACTION_LABELS.increment}
+            onClick={(e) => {
+              e.stopPropagation();
+              onActivate(node.id, "increment");
+            }}
+          >
+            {"▲"}
+          </button>
+        </span>
       )}
     </div>
   );

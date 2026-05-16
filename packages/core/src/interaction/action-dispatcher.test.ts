@@ -293,4 +293,115 @@ describe("ActionDispatcher", () => {
       expect(result.error).toMatch(/no longer in DOM/i);
     });
   });
+
+  // Slider / spinbutton stepping. Two paths share one entry point:
+  //   - Native <input type="range"|"number">: use the .stepUp/.stepDown
+  //     API + emit input/change. No keystrokes needed.
+  //   - Custom ARIA widgets (Radix `<span role="slider">`, Headless UI):
+  //     focus the element and dispatch ArrowRight/ArrowLeft keydown+keyup.
+  describe("increment / decrement actions", () => {
+    it("steps a native <input type='range'> up via .stepUp + input/change events", () => {
+      const input = document.createElement("input");
+      input.type = "range";
+      input.min = "0";
+      input.max = "100";
+      input.step = "1";
+      input.value = "50";
+      document.body.appendChild(input);
+      refs.set("n1", input);
+
+      const inputSpy = vi.fn();
+      const changeSpy = vi.fn();
+      input.addEventListener("input", inputSpy);
+      input.addEventListener("change", changeSpy);
+
+      const result = dispatcher.dispatch({ nodeId: "n1", action: "increment" });
+
+      expect(result.success).toBe(true);
+      expect(input.value).toBe("51");
+      expect(inputSpy).toHaveBeenCalledTimes(1);
+      expect(changeSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("steps a native <input type='number'> down via .stepDown", () => {
+      const input = document.createElement("input");
+      input.type = "number";
+      input.value = "10";
+      document.body.appendChild(input);
+      refs.set("n1", input);
+
+      const result = dispatcher.dispatch({ nodeId: "n1", action: "decrement" });
+
+      expect(result.success).toBe(true);
+      expect(input.value).toBe("9");
+    });
+
+    it("dispatches ArrowRight keydown+keyup on a custom [role='slider']", () => {
+      // Radix Slider renders a <span role="slider"> that listens for arrow
+      // keys on itself. Setting `.value` does nothing — the dispatcher must
+      // focus the element and fire real keyboard events.
+      const slider = document.createElement("span");
+      slider.setAttribute("role", "slider");
+      slider.tabIndex = 0;
+      document.body.appendChild(slider);
+      refs.set("n1", slider);
+
+      const seen: Array<{ type: string; key: string }> = [];
+      slider.addEventListener("keydown", (e) =>
+        seen.push({ type: "keydown", key: (e as KeyboardEvent).key }),
+      );
+      slider.addEventListener("keyup", (e) =>
+        seen.push({ type: "keyup", key: (e as KeyboardEvent).key }),
+      );
+
+      const result = dispatcher.dispatch({ nodeId: "n1", action: "increment" });
+
+      expect(result.success).toBe(true);
+      expect(seen).toEqual([
+        { type: "keydown", key: "ArrowRight" },
+        { type: "keyup", key: "ArrowRight" },
+      ]);
+      expect(document.activeElement).toBe(slider);
+    });
+
+    it("dispatches ArrowLeft on decrement for a custom [role='slider']", () => {
+      const slider = document.createElement("span");
+      slider.setAttribute("role", "slider");
+      slider.tabIndex = 0;
+      document.body.appendChild(slider);
+      refs.set("n1", slider);
+
+      const keys: string[] = [];
+      slider.addEventListener("keydown", (e) =>
+        keys.push((e as KeyboardEvent).key),
+      );
+
+      dispatcher.dispatch({ nodeId: "n1", action: "decrement" });
+
+      expect(keys).toEqual(["ArrowLeft"]);
+    });
+
+    it("works under the Screen Curtain (no reliance on visibility)", () => {
+      // The Screen Curtain hides the page from the user but leaves the DOM
+      // intact. The dispatcher must still drive the slider — focus + keydown
+      // is the same code path regardless of visual occlusion.
+      const slider = document.createElement("span");
+      slider.setAttribute("role", "slider");
+      slider.tabIndex = 0;
+      document.body.appendChild(slider);
+      refs.set("n1", slider);
+
+      let value = 5;
+      slider.addEventListener("keydown", (e) => {
+        if ((e as KeyboardEvent).key === "ArrowRight") value++;
+        if ((e as KeyboardEvent).key === "ArrowLeft") value--;
+      });
+
+      dispatcher.dispatch({ nodeId: "n1", action: "increment" });
+      dispatcher.dispatch({ nodeId: "n1", action: "increment" });
+      dispatcher.dispatch({ nodeId: "n1", action: "decrement" });
+
+      expect(value).toBe(6);
+    });
+  });
 });

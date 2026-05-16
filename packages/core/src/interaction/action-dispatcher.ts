@@ -76,6 +76,10 @@ export class ActionDispatcher {
         return this.handleSelect(element, request.payload);
       case "scroll":
         return this.handleScroll(element);
+      case "increment":
+        return this.handleStep(element, 1);
+      case "decrement":
+        return this.handleStep(element, -1);
       default:
         return { success: false, error: `Unknown action: ${request.action}` };
     }
@@ -200,6 +204,56 @@ export class ActionDispatcher {
       behavior: "smooth",
       block: "center",
     });
+    return { success: true };
+  }
+
+  // Slider / spinbutton step. Native <input type="range"|"number"> have a
+  // .stepUp() / .stepDown() API and emit input/change automatically — use
+  // it so the DOM `value` and the visual thumb stay in sync without going
+  // through the keyboard path. Custom ARIA widgets (Radix Slider span,
+  // headless date pickers, etc.) listen for ArrowRight/ArrowLeft on the
+  // element itself, so focus the element first and dispatch a full
+  // keydown+keyup pair. Works under the Screen Curtain because nothing
+  // here depends on the user seeing the page — the panel drives the value
+  // change end-to-end.
+  private handleStep(element: Element, delta: 1 | -1): ActionResult {
+    const tag = element.tagName.toLowerCase();
+    if (tag === "input") {
+      const input = element as HTMLInputElement;
+      const type = input.type;
+      if (type === "range" || type === "number") {
+        try {
+          if (delta > 0) input.stepUp();
+          else input.stepDown();
+        } catch {
+          // stepUp/stepDown throw on invalid configurations — fall through
+          // to the keyboard path so the user still gets feedback.
+          return this.dispatchArrowStep(element, delta);
+        }
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        return { success: true };
+      }
+    }
+    return this.dispatchArrowStep(element, delta);
+  }
+
+  private dispatchArrowStep(element: Element, delta: 1 | -1): ActionResult {
+    const htmlEl = element as HTMLElement;
+    if (htmlEl.focus) htmlEl.focus({ preventScroll: true });
+    const target = (document.activeElement as Element | null) ?? element;
+    const key = delta > 0 ? "ArrowRight" : "ArrowLeft";
+    const code = delta > 0 ? "ArrowRight" : "ArrowLeft";
+    const keyCode = delta > 0 ? 39 : 37;
+    const init: KeyboardEventInit = {
+      key,
+      code,
+      keyCode,
+      bubbles: true,
+      cancelable: true,
+    };
+    target.dispatchEvent(new KeyboardEvent("keydown", init));
+    target.dispatchEvent(new KeyboardEvent("keyup", init));
     return { success: true };
   }
 }

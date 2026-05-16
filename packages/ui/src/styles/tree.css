@@ -648,6 +648,27 @@
   color: #ffffff;
 }
 
+/* Slider / spinbutton paired stepper (▼ ▲). Sits in the same trailing
+   slot as the regular .sn-action, but shows two compact buttons side by
+   side so the user can step the value in either direction. */
+.sn-action-pair {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.sn-action-pair .sn-action {
+  margin-left: 0;
+}
+
+.sn-action--step {
+  padding: 1px 5px;
+  font-size: 10px;
+  line-height: 1;
+}
+
 /* ---- Action feedback bar ---- */
 .sn-action-feedback {
   padding: 4px 12px;

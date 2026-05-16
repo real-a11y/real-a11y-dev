@@ -7,7 +7,9 @@ export type ActionType =
   | "navigate"
   | "toggle"
   | "select"
-  | "scroll";
+  | "scroll"
+  | "increment"
+  | "decrement";
 
 /** Which tree representation to display */
 export type TreeViewMode = "dom" | "a11y" | "tab";
