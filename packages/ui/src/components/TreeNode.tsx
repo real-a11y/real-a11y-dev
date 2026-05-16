@@ -275,7 +275,30 @@ export function TreeNode({
 
       {/* Slider / spinbutton: paired ▼/▲ stepper. The order is
           decrement-then-increment so the visible glyphs read as a single
-          range control (▼ ▲) rather than as two unrelated buttons. */}
+          range control (▼ ▲) rather than as two unrelated buttons.
+
+          The onClick handler is defensive about focus management because
+          this only fails in the same-document case (the React-app inline
+          panel) where focus is one shared resource between the panel
+          button and the page slider. Radix Slider re-focuses its thumb
+          in an effect after its state update commits — with the panel
+          and slider in the same document that yanks focus away from the
+          button the user just clicked, leaving the focus ring on the
+          slider thumb. The extension and Storybook variants don't see
+          this because the panel and slider live in separate documents
+          and each owns its own document.activeElement.
+
+          Three layers of defense (any one of them is enough on its own,
+          but together they cover every timing the widget might use):
+            1. `btn.focus()` before dispatch — primes the dispatcher's
+               previouslyFocused capture so its own restore aims here.
+            2. `setTimeout(0)` re-focus — wins against synchronous and
+               microtask refocus by the widget.
+            3. `requestAnimationFrame` re-focus — wins against widgets
+               that schedule focus through React commit + effect (Radix
+               Slider falls into this bucket).
+          All three no-op when focus is already on the button, so rapid
+          clicks behave correctly. */}
       {showStepPair && (
         <span class="sn-action-pair">
           <button
@@ -285,7 +308,16 @@ export function TreeNode({
             title={ACTION_LABELS.decrement}
             onClick={(e) => {
               e.stopPropagation();
+              const btn = e.currentTarget as HTMLButtonElement;
+              btn.focus({ preventScroll: true });
               onActivate(node.id, "decrement");
+              const reclaim = () => {
+                if (btn.isConnected && document.activeElement !== btn) {
+                  btn.focus({ preventScroll: true });
+                }
+              };
+              setTimeout(reclaim, 0);
+              requestAnimationFrame(reclaim);
             }}
           >
             {"▼"}
@@ -297,7 +329,16 @@ export function TreeNode({
             title={ACTION_LABELS.increment}
             onClick={(e) => {
               e.stopPropagation();
+              const btn = e.currentTarget as HTMLButtonElement;
+              btn.focus({ preventScroll: true });
               onActivate(node.id, "increment");
+              const reclaim = () => {
+                if (btn.isConnected && document.activeElement !== btn) {
+                  btn.focus({ preventScroll: true });
+                }
+              };
+              setTimeout(reclaim, 0);
+              requestAnimationFrame(reclaim);
             }}
           >
             {"▲"}
