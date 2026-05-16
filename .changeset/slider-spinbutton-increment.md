@@ -12,7 +12,7 @@ listens for arrow keys, not value setters) silently did nothing. Now:
   minor bump on `@real-a11y-dev/core`).
 - The dispatcher routes both to a single stepper:
   - Native `<input type="range" | "number">` → `.stepUp()` / `.stepDown()`
-    + `input`/`change` events (so frameworks observe the change).
+    - `input`/`change` events (so frameworks observe the change).
   - Custom ARIA widgets (Radix, Headless UI, etc.) → focus the element +
     dispatch `ArrowRight` / `ArrowLeft` `keydown`+`keyup`. Works under
     the Screen Curtain because the panel drives the value change

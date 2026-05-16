@@ -138,7 +138,9 @@ describe("extractDomTree", () => {
   });
 
   it("pairs increment/decrement on native <input type='range'> (no 'type')", () => {
-    const root = createPage(`<input type="range" min="0" max="100" value="50">`);
+    const root = createPage(
+      `<input type="range" min="0" max="100" value="50">`,
+    );
     const { nodes, rootId } = extractDomTree(root);
     const input = nodes.get(nodes.get(rootId)!.childIds[0])!;
     expect(input.interaction.actions).toContain("increment");
