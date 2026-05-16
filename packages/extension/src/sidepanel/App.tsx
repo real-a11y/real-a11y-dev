@@ -1,6 +1,7 @@
 /// <reference types="chrome" />
 
 import type {
+  ActionType,
   SemanticNode,
   TreeViewMode,
   RoleFilter,
@@ -411,11 +412,17 @@ export function App() {
   );
 
   const handleActivate = useCallback(
-    (id: string) => {
+    (id: string, explicitAction?: ActionType) => {
       const node = nodes.get(id);
       if (!node) return;
 
-      const primaryAction = getPrimaryAction(node.interaction.actions);
+      // The slider/spinbutton ▼/▲ pair passes its own action so each
+      // button dispatches its own step. All other paths (Enter key,
+      // single-action button click, FilteredList Activate) let us pick
+      // the primary so the existing single-action ergonomics keep
+      // working unchanged.
+      const primaryAction =
+        explicitAction ?? getPrimaryAction(node.interaction.actions);
       if (!primaryAction) {
         // Not interactive — toggle expand instead
         if (node.childIds.length > 0) handleToggle(id);
@@ -985,9 +992,20 @@ export function App() {
                 if (!node) return null;
 
                 const hasChildren = node.childIds.length > 0;
-                const primaryAction = getPrimaryAction(
-                  node.interaction.actions,
-                );
+                const actions = node.interaction.actions;
+                // Slider / spinbutton rows surface a paired ▼/▲ stepper
+                // instead of the single primary-action button — works
+                // under the Screen Curtain because the dispatcher drives
+                // the value end-to-end without the user touching the
+                // page. Suppress the primary button to avoid duplicating
+                // "Increment" alongside ▲. Mirrors TreeNode in
+                // @real-a11y-dev/semantic-navigator-ui.
+                const showStepPair =
+                  actions.includes("increment") &&
+                  actions.includes("decrement");
+                const primaryAction = showStepPair
+                  ? null
+                  : getPrimaryAction(actions);
                 const isSelected = id === selectedId;
                 const displayDepth = scopedRootId
                   ? node.depth - scopedDepthOffset
@@ -1280,6 +1298,40 @@ export function App() {
                       >
                         {"\u23CE"}
                       </button>
+                    )}
+
+                    {/* Slider / spinbutton paired stepper. Order is
+                        decrement-then-increment so the visible glyphs
+                        read as a single range control. Each button
+                        passes its own action to handleActivate so the
+                        dispatcher knows which way to step. */}
+                    {showStepPair && (
+                      <span class="sn-action-pair">
+                        <button
+                          class="sn-action sn-action--visible sn-action--step"
+                          tabIndex={-1}
+                          aria-label={ACTION_LABELS.decrement}
+                          title={ACTION_LABELS.decrement}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleActivate(id, "decrement");
+                          }}
+                        >
+                          {"\u25BC"}
+                        </button>
+                        <button
+                          class="sn-action sn-action--visible sn-action--step"
+                          tabIndex={-1}
+                          aria-label={ACTION_LABELS.increment}
+                          title={ACTION_LABELS.increment}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleActivate(id, "increment");
+                          }}
+                        >
+                          {"\u25B2"}
+                        </button>
+                      </span>
                     )}
                   </div>
                 );
