@@ -391,6 +391,38 @@ describe("ActionDispatcher", () => {
       expect(keys).toEqual(["ArrowLeft"]);
     });
 
+    it("restores focus on the next tick when the widget re-focuses itself asynchronously (Radix shape)", async () => {
+      // Radix Slider grabs focus on its own re-render after a state change —
+      // a microtask boundary AFTER dispatchEvent returns. The synchronous
+      // restore above runs too early and the slider thumb ends up with
+      // focus, which is exactly what the user reported in the React app.
+      // Defending against that requires a deferred (setTimeout 0) restore.
+      const focusBefore = document.createElement("button");
+      focusBefore.textContent = "panel button";
+      document.body.appendChild(focusBefore);
+      focusBefore.focus();
+
+      const slider = document.createElement("span");
+      slider.setAttribute("role", "slider");
+      slider.tabIndex = 0;
+      document.body.appendChild(slider);
+      refs.set("n1", slider);
+
+      // Simulate Radix: focus the slider on a microtask boundary, AFTER
+      // the keydown handler has returned and our synchronous restore has
+      // already run.
+      slider.addEventListener("keydown", () => {
+        queueMicrotask(() => slider.focus());
+      });
+
+      dispatcher.dispatch({ nodeId: "n1", action: "increment" });
+
+      // Wait one task so the deferred setTimeout(0) restore lands.
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(document.activeElement).toBe(focusBefore);
+    });
+
     it("works under the Screen Curtain (no reliance on visibility)", () => {
       // The Screen Curtain hides the page from the user but leaves the DOM
       // intact. The dispatcher must still drive the slider — focus + keydown

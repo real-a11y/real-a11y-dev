@@ -246,11 +246,21 @@ export class ActionDispatcher {
   // `element.focus()` here — that would steal focus from the panel
   // button the user just clicked, and (worse) advance focus to
   // whatever follows the slider in the document tab order once the
-  // user's next keystroke goes anywhere but back to the panel. Some
-  // widgets briefly grab focus internally during their own keydown
-  // handler; if focus drifts during the dispatch, restore it to
-  // whatever was focused before we started so the panel stays
-  // interactive.
+  // user's next keystroke goes anywhere but back to the panel.
+  //
+  // Focus restoration is done in two stages:
+  //
+  //   1. Synchronous, immediately after dispatch — covers widgets
+  //      that move focus to themselves *inside* their keydown
+  //      handler (which runs synchronously during dispatchEvent).
+  //   2. Deferred via setTimeout(0) — covers Radix-style widgets
+  //      that schedule a focus call through React state + re-render,
+  //      which lands on a microtask/RAF boundary after dispatchEvent
+  //      returns. Without this second stage the slider thumb steals
+  //      focus from the panel button the user clicked.
+  //
+  // Both stages no-op when focus is already where we want it, so
+  // doing both is idempotent and rapid clicks behave correctly.
   private dispatchArrowStep(element: Element, delta: 1 | -1): ActionResult {
     const previouslyFocused = document.activeElement as HTMLElement | null;
     const key = delta > 0 ? "ArrowRight" : "ArrowLeft";
@@ -265,6 +275,12 @@ export class ActionDispatcher {
     };
     element.dispatchEvent(new KeyboardEvent("keydown", init));
     element.dispatchEvent(new KeyboardEvent("keyup", init));
+    this.restoreFocus(previouslyFocused);
+    setTimeout(() => this.restoreFocus(previouslyFocused), 0);
+    return { success: true };
+  }
+
+  private restoreFocus(previouslyFocused: HTMLElement | null): void {
     if (
       previouslyFocused &&
       document.activeElement !== previouslyFocused &&
@@ -272,6 +288,5 @@ export class ActionDispatcher {
     ) {
       previouslyFocused.focus?.({ preventScroll: true });
     }
-    return { success: true };
   }
 }
