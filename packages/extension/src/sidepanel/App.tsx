@@ -480,19 +480,30 @@ export function App() {
       const name = node.a11y.name || node.dom.tagName;
       const role = node.a11y.role;
 
-      // Contextual feedback based on role
-      let feedback: string;
-      if (role === "checkbox" || role === "switch") {
-        const wasChecked = node.a11y.states.checked === true;
-        feedback = wasChecked ? `Unchecked: ${name}` : `Checked: ${name}`;
-      } else if (role === "radio") {
-        feedback = `Selected: ${name}`;
-      } else {
-        feedback = `${ACTION_LABELS[primaryAction]}: ${name}`;
-      }
+      // Stepper actions (slider/spinbutton ▼/▲) skip the feedback banner.
+      // The visible value change on the page IS the confirmation, and
+      // they're rapid-fire — flashing the banner on every click would
+      // shove the tree down and pop it back over and over, leaving the
+      // cursor over the wrong row by the second click. Errors still
+      // surface via the failure-path setLastAction below.
+      const isStepper =
+        primaryAction === "increment" || primaryAction === "decrement";
 
-      setLastAction(feedback);
-      setTimeout(() => setLastAction(null), 2000);
+      if (!isStepper) {
+        // Contextual feedback based on role
+        let feedback: string;
+        if (role === "checkbox" || role === "switch") {
+          const wasChecked = node.a11y.states.checked === true;
+          feedback = wasChecked ? `Unchecked: ${name}` : `Checked: ${name}`;
+        } else if (role === "radio") {
+          feedback = `Selected: ${name}`;
+        } else {
+          feedback = `${ACTION_LABELS[primaryAction]}: ${name}`;
+        }
+
+        setLastAction(feedback);
+        setTimeout(() => setLastAction(null), 2000);
+      }
 
       chrome.runtime.sendMessage(
         { type: "DISPATCH_ACTION", payload: request },

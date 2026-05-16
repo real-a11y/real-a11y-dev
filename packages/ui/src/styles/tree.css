@@ -11,6 +11,9 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* Anchor for the absolute-positioned action feedback bar so it can
+     overlay the panel without displacing the tree. */
+  position: relative;
 }
 
 /* ---- Page Header ---- */
@@ -669,8 +672,18 @@
   line-height: 1;
 }
 
-/* ---- Action feedback bar ---- */
+/* ---- Action feedback bar ----
+   Overlays the bottom of the panel rather than living in the flex flow.
+   In-flow rendering produced visible CLS: the bar mounted, pushed every
+   tree row down by its height, popped back when it unmounted, and the
+   user's cursor ended up over the wrong row two clicks later. Absolute
+   positioning anchored to .sn-root keeps the tree static; the bar
+   briefly covers the last row or two while it's visible (~2s). */
 .sn-action-feedback {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
   padding: 4px 12px;
   background: var(--sn-accent);
   color: #ffffff;
@@ -678,18 +691,19 @@
   font-size: 12px;
   font-weight: 600;
   text-align: center;
-  flex-shrink: 0;
+  z-index: 10;
+  pointer-events: none;
   animation: sn-flash 0.15s ease;
 }
 
 @keyframes sn-flash {
   0% {
     opacity: 0;
-    transform: scaleY(0);
+    transform: translateY(100%);
   }
   100% {
     opacity: 1;
-    transform: scaleY(1);
+    transform: translateY(0);
   }
 }
 
