@@ -336,10 +336,18 @@ describe("ActionDispatcher", () => {
       expect(input.value).toBe("9");
     });
 
-    it("dispatches ArrowRight keydown+keyup on a custom [role='slider']", () => {
+    it("dispatches ArrowRight keydown+keyup directly on a custom [role='slider'] without stealing focus", () => {
       // Radix Slider renders a <span role="slider"> that listens for arrow
-      // keys on itself. Setting `.value` does nothing — the dispatcher must
-      // focus the element and fire real keyboard events.
+      // keys on itself — dispatching directly on the element fires the
+      // handler regardless of which element currently has focus. The
+      // dispatcher must NOT call element.focus(): that would yank focus out
+      // of the panel button the user just clicked and leave the next
+      // keystroke landing on whatever follows the slider in tab order.
+      const focusBefore = document.createElement("button");
+      focusBefore.textContent = "panel button";
+      document.body.appendChild(focusBefore);
+      focusBefore.focus();
+
       const slider = document.createElement("span");
       slider.setAttribute("role", "slider");
       slider.tabIndex = 0;
@@ -361,7 +369,9 @@ describe("ActionDispatcher", () => {
         { type: "keydown", key: "ArrowRight" },
         { type: "keyup", key: "ArrowRight" },
       ]);
-      expect(document.activeElement).toBe(slider);
+      // Focus stays on the original element — the panel button keeps it,
+      // which keeps the panel's keyboard ergonomics intact.
+      expect(document.activeElement).toBe(focusBefore);
     });
 
     it("dispatches ArrowLeft on decrement for a custom [role='slider']", () => {

@@ -238,10 +238,21 @@ export class ActionDispatcher {
     return this.dispatchArrowStep(element, delta);
   }
 
+  // Dispatch ArrowRight/ArrowLeft on the slider widget. Custom ARIA
+  // widgets (Radix Slider span, Headless UI, etc.) install the
+  // keyboard listener on the slider element itself, so dispatching
+  // directly on the element fires the handler regardless of which
+  // element currently holds focus. We deliberately do NOT call
+  // `element.focus()` here — that would steal focus from the panel
+  // button the user just clicked, and (worse) advance focus to
+  // whatever follows the slider in the document tab order once the
+  // user's next keystroke goes anywhere but back to the panel. Some
+  // widgets briefly grab focus internally during their own keydown
+  // handler; if focus drifts during the dispatch, restore it to
+  // whatever was focused before we started so the panel stays
+  // interactive.
   private dispatchArrowStep(element: Element, delta: 1 | -1): ActionResult {
-    const htmlEl = element as HTMLElement;
-    if (htmlEl.focus) htmlEl.focus({ preventScroll: true });
-    const target = (document.activeElement as Element | null) ?? element;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
     const key = delta > 0 ? "ArrowRight" : "ArrowLeft";
     const code = delta > 0 ? "ArrowRight" : "ArrowLeft";
     const keyCode = delta > 0 ? 39 : 37;
@@ -252,8 +263,15 @@ export class ActionDispatcher {
       bubbles: true,
       cancelable: true,
     };
-    target.dispatchEvent(new KeyboardEvent("keydown", init));
-    target.dispatchEvent(new KeyboardEvent("keyup", init));
+    element.dispatchEvent(new KeyboardEvent("keydown", init));
+    element.dispatchEvent(new KeyboardEvent("keyup", init));
+    if (
+      previouslyFocused &&
+      document.activeElement !== previouslyFocused &&
+      previouslyFocused.isConnected
+    ) {
+      previouslyFocused.focus?.({ preventScroll: true });
+    }
     return { success: true };
   }
 }
