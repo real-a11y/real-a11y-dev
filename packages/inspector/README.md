@@ -49,7 +49,7 @@ inspector.destroy();
 | `mount` | `"shadow" \| "light"` | `"shadow"` | Shadow DOM isolation (recommended) or light DOM |
 | `highlightOnHover` | `boolean` | `false` | Highlight DOM element on tree node hover |
 | `scrollHostOnSelect` | `boolean` | `false` | Scroll element into view on select |
-| `focusHostOnActivate` | `boolean` | `false` | Move focus to element on activate |
+| `focusHostOnActivate` | `boolean` | `false` | Gate actions that move focus on the host (`focus`, `increment`, `decrement`). When `false`, those actions silently no-op so the panel doesn't pull focus off itself in same-document mounts. |
 | `onNodeSelect` | `(node) => void` | — | Callback when a node is selected |
 | `onAction` | `(request, result) => void` | — | Callback when an action is dispatched |
 
