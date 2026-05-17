@@ -73,7 +73,11 @@ export type ContentToPanel =
   // Picker: content acknowledges that pick mode entered or exited (e.g.
   // the user pressed Escape on the page). Panel mirrors its toggle so
   // the UI doesn't drift out of sync.
-  | { type: "PICK_MODE_CHANGED"; tabId?: number; payload: { enabled: boolean } };
+  | {
+      type: "PICK_MODE_CHANGED";
+      tabId?: number;
+      payload: { enabled: boolean };
+    };
 
 /** Select option for GET_FIELD_STATE response */
 export interface SelectOption {
