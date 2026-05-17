@@ -74,6 +74,9 @@ function teardown(): void {
   tornDown = true;
   observer.stop();
   liveObserver?.disconnect();
+  // Drop the picker listeners and restore the cursor so the page stops
+  // showing crosshair after the extension is reloaded / orphaned.
+  setPickMode(false);
 }
 
 /** Extract tree and send to background as per-frame data */
@@ -100,6 +103,97 @@ function sendTree() {
 const observer = new DomObserver(document.documentElement, () => {
   sendTree();
 });
+
+// ─── Element picker (DevTools-style "select an element in the page") ─────────
+//
+// Off by default. When the panel turns it on (SET_PICK_MODE { enabled: true }):
+//   - mousemove highlights the element under the cursor via FocusManager
+//   - the document's body gets `cursor: crosshair` so the user sees they're
+//     in a different mode
+//   - click is intercepted at the capture phase, default-prevented (so a
+//     picked link doesn't navigate and a picked submit doesn't submit), and
+//     the resolved tracked node id is sent to the panel
+//   - Escape exits pick mode without selecting anything
+//
+// Listeners and cursor style are torn down when pick mode goes off so the
+// page returns to normal interaction.
+let pickModeOn = false;
+let pickClickHandler: ((e: MouseEvent) => void) | null = null;
+let pickMoveHandler: ((e: MouseEvent) => void) | null = null;
+let pickKeyHandler: ((e: KeyboardEvent) => void) | null = null;
+let pickPrevCursor: string | null = null;
+
+function findTrackedNodeId(start: Element | null): string | null {
+  let el = start;
+  while (el) {
+    const id = elementRefs.findId(el);
+    if (id) return id;
+    el = el.parentElement;
+  }
+  return null;
+}
+
+function setPickMode(enabled: boolean): void {
+  if (enabled === pickModeOn) return;
+  pickModeOn = enabled;
+
+  if (enabled) {
+    // Capture phase + preventDefault so the page's own click handlers don't
+    // fire when the user picks an element. Mirrors DevTools' inspector.
+    pickClickHandler = (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const nodeId = findTrackedNodeId(e.target as Element | null);
+      if (nodeId) {
+        safeSendMessage({ type: "NODE_PICKED", payload: { nodeId } });
+      }
+      setPickMode(false);
+    };
+    pickMoveHandler = (e: MouseEvent) => {
+      const nodeId = findTrackedNodeId(e.target as Element | null);
+      if (nodeId) {
+        focusManager.highlightElement(nodeId, { scroll: false });
+      } else {
+        focusManager.clearHighlight();
+      }
+    };
+    pickKeyHandler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setPickMode(false);
+      }
+    };
+
+    document.addEventListener("click", pickClickHandler, true);
+    document.addEventListener("mousemove", pickMoveHandler, true);
+    document.addEventListener("keydown", pickKeyHandler, true);
+
+    if (!isSubFrame) {
+      pickPrevCursor = document.body.style.cursor;
+      document.body.style.cursor = "crosshair";
+    }
+  } else {
+    if (pickClickHandler) {
+      document.removeEventListener("click", pickClickHandler, true);
+      pickClickHandler = null;
+    }
+    if (pickMoveHandler) {
+      document.removeEventListener("mousemove", pickMoveHandler, true);
+      pickMoveHandler = null;
+    }
+    if (pickKeyHandler) {
+      document.removeEventListener("keydown", pickKeyHandler, true);
+      pickKeyHandler = null;
+    }
+    focusManager.clearHighlight();
+    if (!isSubFrame && pickPrevCursor !== null) {
+      document.body.style.cursor = pickPrevCursor;
+      pickPrevCursor = null;
+    }
+  }
+
+  safeSendMessage({ type: "PICK_MODE_CHANGED", payload: { enabled } });
+}
 
 // Listen for messages from side panel (via background)
 chrome.runtime.onMessage.addListener(
@@ -160,6 +254,12 @@ chrome.runtime.onMessage.addListener(
 
       case "SET_FOCUS_TRACKER": {
         focusTrackerEnabled = message.payload.enabled;
+        sendResponse({ success: true });
+        break;
+      }
+
+      case "SET_PICK_MODE": {
+        setPickMode(message.payload.enabled);
         sendResponse({ success: true });
         break;
       }

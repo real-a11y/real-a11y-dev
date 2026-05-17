@@ -63,7 +63,17 @@ export type ContentToPanel =
       // the canonical writer for activeTabId.
       type: "ACTIVE_TAB_CHANGED";
       tabId: number;
-    };
+    }
+  // Picker (DevTools-style "select an element in the page"): the user
+  // clicked an element on the page while pick mode was on. Content
+  // resolves the click target up the DOM tree to the nearest tracked
+  // node and sends its id; panel selects it, scrolls it into view, and
+  // turns pick mode back off.
+  | { type: "NODE_PICKED"; tabId?: number; payload: { nodeId: string } }
+  // Picker: content acknowledges that pick mode entered or exited (e.g.
+  // the user pressed Escape on the page). Panel mirrors its toggle so
+  // the UI doesn't drift out of sync.
+  | { type: "PICK_MODE_CHANGED"; tabId?: number; payload: { enabled: boolean } };
 
 /** Select option for GET_FIELD_STATE response */
 export interface SelectOption {
@@ -107,7 +117,11 @@ export type PanelToContent =
       };
     }
   | { type: "SET_FOCUS_TRACKER"; payload: { enabled: boolean } }
-  | { type: "CLOSE_TAB" };
+  | { type: "CLOSE_TAB" }
+  // Picker: toggle DevTools-style "select an element in the page" mode.
+  // Content swaps in the capture-phase click handler + cursor styling
+  // when enabled, removes them when disabled.
+  | { type: "SET_PICK_MODE"; payload: { enabled: boolean } };
 
 export type ExtensionMessage =
   | ContentToPanel

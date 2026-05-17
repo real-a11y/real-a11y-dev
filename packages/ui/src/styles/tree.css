@@ -854,6 +854,41 @@
   flex-shrink: 0;
 }
 
+/* ---- Element picker toggle (DevTools-style "select an element in the page") ---- */
+.sn-pick-btn {
+  padding: 4px 8px;
+  border: 1px solid var(--sn-border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--sn-text-muted);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
+}
+
+.sn-pick-btn:hover {
+  background: var(--sn-bg-hover);
+  color: var(--sn-text);
+  border-color: var(--sn-accent);
+}
+
+.sn-pick-btn:focus-visible {
+  outline: 2px solid var(--sn-border-focus);
+  outline-offset: 1px;
+}
+
+.sn-pick-btn[aria-pressed="true"] {
+  background: var(--sn-accent);
+  color: #fff;
+  border-color: var(--sn-accent);
+}
+
 /* ---- Screen curtain toggle ---- */
 .sn-curtain-btn {
   padding: 4px 10px;

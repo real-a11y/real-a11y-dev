@@ -95,6 +95,11 @@ export function App() {
   const [roleFilter, setRoleFilter] = useState<RoleFilter>(null);
   const [curtainOn, setCurtainOn] = useState(false);
   const [focusTrackerOn, setFocusTrackerOn] = useState(true);
+  // Picker mode (DevTools-style "select an element in the page"). Off by
+  // default; toggled by the toolbar button or Ctrl/Cmd+Shift+C. The
+  // content script owns the actual click capture — this flag is just the
+  // panel's mirror so the button shows the right pressed state.
+  const [pickModeOn, setPickModeOn] = useState(false);
   const [inputState, setInputState] = useState<InputPanelState | null>(null);
   const [pageTitle, setPageTitle] = useState<string>("");
   const [pageUrl, setPageUrl] = useState<string>("");
@@ -308,6 +313,41 @@ export function App() {
           );
           el?.scrollIntoView({ block: "nearest" });
         });
+      }
+
+      if (message.type === "NODE_PICKED") {
+        // User picked an element on the page via the picker. Select the
+        // matching tree node, expand ancestors so it's visible, scroll it
+        // into view, and turn pick mode off in our local mirror (content
+        // already exited on its side after the click).
+        const nodeId = message.payload.nodeId;
+        setSelectedId(nodeId);
+        setPickModeOn(false);
+        setNodes((prev) => {
+          let current = prev.get(nodeId);
+          while (current?.parentId) {
+            const parent = prev.get(current.parentId);
+            if (parent && !parent.ui.expanded) {
+              parent.ui.expanded = true;
+            }
+            current = parent;
+          }
+          return prev;
+        });
+        forceRender((n) => n + 1);
+        requestAnimationFrame(() => {
+          const el = treeRef.current?.querySelector(
+            `[data-node-id="${CSS.escape(nodeId)}"]`,
+          );
+          el?.scrollIntoView({ block: "center" });
+        });
+      }
+
+      if (message.type === "PICK_MODE_CHANGED") {
+        // Content authoritatively reports its own pick-mode state. This
+        // covers the case where the user pressed Escape on the page to
+        // exit — without it the panel button would stay stuck "on".
+        setPickModeOn(message.payload.enabled);
       }
     };
 
@@ -577,6 +617,35 @@ export function App() {
     });
   }, [focusTrackerOn]);
 
+  // Picker mode toggle — tells the content script to install / remove
+  // its capture-phase click handler. PICK_MODE_CHANGED comes back when
+  // the content script confirms (or when the user pressed Escape on the
+  // page to exit), and we mirror state from that message handler below.
+  const togglePickMode = useCallback(() => {
+    const next = !pickModeOn;
+    setPickModeOn(next);
+    chrome.runtime.sendMessage({
+      type: "SET_PICK_MODE",
+      payload: { enabled: next },
+    });
+  }, [pickModeOn]);
+
+  // Ctrl/Cmd+Shift+C: toggle pick mode, mirroring DevTools' inspector
+  // shortcut. Bound to the panel document so it fires whenever the panel
+  // has focus. Page-level shortcuts are handled by the content script's
+  // own Escape listener while pick mode is active.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && e.shiftKey && (e.key === "C" || e.key === "c")) {
+        e.preventDefault();
+        togglePickMode();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [togglePickMode]);
+
   // Modality flag — see useInputModality for the full rationale. Hover
   // handlers gate on isMouseModality() so keyboard-driven scroll doesn't
   // produce spurious mouseenter events that clobber the selection.
@@ -813,6 +882,21 @@ export function App() {
             TAB
           </button>
         </div>
+
+        <button
+          class="sn-pick-btn"
+          aria-pressed={pickModeOn}
+          onClick={togglePickMode}
+          title={
+            pickModeOn
+              ? "Pick mode ON — click an element in the page to select it in the tree (Esc to cancel)"
+              : "Pick an element in the page (Ctrl/Cmd+Shift+C)"
+          }
+          aria-label="Pick element in page"
+        >
+          {/* Crosshair-on-cursor glyph mirroring DevTools' picker icon. */}
+          {"⦿"}
+        </button>
 
         <button
           class="sn-curtain-btn"
