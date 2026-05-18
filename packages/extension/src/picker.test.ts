@@ -14,9 +14,7 @@ interface Harness {
   modes: boolean[];
 }
 
-function makeHarness(
-  overrides: Partial<PickerOptions> = {},
-): {
+function makeHarness(overrides: Partial<PickerOptions> = {}): {
   picker: ReturnType<typeof createPicker>;
   harness: Harness;
 } {
