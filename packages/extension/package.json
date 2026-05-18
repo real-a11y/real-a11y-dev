@@ -21,6 +21,7 @@
   "devDependencies": {
     "@preact/preset-vite": "^2.9.0",
     "@types/chrome": "^0.0.287",
+    "@vitest/coverage-v8": "^2.1.9",
     "cross-env": "^10.1.0",
     "jsdom": "^29.0.2",
     "typescript": "^5.6.0",
