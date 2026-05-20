@@ -44,9 +44,18 @@ export interface TreeViewProps {
    */
   scrollHostOnSelect?: boolean;
   /**
-   * When the primary action for a node is `"focus"`, actually move focus
-   * on the host element. Other primary actions (click/submit/...) are
-   * always dispatched regardless of this flag. Defaults to `false`.
+   * Gate actions that move focus on the host page. When `false` (default)
+   * these are silently skipped to keep the panel a passive observer:
+   *
+   *   - `"focus"`: would call `.focus()` on the host element directly.
+   *   - `"increment"` / `"decrement"`: dispatch a keydown that custom
+   *     ARIA widgets (Radix Slider thumb, Headless UI date pickers, …)
+   *     respond to by focusing themselves — so in same-document panels
+   *     the focus ring ends up on the page even though we never asked
+   *     for it.
+   *
+   * Other actions (`click`, `toggle`, `submit`, `select`, `type`) are
+   * always dispatched regardless of this flag.
    */
   focusHostOnActivate?: boolean;
   /** Callback when a node is selected */
@@ -114,8 +123,17 @@ export function TreeView({
   const handleActivate = useCallback(
     (nodeId: string, action: ActionType) => {
       if (!interactive) return;
-      // A bare "focus" action only steals host focus when the consumer opted in.
-      if (action === "focus" && !focusHostOnActivate) return;
+      // Gate every action that moves focus on the host. `focus` is the
+      // obvious case; `increment`/`decrement` belong here too because
+      // widgets like Radix Slider focus their own thumb on value change
+      // — in a same-document panel that yanks focus away from the panel
+      // button the user just clicked.
+      if (
+        !focusHostOnActivate &&
+        (action === "focus" || action === "increment" || action === "decrement")
+      ) {
+        return;
+      }
       const request: ActionRequest = { nodeId, action };
       dispatcherRef.current?.dispatch(request);
       onAction?.(request);

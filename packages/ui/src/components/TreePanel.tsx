@@ -202,10 +202,15 @@ export function TreePanel({
   );
 
   const handleActivate = useCallback(
-    (id: string) => {
+    (id: string, explicitAction?: ActionType) => {
       const node = treeData.nodes.get(id);
       if (!node) return;
-      const action = getPrimaryAction(node.interaction.actions);
+      // The slider/spinbutton ▼/▲ pair passes its own action; everyone
+      // else (Enter key, Activate button, action-button click) lets us
+      // pick the primary so the existing single-action ergonomics
+      // continue to work.
+      const action =
+        explicitAction ?? getPrimaryAction(node.interaction.actions);
       if (!action) {
         // No action available — toggle expand/collapse instead.
         if (node.childIds.length > 0) handleToggle(id);

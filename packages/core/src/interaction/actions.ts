@@ -10,20 +10,26 @@ export const ACTION_LABELS: Record<ActionType, string> = {
   toggle: "Toggle",
   select: "Select",
   scroll: "Scroll",
+  increment: "Increment",
+  decrement: "Decrement",
 };
 
 /** Get the primary action for a list of available actions */
 export function getPrimaryAction(actions: ActionType[]): ActionType | null {
   if (actions.length === 0) return null;
 
-  // Priority order: navigate > click > submit > toggle > select > type > focus > scroll
-  // "select" comes before "focus" so native <select> elements show "Select" not "Focus"
+  // Priority order: navigate > click > submit > toggle > select > increment > type > focus > scroll
+  // "select" before "focus" so native <select> shows "Select" not "Focus".
+  // "increment" before "type"/"focus" so slider/spinbutton rows surface
+  // the value-adjust action (▲/▼) as the primary affordance — the panel
+  // pairs increment with decrement when both are present.
   const priority: ActionType[] = [
     "navigate",
     "click",
     "submit",
     "toggle",
     "select",
+    "increment",
     "type",
     "focus",
     "scroll",

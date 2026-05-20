@@ -70,6 +70,16 @@ function getActions(element: Element): ActionType[] {
       actions.push("click");
     } else if (type === "file") {
       actions.push("focus");
+    } else if (type === "range") {
+      // Sliders aren't typeable — they listen for ArrowLeft/ArrowRight
+      // (or use the .stepUp/.stepDown API). Pair the increment/decrement
+      // actions so the panel can drive value changes under the Screen
+      // Curtain too.
+      actions.push("focus", "increment", "decrement");
+    } else if (type === "number") {
+      // Number inputs accept typed values *and* arrow-key stepping —
+      // expose both so the panel can either set a value or nudge it.
+      actions.push("focus", "type", "increment", "decrement");
     } else if (type !== "hidden") {
       actions.push("focus", "type");
     }
@@ -118,8 +128,18 @@ function getActions(element: Element): ActionType[] {
     actions.push("click");
   } else if (role === "textbox" || role === "searchbox") {
     actions.push("focus", "type");
-  } else if (role === "slider" || role === "spinbutton") {
-    actions.push("focus", "type");
+  } else if (role === "slider") {
+    // ARIA slider: a custom widget (Radix `<span role="slider">`,
+    // Headless UI, etc.) that listens for ArrowLeft/ArrowRight on the
+    // element. "type" would set a `.value` property the widget never
+    // reads — drop it. The dispatcher's increment/decrement focus the
+    // element and dispatch real keydown events, which works equally
+    // well under the Screen Curtain.
+    actions.push("focus", "increment", "decrement");
+  } else if (role === "spinbutton") {
+    // Spinbuttons (date pickers, custom number steppers) accept both
+    // typed values and arrow-key stepping. Surface both.
+    actions.push("focus", "type", "increment", "decrement");
   }
 
   if (element.getAttribute("tabindex") !== null && actions.length === 0) {

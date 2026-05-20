@@ -293,4 +293,157 @@ describe("ActionDispatcher", () => {
       expect(result.error).toMatch(/no longer in DOM/i);
     });
   });
+
+  // Slider / spinbutton stepping. Two paths share one entry point:
+  //   - Native <input type="range"|"number">: use the .stepUp/.stepDown
+  //     API + emit input/change. No keystrokes needed.
+  //   - Custom ARIA widgets (Radix `<span role="slider">`, Headless UI):
+  //     focus the element and dispatch ArrowRight/ArrowLeft keydown+keyup.
+  describe("increment / decrement actions", () => {
+    it("steps a native <input type='range'> up via .stepUp + input/change events", () => {
+      const input = document.createElement("input");
+      input.type = "range";
+      input.min = "0";
+      input.max = "100";
+      input.step = "1";
+      input.value = "50";
+      document.body.appendChild(input);
+      refs.set("n1", input);
+
+      const inputSpy = vi.fn();
+      const changeSpy = vi.fn();
+      input.addEventListener("input", inputSpy);
+      input.addEventListener("change", changeSpy);
+
+      const result = dispatcher.dispatch({ nodeId: "n1", action: "increment" });
+
+      expect(result.success).toBe(true);
+      expect(input.value).toBe("51");
+      expect(inputSpy).toHaveBeenCalledTimes(1);
+      expect(changeSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("steps a native <input type='number'> down via .stepDown", () => {
+      const input = document.createElement("input");
+      input.type = "number";
+      input.value = "10";
+      document.body.appendChild(input);
+      refs.set("n1", input);
+
+      const result = dispatcher.dispatch({ nodeId: "n1", action: "decrement" });
+
+      expect(result.success).toBe(true);
+      expect(input.value).toBe("9");
+    });
+
+    it("dispatches ArrowRight keydown+keyup directly on a custom [role='slider'] without stealing focus", () => {
+      // Radix Slider renders a <span role="slider"> that listens for arrow
+      // keys on itself — dispatching directly on the element fires the
+      // handler regardless of which element currently has focus. The
+      // dispatcher must NOT call element.focus(): that would yank focus out
+      // of the panel button the user just clicked and leave the next
+      // keystroke landing on whatever follows the slider in tab order.
+      const focusBefore = document.createElement("button");
+      focusBefore.textContent = "panel button";
+      document.body.appendChild(focusBefore);
+      focusBefore.focus();
+
+      const slider = document.createElement("span");
+      slider.setAttribute("role", "slider");
+      slider.tabIndex = 0;
+      document.body.appendChild(slider);
+      refs.set("n1", slider);
+
+      const seen: Array<{ type: string; key: string }> = [];
+      slider.addEventListener("keydown", (e) =>
+        seen.push({ type: "keydown", key: (e as KeyboardEvent).key }),
+      );
+      slider.addEventListener("keyup", (e) =>
+        seen.push({ type: "keyup", key: (e as KeyboardEvent).key }),
+      );
+
+      const result = dispatcher.dispatch({ nodeId: "n1", action: "increment" });
+
+      expect(result.success).toBe(true);
+      expect(seen).toEqual([
+        { type: "keydown", key: "ArrowRight" },
+        { type: "keyup", key: "ArrowRight" },
+      ]);
+      // Focus stays on the original element — the panel button keeps it,
+      // which keeps the panel's keyboard ergonomics intact.
+      expect(document.activeElement).toBe(focusBefore);
+    });
+
+    it("dispatches ArrowLeft on decrement for a custom [role='slider']", () => {
+      const slider = document.createElement("span");
+      slider.setAttribute("role", "slider");
+      slider.tabIndex = 0;
+      document.body.appendChild(slider);
+      refs.set("n1", slider);
+
+      const keys: string[] = [];
+      slider.addEventListener("keydown", (e) =>
+        keys.push((e as KeyboardEvent).key),
+      );
+
+      dispatcher.dispatch({ nodeId: "n1", action: "decrement" });
+
+      expect(keys).toEqual(["ArrowLeft"]);
+    });
+
+    it("restores focus on the next tick when the widget re-focuses itself asynchronously (Radix shape)", async () => {
+      // Radix Slider grabs focus on its own re-render after a state change —
+      // a microtask boundary AFTER dispatchEvent returns. The synchronous
+      // restore above runs too early and the slider thumb ends up with
+      // focus, which is exactly what the user reported in the React app.
+      // Defending against that requires a deferred (setTimeout 0) restore.
+      const focusBefore = document.createElement("button");
+      focusBefore.textContent = "panel button";
+      document.body.appendChild(focusBefore);
+      focusBefore.focus();
+
+      const slider = document.createElement("span");
+      slider.setAttribute("role", "slider");
+      slider.tabIndex = 0;
+      document.body.appendChild(slider);
+      refs.set("n1", slider);
+
+      // Simulate Radix: focus the slider on a microtask boundary, AFTER
+      // the keydown handler has returned and our synchronous restore has
+      // already run.
+      slider.addEventListener("keydown", () => {
+        queueMicrotask(() => slider.focus());
+      });
+
+      dispatcher.dispatch({ nodeId: "n1", action: "increment" });
+
+      // Wait one task so the deferred setTimeout(0) restore lands.
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(document.activeElement).toBe(focusBefore);
+    });
+
+    it("works under the Screen Curtain (no reliance on visibility)", () => {
+      // The Screen Curtain hides the page from the user but leaves the DOM
+      // intact. The dispatcher must still drive the slider — focus + keydown
+      // is the same code path regardless of visual occlusion.
+      const slider = document.createElement("span");
+      slider.setAttribute("role", "slider");
+      slider.tabIndex = 0;
+      document.body.appendChild(slider);
+      refs.set("n1", slider);
+
+      let value = 5;
+      slider.addEventListener("keydown", (e) => {
+        if ((e as KeyboardEvent).key === "ArrowRight") value++;
+        if ((e as KeyboardEvent).key === "ArrowLeft") value--;
+      });
+
+      dispatcher.dispatch({ nodeId: "n1", action: "increment" });
+      dispatcher.dispatch({ nodeId: "n1", action: "increment" });
+      dispatcher.dispatch({ nodeId: "n1", action: "decrement" });
+
+      expect(value).toBe(6);
+    });
+  });
 });

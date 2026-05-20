@@ -76,6 +76,10 @@ export class ActionDispatcher {
         return this.handleSelect(element, request.payload);
       case "scroll":
         return this.handleScroll(element);
+      case "increment":
+        return this.handleStep(element, 1);
+      case "decrement":
+        return this.handleStep(element, -1);
       default:
         return { success: false, error: `Unknown action: ${request.action}` };
     }
@@ -201,5 +205,88 @@ export class ActionDispatcher {
       block: "center",
     });
     return { success: true };
+  }
+
+  // Slider / spinbutton step. Native <input type="range"|"number"> have a
+  // .stepUp() / .stepDown() API and emit input/change automatically — use
+  // it so the DOM `value` and the visual thumb stay in sync without going
+  // through the keyboard path. Custom ARIA widgets (Radix Slider span,
+  // headless date pickers, etc.) listen for ArrowRight/ArrowLeft on the
+  // element itself, so focus the element first and dispatch a full
+  // keydown+keyup pair. Works under the Screen Curtain because nothing
+  // here depends on the user seeing the page — the panel drives the value
+  // change end-to-end.
+  private handleStep(element: Element, delta: 1 | -1): ActionResult {
+    const tag = element.tagName.toLowerCase();
+    if (tag === "input") {
+      const input = element as HTMLInputElement;
+      const type = input.type;
+      if (type === "range" || type === "number") {
+        try {
+          if (delta > 0) input.stepUp();
+          else input.stepDown();
+        } catch {
+          // stepUp/stepDown throw on invalid configurations — fall through
+          // to the keyboard path so the user still gets feedback.
+          return this.dispatchArrowStep(element, delta);
+        }
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        return { success: true };
+      }
+    }
+    return this.dispatchArrowStep(element, delta);
+  }
+
+  // Dispatch ArrowRight/ArrowLeft on the slider widget. Custom ARIA
+  // widgets (Radix Slider span, Headless UI, etc.) install the
+  // keyboard listener on the slider element itself, so dispatching
+  // directly on the element fires the handler regardless of which
+  // element currently holds focus. We deliberately do NOT call
+  // `element.focus()` here — that would steal focus from the panel
+  // button the user just clicked, and (worse) advance focus to
+  // whatever follows the slider in the document tab order once the
+  // user's next keystroke goes anywhere but back to the panel.
+  //
+  // Focus restoration is done in two stages:
+  //
+  //   1. Synchronous, immediately after dispatch — covers widgets
+  //      that move focus to themselves *inside* their keydown
+  //      handler (which runs synchronously during dispatchEvent).
+  //   2. Deferred via setTimeout(0) — covers Radix-style widgets
+  //      that schedule a focus call through React state + re-render,
+  //      which lands on a microtask/RAF boundary after dispatchEvent
+  //      returns. Without this second stage the slider thumb steals
+  //      focus from the panel button the user clicked.
+  //
+  // Both stages no-op when focus is already where we want it, so
+  // doing both is idempotent and rapid clicks behave correctly.
+  private dispatchArrowStep(element: Element, delta: 1 | -1): ActionResult {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const key = delta > 0 ? "ArrowRight" : "ArrowLeft";
+    const code = delta > 0 ? "ArrowRight" : "ArrowLeft";
+    const keyCode = delta > 0 ? 39 : 37;
+    const init: KeyboardEventInit = {
+      key,
+      code,
+      keyCode,
+      bubbles: true,
+      cancelable: true,
+    };
+    element.dispatchEvent(new KeyboardEvent("keydown", init));
+    element.dispatchEvent(new KeyboardEvent("keyup", init));
+    this.restoreFocus(previouslyFocused);
+    setTimeout(() => this.restoreFocus(previouslyFocused), 0);
+    return { success: true };
+  }
+
+  private restoreFocus(previouslyFocused: HTMLElement | null): void {
+    if (
+      previouslyFocused &&
+      document.activeElement !== previouslyFocused &&
+      previouslyFocused.isConnected
+    ) {
+      previouslyFocused.focus?.({ preventScroll: true });
+    }
   }
 }

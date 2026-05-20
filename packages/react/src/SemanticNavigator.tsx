@@ -47,7 +47,18 @@ export interface SemanticNavigatorProps {
   highlightOnHover?: boolean;
   /** Scroll the host element into view on select. Default false. */
   scrollHostOnSelect?: boolean;
-  /** Steal focus on activate. Default false. */
+  /**
+   * Gate actions that move focus on the host page. Default `false`.
+   *
+   * When `false` the panel skips:
+   *   - the bare `"focus"` action
+   *   - `"increment"` / `"decrement"` for sliders/spinbuttons (widgets
+   *     like Radix Slider focus their own thumb on value change; in a
+   *     same-document panel that pulls focus off the panel button)
+   *
+   * Other actions (`click`, `toggle`, `submit`, `select`, `type`) are
+   * always dispatched regardless of this flag.
+   */
   focusHostOnActivate?: boolean;
   /** Optional CSP nonce applied to the injected style. */
   styleNonce?: string;

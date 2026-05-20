@@ -7,7 +7,9 @@ export type ActionType =
   | "navigate"
   | "toggle"
   | "select"
-  | "scroll";
+  | "scroll"
+  | "increment"
+  | "decrement";
 
 /** Which tree representation to display */
 export type TreeViewMode = "dom" | "a11y" | "tab";
@@ -137,8 +139,16 @@ export interface SemanticNavigatorConfig {
    */
   scrollHostOnSelect?: boolean;
   /**
-   * When true, activating a tree node with the "focus" primary action
-   * moves focus on the real element. Default `false`.
+   * Gate actions that move focus on the host page. Default `false`.
+   *
+   * When `false` the panel skips:
+   *   - the bare `"focus"` action
+   *   - `"increment"` / `"decrement"` for sliders/spinbuttons (widgets
+   *     like Radix Slider focus their own thumb on value change; in a
+   *     same-document panel that pulls focus off the panel button)
+   *
+   * Other actions (`click`, `toggle`, `submit`, `select`, `type`) are
+   * always dispatched regardless of this flag.
    */
   focusHostOnActivate?: boolean;
   /** Optional CSP nonce applied to the injected `<style>` element. */

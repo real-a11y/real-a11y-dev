@@ -1,4 +1,8 @@
-import type { SemanticNode, TreeViewMode } from "@real-a11y-dev/core";
+import type {
+  ActionType,
+  SemanticNode,
+  TreeViewMode,
+} from "@real-a11y-dev/core";
 import { getPrimaryAction, ACTION_LABELS } from "@real-a11y-dev/core";
 
 import type { ControlsLink } from "./TreePanel.js";
@@ -15,7 +19,13 @@ interface TreeNodeProps {
   isFlashing?: boolean;
   onSelect: (id: string) => void;
   onToggle: (id: string) => void;
-  onActivate: (id: string) => void;
+  /**
+   * Called when the row's action surface is invoked (button click). The
+   * optional `action` overrides the primary-action lookup the panel does
+   * by default — used by the slider/spinbutton ▲/▼ pair so each button
+   * dispatches its own increment/decrement instead of the primary.
+   */
+  onActivate: (id: string, action?: ActionType) => void;
   onHover: (id: string | null) => void;
   /**
    * Cross-links rendered on the trigger row of a disclosure pair (this
@@ -172,7 +182,17 @@ export function TreeNode({
   onJumpToNode,
 }: TreeNodeProps) {
   const hasChildren = node.childIds.length > 0;
-  const primaryAction = getPrimaryAction(node.interaction.actions);
+  const actions = node.interaction.actions;
+  // Slider / spinbutton rows surface a paired ▲/▼ control instead of a
+  // single primary-action button — so users can step the value in either
+  // direction (and the Screen Curtain still works because the panel
+  // drives the keystroke end-to-end). When the pair is shown, suppress
+  // the primary button to avoid duplicating "Increment" alongside ▲.
+  const showStepPair =
+    actions.includes("increment") && actions.includes("decrement");
+  const primaryAction = showStepPair
+    ? null
+    : getPrimaryAction(node.interaction.actions);
 
   const classNames = [
     "sn-node",
@@ -251,6 +271,79 @@ export function TreeNode({
         >
           {ACTION_LABELS[primaryAction]}
         </button>
+      )}
+
+      {/* Slider / spinbutton: paired ▼/▲ stepper. The order is
+          decrement-then-increment so the visible glyphs read as a single
+          range control (▼ ▲) rather than as two unrelated buttons.
+
+          The onClick handler is defensive about focus management because
+          this only fails in the same-document case (the React-app inline
+          panel) where focus is one shared resource between the panel
+          button and the page slider. Radix Slider re-focuses its thumb
+          in an effect after its state update commits — with the panel
+          and slider in the same document that yanks focus away from the
+          button the user just clicked, leaving the focus ring on the
+          slider thumb. The extension and Storybook variants don't see
+          this because the panel and slider live in separate documents
+          and each owns its own document.activeElement.
+
+          Three layers of defense (any one of them is enough on its own,
+          but together they cover every timing the widget might use):
+            1. `btn.focus()` before dispatch — primes the dispatcher's
+               previouslyFocused capture so its own restore aims here.
+            2. `setTimeout(0)` re-focus — wins against synchronous and
+               microtask refocus by the widget.
+            3. `requestAnimationFrame` re-focus — wins against widgets
+               that schedule focus through React commit + effect (Radix
+               Slider falls into this bucket).
+          All three no-op when focus is already on the button, so rapid
+          clicks behave correctly. */}
+      {showStepPair && (
+        <span class="sn-action-pair">
+          <button
+            class="sn-action sn-action--step"
+            tabIndex={-1}
+            aria-label={ACTION_LABELS.decrement}
+            title={ACTION_LABELS.decrement}
+            onClick={(e) => {
+              e.stopPropagation();
+              const btn = e.currentTarget as HTMLButtonElement;
+              btn.focus({ preventScroll: true });
+              onActivate(node.id, "decrement");
+              const reclaim = () => {
+                if (btn.isConnected && document.activeElement !== btn) {
+                  btn.focus({ preventScroll: true });
+                }
+              };
+              setTimeout(reclaim, 0);
+              requestAnimationFrame(reclaim);
+            }}
+          >
+            {"▼"}
+          </button>
+          <button
+            class="sn-action sn-action--step"
+            tabIndex={-1}
+            aria-label={ACTION_LABELS.increment}
+            title={ACTION_LABELS.increment}
+            onClick={(e) => {
+              e.stopPropagation();
+              const btn = e.currentTarget as HTMLButtonElement;
+              btn.focus({ preventScroll: true });
+              onActivate(node.id, "increment");
+              const reclaim = () => {
+                if (btn.isConnected && document.activeElement !== btn) {
+                  btn.focus({ preventScroll: true });
+                }
+              };
+              setTimeout(reclaim, 0);
+              requestAnimationFrame(reclaim);
+            }}
+          >
+            {"▲"}
+          </button>
+        </span>
       )}
     </div>
   );

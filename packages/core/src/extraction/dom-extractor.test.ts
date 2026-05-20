@@ -118,6 +118,47 @@ describe("extractDomTree", () => {
     expect(div.interaction.isInteractive).toBe(false);
   });
 
+  it("exposes increment/decrement (not type) for ARIA [role='slider']", () => {
+    // Radix Slider 1.x and other modern libs render a `<span role="slider">`
+    // that listens for ArrowLeft/ArrowRight on itself. Surfacing "type"
+    // produced a misleading TYPE badge that no-op'd when clicked. Pair the
+    // increment/decrement actions instead so the panel's ▼/▲ stepper drives
+    // real key events — works under the Screen Curtain too.
+    const root = createPage(`
+      <span role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">50</span>
+    `);
+    const { nodes } = extractDomTree(root);
+    const slider = [...nodes.values()].find(
+      (n) => n.dom.attributes["role"] === "slider",
+    )!;
+    expect(slider.interaction.actions).toContain("focus");
+    expect(slider.interaction.actions).toContain("increment");
+    expect(slider.interaction.actions).toContain("decrement");
+    expect(slider.interaction.actions).not.toContain("type");
+  });
+
+  it("pairs increment/decrement on native <input type='range'> (no 'type')", () => {
+    const root = createPage(
+      `<input type="range" min="0" max="100" value="50">`,
+    );
+    const { nodes, rootId } = extractDomTree(root);
+    const input = nodes.get(nodes.get(rootId)!.childIds[0])!;
+    expect(input.interaction.actions).toContain("increment");
+    expect(input.interaction.actions).toContain("decrement");
+    // Sliders aren't typeable — keep the action surface honest.
+    expect(input.interaction.actions).not.toContain("type");
+  });
+
+  it("pairs increment/decrement AND type on native <input type='number'>", () => {
+    // Number inputs accept both — typed value entry AND arrow-key stepping.
+    const root = createPage(`<input type="number" value="10">`);
+    const { nodes, rootId } = extractDomTree(root);
+    const input = nodes.get(nodes.get(rootId)!.childIds[0])!;
+    expect(input.interaction.actions).toContain("type");
+    expect(input.interaction.actions).toContain("increment");
+    expect(input.interaction.actions).toContain("decrement");
+  });
+
   it("computes correct roles", () => {
     const root = createPage(`
       <nav aria-label="Main">
