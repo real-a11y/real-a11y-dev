@@ -25,12 +25,56 @@ import {
   type SerializableTree,
 } from "./constants.js";
 
+/**
+ * Tags that never render visible content but routinely appear as direct
+ * children of `#storybook-root` for component-library reasons (React
+ * Aria's collection-builder mounts a `<template>` ahead of the actual
+ * rendered widget; some libs inject `<script>` hydration markers). These
+ * are skipped when picking the "real" root so the addon doesn't start
+ * extracting from an empty `<template>` and report "Empty tree".
+ */
+const NON_RENDERED_TAGS = new Set([
+  "template",
+  "script",
+  "style",
+  "noscript",
+]);
+
+/**
+ * Pick the root element the tree extraction + DomObserver should hang off
+ * for the current story. Pure / DOM-only — exported for unit testing.
+ *
+ * Strategy:
+ *   1. No `#storybook-root` yet → fall back to `document.body` (story
+ *      hasn't rendered).
+ *   2. Filter out tags that produce no visible content (`<template>`,
+ *      `<script>`, ...) from the wrapper's direct children.
+ *   3. Exactly one "real" child remains → use it as the root. Preserves
+ *      the original behavior for the common single-root component case
+ *      and keeps the tree free of the `#storybook-root` wrapper noise.
+ *   4. Zero or 2+ real children → use the wrapper itself. Covers:
+ *        - React Aria patterns (Tree, ListBox, ComboBox) that mount a
+ *          `<template>` + actual widget + focus guards as siblings — the
+ *          previous `firstElementChild` lookup picked the `<template>`
+ *          and the inspector reported "Empty tree" + stale state on
+ *          selection changes (the DomObserver was scoped to an empty
+ *          element so it never fired re-extracts).
+ *        - React Portal / Vue Teleport siblings hoisted to the story
+ *          root for layout reasons.
+ *        - Empty initial render (no children at all).
+ */
+export function pickStoryRoot(doc: Document): Element {
+  const sb = doc.getElementById("storybook-root");
+  if (!sb) return doc.body;
+  const realChildren = Array.from(sb.children).filter(
+    (c) => !NON_RENDERED_TAGS.has(c.tagName.toLowerCase()),
+  );
+  if (realChildren.length === 1) return realChildren[0];
+  return sb;
+}
+
 function getStoryRoot(): Element {
-  const sb = document.getElementById("storybook-root");
-  // Skip the Storybook wrapper div — start the tree at the story's own content.
-  // firstElementChild is the rendered component; fall back to the wrapper itself
-  // only when the story hasn't rendered yet or renders nothing.
-  return sb?.firstElementChild ?? sb ?? document.body;
+  return pickStoryRoot(document);
 }
 
 let observer: DomObserver | null = null;
