@@ -8,7 +8,8 @@ recursed into all descendants for name-from-content, so a tree shaped
 like
 
 ```html
-<li role="treeitem">Reports
+<li role="treeitem">
+  Reports
   <ul role="group">
     <li role="treeitem">report-1</li>
     <li role="treeitem">report-2 …</li>

@@ -483,7 +483,8 @@ describe("extractDomTree", () => {
       expect(reports.a11y.name).toBe("Reports");
       // The nested rows still appear as their own nodes with their own names.
       const inner = [...extractDomTree(root).nodes.values()].filter(
-        (n) => n.a11y.role === "treeitem" && n.dom.attributes["id"] !== "reports",
+        (n) =>
+          n.a11y.role === "treeitem" && n.dom.attributes["id"] !== "reports",
       );
       expect(inner.map((n) => n.a11y.name)).toEqual(["report-1", "report-2"]);
     });
