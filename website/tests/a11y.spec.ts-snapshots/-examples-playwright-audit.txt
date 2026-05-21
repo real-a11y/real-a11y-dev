@@ -83,7 +83,7 @@
       listitem
         link "How the adapter works"
   main
-    heading "Example: Playwright E2E ​" (level 1)
+    heading "Example: Playwright E2E" (level 1)
       link "Permalink to "Example: Playwright E2E""
     paragraph "Demonstrates  — the  adapter — against real fixture pages in a Playwright test suite."
       code "@real-a11y-dev/testing/playwright"
@@ -92,7 +92,7 @@
       strong "Source:"
       link "packages/testing/e2e/"
         code "packages/testing/e2e/"
-    heading "What it shows ​" (level 2)
+    heading "What it shows" (level 2)
       link "Permalink to "What it shows""
     list
       listitem "injecting the audit engine into a real browser page"
@@ -112,15 +112,15 @@
         strong "throwing"
       listitem "narrowing the audit to a specific subtree"
         code "rootSelector"
-    heading "Run it locally ​" (level 2)
+    heading "Run it locally" (level 2)
       link "Permalink to "Run it locally""
     button "Copy Code"
       code
-    heading "Setup ​" (level 2)
+    heading "Setup" (level 2)
       link "Permalink to "Setup""
     button "Copy Code"
       code
-    heading "Good fixture — assertions pass ​" (level 2)
+    heading "Good fixture — assertions pass" (level 2)
       link "Permalink to "Good fixture — assertions pass""
     button "Copy Code"
       code
@@ -138,7 +138,7 @@
       listitem "A  with"
         code "<dialog>"
         code "aria-labelledby"
-    heading "Bad fixture — assertions throw ​" (level 2)
+    heading "Bad fixture — assertions throw" (level 2)
       link "Permalink to "Bad fixture — assertions throw""
     button "Copy Code"
       code
@@ -157,11 +157,11 @@
         code "<dialog>"
         code "aria-label"
         code "aria-labelledby"
-    heading "Narrowing the audit root ​" (level 2)
+    heading "Narrowing the audit root" (level 2)
       link "Permalink to "Narrowing the audit root""
     button "Copy Code"
       code
-    heading "Snapshot test ​" (level 2)
+    heading "Snapshot test" (level 2)
       link "Permalink to "Snapshot test""
     button "Copy Code"
       code
@@ -170,7 +170,7 @@
       code "toMatchSnapshot()"
     button "Copy Code"
       code
-    heading "How the adapter works ​" (level 2)
+    heading "How the adapter works" (level 2)
       link "Permalink to "How the adapter works""
     button "Copy Code"
       code

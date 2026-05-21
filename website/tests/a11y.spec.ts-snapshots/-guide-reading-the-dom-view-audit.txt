@@ -75,7 +75,7 @@
       listitem
         link "How it relates to the other views"
   main
-    heading "Reading the DOM View ​" (level 1)
+    heading "Reading the DOM View" (level 1)
       link "Permalink to "Reading the DOM View""
     blockquote
       paragraph "The DOM view is the same tree across every Real A11y surface — the , the  , the , and the  option on . This page applies to all of them."
@@ -90,7 +90,7 @@
     paragraph "It answers the question:"
       strong ""What did I actually write?""
     separator
-    heading "What you see ​" (level 2)
+    heading "What you see" (level 2)
       link "Permalink to "What you see""
     paragraph "Each row in the tree is one DOM element. You'll see:"
     list
@@ -111,7 +111,7 @@
         code "type"
     paragraph "Elements nest exactly as they do in HTML. Expanding a node shows its children."
     separator
-    heading "When to use it ​" (level 2)
+    heading "When to use it" (level 2)
       link "Permalink to "When to use it""
     paragraph "The A11y view can feel abstract — a heading with no children, a landmark that swallowed half the page. The DOM view lets you trace back to the actual markup to understand why."
       strong "Cross-referencing structure."
@@ -126,9 +126,9 @@
       strong "Checking what ARIA you actually applied."
       code "role="dialog""
     separator
-    heading "What to look for ​" (level 2)
+    heading "What to look for" (level 2)
       link "Permalink to "What to look for""
-    heading "Semantic HTML vs. fake HTML ​" (level 3)
+    heading "Semantic HTML vs. fake HTML" (level 3)
       link "Permalink to "Semantic HTML vs. fake HTML""
     paragraph "There's a real difference between a  and a . Both show up in the DOM view. The  gets keyboard support, focus management, and correct announcement for free. The  gets none of that unless you wire it up manually."
       code "<button>"
@@ -139,7 +139,7 @@
       code "<div>"
       code "<span>"
       code "role"
-    heading "Nesting that doesn't make sense ​" (level 3)
+    heading "Nesting that doesn't make sense" (level 3)
       link "Permalink to "Nesting that doesn't make sense""
     paragraph "Certain HTML nesting rules are invisible until something breaks:"
     list
@@ -159,14 +159,14 @@
         code "<span>"
         code "<a>"
     paragraph "The DOM view makes these patterns obvious at a glance."
-    heading "Too many <div>s between meaningful elements ​" (level 3)
+    heading "Too many <div>s between meaningful elements" (level 3)
       code "<div>"
       link "Permalink to "Too many `<div>`s between meaningful elements""
     paragraph "A label and its input should be close in the tree. If you see five levels of  wrapping before you reach an , it's a sign the component structure grew organically and might be worth simplifying — both for accessibility and for maintainability."
       code "<div>"
       code "<input>"
     separator
-    heading "How it relates to the other views ​" (level 2)
+    heading "How it relates to the other views" (level 2)
       link "Permalink to "How it relates to the other views""
     table
       rowgroup

@@ -5,7 +5,7 @@
   h2 Recipes
   h2 Reference
   h2 On this page
-h1 Why Real A11y? ​
-  h2 The gap ​
-  h2 How they complement each other ​
-  h2 Design principles ​
+h1 Why Real A11y?
+  h2 The gap
+  h2 How they complement each other
+  h2 Design principles

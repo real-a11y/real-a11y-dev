@@ -5,12 +5,12 @@
   h2 Recipes
   h2 Reference
   h2 On this page
-h1 Troubleshooting ​
-  h2 My audit returned nothing ​
-  h2 Snapshot flaps between runs or between local and CI ​
-  h2 Heading outline has no h1 ​
-  h2 Tab sequence is empty ​
-  h2 React hydration mismatch when rendering the panel ​
-  h2 Tests pass in jsdom but fail in Playwright (or vice versa) ​
-  h2 A11yAssertionError with a message I don't understand ​
-  h2 Still stuck? ​
+h1 Troubleshooting
+  h2 My audit returned nothing
+  h2 Snapshot flaps between runs or between local and CI
+  h2 Heading outline has no h1
+  h2 Tab sequence is empty
+  h2 React hydration mismatch when rendering the panel
+  h2 Tests pass in jsdom but fail in Playwright (or vice versa)
+  h2 A11yAssertionError with a message I don't understand
+  h2 Still stuck?

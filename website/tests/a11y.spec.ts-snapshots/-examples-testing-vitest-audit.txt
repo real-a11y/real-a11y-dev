@@ -73,7 +73,7 @@
       listitem
         link "Key code"
   main
-    heading "Example: Vitest Integration ​" (level 1)
+    heading "Example: Vitest Integration" (level 1)
       link "Permalink to "Example: Vitest Integration""
     paragraph "Demonstrates  in a Vitest + jsdom test suite — snapshots, structural assertions, and the  chain."
       code "@real-a11y-dev/testing"
@@ -82,7 +82,7 @@
       strong "Source:"
       link "examples/testing-vitest/"
         code "examples/testing-vitest/"
-    heading "What it shows ​" (level 2)
+    heading "What it shows" (level 2)
       link "Permalink to "What it shows""
     list
       listitem "as a Vitest snapshot"
@@ -101,25 +101,25 @@
       listitem "+  for structure tests"
         code "outlineSnapshot()"
         code "tabSequenceSnapshot()"
-    heading "Run it locally ​" (level 2)
+    heading "Run it locally" (level 2)
       link "Permalink to "Run it locally""
     button "Copy Code"
       code
-    heading "Key code ​" (level 2)
+    heading "Key code" (level 2)
       link "Permalink to "Key code""
-    heading "Snapshot test ​" (level 3)
+    heading "Snapshot test" (level 3)
       link "Permalink to "Snapshot test""
     button "Copy Code"
       code
-    heading "Structural assertions ​" (level 3)
+    heading "Structural assertions" (level 3)
       link "Permalink to "Structural assertions""
     button "Copy Code"
       code
-    heading "Flow chain — combobox interaction ​" (level 3)
+    heading "Flow chain — combobox interaction" (level 3)
       link "Permalink to "Flow chain — combobox interaction""
     button "Copy Code"
       code
-    heading "Tab sequence test ​" (level 3)
+    heading "Tab sequence test" (level 3)
       link "Permalink to "Tab sequence test""
     button "Copy Code"
       code

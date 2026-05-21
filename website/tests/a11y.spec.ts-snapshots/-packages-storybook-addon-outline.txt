@@ -5,14 +5,14 @@
   h2 Recipes
   h2 Reference
   h2 On this page
-h1 @real-a11y-dev/storybook-addon ​
-  h2 Install ​
-  h2 Setup ​
-  h2 The panel ​
-  h2 How it works ​
-  h2 Using the panel effectively ​
-  h2 Story parameters ​
-  h2 Channel events ​
-  h2 Troubleshooting ​
-  h2 See it running ​
-  h2 Panel features ​
+h1 @real-a11y-dev/storybook-addon
+  h2 Install
+  h2 Setup
+  h2 The panel
+  h2 How it works
+  h2 Using the panel effectively
+  h2 Story parameters
+  h2 Channel events
+  h2 Troubleshooting
+  h2 See it running
+  h2 Panel features

@@ -83,21 +83,21 @@
       listitem
         link "Contact"
   main
-    heading "Privacy Policy ​" (level 1)
+    heading "Privacy Policy" (level 1)
       link "Permalink to "Privacy Policy""
     paragraph
       emphasis "Last updated: 2026-04-18"
     paragraph "This policy covers the Real A11y website (), the Semantic Navigator Chrome extension, and the  npm packages."
       code "real-a11y.dev"
       code "@real-a11y-dev/*"
-    heading "Short version ​" (level 2)
+    heading "Short version" (level 2)
       link "Permalink to "Short version""
     list
       listitem "We don't collect personal data."
       listitem "The Chrome extension runs entirely on your device. It does not send page content, URLs, or any other data to any server — ours or anyone else's."
       listitem "The npm packages run on your device / in your CI. They make no network requests."
       listitem "The website may use privacy-respecting aggregate analytics (no cookies, no personal identifiers). If enabled, it's disclosed here."
-    heading "Chrome extension — Semantic Navigator ​" (level 2)
+    heading "Chrome extension — Semantic Navigator" (level 2)
       link "Permalink to "Chrome extension — Semantic Navigator""
     paragraph "The extension reads the DOM of the page you're currently viewing in order to build and display a semantic / accessibility tree in a side panel. It acts locally in your browser."
     paragraph
@@ -136,7 +136,7 @@
             code "webNavigation"
           cell "Detect iframe load events to merge subtree data from cross-origin frames"
     paragraph "No other permissions are requested."
-    heading "npm packages ​" (level 2)
+    heading "npm packages" (level 2)
       link "Permalink to "npm packages""
     paragraph "The , , , , , and  packages are pure libraries. They:"
       code "@real-a11y-dev/core"
@@ -153,7 +153,7 @@
         code "pnpm"
         code "npm"
         code "yarn"
-    heading "Website ​" (level 2)
+    heading "Website" (level 2)
       link "Permalink to "Website""
     paragraph "The site at  is a static VitePress documentation site. The only first-party state is the search index and local preferences (theme selection) stored in your browser's ."
       code "real-a11y.dev"
@@ -163,7 +163,7 @@
       listitem "Use a privacy-respecting, cookie-free provider (e.g. Plausible, Fathom, or Cloudflare Web Analytics)."
       listitem "Update this page to name the provider and what data is collected before enabling."
       listitem "Never use Google Analytics or any product that requires a cookie banner in the EU."
-    heading "Data we might receive anyway ​" (level 2)
+    heading "Data we might receive anyway" (level 2)
       link "Permalink to "Data we might receive anyway""
     paragraph "If you open an issue, comment, or send email:"
     list
@@ -175,15 +175,15 @@
       listitem "Code of Conduct reports to  — handled confidentially per ."
         code "conduct@real-a11y.dev"
         link "CODE_OF_CONDUCT.md"
-    heading "Your rights ​" (level 2)
+    heading "Your rights" (level 2)
       link "Permalink to "Your rights""
     paragraph "If you have questions about this policy or want us to delete any data you've shared with us directly, email . We'll respond within 30 days."
       code "privacy@real-a11y.dev"
-    heading "Changes to this policy ​" (level 2)
+    heading "Changes to this policy" (level 2)
       link "Permalink to "Changes to this policy""
     paragraph "Changes are tracked in the git history of . Material changes will bump the "Last updated" date at the top of the page."
       code "website/privacy.md"
-    heading "Contact ​" (level 2)
+    heading "Contact" (level 2)
       link "Permalink to "Contact""
     list
       listitem "Maintainer: Juan Crisostomo (Real A11y)"

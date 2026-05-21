@@ -77,14 +77,14 @@
       listitem
         link "Why this matters"
   main
-    heading "Accessible Names ​" (level 1)
+    heading "Accessible Names" (level 1)
       link "Permalink to "Accessible Names""
     paragraph "The  is the string a screen reader announces for an element. It's what your user actually hears — and it's almost never just the element's text content. This page explains how that name is computed, what contributes, and what wins when multiple sources compete."
       strong "accessible name"
     paragraph "Every  in a Real A11y tree comes from this algorithm."
       code "SemanticNode.a11y.name"
     separator
-    heading "The priority order ​" (level 2)
+    heading "The priority order" (level 2)
       link "Permalink to "The priority order""
     paragraph "For any element, the accessible name is picked from the  in this list:"
       strong "first non-empty source"
@@ -112,15 +112,15 @@
       listitem "Empty string (element has no accessible name)"
     paragraph "If #1 resolves to a non-empty string, #2–#5 are ignored — even if #2 looks "more specific" from a CSS or developer perspective."
     separator
-    heading "Concrete examples ​" (level 2)
+    heading "Concrete examples" (level 2)
       link "Permalink to "Concrete examples""
-    heading "Button with only text ​" (level 3)
+    heading "Button with only text" (level 3)
       link "Permalink to "Button with only text""
     button "Copy Code"
       code
     paragraph "→  (from #4, text content)."
       code ""Save changes""
-    heading "Button with an icon and hidden text ​" (level 3)
+    heading "Button with an icon and hidden text" (level 3)
       link "Permalink to "Button with an icon and hidden text""
     button "Copy Code"
       code
@@ -128,7 +128,7 @@
       code ""Close dialog""
       code "aria-hidden"
       code "<span>"
-    heading "Button with only an icon ​" (level 3)
+    heading "Button with only an icon" (level 3)
       link "Permalink to "Button with only an icon""
     button "Copy Code"
       code
@@ -138,14 +138,14 @@
       code "aria-label"
     button "Copy Code"
       code
-    heading "Form control with a wrapping label ​" (level 3)
+    heading "Form control with a wrapping label" (level 3)
       link "Permalink to "Form control with a wrapping label""
     button "Copy Code"
       code
     paragraph "→ input's name is  (from #3 — native label association). Real A11y's label handling prunes the label text from the tree so it doesn't surface as a redundant  sibling."
       code ""Email""
       code "generic "Email""
-    heading "Form control with for / id ​" (level 3)
+    heading "Form control with for / id" (level 3)
       code "for"
       code "id"
       link "Permalink to "Form control with `for` / `id`""
@@ -153,7 +153,7 @@
       code
     paragraph "→ input's name is  (same path)."
       code ""Search""
-    heading "aria-label beats text content ​" (level 3)
+    heading "aria-label beats text content" (level 3)
       code "aria-label"
       link "Permalink to "`aria-label` beats text content""
     button "Copy Code"
@@ -161,7 +161,7 @@
     paragraph "→  (from #2). The visible text  is ignored by screen readers here — a classic footgun if the two drift apart."
       code ""Go to homepage""
       code ""Home""
-    heading "aria-labelledby beats everything ​" (level 3)
+    heading "aria-labelledby beats everything" (level 3)
       code "aria-labelledby"
       link "Permalink to "`aria-labelledby` beats everything""
     button "Copy Code"
@@ -176,7 +176,7 @@
     paragraph "→ input's name is ."
       code ""First name (required)""
     separator
-    heading "What does not contribute ​" (level 2)
+    heading "What does not contribute" (level 2)
       emphasis "not"
       link "Permalink to "What does *not* contribute""
     list
@@ -200,7 +200,7 @@
         strong "with empty alt"
           code "<img alt="">"
     separator
-    heading "Debugging an unexpected name ​" (level 2)
+    heading "Debugging an unexpected name" (level 2)
       link "Permalink to "Debugging an unexpected name""
     paragraph "When  shows a name you didn't expect:"
       code "auditSnapshot()"
@@ -222,7 +222,7 @@
       listitem "If the extension shows the same name, it's what real AT will announce."
         strong "Compare against the Chrome extension."
     separator
-    heading "Why this matters ​" (level 2)
+    heading "Why this matters" (level 2)
       link "Permalink to "Why this matters""
     paragraph "The accessible name is the only piece of text a screen reader user has to distinguish one element from another. Two buttons labeled  in a list of items are indistinguishable — not because the user is confused, but because from their perspective ."
       code ""Edit""

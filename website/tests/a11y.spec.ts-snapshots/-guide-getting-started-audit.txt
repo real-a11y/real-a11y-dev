@@ -79,11 +79,11 @@
       listitem
         link "Next steps"
   main
-    heading "Getting Started ​" (level 1)
+    heading "Getting Started" (level 1)
       link "Permalink to "Getting Started""
     paragraph "Real A11y is a suite of packages built around a single engine: . Each package is independently installable — use just the ones you need."
       code "@real-a11y-dev/core"
-    heading "Pick your entry point ​" (level 2)
+    heading "Pick your entry point" (level 2)
       link "Permalink to "Pick your entry point""
     table
       rowgroup
@@ -94,21 +94,21 @@
       rowgroup
         row
           cell "Embed an interactive tree panel in any web app"
-          cell "@real-a11y-dev/inspector"
+          cell
             link "@real-a11y-dev/inspector"
               code "@real-a11y-dev/inspector"
           cell "dev (recommended)"
             strong "dev"
         row
           cell "Write accessibility assertions in Vitest / Jest"
-          cell "@real-a11y-dev/testing"
+          cell
             link "@real-a11y-dev/testing"
               code "@real-a11y-dev/testing"
           cell "dev"
             strong "dev"
         row
           cell "Run accessibility assertions in Playwright E2E tests"
-          cell "@real-a11y-dev/testing/playwright"
+          cell
             link "@real-a11y-dev/testing/playwright"
               code "@real-a11y-dev/testing/playwright"
           cell "dev"
@@ -116,21 +116,21 @@
         row
           cell "Use React hooks and a <SemanticNavigator /> component"
             code "<SemanticNavigator />"
-          cell "@real-a11y-dev/react"
+          cell
             link "@real-a11y-dev/react"
               code "@real-a11y-dev/react"
           cell "dev (recommended)"
             strong "dev"
         row
           cell "Add an A11y tree panel to every Storybook story"
-          cell "@real-a11y-dev/storybook-addon"
+          cell
             link "@real-a11y-dev/storybook-addon"
               code "@real-a11y-dev/storybook-addon"
           cell "dev"
             strong "dev"
         row
           cell "Build your own tooling on the extraction engine"
-          cell "@real-a11y-dev/core"
+          cell
             link "@real-a11y-dev/core"
               code "@real-a11y-dev/core"
           cell "depends (see below)"
@@ -150,7 +150,7 @@
       code "dependencies"
       code "peerDependencies"
     separator
-    heading "Quick install ​" (level 2)
+    heading "Quick install" (level 2)
       link "Permalink to "Quick install""
     paragraph "All packages are installed as dev dependencies below. This is the right default for apps."
     radio "npm"
@@ -159,16 +159,16 @@
     button "Copy Code"
       code
     separator
-    heading "Your first tree in 30 seconds ​" (level 2)
+    heading "Your first tree in 30 seconds" (level 2)
       link "Permalink to "Your first tree in 30 seconds""
-    heading "Framework-agnostic embed ​" (level 3)
+    heading "Framework-agnostic embed" (level 3)
       link "Permalink to "Framework-agnostic embed""
     button "Copy Code"
       code
     paragraph "The panel renders inside a ShadowRoot attached to . Your app's CSS cannot leak in; the panel's CSS cannot leak out."
       code "#sn-panel"
     separator
-    heading "React ​" (level 3)
+    heading "React" (level 3)
       link "Permalink to "React""
     button "Copy Code"
       code
@@ -176,18 +176,18 @@
     button "Copy Code"
       code
     separator
-    heading "Testing (Vitest / Jest) ​" (level 3)
+    heading "Testing (Vitest / Jest)" (level 3)
       link "Permalink to "Testing (Vitest / Jest)""
     button "Copy Code"
       code
     separator
-    heading "Playwright (E2E) ​" (level 3)
+    heading "Playwright (E2E)" (level 3)
       link "Permalink to "Playwright (E2E)""
     button "Copy Code"
       code
     paragraph "The adapter injects the audit engine into the real browser page. No changes to your app code required."
     separator
-    heading "Storybook addon ​" (level 3)
+    heading "Storybook addon" (level 3)
       link "Permalink to "Storybook addon""
     paragraph "Add to :"
       code ".storybook/main.ts"
@@ -196,7 +196,7 @@
     paragraph "That's it. A  panel appears next to Controls and A11y for every story, showing the tree, heading outline, and tab sequence — updated live as the story re-renders."
       strong "Semantic Navigator"
     separator
-    heading "Requirements ​" (level 2)
+    heading "Requirements" (level 2)
       link "Permalink to "Requirements""
     table
       rowgroup
@@ -231,7 +231,7 @@
           cell "≥ 20"
           cell "Storybook ≥ 8"
     separator
-    heading "Keep it out of production ​" (level 2)
+    heading "Keep it out of production" (level 2)
       link "Permalink to "Keep it out of production""
     paragraph "and  render a full tree view (~23 KB gzipped for , plus Preact; see  for the gated budgets). If you drop  or  into a component that ships to production, bundlers can't tree-shake the renderer away — . You want it dev-only."
       code "@real-a11y-dev/inspector"
@@ -243,7 +243,7 @@
       code "createInspector()"
       emphasis "the reference exists at runtime"
     paragraph "Two patterns, pick the one that matches your toolchain."
-    heading "Pattern 1 — static gate (ideal, fully tree-shaken) ​" (level 3)
+    heading "Pattern 1 — static gate (ideal, fully tree-shaken)" (level 3)
       link "Permalink to "Pattern 1 — static gate (ideal, fully tree-shaken)""
     paragraph "Your bundler erases a -branch at build time. Works with Vite, Rollup, webpack, esbuild."
       code "false"
@@ -254,14 +254,14 @@
       code
     paragraph "Use it anywhere — it's a no-op in production, and the  is code-split so the inspector chunk only loads when the gate is true."
       code "import(...)"
-    heading "Pattern 2 — runtime query param (useful for staging) ​" (level 3)
+    heading "Pattern 2 — runtime query param (useful for staging)" (level 3)
       link "Permalink to "Pattern 2 — runtime query param (useful for staging)""
     paragraph "You want to audit a deployed staging URL without a rebuild. Enable via ."
       code "?a11y=1"
     button "Copy Code"
       code
     paragraph "This ships the inspector into the production bundle (as a separate chunk) — acceptable for internal apps / staging, not ideal for consumer-facing production. Prefer Pattern 1 when you can."
-    heading "What's safe to leave in production ​" (level 3)
+    heading "What's safe to leave in production" (level 3)
       link "Permalink to "What's safe to leave in production""
     table
       rowgroup
@@ -300,7 +300,7 @@
           cell "Storybook-only — -D."
             code "-D"
     separator
-    heading "Next steps ​" (level 2)
+    heading "Next steps" (level 2)
       link "Permalink to "Next steps""
     list
       listitem "— understand the semantic tree model, roles, and names"

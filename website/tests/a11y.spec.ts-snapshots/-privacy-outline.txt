@@ -5,12 +5,12 @@
   h2 Recipes
   h2 Reference
   h2 On this page
-h1 Privacy Policy ​
-  h2 Short version ​
-  h2 Chrome extension — Semantic Navigator ​
-  h2 npm packages ​
-  h2 Website ​
-  h2 Data we might receive anyway ​
-  h2 Your rights ​
-  h2 Changes to this policy ​
-  h2 Contact ​
+h1 Privacy Policy
+  h2 Short version
+  h2 Chrome extension — Semantic Navigator
+  h2 npm packages
+  h2 Website
+  h2 Data we might receive anyway
+  h2 Your rights
+  h2 Changes to this policy
+  h2 Contact

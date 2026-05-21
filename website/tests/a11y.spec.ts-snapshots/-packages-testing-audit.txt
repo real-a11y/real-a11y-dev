@@ -83,7 +83,7 @@
       listitem
         link "See it running"
   main
-    heading "@real-a11y-dev/testing ​" (level 1)
+    heading "@real-a11y-dev/testing" (level 1)
       link "Permalink to "@real-a11y-dev/testing""
     blockquote
       paragraph "— Snapshot helpers (, , ) and structural assertions (, , , ) plus a fluent  chain for interaction tests. Works in jsdom (Vitest / Jest) out of the box; add  for real-browser E2E. Reach for this  — unit and e2e alike."
@@ -99,15 +99,15 @@
         code "@real-a11y-dev/testing/playwright"
         strong "in your test suite"
     paragraph "Headless accessibility audit helpers for Vitest, Jest, and Playwright. No browser required for the core helpers — they work in jsdom."
-    heading "Install ​" (level 2)
+    heading "Install" (level 2)
       link "Permalink to "Install""
     button "Copy Code"
       code
     separator
-    heading "Snapshots ​" (level 2)
+    heading "Snapshots" (level 2)
       link "Permalink to "Snapshots""
     paragraph "Deterministic string representations of the accessibility tree. Safe to commit — same DOM always produces the same string."
-    heading "auditSnapshot(root, options?) ​" (level 3)
+    heading "auditSnapshot(root, options?)" (level 3)
       code "auditSnapshot(root, options?)"
       link "Permalink to "`auditSnapshot(root, options?)`""
     paragraph "Returns a formatted string of the full semantic tree."
@@ -143,7 +143,7 @@
     paragraph "Example output:"
     button "Copy Code"
       code
-    heading "Using redact — realistic patterns ​" (level 4)
+    heading "Using redact — realistic patterns" (level 4)
       code "redact"
       link "Permalink to "Using `redact` — realistic patterns""
     paragraph "Most snapshot flakes come from text that changes between runs. Pass regex patterns that match the noisy bits:"
@@ -156,7 +156,7 @@
     paragraph "Redact patterns are additive across calls — define one shared list for your suite:"
     button "Copy Code"
       code
-    heading "outlineSnapshot(root) ​" (level 3)
+    heading "outlineSnapshot(root)" (level 3)
       code "outlineSnapshot(root)"
       link "Permalink to "`outlineSnapshot(root)`""
     paragraph "Returns a string of the heading outline only — useful for structure audits."
@@ -165,7 +165,7 @@
     paragraph "Example output:"
     button "Copy Code"
       code
-    heading "tabSequenceSnapshot(root) ​" (level 3)
+    heading "tabSequenceSnapshot(root)" (level 3)
       code "tabSequenceSnapshot(root)"
       link "Permalink to "`tabSequenceSnapshot(root)`""
     paragraph "Returns the tab sequence as a numbered list."
@@ -175,14 +175,14 @@
     button "Copy Code"
       code
     separator
-    heading "Assertions ​" (level 2)
+    heading "Assertions" (level 2)
       link "Permalink to "Assertions""
     paragraph "These throw  with a descriptive message on failure. Designed for use directly in  /  blocks without wrapping in ."
       code "A11yAssertionError"
       code "it()"
       code "test()"
       code "expect()"
-    heading "assertNoUnlabeledInteractive(root) ​" (level 3)
+    heading "assertNoUnlabeledInteractive(root)" (level 3)
       code "assertNoUnlabeledInteractive(root)"
       link "Permalink to "`assertNoUnlabeledInteractive(root)`""
     paragraph "Throws if any interactive element (button, link, textbox, combobox, checkbox, radio, etc.) has an empty accessible name."
@@ -191,7 +191,7 @@
     paragraph "Error message example:"
     button "Copy Code"
       code
-    heading "assertHeadingOrder(root) ​" (level 3)
+    heading "assertHeadingOrder(root)" (level 3)
       code "assertHeadingOrder(root)"
       link "Permalink to "`assertHeadingOrder(root)`""
     paragraph "Throws if:"
@@ -203,7 +203,7 @@
         code "h4"
     button "Copy Code"
       code
-    heading "assertDialogsLabeled(root) ​" (level 3)
+    heading "assertDialogsLabeled(root)" (level 3)
       code "assertDialogsLabeled(root)"
       link "Permalink to "`assertDialogsLabeled(root)`""
     paragraph "Throws if any  or  element has no accessible name (via  or )."
@@ -213,7 +213,7 @@
       code "aria-labelledby"
     button "Copy Code"
       code
-    heading "assertLandmarkStructure(root) ​" (level 3)
+    heading "assertLandmarkStructure(root)" (level 3)
       code "assertLandmarkStructure(root)"
       link "Permalink to "`assertLandmarkStructure(root)`""
     paragraph "Throws if:"
@@ -229,7 +229,7 @@
     button "Copy Code"
       code
     separator
-    heading "Flow API ​" (level 2)
+    heading "Flow API" (level 2)
       link "Permalink to "Flow API""
     paragraph "Fluent interaction chains that assert about the  after each step. Each  /  / etc. dispatches a real DOM action, then re-extracts the tree so the next step sees the post-interaction state."
       strong "accessibility tree"
@@ -237,7 +237,7 @@
       code ".type()"
     button "Copy Code"
       code
-    heading "Why flow() (vs Testing Library)? ​" (level 3)
+    heading "Why flow() (vs Testing Library)?" (level 3)
       code "flow()"
       link "Permalink to "Why `flow()` (vs Testing Library)?""
     paragraph "Testing Library asserts about the .  asserts about the  — the same tree screen-reader users perceive and the same tree the Real A11y panel shows. That difference changes which tests are easy to write."
@@ -249,7 +249,7 @@
       strong "not"
       code "userEvent"
       code "flow()"
-    heading "Side-by-side: same test, both libraries ​" (level 4)
+    heading "Side-by-side: same test, both libraries" (level 4)
       link "Permalink to "Side-by-side: same test, both libraries""
     paragraph "A common flow — open a confirm dialog, dismiss it, assert it closed:"
     button "Copy Code"
@@ -265,7 +265,7 @@
       code ".click()"
       code "findByRole"
       code "within(dialog)"
-    heading "When to use which ​" (level 4)
+    heading "When to use which" (level 4)
       link "Permalink to "When to use which""
     table
       rowgroup
@@ -288,7 +288,7 @@
           cell "You want to assert "the right modal is now open" or "no modal is open" in one step"
         row
           cell "Your codebase is already deep in RTL idioms and you want to stay consistent"
-          cell "The same audit logic must also run in a real browser via the Playwright adapter"
+          cell "The same audit logic must also run in a real browser via the"
             link "Playwright adapter"
         row
           cell "Testing one component in isolation"
@@ -302,7 +302,7 @@
       code "flow()"
       emphasis "AT users"
       strong "both, in the same suite"
-    heading "Available steps ​" (level 3)
+    heading "Available steps" (level 3)
       link "Permalink to "Available steps""
     table
       rowgroup
@@ -354,7 +354,7 @@
           cell "Run a custom assertion with the current tree as argument."
     paragraph "The flow is lazy — steps queue up and run when you  the chain."
       code "await"
-    heading "expectActiveModal — examples ​" (level 4)
+    heading "expectActiveModal — examples" (level 4)
       code "expectActiveModal"
       link "Permalink to "`expectActiveModal` — examples""
     button "Copy Code"
@@ -362,7 +362,7 @@
     paragraph "The first  or  in document order is treated as the active modal."
       code "role="dialog""
       code "role="alertdialog""
-    heading "expectTree — caveat ​" (level 4)
+    heading "expectTree — caveat" (level 4)
       code "expectTree"
       link "Permalink to "`expectTree` — caveat""
     paragraph "re-serializes the tree with  (no , , generic nodes flattened). A snapshot captured via  or  will not match. For redacted or DOM-mode comparisons, use  and call / yourself."
@@ -375,7 +375,7 @@
       code ".expect((tree) => { … })"
       code "serializeTree"
       code "auditSnapshot"
-    heading "flow(root, options?) ​" (level 3)
+    heading "flow(root, options?)" (level 3)
       code "flow(root, options?)"
       link "Permalink to "`flow(root, options?)`""
     table
@@ -397,9 +397,9 @@
     button "Copy Code"
       code
     separator
-    heading "Utilities ​" (level 2)
+    heading "Utilities" (level 2)
       link "Permalink to "Utilities""
-    heading "waitForMutations(root, options?) ​" (level 3)
+    heading "waitForMutations(root, options?)" (level 3)
       code "waitForMutations(root, options?)"
       link "Permalink to "`waitForMutations(root, options?)`""
     paragraph "Resolves after the next debounced DOM mutation cycle. Useful after programmatic DOM changes."
@@ -428,7 +428,7 @@
             code "number"
           cell "50 ms"
             code "50"
-    heading "dispatch(node, action?, payload?) ​" (level 3)
+    heading "dispatch(node, action?, payload?)" (level 3)
       code "dispatch(node, action?, payload?)"
       link "Permalink to "`dispatch(node, action?, payload?)`""
     paragraph "Dispatches an action on a  directly."
@@ -436,18 +436,18 @@
     button "Copy Code"
       code
     separator
-    heading "Playwright adapter ​" (level 2)
+    heading "Playwright adapter" (level 2)
       link "Permalink to "Playwright adapter""
     paragraph "Run the same audit helpers against a real browser page. The adapter injects a self-contained IIFE bundle into the page and exposes every helper via ."
       code "page.evaluate()"
-    heading "Install ​" (level 3)
+    heading "Install" (level 3)
       link "Permalink to "Install""
     button "Copy Code"
       code
     paragraph "The  peer dependency is optional — only needed when using ."
       code "playwright"
       code "@real-a11y-dev/testing/playwright"
-    heading "attach(page, options?) ​" (level 3)
+    heading "attach(page, options?)" (level 3)
       code "attach(page, options?)"
       link "Permalink to "`attach(page, options?)`""
     button "Copy Code"
@@ -471,17 +471,17 @@
           cell ""body""
             code ""body""
           cell "CSS selector for the audit root element."
-    heading "Narrowing the root ​" (level 3)
+    heading "Narrowing the root" (level 3)
       link "Permalink to "Narrowing the root""
     button "Copy Code"
       code
-    heading "Testing that assertions fail on broken pages ​" (level 3)
+    heading "Testing that assertions fail on broken pages" (level 3)
       link "Permalink to "Testing that assertions fail on broken pages""
     paragraph "Lock in the failure mode too — not just the happy path. When a new assertion lands or you refactor a page, you want confirmation that broken structure still throws:"
     button "Copy Code"
       code
     paragraph "Keep a small "broken" fixture checked into your test repo with one of each pattern the assertions target (missing h1, skipped level, unlabeled button, unlabeled dialog). If a future refactor ever weakens the assertions, this test catches it immediately."
-    heading "Determinism ​" (level 3)
+    heading "Determinism" (level 3)
       link "Permalink to "Determinism""
     paragraph ", , and  return the  for the same DOM — on every run, on every machine. No timestamps, no generated IDs, no ordering surprises:"
       code "auditSnapshot()"
@@ -494,7 +494,7 @@
       code "expect(await sn.auditSnapshot()).toMatchSnapshot()"
       link "redact"
         code "redact"
-    heading "How it works ​" (level 3)
+    heading "How it works" (level 3)
       link "Permalink to "How it works""
     button "Copy Code"
       code
@@ -509,13 +509,13 @@
         code "page.evaluate()"
     paragraph "The bundle is read once and cached in the Node process — subsequent  calls on the same process are instant."
       code "attach()"
-    heading "Error propagation ​" (level 3)
+    heading "Error propagation" (level 3)
       link "Permalink to "Error propagation""
     paragraph "When an assertion throws  inside the page, Playwright propagates the error message back to Node. The full descriptive message (including all offending elements) is preserved."
       code "A11yAssertionError"
     button "Copy Code"
       code
-    heading "SemanticNavigatorPageHandle type ​" (level 3)
+    heading "SemanticNavigatorPageHandle type" (level 3)
       code "SemanticNavigatorPageHandle"
       link "Permalink to "`SemanticNavigatorPageHandle` type""
     button "Copy Code"
@@ -526,12 +526,12 @@
       code "playwright"
       code "@playwright/test"
     separator
-    heading "TypeScript ​" (level 2)
+    heading "TypeScript" (level 2)
       link "Permalink to "TypeScript""
     button "Copy Code"
       code
     separator
-    heading "See it running ​" (level 2)
+    heading "See it running" (level 2)
       link "Permalink to "See it running""
     list
       listitem "— : snapshot tests,  combobox interaction, tab-sequence structure assertions."

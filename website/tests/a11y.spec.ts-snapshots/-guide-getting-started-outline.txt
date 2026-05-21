@@ -5,18 +5,18 @@
   h2 Recipes
   h2 Reference
   h2 On this page
-h1 Getting Started ​
-  h2 Pick your entry point ​
-  h2 Quick install ​
-  h2 Your first tree in 30 seconds ​
-    h3 Framework-agnostic embed ​
-    h3 React ​
-    h3 Testing (Vitest / Jest) ​
-    h3 Playwright (E2E) ​
-    h3 Storybook addon ​
-  h2 Requirements ​
-  h2 Keep it out of production ​
-    h3 Pattern 1 — static gate (ideal, fully tree-shaken) ​
-    h3 Pattern 2 — runtime query param (useful for staging) ​
-    h3 What's safe to leave in production ​
-  h2 Next steps ​
+h1 Getting Started
+  h2 Pick your entry point
+  h2 Quick install
+  h2 Your first tree in 30 seconds
+    h3 Framework-agnostic embed
+    h3 React
+    h3 Testing (Vitest / Jest)
+    h3 Playwright (E2E)
+    h3 Storybook addon
+  h2 Requirements
+  h2 Keep it out of production
+    h3 Pattern 1 — static gate (ideal, fully tree-shaken)
+    h3 Pattern 2 — runtime query param (useful for staging)
+    h3 What's safe to leave in production
+  h2 Next steps

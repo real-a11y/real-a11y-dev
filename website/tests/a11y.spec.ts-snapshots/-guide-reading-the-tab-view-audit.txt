@@ -77,7 +77,7 @@
       listitem
         link "The relationship to the A11y view"
   main
-    heading "Reading the TAB View ​" (level 1)
+    heading "Reading the TAB View" (level 1)
       link "Permalink to "Reading the TAB View""
     blockquote
       paragraph "The TAB view matches the output of  in the testing package — same ordering, same formatting. Whether you're reading it in the Chrome extension, the Storybook addon, or a committed Playwright snapshot fixture, this page applies."
@@ -87,7 +87,7 @@
       strong "can a keyboard user reach everything they need to, in the right order?"
     paragraph "It shows every focusable element on the page as a flat, numbered list — the exact sequence a user would encounter them by pressing Tab, from first to last. No nesting, no hierarchy. Just the order of keyboard focus."
     separator
-    heading "What you see ​" (level 2)
+    heading "What you see" (level 2)
       link "Permalink to "What you see""
     paragraph "Each row is one focusable element, in tab order. For each one you'll see:"
     list
@@ -110,7 +110,7 @@
         strong "An amber  badge"
           code "tabindex=N"
     separator
-    heading "How tab order works ​" (level 2)
+    heading "How tab order works" (level 2)
       link "Permalink to "How tab order works""
     paragraph "Browsers determine tab order using two rules, applied in this sequence:"
     list
@@ -127,14 +127,14 @@
       code ".focus()"
     paragraph "The TAB view reflects this computed order exactly."
     separator
-    heading "What to check ​" (level 2)
+    heading "What to check" (level 2)
       link "Permalink to "What to check""
-    heading "Order matches the visual flow ​" (level 3)
+    heading "Order matches the visual flow" (level 3)
       link "Permalink to "Order matches the visual flow""
     paragraph "Tab order should feel predictable. A user who can see the page expects focus to move left to right, top to bottom — the same way they'd read it. If someone tabs through a navigation bar and focus jumps to the footer before reaching the main content, something is wrong."
     paragraph "Compare the TAB view numbers to the visual layout of your page. If a  header contains the skip link at number 1 and the search field at number 2 — but the search field appears after a hundred nav items visually — keyboard users are in for a confusing ride."
       code "position: fixed"
-    heading "Every interactive element is reachable ​" (level 3)
+    heading "Every interactive element is reachable" (level 3)
       link "Permalink to "Every interactive element is reachable""
     paragraph "Scan the list. Does every button, link, input, select, and interactive control appear? If something is missing, keyboard users can't reach it."
     paragraph "Common reasons an element is absent:"
@@ -152,11 +152,11 @@
         code "aria-hidden="true""
       listitem "It has the  attribute (disabled elements are correctly excluded from tab order)."
         code "disabled"
-    heading "Nothing unreachable appears in the list ​" (level 3)
+    heading "Nothing unreachable appears in the list" (level 3)
       link "Permalink to "Nothing unreachable appears in the list""
     paragraph "The opposite problem: elements that show focus but shouldn't. A visually hidden element that's still in tab order means keyboard focus will land somewhere invisible — and the user will have no idea where they are."
     paragraph "This often happens with off-screen drawers or modals that haven't been properly hidden from the accessibility tree while closed."
-    heading "Amber badges — positive tabindex ​" (level 3)
+    heading "Amber badges — positive tabindex" (level 3)
       link "Permalink to "Amber badges — positive tabindex""
     paragraph "If you see  or  badges, that's almost always a mistake. Here's why:"
       code "tabindex=2"
@@ -167,7 +167,7 @@
       code "tabindex"
     paragraph "The only legitimate use of  is for programmatically managing focus (e.g., moving focus into a modal when it opens). Positive values beyond that are a code smell."
       code "tabindex="-1""
-    heading "Focus traps inside modals and dialogs ​" (level 3)
+    heading "Focus traps inside modals and dialogs" (level 3)
       link "Permalink to "Focus traps inside modals and dialogs""
     paragraph "When a dialog is open, Tab should cycle only through elements inside it — it should never escape to the content behind. The TAB view will show you all focusable elements, so you can check whether the dialog contains everything it should and whether elements behind it are visible in the list when they shouldn't be."
     paragraph "A correct focus trap:"
@@ -176,7 +176,7 @@
       listitem "Wraps from the last element back to the first when Tab is pressed at the end"
       listitem "Returns focus to the trigger element when the dialog closes"
     separator
-    heading "Common patterns and what they look like ​" (level 2)
+    heading "Common patterns and what they look like" (level 2)
       link "Permalink to "Common patterns and what they look like""
     paragraph
       strong "A healthy form"
@@ -198,7 +198,7 @@
       code
     paragraph "The Submit button and Home link appear first in the tab order even though they might be at the bottom of the document. Remove the tabindex values and reorder the HTML."
     separator
-    heading "The relationship to the A11y view ​" (level 2)
+    heading "The relationship to the A11y view" (level 2)
       link "Permalink to "The relationship to the A11y view""
     paragraph "The TAB view and the A11y view are complementary. A11y shows you structure and labeling — whether elements have correct roles and names. TAB shows you reachability and order — whether keyboard users can get to those elements at all."
     paragraph "An element can have a perfect role and accessible name in the A11y view but still be unreachable if it's not focusable. Conversely, an element can appear in the TAB view with no useful name. You need both to get the full picture."

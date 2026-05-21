@@ -5,13 +5,13 @@
   h2 Recipes
   h2 Reference
   h2 On this page
-h1 Next.js (App Router + React 19) ​
-  h2 Install ​
-  h2 Mount <SemanticNavigator /> in a client component ​
-  h2 Gate it out of production ​
-    h3 Option 1 — static gate (fully tree-shaken) ​
-    h3 Option 2 — environment flag ​
-  h2 Unit tests — Vitest + next-intl + Testing Library ​
-    h3 Test a component that uses Link ​
-  h2 E2E — Playwright against next dev ​
-  h2 Known constraints ​
+h1 Next.js (App Router + React 19)
+  h2 Install
+  h2 Mount <SemanticNavigator /> in a client component
+  h2 Gate it out of production
+    h3 Option 1 — static gate (fully tree-shaken)
+    h3 Option 2 — environment flag
+  h2 Unit tests — Vitest + next-intl + Testing Library
+    h3 Test a component that uses Link
+  h2 E2E — Playwright against next dev
+  h2 Known constraints
