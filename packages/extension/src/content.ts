@@ -10,6 +10,7 @@ import {
 } from "@real-a11y-dev/core";
 import type { TreeViewMode } from "@real-a11y-dev/core";
 
+import { createPicker } from "./picker.js";
 import type { PanelToContent } from "./types.js";
 
 const isSubFrame = window !== window.top;
@@ -74,6 +75,9 @@ function teardown(): void {
   tornDown = true;
   observer.stop();
   liveObserver?.disconnect();
+  // Drop the picker listeners and restore the cursor so the page stops
+  // showing crosshair after the extension is reloaded / orphaned.
+  picker.teardown();
 }
 
 /** Extract tree and send to background as per-frame data */
@@ -99,6 +103,26 @@ function sendTree() {
 /** Set up DOM observer for live updates */
 const observer = new DomObserver(document.documentElement, () => {
   sendTree();
+});
+
+// ─── Element picker (DevTools-style "select an element in the page") ─────────
+//
+// All behavior lives in the standalone `createPicker` factory in
+// ./picker.ts — that module is unit-tested in jsdom without chrome.runtime.
+// The wiring here just injects the runtime dependencies (FocusManager
+// highlight, the shared elementRefs, safeSendMessage for panel
+// notifications) and keeps a reference for teardown.
+const picker = createPicker({
+  doc: document,
+  isSubFrame,
+  findId: (el) => elementRefs.findId(el),
+  onHighlight: (nodeId) =>
+    focusManager.highlightElement(nodeId, { scroll: false }),
+  onClearHighlight: () => focusManager.clearHighlight(),
+  onPicked: (nodeId) =>
+    safeSendMessage({ type: "NODE_PICKED", payload: { nodeId } }),
+  onModeChange: (enabled) =>
+    safeSendMessage({ type: "PICK_MODE_CHANGED", payload: { enabled } }),
 });
 
 // Listen for messages from side panel (via background)
@@ -160,6 +184,12 @@ chrome.runtime.onMessage.addListener(
 
       case "SET_FOCUS_TRACKER": {
         focusTrackerEnabled = message.payload.enabled;
+        sendResponse({ success: true });
+        break;
+      }
+
+      case "SET_PICK_MODE": {
+        picker.setEnabled(message.payload.enabled);
         sendResponse({ success: true });
         break;
       }

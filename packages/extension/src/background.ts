@@ -278,6 +278,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return false;
       }
 
+      case "NODE_PICKED": {
+        // Same shape as FOCUS_CHANGED — the content script reports a
+        // frame-local nodeId; prefix it with the originating frameId
+        // so the panel resolves it against the merged tree.
+        const prefixedNodeId = prefixNodeId(frameId, message.payload.nodeId);
+        chrome.runtime
+          .sendMessage({
+            type: "NODE_PICKED",
+            tabId,
+            payload: { nodeId: prefixedNodeId },
+          })
+          .catch((err) => {
+            console.debug(
+              "[SN background] NODE_PICKED forward failed:",
+              err?.message ?? err,
+            );
+          });
+        sendResponse({ received: true });
+        return false;
+      }
+
       case "LIVE_REGION": {
         // No-op: chrome.runtime.sendMessage from the content script
         // already delivers to the sidepanel directly.  Forwarding here
@@ -399,6 +420,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           /* ignore */
         }
       });
+    }
+    sendResponse({ success: true });
+    return false;
+  }
+
+  // Picker toggle — broadcast to every frame so a click inside an iframe
+  // also picks an element. NODE_PICKED comes back through the default
+  // content→panel forwarder below (with `tabId` stamped on).
+  if (message.type === "SET_PICK_MODE") {
+    if (activeTabId) {
+      broadcastToAllFrames(activeTabId, message);
     }
     sendResponse({ success: true });
     return false;
