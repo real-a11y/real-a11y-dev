@@ -33,12 +33,7 @@ import {
  * are skipped when picking the "real" root so the addon doesn't start
  * extracting from an empty `<template>` and report "Empty tree".
  */
-const NON_RENDERED_TAGS = new Set([
-  "template",
-  "script",
-  "style",
-  "noscript",
-]);
+const NON_RENDERED_TAGS = new Set(["template", "script", "style", "noscript"]);
 
 /**
  * Pick the root element the tree extraction + DomObserver should hang off

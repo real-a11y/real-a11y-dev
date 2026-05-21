@@ -14,11 +14,11 @@ never fired re-extracts on selection changes.
 filters out non-rendered tags (`<template>`, `<script>`, `<style>`,
 `<noscript>`) when deciding the root:
 
-  - **Exactly one real child** → use it (preserves the clean tree for
-    plain single-root stories like `<Button>`).
-  - **Zero or 2+ real children** → use `#storybook-root` itself so the
-    observer sees all siblings (React Aria patterns, React Portal
-    hoisting, empty mid-render, etc.).
+- **Exactly one real child** → use it (preserves the clean tree for
+  plain single-root stories like `<Button>`).
+- **Zero or 2+ real children** → use `#storybook-root` itself so the
+  observer sees all siblings (React Aria patterns, React Portal
+  hoisting, empty mid-render, etc.).
 
 Adds 8 regression tests in `pick-story-root.test.ts` covering each
 branch.
