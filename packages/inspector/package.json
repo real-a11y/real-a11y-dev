@@ -55,7 +55,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "preact": "^10.24.0"
+    "preact": "^10.29.2"
   },
   "devDependencies": {
     "@real-a11y-dev/core": "workspace:*",
