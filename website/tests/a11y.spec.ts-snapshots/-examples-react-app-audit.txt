@@ -73,7 +73,7 @@
       listitem
         link "Key code"
   main
-    heading "Example: React App ​" (level 1)
+    heading "Example: React App" (level 1)
       link "Permalink to "Example: React App""
     paragraph "A Vite + React 18 application demonstrating  hooks and the  component."
       code "@real-a11y-dev/react"
@@ -82,7 +82,7 @@
       strong "Source:"
       link "examples/react-app/"
         code "examples/react-app/"
-    heading "What it shows ​" (level 2)
+    heading "What it shows" (level 2)
       link "Permalink to "What it shows""
     list
       listitem "mounted alongside the app in a split-panel layout"
@@ -94,24 +94,24 @@
         code "aria-live"
       listitem "Runtime mode switching (A11y / DOM) via props"
       listitem "Shadow DOM isolation — host app CSS does not affect the panel"
-    heading "Run it locally ​" (level 2)
+    heading "Run it locally" (level 2)
       link "Permalink to "Run it locally""
     button "Copy Code"
       code
     paragraph "Opens at ."
       code "http://localhost:5175"
-    heading "Key code ​" (level 2)
+    heading "Key code" (level 2)
       link "Permalink to "Key code""
-    heading "Split-panel layout ​" (level 3)
+    heading "Split-panel layout" (level 3)
       link "Permalink to "Split-panel layout""
     button "Copy Code"
       code
-    heading "Issues badge with useSemanticTree ​" (level 3)
+    heading "Issues badge with useSemanticTree" (level 3)
       code "useSemanticTree"
       link "Permalink to "Issues badge with `useSemanticTree`""
     button "Copy Code"
       code
-    heading "Modal announcer with useActiveModal ​" (level 3)
+    heading "Modal announcer with useActiveModal" (level 3)
       code "useActiveModal"
       link "Permalink to "Modal announcer with `useActiveModal`""
     button "Copy Code"

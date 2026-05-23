@@ -85,7 +85,7 @@
       listitem
         link "Types"
   main
-    heading "@real-a11y-dev/core ​" (level 1)
+    heading "@real-a11y-dev/core" (level 1)
       link "Permalink to "@real-a11y-dev/core""
     blockquote
       paragraph "— Extracts a browser-accurate accessibility tree from any DOM element, as plain data (). Zero runtime dependencies. Reach for this when you're  on top of the engine; for apps, use one of the wrapper packages."
@@ -93,7 +93,7 @@
         code "Map<string, SemanticNode>"
         strong "building your own tooling"
     paragraph "The extraction engine. Every other package is built on top of this."
-    heading "Install ​" (level 2)
+    heading "Install" (level 2)
       link "Permalink to "Install""
     button "Copy Code"
       code
@@ -117,16 +117,16 @@
           code "peerDependency"
         code "core"
     separator
-    heading "Extraction ​" (level 2)
+    heading "Extraction" (level 2)
       link "Permalink to "Extraction""
-    heading "extractA11yTree(root) ​" (level 3)
+    heading "extractA11yTree(root)" (level 3)
       code "extractA11yTree(root)"
       link "Permalink to "`extractA11yTree(root)`""
     paragraph "Extracts the accessibility tree from a DOM element."
     button "Copy Code"
       code
     paragraph "Resolves ARIA roles, computes accessible names via the full ANDC algorithm, detects hidden subtrees, and maps interaction capabilities."
-    heading "extractDomTree(root) ​" (level 3)
+    heading "extractDomTree(root)" (level 3)
       code "extractDomTree(root)"
       link "Permalink to "`extractDomTree(root)`""
     paragraph "Same shape as , but uses raw tag names as roles instead of ARIA roles. Useful when you want to audit DOM structure rather than accessibility semantics."
@@ -134,9 +134,9 @@
     button "Copy Code"
       code
     separator
-    heading "Query helpers ​" (level 2)
+    heading "Query helpers" (level 2)
       link "Permalink to "Query helpers""
-    heading "findByRole(tree, role, options?) ​" (level 3)
+    heading "findByRole(tree, role, options?)" (level 3)
       code "findByRole(tree, role, options?)"
       link "Permalink to "`findByRole(tree, role, options?)`""
     paragraph "Returns the first  matching the given role, or ."
@@ -208,7 +208,7 @@
             code "boolean"
           cell "Include nodes in aria-hidden subtrees (default: false)."
             code "aria-hidden"
-    heading "findAllByRole(tree, role, options?) ​" (level 3)
+    heading "findAllByRole(tree, role, options?)" (level 3)
       code "findAllByRole(tree, role, options?)"
       link "Permalink to "`findAllByRole(tree, role, options?)`""
     paragraph "Returns all matching nodes as ."
@@ -216,9 +216,9 @@
     button "Copy Code"
       code
     separator
-    heading "Tree traversal ​" (level 2)
+    heading "Tree traversal" (level 2)
       link "Permalink to "Tree traversal""
-    heading "linearize(tree, options?) ​" (level 3)
+    heading "linearize(tree, options?)" (level 3)
       code "linearize(tree, options?)"
       link "Permalink to "`linearize(tree, options?)`""
     paragraph "Returns all nodes in pre-order (DOM order), skipping hidden nodes by default."
@@ -244,24 +244,24 @@
           cell "Include aria-hidden subtrees"
             code "aria-hidden"
     separator
-    heading "Structure queries ​" (level 2)
+    heading "Structure queries" (level 2)
       link "Permalink to "Structure queries""
-    heading "getOutline(tree) ​" (level 3)
+    heading "getOutline(tree)" (level 3)
       code "getOutline(tree)"
       link "Permalink to "`getOutline(tree)`""
     paragraph "Returns heading nodes as a flat outline list."
     button "Copy Code"
       code
-    heading "getTabSequence(tree) ​" (level 3)
+    heading "getTabSequence(tree)" (level 3)
       code "getTabSequence(tree)"
       link "Permalink to "`getTabSequence(tree)`""
     paragraph "Returns focusable nodes in computed tab order."
     button "Copy Code"
       code
     separator
-    heading "Disclosure-pair index ​" (level 2)
+    heading "Disclosure-pair index" (level 2)
       link "Permalink to "Disclosure-pair index""
-    heading "buildControlsIndex(nodes) ​" (level 3)
+    heading "buildControlsIndex(nodes)" (level 3)
       code "buildControlsIndex(nodes)"
       link "Permalink to "`buildControlsIndex(nodes)`""
     paragraph "Resolves the  relationship across a tree and returns adjacency maps in both directions, so callers can render cross-links between disclosure triggers (button, tab, combobox) and the elements they open (menu, panel, listbox)."
@@ -288,15 +288,15 @@
         code "aria-controls"
     paragraph "The  set lists trigger ids whose link came from the heuristic — render those cross-links with a "likely" affordance (different style, hedged tooltip) instead of presenting them as ground truth."
       code "inferred"
-    heading "ControlsIndex ​" (level 3)
+    heading "ControlsIndex" (level 3)
       code "ControlsIndex"
       link "Permalink to "`ControlsIndex`""
     button "Copy Code"
       code
     separator
-    heading "Tree diffing ​" (level 2)
+    heading "Tree diffing" (level 2)
       link "Permalink to "Tree diffing""
-    heading "diffTrees(before, after) ​" (level 3)
+    heading "diffTrees(before, after)" (level 3)
       code "diffTrees(before, after)"
       link "Permalink to "`diffTrees(before, after)`""
     paragraph "Compares two tree snapshots and returns what changed."
@@ -308,16 +308,16 @@
     button "Copy Code"
       code
     separator
-    heading "DOM observation ​" (level 2)
+    heading "DOM observation" (level 2)
       link "Permalink to "DOM observation""
-    heading "DomObserver ​" (level 3)
+    heading "DomObserver" (level 3)
       code "DomObserver"
       link "Permalink to "`DomObserver`""
     paragraph "Watches a DOM subtree for mutations and calls a callback (debounced)."
     button "Copy Code"
       code
     separator
-    heading "Types ​" (level 2)
+    heading "Types" (level 2)
       link "Permalink to "Types""
     button "Copy Code"
       code

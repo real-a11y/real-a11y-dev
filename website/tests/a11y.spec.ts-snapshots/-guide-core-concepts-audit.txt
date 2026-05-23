@@ -81,10 +81,10 @@
       listitem
         link "Tree Diffing"
   main
-    heading "Core Concepts ​" (level 1)
+    heading "Core Concepts" (level 1)
       link "Permalink to "Core Concepts""
     paragraph "Understanding how Real A11y models the DOM will help you use every package more effectively."
-    heading "The Semantic Tree ​" (level 2)
+    heading "The Semantic Tree" (level 2)
       link "Permalink to "The Semantic Tree""
     paragraph "When you call any Real A11y API on a DOM root, it builds a  — a tree of  objects that mirrors what assistive technologies perceive, not the raw HTML structure."
       strong "semantic tree"
@@ -100,7 +100,7 @@
       code "outlineSnapshot()"
       code "getOutline()"
       code "findByRole(tree, "heading", { level: 2 })"
-    heading "Two tree modes ​" (level 3)
+    heading "Two tree modes" (level 3)
       link "Permalink to "Two tree modes""
     table
       rowgroup
@@ -121,7 +121,7 @@
       code "a11y.role"
       code "a11y.name"
     separator
-    heading "Roles ​" (level 2)
+    heading "Roles" (level 2)
       link "Permalink to "Roles""
     paragraph "Roles follow the . Real A11y maps every HTML element to its implicit ARIA role, then overrides with an explicit  attribute if present."
       link "WAI-ARIA specification"
@@ -184,7 +184,7 @@
       code "role="presentation""
       code "role="none""
     separator
-    heading "Accessible Names ​" (level 2)
+    heading "Accessible Names" (level 2)
       link "Permalink to "Accessible Names""
     paragraph "The  computation follows the  algorithm, in priority order:"
       code "a11y.name"
@@ -209,7 +209,7 @@
       code "aria-hidden"
       link "Accessible Names"
     separator
-    heading "Stable Node IDs ​" (level 2)
+    heading "Stable Node IDs" (level 2)
       link "Permalink to "Stable Node IDs""
     paragraph "Each node gets a stable  derived from a . The same DOM node always gets the same ID within a page session — even across re-extractions — so  can reliably report what changed vs. what's new."
       code "id"
@@ -218,7 +218,7 @@
     paragraph "IDs are  stable across page reloads; they're designed for in-session diffing, not persistence."
       strong "not"
     separator
-    heading "Tab Order ​" (level 2)
+    heading "Tab Order" (level 2)
       link "Permalink to "Tab Order""
     paragraph "computes the tab order using the same algorithm browsers use:"
       code "getTabSequence(tree)"
@@ -232,7 +232,7 @@
       listitem "Disabled elements and  subtrees are skipped."
         code "aria-hidden"
     separator
-    heading "Heading Outline ​" (level 2)
+    heading "Heading Outline" (level 2)
       link "Permalink to "Heading Outline""
     paragraph "returns a flat list of  entries for all  nodes in DOM order. This is the data behind  and ."
       code "getOutline(tree)"
@@ -248,7 +248,7 @@
         code "h1 → h3"
         code "h2"
     separator
-    heading "Tree Diffing ​" (level 2)
+    heading "Tree Diffing" (level 2)
       link "Permalink to "Tree Diffing""
     paragraph "compares two serialized trees and returns:"
       code "diffTrees(before, after)"

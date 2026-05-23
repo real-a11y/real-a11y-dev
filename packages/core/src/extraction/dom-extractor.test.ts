@@ -457,6 +457,116 @@ describe("extractDomTree", () => {
       )!;
       expect(link.a11y.name).toBe("Real A11y — go to home");
     });
+
+    // Name-from-content for treeitem / menuitem / etc. used to recurse into
+    // every descendant — so a treeitem with a nested role="group" of more
+    // treeitems concatenated the whole subtree's text into one row's name
+    // ("Reports report-1 report-2 report-2A.docx ..."). Real ATs read each
+    // row's own label independently. Surfaced by PR #80 on the APG Tree
+    // View example. We now skip subtrees whose computed role is a "name
+    // barrier" (group, list, treeitem, button, link, …) when walking text.
+    it("treeitem name does NOT include nested role=group children's text", () => {
+      const root = createPage(`
+        <ul role="tree" aria-label="Docs">
+          <li role="treeitem" id="reports">
+            <span>Reports</span>
+            <ul role="group">
+              <li role="treeitem"><span>report-1</span></li>
+              <li role="treeitem"><span>report-2</span></li>
+            </ul>
+          </li>
+        </ul>
+      `);
+      const reports = [...extractDomTree(root).nodes.values()].find(
+        (n) => n.dom.attributes["id"] === "reports",
+      )!;
+      expect(reports.a11y.name).toBe("Reports");
+      // The nested rows still appear as their own nodes with their own names.
+      const inner = [...extractDomTree(root).nodes.values()].filter(
+        (n) =>
+          n.a11y.role === "treeitem" && n.dom.attributes["id"] !== "reports",
+      );
+      expect(inner.map((n) => n.a11y.name)).toEqual(["report-1", "report-2"]);
+    });
+
+    it("treeitem name does NOT include nested treeitem text even without a wrapping role=group", () => {
+      // Some APG variants use [aria-level] siblings instead of a nested
+      // role="group" — the nested treeitems sit as direct descendants.
+      // The treeitem barrier itself handles that case.
+      const root = createPage(`
+        <div role="tree">
+          <div role="treeitem" id="outer">
+            Folder
+            <div role="treeitem">child</div>
+          </div>
+        </div>
+      `);
+      const outer = [...extractDomTree(root).nodes.values()].find(
+        (n) => n.dom.attributes["id"] === "outer",
+      )!;
+      expect(outer.a11y.name.trim()).toBe("Folder");
+    });
+
+    it("menuitem name does NOT include text from a nested role=menu", () => {
+      // Submenu pattern: a menuitem opens a submenu mounted as a child.
+      // The parent menuitem's announced label should remain just its own.
+      const root = createPage(`
+        <ul role="menu">
+          <li role="menuitem" id="file">
+            File
+            <ul role="menu">
+              <li role="menuitem">Open</li>
+              <li role="menuitem">Save</li>
+            </ul>
+          </li>
+        </ul>
+      `);
+      const file = [...extractDomTree(root).nodes.values()].find(
+        (n) => n.dom.attributes["id"] === "file",
+      )!;
+      expect(file.a11y.name.trim()).toBe("File");
+    });
+
+    it("button name still picks up inline formatting children (strong/em)", () => {
+      // Critical regression-guard: the barrier set must NOT include inline
+      // text-formatting roles or a perfectly normal <button>Save <strong>
+      // changes</strong></button> loses half its label.
+      const root = createPage(`
+        <button>Save <strong>changes</strong> <em>now</em></button>
+      `);
+      const btn = [...extractDomTree(root).nodes.values()].find(
+        (n) => n.dom.tagName === "button",
+      )!;
+      expect(btn.a11y.name.replace(/\s+/g, " ").trim()).toBe(
+        "Save changes now",
+      );
+    });
+
+    it("button name skips a nested button (invalid HTML but possible in custom components)", () => {
+      const root = createPage(`
+        <div role="button" id="outer">
+          Outer
+          <button>Inner</button>
+        </div>
+      `);
+      const outer = [...extractDomTree(root).nodes.values()].find(
+        (n) => n.dom.attributes["id"] === "outer",
+      )!;
+      expect(outer.a11y.name.trim()).toBe("Outer");
+    });
+
+    it("tab role with a heading child still picks up the heading text", () => {
+      // Heading is intentionally NOT a barrier — a button/tab whose label
+      // is a heading (e.g. card headers in custom UIs) should still get
+      // the heading's text.
+      const root = createPage(`
+        <div role="tab" id="t1"><h3>Overview</h3></div>
+      `);
+      const tab = [...extractDomTree(root).nodes.values()].find(
+        (n) => n.dom.attributes["id"] === "t1",
+      )!;
+      expect(tab.a11y.name.trim()).toBe("Overview");
+    });
   });
 
   // React Portal / Vue Teleport / Headless UI mount overlay content

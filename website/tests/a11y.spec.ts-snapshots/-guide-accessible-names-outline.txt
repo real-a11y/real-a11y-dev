@@ -5,16 +5,16 @@
   h2 Recipes
   h2 Reference
   h2 On this page
-h1 Accessible Names ​
-  h2 The priority order ​
-  h2 Concrete examples ​
-    h3 Button with only text ​
-    h3 Button with an icon and hidden text ​
-    h3 Button with only an icon ​
-    h3 Form control with a wrapping label ​
-    h3 Form control with for / id ​
-    h3 aria-label beats text content ​
-    h3 aria-labelledby beats everything ​
-  h2 What does not contribute ​
-  h2 Debugging an unexpected name ​
-  h2 Why this matters ​
+h1 Accessible Names
+  h2 The priority order
+  h2 Concrete examples
+    h3 Button with only text
+    h3 Button with an icon and hidden text
+    h3 Button with only an icon
+    h3 Form control with a wrapping label
+    h3 Form control with for / id
+    h3 aria-label beats text content
+    h3 aria-labelledby beats everything
+  h2 What does not contribute
+  h2 Debugging an unexpected name
+  h2 Why this matters

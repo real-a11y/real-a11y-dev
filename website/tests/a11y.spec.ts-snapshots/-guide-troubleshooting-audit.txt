@@ -83,11 +83,11 @@
       listitem
         link "Still stuck?"
   main
-    heading "Troubleshooting ​" (level 1)
+    heading "Troubleshooting" (level 1)
       link "Permalink to "Troubleshooting""
     paragraph "The library is designed to fail loudly —  exceptions include the offending element, its location in the tree, and a suggested fix. Most problems are caught there. This page covers the edge cases that look like bugs but usually aren't."
       code "A11yAssertionError"
-    heading "My audit returned nothing ​" (level 2)
+    heading "My audit returned nothing" (level 2)
       link "Permalink to "My audit returned nothing""
     button "Copy Code"
       code
@@ -109,7 +109,7 @@
         code "aria-hidden="true""
     paragraph "If the tree genuinely is empty but you expect content, open the Chrome extension on the same page and check the A11y view — the same extraction runs there."
     separator
-    heading "Snapshot flaps between runs or between local and CI ​" (level 2)
+    heading "Snapshot flaps between runs or between local and CI" (level 2)
       link "Permalink to "Snapshot flaps between runs or between local and CI""
     paragraph "is deterministic, but it surfaces text that isn't. Common culprits:"
       code "auditSnapshot()"
@@ -133,7 +133,7 @@
     paragraph "The same option is on the Playwright adapter: ."
       code "sn.auditSnapshot({ redact: [...] })"
     separator
-    heading "Heading outline has no h1 ​" (level 2)
+    heading "Heading outline has no h1" (level 2)
       code "h1"
       link "Permalink to "Heading outline has no `h1`""
     paragraph "throws if there is not exactly one . That's correct for top-level pages. For  — a portaled dialog, a docs widget, an email preview iframe — scope the assertion to the subtree that should have its own hierarchy, or skip it."
@@ -145,7 +145,7 @@
     paragraph "If your page legitimately has multiple h1s (rare — usually an anti-pattern), the rule doesn't fit your design and  isn't the right check."
       code "assertHeadingOrder"
     separator
-    heading "Tab sequence is empty ​" (level 2)
+    heading "Tab sequence is empty" (level 2)
       link "Permalink to "Tab sequence is empty""
     paragraph "lists only  elements. Common reasons for an empty sequence:"
       code "tabSequenceSnapshot()"
@@ -162,7 +162,7 @@
     paragraph "If the tab order  be empty on a given route (a 404, a splash screen with no interactive content), suppress the assertion for that route rather than the whole suite."
       emphasis "should"
     separator
-    heading "React hydration mismatch when rendering the panel ​" (level 2)
+    heading "React hydration mismatch when rendering the panel" (level 2)
       link "Permalink to "React hydration mismatch when rendering the panel""
     paragraph "If you drop  into an SSR-rendered component tree, the server renders the wrapper  but no inspector content — the inspector mounts on the client. That's fine. Hydration warnings typically come from  sources in the same tree; the panel itself is hydration-safe."
       code "<SemanticNavigator />"
@@ -177,7 +177,7 @@
       code "document.*"
       code "next/dynamic({ ssr: false })"
     separator
-    heading "Tests pass in jsdom but fail in Playwright (or vice versa) ​" (level 2)
+    heading "Tests pass in jsdom but fail in Playwright (or vice versa)" (level 2)
       link "Permalink to "Tests pass in jsdom but fail in Playwright (or vice versa)""
     paragraph "jsdom implements most of the accessibility tree, but a few areas diverge from real browsers:"
     list
@@ -199,7 +199,7 @@
     paragraph "The rule: jsdom covers ~95% of cases at jsdom speed. When it diverges, the truth is in Playwright. Use  for the remaining 5%."
       code "@real-a11y-dev/testing/playwright"
     separator
-    heading "A11yAssertionError with a message I don't understand ​" (level 2)
+    heading "A11yAssertionError with a message I don't understand" (level 2)
       code "A11yAssertionError"
       link "Permalink to "`A11yAssertionError` with a message I don't understand""
     paragraph "The error message includes the , the  (path from the root), and the . If the reason is still unclear, pair the assertion with a snapshot of the same root — the snapshot shows the element in context."
@@ -212,7 +212,7 @@
       link "@real-a11y-dev/testing"
         code "@real-a11y-dev/testing"
     separator
-    heading "Still stuck? ​" (level 2)
+    heading "Still stuck?" (level 2)
       link "Permalink to "Still stuck?""
     list
       listitem "Check the  recipe — most "it doesn't install" issues are peer version mismatches."

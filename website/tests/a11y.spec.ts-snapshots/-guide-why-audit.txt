@@ -73,10 +73,10 @@
       listitem
         link "Design principles"
   main
-    heading "Why Real A11y? ​" (level 1)
+    heading "Why Real A11y?" (level 1)
       link "Permalink to "Why Real A11y?""
     paragraph "Existing accessibility tools check rules. Real A11y checks experience."
-    heading "The gap ​" (level 2)
+    heading "The gap" (level 2)
       link "Permalink to "The gap""
     paragraph "and similar rule engines are excellent for catching violations — missing labels, invalid ARIA, color contrast failures. They tell you when something is broken."
       strong "axe-core"
@@ -93,7 +93,7 @@
       strong "Testing Library"
     paragraph "Real A11y fills the space between rule-checking and element-querying: it exposes the full semantic tree so you can assert on the complete picture."
     separator
-    heading "How they complement each other ​" (level 2)
+    heading "How they complement each other" (level 2)
       link "Permalink to "How they complement each other""
     table
       rowgroup
@@ -121,7 +121,7 @@
     paragraph "Real A11y is not a replacement for axe — it's a complement. Run axe for rule violations; use Real A11y for structural assertions; use Testing Library for user-interaction tests."
       strong "Use all of them."
     separator
-    heading "Design principles ​" (level 2)
+    heading "Design principles" (level 2)
       link "Permalink to "Design principles""
     paragraph "The same extraction logic runs in jsdom (Vitest), in a real browser (Playwright), inside the Storybook preview iframe, and in the interactive tree panel. There's no "jsdom mode" with different behavior."
       strong "1. One engine, every context."

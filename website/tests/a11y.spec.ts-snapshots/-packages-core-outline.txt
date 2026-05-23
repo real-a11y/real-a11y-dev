@@ -5,24 +5,24 @@
   h2 Recipes
   h2 Reference
   h2 On this page
-h1 @real-a11y-dev/core ​
-  h2 Install ​
-  h2 Extraction ​
-    h3 extractA11yTree(root) ​
-    h3 extractDomTree(root) ​
-  h2 Query helpers ​
-    h3 findByRole(tree, role, options?) ​
-    h3 findAllByRole(tree, role, options?) ​
-  h2 Tree traversal ​
-    h3 linearize(tree, options?) ​
-  h2 Structure queries ​
-    h3 getOutline(tree) ​
-    h3 getTabSequence(tree) ​
-  h2 Disclosure-pair index ​
-    h3 buildControlsIndex(nodes) ​
-    h3 ControlsIndex ​
-  h2 Tree diffing ​
-    h3 diffTrees(before, after) ​
-  h2 DOM observation ​
-    h3 DomObserver ​
-  h2 Types ​
+h1 @real-a11y-dev/core
+  h2 Install
+  h2 Extraction
+    h3 extractA11yTree(root)
+    h3 extractDomTree(root)
+  h2 Query helpers
+    h3 findByRole(tree, role, options?)
+    h3 findAllByRole(tree, role, options?)
+  h2 Tree traversal
+    h3 linearize(tree, options?)
+  h2 Structure queries
+    h3 getOutline(tree)
+    h3 getTabSequence(tree)
+  h2 Disclosure-pair index
+    h3 buildControlsIndex(nodes)
+    h3 ControlsIndex
+  h2 Tree diffing
+    h3 diffTrees(before, after)
+  h2 DOM observation
+    h3 DomObserver
+  h2 Types

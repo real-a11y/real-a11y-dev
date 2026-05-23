@@ -5,12 +5,12 @@
   h2 Recipes
   h2 Reference
   h2 On this page
-h1 Core Concepts ​
-  h2 The Semantic Tree ​
-    h3 Two tree modes ​
-  h2 Roles ​
-  h2 Accessible Names ​
-  h2 Stable Node IDs ​
-  h2 Tab Order ​
-  h2 Heading Outline ​
-  h2 Tree Diffing ​
+h1 Core Concepts
+  h2 The Semantic Tree
+    h3 Two tree modes
+  h2 Roles
+  h2 Accessible Names
+  h2 Stable Node IDs
+  h2 Tab Order
+  h2 Heading Outline
+  h2 Tree Diffing

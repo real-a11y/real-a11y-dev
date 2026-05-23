@@ -268,11 +268,97 @@ function computeAccessibleDescription(element: Element): string {
 }
 
 /**
+ * Roles that act as a name-from-content "barrier" — when encountered as a
+ * descendant during name computation, their subtree contributes the empty
+ * string instead of being concatenated into the ancestor's name.
+ *
+ * Why this exists: a `<li role="treeitem">Reports<ul role="group"><li
+ * role="treeitem">report-1</li>...</ul></li>` has, by ARIA name-from-
+ * content, a recursive text content of "Reports report-1 report-2 ...".
+ * Real assistive tech reads only "Reports" for that row — each nested
+ * treeitem is a sibling row with its own announceable name, not part of
+ * its parent's name. Without this filter the inspector showed the
+ * polluted concatenation (surfaced on PR #80's APG Tree View example).
+ *
+ * The set covers:
+ *   - Containers / structural groups: group, list, menu, tree, listbox,
+ *     tablist, toolbar, treegrid, grid, table, rowgroup, combobox.
+ *   - Row / item widgets that carry their own name: treeitem, menuitem*,
+ *     option, tab, listitem, row, cell, gridcell, columnheader,
+ *     rowheader.
+ *   - Interactive widgets that own their accessible name: button, link,
+ *     checkbox, radio, switch, slider, spinbutton, textbox, searchbox.
+ *   - Display widgets / live regions: dialog, alertdialog, tabpanel,
+ *     alert, status, log, tooltip, progressbar, meter.
+ *
+ * Intentionally NOT included (walked into so their text contributes):
+ *   - generic, presentation, none — transparent.
+ *   - Inline formatting roles: strong, emphasis, code, mark, deletion,
+ *     insertion, subscript, superscript, term, definition, paragraph,
+ *     blockquote, caption, figcaption, time, separator, img.
+ *   - heading — kept walkable so a button/tab whose label is a heading
+ *     still picks up the heading's text (e.g. `<button><h3>X</h3>`).
+ */
+const NAME_BARRIER_ROLES = new Set<string>([
+  // Containers / structural groups
+  "group",
+  "list",
+  "menu",
+  "menubar",
+  "tree",
+  "listbox",
+  "tablist",
+  "toolbar",
+  "treegrid",
+  "grid",
+  "table",
+  "rowgroup",
+  "combobox",
+  // Row / item widgets with their own name
+  "treeitem",
+  "menuitem",
+  "menuitemcheckbox",
+  "menuitemradio",
+  "option",
+  "tab",
+  "listitem",
+  "row",
+  "cell",
+  "gridcell",
+  "columnheader",
+  "rowheader",
+  // Interactive widgets that own their accessible name
+  "button",
+  "link",
+  "checkbox",
+  "radio",
+  "switch",
+  "slider",
+  "spinbutton",
+  "textbox",
+  "searchbox",
+  // Display widgets / live regions
+  "dialog",
+  "alertdialog",
+  "tabpanel",
+  "alert",
+  "status",
+  "log",
+  "tooltip",
+  "progressbar",
+  "meter",
+]);
+
+/**
  * Recursive text-content walker for accessible name/description computation.
  *
  * Per WAI-ARIA accname-1.2 §4.3.2 step 2A, hidden subtrees contribute the
  * empty string. Skip element descendants that are aria-hidden, hidden,
  * inert, or display/visibility/content-visibility-hidden.
+ *
+ * Also skips descendants whose computed role is in `NAME_BARRIER_ROLES` —
+ * see the set's docstring for the reasoning (treeitem-in-group, nested
+ * widgets, etc.).
  *
  * The root element itself is NOT checked — callers reach this with an
  * element that is either already exposed to AT (name-from-content) or
@@ -288,6 +374,7 @@ function getAccessibleTextContent(element: Element): string {
       const childEl = child as Element;
       if (childEl.getAttribute("aria-hidden") === "true") continue;
       if (isSubtreeHidden(childEl)) continue;
+      if (NAME_BARRIER_ROLES.has(getImplicitRole(childEl))) continue;
       text += getAccessibleTextContent(childEl);
     }
   }

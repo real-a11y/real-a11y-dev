@@ -5,14 +5,14 @@
   h2 Recipes
   h2 Reference
   h2 On this page
-h1 Architecture ​
-  h2 Packages ​
-  h2 Dependency graph ​
-  h2 Why this split ​
-    h3 Engine separate from renderer ​
-    h3 React-specific concerns live in @real-a11y-dev/react ​
-    h3 Testing is fully headless ​
-    h3 UI is bundled, not shipped separately ​
-  h2 Build pipeline per package ​
-  h2 The SemanticNode data model ​
-  h2 Where to read next ​
+h1 Architecture
+  h2 Packages
+  h2 Dependency graph
+  h2 Why this split
+    h3 Engine separate from renderer
+    h3 React-specific concerns live in @real-a11y-dev/react
+    h3 Testing is fully headless
+    h3 UI is bundled, not shipped separately
+  h2 Build pipeline per package
+  h2 The SemanticNode data model
+  h2 Where to read next

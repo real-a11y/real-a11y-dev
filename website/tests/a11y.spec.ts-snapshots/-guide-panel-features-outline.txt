@@ -5,18 +5,18 @@
   h2 Recipes
   h2 Reference
   h2 On this page
-h1 Panel features ​
-  h2 Search ​
-  h2 Role filters ​
-  h2 Focus tracking ​
-    h3 When to leave it on ​
-    h3 When to turn it off ​
-    h3 How to verify it's working ​
-  h2 Scoping ​
-    h3 Dialog auto-scope ​
-  h2 Live region monitoring ​
-  h2 Keyboard navigation ​
-  h2 Panel interaction vs. host side effects ​
-    h3 Why the in-page surfaces default to off ​
-    h3 Opting in for the in-page surfaces ​
-  h2 See also ​
+h1 Panel features
+  h2 Search
+  h2 Role filters
+  h2 Focus tracking
+    h3 When to leave it on
+    h3 When to turn it off
+    h3 How to verify it's working
+  h2 Scoping
+    h3 Dialog auto-scope
+  h2 Live region monitoring
+  h2 Keyboard navigation
+  h2 Panel interaction vs. host side effects
+    h3 Why the in-page surfaces default to off
+    h3 Opting in for the in-page surfaces
+  h2 See also

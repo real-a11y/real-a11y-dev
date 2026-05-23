@@ -79,11 +79,11 @@
       listitem
         link "Where to read next"
   main
-    heading "Architecture ​" (level 1)
+    heading "Architecture" (level 1)
       link "Permalink to "Architecture""
     paragraph "Real A11y is a monorepo of small, composable packages built around one extraction engine. This page explains what each package owns, how they depend on each other, and why the split looks the way it does."
     separator
-    heading "Packages ​" (level 2)
+    heading "Packages" (level 2)
       link "Permalink to "Packages""
     table
       rowgroup
@@ -93,14 +93,14 @@
           rowheader "Runtime deps"
       rowgroup
         row
-          cell "@real-a11y-dev/core"
+          cell
             link "@real-a11y-dev/core"
               code "@real-a11y-dev/core"
           cell "Extraction engine — accessibility + DOM tree walk, role map, accessible-name computation, action dispatch, DOM observer, stable-id generator, tree queries. No UI."
             strong "No UI."
           cell "None"
         row
-          cell "@real-a11y-dev/semantic-navigator-ui"
+          cell
             link "@real-a11y-dev/semantic-navigator-ui"
               code "@real-a11y-dev/semantic-navigator-ui"
           cell "Preact tree-view components — TreePanel, TreeNode, FilteredList, TabSequenceView, theming CSS. Consumed as a build-time dependency of the packages below; not usually installed directly."
@@ -108,7 +108,7 @@
           cell "preact"
             code "preact"
         row
-          cell "@real-a11y-dev/inspector"
+          cell
             link "@real-a11y-dev/inspector"
               code "@real-a11y-dev/inspector"
           cell "Framework-agnostic inspector. createInspector({ root, container }) mounts the tree panel into any DOM node, isolated via Shadow DOM."
@@ -118,7 +118,7 @@
             code "core"
             code "preact"
         row
-          cell "@real-a11y-dev/react"
+          cell
             link "@real-a11y-dev/react"
               code "@real-a11y-dev/react"
           cell "React integration — <SemanticNavigator /> component + useSemanticTree() / useActiveModal() hooks. Wraps inspector for inline and floating modes."
@@ -130,7 +130,7 @@
             code "react >= 18"
             code "react-dom >= 18"
         row
-          cell "@real-a11y-dev/testing"
+          cell
             link "@real-a11y-dev/testing"
               code "@real-a11y-dev/testing"
           cell "Headless audit helpers — auditSnapshot, outlineSnapshot, tabSequenceSnapshot, assert*, flow(). A separate /playwright entrypoint ships a Page-handle adapter for real-browser E2E. No UI."
@@ -145,7 +145,7 @@
           cell "None (optional: @playwright/test)"
             code "@playwright/test"
         row
-          cell "@real-a11y-dev/storybook-addon"
+          cell
             link "@real-a11y-dev/storybook-addon"
               code "@real-a11y-dev/storybook-addon"
           cell "Storybook 8 panel — preview-side extractor posts tree snapshots over the Storybook channel; manager-side React panel renders them."
@@ -155,7 +155,7 @@
     paragraph "A private  workspace builds the Chrome extension using the same engine; it is not published to npm."
       code "@real-a11y-dev/semantic-navigator-extension"
     separator
-    heading "Dependency graph ​" (level 2)
+    heading "Dependency graph" (level 2)
       link "Permalink to "Dependency graph""
     button "Copy Code"
       code
@@ -172,29 +172,29 @@
         code "@real-a11y-dev/semantic-navigator-ui"
         code "noExternal"
     separator
-    heading "Why this split ​" (level 2)
+    heading "Why this split" (level 2)
       link "Permalink to "Why this split""
-    heading "Engine separate from renderer ​" (level 3)
+    heading "Engine separate from renderer" (level 3)
       link "Permalink to "Engine separate from renderer""
     paragraph "Everything useful about the extraction engine (tree walk, role map, accessible-name computation, tab-sequence derivation, action dispatch) is framework-agnostic tree manipulation. Keeping it in  with no UI dependency lets the testing package, the Playwright adapter, and downstream tooling use the engine without pulling Preact into their bundle."
       code "@real-a11y-dev/core"
-    heading "React-specific concerns live in @real-a11y-dev/react ​" (level 3)
+    heading "React-specific concerns live in @real-a11y-dev/react" (level 3)
       code "@real-a11y-dev/react"
       link "Permalink to "React-specific concerns live in `@real-a11y-dev/react`""
     paragraph "React 18 concurrent-mode safety requires ; SSR (Next.js App Router) requires a mount-gated portal; React 19's jsx-runtime has internals that don't live in React 18. All of that React-specific complexity is isolated to one package with a clear React peer dep. Vanilla and Vue projects pay none of that cost — they use  directly."
       code "useSyncExternalStore"
       code "inspector"
-    heading "Testing is fully headless ​" (level 3)
+    heading "Testing is fully headless" (level 3)
       link "Permalink to "Testing is fully headless""
     paragraph "is used by CI jobs that run in Node with no browser, by Vitest unit suites with jsdom, and by Playwright E2E jobs with a real Chromium. One API, three runtimes. Decoupling the UI makes that possible — the tree view isn't involved in any assertion path."
       code "@real-a11y-dev/testing"
-    heading "UI is bundled, not shipped separately ​" (level 3)
+    heading "UI is bundled, not shipped separately" (level 3)
       link "Permalink to "UI is bundled, not shipped separately""
     paragraph "In theory  could be a normal dependency. In practice consumers always want the exact tree-view version the parent package was tested against. Bundling via  eliminates an entire class of peer-range support questions and lets the UI refactor freely inside any release that also updates its consumers."
       code "@real-a11y-dev/semantic-navigator-ui"
       code "noExternal"
     separator
-    heading "Build pipeline per package ​" (level 2)
+    heading "Build pipeline per package" (level 2)
       link "Permalink to "Build pipeline per package""
     paragraph "Every package uses the same tsup config shape:"
     list
@@ -236,7 +236,7 @@
           code "/storybook-addon"
         code "noExternal: ["@real-a11y-dev/semantic-navigator-ui", "@real-a11y-dev/core", "preact"]"
     separator
-    heading "The SemanticNode data model ​" (level 2)
+    heading "The SemanticNode data model" (level 2)
       link "Permalink to "The SemanticNode data model""
     paragraph "All packages share a single node shape from . See  for the full schema. The contract:"
       code "@real-a11y-dev/core"
@@ -247,7 +247,7 @@
       code "Map<string, SemanticNode>"
       code "extractA11yTree(root)"
     separator
-    heading "Where to read next ​" (level 2)
+    heading "Where to read next" (level 2)
       link "Permalink to "Where to read next""
     list
       listitem "— the semantic tree model, roles, tab order"

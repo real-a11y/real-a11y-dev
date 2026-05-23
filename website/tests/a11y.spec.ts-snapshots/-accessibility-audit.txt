@@ -81,12 +81,12 @@
       listitem
         link "Feedback"
   main
-    heading "Accessibility Statement ​" (level 1)
+    heading "Accessibility Statement" (level 1)
       link "Permalink to "Accessibility Statement""
     paragraph
       emphasis "Last updated: 2026-04-18"
     paragraph "Real A11y builds accessibility tooling. Holding our own website, docs, and products to the same standard is table stakes — and also the best dogfood there is."
-    heading "Standards we target ​" (level 2)
+    heading "Standards we target" (level 2)
       link "Permalink to "Standards we target""
     list
       listitem "for the website and all product UI (Chrome extension side panel, Storybook addon panel, Inspector embed)."
@@ -96,14 +96,14 @@
       listitem "for every interactive surface. Nothing is mouse-only."
         strong "Keyboard operability"
     paragraph "The accessibility tree the tools surface is built on top of the same HTML/ARIA semantics we expect our own surfaces to follow."
-    heading "Known gaps ​" (level 2)
+    heading "Known gaps" (level 2)
       link "Permalink to "Known gaps""
     list
       listitem "The tree view in the Chrome extension uses the WAI-ARIA  pattern. On very large pages (10K+ elements) the virtualization gap can cause noticeable delay for screen-reader users. Tracked as an open issue."
         code "tree"
       listitem "The "Curtain" mode (hide page visuals to audit purely from the tree) intentionally hides page content; this is a feature, not a regression, but it is incompatible with external screen-reader workflows that rely on sighted co-operation."
       listitem "The Storybook addon panel inherits whatever theme Storybook provides; contrast on custom Storybook themes is the theme author's responsibility."
-    heading "How we test ​" (level 2)
+    heading "How we test" (level 2)
       link "Permalink to "How we test""
     list
       listitem "Automated:  assertions (, , , ) run in CI on every PR."
@@ -115,7 +115,7 @@
       listitem "Automated: a11y tree diff bot comments on PRs when the extracted tree for fixture pages changes in any measurable way."
       listitem "Manual: keyboard-only walkthrough of the website and extension side panel before every release."
       listitem "Manual: NVDA + Firefox, VoiceOver + Safari, JAWS + Chrome for major features before release."
-    heading "Reporting a problem ​" (level 2)
+    heading "Reporting a problem" (level 2)
       link "Permalink to "Reporting a problem""
     paragraph "If you hit an accessibility barrier on our website or in any product:"
     list
@@ -131,14 +131,14 @@
       listitem "Where the barrier is (URL, extension view, story name, code snippet)"
       listitem "What assistive technology / browser you're using"
       listitem "What happened vs. what you expected"
-    heading "Our commitment ​" (level 2)
+    heading "Our commitment" (level 2)
       link "Permalink to "Our commitment""
     list
       listitem "We acknowledge a11y reports within ."
         strong "72 hours"
       listitem "Regressions from our own released code get priority over new features."
       listitem "We will post-mortem in the changelog when we ship an a11y fix that affected users."
-    heading "Scope ​" (level 2)
+    heading "Scope" (level 2)
       link "Permalink to "Scope""
     paragraph "This statement covers:"
     list
@@ -148,7 +148,7 @@
       listitem "packages' default UI (shipped components — your own styling/usage is your responsibility)"
         code "@real-a11y-dev/*"
     paragraph "It does not cover third-party content we link to from the docs."
-    heading "Feedback ​" (level 2)
+    heading "Feedback" (level 2)
       link "Permalink to "Feedback""
     paragraph "This statement is a living document. If you think we're overstating our coverage, understating a gap, or missing a pattern — open an issue or email ."
       code "a11y@real-a11y.dev"
