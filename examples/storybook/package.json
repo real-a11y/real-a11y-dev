@@ -11,7 +11,7 @@
     "@real-a11y-dev/example-patterns": "workspace:*",
     "@real-a11y-dev/storybook-addon": "workspace:*",
     "react": "^18.3.0",
-    "react-dom": "^18.3.0"
+    "react-dom": "^19.2.6"
   },
   "devDependencies": {
     "@storybook/addon-essentials": "^8.6.0",
@@ -21,7 +21,7 @@
     "@storybook/react-vite": "^8.6.0",
     "@storybook/test": "^8.6.0",
     "@types/react": "^18.3.0",
-    "@types/react-dom": "^18.3.0",
+    "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.3.0",
     "storybook": "^8.6.0",
     "typescript": "^5.6.0",
