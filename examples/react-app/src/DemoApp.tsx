@@ -1,9 +1,13 @@
 import { useRef, useState, type ReactNode } from "react";
 import {
+  ComboboxBroken,
+  ComboboxCorrect,
   DialogBroken,
   DialogCorrect,
   DisclosureBroken,
   DisclosureCorrect,
+  ListboxBroken,
+  ListboxCorrect,
   MenuBroken,
   MenuCorrect,
   SliderBroken,
@@ -14,6 +18,8 @@ import {
   ToastCorrect,
   ToolbarBroken,
   ToolbarCorrect,
+  TreeViewBroken,
+  TreeViewCorrect,
   type TabsExampleProps,
 } from "@real-a11y-dev/example-patterns";
 
@@ -27,6 +33,40 @@ const menuItems = [
   { id: "profile", label: "Edit profile" },
   { id: "settings", label: "Settings" },
   { id: "signout", label: "Sign out" },
+];
+
+const priorityOptions = [
+  { id: "low", label: "Low" },
+  { id: "med", label: "Medium" },
+  { id: "high", label: "High" },
+];
+
+const fruitOptions = [
+  { id: "apple", label: "Apple" },
+  { id: "banana", label: "Banana" },
+  { id: "cherry", label: "Cherry" },
+  { id: "date", label: "Date" },
+  { id: "elderberry", label: "Elderberry" },
+];
+
+const treeNodes = [
+  {
+    id: "src",
+    label: "src",
+    children: [
+      { id: "src/index.ts", label: "index.ts" },
+      {
+        id: "src/components",
+        label: "components",
+        children: [
+          { id: "src/components/Button.tsx", label: "Button.tsx" },
+          { id: "src/components/Input.tsx", label: "Input.tsx" },
+        ],
+      },
+    ],
+  },
+  { id: "package.json", label: "package.json" },
+  { id: "README.md", label: "README.md" },
 ];
 
 /** Two-column wrapper for the correct-vs-broken APG demo sections. */
@@ -387,6 +427,95 @@ export function DemoApp() {
           <SideBySide
             left={<MenuCorrect trigger="Account ▾" items={menuItems} />}
             right={<MenuBroken trigger="Account ▾" items={menuItems} />}
+          />
+        </section>
+
+        {/* Section 13 — APG Listbox */}
+        <section aria-labelledby="listbox-heading" style={{ marginBottom: 40 }}>
+          <h2 id="listbox-heading">APG Listbox — correct vs broken</h2>
+          <p style={{ color: "#666", marginBottom: 16 }}>
+            Both lists let you pick a priority. The correct one wires{" "}
+            <code>role="listbox"</code> with <code>role="option"</code> children
+            and <code>aria-selected</code>, plus roving tabindex and keyboard
+            nav. The broken one is plain buttons — selection is visible (bold)
+            but invisible to AT.
+          </p>
+          <SideBySide
+            left={
+              <ListboxCorrect
+                label="Priority"
+                options={priorityOptions}
+                defaultSelectedId="med"
+              />
+            }
+            right={
+              <ListboxBroken
+                label="Priority"
+                options={priorityOptions}
+                defaultSelectedId="med"
+              />
+            }
+          />
+        </section>
+
+        {/* Section 14 — APG Combobox */}
+        <section
+          aria-labelledby="combobox-heading"
+          style={{ marginBottom: 40 }}
+        >
+          <h2 id="combobox-heading">APG Combobox — correct vs broken</h2>
+          <p style={{ color: "#666", marginBottom: 16 }}>
+            Both inputs filter the same list. The correct one wires{" "}
+            <code>combobox / listbox / option</code> with{" "}
+            <code>aria-activedescendant</code> updates and roving keyboard nav.
+            The broken one is a plain text input + visible list — no role chain,
+            no announced selection.
+          </p>
+          <SideBySide
+            left={
+              <ComboboxCorrect
+                label="Fruit"
+                options={fruitOptions}
+                placeholder="Type to filter…"
+              />
+            }
+            right={
+              <ComboboxBroken
+                label="Fruit"
+                options={fruitOptions}
+                placeholder="Type to filter…"
+              />
+            }
+          />
+        </section>
+
+        {/* Section 15 — APG Tree View */}
+        <section aria-labelledby="tree-heading" style={{ marginBottom: 40 }}>
+          <h2 id="tree-heading">APG Tree View — correct vs broken</h2>
+          <p style={{ color: "#666", marginBottom: 16 }}>
+            Both trees show a file hierarchy. The correct one (React Aria's
+            Tree, which uses the WAI-ARIA Treegrid Pattern) wires{" "}
+            <code>role="treegrid"</code> + <code>role="row"</code> with{" "}
+            <code>aria-level</code> / <code>aria-posinset</code> /{" "}
+            <code>aria-setsize</code> / <code>aria-expanded</code>. The broken
+            one is nested <code>{"<ul>"}</code>s — hierarchy is visible but
+            invisible to AT.
+          </p>
+          <SideBySide
+            left={
+              <TreeViewCorrect
+                label="Project files"
+                nodes={treeNodes}
+                defaultExpandedIds={["src", "src/components"]}
+              />
+            }
+            right={
+              <TreeViewBroken
+                label="Project files"
+                nodes={treeNodes}
+                defaultExpandedIds={["src", "src/components"]}
+              />
+            }
           />
         </section>
       </main>
