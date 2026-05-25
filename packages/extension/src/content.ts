@@ -6,11 +6,11 @@ import {
   ActionDispatcher,
   FocusManager,
   DomObserver,
+  createPicker,
   getElementRefs,
 } from "@real-a11y-dev/core";
 import type { TreeViewMode } from "@real-a11y-dev/core";
 
-import { createPicker } from "./picker.js";
 import type { PanelToContent } from "./types.js";
 
 const isSubFrame = window !== window.top;

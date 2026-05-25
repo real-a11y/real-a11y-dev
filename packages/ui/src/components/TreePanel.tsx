@@ -109,6 +109,27 @@ export interface TreePanelProps {
   /** User-facing callback — fired on every node selection. */
   /** User-facing callback — fired on every node selection. */
   onNodeSelect?: (node: SemanticNode) => void;
+
+  // ── DevTools-style element picker ───────────────────────────────────────────
+  /**
+   * Show the picker toolbar button (⦿) and accept pick events from
+   * the caller. Off by default — the picker captures clicks at the
+   * document level so opt-in only.
+   */
+  enablePicker?: boolean;
+  /** Current picker state; the panel mirrors this on the button's aria-pressed. */
+  pickModeOn?: boolean;
+  /** Called when the user clicks the picker button. */
+  onTogglePickMode?: () => void;
+  /**
+   * Most-recent picked nodeId. When this changes, the panel selects the
+   * row and scrolls it into view, then calls onPickedNodeHandled so the
+   * caller can clear the value (otherwise re-picking the same id would
+   * not retrigger).
+   */
+  pickedNodeId?: string | null;
+  /** Called once the panel has applied a pickedNodeId. */
+  onPickedNodeHandled?: () => void;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -122,6 +143,11 @@ export function TreePanel({
   onActivate,
   onHover,
   onNodeSelect,
+  enablePicker = false,
+  pickModeOn = false,
+  onTogglePickMode,
+  pickedNodeId = null,
+  onPickedNodeHandled,
 }: TreePanelProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [roleFilter, setRoleFilter] = useState<RoleFilter>(null);
@@ -175,6 +201,40 @@ export function TreePanel({
     const el = treeRef.current.querySelector(`[data-node-id="${selectedId}"]`);
     el?.scrollIntoView({ block: "nearest" });
   }, [selectedId]);
+
+  // When the picker reports a picked element, surface it as a tree
+  // selection: expand ancestors so the row is visible, set selectedId,
+  // scroll into view, and acknowledge so the caller can clear the
+  // value (otherwise re-picking the same node wouldn't retrigger).
+  useEffect(() => {
+    if (!pickedNodeId) return;
+    const node = treeData.nodes.get(pickedNodeId);
+    if (!node) {
+      onPickedNodeHandled?.();
+      return;
+    }
+    let cur: SemanticNode | undefined = node;
+    let mutated = false;
+    while (cur?.parentId) {
+      const parent = treeData.nodes.get(cur.parentId);
+      if (parent && !parent.ui.expanded) {
+        parent.ui.expanded = true;
+        mutated = true;
+      }
+      cur = parent;
+    }
+    if (mutated) forceRender();
+    setSelectedId(pickedNodeId);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const el = treeRef.current?.querySelector(
+          `[data-node-id="${CSS.escape(pickedNodeId)}"]`,
+        );
+        el?.scrollIntoView({ block: "center" });
+      });
+    });
+    onPickedNodeHandled?.();
+  }, [pickedNodeId, treeData, forceRender, onPickedNodeHandled]);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
@@ -315,6 +375,9 @@ export function TreePanel({
         onCollapseAll={handleCollapseAll}
         roleFilter={roleFilter}
         onRoleFilterChange={setRoleFilter}
+        enablePicker={enablePicker}
+        pickModeOn={pickModeOn}
+        onTogglePickMode={onTogglePickMode}
       />
       <div class="sn-tree-container">
         {viewMode === "tab" ? (

@@ -40,6 +40,8 @@ export {
 export { ActionDispatcher } from "./interaction/action-dispatcher.js";
 export { FocusManager } from "./interaction/focus-manager.js";
 export { ACTION_LABELS, getPrimaryAction } from "./interaction/actions.js";
+export { createPicker } from "./interaction/picker.js";
+export type { Picker, PickerOptions } from "./interaction/picker.js";
 
 // Observation
 export { DomObserver } from "./observation/dom-observer.js";

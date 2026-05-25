@@ -151,6 +151,15 @@ export interface SemanticNavigatorConfig {
    * always dispatched regardless of this flag.
    */
   focusHostOnActivate?: boolean;
+  /**
+   * Surface a DevTools-style "select an element in the page" picker
+   * (⦿ toolbar button + Ctrl/Cmd+Shift+C shortcut). When the user
+   * clicks an element on the host page while pick mode is on, the
+   * matching tree row is selected and scrolled into view. Off by
+   * default — the picker captures clicks at the document level and
+   * `preventDefault`s them while active, so opt-in only.
+   */
+  enablePicker?: boolean;
   /** Optional CSP nonce applied to the injected `<style>` element. */
   styleNonce?: string;
 

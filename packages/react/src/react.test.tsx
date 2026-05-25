@@ -51,6 +51,42 @@ describe("<SemanticNavigator />", () => {
     // Shadow DOM should be attached (mode: "shadow" is the default).
     expect(host.shadowRoot).not.toBeNull();
   });
+
+  it("renders the picker toolbar button only when enablePicker is true", async () => {
+    function App({ enablePicker }: { enablePicker: boolean }) {
+      const rootRef = useRef<HTMLDivElement>(null);
+      return (
+        <>
+          <div ref={rootRef}>
+            <button>Go</button>
+          </div>
+          <SemanticNavigator root={rootRef} enablePicker={enablePicker} />
+        </>
+      );
+    }
+
+    // enablePicker={false} (default) → no picker button
+    const off = render(<App enablePicker={false} />);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    const offHost = off.container.querySelectorAll("div")[1];
+    expect(
+      offHost.shadowRoot?.querySelector(".sn-pick-btn"),
+    ).toBeNull();
+    off.unmount();
+
+    // enablePicker={true} → picker button rendered with aria-pressed="false"
+    const on = render(<App enablePicker={true} />);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    const onHost = on.container.querySelectorAll("div")[1];
+    const pickBtn = onHost.shadowRoot?.querySelector(".sn-pick-btn");
+    expect(pickBtn).not.toBeNull();
+    expect(pickBtn?.getAttribute("aria-pressed")).toBe("false");
+    expect(pickBtn?.getAttribute("aria-label")).toBe("Pick element in page");
+  });
 });
 
 describe("useSemanticTree", () => {
