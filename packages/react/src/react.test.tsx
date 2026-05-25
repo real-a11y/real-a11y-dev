@@ -71,9 +71,7 @@ describe("<SemanticNavigator />", () => {
       await new Promise((r) => setTimeout(r, 50));
     });
     const offHost = off.container.querySelectorAll("div")[1];
-    expect(
-      offHost.shadowRoot?.querySelector(".sn-pick-btn"),
-    ).toBeNull();
+    expect(offHost.shadowRoot?.querySelector(".sn-pick-btn")).toBeNull();
     off.unmount();
 
     // enablePicker={true} → picker button rendered with aria-pressed="false"
