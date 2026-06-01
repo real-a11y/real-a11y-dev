@@ -1,0 +1,28 @@
+{
+  "mode": "pre",
+  "tag": "beta",
+  "initialVersions": {
+    "@real-a11y-dev/example-react": "0.0.0",
+    "@real-a11y-dev/example-storybook": "0.0.0",
+    "@real-a11y-dev/example-testing": "0.0.0",
+    "@real-a11y-dev/example-vanilla": "0.0.0",
+    "@real-a11y-dev/core": "0.1.0-beta.5",
+    "@real-a11y-dev/example-patterns": "0.0.0",
+    "@real-a11y-dev/semantic-navigator-extension": "0.1.3",
+    "@real-a11y-dev/inspector": "0.1.0-beta.5",
+    "@real-a11y-dev/react": "0.1.0-beta.5",
+    "@real-a11y-dev/storybook-addon": "0.1.0-beta.5",
+    "@real-a11y-dev/testing": "0.1.0-beta.5",
+    "@real-a11y-dev/semantic-navigator-ui": "0.1.0-beta.5",
+    "@real-a11y-dev/website": "0.0.0"
+  },
+  "changesets": [
+    "element-picker-react-app",
+    "element-picker-ui-button",
+    "find-active-modal-role-dialog",
+    "observe-portal-modals",
+    "slider-spinbutton-increment",
+    "storybook-addon-multi-rooted-stories",
+    "treeitem-name-skip-grouped-descendants"
+  ]
+}

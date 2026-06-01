@@ -3,7 +3,16 @@
   "changelog": "@changesets/cli/changelog",
   "commit": false,
   "fixed": [],
-  "linked": [["@real-a11y-dev/*"]],
+  "linked": [
+    [
+      "@real-a11y-dev/core",
+      "@real-a11y-dev/semantic-navigator-ui",
+      "@real-a11y-dev/inspector",
+      "@real-a11y-dev/react",
+      "@real-a11y-dev/storybook-addon",
+      "@real-a11y-dev/testing"
+    ]
+  ],
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
