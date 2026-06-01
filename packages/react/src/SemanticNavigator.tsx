@@ -60,6 +60,14 @@ export interface SemanticNavigatorProps {
    * always dispatched regardless of this flag.
    */
   focusHostOnActivate?: boolean;
+  /**
+   * Surface a DevTools-style "select an element in the page" picker
+   * (⦿ toolbar button + Ctrl/Cmd+Shift+C shortcut). When on, clicking
+   * an element on the host page selects the matching tree row and
+   * scrolls it into view. Default `false` — the picker captures
+   * clicks at the document level while active, so opt-in only.
+   */
+  enablePicker?: boolean;
   /** Optional CSP nonce applied to the injected style. */
   styleNonce?: string;
 
@@ -424,6 +432,7 @@ export function SemanticNavigator({
   highlightOnHover = false,
   scrollHostOnSelect = false,
   focusHostOnActivate = false,
+  enablePicker = false,
   styleNonce,
   onNodeSelect,
   onAction,
@@ -461,6 +470,7 @@ export function SemanticNavigator({
       highlightOnHover,
       scrollHostOnSelect,
       focusHostOnActivate,
+      enablePicker,
       styleNonce,
       onNodeSelect,
       onAction,

@@ -10,6 +10,7 @@ import type {
   ActionType,
   ActionRequest,
   ExtractionResult,
+  Picker,
 } from "@real-a11y-dev/core";
 import {
   extractDomTree,
@@ -17,6 +18,7 @@ import {
   ActionDispatcher,
   FocusManager,
   DomObserver,
+  createPicker,
   getElementRefs,
 } from "@real-a11y-dev/core";
 import { useState, useCallback, useRef, useEffect } from "preact/hooks";
@@ -58,6 +60,14 @@ export interface TreeViewProps {
    * always dispatched regardless of this flag.
    */
   focusHostOnActivate?: boolean;
+  /**
+   * Surface a DevTools-style "select an element in the page" picker:
+   * a toolbar button (⦿) + Ctrl/Cmd+Shift+C shortcut that lets the
+   * user click any host-page element to jump to its tree row. Off by
+   * default — the picker captures clicks at the document level and
+   * preventDefaults them while active, so opt-in only.
+   */
+  enablePicker?: boolean;
   /** Callback when a node is selected */
   onNodeSelect?: (node: SemanticNode) => void;
   /** Callback when an action is dispatched */
@@ -72,15 +82,22 @@ export function TreeView({
   highlightOnHover = false,
   scrollHostOnSelect = false,
   focusHostOnActivate = false,
+  enablePicker = false,
   onNodeSelect,
   onAction,
 }: TreeViewProps) {
   const [viewMode, setViewMode] = useState<TreeViewMode>(initialViewMode);
   const [treeData, setTreeData] = useState<ExtractionResult | null>(null);
+  // Picker: panel-side mirror of the page-side createPicker state. The
+  // picker itself owns the listeners + cursor; this state drives the
+  // toolbar button's aria-pressed and the toggle.
+  const [pickModeOn, setPickModeOn] = useState(false);
+  const [pickedNodeId, setPickedNodeId] = useState<string | null>(null);
 
   const dispatcherRef = useRef<ActionDispatcher | null>(null);
   const focusManagerRef = useRef<FocusManager | null>(null);
   const observerRef = useRef<DomObserver | null>(null);
+  const pickerRef = useRef<Picker | null>(null);
 
   // Extract tree on mount and when view mode changes.
   // Tab mode reuses the a11y tree — no re-extraction needed.
@@ -100,11 +117,53 @@ export function TreeView({
     observerRef.current = new DomObserver(root, extract);
     observerRef.current.start();
 
+    // Picker lifecycle is tied to the same effect so the same refs +
+    // FocusManager are used for the highlight overlay. The picker
+    // itself is inert until setEnabled(true) — creating it is cheap.
+    if (enablePicker) {
+      pickerRef.current = createPicker({
+        doc: root.ownerDocument,
+        // Same-document inline panels: no iframe layer, so isSubFrame is
+        // always false (page-side picker handles its own iframe story
+        // via window.top check; the React mount is always top-level).
+        isSubFrame: false,
+        findId: (el) => refs.findId(el),
+        onHighlight: (nodeId) =>
+          focusManagerRef.current?.highlightElement(nodeId, { scroll: false }),
+        onClearHighlight: () => focusManagerRef.current?.clearHighlight(),
+        onPicked: (nodeId) => setPickedNodeId(nodeId),
+        onModeChange: (enabled) => setPickModeOn(enabled),
+      });
+    }
+
     return () => {
       observerRef.current?.stop();
       focusManagerRef.current?.destroy();
+      pickerRef.current?.teardown();
+      pickerRef.current = null;
     };
-  }, [root, viewMode]);
+  }, [root, viewMode, enablePicker]);
+
+  const togglePickMode = useCallback(() => {
+    pickerRef.current?.setEnabled(!pickModeOn);
+  }, [pickModeOn]);
+
+  // Ctrl/Cmd+Shift+C global toggle, matching DevTools' picker shortcut.
+  // Bound to the host document so it fires whether the panel has focus
+  // or the host page does — same behavior as the extension panel.
+  useEffect(() => {
+    if (!enablePicker) return;
+    const doc = root.ownerDocument;
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && e.shiftKey && (e.key === "C" || e.key === "c")) {
+        e.preventDefault();
+        pickerRef.current?.setEnabled(!pickerRef.current.isEnabled());
+      }
+    };
+    doc.addEventListener("keydown", onKey);
+    return () => doc.removeEventListener("keydown", onKey);
+  }, [root, enablePicker]);
 
   // ── Callbacks wired to DOM side-effects ────────────────────────────────────
 
@@ -182,6 +241,11 @@ export function TreeView({
       onActivate={handleActivate}
       onHover={handleHover}
       onNodeSelect={onNodeSelect}
+      enablePicker={enablePicker}
+      pickModeOn={pickModeOn}
+      onTogglePickMode={togglePickMode}
+      pickedNodeId={pickedNodeId}
+      onPickedNodeHandled={() => setPickedNodeId(null)}
     />
   );
 }

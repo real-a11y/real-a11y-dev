@@ -73,6 +73,7 @@ export function createInspector(
     highlightOnHover = false,
     scrollHostOnSelect = false,
     focusHostOnActivate = false,
+    enablePicker = false,
     styleNonce,
     onNodeSelect,
     onAction,
@@ -163,6 +164,7 @@ export function createInspector(
         highlightOnHover,
         scrollHostOnSelect,
         focusHostOnActivate,
+        enablePicker,
         onNodeSelect,
         onAction: onAction
           ? (request: ActionRequest) => onAction(request, { success: true })

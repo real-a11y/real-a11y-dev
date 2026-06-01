@@ -66,6 +66,7 @@ export function App() {
           mode={mode}
           floating
           highlightOnHover
+          enablePicker
           panelTitle="Semantic Navigator"
         />
       )}

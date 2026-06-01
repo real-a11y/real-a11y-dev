@@ -11,6 +11,12 @@ interface TreeToolbarProps {
   onCollapseAll: () => void;
   roleFilter: RoleFilter;
   onRoleFilterChange: (filter: RoleFilter) => void;
+  /** When true, render the DevTools-style "select an element in the page" button. */
+  enablePicker?: boolean;
+  /** Current picker state — drives aria-pressed on the button. */
+  pickModeOn?: boolean;
+  /** Called when the user clicks the picker button. */
+  onTogglePickMode?: () => void;
 }
 
 export function TreeToolbar({
@@ -23,10 +29,33 @@ export function TreeToolbar({
   onCollapseAll,
   roleFilter,
   onRoleFilterChange,
+  enablePicker = false,
+  pickModeOn = false,
+  onTogglePickMode,
 }: TreeToolbarProps) {
   return (
     <>
       <div class="sn-toolbar" role="toolbar" aria-label="Tree controls">
+        {/* DevTools-style picker: "select an element in the page". The
+            actual click capture + cursor swap live in createPicker (in
+            @real-a11y-dev/core). Same .sn-pick-btn class as the
+            extension uses, so it picks up the shared toolbar style. */}
+        {enablePicker && (
+          <button
+            class="sn-pick-btn"
+            aria-pressed={pickModeOn}
+            onClick={() => onTogglePickMode?.()}
+            title={
+              pickModeOn
+                ? "Pick mode ON — click an element in the page to select it in the tree (Esc to cancel)"
+                : "Pick an element in the page (Ctrl/Cmd+Shift+C)"
+            }
+            aria-label="Pick element in page"
+          >
+            {"⦿"}
+          </button>
+        )}
+
         {/* Search */}
         <input
           class="sn-search"
