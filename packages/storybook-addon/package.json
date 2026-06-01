@@ -1,6 +1,6 @@
 {
   "name": "@real-a11y-dev/storybook-addon",
-  "version": "0.1.0-beta.5",
+  "version": "0.1.0-beta.6",
   "description": "Storybook addon — Semantic Navigator A11y tree panel for every story",
   "license": "MIT",
   "author": "Juan Crisostomo (Real A11y)",
