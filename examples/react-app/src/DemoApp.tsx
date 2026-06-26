@@ -1,13 +1,19 @@
 import { useRef, useState, type ReactNode } from "react";
 import {
+  ComboboxAsyncBroken,
+  ComboboxAsyncCorrect,
   ComboboxBroken,
   ComboboxCorrect,
   DialogBroken,
   DialogCorrect,
+  DialogNestedBroken,
+  DialogNestedCorrect,
   DisclosureBroken,
   DisclosureCorrect,
   ListboxBroken,
   ListboxCorrect,
+  ListboxMultiBroken,
+  ListboxMultiCorrect,
   MenuBroken,
   MenuCorrect,
   SliderBroken,
@@ -18,6 +24,8 @@ import {
   ToastCorrect,
   ToolbarBroken,
   ToolbarCorrect,
+  TreeCheckableBroken,
+  TreeCheckableCorrect,
   TreeViewBroken,
   TreeViewCorrect,
   type TabsExampleProps,
@@ -514,6 +522,192 @@ export function DemoApp() {
                 label="Project files"
                 nodes={treeNodes}
                 defaultExpandedIds={["src", "src/components"]}
+              />
+            }
+          />
+        </section>
+
+        {/* Section 16 — APG Listbox (multi-select) */}
+        <section
+          aria-labelledby="listbox-multi-heading"
+          style={{ marginBottom: 40 }}
+        >
+          <h2 id="listbox-multi-heading">
+            APG Listbox (multi-select) — correct vs broken
+          </h2>
+          <p style={{ color: "#666", marginBottom: 16 }}>
+            Both lists let you pick multiple fruits. The correct one wires{" "}
+            <code>role="listbox"</code> with{" "}
+            <code>aria-multiselectable="true"</code> and per-option{" "}
+            <code>aria-selected</code>, plus Shift+click range select and
+            Space-to-toggle. The broken one is a stack of native checkboxes —
+            visible selection, but no listbox group semantics.
+          </p>
+          <SideBySide
+            left={
+              <ListboxMultiCorrect
+                label="Fruits"
+                options={[
+                  { id: "a", label: "Apples" },
+                  { id: "b", label: "Bananas" },
+                  { id: "c", label: "Cherries" },
+                  { id: "d", label: "Dates" },
+                ]}
+                defaultSelectedIds={["a", "c"]}
+              />
+            }
+            right={
+              <ListboxMultiBroken
+                label="Fruits"
+                options={[
+                  { id: "a", label: "Apples" },
+                  { id: "b", label: "Bananas" },
+                  { id: "c", label: "Cherries" },
+                  { id: "d", label: "Dates" },
+                ]}
+                defaultSelectedIds={["a", "c"]}
+              />
+            }
+          />
+        </section>
+
+        {/* Section 17 — APG Combobox (async) */}
+        <section
+          aria-labelledby="combobox-async-heading"
+          style={{ marginBottom: 40 }}
+        >
+          <h2 id="combobox-async-heading">
+            APG Combobox (async) — correct vs broken
+          </h2>
+          <p style={{ color: "#666", marginBottom: 16 }}>
+            Both inputs simulate a 600ms network round-trip on each keystroke.
+            The correct one marks the listbox <code>aria-busy="true"</code>{" "}
+            while a request is in flight and publishes the result count to a{" "}
+            <code>role="status"</code> live region. The broken one fetches
+            silently — AT users hear nothing about loading or how many results
+            arrived.
+          </p>
+          <SideBySide
+            left={
+              <ComboboxAsyncCorrect
+                label="Codename"
+                placeholder="Type to filter…"
+              />
+            }
+            right={
+              <ComboboxAsyncBroken
+                label="Codename"
+                placeholder="Type to filter…"
+              />
+            }
+          />
+        </section>
+
+        {/* Section 18 — APG Dialog (nested) */}
+        <section
+          aria-labelledby="dialog-nested-heading"
+          style={{ marginBottom: 40 }}
+        >
+          <h2 id="dialog-nested-heading">
+            APG Dialog (nested) — correct vs broken
+          </h2>
+          <p style={{ color: "#666", marginBottom: 16 }}>
+            Both stacks open a dialog with a button inside it that opens another
+            dialog. The correct one (Radix) manages the focus stack — Escape
+            closes the inner first and returns focus to the inner trigger,
+            Escape again closes the outer and returns to the outer trigger. The
+            broken one has both <code>role="dialog"</code> +{" "}
+            <code>aria-modal="true"</code> but no focus trap, no return focus,
+            no Escape handler.
+          </p>
+          <SideBySide
+            left={
+              <DialogNestedCorrect
+                outerTrigger="Open settings"
+                outerTitle="Settings"
+                innerTrigger="Confirm action"
+                innerTitle="Are you sure?"
+              />
+            }
+            right={
+              <DialogNestedBroken
+                outerTrigger="Open settings"
+                outerTitle="Settings"
+                innerTrigger="Confirm action"
+                innerTitle="Are you sure?"
+              />
+            }
+          />
+        </section>
+
+        {/* Section 19 — APG Tree (with checkboxes) */}
+        <section
+          aria-labelledby="tree-checkable-heading"
+          style={{ marginBottom: 40 }}
+        >
+          <h2 id="tree-checkable-heading">
+            APG Tree (with checkboxes) — correct vs broken
+          </h2>
+          <p style={{ color: "#666", marginBottom: 16 }}>
+            Both trees show an inventory list with checkable rows. The correct
+            one wires <code>role="tree"</code> + <code>role="treeitem"</code>{" "}
+            with tri-state <code>aria-checked</code> (<code>"true"</code> /{" "}
+            <code>"false"</code> / <code>"mixed"</code>) — parents derive from
+            descendants, toggling a parent propagates to children. The broken
+            one is a nested <code>{"<ul>"}</code> with plain native checkboxes;
+            parents and children change independently.
+          </p>
+          <SideBySide
+            left={
+              <TreeCheckableCorrect
+                label="Inventory"
+                nodes={[
+                  {
+                    id: "fruits",
+                    label: "Fruits",
+                    children: [
+                      { id: "apple", label: "Apple" },
+                      { id: "banana", label: "Banana" },
+                      { id: "cherry", label: "Cherry" },
+                    ],
+                  },
+                  {
+                    id: "veg",
+                    label: "Vegetables",
+                    children: [
+                      { id: "carrot", label: "Carrot" },
+                      { id: "potato", label: "Potato" },
+                    ],
+                  },
+                ]}
+                defaultExpandedIds={["fruits", "veg"]}
+                defaultCheckedIds={["apple"]}
+              />
+            }
+            right={
+              <TreeCheckableBroken
+                label="Inventory"
+                nodes={[
+                  {
+                    id: "fruits",
+                    label: "Fruits",
+                    children: [
+                      { id: "apple", label: "Apple" },
+                      { id: "banana", label: "Banana" },
+                      { id: "cherry", label: "Cherry" },
+                    ],
+                  },
+                  {
+                    id: "veg",
+                    label: "Vegetables",
+                    children: [
+                      { id: "carrot", label: "Carrot" },
+                      { id: "potato", label: "Potato" },
+                    ],
+                  },
+                ]}
+                defaultExpandedIds={["fruits", "veg"]}
+                defaultCheckedIds={["apple"]}
               />
             }
           />
