@@ -5,6 +5,7 @@
     h3 @real-a11y-dev/testing
   h2 Recipes
   h2 Reference
+  h2 On this page
 h1 CI A11y Diff Bot
   h2 How it works
   h2 What the comment looks like

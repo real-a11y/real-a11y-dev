@@ -208,6 +208,8 @@
         link "CI Diff Bot recipe"
   contentinfo
     link "Edit this page on GitHub"
+    paragraph "Last updated:"
+      time "[redacted]"
     navigation "Pager"
       link "Previous pageAccessibility Snapshots"
       link "Next pageWhy Real A11y?"

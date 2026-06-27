@@ -221,6 +221,8 @@
         link "How Accessibility Snapshots Compare"
   contentinfo
     link "Edit this page on GitHub"
+    paragraph "Last updated:"
+      time "[redacted]"
     navigation "Pager"
       link "Previous pageCore Concepts"
       link "Next pageSnapshots vs. Other Tools"

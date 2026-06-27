@@ -164,6 +164,11 @@ test.describe("a11y tree snapshot", () => {
   for (const route of ROUTES) {
     test(route, async ({ page }) => {
       await page.goto(route, { waitUntil: "load" });
+      // VitePress computes the "On this page" outline aside client-side
+      // after `load`; wait for the network to settle so the hydrated DOM
+      // (and that aside) is present before snapshotting. Without this the
+      // tree/outline/tab snapshots race the aside on long pages.
+      await page.waitForLoadState("networkidle");
       const sn = await attach(page);
       const audit = redactTimes(await sn.auditSnapshot());
       expect(audit).toMatchSnapshot(`${slugFor(route)}.audit.txt`);
@@ -175,6 +180,7 @@ test.describe("heading outline snapshot", () => {
   for (const route of ROUTES) {
     test(route, async ({ page }) => {
       await page.goto(route, { waitUntil: "load" });
+      await page.waitForLoadState("networkidle");
       const sn = await attach(page);
       const outline = await sn.outlineSnapshot();
       expect(outline).toMatchSnapshot(`${slugFor(route)}.outline.txt`);
@@ -186,6 +192,7 @@ test.describe("tab sequence snapshot", () => {
   for (const route of ROUTES) {
     test(route, async ({ page }) => {
       await page.goto(route, { waitUntil: "load" });
+      await page.waitForLoadState("networkidle");
       const sn = await attach(page);
       const tabs = await sn.tabSequenceSnapshot();
       expect(tabs).toMatchSnapshot(`${slugFor(route)}.tabs.txt`);

@@ -311,6 +311,8 @@
         link "Playwright adapter"
   contentinfo
     link "Edit this page on GitHub"
+    paragraph "Last updated:"
+      time "[redacted]"
     navigation "Pager"
       link "Previous pageMatchers"
       link "Next pagePlaywright adapter"

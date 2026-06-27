@@ -223,6 +223,8 @@
         link "CI Diff Bot recipe"
   contentinfo
     link "Edit this page on GitHub"
+    paragraph "Last updated:"
+      time "[redacted]"
     navigation "Pager"
       link "Previous pageFlow API"
       link "Next page@real-a11y-dev/react"
