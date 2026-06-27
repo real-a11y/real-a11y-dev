@@ -1,9 +1,9 @@
 import type { ActionType, SemanticNode } from "@real-a11y-dev/core";
 import { findByRole, type FindByRoleOptions } from "@real-a11y-dev/core";
 
+import { extract, serializeTree } from "@real-a11y-dev/serialize";
+
 import { dispatch } from "./dispatch.js";
-import { extract } from "./extract.js";
-import { serializeTree } from "./serialize.js";
 import { waitForMutations } from "./wait.js";
 
 export interface FlowOptions {
