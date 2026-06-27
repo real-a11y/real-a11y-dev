@@ -1,11 +1,13 @@
-// Snapshots
+// Serialization / snapshots — the canonical text format lives in
+// @real-a11y-dev/serialize; re-exported here under this package's
+// snapshot-flavored names so the testing API is unchanged.
 export {
-  auditSnapshot,
-  outlineSnapshot,
-  tabSequenceSnapshot,
-} from "./snapshot.js";
-export { serializeTree } from "./serialize.js";
-export type { SerializeOptions } from "./serialize.js";
+  serializeTree,
+  serializeTree as auditSnapshot,
+  serializeOutline as outlineSnapshot,
+  serializeTabSequence as tabSequenceSnapshot,
+} from "@real-a11y-dev/serialize";
+export type { SerializeOptions } from "@real-a11y-dev/serialize";
 
 // Assertions
 export {

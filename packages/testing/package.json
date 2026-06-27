@@ -83,7 +83,8 @@
     "snapshot": "node scripts/snapshot.mjs"
   },
   "dependencies": {
-    "@real-a11y-dev/core": "workspace:*"
+    "@real-a11y-dev/core": "workspace:*",
+    "@real-a11y-dev/serialize": "workspace:*"
   },
   "peerDependencies": {
     "playwright": "*"

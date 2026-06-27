@@ -11,10 +11,10 @@
  */
 
 export {
-  auditSnapshot,
-  outlineSnapshot,
-  tabSequenceSnapshot,
-} from "./snapshot.js";
+  serializeTree as auditSnapshot,
+  serializeOutline as outlineSnapshot,
+  serializeTabSequence as tabSequenceSnapshot,
+} from "@real-a11y-dev/serialize";
 
 export {
   assertNoUnlabeledInteractive,

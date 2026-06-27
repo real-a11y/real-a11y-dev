@@ -1,6 +1,5 @@
 import { findAllByRole, getOutline, linearize } from "@real-a11y-dev/core";
-
-import { extract } from "./extract.js";
+import { extract } from "@real-a11y-dev/serialize";
 
 /** Roles we consider intrinsically interactive for labeling checks. */
 const INTERACTIVE_ROLES = new Set([
