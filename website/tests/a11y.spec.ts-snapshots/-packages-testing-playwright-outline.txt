@@ -1,0 +1,19 @@
+  h2 Introduction
+  h2 Reading the Tree
+  h2 Chrome Extension
+  h2 Packages
+    h3 @real-a11y-dev/testing
+  h2 Recipes
+  h2 Reference
+  h2 On this page
+h1 Playwright adapter
+  h2 Install
+  h2 attach(page, options?)
+  h2 Narrowing the root
+  h2 Testing that assertions fail on broken pages
+  h2 Determinism
+  h2 Redacting variable content
+  h2 How it works
+  h2 Error propagation
+  h2 SemanticNavigatorPageHandle type
+  h2 See also

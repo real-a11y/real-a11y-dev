@@ -1,0 +1,14 @@
+  h2 Introduction
+  h2 Reading the Tree
+  h2 Chrome Extension
+  h2 Packages
+    h3 @real-a11y-dev/testing
+  h2 Recipes
+  h2 Reference
+  h2 On this page
+h1 How Accessibility Snapshots Compare
+  h2 Versus visual regression testing
+  h2 Versus rule engines like axe
+  h2 Versus Playwright ARIA snapshots
+  h2 Alongside real screen-reader testing
+  h2 Next

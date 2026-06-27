@@ -1,0 +1,213 @@
+  link "Skip to content"
+  banner
+    link "Real A11y"
+    button "Search"
+    navigation "Main Navigation"
+      link "Guide"
+      link "Recipes"
+      link "Packages"
+      button "v0.1 · Beta"
+    switch "Switch to dark theme"
+    link "github"
+  complementary
+    navigation "Sidebar Navigation"
+      button "Introduction"
+        heading "Introduction" (level 2)
+      link "Getting Started"
+        paragraph "Getting Started"
+      link "Core Concepts"
+        paragraph "Core Concepts"
+      link "Accessibility Snapshots"
+        paragraph "Accessibility Snapshots"
+      link "Snapshots vs. Other Tools"
+        paragraph "Snapshots vs. Other Tools"
+      link "Why Real A11y?"
+        paragraph "Why Real A11y?"
+      button "Reading the Tree"
+        heading "Reading the Tree" (level 2)
+      link "DOM View"
+        paragraph "DOM View"
+      link "A11y View"
+        paragraph "A11y View"
+      link "TAB View"
+        paragraph "TAB View"
+      link "Panel features"
+        paragraph "Panel features"
+      button "Chrome Extension"
+        heading "Chrome Extension" (level 2)
+      link "Overview & Install"
+        paragraph "Overview & Install"
+      button "Packages"
+        heading "Packages" (level 2)
+      link "@real-a11y-dev/core"
+        paragraph "@real-a11y-dev/core"
+      link "@real-a11y-dev/inspector"
+        paragraph "@real-a11y-dev/inspector"
+        link "@real-a11y-dev/testing"
+          heading "@real-a11y-dev/testing" (level 3)
+        button "toggle section"
+      link "@real-a11y-dev/react"
+        paragraph "@real-a11y-dev/react"
+      link "@real-a11y-dev/storybook-addon"
+        paragraph "@real-a11y-dev/storybook-addon"
+      button "Recipes"
+        heading "Recipes" (level 2)
+      link "Next.js (App Router + React 19)"
+        paragraph "Next.js (App Router + React 19)"
+      link "Storybook 8 + React 19"
+        paragraph "Storybook 8 + React 19"
+      link "Peer Dependencies"
+        paragraph "Peer Dependencies"
+      link "CI Diff Bot"
+        paragraph "CI Diff Bot"
+      button "Reference"
+        heading "Reference" (level 2)
+      link "Accessible Names"
+        paragraph "Accessible Names"
+      link "Architecture"
+        paragraph "Architecture"
+      link "Troubleshooting"
+        paragraph "Troubleshooting"
+  navigation "On this page"
+    heading "On this page" (level 2)
+    list
+      listitem
+        link "Versus visual regression testing"
+      listitem
+        link "Versus rule engines like axe"
+      listitem
+        link "Versus Playwright ARIA snapshots"
+      listitem
+        link "Alongside real screen-reader testing"
+      listitem
+        link "Next"
+  main
+    heading "How Accessibility Snapshots Compare" (level 1)
+      link "Permalink to "How Accessibility Snapshots Compare""
+    paragraph "An  doesn't replace your other accessibility and regression tools — it sits beside them and covers a blind spot each of them has. This page walks through the four it's most often confused with, and where the lines fall."
+      link "accessibility snapshot"
+    paragraph "The throughline is . Because Real A11y computes its own accessibility tree, the  snapshot runs in a millisecond-fast Vitest/Jest unit test  in a real browser. The other tools below either need a real browser to read its native accessibility tree, or answer a different question entirely."
+      strong "jsdom"
+      emphasis "same"
+      strong "and"
+    heading "Versus visual regression testing" (level 2)
+      link "Permalink to "Versus visual regression testing""
+    paragraph "Screenshot testing — Playwright's , or services like Percy, Chromatic, and Argos — is the other great snapshot discipline, and it's genuinely complementary. A visual snapshot renders the page to pixels and diffs the image: when a layout shifts, a color regresses, or a component visually breaks, the diff lights up the exact region and you spot it instantly. For , nothing beats it."
+      code "toHaveScreenshot()"
+      emphasis "appearance"
+    paragraph "But pixels only describe what a sighted, mouse-using visitor sees. A screenshot can be pixel-perfect while the page is broken for assistive technology — and those failures move :"
+      strong "zero pixels"
+    list
+      listitem "A real  swapped for a  styled to match — identical screenshot, gone from the a11y tree."
+        code "<button>"
+        code "<div onclick>"
+      listitem "An icon button that lost its  — looks the same, now announces nothing."
+        code "aria-label"
+      listitem "A heading restyled into a plain  — same font size on screen, vanished from the outline."
+        code "<span>"
+      listitem "Focus order rearranged by a layout change — visually unchanged, keyboard path now illogical."
+    paragraph "None of these show up in a screenshot diff. Every one shows up in an accessibility-snapshot diff. The reverse holds too: a purely visual regression — a broken gradient, an overlapping panel, a spacing bug — won't move an accessibility snapshot."
+    paragraph "So they're the two halves of regression testing:  and . A mature suite runs both — visual snapshots for appearance, accessibility snapshots for semantics — and neither one covers the other's blind spot."
+      strong "how it looks"
+      strong "what it means"
+    heading "Versus rule engines like axe" (level 2)
+      link "Permalink to "Versus rule engines like axe""
+    paragraph "Accessibility snapshots and rule engines like  answer , and a healthy suite runs both:"
+      link "jest-axe"
+      strong "different questions"
+    table
+      rowgroup
+        row
+          rowheader "Aspect"
+          rowheader "Rule engine (e.g. jest-axe)"
+          rowheader "Accessibility Snapshot"
+      rowgroup
+        row
+          cell "Question"
+          cell ""Does this violate a WCAG rule?""
+          cell ""What is the structure, and did it change?""
+        row
+          cell "Output"
+          cell "A pass/fail list of violations"
+          cell "A reviewable, diffable artifact"
+        row
+          cell "Great at"
+          cell "Color contrast, ARIA validity, breadth of rules"
+          cell "Structure, focus order, regressions over time"
+        row
+          cell "Blind to"
+          cell "Structural drift between commits; tab-order changes"
+          cell "The dozens of rules an engine encodes"
+    paragraph "Run  for rule compliance and an accessibility snapshot for structural regression. Neither subsumes the other — which is why the  are designed to sit in the same suite as jest-axe, not replace it."
+      code "toHaveNoViolations()"
+      link "matchers"
+    heading "Versus Playwright ARIA snapshots" (level 2)
+      link "Permalink to "Versus Playwright ARIA snapshots""
+    paragraph "The idea owes a direct debt to  (), which serialize the accessibility tree to YAML and popularized snapshotting  instead of markup. If your tests already run in a real browser through Playwright, it's an excellent first-party tool — reach for it."
+      link "Playwright's ARIA snapshots"
+      code "expect(page).toMatchAriaSnapshot()"
+      emphasis "structure"
+    paragraph "Real A11y takes the same idea somewhere Playwright structurally can't, and frames it explicitly as an audit:"
+    table
+      rowgroup
+        row
+          rowheader "Aspect"
+          rowheader "Playwright ARIA snapshots"
+          rowheader "Real A11y accessibility snapshots"
+      rowgroup
+        row
+          cell "Runs in"
+          cell "A real browser (reads the browser's own accessibility tree)"
+          cell "jsdom and a real browser — no browser needed for unit tests"
+            strong "jsdom and a real browser"
+        row
+          cell "Test runners"
+          cell "Playwright"
+          cell "Vitest, Jest (jsdom) + a Playwright adapter"
+        row
+          cell "Engine"
+          cell "The browser's native AX tree"
+          cell "Real A11y's own extraction — the same tree the , , and  render"
+            link "extension"
+            link "React panel"
+            link "Storybook addon"
+        row
+          cell "Views"
+          cell "Role + name tree"
+          cell "Tree +  +"
+            strong "+"
+            link "heading outline"
+            strong "+"
+            link "tab order"
+        row
+          cell "Framing"
+          cell "A stable alternative to DOM / visual snapshots"
+          cell "An accessibility audit, paired with  and"
+            link "assertions"
+            link "matchers"
+    paragraph "The practical wedge is jsdom. jsdom has no accessibility tree, so a snapshot built on the browser's AX tree simply can't run in a Vitest or Jest unit test. Because Real A11y computes its own tree, the  snapshot runs in a millisecond-fast unit test and in a real-browser E2E run — and matches what you inspect by eye in the panel."
+      emphasis "same"
+    blockquote
+      paragraph "Historical note: "accessibility snapshot" has lineage in Playwright and Puppeteer's older  (a JSON AX-tree dump), which Playwright deprecated long ago and removed in v1.49, in favor of the YAML ARIA snapshots above."
+        code "page.accessibility.snapshot()"
+    heading "Alongside real screen-reader testing" (level 2)
+      link "Permalink to "Alongside real screen-reader testing""
+    paragraph "This complements real screen-reader testing — it doesn't replace it"
+    paragraph "Nothing substitutes for hearing your app announced; lived AT experience catches things structure alone can't. What snapshots do is move the first and largest class of problems —  ones — to where every developer already works: a diff in code review. Deep expertise becomes a way to go further, not the price of entry."
+      emphasis "structural"
+    heading "Next" (level 2)
+      link "Permalink to "Next""
+    list
+      listitem "New to the concept? →"
+        link "Accessibility Snapshots"
+      listitem "Ready to write one? →  ·  ·"
+        link "Snapshots reference"
+        link "matchers"
+        link "Playwright adapter"
+      listitem "In CI → the  posts tree diffs on every PR"
+        link "CI Diff Bot recipe"
+  contentinfo
+    link "Edit this page on GitHub"
+    navigation "Pager"
+      link "Previous pageAccessibility Snapshots"
+      link "Next pageWhy Real A11y?"

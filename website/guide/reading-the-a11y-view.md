@@ -5,7 +5,7 @@ description: How to interpret the accessibility tree — what a screen reader ac
 
 # Reading the A11y View
 
-> The A11y view is the same tree across every Real A11y surface — the [Chrome extension](/guide/chrome-extension), the `<SemanticNavigator />` [React component](/packages/react), the [Storybook addon](/packages/storybook-addon), and the [`auditSnapshot()`](/packages/testing#auditsnapshot-root-options) string from the testing package. This page applies to all of them.
+> The A11y view is the same tree across every Real A11y surface — the [Chrome extension](/guide/chrome-extension), the `<SemanticNavigator />` [React component](/packages/react), the [Storybook addon](/packages/storybook-addon), and the [`auditSnapshot()`](/packages/testing/snapshots#auditsnapshot-root-options) string from the testing package. This page applies to all of them.
 
 The A11y view shows you what assistive technology actually perceives — screen readers, voice control software, switch devices, and the browser's own accessibility APIs. Not what you wrote in HTML, but what users with disabilities actually experience when they interact with your page.
 

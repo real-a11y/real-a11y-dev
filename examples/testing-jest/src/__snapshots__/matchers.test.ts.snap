@@ -1,0 +1,9 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`a11ySnapshot serializer under Jest renders the semantic tree into toMatchSnapshot() 1`] = `
+  main
+    heading "Sign in" (level 1)
+    form "Sign-in form"
+      textbox "Email"
+      button "Sign in"
+`;
