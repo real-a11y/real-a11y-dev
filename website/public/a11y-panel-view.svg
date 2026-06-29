@@ -1,0 +1,163 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 520" role="img" aria-label="Accessibility tree panel showing the same website content as an indented tree with roles, accessible names, states, and action badges, as seen in the Real A11y chrome extension.">
+  <title>A11y Panel View — What the extension shows</title>
+  <style>
+    .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+    .role { font-weight: 600; fill: #92400e; font-size: 13px; }
+    .name { fill: #047857; font-size: 13px; }
+    .value { fill: #047857; font-size: 13px; }
+    .bullet { fill: #6b7280; font-size: 10px; }
+    .badge-action { font-size: 9px; font-weight: 600; fill: #1e40af; letter-spacing: 0.5px; }
+    .badge-state { font-size: 9px; font-weight: 600; fill: #c2410c; letter-spacing: 0.5px; }
+    .badge-level { font-size: 9px; font-weight: 700; fill: hsl(221, 83%, 53%); letter-spacing: 0.3px; }
+  </style>
+
+  <!-- Panel background -->
+  <rect width="620" height="520" rx="10" fill="#ffffff" stroke="#e5e7eb" stroke-width="1.5"/>
+
+  <!-- Title bar -->
+  <rect width="620" height="36" rx="10" fill="#f9fafb" stroke="#e5e7eb" stroke-width="1"/>
+  <rect y="26" width="620" height="10" fill="#f9fafb"/>
+  <text x="20" y="23" class="mono" font-size="12" font-weight="600" fill="#374151">A11y Tree</text>
+  <line x1="0" y1="36" x2="620" y2="36" stroke="#e5e7eb" stroke-width="1"/>
+
+  <!-- Row 1: document -->
+  <g transform="translate(0, 42)">
+    <text x="16" y="16" class="mono bullet">·</text>
+    <text x="28" y="16" class="mono role">document</text>
+  </g>
+
+  <!-- Row 2: link "Skip to main content" NAVIGATE -->
+  <g transform="translate(0, 68)">
+    <text x="48" y="16" class="mono role">link</text>
+    <text x="78" y="16" class="mono name">"Skip to main content"</text>
+    <rect x="260" y="4" width="65" height="16" rx="3" fill="#dbeafe"/>
+    <text x="292" y="15" text-anchor="middle" class="mono badge-action">NAVIGATE</text>
+  </g>
+
+  <!-- Row 3: banner -->
+  <g transform="translate(0, 94)">
+    <text x="36" y="16" class="mono bullet">·</text>
+    <text x="48" y="16" class="mono role">banner</text>
+  </g>
+
+  <!-- Row 4: main -->
+  <g transform="translate(0, 120)">
+    <text x="36" y="16" class="mono bullet">·</text>
+    <text x="48" y="16" class="mono role">main</text>
+  </g>
+
+  <!-- Row 5: heading H1 "Let's work together" -->
+  <g transform="translate(0, 146)">
+    <text x="68" y="16" class="mono role">heading</text>
+    <rect x="126" y="4" width="22" height="16" rx="3" fill="hsla(221, 83%, 53%, 0.1)" stroke="hsla(221, 83%, 53%, 0.2)" stroke-width="1"/>
+    <text x="137" y="15" text-anchor="middle" class="mono badge-level">H1</text>
+    <text x="156" y="16" class="mono name">"Let's work together"</text>
+  </g>
+
+  <!-- Row 6: paragraph "Tell me what you're working on..." -->
+  <g transform="translate(0, 172)">
+    <text x="68" y="16" class="mono role">paragraph</text>
+    <text x="142" y="16" class="mono name">"Tell me what you're working on and how I can hel…"</text>
+  </g>
+
+  <!-- Row 7: form "Let's work together" -->
+  <g transform="translate(0, 198)">
+    <text x="56" y="16" class="mono bullet">·</text>
+    <text x="68" y="16" class="mono role">form</text>
+    <text x="104" y="16" class="mono name">"Let's work together"</text>
+  </g>
+
+  <!-- Row 8: textbox "Your name" = "Juan Crisostomo" required TYPE -->
+  <g transform="translate(0, 224)">
+    <text x="88" y="16" class="mono role">textbox</text>
+    <text x="148" y="16" class="mono name">"Your name"</text>
+    <text x="237" y="16" class="mono" font-size="13" fill="#6b7280"> = </text>
+    <text x="258" y="16" class="mono value">"Juan Crisostomo"</text>
+    <rect x="392" y="4" width="56" height="16" rx="3" fill="#fff7ed"/>
+    <text x="420" y="15" text-anchor="middle" class="mono badge-state">required</text>
+    <rect x="454" y="4" width="36" height="16" rx="3" fill="#dbeafe"/>
+    <text x="472" y="15" text-anchor="middle" class="mono badge-action">TYPE</text>
+  </g>
+
+  <!-- Row 9: textbox "Work email" = "juan.crisostomo..." required TYPE -->
+  <g transform="translate(0, 250)">
+    <text x="88" y="16" class="mono role">textbox</text>
+    <text x="148" y="16" class="mono name">"Work email"</text>
+    <text x="246" y="16" class="mono" font-size="13" fill="#6b7280"> = </text>
+    <text x="267" y="16" class="mono value">"juan.crisostomo…"</text>
+    <rect x="410" y="4" width="56" height="16" rx="3" fill="#fff7ed"/>
+    <text x="438" y="15" text-anchor="middle" class="mono badge-state">required</text>
+    <rect x="472" y="4" width="36" height="16" rx="3" fill="#dbeafe"/>
+    <text x="490" y="15" text-anchor="middle" class="mono badge-action">TYPE</text>
+  </g>
+
+  <!-- Row 10: textbox "Product URL" TYPE — SELECTED ROW -->
+  <g transform="translate(0, 276)">
+    <rect x="2" y="0" width="616" height="26" rx="2" fill="#eff6ff" stroke="#3b82f6" stroke-width="1"/>
+    <rect x="2" y="0" width="3" height="26" fill="#3b82f6"/>
+    <text x="88" y="16" class="mono role">textbox</text>
+    <text x="148" y="16" class="mono name">"Product URL"</text>
+    <rect x="256" y="4" width="36" height="16" rx="3" fill="#dbeafe"/>
+    <text x="274" y="15" text-anchor="middle" class="mono badge-action">TYPE</text>
+  </g>
+
+  <!-- Row 11: textbox "Tell me about your request" required TYPE -->
+  <g transform="translate(0, 302)">
+    <text x="88" y="16" class="mono role">textbox</text>
+    <text x="148" y="16" class="mono name">"Tell me about your request"</text>
+    <rect x="370" y="4" width="56" height="16" rx="3" fill="#fff7ed"/>
+    <text x="398" y="15" text-anchor="middle" class="mono badge-state">required</text>
+    <rect x="432" y="4" width="36" height="16" rx="3" fill="#dbeafe"/>
+    <text x="450" y="15" text-anchor="middle" class="mono badge-action">TYPE</text>
+  </g>
+
+  <!-- Row 12: button "Send message" CLICK -->
+  <g transform="translate(0, 328)">
+    <text x="88" y="16" class="mono role">button</text>
+    <text x="142" y="16" class="mono name">"Send message"</text>
+    <rect x="260" y="4" width="40" height="16" rx="3" fill="#dbeafe"/>
+    <text x="280" y="15" text-anchor="middle" class="mono badge-action">CLICK</text>
+  </g>
+
+  <!-- Row 13: paragraph "Prefer to talk directly?" -->
+  <g transform="translate(0, 354)">
+    <text x="56" y="16" class="mono bullet">·</text>
+    <text x="68" y="16" class="mono role">paragraph</text>
+    <text x="142" y="16" class="mono name">"Prefer to talk directly?"</text>
+  </g>
+
+  <!-- Row 14: contentinfo -->
+  <g transform="translate(0, 380)">
+    <text x="36" y="16" class="mono bullet">·</text>
+    <text x="48" y="16" class="mono role">contentinfo</text>
+  </g>
+
+  <!-- Row 15: link "Real A11y – go to home" NAVIGATE -->
+  <g transform="translate(0, 406)">
+    <text x="68" y="16" class="mono role">link</text>
+    <text x="98" y="16" class="mono name">"Real A11y – go to home"</text>
+    <rect x="300" y="4" width="65" height="16" rx="3" fill="#dbeafe"/>
+    <text x="332" y="15" text-anchor="middle" class="mono badge-action">NAVIGATE</text>
+  </g>
+
+  <!-- Row 16: paragraph "Real accessibility for product teams." -->
+  <g transform="translate(0, 432)">
+    <text x="68" y="16" class="mono role">paragraph</text>
+    <text x="142" y="16" class="mono name">"Real accessibility for product teams."</text>
+  </g>
+
+  <!-- Row 17: navigation "Footer navigation" -->
+  <g transform="translate(0, 458)">
+    <text x="56" y="16" class="mono bullet">·</text>
+    <text x="68" y="16" class="mono role">navigation</text>
+    <text x="152" y="16" class="mono name">"Footer navigation"</text>
+  </g>
+
+  <!-- Row 18: link "Services" NAVIGATE -->
+  <g transform="translate(0, 484)">
+    <text x="88" y="16" class="mono role">link</text>
+    <text x="118" y="16" class="mono name">"Services"</text>
+    <rect x="198" y="4" width="65" height="16" rx="3" fill="#dbeafe"/>
+    <text x="230" y="15" text-anchor="middle" class="mono badge-action">NAVIGATE</text>
+  </g>
+</svg>
