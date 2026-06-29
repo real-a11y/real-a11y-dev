@@ -36,28 +36,37 @@
 36. link "Architecture"
 37. link "Troubleshooting"
 38. link "What you see"
-39. link "How tab order works"
+39. link "How heading levels work"
 40. link "What to check"
 41. link "Common patterns and what they look like"
-42. link "The relationship to the A11y view"
-43. link "Permalink to "Reading the TAB View""
-44. link "tabSequenceSnapshot()"
+42. link "The relationship to the other views"
+43. link "Permalink to "Reading the Headings View""
+44. link "outlineSnapshot()"
 45. link "Permalink to "What you see""
-46. link "Permalink to "How tab order works""
+46. link "Permalink to "How heading levels work""
 47. link "Permalink to "What to check""
-48. link "Permalink to "Order matches the visual flow""
-49. link "Permalink to "Every interactive element is reachable""
-50. link "Permalink to "Nothing unreachable appears in the list""
-51. link "Permalink to "Amber badges — positive tabindex""
-52. link "Permalink to "Focus traps inside modals and dialogs""
-53. link "Permalink to "Common patterns and what they look like""
-54. button "Copy Code"
-55. generic
-56. button "Copy Code"
-57. generic
-58. button "Copy Code"
-59. generic
-60. link "Permalink to "The relationship to the A11y view""
-61. link "Edit this page on GitHub"
-62. link "Previous pageHeadings View"
-63. link "Next pagePanel features"
+48. link "Permalink to "Exactly one H1""
+49. button "Copy Code"
+50. generic
+51. link "Permalink to "No skipped levels""
+52. button "Copy Code"
+53. generic
+54. link "Permalink to "Headings that aren't headings""
+55. button "Copy Code"
+56. generic
+57. link "Permalink to "Missing headings""
+58. link "Permalink to "Headings inside interactive elements""
+59. button "Copy Code"
+60. generic
+61. link "Permalink to "Common patterns and what they look like""
+62. button "Copy Code"
+63. generic
+64. button "Copy Code"
+65. generic
+66. button "Copy Code"
+67. generic
+68. link "Permalink to "The relationship to the other views""
+69. table
+70. link "Edit this page on GitHub"
+71. link "Previous pageA11y View"
+72. link "Next pageTAB View"

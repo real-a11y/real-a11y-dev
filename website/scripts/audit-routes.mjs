@@ -20,6 +20,7 @@ export const ROUTES = [
   "/guide/understanding-the-views",
   "/guide/reading-the-dom-view",
   "/guide/reading-the-a11y-view",
+  "/guide/reading-the-headings-view",
   "/guide/reading-the-tab-view",
   "/guide/chrome-extension",
   "/guide/ci-diff-bot",

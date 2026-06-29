@@ -1,0 +1,18 @@
+  h2 Introduction
+  h2 Reading the Tree
+  h2 Chrome Extension
+  h2 Packages
+  h2 Recipes
+  h2 Reference
+  h2 On this page
+h1 Reading the Headings View
+  h2 What you see
+  h2 How heading levels work
+  h2 What to check
+    h3 Exactly one H1
+    h3 No skipped levels
+    h3 Headings that aren't headings
+    h3 Missing headings
+    h3 Headings inside interactive elements
+  h2 Common patterns and what they look like
+  h2 The relationship to the other views

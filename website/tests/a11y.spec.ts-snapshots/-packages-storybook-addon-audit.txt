@@ -27,6 +27,8 @@
         paragraph "DOM View"
       link "A11y View"
         paragraph "A11y View"
+      link "Headings View"
+        paragraph "Headings View"
       link "TAB View"
         paragraph "TAB View"
       link "Panel features"
