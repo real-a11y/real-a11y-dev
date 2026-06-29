@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 440" role="img" aria-label="Accessibility tree view: the same website content rearranged as a hierarchical tree, showing how assistive technology reads the page structure in document order.">
+  <title>A11y Tree View — How assistive technology reads the page</title>
+
+  <!-- Background -->
+  <rect width="600" height="440" rx="12" fill="#f8f7fc" stroke="#d8d0eb" stroke-width="1.5"/>
+
+  <!-- Title -->
+  <text x="300" y="32" text-anchor="middle" font-family="system-ui, sans-serif" font-size="15" font-weight="600" fill="#4c1d95">Accessibility Tree View</text>
+
+  <!-- Root node: document -->
+  <rect x="230" y="50" width="140" height="32" rx="6" fill="#6d28d9"/>
+  <text x="300" y="71" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="#ffffff">document</text>
+
+  <!-- Connector: document to children -->
+  <line x1="300" y1="82" x2="300" y2="98" stroke="#c4b5fd" stroke-width="1.5"/>
+  <!-- Horizontal connector spanning all L1 children -->
+  <line x1="80" y1="98" x2="520" y2="98" stroke="#c4b5fd" stroke-width="1.5"/>
+
+  <!-- L1: banner (header) -->
+  <line x1="80" y1="98" x2="80" y2="108" stroke="#c4b5fd" stroke-width="1.5"/>
+  <rect x="24" y="108" width="112" height="30" rx="6" fill="#6d28d9"/>
+  <text x="80" y="127" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#ffffff">banner</text>
+  <text x="80" y="148" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="#7c3aed">Header</text>
+
+  <!-- L1: navigation -->
+  <line x1="210" y1="98" x2="210" y2="108" stroke="#c4b5fd" stroke-width="1.5"/>
+  <rect x="154" y="108" width="112" height="30" rx="6" fill="#8b5cf6"/>
+  <text x="210" y="127" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#ffffff">navigation</text>
+  <text x="210" y="148" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="#7c3aed">Nav</text>
+
+  <!-- L1: main -->
+  <line x1="370" y1="98" x2="370" y2="108" stroke="#c4b5fd" stroke-width="1.5"/>
+  <rect x="314" y="108" width="112" height="30" rx="6" fill="#a78bfa"/>
+  <text x="370" y="127" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#ffffff">main</text>
+  <text x="370" y="148" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="#7c3aed">Main Content</text>
+
+  <!-- L1: complementary (aside) -->
+  <line x1="520" y1="98" x2="520" y2="108" stroke="#c4b5fd" stroke-width="1.5"/>
+  <rect x="448" y="108" width="140" height="30" rx="6" fill="#c4b5fd"/>
+  <text x="518" y="127" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#4c1d95">complementary</text>
+  <text x="518" y="148" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="#7c3aed">Aside</text>
+
+  <!-- L2 children of navigation -->
+  <line x1="210" y1="138" x2="210" y2="164" stroke="#c4b5fd" stroke-width="1.5"/>
+  <line x1="150" y1="164" x2="270" y2="164" stroke="#c4b5fd" stroke-width="1.5"/>
+
+  <line x1="150" y1="164" x2="150" y2="174" stroke="#c4b5fd" stroke-width="1.5"/>
+  <rect x="110" y="174" width="80" height="24" rx="5" fill="#ddd6fe"/>
+  <text x="150" y="190" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#4c1d95">link</text>
+
+  <line x1="210" y1="164" x2="210" y2="174" stroke="#c4b5fd" stroke-width="1.5"/>
+  <rect x="170" y="204" width="80" height="24" rx="5" fill="#ddd6fe"/>
+  <text x="210" y="220" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#4c1d95">link</text>
+
+  <line x1="270" y1="164" x2="270" y2="174" stroke="#c4b5fd" stroke-width="1.5"/>
+  <rect x="230" y="174" width="80" height="24" rx="5" fill="#ddd6fe"/>
+  <text x="270" y="190" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#4c1d95">link</text>
+
+  <!-- L2 children of main -->
+  <line x1="370" y1="138" x2="370" y2="164" stroke="#c4b5fd" stroke-width="1.5"/>
+  <line x1="330" y1="164" x2="470" y2="164" stroke="#c4b5fd" stroke-width="1.5"/>
+
+  <!-- heading -->
+  <line x1="330" y1="164" x2="330" y2="174" stroke="#c4b5fd" stroke-width="1.5"/>
+  <rect x="284" y="174" width="92" height="24" rx="5" fill="#ddd6fe"/>
+  <text x="330" y="190" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#4c1d95">heading h2</text>
+
+  <!-- paragraph -->
+  <line x1="400" y1="164" x2="400" y2="174" stroke="#c4b5fd" stroke-width="1.5"/>
+  <rect x="356" y="204" width="88" height="24" rx="5" fill="#ddd6fe"/>
+  <text x="400" y="220" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#4c1d95">paragraph</text>
+
+  <!-- button -->
+  <line x1="470" y1="164" x2="470" y2="174" stroke="#c4b5fd" stroke-width="1.5"/>
+  <rect x="432" y="174" width="76" height="24" rx="5" fill="#ddd6fe"/>
+  <text x="470" y="190" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#4c1d95">button</text>
+
+  <!-- L1: contentinfo (footer) — on its own row -->
+  <line x1="300" y1="98" x2="300" y2="98" stroke="#c4b5fd" stroke-width="0"/>
+
+  <!-- Footer node, lower position -->
+  <rect x="220" y="260" width="160" height="30" rx="6" fill="#7c3aed"/>
+  <text x="300" y="279" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#ffffff">contentinfo</text>
+  <text x="300" y="300" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="#7c3aed">Footer</text>
+
+  <!-- Connector from horizontal bar down to footer -->
+  <line x1="300" y1="98" x2="300" y2="98" stroke="#c4b5fd" stroke-width="1.5"/>
+  <!-- We need a vertical line from the horizontal bar to the footer -->
+  <line x1="300" y1="138" x2="300" y2="260" stroke="#c4b5fd" stroke-width="1.5" stroke-dasharray="4,3"/>
+
+  <!-- Legend box -->
+  <rect x="24" y="330" width="552" height="90" rx="8" fill="#ede9f6" stroke="#d8d0eb" stroke-width="1"/>
+  <text x="300" y="352" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="#4c1d95">Same content, different structure</text>
+  <text x="300" y="372" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" fill="#6b7280">Sighted users see a 2D spatial layout.</text>
+  <text x="300" y="390" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" fill="#6b7280">Assistive technology reads a hierarchical tree in document order.</text>
+  <text x="300" y="410" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#6d28d9">Both must represent the same meaning.</text>
+</svg>

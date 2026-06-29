@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 440" role="img" aria-label="Visual view: a website layout as sighted users see it, with a header bar at top, navigation sidebar on the left, main content area in the center, and a footer at the bottom.">
+  <title>Visual View — How sighted users see the page</title>
+
+  <!-- Background -->
+  <rect width="600" height="440" rx="12" fill="#f8f7fc" stroke="#d8d0eb" stroke-width="1.5"/>
+
+  <!-- Title -->
+  <text x="300" y="32" text-anchor="middle" font-family="system-ui, sans-serif" font-size="15" font-weight="600" fill="#4c1d95">Visual View</text>
+
+  <!-- Browser chrome hint -->
+  <rect x="24" y="48" width="552" height="24" rx="6" fill="#ede9f6"/>
+  <circle cx="40" cy="60" r="4" fill="#c4b5fd"/>
+  <circle cx="54" cy="60" r="4" fill="#c4b5fd"/>
+  <circle cx="68" cy="60" r="4" fill="#c4b5fd"/>
+  <rect x="90" y="54" width="200" height="12" rx="3" fill="#ddd6fe"/>
+
+  <!-- Page area -->
+  <rect x="24" y="80" width="552" height="340" rx="0" fill="#ffffff" stroke="#d8d0eb" stroke-width="1"/>
+
+  <!-- Header -->
+  <rect x="36" y="92" width="528" height="48" rx="6" fill="#6d28d9"/>
+  <text x="60" y="121" font-family="system-ui, sans-serif" font-size="13" font-weight="600" fill="#ffffff">Header</text>
+  <rect x="340" y="106" width="40" height="20" rx="3" fill="rgba(255,255,255,0.2)"/>
+  <rect x="390" y="106" width="40" height="20" rx="3" fill="rgba(255,255,255,0.2)"/>
+  <rect x="440" y="106" width="40" height="20" rx="3" fill="rgba(255,255,255,0.2)"/>
+  <rect x="490" y="106" width="60" height="20" rx="3" fill="rgba(255,255,255,0.2)"/>
+
+  <!-- Nav sidebar -->
+  <rect x="36" y="152" width="120" height="216" rx="6" fill="#8b5cf6"/>
+  <text x="96" y="176" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="#ffffff">Nav</text>
+  <rect x="48" y="190" width="96" height="14" rx="3" fill="rgba(255,255,255,0.25)"/>
+  <rect x="48" y="212" width="96" height="14" rx="3" fill="rgba(255,255,255,0.25)"/>
+  <rect x="48" y="234" width="96" height="14" rx="3" fill="rgba(255,255,255,0.25)"/>
+  <rect x="48" y="256" width="96" height="14" rx="3" fill="rgba(255,255,255,0.25)"/>
+  <rect x="48" y="278" width="96" height="14" rx="3" fill="rgba(255,255,255,0.25)"/>
+
+  <!-- Main content -->
+  <rect x="168" y="152" width="264" height="216" rx="6" fill="#a78bfa"/>
+  <text x="300" y="176" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="#ffffff">Main Content</text>
+  <rect x="184" y="192" width="232" height="10" rx="2" fill="rgba(255,255,255,0.25)"/>
+  <rect x="184" y="210" width="232" height="10" rx="2" fill="rgba(255,255,255,0.25)"/>
+  <rect x="184" y="228" width="180" height="10" rx="2" fill="rgba(255,255,255,0.25)"/>
+  <rect x="184" y="258" width="232" height="10" rx="2" fill="rgba(255,255,255,0.25)"/>
+  <rect x="184" y="276" width="232" height="10" rx="2" fill="rgba(255,255,255,0.25)"/>
+  <rect x="184" y="294" width="140" height="10" rx="2" fill="rgba(255,255,255,0.25)"/>
+  <!-- Button in main -->
+  <rect x="184" y="320" width="80" height="28" rx="5" fill="rgba(255,255,255,0.35)"/>
+  <text x="224" y="339" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#ffffff">Button</text>
+
+  <!-- Aside -->
+  <rect x="444" y="152" width="120" height="216" rx="6" fill="#c4b5fd"/>
+  <text x="504" y="176" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="#4c1d95">Aside</text>
+  <rect x="456" y="194" width="96" height="60" rx="4" fill="rgba(109,40,217,0.12)"/>
+  <rect x="456" y="264" width="96" height="60" rx="4" fill="rgba(109,40,217,0.12)"/>
+
+  <!-- Footer -->
+  <rect x="36" y="380" width="528" height="28" rx="6" fill="#7c3aed"/>
+  <text x="300" y="399" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="#ffffff">Footer</text>
+</svg>
