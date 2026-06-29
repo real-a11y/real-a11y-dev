@@ -1,84 +1,133 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 360" role="img" aria-label="Tab order view: only the focusable elements from the page, shown as numbered colored rectangles in the order a keyboard user would reach them.">
-  <title>Tab Order View — Keyboard navigation path through the page</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 440" role="img" aria-label="Tab order view: only the focusable elements from the page shown as numbered colored bars, using the same element colors as the visual view, in the order a keyboard user reaches them.">
+  <title>Tab Order View — Keyboard navigation path</title>
 
   <!-- Background -->
-  <rect width="520" height="360" rx="12" fill="#f8f7fc" stroke="#d8d0eb" stroke-width="1.5"/>
+  <rect width="540" height="440" rx="12" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
 
   <!-- Title -->
-  <text x="260" y="30" text-anchor="middle" font-family="system-ui, sans-serif" font-size="15" font-weight="600" fill="#4c1d95">Tab Order View</text>
+  <text x="270" y="28" text-anchor="middle" font-family="system-ui, sans-serif" font-size="15" font-weight="600" fill="#1e293b">Tab Order View</text>
 
-  <!-- Tab 1: Skip link -->
-  <g transform="translate(24, 48)">
-    <rect width="472" height="26" rx="5" fill="#6d28d9"/>
-    <circle cx="-1" cy="13" r="11" fill="#4c1d95" stroke="#f8f7fc" stroke-width="2"/>
-    <text x="-1" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff">1</text>
-    <rect x="16" y="5" width="130" height="16" rx="3" fill="rgba(255,255,255,0.2)"/>
-    <text x="26" y="17" font-family="system-ui, sans-serif" font-size="10" fill="rgba(255,255,255,0.8)">skip to content</text>
+  <!-- Tab 1: link (from banner) — sky on blue bg hint -->
+  <g transform="translate(20, 44)">
+    <rect x="20" y="0" width="480" height="26" rx="5" fill="#0ea5e9"/>
+    <circle cx="8" cy="13" r="12" fill="#0369a1" stroke="#f8fafc" stroke-width="2"/>
+    <text x="8" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff">1</text>
+    <rect x="36" y="6" width="160" height="14" rx="3" fill="rgba(255,255,255,0.25)"/>
+    <text x="46" y="17" font-family="system-ui, sans-serif" font-size="10" fill="#ffffff">link</text>
+    <rect x="420" y="5" width="60" height="16" rx="3" fill="rgba(14,105,161,0.4)"/>
+    <text x="450" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="8" font-weight="600" fill="#ffffff">banner</text>
   </g>
 
-  <!-- Tab 2: Header nav link -->
-  <g transform="translate(24, 84)">
-    <rect width="472" height="26" rx="5" fill="#6d28d9" fill-opacity="0.85"/>
-    <circle cx="-1" cy="13" r="11" fill="#4c1d95" stroke="#f8f7fc" stroke-width="2"/>
-    <text x="-1" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff">2</text>
-    <rect x="16" y="5" width="90" height="16" rx="3" fill="rgba(255,255,255,0.2)"/>
-    <text x="26" y="17" font-family="system-ui, sans-serif" font-size="10" fill="rgba(255,255,255,0.8)">link</text>
+  <!-- Tab 2: link (from banner) -->
+  <g transform="translate(20, 78)">
+    <rect x="20" y="0" width="480" height="26" rx="5" fill="#0ea5e9"/>
+    <circle cx="8" cy="13" r="12" fill="#0369a1" stroke="#f8fafc" stroke-width="2"/>
+    <text x="8" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff">2</text>
+    <rect x="36" y="6" width="100" height="14" rx="3" fill="rgba(255,255,255,0.25)"/>
+    <text x="46" y="17" font-family="system-ui, sans-serif" font-size="10" fill="#ffffff">link</text>
+    <rect x="420" y="5" width="60" height="16" rx="3" fill="rgba(14,105,161,0.4)"/>
+    <text x="450" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="8" font-weight="600" fill="#ffffff">banner</text>
   </g>
 
-  <!-- Tab 3: Nav link -->
-  <g transform="translate(24, 120)">
-    <rect width="472" height="26" rx="5" fill="#8b5cf6"/>
-    <circle cx="-1" cy="13" r="11" fill="#5b21b6" stroke="#f8f7fc" stroke-width="2"/>
-    <text x="-1" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff">3</text>
-    <rect x="16" y="5" width="90" height="16" rx="3" fill="rgba(255,255,255,0.25)"/>
-    <text x="26" y="17" font-family="system-ui, sans-serif" font-size="10" fill="rgba(255,255,255,0.8)">link</text>
+  <!-- Tab 3: link (from nav) -->
+  <g transform="translate(20, 112)">
+    <rect x="20" y="0" width="480" height="26" rx="5" fill="#0ea5e9" fill-opacity="0.85"/>
+    <circle cx="8" cy="13" r="12" fill="#0369a1" stroke="#f8fafc" stroke-width="2"/>
+    <text x="8" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff">3</text>
+    <rect x="36" y="6" width="100" height="14" rx="3" fill="rgba(255,255,255,0.25)"/>
+    <text x="46" y="17" font-family="system-ui, sans-serif" font-size="10" fill="#ffffff">link</text>
+    <rect x="420" y="5" width="60" height="16" rx="3" fill="rgba(14,105,161,0.4)"/>
+    <text x="450" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="8" font-weight="600" fill="#ffffff">nav</text>
   </g>
 
-  <!-- Tab 4: Nav link -->
-  <g transform="translate(24, 152)">
-    <rect width="472" height="26" rx="5" fill="#8b5cf6" fill-opacity="0.85"/>
-    <circle cx="-1" cy="13" r="11" fill="#5b21b6" stroke="#f8f7fc" stroke-width="2"/>
-    <text x="-1" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff">4</text>
-    <rect x="16" y="5" width="90" height="16" rx="3" fill="rgba(255,255,255,0.25)"/>
-    <text x="26" y="17" font-family="system-ui, sans-serif" font-size="10" fill="rgba(255,255,255,0.8)">link</text>
+  <!-- Tab 4: link (from nav) -->
+  <g transform="translate(20, 146)">
+    <rect x="20" y="0" width="480" height="26" rx="5" fill="#0ea5e9" fill-opacity="0.85"/>
+    <circle cx="8" cy="13" r="12" fill="#0369a1" stroke="#f8fafc" stroke-width="2"/>
+    <text x="8" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff">4</text>
+    <rect x="36" y="6" width="100" height="14" rx="3" fill="rgba(255,255,255,0.25)"/>
+    <text x="46" y="17" font-family="system-ui, sans-serif" font-size="10" fill="#ffffff">link</text>
+    <rect x="420" y="5" width="60" height="16" rx="3" fill="rgba(14,105,161,0.4)"/>
+    <text x="450" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="8" font-weight="600" fill="#ffffff">nav</text>
   </g>
 
-  <!-- Tab 5: Textbox from main -->
-  <g transform="translate(24, 188)">
-    <rect width="472" height="26" rx="5" fill="#a78bfa"/>
-    <circle cx="-1" cy="13" r="11" fill="#6d28d9" stroke="#f8f7fc" stroke-width="2"/>
-    <text x="-1" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff">5</text>
-    <rect x="16" y="4" width="200" height="18" rx="3" fill="rgba(255,255,255,0.3)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
-    <text x="26" y="17" font-family="system-ui, sans-serif" font-size="10" fill="rgba(255,255,255,0.8)">textbox</text>
+  <!-- Tab 5: link (from nav) -->
+  <g transform="translate(20, 180)">
+    <rect x="20" y="0" width="480" height="26" rx="5" fill="#0ea5e9" fill-opacity="0.85"/>
+    <circle cx="8" cy="13" r="12" fill="#0369a1" stroke="#f8fafc" stroke-width="2"/>
+    <text x="8" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff">5</text>
+    <rect x="36" y="6" width="100" height="14" rx="3" fill="rgba(255,255,255,0.25)"/>
+    <text x="46" y="17" font-family="system-ui, sans-serif" font-size="10" fill="#ffffff">link</text>
+    <rect x="420" y="5" width="60" height="16" rx="3" fill="rgba(14,105,161,0.4)"/>
+    <text x="450" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="8" font-weight="600" fill="#ffffff">nav</text>
   </g>
 
-  <!-- Tab 6: Textbox from main -->
-  <g transform="translate(24, 220)">
-    <rect width="472" height="26" rx="5" fill="#a78bfa" fill-opacity="0.85"/>
-    <circle cx="-1" cy="13" r="11" fill="#6d28d9" stroke="#f8f7fc" stroke-width="2"/>
-    <text x="-1" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff">6</text>
-    <rect x="16" y="4" width="200" height="18" rx="3" fill="rgba(255,255,255,0.3)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
-    <text x="26" y="17" font-family="system-ui, sans-serif" font-size="10" fill="rgba(255,255,255,0.8)">textbox</text>
+  <!-- Tab 6: input (from main) — rose -->
+  <g transform="translate(20, 214)">
+    <rect x="20" y="0" width="480" height="26" rx="5" fill="#f43f5e"/>
+    <circle cx="8" cy="13" r="12" fill="#be123c" stroke="#f8fafc" stroke-width="2"/>
+    <text x="8" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff">6</text>
+    <rect x="36" y="4" width="200" height="18" rx="3" fill="rgba(255,255,255,0.2)" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+    <text x="46" y="17" font-family="system-ui, sans-serif" font-size="10" fill="#ffffff">input</text>
+    <rect x="420" y="5" width="60" height="16" rx="3" fill="rgba(190,18,60,0.4)"/>
+    <text x="450" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="8" font-weight="600" fill="#ffffff">main</text>
   </g>
 
-  <!-- Tab 7: Button from main -->
-  <g transform="translate(24, 256)">
-    <rect width="472" height="28" rx="5" fill="#a78bfa" fill-opacity="0.75"/>
-    <circle cx="-1" cy="14" r="11" fill="#6d28d9" stroke="#f8f7fc" stroke-width="2"/>
-    <text x="-1" y="18" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff">7</text>
-    <rect x="16" y="5" width="100" height="20" rx="4" fill="rgba(255,255,255,0.35)"/>
-    <text x="26" y="19" font-family="system-ui, sans-serif" font-size="10" fill="rgba(255,255,255,0.9)">button</text>
+  <!-- Tab 7: input (from main) -->
+  <g transform="translate(20, 248)">
+    <rect x="20" y="0" width="480" height="26" rx="5" fill="#f43f5e" fill-opacity="0.9"/>
+    <circle cx="8" cy="13" r="12" fill="#be123c" stroke="#f8fafc" stroke-width="2"/>
+    <text x="8" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff">7</text>
+    <rect x="36" y="4" width="200" height="18" rx="3" fill="rgba(255,255,255,0.2)" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+    <text x="46" y="17" font-family="system-ui, sans-serif" font-size="10" fill="#ffffff">input</text>
+    <rect x="420" y="5" width="60" height="16" rx="3" fill="rgba(190,18,60,0.4)"/>
+    <text x="450" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="8" font-weight="600" fill="#ffffff">main</text>
   </g>
 
-  <!-- Tab 8: Footer link -->
-  <g transform="translate(24, 294)">
-    <rect width="472" height="26" rx="5" fill="#7c3aed"/>
-    <circle cx="-1" cy="13" r="11" fill="#4c1d95" stroke="#f8f7fc" stroke-width="2"/>
-    <text x="-1" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff">8</text>
-    <rect x="16" y="5" width="90" height="16" rx="3" fill="rgba(255,255,255,0.2)"/>
-    <text x="26" y="17" font-family="system-ui, sans-serif" font-size="10" fill="rgba(255,255,255,0.8)">link</text>
+  <!-- Tab 8: button (from main) — green -->
+  <g transform="translate(20, 282)">
+    <rect x="20" y="0" width="480" height="28" rx="5" fill="#10b981"/>
+    <circle cx="8" cy="14" r="12" fill="#047857" stroke="#f8fafc" stroke-width="2"/>
+    <text x="8" y="18" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff">8</text>
+    <rect x="36" y="5" width="100" height="18" rx="4" fill="rgba(255,255,255,0.25)"/>
+    <text x="46" y="18" font-family="system-ui, sans-serif" font-size="10" fill="#ffffff">button</text>
+    <rect x="420" y="5" width="60" height="16" rx="3" fill="rgba(4,120,87,0.4)"/>
+    <text x="450" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="8" font-weight="600" fill="#ffffff">main</text>
+  </g>
+
+  <!-- Tab 9: link (from aside) — sky -->
+  <g transform="translate(20, 318)">
+    <rect x="20" y="0" width="480" height="26" rx="5" fill="#0ea5e9" fill-opacity="0.8"/>
+    <circle cx="8" cy="13" r="12" fill="#0369a1" stroke="#f8fafc" stroke-width="2"/>
+    <text x="8" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff">9</text>
+    <rect x="36" y="6" width="130" height="14" rx="3" fill="rgba(255,255,255,0.25)"/>
+    <text x="46" y="17" font-family="system-ui, sans-serif" font-size="10" fill="#ffffff">link</text>
+    <rect x="420" y="5" width="60" height="16" rx="3" fill="rgba(14,105,161,0.4)"/>
+    <text x="450" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="8" font-weight="600" fill="#ffffff">aside</text>
+  </g>
+
+  <!-- Tab 10: link (from aside) -->
+  <g transform="translate(20, 352)">
+    <rect x="20" y="0" width="480" height="26" rx="5" fill="#0ea5e9" fill-opacity="0.8"/>
+    <circle cx="8" cy="13" r="12" fill="#0369a1" stroke="#f8fafc" stroke-width="2"/>
+    <text x="8" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff">10</text>
+    <rect x="36" y="6" width="80" height="14" rx="3" fill="rgba(255,255,255,0.25)"/>
+    <text x="46" y="17" font-family="system-ui, sans-serif" font-size="10" fill="#ffffff">link</text>
+    <rect x="420" y="5" width="60" height="16" rx="3" fill="rgba(14,105,161,0.4)"/>
+    <text x="450" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="8" font-weight="600" fill="#ffffff">aside</text>
+  </g>
+
+  <!-- Tab 11: link (from footer) -->
+  <g transform="translate(20, 386)">
+    <rect x="20" y="0" width="480" height="26" rx="5" fill="#0ea5e9" fill-opacity="0.75"/>
+    <circle cx="8" cy="13" r="12" fill="#0369a1" stroke="#f8fafc" stroke-width="2"/>
+    <text x="8" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff">11</text>
+    <rect x="36" y="6" width="80" height="14" rx="3" fill="rgba(255,255,255,0.25)"/>
+    <text x="46" y="17" font-family="system-ui, sans-serif" font-size="10" fill="#ffffff">link</text>
+    <rect x="420" y="5" width="60" height="16" rx="3" fill="rgba(14,105,161,0.4)"/>
+    <text x="450" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="8" font-weight="600" fill="#ffffff">footer</text>
   </g>
 
   <!-- Legend -->
-  <text x="260" y="348" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" fill="#6b7280">Keyboard users press Tab to move through focusable elements in this order.</text>
+  <text x="270" y="432" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#64748b">Keyboard users press Tab to move through focusable elements in this order.</text>
 </svg>
