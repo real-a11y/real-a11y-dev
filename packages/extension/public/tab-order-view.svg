@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 360" role="img" aria-label="Tab order view: only the focusable elements from the page, shown as numbered colored rectangles in the order a keyboard user would reach them.">
+  <title>Tab Order View — Keyboard navigation path through the page</title>
+
+  <!-- Background -->
+  <rect width="520" height="360" rx="12" fill="#f8f7fc" stroke="#d8d0eb" stroke-width="1.5"/>
+
+  <!-- Title -->
+  <text x="260" y="30" text-anchor="middle" font-family="system-ui, sans-serif" font-size="15" font-weight="600" fill="#4c1d95">Tab Order View</text>
+
+  <!-- Tab 1: Skip link -->
+  <g transform="translate(24, 48)">
+    <rect width="472" height="26" rx="5" fill="#6d28d9"/>
+    <circle cx="-1" cy="13" r="11" fill="#4c1d95" stroke="#f8f7fc" stroke-width="2"/>
+    <text x="-1" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff">1</text>
+    <rect x="16" y="5" width="130" height="16" rx="3" fill="rgba(255,255,255,0.2)"/>
+    <text x="26" y="17" font-family="system-ui, sans-serif" font-size="10" fill="rgba(255,255,255,0.8)">skip to content</text>
+  </g>
+
+  <!-- Tab 2: Header nav link -->
+  <g transform="translate(24, 84)">
+    <rect width="472" height="26" rx="5" fill="#6d28d9" fill-opacity="0.85"/>
+    <circle cx="-1" cy="13" r="11" fill="#4c1d95" stroke="#f8f7fc" stroke-width="2"/>
+    <text x="-1" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff">2</text>
+    <rect x="16" y="5" width="90" height="16" rx="3" fill="rgba(255,255,255,0.2)"/>
+    <text x="26" y="17" font-family="system-ui, sans-serif" font-size="10" fill="rgba(255,255,255,0.8)">link</text>
+  </g>
+
+  <!-- Tab 3: Nav link -->
+  <g transform="translate(24, 120)">
+    <rect width="472" height="26" rx="5" fill="#8b5cf6"/>
+    <circle cx="-1" cy="13" r="11" fill="#5b21b6" stroke="#f8f7fc" stroke-width="2"/>
+    <text x="-1" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff">3</text>
+    <rect x="16" y="5" width="90" height="16" rx="3" fill="rgba(255,255,255,0.25)"/>
+    <text x="26" y="17" font-family="system-ui, sans-serif" font-size="10" fill="rgba(255,255,255,0.8)">link</text>
+  </g>
+
+  <!-- Tab 4: Nav link -->
+  <g transform="translate(24, 152)">
+    <rect width="472" height="26" rx="5" fill="#8b5cf6" fill-opacity="0.85"/>
+    <circle cx="-1" cy="13" r="11" fill="#5b21b6" stroke="#f8f7fc" stroke-width="2"/>
+    <text x="-1" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff">4</text>
+    <rect x="16" y="5" width="90" height="16" rx="3" fill="rgba(255,255,255,0.25)"/>
+    <text x="26" y="17" font-family="system-ui, sans-serif" font-size="10" fill="rgba(255,255,255,0.8)">link</text>
+  </g>
+
+  <!-- Tab 5: Textbox from main -->
+  <g transform="translate(24, 188)">
+    <rect width="472" height="26" rx="5" fill="#a78bfa"/>
+    <circle cx="-1" cy="13" r="11" fill="#6d28d9" stroke="#f8f7fc" stroke-width="2"/>
+    <text x="-1" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff">5</text>
+    <rect x="16" y="4" width="200" height="18" rx="3" fill="rgba(255,255,255,0.3)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+    <text x="26" y="17" font-family="system-ui, sans-serif" font-size="10" fill="rgba(255,255,255,0.8)">textbox</text>
+  </g>
+
+  <!-- Tab 6: Textbox from main -->
+  <g transform="translate(24, 220)">
+    <rect width="472" height="26" rx="5" fill="#a78bfa" fill-opacity="0.85"/>
+    <circle cx="-1" cy="13" r="11" fill="#6d28d9" stroke="#f8f7fc" stroke-width="2"/>
+    <text x="-1" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff">6</text>
+    <rect x="16" y="4" width="200" height="18" rx="3" fill="rgba(255,255,255,0.3)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+    <text x="26" y="17" font-family="system-ui, sans-serif" font-size="10" fill="rgba(255,255,255,0.8)">textbox</text>
+  </g>
+
+  <!-- Tab 7: Button from main -->
+  <g transform="translate(24, 256)">
+    <rect width="472" height="28" rx="5" fill="#a78bfa" fill-opacity="0.75"/>
+    <circle cx="-1" cy="14" r="11" fill="#6d28d9" stroke="#f8f7fc" stroke-width="2"/>
+    <text x="-1" y="18" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff">7</text>
+    <rect x="16" y="5" width="100" height="20" rx="4" fill="rgba(255,255,255,0.35)"/>
+    <text x="26" y="19" font-family="system-ui, sans-serif" font-size="10" fill="rgba(255,255,255,0.9)">button</text>
+  </g>
+
+  <!-- Tab 8: Footer link -->
+  <g transform="translate(24, 294)">
+    <rect width="472" height="26" rx="5" fill="#7c3aed"/>
+    <circle cx="-1" cy="13" r="11" fill="#4c1d95" stroke="#f8f7fc" stroke-width="2"/>
+    <text x="-1" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff">8</text>
+    <rect x="16" y="5" width="90" height="16" rx="3" fill="rgba(255,255,255,0.2)"/>
+    <text x="26" y="17" font-family="system-ui, sans-serif" font-size="10" fill="rgba(255,255,255,0.8)">link</text>
+  </g>
+
+  <!-- Legend -->
+  <text x="260" y="348" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" fill="#6b7280">Keyboard users press Tab to move through focusable elements in this order.</text>
+</svg>

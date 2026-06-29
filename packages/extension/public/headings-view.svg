@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 320" role="img" aria-label="Headings view: only the heading elements from the page, shown as colored rectangles indented by level, forming the document outline that screen readers use to navigate.">
+  <title>Headings View — Document outline from the page sections</title>
+
+  <!-- Background -->
+  <rect width="520" height="320" rx="12" fill="#f8f7fc" stroke="#d8d0eb" stroke-width="1.5"/>
+
+  <!-- Title -->
+  <text x="260" y="30" text-anchor="middle" font-family="system-ui, sans-serif" font-size="15" font-weight="600" fill="#4c1d95">Headings View</text>
+
+  <!-- H1 — full width, from main content color -->
+  <rect x="24" y="50" width="472" height="32" rx="5" fill="#a78bfa"/>
+  <rect x="24" y="50" width="4" height="32" rx="2" fill="#6d28d9"/>
+  <rect x="36" y="56" width="26" height="20" rx="4" fill="rgba(255,255,255,0.3)"/>
+  <text x="49" y="70" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff">H1</text>
+  <rect x="72" y="60" width="200" height="12" rx="3" fill="rgba(255,255,255,0.3)"/>
+
+  <!-- H2 — indented, slightly narrower -->
+  <rect x="48" y="94" width="448" height="28" rx="5" fill="#c4b5fd"/>
+  <rect x="48" y="94" width="4" height="28" rx="2" fill="#7c3aed"/>
+  <rect x="60" y="99" width="26" height="18" rx="4" fill="rgba(109,40,217,0.15)"/>
+  <text x="73" y="112" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#6d28d9">H2</text>
+  <rect x="96" y="103" width="160" height="10" rx="2" fill="rgba(109,40,217,0.12)"/>
+
+  <!-- H3 — more indented -->
+  <rect x="72" y="130" width="424" height="24" rx="5" fill="#ddd6fe"/>
+  <rect x="72" y="130" width="4" height="24" rx="2" fill="#8b5cf6"/>
+  <rect x="84" y="134" width="26" height="16" rx="4" fill="rgba(109,40,217,0.1)"/>
+  <text x="97" y="146" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" font-weight="700" fill="#7c3aed">H3</text>
+  <rect x="118" y="138" width="120" height="8" rx="2" fill="rgba(109,40,217,0.08)"/>
+
+  <!-- H3 — sibling -->
+  <rect x="72" y="160" width="424" height="24" rx="5" fill="#ddd6fe"/>
+  <rect x="72" y="160" width="4" height="24" rx="2" fill="#8b5cf6"/>
+  <rect x="84" y="164" width="26" height="16" rx="4" fill="rgba(109,40,217,0.1)"/>
+  <text x="97" y="176" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" font-weight="700" fill="#7c3aed">H3</text>
+  <rect x="118" y="168" width="100" height="8" rx="2" fill="rgba(109,40,217,0.08)"/>
+
+  <!-- H3 — sibling -->
+  <rect x="72" y="190" width="424" height="24" rx="5" fill="#ddd6fe"/>
+  <rect x="72" y="190" width="4" height="24" rx="2" fill="#8b5cf6"/>
+  <rect x="84" y="194" width="26" height="16" rx="4" fill="rgba(109,40,217,0.1)"/>
+  <text x="97" y="206" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" font-weight="700" fill="#7c3aed">H3</text>
+  <rect x="118" y="198" width="110" height="8" rx="2" fill="rgba(109,40,217,0.08)"/>
+
+  <!-- H2 — back to level 2 -->
+  <rect x="48" y="222" width="448" height="28" rx="5" fill="#c4b5fd"/>
+  <rect x="48" y="222" width="4" height="28" rx="2" fill="#7c3aed"/>
+  <rect x="60" y="227" width="26" height="18" rx="4" fill="rgba(109,40,217,0.15)"/>
+  <text x="73" y="240" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#6d28d9">H2</text>
+  <rect x="96" y="231" width="140" height="10" rx="2" fill="rgba(109,40,217,0.12)"/>
+
+  <!-- H2 — another -->
+  <rect x="48" y="258" width="448" height="28" rx="5" fill="#c4b5fd"/>
+  <rect x="48" y="258" width="4" height="28" rx="2" fill="#7c3aed"/>
+  <rect x="60" y="263" width="26" height="18" rx="4" fill="rgba(109,40,217,0.15)"/>
+  <text x="73" y="276" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#6d28d9">H2</text>
+  <rect x="96" y="267" width="130" height="10" rx="2" fill="rgba(109,40,217,0.12)"/>
+
+  <!-- Legend -->
+  <text x="260" y="308" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" fill="#6b7280">Screen readers navigate by headings — this is their table of contents.</text>
+</svg>
