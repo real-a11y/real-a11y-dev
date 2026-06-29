@@ -17,6 +17,7 @@ export const ROUTES = [
   "/guide/architecture",
   "/guide/accessible-names",
   "/guide/panel-features",
+  "/guide/understanding-the-views",
   "/guide/reading-the-dom-view",
   "/guide/reading-the-a11y-view",
   "/guide/reading-the-tab-view",

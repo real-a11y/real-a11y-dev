@@ -18,7 +18,7 @@ This is the most important view.
   <img src="/a11y-tree-view-panel.svg" alt="A11y tree view: the same sections rearranged as an indented tree — banner, navigation, main with headings, paragraphs, inputs and button, complementary, and contentinfo." style="max-width: 310px; width: 100%;" />
 </div>
 
-<p style="color: #64748b; font-size: 0.9em; margin-top: -0.5rem;">Left: what sighted users see. Right: what assistive technology reads. Same content — different structure.</p>
+<p style="color: var(--vp-c-text-3); font-size: 0.9em; margin-top: -0.5rem;">Left: what sighted users see. Right: what assistive technology reads. Same content — different structure.</p>
 
 ---
 

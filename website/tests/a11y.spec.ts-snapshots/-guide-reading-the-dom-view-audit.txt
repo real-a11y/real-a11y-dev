@@ -21,6 +21,8 @@
         paragraph "Why Real A11y?"
       button "Reading the Tree"
         heading "Reading the Tree" (level 2)
+      link "Understanding the Views"
+        paragraph "Understanding the Views"
       link "DOM View"
         paragraph "DOM View"
       link "A11y View"
@@ -89,6 +91,9 @@
     paragraph "The DOM view shows you the raw HTML structure of your page — every element, in the exact nesting order it exists in the document. Think of it as your browser's Elements panel, trimmed down to structure and meaning."
     paragraph "It answers the question:"
       strong ""What did I actually write?""
+    img "Visual view: a website with blue header, teal nav, purple main content, amber aside, and slate footer arranged as a spatial layout."
+    img "A11y tree diagram: the same sections shown as a tree with document as root, branching into banner, navigation, main, complementary, and contentinfo nodes with their children."
+    paragraph "Left: what sighted users see. Right: the document structure. The DOM view shows the raw HTML that produces both."
     separator
     heading "What you see" (level 2)
       link "Permalink to "What you see""
@@ -192,5 +197,5 @@
     paragraph "Last updated:"
       time "[redacted]"
     navigation "Pager"
-      link "Previous pageWhy Real A11y?"
+      link "Previous pageUnderstanding the Views"
       link "Next pageA11y View"

@@ -21,6 +21,8 @@
         paragraph "Why Real A11y?"
       button "Reading the Tree"
         heading "Reading the Tree" (level 2)
+      link "Understanding the Views"
+        paragraph "Understanding the Views"
       link "DOM View"
         paragraph "DOM View"
       link "A11y View"

@@ -21,6 +21,8 @@
         paragraph "Why Real A11y?"
       button "Reading the Tree"
         heading "Reading the Tree" (level 2)
+      link "Understanding the Views"
+        paragraph "Understanding the Views"
       link "DOM View"
         paragraph "DOM View"
       link "A11y View"
@@ -86,6 +88,8 @@
     paragraph "The TAB view answers one question:"
       strong "can a keyboard user reach everything they need to, in the right order?"
     paragraph "It shows every focusable element on the page as a flat, numbered list — the exact sequence a user would encounter them by pressing Tab, from first to last. No nesting, no hierarchy. Just the order of keyboard focus."
+    img "Tab order view: focusable elements shown as numbered bars in sequence — sky-blue links from banner, nav, aside, and footer, rose inputs and a green button from main — each labeled with which landmark it belongs to."
+    paragraph "The color tells you the element type. The badge on the right tells you which section it came from. The number is the tab position."
     separator
     heading "What you see" (level 2)
       link "Permalink to "What you see""

@@ -1,0 +1,13 @@
+  h2 Introduction
+  h2 Reading the Tree
+  h2 Chrome Extension
+  h2 Packages
+  h2 Recipes
+  h2 Reference
+  h2 On this page
+h1 Understanding the views
+  h2 The visual layout
+  h2 A11y Tree view
+  h2 Headings view
+  h2 TAB order view
+  h2 Same content, four perspectives
