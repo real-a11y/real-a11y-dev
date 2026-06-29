@@ -14,8 +14,8 @@ It answers the question: **"If someone couldn't see this, what would they hear?"
 This is the most important view.
 
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin: 1.5rem 0;">
-  <img src="/visual-view.svg" alt="Visual view: a website with blue header, teal nav, purple main content, amber aside, and slate footer arranged as a spatial layout." style="max-width: 310px; width: 100%;" />
-  <img src="/a11y-tree-view-panel.svg" alt="A11y tree view: the same sections rearranged as an indented tree — banner, navigation, main with headings, paragraphs, inputs and button, complementary, and contentinfo." style="max-width: 310px; width: 100%;" />
+  <img src="../public/visual-view.svg" alt="Visual view: a website with blue header, teal nav, purple main content, amber aside, and slate footer arranged as a spatial layout." style="max-width: 310px; width: 100%;" />
+  <img src="../public/a11y-tree-view-panel.svg" alt="A11y tree view: the same sections rearranged as an indented tree — banner, navigation, main with headings, paragraphs, inputs and button, complementary, and contentinfo." style="max-width: 310px; width: 100%;" />
 </div>
 
 <p style="color: var(--vp-c-text-3); font-size: 0.9em; margin-top: -0.5rem;">Left: what sighted users see. Right: what assistive technology reads. Same content — different structure.</p>

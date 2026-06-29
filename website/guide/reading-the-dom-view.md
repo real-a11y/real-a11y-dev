@@ -12,8 +12,8 @@ The DOM view shows you the raw HTML structure of your page — every element, in
 It answers the question: **"What did I actually write?"**
 
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin: 1.5rem 0;">
-  <img src="/visual-view.svg" alt="Visual view: a website with blue header, teal nav, purple main content, amber aside, and slate footer arranged as a spatial layout." style="max-width: 310px; width: 100%;" />
-  <img src="/a11y-tree-view.svg" alt="A11y tree diagram: the same sections shown as a tree with document as root, branching into banner, navigation, main, complementary, and contentinfo nodes with their children." style="max-width: 310px; width: 100%;" />
+  <img src="../public/visual-view.svg" alt="Visual view: a website with blue header, teal nav, purple main content, amber aside, and slate footer arranged as a spatial layout." style="max-width: 310px; width: 100%;" />
+  <img src="../public/a11y-tree-view.svg" alt="A11y tree diagram: the same sections shown as a tree with document as root, branching into banner, navigation, main, complementary, and contentinfo nodes with their children." style="max-width: 310px; width: 100%;" />
 </div>
 
 <p style="color: var(--vp-c-text-3); font-size: 0.9em; margin-top: -0.5rem;">Left: what sighted users see. Right: the document structure. The DOM view shows the raw HTML that produces both.</p>

@@ -11,7 +11,7 @@ The TAB view answers one question: **can a keyboard user reach everything they n
 
 It shows every focusable element on the page as a flat, numbered list — the exact sequence a user would encounter them by pressing Tab, from first to last. No nesting, no hierarchy. Just the order of keyboard focus.
 
-<img src="/tab-order-view.svg" alt="Tab order view: focusable elements shown as numbered bars in sequence — sky-blue links from banner, nav, aside, and footer, rose inputs and a green button from main — each labeled with which landmark it belongs to." style="max-width: 540px; width: 100%; margin: 1.5rem 0;" />
+<img src="../public/tab-order-view.svg" alt="Tab order view: focusable elements shown as numbered bars in sequence — sky-blue links from banner, nav, aside, and footer, rose inputs and a green button from main — each labeled with which landmark it belongs to." style="max-width: 540px; width: 100%; margin: 1.5rem 0;" />
 
 <p style="color: var(--vp-c-text-3); font-size: 0.9em; margin-top: -0.5rem;">The color tells you the element type. The badge on the right tells you which section it came from. The number is the tab position.</p>
 
