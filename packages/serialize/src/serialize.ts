@@ -25,6 +25,17 @@ function redactText(input: string, patterns: RegExp[] | undefined): string {
   return out;
 }
 
+/**
+ * Collapse whitespace runs — including the stray newlines/tabs some pages
+ * leave in accessible names — to a single space, and trim. Mirrors the
+ * accessible-name spec's flat-string normalization. Without it a name like
+ * `"Amazon\n\n\nSubtotal …"` would smear across many lines and break the
+ * one-node-per-line format.
+ */
+function cleanName(input: string): string {
+  return input.replace(/\s+/g, " ").trim();
+}
+
 /** Resolve an input to a tree, extracting from the DOM only when needed. */
 function toTree(input: SerializeInput, mode: "a11y" | "dom" = "a11y") {
   return input instanceof Element ? extract(input, mode) : input;
@@ -49,7 +60,7 @@ export function serializeTree(
   for (const node of visible) {
     if (!includeGeneric && node.a11y.role === "generic") continue;
     const indent = "  ".repeat(node.depth);
-    const name = redactText(node.a11y.name, redact);
+    const name = redactText(cleanName(node.a11y.name), redact);
     const nameSuffix = name ? ` "${name}"` : "";
     const level = node.a11y.properties?.level;
     const levelSuffix = level ? ` (level ${level})` : "";
@@ -66,7 +77,10 @@ export function serializeOutline(input: SerializeInput): string {
   const entries = getOutline(toTree(input));
   if (entries.length === 0) return "(no headings)";
   return entries
-    .map((e) => `${"  ".repeat(Math.max(0, e.level - 1))}h${e.level} ${e.name}`)
+    .map(
+      (e) =>
+        `${"  ".repeat(Math.max(0, e.level - 1))}h${e.level} ${cleanName(e.name)}`,
+    )
     .join("\n");
 }
 
@@ -80,7 +94,8 @@ export function serializeTabSequence(input: SerializeInput): string {
   if (seq.length === 0) return "(nothing focusable)";
   return seq
     .map((n, i) => {
-      const name = n.a11y.name ? ` "${n.a11y.name}"` : "";
+      const clean = cleanName(n.a11y.name);
+      const name = clean ? ` "${clean}"` : "";
       return `${String(i + 1).padStart(2, "0")}. ${n.a11y.role}${name}`;
     })
     .join("\n");

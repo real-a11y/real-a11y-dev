@@ -34,6 +34,15 @@ describe("serializeTree", () => {
     expect(out).toContain("[REDACTED]");
     expect(out).not.toContain("2 minutes ago");
   });
+
+  it("collapses whitespace and newlines in accessible names", () => {
+    // Pages sometimes leave raw newlines/indentation inside a name; the
+    // serializer must flatten them so the name stays on one line.
+    document.body.innerHTML =
+      '<button aria-label="Amazon\n\n\n   Subtotal (2)">x</button>';
+    const out = serializeTree(document.body);
+    expect(out).toContain('button "Amazon Subtotal (2)"');
+  });
 });
 
 describe("serializeOutline", () => {
