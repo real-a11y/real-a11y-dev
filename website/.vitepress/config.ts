@@ -181,6 +181,10 @@ export default defineConfig({
       {
         text: "Reading the Tree",
         items: [
+          {
+            text: "Understanding the Views",
+            link: "/guide/understanding-the-views",
+          },
           { text: "DOM View", link: "/guide/reading-the-dom-view" },
           { text: "A11y View", link: "/guide/reading-the-a11y-view" },
           { text: "TAB View", link: "/guide/reading-the-tab-view" },
