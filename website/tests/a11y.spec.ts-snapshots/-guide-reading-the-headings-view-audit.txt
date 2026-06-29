@@ -229,6 +229,8 @@
           cell "Can keyboard users reach everything?"
   contentinfo
     link "Edit this page on GitHub"
+    paragraph "Last updated:"
+      time "[redacted]"
     navigation "Pager"
       link "Previous pageA11y View"
       link "Next pageTAB View"
