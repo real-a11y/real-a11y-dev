@@ -120,6 +120,24 @@
       button {
         background: rgba(46, 121, 255, 0.08) !important;
       }
+
+      /* APG pattern grid — side-by-side correct vs broken */
+      .apg-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+        align-items: start;
+      }
+      .apg-cell {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .apg-label {
+        font-weight: 600;
+        color: #444;
+        font-size: 0.9em;
+      }
     </style>
   </head>
   <body>
@@ -282,6 +300,201 @@
         "
       ><code><span role="presentation" style="color:#d73a49;">const</span> <span role="presentation" style="color:#005cc5;">sn</span> = <span role="presentation" style="color:#6f42c1;">createInspector</span>({ root, container });
 <span role="presentation" style="color:#005cc5;">sn</span>.<span role="presentation" style="color:#6f42c1;">mount</span>();</code></pre>
+
+      <section aria-labelledby="apg-heading" style="margin-top: 48px">
+        <h2 id="apg-heading">APG patterns — correct vs broken</h2>
+        <p>
+          Hand-rolled vanilla equivalents of the 10 Phase 1 APG patterns shipped
+          in <code>@real-a11y-dev/example-patterns</code> for React. Each
+          pattern has a Correct implementation with full WAI-ARIA / keyboard /
+          focus management, and a Broken sibling that is visually identical but
+          missing the ARIA layer. Open the panel above and click into each to
+          compare the trees.
+        </p>
+
+        <article aria-labelledby="apg-tabs-h" style="margin-bottom: 24px">
+          <h3 id="apg-tabs-h">Tabs</h3>
+          <p>
+            APG tablist + tab + tabpanel, with roving tabindex and ←/→ keys.
+            Broken: plain buttons, no roles.
+          </p>
+          <div class="apg-grid">
+            <div class="apg-cell">
+              <div class="apg-label">✓ Correct</div>
+              <div id="apg-tabs-correct"></div>
+            </div>
+            <div class="apg-cell">
+              <div class="apg-label">⚠ Broken</div>
+              <div id="apg-tabs-broken"></div>
+            </div>
+          </div>
+        </article>
+
+        <article aria-labelledby="apg-slider-h" style="margin-bottom: 24px">
+          <h3 id="apg-slider-h">Slider</h3>
+          <p>
+            APG slider with role / aria-valuemin/max/now and full keyboard.
+            Broken: same visual, mouse-only.
+          </p>
+          <div class="apg-grid">
+            <div class="apg-cell">
+              <div class="apg-label">✓ Correct</div>
+              <div id="apg-slider-correct"></div>
+            </div>
+            <div class="apg-cell">
+              <div class="apg-label">⚠ Broken</div>
+              <div id="apg-slider-broken"></div>
+            </div>
+          </div>
+        </article>
+
+        <article aria-labelledby="apg-disclosure-h" style="margin-bottom: 24px">
+          <h3 id="apg-disclosure-h">Disclosure</h3>
+          <p>
+            Button + aria-expanded + aria-controls + panel. Broken: button +
+            display:none toggle, no ARIA.
+          </p>
+          <div class="apg-grid">
+            <div class="apg-cell">
+              <div class="apg-label">✓ Correct</div>
+              <div id="apg-disclosure-correct"></div>
+            </div>
+            <div class="apg-cell">
+              <div class="apg-label">⚠ Broken</div>
+              <div id="apg-disclosure-broken"></div>
+            </div>
+          </div>
+        </article>
+
+        <article aria-labelledby="apg-dialog-h" style="margin-bottom: 24px">
+          <h3 id="apg-dialog-h">Dialog</h3>
+          <p>
+            Native &lt;dialog&gt; opened via showModal() — focus trap + return
+            focus + Escape close. Broken: positioned div, no focus mgmt.
+          </p>
+          <div class="apg-grid">
+            <div class="apg-cell">
+              <div class="apg-label">✓ Correct</div>
+              <div id="apg-dialog-correct"></div>
+            </div>
+            <div class="apg-cell">
+              <div class="apg-label">⚠ Broken</div>
+              <div id="apg-dialog-broken"></div>
+            </div>
+          </div>
+        </article>
+
+        <article aria-labelledby="apg-toolbar-h" style="margin-bottom: 24px">
+          <h3 id="apg-toolbar-h">Toolbar</h3>
+          <p>
+            role="toolbar" + roving tabindex + ←/→ keys. Broken: plain buttons,
+            all tabbable.
+          </p>
+          <div class="apg-grid">
+            <div class="apg-cell">
+              <div class="apg-label">✓ Correct</div>
+              <div id="apg-toolbar-correct"></div>
+            </div>
+            <div class="apg-cell">
+              <div class="apg-label">⚠ Broken</div>
+              <div id="apg-toolbar-broken"></div>
+            </div>
+          </div>
+        </article>
+
+        <article aria-labelledby="apg-toast-h" style="margin-bottom: 24px">
+          <h3 id="apg-toast-h">Toast</h3>
+          <p>
+            role="status" / aria-live live region. Broken: plain div, content
+            updates silent to AT.
+          </p>
+          <div class="apg-grid">
+            <div class="apg-cell">
+              <div class="apg-label">✓ Correct</div>
+              <div id="apg-toast-correct"></div>
+            </div>
+            <div class="apg-cell">
+              <div class="apg-label">⚠ Broken</div>
+              <div id="apg-toast-broken"></div>
+            </div>
+          </div>
+        </article>
+
+        <article aria-labelledby="apg-menu-h" style="margin-bottom: 24px">
+          <h3 id="apg-menu-h">Menu</h3>
+          <p>
+            Button + aria-haspopup/aria-expanded → role="menu" /
+            role="menuitem". Broken: button + div, no roles.
+          </p>
+          <div class="apg-grid">
+            <div class="apg-cell">
+              <div class="apg-label">✓ Correct</div>
+              <div id="apg-menu-correct"></div>
+            </div>
+            <div class="apg-cell">
+              <div class="apg-label">⚠ Broken</div>
+              <div id="apg-menu-broken"></div>
+            </div>
+          </div>
+        </article>
+
+        <article aria-labelledby="apg-listbox-h" style="margin-bottom: 24px">
+          <h3 id="apg-listbox-h">Listbox</h3>
+          <p>
+            role="listbox" + role="option" + aria-selected +
+            aria-activedescendant + keyboard nav. Broken: div of buttons,
+            selection only visual.
+          </p>
+          <div class="apg-grid">
+            <div class="apg-cell">
+              <div class="apg-label">✓ Correct</div>
+              <div id="apg-listbox-correct"></div>
+            </div>
+            <div class="apg-cell">
+              <div class="apg-label">⚠ Broken</div>
+              <div id="apg-listbox-broken"></div>
+            </div>
+          </div>
+        </article>
+
+        <article aria-labelledby="apg-combobox-h" style="margin-bottom: 24px">
+          <h3 id="apg-combobox-h">Combobox</h3>
+          <p>
+            role="combobox" + aria-expanded + aria-controls +
+            aria-activedescendant + role="listbox"/option popover. Broken: plain
+            input + dropdown, no roles.
+          </p>
+          <div class="apg-grid">
+            <div class="apg-cell">
+              <div class="apg-label">✓ Correct</div>
+              <div id="apg-combobox-correct"></div>
+            </div>
+            <div class="apg-cell">
+              <div class="apg-label">⚠ Broken</div>
+              <div id="apg-combobox-broken"></div>
+            </div>
+          </div>
+        </article>
+
+        <article aria-labelledby="apg-tree-h" style="margin-bottom: 24px">
+          <h3 id="apg-tree-h">Tree View</h3>
+          <p>
+            role="tree" + role="treeitem" + aria-level / aria-posinset /
+            aria-setsize / aria-expanded + arrow keys. Broken: nested ul/li, no
+            roles.
+          </p>
+          <div class="apg-grid">
+            <div class="apg-cell">
+              <div class="apg-label">✓ Correct</div>
+              <div id="apg-tree-correct"></div>
+            </div>
+            <div class="apg-cell">
+              <div class="apg-label">⚠ Broken</div>
+              <div id="apg-tree-broken"></div>
+            </div>
+          </div>
+        </article>
+      </section>
     </main>
 
     <dialog id="sample-dialog" aria-labelledby="dialog-title">

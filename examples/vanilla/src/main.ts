@@ -1,5 +1,26 @@
 import { createInspector } from "@real-a11y-dev/inspector";
 
+import { mountTabsCorrect } from "./patterns/tabs/correct.js";
+import { mountTabsBroken } from "./patterns/tabs/broken.js";
+import { mountSliderCorrect } from "./patterns/slider/correct.js";
+import { mountSliderBroken } from "./patterns/slider/broken.js";
+import { mountDisclosureCorrect } from "./patterns/disclosure/correct.js";
+import { mountDisclosureBroken } from "./patterns/disclosure/broken.js";
+import { mountDialogCorrect } from "./patterns/dialog/correct.js";
+import { mountDialogBroken } from "./patterns/dialog/broken.js";
+import { mountToolbarCorrect } from "./patterns/toolbar/correct.js";
+import { mountToolbarBroken } from "./patterns/toolbar/broken.js";
+import { mountToastCorrect } from "./patterns/toast/correct.js";
+import { mountToastBroken } from "./patterns/toast/broken.js";
+import { mountMenuCorrect } from "./patterns/menu/correct.js";
+import { mountMenuBroken } from "./patterns/menu/broken.js";
+import { mountListboxCorrect } from "./patterns/listbox/correct.js";
+import { mountListboxBroken } from "./patterns/listbox/broken.js";
+import { mountComboboxCorrect } from "./patterns/combobox/correct.js";
+import { mountComboboxBroken } from "./patterns/combobox/broken.js";
+import { mountTreeViewCorrect } from "./patterns/tree-view/correct.js";
+import { mountTreeViewBroken } from "./patterns/tree-view/broken.js";
+
 // ─── Panel ────────────────────────────────────────────────────────────────────
 //
 // Layout (bottom-right corner, 16 px gap from edges):
@@ -363,3 +384,38 @@ function wireDisclosure(triggerId: string, menuId: string) {
 
 wireDisclosure("btn-explicit", "explicit-menu");
 wireDisclosure("btn-inferred", "profile-menu");
+
+// ─── APG patterns — correct vs broken ──────────────────────────────────────
+//
+// Mount each pattern into its dedicated slot in index.html. Each pattern
+// module ships `mountCorrect(host)` and `mountBroken(host)` that append
+// a self-contained widget. Visually identical pairs; differences are in
+// the ARIA / keyboard / focus layer Real A11y inspects.
+
+const apgMounts: [string, (host: HTMLElement) => void][] = [
+  ["apg-tabs-correct", mountTabsCorrect],
+  ["apg-tabs-broken", mountTabsBroken],
+  ["apg-slider-correct", mountSliderCorrect],
+  ["apg-slider-broken", mountSliderBroken],
+  ["apg-disclosure-correct", mountDisclosureCorrect],
+  ["apg-disclosure-broken", mountDisclosureBroken],
+  ["apg-dialog-correct", mountDialogCorrect],
+  ["apg-dialog-broken", mountDialogBroken],
+  ["apg-toolbar-correct", mountToolbarCorrect],
+  ["apg-toolbar-broken", mountToolbarBroken],
+  ["apg-toast-correct", mountToastCorrect],
+  ["apg-toast-broken", mountToastBroken],
+  ["apg-menu-correct", mountMenuCorrect],
+  ["apg-menu-broken", mountMenuBroken],
+  ["apg-listbox-correct", mountListboxCorrect],
+  ["apg-listbox-broken", mountListboxBroken],
+  ["apg-combobox-correct", mountComboboxCorrect],
+  ["apg-combobox-broken", mountComboboxBroken],
+  ["apg-tree-correct", mountTreeViewCorrect],
+  ["apg-tree-broken", mountTreeViewBroken],
+];
+
+for (const [id, mount] of apgMounts) {
+  const host = document.getElementById(id);
+  if (host) mount(host);
+}
