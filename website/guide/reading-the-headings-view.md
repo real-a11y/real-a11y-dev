@@ -11,9 +11,9 @@ The Headings view answers one question: **can a screen reader user navigate this
 
 Headings are how screen reader users scan a page — the same way sighted users scan titles and section labels. The Headings view extracts every `<h1>` through `<h6>` and shows them as a leveled outline, like a table of contents.
 
-<img src="../public/headings-view.svg" alt="Headings view: only the heading elements from the page, shown as indigo bars indented by level — one H1 at the top, followed by H2s and H3s forming the document outline." style="max-width: 540px; width: 100%; margin: 1.5rem 0;" />
+<img src="../public/headings-view.svg" alt="Headings view: only the heading elements from the page, shown as indigo bars indented by level — one H1 at the top, followed by H2s and H3s forming the document outline." style="display: block; max-width: 540px; width: 100%; margin: 1.5rem auto;" />
 
-<p style="color: var(--vp-c-text-3); font-size: 0.9em; margin-top: -0.5rem;">Each bar is one heading. The indentation shows the level — H1 at the top, H2 nested under it, H3 nested under H2.</p>
+<p style="color: var(--vp-c-text-3); font-size: 0.9em; margin-top: -0.5rem; text-align: center;">Each bar is one heading. The indentation shows the level — H1 at the top, H2 nested under it, H3 nested under H2.</p>
 
 ---
 
