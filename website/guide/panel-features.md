@@ -91,7 +91,7 @@ Scoping affects:
 | Chrome extension | Double-click any node to scope; breadcrumb + `×` button to exit |
 | `inspector` | `inspector.setRoot(element)` to scope; `inspector.setRoot(originalRoot)` to exit |
 | React `<SemanticNavigator />` | Update the `root` prop's ref to point at the scoped element |
-| `@real-a11y-dev/testing` | `attach(page, { rootSelector: "form" })` for Playwright; `auditSnapshot(form, …)` for jsdom — see [the testing reference](/packages/testing#auditsnapshot-root-options) |
+| `@real-a11y-dev/testing` | `attach(page, { rootSelector: "form" })` for Playwright; `auditSnapshot(form, …)` for jsdom — see [the testing reference](/packages/testing/snapshots#auditsnapshot-root-options) |
 
 ### Dialog auto-scope
 

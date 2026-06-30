@@ -1,0 +1,230 @@
+  link "Skip to content"
+  banner
+    link "Real A11y"
+    button "Search"
+    navigation "Main Navigation"
+      link "Guide"
+      link "Recipes"
+      link "Packages"
+      button "v0.1 · Beta"
+    switch "Switch to dark theme"
+    link "github"
+  complementary
+    navigation "Sidebar Navigation"
+      button "Introduction"
+        heading "Introduction" (level 2)
+      link "Getting Started"
+        paragraph "Getting Started"
+      link "Core Concepts"
+        paragraph "Core Concepts"
+      link "Accessibility Snapshots"
+        paragraph "Accessibility Snapshots"
+      link "Snapshots vs. Other Tools"
+        paragraph "Snapshots vs. Other Tools"
+      link "Why Real A11y?"
+        paragraph "Why Real A11y?"
+      button "Reading the Tree"
+        heading "Reading the Tree" (level 2)
+      link "DOM View"
+        paragraph "DOM View"
+      link "A11y View"
+        paragraph "A11y View"
+      link "TAB View"
+        paragraph "TAB View"
+      link "Panel features"
+        paragraph "Panel features"
+      button "Chrome Extension"
+        heading "Chrome Extension" (level 2)
+      link "Overview & Install"
+        paragraph "Overview & Install"
+      button "Packages"
+        heading "Packages" (level 2)
+      link "@real-a11y-dev/core"
+        paragraph "@real-a11y-dev/core"
+      link "@real-a11y-dev/inspector"
+        paragraph "@real-a11y-dev/inspector"
+        link "@real-a11y-dev/testing"
+          heading "@real-a11y-dev/testing" (level 3)
+        button "toggle section"
+      link "Snapshots"
+        paragraph "Snapshots"
+      link "Assertions"
+        paragraph "Assertions"
+      link "Matchers"
+        paragraph "Matchers"
+      link "Flow API"
+        paragraph "Flow API"
+      link "Playwright adapter"
+        paragraph "Playwright adapter"
+      link "@real-a11y-dev/react"
+        paragraph "@real-a11y-dev/react"
+      link "@real-a11y-dev/storybook-addon"
+        paragraph "@real-a11y-dev/storybook-addon"
+      button "Recipes"
+        heading "Recipes" (level 2)
+      link "Next.js (App Router + React 19)"
+        paragraph "Next.js (App Router + React 19)"
+      link "Storybook 8 + React 19"
+        paragraph "Storybook 8 + React 19"
+      link "Peer Dependencies"
+        paragraph "Peer Dependencies"
+      link "CI Diff Bot"
+        paragraph "CI Diff Bot"
+      button "Reference"
+        heading "Reference" (level 2)
+      link "Accessible Names"
+        paragraph "Accessible Names"
+      link "Architecture"
+        paragraph "Architecture"
+      link "Troubleshooting"
+        paragraph "Troubleshooting"
+  navigation "On this page"
+    heading "On this page" (level 2)
+    list
+      listitem
+        link "Install"
+      listitem
+        link "attach(page, options?)"
+      listitem
+        link "Narrowing the root"
+      listitem
+        link "Testing that assertions fail on broken pages"
+      listitem
+        link "Determinism"
+      listitem
+        link "Redacting variable content"
+      listitem
+        link "How it works"
+      listitem
+        link "Error propagation"
+      listitem
+        link "SemanticNavigatorPageHandle type"
+      listitem
+        link "See also"
+  main
+    heading "Playwright adapter" (level 1)
+      link "Permalink to "Playwright adapter""
+    paragraph "Run the same audit helpers against a real browser page. The adapter injects a self-contained IIFE bundle into the page and exposes every helper via ."
+      code "page.evaluate()"
+    paragraph "Part of , imported from the  subpath."
+      link "@real-a11y-dev/testing"
+        code "@real-a11y-dev/testing"
+      code "/playwright"
+    heading "Install" (level 2)
+      link "Permalink to "Install""
+    button "Copy Code"
+      code
+    paragraph "The  peer dependency is optional — only needed when using ."
+      code "playwright"
+      code "@real-a11y-dev/testing/playwright"
+    heading "attach(page, options?)" (level 2)
+      code "attach(page, options?)"
+      link "Permalink to "`attach(page, options?)`""
+    button "Copy Code"
+      code
+    paragraph
+      strong "options:"
+        code "attach()"
+    table
+      rowgroup
+        row
+          rowheader "Option"
+          rowheader "Type"
+          rowheader "Default"
+          rowheader "Description"
+      rowgroup
+        row
+          cell "rootSelector"
+            code "rootSelector"
+          cell "string"
+            code "string"
+          cell ""body""
+            code ""body""
+          cell "CSS selector for the audit root element."
+    heading "Narrowing the root" (level 2)
+      link "Permalink to "Narrowing the root""
+    button "Copy Code"
+      code
+    heading "Testing that assertions fail on broken pages" (level 2)
+      link "Permalink to "Testing that assertions fail on broken pages""
+    paragraph "Lock in the failure mode too — not just the happy path. When a new assertion lands or you refactor a page, you want confirmation that broken structure still throws:"
+    button "Copy Code"
+      code
+    paragraph "Keep a small "broken" fixture checked into your test repo with one of each pattern the assertions target (missing h1, skipped level, unlabeled button, unlabeled dialog). If a future refactor ever weakens the assertions, this test catches it immediately."
+    heading "Determinism" (level 2)
+      link "Permalink to "Determinism""
+    paragraph ", , and  return the  for the same DOM — on every run, on every machine. No timestamps, no generated IDs, no ordering surprises:"
+      code "auditSnapshot()"
+      code "outlineSnapshot()"
+      code "tabSequenceSnapshot()"
+      strong "same string"
+    button "Copy Code"
+      code
+    paragraph "That's the property that makes  safe to use in CI without flakes. If you have genuinely variable content (timestamps, locale-dependent copy), redact it — see below."
+      code "expect(await sn.auditSnapshot()).toMatchSnapshot()"
+    heading "Redacting variable content" (level 2)
+      link "Permalink to "Redacting variable content""
+    paragraph "takes the same  option as the jsdom helper — an array of  whose matches become  in accessible names:"
+      code "auditSnapshot()"
+      link "redact"
+        code "redact"
+      code "RegExp"
+      code "[REDACTED]"
+    button "Copy Code"
+      code
+    paragraph "A  can't be passed through  directly — Playwright serializes evaluate arguments and a  arrives as an empty . The adapter handles this for you: it marshals each pattern to , ferries that across the boundary, and rebuilds the  inside the page — so patterns behave exactly as they do in jsdom. Keep the  in mind when a name can contain more than one match."
+      code "RegExp"
+      code "page.evaluate()"
+      code "RegExp"
+      code "{}"
+      code "{ source, flags }"
+      code "RegExp"
+      link "g-flag gotcha"
+        code "g"
+    heading "How it works" (level 2)
+      link "Permalink to "How it works""
+    button "Copy Code"
+      code
+    list
+      listitem "reads the pre-built IIFE bundle () from the package."
+        code "attach()"
+        code "dist/page-bundle.iife.global.js"
+      listitem "Injects it into the page via . This sets ."
+        code "page.addScriptTag()"
+        code "window.__realA11y__"
+      listitem "Each method calls , running the helper in the browser and returning the result (or re-throwing the error) in Node."
+        code "page.evaluate()"
+    paragraph "The bundle is read once and cached in the Node process — subsequent  calls on the same process are instant."
+      code "attach()"
+    heading "Error propagation" (level 2)
+      link "Permalink to "Error propagation""
+    paragraph "When an assertion throws  inside the page, Playwright propagates the error message back to Node. The full descriptive message (including all offending elements) is preserved."
+      code "A11yAssertionError"
+    button "Copy Code"
+      code
+    heading "SemanticNavigatorPageHandle type" (level 2)
+      code "SemanticNavigatorPageHandle"
+      link "Permalink to "`SemanticNavigatorPageHandle` type""
+    button "Copy Code"
+      code
+    paragraph "is a minimal structural type that accepts the real Playwright  object without requiring  or  in packages that only import the types."
+      code "PlaywrightPage"
+      code "Page"
+      code "playwright"
+      code "@playwright/test"
+    heading "See also" (level 2)
+      link "Permalink to "See also""
+    list
+      listitem "and  — the helpers  exposes"
+        link "Snapshots"
+        link "Assertions"
+        code "attach()"
+      listitem "— wiring snapshots into a PR workflow"
+        link "CI Diff Bot recipe"
+  contentinfo
+    link "Edit this page on GitHub"
+    paragraph "Last updated:"
+      time "[redacted]"
+    navigation "Pager"
+      link "Previous pageFlow API"
+      link "Next page@real-a11y-dev/react"

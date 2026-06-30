@@ -1,0 +1,20 @@
+  h2 Introduction
+  h2 Reading the Tree
+  h2 Chrome Extension
+  h2 Packages
+    h3 @real-a11y-dev/testing
+  h2 Recipes
+  h2 Reference
+  h2 On this page
+h1 Matchers
+  h2 Setup
+    h3 Vitest
+    h3 Jest
+  h2 Assertion matchers
+  h2 toHaveTabSequence(expected)
+  h2 a11ySnapshot(root, options?) — snapshot serializer
+    h3 a11ySnapshot vs auditSnapshot
+    h3 Modal scoping in snapshots
+  h2 Vitest vs Jest type augmentation
+  h2 See it running
+  h2 See also

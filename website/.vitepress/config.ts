@@ -175,6 +175,14 @@ export default defineConfig({
         items: [
           { text: "Getting Started", link: "/guide/getting-started" },
           { text: "Core Concepts", link: "/guide/core-concepts" },
+          {
+            text: "Accessibility Snapshots",
+            link: "/guide/accessibility-snapshots",
+          },
+          {
+            text: "Snapshots vs. Other Tools",
+            link: "/guide/accessibility-snapshots-comparisons",
+          },
           { text: "Why Real A11y?", link: "/guide/why" },
         ],
       },
@@ -198,7 +206,21 @@ export default defineConfig({
         items: [
           { text: "@real-a11y-dev/core", link: "/packages/core" },
           { text: "@real-a11y-dev/inspector", link: "/packages/inspector" },
-          { text: "@real-a11y-dev/testing", link: "/packages/testing" },
+          {
+            text: "@real-a11y-dev/testing",
+            link: "/packages/testing",
+            collapsed: true,
+            items: [
+              { text: "Snapshots", link: "/packages/testing/snapshots" },
+              { text: "Assertions", link: "/packages/testing/assertions" },
+              { text: "Matchers", link: "/packages/testing/matchers" },
+              { text: "Flow API", link: "/packages/testing/flow" },
+              {
+                text: "Playwright adapter",
+                link: "/packages/testing/playwright",
+              },
+            ],
+          },
           { text: "@real-a11y-dev/react", link: "/packages/react" },
           {
             text: "@real-a11y-dev/storybook-addon",

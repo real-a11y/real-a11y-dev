@@ -1,0 +1,18 @@
+  h2 Introduction
+  h2 Reading the Tree
+  h2 Chrome Extension
+  h2 Packages
+    h3 @real-a11y-dev/testing
+  h2 Recipes
+  h2 Reference
+  h2 On this page
+h1 Snapshots
+  h2 auditSnapshot(root, options?)
+    h3 Using redact
+      h4 Without redact — the snapshot flakes
+      h4 With redact — stable structure, masked text
+      h4 Realistic patterns
+  h2 outlineSnapshot(root)
+  h2 tabSequenceSnapshot(root)
+  h2 Determinism
+  h2 See also

@@ -117,7 +117,7 @@ try {
 }
 ```
 
-Every assertion is documented with an example in [`@real-a11y-dev/testing`](/packages/testing#assertions).
+Every assertion is documented with an example in [`@real-a11y-dev/testing`](/packages/testing/assertions).
 
 ---
 

@@ -5,7 +5,7 @@ description: How to read the tab-sequence view — a flat numbered list of every
 
 # Reading the TAB View
 
-> The TAB view matches the output of [`tabSequenceSnapshot()`](/packages/testing#tabsequencesnapshot-root) in the testing package — same ordering, same formatting. Whether you're reading it in the Chrome extension, the Storybook addon, or a committed Playwright snapshot fixture, this page applies.
+> The TAB view matches the output of [`tabSequenceSnapshot()`](/packages/testing/snapshots#tabsequencesnapshot-root) in the testing package — same ordering, same formatting. Whether you're reading it in the Chrome extension, the Storybook addon, or a committed Playwright snapshot fixture, this page applies.
 
 The TAB view answers one question: **can a keyboard user reach everything they need to, in the right order?**
 

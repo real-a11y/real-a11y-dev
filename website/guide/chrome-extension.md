@@ -10,9 +10,18 @@ description: Inspect any website's DOM, accessibility tree, and tab order in a C
 Most accessibility problems don't look like problems — until you remove the visual layer. Semantic Navigator replaces the page with its accessibility tree. You can still click, navigate, fill forms, and complete tasks. The structure is all you get.
 
 <div class="sn-actions">
-  <a href="https://github.com/real-a11y/real-a11y-dev" class="sn-btn-primary">View on GitHub</a>
-  <span class="sn-meta">Open source · MIT license · Chrome 116+</span>
+  <a href="https://chromewebstore.google.com/detail/semantic-navigator/gnnepgbbecnlomngfemkadnbeaopleom" class="sn-btn-primary">Add to Chrome</a>
+  <a href="https://github.com/real-a11y/real-a11y-dev" class="sn-btn-secondary">View on GitHub</a>
+  <span class="sn-meta">Free · open source · MIT license · Chrome 116+</span>
 </div>
+
+<figure class="sn-hero">
+  <img
+    src="/semantic-navigator-curtain.png"
+    alt="A browser with the Semantic Navigator screen curtain turned on: the left half of the window is fully blacked out and labeled “Content hidden — navigate via Semantic Navigator,” while the side panel on the right shows the page's complete accessibility tree — banner, main navigation, breadcrumb, headings, and links and buttons with their roles and accessible names — still fully navigable, with a keyboard-key bar along the bottom."
+  />
+  <figcaption>The screen curtain blacks out the page. The accessibility tree stays — and so does every interaction.</figcaption>
+</figure>
 
 ---
 
@@ -71,13 +80,13 @@ This extension makes those sessions less painful. It does not make them optional
 
 ## The screen curtain
 
-Semantic Navigator includes a screen curtain — a single toggle that blacks out the entire page.
+Semantic Navigator includes a screen curtain — a single `Curtain ON` toggle that blacks out the entire page. Only an extension can paint over a whole browser tab.
 
-The tree stays. The panel stays. You can still interact with the full product.
-
-The visual layer is just gone.
+The tree stays. The panel stays. You can still interact with the full product. The visual layer is just gone.
 
 This is the closest a sighted developer gets to the experience. It's uncomfortable. It should be. That discomfort is information.
+
+While the curtain is on, the focus-ring overlay is suppressed too (no point drawing on a blacked-out page) — lean on the panel's tree selection to orient yourself.
 
 ---
 
@@ -93,7 +102,7 @@ The page renders as an interactive tree — DOM view (raw HTML elements) or A11y
 Click links, fill forms, submit, expand menus, complete flows. You're using the real product — just through its structure instead of its visual layer.
 
 **4. Find where it breaks**
-When something is hard to locate, hard to understand, or impossible to complete — that's a real accessibility failure. Not a hypothetical. Not a lint warning. Something your users have been hitting silently for months.
+When something is hard to locate, hard to understand, or impossible to complete, that's [the test](#the-test) failing — not a hypothetical, not a lint warning. Something your users have been hitting silently for months.
 
 ---
 
@@ -101,15 +110,7 @@ When something is hard to locate, hard to understand, or impossible to complete 
 
 The extension surfaces the same engine as `@real-a11y-dev/inspector`, `@real-a11y-dev/react`, and `@real-a11y-dev/storybook-addon`. Everything *about reading the tree* is shared across those — see [the panel features guide](/guide/panel-features) for filters, search, focus tracking, scoping, and live region monitoring.
 
-What only an extension can give you, and what's documented below, is the handful of capabilities that require a browser extension to reach across tabs and frames:
-
-### Screen curtain — `Curtain` / `Curtain ON`
-
-A full-viewport overlay that blacks out the host page. Only an extension can paint over the entire tab. The tree stays, the panel stays, the page remains fully interactive through the tree — you just can't see it.
-
-**When to use it.** When you want to audit a flow with zero visual fallback. Clicking "Curtain ON" is the fastest way to find out whether a task is actually completable through structure alone. If you can't check out, can't close the dialog, can't find the submit button — that's the accessibility bug.
-
-**Note.** While the curtain is on, the focus-ring overlay is suppressed too (no point drawing on a blacked-out page), so lean on the panel's tree selection to orient yourself.
+What only an extension can give you is the handful of capabilities that require a browser extension to reach across tabs and frames. The [screen curtain](#the-screen-curtain) above is one; here are the rest:
 
 ### Cross-iframe tree merging
 

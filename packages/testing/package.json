@@ -48,6 +48,22 @@
       },
       "import": "./dist/playwright.js",
       "require": "./dist/playwright.cjs"
+    },
+    "./matchers": {
+      "types": {
+        "import": "./dist/matchers.d.ts",
+        "require": "./dist/matchers.d.cts"
+      },
+      "import": "./dist/matchers.js",
+      "require": "./dist/matchers.cjs"
+    },
+    "./matchers/vitest": {
+      "types": {
+        "import": "./dist/matchers-vitest.d.ts",
+        "require": "./dist/matchers-vitest.d.cts"
+      },
+      "import": "./dist/matchers-vitest.js",
+      "require": "./dist/matchers-vitest.cjs"
     }
   },
   "files": [

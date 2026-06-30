@@ -1,0 +1,29 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`account page — accessibility gate > guards the semantic structure with a redacted snapshot 1`] = `
+  banner
+    navigation "Primary"
+      link "Home"
+      link "Settings"
+  main
+    heading "Account settings" (level 1)
+    region "Profile"
+      heading "Profile" (level 2)
+      form "Profile"
+        textbox "Display name"
+        textbox "Email"
+        button "Save changes"
+    region "Danger zone"
+      heading "Danger zone" (level 2)
+      paragraph "Account ID: [REDACTED]"
+      button "Delete account"
+  contentinfo "© 2026 Example Inc."
+`;
+
+exports[`account page — after opening the confirm dialog > scopes the a11y tree to the modal, and the modal is accessible 1`] = `
+dialog "Delete account?"
+  heading "Delete account?" (level 2)
+  paragraph "This cannot be undone."
+  button "Cancel"
+  button "Delete"
+`;

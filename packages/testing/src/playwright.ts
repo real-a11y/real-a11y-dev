@@ -65,9 +65,24 @@ export interface AttachOptions {
   rootSelector?: string;
 }
 
+export interface AuditSnapshotOptions {
+  /** `"a11y"` (default) or `"dom"` tree extraction mode. */
+  mode?: "a11y" | "dom";
+  /**
+   * Regex patterns whose matches are replaced with `[REDACTED]` in accessible
+   * names — keeps snapshots deterministic across runs. Mirrors the jsdom
+   * `auditSnapshot` option; the adapter marshals each `RegExp` across the
+   * `page.evaluate()` boundary (a `RegExp` can't be serialised directly) and
+   * reconstructs it inside the page.
+   */
+  redact?: RegExp[];
+  /** Include generic container nodes (`role="generic"`). Default false. */
+  includeGeneric?: boolean;
+}
+
 export interface SemanticNavigatorPageHandle {
   /** Serialised A11y (or DOM) tree — deterministic, safe to snapshot. */
-  auditSnapshot(options?: { mode?: "a11y" | "dom" }): Promise<string>;
+  auditSnapshot(options?: AuditSnapshotOptions): Promise<string>;
   /** Indented heading outline (h1..h6) in document order. */
   outlineSnapshot(): Promise<string>;
   /** Focusable elements in computed tab order, numbered. */
@@ -150,8 +165,47 @@ export async function attach(
   }
 
   return {
-    auditSnapshot(opts = {}) {
-      return evalFn<string>("auditSnapshot", [opts]);
+    auditSnapshot(opts: AuditSnapshotOptions = {}) {
+      const { mode, redact, includeGeneric } = opts;
+      // `RegExp` doesn't survive `page.evaluate()` serialisation — it arrives
+      // as an empty `{}`. Marshal each pattern to a plain `{ source, flags }`
+      // pair and rebuild the `RegExp` inside the page.
+      const redactParts = redact?.map((re) => ({
+        source: re.source,
+        flags: re.flags,
+      }));
+
+      type AuditArg = {
+        selector: string;
+        mode?: "a11y" | "dom";
+        redact?: { source: string; flags: string }[];
+        includeGeneric?: boolean;
+      };
+
+      return page.evaluate(
+        (arg) => {
+          const a = arg as AuditArg;
+          const ra = (globalThis as Record<string, unknown>)
+            .__realA11y__ as Record<
+            string,
+            (root: Element, options?: unknown) => unknown
+          >;
+          const root = document.querySelector(a.selector) ?? document.body;
+          const options: Record<string, unknown> = {};
+          if (a.mode) options.mode = a.mode;
+          if (a.includeGeneric !== undefined)
+            options.includeGeneric = a.includeGeneric;
+          if (a.redact)
+            options.redact = a.redact.map((r) => new RegExp(r.source, r.flags));
+          return ra.auditSnapshot(root, options) as string;
+        },
+        {
+          selector: rootSelector,
+          mode,
+          redact: redactParts,
+          includeGeneric,
+        } satisfies AuditArg,
+      );
     },
     outlineSnapshot() {
       return evalFn<string>("outlineSnapshot");

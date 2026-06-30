@@ -5,7 +5,7 @@ description: How to interpret the DOM view — every element in the raw HTML nes
 
 # Reading the DOM View
 
-> The DOM view is the same tree across every Real A11y surface — the [Chrome extension](/guide/chrome-extension), the `<SemanticNavigator />` [React component](/packages/react), the [Storybook addon](/packages/storybook-addon), and the `mode: "dom"` option on [`auditSnapshot()`](/packages/testing#auditsnapshot-root-options). This page applies to all of them.
+> The DOM view is the same tree across every Real A11y surface — the [Chrome extension](/guide/chrome-extension), the `<SemanticNavigator />` [React component](/packages/react), the [Storybook addon](/packages/storybook-addon), and the `mode: "dom"` option on [`auditSnapshot()`](/packages/testing/snapshots#auditsnapshot-root-options). This page applies to all of them.
 
 The DOM view shows you the raw HTML structure of your page — every element, in the exact nesting order it exists in the document. Think of it as your browser's Elements panel, trimmed down to structure and meaning.
 

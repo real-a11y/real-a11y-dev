@@ -107,6 +107,15 @@ test.describe("good fixture", () => {
     const snap2 = await sn.auditSnapshot();
     expect(snap1).toBe(snap2);
   });
+
+  test("auditSnapshot redacts matching accessible names", async ({ page }) => {
+    // Proves a RegExp survives the marshalling across the page.evaluate()
+    // boundary and redaction runs inside the page.
+    const sn = await attach(page);
+    const snapshot = await sn.auditSnapshot({ redact: [/Test fixture/g] });
+    expect(snapshot).not.toContain("Test fixture");
+    expect(snapshot).toContain("[REDACTED]");
+  });
 });
 
 // ─── Bad fixture (assertions must fail) ──────────────────────────────────────

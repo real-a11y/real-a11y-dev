@@ -1,0 +1,20 @@
+  h2 Introduction
+  h2 Reading the Tree
+  h2 Chrome Extension
+  h2 Packages
+    h3 @real-a11y-dev/testing
+  h2 Recipes
+  h2 Reference
+  h2 On this page
+h1 Flow API
+  h2 Why flow() (vs Testing Library)?
+    h3 Side-by-side: same test, both libraries
+    h3 When to use which
+  h2 Available steps
+    h3 expectActiveModal — examples
+    h3 expectTree — caveat
+  h2 flow(root, options?)
+  h2 Utilities
+    h3 waitForMutations(root, options?)
+    h3 dispatch(node, action?, payload?)
+  h2 See also
