@@ -62,6 +62,6 @@
     "@real-a11y-dev/semantic-navigator-ui": "workspace:*",
     "tsup": "^8.3.0",
     "typescript": "^5.6.0",
-    "vitest": "^2.1.0"
+    "vitest": "^3.2.6"
   }
 }
