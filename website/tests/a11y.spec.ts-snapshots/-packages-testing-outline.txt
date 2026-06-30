@@ -2,40 +2,12 @@
   h2 Reading the Tree
   h2 Chrome Extension
   h2 Packages
+    h3 @real-a11y-dev/testing
   h2 Recipes
   h2 Reference
   h2 On this page
 h1 @real-a11y-dev/testing
   h2 Install
-  h2 Snapshots
-    h3 auditSnapshot(root, options?)
-      h4 Using redact — realistic patterns
-    h3 outlineSnapshot(root)
-    h3 tabSequenceSnapshot(root)
-  h2 Assertions
-    h3 assertNoUnlabeledInteractive(root)
-    h3 assertHeadingOrder(root)
-    h3 assertDialogsLabeled(root)
-    h3 assertLandmarkStructure(root)
-  h2 Flow API
-    h3 Why flow() (vs Testing Library)?
-      h4 Side-by-side: same test, both libraries
-      h4 When to use which
-    h3 Available steps
-      h4 expectActiveModal — examples
-      h4 expectTree — caveat
-    h3 flow(root, options?)
-  h2 Utilities
-    h3 waitForMutations(root, options?)
-    h3 dispatch(node, action?, payload?)
-  h2 Playwright adapter
-    h3 Install
-    h3 attach(page, options?)
-    h3 Narrowing the root
-    h3 Testing that assertions fail on broken pages
-    h3 Determinism
-    h3 How it works
-    h3 Error propagation
-    h3 SemanticNavigatorPageHandle type
-  h2 TypeScript
+  h2 What's in the box
+  h2 Which do I reach for?
   h2 See it running

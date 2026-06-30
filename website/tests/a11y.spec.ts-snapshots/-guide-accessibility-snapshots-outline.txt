@@ -1,0 +1,17 @@
+  h2 Introduction
+  h2 Reading the Tree
+  h2 Chrome Extension
+  h2 Packages
+    h3 @real-a11y-dev/testing
+  h2 Recipes
+  h2 Reference
+  h2 On this page
+h1 Accessibility Snapshots
+  h2 Why this exists
+  h2 The problem with DOM snapshots
+  h2 Three views, one tree
+  h2 Deterministic by construction
+  h2 It models real AT behavior
+  h2 It catches what a screenshot can't
+  h2 The same tree, everywhere
+  h2 Start snapshotting

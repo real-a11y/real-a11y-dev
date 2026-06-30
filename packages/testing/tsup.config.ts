@@ -3,7 +3,12 @@ import { defineConfig } from "tsup";
 export default defineConfig([
   // ── Main entries: ESM + CJS ─────────────────────────────────────────────
   {
-    entry: ["src/index.ts", "src/playwright.ts"],
+    entry: [
+      "src/index.ts",
+      "src/playwright.ts",
+      "src/matchers.ts",
+      "src/matchers-vitest.ts",
+    ],
     format: ["esm", "cjs"],
     dts: true,
     sourcemap: true,

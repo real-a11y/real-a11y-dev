@@ -1,0 +1,178 @@
+  link "Skip to content"
+  banner
+    link "Real A11y"
+    button "Search"
+    navigation "Main Navigation"
+      link "Guide"
+      link "Recipes"
+      link "Packages"
+      button "v0.1 · Beta"
+    switch "Switch to dark theme"
+    link "github"
+  complementary
+    navigation "Sidebar Navigation"
+      button "Introduction"
+        heading "Introduction" (level 2)
+      link "Getting Started"
+        paragraph "Getting Started"
+      link "Core Concepts"
+        paragraph "Core Concepts"
+      link "Accessibility Snapshots"
+        paragraph "Accessibility Snapshots"
+      link "Snapshots vs. Other Tools"
+        paragraph "Snapshots vs. Other Tools"
+      link "Why Real A11y?"
+        paragraph "Why Real A11y?"
+      button "Reading the Tree"
+        heading "Reading the Tree" (level 2)
+      link "Understanding the Views"
+        paragraph "Understanding the Views"
+      link "DOM View"
+        paragraph "DOM View"
+      link "A11y View"
+        paragraph "A11y View"
+      link "Headings View"
+        paragraph "Headings View"
+      link "TAB View"
+        paragraph "TAB View"
+      link "Panel features"
+        paragraph "Panel features"
+      button "Chrome Extension"
+        heading "Chrome Extension" (level 2)
+      link "Overview & Install"
+        paragraph "Overview & Install"
+      button "Packages"
+        heading "Packages" (level 2)
+      link "@real-a11y-dev/core"
+        paragraph "@real-a11y-dev/core"
+      link "@real-a11y-dev/inspector"
+        paragraph "@real-a11y-dev/inspector"
+        link "@real-a11y-dev/testing"
+          heading "@real-a11y-dev/testing" (level 3)
+        button "toggle section"
+      link "Snapshots"
+        paragraph "Snapshots"
+      link "Assertions"
+        paragraph "Assertions"
+      link "Matchers"
+        paragraph "Matchers"
+      link "Flow API"
+        paragraph "Flow API"
+      link "Playwright adapter"
+        paragraph "Playwright adapter"
+      link "@real-a11y-dev/react"
+        paragraph "@real-a11y-dev/react"
+      link "@real-a11y-dev/storybook-addon"
+        paragraph "@real-a11y-dev/storybook-addon"
+      button "Recipes"
+        heading "Recipes" (level 2)
+      link "Next.js (App Router + React 19)"
+        paragraph "Next.js (App Router + React 19)"
+      link "Storybook 8 + React 19"
+        paragraph "Storybook 8 + React 19"
+      link "Peer Dependencies"
+        paragraph "Peer Dependencies"
+      link "CI Diff Bot"
+        paragraph "CI Diff Bot"
+      button "Reference"
+        heading "Reference" (level 2)
+      link "Accessible Names"
+        paragraph "Accessible Names"
+      link "Architecture"
+        paragraph "Architecture"
+      link "Troubleshooting"
+        paragraph "Troubleshooting"
+  navigation "On this page"
+    heading "On this page" (level 2)
+    list
+      listitem
+        link "assertNoUnlabeledInteractive(root)"
+      listitem
+        link "assertHeadingOrder(root)"
+      listitem
+        link "assertDialogsLabeled(root)"
+      listitem
+        link "assertLandmarkStructure(root)"
+      listitem
+        link "A11yAssertionError"
+      listitem
+        link "See also"
+  main
+    heading "Assertions" (level 1)
+      link "Permalink to "Assertions""
+    paragraph "These throw  with a descriptive message on failure. Designed for use directly in  /  blocks without wrapping in ."
+      code "A11yAssertionError"
+      code "it()"
+      code "test()"
+      code "expect()"
+    paragraph "Part of . Prefer the  form? See , which wraps these same checks."
+      link "@real-a11y-dev/testing"
+        code "@real-a11y-dev/testing"
+      code "expect(el).toHaveValidHeadingOrder()"
+      link "Matchers"
+    heading "assertNoUnlabeledInteractive(root)" (level 2)
+      code "assertNoUnlabeledInteractive(root)"
+      link "Permalink to "`assertNoUnlabeledInteractive(root)`""
+    paragraph "Throws if any interactive element (button, link, textbox, combobox, checkbox, radio, etc.) has an empty accessible name."
+    button "Copy Code"
+      code
+    paragraph "Error message example:"
+    button "Copy Code"
+      code
+    heading "assertHeadingOrder(root)" (level 2)
+      code "assertHeadingOrder(root)"
+      link "Permalink to "`assertHeadingOrder(root)`""
+    paragraph "Throws if:"
+    list
+      listitem "There is not exactly one"
+        code "h1"
+      listitem "Any heading level is skipped (e.g.,  followed directly by )"
+        code "h2"
+        code "h4"
+    button "Copy Code"
+      code
+    heading "assertDialogsLabeled(root)" (level 2)
+      code "assertDialogsLabeled(root)"
+      link "Permalink to "`assertDialogsLabeled(root)`""
+    paragraph "Throws if any  or  element has no accessible name (via  or )."
+      code "dialog"
+      code "alertdialog"
+      code "aria-label"
+      code "aria-labelledby"
+    button "Copy Code"
+      code
+    heading "assertLandmarkStructure(root)" (level 2)
+      code "assertLandmarkStructure(root)"
+      link "Permalink to "`assertLandmarkStructure(root)`""
+    paragraph "Throws if:"
+    list
+      listitem "There is no  landmark"
+        code "main"
+      listitem "There is more than one  landmark"
+        code "main"
+      listitem "There is more than one  (header) landmark"
+        code "banner"
+      listitem "There is more than one  (footer) landmark"
+        code "contentinfo"
+    button "Copy Code"
+      code
+    heading "A11yAssertionError" (level 2)
+      code "A11yAssertionError"
+      link "Permalink to "`A11yAssertionError`""
+    paragraph "All four assertions throw this error type on failure. Import it to catch or assert against it directly:"
+    button "Copy Code"
+      code
+    heading "See also" (level 2)
+      link "Permalink to "See also""
+    list
+      listitem "— the same checks as  matchers with  negation"
+        link "Matchers"
+        code "expect"
+        code ".not"
+      listitem "— run these assertions against a real browser"
+        link "Playwright adapter"
+  contentinfo
+    link "Edit this page on GitHub"
+    navigation "Pager"
+      link "Previous pageSnapshots"
+      link "Next pageMatchers"

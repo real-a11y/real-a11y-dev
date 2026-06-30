@@ -429,7 +429,7 @@ Each page produces three blocks: the a11y tree, the heading outline, and the tab
 ## Home
 
 ### A11y tree
-main ""
+main
   heading "Welcome" (level 1)
   form "Newsletter"
     textbox "Email"

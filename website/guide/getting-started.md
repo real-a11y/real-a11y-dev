@@ -13,7 +13,7 @@ Real A11y is a suite of packages built around a single engine: `@real-a11y-dev/c
 |---|---|---|
 | Embed an interactive tree panel in any web app | [`@real-a11y-dev/inspector`](/packages/inspector) | **dev** (recommended) |
 | Write accessibility assertions in Vitest / Jest | [`@real-a11y-dev/testing`](/packages/testing) | **dev** |
-| Run accessibility assertions in Playwright E2E tests | [`@real-a11y-dev/testing/playwright`](/packages/testing#playwright-adapter) | **dev** |
+| Run accessibility assertions in Playwright E2E tests | [`@real-a11y-dev/testing/playwright`](/packages/testing/playwright) | **dev** |
 | Use React hooks and a `<SemanticNavigator />` component | [`@real-a11y-dev/react`](/packages/react) | **dev** (recommended) |
 | Add an A11y tree panel to every Storybook story | [`@real-a11y-dev/storybook-addon`](/packages/storybook-addon) | **dev** |
 | Build your own tooling on the extraction engine | [`@real-a11y-dev/core`](/packages/core) | depends (see below) |
@@ -138,6 +138,22 @@ test("login form is fully labeled", () => {
   expect(auditSnapshot(container)).toMatchSnapshot();
 });
 ```
+
+Those are the **function-style** helpers — zero setup. Prefer the jest-axe-style `expect` matchers? Register them once in a setup file and the same checks read as native matchers (Vitest **and** Jest):
+
+```ts
+import { a11ySnapshot } from "@real-a11y-dev/testing/matchers";
+
+test("login form is fully labeled", () => {
+  const { container } = render(<LoginForm />);
+
+  expect(container).toHaveNoUnlabeledInteractive();
+  expect(container).toHaveValidHeadingOrder();
+  expect(a11ySnapshot(container)).toMatchSnapshot();
+});
+```
+
+See [Matchers](/packages/testing/matchers) for the one-time `registerA11yMatchers(expect)` setup, and [Accessibility Snapshots](/guide/accessibility-snapshots) for what the snapshot captures and why it complements axe.
 
 ---
 
@@ -293,4 +309,5 @@ This ships the inspector into the production bundle (as a separate chunk) — ac
 ## Next steps
 
 - [Core Concepts](/guide/core-concepts) — understand the semantic tree model, roles, and names
+- [Accessibility Snapshots](/guide/accessibility-snapshots) — what it means to snapshot the a11y tree, and how it complements axe and visual regression testing
 - [Why Real A11y?](/guide/why) — how this compares to axe-core, Testing Library, and other tools

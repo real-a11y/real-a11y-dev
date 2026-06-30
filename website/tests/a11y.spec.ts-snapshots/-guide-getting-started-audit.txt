@@ -17,6 +17,10 @@
         paragraph "Getting Started"
       link "Core Concepts"
         paragraph "Core Concepts"
+      link "Accessibility Snapshots"
+        paragraph "Accessibility Snapshots"
+      link "Snapshots vs. Other Tools"
+        paragraph "Snapshots vs. Other Tools"
       link "Why Real A11y?"
         paragraph "Why Real A11y?"
       button "Reading the Tree"
@@ -43,8 +47,9 @@
         paragraph "@real-a11y-dev/core"
       link "@real-a11y-dev/inspector"
         paragraph "@real-a11y-dev/inspector"
-      link "@real-a11y-dev/testing"
-        paragraph "@real-a11y-dev/testing"
+        link "@real-a11y-dev/testing"
+          heading "@real-a11y-dev/testing" (level 3)
+        button "toggle section"
       link "@real-a11y-dev/react"
         paragraph "@real-a11y-dev/react"
       link "@real-a11y-dev/storybook-addon"
@@ -184,6 +189,16 @@
       link "Permalink to "Testing (Vitest / Jest)""
     button "Copy Code"
       code
+    paragraph "Those are the  helpers — zero setup. Prefer the jest-axe-style  matchers? Register them once in a setup file and the same checks read as native matchers (Vitest  Jest):"
+      strong "function-style"
+      code "expect"
+      strong "and"
+    button "Copy Code"
+      code
+    paragraph "See  for the one-time  setup, and  for what the snapshot captures and why it complements axe."
+      link "Matchers"
+      code "registerA11yMatchers(expect)"
+      link "Accessibility Snapshots"
     separator
     heading "Playwright (E2E)" (level 3)
       link "Permalink to "Playwright (E2E)""
@@ -309,6 +324,8 @@
     list
       listitem "— understand the semantic tree model, roles, and names"
         link "Core Concepts"
+      listitem "— what it means to snapshot the a11y tree, and how it complements axe and visual regression testing"
+        link "Accessibility Snapshots"
       listitem "— how this compares to axe-core, Testing Library, and other tools"
         link "Why Real A11y?"
   contentinfo
