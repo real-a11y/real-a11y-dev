@@ -100,3 +100,25 @@ h2,
 h3 {
   font-family: var(--vp-font-family-base);
 }
+
+/* Center any block-level media inside the docs content. VitePress
+ * doesn't apply alignment to `<img>` / `<svg>` / `<picture>` /
+ * `<figure>` by default — they inherit the surrounding paragraph
+ * alignment, which is `left`. Centering keeps standalone diagrams
+ * (tree visualisations, tab-order illustrations, screenshots)
+ * visually balanced inside the centered prose column.
+ *
+ * Scoped to `.vp-doc` (VitePress's content wrapper) so navigation
+ * thumbnails, brand marks, and other chrome aren't affected.
+ *
+ * `block` + `margin-inline: auto` is the centering pair that works
+ * regardless of intrinsic width. `max-width: 100%` prevents wider
+ * images from overflowing on narrow viewports. */
+.vp-doc img,
+.vp-doc svg:not(.vp-icon),
+.vp-doc picture,
+.vp-doc figure {
+  display: block;
+  margin-inline: auto;
+  max-width: 100%;
+}
