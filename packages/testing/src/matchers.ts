@@ -28,8 +28,11 @@ import {
   assertLandmarkStructure,
   A11yAssertionError,
 } from "./assertions.js";
-import { extract } from "./extract.js";
-import { serializeTree, type SerializeOptions } from "./serialize.js";
+import {
+  extract,
+  serializeTree,
+  type SerializeOptions,
+} from "@real-a11y-dev/serialize";
 
 type Tree = { nodes: Map<string, SemanticNode>; rootId: string };
 
