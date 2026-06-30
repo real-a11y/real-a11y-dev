@@ -254,6 +254,8 @@
         link "CI Diff Bot recipe"
   contentinfo
     link "Edit this page on GitHub"
+    paragraph "Last updated:"
+      time "[redacted]"
     navigation "Pager"
       link "Previous page@real-a11y-dev/testing"
       link "Next pageAssertions"
