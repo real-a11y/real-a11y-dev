@@ -95,7 +95,7 @@
     heading "@real-a11y-dev/react" (level 1)
       link "Permalink to "@real-a11y-dev/react""
     blockquote
-      paragraph "—  component plus  /  hooks. Built on  for concurrent-mode safety, SSR-safe in floating mode. Reach for this when your app is  — for anything else use ."
+      paragraph "— component plus / hooks. Built on for concurrent-mode safety, SSR-safe in floating mode. Reach for this when your app is — for anything else use ."
         strong "TL;DR"
         code "<SemanticNavigator />"
         code "useSemanticTree()"
@@ -104,7 +104,7 @@
         strong "React"
         link "@real-a11y-dev/inspector"
           code "@real-a11y-dev/inspector"
-    paragraph "Native React integration — hooks and a component. Built on  for React 18 concurrent-mode safety."
+    paragraph "Native React integration — hooks and a component. Built on for React 18 concurrent-mode safety."
       code "useSyncExternalStore"
     heading "Install" (level 2)
       link "Permalink to "Install""
@@ -115,11 +115,11 @@
       code "react >= 18"
       code "react-dom >= 18"
     paragraph "Install as a dev dependency"
-    paragraph "bundles a tree extractor and a Preact-based renderer (~40 KB gzipped). It's a developer audit tool, not runtime infrastructure — keep it in  and gate  on a build flag so it never ships to end users."
+    paragraph "bundles a tree extractor and a Preact-based renderer (~40 KB gzipped). It's a developer audit tool, not runtime infrastructure — keep it in and gate on a build flag so it never ships to end users."
       code "@real-a11y-dev/react"
       code "devDependencies"
       code "<SemanticNavigator />"
-    paragraph "See  for the common Vite / Next.js / vanilla gating patterns."
+    paragraph "See for the common Vite / Next.js / vanilla gating patterns."
       link "Keep it out of production"
     separator
     heading "<SemanticNavigator />" (level 2)
@@ -209,18 +209,18 @@
           cell "—"
           cell "Inline styles for the host <div>."
             code "<div>"
-    paragraph "The component creates its own internal  host and passes it to . Changing  or  remounts the navigator; changing  uses the imperative  API without remounting."
+    paragraph "The component creates its own internal host and passes it to . Changing or remounts the navigator; changing uses the imperative API without remounting."
       code "<div>"
       code "createSemanticNavigator"
       code "root"
       code "mount"
       code "mode"
       code "setViewMode()"
-    paragraph "Why  /  /  default to false"
+    paragraph "Why / / default to false"
       code "highlightOnHover"
       code "scrollHostOnSelect"
       code "focusHostOnActivate"
-    paragraph "renders into the same document as your app, so activating a tree row could steal focus from the panel or scroll the page underneath you. The panel itself stays fully interactive either way — row selection, cross-link chip navigation, keyboard movement — what's gated is the side effect on the  DOM element. See  for the full rationale and when to flip them on."
+    paragraph "renders into the same document as your app, so activating a tree row could steal focus from the panel or scroll the page underneath you. The panel itself stays fully interactive either way — row selection, cross-link chip navigation, keyboard movement — what's gated is the side effect on the DOM element. See for the full rationale and when to flip them on."
       code "<SemanticNavigator />"
       emphasis "real"
       link "Panel interaction vs. host side effects"
@@ -231,7 +231,7 @@
     paragraph "Subscribes to the semantic tree for a given DOM element. Re-renders whenever the DOM mutates and the debounce settles."
     button "Copy Code"
       code
-    paragraph "—  before the first extraction."
+    paragraph "— before the first extraction."
       strong "Returns:"
       code "SemanticTree | null"
       code "null"
@@ -263,7 +263,7 @@
           cell "Debounce delay for DOM mutation callbacks."
     heading "Concurrent-mode safety" (level 3)
       link "Permalink to "Concurrent-mode safety""
-    paragraph "uses  internally. The subscription and snapshot functions satisfy React 18's requirements:"
+    paragraph "uses internally. The subscription and snapshot functions satisfy React 18's requirements:"
       code "useSemanticTree"
       code "useSyncExternalStore"
     list
@@ -286,27 +286,27 @@
     heading "Announcing modal opens in an aria-live region" (level 3)
       code "aria-live"
       link "Permalink to "Announcing modal opens in an `aria-live` region""
-    paragraph "A static  only announces the  state. To tell screen-reader users that a dialog , wrap the output in a polite  region so each change is announced:"
+    paragraph "A static only announces the state. To tell screen-reader users that a dialog , wrap the output in a polite region so each change is announced:"
       code "role="status""
       emphasis "current"
       emphasis "just opened"
       code "aria-live"
     button "Copy Code"
       code
-    paragraph "Drop this near the top of your layout alongside the  host. Users of assistive tech get a courteous notification every time a dialog opens — useful when your app's own announcement logic is still under construction."
+    paragraph "Drop this near the top of your layout alongside the host. Users of assistive tech get a courteous notification every time a dialog opens — useful when your app's own announcement logic is still under construction."
       code "<SemanticNavigator />"
     separator
     heading "Patterns" (level 2)
       link "Permalink to "Patterns""
     heading "Audit overlay in development" (level 3)
       link "Permalink to "Audit overlay in development""
-    paragraph "Gate the import itself so the inspector code is  (a top-level  import prevents that — the reference survives even inside an )."
+    paragraph "Gate the import itself so the inspector code is (a top-level import prevents that — the reference survives even inside an )."
       strong "tree-shaken from production bundles"
       code "SemanticNavigator"
       code "if (DEV)"
     button "Copy Code"
       code
-    paragraph "Production builds: the  branch is dead-code-eliminated and  never enters the final bundle. Dev builds: the inspector loads on demand as its own chunk."
+    paragraph "Production builds: the branch is dead-code-eliminated and never enters the final bundle. Dev builds: the inspector loads on demand as its own chunk."
       code "DEV"
       code "@real-a11y-dev/react"
     heading "Reacting to tree changes" (level 3)
@@ -316,7 +316,7 @@
     separator
     heading "TypeScript" (level 2)
       link "Permalink to "TypeScript""
-    paragraph "All hooks and components are fully typed. Import types from  for tree node types:"
+    paragraph "All hooks and components are fully typed. Import types from for tree node types:"
       code "@real-a11y-dev/core"
     button "Copy Code"
       code
@@ -324,14 +324,14 @@
     heading "See it running" (level 2)
       link "Permalink to "See it running""
     list
-      listitem "— : split-panel layout with a mode toggle,  driving a live "issues" badge, and  with an  announcer."
+      listitem "— : split-panel layout with a mode toggle, driving a live "issues" badge, and with an announcer."
         strong "Vite + React 18"
         link "examples/react-app/"
           code "examples/react-app/"
         code "useSemanticTree"
         code "useActiveModal"
         code "aria-live"
-      listitem "— the  covers the client-component and SSR-gating patterns specific to Next."
+      listitem "— the covers the client-component and SSR-gating patterns specific to Next."
         strong "Next.js (App Router + React 19)"
         link "Next.js recipe"
     separator

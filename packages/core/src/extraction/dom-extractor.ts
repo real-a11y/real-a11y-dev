@@ -382,7 +382,18 @@ function getAccessibleTextContent(element: Element): string {
 }
 
 /** Compute the accessible name for an element (simplified) */
+/**
+ * Accessible name, whitespace-normalized per accname-1.2 §4.3.2 step 4:
+ * collapse runs of whitespace — including the stray newlines/indentation some
+ * pages leave inside their markup — to a single space, and trim. Normalizing
+ * at this single source means every surface (panel, search, serializer,
+ * snapshots) sees the same clean name.
+ */
 function computeAccessibleName(element: Element): string {
+  return computeRawAccessibleName(element).replace(/\s+/g, " ").trim();
+}
+
+function computeRawAccessibleName(element: Element): string {
   // 1. aria-label takes priority
   const ariaLabel = element.getAttribute("aria-label");
   if (ariaLabel) return ariaLabel.trim();

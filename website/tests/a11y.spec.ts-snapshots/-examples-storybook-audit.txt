@@ -88,7 +88,7 @@
   main
     heading "Example: Storybook" (level 1)
       link "Permalink to "Example: Storybook""
-    paragraph "A Storybook 8 project with  enabled — demonstrating the panel on real component stories."
+    paragraph "A Storybook 8 project with enabled — demonstrating the panel on real component stories."
       code "@real-a11y-dev/storybook-addon"
     paragraph
       strong "Source:"
@@ -118,7 +118,7 @@
       code
     heading "What to look for in the panel" (level 2)
       link "Permalink to "What to look for in the panel""
-    paragraph "Open any story and click the  tab:"
+    paragraph "Open any story and click the tab:"
       strong "Semantic Navigator"
     list
       listitem "— see the role, accessible name, and ARIA states for every element in the story canvas."
@@ -129,7 +129,7 @@
         strong "Tab sequence"
       listitem "— switch to DOM mode to see raw tag names instead of ARIA roles."
         strong "Mode toggle"
-    paragraph "Try the  panel alongside Semantic Navigator — changing a prop (like toggling ) triggers a new extraction and the panel updates within 200ms."
+    paragraph "Try the panel alongside Semantic Navigator — changing a prop (like toggling ) triggers a new extraction and the panel updates within 200ms."
       strong "Controls"
       code "disabled"
   contentinfo

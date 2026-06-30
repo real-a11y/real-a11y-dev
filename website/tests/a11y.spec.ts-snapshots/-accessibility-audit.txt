@@ -108,14 +108,14 @@
     heading "Known gaps" (level 2)
       link "Permalink to "Known gaps""
     list
-      listitem "The tree view in the Chrome extension uses the WAI-ARIA  pattern. On very large pages (10K+ elements) the virtualization gap can cause noticeable delay for screen-reader users. Tracked as an open issue."
+      listitem "The tree view in the Chrome extension uses the WAI-ARIA pattern. On very large pages (10K+ elements) the virtualization gap can cause noticeable delay for screen-reader users. Tracked as an open issue."
         code "tree"
       listitem "The "Curtain" mode (hide page visuals to audit purely from the tree) intentionally hides page content; this is a feature, not a regression, but it is incompatible with external screen-reader workflows that rely on sighted co-operation."
       listitem "The Storybook addon panel inherits whatever theme Storybook provides; contrast on custom Storybook themes is the theme author's responsibility."
     heading "How we test" (level 2)
       link "Permalink to "How we test""
     list
-      listitem "Automated:  assertions (, , , ) run in CI on every PR."
+      listitem "Automated: assertions (, , , ) run in CI on every PR."
         code "@real-a11y-dev/testing"
         code "assertNoUnlabeledInteractive"
         code "assertHeadingOrder"
@@ -128,11 +128,11 @@
       link "Permalink to "Reporting a problem""
     paragraph "If you hit an accessibility barrier on our website or in any product:"
     list
-      listitem "— open a GitHub issue with the  label: ."
+      listitem "— open a GitHub issue with the label: ."
         strong "Preferred"
         code "a11y"
         link "github.com/real-a11y/real-a11y-dev/issues/new?labels=a11y"
-      listitem "—  if GitHub isn't an option for you."
+      listitem "— if GitHub isn't an option for you."
         strong "Email"
         code "a11y@real-a11y.dev"
     paragraph "Please include:"

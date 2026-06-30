@@ -94,20 +94,20 @@
   main
     heading "Accessibility Snapshots" (level 1)
       link "Permalink to "Accessibility Snapshots""
-    paragraph "An  is a deterministic, human-readable capture of what assistive technology perceives on a page — roles, accessible names, heading outline, and tab order — serialized to a string you can commit and diff in code review."
+    paragraph "An is a deterministic, human-readable capture of what assistive technology perceives on a page — roles, accessible names, heading outline, and tab order — serialized to a string you can commit and diff in code review."
       strong "accessibility snapshot"
     button "Copy Code"
       code
-    paragraph "It's the structural counterpart to rule-based audits. Where a tool like  answers , an accessibility snapshot answers  For how it stacks up against axe, visual regression testing, and Playwright's ARIA snapshots, see ."
+    paragraph "It's the structural counterpart to rule-based audits. Where a tool like answers , an accessibility snapshot answers For how it stacks up against axe, visual regression testing, and Playwright's ARIA snapshots, see ."
       link "axe"
       emphasis ""does this violate a WCAG rule right now?""
       emphasis ""what is the semantic structure — and did it change?""
       link "How Accessibility Snapshots Compare"
     heading "Why this exists" (level 2)
       link "Permalink to "Why this exists""
-    paragraph "Accessibility is hard to get right. Building — and  — an accessible web app demands fluency in WCAG, ARIA, and the accessible-name algorithm, plus the quirks of real screen readers, which behave differently across NVDA on Windows, VoiceOver on macOS and iOS, and TalkBack on Android. That's a steep wall, and it's a big reason teams ship accessibility bugs they never notice."
+    paragraph "Accessibility is hard to get right. Building — and — an accessible web app demands fluency in WCAG, ARIA, and the accessible-name algorithm, plus the quirks of real screen readers, which behave differently across NVDA on Windows, VoiceOver on macOS and iOS, and TalkBack on Android. That's a steep wall, and it's a big reason teams ship accessibility bugs they never notice."
       emphasis "testing"
-    paragraph "An accessibility snapshot lowers the bar. Because it shows your page exactly as assistive technology structures it — roles, names, headings, focus order — you can read it and answer the questions that matter  being a screen-reader expert:"
+    paragraph "An accessibility snapshot lowers the bar. Because it shows your page exactly as assistive technology structures it — roles, names, headings, focus order — you can read it and answer the questions that matter being a screen-reader expert:"
       emphasis "without"
     list
       listitem
@@ -116,26 +116,26 @@
         emphasis "Would this structure make sense to someone who can't see it?"
       listitem
         emphasis "Is anything unlabeled, mis-roled, or out of order?"
-    paragraph "You don't need NVDA, VoiceOver, and TalkBack open across three machines to catch a missing label or a heading that jumps from  to . You read the snapshot in your editor, or in a pull-request diff. It doesn't  real screen-reader testing —  — it moves the largest, most mechanical class of problems to where every developer already works."
+    paragraph "You don't need NVDA, VoiceOver, and TalkBack open across three machines to catch a missing label or a heading that jumps from to . You read the snapshot in your editor, or in a pull-request diff. It doesn't real screen-reader testing — — it moves the largest, most mechanical class of problems to where every developer already works."
       code "<h1>"
       code "<h3>"
       emphasis "replace"
       link "more on that"
     heading "The problem with DOM snapshots" (level 2)
       link "Permalink to "The problem with DOM snapshots""
-    paragraph "A normal  on rendered HTML captures the : every wrapper , class name, and inline style. Two problems follow:"
+    paragraph "A normal on rendered HTML captures the : every wrapper , class name, and inline style. Two problems follow:"
       code "toMatchSnapshot()"
       strong "DOM"
       code "<div>"
     list
-      listitem "A purely visual refactor — renaming a class, nesting another  — churns the snapshot even though nothing a screen-reader user perceives has changed."
+      listitem "A purely visual refactor — renaming a class, nesting another — churns the snapshot even though nothing a screen-reader user perceives has changed."
         strong "Noise."
         code "<div>"
-      listitem "The DOM snapshot says nothing about the  computed from , whether headings skip a level, or what order elements receive focus."
+      listitem "The DOM snapshot says nothing about the computed from , whether headings skip a level, or what order elements receive focus."
         strong "Blind spots."
         emphasis "accessible name"
         code "aria-labelledby"
-    paragraph "An accessibility snapshot inverts both. It captures  what reaches the accessibility tree — the tree at the top of this page — so it's stable against cosmetic change and surfaces exactly the semantics that matter. Rename every wrapper class and the snapshot is byte-identical. Drop the form's , skip from  to , or leave a button unlabeled — and it changes immediately."
+    paragraph "An accessibility snapshot inverts both. It captures what reaches the accessibility tree — the tree at the top of this page — so it's stable against cosmetic change and surfaces exactly the semantics that matter. Rename every wrapper class and the snapshot is byte-identical. Drop the form's , skip from to , or leave a button unlabeled — and it changes immediately."
       strong "only"
       code "aria-label"
       code "<h1>"
@@ -175,7 +175,7 @@
             code "tabindex"
     heading "Deterministic by construction" (level 2)
       link "Permalink to "Deterministic by construction""
-    paragraph "The same DOM always produces the same string — no timestamps, generated IDs, or ordering surprises — so  is safe in CI without flakes. For genuinely dynamic content (timestamps, tokens, currency),  replaces the noisy bits while keeping the structure intact:"
+    paragraph "The same DOM always produces the same string — no timestamps, generated IDs, or ordering surprises — so is safe in CI without flakes. For genuinely dynamic content (timestamps, tokens, currency), replaces the noisy bits while keeping the structure intact:"
       code "toMatchSnapshot()"
       link "redact"
         code "redact"
@@ -183,24 +183,24 @@
       code
     heading "It models real AT behavior" (level 2)
       link "Permalink to "It models real AT behavior""
-    paragraph "Because the snapshot reflects the  accessibility tree — not raw markup — it captures semantics a DOM dump can't. The clearest example is : when a dialog is open, content behind it is inert to assistive tech, so it drops out of the tree. Open a modal and the snapshot (and tab order) collapse to just the dialog — a precise artifact for that state:"
+    paragraph "Because the snapshot reflects the accessibility tree — not raw markup — it captures semantics a DOM dump can't. The clearest example is : when a dialog is open, content behind it is inert to assistive tech, so it drops out of the tree. Open a modal and the snapshot (and tab order) collapse to just the dialog — a precise artifact for that state:"
       emphasis "extracted"
       strong "modal scoping"
     button "Copy Code"
       code
     heading "It catches what a screenshot can't" (level 2)
       link "Permalink to "It catches what a screenshot can't""
-    paragraph "A screenshot can be pixel-perfect while the page is broken for assistive technology. Swap a real  for a  styled to match: identical screenshot, gone from the accessibility tree. That regression moves , so a visual snapshot sails right past it — an accessibility snapshot catches it immediately."
+    paragraph "A screenshot can be pixel-perfect while the page is broken for assistive technology. Swap a real for a styled to match: identical screenshot, gone from the accessibility tree. That regression moves , so a visual snapshot sails right past it — an accessibility snapshot catches it immediately."
       code "<button>"
       code "<div onclick>"
       strong "zero pixels"
-    paragraph "Visual snapshots and accessibility snapshots are the two halves of regression testing —  and  — and neither covers the other's blind spot."
+    paragraph "Visual snapshots and accessibility snapshots are the two halves of regression testing — and — and neither covers the other's blind spot."
       emphasis "how it looks"
       emphasis "what it means"
       link "See the full comparison →"
     heading "The same tree, everywhere" (level 2)
       link "Permalink to "The same tree, everywhere""
-    paragraph "An accessibility snapshot is the serialized form of the tree you can also  live across Real A11y's surfaces — the , the , and the  all render the same extraction. What you inspect by eye in the panel is what you commit as a snapshot in tests."
+    paragraph "An accessibility snapshot is the serialized form of the tree you can also live across Real A11y's surfaces — the , the , and the all render the same extraction. What you inspect by eye in the panel is what you commit as a snapshot in tests."
       emphasis "see"
       link "Chrome extension"
       link "React panel"
@@ -217,7 +217,7 @@
         strong "In Playwright"
         link "the attach() adapter"
           code "attach()"
-      listitem "→ the  posts tree diffs on every PR"
+      listitem "→ the posts tree diffs on every PR"
         strong "In CI"
         link "CI Diff Bot recipe"
       listitem "→"

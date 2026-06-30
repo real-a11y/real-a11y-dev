@@ -99,7 +99,7 @@
       link "Permalink to "How it works""
     button "Copy Code"
       code
-    paragraph "Two jobs run in parallel — one on , one on the PR branch. A third job diffs the text output of  and  on the PR."
+    paragraph "Two jobs run in parallel — one on , one on the PR branch. A third job diffs the text output of and on the PR."
       code "main"
       code "auditSnapshot()"
       strong "posts or updates a single sticky comment"
@@ -117,7 +117,7 @@
       group "Show full diff"
         button "Copy Code"
           code
-    paragraph "The comment is  — not spammed. If the PR is fixed and re-pushed, the comment updates to ✅."
+    paragraph "The comment is — not spammed. If the PR is fixed and re-pushed, the comment updates to ✅."
       strong "updated in place"
     separator
     heading "Setup" (level 2)
@@ -128,7 +128,7 @@
       code
     heading "2. Drop in the snapshot script" (level 3)
       link "Permalink to "2. Drop in the snapshot script""
-    paragraph "Copy this file into your repo at  — it's yours to customize, version-control, and extend as your audit grows:"
+    paragraph "Copy this file into your repo at — it's yours to customize, version-control, and extend as your audit grows:"
       code "scripts/a11y-snapshot.mjs"
     button "Copy Code"
       code
@@ -139,11 +139,11 @@
     paragraph "Run it locally whenever you want:"
     button "Copy Code"
       code
-    paragraph "Output goes to  by default — add that to ."
+    paragraph "Output goes to by default — add that to ."
       code "a11y-snapshots.md"
       code ".gitignore"
     blockquote
-      paragraph "is the public surface —  plus the handle methods. Your snapshot  (which pages, what order, how to redact, whether to fail on network errors) belongs in your repo, not in a dependency."
+      paragraph "is the public surface — plus the handle methods. Your snapshot (which pages, what order, how to redact, whether to fail on network errors) belongs in your repo, not in a dependency."
         strong "Why an owned script?"
         code "@real-a11y-dev/testing/playwright"
         code "attach()"
@@ -151,8 +151,8 @@
     heading "3. Add the workflow" (level 3)
       link "Permalink to "3. Add the workflow""
     blockquote
-      paragraph "The workflow runs  against  the PR head  the base branch. If the script and its devDependencies don't yet exist on , the  job fails with  (or an  from  if the lockfile points at a private registry). The diff comment never posts and you'll think the workflow is broken."
-        strong "Land steps 1 and 2 on  first."
+      paragraph "The workflow runs against the PR head the base branch. If the script and its devDependencies don't yet exist on , the job fails with (or an from if the lockfile points at a private registry). The diff comment never posts and you'll think the workflow is broken."
+        strong "Land steps 1 and 2 on first."
           code "main"
         code "npm run a11y:snapshot"
         strong "both"
@@ -164,7 +164,7 @@
         code "npm ci"
       paragraph "Order of operations:"
       list
-        listitem "PR (or direct commit) to : install  + , add , add the  npm script."
+        listitem "PR (or direct commit) to : install + , add , add the npm script."
           code "main"
           code "@real-a11y-dev/testing"
           code "@playwright/test"
@@ -184,7 +184,7 @@
         link "Static site (serve build output)"
       listitem
         link "pnpm monorepo"
-    paragraph "All templates call the same two helpers —  (your owned script) for the snapshot job,  for the PR comment. Only the "start the app" step changes."
+    paragraph "All templates call the same two helpers — (your owned script) for the snapshot job, for the PR comment. Only the "start the app" step changes."
       code "npm run a11y:snapshot"
       code "actions/github-script"
     separator
@@ -221,12 +221,12 @@
     separator
     heading "Workflow templates" (level 2)
       link "Permalink to "Workflow templates""
-    paragraph "Each template shares the same final step — a  job that downloads both snapshot artifacts and posts the sticky PR comment. That step is identical across setups and is shown once at the end of this section."
+    paragraph "Each template shares the same final step — a job that downloads both snapshot artifacts and posts the sticky PR comment. That step is identical across setups and is shown once at the end of this section."
       strong "diff & comment"
     heading "Next.js (dev server)" (level 3)
       link "Permalink to "<a id="template-nextjs"></a>Next.js (dev server)""
     blockquote
-      paragraph "Using  in ?  errors out with  — use the  template instead, which serves the build output via ."
+      paragraph "Using in ? errors out with — use the template instead, which serves the build output via ."
         code "output: "export""
         code "next.config"
         code "next start"
@@ -300,7 +300,7 @@
     separator
     heading "Combine with assertions" (level 2)
       link "Permalink to "Combine with assertions""
-    paragraph "The diff bot tells you  — pair it with , , etc. to fail the build immediately on known-bad patterns:"
+    paragraph "The diff bot tells you — pair it with , , etc. to fail the build immediately on known-bad patterns:"
       emphasis "something changed"
       code "assertHeadingOrder"
       code "assertNoUnlabeledInteractive"

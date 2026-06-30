@@ -97,7 +97,7 @@
     heading "@real-a11y-dev/testing" (level 1)
       link "Permalink to "@real-a11y-dev/testing""
     blockquote
-      paragraph "— Accessibility-tree snapshots, structural assertions, custom  matchers, and a fluent  interaction chain. Works in jsdom (Vitest / Jest) out of the box; add  for real-browser E2E. Reach for this  — unit and e2e alike."
+      paragraph "— Accessibility-tree snapshots, structural assertions, custom matchers, and a fluent interaction chain. Works in jsdom (Vitest / Jest) out of the box; add for real-browser E2E. Reach for this — unit and e2e alike."
         strong "TL;DR"
         code "expect"
         code "flow()"
@@ -157,14 +157,14 @@
     heading "Which do I reach for?" (level 2)
       link "Permalink to "Which do I reach for?""
     list
-      listitem "→  (, , ) committed with ."
+      listitem "→ (, , ) committed with ."
         strong "Catch regressions in CI"
         link "Snapshots"
         code "auditSnapshot"
         code "outlineSnapshot"
         code "tabSequenceSnapshot"
         code "toMatchSnapshot()"
-      listitem "("one ", "no unlabeled buttons") →  or, for  style, ."
+      listitem "("one ", "no unlabeled buttons") → or, for style, ."
         strong "Assert a specific invariant"
         code "<h1>"
         link "Assertions"
@@ -179,7 +179,7 @@
     heading "See it running" (level 2)
       link "Permalink to "See it running""
     list
-      listitem "— : snapshot tests, the custom matchers,  interactions, tab-sequence structure assertions."
+      listitem "— : snapshot tests, the custom matchers, interactions, tab-sequence structure assertions."
         strong "Vitest + jsdom"
         link "examples/testing-vitest/"
           code "examples/testing-vitest/"
@@ -192,7 +192,7 @@
         strong "Playwright E2E"
         link "examples/playwright/"
           code "examples/playwright/"
-      listitem "— the  wires a snapshot generator into a PR workflow."
+      listitem "— the wires a snapshot generator into a PR workflow."
         strong "CI tree-diff bot"
         link "CI Diff Bot recipe"
   contentinfo

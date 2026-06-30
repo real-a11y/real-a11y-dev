@@ -84,7 +84,7 @@
   main
     heading "Example: React App" (level 1)
       link "Permalink to "Example: React App""
-    paragraph "A Vite + React 18 application demonstrating  hooks and the  component."
+    paragraph "A Vite + React 18 application demonstrating hooks and the component."
       code "@real-a11y-dev/react"
       code "<SemanticNavigator />"
     paragraph
@@ -98,7 +98,7 @@
         code "<SemanticNavigator />"
       listitem "powering a live "issues" badge (unlabeled buttons, missing headings)"
         code "useSemanticTree()"
-      listitem "announcing when a dialog is open via an  region"
+      listitem "announcing when a dialog is open via an region"
         code "useActiveModal()"
         code "aria-live"
       listitem "Runtime mode switching (A11y / DOM) via props"

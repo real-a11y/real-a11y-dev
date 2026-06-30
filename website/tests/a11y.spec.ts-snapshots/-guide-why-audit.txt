@@ -137,7 +137,7 @@
     paragraph "produces a stable string — same DOM, same string, every time, on every machine. No timestamps, no generated IDs, no ordering surprises. Safe to commit to version control."
       strong "2. Deterministic output."
       code "auditSnapshot()"
-    paragraph "doesn't return . It throws an  with the specific element, its location in the tree, and a fix suggestion — because you're reading a test failure message at 2am and you need the answer, not a boolean."
+    paragraph "doesn't return . It throws an with the specific element, its location in the tree, and a fix suggestion — because you're reading a test failure message at 2am and you need the answer, not a boolean."
       strong "3. Fail loudly with context."
       code "assertNoUnlabeledInteractive()"
       code "true/false"

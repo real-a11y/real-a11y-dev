@@ -9,8 +9,7 @@
       button "v0.1 · Beta"
     switch "Switch to dark theme"
     link "github"
-  heading "Real A11yAccessibility tooling
-that works in the real world" (level 1)
+  heading "Real A11yAccessibility tooling that works in the real world" (level 1)
   paragraph "Beta (v0.1) — Extracts the accessibility tree as plain data. Use it through a Chrome extension, Storybook panel, React component, or testing library — one engine, every surface."
   link "Get Started"
   link "Chrome Extension"
@@ -36,7 +35,7 @@ that works in the real world" (level 1)
     heading "Shadow DOM isolation by default" (level 2)
     paragraph "The semantic-navigator embed mounts inside a ShadowRoot so its styles never leak into your app and your app's styles never override the panel. CSS conflicts are eliminated at the architecture level."
   contentinfo
-    paragraph "Released under the MIT License. ·  ·"
+    paragraph "Released under the MIT License. · ·"
       link "Privacy"
       link "Accessibility"
     paragraph "Copyright © 2024-present Real A11y contributors"

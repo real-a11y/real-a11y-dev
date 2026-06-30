@@ -94,7 +94,7 @@
   main
     heading "Example: Playwright E2E" (level 1)
       link "Permalink to "Example: Playwright E2E""
-    paragraph "Demonstrates  — the  adapter — against real fixture pages in a Playwright test suite."
+    paragraph "Demonstrates — the adapter — against real fixture pages in a Playwright test suite."
       code "@real-a11y-dev/testing/playwright"
       code "attach()"
     paragraph
@@ -117,7 +117,7 @@
         code "assertNoUnlabeledInteractive"
         code "assertLandmarkStructure"
         code "assertDialogsLabeled"
-      listitem "The same assertions  on a broken page — error messages surfaced in the test runner"
+      listitem "The same assertions on a broken page — error messages surfaced in the test runner"
         strong "throwing"
       listitem "narrowing the audit to a specific subtree"
         code "rootSelector"
@@ -135,16 +135,16 @@
       code
     paragraph "The good fixture has:"
     list
-      listitem "One  with two  sections (no skipped levels)"
+      listitem "One with two sections (no skipped levels)"
         code "<h1>"
         code "<h2>"
-      listitem "Labeled , ,  landmarks"
+      listitem "Labeled , , landmarks"
         code "<header>"
         code "<main>"
         code "<footer>"
-      listitem "A form with proper  elements on every input"
+      listitem "A form with proper elements on every input"
         code "<label>"
-      listitem "A  with"
+      listitem "A with"
         code "<dialog>"
         code "aria-labelledby"
     heading "Bad fixture — assertions throw" (level 2)
@@ -153,16 +153,16 @@
       code
     paragraph "The bad fixture has:"
     list
-      listitem "No  (starts at , then jumps to )"
+      listitem "No (starts at , then jumps to )"
         code "<h1>"
         code "<h2>"
         code "<h4>"
-      listitem "No  landmark"
+      listitem "No landmark"
         code "<main>"
-      listitem "An unlabeled  and unlabeled"
+      listitem "An unlabeled and unlabeled"
         code "<button>"
         code "<input>"
-      listitem "An open  with no  or"
+      listitem "An open with no or"
         code "<dialog>"
         code "aria-label"
         code "aria-labelledby"
@@ -174,7 +174,7 @@
       link "Permalink to "Snapshot test""
     button "Copy Code"
       code
-    paragraph "Commit  output with  to catch unintended accessibility regressions in CI:"
+    paragraph "Commit output with to catch unintended accessibility regressions in CI:"
       code "auditSnapshot()"
       code "toMatchSnapshot()"
     button "Copy Code"
@@ -183,7 +183,7 @@
       link "Permalink to "How the adapter works""
     button "Copy Code"
       code
-    paragraph "The bundle (30 KB) is read from disk once and cached in the Node process — subsequent  calls add no I/O overhead."
+    paragraph "The bundle (30 KB) is read from disk once and cached in the Node process — subsequent calls add no I/O overhead."
       code "attach()"
   contentinfo
     link "Edit this page on GitHub"

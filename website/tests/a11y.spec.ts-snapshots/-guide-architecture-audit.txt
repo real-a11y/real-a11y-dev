@@ -161,7 +161,7 @@
           cell "storybook >= 8, react >= 18"
             code "storybook >= 8"
             code "react >= 18"
-    paragraph "A private  workspace builds the Chrome extension using the same engine; it is not published to npm."
+    paragraph "A private workspace builds the Chrome extension using the same engine; it is not published to npm."
       code "@real-a11y-dev/semantic-navigator-extension"
     separator
     heading "Dependency graph" (level 2)
@@ -173,7 +173,7 @@
       listitem "Assertions and snapshots only read the tree; they never render. That's what makes them safe for jsdom and fast enough to run in every unit test."
         strong "has zero UI dependency."
           code "@real-a11y-dev/testing"
-      listitem ", , and  each pull  through  in tsup, shipping self-contained artifacts. Consumers only ever install the top-level package; they never reason about Preact versions or tree-view internals."
+      listitem ", , and each pull through in tsup, shipping self-contained artifacts. Consumers only ever install the top-level package; they never reason about Preact versions or tree-view internals."
         strong "The UI package is bundled into consumers."
         code "inspector"
         code "react"
@@ -185,12 +185,12 @@
       link "Permalink to "Why this split""
     heading "Engine separate from renderer" (level 3)
       link "Permalink to "Engine separate from renderer""
-    paragraph "Everything useful about the extraction engine (tree walk, role map, accessible-name computation, tab-sequence derivation, action dispatch) is framework-agnostic tree manipulation. Keeping it in  with no UI dependency lets the testing package, the Playwright adapter, and downstream tooling use the engine without pulling Preact into their bundle."
+    paragraph "Everything useful about the extraction engine (tree walk, role map, accessible-name computation, tab-sequence derivation, action dispatch) is framework-agnostic tree manipulation. Keeping it in with no UI dependency lets the testing package, the Playwright adapter, and downstream tooling use the engine without pulling Preact into their bundle."
       code "@real-a11y-dev/core"
     heading "React-specific concerns live in @real-a11y-dev/react" (level 3)
       code "@real-a11y-dev/react"
       link "Permalink to "React-specific concerns live in `@real-a11y-dev/react`""
-    paragraph "React 18 concurrent-mode safety requires ; SSR (Next.js App Router) requires a mount-gated portal; React 19's jsx-runtime has internals that don't live in React 18. All of that React-specific complexity is isolated to one package with a clear React peer dep. Vanilla and Vue projects pay none of that cost — they use  directly."
+    paragraph "React 18 concurrent-mode safety requires ; SSR (Next.js App Router) requires a mount-gated portal; React 19's jsx-runtime has internals that don't live in React 18. All of that React-specific complexity is isolated to one package with a clear React peer dep. Vanilla and Vue projects pay none of that cost — they use directly."
       code "useSyncExternalStore"
       code "inspector"
     heading "Testing is fully headless" (level 3)
@@ -199,7 +199,7 @@
       code "@real-a11y-dev/testing"
     heading "UI is bundled, not shipped separately" (level 3)
       link "Permalink to "UI is bundled, not shipped separately""
-    paragraph "In theory  could be a normal dependency. In practice consumers always want the exact tree-view version the parent package was tested against. Bundling via  eliminates an entire class of peer-range support questions and lets the UI refactor freely inside any release that also updates its consumers."
+    paragraph "In theory could be a normal dependency. In practice consumers always want the exact tree-view version the parent package was tested against. Bundling via eliminates an entire class of peer-range support questions and lets the UI refactor freely inside any release that also updates its consumers."
       code "@real-a11y-dev/semantic-navigator-ui"
       code "noExternal"
     separator
@@ -222,7 +222,7 @@
           code ""files": ["dist"]"
     paragraph "Per-entrypoint specifics:"
     list
-      listitem "— two entries (, ). The Playwright entry imports  to read a pre-built IIFE bundle () that gets injected into the page via ."
+      listitem "— two entries (, ). The Playwright entry imports to read a pre-built IIFE bundle () that gets injected into the page via ."
         strong
           code "@real-a11y-dev/testing"
         code "index"
@@ -238,8 +238,8 @@
         code "manager"
         link "packages/storybook-addon/tsup.config.ts"
           code "packages/storybook-addon/tsup.config.ts"
-      listitem "—  so the bundled artifact is self-contained."
-        strong "/  /"
+      listitem "— so the bundled artifact is self-contained."
+        strong "/ /"
           code "@real-a11y-dev/inspector"
           code "/react"
           code "/storybook-addon"
@@ -247,12 +247,12 @@
     separator
     heading "The SemanticNode data model" (level 2)
       link "Permalink to "The SemanticNode data model""
-    paragraph "All packages share a single node shape from . See  for the full schema. The contract:"
+    paragraph "All packages share a single node shape from . See for the full schema. The contract:"
       code "@real-a11y-dev/core"
       link "Core Concepts"
     button "Copy Code"
       code
-    paragraph "Everything else — the UI, the assertions, the snapshots, the Storybook panel — is a projection of a . When a consumer finds a surprising output, the conversation terminates at "what does  return?" That's the root of every question."
+    paragraph "Everything else — the UI, the assertions, the snapshots, the Storybook panel — is a projection of a . When a consumer finds a surprising output, the conversation terminates at "what does return?" That's the root of every question."
       code "Map<string, SemanticNode>"
       code "extractA11yTree(root)"
     separator
