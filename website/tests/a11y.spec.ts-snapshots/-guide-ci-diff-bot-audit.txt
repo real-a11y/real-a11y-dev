@@ -93,10 +93,8 @@
         link "Combine with assertions"
   main
     heading "CI A11y Diff Bot" (level 1)
-      link "Permalink to "CI A11y Diff Bot""
     paragraph "Post a PR comment whenever the accessibility tree of any audited page changes. The bot catches regressions that no linter can: roles disappearing, labels silently emptied, landmarks removed, dialogs becoming unreachable."
     heading "How it works" (level 2)
-      link "Permalink to "How it works""
     button "Copy Code"
       code
     paragraph "Two jobs run in parallel — one on , one on the PR branch. A third job diffs the text output of and on the PR."
@@ -104,7 +102,6 @@
       code "auditSnapshot()"
       strong "posts or updates a single sticky comment"
     heading "What the comment looks like" (level 2)
-      link "Permalink to "What the comment looks like""
     paragraph
       strong "No changes:"
     blockquote
@@ -121,13 +118,10 @@
       strong "updated in place"
     separator
     heading "Setup" (level 2)
-      link "Permalink to "Setup""
     heading "1. Install" (level 3)
-      link "Permalink to "1. Install""
     button "Copy Code"
       code
     heading "2. Drop in the snapshot script" (level 3)
-      link "Permalink to "2. Drop in the snapshot script""
     paragraph "Copy this file into your repo at — it's yours to customize, version-control, and extend as your audit grows:"
       code "scripts/a11y-snapshot.mjs"
     button "Copy Code"
@@ -149,7 +143,6 @@
         code "attach()"
         emphasis "policy"
     heading "3. Add the workflow" (level 3)
-      link "Permalink to "3. Add the workflow""
     blockquote
       paragraph "The workflow runs against the PR head the base branch. If the script and its devDependencies don't yet exist on , the job fails with (or an from if the lockfile points at a private registry). The diff comment never posts and you'll think the workflow is broken."
         strong "Land steps 1 and 2 on first."
@@ -189,7 +182,6 @@
       code "actions/github-script"
     separator
     heading "Configuration" (level 2)
-      link "Permalink to "Configuration""
     paragraph "The CLI reads its inputs from environment variables."
     table
       rowgroup
@@ -212,7 +204,6 @@
           cell "Absolute or relative path where the markdown report is written."
     heading "A11Y_PAGES shape" (level 3)
       code "A11Y_PAGES"
-      link "Permalink to "`A11Y_PAGES` shape""
     button "Copy Code"
       code
     paragraph "is a CSS selector passed to . Scope-narrowed audits are useful when only part of a page is relevant to the PR (a component, a form, a specific region)."
@@ -220,11 +211,9 @@
       code "attach()"
     separator
     heading "Workflow templates" (level 2)
-      link "Permalink to "Workflow templates""
     paragraph "Each template shares the same final step — a job that downloads both snapshot artifacts and posts the sticky PR comment. That step is identical across setups and is shown once at the end of this section."
       strong "diff & comment"
     heading "Next.js (dev server)" (level 3)
-      link "Permalink to "<a id="template-nextjs"></a>Next.js (dev server)""
     blockquote
       paragraph "Using in ? errors out with — use the template instead, which serves the build output via ."
         code "output: "export""
@@ -236,29 +225,24 @@
     button "Copy Code"
       code
     heading "Vite / CRA SPA (preview server)" (level 3)
-      link "Permalink to "<a id="template-vite"></a>Vite / CRA SPA (preview server)""
     paragraph "Same structure as Next.js — only the build + serve step differs:"
     button "Copy Code"
       code
     heading "Static site (serve build output)" (level 3)
-      link "Permalink to "<a id="template-static"></a>Static site (serve build output)""
     paragraph "For static exports (Next.js , Astro, SvelteKit adapter-static, etc.):"
       code "output: "export""
     button "Copy Code"
       code
     heading "pnpm monorepo" (level 3)
-      link "Permalink to "<a id="template-pnpm-monorepo"></a>pnpm monorepo""
     paragraph "Replace 's npm cache with pnpm's action and update the install / build steps:"
       code "actions/setup-node"
     button "Copy Code"
       code
     heading "Shared: diff & comment job" (level 3)
-      link "Permalink to "<a id="diff-and-comment"></a>Shared: diff & comment job""
     button "Copy Code"
       code
     separator
     heading "Output format" (level 2)
-      link "Permalink to "Output format""
     paragraph "Each page produces three blocks: the a11y tree, the heading outline, and the tab sequence. Example:"
     button "Copy Code"
       code
@@ -266,7 +250,6 @@
       code "main"
     separator
     heading "What it catches" (level 2)
-      link "Permalink to "What it catches""
     table
       rowgroup
         row
@@ -299,7 +282,6 @@
           cell "✅"
     separator
     heading "Combine with assertions" (level 2)
-      link "Permalink to "Combine with assertions""
     paragraph "The diff bot tells you — pair it with , , etc. to fail the build immediately on known-bad patterns:"
       emphasis "something changed"
       code "assertHeadingOrder"

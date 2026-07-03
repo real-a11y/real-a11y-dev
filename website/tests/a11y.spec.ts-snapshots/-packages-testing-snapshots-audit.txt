@@ -97,7 +97,6 @@
         link "See also"
   main
     heading "Snapshots" (level 1)
-      link "Permalink to "Snapshots""
     paragraph "Deterministic string representations of the accessibility tree. Safe to commit — the same DOM always produces the same string."
     paragraph "Part of . For the ergonomic form, see ."
       link "@real-a11y-dev/testing"
@@ -106,7 +105,6 @@
       link "Matchers"
     heading "auditSnapshot(root, options?)" (level 2)
       code "auditSnapshot(root, options?)"
-      link "Permalink to "`auditSnapshot(root, options?)`""
     paragraph "Returns a formatted string of the full semantic tree."
     blockquote
       paragraph "Using the entry? renders the with cleaner snapshot tooling. returns a raw string you can assert on or write to a file; returns a serializer-boxed value for native . See ."
@@ -153,14 +151,12 @@
       code
     heading "Using redact" (level 3)
       code "redact"
-      link "Permalink to "Using `redact`""
     paragraph "takes an array of regexes. Any substring of an that matches one is replaced with the literal placeholder . The element, its role, and its position are untouched — only the volatile text inside its name is masked."
       code "redact"
       strong "accessible name"
       code "[REDACTED]"
     heading "Without redact — the snapshot flakes" (level 4)
       code "redact"
-      link "Permalink to "Without `redact` — the snapshot flakes""
     paragraph "A relative timestamp in an changes between runs, so the committed snapshot fails even though nothing actually regressed:"
       code "aria-label"
     button "Copy Code"
@@ -169,7 +165,6 @@
       code
     heading "With redact — stable structure, masked text" (level 4)
       code "redact"
-      link "Permalink to "With `redact` — stable structure, masked text""
     button "Copy Code"
       code
     button "Copy Code"
@@ -177,7 +172,6 @@
     paragraph "You still catch real regressions — if the button lost its label the name would change to — you just stop catching "the clock advanced.""
       code """"
     heading "Realistic patterns" (level 4)
-      link "Permalink to "Realistic patterns""
     paragraph "Most flakes come from a handful of sources. Pass a regex for each noisy bit:"
     button "Copy Code"
       code
@@ -218,7 +212,6 @@
         code "RegExp"
     heading "outlineSnapshot(root)" (level 2)
       code "outlineSnapshot(root)"
-      link "Permalink to "`outlineSnapshot(root)`""
     paragraph "Returns a string of the heading outline only — useful for structure audits."
     button "Copy Code"
       code
@@ -227,7 +220,6 @@
       code
     heading "tabSequenceSnapshot(root)" (level 2)
       code "tabSequenceSnapshot(root)"
-      link "Permalink to "`tabSequenceSnapshot(root)`""
     paragraph "Returns the tab sequence as a numbered list."
     button "Copy Code"
       code
@@ -235,14 +227,12 @@
     button "Copy Code"
       code
     heading "Determinism" (level 2)
-      link "Permalink to "Determinism""
     paragraph "All three helpers return the for the same DOM — on every run, on every machine. No timestamps, no generated IDs, no ordering surprises. That's the property that makes safe in CI without flakes. For genuinely variable content, use ."
       strong "same string"
       code "toMatchSnapshot()"
       link "redact"
         code "redact"
     heading "See also" (level 2)
-      link "Permalink to "See also""
     list
       listitem "— serializer so renders the tree directly"
         link "Matchers"

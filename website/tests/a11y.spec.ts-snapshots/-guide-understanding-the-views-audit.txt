@@ -87,17 +87,14 @@
         link "Same content, four perspectives"
   main
     heading "Understanding the views" (level 1)
-      link "Permalink to "Understanding the views""
     paragraph "Real A11y gives you multiple ways to inspect the same page. Each view answers a different question — but they all describe the ."
       strong "same content"
     heading "The visual layout" (level 2)
-      link "Permalink to "The visual layout""
     paragraph "This is what sighted users see: a spatial arrangement of sections, text, images, forms, and links."
     img "Visual view: a website layout with a blue header, teal navigation sidebar, purple main content area with headings, text, images, inputs, and a button, an amber aside panel, and a slate footer."
     paragraph "Every colored shape represents a piece of content. The colors are consistent across all diagrams below — so you can track each element across views."
     separator
     heading "A11y Tree view" (level 2)
-      link "Permalink to "A11y Tree view""
     paragraph "Assistive technology doesn't see the 2D layout. It reads the same content as a , organized by landmark roles."
       strong "hierarchical tree"
     img "A11y tree view: the same website content rearranged as a tree diagram with document as the root, branching into banner, navigation, main, complementary, and contentinfo landmarks, each containing their child elements."
@@ -109,13 +106,11 @@
       link "Read more about the A11y view →"
     separator
     heading "Headings view" (level 2)
-      link "Permalink to "Headings view""
     paragraph "Screen reader users navigate primarily by headings. This view extracts just the heading elements and shows the document outline."
     img "Headings view: only the heading elements from the page, shown as indigo bars indented by level — one H1 at the top, followed by H2s and H3s forming the document outline."
     paragraph "A well-structured outline has exactly one H1, no skipped levels, and a logical nesting that mirrors the page's sections."
     separator
     heading "TAB order view" (level 2)
-      link "Permalink to "TAB order view""
     paragraph "Keyboard users press Tab to move between interactive elements. This view shows the exact sequence — a flat, numbered list of every focusable element."
     img "Tab order view: focusable elements shown as numbered bars in sequence — sky-blue links, rose inputs, and a green button — each labeled with which landmark section it belongs to."
     paragraph "The color of each bar tells you the element type (link, input, button), and the badge on the right tells you which section it came from. The order should match the visual flow."
@@ -123,7 +118,6 @@
       link "Read more about the TAB view →"
     separator
     heading "Same content, four perspectives" (level 2)
-      link "Permalink to "Same content, four perspectives""
     table
       rowgroup
         row

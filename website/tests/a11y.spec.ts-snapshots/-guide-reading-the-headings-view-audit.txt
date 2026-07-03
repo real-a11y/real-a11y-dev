@@ -87,7 +87,6 @@
         link "The relationship to the other views"
   main
     heading "Reading the Headings View" (level 1)
-      link "Permalink to "Reading the Headings View""
     blockquote
       paragraph "The Headings view matches the output of in the testing package — same ordering, same formatting. Whether you're reading it in the Chrome extension, the Storybook addon, or a committed Playwright snapshot fixture, this page applies."
         link "outlineSnapshot()"
@@ -101,7 +100,6 @@
     paragraph "Each bar is one heading. The indentation shows the level — H1 at the top, H2 nested under it, H3 nested under H2."
     separator
     heading "What you see" (level 2)
-      link "Permalink to "What you see""
     paragraph "Each row is one heading element, in document order. For each one you'll see:"
     list
       listitem "— , , , , , or"
@@ -118,7 +116,6 @@
         strong "Indentation"
     separator
     heading "How heading levels work" (level 2)
-      link "Permalink to "How heading levels work""
     paragraph "Heading levels create a hierarchy — like an outline in a word processor:"
     list
       listitem "is the page title. There should be exactly one per page."
@@ -140,9 +137,7 @@
       code "<h3>"
     separator
     heading "What to check" (level 2)
-      link "Permalink to "What to check""
     heading "Exactly one H1" (level 3)
-      link "Permalink to "Exactly one H1""
     paragraph "Every page should have exactly one — the page title. Zero means there's no top-level label. More than one means the page has multiple "titles" and the hierarchy has no single root."
       code "<h1>"
     button "Copy Code"
@@ -152,7 +147,6 @@
       code "<h1>"
       code "<h2>"
     heading "No skipped levels" (level 3)
-      link "Permalink to "No skipped levels""
     paragraph "Heading levels should only increase by one at a time. Jumping from to breaks the outline — screen reader users navigating by heading level lose their place in the hierarchy."
       code "<h1>"
       code "<h3>"
@@ -163,7 +157,6 @@
       code "<h2>"
       code "<h2>"
     heading "Headings that aren't headings" (level 3)
-      link "Permalink to "Headings that aren't headings""
     paragraph "Sometimes developers use or to get a specific font size, not to create structure. The Headings view will reveal this — you'll see headings that don't belong in the outline."
       code "<h3>"
       code "<h4>"
@@ -172,11 +165,9 @@
     paragraph "Use CSS to style the text at the size you want. Don't pick a heading level based on how it looks — pick it based on where it falls in the outline."
       strong "The fix:"
     heading "Missing headings" (level 3)
-      link "Permalink to "Missing headings""
     paragraph "If a major section of the page has no heading, screen reader users can't jump to it. They have to arrow through every element sequentially to find it."
     paragraph "Compare the Headings view to the visual layout. Every distinct section a sighted user would recognize should have a heading in the outline."
     heading "Headings inside interactive elements" (level 3)
-      link "Permalink to "Headings inside interactive elements""
     paragraph "A heading inside a or creates confusing behavior — the element shows up both in heading navigation and interactive navigation, and screen readers may announce it inconsistently."
       code "<button>"
       code "<a>"
@@ -187,7 +178,6 @@
       code "aria-label"
     separator
     heading "Common patterns and what they look like" (level 2)
-      link "Permalink to "Common patterns and what they look like""
     paragraph
       strong "A healthy page outline"
     button "Copy Code"
@@ -207,7 +197,6 @@
     paragraph "Every heading level used, deep nesting. This is valid, but if a page reaches H5 or H6, consider whether the content would be better split across multiple pages."
     separator
     heading "The relationship to the other views" (level 2)
-      link "Permalink to "The relationship to the other views""
     paragraph "The Headings view is a focused slice of the A11y view. Where the A11y view shows every role — landmarks, buttons, links, inputs — the Headings view shows only headings."
     paragraph "Use the Headings view when you want to check document structure quickly. Use the A11y view when you need the full picture — landmarks, names, states, and everything in between."
     table

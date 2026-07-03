@@ -93,7 +93,6 @@
         link "Install"
   main
     heading "Semantic Navigator" (level 1)
-      link "Permalink to "Semantic Navigator""
     paragraph "Navigate the web the way your users have to."
     paragraph "Most accessibility problems don't look like problems — until you remove the visual layer. Semantic Navigator replaces the page with its accessibility tree. You can still click, navigate, fill forms, and complete tasks. The structure is all you get."
     link "Add to Chrome"
@@ -107,7 +106,6 @@
     paragraph "The more your navigation resembles how screen reader users experience your product, the more confidence it can give you."
     separator
     heading "The problem" (level 2)
-      link "Permalink to "The problem""
     paragraph "You build, test, and ship products you have never actually experienced."
     paragraph "Not the way a screen reader user experiences them."
     paragraph "You navigate with your eyes. You click what you can see, skip what doesn't look relevant, and scan for what matters. Your users navigate with structure — headings to orient, landmarks to jump to, roles and names to understand what each element does. They hear the tree, one element at a time, in the order the DOM gives it to them."
@@ -115,7 +113,6 @@
     paragraph "Most teams have never experienced their own product that way. Not because they don't care — but because nothing has ever made them sit down and try it."
     separator
     heading "The test" (level 2)
-      link "Permalink to "The test""
     paragraph
       strong "If you can complete the task through the accessibility tree, your users probably can too."
     paragraph
@@ -126,7 +123,6 @@
     paragraph "That's not a usability problem. That's your accessibility bug. And your screen reader users hit it every day."
     separator
     heading "This is not a replacement for real testing" (level 2)
-      link "Permalink to "This is not a replacement for real testing""
     paragraph "NVDA. JAWS. VoiceOver. TalkBack. These are the tools your users actually depend on. Each one has its own quirks, its own keyboard model, its own way of announcing dynamic content. None of that is simulated here."
     paragraph "Semantic Navigator does not reproduce what a screen reader sounds like, how it moves, or what it announces in response to focus changes. What it does is expose the raw material — the semantic tree — that screen readers consume."
     paragraph "Think of it as the difference between reading a recipe and tasting the dish. The tree tells you what's there. A real screen reader tells you how it's experienced."
@@ -137,7 +133,6 @@
     paragraph "This extension makes those sessions less painful. It does not make them optional."
     separator
     heading "The screen curtain" (level 2)
-      link "Permalink to "The screen curtain""
     paragraph "Semantic Navigator includes a screen curtain — a single toggle that blacks out the entire page. Only an extension can paint over a whole browser tab."
       code "Curtain ON"
     paragraph "The tree stays. The panel stays. You can still interact with the full product. The visual layer is just gone."
@@ -145,7 +140,6 @@
     paragraph "While the curtain is on, the focus-ring overlay is suppressed too (no point drawing on a blacked-out page) — lean on the panel's tree selection to orient yourself."
     separator
     heading "How it works" (level 2)
-      link "Permalink to "How it works""
     paragraph "Click the extension icon in your Chrome toolbar. The side panel opens next to the current page and populates immediately."
       strong "1. Open the side panel"
     paragraph "The page renders as an interactive tree — DOM view (raw HTML elements) or A11y view (roles, accessible names, states). This is what assistive technology perceives."
@@ -157,7 +151,6 @@
       link "the test"
     separator
     heading "What's unique to the Chrome extension" (level 2)
-      link "Permalink to "What's unique to the Chrome extension""
     paragraph "The extension surfaces the same engine as , , and . Everything is shared across those — see for filters, search, focus tracking, scoping, and live region monitoring."
       code "@real-a11y-dev/inspector"
       code "@real-a11y-dev/react"
@@ -167,7 +160,6 @@
     paragraph "What only an extension can give you is the handful of capabilities that require a browser extension to reach across tabs and frames. The above is one; here are the rest:"
       link "screen curtain"
     heading "Cross-iframe tree merging" (level 3)
-      link "Permalink to "Cross-iframe tree merging""
     paragraph "iframes are merged into the parent tree at the correct depth. The extension's background script reaches across frame boundaries (a privilege only extensions have) and stitches each iframe's locally-extracted tree onto its placeholder in the parent. Embedded widgets, third-party flows, payment forms — all in scope."
       code "<iframe>"
     paragraph "In-page packages (, ) only see their own document and can't merge across origins. The extension is the only surface that gives you the full picture for sites that use iframes heavily."
@@ -181,7 +173,6 @@
       code "Space"
       code "↑"
       code "↓"
-      link "Permalink to "Keyboard bar — `Esc` · `Tab` · `Shift+Tab` · `Enter` · `Space` · `↑` · `↓`""
     paragraph "Buttons that dispatch a synthetic to whatever element currently has focus on the host page. Possible only because the extension's content script can against the page's DOM from outside."
       code "KeyboardEvent"
       code "dispatchEvent"
@@ -193,11 +184,9 @@
       code "Esc"
     heading "Close tab — × next to the page title" (level 3)
       code "×"
-      link "Permalink to "Close tab — `×` next to the page title""
     paragraph "Closes the current browser tab. Handy for dismissing popups, login windows, or test tabs without reaching for the mouse. Extension-only because it uses ."
       code "chrome.tabs.remove"
     heading "Cross-link chips on disclosure pairs" (level 3)
-      link "Permalink to "Cross-link chips on disclosure pairs""
     paragraph "Disclosure widgets — a button that opens a menu, a tab that controls a panel, a combobox bound to a listbox — render as two separate rows in the tree, often far apart. The relationship between them is the most useful piece of information when debugging the widget, and it's the easiest to miss."
     paragraph "The panel renders that relationship as paired clickable chips:"
     list
@@ -223,17 +212,14 @@
         code "aria-controls"
     heading "Manual refresh on tab switch — ↻ toolbar button" (level 3)
       code "↻"
-      link "Permalink to "Manual refresh on tab switch — `↻` toolbar button""
     paragraph "When you switch browser tabs, the panel and shows the empty "Connecting…" state instead of stale content from the previous tab. Hit the refresh button to load the new tab's tree."
       strong "clears its tree"
       code "↻"
     paragraph "This is intentional: auto-refresh on tab switch was unreliable across the long tail of pages (restricted URLs with no content script, lazy-injected content scripts that aren't ready yet, races between the panel and the content script becoming reachable). The manual refresh trades one extra click for predictability — you always know what you're seeing."
     heading "BETA pill in the panel header" (level 3)
-      link "Permalink to "BETA pill in the panel header""
     paragraph "Sets expectations during the pre-1.0 phase. Linked to the GitHub issues page. Goes away at v1.0."
     separator
     heading "Reading the tree, scoping, filtering, focus tracking" (level 2)
-      link "Permalink to "Reading the tree, scoping, filtering, focus tracking""
     paragraph "These behaviors are shared with (and every package built on it). They work the same way in the extension's panel as they do anywhere else the tree is rendered:"
       code "@real-a11y-dev/inspector"
     list
@@ -249,7 +235,6 @@
           link "Panel features"
     separator
     heading "Install" (level 2)
-      link "Permalink to "Install""
     paragraph "— ."
       strong "Chrome Web Store"
       link "Semantic Navigator"

@@ -44,24 +44,13 @@
 44. link "What to check"
 45. link "Common patterns and what they look like"
 46. link "The relationship to the A11y view"
-47. link "Permalink to "Reading the TAB View""
-48. link "tabSequenceSnapshot()"
-49. link "Permalink to "What you see""
-50. link "Permalink to "How tab order works""
-51. link "Permalink to "What to check""
-52. link "Permalink to "Order matches the visual flow""
-53. link "Permalink to "Every interactive element is reachable""
-54. link "Permalink to "Nothing unreachable appears in the list""
-55. link "Permalink to "Amber badges — positive tabindex""
-56. link "Permalink to "Focus traps inside modals and dialogs""
-57. link "Permalink to "Common patterns and what they look like""
-58. button "Copy Code"
-59. generic
-60. button "Copy Code"
-61. generic
-62. button "Copy Code"
-63. generic
-64. link "Permalink to "The relationship to the A11y view""
-65. link "Edit this page on GitHub"
-66. link "Previous pageHeadings View"
-67. link "Next pagePanel features"
+47. link "tabSequenceSnapshot()"
+48. button "Copy Code"
+49. generic
+50. button "Copy Code"
+51. generic
+52. button "Copy Code"
+53. generic
+54. link "Edit this page on GitHub"
+55. link "Previous pageHeadings View"
+56. link "Next pagePanel features"

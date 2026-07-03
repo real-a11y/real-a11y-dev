@@ -44,33 +44,22 @@
 44. link "What to check"
 45. link "Common patterns and what they look like"
 46. link "The relationship to the other views"
-47. link "Permalink to "Reading the Headings View""
-48. link "outlineSnapshot()"
-49. link "Permalink to "What you see""
-50. link "Permalink to "How heading levels work""
-51. link "Permalink to "What to check""
-52. link "Permalink to "Exactly one H1""
-53. button "Copy Code"
-54. generic
-55. link "Permalink to "No skipped levels""
+47. link "outlineSnapshot()"
+48. button "Copy Code"
+49. generic
+50. button "Copy Code"
+51. generic
+52. button "Copy Code"
+53. generic
+54. button "Copy Code"
+55. generic
 56. button "Copy Code"
 57. generic
-58. link "Permalink to "Headings that aren't headings""
-59. button "Copy Code"
-60. generic
-61. link "Permalink to "Missing headings""
-62. link "Permalink to "Headings inside interactive elements""
-63. button "Copy Code"
-64. generic
-65. link "Permalink to "Common patterns and what they look like""
-66. button "Copy Code"
-67. generic
-68. button "Copy Code"
-69. generic
-70. button "Copy Code"
-71. generic
-72. link "Permalink to "The relationship to the other views""
-73. table
-74. link "Edit this page on GitHub"
-75. link "Previous pageA11y View"
-76. link "Next pageTAB View"
+58. button "Copy Code"
+59. generic
+60. button "Copy Code"
+61. generic
+62. table
+63. link "Edit this page on GitHub"
+64. link "Previous pageA11y View"
+65. link "Next pageTAB View"

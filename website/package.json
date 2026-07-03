@@ -14,6 +14,7 @@
     "@playwright/test": "^1.51.1",
     "@real-a11y-dev/design": "^0.1.0",
     "@real-a11y-dev/testing": "workspace:*",
+    "markdown-it-anchor": "^9.2.0",
     "vitepress": "^1.6.3"
   }
 }

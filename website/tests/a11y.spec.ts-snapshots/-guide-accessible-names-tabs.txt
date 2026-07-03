@@ -44,37 +44,24 @@
 44. link "What does not contribute"
 45. link "Debugging an unexpected name"
 46. link "Why this matters"
-47. link "Permalink to "Accessible Names""
-48. link "Permalink to "The priority order""
-49. link "Permalink to "Concrete examples""
-50. link "Permalink to "Button with only text""
+47. button "Copy Code"
+48. generic
+49. button "Copy Code"
+50. generic
 51. button "Copy Code"
 52. generic
-53. link "Permalink to "Button with an icon and hidden text""
-54. button "Copy Code"
-55. generic
-56. link "Permalink to "Button with only an icon""
+53. button "Copy Code"
+54. generic
+55. button "Copy Code"
+56. generic
 57. button "Copy Code"
 58. generic
 59. button "Copy Code"
 60. generic
-61. link "Permalink to "Form control with a wrapping label""
-62. button "Copy Code"
-63. generic
-64. link "Permalink to "Form control with `for` / `id`""
-65. button "Copy Code"
-66. generic
-67. link "Permalink to "`aria-label` beats text content""
-68. button "Copy Code"
-69. generic
-70. link "Permalink to "`aria-labelledby` beats everything""
-71. button "Copy Code"
-72. generic
-73. button "Copy Code"
-74. generic
-75. link "Permalink to "What does *not* contribute""
-76. link "Permalink to "Debugging an unexpected name""
-77. link "Permalink to "Why this matters""
-78. link "Edit this page on GitHub"
-79. link "Previous pageCI Diff Bot"
-80. link "Next pageArchitecture"
+61. button "Copy Code"
+62. generic
+63. button "Copy Code"
+64. generic
+65. link "Edit this page on GitHub"
+66. link "Previous pageCI Diff Bot"
+67. link "Next pageArchitecture"

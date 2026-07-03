@@ -42,11 +42,7 @@
 42. link "The gap"
 43. link "How they complement each other"
 44. link "Design principles"
-45. link "Permalink to "Why Real A11y?""
-46. link "Permalink to "The gap""
-47. link "Permalink to "How they complement each other""
-48. table
-49. link "Permalink to "Design principles""
-50. link "Edit this page on GitHub"
-51. link "Previous pageSnapshots vs. Other Tools"
-52. link "Next pageUnderstanding the Views"
+45. table
+46. link "Edit this page on GitHub"
+47. link "Previous pageSnapshots vs. Other Tools"
+48. link "Next pageUnderstanding the Views"

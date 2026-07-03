@@ -47,59 +47,41 @@
 47. link "Output format"
 48. link "What it catches"
 49. link "Combine with assertions"
-50. link "Permalink to "CI A11y Diff Bot""
-51. link "Permalink to "How it works""
+50. button "Copy Code"
+51. generic
 52. button "Copy Code"
 53. generic
-54. link "Permalink to "What the comment looks like""
-55. button "Copy Code"
-56. generic
-57. link "Permalink to "Setup""
-58. link "Permalink to "1. Install""
-59. button "Copy Code"
-60. generic
-61. link "Permalink to "2. Drop in the snapshot script""
-62. button "Copy Code"
-63. generic
-64. button "Copy Code"
-65. generic
-66. button "Copy Code"
-67. generic
-68. link "Permalink to "3. Add the workflow""
-69. link "Next.js (dev server)"
-70. link "Vite / CRA SPA (preview server)"
-71. link "Static site (serve build output)"
-72. link "pnpm monorepo"
-73. link "Permalink to "Configuration""
-74. table
-75. link "Permalink to "`A11Y_PAGES` shape""
+54. button "Copy Code"
+55. generic
+56. button "Copy Code"
+57. generic
+58. button "Copy Code"
+59. generic
+60. button "Copy Code"
+61. generic
+62. link "Next.js (dev server)"
+63. link "Vite / CRA SPA (preview server)"
+64. link "Static site (serve build output)"
+65. link "pnpm monorepo"
+66. table
+67. button "Copy Code"
+68. generic
+69. link "Static site"
+70. button "Copy Code"
+71. generic
+72. button "Copy Code"
+73. generic
+74. button "Copy Code"
+75. generic
 76. button "Copy Code"
 77. generic
-78. link "Permalink to "Workflow templates""
-79. link "Permalink to "<a id="template-nextjs"></a>Next.js (dev server)""
-80. link "Static site"
-81. button "Copy Code"
-82. generic
-83. link "Permalink to "<a id="template-vite"></a>Vite / CRA SPA (preview server)""
-84. button "Copy Code"
-85. generic
-86. link "Permalink to "<a id="template-static"></a>Static site (serve build output)""
-87. button "Copy Code"
-88. generic
-89. link "Permalink to "<a id="template-pnpm-monorepo"></a>pnpm monorepo""
-90. button "Copy Code"
-91. generic
-92. link "Permalink to "<a id="diff-and-comment"></a>Shared: diff & comment job""
-93. button "Copy Code"
-94. generic
-95. link "Permalink to "Output format""
-96. button "Copy Code"
-97. generic
-98. link "Permalink to "What it catches""
-99. table
-100. link "Permalink to "Combine with assertions""
-101. button "Copy Code"
-102. generic
-103. link "Edit this page on GitHub"
-104. link "Previous pagePeer Dependencies"
-105. link "Next pageAccessible Names"
+78. button "Copy Code"
+79. generic
+80. button "Copy Code"
+81. generic
+82. table
+83. button "Copy Code"
+84. generic
+85. link "Edit this page on GitHub"
+86. link "Previous pagePeer Dependencies"
+87. link "Next pageAccessible Names"

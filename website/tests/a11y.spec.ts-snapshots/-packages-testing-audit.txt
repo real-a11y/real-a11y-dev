@@ -95,7 +95,6 @@
         link "See it running"
   main
     heading "@real-a11y-dev/testing" (level 1)
-      link "Permalink to "@real-a11y-dev/testing""
     blockquote
       paragraph "— Accessibility-tree snapshots, structural assertions, custom matchers, and a fluent interaction chain. Works in jsdom (Vitest / Jest) out of the box; add for real-browser E2E. Reach for this — unit and e2e alike."
         strong "TL;DR"
@@ -105,11 +104,9 @@
         strong "in your test suite"
     paragraph "Headless accessibility audit helpers for Vitest, Jest, and Playwright. No browser required for the core helpers — they work in jsdom."
     heading "Install" (level 2)
-      link "Permalink to "Install""
     button "Copy Code"
       code
     heading "What's in the box" (level 2)
-      link "Permalink to "What's in the box""
     table
       rowgroup
         row
@@ -121,14 +118,14 @@
           cell "Snapshots"
             strong "Snapshots"
           cell "Deterministic strings of the a11y tree, heading outline, and tab order — diff-friendly, safe to commit."
-          cell
+          cell "Snapshots →"
             link "Snapshots →"
         row
           cell "Assertions"
             strong "Assertions"
           cell "assert* functions that throw descriptive errors on broken structure."
             code "assert*"
-          cell
+          cell "Assertions →"
             link "Assertions →"
         row
           cell "Matchers"
@@ -136,26 +133,25 @@
           cell "The same checks as ergonomic expect matchers, plus the a11ySnapshot() serializer. Vitest + Jest."
             code "expect"
             code "a11ySnapshot()"
-          cell
+          cell "Matchers →"
             link "Matchers →"
         row
           cell "Flow API"
             strong "Flow API"
           cell "Fluent interaction chains that assert about the tree after each step."
-          cell
+          cell "Flow API →"
             link "Flow API →"
         row
           cell "Playwright adapter"
             strong "Playwright adapter"
           cell "Run every helper against a real browser page via attach(page)."
             code "attach(page)"
-          cell
+          cell "Playwright →"
             link "Playwright →"
     paragraph "New to the idea of snapshotting the accessibility tree? Start with the concept: ."
       link "Accessibility Snapshots"
         strong "Accessibility Snapshots"
     heading "Which do I reach for?" (level 2)
-      link "Permalink to "Which do I reach for?""
     list
       listitem "→ (, , ) committed with ."
         strong "Catch regressions in CI"
@@ -177,7 +173,6 @@
         strong "Audit a real, rendered page"
         link "Playwright adapter"
     heading "See it running" (level 2)
-      link "Permalink to "See it running""
     list
       listitem "— : snapshot tests, the custom matchers, interactions, tab-sequence structure assertions."
         strong "Vitest + jsdom"

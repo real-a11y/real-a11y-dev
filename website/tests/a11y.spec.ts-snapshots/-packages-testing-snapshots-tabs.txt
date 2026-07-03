@@ -49,51 +49,41 @@
 49. link "tabSequenceSnapshot(root)"
 50. link "Determinism"
 51. link "See also"
-52. link "Permalink to "Snapshots""
-53. link "@real-a11y-dev/testing"
-54. link "Matchers"
-55. link "Permalink to "`auditSnapshot(root, options?)`""
-56. link "matchers"
-57. link "a11ySnapshot vs auditSnapshot"
-58. button "Copy Code"
-59. generic
-60. table
+52. link "@real-a11y-dev/testing"
+53. link "Matchers"
+54. link "matchers"
+55. link "a11ySnapshot vs auditSnapshot"
+56. button "Copy Code"
+57. generic
+58. table
+59. button "Copy Code"
+60. generic
 61. button "Copy Code"
 62. generic
-63. link "Permalink to "Using `redact`""
-64. link "Permalink to "Without `redact` — the snapshot flakes""
+63. button "Copy Code"
+64. generic
 65. button "Copy Code"
 66. generic
 67. button "Copy Code"
 68. generic
-69. link "Permalink to "With `redact` — stable structure, masked text""
-70. button "Copy Code"
-71. generic
-72. button "Copy Code"
-73. generic
-74. link "Permalink to "Realistic patterns""
+69. button "Copy Code"
+70. generic
+71. button "Copy Code"
+72. generic
+73. link "a11ySnapshot"
+74. link "Playwright adapter"
 75. button "Copy Code"
 76. generic
 77. button "Copy Code"
 78. generic
-79. link "a11ySnapshot"
-80. link "Playwright adapter"
-81. link "Permalink to "`outlineSnapshot(root)`""
-82. button "Copy Code"
-83. generic
-84. button "Copy Code"
-85. generic
-86. link "Permalink to "`tabSequenceSnapshot(root)`""
-87. button "Copy Code"
-88. generic
-89. button "Copy Code"
-90. generic
-91. link "Permalink to "Determinism""
-92. link "redact"
-93. link "Permalink to "See also""
-94. link "Matchers"
-95. link "Playwright adapter"
-96. link "CI Diff Bot recipe"
-97. link "Edit this page on GitHub"
-98. link "Previous page@real-a11y-dev/testing"
-99. link "Next pageAssertions"
+79. button "Copy Code"
+80. generic
+81. button "Copy Code"
+82. generic
+83. link "redact"
+84. link "Matchers"
+85. link "Playwright adapter"
+86. link "CI Diff Bot recipe"
+87. link "Edit this page on GitHub"
+88. link "Previous page@real-a11y-dev/testing"
+89. link "Next pageAssertions"

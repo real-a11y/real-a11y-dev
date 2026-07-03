@@ -46,26 +46,17 @@
 46. link "Tab Order"
 47. link "Heading Outline"
 48. link "Tree Diffing"
-49. link "Permalink to "Core Concepts""
-50. link "Permalink to "The Semantic Tree""
-51. button "Copy Code"
-52. generic
-53. link "Permalink to "Two tree modes""
-54. table
-55. link "Permalink to "Roles""
-56. link "WAI-ARIA specification"
-57. table
-58. link "Permalink to "Accessible Names""
-59. link "Accessible Name and Description Computation (ANDC)"
-60. button "Copy Code"
-61. generic
-62. link "Accessible Names"
-63. link "Permalink to "Stable Node IDs""
-64. link "Permalink to "Tab Order""
-65. link "Permalink to "Heading Outline""
-66. link "Permalink to "Tree Diffing""
-67. button "Copy Code"
-68. generic
-69. link "Edit this page on GitHub"
-70. link "Previous pageGetting Started"
-71. link "Next pageAccessibility Snapshots"
+49. button "Copy Code"
+50. generic
+51. table
+52. link "WAI-ARIA specification"
+53. table
+54. link "Accessible Name and Description Computation (ANDC)"
+55. button "Copy Code"
+56. generic
+57. link "Accessible Names"
+58. button "Copy Code"
+59. generic
+60. link "Edit this page on GitHub"
+61. link "Previous pageGetting Started"
+62. link "Next pageAccessibility Snapshots"

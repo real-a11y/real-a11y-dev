@@ -99,7 +99,6 @@
         link "See also"
   main
     heading "Assertions" (level 1)
-      link "Permalink to "Assertions""
     paragraph "These throw with a descriptive message on failure. Designed for use directly in / blocks without wrapping in ."
       code "A11yAssertionError"
       code "it()"
@@ -112,7 +111,6 @@
       link "Matchers"
     heading "assertNoUnlabeledInteractive(root)" (level 2)
       code "assertNoUnlabeledInteractive(root)"
-      link "Permalink to "`assertNoUnlabeledInteractive(root)`""
     paragraph "Throws if any interactive element (button, link, textbox, combobox, checkbox, radio, etc.) has an empty accessible name."
     button "Copy Code"
       code
@@ -121,7 +119,6 @@
       code
     heading "assertHeadingOrder(root)" (level 2)
       code "assertHeadingOrder(root)"
-      link "Permalink to "`assertHeadingOrder(root)`""
     paragraph "Throws if:"
     list
       listitem "There is not exactly one"
@@ -133,7 +130,6 @@
       code
     heading "assertDialogsLabeled(root)" (level 2)
       code "assertDialogsLabeled(root)"
-      link "Permalink to "`assertDialogsLabeled(root)`""
     paragraph "Throws if any or element has no accessible name (via or )."
       code "dialog"
       code "alertdialog"
@@ -143,7 +139,6 @@
       code
     heading "assertLandmarkStructure(root)" (level 2)
       code "assertLandmarkStructure(root)"
-      link "Permalink to "`assertLandmarkStructure(root)`""
     paragraph "Throws if:"
     list
       listitem "There is no landmark"
@@ -158,12 +153,10 @@
       code
     heading "A11yAssertionError" (level 2)
       code "A11yAssertionError"
-      link "Permalink to "`A11yAssertionError`""
     paragraph "All four assertions throw this error type on failure. Import it to catch or assert against it directly:"
     button "Copy Code"
       code
     heading "See also" (level 2)
-      link "Permalink to "See also""
     list
       listitem "— the same checks as matchers with negation"
         link "Matchers"

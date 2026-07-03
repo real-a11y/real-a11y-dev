@@ -93,7 +93,6 @@
         link "Start snapshotting"
   main
     heading "Accessibility Snapshots" (level 1)
-      link "Permalink to "Accessibility Snapshots""
     paragraph "An is a deterministic, human-readable capture of what assistive technology perceives on a page — roles, accessible names, heading outline, and tab order — serialized to a string you can commit and diff in code review."
       strong "accessibility snapshot"
     button "Copy Code"
@@ -104,7 +103,6 @@
       emphasis ""what is the semantic structure — and did it change?""
       link "How Accessibility Snapshots Compare"
     heading "Why this exists" (level 2)
-      link "Permalink to "Why this exists""
     paragraph "Accessibility is hard to get right. Building — and — an accessible web app demands fluency in WCAG, ARIA, and the accessible-name algorithm, plus the quirks of real screen readers, which behave differently across NVDA on Windows, VoiceOver on macOS and iOS, and TalkBack on Android. That's a steep wall, and it's a big reason teams ship accessibility bugs they never notice."
       emphasis "testing"
     paragraph "An accessibility snapshot lowers the bar. Because it shows your page exactly as assistive technology structures it — roles, names, headings, focus order — you can read it and answer the questions that matter being a screen-reader expert:"
@@ -122,7 +120,6 @@
       emphasis "replace"
       link "more on that"
     heading "The problem with DOM snapshots" (level 2)
-      link "Permalink to "The problem with DOM snapshots""
     paragraph "A normal on rendered HTML captures the : every wrapper , class name, and inline style. Two problems follow:"
       code "toMatchSnapshot()"
       strong "DOM"
@@ -141,7 +138,6 @@
       code "<h1>"
       code "<h3>"
     heading "Three views, one tree" (level 2)
-      link "Permalink to "Three views, one tree""
     paragraph "Real A11y snapshots the same tree three ways, so you pick the grain that fits the test:"
     table
       rowgroup
@@ -151,14 +147,14 @@
           rowheader "Catches"
       rowgroup
         row
-          cell "Tree ()"
+          cell "Tree ( auditSnapshot )"
             strong "Tree"
             link "auditSnapshot"
               code "auditSnapshot"
           cell "Full role + name structure"
           cell "Missing labels, wrong roles, structural drift"
         row
-          cell "Outline ()"
+          cell "Outline ( outlineSnapshot )"
             strong "Outline"
             link "outlineSnapshot"
               code "outlineSnapshot"
@@ -166,7 +162,7 @@
           cell "Missing <h1>, skipped levels"
             code "<h1>"
         row
-          cell "Tab order ()"
+          cell "Tab order ( tabSequenceSnapshot )"
             strong "Tab order"
             link "tabSequenceSnapshot"
               code "tabSequenceSnapshot"
@@ -174,7 +170,6 @@
           cell "Focus traps, illogical tab order, positive-tabindex surprises"
             code "tabindex"
     heading "Deterministic by construction" (level 2)
-      link "Permalink to "Deterministic by construction""
     paragraph "The same DOM always produces the same string — no timestamps, generated IDs, or ordering surprises — so is safe in CI without flakes. For genuinely dynamic content (timestamps, tokens, currency), replaces the noisy bits while keeping the structure intact:"
       code "toMatchSnapshot()"
       link "redact"
@@ -182,14 +177,12 @@
     button "Copy Code"
       code
     heading "It models real AT behavior" (level 2)
-      link "Permalink to "It models real AT behavior""
     paragraph "Because the snapshot reflects the accessibility tree — not raw markup — it captures semantics a DOM dump can't. The clearest example is : when a dialog is open, content behind it is inert to assistive tech, so it drops out of the tree. Open a modal and the snapshot (and tab order) collapse to just the dialog — a precise artifact for that state:"
       emphasis "extracted"
       strong "modal scoping"
     button "Copy Code"
       code
     heading "It catches what a screenshot can't" (level 2)
-      link "Permalink to "It catches what a screenshot can't""
     paragraph "A screenshot can be pixel-perfect while the page is broken for assistive technology. Swap a real for a styled to match: identical screenshot, gone from the accessibility tree. That regression moves , so a visual snapshot sails right past it — an accessibility snapshot catches it immediately."
       code "<button>"
       code "<div onclick>"
@@ -199,14 +192,12 @@
       emphasis "what it means"
       link "See the full comparison →"
     heading "The same tree, everywhere" (level 2)
-      link "Permalink to "The same tree, everywhere""
     paragraph "An accessibility snapshot is the serialized form of the tree you can also live across Real A11y's surfaces — the , the , and the all render the same extraction. What you inspect by eye in the panel is what you commit as a snapshot in tests."
       emphasis "see"
       link "Chrome extension"
       link "React panel"
       link "Storybook addon"
     heading "Start snapshotting" (level 2)
-      link "Permalink to "Start snapshotting""
     list
       listitem "→ , or the ergonomic"
         strong "In Vitest / Jest"

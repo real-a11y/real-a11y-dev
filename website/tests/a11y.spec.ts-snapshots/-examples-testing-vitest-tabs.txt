@@ -42,24 +42,16 @@
 42. link "What it shows"
 43. link "Run it locally"
 44. link "Key code"
-45. link "Permalink to "Example: Vitest Integration""
-46. link "examples/testing-vitest/"
-47. link "Permalink to "What it shows""
-48. link "Permalink to "Run it locally""
-49. button "Copy Code"
-50. generic
-51. link "Permalink to "Key code""
-52. link "Permalink to "Snapshot test""
-53. button "Copy Code"
-54. generic
-55. link "Permalink to "Structural assertions""
-56. button "Copy Code"
-57. generic
-58. link "Permalink to "Flow chain — combobox interaction""
-59. button "Copy Code"
-60. generic
-61. link "Permalink to "Tab sequence test""
-62. button "Copy Code"
-63. generic
-64. link "Edit this page on GitHub"
-65. link "Next pageGetting Started"
+45. link "examples/testing-vitest/"
+46. button "Copy Code"
+47. generic
+48. button "Copy Code"
+49. generic
+50. button "Copy Code"
+51. generic
+52. button "Copy Code"
+53. generic
+54. button "Copy Code"
+55. generic
+56. link "Edit this page on GitHub"
+57. link "Next pageGetting Started"
