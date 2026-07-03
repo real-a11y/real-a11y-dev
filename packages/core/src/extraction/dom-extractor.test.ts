@@ -475,8 +475,11 @@ describe("extractDomTree", () => {
     // treeitems concatenated the whole subtree's text into one row's name
     // ("Reports report-1 report-2 report-2A.docx ..."). Real ATs read each
     // row's own label independently. Surfaced by PR #80 on the APG Tree
-    // View example. We now skip subtrees whose computed role is a "name
-    // barrier" (group, list, treeitem, button, link, …) when walking text.
+    // View example. We skip subtrees whose computed role is a structural
+    // "name barrier" (group, list, treeitem, row, …) when walking text.
+    // Named widgets (link, button, checkbox, radio, switch) are different:
+    // per accname §2F.iii they contribute their *computed name* — see the
+    // heading/link tests below.
     it("treeitem name does NOT include nested role=group children's text", () => {
       const root = createPage(`
         <ul role="tree" aria-label="Docs">
@@ -554,7 +557,11 @@ describe("extractDomTree", () => {
       );
     });
 
-    it("button name skips a nested button (invalid HTML but possible in custom components)", () => {
+    it("button name includes a nested button's name (accname §2F — matches Chrome)", () => {
+      // Previously we skipped nested named widgets entirely, which left
+      // link-wrapped headings nameless. Per accname §2F.iii a descendant
+      // widget contributes its computed name — Chrome and Firefox expose
+      // "Outer Inner" for this markup, so we do too.
       const root = createPage(`
         <div role="button" id="outer">
           Outer
@@ -564,7 +571,7 @@ describe("extractDomTree", () => {
       const outer = [...extractDomTree(root).nodes.values()].find(
         (n) => n.dom.attributes["id"] === "outer",
       )!;
-      expect(outer.a11y.name.trim()).toBe("Outer");
+      expect(outer.a11y.name).toBe("Outer Inner");
     });
 
     it("tab role with a heading child still picks up the heading text", () => {
@@ -578,6 +585,53 @@ describe("extractDomTree", () => {
         (n) => n.dom.attributes["id"] === "t1",
       )!;
       expect(tab.a11y.name.trim()).toBe("Overview");
+    });
+
+    // A heading whose entire content is a link (GitHub file headers,
+    // changelog entries, card titles) takes the link's name as its own —
+    // accname §2F.iii. Skipping the link left the heading nameless.
+    it("heading names itself from a nested link's content", () => {
+      const root = createPage(`
+        <h3><a href="#diff"><code>website/.vitepress/config.ts</code></a></h3>
+      `);
+      const heading = [...extractDomTree(root).nodes.values()].find(
+        (n) => n.a11y.role === "heading",
+      )!;
+      expect(heading.a11y.name).toBe("website/.vitepress/config.ts");
+    });
+
+    it("heading uses a nested link's aria-label, not its raw text", () => {
+      // The child contributes its *computed name* — aria-label wins over
+      // content, exactly as the recursive name algorithm prescribes.
+      const root = createPage(`
+        <h2><a href="/api" aria-label="API reference">docs</a></h2>
+      `);
+      const heading = [...extractDomTree(root).nodes.values()].find(
+        (n) => n.a11y.role === "heading",
+      )!;
+      expect(heading.a11y.name).toBe("API reference");
+    });
+
+    it("text around a nested link joins with single spaces", () => {
+      const root = createPage(`
+        <h4>Read <a href="/guide">the guide</a> first</h4>
+      `);
+      const heading = [...extractDomTree(root).nodes.values()].find(
+        (n) => n.a11y.role === "heading",
+      )!;
+      expect(heading.a11y.name).toBe("Read the guide first");
+    });
+
+    it("heading excludes an aria-hidden permalink anchor", () => {
+      // The docs-tool pattern done right: an aria-hidden anchor inside a
+      // heading contributes nothing (§4.3.2 step 2A beats everything).
+      const root = createPage(`
+        <h2>Install <a href="#install" aria-hidden="true" aria-label='Permalink to "Install"'>#</a></h2>
+      `);
+      const heading = [...extractDomTree(root).nodes.values()].find(
+        (n) => n.a11y.role === "heading",
+      )!;
+      expect(heading.a11y.name).toBe("Install");
     });
   });
 
