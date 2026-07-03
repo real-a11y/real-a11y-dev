@@ -144,14 +144,14 @@
               code "@real-a11y-dev/core"
           cell "depends (see below)"
     paragraph "Install as a dev dependency by default"
-    paragraph "Real A11y is a , not runtime infrastructure. Install everything under  ( / ) and gate any UI it renders on a development build flag. That way the tree extractor, Preact renderer, and accessibility heuristics never reach your production bundle."
+    paragraph "Real A11y is a , not runtime infrastructure. Install everything under ( / ) and gate any UI it renders on a development build flag. That way the tree extractor, Preact renderer, and accessibility heuristics never reach your production bundle."
       strong "developer-time audit suite"
       code "devDependencies"
       code "-D"
       code "--save-dev"
-    paragraph "See  below for the gating patterns."
+    paragraph "See below for the gating patterns."
       link "Keep it out of production"
-    paragraph "The only time you want a  dependency is if you're building your own  tooling on top of  (e.g. another testing library or an audit service) — then  belongs in your regular  or, better, ."
+    paragraph "The only time you want a dependency is if you're building your own tooling on top of (e.g. another testing library or an audit service) — then belongs in your regular or, better, ."
       strong "runtime"
       emphasis "published"
       code "@real-a11y-dev/core"
@@ -189,13 +189,13 @@
       link "Permalink to "Testing (Vitest / Jest)""
     button "Copy Code"
       code
-    paragraph "Those are the  helpers — zero setup. Prefer the jest-axe-style  matchers? Register them once in a setup file and the same checks read as native matchers (Vitest  Jest):"
+    paragraph "Those are the helpers — zero setup. Prefer the jest-axe-style matchers? Register them once in a setup file and the same checks read as native matchers (Vitest Jest):"
       strong "function-style"
       code "expect"
       strong "and"
     button "Copy Code"
       code
-    paragraph "See  for the one-time  setup, and  for what the snapshot captures and why it complements axe."
+    paragraph "See for the one-time setup, and for what the snapshot captures and why it complements axe."
       link "Matchers"
       code "registerA11yMatchers(expect)"
       link "Accessibility Snapshots"
@@ -212,7 +212,7 @@
       code ".storybook/main.ts"
     button "Copy Code"
       code
-    paragraph "That's it. A  panel appears next to Controls and A11y for every story, showing the tree, heading outline, and tab sequence — updated live as the story re-renders."
+    paragraph "That's it. A panel appears next to Controls and A11y for every story, showing the tree, heading outline, and tab sequence — updated live as the story re-renders."
       strong "Semantic Navigator"
     separator
     heading "Requirements" (level 2)
@@ -252,7 +252,7 @@
     separator
     heading "Keep it out of production" (level 2)
       link "Permalink to "Keep it out of production""
-    paragraph "and  render a full tree view (~23 KB gzipped for , plus Preact; see  for the gated budgets). If you drop  or  into a component that ships to production, bundlers can't tree-shake the renderer away — . You want it dev-only."
+    paragraph "and render a full tree view (~23 KB gzipped for , plus Preact; see for the gated budgets). If you drop or into a component that ships to production, bundlers can't tree-shake the renderer away — . You want it dev-only."
       code "@real-a11y-dev/inspector"
       code "@real-a11y-dev/react"
       code "inspector"
@@ -271,7 +271,7 @@
     radio "vanilla / any bundler"
     button "Copy Code"
       code
-    paragraph "Use it anywhere — it's a no-op in production, and the  is code-split so the inspector chunk only loads when the gate is true."
+    paragraph "Use it anywhere — it's a no-op in production, and the is code-split so the inspector chunk only loads when the gate is true."
       code "import(...)"
     heading "Pattern 2 — runtime query param (useful for staging)" (level 3)
       link "Permalink to "Pattern 2 — runtime query param (useful for staging)""

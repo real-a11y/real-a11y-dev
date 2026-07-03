@@ -98,7 +98,7 @@
   main
     heading "Flow API" (level 1)
       link "Permalink to "Flow API""
-    paragraph "Fluent interaction chains that assert about the  after each step. Each  /  / etc. dispatches a real DOM action, then re-extracts the tree so the next step sees the post-interaction state."
+    paragraph "Fluent interaction chains that assert about the after each step. Each / / etc. dispatches a real DOM action, then re-extracts the tree so the next step sees the post-interaction state."
       strong "accessibility tree"
       code ".click()"
       code ".type()"
@@ -110,11 +110,11 @@
     heading "Why flow() (vs Testing Library)?" (level 2)
       code "flow()"
       link "Permalink to "Why `flow()` (vs Testing Library)?""
-    paragraph "Testing Library asserts about the .  asserts about the  — the same tree screen-reader users perceive and the same tree the Real A11y panel shows. That difference changes which tests are easy to write."
+    paragraph "Testing Library asserts about the . asserts about the — the same tree screen-reader users perceive and the same tree the Real A11y panel shows. That difference changes which tests are easy to write."
       strong "rendered DOM"
       code "flow()"
       strong "extracted accessibility tree"
-    paragraph "is  a Testing Library replacement. They compose well:  for input-fidelity (real keyboard/pointer sequences);  for tree-shape and "is the right region active" assertions."
+    paragraph "is a Testing Library replacement. They compose well: for input-fidelity (real keyboard/pointer sequences); for tree-shape and "is the right region active" assertions."
       code "flow()"
       strong "not"
       code "userEvent"
@@ -126,7 +126,7 @@
       code
     button "Copy Code"
       code
-    paragraph "Both pass on the same component. The Flow version is shorter because  is a single tree-level invariant — "exactly one dialog is open AND its name matches." Expressing the same in RTL stitches  +  +  +  together. And because Flow re-extracts the tree after , the next  already sees the new dialog without an explicit  scope."
+    paragraph "Both pass on the same component. The Flow version is shorter because is a single tree-level invariant — "exactly one dialog is open AND its name matches." Expressing the same in RTL stitches + + + together. And because Flow re-extracts the tree after , the next already sees the new dialog without an explicit scope."
       code "expectActiveModal"
       code "getByRole"
       code "within"
@@ -167,7 +167,7 @@
           cell "You care about the simulated input (e.g. testing a custom keyboard handler)"
           cell "You care about the outcome in the a11y tree (states, structure, active modal)"
             strong "outcome"
-    paragraph "The two libraries see different things. RTL sees what  experience.  sees what  experience after the same actions. For most teams the right answer is ."
+    paragraph "The two libraries see different things. RTL sees what experience. sees what experience after the same actions. For most teams the right answer is ."
       emphasis "sighted users using a mouse and keyboard"
       code "flow()"
       emphasis "AT users"
@@ -222,20 +222,20 @@
           cell ".expect(fn)"
             code ".expect(fn)"
           cell "Run a custom assertion with the current tree as argument."
-    paragraph "The flow is lazy — steps queue up and run when you  the chain."
+    paragraph "The flow is lazy — steps queue up and run when you the chain."
       code "await"
     heading "expectActiveModal — examples" (level 3)
       code "expectActiveModal"
       link "Permalink to "`expectActiveModal` — examples""
     button "Copy Code"
       code
-    paragraph "The first  or  in document order is treated as the active modal."
+    paragraph "The first or in document order is treated as the active modal."
       code "role="dialog""
       code "role="alertdialog""
     heading "expectTree — caveat" (level 3)
       code "expectTree"
       link "Permalink to "`expectTree` — caveat""
-    paragraph "re-serializes the tree with  (no , , generic nodes flattened). A snapshot captured via  or  will not match. For redacted or DOM-mode comparisons, use  and call / yourself."
+    paragraph "re-serializes the tree with (no , , generic nodes flattened). A snapshot captured via or will not match. For redacted or DOM-mode comparisons, use and call / yourself."
       code "expectTree"
       strong "default options"
       code "redact"
@@ -300,7 +300,7 @@
     heading "dispatch(node, action?, payload?)" (level 3)
       code "dispatch(node, action?, payload?)"
       link "Permalink to "`dispatch(node, action?, payload?)`""
-    paragraph "Dispatches an action on a  directly."
+    paragraph "Dispatches an action on a directly."
       code "SemanticNode"
     button "Copy Code"
       code

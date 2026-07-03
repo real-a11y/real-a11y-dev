@@ -102,7 +102,7 @@
   main
     heading "Matchers" (level 1)
       link "Permalink to "Matchers""
-    paragraph "An ergonomic  layer over the  and  — the same checks, but read as native matchers with  negation and clean failure messages. This is the jest-axe-style surface of the package."
+    paragraph "An ergonomic layer over the and — the same checks, but read as native matchers with negation and clean failure messages. This is the jest-axe-style surface of the package."
       code "expect"
       link "assertions"
       link "snapshots"
@@ -111,7 +111,7 @@
     button "Copy Code"
       code
     blockquote
-      paragraph "jest-axe runs a WCAG  and reports violations. These matchers assert  and capture  of the semantic tree — including focus order and modal scoping, which a rule engine doesn't model. The two compose well in one suite. See  for the distinction."
+      paragraph "jest-axe runs a WCAG and reports violations. These matchers assert and capture of the semantic tree — including focus order and modal scoping, which a rule engine doesn't model. The two compose well in one suite. See for the distinction."
         strong "Not the same as jest-axe."
         strong "rule engine"
         strong "structure"
@@ -119,7 +119,7 @@
         link "Accessibility Snapshots"
     heading "Setup" (level 2)
       link "Permalink to "Setup""
-    paragraph "Registration is opt-in (the jest-axe pattern): call  once from a setup file. Nothing runs on import."
+    paragraph "Registration is opt-in (the jest-axe pattern): call once from a setup file. Nothing runs on import."
       code "registerA11yMatchers(expect)"
     heading "Vitest" (level 3)
       link "Permalink to "Vitest""
@@ -134,7 +134,7 @@
     button "Copy Code"
       code
     paragraph "TypeScript module resolution (Jest + ts-jest)"
-    paragraph "The  subpath is exposed through the package  field, so TypeScript must read it. Use  (or  / ) — the legacy  resolver ignores  and the import won't resolve.  also needs  under Node16."
+    paragraph "The subpath is exposed through the package field, so TypeScript must read it. Use (or / ) — the legacy resolver ignores and the import won't resolve. also needs under Node16."
       code "/matchers"
       code "exports"
       code ""moduleResolution": "Node16""
@@ -187,12 +187,12 @@
     heading "toHaveTabSequence(expected)" (level 2)
       code "toHaveTabSequence(expected)"
       link "Permalink to "`toHaveTabSequence(expected)`""
-    paragraph "Asserts the computed Tab order equals an array of  tokens, in the order a user would encounter pressing Tab (positive  first)."
+    paragraph "Asserts the computed Tab order equals an array of tokens, in the order a user would encounter pressing Tab (positive first)."
       code "role "name""
       code "tabindex"
     button "Copy Code"
       code
-    paragraph "This is the assertion form of . It's especially useful for  checks — when a modal is open, the sequence collapses to just the dialog's controls:"
+    paragraph "This is the assertion form of . It's especially useful for checks — when a modal is open, the sequence collapses to just the dialog's controls:"
       link "tabSequenceSnapshot"
         code "tabSequenceSnapshot"
       strong "focus-trap"
@@ -201,7 +201,7 @@
     heading "a11ySnapshot(root, options?) — snapshot serializer" (level 2)
       code "a11ySnapshot(root, options?)"
       link "Permalink to "`a11ySnapshot(root, options?)` — snapshot serializer""
-    paragraph "Wrap a DOM root (or a pre-extracted tree) so  /  render the  instead of a DOM dump — fully native to each framework's snapshot tooling (/, obsolete detection all work)."
+    paragraph "Wrap a DOM root (or a pre-extracted tree) so / render the instead of a DOM dump — fully native to each framework's snapshot tooling (/, obsolete detection all work)."
       code "toMatchSnapshot()"
       code "toMatchInlineSnapshot()"
       strong "semantic tree"
@@ -211,17 +211,17 @@
       code
     button "Copy Code"
       code
-    paragraph "It accepts the same options as  — including  to mask dynamic text (timestamps, IDs, prices) so the snapshot stays stable in CI:"
+    paragraph "It accepts the same options as — including to mask dynamic text (timestamps, IDs, prices) so the snapshot stays stable in CI:"
       code "auditSnapshot"
       link "redact"
         code "redact"
     button "Copy Code"
       code
-    paragraph "See  for the full pattern reference and the -flag gotcha."
+    paragraph "See for the full pattern reference and the -flag gotcha."
       link "redact"
         code "redact"
       code "g"
-    paragraph "registers the serializer for you. To register it on its own (e.g. via a framework's  config), it's exported as ."
+    paragraph "registers the serializer for you. To register it on its own (e.g. via a framework's config), it's exported as ."
       code "registerA11yMatchers"
       code "snapshotSerializers"
       code "a11ySnapshotSerializer"
@@ -229,13 +229,13 @@
       code "a11ySnapshot"
       code "auditSnapshot"
       link "Permalink to "`a11ySnapshot` vs `auditSnapshot`""
-    paragraph "Both render the  — under the hood they call the same serializer with the same options (, , ). The only difference is what they hand back, and therefore how the framework treats it:"
+    paragraph "Both render the — under the hood they call the same serializer with the same options (, , ). The only difference is what they hand back, and therefore how the framework treats it:"
       strong "same tree"
       code "mode"
       code "redact"
       code "includeGeneric"
     list
-      listitem "returns a . The value your test holds  the tree, so you can assert on it directly — ,  — log it, or write it to a file (that's what the  does). It needs no setup."
+      listitem "returns a . The value your test holds the tree, so you can assert on it directly — , — log it, or write it to a file (that's what the does). It needs no setup."
         link "auditSnapshot()"
           code "auditSnapshot()"
         strong "plain string"
@@ -243,7 +243,7 @@
         code "expect(s).toContain('button "Save"')"
         code "expect(s1).toBe(s2)"
         link "CI diff bot"
-      listitem "returns an  that the registered serializer renders at snapshot time. It does nothing on its own, but it keeps  /  fully native — and crucially, : the tree is rendered as-is instead of escaped into a quoted string literal."
+      listitem "returns an that the registered serializer renders at snapshot time. It does nothing on its own, but it keeps / fully native — and crucially, : the tree is rendered as-is instead of escaped into a quoted string literal."
         code "a11ySnapshot()"
         strong "opaque boxed value"
         code "toMatchSnapshot()"
@@ -266,12 +266,12 @@
           cell "You don't want to register a serializer"
           cell "You want clean, unquoted output — especially for inline snapshots"
             strong "inline"
-    paragraph "When in doubt:  for "I need the string,"  for "I'm storing a snapshot of the tree.""
+    paragraph "When in doubt: for "I need the string," for "I'm storing a snapshot of the tree.""
       code "auditSnapshot"
       code "a11ySnapshot"
     heading "Modal scoping in snapshots" (level 3)
       link "Permalink to "Modal scoping in snapshots""
-    paragraph "Because the snapshot reflects the extracted a11y tree, an open dialog  the snapshot — content behind a modal is inert to assistive tech, so it drops out and the snapshot captures only the dialog. That makes the snapshot a precise regression artifact for the modal state, not just the page."
+    paragraph "Because the snapshot reflects the extracted a11y tree, an open dialog the snapshot — content behind a modal is inert to assistive tech, so it drops out and the snapshot captures only the dialog. That makes the snapshot a precise regression artifact for the modal state, not just the page."
       strong "scopes"
     heading "Vitest vs Jest type augmentation" (level 2)
       link "Permalink to "Vitest vs Jest type augmentation""
@@ -298,7 +298,7 @@
     heading "See it running" (level 2)
       link "Permalink to "See it running""
     list
-      listitem "—  (simple) and  (a full a11y gate + -driven modal)"
+      listitem "— (simple) and (a full a11y gate + -driven modal)"
         link "examples/testing-vitest"
           code "examples/testing-vitest"
         code "matchers-basic.test.ts"
@@ -310,7 +310,7 @@
     heading "See also" (level 2)
       link "Permalink to "See also""
     list
-      listitem "and  — the functions these matchers wrap"
+      listitem "and — the functions these matchers wrap"
         link "Assertions"
         link "Snapshots"
       listitem "— the concept and why it complements rule-based audits"

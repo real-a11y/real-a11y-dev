@@ -97,7 +97,7 @@
     heading "@real-a11y-dev/inspector" (level 1)
       link "Permalink to "@real-a11y-dev/inspector""
     blockquote
-      paragraph "— A drop-in, framework-agnostic tree-inspector panel. Call  and you get an interactive A11y / DOM / TAB view rendered into any DOM node, CSS-isolated via Shadow DOM. Reach for this in , or when you want the panel without framework coupling."
+      paragraph "— A drop-in, framework-agnostic tree-inspector panel. Call and you get an interactive A11y / DOM / TAB view rendered into any DOM node, CSS-isolated via Shadow DOM. Reach for this in , or when you want the panel without framework coupling."
         strong "TL;DR"
         code "createInspector({ root, container })"
         strong "vanilla / non-React projects"
@@ -109,18 +109,18 @@
     paragraph "none (Preact is bundled)."
       strong "Peer dependencies:"
     paragraph "Install as a dev dependency"
-    paragraph "is a developer audit panel (~40 KB gzipped, Preact + tree view). Keep it in  and load it via a dynamic  behind a build flag so it never ships to end users."
+    paragraph "is a developer audit panel (~40 KB gzipped, Preact + tree view). Keep it in and load it via a dynamic behind a build flag so it never ships to end users."
       code "@real-a11y-dev/inspector"
       code "devDependencies"
       code "import()"
-    paragraph "See  for the Vite / webpack / vanilla gating patterns."
+    paragraph "See for the Vite / webpack / vanilla gating patterns."
       link "Keep it out of production"
     separator
     heading "Quick start" (level 2)
       link "Permalink to "Quick start""
     button "Copy Code"
       code
-    paragraph "The panel renders inside a  attached to . Your app's CSS cannot leak in; the panel's CSS cannot leak out. Toggle mode, switch view, or unmount programmatically at any time."
+    paragraph "The panel renders inside a attached to . Your app's CSS cannot leak in; the panel's CSS cannot leak out. Toggle mode, switch view, or unmount programmatically at any time."
       code "ShadowRoot"
       code "#inspector-panel"
     separator
@@ -209,11 +209,11 @@
     paragraph "Shadow DOM is the right default"
     paragraph "With , the panel's styles live inside the ShadowRoot and cannot conflict with your app. Your app's CSS cannot accidentally override the panel's layout. Keep this default unless you have a specific reason to opt out."
       code "mount: "shadow""
-    paragraph "Why  /  /  default to false"
+    paragraph "Why / / default to false"
       code "highlightOnHover"
       code "scrollHostOnSelect"
       code "focusHostOnActivate"
-    paragraph "The inspector renders into the same document as your app, so activating a tree row could steal focus from the panel or scroll the page underneath you. The panel itself stays fully interactive either way — selection, chip navigation, keyboard movement — what's gated is the side effect on the  DOM element. See  for the full rationale and when to flip them on."
+    paragraph "The inspector renders into the same document as your app, so activating a tree row could steal focus from the panel or scroll the page underneath you. The panel itself stays fully interactive either way — selection, chip navigation, keyboard movement — what's gated is the side effect on the DOM element. See for the full rationale and when to flip them on."
       emphasis "real"
       link "Panel interaction vs. host side effects"
     separator
@@ -224,7 +224,7 @@
     heading "mount()" (level 3)
       code "mount()"
       link "Permalink to "`mount()`""
-    paragraph "Attaches the panel to  and starts observing  for DOM mutations."
+    paragraph "Attaches the panel to and starts observing for DOM mutations."
       code "container"
       code "root"
     heading "unmount() / destroy()" (level 3)
@@ -236,7 +236,7 @@
     heading "setViewMode(mode)" (level 3)
       code "setViewMode(mode)"
       link "Permalink to "`setViewMode(mode)`""
-    paragraph "Switches between , , and  modes without remounting."
+    paragraph "Switches between , , and modes without remounting."
       code ""a11y""
       code ""dom""
       code ""tab""
@@ -260,14 +260,14 @@
     separator
     heading "Shadow DOM explained" (level 2)
       link "Permalink to "Shadow DOM explained""
-    paragraph "When  (the default), the inspector:"
+    paragraph "When (the default), the inspector:"
       code "mount: "shadow""
     list
       listitem "Calls ."
         code "container.attachShadow({ mode: "open" })"
-      listitem "Injects a  element with the bundled panel CSS inside the shadow root."
+      listitem "Injects a element with the bundled panel CSS inside the shadow root."
         code "<style>"
-      listitem "Renders the tree panel into an inner  inside the shadow root."
+      listitem "Renders the tree panel into an inner inside the shadow root."
         code "<div>"
     paragraph "Your application's CSS does not pierce the shadow boundary. The panel's CSS does not leak out. If you set , the same nonce is applied to the injected style element for CSP compliance."
       code "styleNonce"
@@ -275,7 +275,7 @@
       link "Permalink to "Opting out""
     button "Copy Code"
       code
-    paragraph "With , a  element is injected into  instead."
+    paragraph "With , a element is injected into instead."
       code "mount: "light""
       code "<style id="sn-styles">"
       code "document.head"
@@ -295,7 +295,7 @@
     heading "See it running" (level 2)
       link "Permalink to "See it running""
     list
-      listitem "— : mode switcher,  to narrow the audit to an open dialog,  after programmatic DOM changes."
+      listitem "— : mode switcher, to narrow the audit to an open dialog, after programmatic DOM changes."
         strong "Vanilla / Vite"
         link "examples/vanilla/"
           code "examples/vanilla/"

@@ -97,7 +97,7 @@
     heading "@real-a11y-dev/core" (level 1)
       link "Permalink to "@real-a11y-dev/core""
     blockquote
-      paragraph "— Extracts a browser-accurate accessibility tree from any DOM element, as plain data (). Zero runtime dependencies. Reach for this when you're  on top of the engine; for apps, use one of the wrapper packages."
+      paragraph "— Extracts a browser-accurate accessibility tree from any DOM element, as plain data (). Zero runtime dependencies. Reach for this when you're on top of the engine; for apps, use one of the wrapper packages."
         strong "TL;DR"
         code "Map<string, SemanticNode>"
         strong "building your own tooling"
@@ -110,18 +110,18 @@
       code "@real-a11y-dev/core"
     paragraph "Which type of dependency do I need?"
     list
-      listitem "is the right default for most apps — you're using  inside tests, Storybook, or a dev-only audit panel gated by  / . See ."
+      listitem "is the right default for most apps — you're using inside tests, Storybook, or a dev-only audit panel gated by / . See ."
         strong "(dev)"
           code "-D"
         code "core"
         code "import.meta.env.DEV"
         code "process.env.NODE_ENV"
         link "Keep it out of production"
-      listitem "if you're publishing your own package that uses  at runtime (e.g. a new audit tool on top of the engine)."
+      listitem "if you're publishing your own package that uses at runtime (e.g. a new audit tool on top of the engine)."
         strong "Regular"
           code "dependency"
         code "core"
-      listitem "if you're publishing a library that composes  with other Real A11y packages — lets consumers share a single copy."
+      listitem "if you're publishing a library that composes with other Real A11y packages — lets consumers share a single copy."
         strong
           code "peerDependency"
         code "core"
@@ -148,7 +148,7 @@
     heading "findByRole(tree, role, options?)" (level 3)
       code "findByRole(tree, role, options?)"
       link "Permalink to "`findByRole(tree, role, options?)`""
-    paragraph "Returns the first  matching the given role, or ."
+    paragraph "Returns the first matching the given role, or ."
       code "SemanticNode"
       code "null"
     button "Copy Code"
@@ -273,7 +273,7 @@
     heading "buildControlsIndex(nodes)" (level 3)
       code "buildControlsIndex(nodes)"
       link "Permalink to "`buildControlsIndex(nodes)`""
-    paragraph "Resolves the  relationship across a tree and returns adjacency maps in both directions, so callers can render cross-links between disclosure triggers (button, tab, combobox) and the elements they open (menu, panel, listbox)."
+    paragraph "Resolves the relationship across a tree and returns adjacency maps in both directions, so callers can render cross-links between disclosure triggers (button, tab, combobox) and the elements they open (menu, panel, listbox)."
       code "aria-controls"
     button "Copy Code"
       code
@@ -284,7 +284,7 @@
       listitem "— the principled relationship. Always preferred."
         strong "Explicit"
           code "aria-controls"
-      listitem "— for triggers that expose  +  but no , paired with the next visible element of the matching role ( → ,  → , etc.). Common in apps that skip . Conservative by design: skipped when the trigger already has , won't poach an element that's already an explicit target, and excludes hidden candidates."
+      listitem "— for triggers that expose + but no , paired with the next visible element of the matching role ( → , → , etc.). Common in apps that skip . Conservative by design: skipped when the trigger already has , won't poach an element that's already an explicit target, and excludes hidden candidates."
         strong "Heuristic fallback"
         code "aria-haspopup"
         code "aria-expanded="true""
@@ -295,7 +295,7 @@
         code "role="listbox""
         code "aria-controls"
         code "aria-controls"
-    paragraph "The  set lists trigger ids whose link came from the heuristic — render those cross-links with a "likely" affordance (different style, hedged tooltip) instead of presenting them as ground truth."
+    paragraph "The set lists trigger ids whose link came from the heuristic — render those cross-links with a "likely" affordance (different style, hedged tooltip) instead of presenting them as ground truth."
       code "inferred"
     heading "ControlsIndex" (level 3)
       code "ControlsIndex"

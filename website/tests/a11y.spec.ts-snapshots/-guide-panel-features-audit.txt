@@ -95,7 +95,7 @@
     heading "Panel features" (level 1)
       link "Permalink to "Panel features""
     blockquote
-      paragraph "These behaviors are  — the , the  embed, the , and the . If a feature exists in one, it exists in all of them. Where the per-package APIs differ, this page calls out which prop / option to reach for."
+      paragraph "These behaviors are — the , the embed, the , and the . If a feature exists in one, it exists in all of them. Where the per-package APIs differ, this page calls out which prop / option to reach for."
         strong "shared across every Real A11y surface"
         link "Chrome extension"
         link "@real-a11y-dev/inspector"
@@ -213,12 +213,12 @@
       strong "on"
       strong "bidirectionally"
     list
-      listitem "— when focus moves on the page (Tab, click on a focusable element), the panel draws the highlight overlay on that element, scrolls the tree to its node, and selects the row.  Implemented by the  via a  listener in its content script; the in-page surfaces don't ship this auto-sync (the host app would have to wire it up itself)."
+      listitem "— when focus moves on the page (Tab, click on a focusable element), the panel draws the highlight overlay on that element, scrolls the tree to its node, and selects the row. Implemented by the via a listener in its content script; the in-page surfaces don't ship this auto-sync (the host app would have to wire it up itself)."
         strong "Page → panel"
         strong "This is what the "Focus sync" toggle controls."
         link "Chrome extension"
         code "focusin"
-      listitem "— selecting a tree node draws the highlight overlay on the corresponding element. The Chrome extension  moves real focus to that element on selection — its DevTools panel lives in a separate window, so it can do that without disrupting panel navigation. For the in-page surfaces (, React ), focus and scroll side effects on the host element are , to avoid stealing focus from the panel itself. See ."
+      listitem "— selecting a tree node draws the highlight overlay on the corresponding element. The Chrome extension moves real focus to that element on selection — its DevTools panel lives in a separate window, so it can do that without disrupting panel navigation. For the in-page surfaces (, React ), focus and scroll side effects on the host element are , to avoid stealing focus from the panel itself. See ."
         strong "Panel → page"
         emphasis "also"
         code "inspector"
@@ -241,7 +241,7 @@
         emphasis "(extension only)"
     heading "How to verify it's working" (level 3)
       link "Permalink to "How to verify it's working""
-    paragraph "Focus the page itself first (click anywhere on the page, not the panel), then press Tab. You should see  a blue rectangle on the focused page element  the corresponding tree node highlight in the panel. If only one happens — or neither — see the ."
+    paragraph "Focus the page itself first (click anywhere on the page, not the panel), then press Tab. You should see a blue rectangle on the focused page element the corresponding tree node highlight in the panel. If only one happens — or neither — see the ."
       strong "both"
       strong "and"
       link "troubleshooting page"
@@ -273,7 +273,7 @@
     heading "Scoping" (level 2)
       link "Permalink to "Scoping""
     paragraph "Narrow the audit root to a subtree. Useful when you want to focus on one form, one dialog, or one widget without the rest of the page in the way."
-    paragraph "In the panel, double-click any node to scope into it. The tree re-renders showing only that subtree. A breadcrumb at the top shows the path; click any breadcrumb segment to scope back up, or the  to exit to the full tree."
+    paragraph "In the panel, double-click any node to scope into it. The tree re-renders showing only that subtree. A breadcrumb at the top shows the path; click any breadcrumb segment to scope back up, or the to exit to the full tree."
       code "×"
     paragraph "Scoping affects:"
     list
@@ -313,13 +313,13 @@
             link "the testing reference"
     heading "Dialog auto-scope" (level 3)
       link "Permalink to "Dialog auto-scope""
-    paragraph "When the page opens a  or , the panel automatically scopes into it. A "Dialog: …" indicator appears with the dialog's accessible name. This is what a screen reader user effectively gets — the rest of the page becomes inert and the dialog is the only thing they can navigate. Verifying that auto-scope works correctly (proper labeling, focus trap, escape to close) is one of the highest-value audits the panel enables."
+    paragraph "When the page opens a or , the panel automatically scopes into it. A "Dialog: …" indicator appears with the dialog's accessible name. This is what a screen reader user effectively gets — the rest of the page becomes inert and the dialog is the only thing they can navigate. Verifying that auto-scope works correctly (proper labeling, focus trap, escape to close) is one of the highest-value audits the panel enables."
       code "<dialog>"
       code "[role="dialog"]"
     separator
     heading "Live region monitoring" (level 2)
       link "Permalink to "Live region monitoring""
-    paragraph "Every  region update,  change, and  on the page appears in the panel's live log in real time, labeled  or . The order, timing, and content are what a screen reader would announce."
+    paragraph "Every region update, change, and on the page appears in the panel's live log in real time, labeled or . The order, timing, and content are what a screen reader would announce."
       code "aria-live"
       code "role="status""
       code "role="alert""
@@ -395,7 +395,7 @@
           cell "Esc"
             code "Esc"
           cell "Clear scope, then clear search, then close the panel"
-    paragraph "Implemented in  via  — every package that mounts the tree gets the same keymap."
+    paragraph "Implemented in via — every package that mounts the tree gets the same keymap."
       code "@real-a11y-dev/semantic-navigator-ui"
       code "useTreeKeyboard"
     separator
@@ -403,10 +403,10 @@
       link "Permalink to "Panel interaction vs. host side effects""
     paragraph "A distinction worth pinning down before wiring up an in-page panel for the first time, because the framing "interaction is opt-in" gets it backwards:"
     list
-      listitem "Selecting a row, clicking a cross-link chip and jumping to its target, expanding / collapsing, arrow-key tree movement — all of this mutates panel state only. Nothing you do  the panel reaches the real DOM until you ask it to. This is identical across the Chrome extension, the inspector embed, the React component, and the Storybook addon."
+      listitem "Selecting a row, clicking a cross-link chip and jumping to its target, expanding / collapsing, arrow-key tree movement — all of this mutates panel state only. Nothing you do the panel reaches the real DOM until you ask it to. This is identical across the Chrome extension, the inspector embed, the React component, and the Storybook addon."
         strong "Panel-internal interaction is always on, in every surface."
         emphasis "inside"
-      listitem "Calling  or  on the  element in response to a panel action — that's opt-in for the in-page surfaces and on by default for the isolated ones."
+      listitem "Calling or on the element in response to a panel action — that's opt-in for the in-page surfaces and on by default for the isolated ones."
         strong "Host-page side effects are what's gated."
         code ".focus()"
         code ".scrollIntoView()"
@@ -443,7 +443,7 @@
             strong "Off by default"
     heading "Why the in-page surfaces default to off" (level 3)
       link "Permalink to "Why the in-page surfaces default to off""
-    paragraph "If activating a tree row stole focus to the host element, every Enter / Space on a row would yank focus out of the panel and break tree-pattern keyboard navigation. Same for scroll — every arrow-key step would scroll the page out from under you. The extension and Storybook addon don't have that problem because the panel and the inspected DOM live in different windows / iframes;  on a host element in one document can't pull focus out of a panel in another."
+    paragraph "If activating a tree row stole focus to the host element, every Enter / Space on a row would yank focus out of the panel and break tree-pattern keyboard navigation. Same for scroll — every arrow-key step would scroll the page out from under you. The extension and Storybook addon don't have that problem because the panel and the inspected DOM live in different windows / iframes; on a host element in one document can't pull focus out of a panel in another."
       code ".focus()"
     paragraph "The broader principle, recorded in the changelog when these defaults were established:"
       emphasis "opt-in host-app side effects so audits and test harnesses don't disturb the app under test."
@@ -453,7 +453,7 @@
       code
     button "Copy Code"
       code
-    paragraph "is the safest of the three to enable — the overlay just paints over the host page without touching its layout or focus.  and  are the ones that affect the page underneath; turn them on when the panel is set up as an active inspection tool, leave them off when the panel is mounted in production for end users."
+    paragraph "is the safest of the three to enable — the overlay just paints over the host page without touching its layout or focus. and are the ones that affect the page underneath; turn them on when the panel is set up as an active inspection tool, leave them off when the panel is mounted in production for end users."
       code "highlightOnHover"
       code "scrollHostOnSelect"
       code "focusHostOnActivate"
@@ -461,7 +461,7 @@
     heading "See also" (level 2)
       link "Permalink to "See also""
     list
-      listitem "·  ·  — what the tree itself shows in each mode"
+      listitem "· · — what the tree itself shows in each mode"
         link "Reading the DOM View"
         link "A11y View"
         link "TAB View"

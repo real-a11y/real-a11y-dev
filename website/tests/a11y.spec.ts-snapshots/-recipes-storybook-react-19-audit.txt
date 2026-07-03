@@ -103,12 +103,12 @@
       link "Permalink to "Register the addon""
     button "Copy Code"
       code
-    paragraph "A  panel appears next to Controls and A11y for every story, showing the tree, heading outline, and tab sequence."
+    paragraph "A panel appears next to Controls and A11y for every story, showing the tree, heading outline, and tab sequence."
       strong "Semantic Navigator"
     separator
     heading "React 19 — pin the JSX runtime" (level 2)
       link "Permalink to "React 19 — pin the JSX runtime""
-    paragraph "Storybook externalizes  for addon manager bundles but does  externalize . When Vite's esbuild falls back to the classic JSX transform (which it does for some source files under React 19 + Storybook 8.6), story files emit  calls that fail with  — because automatic runtime is the default for React 19 projects and classic transform needs  in scope."
+    paragraph "Storybook externalizes for addon manager bundles but does externalize . When Vite's esbuild falls back to the classic JSX transform (which it does for some source files under React 19 + Storybook 8.6), story files emit calls that fail with — because automatic runtime is the default for React 19 projects and classic transform needs in scope."
       code "react"
       strong "not"
       code "react/jsx-runtime"
@@ -126,10 +126,10 @@
       link "Permalink to "When you *don't* need this""
     list
       listitem "React 18 projects — the default transform is already compatible."
-      listitem "Projects that always  at the top of every component/story (classic-runtime hygiene)."
+      listitem "Projects that always at the top of every component/story (classic-runtime hygiene)."
         code "import React from "react""
       listitem "Future Storybook versions where this is fixed upstream."
-    paragraph "If you hit  at story render time, add the  override."
+    paragraph "If you hit at story render time, add the override."
       code "React is not defined"
       code "viteFinal"
     separator
@@ -147,19 +147,19 @@
     paragraph "Storybook's addon build is deterministic; include Storybook in your regular CI jobs."
     button "Copy Code"
       code
-    paragraph "For accessibility-specific CI coverage on Storybook stories, pair it with the Playwright adapter — load the built Storybook and run  against each story's iframe. That's more setup than most projects need; for per-story audits the panel itself + manual review is usually enough."
+    paragraph "For accessibility-specific CI coverage on Storybook stories, pair it with the Playwright adapter — load the built Storybook and run against each story's iframe. That's more setup than most projects need; for per-story audits the panel itself + manual review is usually enough."
       code "auditSnapshot()"
     separator
     heading "Known constraints" (level 2)
       link "Permalink to "Known constraints""
     list
-      listitem "is required. The addon's manager entry uses the  v8 API."
+      listitem "is required. The addon's manager entry uses the v8 API."
         strong "Storybook ≥ 8.0"
         code "storybook/manager-api"
-      listitem "as a peer. React 19 works with the  override above."
+      listitem "as a peer. React 19 works with the override above."
         strong "React ≥ 18"
         code "viteFinal"
-      listitem "If anything in your Storybook config transitively loads a second copy of React (some legacy addons do this), the manager will crash. Run  — there should be exactly one resolution."
+      listitem "If anything in your Storybook config transitively loads a second copy of React (some legacy addons do this), the manager will crash. Run — there should be exactly one resolution."
         strong "Mixed React versions on the page will fail."
         code "npm ls react"
   contentinfo

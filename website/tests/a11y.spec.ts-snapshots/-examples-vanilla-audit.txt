@@ -84,7 +84,7 @@
   main
     heading "Example: Vanilla / Vite" (level 1)
       link "Permalink to "Example: Vanilla / Vite""
-    paragraph "A minimal Vite + TypeScript application demonstrating  as a floating dev-tools overlay."
+    paragraph "A minimal Vite + TypeScript application demonstrating as a floating dev-tools overlay."
       code "@real-a11y-dev/inspector"
     paragraph
       strong "Source:"
@@ -95,9 +95,9 @@
     list
       listitem "Mounting the panel into a floating container via Shadow DOM"
       listitem "Switching between A11y and DOM modes at runtime"
-      listitem "Using  to narrow the observed subtree to just a dialog"
+      listitem "Using to narrow the observed subtree to just a dialog"
         code "setRoot()"
-      listitem "Calling  after a programmatic DOM update"
+      listitem "Calling after a programmatic DOM update"
         code "refresh()"
       listitem "— hover a tree node to highlight the corresponding DOM element"
         code "highlightOnHover"

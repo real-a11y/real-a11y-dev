@@ -102,12 +102,12 @@
     heading "Mount <SemanticNavigator /> in a client component" (level 2)
       code "<SemanticNavigator />"
       link "Permalink to "Mount `<SemanticNavigator />` in a client component""
-    paragraph "Any component that renders the inspector must be a . The inspector uses refs, DOM APIs, and (in floating mode) a portal to  — none of that is available during server rendering."
+    paragraph "Any component that renders the inspector must be a . The inspector uses refs, DOM APIs, and (in floating mode) a portal to — none of that is available during server rendering."
       strong "Client Component"
       code "document.body"
     button "Copy Code"
       code
-    paragraph "The  mode portals into . The library already guards against SSR — the portal only activates after the first client commit — so you can render this component from a Server Component without a crash."
+    paragraph "The mode portals into . The library already guards against SSR — the portal only activates after the first client commit — so you can render this component from a Server Component without a crash."
       code "floating"
       code "document.body"
     heading "Gate it out of production" (level 2)
@@ -117,7 +117,7 @@
       link "Permalink to "Option 1 — static gate (fully tree-shaken)""
     button "Copy Code"
       code
-    paragraph "Note:  has to live  in the App Router. Putting it in a Server Component throws a build-time error."
+    paragraph "Note: has to live in the App Router. Putting it in a Server Component throws a build-time error."
       code "dynamic(..., { ssr: false })"
       strong "inside a Client Component"
     heading "Option 2 — environment flag" (level 3)
@@ -129,7 +129,7 @@
     separator
     heading "Unit tests — Vitest + next-intl + Testing Library" (level 2)
       link "Permalink to "Unit tests — Vitest + next-intl + Testing Library""
-    paragraph "The App Router's  navigation helpers (, , etc.) read from the request-scoped intl context, which doesn't exist in a unit-test renderer. Mock them in :"
+    paragraph "The App Router's navigation helpers (, , etc.) read from the request-scoped intl context, which doesn't exist in a unit-test renderer. Mock them in :"
       code "next-intl"
       code "Link"
       code "usePathname"
@@ -140,14 +140,14 @@
       code "vitest.config.ts"
     button "Copy Code"
       code
-    paragraph "Note the file is  — the mock itself renders JSX."
+    paragraph "Note the file is — the mock itself renders JSX."
       code ".tsx"
     heading "Test a component that uses Link" (level 3)
       code "Link"
       link "Permalink to "Test a component that uses `Link`""
     button "Copy Code"
       code
-    paragraph "Only the  are mocked. Your own components render for real."
+    paragraph "Only the are mocked. Your own components render for real."
       emphasis "Next internals"
     separator
     heading "E2E — Playwright against next dev" (level 2)
@@ -157,7 +157,7 @@
       code
     button "Copy Code"
       code
-    paragraph "The same  handle exposes  and  — commit all three as fixtures and let PRs diff against them."
+    paragraph "The same handle exposes and — commit all three as fixtures and let PRs diff against them."
       code "attach(page)"
       code "outlineSnapshot"
       code "tabSequenceSnapshot"
@@ -165,7 +165,7 @@
     heading "Known constraints" (level 2)
       link "Permalink to "Known constraints""
     list
-      listitem "The component uses  + . Wrap it in a Client Component ()."
+      listitem "The component uses + . Wrap it in a Client Component ()."
         strong "Server Components can't render ."
           code "<SemanticNavigator />"
         code "useRef"
@@ -174,16 +174,16 @@
       listitem "In Next 15 this is a build-time error, not a runtime one."
         strong "must live inside a Client Component."
           code "next/dynamic({ ssr: false })"
-      listitem "for React 19. Older versions declare  as a peer and fail to install."
+      listitem "for React 19. Older versions declare as a peer and fail to install."
         strong "must be ≥ 16.1"
           code "@testing-library/react"
         code "react: ^18"
-      listitem "Next 15 declares  as an optional peer — install ≥ that version to avoid ."
+      listitem "Next 15 declares as an optional peer — install ≥ that version to avoid ."
         strong "version must match Next's peer range."
           code "@playwright/test"
         code "@playwright/test@^1.51.1"
         code "ERESOLVE"
-    paragraph "See the  recipe for the full matrix."
+    paragraph "See the recipe for the full matrix."
       link "Peer Dependencies"
   contentinfo
     link "Edit this page on GitHub"

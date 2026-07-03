@@ -96,7 +96,7 @@
       link "Permalink to "Privacy Policy""
     paragraph
       emphasis "Last updated: 2026-04-18"
-    paragraph "This policy covers the Real A11y website (), the Semantic Navigator Chrome extension, and the  npm packages."
+    paragraph "This policy covers the Real A11y website (), the Semantic Navigator Chrome extension, and the npm packages."
       code "real-a11y.dev"
       code "@real-a11y-dev/*"
     heading "Short version" (level 2)
@@ -147,7 +147,7 @@
     paragraph "No other permissions are requested."
     heading "npm packages" (level 2)
       link "Permalink to "npm packages""
-    paragraph "The , , , , , and  packages are pure libraries. They:"
+    paragraph "The , , , , , and packages are pure libraries. They:"
       code "@real-a11y-dev/core"
       code "@real-a11y-dev/inspector"
       code "@real-a11y-dev/testing"
@@ -158,13 +158,13 @@
       listitem "Run where you run them (browser, Node, jsdom, Playwright)."
       listitem "Make no network requests."
       listitem "Do not "phone home," collect usage data, or check for updates."
-      listitem "Have no side effects at install time beyond what  /  /  does normally."
+      listitem "Have no side effects at install time beyond what / / does normally."
         code "pnpm"
         code "npm"
         code "yarn"
     heading "Website" (level 2)
       link "Permalink to "Website""
-    paragraph "The site at  is a static VitePress documentation site. The only first-party state is the search index and local preferences (theme selection) stored in your browser's ."
+    paragraph "The site at is a static VitePress documentation site. The only first-party state is the search index and local preferences (theme selection) stored in your browser's ."
       code "real-a11y.dev"
       code "localStorage"
     paragraph "If we enable analytics in the future, we will:"
@@ -178,10 +178,10 @@
     list
       listitem "GitHub issues / discussions / PRs — subject to . Anything you post there is public."
         link "GitHub's privacy policy"
-      listitem "Security reports to  or the private GitHub security advisory — handled per ; the email address and content are retained only as long as needed to investigate and fix the reported issue."
+      listitem "Security reports to or the private GitHub security advisory — handled per ; the email address and content are retained only as long as needed to investigate and fix the reported issue."
         code "security@real-a11y.dev"
         link "SECURITY.md"
-      listitem "Code of Conduct reports to  — handled confidentially per ."
+      listitem "Code of Conduct reports to — handled confidentially per ."
         code "conduct@real-a11y.dev"
         link "CODE_OF_CONDUCT.md"
     heading "Your rights" (level 2)

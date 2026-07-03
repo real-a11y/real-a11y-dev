@@ -95,14 +95,14 @@
     paragraph "Understanding how Real A11y models the DOM will help you use every package more effectively."
     heading "The Semantic Tree" (level 2)
       link "Permalink to "The Semantic Tree""
-    paragraph "When you call any Real A11y API on a DOM root, it builds a  — a tree of  objects that mirrors what assistive technologies perceive, not the raw HTML structure."
+    paragraph "When you call any Real A11y API on a DOM root, it builds a — a tree of objects that mirrors what assistive technologies perceive, not the raw HTML structure."
       strong "semantic tree"
       code "SemanticNode"
     button "Copy Code"
       code
     paragraph "Heading level lives on"
       code "properties"
-    paragraph "Heading level isn't a typed field — it's stored as a string (–) on . You don't usually read it directly; , , and  parse it for you."
+    paragraph "Heading level isn't a typed field — it's stored as a string (–) on . You don't usually read it directly; , , and parse it for you."
       code ""1""
       code ""6""
       code "a11y.properties.level"
@@ -125,14 +125,14 @@
           cell ""dom""
             code ""dom""
           cell "DOM tree — raw tag names and text content. Useful for structural audits."
-    paragraph "Both modes produce the same  shape; only the  and  computation differs."
+    paragraph "Both modes produce the same shape; only the and computation differs."
       code "SemanticNode"
       code "a11y.role"
       code "a11y.name"
     separator
     heading "Roles" (level 2)
       link "Permalink to "Roles""
-    paragraph "Roles follow the . Real A11y maps every HTML element to its implicit ARIA role, then overrides with an explicit  attribute if present."
+    paragraph "Roles follow the . Real A11y maps every HTML element to its implicit ARIA role, then overrides with an explicit attribute if present."
       link "WAI-ARIA specification"
       code "role"
     paragraph "Examples:"
@@ -189,13 +189,13 @@
             code "<div>"
           cell "generic"
             code "generic"
-    paragraph "and  strip the element's role from the tree — the element is still present, but its children are re-parented."
+    paragraph "and strip the element's role from the tree — the element is still present, but its children are re-parented."
       code "role="presentation""
       code "role="none""
     separator
     heading "Accessible Names" (level 2)
       link "Permalink to "Accessible Names""
-    paragraph "The  computation follows the  algorithm, in priority order:"
+    paragraph "The computation follows the algorithm, in priority order:"
       code "a11y.name"
       link "Accessible Name and Description Computation (ANDC)"
     list
@@ -203,7 +203,7 @@
         code "aria-labelledby"
       listitem "— inline string"
         code "aria-label"
-      listitem "Native label —  or wrapping"
+      listitem "Native label — or wrapping"
         code "<label for="…">"
         code "<label>"
       listitem "Text content — for buttons, links, headings"
@@ -212,7 +212,7 @@
     button "Copy Code"
       code
     paragraph "Deep dive"
-    paragraph "The full rules — including multi-ID  concatenation, what  contribute (placeholders, CSS generated content,  subtrees), and a debugging checklist — live in ."
+    paragraph "The full rules — including multi-ID concatenation, what contribute (placeholders, CSS generated content, subtrees), and a debugging checklist — live in ."
       code "aria-labelledby"
       emphasis "doesn't"
       code "aria-hidden"
@@ -220,11 +220,11 @@
     separator
     heading "Stable Node IDs" (level 2)
       link "Permalink to "Stable Node IDs""
-    paragraph "Each node gets a stable  derived from a . The same DOM node always gets the same ID within a page session — even across re-extractions — so  can reliably report what changed vs. what's new."
+    paragraph "Each node gets a stable derived from a . The same DOM node always gets the same ID within a page session — even across re-extractions — so can reliably report what changed vs. what's new."
       code "id"
       code "WeakMap<Node, string>"
       code "diffTrees()"
-    paragraph "IDs are  stable across page reloads; they're designed for in-session diffing, not persistence."
+    paragraph "IDs are stable across page reloads; they're designed for in-session diffing, not persistence."
       strong "not"
     separator
     heading "Tab Order" (level 2)
@@ -232,18 +232,18 @@
     paragraph "computes the tab order using the same algorithm browsers use:"
       code "getTabSequence(tree)"
     list
-      listitem "Elements with positive  values, ascending by value, then in DOM order for ties."
+      listitem "Elements with positive values, ascending by value, then in DOM order for ties."
         code "tabindex"
-      listitem "Elements with  or no tabindex, in DOM order."
+      listitem "Elements with or no tabindex, in DOM order."
         code "tabindex="0""
-      listitem "Elements with  are skipped (reachable programmatically, not by Tab key)."
+      listitem "Elements with are skipped (reachable programmatically, not by Tab key)."
         code "tabindex="-1""
-      listitem "Disabled elements and  subtrees are skipped."
+      listitem "Disabled elements and subtrees are skipped."
         code "aria-hidden"
     separator
     heading "Heading Outline" (level 2)
       link "Permalink to "Heading Outline""
-    paragraph "returns a flat list of  entries for all  nodes in DOM order. This is the data behind  and ."
+    paragraph "returns a flat list of entries for all nodes in DOM order. This is the data behind and ."
       code "getOutline(tree)"
       code "{ id, level, name }"
       code "heading"
@@ -253,7 +253,7 @@
     list
       listitem "Has exactly one"
         code "h1"
-      listitem "Never skips a level (e.g.,  with no  in between)"
+      listitem "Never skips a level (e.g., with no in between)"
         code "h1 → h3"
         code "h2"
     separator
@@ -264,7 +264,7 @@
     button "Copy Code"
       code
     paragraph "Changes detected: role, name, description, textContent, isHidden, isFocusable, aria states, aria properties, and child order."
-    paragraph "This powers the  assertion and the  utility in ."
+    paragraph "This powers the assertion and the utility in ."
       code "flow().expectTree()"
       code "waitForMutations()"
       code "@real-a11y-dev/testing"

@@ -84,7 +84,7 @@
   main
     heading "Example: Vitest Integration" (level 1)
       link "Permalink to "Example: Vitest Integration""
-    paragraph "Demonstrates  in a Vitest + jsdom test suite — snapshots, structural assertions, and the  chain."
+    paragraph "Demonstrates in a Vitest + jsdom test suite — snapshots, structural assertions, and the chain."
       code "@real-a11y-dev/testing"
       code "flow()"
     paragraph
@@ -107,7 +107,7 @@
         code "footer"
       listitem "chaining through a combobox interaction"
         code "flow()"
-      listitem "+  for structure tests"
+      listitem "+ for structure tests"
         code "outlineSnapshot()"
         code "tabSequenceSnapshot()"
     heading "Run it locally" (level 2)

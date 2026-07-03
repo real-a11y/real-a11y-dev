@@ -146,7 +146,7 @@
           cell "≥ 18"
           cell "≥ 8.0"
           cell "—"
-    paragraph "and  have no runtime peers — they use standard DOM APIs.  takes any  root, so your test runner and component renderer are entirely your choice."
+    paragraph "and have no runtime peers — they use standard DOM APIs. takes any root, so your test runner and component renderer are entirely your choice."
       code "@real-a11y-dev/core"
       code "@real-a11y-dev/inspector"
       code "@real-a11y-dev/testing"
@@ -154,20 +154,20 @@
     separator
     heading "Companion libraries" (level 2)
       link "Permalink to "Companion libraries""
-    paragraph "Real A11y packages don't declare these as peers, but most users install at least one of them alongside . The versions below are what works cleanly with React 19 — pinning older versions surfaces peer errors that  Real A11y-related but aren't."
+    paragraph "Real A11y packages don't declare these as peers, but most users install at least one of them alongside . The versions below are what works cleanly with React 19 — pinning older versions surfaces peer errors that Real A11y-related but aren't."
       code "@real-a11y-dev/testing"
       emphasis "look"
     heading "@testing-library/react" (level 3)
       code "@testing-library/react"
       link "Permalink to "`@testing-library/react`""
-    paragraph "Not a peer of any Real A11y package — you can use  without it (just pass any  as the audit root). But if you use it: version  declares  as its own peer. Installing it alongside React 19 gives:"
+    paragraph "Not a peer of any Real A11y package — you can use without it (just pass any as the audit root). But if you use it: version declares as its own peer. Installing it alongside React 19 gives:"
       code "@real-a11y-dev/testing"
       code "Element"
       code "16.0.0"
       code "react: ^18"
     button "Copy Code"
       code
-    paragraph "install  (or later). Version 16.1 relaxed the peer to ."
+    paragraph "install (or later). Version 16.1 relaxed the peer to ."
       strong "Fix:"
       code "@testing-library/react@^16.1.0"
       code "react: ^18 || ^19"
@@ -176,14 +176,14 @@
     heading "@playwright/test in Next.js 15 projects" (level 3)
       code "@playwright/test"
       link "Permalink to "`@playwright/test` in Next.js 15 projects""
-    paragraph "Next 15 declares  as an .  itself is happy with , but npm resolves against Next's optional peer and errors out:"
+    paragraph "Next 15 declares as an . itself is happy with , but npm resolves against Next's optional peer and errors out:"
       code "@playwright/test@^1.51.1"
       strong "optional peer"
       code "@real-a11y-dev/testing/playwright"
       code "^1.49"
     button "Copy Code"
       code
-    paragraph "install  to satisfy both."
+    paragraph "install to satisfy both."
       strong "Fix:"
       code "@playwright/test@^1.51.1"
     button "Copy Code"
@@ -192,12 +192,12 @@
     heading "@real-a11y-dev/storybook-addon — Storybook version" (level 2)
       code "@real-a11y-dev/storybook-addon"
       link "Permalink to "`@real-a11y-dev/storybook-addon` — Storybook version""
-    paragraph "The addon's manager imports from  v8. Storybook 7 or earlier won't work. Storybook ≥ 8.0 is required."
+    paragraph "The addon's manager imports from v8. Storybook 7 or earlier won't work. Storybook ≥ 8.0 is required."
       code "@storybook/manager-api"
     heading "@real-a11y-dev/react — React version" (level 2)
       code "@real-a11y-dev/react"
       link "Permalink to "`@real-a11y-dev/react` — React version""
-    paragraph "Any React ≥ 18 works. On React 19 specifically, the inspector's floating-panel mode is SSR-safe (it gates the portal behind a client-mount effect), but you still need  at the consumer boundary — see the  for the full pattern."
+    paragraph "Any React ≥ 18 works. On React 19 specifically, the inspector's floating-panel mode is SSR-safe (it gates the portal behind a client-mount effect), but you still need at the consumer boundary — see the for the full pattern."
       code ""use client""
       link "Next.js recipe"
     heading "@real-a11y-dev/testing/playwright — browser install" (level 2)
@@ -215,7 +215,7 @@
     paragraph "Verify a single resolution:"
     button "Copy Code"
       code
-    paragraph "One version per package, one path. If you see more than one, look at transitive deps that pin React to a specific version (often older Storybook addons or legacy test helpers) and either upgrade them or override the version via  /  /  in ."
+    paragraph "One version per package, one path. If you see more than one, look at transitive deps that pin React to a specific version (often older Storybook addons or legacy test helpers) and either upgrade them or override the version via / / in ."
       code "overrides"
       code "resolutions"
       code "pnpm.overrides"
@@ -231,7 +231,7 @@
     paragraph "For pnpm:"
     button "Copy Code"
       code
-    paragraph "Re-run  /  afterwards to confirm a single resolution."
+    paragraph "Re-run / afterwards to confirm a single resolution."
       code "npm ls react"
       code "pnpm why react"
   contentinfo

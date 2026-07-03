@@ -22,14 +22,18 @@ import type { SemanticNode } from "@real-a11y-dev/core";
 import { getTabSequence } from "@real-a11y-dev/core";
 
 import {
+  extract,
+  serializeTree,
+  type SerializeOptions,
+} from "@real-a11y-dev/serialize";
+
+import {
   assertNoUnlabeledInteractive,
   assertHeadingOrder,
   assertDialogsLabeled,
   assertLandmarkStructure,
   A11yAssertionError,
 } from "./assertions.js";
-import { extract } from "./extract.js";
-import { serializeTree, type SerializeOptions } from "./serialize.js";
 
 type Tree = { nodes: Map<string, SemanticNode>; rootId: string };
 

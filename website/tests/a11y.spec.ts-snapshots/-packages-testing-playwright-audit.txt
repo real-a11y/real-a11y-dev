@@ -110,7 +110,7 @@
       link "Permalink to "Playwright adapter""
     paragraph "Run the same audit helpers against a real browser page. The adapter injects a self-contained IIFE bundle into the page and exposes every helper via ."
       code "page.evaluate()"
-    paragraph "Part of , imported from the  subpath."
+    paragraph "Part of , imported from the subpath."
       link "@real-a11y-dev/testing"
         code "@real-a11y-dev/testing"
       code "/playwright"
@@ -118,7 +118,7 @@
       link "Permalink to "Install""
     button "Copy Code"
       code
-    paragraph "The  peer dependency is optional — only needed when using ."
+    paragraph "The peer dependency is optional — only needed when using ."
       code "playwright"
       code "@real-a11y-dev/testing/playwright"
     heading "attach(page, options?)" (level 2)
@@ -157,18 +157,18 @@
     paragraph "Keep a small "broken" fixture checked into your test repo with one of each pattern the assertions target (missing h1, skipped level, unlabeled button, unlabeled dialog). If a future refactor ever weakens the assertions, this test catches it immediately."
     heading "Determinism" (level 2)
       link "Permalink to "Determinism""
-    paragraph ", , and  return the  for the same DOM — on every run, on every machine. No timestamps, no generated IDs, no ordering surprises:"
+    paragraph ", , and return the for the same DOM — on every run, on every machine. No timestamps, no generated IDs, no ordering surprises:"
       code "auditSnapshot()"
       code "outlineSnapshot()"
       code "tabSequenceSnapshot()"
       strong "same string"
     button "Copy Code"
       code
-    paragraph "That's the property that makes  safe to use in CI without flakes. If you have genuinely variable content (timestamps, locale-dependent copy), redact it — see below."
+    paragraph "That's the property that makes safe to use in CI without flakes. If you have genuinely variable content (timestamps, locale-dependent copy), redact it — see below."
       code "expect(await sn.auditSnapshot()).toMatchSnapshot()"
     heading "Redacting variable content" (level 2)
       link "Permalink to "Redacting variable content""
-    paragraph "takes the same  option as the jsdom helper — an array of  whose matches become  in accessible names:"
+    paragraph "takes the same option as the jsdom helper — an array of whose matches become in accessible names:"
       code "auditSnapshot()"
       link "redact"
         code "redact"
@@ -176,7 +176,7 @@
       code "[REDACTED]"
     button "Copy Code"
       code
-    paragraph "A  can't be passed through  directly — Playwright serializes evaluate arguments and a  arrives as an empty . The adapter handles this for you: it marshals each pattern to , ferries that across the boundary, and rebuilds the  inside the page — so patterns behave exactly as they do in jsdom. Keep the  in mind when a name can contain more than one match."
+    paragraph "A can't be passed through directly — Playwright serializes evaluate arguments and a arrives as an empty . The adapter handles this for you: it marshals each pattern to , ferries that across the boundary, and rebuilds the inside the page — so patterns behave exactly as they do in jsdom. Keep the in mind when a name can contain more than one match."
       code "RegExp"
       code "page.evaluate()"
       code "RegExp"
@@ -198,11 +198,11 @@
         code "window.__realA11y__"
       listitem "Each method calls , running the helper in the browser and returning the result (or re-throwing the error) in Node."
         code "page.evaluate()"
-    paragraph "The bundle is read once and cached in the Node process — subsequent  calls on the same process are instant."
+    paragraph "The bundle is read once and cached in the Node process — subsequent calls on the same process are instant."
       code "attach()"
     heading "Error propagation" (level 2)
       link "Permalink to "Error propagation""
-    paragraph "When an assertion throws  inside the page, Playwright propagates the error message back to Node. The full descriptive message (including all offending elements) is preserved."
+    paragraph "When an assertion throws inside the page, Playwright propagates the error message back to Node. The full descriptive message (including all offending elements) is preserved."
       code "A11yAssertionError"
     button "Copy Code"
       code
@@ -211,7 +211,7 @@
       link "Permalink to "`SemanticNavigatorPageHandle` type""
     button "Copy Code"
       code
-    paragraph "is a minimal structural type that accepts the real Playwright  object without requiring  or  in packages that only import the types."
+    paragraph "is a minimal structural type that accepts the real Playwright object without requiring or in packages that only import the types."
       code "PlaywrightPage"
       code "Page"
       code "playwright"
@@ -219,7 +219,7 @@
     heading "See also" (level 2)
       link "Permalink to "See also""
     list
-      listitem "and  — the helpers  exposes"
+      listitem "and — the helpers exposes"
         link "Snapshots"
         link "Assertions"
         code "attach()"

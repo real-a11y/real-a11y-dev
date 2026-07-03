@@ -100,12 +100,12 @@
   main
     heading "Assertions" (level 1)
       link "Permalink to "Assertions""
-    paragraph "These throw  with a descriptive message on failure. Designed for use directly in  /  blocks without wrapping in ."
+    paragraph "These throw with a descriptive message on failure. Designed for use directly in / blocks without wrapping in ."
       code "A11yAssertionError"
       code "it()"
       code "test()"
       code "expect()"
-    paragraph "Part of . Prefer the  form? See , which wraps these same checks."
+    paragraph "Part of . Prefer the form? See , which wraps these same checks."
       link "@real-a11y-dev/testing"
         code "@real-a11y-dev/testing"
       code "expect(el).toHaveValidHeadingOrder()"
@@ -126,7 +126,7 @@
     list
       listitem "There is not exactly one"
         code "h1"
-      listitem "Any heading level is skipped (e.g.,  followed directly by )"
+      listitem "Any heading level is skipped (e.g., followed directly by )"
         code "h2"
         code "h4"
     button "Copy Code"
@@ -134,7 +134,7 @@
     heading "assertDialogsLabeled(root)" (level 2)
       code "assertDialogsLabeled(root)"
       link "Permalink to "`assertDialogsLabeled(root)`""
-    paragraph "Throws if any  or  element has no accessible name (via  or )."
+    paragraph "Throws if any or element has no accessible name (via or )."
       code "dialog"
       code "alertdialog"
       code "aria-label"
@@ -146,13 +146,13 @@
       link "Permalink to "`assertLandmarkStructure(root)`""
     paragraph "Throws if:"
     list
-      listitem "There is no  landmark"
+      listitem "There is no landmark"
         code "main"
-      listitem "There is more than one  landmark"
+      listitem "There is more than one landmark"
         code "main"
-      listitem "There is more than one  (header) landmark"
+      listitem "There is more than one (header) landmark"
         code "banner"
-      listitem "There is more than one  (footer) landmark"
+      listitem "There is more than one (footer) landmark"
         code "contentinfo"
     button "Copy Code"
       code
@@ -165,7 +165,7 @@
     heading "See also" (level 2)
       link "Permalink to "See also""
     list
-      listitem "— the same checks as  matchers with  negation"
+      listitem "— the same checks as matchers with negation"
         link "Matchers"
         code "expect"
         code ".not"

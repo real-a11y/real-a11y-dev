@@ -41,6 +41,18 @@ describe("extractDomTree", () => {
     expect(rootNode!.parentId).toBe(null);
   });
 
+  it("normalizes whitespace in accessible names", () => {
+    // Pages sometimes leave raw newlines/indentation inside a name; the
+    // computed name must collapse them to single spaces (accname §4.3.2)
+    // so every surface — panel, search, serializer — sees the same string.
+    const root = createPage(
+      '<button aria-label="Amazon\n\n\n   Subtotal (2)">x</button>',
+    );
+    const { nodes } = extractDomTree(root);
+    const btn = [...nodes.values()].find((n) => n.a11y.role === "button");
+    expect(btn?.a11y.name).toBe("Amazon Subtotal (2)");
+  });
+
   it("assigns correct parent-child relationships", () => {
     const root = createPage("<ul><li>One</li><li>Two</li></ul>");
     const { nodes, rootId } = extractDomTree(root);

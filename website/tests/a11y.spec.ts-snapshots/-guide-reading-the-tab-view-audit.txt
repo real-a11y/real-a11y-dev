@@ -89,7 +89,7 @@
     heading "Reading the TAB View" (level 1)
       link "Permalink to "Reading the TAB View""
     blockquote
-      paragraph "The TAB view matches the output of  in the testing package — same ordering, same formatting. Whether you're reading it in the Chrome extension, the Storybook addon, or a committed Playwright snapshot fixture, this page applies."
+      paragraph "The TAB view matches the output of in the testing package — same ordering, same formatting. Whether you're reading it in the Chrome extension, the Storybook addon, or a committed Playwright snapshot fixture, this page applies."
         link "tabSequenceSnapshot()"
           code "tabSequenceSnapshot()"
     paragraph "The TAB view answers one question:"
@@ -118,22 +118,22 @@
         code "<a>"
         code "<input>"
       listitem "— only shown when the element has an explicit positive tabindex value (see below)"
-        strong "An amber  badge"
+        strong "An amber badge"
           code "tabindex=N"
     separator
     heading "How tab order works" (level 2)
       link "Permalink to "How tab order works""
     paragraph "Browsers determine tab order using two rules, applied in this sequence:"
     list
-      listitem "Elements with a  (like , ) come first, sorted from lowest to highest. Elements with the same value are sorted by their position in the document."
+      listitem "Elements with a (like , ) come first, sorted from lowest to highest. Elements with the same value are sorted by their position in the document."
         strong "positive"
           code "tabindex"
         code "tabindex="1""
         code "tabindex="2""
-      listitem "Everything else — elements with  or no tabindex at all — follows in  (top to bottom, left to right)."
+      listitem "Everything else — elements with or no tabindex at all — follows in (top to bottom, left to right)."
         code "tabindex="0""
         strong "document order"
-    paragraph "Elements with  are completely excluded. They're reachable programmatically (via JavaScript's ), but invisible to the Tab key."
+    paragraph "Elements with are completely excluded. They're reachable programmatically (via JavaScript's ), but invisible to the Tab key."
       code "tabindex="-1""
       code ".focus()"
     paragraph "The TAB view reflects this computed order exactly."
@@ -143,25 +143,25 @@
     heading "Order matches the visual flow" (level 3)
       link "Permalink to "Order matches the visual flow""
     paragraph "Tab order should feel predictable. A user who can see the page expects focus to move left to right, top to bottom — the same way they'd read it. If someone tabs through a navigation bar and focus jumps to the footer before reaching the main content, something is wrong."
-    paragraph "Compare the TAB view numbers to the visual layout of your page. If a  header contains the skip link at number 1 and the search field at number 2 — but the search field appears after a hundred nav items visually — keyboard users are in for a confusing ride."
+    paragraph "Compare the TAB view numbers to the visual layout of your page. If a header contains the skip link at number 1 and the search field at number 2 — but the search field appears after a hundred nav items visually — keyboard users are in for a confusing ride."
       code "position: fixed"
     heading "Every interactive element is reachable" (level 3)
       link "Permalink to "Every interactive element is reachable""
     paragraph "Scan the list. Does every button, link, input, select, and interactive control appear? If something is missing, keyboard users can't reach it."
     paragraph "Common reasons an element is absent:"
     list
-      listitem "It's a  or  with a click handler but no  or . It's mouse-only."
+      listitem "It's a or with a click handler but no or . It's mouse-only."
         code "<div>"
         code "<span>"
         code "tabindex"
         code "role"
-      listitem "It has  — reachable by script, but not by Tab."
+      listitem "It has — reachable by script, but not by Tab."
         code "tabindex="-1""
       listitem "It has , , or ."
         code "display: none"
         code "visibility: hidden"
         code "aria-hidden="true""
-      listitem "It has the  attribute (disabled elements are correctly excluded from tab order)."
+      listitem "It has the attribute (disabled elements are correctly excluded from tab order)."
         code "disabled"
     heading "Nothing unreachable appears in the list" (level 3)
       link "Permalink to "Nothing unreachable appears in the list""
@@ -169,14 +169,14 @@
     paragraph "This often happens with off-screen drawers or modals that haven't been properly hidden from the accessibility tree while closed."
     heading "Amber badges — positive tabindex" (level 3)
       link "Permalink to "Amber badges — positive tabindex""
-    paragraph "If you see  or  badges, that's almost always a mistake. Here's why:"
+    paragraph "If you see or badges, that's almost always a mistake. Here's why:"
       code "tabindex=2"
       code "tabindex=5"
     paragraph "Positive tabindex values pull elements to the front of the tab queue, ahead of everything else in the document regardless of where they appear in the markup. The result is that focus jumps around the page in an order that doesn't match anything visual — disorienting for any keyboard user."
-    paragraph ", not to manage tab order through  values. Put elements in the document in the order you want them to be focused. Then tab order is natural and requires no maintenance."
+    paragraph ", not to manage tab order through values. Put elements in the document in the order you want them to be focused. Then tab order is natural and requires no maintenance."
       strong "The fix is to reorder the DOM"
       code "tabindex"
-    paragraph "The only legitimate use of  is for programmatically managing focus (e.g., moving focus into a modal when it opens). Positive values beyond that are a code smell."
+    paragraph "The only legitimate use of is for programmatically managing focus (e.g., moving focus into a modal when it opens). Positive values beyond that are a code smell."
       code "tabindex="-1""
     heading "Focus traps inside modals and dialogs" (level 3)
       link "Permalink to "Focus traps inside modals and dialogs""
@@ -199,7 +199,7 @@
       strong "A broken icon toolbar"
     button "Copy Code"
       code
-    paragraph "Three buttons in sequence — but no names. A keyboard user tabbing through hears:  Fix by adding  to each icon button."
+    paragraph "Three buttons in sequence — but no names. A keyboard user tabbing through hears: Fix by adding to each icon button."
       emphasis ""button, button, button.""
       code "aria-label"
     separator

@@ -99,7 +99,7 @@
     heading "Snapshots" (level 1)
       link "Permalink to "Snapshots""
     paragraph "Deterministic string representations of the accessibility tree. Safe to commit — the same DOM always produces the same string."
-    paragraph "Part of . For the ergonomic  form, see ."
+    paragraph "Part of . For the ergonomic form, see ."
       link "@real-a11y-dev/testing"
         code "@real-a11y-dev/testing"
       code "expect(...).toMatchSnapshot()"
@@ -109,7 +109,7 @@
       link "Permalink to "`auditSnapshot(root, options?)`""
     paragraph "Returns a formatted string of the full semantic tree."
     blockquote
-      paragraph "Using the  entry?  renders the  with cleaner snapshot tooling.  returns a raw string you can assert on or write to a file;  returns a serializer-boxed value for native . See ."
+      paragraph "Using the entry? renders the with cleaner snapshot tooling. returns a raw string you can assert on or write to a file; returns a serializer-boxed value for native . See ."
         link "matchers"
         code "a11ySnapshot()"
         strong "same tree"
@@ -154,14 +154,14 @@
     heading "Using redact" (level 3)
       code "redact"
       link "Permalink to "Using `redact`""
-    paragraph "takes an array of regexes. Any substring of an  that matches one is replaced with the literal placeholder . The element, its role, and its position are untouched — only the volatile text inside its name is masked."
+    paragraph "takes an array of regexes. Any substring of an that matches one is replaced with the literal placeholder . The element, its role, and its position are untouched — only the volatile text inside its name is masked."
       code "redact"
       strong "accessible name"
       code "[REDACTED]"
     heading "Without redact — the snapshot flakes" (level 4)
       code "redact"
       link "Permalink to "Without `redact` — the snapshot flakes""
-    paragraph "A relative timestamp in an  changes between runs, so the committed snapshot fails even though nothing actually regressed:"
+    paragraph "A relative timestamp in an changes between runs, so the committed snapshot fails even though nothing actually regressed:"
       code "aria-label"
     button "Copy Code"
       code
@@ -174,31 +174,31 @@
       code
     button "Copy Code"
       code
-    paragraph "You still catch real regressions — if the button lost its label the name would change to  — you just stop catching "the clock advanced.""
+    paragraph "You still catch real regressions — if the button lost its label the name would change to — you just stop catching "the clock advanced.""
       code """"
     heading "Realistic patterns" (level 4)
       link "Permalink to "Realistic patterns""
     paragraph "Most flakes come from a handful of sources. Pass a regex for each noisy bit:"
     button "Copy Code"
       code
-    paragraph "The redaction happens  name computation — so an  becomes  in the snapshot string without changing the underlying tree. The element still appears, its role and structure still matter."
+    paragraph "The redaction happens name computation — so an becomes in the snapshot string without changing the underlying tree. The element still appears, its role and structure still matter."
       strong "after"
       code "aria-label="Updated 2 minutes ago""
       code "[REDACTED]"
     paragraph "Define one shared list and reuse it across the suite so every snapshot masks the same noise consistently:"
     button "Copy Code"
       code
-    paragraph "How  works — and two gotchas"
+    paragraph "How works — and two gotchas"
       code "redact"
     list
-      listitem "It runs on the , at serialization time. Roles, heading levels, and tree shape are never modified —  changes the snapshot , not the extraction."
+      listitem "It runs on the , at serialization time. Roles, heading levels, and tree shape are never modified — changes the snapshot , not the extraction."
         strong "accessible name only"
         code "redact"
         emphasis "string"
       listitem "Patterns apply , cumulatively."
         strong "in order"
-      listitem "Internally each pattern runs , and  without  only replaces the  match — so  with  masks just the first date.  masks both."
-        strong "Add the  flag if a name can contain more than one match."
+      listitem "Internally each pattern runs , and without only replaces the match — so with masks just the first date. masks both."
+        strong "Add the flag if a name can contain more than one match."
           code "g"
         code "name.replace(pattern, "[REDACTED]")"
         code "String.replace"
@@ -210,7 +210,7 @@
       listitem "Masking a whole name blinds the snapshot to real regressions in it — remove the clock, not the label."
         strong "Redact the narrowest thing that's actually volatile."
     blockquote
-      paragraph "Available everywhere snapshots are:  and the  matcher in jsdom, and the  — which marshals each  across the browser boundary for you."
+      paragraph "Available everywhere snapshots are: and the matcher in jsdom, and the — which marshals each across the browser boundary for you."
         code "auditSnapshot"
         link "a11ySnapshot"
           code "a11ySnapshot"
@@ -236,7 +236,7 @@
       code
     heading "Determinism" (level 2)
       link "Permalink to "Determinism""
-    paragraph "All three helpers return the  for the same DOM — on every run, on every machine. No timestamps, no generated IDs, no ordering surprises. That's the property that makes  safe in CI without flakes. For genuinely variable content, use ."
+    paragraph "All three helpers return the for the same DOM — on every run, on every machine. No timestamps, no generated IDs, no ordering surprises. That's the property that makes safe in CI without flakes. For genuinely variable content, use ."
       strong "same string"
       code "toMatchSnapshot()"
       link "redact"
@@ -244,7 +244,7 @@
     heading "See also" (level 2)
       link "Permalink to "See also""
     list
-      listitem "—  serializer so  renders the tree directly"
+      listitem "— serializer so renders the tree directly"
         link "Matchers"
         code "a11ySnapshot()"
         code "expect(el).toMatchSnapshot()"

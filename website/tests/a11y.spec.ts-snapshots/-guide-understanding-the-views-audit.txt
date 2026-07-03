@@ -101,7 +101,7 @@
     paragraph "Assistive technology doesn't see the 2D layout. It reads the same content as a , organized by landmark roles."
       strong "hierarchical tree"
     img "A11y tree view: the same website content rearranged as a tree diagram with document as the root, branching into banner, navigation, main, complementary, and contentinfo landmarks, each containing their child elements."
-    paragraph "Same shapes, same colors — different structure. The tree shows  each element is (its role),  (its accessible name), and  in the hierarchy."
+    paragraph "Same shapes, same colors — different structure. The tree shows each element is (its role), (its accessible name), and in the hierarchy."
       strong "what"
       strong "what it's called"
       strong "where it sits"

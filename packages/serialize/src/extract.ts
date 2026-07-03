@@ -6,8 +6,8 @@ import {
 } from "@real-a11y-dev/core";
 
 /**
- * Internal helper — pick the right extractor for the requested view mode.
- * Defaults to the A11y tree because that's what most audits care about.
+ * Pick the right extractor for the requested view mode. Defaults to the A11y
+ * tree because that's what most serialization targets care about.
  */
 export function extract(
   root: Element,
