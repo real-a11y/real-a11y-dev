@@ -93,7 +93,6 @@
         link "See also"
   main
     heading "Panel features" (level 1)
-      link "Permalink to "Panel features""
     blockquote
       paragraph "These behaviors are — the , the embed, the , and the . If a feature exists in one, it exists in all of them. Where the per-package APIs differ, this page calls out which prop / option to reach for."
         strong "shared across every Real A11y surface"
@@ -104,7 +103,6 @@
         link "Storybook addon"
     separator
     heading "Search" (level 2)
-      link "Permalink to "Search""
     paragraph "A live filter over the tree. Matches on , , , , and . Type "email" → every input, label, and heading whose name or content contains "email" stays visible; everything else collapses. Clearing the field restores the full tree."
       strong "tag name"
       strong "role"
@@ -132,7 +130,6 @@
           cell "Same input in the addon panel header"
     separator
     heading "Role filters" (level 2)
-      link "Permalink to "Role filters""
     paragraph "Six chip-style toggles that hide every node except the matching role (and the ancestors needed to reach it). Click the same chip again to clear."
     table
       rowgroup
@@ -208,7 +205,6 @@
           cell "Same chip row in the addon panel"
     separator
     heading "Focus tracking" (level 2)
-      link "Permalink to "Focus tracking""
     paragraph "When focus tracking is , the panel and the host page stay in sync :"
       strong "on"
       strong "bidirectionally"
@@ -226,10 +222,8 @@
         strong "opt-in"
         link "Panel interaction vs. host side effects"
     heading "When to leave it on" (level 3)
-      link "Permalink to "When to leave it on""
     paragraph "The default. It's the single strongest feature for understanding "what a keyboard user is looking at right now." Tab through a form with the panel open and you'll see the experience."
     heading "When to turn it off" (level 3)
-      link "Permalink to "When to turn it off""
     paragraph "Three cases:"
     list
       listitem "— forms with 30+ fields, SPAs that grab focus on every interaction, or pages with aggressive focus-trap libraries. The tree would jump around continuously; turning the sync off keeps it stable on the node you're inspecting."
@@ -240,7 +234,6 @@
         strong "Curtain mode"
         emphasis "(extension only)"
     heading "How to verify it's working" (level 3)
-      link "Permalink to "How to verify it's working""
     paragraph "Focus the page itself first (click anywhere on the page, not the panel), then press Tab. You should see a blue rectangle on the focused page element the corresponding tree node highlight in the panel. If only one happens — or neither — see the ."
       strong "both"
       strong "and"
@@ -257,13 +250,13 @@
         row
           cell "inspector"
             code "inspector"
-          cell "createInspector({ root, container, highlightOnHover: true, scrollHostOnSelect: true, focusHostOnActivate: true }) — opt in to overlay / scroll / focus on the host page; all three default to off, see"
+          cell "createInspector({ root, container, highlightOnHover: true, scrollHostOnSelect: true, focusHostOnActivate: true }) — opt in to overlay / scroll / focus on the host page; all three default to off, see the rationale"
             code "createInspector({ root, container, highlightOnHover: true, scrollHostOnSelect: true, focusHostOnActivate: true })"
             link "the rationale"
         row
           cell "React <SemanticNavigator />"
             code "<SemanticNavigator />"
-          cell "<SemanticNavigator highlightOnHover scrollHostOnSelect focusHostOnActivate /> — same opt-ins as the inspector; see"
+          cell "<SemanticNavigator highlightOnHover scrollHostOnSelect focusHostOnActivate /> — same opt-ins as the inspector; see the package reference"
             code "<SemanticNavigator highlightOnHover scrollHostOnSelect focusHostOnActivate />"
             link "the package reference"
         row
@@ -271,7 +264,6 @@
           cell "Selection draws an overlay on the story preview by default; the addon hardcodes safe values since the manager iframe is isolated from the preview"
     separator
     heading "Scoping" (level 2)
-      link "Permalink to "Scoping""
     paragraph "Narrow the audit root to a subtree. Useful when you want to focus on one form, one dialog, or one widget without the rest of the page in the way."
     paragraph "In the panel, double-click any node to scope into it. The tree re-renders showing only that subtree. A breadcrumb at the top shows the path; click any breadcrumb segment to scope back up, or the to exit to the full tree."
       code "×"
@@ -307,18 +299,16 @@
         row
           cell "@real-a11y-dev/testing"
             code "@real-a11y-dev/testing"
-          cell "attach(page, { rootSelector: "form" }) for Playwright; auditSnapshot(form, …) for jsdom — see"
+          cell "attach(page, { rootSelector: "form" }) for Playwright; auditSnapshot(form, …) for jsdom — see the testing reference"
             code "attach(page, { rootSelector: "form" })"
             code "auditSnapshot(form, …)"
             link "the testing reference"
     heading "Dialog auto-scope" (level 3)
-      link "Permalink to "Dialog auto-scope""
     paragraph "When the page opens a or , the panel automatically scopes into it. A "Dialog: …" indicator appears with the dialog's accessible name. This is what a screen reader user effectively gets — the rest of the page becomes inert and the dialog is the only thing they can navigate. Verifying that auto-scope works correctly (proper labeling, focus trap, escape to close) is one of the highest-value audits the panel enables."
       code "<dialog>"
       code "[role="dialog"]"
     separator
     heading "Live region monitoring" (level 2)
-      link "Permalink to "Live region monitoring""
     paragraph "Every region update, change, and on the page appears in the panel's live log in real time, labeled or . The order, timing, and content are what a screen reader would announce."
       code "aria-live"
       code "role="status""
@@ -353,7 +343,6 @@
           cell "Inside the panel — same position"
     separator
     heading "Keyboard navigation" (level 2)
-      link "Permalink to "Keyboard navigation""
     paragraph "The panel itself is fully keyboard-operable."
     table
       rowgroup
@@ -400,7 +389,6 @@
       code "useTreeKeyboard"
     separator
     heading "Panel interaction vs. host side effects" (level 2)
-      link "Permalink to "Panel interaction vs. host side effects""
     paragraph "A distinction worth pinning down before wiring up an in-page panel for the first time, because the framing "interaction is opt-in" gets it backwards:"
     list
       listitem "Selecting a row, clicking a cross-link chip and jumping to its target, expanding / collapsing, arrow-key tree movement — all of this mutates panel state only. Nothing you do the panel reaches the real DOM until you ask it to. This is identical across the Chrome extension, the inspector embed, the React component, and the Storybook addon."
@@ -442,13 +430,11 @@
           cell "Off by default — opt in via props"
             strong "Off by default"
     heading "Why the in-page surfaces default to off" (level 3)
-      link "Permalink to "Why the in-page surfaces default to off""
     paragraph "If activating a tree row stole focus to the host element, every Enter / Space on a row would yank focus out of the panel and break tree-pattern keyboard navigation. Same for scroll — every arrow-key step would scroll the page out from under you. The extension and Storybook addon don't have that problem because the panel and the inspected DOM live in different windows / iframes; on a host element in one document can't pull focus out of a panel in another."
       code ".focus()"
     paragraph "The broader principle, recorded in the changelog when these defaults were established:"
       emphasis "opt-in host-app side effects so audits and test harnesses don't disturb the app under test."
     heading "Opting in for the in-page surfaces" (level 3)
-      link "Permalink to "Opting in for the in-page surfaces""
     button "Copy Code"
       code
     button "Copy Code"
@@ -459,7 +445,6 @@
       code "focusHostOnActivate"
     separator
     heading "See also" (level 2)
-      link "Permalink to "See also""
     list
       listitem "· · — what the tree itself shows in each mode"
         link "Reading the DOM View"

@@ -1,3 +1,4 @@
+import anchor from "markdown-it-anchor";
 import { defineConfig } from "vitepress";
 import type { ShikiTransformer } from "shiki";
 
@@ -34,6 +35,21 @@ export default defineConfig({
   cleanUrls: true,
 
   markdown: {
+    // Heading permalink anchors, hidden from assistive tech (GitHub's
+    // pattern: aria-hidden + tabindex="-1", still hover/clickable for
+    // sighted users). VitePress's default anchor is a real link with
+    // aria-label="Permalink to X" INSIDE the heading — per accname §2F
+    // that label joins the heading's accessible name, so every heading
+    // announces as "X Permalink to 'X'". Our own engine (and axe's
+    // aria-hidden-focus rule, satisfied by the tabindex) surfaced it —
+    // same fix we'd recommend to consumers.
+    anchor: {
+      permalink: anchor.permalink.linkInsideHeader({
+        symbol: "&ZeroWidthSpace;",
+        ariaHidden: true,
+        renderAttrs: () => ({ tabindex: "-1" }),
+      }),
+    },
     codeTransformers: [hideTokenSpans],
     // VitePress's default Shiki themes (`github-light` / `github-dark`)
     // ship a few token colors that fall just under WCAG AA's 4.5:1 on

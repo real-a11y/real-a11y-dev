@@ -47,49 +47,34 @@
 47. link "Keyboard navigation"
 48. link "Panel interaction vs. host side effects"
 49. link "See also"
-50. link "Permalink to "Panel features""
-51. link "Chrome extension"
-52. link "@real-a11y-dev/inspector"
-53. link "React component"
-54. link "Storybook addon"
-55. link "Permalink to "Search""
+50. link "Chrome extension"
+51. link "@real-a11y-dev/inspector"
+52. link "React component"
+53. link "Storybook addon"
+54. table
+55. table
 56. table
-57. link "Permalink to "Role filters""
-58. table
-59. table
-60. link "Permalink to "Focus tracking""
-61. link "Chrome extension"
-62. link "Panel interaction vs. host side effects"
-63. link "Permalink to "When to leave it on""
-64. link "Permalink to "When to turn it off""
-65. link "Permalink to "How to verify it's working""
-66. link "troubleshooting page"
+57. link "Chrome extension"
+58. link "Panel interaction vs. host side effects"
+59. link "troubleshooting page"
+60. table
+61. link "the rationale"
+62. link "the package reference"
+63. table
+64. link "the testing reference"
+65. table
+66. table
 67. table
-68. link "the rationale"
-69. link "the package reference"
-70. link "Permalink to "Scoping""
-71. table
-72. link "the testing reference"
-73. link "Permalink to "Dialog auto-scope""
-74. link "Permalink to "Live region monitoring""
-75. table
-76. link "Permalink to "Keyboard navigation""
-77. table
-78. link "Permalink to "Panel interaction vs. host side effects""
-79. table
-80. link "Permalink to "Why the in-page surfaces default to off""
-81. link "Permalink to "Opting in for the in-page surfaces""
-82. button "Copy Code"
-83. generic
-84. button "Copy Code"
-85. generic
-86. link "Permalink to "See also""
-87. link "Reading the DOM View"
-88. link "A11y View"
-89. link "TAB View"
-90. link "Accessible Names"
-91. link "Architecture"
-92. link "Troubleshooting"
-93. link "Edit this page on GitHub"
-94. link "Previous pageTAB View"
-95. link "Next pageOverview & Install"
+68. button "Copy Code"
+69. generic
+70. button "Copy Code"
+71. generic
+72. link "Reading the DOM View"
+73. link "A11y View"
+74. link "TAB View"
+75. link "Accessible Names"
+76. link "Architecture"
+77. link "Troubleshooting"
+78. link "Edit this page on GitHub"
+79. link "Previous pageTAB View"
+80. link "Next pageOverview & Install"

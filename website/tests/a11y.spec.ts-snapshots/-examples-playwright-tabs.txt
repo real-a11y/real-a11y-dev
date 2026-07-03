@@ -47,31 +47,22 @@
 47. link "Narrowing the audit root"
 48. link "Snapshot test"
 49. link "How the adapter works"
-50. link "Permalink to "Example: Playwright E2E""
-51. link "packages/testing/e2e/"
-52. link "Permalink to "What it shows""
-53. link "Permalink to "Run it locally""
-54. button "Copy Code"
-55. generic
-56. link "Permalink to "Setup""
+50. link "packages/testing/e2e/"
+51. button "Copy Code"
+52. generic
+53. button "Copy Code"
+54. generic
+55. button "Copy Code"
+56. generic
 57. button "Copy Code"
 58. generic
-59. link "Permalink to "Good fixture — assertions pass""
-60. button "Copy Code"
-61. generic
-62. link "Permalink to "Bad fixture — assertions throw""
+59. button "Copy Code"
+60. generic
+61. button "Copy Code"
+62. generic
 63. button "Copy Code"
 64. generic
-65. link "Permalink to "Narrowing the audit root""
-66. button "Copy Code"
-67. generic
-68. link "Permalink to "Snapshot test""
-69. button "Copy Code"
-70. generic
-71. button "Copy Code"
-72. generic
-73. link "Permalink to "How the adapter works""
-74. button "Copy Code"
-75. generic
-76. link "Edit this page on GitHub"
-77. link "Next pageGetting Started"
+65. button "Copy Code"
+66. generic
+67. link "Edit this page on GitHub"
+68. link "Next pageGetting Started"

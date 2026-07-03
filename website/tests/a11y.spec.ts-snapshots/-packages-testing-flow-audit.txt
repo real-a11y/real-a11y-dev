@@ -97,7 +97,6 @@
         link "See also"
   main
     heading "Flow API" (level 1)
-      link "Permalink to "Flow API""
     paragraph "Fluent interaction chains that assert about the after each step. Each / / etc. dispatches a real DOM action, then re-extracts the tree so the next step sees the post-interaction state."
       strong "accessibility tree"
       code ".click()"
@@ -109,7 +108,6 @@
       code
     heading "Why flow() (vs Testing Library)?" (level 2)
       code "flow()"
-      link "Permalink to "Why `flow()` (vs Testing Library)?""
     paragraph "Testing Library asserts about the . asserts about the — the same tree screen-reader users perceive and the same tree the Real A11y panel shows. That difference changes which tests are easy to write."
       strong "rendered DOM"
       code "flow()"
@@ -120,7 +118,6 @@
       code "userEvent"
       code "flow()"
     heading "Side-by-side: same test, both libraries" (level 3)
-      link "Permalink to "Side-by-side: same test, both libraries""
     paragraph "A common flow — open a confirm dialog, dismiss it, assert it closed:"
     button "Copy Code"
       code
@@ -136,7 +133,6 @@
       code "findByRole"
       code "within(dialog)"
     heading "When to use which" (level 3)
-      link "Permalink to "When to use which""
     table
       rowgroup
         row
@@ -158,7 +154,7 @@
           cell "You want to assert "the right modal is now open" or "no modal is open" in one step"
         row
           cell "Your codebase is already deep in RTL idioms and you want to stay consistent"
-          cell "The same audit logic must also run in a real browser via the"
+          cell "The same audit logic must also run in a real browser via the Playwright adapter"
             link "Playwright adapter"
         row
           cell "Testing one component in isolation"
@@ -173,7 +169,6 @@
       emphasis "AT users"
       strong "both, in the same suite"
     heading "Available steps" (level 2)
-      link "Permalink to "Available steps""
     table
       rowgroup
         row
@@ -226,7 +221,6 @@
       code "await"
     heading "expectActiveModal — examples" (level 3)
       code "expectActiveModal"
-      link "Permalink to "`expectActiveModal` — examples""
     button "Copy Code"
       code
     paragraph "The first or in document order is treated as the active modal."
@@ -234,7 +228,6 @@
       code "role="alertdialog""
     heading "expectTree — caveat" (level 3)
       code "expectTree"
-      link "Permalink to "`expectTree` — caveat""
     paragraph "re-serializes the tree with (no , , generic nodes flattened). A snapshot captured via or will not match. For redacted or DOM-mode comparisons, use and call / yourself."
       code "expectTree"
       strong "default options"
@@ -247,7 +240,6 @@
       code "auditSnapshot"
     heading "flow(root, options?)" (level 2)
       code "flow(root, options?)"
-      link "Permalink to "`flow(root, options?)`""
     table
       rowgroup
         row
@@ -267,10 +259,8 @@
     button "Copy Code"
       code
     heading "Utilities" (level 2)
-      link "Permalink to "Utilities""
     heading "waitForMutations(root, options?)" (level 3)
       code "waitForMutations(root, options?)"
-      link "Permalink to "`waitForMutations(root, options?)`""
     paragraph "Resolves after the next debounced DOM mutation cycle. Useful after programmatic DOM changes."
     button "Copy Code"
       code
@@ -299,13 +289,11 @@
             code "50"
     heading "dispatch(node, action?, payload?)" (level 3)
       code "dispatch(node, action?, payload?)"
-      link "Permalink to "`dispatch(node, action?, payload?)`""
     paragraph "Dispatches an action on a directly."
       code "SemanticNode"
     button "Copy Code"
       code
     heading "See also" (level 2)
-      link "Permalink to "See also""
     list
       listitem "— -style assertions, including post- modal checks"
         link "Matchers"

@@ -48,45 +48,27 @@
 48. link "Example: dev-tools overlay"
 49. link "See it running"
 50. link "Panel features"
-51. link "Permalink to "@real-a11y-dev/inspector""
-52. link "Permalink to "Install""
-53. button "Copy Code"
-54. generic
-55. link "Keep it out of production"
-56. link "Permalink to "Quick start""
-57. button "Copy Code"
-58. generic
-59. link "Permalink to "`createInspector(config)`""
-60. link "Permalink to "Config""
-61. table
-62. link "Panel interaction vs. host side effects"
-63. link "Permalink to "Instance API""
+51. button "Copy Code"
+52. generic
+53. link "Keep it out of production"
+54. button "Copy Code"
+55. generic
+56. table
+57. link "Panel interaction vs. host side effects"
+58. button "Copy Code"
+59. generic
+60. button "Copy Code"
+61. generic
+62. button "Copy Code"
+63. generic
 64. button "Copy Code"
 65. generic
-66. link "Permalink to "`mount()`""
-67. link "Permalink to "`unmount()` / `destroy()`""
-68. link "Permalink to "`setViewMode(mode)`""
-69. link "Permalink to "`setRoot(root)`""
-70. button "Copy Code"
-71. generic
-72. link "Permalink to "`refresh()`""
-73. link "Permalink to "`getTree()`""
-74. button "Copy Code"
-75. generic
-76. link "Permalink to "Shadow DOM explained""
-77. link "Permalink to "Opting out""
-78. button "Copy Code"
-79. generic
-80. link "Permalink to "Interaction flags""
-81. button "Copy Code"
-82. generic
-83. link "Permalink to "Example: dev-tools overlay""
-84. button "Copy Code"
-85. generic
-86. link "Permalink to "See it running""
-87. link "examples/vanilla/"
-88. link "Permalink to "Panel features""
-89. link "Panel features reference"
-90. link "Edit this page on GitHub"
-91. link "Previous page@real-a11y-dev/core"
-92. link "Next page@real-a11y-dev/testing"
+66. button "Copy Code"
+67. generic
+68. button "Copy Code"
+69. generic
+70. link "examples/vanilla/"
+71. link "Panel features reference"
+72. link "Edit this page on GitHub"
+73. link "Previous page@real-a11y-dev/core"
+74. link "Next page@real-a11y-dev/testing"

@@ -286,10 +286,15 @@ function computeAccessibleDescription(element: Element): string {
  *   - Row / item widgets that carry their own name: treeitem, menuitem*,
  *     option, tab, listitem, row, cell, gridcell, columnheader,
  *     rowheader.
- *   - Interactive widgets that own their accessible name: button, link,
- *     checkbox, radio, switch, slider, spinbutton, textbox, searchbox.
+ *   - Embedded form controls: slider, spinbutton, textbox, searchbox.
+ *     (accname §2C says these contribute their *value* when embedded in a
+ *     label — e.g. `<label>Delete <input value="3"> files</label>` names
+ *     "Delete 3 files". Not implemented yet; skipping is the safer
+ *     approximation until the value rule lands.)
  *   - Display widgets / live regions: dialog, alertdialog, tabpanel,
- *     alert, status, log, tooltip, progressbar, meter.
+ *     alert, status, log, tooltip, progressbar, meter. A tooltip or
+ *     dialog nested inside a widget is its own surface, not part of the
+ *     host's label.
  *
  * Intentionally NOT included (walked into so their text contributes):
  *   - generic, presentation, none — transparent.
@@ -298,6 +303,9 @@ function computeAccessibleDescription(element: Element): string {
  *     blockquote, caption, figcaption, time, separator, img.
  *   - heading — kept walkable so a button/tab whose label is a heading
  *     still picks up the heading's text (e.g. `<button><h3>X</h3>`).
+ *   - Named widgets (link, button, checkbox, radio, switch) — handled by
+ *     {@link NAMED_WIDGET_ROLES} below: they contribute their *computed
+ *     accessible name*, not raw text.
  */
 const NAME_BARRIER_ROLES = new Set<string>([
   // Containers / structural groups
@@ -327,12 +335,7 @@ const NAME_BARRIER_ROLES = new Set<string>([
   "gridcell",
   "columnheader",
   "rowheader",
-  // Interactive widgets that own their accessible name
-  "button",
-  "link",
-  "checkbox",
-  "radio",
-  "switch",
+  // Embedded form controls (see §2C note in the docstring)
   "slider",
   "spinbutton",
   "textbox",
@@ -347,6 +350,29 @@ const NAME_BARRIER_ROLES = new Set<string>([
   "tooltip",
   "progressbar",
   "meter",
+]);
+
+/**
+ * Named widgets encountered as descendants during name-from-content
+ * contribute their *computed accessible name* — not their raw subtree text,
+ * and not the empty string.
+ *
+ * Per accname-1.2 §2F.iii the walk recurses with the full name algorithm,
+ * so `<h3><a aria-label="API docs">config.ts</a></h3>` names the heading
+ * "API docs", and `<h3><a><code>config.ts</code></a></h3>` names it
+ * "config.ts" — matching what Chrome and Firefox expose. Skipping these
+ * entirely (as we briefly did) left link-wrapped headings nameless.
+ *
+ * Deliberately narrow: item widgets like treeitem/menuitem/option stay in
+ * {@link NAME_BARRIER_ROLES} — a nested tree row is a sibling with its own
+ * announceable name, not part of its parent's label (PR #84).
+ */
+const NAMED_WIDGET_ROLES = new Set<string>([
+  "link",
+  "button",
+  "checkbox",
+  "radio",
+  "switch",
 ]);
 
 /**
@@ -374,7 +400,15 @@ function getAccessibleTextContent(element: Element): string {
       const childEl = child as Element;
       if (childEl.getAttribute("aria-hidden") === "true") continue;
       if (isSubtreeHidden(childEl)) continue;
-      if (NAME_BARRIER_ROLES.has(getImplicitRole(childEl))) continue;
+      const role = getImplicitRole(childEl);
+      // Named widgets contribute their computed name (accname §2F.iii) —
+      // padded with spaces so adjacent text doesn't glue; the final
+      // whitespace normalization collapses any doubles.
+      if (NAMED_WIDGET_ROLES.has(role)) {
+        text += ` ${computeAccessibleName(childEl)} `;
+        continue;
+      }
+      if (NAME_BARRIER_ROLES.has(role)) continue;
       text += getAccessibleTextContent(childEl);
     }
   }

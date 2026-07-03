@@ -50,29 +50,22 @@
 50. link "assertLandmarkStructure(root)"
 51. link "A11yAssertionError"
 52. link "See also"
-53. link "Permalink to "Assertions""
-54. link "@real-a11y-dev/testing"
-55. link "Matchers"
-56. link "Permalink to "`assertNoUnlabeledInteractive(root)`""
+53. link "@real-a11y-dev/testing"
+54. link "Matchers"
+55. button "Copy Code"
+56. generic
 57. button "Copy Code"
 58. generic
 59. button "Copy Code"
 60. generic
-61. link "Permalink to "`assertHeadingOrder(root)`""
-62. button "Copy Code"
-63. generic
-64. link "Permalink to "`assertDialogsLabeled(root)`""
+61. button "Copy Code"
+62. generic
+63. button "Copy Code"
+64. generic
 65. button "Copy Code"
 66. generic
-67. link "Permalink to "`assertLandmarkStructure(root)`""
-68. button "Copy Code"
-69. generic
-70. link "Permalink to "`A11yAssertionError`""
-71. button "Copy Code"
-72. generic
-73. link "Permalink to "See also""
-74. link "Matchers"
-75. link "Playwright adapter"
-76. link "Edit this page on GitHub"
-77. link "Previous pageSnapshots"
-78. link "Next pageMatchers"
+67. link "Matchers"
+68. link "Playwright adapter"
+69. link "Edit this page on GitHub"
+70. link "Previous pageSnapshots"
+71. link "Next pageMatchers"

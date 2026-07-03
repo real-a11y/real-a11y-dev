@@ -95,7 +95,6 @@
         link "Panel features"
   main
     heading "@real-a11y-dev/inspector" (level 1)
-      link "Permalink to "@real-a11y-dev/inspector""
     blockquote
       paragraph "— A drop-in, framework-agnostic tree-inspector panel. Call and you get an interactive A11y / DOM / TAB view rendered into any DOM node, CSS-isolated via Shadow DOM. Reach for this in , or when you want the panel without framework coupling."
         strong "TL;DR"
@@ -103,7 +102,6 @@
         strong "vanilla / non-React projects"
     paragraph "Framework-agnostic interactive accessibility tree panel. Mounts into any container element, isolated via Shadow DOM by default."
     heading "Install" (level 2)
-      link "Permalink to "Install""
     button "Copy Code"
       code
     paragraph "none (Preact is bundled)."
@@ -117,7 +115,6 @@
       link "Keep it out of production"
     separator
     heading "Quick start" (level 2)
-      link "Permalink to "Quick start""
     button "Copy Code"
       code
     paragraph "The panel renders inside a attached to . Your app's CSS cannot leak in; the panel's CSS cannot leak out. Toggle mode, switch view, or unmount programmatically at any time."
@@ -126,11 +123,9 @@
     separator
     heading "createInspector(config)" (level 2)
       code "createInspector(config)"
-      link "Permalink to "`createInspector(config)`""
     paragraph "Returns an ."
       code "InspectorInstance"
     heading "Config" (level 3)
-      link "Permalink to "Config""
     table
       rowgroup
         row
@@ -218,48 +213,40 @@
       link "Panel interaction vs. host side effects"
     separator
     heading "Instance API" (level 2)
-      link "Permalink to "Instance API""
     button "Copy Code"
       code
     heading "mount()" (level 3)
       code "mount()"
-      link "Permalink to "`mount()`""
     paragraph "Attaches the panel to and starts observing for DOM mutations."
       code "container"
       code "root"
     heading "unmount() / destroy()" (level 3)
       code "unmount()"
       code "destroy()"
-      link "Permalink to "`unmount()` / `destroy()`""
     paragraph "Removes the panel from , stops the observer, and cleans up all event listeners. Safe to call multiple times."
       code "container"
     heading "setViewMode(mode)" (level 3)
       code "setViewMode(mode)"
-      link "Permalink to "`setViewMode(mode)`""
     paragraph "Switches between , , and modes without remounting."
       code ""a11y""
       code ""dom""
       code ""tab""
     heading "setRoot(root)" (level 3)
       code "setRoot(root)"
-      link "Permalink to "`setRoot(root)`""
     paragraph "Swaps the observed root element. The observer is restarted on the new root; the panel re-renders immediately."
     button "Copy Code"
       code
     heading "refresh()" (level 3)
       code "refresh()"
-      link "Permalink to "`refresh()`""
     paragraph "Forces an immediate re-extraction without waiting for the next DOM mutation. Useful in tests or after programmatic DOM changes."
     heading "getTree()" (level 3)
       code "getTree()"
-      link "Permalink to "`getTree()`""
     paragraph "Returns the most recently extracted tree as an ."
       code "ExtractionResult"
     button "Copy Code"
       code
     separator
     heading "Shadow DOM explained" (level 2)
-      link "Permalink to "Shadow DOM explained""
     paragraph "When (the default), the inspector:"
       code "mount: "shadow""
     list
@@ -272,7 +259,6 @@
     paragraph "Your application's CSS does not pierce the shadow boundary. The panel's CSS does not leak out. If you set , the same nonce is applied to the injected style element for CSP compliance."
       code "styleNonce"
     heading "Opting out" (level 3)
-      link "Permalink to "Opting out""
     button "Copy Code"
       code
     paragraph "With , a element is injected into instead."
@@ -281,19 +267,16 @@
       code "document.head"
     separator
     heading "Interaction flags" (level 2)
-      link "Permalink to "Interaction flags""
     paragraph "All host-side effects are opt-in:"
     button "Copy Code"
       code
     paragraph "These are off by default so that using the panel during testing never disturbs the host app's own focus or scroll state."
     separator
     heading "Example: dev-tools overlay" (level 2)
-      link "Permalink to "Example: dev-tools overlay""
     button "Copy Code"
       code
     separator
     heading "See it running" (level 2)
-      link "Permalink to "See it running""
     list
       listitem "— : mode switcher, to narrow the audit to an open dialog, after programmatic DOM changes."
         strong "Vanilla / Vite"
@@ -303,7 +286,6 @@
         code "refresh()"
     separator
     heading "Panel features" (level 2)
-      link "Permalink to "Panel features""
     paragraph "Once the inspector is mounted, all the same in-panel behaviors as the Chrome extension and Storybook addon are available — search, role filters, focus tracking, scoping, live region monitoring, keyboard navigation. They're shared across every Real A11y surface."
     paragraph "→"
       link "Panel features reference"

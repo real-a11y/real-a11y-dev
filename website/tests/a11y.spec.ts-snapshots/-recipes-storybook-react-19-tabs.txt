@@ -46,24 +46,16 @@
 46. link "Clear the cache after adding the addon"
 47. link "CI"
 48. link "Known constraints"
-49. link "Permalink to "Storybook 8 + React 19""
-50. link "Permalink to "Install""
+49. button "Copy Code"
+50. generic
 51. button "Copy Code"
 52. generic
-53. link "Permalink to "Register the addon""
-54. button "Copy Code"
-55. generic
-56. link "Permalink to "React 19 — pin the JSX runtime""
+53. button "Copy Code"
+54. generic
+55. button "Copy Code"
+56. generic
 57. button "Copy Code"
 58. generic
-59. link "Permalink to "When you *don't* need this""
-60. link "Permalink to "Clear the cache after adding the addon""
-61. button "Copy Code"
-62. generic
-63. link "Permalink to "CI""
-64. button "Copy Code"
-65. generic
-66. link "Permalink to "Known constraints""
-67. link "Edit this page on GitHub"
-68. link "Previous pageNext.js (App Router + React 19)"
-69. link "Next pagePeer Dependencies"
+59. link "Edit this page on GitHub"
+60. link "Previous pageNext.js (App Router + React 19)"
+61. link "Next pagePeer Dependencies"

@@ -54,42 +54,31 @@
 54. link "Error propagation"
 55. link "SemanticNavigatorPageHandle type"
 56. link "See also"
-57. link "Permalink to "Playwright adapter""
-58. link "@real-a11y-dev/testing"
-59. link "Permalink to "Install""
+57. link "@real-a11y-dev/testing"
+58. button "Copy Code"
+59. generic
 60. button "Copy Code"
 61. generic
-62. link "Permalink to "`attach(page, options?)`""
+62. table
 63. button "Copy Code"
 64. generic
-65. table
-66. link "Permalink to "Narrowing the root""
+65. button "Copy Code"
+66. generic
 67. button "Copy Code"
 68. generic
-69. link "Permalink to "Testing that assertions fail on broken pages""
+69. link "redact"
 70. button "Copy Code"
 71. generic
-72. link "Permalink to "Determinism""
+72. link "g-flag gotcha"
 73. button "Copy Code"
 74. generic
-75. link "Permalink to "Redacting variable content""
-76. link "redact"
+75. button "Copy Code"
+76. generic
 77. button "Copy Code"
 78. generic
-79. link "g-flag gotcha"
-80. link "Permalink to "How it works""
-81. button "Copy Code"
-82. generic
-83. link "Permalink to "Error propagation""
-84. button "Copy Code"
-85. generic
-86. link "Permalink to "`SemanticNavigatorPageHandle` type""
-87. button "Copy Code"
-88. generic
-89. link "Permalink to "See also""
-90. link "Snapshots"
-91. link "Assertions"
-92. link "CI Diff Bot recipe"
-93. link "Edit this page on GitHub"
-94. link "Previous pageFlow API"
-95. link "Next page@real-a11y-dev/react"
+79. link "Snapshots"
+80. link "Assertions"
+81. link "CI Diff Bot recipe"
+82. link "Edit this page on GitHub"
+83. link "Previous pageFlow API"
+84. link "Next page@real-a11y-dev/react"

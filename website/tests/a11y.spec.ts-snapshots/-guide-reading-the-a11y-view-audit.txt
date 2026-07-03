@@ -87,7 +87,6 @@
         link "Quick sanity checks"
   main
     heading "Reading the A11y View" (level 1)
-      link "Permalink to "Reading the A11y View""
     blockquote
       paragraph "The A11y view is the same tree across every Real A11y surface — the , the , the , and the string from the testing package. This page applies to all of them."
         link "Chrome extension"
@@ -105,7 +104,6 @@
     paragraph "Left: what sighted users see. Right: what assistive technology reads. Same content — different structure."
     separator
     heading "What you see" (level 2)
-      link "Permalink to "What you see""
     paragraph "Each node represents one meaningful element in the accessibility tree. For each one, you'll see:"
     list
       listitem "— What kind of thing it is. , , , , , , … This comes from the HTML tag or an explicit attribute."
@@ -126,7 +124,6 @@
         strong "State"
     separator
     heading "How the A11y view differs from the DOM view" (level 2)
-      link "Permalink to "How the A11y view differs from the DOM view""
     paragraph "The DOM view shows every HTML element. The A11y view filters and transforms:"
     list
       listitem "A used only for layout with no role or text shows up in DOM but not in A11y. Same for , empty containers, and elements with or ."
@@ -149,9 +146,7 @@
         code "title"
     separator
     heading "What to look for" (level 2)
-      link "Permalink to "What to look for""
     heading "Interactive elements with no name" (level 3)
-      link "Permalink to "Interactive elements with no name""
     paragraph "This is the single most common issue. An icon-only button, a link with no text, a form input with no visible label — these show up in the A11y view with a role but an empty name."
     button "Copy Code"
       code
@@ -165,7 +160,6 @@
       code "aria-label"
     heading "Everything is generic" (level 3)
       code "generic"
-      link "Permalink to "Everything is `generic`""
     paragraph "The role is what and get when they have no semantic role. If your A11y tree looks like:"
       code "generic"
       code "<div>"
@@ -185,7 +179,6 @@
       code "<button>"
       code "<a>"
     heading "Heading levels that jump" (level 3)
-      link "Permalink to "Heading levels that jump""
     paragraph "Headings are how screen reader users navigate long pages — they Tab through headings the same way sighted users scan titles. If you jump from an directly to an , users navigating by heading lose their place in the hierarchy."
       code "h1"
       code "h3"
@@ -194,31 +187,26 @@
     paragraph "Heading levels should only increase by one at a time. Use CSS to control visual size — don't pick a heading level based on how big it looks."
       strong "The fix:"
     heading "Images with no name" (level 3)
-      link "Permalink to "Images with no name""
     paragraph "An without an attribute, or with when the image conveys meaning, shows up in the A11y tree with no name. Decorative images should genuinely be decorative — if it communicates content (a product photo, a chart, a badge), it needs a description."
       code "<img>"
       code "alt"
       code "alt="""
     heading "ARIA states that don't match reality" (level 3)
-      link "Permalink to "ARIA states that don't match reality""
     paragraph "An accordion with is good. An that never changes when the accordion opens is a bug — the A11y tree will say "collapsed" while the panel is visually open. The A11y view will catch this: look at the state and ask whether it matches what you see on screen."
       code "<button>"
       code "aria-expanded"
       code "aria-expanded"
     heading "Elements that should be in the tree but aren't" (level 3)
-      link "Permalink to "Elements that should be in the tree but aren't""
     paragraph "If a custom widget isn't showing up with the right role — or isn't showing up at all — it may be , visually hidden but also hidden from AT, or built with markup that doesn't carry semantic meaning. The A11y view makes absences visible."
       code "aria-hidden"
     separator
     heading "Reading a well-structured tree" (level 2)
-      link "Permalink to "Reading a well-structured tree""
     paragraph "A healthy A11y tree looks something like this:"
     button "Copy Code"
       code
     paragraph "Landmarks structure the page. Headings create hierarchy. Interactive elements have meaningful names. Nothing generic where something semantic belongs."
     separator
     heading "Quick sanity checks" (level 2)
-      link "Permalink to "Quick sanity checks""
     paragraph "Run through these any time you open the A11y view on an unfamiliar component:"
     list
       listitem "Do all interactive elements have a name?"

@@ -49,40 +49,28 @@
 49. link "flow(root, options?)"
 50. link "Utilities"
 51. link "See also"
-52. link "Permalink to "Flow API""
-53. link "@real-a11y-dev/testing"
-54. button "Copy Code"
-55. generic
-56. link "Permalink to "Why `flow()` (vs Testing Library)?""
-57. link "Permalink to "Side-by-side: same test, both libraries""
-58. button "Copy Code"
-59. generic
-60. button "Copy Code"
-61. generic
-62. link "Permalink to "When to use which""
-63. table
-64. link "Playwright adapter"
-65. link "Permalink to "Available steps""
-66. table
-67. link "Permalink to "`expectActiveModal` — examples""
-68. button "Copy Code"
-69. generic
-70. link "Permalink to "`expectTree` — caveat""
-71. link "Permalink to "`flow(root, options?)`""
-72. table
-73. button "Copy Code"
-74. generic
-75. link "Permalink to "Utilities""
-76. link "Permalink to "`waitForMutations(root, options?)`""
-77. button "Copy Code"
-78. generic
-79. table
-80. link "Permalink to "`dispatch(node, action?, payload?)`""
-81. button "Copy Code"
-82. generic
-83. link "Permalink to "See also""
-84. link "Matchers"
-85. link "Playwright adapter"
-86. link "Edit this page on GitHub"
-87. link "Previous pageMatchers"
-88. link "Next pagePlaywright adapter"
+52. link "@real-a11y-dev/testing"
+53. button "Copy Code"
+54. generic
+55. button "Copy Code"
+56. generic
+57. button "Copy Code"
+58. generic
+59. table
+60. link "Playwright adapter"
+61. table
+62. button "Copy Code"
+63. generic
+64. table
+65. button "Copy Code"
+66. generic
+67. button "Copy Code"
+68. generic
+69. table
+70. button "Copy Code"
+71. generic
+72. link "Matchers"
+73. link "Playwright adapter"
+74. link "Edit this page on GitHub"
+75. link "Previous pageMatchers"
+76. link "Next pagePlaywright adapter"

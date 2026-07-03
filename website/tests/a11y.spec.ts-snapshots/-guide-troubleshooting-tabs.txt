@@ -47,26 +47,17 @@
 47. link "Tests pass in jsdom but fail in Playwright (or vice versa)"
 48. link "A11yAssertionError with a message I don't understand"
 49. link "Still stuck?"
-50. link "Permalink to "Troubleshooting""
-51. link "Permalink to "My audit returned nothing""
+50. button "Copy Code"
+51. generic
 52. button "Copy Code"
 53. generic
-54. link "Permalink to "Snapshot flaps between runs or between local and CI""
-55. button "Copy Code"
-56. generic
-57. link "Permalink to "Heading outline has no `h1`""
-58. button "Copy Code"
-59. generic
-60. link "Permalink to "Tab sequence is empty""
-61. link "Permalink to "React hydration mismatch when rendering the panel""
-62. link "Permalink to "Tests pass in jsdom but fail in Playwright (or vice versa)""
-63. link "Permalink to "`A11yAssertionError` with a message I don't understand""
-64. button "Copy Code"
-65. generic
-66. link "@real-a11y-dev/testing"
-67. link "Permalink to "Still stuck?""
-68. link "Peer Dependencies"
-69. link "Next.js"
-70. link "Storybook + React 19"
-71. link "Edit this page on GitHub"
-72. link "Previous pageArchitecture"
+54. button "Copy Code"
+55. generic
+56. button "Copy Code"
+57. generic
+58. link "@real-a11y-dev/testing"
+59. link "Peer Dependencies"
+60. link "Next.js"
+61. link "Storybook + React 19"
+62. link "Edit this page on GitHub"
+63. link "Previous pageArchitecture"

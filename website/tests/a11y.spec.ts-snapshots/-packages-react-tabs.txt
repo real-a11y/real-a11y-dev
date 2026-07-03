@@ -47,44 +47,30 @@
 47. link "TypeScript"
 48. link "See it running"
 49. link "Panel features"
-50. link "Permalink to "@real-a11y-dev/react""
-51. link "@real-a11y-dev/inspector"
-52. link "Permalink to "Install""
-53. button "Copy Code"
-54. generic
-55. link "Keep it out of production"
-56. link "Permalink to "`<SemanticNavigator />`""
-57. button "Copy Code"
-58. generic
-59. link "Permalink to "Props""
+50. link "@real-a11y-dev/inspector"
+51. button "Copy Code"
+52. generic
+53. link "Keep it out of production"
+54. button "Copy Code"
+55. generic
+56. table
+57. link "Panel interaction vs. host side effects"
+58. button "Copy Code"
+59. generic
 60. table
-61. link "Panel interaction vs. host side effects"
-62. link "Permalink to "`useSemanticTree(rootRef, options?)`""
+61. button "Copy Code"
+62. generic
 63. button "Copy Code"
 64. generic
-65. table
-66. link "Permalink to "Concurrent-mode safety""
-67. link "Permalink to "`useActiveModal(rootRef)`""
-68. button "Copy Code"
-69. generic
-70. link "Permalink to "Announcing modal opens in an `aria-live` region""
-71. button "Copy Code"
-72. generic
-73. link "Permalink to "Patterns""
-74. link "Permalink to "Audit overlay in development""
-75. button "Copy Code"
-76. generic
-77. link "Permalink to "Reacting to tree changes""
-78. button "Copy Code"
-79. generic
-80. link "Permalink to "TypeScript""
-81. button "Copy Code"
-82. generic
-83. link "Permalink to "See it running""
-84. link "examples/react-app/"
-85. link "Next.js recipe"
-86. link "Permalink to "Panel features""
-87. link "Panel features reference"
-88. link "Edit this page on GitHub"
-89. link "Previous pagePlaywright adapter"
-90. link "Next page@real-a11y-dev/storybook-addon"
+65. button "Copy Code"
+66. generic
+67. button "Copy Code"
+68. generic
+69. button "Copy Code"
+70. generic
+71. link "examples/react-app/"
+72. link "Next.js recipe"
+73. link "Panel features reference"
+74. link "Edit this page on GitHub"
+75. link "Previous pagePlaywright adapter"
+76. link "Next page@real-a11y-dev/storybook-addon"

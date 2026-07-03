@@ -44,30 +44,18 @@
 44. link "What to look for"
 45. link "Reading a well-structured tree"
 46. link "Quick sanity checks"
-47. link "Permalink to "Reading the A11y View""
-48. link "Chrome extension"
-49. link "React component"
-50. link "Storybook addon"
-51. link "auditSnapshot()"
-52. link "Permalink to "What you see""
-53. link "Permalink to "How the A11y view differs from the DOM view""
-54. link "Permalink to "What to look for""
-55. link "Permalink to "Interactive elements with no name""
-56. button "Copy Code"
-57. generic
-58. link "Permalink to "Everything is `generic`""
-59. button "Copy Code"
-60. generic
-61. link "Permalink to "Heading levels that jump""
-62. button "Copy Code"
-63. generic
-64. link "Permalink to "Images with no name""
-65. link "Permalink to "ARIA states that don't match reality""
-66. link "Permalink to "Elements that should be in the tree but aren't""
-67. link "Permalink to "Reading a well-structured tree""
-68. button "Copy Code"
-69. generic
-70. link "Permalink to "Quick sanity checks""
-71. link "Edit this page on GitHub"
-72. link "Previous pageDOM View"
-73. link "Next pageHeadings View"
+47. link "Chrome extension"
+48. link "React component"
+49. link "Storybook addon"
+50. link "auditSnapshot()"
+51. button "Copy Code"
+52. generic
+53. button "Copy Code"
+54. generic
+55. button "Copy Code"
+56. generic
+57. button "Copy Code"
+58. generic
+59. link "Edit this page on GitHub"
+60. link "Previous pageDOM View"
+61. link "Next pageHeadings View"

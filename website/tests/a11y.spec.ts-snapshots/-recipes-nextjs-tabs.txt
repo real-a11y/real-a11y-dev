@@ -45,36 +45,26 @@
 45. link "Unit tests — Vitest + next-intl + Testing Library"
 46. link "E2E — Playwright against next dev"
 47. link "Known constraints"
-48. link "Permalink to "Next.js (App Router + React 19)""
-49. link "Permalink to "Install""
-50. button "Copy Code"
-51. generic
-52. link "Keep it out of production"
-53. link "Permalink to "Mount `<SemanticNavigator />` in a client component""
-54. button "Copy Code"
-55. generic
-56. link "Permalink to "Gate it out of production""
-57. link "Permalink to "Option 1 — static gate (fully tree-shaken)""
-58. button "Copy Code"
-59. generic
-60. link "Permalink to "Option 2 — environment flag""
+48. button "Copy Code"
+49. generic
+50. link "Keep it out of production"
+51. button "Copy Code"
+52. generic
+53. button "Copy Code"
+54. generic
+55. button "Copy Code"
+56. generic
+57. button "Copy Code"
+58. generic
+59. button "Copy Code"
+60. generic
 61. button "Copy Code"
 62. generic
-63. link "Permalink to "Unit tests — Vitest + next-intl + Testing Library""
-64. button "Copy Code"
-65. generic
-66. button "Copy Code"
-67. generic
-68. link "Permalink to "Test a component that uses `Link`""
-69. button "Copy Code"
-70. generic
-71. link "Permalink to "E2E — Playwright against `next dev`""
-72. button "Copy Code"
-73. generic
-74. button "Copy Code"
-75. generic
-76. link "Permalink to "Known constraints""
-77. link "Peer Dependencies"
-78. link "Edit this page on GitHub"
-79. link "Previous page@real-a11y-dev/storybook-addon"
-80. link "Next pageStorybook 8 + React 19"
+63. button "Copy Code"
+64. generic
+65. button "Copy Code"
+66. generic
+67. link "Peer Dependencies"
+68. link "Edit this page on GitHub"
+69. link "Previous page@real-a11y-dev/storybook-addon"
+70. link "Next pageStorybook 8 + React 19"

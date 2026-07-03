@@ -48,58 +48,37 @@
 48. link "Tree diffing"
 49. link "DOM observation"
 50. link "Types"
-51. link "Permalink to "@real-a11y-dev/core""
-52. link "Permalink to "Install""
-53. button "Copy Code"
-54. generic
-55. link "Keep it out of production"
-56. link "Permalink to "Extraction""
-57. link "Permalink to "`extractA11yTree(root)`""
+51. button "Copy Code"
+52. generic
+53. link "Keep it out of production"
+54. button "Copy Code"
+55. generic
+56. button "Copy Code"
+57. generic
 58. button "Copy Code"
 59. generic
-60. link "Permalink to "`extractDomTree(root)`""
+60. table
 61. button "Copy Code"
 62. generic
-63. link "Permalink to "Query helpers""
-64. link "Permalink to "`findByRole(tree, role, options?)`""
-65. button "Copy Code"
-66. generic
-67. table
-68. link "Permalink to "`findAllByRole(tree, role, options?)`""
-69. button "Copy Code"
-70. generic
-71. link "Permalink to "Tree traversal""
-72. link "Permalink to "`linearize(tree, options?)`""
-73. button "Copy Code"
-74. generic
-75. table
-76. link "Permalink to "Structure queries""
-77. link "Permalink to "`getOutline(tree)`""
+63. button "Copy Code"
+64. generic
+65. table
+66. button "Copy Code"
+67. generic
+68. button "Copy Code"
+69. generic
+70. button "Copy Code"
+71. generic
+72. button "Copy Code"
+73. generic
+74. button "Copy Code"
+75. generic
+76. button "Copy Code"
+77. generic
 78. button "Copy Code"
 79. generic
-80. link "Permalink to "`getTabSequence(tree)`""
-81. button "Copy Code"
-82. generic
-83. link "Permalink to "Disclosure-pair index""
-84. link "Permalink to "`buildControlsIndex(nodes)`""
-85. button "Copy Code"
-86. generic
-87. link "Permalink to "`ControlsIndex`""
-88. button "Copy Code"
-89. generic
-90. link "Permalink to "Tree diffing""
-91. link "Permalink to "`diffTrees(before, after)`""
-92. button "Copy Code"
-93. generic
-94. button "Copy Code"
-95. generic
-96. link "Permalink to "DOM observation""
-97. link "Permalink to "`DomObserver`""
-98. button "Copy Code"
-99. generic
-100. link "Permalink to "Types""
-101. button "Copy Code"
-102. generic
-103. link "Edit this page on GitHub"
-104. link "Previous pageOverview & Install"
-105. link "Next page@real-a11y-dev/inspector"
+80. button "Copy Code"
+81. generic
+82. link "Edit this page on GitHub"
+83. link "Previous pageOverview & Install"
+84. link "Next page@real-a11y-dev/inspector"

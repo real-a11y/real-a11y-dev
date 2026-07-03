@@ -42,21 +42,14 @@
 42. link "What it shows"
 43. link "Run it locally"
 44. link "Key code"
-45. link "Permalink to "Example: React App""
-46. link "examples/react-app/"
-47. link "Permalink to "What it shows""
-48. link "Permalink to "Run it locally""
-49. button "Copy Code"
-50. generic
-51. link "Permalink to "Key code""
-52. link "Permalink to "Split-panel layout""
-53. button "Copy Code"
-54. generic
-55. link "Permalink to "Issues badge with `useSemanticTree`""
-56. button "Copy Code"
-57. generic
-58. link "Permalink to "Modal announcer with `useActiveModal`""
-59. button "Copy Code"
-60. generic
-61. link "Edit this page on GitHub"
-62. link "Next pageGetting Started"
+45. link "examples/react-app/"
+46. button "Copy Code"
+47. generic
+48. button "Copy Code"
+49. generic
+50. button "Copy Code"
+51. generic
+52. button "Copy Code"
+53. generic
+54. link "Edit this page on GitHub"
+55. link "Next pageGetting Started"

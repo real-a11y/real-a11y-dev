@@ -91,10 +91,8 @@
         link "Clean install recipe"
   main
     heading "Peer Dependencies" (level 1)
-      link "Permalink to "Peer Dependencies""
     paragraph "Real A11y is a lean dev-time audit suite. It relies on a small set of peers you probably already have — React, Storybook, Playwright — plus a couple of popular companion libraries (Testing Library) that don't formally peer on anything but where version mismatches still bite. This page is the matrix."
     heading "Compatibility matrix" (level 2)
-      link "Permalink to "Compatibility matrix""
     table
       rowgroup
         row
@@ -153,13 +151,11 @@
       code "Element"
     separator
     heading "Companion libraries" (level 2)
-      link "Permalink to "Companion libraries""
     paragraph "Real A11y packages don't declare these as peers, but most users install at least one of them alongside . The versions below are what works cleanly with React 19 — pinning older versions surfaces peer errors that Real A11y-related but aren't."
       code "@real-a11y-dev/testing"
       emphasis "look"
     heading "@testing-library/react" (level 3)
       code "@testing-library/react"
-      link "Permalink to "`@testing-library/react`""
     paragraph "Not a peer of any Real A11y package — you can use without it (just pass any as the audit root). But if you use it: version declares as its own peer. Installing it alongside React 19 gives:"
       code "@real-a11y-dev/testing"
       code "Element"
@@ -175,7 +171,6 @@
       code
     heading "@playwright/test in Next.js 15 projects" (level 3)
       code "@playwright/test"
-      link "Permalink to "`@playwright/test` in Next.js 15 projects""
     paragraph "Next 15 declares as an . itself is happy with , but npm resolves against Next's optional peer and errors out:"
       code "@playwright/test@^1.51.1"
       strong "optional peer"
@@ -191,25 +186,21 @@
     separator
     heading "@real-a11y-dev/storybook-addon — Storybook version" (level 2)
       code "@real-a11y-dev/storybook-addon"
-      link "Permalink to "`@real-a11y-dev/storybook-addon` — Storybook version""
     paragraph "The addon's manager imports from v8. Storybook 7 or earlier won't work. Storybook ≥ 8.0 is required."
       code "@storybook/manager-api"
     heading "@real-a11y-dev/react — React version" (level 2)
       code "@real-a11y-dev/react"
-      link "Permalink to "`@real-a11y-dev/react` — React version""
     paragraph "Any React ≥ 18 works. On React 19 specifically, the inspector's floating-panel mode is SSR-safe (it gates the portal behind a client-mount effect), but you still need at the consumer boundary — see the for the full pattern."
       code ""use client""
       link "Next.js recipe"
     heading "@real-a11y-dev/testing/playwright — browser install" (level 2)
       code "@real-a11y-dev/testing/playwright"
-      link "Permalink to "`@real-a11y-dev/testing/playwright` — browser install""
     paragraph "After adding the package, install the Chromium engine:"
     button "Copy Code"
       code
     paragraph "The adapter only uses Chromium — Firefox and WebKit aren't needed for the audit bundle."
     separator
     heading "Single React instance" (level 2)
-      link "Permalink to "Single React instance""
     paragraph "Several of the edge cases above (especially in Storybook and SSR apps) boil down to . The manager mixes React internals from one copy with jsx-runtime calls against another, and hooks die."
       strong "having two copies of React resolved on the page"
     paragraph "Verify a single resolution:"
@@ -224,7 +215,6 @@
       code
     separator
     heading "Clean install recipe" (level 2)
-      link "Permalink to "Clean install recipe""
     paragraph "When peer conflicts get tangled, a clean install clears the lockfile state:"
     button "Copy Code"
       code

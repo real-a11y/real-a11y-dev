@@ -44,18 +44,12 @@
 44. link "Setup"
 45. link "Example story"
 46. link "What to look for in the panel"
-47. link "Permalink to "Example: Storybook""
-48. link "examples/storybook/"
-49. link "Permalink to "What it shows""
-50. link "Permalink to "Run it locally""
-51. button "Copy Code"
-52. generic
-53. link "Permalink to "Setup""
-54. button "Copy Code"
-55. generic
-56. link "Permalink to "Example story""
-57. button "Copy Code"
-58. generic
-59. link "Permalink to "What to look for in the panel""
-60. link "Edit this page on GitHub"
-61. link "Next pageGetting Started"
+47. link "examples/storybook/"
+48. button "Copy Code"
+49. generic
+50. button "Copy Code"
+51. generic
+52. button "Copy Code"
+53. generic
+54. link "Edit this page on GitHub"
+55. link "Next pageGetting Started"

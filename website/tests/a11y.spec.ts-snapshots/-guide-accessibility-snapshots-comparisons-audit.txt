@@ -87,7 +87,6 @@
         link "Next"
   main
     heading "How Accessibility Snapshots Compare" (level 1)
-      link "Permalink to "How Accessibility Snapshots Compare""
     paragraph "An doesn't replace your other accessibility and regression tools — it sits beside them and covers a blind spot each of them has. This page walks through the four it's most often confused with, and where the lines fall."
       link "accessibility snapshot"
     paragraph "The throughline is . Because Real A11y computes its own accessibility tree, the snapshot runs in a millisecond-fast Vitest/Jest unit test in a real browser. The other tools below either need a real browser to read its native accessibility tree, or answer a different question entirely."
@@ -95,7 +94,6 @@
       emphasis "same"
       strong "and"
     heading "Versus visual regression testing" (level 2)
-      link "Permalink to "Versus visual regression testing""
     paragraph "Screenshot testing — Playwright's , or services like Percy, Chromatic, and Argos — is the other great snapshot discipline, and it's genuinely complementary. A visual snapshot renders the page to pixels and diffs the image: when a layout shifts, a color regresses, or a component visually breaks, the diff lights up the exact region and you spot it instantly. For , nothing beats it."
       code "toHaveScreenshot()"
       emphasis "appearance"
@@ -115,7 +113,6 @@
       strong "how it looks"
       strong "what it means"
     heading "Versus rule engines like axe" (level 2)
-      link "Permalink to "Versus rule engines like axe""
     paragraph "Accessibility snapshots and rule engines like answer , and a healthy suite runs both:"
       link "jest-axe"
       strong "different questions"
@@ -146,7 +143,6 @@
       code "toHaveNoViolations()"
       link "matchers"
     heading "Versus Playwright ARIA snapshots" (level 2)
-      link "Permalink to "Versus Playwright ARIA snapshots""
     paragraph "The idea owes a direct debt to (), which serialize the accessibility tree to YAML and popularized snapshotting instead of markup. If your tests already run in a real browser through Playwright, it's an excellent first-party tool — reach for it."
       link "Playwright's ARIA snapshots"
       code "expect(page).toMatchAriaSnapshot()"
@@ -171,14 +167,14 @@
         row
           cell "Engine"
           cell "The browser's native AX tree"
-          cell "Real A11y's own extraction — the same tree the , , and render"
+          cell "Real A11y's own extraction — the same tree the extension , React panel , and Storybook addon render"
             link "extension"
             link "React panel"
             link "Storybook addon"
         row
           cell "Views"
           cell "Role + name tree"
-          cell "Tree + +"
+          cell "Tree + heading outline + tab order"
             strong "+"
             link "heading outline"
             strong "+"
@@ -186,7 +182,7 @@
         row
           cell "Framing"
           cell "A stable alternative to DOM / visual snapshots"
-          cell "An accessibility audit, paired with and"
+          cell "An accessibility audit, paired with assertions and matchers"
             link "assertions"
             link "matchers"
     paragraph "The practical wedge is jsdom. jsdom has no accessibility tree, so a snapshot built on the browser's AX tree simply can't run in a Vitest or Jest unit test. Because Real A11y computes its own tree, the snapshot runs in a millisecond-fast unit test and in a real-browser E2E run — and matches what you inspect by eye in the panel."
@@ -195,12 +191,10 @@
       paragraph "Historical note: "accessibility snapshot" has lineage in Playwright and Puppeteer's older (a JSON AX-tree dump), which Playwright deprecated long ago and removed in v1.49, in favor of the YAML ARIA snapshots above."
         code "page.accessibility.snapshot()"
     heading "Alongside real screen-reader testing" (level 2)
-      link "Permalink to "Alongside real screen-reader testing""
     paragraph "This complements real screen-reader testing — it doesn't replace it"
     paragraph "Nothing substitutes for hearing your app announced; lived AT experience catches things structure alone can't. What snapshots do is move the first and largest class of problems — ones — to where every developer already works: a diff in code review. Deep expertise becomes a way to go further, not the price of entry."
       emphasis "structural"
     heading "Next" (level 2)
-      link "Permalink to "Next""
     list
       listitem "New to the concept? →"
         link "Accessibility Snapshots"

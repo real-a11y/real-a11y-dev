@@ -83,7 +83,6 @@
         link "Key code"
   main
     heading "Example: Vanilla / Vite" (level 1)
-      link "Permalink to "Example: Vanilla / Vite""
     paragraph "A minimal Vite + TypeScript application demonstrating as a floating dev-tools overlay."
       code "@real-a11y-dev/inspector"
     paragraph
@@ -91,7 +90,6 @@
       link "examples/vanilla/"
         code "examples/vanilla/"
     heading "What it shows" (level 2)
-      link "Permalink to "What it shows""
     list
       listitem "Mounting the panel into a floating container via Shadow DOM"
       listitem "Switching between A11y and DOM modes at runtime"
@@ -102,13 +100,11 @@
       listitem "— hover a tree node to highlight the corresponding DOM element"
         code "highlightOnHover"
     heading "Run it locally" (level 2)
-      link "Permalink to "Run it locally""
     button "Copy Code"
       code
     paragraph "Opens at ."
       code "http://localhost:5174"
     heading "Key code" (level 2)
-      link "Permalink to "Key code""
     button "Copy Code"
       code
   contentinfo
