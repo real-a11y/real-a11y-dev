@@ -15,6 +15,11 @@ import {
   buildControlsIndex,
 } from "@real-a11y-dev/core";
 import {
+  serializeTree,
+  serializeOutline,
+  serializeTabSequence,
+} from "@real-a11y-dev/serialize";
+import {
   useTreeKeyboard,
   useInputModality,
 } from "@real-a11y-dev/semantic-navigator-ui";
@@ -29,6 +34,8 @@ import {
 
 import type { ContentToPanel } from "../types.js";
 
+import { buildExportMarkdown, ALL_VIEWS } from "./export.js";
+import type { ExportView } from "./export.js";
 import { FilteredList } from "./FilteredList.js";
 import { InputPanel } from "./InputPanel.js";
 import type { InputPanelState } from "./InputPanel.js";
@@ -95,6 +102,8 @@ export function App() {
   const [roleFilter, setRoleFilter] = useState<RoleFilter>(null);
   const [curtainOn, setCurtainOn] = useState(false);
   const [focusTrackerOn, setFocusTrackerOn] = useState(true);
+  // Export dropdown ("Copy" → pick which view(s) to put on the clipboard).
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
   // Picker mode (DevTools-style "select an element in the page"). Off by
   // default; toggled by the toolbar button or Ctrl/Cmd+Shift+C. The
   // content script owns the actual click capture — this flag is just the
@@ -110,6 +119,7 @@ export function App() {
   const announcementId = useRef(0);
 
   const treeRef = useRef<HTMLDivElement>(null);
+  const exportRef = useRef<HTMLDivElement>(null);
   const { query, matchCount, updateQuery, updateMatchCount } = useSearch();
 
   // aria-controls cross-link index (trigger ↔ controlled element). Used to
@@ -721,6 +731,81 @@ export function App() {
     [viewMode],
   );
 
+  // Export the selected view(s) as a Markdown report and copy to clipboard.
+  // Serialized entirely panel-side from the merged snapshot the panel already
+  // holds — so it's exactly what's on screen (current view, scoped) and never
+  // depends on the content script being fresh.
+  const doExport = useCallback(
+    (selection: ExportView[]) => {
+      setExportMenuOpen(false);
+      const exportRootId = scopedRootId || rootId;
+      if (!exportRootId || nodes.size === 0) {
+        setLastAction("Nothing to export yet");
+        setTimeout(() => setLastAction(null), 2000);
+        return;
+      }
+      const tree = { nodes, rootId: exportRootId };
+
+      // A scoped subtree serializes at its absolute depth; de-indent so the
+      // scope root sits at column 0 in the report.
+      const scopeNode = scopedRootId ? nodes.get(scopedRootId) : null;
+      const scopeDepth = scopeNode?.depth ?? 0;
+      const treeStr =
+        scopeDepth > 0
+          ? serializeTree(tree)
+              .split("\n")
+              .map((line) => line.slice(2 * scopeDepth))
+              .join("\n")
+          : serializeTree(tree);
+      const scopeLabel = scopeNode
+        ? `${scopeNode.a11y.role}${scopeNode.a11y.name ? ` "${scopeNode.a11y.name}"` : ""}`
+        : undefined;
+
+      const markdown = buildExportMarkdown(
+        {
+          tree: treeStr,
+          outline: serializeOutline(tree),
+          tabSequence: serializeTabSequence(tree),
+        },
+        {
+          pageTitle,
+          pageUrl,
+          capturedAt: new Date().toISOString(),
+          extensionVersion: chrome.runtime.getManifest().version,
+          viewLabel: viewMode === "dom" ? "DOM tree" : "Accessibility tree",
+          scope: scopeLabel,
+        },
+        selection,
+      );
+
+      navigator.clipboard.writeText(markdown).then(
+        () => setLastAction("Copied to clipboard"),
+        () => setLastAction("Clipboard blocked — click the panel, then retry"),
+      );
+      setTimeout(() => setLastAction(null), 2500);
+    },
+    [nodes, scopedRootId, rootId, viewMode, pageTitle, pageUrl],
+  );
+
+  // Close the export menu on outside-click or Escape.
+  useEffect(() => {
+    if (!exportMenuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+        setExportMenuOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setExportMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [exportMenuOpen]);
+
   const { handleKeyDown } = useTreeKeyboard({
     nodes,
     visibleNodeIds,
@@ -958,6 +1043,46 @@ export function App() {
         >
           -
         </button>
+
+        <div class="sn-export" ref={exportRef}>
+          <button
+            class="sn-toolbar-btn sn-export-btn"
+            aria-haspopup="true"
+            aria-expanded={exportMenuOpen}
+            onClick={() => setExportMenuOpen((o) => !o)}
+            title="Copy the tree as Markdown — paste into a bug report"
+          >
+            {"Copy ▾"}
+          </button>
+          {exportMenuOpen && (
+            <div class="sn-export-menu" aria-label="Copy which view">
+              <button
+                class="sn-export-item"
+                onClick={() => doExport(ALL_VIEWS)}
+              >
+                Everything
+              </button>
+              <button
+                class="sn-export-item"
+                onClick={() => doExport(["tree"] as ExportView[])}
+              >
+                {viewMode === "dom" ? "DOM tree" : "A11y tree"}
+              </button>
+              <button
+                class="sn-export-item"
+                onClick={() => doExport(["outline"] as ExportView[])}
+              >
+                Headings
+              </button>
+              <button
+                class="sn-export-item"
+                onClick={() => doExport(["tab"] as ExportView[])}
+              >
+                Tab sequence
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Role filters — disabled in tab sequence view */}

@@ -1,0 +1,47 @@
+/* Export ("Copy ▾") dropdown — extension-only UI, layered over the shared
+ * panel styles from @real-a11y-dev/semantic-navigator-ui. Reuses the panel's
+ * theme variables so it follows light/dark automatically. */
+
+.sn-export {
+  position: relative;
+  display: inline-flex;
+}
+
+.sn-export-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  min-width: 140px;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--sn-bg);
+  border: 1px solid var(--sn-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.18);
+}
+
+.sn-export-item {
+  padding: 5px 10px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--sn-text);
+  font-family: var(--sn-font-mono);
+  font-size: 11px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.sn-export-item:hover,
+.sn-export-item:focus-visible {
+  background: var(--sn-bg-hover);
+  outline: none;
+}
+
+/* "Everything" — the common case, given a little weight. */
+.sn-export-item:first-child {
+  font-weight: 600;
+}

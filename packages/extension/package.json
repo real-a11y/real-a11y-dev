@@ -16,6 +16,7 @@
   "dependencies": {
     "@real-a11y-dev/core": "workspace:*",
     "@real-a11y-dev/semantic-navigator-ui": "workspace:*",
+    "@real-a11y-dev/serialize": "workspace:*",
     "preact": "^10.24.0"
   },
   "devDependencies": {
