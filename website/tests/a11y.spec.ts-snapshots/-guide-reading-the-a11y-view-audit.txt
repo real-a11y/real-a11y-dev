@@ -25,10 +25,14 @@
         paragraph "Why Real A11y?"
       button "Reading the Tree"
         heading "Reading the Tree" (level 2)
+      link "Understanding the Views"
+        paragraph "Understanding the Views"
       link "DOM View"
         paragraph "DOM View"
       link "A11y View"
         paragraph "A11y View"
+      link "Headings View"
+        paragraph "Headings View"
       link "TAB View"
         paragraph "TAB View"
       link "Panel features"
@@ -96,6 +100,9 @@
     paragraph "It answers the question:"
       strong ""If someone couldn't see this, what would they hear?""
     paragraph "This is the most important view."
+    img "Visual view: a website with blue header, teal nav, purple main content, amber aside, and slate footer arranged as a spatial layout."
+    img "A11y tree view: the same sections rearranged as an indented tree — banner, navigation, main with headings, paragraphs, inputs and button, complementary, and contentinfo."
+    paragraph "Left: what sighted users see. Right: what assistive technology reads. Same content — different structure."
     separator
     heading "What you see" (level 2)
       link "Permalink to "What you see""
@@ -229,4 +236,4 @@
       time "[redacted]"
     navigation "Pager"
       link "Previous pageDOM View"
-      link "Next pageTAB View"
+      link "Next pageHeadings View"
