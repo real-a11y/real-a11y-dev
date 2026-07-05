@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { resetIdCounter } from "../utils/id-generator.js";
 
 import { extractA11yTree } from "./a11y-extractor.js";
-import { extractDomTree } from "./dom-extractor.js";
+import { extractDomTree, isSensitiveField } from "./dom-extractor.js";
 
 beforeEach(() => {
   resetIdCounter();
@@ -817,5 +817,91 @@ describe("accessible-name cycle safety (accname visit-once)", () => {
   it("does not overflow on a self-referential aria-labelledby", () => {
     host.innerHTML = `<button id="self" aria-labelledby="self">Go</button>`;
     expect(() => extractDomTree(host)).not.toThrow();
+  });
+});
+
+describe("isSensitiveField", () => {
+  const el = (html: string): Element => {
+    const div = document.createElement("div");
+    div.innerHTML = html;
+    return div.firstElementChild!;
+  };
+
+  it("flags password inputs", () => {
+    expect(isSensitiveField(el(`<input type="password">`))).toBe(true);
+  });
+
+  it("flags credential and payment autocomplete tokens", () => {
+    expect(
+      isSensitiveField(el(`<input autocomplete="current-password">`)),
+    ).toBe(true);
+    expect(isSensitiveField(el(`<input autocomplete="one-time-code">`))).toBe(
+      true,
+    );
+    expect(isSensitiveField(el(`<input autocomplete="cc-number">`))).toBe(true);
+    // autocomplete may carry section/shipping tokens before the field name
+    expect(
+      isSensitiveField(el(`<input autocomplete="section-a billing cc-csc">`)),
+    ).toBe(true);
+    expect(
+      isSensitiveField(el(`<select autocomplete="cc-exp-month"></select>`)),
+    ).toBe(true);
+  });
+
+  it("does not flag ordinary text fields", () => {
+    expect(isSensitiveField(el(`<input type="text">`))).toBe(false);
+    expect(
+      isSensitiveField(el(`<input type="email" autocomplete="email">`)),
+    ).toBe(false);
+    expect(isSensitiveField(el(`<textarea></textarea>`))).toBe(false);
+    expect(isSensitiveField(el(`<div>not a field</div>`))).toBe(false);
+  });
+});
+
+describe("sensitive value redaction", () => {
+  const firstChild = (root: Element) => {
+    const { nodes, rootId } = extractDomTree(root);
+    return nodes.get(nodes.get(rootId)!.childIds[0])!;
+  };
+
+  it("redacts a password field's value in the extracted tree", () => {
+    const node = firstChild(
+      createPage(`<input type="password" value="hunter2">`),
+    );
+    expect(node.dom.attributes["value"]).toBe("[redacted]");
+    expect(JSON.stringify(node)).not.toContain("hunter2");
+  });
+
+  it("redacts a credit-card field's value by autocomplete token", () => {
+    const node = firstChild(
+      createPage(`<input autocomplete="cc-number" value="4111111111111111">`),
+    );
+    expect(node.dom.attributes["value"]).toBe("[redacted]");
+    expect(JSON.stringify(node)).not.toContain("4111111111111111");
+  });
+
+  it("preserves ordinary text-input values", () => {
+    const node = firstChild(
+      createPage(`<input type="text" value="Ada Lovelace">`),
+    );
+    expect(node.dom.attributes["value"]).toBe("Ada Lovelace");
+  });
+
+  it("never uses a sensitive value as the accessible name", () => {
+    // Unlabeled password with a typed value: the name must not leak it.
+    const bare = firstChild(
+      createPage(`<input type="password" value="hunter2">`),
+    );
+    expect(bare.a11y.name).not.toContain("hunter2");
+    expect(bare.a11y.name).not.toBe("[redacted]");
+
+    // With a placeholder, the name falls back to the placeholder, not the value.
+    const withPlaceholder = firstChild(
+      createPage(
+        `<input type="password" placeholder="Password" value="hunter2">`,
+      ),
+    );
+    expect(withPlaceholder.a11y.name).toBe("Password");
+    expect(JSON.stringify(withPlaceholder)).not.toContain("hunter2");
   });
 });
