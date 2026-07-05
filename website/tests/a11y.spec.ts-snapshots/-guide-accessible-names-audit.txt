@@ -84,13 +84,16 @@
       listitem
         link "Debugging an unexpected name"
       listitem
+        link "Why we don't just ask the browser"
+      listitem
         link "Why this matters"
   main
     heading "Accessible Names" (level 1)
     paragraph "The is the string a screen reader announces for an element. It's what your user actually hears — and it's almost never just the element's text content. This page explains how that name is computed, what contributes, and what wins when multiple sources compete."
       strong "accessible name"
-    paragraph "Every in a Real A11y tree comes from this algorithm."
+    paragraph "Every in a Real A11y tree comes from this algorithm — the W3C , the same spec browsers and screen readers follow."
       code "SemanticNode.a11y.name"
+      link "Accessible Name and Description Computation (accname-1.2)"
     separator
     heading "The priority order" (level 2)
     paragraph "For any element, the accessible name is picked from the in this list:"
@@ -218,6 +221,16 @@
           code "aria-hidden"
       listitem "If the extension shows the same name, it's what real AT will announce."
         strong "Compare against the Chrome extension."
+    separator
+    heading "Why we don't just ask the browser" (level 2)
+    paragraph "Browsers already do this — every engine builds an accessibility tree internally and runs accname to name each node. So why does Real A11y reimplement the algorithm in JavaScript instead of reading the browser's answer?"
+    paragraph "Because there's no stable, cross-browser to read it. The 's — the proposal that would expose the computed name to script — stalled years ago, partly over legitimate fingerprinting concerns: exposing the computed tree can leak that someone is running assistive tech. Today that tree is reachable only through privileged channels like DevTools or Playwright over the Chrome DevTools Protocol — never a portable call you can make from a unit test."
+      emphasis "web API"
+      link "Accessibility Object Model"
+      code "getComputedAccessibleNode()"
+    paragraph "So Real A11y computes the name itself. That isn't a workaround for a missing convenience — it's what lets the computation run everywhere: a live browser, a Playwright page, jsdom under Vitest, a Storybook story. One engine, one answer, every context — including the ones where no browser accessibility tree exists at all."
+      emphasis "same"
+    paragraph "The cost is that we own the spec's hard edges — name-from-content recursion, reference cycles, whitespace normalization — and have to match what real AT actually exposes. That's why this page, and the test suite behind it, is so exact about what wins."
     separator
     heading "Why this matters" (level 2)
     paragraph "The accessible name is the only piece of text a screen reader user has to distinguish one element from another. Two buttons labeled in a list of items are indistinguishable — not because the user is confused, but because from their perspective ."

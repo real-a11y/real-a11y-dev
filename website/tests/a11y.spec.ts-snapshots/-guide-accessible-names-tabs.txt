@@ -43,9 +43,9 @@
 43. link "Concrete examples"
 44. link "What does not contribute"
 45. link "Debugging an unexpected name"
-46. link "Why this matters"
-47. button "Copy Code"
-48. generic
+46. link "Why we don't just ask the browser"
+47. link "Why this matters"
+48. link "Accessible Name and Description Computation (accname-1.2)"
 49. button "Copy Code"
 50. generic
 51. button "Copy Code"
@@ -62,6 +62,9 @@
 62. generic
 63. button "Copy Code"
 64. generic
-65. link "Edit this page on GitHub"
-66. link "Previous pageCI Diff Bot"
-67. link "Next pageArchitecture"
+65. button "Copy Code"
+66. generic
+67. link "Accessibility Object Model"
+68. link "Edit this page on GitHub"
+69. link "Previous pageCI Diff Bot"
+70. link "Next pageArchitecture"
