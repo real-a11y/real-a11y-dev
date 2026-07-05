@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
 import { resetIdCounter } from "../utils/id-generator.js";
 
+import { extractA11yTree } from "./a11y-extractor.js";
 import { extractDomTree } from "./dom-extractor.js";
 
 beforeEach(() => {
@@ -769,5 +770,52 @@ describe("extractDomTree", () => {
     afterEach(() => {
       document.body.innerHTML = "";
     });
+  });
+});
+
+describe("accessible-name cycle safety (accname visit-once)", () => {
+  // Since PR #101, name-from-content recurses into named-widget descendants
+  // (getAccessibleTextContent -> computeAccessibleName), and
+  // computeRawAccessibleName resolves aria-labelledby by walking the target's
+  // content. With no visited guard those two call each other forever when a
+  // widget's aria-labelledby points at an ancestor that contains it —
+  // "Maximum call stack size exceeded", which threw out of extractA11yTree and
+  // froze the panel on a real page (mercadolibre.com.mx signup).
+  //
+  // The elements MUST be attached to the document: aria-labelledby resolves via
+  // document.getElementById, which only sees attached subtrees. A detached
+  // fixture (createPage) can't reproduce it.
+  let host: HTMLElement;
+  beforeEach(() => {
+    host = document.createElement("div");
+    document.body.appendChild(host);
+  });
+  afterEach(() => {
+    host.remove();
+  });
+
+  it("does not overflow when a named widget's aria-labelledby points at its container", () => {
+    host.innerHTML = `<div id="outer" role="button">Outer <a href="#" aria-labelledby="outer">Inner</a></div>`;
+    let name: string | undefined;
+    expect(() => {
+      const outer = [...extractDomTree(host).nodes.values()].find(
+        (n) => n.dom.attributes["id"] === "outer",
+      )!;
+      name = outer.a11y.name;
+    }).not.toThrow();
+    // Cycle broken: a re-entered element contributes "", so the name resolves
+    // to finite content rather than recursing forever.
+    expect(name).toBeTruthy();
+    expect(name!.length).toBeLessThan(200);
+  });
+
+  it("does not overflow via the full extractA11yTree pipeline", () => {
+    host.innerHTML = `<div id="o" role="button"><a href="#" aria-labelledby="o">x</a></div>`;
+    expect(() => extractA11yTree(host)).not.toThrow();
+  });
+
+  it("does not overflow on a self-referential aria-labelledby", () => {
+    host.innerHTML = `<button id="self" aria-labelledby="self">Go</button>`;
+    expect(() => extractDomTree(host)).not.toThrow();
   });
 });
