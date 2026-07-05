@@ -4,6 +4,7 @@
     button "Search"
     navigation "Main Navigation"
       link "Guide"
+      link "Concepts"
       link "Recipes"
       link "Packages"
       button "v0.1 · Beta"
@@ -15,14 +16,20 @@
         heading "Introduction" (level 2)
       link "Getting Started"
         paragraph "Getting Started"
+      link "Why Real A11y?"
+        paragraph "Why Real A11y?"
+      button "Concepts"
+        heading "Concepts" (level 2)
       link "Core Concepts"
         paragraph "Core Concepts"
+      link "Accessibility-Driven Development"
+        paragraph "Accessibility-Driven Development"
+      link "Accessibility-Driven Testing"
+        paragraph "Accessibility-Driven Testing"
       link "Accessibility Snapshots"
         paragraph "Accessibility Snapshots"
       link "Snapshots vs. Other Tools"
         paragraph "Snapshots vs. Other Tools"
-      link "Why Real A11y?"
-        paragraph "Why Real A11y?"
       button "Reading the Tree"
         heading "Reading the Tree" (level 2)
       link "Understanding the Views"
@@ -307,10 +314,12 @@
     separator
     heading "Next steps" (level 2)
     list
+      listitem "— build with the tree in view, catch problems at author-time"
+        link "Accessibility-Driven Development"
+      listitem "— lock the tree into CI with snapshots and assertions"
+        link "Accessibility-Driven Testing"
       listitem "— understand the semantic tree model, roles, and names"
         link "Core Concepts"
-      listitem "— what it means to snapshot the a11y tree, and how it complements axe and visual regression testing"
-        link "Accessibility Snapshots"
       listitem "— how this compares to axe-core, Testing Library, and other tools"
         link "Why Real A11y?"
   contentinfo
@@ -318,4 +327,4 @@
     paragraph "Last updated:"
       time "[redacted]"
     navigation "Pager"
-      link "Next pageCore Concepts"
+      link "Next pageWhy Real A11y?"

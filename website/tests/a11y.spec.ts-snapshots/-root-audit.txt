@@ -4,6 +4,7 @@
     button "Search"
     navigation "Main Navigation"
       link "Guide"
+      link "Concepts"
       link "Recipes"
       link "Packages"
       button "v0.1 · Beta"
