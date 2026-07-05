@@ -28,7 +28,11 @@ export type {
 } from "./types.js";
 
 // Extraction
-export { extractDomTree, getElementRefs } from "./extraction/dom-extractor.js";
+export {
+  extractDomTree,
+  getElementRefs,
+  isSensitiveField,
+} from "./extraction/dom-extractor.js";
 export { extractA11yTree } from "./extraction/a11y-extractor.js";
 export {
   getImplicitRole,

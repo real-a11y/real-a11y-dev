@@ -519,10 +519,12 @@ function computeRawAccessibleName(
     if (summary) return getAccessibleTextContent(summary, visited).trim();
   }
 
-  // 5. Value/placeholder for inputs
+  // 5. Value/placeholder for inputs. A sensitive field's value is a secret
+  //    and must never surface as an accessible name (it flows into snapshots
+  //    and the extension channel) — fall through to placeholder instead.
   if (tag === "input") {
     const input = element as HTMLInputElement;
-    if (input.value) return input.value;
+    if (input.value && !isSensitiveField(input)) return input.value;
     if (input.placeholder) return input.placeholder;
   }
 
@@ -601,6 +603,54 @@ function getDescendantText(element: Element): string {
   return collapsed.slice(0, DESCENDANT_TEXT_MAX - 1) + "…";
 }
 
+/**
+ * Autocomplete field names (WHATWG autofill tokens) that identify a control
+ * holding a secret. Matched against each space-separated token of an
+ * element's `autocomplete` value.
+ */
+const SENSITIVE_AUTOCOMPLETE_TOKENS: ReadonlySet<string> = new Set([
+  "current-password",
+  "new-password",
+  "one-time-code",
+  "cc-number",
+  "cc-csc",
+  "cc-exp",
+  "cc-exp-month",
+  "cc-exp-year",
+]);
+
+/** Substituted for a sensitive field's live value in the extracted tree. */
+const REDACTED_VALUE = "[redacted]";
+
+/**
+ * True if `element` is a form field whose live value must never be captured
+ * into the semantic tree — a password `<input>`, or any input/textarea/select
+ * whose `autocomplete` names a credential or payment field.
+ *
+ * The extracted tree flows into serializer snapshots (committed to git and
+ * CI), the testing package's assertions, and the Chrome extension's message
+ * channel. A secret typed into such a field must not ride along, so callers
+ * that read `.value` — {@link extractDomTree} via `getKeyAttributes`, the
+ * accessible-name fallback, and downstream consumers like the extension's
+ * field-state read — gate on this predicate.
+ */
+export function isSensitiveField(element: Element): boolean {
+  const tag = element.tagName.toLowerCase();
+  if (tag !== "input" && tag !== "textarea" && tag !== "select") {
+    return false;
+  }
+  if (tag === "input" && (element as HTMLInputElement).type === "password") {
+    return true;
+  }
+  const autocomplete = element.getAttribute("autocomplete");
+  if (autocomplete) {
+    for (const token of autocomplete.toLowerCase().split(/\s+/)) {
+      if (SENSITIVE_AUTOCOMPLETE_TOKENS.has(token)) return true;
+    }
+  }
+  return false;
+}
+
 /** Get key attributes for display */
 function getKeyAttributes(element: Element): Record<string, string> {
   const attrs: Record<string, string> = {};
@@ -642,7 +692,9 @@ function getKeyAttributes(element: Element): Record<string, string> {
   if (tag === "input" || tag === "textarea" || tag === "select") {
     const currentValue = (element as HTMLInputElement).value;
     if (currentValue) {
-      attrs["value"] = currentValue;
+      attrs["value"] = isSensitiveField(element)
+        ? REDACTED_VALUE
+        : currentValue;
     }
   }
 
