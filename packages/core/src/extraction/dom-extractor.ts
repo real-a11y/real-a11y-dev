@@ -447,11 +447,9 @@ function computeRawAccessibleName(
   if (visited.has(element)) return "";
   visited.add(element);
 
-  // 1. aria-label takes priority
-  const ariaLabel = element.getAttribute("aria-label");
-  if (ariaLabel) return ariaLabel.trim();
-
-  // 2. aria-labelledby (simplified: resolve first ID)
+  // 1. aria-labelledby is resolved before aria-label (accname-1.2 §2B
+  //    precedes §2D): concatenate the accessible names of every referenced
+  //    IDREF, in order. The visit-once guard above breaks reference cycles.
   const labelledBy = element.getAttribute("aria-labelledby");
   if (labelledBy) {
     const doc = element.ownerDocument;
@@ -464,6 +462,10 @@ function computeRawAccessibleName(
       .filter(Boolean);
     if (names.length) return names.join(" ");
   }
+
+  // 2. aria-label
+  const ariaLabel = element.getAttribute("aria-label");
+  if (ariaLabel) return ariaLabel.trim();
 
   const tag = element.tagName.toLowerCase();
 

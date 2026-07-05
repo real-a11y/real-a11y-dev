@@ -85,6 +85,24 @@ describe("extractDomTree", () => {
     expect(btn.a11y.name).toBe("Close dialog");
   });
 
+  it("prefers aria-labelledby over aria-label (accname §2B before §2D)", () => {
+    // When both are present, aria-labelledby wins: the referenced element's
+    // text is the name, not the inline aria-label. This matches what browsers
+    // and screen readers expose. Attached to the document so the IDREF
+    // resolves via getElementById.
+    document.body.innerHTML =
+      '<h2 id="t">Confirm delete</h2>' +
+      '<button aria-label="X" aria-labelledby="t">✕</button>';
+    try {
+      const btn = [...extractDomTree(document.body).nodes.values()].find(
+        (n) => n.a11y.role === "button",
+      )!;
+      expect(btn.a11y.name).toBe("Confirm delete");
+    } finally {
+      document.body.innerHTML = "";
+    }
+  });
+
   it("computes accessible names from text content", () => {
     const root = createPage("<button>Submit</button>");
     const { nodes, rootId } = extractDomTree(root);
