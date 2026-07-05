@@ -258,7 +258,9 @@ function computeAccessibleDescription(element: Element): string {
       .filter(Boolean)
       .map((id) => {
         const target = doc.getElementById(id);
-        return target ? getAccessibleTextContent(target).trim() : undefined;
+        return target
+          ? getAccessibleTextContent(target, new Set()).trim()
+          : undefined;
       })
       .filter((t): t is string => !!t);
     if (texts.length) return texts.join(" ");
@@ -391,7 +393,10 @@ const NAMED_WIDGET_ROLES = new Set<string>([
  * directly referenced by aria-labelledby / a host-language label (the
  * spec's "directly referenced" carve-out).
  */
-function getAccessibleTextContent(element: Element): string {
+function getAccessibleTextContent(
+  element: Element,
+  visited: Set<Element>,
+): string {
   let text = "";
   for (const child of element.childNodes) {
     if (child.nodeType === Node.TEXT_NODE) {
@@ -405,11 +410,11 @@ function getAccessibleTextContent(element: Element): string {
       // padded with spaces so adjacent text doesn't glue; the final
       // whitespace normalization collapses any doubles.
       if (NAMED_WIDGET_ROLES.has(role)) {
-        text += ` ${computeAccessibleName(childEl)} `;
+        text += ` ${computeAccessibleName(childEl, visited)} `;
         continue;
       }
       if (NAME_BARRIER_ROLES.has(role)) continue;
-      text += getAccessibleTextContent(childEl);
+      text += getAccessibleTextContent(childEl, visited);
     }
   }
   return text;
@@ -423,11 +428,25 @@ function getAccessibleTextContent(element: Element): string {
  * at this single source means every surface (panel, search, serializer,
  * snapshots) sees the same clean name.
  */
-function computeAccessibleName(element: Element): string {
-  return computeRawAccessibleName(element).replace(/\s+/g, " ").trim();
+function computeAccessibleName(
+  element: Element,
+  visited: Set<Element> = new Set(),
+): string {
+  return computeRawAccessibleName(element, visited).replace(/\s+/g, " ").trim();
 }
 
-function computeRawAccessibleName(element: Element): string {
+function computeRawAccessibleName(
+  element: Element,
+  visited: Set<Element>,
+): string {
+  // accname visit-once guard (§4.3.2): an element already on the current
+  // name-computation path contributes the empty string when reached again.
+  // Without this, an aria-labelledby that points at an ancestor containing the
+  // element cycles between labelledby resolution and name-from-content until
+  // the stack overflows (seen on real pages, e.g. the mercadolibre signup).
+  if (visited.has(element)) return "";
+  visited.add(element);
+
   // 1. aria-label takes priority
   const ariaLabel = element.getAttribute("aria-label");
   if (ariaLabel) return ariaLabel.trim();
@@ -440,7 +459,7 @@ function computeRawAccessibleName(element: Element): string {
       .split(/\s+/)
       .map((id) => {
         const target = doc.getElementById(id);
-        return target ? getAccessibleTextContent(target).trim() : "";
+        return target ? getAccessibleTextContent(target, visited).trim() : "";
       })
       .filter(Boolean);
     if (names.length) return names.join(" ");
@@ -459,7 +478,7 @@ function computeRawAccessibleName(element: Element): string {
     const id = element.getAttribute("id");
     if (id) {
       const label = element.ownerDocument.querySelector(`label[for="${id}"]`);
-      if (label) return getAccessibleTextContent(label).trim();
+      if (label) return getAccessibleTextContent(label, visited).trim();
     }
     // Wrapping label pattern: <label>Full name<input /></label>
     // Walk the label's child nodes and collect text from everything that is
@@ -479,7 +498,7 @@ function computeRawAccessibleName(element: Element): string {
           if (FORM_CONTROL_TAGS.has(childTag)) continue;
           if (childEl.getAttribute("aria-hidden") === "true") continue;
           if (isSubtreeHidden(childEl)) continue;
-          const text = getAccessibleTextContent(childEl).trim();
+          const text = getAccessibleTextContent(childEl, visited).trim();
           if (text) parts.push(text);
         }
       }
@@ -491,13 +510,13 @@ function computeRawAccessibleName(element: Element): string {
   // 4a. Fieldset — accessible name comes from its direct <legend> child
   if (tag === "fieldset") {
     const legend = element.querySelector(":scope > legend");
-    if (legend) return getAccessibleTextContent(legend).trim();
+    if (legend) return getAccessibleTextContent(legend, visited).trim();
   }
 
   // 4b. Details — accessible name comes from its direct <summary> child
   if (tag === "details") {
     const summary = element.querySelector(":scope > summary");
-    if (summary) return getAccessibleTextContent(summary).trim();
+    if (summary) return getAccessibleTextContent(summary, visited).trim();
   }
 
   // 5. Value/placeholder for inputs
@@ -544,7 +563,7 @@ function computeRawAccessibleName(element: Element): string {
     explicitRole === "cell";
 
   if (NAMES_FROM_CONTENT_TAGS.has(tag) || namesFromContentRole) {
-    const fullText = getAccessibleTextContent(element).trim();
+    const fullText = getAccessibleTextContent(element, visited).trim();
     if (fullText) return fullText;
   }
 
