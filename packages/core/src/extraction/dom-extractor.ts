@@ -787,26 +787,49 @@ function isActuallyVisible(element: Element): boolean {
 }
 
 /**
+ * True if `element` is a MODAL dialog — content behind a modal is inert to
+ * assistive tech, so extraction scopes exclusively to it.
+ *
+ * Modality is identified by a POSITIVE signal, never by role="dialog" alone:
+ *   - `aria-modal="true"` — set by every mainstream modal library (Radix
+ *     Dialog, Headless UI, MUI) and by the APG dialog pattern itself.
+ *   - the native `:modal` pseudo-class — a `<dialog>` opened via showModal().
+ *
+ * A role="dialog" WITHOUT one of these is NOT modal: cookie-consent banners,
+ * Radix `Popover.Content`, and non-modal drawers all render role="dialog"
+ * yet leave the page interactive. Treating those as modal collapsed the whole
+ * page down to just the banner in the inspector. (We deliberately do NOT
+ * infer modality from "siblings are aria-hidden" — that heuristic carries the
+ * same false-positive hijack risk, and mainstream libraries all set
+ * aria-modal regardless.)
+ */
+function isModal(element: Element): boolean {
+  if (element.getAttribute("aria-modal") === "true") return true;
+  try {
+    if (element.matches(":modal")) return true;
+  } catch {
+    // :modal pseudo-class not supported in this environment (e.g. jsdom)
+  }
+  return false;
+}
+
+/**
  * Find the active modal dialog, if any.
  * When a modal is active, content behind it is inert — screen readers
  * scope navigation exclusively to the modal content.
  */
 function findActiveModal(doc: Document): Element | null {
-  // Visible dialog elements:
-  //   - [aria-modal="true"]: explicit modal hint.
-  //   - [role="dialog"] / [role="alertdialog"]: any rendered dialog.
-  //     Radix Dialog ≥1.1 and several modern libs no longer set
-  //     aria-modal — they rely on sibling-aria-hidden + focus trap
-  //     instead. AT still scopes to a visible role="dialog", so we do
-  //     too. Visibility check filters out closed/unmounted dialogs.
+  // Candidate dialogs, gated by isModal(): a visible role="dialog" alone does
+  // not imply modality, so a non-modal dialog (cookie banner, Radix Popover)
+  // must not hijack the scope. Iterate last-to-first so the top-most stacked
+  // dialog wins; isActuallyVisible filters closed/unmounted ones.
   const dialogs = doc.querySelectorAll(
     '[aria-modal="true"], [role="dialog"], [role="alertdialog"]',
   );
   for (let i = dialogs.length - 1; i >= 0; i--) {
-    // Must check full ancestor chain — parent may have display:none even if
-    // the dialog element itself has no hiding style (isSubtreeHidden only
-    // checks the element itself, not ancestors).
-    if (isActuallyVisible(dialogs[i])) return dialogs[i];
+    if (isActuallyVisible(dialogs[i]) && isModal(dialogs[i])) {
+      return dialogs[i];
+    }
   }
 
   // Native <dialog> opened with showModal() — matches :modal pseudo-class
@@ -840,10 +863,15 @@ function findPortalOverlay(doc: Document, root: Element): Element | null {
   const body = doc.body;
   if (!body || body === root || root.contains(body)) return null;
 
-  // Non-modal portal roles. Modals are handled by findActiveModal().
+  // Portal-mounted overlay roles. MODAL dialogs are handled exclusively by
+  // findActiveModal() (which takes precedence). A NON-modal role="dialog"
+  // (cookie banner, Radix Popover) is additive like any other overlay — it is
+  // included here so it pivots to body and joins the tree, rather than
+  // hijacking the scope the way findActiveModal used to.
   const overlays = doc.querySelectorAll(
     '[role="menu"], [role="menubar"], [role="listbox"], [role="tooltip"], ' +
-      '[role="status"], [role="alert"], [role="log"], [aria-live]',
+      '[role="status"], [role="alert"], [role="log"], [aria-live], ' +
+      '[role="dialog"], [role="alertdialog"]',
   );
   for (const el of overlays) {
     if (!root.contains(el) && isActuallyVisible(el)) {
