@@ -190,6 +190,39 @@ jobs:
           path: website/playwright-report/
           retention-days: 7
 
+  # Require a changeset whenever a *published* package's source changes, so a
+  # release's changelog and version bump never silently go missing. We check
+  # the PR's own diff rather than `changeset status`: the packages are `linked`
+  # in .changeset/config.json, so any pending changeset already sitting in
+  # .changeset/ makes `status` pass even when THIS PR added none.
+  changeset:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require a changeset for published-package changes
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: origin/${{ github.base_ref }}
+        run: |
+          changed=$(git diff --name-only "$BASE"...HEAD)
+          # Published packages only — extension and example-patterns are
+          # private; test-only edits need no changelog entry.
+          src=$(echo "$changed" \
+            | grep -E '^packages/(core|serialize|ui|inspector|react|storybook-addon|testing)/src/' \
+            | grep -vE '\.(test|spec)\.[tj]sx?$' || true)
+          added=$(git diff --name-only --diff-filter=A "$BASE"...HEAD -- .changeset \
+            | grep -E '\.md$' | grep -viE 'README' || true)
+          if [ -n "$src" ] && [ -z "$added" ]; then
+            echo "::error::This PR changes a published package but adds no changeset. Run 'pnpm changeset' (or 'pnpm changeset --empty' if no release is needed) and commit the .changeset/*.md file."
+            echo "Changed published-package source:"
+            echo "$src"
+            exit 1
+          fi
+          echo "Changeset check OK."
+
   # Aggregating gate that branch protection can require under a single name.
   # Without it, switching the matrix on/off requires a settings change for
   # every required-check entry. `test` becomes the stable contract; the
@@ -197,11 +230,11 @@ jobs:
   test:
     if: always()
     runs-on: ubuntu-latest
-    needs: [verify, e2e, examples-dev, website-a11y]
+    needs: [verify, e2e, examples-dev, website-a11y, changeset]
     steps:
       - name: Aggregate result
         run: |
-          if [ "${{ needs.verify.result }}" != "success" ] || [ "${{ needs.e2e.result }}" != "success" ] || [ "${{ needs.examples-dev.result }}" != "success" ] || [ "${{ needs.website-a11y.result }}" != "success" ]; then
-            echo "verify=${{ needs.verify.result }} e2e=${{ needs.e2e.result }} examples-dev=${{ needs.examples-dev.result }} website-a11y=${{ needs.website-a11y.result }}"
+          if [ "${{ needs.verify.result }}" != "success" ] || [ "${{ needs.e2e.result }}" != "success" ] || [ "${{ needs.examples-dev.result }}" != "success" ] || [ "${{ needs.website-a11y.result }}" != "success" ] || [ "${{ needs.changeset.result }}" != "success" ]; then
+            echo "verify=${{ needs.verify.result }} e2e=${{ needs.e2e.result }} examples-dev=${{ needs.examples-dev.result }} website-a11y=${{ needs.website-a11y.result }} changeset=${{ needs.changeset.result }}"
             exit 1
           fi
