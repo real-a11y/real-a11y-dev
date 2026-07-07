@@ -51,7 +51,9 @@ const INTERACTIVE = new Set([
   "combobox",
   "slider",
   "spinbutton",
-  "treeitem",
+  // NB: treeitem is intentionally excluded — tree items legitimately nest (a
+  // treeitem owns a group of child treeitems), so treeitem-in-treeitem is valid
+  // structure, not a nested-control error.
 ]);
 
 /** Per-node spec issues — drives the red/green dot and the inspector list. */

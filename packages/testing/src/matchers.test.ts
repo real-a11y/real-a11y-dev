@@ -58,6 +58,25 @@ describe("toBeValidA11yTree", () => {
     expect(mount(`<button></button>`)).not.toBeValidA11yTree();
   });
 
+  it("passes realistic valid markup (landmarks, nav, list, links)", () => {
+    expect(
+      mount(`
+        <header>
+          <nav aria-label="Primary">
+            <ul>
+              <li><a href="/">Home</a></li>
+              <li><a href="/about">About</a></li>
+            </ul>
+          </nav>
+        </header>
+        <main>
+          <h1>Dashboard</h1>
+          <button>Save</button>
+        </main>
+      `),
+    ).toBeValidA11yTree();
+  });
+
   it("reports the violation in the failure message", () => {
     expect(() =>
       expect(mount(`<button></button>`)).toBeValidA11yTree(),
