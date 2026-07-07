@@ -14,15 +14,26 @@
     "@real-a11y-dev/storybook-addon": "0.1.0-beta.5",
     "@real-a11y-dev/testing": "0.1.0-beta.5",
     "@real-a11y-dev/semantic-navigator-ui": "0.1.0-beta.5",
-    "@real-a11y-dev/website": "0.0.0"
+    "@real-a11y-dev/website": "0.0.0",
+    "@real-a11y-dev/example-testing-jest": "0.0.0",
+    "@real-a11y-dev/serialize": "0.1.0-beta.6",
+    "@real-a11y-dev/validate": "0.1.0-beta.6"
   },
   "changesets": [
+    "accname-cycle-stack-overflow",
+    "accname-labelledby-precedence",
+    "core-normalize-accessible-names",
     "element-picker-react-app",
     "element-picker-ui-button",
     "find-active-modal-role-dialog",
+    "name-from-content-named-widgets",
     "observe-portal-modals",
+    "redact-sensitive-field-values",
+    "serialize-package",
     "slider-spinbutton-increment",
     "storybook-addon-multi-rooted-stories",
-    "treeitem-name-skip-grouped-descendants"
+    "testing-matchers-and-playwright-redact",
+    "treeitem-name-skip-grouped-descendants",
+    "validate-package"
   ]
 }

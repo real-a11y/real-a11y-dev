@@ -1,5 +1,21 @@
 # @real-a11y-dev/storybook-addon
 
+## 0.1.0-beta.7
+
+### Patch Changes
+
+- Updated dependencies [8c230cb]
+- Updated dependencies [c7af39c]
+- Updated dependencies [7df0e4d]
+- Updated dependencies [088a142]
+- Updated dependencies [771f034]
+- Updated dependencies [7df0e4d]
+- Updated dependencies [194b6ad]
+- Updated dependencies [1270667]
+  - @real-a11y-dev/core@0.1.0-beta.7
+  - @real-a11y-dev/testing@0.1.0-beta.7
+  - @real-a11y-dev/semantic-navigator-ui@0.1.0-beta.7
+
 ## 0.1.0-beta.6
 
 ### Patch Changes
