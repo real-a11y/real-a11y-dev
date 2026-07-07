@@ -1,6 +1,6 @@
 {
   "name": "@real-a11y-dev/validate",
-  "version": "0.1.0-beta.6",
+  "version": "0.1.0-beta.7",
   "description": "ARIA semantics validation for the Semantic Navigator accessibility tree — per-node rules plus tree-level relationship checks (interactive nesting, required context / owned). aria-query-backed, so it never drifts from the spec.",
   "license": "MIT",
   "author": "Juan Crisostomo (Real A11y)",

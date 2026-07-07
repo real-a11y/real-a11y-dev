@@ -1,5 +1,25 @@
 # @real-a11y-dev/core
 
+## 0.1.0-beta.7
+
+### Minor Changes
+
+- 771f034: Redact sensitive form-field values at the extraction source. `getKeyAttributes` previously captured the live `.value` of every input/textarea/select — including `type="password"`, one-time codes, and credit-card fields — into `node.dom.attributes.value`, and an unlabeled field's value could surface as its accessible name. Because the extracted tree flows into serializer snapshots (committed to git and CI), the testing package, and the Chrome extension's message channel, a typed secret rode along everywhere.
+
+  Now a new `isSensitiveField(element)` predicate (exported from `@real-a11y-dev/core`) identifies password inputs and any field whose `autocomplete` names a credential or payment token. Such a field's value is replaced with `"[redacted]"` in the tree and is never used as an accessible name (the name falls back to the placeholder). Every downstream consumer inherits the fix from the single extraction choke point.
+
+### Patch Changes
+
+- 8c230cb: Fix a stack-overflow crash in accessible-name computation. Since named-widget descendants began contributing their computed name (PR #101), `getAccessibleTextContent` and `computeRawAccessibleName` could call each other without end when an element's `aria-labelledby` points at an ancestor that contains it — a real pattern that threw `RangeError: Maximum call stack size exceeded` out of `extractA11yTree` and froze the inspector (observed on mercadolibre.com.mx's signup form).
+
+  Name computation now follows the accname visit-once rule (§4.3.2): an element already on the current computation path contributes the empty string when reached again, breaking the cycle while leaving every non-cyclic name unchanged. A `visited` set is threaded through `computeAccessibleName` / `computeRawAccessibleName` / `getAccessibleTextContent`, and `aria-describedby` resolution is guarded the same way.
+
+- c7af39c: Resolve `aria-labelledby` before `aria-label` in accessible-name computation. Per accname-1.2 the `aria-labelledby` reference (§2B) is resolved before the inline `aria-label` (§2D), so an element carrying both — e.g. `<button aria-label="X" aria-labelledby="heading">` — is now named from the referenced text (matching Chrome, Firefox, and NVDA) instead of the inline label. Previously the inline `aria-label` won, producing a name that disagreed with what screen readers actually announce.
+- 7df0e4d: Whitespace-normalize accessible names at the source. Runs of whitespace — including the stray newlines and indentation some pages leave inside their markup — now collapse to a single space and are trimmed, per accname-1.2 §4.3.2. Previously a name could carry raw newlines (e.g. an Amazon `<h3>` whose name smeared across many lines in serialized output), which surfaced in snapshots, exports, and name-based search. Normalizing in `computeAccessibleName` means every consumer — the panel, search, the serializer, and the testing snapshots — sees the same clean string.
+- 088a142: Name-from-content now includes nested named widgets' names instead of skipping them. A heading whose content is a link — GitHub-style file headers, changelog entries, card titles — was computed as nameless; per accname-1.2 §2F.iii the link contributes its _computed accessible name_ (so a nested `aria-label` wins over its text), matching what Chrome and Firefox expose. Applies to `link`, `button`, `checkbox`, `radio`, and `switch` descendants. Structural rows keep their PR #84 behavior — a nested `treeitem`/`menuitem`/`option` is a sibling with its own announceable name, never part of its parent's label.
+
+  If you snapshot pages with link-wrapped headings, expect those names to change (from empty to the link's name) — the new value is what assistive technology actually announces.
+
 ## 0.1.0-beta.6
 
 ### Minor Changes
