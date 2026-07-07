@@ -116,3 +116,14 @@ jobs:
             --access public \
             --tag ${{ steps.tag.outputs.value }} \
             --no-git-checks
+
+      # After a prerelease publish, advance `latest` to the just-published
+      # versions. `--tag beta` never moves `latest`, so pre-1.0 `npm install
+      # <pkg>` would keep resolving an old version and the npm page would
+      # headline a stale one. The script self-guards: it no-ops when the publish
+      # already targeted `latest`, and when the repo is past changesets
+      # prerelease mode — so it can never regress a stable `latest` to a beta.
+      - name: Advance latest dist-tag (prerelease only)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: node scripts/advance-latest.mjs --published-tag ${{ steps.tag.outputs.value }}
