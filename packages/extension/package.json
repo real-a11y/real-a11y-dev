@@ -1,6 +1,6 @@
 {
   "name": "@real-a11y-dev/semantic-navigator-extension",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "private": true,
   "description": "Semantic Navigator — Chrome extension for the Real A11y project. Inspect and interact with the accessibility tree of any page.",
   "type": "module",
