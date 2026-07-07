@@ -29,6 +29,7 @@
     "name-from-content-named-widgets",
     "observe-portal-modals",
     "redact-sensitive-field-values",
+    "rerelease-inspector",
     "serialize-package",
     "slider-spinbutton-increment",
     "storybook-addon-multi-rooted-stories",
