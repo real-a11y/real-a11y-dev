@@ -84,7 +84,8 @@
   },
   "dependencies": {
     "@real-a11y-dev/core": "workspace:*",
-    "@real-a11y-dev/serialize": "workspace:*"
+    "@real-a11y-dev/serialize": "workspace:*",
+    "@real-a11y-dev/validate": "workspace:*"
   },
   "peerDependencies": {
     "playwright": "*"

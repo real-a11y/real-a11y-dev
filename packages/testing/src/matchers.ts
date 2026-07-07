@@ -26,6 +26,11 @@ import {
   serializeTree,
   type SerializeOptions,
 } from "@real-a11y-dev/serialize";
+import {
+  validateNode,
+  validateTree,
+  type ValidatedNode,
+} from "@real-a11y-dev/validate";
 
 import {
   assertNoUnlabeledInteractive,
@@ -126,6 +131,73 @@ function toHaveTabSequence(
   };
 }
 
+// ─── ARIA validity matcher ───────────────────────────────────────────────────
+
+/** Adapt a core `SemanticNode` tree to the validator's minimal node shape,
+ *  reconstructing `aria-*` attribute names from the split states/properties. */
+function toValidatedNodes(tree: Tree): Map<string, ValidatedNode> {
+  const out = new Map<string, ValidatedNode>();
+  for (const [id, n] of tree.nodes) {
+    const attrs: Record<string, string | boolean> = {};
+    for (const [k, v] of Object.entries(n.a11y.states)) attrs[`aria-${k}`] = v;
+    for (const [k, v] of Object.entries(n.a11y.properties))
+      attrs[`aria-${k}`] = v;
+    out.set(id, {
+      id,
+      parentId: n.parentId,
+      role: n.a11y.role,
+      name: n.a11y.name,
+      attrs,
+    });
+  }
+  return out;
+}
+
+/**
+ * Assert the extracted accessibility tree has no ARIA *errors* — invalid roles,
+ * missing required names/attributes, and the relationship violations
+ * `@real-a11y-dev/validate` catches (interactive nesting, presentational-children
+ * misuse). Advisory warnings don't fail the matcher.
+ */
+function toBeValidA11yTree(received: unknown): MatcherResult {
+  if (!(received instanceof Element)) {
+    return {
+      pass: false,
+      message: () =>
+        `toBeValidA11yTree: expected a DOM Element, received ${describe(received)}`,
+    };
+  }
+  const nodes = toValidatedNodes(extract(received, "a11y"));
+  const label = (n: ValidatedNode) =>
+    n.name ? `${n.role} "${n.name}"` : n.role;
+  const errors: string[] = [];
+  for (const node of nodes.values()) {
+    for (const issue of validateNode(node, nodes)) {
+      if (issue.severity === "error")
+        errors.push(`${label(node)} — ${issue.message}`);
+    }
+  }
+  for (const [id, list] of validateTree(nodes)) {
+    const node = nodes.get(id);
+    if (!node) continue;
+    for (const issue of list) {
+      if (issue.severity === "error")
+        errors.push(`${label(node)} — ${issue.message}`);
+    }
+  }
+  const pass = errors.length === 0;
+  return {
+    pass,
+    message: () =>
+      pass
+        ? "expected the accessibility tree to have ARIA violations, but it was valid"
+        : [
+            `Accessibility tree has ${errors.length} ARIA violation(s):`,
+            ...errors.map((e) => `  ✖ ${e}`),
+          ].join("\n"),
+  };
+}
+
 // ─── the matcher bundle ──────────────────────────────────────────────────────
 
 export const a11yMatchers = {
@@ -154,6 +226,7 @@ export const a11yMatchers = {
     );
   },
   toHaveTabSequence,
+  toBeValidA11yTree,
 };
 
 // ─── snapshot serializer ─────────────────────────────────────────────────────
@@ -235,6 +308,8 @@ export interface A11yMatchers<R = unknown> {
   toHaveValidLandmarks(): R;
   /** Focusable nodes, in Tab order, equal the given `role "name"` tokens. */
   toHaveTabSequence(expected: string[]): R;
+  /** The extracted a11y tree has no ARIA errors (roles, names, relationships). */
+  toBeValidA11yTree(): R;
 }
 
 declare global {

@@ -49,6 +49,22 @@ describe("assertion matchers", () => {
   });
 });
 
+describe("toBeValidA11yTree", () => {
+  it("passes a valid tree and fails on an ARIA error", () => {
+    expect(
+      mount(`<main><h1>Dashboard</h1><button>Save</button></main>`),
+    ).toBeValidA11yTree();
+    // an unnamed button — role "button" requires an accessible name
+    expect(mount(`<button></button>`)).not.toBeValidA11yTree();
+  });
+
+  it("reports the violation in the failure message", () => {
+    expect(() =>
+      expect(mount(`<button></button>`)).toBeValidA11yTree(),
+    ).toThrow(/ARIA violation/i);
+  });
+});
+
 describe("toHaveTabSequence", () => {
   it("matches the computed Tab order (positive tabindex first)", () => {
     const root = mount(`

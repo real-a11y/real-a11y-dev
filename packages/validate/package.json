@@ -1,0 +1,66 @@
+{
+  "name": "@real-a11y-dev/validate",
+  "version": "0.1.0-beta.6",
+  "description": "ARIA semantics validation for the Semantic Navigator accessibility tree — per-node rules plus tree-level relationship checks (interactive nesting, required context / owned). aria-query-backed, so it never drifts from the spec.",
+  "license": "MIT",
+  "author": "Juan Crisostomo (Real A11y)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/real-a11y/real-a11y-dev.git",
+    "directory": "packages/validate"
+  },
+  "homepage": "https://real-a11y.dev",
+  "bugs": {
+    "url": "https://github.com/real-a11y/real-a11y-dev/issues"
+  },
+  "keywords": [
+    "a11y",
+    "accessibility",
+    "aria",
+    "accessibility-tree",
+    "validation",
+    "lint",
+    "aria-query"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": {
+        "import": "./dist/index.d.ts",
+        "require": "./dist/index.d.cts"
+      },
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "aria-query": "^5.3.2"
+  },
+  "devDependencies": {
+    "@types/aria-query": "^5.0.4",
+    "tsup": "^8.3.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}
