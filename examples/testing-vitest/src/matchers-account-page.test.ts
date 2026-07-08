@@ -59,6 +59,9 @@ function renderAccountPage(): Element {
   root.querySelector("#delete")!.addEventListener("click", () => {
     const dialog = document.createElement("div");
     dialog.setAttribute("role", "dialog");
+    // Genuinely modal (as the APG dialog pattern and every mainstream modal
+    // library emit) — content behind it is inert, so the tree scopes to it.
+    dialog.setAttribute("aria-modal", "true");
     dialog.setAttribute("aria-labelledby", "confirm-title");
     dialog.innerHTML = `
       <h2 id="confirm-title">Delete account?</h2>
