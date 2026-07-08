@@ -1,5 +1,15 @@
 # @real-a11y-dev/storybook-addon
 
+## 0.1.0-beta.9
+
+### Patch Changes
+
+- Re-release so the bundled `@real-a11y-dev/core` picks up the modal-dialog scoping fix (#107 — only pivot to genuinely modal dialogs, not any `role="dialog"`). Both packages inline core at build time (`tsup` `noExternal`), so a rebuild is required to ship the fix — a version-only bump of core wouldn't reach them.
+- Updated dependencies [3607ac4]
+  - @real-a11y-dev/core@0.1.0-beta.9
+  - @real-a11y-dev/testing@0.1.0-beta.9
+  - @real-a11y-dev/semantic-navigator-ui@0.1.0-beta.9
+
 ## 0.1.0-beta.7
 
 ### Patch Changes

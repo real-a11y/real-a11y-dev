@@ -1,5 +1,12 @@
 # @real-a11y-dev/semantic-navigator-ui
 
+## 0.1.0-beta.9
+
+### Patch Changes
+
+- Updated dependencies [3607ac4]
+  - @real-a11y-dev/core@0.1.0-beta.9
+
 ## 0.1.0-beta.7
 
 ### Patch Changes
