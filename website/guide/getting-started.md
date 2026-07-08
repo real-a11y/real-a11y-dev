@@ -308,6 +308,7 @@ This ships the inspector into the production bundle (as a separate chunk) — ac
 
 ## Next steps
 
+- [Accessibility-Driven Development](/concepts/accessibility-driven-development) — build with the tree in view, catch problems at author-time
+- [Accessibility-Driven Testing](/concepts/accessibility-driven-testing) — lock the tree into CI with snapshots and assertions
 - [Core Concepts](/guide/core-concepts) — understand the semantic tree model, roles, and names
-- [Accessibility Snapshots](/guide/accessibility-snapshots) — what it means to snapshot the a11y tree, and how it complements axe and visual regression testing
 - [Why Real A11y?](/guide/why) — how this compares to axe-core, Testing Library, and other tools

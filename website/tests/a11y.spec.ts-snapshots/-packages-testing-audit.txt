@@ -4,6 +4,7 @@
     button "Search"
     navigation "Main Navigation"
       link "Guide"
+      link "Concepts"
       link "Recipes"
       link "Packages"
       button "v0.1 · Beta"
@@ -15,14 +16,20 @@
         heading "Introduction" (level 2)
       link "Getting Started"
         paragraph "Getting Started"
+      link "Why Real A11y?"
+        paragraph "Why Real A11y?"
+      button "Concepts"
+        heading "Concepts" (level 2)
       link "Core Concepts"
         paragraph "Core Concepts"
+      link "Accessibility-Driven Development"
+        paragraph "Accessibility-Driven Development"
+      link "Accessibility-Driven Testing"
+        paragraph "Accessibility-Driven Testing"
       link "Accessibility Snapshots"
         paragraph "Accessibility Snapshots"
       link "Snapshots vs. Other Tools"
         paragraph "Snapshots vs. Other Tools"
-      link "Why Real A11y?"
-        paragraph "Why Real A11y?"
       button "Reading the Tree"
         heading "Reading the Tree" (level 2)
       link "Understanding the Views"
@@ -103,6 +110,9 @@
         code "@real-a11y-dev/testing/playwright"
         strong "in your test suite"
     paragraph "Headless accessibility audit helpers for Vitest, Jest, and Playwright. No browser required for the core helpers — they work in jsdom."
+    paragraph "This package is the toolkit behind — making the accessibility tree a first-class thing your CI asserts on."
+      link "Accessibility-Driven Testing"
+        strong "Accessibility-Driven Testing"
     heading "Install" (level 2)
     button "Copy Code"
       code

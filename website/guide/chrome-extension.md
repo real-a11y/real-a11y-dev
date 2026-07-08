@@ -9,6 +9,8 @@ description: Inspect any website's DOM, accessibility tree, and tab order in a C
 
 Most accessibility problems don't look like problems — until you remove the visual layer. Semantic Navigator replaces the page with its accessibility tree. You can still click, navigate, fill forms, and complete tasks. The structure is all you get.
 
+It's the main tool for [**Accessibility-Driven Development**](/concepts/accessibility-driven-development) — building with the accessibility tree in view instead of auditing it after.
+
 <div class="sn-actions">
   <a href="https://chromewebstore.google.com/detail/semantic-navigator/gnnepgbbecnlomngfemkadnbeaopleom" class="sn-btn-primary">Add to Chrome</a>
   <a href="https://github.com/real-a11y/real-a11y-dev" class="sn-btn-secondary">View on GitHub</a>

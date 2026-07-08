@@ -83,3 +83,5 @@ An accessibility snapshot is the serialized form of the tree you can also *see* 
 - **In Playwright** → [the `attach()` adapter](/packages/testing/playwright)
 - **In CI** → the [CI Diff Bot recipe](/guide/ci-diff-bot) posts tree diffs on every PR
 - **Comparing it to axe, visual testing, or Playwright?** → [How Accessibility Snapshots Compare](/guide/accessibility-snapshots-comparisons)
+
+> Snapshots are the artifact at the heart of [**Accessibility-Driven Testing**](/concepts/accessibility-driven-testing) — the practice of letting the accessibility tree drive your test suite.

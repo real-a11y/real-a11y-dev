@@ -9,6 +9,8 @@ description: Deterministic snapshots and structural assertions for the accessibi
 
 Headless accessibility audit helpers for Vitest, Jest, and Playwright. No browser required for the core helpers — they work in jsdom.
 
+This package is the toolkit behind [**Accessibility-Driven Testing**](/concepts/accessibility-driven-testing) — making the accessibility tree a first-class thing your CI asserts on.
+
 ## Install
 
 ```sh

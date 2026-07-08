@@ -160,6 +160,7 @@ export default defineConfig({
 
     nav: [
       { text: "Guide", link: "/guide/getting-started" },
+      { text: "Concepts", link: "/concepts/accessibility-driven-development" },
       { text: "Recipes", link: "/recipes/nextjs" },
       { text: "Packages", link: "/packages/core" },
       {
@@ -190,7 +191,21 @@ export default defineConfig({
         text: "Introduction",
         items: [
           { text: "Getting Started", link: "/guide/getting-started" },
+          { text: "Why Real A11y?", link: "/guide/why" },
+        ],
+      },
+      {
+        text: "Concepts",
+        items: [
           { text: "Core Concepts", link: "/guide/core-concepts" },
+          {
+            text: "Accessibility-Driven Development",
+            link: "/concepts/accessibility-driven-development",
+          },
+          {
+            text: "Accessibility-Driven Testing",
+            link: "/concepts/accessibility-driven-testing",
+          },
           {
             text: "Accessibility Snapshots",
             link: "/guide/accessibility-snapshots",
@@ -199,7 +214,6 @@ export default defineConfig({
             text: "Snapshots vs. Other Tools",
             link: "/guide/accessibility-snapshots-comparisons",
           },
-          { text: "Why Real A11y?", link: "/guide/why" },
         ],
       },
       {

@@ -10,6 +10,10 @@ export const ROUTES = [
   "/accessibility",
   "/privacy",
 
+  // Concepts
+  "/concepts/accessibility-driven-development",
+  "/concepts/accessibility-driven-testing",
+
   // Guide
   "/guide/getting-started",
   "/guide/why",

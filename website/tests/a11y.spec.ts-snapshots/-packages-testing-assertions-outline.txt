@@ -1,4 +1,5 @@
   h2 Introduction
+  h2 Concepts
   h2 Reading the Tree
   h2 Chrome Extension
   h2 Packages
