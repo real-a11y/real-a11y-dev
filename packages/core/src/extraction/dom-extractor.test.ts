@@ -736,14 +736,12 @@ describe("extractDomTree", () => {
       expect(allNodes.some((n) => n.a11y.role === "status")).toBe(false);
     });
 
-    it("pivots to [role='dialog'] without aria-modal (Radix Dialog ≥1.1)", () => {
-      // Radix Dialog 1.1+ and several modern libs (Headless UI, Reach UI)
-      // omit aria-modal — they enforce modality via sibling-aria-hidden +
-      // focus trap instead. The extractor must still recognise a visible
-      // role="dialog" as the modal scope, otherwise pivot silently fails
-      // and the panel shows page chrome instead of the dialog content.
+    it("pivots exclusively to a MODAL role='dialog' (aria-modal, as Radix/Headless/MUI set)", () => {
+      // Real modal dialogs (Radix Dialog, Headless UI, MUI, the APG pattern)
+      // set aria-modal="true". AT scopes exclusively to a modal, so we pivot:
+      // the dialog appears and the page behind it is dropped.
       appendOverlay(`
-        <div role="dialog" aria-labelledby="t">
+        <div role="dialog" aria-modal="true" aria-labelledby="t">
           <h2 id="t">Confirm deletion</h2>
           <p>This action cannot be undone.</p>
           <button>Close</button>
@@ -758,9 +756,32 @@ describe("extractDomTree", () => {
           (n) => n.a11y.role === "button" && n.a11y.name === "Close",
         ),
       ).toBe(true);
-      // Modal scope is exclusive — the original "Open menu" trigger inside
-      // appRoot must NOT appear when the dialog is the effective root.
+      // Modal scope is exclusive — the appRoot "Open menu" trigger is dropped.
       expect(allNodes.some((n) => n.a11y.name === "Open menu")).toBe(false);
+    });
+
+    it("does NOT hijack scope for a non-modal role='dialog' (cookie banner / Radix Popover)", () => {
+      // A cookie-consent banner and a Radix Popover both render role="dialog"
+      // with NO aria-modal and leave the page interactive. Treating them as
+      // modal used to collapse the whole page down to just the banner. Now
+      // they are additive: the page stays AND the dialog joins the tree.
+      appendOverlay(`
+        <div role="dialog" aria-labelledby="c">
+          <h2 id="c">We use cookies</h2>
+          <button>Accept</button>
+        </div>
+      `);
+
+      const tree = extractDomTree(appRoot);
+      const allNodes = [...tree.nodes.values()];
+      // Page content is preserved — NOT hijacked.
+      expect(allNodes.some((n) => n.a11y.name === "Open menu")).toBe(true);
+      // The non-modal dialog is still shown (additive via the portal path).
+      expect(
+        allNodes.some(
+          (n) => n.a11y.role === "button" && n.a11y.name === "Accept",
+        ),
+      ).toBe(true);
     });
 
     it("stays scoped to root when no portal overlay is present", () => {
