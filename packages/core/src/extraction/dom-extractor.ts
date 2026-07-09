@@ -521,20 +521,38 @@ function computeRawAccessibleName(
     if (summary) return getAccessibleTextContent(summary, visited).trim();
   }
 
-  // 5. Value/placeholder for inputs. A sensitive field's value is a secret
-  //    and must never surface as an accessible name (it flows into snapshots
-  //    and the extension channel) — fall through to placeholder instead.
+  // 5. Button-like inputs (submit/reset/button) take their name from the
+  //    `value` attribute (HTML-AAM). For any other input the value is the
+  //    user's DATA, not a name — an unlabeled text field must read as unnamed
+  //    rather than echo what was typed, and an unlabeled checkbox must not
+  //    inherit its default value "on". That matches what assistive tech
+  //    announces and stops @real-a11y-dev/testing from passing genuinely
+  //    unlabeled controls. (The sensitive-value guard is kept for defense in
+  //    depth; a password field is never button-like, so it no longer reaches
+  //    this branch at all.)
   if (tag === "input") {
     const input = element as HTMLInputElement;
-    if (input.value && !isSensitiveField(input)) return input.value;
-    if (input.placeholder) return input.placeholder;
+    const type = input.type;
+    if (
+      (type === "submit" || type === "reset" || type === "button") &&
+      input.value &&
+      !isSensitiveField(input)
+    ) {
+      return input.value;
+    }
   }
 
-  // 6. title attribute
+  // 6. title attribute (HTML-AAM orders title before placeholder)
   const title = element.getAttribute("title");
   if (title) return title;
 
-  // 7. Recursive text content — ONLY for elements whose ARIA role supports
+  // 7. placeholder — a text input's last-resort name, after title.
+  if (tag === "input") {
+    const placeholder = (element as HTMLInputElement).placeholder;
+    if (placeholder) return placeholder;
+  }
+
+  // 8. Recursive text content — ONLY for elements whose ARIA role supports
   //    "name from content" (headings, links, buttons, table cells, options).
   //    NOT for generic containers (div, span, p) which would grab huge text blobs.
   const NAMES_FROM_CONTENT_TAGS = new Set([
@@ -571,7 +589,7 @@ function computeRawAccessibleName(
     if (fullText) return fullText;
   }
 
-  // 8. Fallback: direct text content only (for generic/container elements)
+  // 9. Fallback: direct text content only (for generic/container elements)
   const directText = getDirectTextContent(element);
   if (directText) return directText;
 

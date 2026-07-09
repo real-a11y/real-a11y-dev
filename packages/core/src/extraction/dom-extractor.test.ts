@@ -944,3 +944,56 @@ describe("sensitive value redaction", () => {
     expect(JSON.stringify(withPlaceholder)).not.toContain("hunter2");
   });
 });
+
+describe("input accessible name (HTML-AAM)", () => {
+  const nameOf = (html: string) => {
+    const root = createPage(html);
+    const input = [...extractDomTree(root).nodes.values()].find(
+      (n) => n.dom.tagName === "input",
+    )!;
+    return input.a11y.name;
+  };
+
+  it("does not use an unlabeled text input's value as its name", () => {
+    // The typed value is the user's DATA. Echoing it as the name makes an
+    // unlabeled field look labelled, so the testing package would pass a
+    // control that real AT announces as unlabeled.
+    expect(nameOf('<input type="text" value="John Doe">')).toBe("");
+  });
+
+  it('does not give an unlabeled checkbox/radio the default value "on"', () => {
+    // A bare checkbox has DOM value "on"; that must not become its name.
+    expect(nameOf('<input type="checkbox">')).toBe("");
+    expect(nameOf('<input type="radio">')).toBe("");
+  });
+
+  it("uses value as the name for button-like inputs (submit/reset/button)", () => {
+    expect(nameOf('<input type="submit" value="Send">')).toBe("Send");
+    expect(nameOf('<input type="reset" value="Clear">')).toBe("Clear");
+    expect(nameOf('<input type="button" value="Go">')).toBe("Go");
+  });
+
+  it("orders title before placeholder", () => {
+    expect(
+      nameOf('<input type="text" title="Your email" placeholder="you@x.com">'),
+    ).toBe("Your email");
+  });
+
+  it("falls back to placeholder when there is no label or title", () => {
+    expect(nameOf('<input type="text" placeholder="Search">')).toBe("Search");
+  });
+
+  it("still prefers an associated label over placeholder", () => {
+    document.body.innerHTML =
+      '<label for="e">Email</label>' +
+      '<input id="e" type="text" value="typed" placeholder="you@x.com">';
+    try {
+      const input = [...extractDomTree(document.body).nodes.values()].find(
+        (n) => n.dom.tagName === "input",
+      )!;
+      expect(input.a11y.name).toBe("Email");
+    } finally {
+      document.body.innerHTML = "";
+    }
+  });
+});
