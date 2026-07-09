@@ -2,9 +2,11 @@
 
 import { buildFrameInfoMap, mergeFrameTrees } from "./frame-merger.js";
 import {
+  type PlannedTabMessage,
   prefixNodeId,
   parseNodeId,
   planFrameAnnouncementResponse,
+  planFrameHello,
   planPanelDisconnectCleanup,
 } from "./routing.js";
 import {
@@ -31,6 +33,11 @@ function getTabState(tabId: number): TabState {
 // ---- Frame tree merging ----
 
 async function mergeAndSendTree(tabId: number) {
+  // No panel means nobody consumes the merged tree — skip the getAllFrames
+  // call, the merge, the node clone, and the (dropped) sendMessage. Content
+  // scripts only send FRAME_TREE_DATA while observing (panel-gated), so this
+  // mainly guards stale in-flight data arriving just as the panel closes.
+  if (!sidepanelConnected) return;
   const state = getTabState(tabId);
   const topFrame = state.frames.get(0);
   if (!topFrame) return;
@@ -102,6 +109,31 @@ async function broadcastToAllFrames(tabId: number, message: unknown) {
   }
 }
 
+/**
+ * Execute a plan produced by the pure routing.ts planners. An item with a
+ * `frameId` targets that one frame; without one it goes to the tab (top
+ * frame). Errors (a frame with no content script) are swallowed.
+ */
+function dispatchPlan(plan: PlannedTabMessage[]) {
+  for (const item of plan) {
+    const cb = () => {
+      if (chrome.runtime.lastError) {
+        /* frame may have no content script */
+      }
+    };
+    if (item.frameId !== undefined) {
+      chrome.tabs.sendMessage(
+        item.tabId,
+        item.body,
+        { frameId: item.frameId },
+        cb,
+      );
+    } else {
+      chrome.tabs.sendMessage(item.tabId, item.body, cb);
+    }
+  }
+}
+
 // ---- Side-panel connection state ----
 // Tracked as the source of truth for whether the focus tracker should be
 // enabled in content scripts. Every time a frame's content script announces
@@ -125,6 +157,22 @@ chrome.runtime.onConnect.addListener((port) => {
   // it can request a tree or filter inbound messages. Push the current
   // activeTabId immediately on connect.
   broadcastActiveTabToPanel();
+
+  // Arm observation on the active tab's already-loaded content scripts — they
+  // announced via FRAME_HELLO before the panel existed and are waiting for
+  // this. Frames that load later are armed by the FRAME_HELLO handler. On a
+  // fresh service-worker instance (including SW-death revival, when the panel
+  // reconnects its port) `activeTabId` is null until resolved, so resolve it
+  // first — otherwise this re-arm would silently no-op.
+  void (async () => {
+    if (activeTabId === null) await refreshActiveTabFromLastFocusedWindow();
+    if (activeTabId !== null) {
+      broadcastToAllFrames(activeTabId, {
+        type: "SET_OBSERVING",
+        payload: { enabled: true },
+      });
+    }
+  })();
 
   port.onDisconnect.addListener(() => {
     sidepanelConnected = false;
@@ -235,24 +283,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           sidepanelConnected,
           curtainOn: !!tabCurtainOn.get(tabId),
         });
-        for (const item of plan) {
-          const cb = () => {
-            if (chrome.runtime.lastError) {
-              /* ignore */
-            }
-          };
-          if (item.frameId !== undefined) {
-            chrome.tabs.sendMessage(
-              item.tabId,
-              item.body,
-              { frameId: item.frameId },
-              cb,
-            );
-          } else {
-            chrome.tabs.sendMessage(item.tabId, item.body, cb);
-          }
-        }
+        dispatchPlan(plan);
 
+        sendResponse({ received: true });
+        return false;
+      }
+
+      case "FRAME_HELLO": {
+        // A frame just loaded and announced itself WITHOUT extracting. If a
+        // panel is connected for the tab, tell it to start observing (and
+        // enable the focus tracker). Otherwise do nothing — no extraction.
+        dispatchPlan(planFrameHello({ tabId, frameId, sidepanelConnected }));
         sendResponse({ received: true });
         return false;
       }

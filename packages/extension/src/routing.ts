@@ -118,6 +118,14 @@ export function planFrameAnnouncementResponse(opts: {
   }
 
   if (opts.sidepanelConnected) {
+    // Re-assert observation (idempotent — content's startObserving() early-
+    // returns if already observing) so a frame that keeps announcing after a
+    // service-worker revival stays armed, and re-assert the focus tracker.
+    out.push({
+      tabId: opts.tabId,
+      frameId: opts.frameId,
+      body: { type: "SET_OBSERVING", payload: { enabled: true } },
+    });
     out.push({
       tabId: opts.tabId,
       frameId: opts.frameId,
@@ -126,6 +134,37 @@ export function planFrameAnnouncementResponse(opts: {
   }
 
   return out;
+}
+
+/**
+ * Decide what to send a frame that just sent a lightweight `FRAME_HELLO`
+ * (content-script load announce — it is NOT yet observing). If a panel is
+ * connected for the tab, tell the frame to start observing and enable the
+ * focus tracker. When no panel is connected this returns nothing, so a page
+ * whose panel was never opened does zero extraction.
+ *
+ * Curtain re-application is intentionally NOT handled here — it rides the
+ * `FRAME_TREE_DATA` path (planFrameAnnouncementResponse), which the frame
+ * reaches as soon as it starts observing.
+ */
+export function planFrameHello(opts: {
+  tabId: number;
+  frameId: number;
+  sidepanelConnected: boolean;
+}): PlannedTabMessage[] {
+  if (!opts.sidepanelConnected) return [];
+  return [
+    {
+      tabId: opts.tabId,
+      frameId: opts.frameId,
+      body: { type: "SET_OBSERVING", payload: { enabled: true } },
+    },
+    {
+      tabId: opts.tabId,
+      frameId: opts.frameId,
+      body: { type: "SET_FOCUS_TRACKER", payload: { enabled: true } },
+    },
+  ];
 }
 
 /**
@@ -149,6 +188,10 @@ export function planPanelDisconnectCleanup(opts: {
   curtainOn: boolean;
 }): PlannedTabMessage[] {
   const out: PlannedTabMessage[] = [
+    {
+      tabId: opts.tabId,
+      body: { type: "SET_OBSERVING", payload: { enabled: false } },
+    },
     {
       tabId: opts.tabId,
       body: { type: "SET_FOCUS_TRACKER", payload: { enabled: false } },

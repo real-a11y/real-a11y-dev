@@ -16,6 +16,11 @@ export type FrameToBackground =
         rootId: string;
       };
     }
+  // Cheap "I'm here" announce sent at content-script load, carrying no tree.
+  // It lets the background learn a frame is reachable so it can tell the
+  // frame to start observing IFF a panel is connected — without paying a
+  // full extraction on every page whether or not the panel is ever opened.
+  | { type: "FRAME_HELLO"; payload: { frameUrl: string } }
   | { type: "FOCUS_CHANGED"; payload: { nodeId: string } }
   | {
       type: "LIVE_REGION";
@@ -121,6 +126,10 @@ export type PanelToContent =
       };
     }
   | { type: "SET_FOCUS_TRACKER"; payload: { enabled: boolean } }
+  // Start/stop the (expensive) live tree observation in the content script.
+  // Driven by the panel's connect/disconnect the same way SET_FOCUS_TRACKER
+  // is, so a page whose panel was never opened does no observing at all.
+  | { type: "SET_OBSERVING"; payload: { enabled: boolean } }
   | { type: "CLOSE_TAB" }
   // Picker: toggle DevTools-style "select an element in the page" mode.
   // Content swaps in the capture-phase click handler + cursor styling
