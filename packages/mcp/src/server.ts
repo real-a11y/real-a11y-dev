@@ -225,7 +225,10 @@ export function renderCompare(
   customTree: string,
   native: { tree: string; pairs: string[] },
 ): string {
-  const norm = (l: string) => l.trim().replace(/\s+\(level \d+\)$/, "");
+  // Single literal space (not `\s+`) — the tree serializer always emits exactly
+  // one space before "(level N)", and an unbounded `\s+` on audited-page text is
+  // a polynomial-ReDoS surface (CodeQL js/polynomial-redos).
+  const norm = (l: string) => l.trim().replace(/ \(level \d+\)$/, "");
   const keep = (l: string) => COMPARE_ROLES.has(roleOf(l));
   const customPairs = customTree
     .split("\n")
