@@ -24,6 +24,7 @@ export const ROUTES = [
   "/guide/reading-the-a11y-view",
   "/guide/reading-the-headings-view",
   "/guide/reading-the-tab-view",
+  "/guide/reading-good-semantics",
   "/guide/chrome-extension",
   "/guide/ci-diff-bot",
   "/guide/troubleshooting",
@@ -39,6 +40,7 @@ export const ROUTES = [
   "/packages/react",
   "/packages/inspector",
   "/packages/storybook-addon",
+  "/packages/mcp",
 
   // Recipes
   "/recipes/nextjs",

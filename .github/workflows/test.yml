@@ -77,9 +77,10 @@ jobs:
       - name: Packaging checks
         run: pnpm packaging:check
 
-  # Playwright e2e for @real-a11y-dev/testing's `attach()` API. Single OS
-  # + Node combo — the e2e suite tests our adapter, not Node/OS portability,
-  # and the `test` matrix already covers those for the libraries themselves.
+  # Playwright e2e for @real-a11y-dev/testing's `attach()` API and the
+  # @real-a11y-dev/mcp server (both drive a real browser). Single OS + Node
+  # combo — the e2e suites test our adapters, not Node/OS portability, and the
+  # `test` matrix already covers those for the libraries themselves.
   e2e:
     runs-on: ubuntu-latest
     steps:
@@ -103,6 +104,11 @@ jobs:
 
       - name: Run e2e tests
         run: pnpm --filter @real-a11y-dev/testing test:e2e
+
+      # MCP server e2e — reuses the Chromium installed above (shared
+      # ms-playwright cache); drives a real browser through the MCP tools.
+      - name: Run MCP e2e tests
+        run: pnpm --filter @real-a11y-dev/mcp test:e2e
 
       - name: Upload Playwright report on failure
         if: failure()
@@ -211,7 +217,7 @@ jobs:
           # Published packages only — extension and example-patterns are
           # private; test-only edits need no changelog entry.
           src=$(echo "$changed" \
-            | grep -E '^packages/(core|serialize|ui|inspector|react|storybook-addon|testing)/src/' \
+            | grep -E '^packages/(core|serialize|ui|inspector|react|storybook-addon|testing|validate|mcp)/src/' \
             | grep -vE '\.(test|spec)\.[tj]sx?$' || true)
           added=$(git diff --name-only --diff-filter=A "$BASE"...HEAD -- .changeset \
             | grep -E '\.md$' | grep -viE 'README' || true)
