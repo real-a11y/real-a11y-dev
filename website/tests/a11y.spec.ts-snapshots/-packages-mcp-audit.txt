@@ -379,8 +379,6 @@
         link "@real-a11y-dev/testing — Assertions"
           code "@real-a11y-dev/testing"
         code "collectFindings"
-      listitem "— how to read the tree the tools hand back."
-        link "Reading Good Semantics"
   contentinfo
     link "Edit this page on GitHub"
     paragraph "Last updated:"

@@ -234,5 +234,3 @@ It reuses the pieces `@real-a11y-dev/testing` already ships:
 
 - [`@real-a11y-dev/testing` — Assertions](/packages/testing/assertions) — the same
   `collectFindings` engine, for unit and end-to-end tests.
-- [Reading Good Semantics](/guide/reading-good-semantics) — how to read the tree
-  the tools hand back.

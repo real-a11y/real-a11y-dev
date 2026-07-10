@@ -66,6 +66,5 @@
 66. link "collectFindings"
 67. link "axe-core"
 68. link "@real-a11y-dev/testing — Assertions"
-69. link "Reading Good Semantics"
-70. link "Edit this page on GitHub"
-71. link "Next pageGetting Started"
+69. link "Edit this page on GitHub"
+70. link "Next pageGetting Started"
