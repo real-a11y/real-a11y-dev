@@ -44,28 +44,37 @@
 44. link "Accessible Names"
 45. link "Architecture"
 46. link "Troubleshooting"
-47. link "assertNoUnlabeledInteractive(root)"
-48. link "assertHeadingOrder(root)"
-49. link "assertDialogsLabeled(root)"
-50. link "assertLandmarkStructure(root)"
-51. link "A11yAssertionError"
-52. link "See also"
-53. link "@real-a11y-dev/testing"
-54. link "Matchers"
-55. button "Copy Code"
-56. generic
+47. link "collectFindings(root, rules?)"
+48. link "listByRole(root, filter)"
+49. link "assertNoUnlabeledInteractive(root)"
+50. link "assertHeadingOrder(root)"
+51. link "assertDialogsLabeled(root)"
+52. link "assertLandmarkStructure(root)"
+53. link "A11yAssertionError"
+54. link "See also"
+55. link "@real-a11y-dev/testing"
+56. link "Matchers"
 57. button "Copy Code"
 58. generic
-59. button "Copy Code"
-60. generic
-61. button "Copy Code"
-62. generic
-63. button "Copy Code"
-64. generic
-65. button "Copy Code"
-66. generic
-67. link "Matchers"
-68. link "Playwright adapter"
-69. link "Edit this page on GitHub"
-70. link "Previous pageSnapshots"
-71. link "Next pageMatchers"
+59. table
+60. button "Copy Code"
+61. generic
+62. button "Copy Code"
+63. generic
+64. button "Copy Code"
+65. generic
+66. button "Copy Code"
+67. generic
+68. button "Copy Code"
+69. generic
+70. button "Copy Code"
+71. generic
+72. button "Copy Code"
+73. generic
+74. button "Copy Code"
+75. generic
+76. link "Matchers"
+77. link "Playwright adapter"
+78. link "Edit this page on GitHub"
+79. link "Previous pageSnapshots"
+80. link "Next pageMatchers"

@@ -22,9 +22,12 @@ export {
   assertDialogsLabeled,
   assertLandmarkStructure,
   A11yAssertionError,
+  collectFindings,
+  listByRole,
 } from "./assertions.js";
 
 export {
+  extractA11yTree,
   findByRole,
   findAllByRole,
   getOutline,

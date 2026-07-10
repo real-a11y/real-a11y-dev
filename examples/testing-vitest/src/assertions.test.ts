@@ -31,7 +31,9 @@ describe("assertNoUnlabeledInteractive", () => {
         <button type="button"><!-- icon only, no text --></button>
       </div>
     `);
-    expect(() => assertNoUnlabeledInteractive(root)).toThrow("unlabeled");
+    expect(() => assertNoUnlabeledInteractive(root)).toThrow(
+      /unlabeled interactive/i,
+    );
   });
 
   it("throws when an input has no label or aria-label", () => {
