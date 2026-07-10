@@ -54,29 +54,27 @@
 54. link "See also"
 55. link "@real-a11y-dev/testing"
 56. link "Matchers"
-57. link "MCP server"
-58. button "Copy Code"
-59. generic
-60. table
-61. button "Copy Code"
-62. generic
-63. button "Copy Code"
-64. generic
-65. button "Copy Code"
-66. generic
-67. button "Copy Code"
-68. generic
-69. button "Copy Code"
-70. generic
-71. button "Copy Code"
-72. generic
-73. button "Copy Code"
-74. generic
-75. button "Copy Code"
-76. generic
-77. link "Matchers"
-78. link "Playwright adapter"
-79. link "MCP server"
-80. link "Edit this page on GitHub"
-81. link "Previous pageSnapshots"
-82. link "Next pageMatchers"
+57. button "Copy Code"
+58. generic
+59. table
+60. button "Copy Code"
+61. generic
+62. button "Copy Code"
+63. generic
+64. button "Copy Code"
+65. generic
+66. button "Copy Code"
+67. generic
+68. button "Copy Code"
+69. generic
+70. button "Copy Code"
+71. generic
+72. button "Copy Code"
+73. generic
+74. button "Copy Code"
+75. generic
+76. link "Matchers"
+77. link "Playwright adapter"
+78. link "Edit this page on GitHub"
+79. link "Previous pageSnapshots"
+80. link "Next pageMatchers"
