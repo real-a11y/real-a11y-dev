@@ -7,6 +7,9 @@
   h2 Reference
   h2 On this page
 h1 Assertions
+  h2 collectFindings(root, rules?)
+    h3 ALL_RULES
+  h2 listByRole(root, filter)
   h2 assertNoUnlabeledInteractive(root)
   h2 assertHeadingOrder(root)
   h2 assertDialogsLabeled(root)
