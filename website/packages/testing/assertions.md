@@ -11,7 +11,7 @@ Part of [`@real-a11y-dev/testing`](/packages/testing). Prefer the `expect(el).to
 
 ## `collectFindings(root, rules?)`
 
-The non-throwing primitive underneath every `assert*` helper. It runs the rules over a **single** tree extraction and returns **every** violation as a structured `Finding[]`, instead of throwing on the first. Reach for it to build a report, a custom matcher, or to feed an audit to another tool — it's exactly what the [MCP server](/packages/mcp)'s `audit_page` returns.
+The non-throwing primitive underneath every `assert*` helper. It runs the rules over a **single** tree extraction and returns **every** violation as a structured `Finding[]`, instead of throwing on the first. Reach for it to build a report, a custom matcher, or to feed an audit to another tool.
 
 ```ts
 import { collectFindings, ALL_RULES } from "@real-a11y-dev/testing";
@@ -119,4 +119,3 @@ import type { A11yAssertionError } from "@real-a11y-dev/testing";
 
 - [Matchers](/packages/testing/matchers) — the same checks as `expect` matchers with `.not` negation
 - [Playwright adapter](/packages/testing/playwright) — run these assertions against a real browser
-- [MCP server](/packages/mcp) — `collectFindings` exposed to AI agents as `audit_page`

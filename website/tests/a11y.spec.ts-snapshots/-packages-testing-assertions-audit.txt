@@ -115,13 +115,11 @@
       link "Matchers"
     heading "collectFindings(root, rules?)" (level 2)
       code "collectFindings(root, rules?)"
-    paragraph "The non-throwing primitive underneath every helper. It runs the rules over a tree extraction and returns violation as a structured , instead of throwing on the first. Reach for it to build a report, a custom matcher, or to feed an audit to another tool — it's exactly what the 's returns."
+    paragraph "The non-throwing primitive underneath every helper. It runs the rules over a tree extraction and returns violation as a structured , instead of throwing on the first. Reach for it to build a report, a custom matcher, or to feed an audit to another tool."
       code "assert*"
       strong "single"
       strong "every"
       code "Finding[]"
-      link "MCP server"
-      code "audit_page"
     button "Copy Code"
       code
     paragraph "is a DOM an already-extracted tree (). Passing a pre-extracted tree runs the rules over the snapshot used for the serialized tree / outline / tab order, so a multi-view report can't be internally inconsistent on a page that changes between extractions."
@@ -244,10 +242,6 @@
         code ".not"
       listitem "— run these assertions against a real browser"
         link "Playwright adapter"
-      listitem "— exposed to AI agents as"
-        link "MCP server"
-        code "collectFindings"
-        code "audit_page"
   contentinfo
     link "Edit this page on GitHub"
     paragraph "Last updated:"
