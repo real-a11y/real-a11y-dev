@@ -6,6 +6,7 @@ import {
   normalizeUrl,
   urlsMatch,
   planFrameAnnouncementResponse,
+  planFrameHello,
 } from "./routing.js";
 
 describe("prefixNodeId", () => {
@@ -154,16 +155,21 @@ describe("planFrameAnnouncementResponse", () => {
     expect(planFrameAnnouncementResponse(baseOpts)).toEqual([]);
   });
 
-  it("re-asserts the focus tracker to the announcing frame when panel is connected", () => {
-    // This is the cold-start race fix: every frame that announces itself
-    // while the panel is open immediately gets `SET_FOCUS_TRACKER: true`,
-    // so there is no window where the panel is open but the tracker is off.
+  it("re-asserts observing + focus tracker to the announcing frame when panel is connected", () => {
+    // Cold-start / SW-revival race fix: every frame that announces itself
+    // while the panel is open immediately gets SET_OBSERVING + SET_FOCUS_TRACKER,
+    // so there is no window where the panel is open but the frame is idle.
     const plan = planFrameAnnouncementResponse({
       ...baseOpts,
       sidepanelConnected: true,
     });
 
     expect(plan).toEqual([
+      {
+        tabId: 42,
+        frameId: 0,
+        body: { type: "SET_OBSERVING", payload: { enabled: true } },
+      },
       {
         tabId: 42,
         frameId: 0,
@@ -230,11 +236,46 @@ describe("planFrameAnnouncementResponse", () => {
       curtainOn: true,
     });
 
-    expect(plan).toHaveLength(2);
+    expect(plan).toHaveLength(3);
     expect(plan.map((m) => m.body.type)).toEqual([
       "TOGGLE_CURTAIN",
+      "SET_OBSERVING",
       "SET_FOCUS_TRACKER",
     ]);
+  });
+});
+
+describe("planFrameHello", () => {
+  it("sends nothing when the panel is closed (no observing on a page with no panel)", () => {
+    expect(
+      planFrameHello({ tabId: 42, frameId: 0, sidepanelConnected: false }),
+    ).toEqual([]);
+  });
+
+  it("arms observing + focus tracker on the announcing frame when connected", () => {
+    expect(
+      planFrameHello({ tabId: 42, frameId: 0, sidepanelConnected: true }),
+    ).toEqual([
+      {
+        tabId: 42,
+        frameId: 0,
+        body: { type: "SET_OBSERVING", payload: { enabled: true } },
+      },
+      {
+        tabId: 42,
+        frameId: 0,
+        body: { type: "SET_FOCUS_TRACKER", payload: { enabled: true } },
+      },
+    ]);
+  });
+
+  it("targets the announcing subframe, not the whole tab", () => {
+    const plan = planFrameHello({
+      tabId: 42,
+      frameId: 9,
+      sidepanelConnected: true,
+    });
+    for (const item of plan) expect(item).toMatchObject({ frameId: 9 });
   });
 });
 
@@ -247,6 +288,7 @@ describe("planPanelDisconnectCleanup", () => {
     const plan = planPanelDisconnectCleanup({ tabId: 17, curtainOn: false });
 
     expect(plan.map((m) => m.body)).toEqual([
+      { type: "SET_OBSERVING", payload: { enabled: false } },
       { type: "SET_FOCUS_TRACKER", payload: { enabled: false } },
       { type: "CLEAR_HIGHLIGHT" },
     ]);

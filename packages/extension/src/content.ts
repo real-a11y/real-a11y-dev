@@ -29,6 +29,10 @@ const elementRefs = getElementRefs();
 const dispatcher = new ActionDispatcher(elementRefs);
 const focusManager = new FocusManager(elementRefs);
 let liveObserver: MutationObserver | null = null;
+// Whether live tree observation is armed. Starts OFF — deferred until the
+// side panel connects for this tab, so a page whose panel is never opened
+// does no extraction at all.
+let observingEnabled = false;
 
 /** Check if an element can receive focus */
 function isFocusable(el: Element): boolean {
@@ -132,6 +136,9 @@ chrome.runtime.onMessage.addListener(
     switch (message.type) {
       case "REQUEST_TREE": {
         currentViewMode = message.payload.viewMode;
+        // Requesting a tree implies the panel is open — arm live updates so
+        // the panel keeps receiving them after this one-time populate.
+        startObserving();
         sendTree();
         sendResponse({ success: true });
         break;
@@ -185,6 +192,13 @@ chrome.runtime.onMessage.addListener(
 
       case "SET_FOCUS_TRACKER": {
         focusTrackerEnabled = message.payload.enabled;
+        sendResponse({ success: true });
+        break;
+      }
+
+      case "SET_OBSERVING": {
+        if (message.payload.enabled) startObserving();
+        else stopObserving();
         sendResponse({ success: true });
         break;
       }
@@ -363,20 +377,47 @@ if (!isSubFrame) {
       }
     }, 200);
   });
+}
 
-  liveObserver.observe(document.body, {
+/**
+ * Arm live observation: start the core DomObserver and (top frame) the
+ * live-region observer. Deferred until the panel connects — the background
+ * sends SET_OBSERVING(true) / the panel sends REQUEST_TREE on open.
+ * Idempotent.
+ */
+function startObserving() {
+  if (observingEnabled) return;
+  observingEnabled = true;
+  observer.start();
+  liveObserver?.observe(document.body, {
     childList: true,
     subtree: true,
     characterData: true,
   });
 }
 
-// Start observing
-observer.start();
+/** Disarm observation when the panel disconnects. Idempotent. */
+function stopObserving() {
+  if (!observingEnabled) return;
+  observingEnabled = false;
+  observer.stop();
+  liveObserver?.disconnect();
+}
 
-// Send initial tree
-sendTree();
+function onNavigated() {
+  // Re-announce so the background re-evaluates a new top-frame URL; only
+  // re-extract if we're actively observing.
+  safeSendMessage({
+    type: "FRAME_HELLO",
+    payload: { frameUrl: location.href },
+  });
+  if (observingEnabled) sendTree();
+}
 
-// Re-send tree on navigation
-window.addEventListener("popstate", () => sendTree());
-window.addEventListener("hashchange", () => sendTree());
+// Announce presence WITHOUT extracting. The background replies with
+// SET_OBSERVING(true) only if a side panel is connected for this tab, so a
+// page whose panel is never opened pays nothing.
+safeSendMessage({ type: "FRAME_HELLO", payload: { frameUrl: location.href } });
+
+window.addEventListener("popstate", onNavigated);
+window.addEventListener("hashchange", onNavigated);

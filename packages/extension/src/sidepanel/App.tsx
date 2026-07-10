@@ -219,16 +219,27 @@ export function App() {
   // current focus-tracker state to the content script — the tracker starts
   // OFF in content.ts, so this first SET_FOCUS_TRACKER is what turns it on.
   useEffect(() => {
-    const port = chrome.runtime.connect({ name: "sidepanel" });
-    chrome.runtime.sendMessage({
-      type: "SET_FOCUS_TRACKER",
-      payload: { enabled: focusTrackerOn },
-    });
-    return () => {
-      port.disconnect();
+    let port: chrome.runtime.Port | null = null;
+    const connect = () => {
+      port = chrome.runtime.connect({ name: "sidepanel" });
+      // Push the panel's focus-tracker state on (re)connect — the tracker
+      // starts OFF in content.ts, so this is what turns it on.
+      chrome.runtime.sendMessage({
+        type: "SET_FOCUS_TRACKER",
+        payload: { enabled: focusTrackerOn },
+      });
+      port.onDisconnect.addListener(() => {
+        // The MV3 service worker was torn down (its port drops while the panel
+        // is still open). Reconnect to revive it and re-run the background's
+        // onConnect, which re-broadcasts SET_OBSERVING(true) so extraction
+        // resumes rather than silently stopping.
+        connect();
+      });
     };
+    connect();
+    return () => port?.disconnect();
     // Intentionally empty deps: toggleFocusTracker handles subsequent changes;
-    // this effect only handles the initial panel-open hand-off.
+    // this effect owns the port lifecycle + the service-worker-death reconnect.
   }, []);
 
   // Listen for tree data and focus changes from content script
