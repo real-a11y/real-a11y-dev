@@ -16,7 +16,11 @@ export {
   assertDialogsLabeled,
   assertLandmarkStructure,
   A11yAssertionError,
+  collectFindings,
+  listByRole,
+  ALL_RULES,
 } from "./assertions.js";
+export type { Finding, A11yRule, RoleFilter } from "./assertions.js";
 
 // Raw primitives
 export { dispatch } from "./dispatch.js";
