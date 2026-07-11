@@ -39,6 +39,7 @@ export const ROUTES = [
   "/packages/react",
   "/packages/inspector",
   "/packages/storybook-addon",
+  "/packages/mcp",
 
   // Recipes
   "/recipes/nextjs",

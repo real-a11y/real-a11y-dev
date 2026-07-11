@@ -1,0 +1,387 @@
+  link "Skip to content"
+  banner
+    link "Real A11y"
+    button "Search"
+    navigation "Main Navigation"
+      link "Guide"
+      link "Recipes"
+      link "Packages"
+      button "v0.1 · Beta"
+    switch "Switch to dark theme"
+    link "github"
+  complementary
+    navigation "Sidebar Navigation"
+      button "Introduction"
+        heading "Introduction" (level 2)
+      link "Getting Started"
+        paragraph "Getting Started"
+      link "Core Concepts"
+        paragraph "Core Concepts"
+      link "Accessibility Snapshots"
+        paragraph "Accessibility Snapshots"
+      link "Snapshots vs. Other Tools"
+        paragraph "Snapshots vs. Other Tools"
+      link "Why Real A11y?"
+        paragraph "Why Real A11y?"
+      button "Reading the Tree"
+        heading "Reading the Tree" (level 2)
+      link "Understanding the Views"
+        paragraph "Understanding the Views"
+      link "DOM View"
+        paragraph "DOM View"
+      link "A11y View"
+        paragraph "A11y View"
+      link "Headings View"
+        paragraph "Headings View"
+      link "TAB View"
+        paragraph "TAB View"
+      link "Panel features"
+        paragraph "Panel features"
+      button "Chrome Extension"
+        heading "Chrome Extension" (level 2)
+      link "Overview & Install"
+        paragraph "Overview & Install"
+      button "Packages"
+        heading "Packages" (level 2)
+      link "@real-a11y-dev/core"
+        paragraph "@real-a11y-dev/core"
+      link "@real-a11y-dev/inspector"
+        paragraph "@real-a11y-dev/inspector"
+        link "@real-a11y-dev/testing"
+          heading "@real-a11y-dev/testing" (level 3)
+        button "toggle section"
+      link "@real-a11y-dev/react"
+        paragraph "@real-a11y-dev/react"
+      link "@real-a11y-dev/storybook-addon"
+        paragraph "@real-a11y-dev/storybook-addon"
+      button "Recipes"
+        heading "Recipes" (level 2)
+      link "Next.js (App Router + React 19)"
+        paragraph "Next.js (App Router + React 19)"
+      link "Storybook 8 + React 19"
+        paragraph "Storybook 8 + React 19"
+      link "Peer Dependencies"
+        paragraph "Peer Dependencies"
+      link "CI Diff Bot"
+        paragraph "CI Diff Bot"
+      button "Reference"
+        heading "Reference" (level 2)
+      link "Accessible Names"
+        paragraph "Accessible Names"
+      link "Architecture"
+        paragraph "Architecture"
+      link "Troubleshooting"
+        paragraph "Troubleshooting"
+  navigation "On this page"
+    heading "On this page" (level 2)
+    list
+      listitem
+        link "Prerequisites"
+      listitem
+        link "Getting started"
+      listitem
+        link "Tools"
+      listitem
+        link "Features"
+      listitem
+        link "Configuration"
+      listitem
+        link "Quick reference"
+      listitem
+        link "How it compares to Playwright MCP"
+      listitem
+        link "Under the hood"
+      listitem
+        link "Limitations"
+      listitem
+        link "See also"
+  main
+    heading "@real-a11y-dev/mcp" (level 1)
+    paragraph "Beta — preview page"
+    paragraph "Published on npm as a : the API and tool surface may still change before 1.0, and audit fidelity is bounded by known engine issues (see the Limitations section below). This page is a preview and isn't in the sidebar yet — pin a version rather than tracking the latest tag if you build on it."
+      strong "beta"
+    paragraph "The Real A11y MCP server gives an AI assistant a real browser and the accessibility tree behind any page, so it can a URL and report the defects a screen reader would announce — not guess from pasted HTML (which hides computed roles and visibility) or a screenshot (which has no semantics). Point any client at it and ask it to audit a page in plain language."
+      strong "audit"
+      link "Model Context Protocol"
+    heading "Prerequisites" (level 2)
+    paragraph "Accessibility is a property of the page — the roles, names, and visibility a browser actually computes, not what's in the HTML source. So the server drives a real browser (via Playwright) rather than parsing markup, and needs:"
+      strong "rendered"
+    list
+      listitem "— the server runs under Node and is fetched with ."
+        strong "Node.js 20+"
+        code "npx"
+      listitem "— it drives a real browser; install one with ."
+        strong "A Chromium binary"
+        code "npx playwright install chromium"
+      listitem "— Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, or any other MCP-capable tool."
+        strong "An MCP client"
+    heading "Getting started" (level 2)
+    heading "Installation" (level 3)
+    paragraph "The server speaks MCP over stdio — point your client at . No install step is needed; fetches it on first run."
+      code "npx -y @real-a11y-dev/mcp"
+      code "npx"
+    radio "Claude Code"
+    radio "VS Code"
+    radio "Config file"
+    button "Copy Code"
+      code
+    paragraph "For clients configured by file, add the block above to:"
+      code "mcpServers"
+    list
+      listitem "— (Settings → Developer → Edit Config)."
+        strong "Claude Desktop"
+        code "claude_desktop_config.json"
+      listitem "— , or a project-local ."
+        strong "Cursor"
+        code "~/.cursor/mcp.json"
+        code ".cursor/mcp.json"
+      listitem "— that client's MCP config, using the same block."
+        strong "Windsurf and others"
+    paragraph "Then install a browser once:"
+    button "Copy Code"
+      code
+    paragraph "To pin a version instead of tracking the latest, add it to your project () and point / at the local install."
+      code "npm install -D @real-a11y-dev/mcp playwright"
+      code "command"
+      code "args"
+    heading "Your first audit" (level 3)
+    paragraph "Once it's connected, ask in plain language — the assistant picks the tools:"
+    blockquote
+      paragraph ""Audit example.com for accessibility problems.""
+        strong "You:"
+      paragraph "calls → → gets structured findings → explains them and proposes fixes."
+        strong "Assistant:"
+        code "open_page("https://example.com")"
+        code "audit_page()"
+    paragraph "Because it drives a real browser, JS-heavy SPAs render fully, and any URL the browser can reach works — public sites, a , or staging."
+      strong "local dev server"
+    heading "Tools" (level 2)
+    table
+      rowgroup
+        row
+          rowheader "Tool"
+          rowheader "Purpose"
+      rowgroup
+        row
+          cell "open_page"
+            code "open_page"
+          cell "Navigate to a URL and prepare it for queries. Call first. waitUntil / settleMs settle dynamic pages; device (e.g. "iPhone 13", "iPad Pro 11") audits the mobile/tablet layout."
+            code "waitUntil"
+            code "settleMs"
+            code "device"
+            code ""iPhone 13""
+            code ""iPad Pro 11""
+        row
+          cell "audit_page"
+            strong
+              code "audit_page"
+          cell "Flagship. Every accessibility violation — unlabeled controls, images missing alt text, skipped/missing/duplicate headings, unlabeled dialogs, broken landmark structure — as structured findings, each with a CSS locator + severity, grouped and counted, plus a summary."
+            strong "Flagship."
+            strong "locator"
+            strong "severity"
+        row
+          cell "inspect_page"
+            code "inspect_page"
+          cell "Findings plus the semantic tree, heading outline, and tab order — all from one extraction, guaranteed internally consistent. Prefer on dynamic pages."
+            strong "plus"
+            strong "one"
+        row
+          cell "get_semantic_tree"
+            code "get_semantic_tree"
+          cell "Deterministic role + accessible-name outline of the page."
+        row
+          cell "get_heading_outline"
+            code "get_heading_outline"
+          cell "Heading structure (h1–h6) in document order."
+        row
+          cell "get_tab_order"
+            code "get_tab_order"
+          cell "Focusable elements in keyboard Tab order."
+        row
+          cell "list_elements"
+            code "list_elements"
+          cell "Every element of one category — link / button / form / landmark / image / heading — as role + name + locator. A focused, token-efficient view."
+            code "link"
+            code "button"
+            code "form"
+            code "landmark"
+            code "image"
+            code "heading"
+        row
+          cell "get_native_tree"
+            code "get_native_tree"
+          cell "Chromium's own accessibility tree (Blink, via CDP) — the authoritative browser tree, for cross-checking."
+            strong "own"
+        row
+          cell "compare_trees"
+            code "compare_trees"
+          cell "Diff the custom tree against the native one and report role/name disagreements — a cross-check on the engine's fidelity."
+        row
+          cell "close_browser"
+            code "close_browser"
+          cell "Tear down the session."
+    paragraph "Every audit/inspection tool takes an optional (default ) to scope extraction to a single region or component. The two native-tree tools (, ) read the whole document."
+      code "rootSelector"
+      code "body"
+      code "get_native_tree"
+      code "compare_trees"
+    heading "Features" (level 2)
+    heading "Consistency on dynamic pages" (level 3)
+    paragraph "Live pages move — SPAs hydrate, consent dialogs appear. Two features keep results trustworthy:"
+    list
+      listitem "derives findings, tree, outline, and tab order from a extraction, so they always describe the same instant (separate + calls can each catch a different state)."
+        strong
+          code "inspect_page"
+        emphasis "single"
+        code "audit_page"
+        code "get_*"
+      listitem "let the page settle before extraction, so runs are repeatable instead of racing async content."
+        strong "'s and"
+          code "open_page"
+          code "waitUntil: "networkidle""
+          code "settleMs"
+    heading "Mobile & tablet" (level 3)
+    paragraph "Pass (a Playwright device name like or ) to and the tree reflects the layout — a responsive site can differ substantially from desktop (a becomes a hamburger , content is hidden or reordered). Open the same URL at desktop and on a device to diff how accessible each rendering is. Emulation isn't available over (it reuses the running browser's context)."
+      code "device"
+      code ""iPhone 13""
+      code ""iPad Pro 11""
+      code "open_page"
+      strong "mobile/tablet"
+      code "menubar"
+      code "button"
+      code "REAL_A11Y_MCP_CDP"
+    heading "Cross-checking against the browser" (level 3)
+    paragraph "Every audit and query uses Real A11y's engine — the same portable extraction that runs in the extension and in tests. Because the server also drives Chromium, two optional tools let you cross-check it against the browser's own computation: returns Chromium's native accessibility tree (via CDP), and diffs the two and flags any role or name disagreements. The custom engine is the default everywhere; native is an opt-in, Chromium-only sanity check."
+      strong "custom"
+      strong
+        code "get_native_tree"
+      strong
+        code "compare_trees"
+    heading "Configuration" (level 2)
+    paragraph "Set these environment variables on the server process — most clients accept an object alongside / in the config block above."
+      code ""env""
+      code "command"
+      code "args"
+    table
+      rowgroup
+        row
+          rowheader "Variable"
+          rowheader "Effect"
+      rowgroup
+        row
+          cell "REAL_A11Y_MCP_CDP"
+            code "REAL_A11Y_MCP_CDP"
+          cell "Attach to an already-running Chrome over CDP (e.g. http://localhost:9222) instead of launching one — use this to audit pages behind a login."
+            code "http://localhost:9222"
+        row
+          cell "REAL_A11Y_MCP_HEADFUL"
+            code "REAL_A11Y_MCP_HEADFUL"
+          cell "1 launches a visible browser instead of headless."
+            code "1"
+        row
+          cell "REAL_A11Y_MCP_ALLOW_FILE"
+            code "REAL_A11Y_MCP_ALLOW_FILE"
+          cell "1 permits auditing file:// URLs (off by default — an agent that can open file:///…/.env and read the DOM back is a local-file exfiltration risk)."
+            code "1"
+            code "file://"
+            code "file:///…/.env"
+    paragraph "Use a dedicated profile for CDP"
+    paragraph "Attaching over CDP connects to whatever Chrome is listening on that port — , which an LLM-driven server can then read. Launch a throwaway instance rather than enabling remote debugging on your main profile:"
+      strong "including your everyday browser and its logged-in sessions"
+    button "Copy Code"
+      code
+    heading "Quick reference" (level 2)
+    paragraph "Drive it in natural language; the assistant maps each request to the right tools."
+    table
+      rowgroup
+        row
+          rowheader "Ask"
+          rowheader "What it does"
+      rowgroup
+        row
+          cell ""Audit https://example.com and list every issue with its CSS selector, grouped by severity.""
+            emphasis ""Audit and list every issue with its CSS selector, grouped by severity.""
+              code "https://example.com"
+          cell "Full page audit, with locators"
+        row
+          cell ""Open http://localhost:3000, inspect the signup form, and tell me which fields are missing labels.""
+            emphasis ""Open , inspect the signup form, and tell me which fields are missing labels.""
+              code "http://localhost:3000"
+          cell "Scoped audit + fixes"
+        row
+          cell ""Compare the nav of https://mysite.com on desktop and on an iPhone 13 — does mobile stay accessible?""
+            emphasis ""Compare the nav of on desktop and on an iPhone 13 — does mobile stay accessible?""
+              code "https://mysite.com"
+          cell "Desktop vs. device layout"
+        row
+          cell ""On https://example.com, audit just the cookie-consent dialog.""
+            emphasis ""On , audit just the cookie-consent dialog.""
+              code "https://example.com"
+          cell "Scope with rootSelector"
+            code "rootSelector"
+        row
+          cell ""Get the heading outline of https://blog.example.com and flag skipped levels.""
+            emphasis ""Get the heading outline of and flag skipped levels.""
+              code "https://blog.example.com"
+          cell "Heading structure"
+        row
+          cell ""Log in, open the dashboard, then audit that screen.""
+            emphasis ""Log in, open the dashboard, then audit that screen.""
+          cell "Pair a browser-automation MCP for the flow, audit with this one"
+    heading "How it compares to Playwright MCP" (level 2)
+    paragraph "This a browser-automation MCP such as — it doesn't try to replace it. They solve different halves of the problem:"
+      strong "complements"
+      link "Playwright MCP"
+    list
+      listitem "lets an agent a page — click, type, navigate — using the accessibility snapshot as a means to ."
+        strong "Playwright MCP"
+        emphasis "drive"
+        emphasis "act"
+      listitem "lets an agent a page — it reports what assistive technology would announce as , with a semantic tree tuned to what a screen reader actually perceives."
+        strong "Real A11y"
+        emphasis "judge"
+        emphasis "broken"
+    paragraph "Use Playwright MCP to act; use Real A11y to audit. They pair naturally: drive a flow to a given state with one, then check that state's accessibility with the other."
+    paragraph "Two different "Playwrights""
+    paragraph "This package is — the browser driver you install as a peer dependency. It , the automation server above. Same underlying engine, different jobs."
+      emphasis "built on"
+      strong "Playwright the library"
+      emphasis "complements"
+      strong "Playwright MCP"
+    heading "Under the hood" (level 2)
+    paragraph "It reuses the pieces already ships:"
+      code "@real-a11y-dev/testing"
+    list
+      listitem "(the library) drives a real browser — required, because the engine relies on layout / to decide what is exposed to assistive tech, which a serverside DOM (jsdom) cannot faithfully reproduce."
+        strong "Playwright"
+        code "getComputedStyle"
+      listitem "The prebuilt page-bundle is injected by evaluating it through the CDP runtime (), which sets and works even on sites that enforce a strict CSP / Trusted Types — where DOM injection () is blocked."
+        code "page.evaluate"
+        code "window.__realA11y__"
+        code "<script>"
+        code "addScriptTag"
+      listitem "Each tool routes through and calls the shared / serialize helpers — the same audit logic the testing package's assertions use."
+        code "page.evaluate()"
+        link "collectFindings"
+          code "collectFindings"
+    heading "Limitations" (level 2)
+    list
+      listitem "It runs five rules today — unlabeled interactive elements, images missing alt text, heading order, dialog labeling, and landmark structure — plus the full semantic tree. It is not a complete WCAG or axe-core suite; it is semantic-tree-based and tuned to "what a screen reader announces." For contrast, focus visibility, and other rendered/interactive checks, pair it with and manual testing."
+        strong "Scope."
+        link "axe-core"
+      listitem "The tree is a reimplementation of accessible-name / role computation, not the browser's native accessibility tree. It is tuned to match what assistive tech announces, but can diverge on edge cases."
+        strong "Fidelity follows the engine."
+      listitem "The assistant's environment must be able to launch Chromium or connect to one over CDP."
+        strong "Requires a real browser."
+    heading "See also" (level 2)
+    list
+      listitem "— the same engine, for unit and end-to-end tests."
+        link "@real-a11y-dev/testing — Assertions"
+          code "@real-a11y-dev/testing"
+        code "collectFindings"
+  contentinfo
+    link "Edit this page on GitHub"
+    paragraph "Last updated:"
+      time "[redacted]"
+    navigation "Pager"
+      link "Next pageGetting Started"
