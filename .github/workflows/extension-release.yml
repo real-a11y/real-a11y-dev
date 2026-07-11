@@ -49,6 +49,18 @@ jobs:
       - name: Build workspace dependencies
         run: pnpm --filter "@real-a11y-dev/semantic-navigator-extension^..." build
 
+      # The zip below is produced by `vite`, which does not type-check, and the
+      # extension's unit tests never run here — so a type error or a failing
+      # test could ship straight to the Chrome Web Store. Gate the release on
+      # the extension plus the packages it bundles (core, ui, serialize); the
+      # `^...` build above already produced their dist/. The extension's
+      # `typecheck` also re-checks the manifest/package.json version sync.
+      - name: Typecheck the extension and its bundled deps
+        run: pnpm --filter "@real-a11y-dev/semantic-navigator-extension..." typecheck
+
+      - name: Test the extension and its bundled deps
+        run: pnpm --filter "@real-a11y-dev/semantic-navigator-extension..." test
+
       # Builds the extension itself and runs scripts/zip-for-cws.mjs.
       - name: Build + zip
         run: pnpm --filter @real-a11y-dev/semantic-navigator-extension package
