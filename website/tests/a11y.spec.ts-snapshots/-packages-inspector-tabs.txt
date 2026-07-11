@@ -30,45 +30,48 @@
 30. button "toggle section"
 31. link "@real-a11y-dev/react"
 32. link "@real-a11y-dev/storybook-addon"
-33. button "Recipes"
-34. link "Next.js (App Router + React 19)"
-35. link "Storybook 8 + React 19"
-36. link "Peer Dependencies"
-37. link "CI Diff Bot"
-38. button "Reference"
-39. link "Accessible Names"
-40. link "Architecture"
-41. link "Troubleshooting"
-42. link "Install"
-43. link "Quick start"
-44. link "createInspector(config)"
-45. link "Instance API"
-46. link "Shadow DOM explained"
-47. link "Interaction flags"
-48. link "Example: dev-tools overlay"
-49. link "See it running"
-50. link "Panel features"
-51. button "Copy Code"
-52. generic
-53. link "Keep it out of production"
+33. link "@real-a11y-dev/mcp"
+34. link "@real-a11y-dev/cli"
+35. button "Recipes"
+36. link "Next.js (App Router + React 19)"
+37. link "Storybook 8 + React 19"
+38. link "Peer Dependencies"
+39. link "CI Diff Bot"
+40. button "Reference"
+41. link "Authenticated Pages"
+42. link "Accessible Names"
+43. link "Architecture"
+44. link "Troubleshooting"
+45. link "Install"
+46. link "Quick start"
+47. link "createInspector(config)"
+48. link "Instance API"
+49. link "Shadow DOM explained"
+50. link "Interaction flags"
+51. link "Example: dev-tools overlay"
+52. link "See it running"
+53. link "Panel features"
 54. button "Copy Code"
 55. generic
-56. table
-57. link "Panel interaction vs. host side effects"
-58. button "Copy Code"
-59. generic
-60. button "Copy Code"
-61. generic
-62. button "Copy Code"
-63. generic
-64. button "Copy Code"
-65. generic
-66. button "Copy Code"
-67. generic
-68. button "Copy Code"
-69. generic
-70. link "examples/vanilla/"
-71. link "Panel features reference"
-72. link "Edit this page on GitHub"
-73. link "Previous page@real-a11y-dev/core"
-74. link "Next page@real-a11y-dev/testing"
+56. link "Keep it out of production"
+57. button "Copy Code"
+58. generic
+59. table
+60. link "Panel interaction vs. host side effects"
+61. button "Copy Code"
+62. generic
+63. button "Copy Code"
+64. generic
+65. button "Copy Code"
+66. generic
+67. button "Copy Code"
+68. generic
+69. button "Copy Code"
+70. generic
+71. button "Copy Code"
+72. generic
+73. link "examples/vanilla/"
+74. link "Panel features reference"
+75. link "Edit this page on GitHub"
+76. link "Previous page@real-a11y-dev/core"
+77. link "Next page@real-a11y-dev/testing"

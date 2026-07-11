@@ -30,39 +30,42 @@
 30. button "toggle section"
 31. link "@real-a11y-dev/react"
 32. link "@real-a11y-dev/storybook-addon"
-33. button "Recipes"
-34. link "Next.js (App Router + React 19)"
-35. link "Storybook 8 + React 19"
-36. link "Peer Dependencies"
-37. link "CI Diff Bot"
-38. button "Reference"
-39. link "Accessible Names"
-40. link "Architecture"
-41. link "Troubleshooting"
-42. link "What it shows"
-43. link "Run it locally"
-44. link "Setup"
-45. link "Good fixture — assertions pass"
-46. link "Bad fixture — assertions throw"
-47. link "Narrowing the audit root"
-48. link "Snapshot test"
-49. link "How the adapter works"
-50. link "packages/testing/e2e/"
-51. button "Copy Code"
-52. generic
-53. button "Copy Code"
-54. generic
-55. button "Copy Code"
-56. generic
-57. button "Copy Code"
-58. generic
-59. button "Copy Code"
-60. generic
-61. button "Copy Code"
-62. generic
-63. button "Copy Code"
-64. generic
-65. button "Copy Code"
-66. generic
-67. link "Edit this page on GitHub"
-68. link "Next pageGetting Started"
+33. link "@real-a11y-dev/mcp"
+34. link "@real-a11y-dev/cli"
+35. button "Recipes"
+36. link "Next.js (App Router + React 19)"
+37. link "Storybook 8 + React 19"
+38. link "Peer Dependencies"
+39. link "CI Diff Bot"
+40. button "Reference"
+41. link "Authenticated Pages"
+42. link "Accessible Names"
+43. link "Architecture"
+44. link "Troubleshooting"
+45. link "What it shows"
+46. link "Run it locally"
+47. link "Setup"
+48. link "Good fixture — assertions pass"
+49. link "Bad fixture — assertions throw"
+50. link "Narrowing the audit root"
+51. link "Snapshot test"
+52. link "How the adapter works"
+53. link "packages/testing/e2e/"
+54. button "Copy Code"
+55. generic
+56. button "Copy Code"
+57. generic
+58. button "Copy Code"
+59. generic
+60. button "Copy Code"
+61. generic
+62. button "Copy Code"
+63. generic
+64. button "Copy Code"
+65. generic
+66. button "Copy Code"
+67. generic
+68. button "Copy Code"
+69. generic
+70. link "Edit this page on GitHub"
+71. link "Next pageGetting Started"

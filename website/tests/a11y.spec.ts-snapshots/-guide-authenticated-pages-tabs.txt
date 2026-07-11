@@ -42,13 +42,13 @@
 42. link "Accessible Names"
 43. link "Architecture"
 44. link "Troubleshooting"
-45. link "Install"
-46. link "Register the addon"
-47. link "React 19 — pin the JSX runtime"
-48. link "When you don't need this"
-49. link "Clear the cache after adding the addon"
-50. link "CI"
-51. link "Known constraints"
+45. link "Saved session (recommended)"
+46. link "Attach to your logged-in browser (--cdp)"
+47. link "Security"
+48. link "See also"
+49. link "CLI"
+50. link "MCP server"
+51. table
 52. button "Copy Code"
 53. generic
 54. button "Copy Code"
@@ -59,6 +59,13 @@
 59. generic
 60. button "Copy Code"
 61. generic
-62. link "Edit this page on GitHub"
-63. link "Previous pageNext.js (App Router + React 19)"
-64. link "Next pagePeer Dependencies"
+62. button "Copy Code"
+63. generic
+64. link "MCP configuration"
+65. button "Copy Code"
+66. generic
+67. link "@real-a11y-dev/cli"
+68. link "@real-a11y-dev/mcp"
+69. link "Edit this page on GitHub"
+70. link "Previous pageCI Diff Bot"
+71. link "Next pageAccessible Names"

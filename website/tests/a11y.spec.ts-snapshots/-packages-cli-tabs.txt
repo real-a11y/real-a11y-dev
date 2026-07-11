@@ -42,23 +42,44 @@
 42. link "Accessible Names"
 43. link "Architecture"
 44. link "Troubleshooting"
-45. link "Install"
-46. link "Register the addon"
-47. link "React 19 — pin the JSX runtime"
-48. link "When you don't need this"
-49. link "Clear the cache after adding the addon"
-50. link "CI"
-51. link "Known constraints"
-52. button "Copy Code"
-53. generic
-54. button "Copy Code"
-55. generic
-56. button "Copy Code"
-57. generic
-58. button "Copy Code"
-59. generic
-60. button "Copy Code"
-61. generic
-62. link "Edit this page on GitHub"
-63. link "Previous pageNext.js (App Router + React 19)"
-64. link "Next pagePeer Dependencies"
+45. link "Prerequisites"
+46. link "Your first audit"
+47. link "Commands"
+48. link "Global flags"
+49. link "Machine output"
+50. link "In CI"
+51. link "Pages behind a login"
+52. link "Limitations"
+53. link "See also"
+54. link "extension"
+55. link "testing library"
+56. link "MCP server"
+57. button "Copy Code"
+58. generic
+59. button "Copy Code"
+60. generic
+61. button "Copy Code"
+62. generic
+63. button "Copy Code"
+64. generic
+65. button "Copy Code"
+66. generic
+67. table
+68. link "Authenticated pages"
+69. table
+70. link "Authenticated pages"
+71. button "Copy Code"
+72. generic
+73. table
+74. button "Copy Code"
+75. generic
+76. button "Copy Code"
+77. generic
+78. link "Authenticated pages"
+79. link "axe-core"
+80. link "Authenticated pages"
+81. link "@real-a11y-dev/mcp"
+82. link "@real-a11y-dev/testing"
+83. link "Edit this page on GitHub"
+84. link "Previous page@real-a11y-dev/mcp"
+85. link "Next pageNext.js (App Router + React 19)"

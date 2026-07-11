@@ -1,0 +1,20 @@
+  h2 Introduction
+  h2 Reading the Tree
+  h2 Chrome Extension
+  h2 Packages
+    h3 @real-a11y-dev/testing
+  h2 Recipes
+  h2 Reference
+  h2 On this page
+h1 @real-a11y-dev/cli
+  h2 Prerequisites
+  h2 Your first audit
+  h2 Commands
+  h2 Global flags
+  h2 Machine output
+    h3 Exit codes
+    h3 Stability contract
+  h2 In CI
+  h2 Pages behind a login
+  h2 Limitations
+  h2 See also

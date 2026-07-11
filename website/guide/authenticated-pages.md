@@ -13,7 +13,7 @@ never typed by an agent, never passed as a flag, never stored in shell history.
 
 There are two ways in. Reach for the first by default.
 
-| | **Saved session** (`--storage-state`) | **Attach to your browser** (`--cdp`) |
+| Aspect | **Saved session** (`--storage-state`) | **Attach to your browser** (`--cdp`) |
 | --- | --- | --- |
 | How | Log in once, save a session file, reuse it | Point the tool at a Chrome you're already logged into |
 | Best for | Repeatable audits, CI, "the logged-in dashboard" | One-off / interactive, SSO or MFA too painful to script |
@@ -103,8 +103,8 @@ real-a11y audit https://app.example.com/dashboard --cdp http://localhost:9222
 ::: danger Use a dedicated profile for CDP
 Attaching over CDP connects to whatever Chrome is on that port — **including
 your everyday browser and its logged-in sessions** (email, banking). Always
-launch a separate `--user-data-dir` instance, never enable remote debugging on
-your main profile.
+launch a separate profile with its own **--user-data-dir**, never enable remote
+debugging on your main profile.
 :::
 
 The MCP server uses the same mechanism via the `REAL_A11Y_MCP_CDP` environment
@@ -141,8 +141,8 @@ Rotate by re-running `login` locally and updating the secret.
 
 ::: danger Never run untrusted config with a live session
 Do not audit a pull-request-controlled URL or config while a secret-provisioned
-session is loaded (e.g. under `pull_request_target`). A PR could point the audit
-at an attacker page that redirects into your authenticated site. Keep the audit
+session is loaded (e.g. under a **pull_request_target** trigger). A PR could
+point the audit at an attacker page that redirects into your authenticated site. Keep the audit
 target a literal in the workflow — origin pinning then fails closed on any
 redirect elsewhere.
 :::

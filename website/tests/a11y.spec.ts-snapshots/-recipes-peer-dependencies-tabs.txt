@@ -30,42 +30,45 @@
 30. button "toggle section"
 31. link "@real-a11y-dev/react"
 32. link "@real-a11y-dev/storybook-addon"
-33. button "Recipes"
-34. link "Next.js (App Router + React 19)"
-35. link "Storybook 8 + React 19"
-36. link "Peer Dependencies"
-37. link "CI Diff Bot"
-38. button "Reference"
-39. link "Accessible Names"
-40. link "Architecture"
-41. link "Troubleshooting"
-42. link "Compatibility matrix"
-43. link "Companion libraries"
-44. link "@real-a11y-dev/storybook-addon — Storybook version"
-45. link "@real-a11y-dev/react — React version"
-46. link "@real-a11y-dev/testing/playwright — browser install"
-47. link "Single React instance"
-48. link "Clean install recipe"
-49. table
-50. button "Copy Code"
-51. generic
-52. button "Copy Code"
-53. generic
-54. button "Copy Code"
-55. generic
-56. button "Copy Code"
-57. generic
-58. link "Next.js recipe"
+33. link "@real-a11y-dev/mcp"
+34. link "@real-a11y-dev/cli"
+35. button "Recipes"
+36. link "Next.js (App Router + React 19)"
+37. link "Storybook 8 + React 19"
+38. link "Peer Dependencies"
+39. link "CI Diff Bot"
+40. button "Reference"
+41. link "Authenticated Pages"
+42. link "Accessible Names"
+43. link "Architecture"
+44. link "Troubleshooting"
+45. link "Compatibility matrix"
+46. link "Companion libraries"
+47. link "@real-a11y-dev/storybook-addon — Storybook version"
+48. link "@real-a11y-dev/react — React version"
+49. link "@real-a11y-dev/testing/playwright — browser install"
+50. link "Single React instance"
+51. link "Clean install recipe"
+52. table
+53. button "Copy Code"
+54. generic
+55. button "Copy Code"
+56. generic
+57. button "Copy Code"
+58. generic
 59. button "Copy Code"
 60. generic
-61. button "Copy Code"
-62. generic
-63. button "Copy Code"
-64. generic
-65. button "Copy Code"
-66. generic
-67. button "Copy Code"
-68. generic
-69. link "Edit this page on GitHub"
-70. link "Previous pageStorybook 8 + React 19"
-71. link "Next pageCI Diff Bot"
+61. link "Next.js recipe"
+62. button "Copy Code"
+63. generic
+64. button "Copy Code"
+65. generic
+66. button "Copy Code"
+67. generic
+68. button "Copy Code"
+69. generic
+70. button "Copy Code"
+71. generic
+72. link "Edit this page on GitHub"
+73. link "Previous pageStorybook 8 + React 19"
+74. link "Next pageCI Diff Bot"

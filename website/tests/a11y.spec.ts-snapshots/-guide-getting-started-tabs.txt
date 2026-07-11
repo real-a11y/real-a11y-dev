@@ -30,62 +30,65 @@
 30. button "toggle section"
 31. link "@real-a11y-dev/react"
 32. link "@real-a11y-dev/storybook-addon"
-33. button "Recipes"
-34. link "Next.js (App Router + React 19)"
-35. link "Storybook 8 + React 19"
-36. link "Peer Dependencies"
-37. link "CI Diff Bot"
-38. button "Reference"
-39. link "Accessible Names"
-40. link "Architecture"
-41. link "Troubleshooting"
-42. link "Pick your entry point"
-43. link "Quick install"
-44. link "Your first tree in 30 seconds"
-45. link "Requirements"
-46. link "Keep it out of production"
-47. link "Next steps"
-48. table
-49. link "@real-a11y-dev/inspector"
-50. link "@real-a11y-dev/testing"
-51. link "@real-a11y-dev/testing/playwright"
-52. link "@real-a11y-dev/react"
-53. link "@real-a11y-dev/storybook-addon"
-54. link "@real-a11y-dev/core"
-55. link "Keep it out of production"
-56. radio "npm"
-57. radio "pnpm"
-58. radio "yarn"
-59. button "Copy Code"
-60. generic
-61. button "Copy Code"
-62. generic
-63. button "Copy Code"
-64. generic
-65. button "Copy Code"
-66. generic
-67. button "Copy Code"
-68. generic
-69. button "Copy Code"
-70. generic
-71. link "Matchers"
-72. link "Accessibility Snapshots"
-73. button "Copy Code"
-74. generic
-75. button "Copy Code"
-76. generic
-77. table
-78. link ".size-limit.json"
-79. radio "Vite / React"
-80. radio "webpack / Next.js"
-81. radio "vanilla / any bundler"
-82. button "Copy Code"
-83. generic
-84. button "Copy Code"
-85. generic
-86. table
-87. link "Core Concepts"
-88. link "Accessibility Snapshots"
-89. link "Why Real A11y?"
-90. link "Edit this page on GitHub"
-91. link "Next pageCore Concepts"
+33. link "@real-a11y-dev/mcp"
+34. link "@real-a11y-dev/cli"
+35. button "Recipes"
+36. link "Next.js (App Router + React 19)"
+37. link "Storybook 8 + React 19"
+38. link "Peer Dependencies"
+39. link "CI Diff Bot"
+40. button "Reference"
+41. link "Authenticated Pages"
+42. link "Accessible Names"
+43. link "Architecture"
+44. link "Troubleshooting"
+45. link "Pick your entry point"
+46. link "Quick install"
+47. link "Your first tree in 30 seconds"
+48. link "Requirements"
+49. link "Keep it out of production"
+50. link "Next steps"
+51. table
+52. link "@real-a11y-dev/inspector"
+53. link "@real-a11y-dev/testing"
+54. link "@real-a11y-dev/testing/playwright"
+55. link "@real-a11y-dev/react"
+56. link "@real-a11y-dev/storybook-addon"
+57. link "@real-a11y-dev/core"
+58. link "Keep it out of production"
+59. radio "npm"
+60. radio "pnpm"
+61. radio "yarn"
+62. button "Copy Code"
+63. generic
+64. button "Copy Code"
+65. generic
+66. button "Copy Code"
+67. generic
+68. button "Copy Code"
+69. generic
+70. button "Copy Code"
+71. generic
+72. button "Copy Code"
+73. generic
+74. link "Matchers"
+75. link "Accessibility Snapshots"
+76. button "Copy Code"
+77. generic
+78. button "Copy Code"
+79. generic
+80. table
+81. link ".size-limit.json"
+82. radio "Vite / React"
+83. radio "webpack / Next.js"
+84. radio "vanilla / any bundler"
+85. button "Copy Code"
+86. generic
+87. button "Copy Code"
+88. generic
+89. table
+90. link "Core Concepts"
+91. link "Accessibility Snapshots"
+92. link "Why Real A11y?"
+93. link "Edit this page on GitHub"
+94. link "Next pageCore Concepts"

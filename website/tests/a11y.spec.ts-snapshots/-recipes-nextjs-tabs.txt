@@ -30,41 +30,44 @@
 30. button "toggle section"
 31. link "@real-a11y-dev/react"
 32. link "@real-a11y-dev/storybook-addon"
-33. button "Recipes"
-34. link "Next.js (App Router + React 19)"
-35. link "Storybook 8 + React 19"
-36. link "Peer Dependencies"
-37. link "CI Diff Bot"
-38. button "Reference"
-39. link "Accessible Names"
-40. link "Architecture"
-41. link "Troubleshooting"
-42. link "Install"
-43. link "Mount <SemanticNavigator /> in a client component"
-44. link "Gate it out of production"
-45. link "Unit tests — Vitest + next-intl + Testing Library"
-46. link "E2E — Playwright against next dev"
-47. link "Known constraints"
-48. button "Copy Code"
-49. generic
-50. link "Keep it out of production"
+33. link "@real-a11y-dev/mcp"
+34. link "@real-a11y-dev/cli"
+35. button "Recipes"
+36. link "Next.js (App Router + React 19)"
+37. link "Storybook 8 + React 19"
+38. link "Peer Dependencies"
+39. link "CI Diff Bot"
+40. button "Reference"
+41. link "Authenticated Pages"
+42. link "Accessible Names"
+43. link "Architecture"
+44. link "Troubleshooting"
+45. link "Install"
+46. link "Mount <SemanticNavigator /> in a client component"
+47. link "Gate it out of production"
+48. link "Unit tests — Vitest + next-intl + Testing Library"
+49. link "E2E — Playwright against next dev"
+50. link "Known constraints"
 51. button "Copy Code"
 52. generic
-53. button "Copy Code"
-54. generic
-55. button "Copy Code"
-56. generic
-57. button "Copy Code"
-58. generic
-59. button "Copy Code"
-60. generic
-61. button "Copy Code"
-62. generic
-63. button "Copy Code"
-64. generic
-65. button "Copy Code"
-66. generic
-67. link "Peer Dependencies"
-68. link "Edit this page on GitHub"
-69. link "Previous page@real-a11y-dev/storybook-addon"
-70. link "Next pageStorybook 8 + React 19"
+53. link "Keep it out of production"
+54. button "Copy Code"
+55. generic
+56. button "Copy Code"
+57. generic
+58. button "Copy Code"
+59. generic
+60. button "Copy Code"
+61. generic
+62. button "Copy Code"
+63. generic
+64. button "Copy Code"
+65. generic
+66. button "Copy Code"
+67. generic
+68. button "Copy Code"
+69. generic
+70. link "Peer Dependencies"
+71. link "Edit this page on GitHub"
+72. link "Previous page@real-a11y-dev/cli"
+73. link "Next pageStorybook 8 + React 19"
