@@ -16,12 +16,7 @@ import { EXIT } from "../exit.js";
 import { progress, writeReport } from "../output.js";
 import { renderJson, type PageReport } from "../render/json.js";
 import { redactUrl, sanitizeText, type CleanSnapshot } from "../sanitize.js";
-import {
-  callPage,
-  createSession,
-  openPage,
-  snapshotPage,
-} from "../session.js";
+import { callPage, createSession, openPage, snapshotPage } from "../session.js";
 
 import {
   isAuthenticated,

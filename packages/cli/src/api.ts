@@ -7,10 +7,7 @@
  * Phase 2 adds `toSarif`, `diffFindings`, and `parseSnapshotArtifact` here.
  */
 
-export {
-  fingerprintFindings,
-  hashId,
-} from "./fingerprint.js";
+export { fingerprintFindings, hashId } from "./fingerprint.js";
 export type { FingerprintedFinding, FingerprintId } from "./fingerprint.js";
 
 export {

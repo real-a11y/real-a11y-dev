@@ -71,17 +71,41 @@ describe("fingerprintFindings — node findings", () => {
 });
 
 describe("fingerprintFindings — doc findings", () => {
-  const doc = (rule: Finding["rule"], message: string, name?: string): Finding =>
-    ({ rule, severity: "warning", message, ...(name ? { name } : {}) });
+  const doc = (
+    rule: Finding["rule"],
+    message: string,
+    name?: string,
+  ): Finding => ({
+    rule,
+    severity: "warning",
+    message,
+    ...(name ? { name } : {}),
+  });
 
   it.each([
     ["heading-order", "Missing <h1>: every document…", "missing-h1"],
-    ["heading-order", 'Expected exactly one <h1>, found 2: "a", "b"', "multiple-h1"],
+    [
+      "heading-order",
+      'Expected exactly one <h1>, found 2: "a", "b"',
+      "multiple-h1",
+    ],
     ["heading-order", 'Heading level skipped: "X" is h4…', "skipped-level"],
     ["landmark-structure", "Missing <main>: every page…", "missing-main"],
-    ["landmark-structure", "Expected exactly one <main> landmark, found 2.", "multiple-main"],
-    ["landmark-structure", "More than one top-level <header> (banner landmark): found 2.", "multiple-banner"],
-    ["landmark-structure", "More than one top-level <footer> (contentinfo landmark): found 3.", "multiple-contentinfo"],
+    [
+      "landmark-structure",
+      "Expected exactly one <main> landmark, found 2.",
+      "multiple-main",
+    ],
+    [
+      "landmark-structure",
+      "More than one top-level <header> (banner landmark): found 2.",
+      "multiple-banner",
+    ],
+    [
+      "landmark-structure",
+      "More than one top-level <footer> (contentinfo landmark): found 3.",
+      "multiple-contentinfo",
+    ],
   ] as const)("classifies %s %j as %s", (rule, message, kind) => {
     const [f] = fingerprintFindings("Home", [doc(rule, message)]);
     expect(f.id[3]).toBe(kind);
@@ -89,10 +113,16 @@ describe("fingerprintFindings — doc findings", () => {
 
   it("keeps counts out of the identity — found 2 vs found 3 match", () => {
     const [a] = fingerprintFindings("Home", [
-      doc("landmark-structure", "Expected exactly one <main> landmark, found 2."),
+      doc(
+        "landmark-structure",
+        "Expected exactly one <main> landmark, found 2.",
+      ),
     ]);
     const [b] = fingerprintFindings("Home", [
-      doc("landmark-structure", "Expected exactly one <main> landmark, found 3."),
+      doc(
+        "landmark-structure",
+        "Expected exactly one <main> landmark, found 3.",
+      ),
     ]);
     expect(a.fingerprint).toBe(b.fingerprint);
   });
@@ -110,7 +140,8 @@ describe("fingerprintFindings — doc findings", () => {
 
 describe("hashId", () => {
   it("is stable — a committed baseline must never silently re-hash", () => {
-    expect(hashId(["v1", "Home", "image-alt", "img", "img", "#hero", "", 0]))
-      .toMatchInlineSnapshot(`"v1:a44ea21e34c4014e"`);
+    expect(
+      hashId(["v1", "Home", "image-alt", "img", "img", "#hero", "", 0]),
+    ).toMatchInlineSnapshot(`"v1:a44ea21e34c4014e"`);
   });
 });

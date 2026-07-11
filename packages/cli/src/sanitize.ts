@@ -94,7 +94,13 @@ export function redactUrlsIn(text: string): string {
 }
 
 const RULE_SET: ReadonlySet<string> = new Set(ALL_RULES);
-const OPTIONAL_FIELDS = ["role", "name", "tagName", "locator", "context"] as const;
+const OPTIONAL_FIELDS = [
+  "role",
+  "name",
+  "tagName",
+  "locator",
+  "context",
+] as const;
 
 /** Max findings accepted from a single page (hostile bundles can fabricate millions). */
 export const FINDINGS_CAP = 5_000;
@@ -146,9 +152,10 @@ export interface CleanSnapshot {
 }
 
 export function projectSnapshot(raw: unknown): CleanSnapshot {
-  const r = (
-    typeof raw === "object" && raw !== null ? raw : {}
-  ) as Record<string, unknown>;
+  const r = (typeof raw === "object" && raw !== null ? raw : {}) as Record<
+    string,
+    unknown
+  >;
   const text = (v: unknown): string =>
     typeof v === "string" ? sanitizeText(v) : "";
   return {

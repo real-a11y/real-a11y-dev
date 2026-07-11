@@ -72,10 +72,7 @@ export function writeFileAtomic(
   return abs;
 }
 
-export function writeReport(
-  target: string | undefined,
-  content: string,
-): void {
+export function writeReport(target: string | undefined, content: string): void {
   if (!target) {
     process.stdout.write(content);
     return;

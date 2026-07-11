@@ -477,9 +477,7 @@ export class BrowserSession implements A11ySession {
       if (!context) {
         throw new Error("No browser context is open — call open() first.");
       }
-      return context.storageState(
-        options.indexedDB ? { indexedDB: true } : {},
-      );
+      return context.storageState(options.indexedDB ? { indexedDB: true } : {});
     });
   }
 

@@ -15,7 +15,10 @@ import { fileURLToPath } from "node:url";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-const BIN = resolve(dirname(fileURLToPath(import.meta.url)), "../dist/index.js");
+const BIN = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "../dist/index.js",
+);
 
 interface RunResult {
   code: number;

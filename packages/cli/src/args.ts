@@ -233,7 +233,9 @@ Flags:
 export function rootHelp(): string {
   const lines = Object.entries(COMMANDS).map(
     ([name, spec]) =>
-      `  ${name === "list" ? "list <cat> <url>" : `${name} <url${name === "audit" ? "..." : ""}>`}`.padEnd(21) + spec.summary,
+      `  ${name === "list" ? "list <cat> <url>" : `${name} <url${name === "audit" ? "..." : ""}>`}`.padEnd(
+        21,
+      ) + spec.summary,
   );
   return `real-a11y — audit what a screen reader hears, from your shell
 
@@ -250,9 +252,14 @@ Docs: https://real-a11y.dev
 
 // ── validated flag views ─────────────────────────────────────────────────────
 
-export function parseRules(value: string | boolean | undefined): A11yRule[] | undefined {
+export function parseRules(
+  value: string | boolean | undefined,
+): A11yRule[] | undefined {
   if (typeof value !== "string" || value.trim() === "") return undefined;
-  const wanted = value.split(",").map((r) => r.trim()).filter(Boolean);
+  const wanted = value
+    .split(",")
+    .map((r) => r.trim())
+    .filter(Boolean);
   const valid: ReadonlySet<string> = new Set(ALL_RULES);
   for (const rule of wanted) {
     if (!valid.has(rule)) {
@@ -306,7 +313,12 @@ function parseMs(
   return Math.min(n, max);
 }
 
-const WAIT_STATES = ["load", "domcontentloaded", "networkidle", "commit"] as const;
+const WAIT_STATES = [
+  "load",
+  "domcontentloaded",
+  "networkidle",
+  "commit",
+] as const;
 
 /** Build the engine's OpenOptions from raw flags, validating each. */
 export function parseOpenOptions(flags: FlagValues): OpenOptions {
@@ -344,7 +356,10 @@ export function parseOpenOptions(flags: FlagValues): OpenOptions {
     };
   }
 
-  if (typeof flags.cdp === "string" && (flags.headful || options.device || options.viewport)) {
+  if (
+    typeof flags.cdp === "string" &&
+    (flags.headful || options.device || options.viewport)
+  ) {
     throw new CliError(
       "--cdp reuses a running browser — it can't be combined with --headful, --device, or --viewport.",
     );

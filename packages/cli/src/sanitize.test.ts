@@ -76,7 +76,11 @@ describe("projectFinding", () => {
   };
 
   it("keeps known fields, drops unknown ones", () => {
-    const projected = projectFinding({ ...valid, __proto__x: "boom", extra: 1 });
+    const projected = projectFinding({
+      ...valid,
+      __proto__x: "boom",
+      extra: 1,
+    });
     expect(projected).toEqual({
       rule: "image-alt",
       severity: "warning",

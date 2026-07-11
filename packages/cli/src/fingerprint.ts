@@ -94,9 +94,7 @@ function tupleBase(page: string, finding: Finding): FingerprintId {
 }
 
 export function hashId(id: FingerprintId): string {
-  const digest = createHash("sha256")
-    .update(JSON.stringify(id))
-    .digest("hex");
+  const digest = createHash("sha256").update(JSON.stringify(id)).digest("hex");
   return `v1:${digest.slice(0, 16)}`;
 }
 

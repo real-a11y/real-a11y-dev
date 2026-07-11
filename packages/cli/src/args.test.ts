@@ -47,18 +47,14 @@ describe("parseOpenOptions", () => {
       width: 1280,
       height: 800,
     });
-    expect(() => parseOpenOptions({ viewport: "big" })).toThrow(
-      /WIDTHxHEIGHT/,
-    );
+    expect(() => parseOpenOptions({ viewport: "big" })).toThrow(/WIDTHxHEIGHT/);
   });
 
   it("validates wait states", () => {
     expect(parseOpenOptions({ "wait-until": "networkidle" }).waitUntil).toBe(
       "networkidle",
     );
-    expect(() => parseOpenOptions({ "wait-until": "ready" })).toThrow(
-      CliError,
-    );
+    expect(() => parseOpenOptions({ "wait-until": "ready" })).toThrow(CliError);
   });
 
   it("clamps settle and timeout to their caps", () => {

@@ -170,9 +170,8 @@ describe("emitAnnotations", () => {
 
   it("annotates failed pages", () => {
     const lines: string[] = [];
-    emitAnnotations(
-      [page({ findings: [], error: "could not open" })],
-      (l) => lines.push(l),
+    emitAnnotations([page({ findings: [], error: "could not open" })], (l) =>
+      lines.push(l),
     );
     expect(lines[0]).toMatch(/^::error title=real-a11y::/);
   });

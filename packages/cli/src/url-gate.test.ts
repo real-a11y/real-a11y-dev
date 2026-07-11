@@ -39,7 +39,11 @@ describe("normalizeTarget", () => {
   });
 
   it("suggests https:// for host:port shorthand — localhost:3000 must never read as a scheme", () => {
-    for (const input of ["localhost:3000", "example.com:8080/x", "127.0.0.1:8080"]) {
+    for (const input of [
+      "localhost:3000",
+      "example.com:8080/x",
+      "127.0.0.1:8080",
+    ]) {
       try {
         normalizeTarget(input);
         expect.unreachable();
@@ -68,7 +72,10 @@ describe("assertAllowedUrl", () => {
 
   it("allows arg-authored file: without a flag — the human is the authority", () => {
     expect(
-      assertAllowedUrl("file:///tmp/x.html", { source: "arg", allowFile: false }),
+      assertAllowedUrl("file:///tmp/x.html", {
+        source: "arg",
+        allowFile: false,
+      }),
     ).toBe(true);
   });
 
@@ -90,7 +97,9 @@ describe("assertAllowedUrl", () => {
 
 describe("assertFinalUrl", () => {
   it("accepts web landings and approved file landings only", () => {
-    expect(() => assertFinalUrl("https://x/after-redirect", false)).not.toThrow();
+    expect(() =>
+      assertFinalUrl("https://x/after-redirect", false),
+    ).not.toThrow();
     expect(() => assertFinalUrl("file:///x", true)).not.toThrow();
     expect(() => assertFinalUrl("file:///etc/passwd", false)).toThrow(
       /landed on/,

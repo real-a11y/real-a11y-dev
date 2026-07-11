@@ -50,7 +50,8 @@ export function validateStorageStatePath(path: string): string {
   // either array being present — never inspect the values.
   const shape = parsed as { cookies?: unknown; origins?: unknown };
   const ok =
-    (parsed !== null && typeof parsed === "object") &&
+    parsed !== null &&
+    typeof parsed === "object" &&
     (Array.isArray(shape.cookies) || Array.isArray(shape.origins));
   if (!ok) {
     throw new CliError(

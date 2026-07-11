@@ -67,7 +67,11 @@ export function isAuthenticated(flags: FlagValues): boolean {
 
 function auditOrigins(flags: FlagValues): string[] {
   const raw = flags["audit-origin"];
-  const values = Array.isArray(raw) ? raw : typeof raw === "string" ? [raw] : [];
+  const values = Array.isArray(raw)
+    ? raw
+    : typeof raw === "string"
+      ? [raw]
+      : [];
   return values.map((value) => {
     let origin: string;
     try {

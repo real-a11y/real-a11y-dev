@@ -43,7 +43,10 @@ describe("sessionFlags", () => {
   it("extends the allowlist with --audit-origin (normalized to origin)", () => {
     const file = stateFile();
     const cfg = sessionFlags(
-      { "storage-state": file, "audit-origin": ["https://auth.example.com/cb"] },
+      {
+        "storage-state": file,
+        "audit-origin": ["https://auth.example.com/cb"],
+      },
       [target("https://app.example.com/x")],
     );
     expect(new Set(cfg.allowedOrigins)).toEqual(

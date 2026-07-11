@@ -30,9 +30,7 @@ function escapeProperty(s: string): string {
 }
 
 export function shouldAnnotate(flags: FlagValues): boolean {
-  return (
-    process.env.GITHUB_ACTIONS === "true" && flags["no-annotate"] !== true
-  );
+  return process.env.GITHUB_ACTIONS === "true" && flags["no-annotate"] !== true;
 }
 
 export function emitAnnotations(
@@ -60,10 +58,7 @@ export function emitAnnotations(
       else groups.set(key, [finding]);
     }
     for (const [key, findings] of groups) {
-      const [severity, rule] = key.split("|") as [
-        "error" | "warning",
-        string,
-      ];
+      const [severity, rule] = key.split("|") as ["error" | "warning", string];
       const locators = findings
         .map((f) => f.locator)
         .filter((l): l is string => Boolean(l))
