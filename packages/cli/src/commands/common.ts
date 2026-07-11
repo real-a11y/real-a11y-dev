@@ -2,6 +2,7 @@
 
 import type { FlagValues } from "../args.js";
 import { CliError } from "../exit.js";
+import { assertWritableTarget } from "../output.js";
 import { redactUrl } from "../sanitize.js";
 import type { SessionFlags } from "../session.js";
 import { assertAllowedUrl, normalizeTarget } from "../url-gate.js";
@@ -70,5 +71,9 @@ export function rootOf(flags: FlagValues): string {
 }
 
 export function outputOf(flags: FlagValues): string | undefined {
-  return typeof flags.output === "string" ? flags.output : undefined;
+  const target = typeof flags.output === "string" ? flags.output : undefined;
+  // Commands call this in their preamble — a typo'd path fails before the
+  // browser launches, not after the whole audit ran.
+  if (target !== undefined) assertWritableTarget(target);
+  return target;
 }

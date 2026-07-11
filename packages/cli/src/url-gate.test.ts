@@ -38,6 +38,22 @@ describe("normalizeTarget", () => {
     }
   });
 
+  it("suggests https:// for host:port shorthand — localhost:3000 must never read as a scheme", () => {
+    for (const input of ["localhost:3000", "example.com:8080/x", "127.0.0.1:8080"]) {
+      try {
+        normalizeTarget(input);
+        expect.unreachable();
+      } catch (err) {
+        expect(err).toBeInstanceOf(CliError);
+        expect((err as CliError).hint).toContain(`https://${input}`);
+      }
+    }
+  });
+
+  it("passes real foreign schemes through so the gate can name them", () => {
+    expect(normalizeTarget("ftp://host/x")).toBe("ftp://host/x");
+  });
+
   it("errors on missing files", () => {
     expect(() => normalizeTarget("./no/such/file.html")).toThrow(CliError);
   });

@@ -20,6 +20,7 @@ import { CliError } from "./exit.js";
 import {
   projectSnapshot,
   redactUrl,
+  redactUrlsIn,
   sanitizeText,
   type CleanSnapshot,
 } from "./sanitize.js";
@@ -106,7 +107,9 @@ export async function openPage(
   } catch (err) {
     if (err instanceof CliError) throw err;
     const raw = err instanceof Error ? err.message : String(err);
-    const message = sanitizeText(raw, { singleLine: true });
+    // Playwright quotes the full target URL (userinfo, query secrets and
+    // all) inside its messages — redact before the message reaches any sink.
+    const message = sanitizeText(redactUrlsIn(raw), { singleLine: true });
     if (/Executable doesn't exist/i.test(raw)) {
       throw new CliError(
         "Chromium isn't downloaded yet.",
@@ -187,7 +190,7 @@ function noteCrossOrigin(requested: string, landed: string): void {
 function mapPageError(err: unknown, root: string): CliError {
   if (err instanceof CliError) return err;
   const raw = err instanceof Error ? err.message : String(err);
-  const message = sanitizeText(raw, { singleLine: true });
+  const message = sanitizeText(redactUrlsIn(raw), { singleLine: true });
   if (/matched no element/.test(raw)) {
     return new CliError(
       `no element matches --root "${root}" on the page`,

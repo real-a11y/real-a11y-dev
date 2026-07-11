@@ -6,20 +6,19 @@
  * prompts, ever.
  */
 
+import { randomBytes } from "node:crypto";
 import { renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
 import { registerCleanup } from "./cleanup.js";
 import { CliError } from "./exit.js";
 
-export function writeReport(
-  target: string | undefined,
-  content: string,
-): void {
-  if (!target) {
-    process.stdout.write(content);
-    return;
-  }
+/**
+ * Fail a bad --output path BEFORE the audit runs — discovering a typo'd
+ * directory after a multi-page browser run discards all the results.
+ * writeReport re-checks as a late safety net.
+ */
+export function assertWritableTarget(target: string): void {
   const abs = resolve(target);
   try {
     if (statSync(abs).isDirectory()) {
@@ -36,7 +35,21 @@ export function writeReport(
       `--output parent directory does not exist: ${dirname(abs)}`,
     );
   }
-  const tmp = `${abs}.tmp-${process.pid}`;
+}
+
+export function writeReport(
+  target: string | undefined,
+  content: string,
+): void {
+  if (!target) {
+    process.stdout.write(content);
+    return;
+  }
+  const abs = resolve(target);
+  assertWritableTarget(abs);
+  // Random suffix + exclusive create: a predictable pid-based name could be
+  // pre-created (or symlinked) by another local user in a shared directory.
+  const tmp = `${abs}.tmp-${randomBytes(6).toString("hex")}`;
   const unregister = registerCleanup(() => {
     try {
       unlinkSync(tmp);
@@ -45,7 +58,7 @@ export function writeReport(
     }
   });
   try {
-    writeFileSync(tmp, content, "utf8");
+    writeFileSync(tmp, content, { encoding: "utf8", flag: "wx" });
     renameSync(tmp, abs);
   } finally {
     unregister();

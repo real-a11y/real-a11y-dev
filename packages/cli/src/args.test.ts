@@ -67,6 +67,13 @@ describe("parseOpenOptions", () => {
     expect(() => parseOpenOptions({ timeout: "-4" })).toThrow(CliError);
   });
 
+  it("rejects empty and zero timeouts — 0 means wait-forever in Playwright", () => {
+    expect(() => parseOpenOptions({ timeout: "" })).toThrow(CliError);
+    expect(() => parseOpenOptions({ timeout: "  " })).toThrow(CliError);
+    expect(() => parseOpenOptions({ timeout: "0" })).toThrow(CliError);
+    expect(parseOpenOptions({ settle: "0" }).settleMs).toBe(0);
+  });
+
   it("rejects emulation flags over --cdp", () => {
     expect(() =>
       parseOpenOptions({ cdp: "http://localhost:9222", device: "iPhone 13" }),

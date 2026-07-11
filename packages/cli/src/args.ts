@@ -248,12 +248,17 @@ export function parseFormat<T extends string>(
 function parseMs(
   name: string,
   value: string | boolean | undefined,
-  { fallback, max }: { fallback?: number; max: number },
+  { fallback, max, min = 0 }: { fallback?: number; max: number; min?: number },
 ): number | undefined {
   if (value === undefined) return fallback;
-  const n = Number(value);
-  if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) {
-    throw new CliError(`${name} expects a non-negative integer (milliseconds)`);
+  // Number("") === 0, so an empty value (e.g. --timeout=$UNSET_VAR) must be
+  // rejected explicitly — for --timeout, 0 means "wait forever" in Playwright.
+  const raw = String(value).trim();
+  const n = Number(raw);
+  if (raw === "" || !Number.isFinite(n) || !Number.isInteger(n) || n < min) {
+    throw new CliError(
+      `${name} expects an integer number of milliseconds${min > 0 ? ` (at least ${min})` : ""}`,
+    );
   }
   return Math.min(n, max);
 }
@@ -276,7 +281,10 @@ export function parseOpenOptions(flags: FlagValues): OpenOptions {
 
   const settle = parseMs("--settle", flags.settle, { max: 30_000 });
   if (settle !== undefined) options.settleMs = settle;
-  const timeout = parseMs("--timeout", flags.timeout, { max: 120_000 });
+  const timeout = parseMs("--timeout", flags.timeout, {
+    max: 120_000,
+    min: 1,
+  });
   if (timeout !== undefined) options.timeoutMs = timeout;
 
   if (typeof flags.device === "string") options.device = flags.device;

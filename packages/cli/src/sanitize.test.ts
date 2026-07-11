@@ -5,6 +5,7 @@ import {
   projectFindings,
   projectSnapshot,
   redactUrl,
+  redactUrlsIn,
   sanitizeText,
 } from "./sanitize.js";
 
@@ -36,6 +37,12 @@ describe("sanitizeText", () => {
     expect(sanitizeText(42)).toBe("42");
     expect(sanitizeText(null)).toBe("");
   });
+
+  it("strips SGR color codes (Playwright errors) but keeps non-SGR escapes visible", () => {
+    expect(sanitizeText("a\u001B[2mdim\u001B[22mb")).toBe("adimb");
+    expect(sanitizeText("x\u001B[2Ky")).toBe("x\\u{1B}[2Ky");
+    expect(sanitizeText("literal [31m text")).toBe("literal [31m text");
+  });
 });
 
 describe("redactUrl", () => {
@@ -51,6 +58,12 @@ describe("redactUrl", () => {
 
   it("sanitizes but returns non-URLs as-is", () => {
     expect(redactUrl("not a url")).toBe("not a url");
+  });
+
+  it("redactUrlsIn scrubs URLs embedded in free text (Playwright messages)", () => {
+    expect(
+      redactUrlsIn("page.goto: net::ERR at https://u:p@h/x?token=abc failed"),
+    ).toBe("page.goto: net::ERR at https://h/x?token=%5BREDACTED%5D failed");
   });
 });
 

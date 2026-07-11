@@ -35,22 +35,38 @@ function schemeOf(input: string): string | null {
 /** Bare-domain heuristic for the "did you mean https://…" hint. */
 const DOMAINISH_RE = /^[a-z0-9-]+(\.[a-z0-9-]+)+(:\d+)?(\/|$)/i;
 
+const KNOWN_SCHEMES = new Set(["http", "https", "data", "file"]);
+
 /**
- * Turn a CLI target into an absolute URL. Real URLs pass through; everything
- * else is treated as a local path. Single-letter schemes are Windows drive
- * paths (`new URL("C:\\site\\a.html")` parses as scheme "c"), which must win
- * over URL interpretation — the primary dev machine is Windows.
+ * host:port shorthand parses as a valid URL "scheme" (`localhost:3000` →
+ * scheme "localhost", `example.com:8080` → scheme "example.com") — catch it
+ * before trusting the parse, or the most common dev invocation dies with a
+ * baffling "refusing to open a localhost: URL".
+ */
+const HOST_PORT_RE = /^[a-z0-9-]+(\.[a-z0-9-]+)*:\d+([/?#]|$)/i;
+
+function suggestHttps(input: string): never {
+  throw new CliError(
+    `"${input}" is not a URL or an existing file.`,
+    `did you mean https://${input} ?`,
+  );
+}
+
+/**
+ * Turn a CLI target into an absolute URL. Known-scheme URLs pass through;
+ * everything else is treated as a local path or a typo'd URL. Single-letter
+ * schemes are Windows drive paths (`new URL("C:\\site\\a.html")` parses as
+ * scheme "c"), which must win over URL interpretation — the primary dev
+ * machine is Windows.
  */
 export function normalizeTarget(input: string): string {
   const scheme = schemeOf(input);
-  if (scheme && scheme.length > 1) return input;
+  if (scheme && KNOWN_SCHEMES.has(scheme)) return input;
   if (existsSync(input)) return pathToFileURL(resolve(input)).href;
-  if (!scheme && DOMAINISH_RE.test(input)) {
-    throw new CliError(
-      `"${input}" is not a URL or an existing file.`,
-      `did you mean https://${input} ?`,
-    );
-  }
+  if (HOST_PORT_RE.test(input)) suggestHttps(input);
+  // A real foreign scheme (ftp:, chrome:) — let the gate name it in its error.
+  if (scheme && scheme.length > 1) return input;
+  if (!scheme && DOMAINISH_RE.test(input)) suggestHttps(input);
   throw new CliError(`no such file: ${resolve(input)}`);
 }
 

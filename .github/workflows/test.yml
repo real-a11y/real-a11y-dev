@@ -164,10 +164,10 @@ jobs:
 
       # Spawn the built bin browser-free — exit-code and stdout-drain
       # discipline on Windows only shows up in a real spawned process.
+      # `&&`, not a multi-line block: pwsh only propagates the LAST command's
+      # exit code, which would mask a failing --version.
       - name: Smoke-test CLI bin (browser-free)
-        run: |
-          node packages/cli/dist/index.js --version
-          node packages/cli/dist/index.js --help
+        run: node packages/cli/dist/index.js --version && node packages/cli/dist/index.js --help
 
       - name: Smoke-test example dev servers
         run: pnpm examples:dev-smoke

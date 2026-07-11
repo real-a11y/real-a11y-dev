@@ -90,7 +90,7 @@ export const auditCommand: CommandFn = async (positionals, flags) => {
   }
   if (format === "pretty" && !quiet && process.stdout.isTTY) {
     process.stderr.write(
-      `tip: run 'real-a11y inspect ${positionals[0]}' to see the semantic tree\n`,
+      `tip: run 'real-a11y inspect ${targets[0].name}' to see the semantic tree\n`,
     );
   }
 

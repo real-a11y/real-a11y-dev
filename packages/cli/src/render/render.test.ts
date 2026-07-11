@@ -71,7 +71,20 @@ describe("renderPretty", () => {
     );
     expect(out).toContain("== https://example.com/");
     expect(out).toContain("[error] page failed: could not open b");
-    expect(out.trimEnd().split("\n").at(-1)).toMatch(/^3 issues/);
+    expect(out.trimEnd().split("\n").at(-1)).toMatch(
+      /^3 issues .* · 1 page\(s\) failed to load$/,
+    );
+  });
+
+  it("a failed page NEVER reads as a clean bill of health", () => {
+    const out = renderPretty(
+      [page({ findings: [], error: "could not open" })],
+      { color: false },
+    );
+    expect(out).not.toContain("No accessibility issues found.");
+    expect(out.trimEnd().split("\n").at(-1)).toBe(
+      "1 page(s) failed to load — nothing was audited",
+    );
   });
 
   it("conveys severity by text tag even with color on", () => {
@@ -123,6 +136,36 @@ describe("emitAnnotations", () => {
     expect(forged).toContain("%0A");
     expect(forged.split("\n").filter(Boolean)).toHaveLength(1);
     expect(lines.every((l) => /^::(error|warning) title=/.test(l))).toBe(true);
+  });
+
+  it("keeps distinct messages under one rule in separate, correctly-counted groups", () => {
+    const headings: Finding[] = [
+      {
+        rule: "heading-order",
+        severity: "warning",
+        message: "Missing <h1>: every document should have one.",
+      },
+      {
+        rule: "heading-order",
+        severity: "warning",
+        message: 'Heading level skipped: "A" is h4 but the previous was h2.',
+        name: "A",
+      },
+      {
+        rule: "heading-order",
+        severity: "warning",
+        message: 'Heading level skipped: "B" is h4 but the previous was h2.',
+        name: "B",
+      },
+    ];
+    const lines: string[] = [];
+    emitAnnotations(
+      [page({ findings: fingerprintFindings("p", headings) })],
+      (l) => lines.push(l),
+    );
+    expect(lines).toHaveLength(3);
+    expect(lines.filter((l) => l.includes("1 ×"))).toHaveLength(3);
+    expect(lines.some((l) => l.includes("3 ×"))).toBe(false);
   });
 
   it("annotates failed pages", () => {

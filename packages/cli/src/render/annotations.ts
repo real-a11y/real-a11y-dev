@@ -48,9 +48,13 @@ export function emitAnnotations(
       );
       continue;
     }
+    // Keyed by message too: heading-order/landmark-structure emit several
+    // distinct templates that co-occur, and "3 × Missing <h1>" for one
+    // missing-h1 plus two skipped levels would be a lie. Distinct messages
+    // per rule are bounded, so the runner's annotation caps are still safe.
     const groups = new Map<string, typeof page.findings>();
     for (const finding of page.findings) {
-      const key = `${finding.severity}|${finding.rule}`;
+      const key = `${finding.severity}|${finding.rule}|${finding.message}`;
       const group = groups.get(key);
       if (group) group.push(finding);
       else groups.set(key, [finding]);
@@ -112,7 +116,7 @@ export function appendStepSummary(
     ];
     const groups = new Map<string, typeof page.findings>();
     for (const finding of page.findings) {
-      const key = `${finding.severity}|${finding.rule}`;
+      const key = `${finding.severity}|${finding.rule}|${finding.message}`;
       const group = groups.get(key);
       if (group) group.push(finding);
       else groups.set(key, [finding]);

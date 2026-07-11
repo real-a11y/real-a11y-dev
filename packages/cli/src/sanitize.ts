@@ -23,6 +23,16 @@ const CONTROL_RE =
 /** Max length for any single page-derived field (name, message, locator…). */
 const FIELD_CAP = 1_000;
 
+/**
+ * SGR color sequences are stripped rather than escaped: Playwright colorizes
+ * its own error messages, and rendering those as literal `\u{1B}[2m` noise in
+ * every failure sink would bury the message. Everything non-SGR (OSC, other
+ * CSI, C0/C1) still gets visibly escaped below — that's the injection surface.
+ */
+const SGR_RE =
+  // eslint-disable-next-line no-control-regex
+  /\u001B\[[0-9;]*m/g;
+
 export interface SanitizeOptions {
   /**
    * Collapse all whitespace runs (incl. newlines) to a single space — for
@@ -39,6 +49,7 @@ export function sanitizeText(
 ): string {
   let s =
     typeof value === "string" ? value : value == null ? "" : String(value);
+  s = s.replace(SGR_RE, "");
   s = options.singleLine ? s.replace(/[\r\n\t]+/g, " ") : s.replace(/\r/g, "");
   return s.replace(
     CONTROL_RE,
@@ -69,6 +80,17 @@ export function redactUrl(raw: string): string {
     if (SECRET_PARAM_RE.test(key)) url.searchParams.set(key, "[REDACTED]");
   }
   return sanitizeText(url.toString(), { singleLine: true });
+}
+
+const URL_IN_TEXT_RE = /\bhttps?:\/\/[^\s"'<>)\]]+/g;
+
+/**
+ * Redact every http(s) URL embedded in free text — Playwright error messages
+ * quote the full target URL (userinfo, query secrets and all), and those
+ * messages flow into reports, annotations, and CI logs.
+ */
+export function redactUrlsIn(text: string): string {
+  return text.replace(URL_IN_TEXT_RE, (match) => redactUrl(match));
 }
 
 const RULE_SET: ReadonlySet<string> = new Set(ALL_RULES);

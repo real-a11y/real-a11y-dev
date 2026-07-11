@@ -86,14 +86,32 @@ export function renderPretty(
   }
 
   const total = summarizeAll(pages);
+  const failed = pages.filter((p) => p.error).length;
   if (lines.length) lines.push("");
-  if (total.total === 0) {
+  if (total.total === 0 && failed === 0) {
     lines.push("No accessibility issues found.");
   } else {
-    const noun = total.total === 1 ? "issue" : "issues";
-    const summary = `${total.total} ${noun} — ${total.errors} error(s), ${total.warnings} warning(s)`;
+    // A failed page must never read as a clean bill of health — the summary
+    // is the last line people scan, so failures belong in it.
+    const bits: string[] = [];
+    if (total.total > 0) {
+      const noun = total.total === 1 ? "issue" : "issues";
+      bits.push(
+        `${total.total} ${noun} — ${total.errors} error(s), ${total.warnings} warning(s)`,
+      );
+    }
+    if (failed > 0) {
+      bits.push(
+        failed === pages.length
+          ? `${failed} page(s) failed to load — nothing was audited`
+          : `${failed} page(s) failed to load`,
+      );
+    }
+    const summary = bits.join(" · ");
     lines.push(
-      c.bold(total.errors > 0 ? c.red(summary) : c.yellow(summary)),
+      c.bold(
+        total.errors > 0 || failed > 0 ? c.red(summary) : c.yellow(summary),
+      ),
     );
   }
   return `${lines.join("\n")}\n`;

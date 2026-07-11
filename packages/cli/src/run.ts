@@ -59,12 +59,16 @@ export async function run(argv: string[]): Promise<number> {
   }
 
   const rest = argv.slice(1);
-  if (rest.includes("--help") || rest.includes("-h")) {
+  // Raw pre-scan (stopping at "--") catches --help even when the rest of the
+  // line wouldn't parse; the post-parse check catches grouped shorts (-qh).
+  const doubleDash = rest.indexOf("--");
+  const flagTokens = doubleDash === -1 ? rest : rest.slice(0, doubleDash);
+  if (flagTokens.includes("--help") || flagTokens.includes("-h")) {
     process.stdout.write(command.help);
     return EXIT.OK;
   }
 
-  const verbose = rest.includes("--verbose");
+  const verbose = flagTokens.includes("--verbose");
   try {
     const { values, positionals } = parseArgs({
       args: rest,
@@ -72,6 +76,10 @@ export async function run(argv: string[]): Promise<number> {
       allowPositionals: true,
       strict: true,
     });
+    if ((values as FlagValues).help === true) {
+      process.stdout.write(command.help);
+      return EXIT.OK;
+    }
     const fn = await command.load();
     return await fn(positionals, values as FlagValues);
   } catch (err) {
