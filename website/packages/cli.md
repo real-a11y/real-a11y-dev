@@ -80,9 +80,45 @@ ceremony).
 | `outline <url>` | Heading outline (h1–h6) in document order. |
 | `tabs <url>` | Focusable elements in keyboard Tab order. |
 | `list <category> <url>` | One category — `heading` / `link` / `button` / `form` / `landmark` / `image` — as role + name + locator. |
+| `snapshot` | Audit a page set (from `a11y.config.json` or `A11Y_PAGES`) → one diffable JSON artifact, or `--md` for a human report. |
+| `diff <base> <pr>` | Findings-aware diff of two snapshot artifacts — new / changed / fixed. Pure (no browser). See below. |
 | `login <url> --save <file>` | Save a login session for `--storage-state` audits (see [Authenticated pages](/guide/authenticated-pages)). |
 
 Run `real-a11y <command> --help` for a command's flags.
+
+## Track regressions across a PR
+
+The flagship CI feature: snapshot a whole page set into a diffable artifact,
+then diff two of them and fail the build only on **new** findings.
+
+```sh
+# on the base branch, and again on the PR
+real-a11y snapshot --config a11y.config.json -o base.json
+real-a11y snapshot --config a11y.config.json -o pr.json
+
+real-a11y diff base.json pr.json          # exit 1 only on NEW findings
+real-a11y diff base.json pr.json -f md    # a PR-comment-ready summary
+```
+
+Pages live in `a11y.config.json` — your policy in your repo:
+
+```json
+{
+  "pages": [
+    { "name": "Home", "url": "http://localhost:3000" },
+    { "name": "Login", "url": "http://localhost:3000/login", "rootSelector": "main" }
+  ],
+  "rules": ["no-unlabeled-interactive", "image-alt", "heading-order"],
+  "failOn": "error"
+}
+```
+
+The diff is **finding-identity-aware**, not a line diff: each finding carries a
+stable `v1:` fingerprint, so a renumbered `:nth-of-type` locator, a re-indented
+subtree, or an inserted sibling is **not** a change — only an actual
+new / changed / fixed violation is. Pre-existing debt never blocks a PR
+(REMOVED and CHANGED don't gate), and the config is strict and fail-closed — a
+typo'd key is an error, so a mistake can't silently un-gate CI.
 
 ## Global flags
 
@@ -180,8 +216,8 @@ workflow, the security rules, and the interactive `--cdp` alternative.
   semantic-tree-based and tuned to "what a screen reader announces." Pair it with
   [axe-core](https://github.com/dequelabs/axe-core) for contrast, focus
   visibility, and other rendered checks.
-- **Not a crawler.** You name the pages (arguments today; a config file is
-  planned) — there is no link discovery.
+- **Not a crawler.** You name the pages (as arguments, or in
+  `a11y.config.json` for `snapshot`) — there is no link discovery.
 - **Requires a real browser.** Playwright + Chromium must be installable.
 
 ## See also

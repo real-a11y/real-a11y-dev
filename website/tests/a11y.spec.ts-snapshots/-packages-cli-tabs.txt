@@ -45,41 +45,46 @@
 45. link "Prerequisites"
 46. link "Your first audit"
 47. link "Commands"
-48. link "Global flags"
-49. link "Machine output"
-50. link "In CI"
-51. link "Pages behind a login"
-52. link "Limitations"
-53. link "See also"
-54. link "extension"
-55. link "testing library"
-56. link "MCP server"
-57. button "Copy Code"
-58. generic
-59. button "Copy Code"
-60. generic
-61. button "Copy Code"
-62. generic
-63. button "Copy Code"
-64. generic
-65. button "Copy Code"
-66. generic
-67. table
-68. link "Authenticated pages"
-69. table
-70. link "Authenticated pages"
-71. button "Copy Code"
-72. generic
-73. table
-74. button "Copy Code"
-75. generic
+48. link "Track regressions across a PR"
+49. link "Global flags"
+50. link "Machine output"
+51. link "In CI"
+52. link "Pages behind a login"
+53. link "Limitations"
+54. link "See also"
+55. link "extension"
+56. link "testing library"
+57. link "MCP server"
+58. button "Copy Code"
+59. generic
+60. button "Copy Code"
+61. generic
+62. button "Copy Code"
+63. generic
+64. button "Copy Code"
+65. generic
+66. button "Copy Code"
+67. generic
+68. table
+69. link "Authenticated pages"
+70. button "Copy Code"
+71. generic
+72. button "Copy Code"
+73. generic
+74. table
+75. link "Authenticated pages"
 76. button "Copy Code"
 77. generic
-78. link "Authenticated pages"
-79. link "axe-core"
-80. link "Authenticated pages"
-81. link "@real-a11y-dev/mcp"
-82. link "@real-a11y-dev/testing"
-83. link "Edit this page on GitHub"
-84. link "Previous page@real-a11y-dev/mcp"
-85. link "Next pageNext.js (App Router + React 19)"
+78. table
+79. button "Copy Code"
+80. generic
+81. button "Copy Code"
+82. generic
+83. link "Authenticated pages"
+84. link "axe-core"
+85. link "Authenticated pages"
+86. link "@real-a11y-dev/mcp"
+87. link "@real-a11y-dev/testing"
+88. link "Edit this page on GitHub"
+89. link "Previous page@real-a11y-dev/mcp"
+90. link "Next pageNext.js (App Router + React 19)"

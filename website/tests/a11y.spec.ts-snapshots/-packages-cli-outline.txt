@@ -10,6 +10,7 @@ h1 @real-a11y-dev/cli
   h2 Prerequisites
   h2 Your first audit
   h2 Commands
+  h2 Track regressions across a PR
   h2 Global flags
   h2 Machine output
     h3 Exit codes
