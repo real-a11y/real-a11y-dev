@@ -72,8 +72,24 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      # Root `build` (the same one CI and the pre-push hook run) builds every
+      # publishable package; it shares its workspace filter with `typecheck`
+      # and `test` below, so the gate can never trip over an unbuilt package.
       - name: Build all packages
-        run: pnpm -r --filter='./packages/*' build
+        run: pnpm build
+
+      # A version tag can be pushed from any commit, and the build above is
+      # `tsup`/`vite` — it transpiles without type-checking and never runs the
+      # test suites. So a type error or a failing test in the tagged commit
+      # would publish to npm silently. Re-run the two gates a build can't catch
+      # on the exact release commit, before anything is published. (format:check
+      # and lint are already enforced on `main` by the required `test` check, so
+      # repeating them here would only add cost and failure surface.)
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
 
       - name: Resolve dist-tag
         id: tag
