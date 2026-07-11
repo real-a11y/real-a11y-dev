@@ -281,7 +281,22 @@ const READ_ONLY = {
   openWorldHint: false,
 } as const;
 
-export function buildServer(session: A11ySession): McpServer {
+export interface BuildServerOptions {
+  /**
+   * True when the server was started with a saved login session
+   * (`REAL_A11Y_MCP_STORAGE_STATE`). Surfaces the fact to the agent — in
+   * `open_page`'s description and result — so it doesn't try to "fix" a page
+   * that's already authenticated. A boolean only; the path/contents are never
+   * exposed through any tool.
+   */
+  authenticated?: boolean;
+}
+
+export function buildServer(
+  session: A11ySession,
+  options: BuildServerOptions = {},
+): McpServer {
+  const authenticated = options.authenticated === true;
   const server = new McpServer(
     {
       name: "real-a11y",
@@ -300,7 +315,10 @@ export function buildServer(session: A11ySession): McpServer {
     {
       title: "Open page",
       description:
-        "Navigate the browser to a URL and prepare it for accessibility queries. Call this before any audit/get_* tool. For dynamic sites (SPAs, consent dialogs) set waitUntil='networkidle' and/or settleMs so the page settles first. To audit the MOBILE or TABLET layout — which can differ substantially from desktop (hamburger nav, hidden content, touch-only controls) — pass a `device`.",
+        "Navigate the browser to a URL and prepare it for accessibility queries. Call this before any audit/get_* tool. For dynamic sites (SPAs, consent dialogs) set waitUntil='networkidle' and/or settleMs so the page settles first. To audit the MOBILE or TABLET layout — which can differ substantially from desktop (hamburger nav, hidden content, touch-only controls) — pass a `device`." +
+        (authenticated
+          ? " This server was started with a saved login session, so pages open ALREADY AUTHENTICATED — do not try to log in or navigate to a login page; open the destination directly."
+          : ""),
       inputSchema: {
         url: z.string().url().describe("Absolute URL to open."),
         waitUntil: z
@@ -362,7 +380,10 @@ export function buildServer(session: A11ySession): McpServer {
           ? ` [${viewport.width}×${viewport.height}]`
           : "";
       return text(
-        `Opened ${info.url}${emu}\nTitle: ${info.title || "(untitled)"}`,
+        `Opened ${info.url}${emu}\nTitle: ${info.title || "(untitled)"}` +
+          (authenticated
+            ? "\n(authenticated session: storage state loaded)"
+            : ""),
       );
     },
   );

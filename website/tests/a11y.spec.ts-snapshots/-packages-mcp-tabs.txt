@@ -62,13 +62,15 @@
 62. generic
 63. table
 64. table
-65. button "Copy Code"
-66. generic
-67. table
-68. link "Playwright MCP"
-69. link "collectFindings"
-70. link "axe-core"
-71. link "@real-a11y-dev/testing — Assertions"
-72. link "Edit this page on GitHub"
-73. link "Previous page@real-a11y-dev/storybook-addon"
-74. link "Next page@real-a11y-dev/cli"
+65. link "Authenticated pages"
+66. link "Authenticated pages"
+67. button "Copy Code"
+68. generic
+69. table
+70. link "Playwright MCP"
+71. link "collectFindings"
+72. link "axe-core"
+73. link "@real-a11y-dev/testing — Assertions"
+74. link "Edit this page on GitHub"
+75. link "Previous page@real-a11y-dev/storybook-addon"
+76. link "Next page@real-a11y-dev/cli"

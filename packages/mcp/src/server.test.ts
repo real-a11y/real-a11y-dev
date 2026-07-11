@@ -15,6 +15,7 @@ import {
   renderAudit,
   renderCompare,
   renderSnapshot,
+  type BuildServerOptions,
 } from "./server.js";
 
 /** In-memory session that records calls and returns programmed responses. */
@@ -59,8 +60,8 @@ class FakeSession implements A11ySession {
 }
 
 /** Wire a Client to a server built around `session`, over an in-memory pair. */
-async function connect(session: A11ySession) {
-  const server = buildServer(session);
+async function connect(session: A11ySession, options?: BuildServerOptions) {
+  const server = buildServer(session, options);
   const [clientT, serverT] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "test", version: "0.0.0" });
   await Promise.all([server.connect(serverT), client.connect(clientT)]);
@@ -174,6 +175,34 @@ describe("MCP server wiring", () => {
       settleMs: 0,
     });
     expect(textOf(res)).toMatch(/Fake Title/);
+  });
+
+  it("does not signal a session by default (no auth configured)", async () => {
+    const client = await connect(session);
+    const res = await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/" },
+    });
+    expect(textOf(res)).not.toMatch(/authenticated session/);
+    const openTool = (await client.listTools()).tools.find(
+      (t) => t.name === "open_page",
+    );
+    expect(openTool?.description).not.toMatch(/already authenticated/i);
+  });
+
+  it("signals a loaded session in open_page's result and description", async () => {
+    const client = await connect(session, { authenticated: true });
+    const res = await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://app.example.com/dashboard" },
+    });
+    // Boolean fact only — never the storage-state path or its contents.
+    expect(textOf(res)).toMatch(/authenticated session: storage state loaded/);
+    const openTool = (await client.listTools()).tools.find(
+      (t) => t.name === "open_page",
+    );
+    expect(openTool?.description).toMatch(/already authenticated/i);
+    expect(openTool?.description).toMatch(/do not try to log in/i);
   });
 
   it("open_page forwards waitUntil and settleMs settle options", async () => {

@@ -277,7 +277,7 @@
         row
           cell "REAL_A11Y_MCP_CDP"
             code "REAL_A11Y_MCP_CDP"
-          cell "Attach to an already-running Chrome over CDP (e.g. http://localhost:9222) instead of launching one — use this to audit pages behind a login."
+          cell "Attach to an already-running Chrome over CDP (e.g. http://localhost:9222) instead of launching one — the interactive way to audit a login."
             code "http://localhost:9222"
         row
           cell "REAL_A11Y_MCP_HEADFUL"
@@ -291,6 +291,19 @@
             code "1"
             code "file://"
             code "file:///…/.env"
+        row
+          cell "REAL_A11Y_MCP_STORAGE_STATE"
+            code "REAL_A11Y_MCP_STORAGE_STATE"
+          cell "Path to a saved login session (a Playwright storage-state file) — audit authenticated pages as that session. Never a tool parameter, so session tokens stay out of the agent's context. See Authenticated pages ."
+            link "Authenticated pages"
+        row
+          cell "REAL_A11Y_MCP_ALLOWED_ORIGINS"
+            code "REAL_A11Y_MCP_ALLOWED_ORIGINS"
+          cell "Comma-separated origins auditing is pinned to when a session is loaded — strongly recommended with STORAGE_STATE so a redirect can't audit an unintended site."
+            code "STORAGE_STATE"
+    paragraph "When a storage state is configured, tells the agent the session is already active so it won't try to log in — see the guide for the full workflow and security rules."
+      code "open_page"
+      link "Authenticated pages"
     paragraph "Use a dedicated profile for CDP"
     paragraph "Attaching over CDP connects to whatever Chrome is listening on that port — , which an LLM-driven server can then read. Launch a throwaway instance rather than enabling remote debugging on your main profile:"
       strong "including your everyday browser and its logged-in sessions"
