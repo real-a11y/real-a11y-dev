@@ -26,6 +26,7 @@ export const ROUTES = [
   "/guide/reading-the-tab-view",
   "/guide/chrome-extension",
   "/guide/ci-diff-bot",
+  "/guide/authenticated-pages",
   "/guide/troubleshooting",
 
   // Packages
@@ -40,6 +41,7 @@ export const ROUTES = [
   "/packages/inspector",
   "/packages/storybook-addon",
   "/packages/mcp",
+  "/packages/cli",
 
   // Recipes
   "/recipes/nextjs",

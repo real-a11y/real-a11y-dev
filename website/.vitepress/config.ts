@@ -247,6 +247,8 @@ export default defineConfig({
             text: "@real-a11y-dev/storybook-addon",
             link: "/packages/storybook-addon",
           },
+          { text: "@real-a11y-dev/mcp", link: "/packages/mcp" },
+          { text: "@real-a11y-dev/cli", link: "/packages/cli" },
         ],
       },
       {
@@ -264,6 +266,10 @@ export default defineConfig({
       {
         text: "Reference",
         items: [
+          {
+            text: "Authenticated Pages",
+            link: "/guide/authenticated-pages",
+          },
           { text: "Accessible Names", link: "/guide/accessible-names" },
           { text: "Architecture", link: "/guide/architecture" },
         ],

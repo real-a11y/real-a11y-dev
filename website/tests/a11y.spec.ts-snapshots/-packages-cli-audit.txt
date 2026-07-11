@@ -1,0 +1,354 @@
+  link "Skip to content"
+  banner
+    link "Real A11y"
+    button "Search"
+    navigation "Main Navigation"
+      link "Guide"
+      link "Recipes"
+      link "Packages"
+      button "v0.1 · Beta"
+    switch "Switch to dark theme"
+    link "github"
+  complementary
+    navigation "Sidebar Navigation"
+      button "Introduction"
+        heading "Introduction" (level 2)
+      link "Getting Started"
+        paragraph "Getting Started"
+      link "Core Concepts"
+        paragraph "Core Concepts"
+      link "Accessibility Snapshots"
+        paragraph "Accessibility Snapshots"
+      link "Snapshots vs. Other Tools"
+        paragraph "Snapshots vs. Other Tools"
+      link "Why Real A11y?"
+        paragraph "Why Real A11y?"
+      button "Reading the Tree"
+        heading "Reading the Tree" (level 2)
+      link "Understanding the Views"
+        paragraph "Understanding the Views"
+      link "DOM View"
+        paragraph "DOM View"
+      link "A11y View"
+        paragraph "A11y View"
+      link "Headings View"
+        paragraph "Headings View"
+      link "TAB View"
+        paragraph "TAB View"
+      link "Panel features"
+        paragraph "Panel features"
+      button "Chrome Extension"
+        heading "Chrome Extension" (level 2)
+      link "Overview & Install"
+        paragraph "Overview & Install"
+      button "Packages"
+        heading "Packages" (level 2)
+      link "@real-a11y-dev/core"
+        paragraph "@real-a11y-dev/core"
+      link "@real-a11y-dev/inspector"
+        paragraph "@real-a11y-dev/inspector"
+        link "@real-a11y-dev/testing"
+          heading "@real-a11y-dev/testing" (level 3)
+        button "toggle section"
+      link "@real-a11y-dev/react"
+        paragraph "@real-a11y-dev/react"
+      link "@real-a11y-dev/storybook-addon"
+        paragraph "@real-a11y-dev/storybook-addon"
+      link "@real-a11y-dev/mcp"
+        paragraph "@real-a11y-dev/mcp"
+      link "@real-a11y-dev/cli"
+        paragraph "@real-a11y-dev/cli"
+      button "Recipes"
+        heading "Recipes" (level 2)
+      link "Next.js (App Router + React 19)"
+        paragraph "Next.js (App Router + React 19)"
+      link "Storybook 8 + React 19"
+        paragraph "Storybook 8 + React 19"
+      link "Peer Dependencies"
+        paragraph "Peer Dependencies"
+      link "CI Diff Bot"
+        paragraph "CI Diff Bot"
+      button "Reference"
+        heading "Reference" (level 2)
+      link "Authenticated Pages"
+        paragraph "Authenticated Pages"
+      link "Accessible Names"
+        paragraph "Accessible Names"
+      link "Architecture"
+        paragraph "Architecture"
+      link "Troubleshooting"
+        paragraph "Troubleshooting"
+  navigation "On this page"
+    heading "On this page" (level 2)
+    list
+      listitem
+        link "Prerequisites"
+      listitem
+        link "Your first audit"
+      listitem
+        link "Commands"
+      listitem
+        link "Global flags"
+      listitem
+        link "Machine output"
+      listitem
+        link "In CI"
+      listitem
+        link "Pages behind a login"
+      listitem
+        link "Limitations"
+      listitem
+        link "See also"
+  main
+    heading "@real-a11y-dev/cli" (level 1)
+    paragraph "Beta — preview page"
+    paragraph "Published on npm as a : the command surface may still change before 1.0, and audit fidelity is bounded by known engine issues (see Limitations). Pin a version rather than tracking the latest tag if you build on it."
+      strong "beta"
+    paragraph "Audit , from your shell. drives a real browser, extracts the semantic accessibility tree, and reports the defects a screen reader would announce — with exit codes for CI, a stable JSON contract for scripts, and a way to audit pages behind a login. It's the same engine as the , the , and the — one audit, a different surface."
+      strong "what a screen reader hears"
+      code "real-a11y"
+      link "extension"
+      link "testing library"
+      link "MCP server"
+    heading "Prerequisites" (level 2)
+    paragraph "Accessibility is a property of the page — the roles, names, and visibility a browser actually computes, not what's in the HTML source. So the CLI drives a real browser (via Playwright) rather than parsing markup, and needs:"
+      strong "rendered"
+    list
+      listitem "."
+        strong "Node.js 20+"
+      listitem "— Playwright is an optional peer dependency, loaded only when a command needs a browser."
+        strong "Playwright + a Chromium binary"
+    button "Copy Code"
+      code
+    paragraph "Prefer an in-project install over a bare : resolves its own copy of Playwright, and its browser binaries are revision-locked, so a mismatched global Playwright can leave you with "Executable doesn't exist" even after ."
+      code "npx @real-a11y-dev/cli"
+      code "npx"
+      code "playwright install"
+    heading "Your first audit" (level 2)
+    button "Copy Code"
+      code
+    button "Copy Code"
+      code
+    paragraph "Then gate a build on it — exits on errors with no extra flags:"
+      code "audit"
+      code "1"
+    button "Copy Code"
+      code
+    button "Copy Code"
+      code
+    paragraph "Because it drives a real browser, JS-heavy SPAs render fully, and any URL the browser can reach works — public sites, a , staging, or a built file ( — paths you type need no ceremony)."
+      strong "local dev server"
+      code "real-a11y audit ./dist/index.html"
+    heading "Commands" (level 2)
+    table
+      rowgroup
+        row
+          rowheader "Command"
+          rowheader "What it prints"
+      rowgroup
+        row
+          cell "audit <url…>"
+            strong
+              code "audit <url…>"
+          cell "Flagship. Every violation — unlabeled controls, images missing alt text, skipped/missing/duplicate headings, unlabeled dialogs, broken landmark structure — grouped by rule, each with a CSS locator + severity. Exits 1 on errors (the CI gate)."
+            strong "Flagship."
+            strong "locator"
+            strong "severity"
+            code "1"
+        row
+          cell "inspect <url>"
+            code "inspect <url>"
+          cell "Findings plus the semantic tree, heading outline, and tab order — all from one extraction, guaranteed internally consistent."
+            strong "plus"
+            strong "one"
+        row
+          cell "tree <url>"
+            code "tree <url>"
+          cell "The semantic tree (role + accessible name)."
+        row
+          cell "outline <url>"
+            code "outline <url>"
+          cell "Heading outline (h1–h6) in document order."
+        row
+          cell "tabs <url>"
+            code "tabs <url>"
+          cell "Focusable elements in keyboard Tab order."
+        row
+          cell "list <category> <url>"
+            code "list <category> <url>"
+          cell "One category — heading / link / button / form / landmark / image — as role + name + locator."
+            code "heading"
+            code "link"
+            code "button"
+            code "form"
+            code "landmark"
+            code "image"
+        row
+          cell "login <url> --save <file>"
+            code "login <url> --save <file>"
+          cell "Save a login session for --storage-state audits (see Authenticated pages )."
+            code "--storage-state"
+            link "Authenticated pages"
+    paragraph "Run for a command's flags."
+      code "real-a11y <command> --help"
+    heading "Global flags" (level 2)
+    table
+      rowgroup
+        row
+          rowheader "Flag"
+          rowheader "Effect"
+      rowgroup
+        row
+          cell "--root <selector>"
+            code "--root <selector>"
+          cell "Scope extraction to a region or component (default body)."
+            code "body"
+        row
+          cell "--device <name>"
+            code "--device <name>"
+          cell "Emulate a device — "iPhone 13", "Pixel 7" — to audit the mobile layout."
+            code ""iPhone 13""
+            code ""Pixel 7""
+        row
+          cell "--viewport <WxH>"
+            code "--viewport <WxH>"
+          cell "Explicit viewport, e.g. 1280x800."
+            code "1280x800"
+        row
+          cell "--wait-until <state> / --settle <ms>"
+            code "--wait-until <state>"
+            code "--settle <ms>"
+          cell "Settle dynamic pages before extraction (load | domcontentloaded | networkidle | commit)."
+            code "load"
+            code "domcontentloaded"
+            code "networkidle"
+            code "commit"
+        row
+          cell "--timeout <ms>"
+            code "--timeout <ms>"
+          cell "Navigation timeout (default 30000)."
+            code "30000"
+        row
+          cell "--rules <ids>"
+            code "--rules <ids>"
+          cell "Comma-separated subset of the five rules (audit/inspect)."
+            code "audit"
+            code "inspect"
+        row
+          cell "--fail-on <level>"
+            code "--fail-on <level>"
+          cell "error | warning | never — the gate threshold (default error for audit/inspect, never for views)."
+            code "error"
+            code "warning"
+            code "never"
+            code "error"
+            code "audit"
+            code "inspect"
+            code "never"
+        row
+          cell "-f, --format <fmt>"
+            code "-f, --format <fmt>"
+          cell "pretty (default) or json. Never auto-switched — piping only drops color."
+            code "pretty"
+            code "json"
+        row
+          cell "-o, --output <file>"
+            code "-o, --output <file>"
+          cell "Write the report to a file (progress stays on stderr)."
+        row
+          cell "--storage-state <file> / --audit-origin <origin>"
+            code "--storage-state <file>"
+            code "--audit-origin <origin>"
+          cell "Audit as a saved login session (see Authenticated pages )."
+            link "Authenticated pages"
+        row
+          cell "--cdp <endpoint>"
+            code "--cdp <endpoint>"
+          cell "Attach to a running Chrome instead of launching one."
+    heading "Machine output" (level 2)
+    paragraph "emits one stable envelope for every command, single- or multi-page, so scripts always read :"
+      code "--format json"
+      code ".pages[0].…"
+    button "Copy Code"
+      code
+    paragraph "Each finding carries a stable — an identity robust to unrelated DOM churn, so a report can be diffed run-to-run without every re-indent reading as a change."
+      code "v1:"
+      strong "fingerprint"
+    heading "Exit codes" (level 3)
+    table
+      rowgroup
+        row
+          rowheader "Code"
+          rowheader "Meaning"
+      rowgroup
+        row
+          cell "0"
+            code "0"
+          cell "No findings at/above --fail-on."
+            code "--fail-on"
+        row
+          cell "1"
+            code "1"
+          cell "Findings at/above the threshold (the CI gate)."
+        row
+          cell "2"
+            code "2"
+          cell "Usage / navigation / engine error."
+    heading "Stability contract" (level 3)
+    list
+      listitem "Exit codes are ."
+        code "0/1/2"
+        strong "frozen"
+      listitem "carries ; within 0.x, changes are additive-only."
+        code "--format json"
+        code "schemaVersion"
+      listitem "Fingerprints () are immutable per version — a better algorithm ships as alongside, never by mutating ."
+        code "v1:…"
+        code "v2"
+        code "v1"
+      listitem "Reports are : no timestamps, stable ordering, LF-only — so the same DOM yields the same bytes."
+        strong "deterministic"
+      listitem "Output never conveys severity by color alone (always a text tag), and honors / . — the only network traffic is to the page you audit."
+        code "NO_COLOR"
+        code "FORCE_COLOR"
+        strong "No telemetry"
+    heading "In CI" (level 2)
+    paragraph "is a gate with no extra flags. Under GitHub Actions it additionally emits grouped annotations on the checks surface and a job-summary report — automatically ( to opt out):"
+      code "audit"
+      code "::error"
+      code "--no-annotate"
+    button "Copy Code"
+      code
+    heading "Pages behind a login" (level 2)
+    paragraph "Log in once and reuse the session — no password ever reaches the tool:"
+    button "Copy Code"
+      code
+    paragraph "See the guide for the full workflow, the security rules, and the interactive alternative."
+      link "Authenticated pages"
+      code "--cdp"
+    heading "Limitations" (level 2)
+    list
+      listitem "Five rules today — unlabeled interactive elements, images missing alt text, heading order, dialog labeling, and landmark structure — plus the full semantic tree. It is not a complete WCAG or axe-core suite; it is semantic-tree-based and tuned to "what a screen reader announces." Pair it with for contrast, focus visibility, and other rendered checks."
+        strong "Scope."
+        link "axe-core"
+      listitem "You name the pages (arguments today; a config file is planned) — there is no link discovery."
+        strong "Not a crawler."
+      listitem "Playwright + Chromium must be installable."
+        strong "Requires a real browser."
+    heading "See also" (level 2)
+    list
+      listitem "— audit behind a login."
+        link "Authenticated pages"
+      listitem "— the same engine for AI agents."
+        link "@real-a11y-dev/mcp"
+          code "@real-a11y-dev/mcp"
+      listitem "— the same engine in your tests."
+        link "@real-a11y-dev/testing"
+          code "@real-a11y-dev/testing"
+  contentinfo
+    link "Edit this page on GitHub"
+    paragraph "Last updated:"
+      time "[redacted]"
+    navigation "Pager"
+      link "Previous page@real-a11y-dev/mcp"
+      link "Next pageNext.js (App Router + React 19)"

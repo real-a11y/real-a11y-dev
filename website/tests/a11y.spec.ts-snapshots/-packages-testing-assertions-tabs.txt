@@ -35,46 +35,49 @@
 35. link "Playwright adapter"
 36. link "@real-a11y-dev/react"
 37. link "@real-a11y-dev/storybook-addon"
-38. button "Recipes"
-39. link "Next.js (App Router + React 19)"
-40. link "Storybook 8 + React 19"
-41. link "Peer Dependencies"
-42. link "CI Diff Bot"
-43. button "Reference"
-44. link "Accessible Names"
-45. link "Architecture"
-46. link "Troubleshooting"
-47. link "collectFindings(root, rules?)"
-48. link "listByRole(root, filter)"
-49. link "assertNoUnlabeledInteractive(root)"
-50. link "assertHeadingOrder(root)"
-51. link "assertDialogsLabeled(root)"
-52. link "assertLandmarkStructure(root)"
-53. link "A11yAssertionError"
-54. link "See also"
-55. link "@real-a11y-dev/testing"
-56. link "Matchers"
-57. button "Copy Code"
-58. generic
-59. table
+38. link "@real-a11y-dev/mcp"
+39. link "@real-a11y-dev/cli"
+40. button "Recipes"
+41. link "Next.js (App Router + React 19)"
+42. link "Storybook 8 + React 19"
+43. link "Peer Dependencies"
+44. link "CI Diff Bot"
+45. button "Reference"
+46. link "Authenticated Pages"
+47. link "Accessible Names"
+48. link "Architecture"
+49. link "Troubleshooting"
+50. link "collectFindings(root, rules?)"
+51. link "listByRole(root, filter)"
+52. link "assertNoUnlabeledInteractive(root)"
+53. link "assertHeadingOrder(root)"
+54. link "assertDialogsLabeled(root)"
+55. link "assertLandmarkStructure(root)"
+56. link "A11yAssertionError"
+57. link "See also"
+58. link "@real-a11y-dev/testing"
+59. link "Matchers"
 60. button "Copy Code"
 61. generic
-62. button "Copy Code"
-63. generic
-64. button "Copy Code"
-65. generic
-66. button "Copy Code"
-67. generic
-68. button "Copy Code"
-69. generic
-70. button "Copy Code"
-71. generic
-72. button "Copy Code"
-73. generic
-74. button "Copy Code"
-75. generic
-76. link "Matchers"
-77. link "Playwright adapter"
-78. link "Edit this page on GitHub"
-79. link "Previous pageSnapshots"
-80. link "Next pageMatchers"
+62. table
+63. button "Copy Code"
+64. generic
+65. button "Copy Code"
+66. generic
+67. button "Copy Code"
+68. generic
+69. button "Copy Code"
+70. generic
+71. button "Copy Code"
+72. generic
+73. button "Copy Code"
+74. generic
+75. button "Copy Code"
+76. generic
+77. button "Copy Code"
+78. generic
+79. link "Matchers"
+80. link "Playwright adapter"
+81. link "Edit this page on GitHub"
+82. link "Previous pageSnapshots"
+83. link "Next pageMatchers"

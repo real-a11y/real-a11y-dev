@@ -54,6 +54,10 @@
         paragraph "@real-a11y-dev/react"
       link "@real-a11y-dev/storybook-addon"
         paragraph "@real-a11y-dev/storybook-addon"
+      link "@real-a11y-dev/mcp"
+        paragraph "@real-a11y-dev/mcp"
+      link "@real-a11y-dev/cli"
+        paragraph "@real-a11y-dev/cli"
       button "Recipes"
         heading "Recipes" (level 2)
       link "Next.js (App Router + React 19)"
@@ -66,6 +70,8 @@
         paragraph "CI Diff Bot"
       button "Reference"
         heading "Reference" (level 2)
+      link "Authenticated Pages"
+        paragraph "Authenticated Pages"
       link "Accessible Names"
         paragraph "Accessible Names"
       link "Architecture"

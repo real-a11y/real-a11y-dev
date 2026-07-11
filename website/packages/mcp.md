@@ -8,8 +8,8 @@ description: A Model Context Protocol server that exposes the Real A11y semantic
 ::: warning Beta — preview page
 Published on npm as a **beta**: the API and tool surface may still change before
 1.0, and audit fidelity is bounded by known engine issues (see the Limitations
-section below). This page is a preview and isn't in the sidebar yet — pin a
-version rather than tracking the latest tag if you build on it.
+section below). Pin a version rather than tracking the latest tag if you build
+on it.
 :::
 
 The Real A11y MCP server gives an AI assistant a real browser and the

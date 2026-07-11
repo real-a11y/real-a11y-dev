@@ -153,6 +153,37 @@ export interface BrowserSessionOptions {
    * instead of launching a fresh browser (e.g. "http://localhost:9222").
    */
   cdpEndpoint?: string;
+  /**
+   * Network proxy for the launched browser. Chromium does not honor
+   * `HTTP_PROXY`/`HTTPS_PROXY` env vars on its own, so callers on corporate
+   * networks must pass one explicitly. Ignored when `cdpEndpoint` is set (the
+   * running browser already has its own network config).
+   */
+  proxy?: {
+    server: string;
+    bypass?: string;
+    username?: string;
+    password?: string;
+  };
+  /**
+   * Path to a Playwright storage-state JSON (cookies + origin storage), loaded
+   * into every **launched** context so pages open already authenticated. The
+   * user creates it out-of-band (e.g. the CLI's `login` helper); this is never
+   * an agent-supplied parameter. Applied at the single `newContext()` site, so
+   * it survives device-emulation context rebuilds. Rejected together with
+   * `cdpEndpoint` (a CDP connection reuses the running browser's own session).
+   */
+  storageState?: string;
+  /**
+   * When set (non-empty), extraction is refused unless the page's **final**
+   * origin (after redirects) is in this allowlist. This is the control that
+   * stops a redirect from an intended target to a different origin from
+   * silently auditing an authenticated page the operator never asked for.
+   * Empty/absent ⇒ no origin restriction (anonymous audits follow redirects
+   * freely — logged-out content isn't sensitive). Origins are compared as
+   * `new URL(...).origin` strings.
+   */
+  allowedOrigins?: string[];
 }
 
 /** Navigation / settle options for {@link A11ySession.open}. */
@@ -237,7 +268,19 @@ export class BrowserSession implements A11ySession {
   /** Serializes every operation so concurrent tool calls can't race the page. */
   private queue: Promise<unknown> = Promise.resolve();
 
-  constructor(private readonly opts: BrowserSessionOptions = {}) {}
+  constructor(private readonly opts: BrowserSessionOptions = {}) {
+    if (opts.storageState && opts.cdpEndpoint) {
+      throw new Error(
+        "storageState is for launched browsers — a CDP connection reuses the running browser's own session, so the two can't be combined.",
+      );
+    }
+  }
+
+  /** Origins allowed for extraction, or null when unrestricted. */
+  private get allowedOrigins(): Set<string> | null {
+    const list = this.opts.allowedOrigins;
+    return list && list.length ? new Set(list) : null;
+  }
 
   /**
    * Run `fn` after any in-flight operation. MCP clients dispatch tool calls
@@ -288,6 +331,10 @@ export class BrowserSession implements A11ySession {
           `Navigation to ${url} did not complete (still on about:blank). Try waitUntil:"load" or a larger timeoutMs.`,
         );
       }
+      // Origin pinning: with a session loaded, a redirect to a recorded cookie
+      // domain would render an authenticated page we never intended to audit.
+      // Enforce the allowlist on the FINAL url, before injecting or extracting.
+      this.assertAllowedOrigin(page.url());
       await this.injectBundle(page);
       await this.verifyReady(page);
       return { title: await page.title(), url: page.url() };
@@ -415,6 +462,25 @@ export class BrowserSession implements A11ySession {
     });
   }
 
+  /**
+   * Capture the current context's storage state (cookies + origin storage) —
+   * the "save" step behind the CLI's `login` helper. Returns the plain object;
+   * the caller owns serialization + file writing (permissions, atomicity).
+   * `indexedDB` is caller-gated: it's a no-op on Playwright < 1.51, so the CLI
+   * passes it only when the resolved version supports it.
+   */
+  async captureStorageState(
+    options: { indexedDB?: boolean } = {},
+  ): Promise<unknown> {
+    return this.run(async () => {
+      const context = this.context;
+      if (!context) {
+        throw new Error("No browser context is open — call open() first.");
+      }
+      return context.storageState(options.indexedDB ? { indexedDB: true } : {});
+    });
+  }
+
   async close(): Promise<void> {
     return this.run(async () => {
       if (this.opts.cdpEndpoint) {
@@ -445,6 +511,23 @@ export class BrowserSession implements A11ySession {
       throw new Error("No page is open. Call the open_page tool first.");
     }
     return this.page;
+  }
+
+  /** Refuse extraction when the final URL's origin isn't allowlisted. */
+  private assertAllowedOrigin(finalUrl: string): void {
+    const allowed = this.allowedOrigins;
+    if (!allowed) return;
+    let origin: string;
+    try {
+      origin = new URL(finalUrl).origin;
+    } catch {
+      throw new Error(`Refusing to audit an unparseable URL: ${finalUrl}`);
+    }
+    if (!allowed.has(origin)) {
+      throw new Error(
+        `Refusing to audit ${origin}: not an allowed audit origin under an authenticated session (a redirect may have left the intended site).`,
+      );
+    }
   }
 
   private async ensurePage(
@@ -486,6 +569,7 @@ export class BrowserSession implements A11ySession {
     if (!this.browser || !this.browser.isConnected()) {
       this.browser = await chromium.launch({
         headless: this.opts.headless ?? true,
+        ...(this.opts.proxy ? { proxy: this.opts.proxy } : {}),
       });
     }
 
@@ -502,6 +586,11 @@ export class BrowserSession implements A11ySession {
       ctxOpts = descriptor;
     }
     if (emu.viewport) ctxOpts = { ...ctxOpts, viewport: emu.viewport };
+    // Load the session into every launched context — including this one when a
+    // device change rebuilds it, so auth is never silently dropped by emulation.
+    if (this.opts.storageState) {
+      ctxOpts = { ...ctxOpts, storageState: this.opts.storageState };
+    }
 
     // Emulation changed (or first open) → rebuild the context with it.
     if (this.context) {

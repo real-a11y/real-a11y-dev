@@ -54,6 +54,10 @@
         paragraph "@real-a11y-dev/react"
       link "@real-a11y-dev/storybook-addon"
         paragraph "@real-a11y-dev/storybook-addon"
+      link "@real-a11y-dev/mcp"
+        paragraph "@real-a11y-dev/mcp"
+      link "@real-a11y-dev/cli"
+        paragraph "@real-a11y-dev/cli"
       button "Recipes"
         heading "Recipes" (level 2)
       link "Next.js (App Router + React 19)"
@@ -66,6 +70,8 @@
         paragraph "CI Diff Bot"
       button "Reference"
         heading "Reference" (level 2)
+      link "Authenticated Pages"
+        paragraph "Authenticated Pages"
       link "Accessible Names"
         paragraph "Accessible Names"
       link "Architecture"
@@ -98,7 +104,7 @@
   main
     heading "@real-a11y-dev/mcp" (level 1)
     paragraph "Beta — preview page"
-    paragraph "Published on npm as a : the API and tool surface may still change before 1.0, and audit fidelity is bounded by known engine issues (see the Limitations section below). This page is a preview and isn't in the sidebar yet — pin a version rather than tracking the latest tag if you build on it."
+    paragraph "Published on npm as a : the API and tool surface may still change before 1.0, and audit fidelity is bounded by known engine issues (see the Limitations section below). Pin a version rather than tracking the latest tag if you build on it."
       strong "beta"
     paragraph "The Real A11y MCP server gives an AI assistant a real browser and the accessibility tree behind any page, so it can a URL and report the defects a screen reader would announce — not guess from pasted HTML (which hides computed roles and visibility) or a screenshot (which has no semantics). Point any client at it and ask it to audit a page in plain language."
       strong "audit"
@@ -384,4 +390,5 @@
     paragraph "Last updated:"
       time "[redacted]"
     navigation "Pager"
-      link "Next pageGetting Started"
+      link "Previous page@real-a11y-dev/storybook-addon"
+      link "Next page@real-a11y-dev/cli"

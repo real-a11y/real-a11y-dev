@@ -1,0 +1,17 @@
+  h2 Introduction
+  h2 Reading the Tree
+  h2 Chrome Extension
+  h2 Packages
+    h3 @real-a11y-dev/testing
+  h2 Recipes
+  h2 Reference
+  h2 On this page
+h1 Auditing authenticated pages
+  h2 Saved session (recommended)
+    h3 1. Save the session
+    h3 2. Audit with it
+    h3 Origin pinning
+  h2 Attach to your logged-in browser (--cdp)
+  h2 Security
+    h3 In CI
+  h2 See also
