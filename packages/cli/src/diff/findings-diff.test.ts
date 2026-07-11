@@ -2,6 +2,7 @@ import type { Finding } from "@real-a11y-dev/testing";
 import { describe, expect, it } from "vitest";
 
 import { fingerprintFindings } from "../fingerprint.js";
+
 import { diffFindings, summarize, type DiffEntry } from "./findings-diff.js";
 
 const button = (over: Partial<Finding> = {}): Finding => ({

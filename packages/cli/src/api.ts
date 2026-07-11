@@ -1,14 +1,39 @@
 /**
  * @real-a11y-dev/cli — programmatic surface.
  *
- * Pure only: fingerprints, sanitization, exit-code helpers, and the envelope
- * types. No browser, no playwright — orchestration APIs live in
- * `@real-a11y-dev/testing` (attach) and `@real-a11y-dev/mcp` (BrowserSession).
- * Phase 2 adds `toSarif`, `diffFindings`, and `parseSnapshotArtifact` here.
+ * Pure only: fingerprints, the snapshot artifact, the findings-aware diff,
+ * sanitization, and exit-code helpers. No browser, no playwright —
+ * orchestration APIs live in `@real-a11y-dev/testing` (attach) and
+ * `@real-a11y-dev/mcp` (BrowserSession).
  */
 
-export { fingerprintFindings, hashId } from "./fingerprint.js";
-export type { FingerprintedFinding, FingerprintId } from "./fingerprint.js";
+export { fingerprintFindings, hashId, componentsOf } from "./fingerprint.js";
+export type {
+  FingerprintedFinding,
+  FingerprintId,
+  FindingComponents,
+} from "./fingerprint.js";
+
+// Snapshot artifact — the diffable `a11y-snapshot.json`.
+export {
+  ARTIFACT_SCHEMA_VERSION,
+  buildArtifact,
+  serializeArtifact,
+  parseSnapshotArtifact,
+} from "./snapshot-artifact.js";
+export type { SnapshotArtifact, SnapshotPage } from "./snapshot-artifact.js";
+
+// Findings-aware diff.
+export { diffFindings } from "./diff/findings-diff.js";
+export type {
+  DiffEntry,
+  DiffClass,
+  DiffSummary,
+} from "./diff/findings-diff.js";
+export { diffArtifacts } from "./diff/page-diff.js";
+export type { DiffResult, PageDiff } from "./diff/page-diff.js";
+export { diffViews } from "./diff/views-diff.js";
+export type { ViewDiff } from "./diff/views-diff.js";
 
 export {
   projectFinding,

@@ -9,8 +9,8 @@
  * changes need no bump); a version mismatch is a hard error ("re-snapshot").
  */
 
-import type { FingerprintedFinding } from "./fingerprint.js";
 import { CliError } from "./exit.js";
+import type { FingerprintedFinding } from "./fingerprint.js";
 
 export const ARTIFACT_SCHEMA_VERSION = 1;
 
