@@ -67,8 +67,25 @@ Every command takes `--format json` for a stable machine envelope
 see `real-a11y <command> --help`.
 
 Local builds audit directly: `real-a11y audit ./dist/index.html` (paths you
-type need no ceremony). Pages behind a login: attach to your signed-in Chrome
-with `--cdp http://localhost:9222`.
+type need no ceremony).
+
+## Pages behind a login
+
+Log in once and reuse the session — no password ever reaches the tool:
+
+```sh
+real-a11y login https://app.example.com --save auth.json   # log in by hand, press Enter
+real-a11y audit https://app.example.com/dashboard --storage-state auth.json
+```
+
+`auth.json` holds live session tokens — **gitignore it** (the `login` command
+warns if you don't) and prefer a dedicated test account. Under a loaded
+session, auditing is **pinned to the target's origin**: if a page redirects
+off it, extraction is refused (a safeguard against a stray or hostile redirect
+pulling an unintended authenticated page into your report) — pass
+`--audit-origin <origin>` to allow a known SSO bounce. Session storage isn't
+captured; for apps that keep auth there, attach to your signed-in Chrome with
+`--cdp http://localhost:9222` instead (the interactive escape hatch).
 
 ## Output stability
 

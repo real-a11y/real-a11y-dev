@@ -25,7 +25,13 @@ import { renderPretty } from "../render/pretty.js";
 import { redactUrl } from "../sanitize.js";
 import { createSession, openPage, snapshotPage } from "../session.js";
 
-import { outputOf, resolveTargets, rootOf, sessionFlags } from "./common.js";
+import {
+  isAuthenticated,
+  outputOf,
+  resolveTargets,
+  rootOf,
+  sessionFlags,
+} from "./common.js";
 
 export const auditCommand: CommandFn = async (positionals, flags) => {
   // Everything user-typed validates before a browser launches.
@@ -36,8 +42,9 @@ export const auditCommand: CommandFn = async (positionals, flags) => {
   const targets = resolveTargets(positionals, flags);
   const output = outputOf(flags);
   const quiet = flags.quiet === true;
+  const authed = isAuthenticated(flags);
 
-  const session = await createSession(sessionFlags(flags));
+  const session = await createSession(sessionFlags(flags, targets));
   const pages: PageReport[] = [];
   try {
     for (const target of targets) {
@@ -49,6 +56,7 @@ export const auditCommand: CommandFn = async (positionals, flags) => {
           target.url,
           openOptions,
           target.fileApproved,
+          authed,
         );
         const snapshot = await snapshotPage(session, rootOf(flags), {
           ...(rules ? { rules } : {}),

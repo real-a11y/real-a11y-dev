@@ -25,7 +25,13 @@ import { renderPretty } from "../render/pretty.js";
 import { redactUrl } from "../sanitize.js";
 import { createSession, openPage, snapshotPage } from "../session.js";
 
-import { outputOf, rootOf, sessionFlags, singleTarget } from "./common.js";
+import {
+  isAuthenticated,
+  outputOf,
+  rootOf,
+  sessionFlags,
+  singleTarget,
+} from "./common.js";
 
 function section(title: string, body: string): string {
   return `== ${title} ==\n${body.trim() === "" ? "(empty)" : body}\n`;
@@ -40,7 +46,7 @@ export const inspectCommand: CommandFn = async (positionals, flags) => {
   const output = outputOf(flags);
   const quiet = flags.quiet === true;
 
-  const session = await createSession(sessionFlags(flags));
+  const session = await createSession(sessionFlags(flags, [target]));
   let page: PageReport;
   try {
     progress(`inspecting ${target.name} …`, { quiet });
@@ -49,6 +55,7 @@ export const inspectCommand: CommandFn = async (positionals, flags) => {
       target.url,
       openOptions,
       target.fileApproved,
+      isAuthenticated(flags),
     );
     const snapshot = await snapshotPage(session, rootOf(flags), {
       ...(rules ? { rules } : {}),

@@ -5,6 +5,7 @@ import { CliError } from "../exit.js";
 import { assertWritableTarget } from "../output.js";
 import { redactUrl } from "../sanitize.js";
 import type { SessionFlags } from "../session.js";
+import { validateStorageStatePath } from "../storage-state.js";
 import { assertAllowedUrl, normalizeTarget } from "../url-gate.js";
 
 export interface Target {
@@ -59,11 +60,60 @@ export function singleTarget(
   return resolveTargets(positionals, flags)[0];
 }
 
-export function sessionFlags(flags: FlagValues): SessionFlags {
-  return {
+/** True when this run loads a saved session — commands thread it to openPage. */
+export function isAuthenticated(flags: FlagValues): boolean {
+  return typeof flags["storage-state"] === "string";
+}
+
+function auditOrigins(flags: FlagValues): string[] {
+  const raw = flags["audit-origin"];
+  const values = Array.isArray(raw) ? raw : typeof raw === "string" ? [raw] : [];
+  return values.map((value) => {
+    let origin: string;
+    try {
+      origin = new URL(value).origin;
+    } catch {
+      throw new CliError(
+        `--audit-origin expects an origin like https://app.example.com — got "${value}"`,
+      );
+    }
+    return origin;
+  });
+}
+
+/**
+ * Build the session config. When `--storage-state` is set the run is
+ * authenticated, so we also compute the origin allowlist (the http(s) target
+ * origins plus any `--audit-origin`) — origin pinning that stops a redirect
+ * from routing extraction to an unintended, cookie-matching origin.
+ */
+export function sessionFlags(
+  flags: FlagValues,
+  targets: readonly Target[] = [],
+): SessionFlags {
+  const base: SessionFlags = {
     headful: flags.headful === true,
     ...(typeof flags.cdp === "string" ? { cdp: flags.cdp } : {}),
   };
+  const stateFlag = flags["storage-state"];
+  if (typeof stateFlag !== "string") return base;
+  if (typeof flags.cdp === "string") {
+    throw new CliError(
+      "--storage-state can't be combined with --cdp.",
+      "--cdp reuses your running Chrome's session — the storage state file is for fresh launches.",
+    );
+  }
+  const storageState = validateStorageStatePath(stateFlag);
+  const origins = new Set<string>(auditOrigins(flags));
+  for (const target of targets) {
+    try {
+      const { protocol, origin } = new URL(target.url);
+      if (protocol === "http:" || protocol === "https:") origins.add(origin);
+    } catch {
+      // file:/data: targets have no meaningful origin — nothing to pin.
+    }
+  }
+  return { ...base, storageState, allowedOrigins: [...origins] };
 }
 
 export function rootOf(flags: FlagValues): string {

@@ -32,6 +32,8 @@ const BROWSER_FLAGS: Options = {
   headful: { type: "boolean" },
   cdp: { type: "string" },
   "allow-file": { type: "boolean" },
+  "storage-state": { type: "string" },
+  "audit-origin": { type: "string", multiple: true },
 };
 
 const OUTPUT_FLAGS: Options = {
@@ -64,6 +66,17 @@ const VIEW_FLAGS: Options = {
   "include-generic": { type: "boolean" },
 };
 
+// login is a narrow, interactive command: no format/output/emulation/auth
+// flags — it forces headful and writes a session file.
+const LOGIN_FLAGS: Options = {
+  save: { type: "string" },
+  "wait-until": { type: "string" },
+  settle: { type: "string" },
+  timeout: { type: "string" },
+  verbose: { type: "boolean" },
+  help: { type: "boolean", short: "h" },
+};
+
 export const LIST_CATEGORIES = [
   "heading",
   "link",
@@ -83,8 +96,12 @@ const SHARED_FLAG_HELP = `  --root <selector>      Scope extraction             
   -f, --format <fmt>     pretty | json                    (default: pretty)
   -o, --output <file>    Write the report to a file (progress stays on stderr)
   --headful              Show the browser window
-  --cdp <endpoint>       Attach to a running Chrome — also the way to audit
-                         pages behind a login (no emulation flags over CDP)
+  --storage-state <file> Audit as a logged-in user, using a saved session
+                         (create it with: real-a11y login <url> --save <file>)
+  --audit-origin <origin>  Extra origin allowed under --storage-state
+                         (repeatable; defaults to the target's own origin)
+  --cdp <endpoint>       Attach to a running Chrome — the interactive way to
+                         audit a login (no emulation flags over CDP)
   -q, --quiet            Suppress progress
   --verbose              Extra diagnostics on stderr`;
 
@@ -184,6 +201,32 @@ Flags:
 ${SHARED_FLAG_HELP}
 `,
     load: async () => (await import("./commands/views.js")).listCommand,
+  },
+  login: {
+    summary: "Save a login session for --storage-state audits",
+    options: LOGIN_FLAGS,
+    help: `Usage: real-a11y login <url> --save <file>
+
+Opens a visible browser. Log in by hand — MFA, SSO, and passkeys all work,
+because a human is driving. Then press Enter HERE to save the session to a
+file you can later pass to --storage-state.
+
+The saved file holds live session tokens: keep it out of version control
+(the command warns if it isn't) and prefer a dedicated low-privilege test
+account. Session storage isn't captured — apps that keep auth there need --cdp.
+
+Examples:
+  real-a11y login https://app.example.com --save auth.json
+  real-a11y audit https://app.example.com/dashboard --storage-state auth.json
+
+Flags:
+  --save <file>          Where to write the session          (required)
+  --wait-until <state>   load|domcontentloaded|networkidle|commit (default: load)
+  --settle <ms>          Extra wait after load               (default: 0)
+  --timeout <ms>         Navigation timeout                  (default: 30000)
+  --verbose              Extra diagnostics on stderr
+`,
+    load: async () => (await import("./commands/login.js")).loginCommand,
   },
 };
 

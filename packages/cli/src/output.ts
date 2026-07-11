@@ -37,18 +37,20 @@ export function assertWritableTarget(target: string): void {
   }
 }
 
-export function writeReport(
-  target: string | undefined,
+/**
+ * Atomic write: tmp (random suffix, exclusive create) + rename, so a killed
+ * run never leaves a half-written file and a predictable name can't be
+ * pre-created/symlinked by another local user. `mode` sets the tmp file's
+ * permissions at create time (e.g. 0o600 for credential files) — honored on
+ * POSIX, a no-op on Windows.
+ */
+export function writeFileAtomic(
+  target: string,
   content: string,
-): void {
-  if (!target) {
-    process.stdout.write(content);
-    return;
-  }
+  options: { mode?: number } = {},
+): string {
   const abs = resolve(target);
   assertWritableTarget(abs);
-  // Random suffix + exclusive create: a predictable pid-based name could be
-  // pre-created (or symlinked) by another local user in a shared directory.
   const tmp = `${abs}.tmp-${randomBytes(6).toString("hex")}`;
   const unregister = registerCleanup(() => {
     try {
@@ -58,11 +60,27 @@ export function writeReport(
     }
   });
   try {
-    writeFileSync(tmp, content, { encoding: "utf8", flag: "wx" });
+    writeFileSync(tmp, content, {
+      encoding: "utf8",
+      flag: "wx",
+      ...(options.mode !== undefined ? { mode: options.mode } : {}),
+    });
     renameSync(tmp, abs);
   } finally {
     unregister();
   }
+  return abs;
+}
+
+export function writeReport(
+  target: string | undefined,
+  content: string,
+): void {
+  if (!target) {
+    process.stdout.write(content);
+    return;
+  }
+  const abs = writeFileAtomic(target, content);
   process.stderr.write(`report written to ${abs}\n`);
 }
 

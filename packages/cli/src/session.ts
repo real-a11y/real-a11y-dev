@@ -63,6 +63,10 @@ function isPlaywrightNotInstalled(err: unknown): boolean {
 export interface SessionFlags {
   headful?: boolean;
   cdp?: string;
+  /** Validated absolute path to a storage-state file (see storage-state.ts). */
+  storageState?: string;
+  /** Origins allowed for extraction when a session is loaded (origin pinning). */
+  allowedOrigins?: string[];
 }
 
 export async function createSession(
@@ -87,6 +91,10 @@ export async function createSession(
     headless: !flags.headful,
     ...(flags.cdp ? { cdpEndpoint: flags.cdp } : {}),
     ...(proxy ? { proxy } : {}),
+    ...(flags.storageState ? { storageState: flags.storageState } : {}),
+    ...(flags.allowedOrigins && flags.allowedOrigins.length
+      ? { allowedOrigins: flags.allowedOrigins }
+      : {}),
   });
   registerCleanup(() => session.close());
   return session;
@@ -98,11 +106,12 @@ export async function openPage(
   url: string,
   options: OpenOptions,
   fileApproved: boolean,
+  authenticated = false,
 ): Promise<{ title: string; url: string }> {
   try {
     const result = await session.open(url, options);
     assertFinalUrl(result.url, fileApproved);
-    noteCrossOrigin(url, result.url);
+    noteCrossOrigin(url, result.url, authenticated);
     return result;
   } catch (err) {
     if (err instanceof CliError) throw err;
@@ -124,6 +133,14 @@ export async function openPage(
     }
     if (/emulation is not supported over a CDP/i.test(raw)) {
       throw new CliError(message);
+    }
+    // Origin pinning refused extraction — a redirect left the intended site
+    // while a session was loaded. Surface it as its own catalog entry.
+    if (/not an allowed audit origin/i.test(raw)) {
+      throw new CliError(
+        message,
+        "the page redirected off the audited origin; pass --audit-origin <origin> if that's expected.",
+      );
     }
     if (/connect ECONNREFUSED|browserType.connectOverCDP/i.test(raw)) {
       throw new CliError(
@@ -170,7 +187,11 @@ export async function callPage<T>(
  * but content from an unexpected host quietly entering a report is worth a
  * visible note (it may end up in a PR comment in phase 2).
  */
-function noteCrossOrigin(requested: string, landed: string): void {
+function noteCrossOrigin(
+  requested: string,
+  landed: string,
+  authenticated: boolean,
+): void {
   try {
     const from = new URL(requested);
     const to = new URL(landed);
@@ -178,8 +199,13 @@ function noteCrossOrigin(requested: string, landed: string): void {
       (from.protocol === "http:" || from.protocol === "https:") &&
       from.origin !== to.origin
     ) {
+      // Under a loaded session, an unexpected origin often means the session
+      // expired and the site bounced to a login page — say so.
+      const suffix = authenticated
+        ? " — if this is a login page, the storage state may have expired; re-run: real-a11y login <url> --save <file>"
+        : "";
       process.stderr.write(
-        `note: landed on ${redactUrl(to.origin)} (requested ${redactUrl(from.origin)})\n`,
+        `note: landed on ${redactUrl(to.origin)} (requested ${redactUrl(from.origin)})${suffix}\n`,
       );
     }
   } catch {

@@ -24,6 +24,7 @@ import {
 } from "../session.js";
 
 import {
+  isAuthenticated,
   outputOf,
   rootOf,
   sessionFlags,
@@ -37,7 +38,7 @@ async function withPage<T>(
   body: (session: Awaited<ReturnType<typeof createSession>>) => Promise<T>,
 ): Promise<{ value: T; finalUrl: string }> {
   const openOptions = parseOpenOptions(flags);
-  const session = await createSession(sessionFlags(flags));
+  const session = await createSession(sessionFlags(flags, [target]));
   try {
     progress(`opening ${target.name} …`, { quiet: flags.quiet === true });
     const opened = await openPage(
@@ -45,6 +46,7 @@ async function withPage<T>(
       target.url,
       openOptions,
       target.fileApproved,
+      isAuthenticated(flags),
     );
     return { value: await body(session), finalUrl: redactUrl(opened.url) };
   } finally {
