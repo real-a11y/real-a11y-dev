@@ -12,6 +12,7 @@ import {
 } from "@real-a11y-dev/core";
 import type { TreeViewMode } from "@real-a11y-dev/core";
 
+import { isTrustedSender } from "./routing.js";
 import type { PanelToContent } from "./types.js";
 
 const isSubFrame = window !== window.top;
@@ -132,7 +133,16 @@ const picker = createPicker({
 
 // Listen for messages from side panel (via background)
 chrome.runtime.onMessage.addListener(
-  (message: PanelToContent, _sender, sendResponse) => {
+  (message: PanelToContent, sender, sendResponse) => {
+    // Only honor commands from our own extension's background (which relays
+    // the side panel's actions — the panel never messages this frame
+    // directly). onMessage is same-extension only, so this never fires in
+    // practice, but these handlers dispatch clicks + keystrokes and read
+    // live field state, so assert the trust boundary explicitly rather than
+    // acting on whatever reaches the listener. Returning false closes the
+    // channel with no response for a rejected sender.
+    if (!isTrustedSender(sender, chrome.runtime.id)) return false;
+
     switch (message.type) {
       case "REQUEST_TREE": {
         currentViewMode = message.payload.viewMode;

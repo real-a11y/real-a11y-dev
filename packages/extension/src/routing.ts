@@ -208,3 +208,34 @@ export function planPanelDisconnectCleanup(opts: {
 
   return out;
 }
+
+// ---- Message-sender trust boundary ----
+
+/**
+ * True only when a runtime message originated from THIS extension's own
+ * contexts (the background, the side panel, or one of our content scripts).
+ *
+ * Chrome already scopes `chrome.runtime.onMessage` to the same extension, so
+ * under current routing this check is effectively a no-op — `sender.id` is
+ * always `chrome.runtime.id`. Its value is to make that trust boundary
+ * explicit and self-documenting at each listener (the content-script handlers
+ * dispatch clicks/keystrokes and read live field state) rather than silently
+ * acting on whatever arrives.
+ *
+ * It does NOT cover an external surface: messages from other extensions or
+ * from `externally_connectable` pages arrive on the separate
+ * `onMessageExternal` / `onConnectExternal` listeners, never on the guarded
+ * `onMessage`. Adding such a surface later would require its own guard there —
+ * this one would never see those messages.
+ *
+ * `ownExtensionId` is `chrome.runtime.id` at the call site — taking it as an
+ * argument (rather than reading `chrome` here) keeps this pure and
+ * unit-testable without a Chrome mock. `Boolean(ownExtensionId)` guards the
+ * `undefined === undefined` case so an unavailable id never reads as trusted.
+ */
+export function isTrustedSender(
+  sender: { id?: string } | undefined,
+  ownExtensionId: string | undefined,
+): boolean {
+  return Boolean(ownExtensionId) && sender?.id === ownExtensionId;
+}

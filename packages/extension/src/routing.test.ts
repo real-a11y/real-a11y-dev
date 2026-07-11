@@ -7,6 +7,7 @@ import {
   urlsMatch,
   planFrameAnnouncementResponse,
   planFrameHello,
+  isTrustedSender,
 } from "./routing.js";
 
 describe("prefixNodeId", () => {
@@ -276,6 +277,41 @@ describe("planFrameHello", () => {
       sidepanelConnected: true,
     });
     for (const item of plan) expect(item).toMatchObject({ frameId: 9 });
+  });
+});
+
+describe("isTrustedSender", () => {
+  const OWN = "abcdefghijklmnopabcdefghijklmnop"; // our extension id
+
+  it("accepts a message from our own extension (sender.id === ownId)", () => {
+    expect(isTrustedSender({ id: OWN }, OWN)).toBe(true);
+  });
+
+  it("accepts even when the sender carries a tab (content-script message)", () => {
+    // A content script's message still has sender.id === our extension id;
+    // the extra sender.tab must not change the trust decision.
+    const contentSender = { id: OWN, tab: { id: 5 } };
+    expect(isTrustedSender(contentSender, OWN)).toBe(true);
+  });
+
+  it("rejects a foreign extension id", () => {
+    expect(isTrustedSender({ id: "some-other-extension-id" }, OWN)).toBe(false);
+  });
+
+  it("rejects a sender with no id", () => {
+    expect(isTrustedSender({}, OWN)).toBe(false);
+  });
+
+  it("rejects an undefined sender", () => {
+    expect(isTrustedSender(undefined, OWN)).toBe(false);
+  });
+
+  it("rejects when our own id is unavailable, even if the sender also lacks one", () => {
+    // Guards the undefined === undefined trap: no id on either side must
+    // NOT read as trusted.
+    expect(isTrustedSender({}, undefined)).toBe(false);
+    expect(isTrustedSender(undefined, undefined)).toBe(false);
+    expect(isTrustedSender({ id: "" }, "")).toBe(false);
   });
 });
 

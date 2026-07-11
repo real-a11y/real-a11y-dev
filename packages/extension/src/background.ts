@@ -3,6 +3,7 @@
 import { buildFrameInfoMap, mergeFrameTrees } from "./frame-merger.js";
 import {
   type PlannedTabMessage,
+  isTrustedSender,
   prefixNodeId,
   parseNodeId,
   planFrameAnnouncementResponse,
@@ -256,6 +257,13 @@ chrome.windows.onFocusChanged.addListener((windowId) => {
 
 // Route messages between frames, side panel, and content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Reject anything not sent by our own extension's contexts (content
+  // scripts, side panel). onMessage is same-extension only, so this never
+  // fires in practice — but the branches below trust `sender.tab` and route
+  // powerful commands (CLOSE_TAB, SEND_KEY, DISPATCH_ACTION) to the active
+  // tab, so the trust boundary is worth asserting explicitly here.
+  if (!isTrustedSender(sender, chrome.runtime.id)) return false;
+
   // ---- Messages from content script frames ----
   if (sender.tab?.id) {
     const tabId = sender.tab.id;
