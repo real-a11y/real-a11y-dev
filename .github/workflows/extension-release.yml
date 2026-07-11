@@ -53,8 +53,7 @@ jobs:
       # extension's unit tests never run here — so a type error or a failing
       # test could ship straight to the Chrome Web Store. Gate the release on
       # the extension plus the packages it bundles (core, ui, serialize); the
-      # `^...` build above already produced their dist/. The extension's
-      # `typecheck` also re-checks the manifest/package.json version sync.
+      # `^...` build above already produced their dist/.
       - name: Typecheck the extension and its bundled deps
         run: pnpm --filter "@real-a11y-dev/semantic-navigator-extension..." typecheck
 
