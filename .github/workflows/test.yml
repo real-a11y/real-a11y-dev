@@ -110,6 +110,11 @@ jobs:
       - name: Run MCP e2e tests
         run: pnpm --filter @real-a11y-dev/mcp test:e2e
 
+      # CLI e2e — spawns the built `real-a11y` bin against data: URLs;
+      # reuses the same Chromium install.
+      - name: Run CLI e2e tests
+        run: pnpm --filter @real-a11y-dev/cli test:e2e
+
       - name: Upload Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -149,6 +154,20 @@ jobs:
 
       - name: Build workspace packages
         run: pnpm -r --filter='./packages/*' build
+
+      # CLI unit tests on both OSes — the CLI's path/URL normalization and
+      # exit-code discipline are exactly the class of behavior only a
+      # Windows runner catches (pathToFileURL, drive-letter "schemes").
+      # Browserless, so it costs seconds.
+      - name: Run CLI unit tests
+        run: pnpm --filter @real-a11y-dev/cli test
+
+      # Spawn the built bin browser-free — exit-code and stdout-drain
+      # discipline on Windows only shows up in a real spawned process.
+      - name: Smoke-test CLI bin (browser-free)
+        run: |
+          node packages/cli/dist/index.js --version
+          node packages/cli/dist/index.js --help
 
       - name: Smoke-test example dev servers
         run: pnpm examples:dev-smoke
@@ -217,7 +236,7 @@ jobs:
           # Published packages only — extension and example-patterns are
           # private; test-only edits need no changelog entry.
           src=$(echo "$changed" \
-            | grep -E '^packages/(core|serialize|ui|inspector|react|storybook-addon|testing|validate|mcp)/src/' \
+            | grep -E '^packages/(core|serialize|ui|inspector|react|storybook-addon|testing|validate|mcp|cli)/src/' \
             | grep -vE '\.(test|spec)\.[tj]sx?$' || true)
           added=$(git diff --name-only --diff-filter=A "$BASE"...HEAD -- .changeset \
             | grep -E '\.md$' | grep -viE 'README' || true)

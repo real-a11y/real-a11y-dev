@@ -1,13 +1,13 @@
 {
-  "name": "@real-a11y-dev/mcp",
+  "name": "@real-a11y-dev/cli",
   "version": "0.0.1",
-  "description": "Model Context Protocol server that exposes the Real A11y semantic tree and accessibility audits to AI agents",
+  "description": "Audit what a screen reader hears, from your shell — semantic-tree accessibility audits with CI-grade exit codes and formats",
   "license": "MIT",
   "author": "Juan Crisostomo (Real A11y)",
   "repository": {
     "type": "git",
     "url": "https://github.com/real-a11y/real-a11y-dev.git",
-    "directory": "packages/mcp"
+    "directory": "packages/cli"
   },
   "homepage": "https://real-a11y.dev",
   "bugs": {
@@ -17,34 +17,31 @@
     "a11y",
     "accessibility",
     "aria",
-    "mcp",
-    "model-context-protocol",
-    "ai",
-    "agent",
-    "audit"
+    "cli",
+    "audit",
+    "ci",
+    "semantic-tree",
+    "screen-reader"
   ],
   "engines": {
     "node": ">=20"
   },
   "type": "module",
   "bin": {
-    "real-a11y-mcp": "./dist/index.js"
+    "real-a11y": "./dist/index.js"
   },
-  "main": "./dist/server.js",
-  "types": "./dist/server.d.ts",
+  "main": "./dist/api.js",
+  "types": "./dist/api.d.ts",
   "sideEffects": false,
   "exports": {
     ".": {
-      "types": "./dist/server.d.ts",
-      "import": "./dist/server.js"
-    },
-    "./browser": {
-      "types": "./dist/browser.d.ts",
-      "import": "./dist/browser.js"
+      "types": "./dist/api.d.ts",
+      "import": "./dist/api.js"
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE"
   ],
   "publishConfig": {
     "access": "public",
@@ -55,16 +52,19 @@
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:e2e": "vitest run --config vitest.e2e.config.ts",
-    "start": "node dist/index.js"
+    "test:e2e": "vitest run --config vitest.e2e.config.ts"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.0",
-    "@real-a11y-dev/testing": "workspace:*",
-    "zod": "^3.25.0"
+    "@real-a11y-dev/mcp": "workspace:*",
+    "@real-a11y-dev/testing": "workspace:*"
   },
   "peerDependencies": {
     "playwright": ">=1.49.0 <2"
+  },
+  "peerDependenciesMeta": {
+    "playwright": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

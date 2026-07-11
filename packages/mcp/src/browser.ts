@@ -153,6 +153,18 @@ export interface BrowserSessionOptions {
    * instead of launching a fresh browser (e.g. "http://localhost:9222").
    */
   cdpEndpoint?: string;
+  /**
+   * Network proxy for the launched browser. Chromium does not honor
+   * `HTTP_PROXY`/`HTTPS_PROXY` env vars on its own, so callers on corporate
+   * networks must pass one explicitly. Ignored when `cdpEndpoint` is set (the
+   * running browser already has its own network config).
+   */
+  proxy?: {
+    server: string;
+    bypass?: string;
+    username?: string;
+    password?: string;
+  };
 }
 
 /** Navigation / settle options for {@link A11ySession.open}. */
@@ -486,6 +498,7 @@ export class BrowserSession implements A11ySession {
     if (!this.browser || !this.browser.isConnected()) {
       this.browser = await chromium.launch({
         headless: this.opts.headless ?? true,
+        ...(this.opts.proxy ? { proxy: this.opts.proxy } : {}),
       });
     }
 
