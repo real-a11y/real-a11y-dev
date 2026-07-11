@@ -125,9 +125,20 @@ export const loginCommand: CommandFn = async (positionals, flags) => {
       mode: 0o600,
     });
     warnIfTracked(abs);
+    // Show the exact next command — the session file does nothing until it's
+    // passed to an audit, and forgetting that is the obvious first-run trap.
+    let origin: string;
+    try {
+      origin = new URL(url).origin;
+    } catch {
+      origin = url;
+    }
     process.stderr.write(
-      `saved session state to ${abs} — treat it like a password; it expires when the site's session does.\n` +
-        "note: session storage isn't captured — apps that keep auth there will need --cdp instead.\n",
+      `saved session state to ${abs}\n` +
+        `audit a page on ${origin} with it:\n` +
+        `  real-a11y audit <url> --storage-state ${save}\n` +
+        "this file holds live session tokens — treat it like a password (it expires when the site's session does).\n" +
+        "note: session storage isn't captured — apps that keep auth there need --cdp instead.\n",
     );
     return EXIT.OK;
   } finally {
