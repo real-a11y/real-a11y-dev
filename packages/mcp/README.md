@@ -83,9 +83,15 @@ To pin the version instead, add it to your project (`pnpm add -D
 
 | Var | Effect |
 | --- | --- |
-| `REAL_A11Y_MCP_CDP` | Attach to a running Chrome over CDP (e.g. `http://localhost:9222`) instead of launching one. |
+| `REAL_A11Y_MCP_CDP` | Attach to a running Chrome over CDP (e.g. `http://localhost:9222`) instead of launching one — audit pages behind a login you're already signed into. |
 | `REAL_A11Y_MCP_HEADFUL` | `1` launches a visible browser instead of headless. |
 | `REAL_A11Y_MCP_ALLOW_FILE` | `1` permits auditing `file://` URLs. Off by default: an LLM-driven server that can open `file:///…/.env` and read the DOM back is a local-file exfiltration primitive. |
+| `REAL_A11Y_MCP_STORAGE_STATE` | Path to a Playwright storage-state file — audit pages behind a login as that saved session. Create it out-of-band (e.g. `real-a11y login`); it's never a tool parameter, so session tokens never enter the agent's context. The server refuses to start if the file is missing or malformed. |
+| `REAL_A11Y_MCP_ALLOWED_ORIGINS` | Comma-separated origins that auditing is restricted to when a storage state is loaded (origin pinning). **Strongly recommended** alongside `STORAGE_STATE`: without it, a redirect could audit an unintended site with your session. |
+
+Auth material is always operator-configured, never a tool parameter — the agent
+just benefits from a session you set up. Use a dedicated low-privilege test
+account, and keep the storage-state file out of version control.
 
 ## Status
 
