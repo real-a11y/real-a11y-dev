@@ -1,0 +1,132 @@
+name: Docs currency
+
+# Advisory backstop for the `pr` skill's docs step: when a PR changes package
+# SOURCE but touches no markdown, remind the author to check whether the docs
+# need to move with it. It posts ONE sticky comment (with the doc-map) and
+# clears it once docs are added or the author opts out. It never fails, so it
+# can't block a legitimate internal refactor — escalate to a required check via
+# branch protection only if you want it to gate.
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+    paths:
+      - "packages/*/src/**"
+      - "packages/*/package.json"
+
+permissions:
+  contents: read
+  pull-requests: write # post/update the sticky comment
+
+concurrency:
+  group: docs-currency-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const MARKER = '<!-- docs-currency -->';
+            const { owner, repo } = context.repo;
+            const pr = context.issue.number;
+
+            // Every file this PR changes (head vs base), paginated.
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner,
+              repo,
+              pull_number: pr,
+              per_page: 100,
+            });
+            const paths = files.map((f) => f.filename);
+
+            const touchedSrc = paths.some(
+              (p) =>
+                /^packages\/[^/]+\/src\//.test(p) ||
+                /^packages\/[^/]+\/package\.json$/.test(p),
+            );
+            const touchedDocs = paths.some((p) => p.endsWith('.md'));
+
+            // Opt-out: the `no-docs-needed` label, or `docs-check: n/a` in the body.
+            const labels = (context.payload.pull_request.labels || []).map((l) => l.name);
+            const body = context.payload.pull_request.body || '';
+            const optedOut =
+              labels.includes('no-docs-needed') ||
+              /docs-check:\s*(n\/?a|skip|none)/i.test(body);
+
+            const needsReminder = touchedSrc && !touchedDocs && !optedOut;
+
+            // Find our existing sticky comment (marker as FIRST line AND our bot).
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number: pr,
+              per_page: 100,
+            });
+            const mine = comments.find(
+              (c) =>
+                c.user?.login === 'github-actions[bot]' &&
+                c.body?.startsWith(MARKER),
+            );
+
+            if (needsReminder) {
+              const reminder = [
+                MARKER,
+                '### 📝 Docs check — did the docs move with this change?',
+                '',
+                'This PR changes package **source** but touches no `.md` files. If the change is user-visible, its docs should move with it **in this PR** (that keeps them from drifting):',
+                '',
+                '| A change to… | Update |',
+                '| --- | --- |',
+                '| A package’s public API (export, option, command, flag, MCP tool, env var, exit code) | `packages/<pkg>/README.md` **and** `website/packages/<pkg>.md` |',
+                '| A new package or product surface | root `README.md`, `website/index.md` (home), `website/guide/architecture.md`, `website/guide/getting-started.md`, a new `website/packages/<pkg>.md` |',
+                '| Network / privacy behavior | `website/privacy.md` |',
+                '| The Chrome extension | `packages/extension/README.md`, `website/guide/chrome-extension.md` |',
+                '',
+                'Full map + the a11y-baseline regen step: the `pr` skill (`.claude/skills/pr/SKILL.md`).',
+                '',
+                '_Internal-only change with nothing to document?_ Put `docs-check: n/a` in the PR description (or add a `no-docs-needed` label) and this note clears.',
+                '',
+                '_Advisory — this check never blocks the merge._',
+              ].join('\n');
+
+              if (mine) {
+                await github.rest.issues.updateComment({
+                  owner,
+                  repo,
+                  comment_id: mine.id,
+                  body: reminder,
+                });
+                console.log('Docs reminder updated.');
+              } else {
+                await github.rest.issues.createComment({
+                  owner,
+                  repo,
+                  issue_number: pr,
+                  body: reminder,
+                });
+                console.log('Docs reminder posted.');
+              }
+            } else if (mine) {
+              // Docs were added, or the author opted out — clear the reminder in place.
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: mine.id,
+                body: [
+                  MARKER,
+                  '### ✅ Docs check',
+                  '',
+                  touchedDocs
+                    ? 'Docs were updated in this PR — thanks.'
+                    : 'Marked as no docs needed for this change.',
+                ].join('\n'),
+              });
+              console.log('Docs reminder cleared.');
+            } else {
+              console.log('Source changed with docs (or nothing to remind) — no action.');
+            }
