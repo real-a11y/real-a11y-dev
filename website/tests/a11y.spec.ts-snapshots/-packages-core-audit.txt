@@ -308,7 +308,7 @@
     heading "DOM observation" (level 2)
     heading "DomObserver" (level 3)
       code "DomObserver"
-    paragraph "Watches a DOM subtree for mutations and calls a callback (debounced)."
+    paragraph "Watches a DOM subtree for mutations and calls a callback. Rapid mutations are debounced, and a max-wait ceiling ensures the callback still fires on a stream that never goes quiet (streaming responses, progress bars, animated content) instead of the debounce deferring it forever."
     button "Copy Code"
       code
     separator
