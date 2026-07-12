@@ -29,7 +29,7 @@ New to the idea of snapshotting the accessibility tree? Start with the concept: 
 
 ## Which do I reach for?
 
-- **Catch regressions in CI** → [Snapshots](/packages/testing/snapshots) (`auditSnapshot`, `outlineSnapshot`, `tabSequenceSnapshot`) committed with `toMatchSnapshot()`.
+- **Catch regressions in CI** → [Snapshots](/packages/testing/snapshots) (`auditSnapshot`, `outlineSnapshot`, `tabSequenceSnapshot`) committed with `toMatchSnapshot()`. For **headless page-set audits** of a deployed site — no test suite — reach for [`@real-a11y-dev/cli`](/packages/cli)'s `snapshot` / `diff` instead.
 - **Assert a specific invariant** ("one `<h1>`", "no unlabeled buttons") → [Assertions](/packages/testing/assertions) or, for `expect` style, [Matchers](/packages/testing/matchers).
 - **Test an interaction** (open a menu, submit a form, dismiss a modal) → [Flow API](/packages/testing/flow).
 - **Audit a real, rendered page** (not jsdom) → [Playwright adapter](/packages/testing/playwright).
@@ -39,4 +39,4 @@ New to the idea of snapshotting the accessibility tree? Start with the concept: 
 - **Vitest + jsdom** — [`examples/testing-vitest/`](https://github.com/real-a11y/real-a11y-dev/tree/main/examples/testing-vitest): snapshot tests, the custom matchers, `flow()` interactions, tab-sequence structure assertions.
 - **Jest + ts-jest** — [`examples/testing-jest/`](https://github.com/real-a11y/real-a11y-dev/tree/main/examples/testing-jest): the minimal Jest setup for the matchers.
 - **Playwright E2E** — [`examples/playwright/`](https://github.com/real-a11y/real-a11y-dev/tree/main/examples/playwright): a "good fixture" where every assertion passes and a "broken fixture" where each throws — the pattern to keep in CI.
-- **CI tree-diff bot** — the [CI Diff Bot recipe](/guide/ci-diff-bot) wires a snapshot generator into a PR workflow.
+- **CI tree-diff bot** — the [CI Diff Bot recipe](/guide/ci-diff-bot) runs [`@real-a11y-dev/cli`](/packages/cli)'s `real-a11y snapshot` (each audited page → one diffable JSON artifact) and `real-a11y diff` (new / changed / fixed findings) in a PR workflow.

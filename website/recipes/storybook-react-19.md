@@ -111,6 +111,6 @@ For accessibility-specific CI coverage on Storybook stories, pair it with the Pl
 
 ## Known constraints
 
-- **Storybook ≥ 8.0** is required. The addon's manager entry uses the `storybook/manager-api` v8 API.
+- **Storybook ≥ 8.0** is required. The addon's manager entry uses the `@storybook/manager-api` v8 API.
 - **React ≥ 18** as a peer. React 19 works with the `viteFinal` override above.
 - **Mixed React versions on the page will fail.** If anything in your Storybook config transitively loads a second copy of React (some legacy addons do this), the manager will crash. Run `npm ls react` — there should be exactly one resolution.

@@ -10,16 +10,17 @@ Chrome extension that adds a Side Panel with an interactive DOM/accessibility tr
 
 ## Installation (from source)
 
-1. Clone the [Semantic Navigator](https://github.com/real-a11y/semantic-navigator) repo
-2. Install dependencies and build:
+1. Clone the [monorepo](https://github.com/real-a11y/real-a11y-dev) and build the extension:
    ```bash
+   git clone https://github.com/real-a11y/real-a11y-dev.git
+   cd real-a11y
    pnpm install
-   pnpm build
+   pnpm --filter @real-a11y-dev/semantic-navigator-extension build
    ```
-3. Open `chrome://extensions` in Chrome
-4. Enable **Developer mode** (toggle in the top right)
-5. Click **Load unpacked** and select the `packages/extension/dist` directory
-6. Navigate to any web page and click the Semantic Navigator icon in the toolbar
+2. Open `chrome://extensions` in Chrome
+3. Enable **Developer mode** (toggle in the top right)
+4. Click **Load unpacked** and select the `packages/extension/dist` directory
+5. Navigate to any web page and click the Semantic Navigator icon in the toolbar
 
 ## How it works
 
@@ -37,7 +38,7 @@ Web Page
 
 - **Content Script** — Injected into every page. Extracts the DOM/accessibility tree using `@real-a11y-dev/core`, dispatches actions on real DOM elements, and manages the highlight overlay.
 - **Background Service Worker** — Routes messages between the Side Panel and content scripts. Manages the Side Panel lifecycle.
-- **Side Panel** — Renders the tree UI. Receives serialized tree data from the content script and sends action commands back.
+- **Side Panel** — Renders the tree UI. Receives serialized tree data from the content script and sends action commands back. A **Copy ▾** dropdown exports the current view to the clipboard as a paste-ready Markdown accessibility report — Everything, the A11y/DOM tree, the heading outline, or the tab sequence — for dropping into a bug tracker.
 
 ### Permissions
 

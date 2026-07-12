@@ -45,16 +45,20 @@
 45. link "What it shows"
 46. link "Run it locally"
 47. link "Key code"
-48. link "examples/testing-vitest/"
-49. button "Copy Code"
-50. generic
-51. button "Copy Code"
-52. generic
-53. button "Copy Code"
-54. generic
-55. button "Copy Code"
-56. generic
-57. button "Copy Code"
-58. generic
-59. link "Edit this page on GitHub"
-60. link "Next pageGetting Started"
+48. link "See also"
+49. link "examples/testing-vitest/"
+50. button "Copy Code"
+51. generic
+52. button "Copy Code"
+53. generic
+54. button "Copy Code"
+55. generic
+56. button "Copy Code"
+57. generic
+58. button "Copy Code"
+59. generic
+60. link "Playwright E2E"
+61. link "@real-a11y-dev/cli"
+62. link "@real-a11y-dev/mcp"
+63. link "Edit this page on GitHub"
+64. link "Next pageGetting Started"

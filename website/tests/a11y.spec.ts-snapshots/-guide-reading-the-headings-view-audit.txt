@@ -94,9 +94,13 @@
   main
     heading "Reading the Headings View" (level 1)
     blockquote
-      paragraph "The Headings view matches the output of in the testing package — same ordering, same formatting. Whether you're reading it in the Chrome extension, the Storybook addon, or a committed Playwright snapshot fixture, this page applies."
+      paragraph "The Headings view matches the output of in the testing package — same ordering, same formatting. Whether you're reading it in the Chrome extension, the Storybook addon, a committed Playwright snapshot fixture, the command, or the MCP tool, this page applies."
         link "outlineSnapshot()"
           code "outlineSnapshot()"
+        link "real-a11y outline"
+          code "real-a11y outline"
+        link "get_heading_outline"
+          code "get_heading_outline"
     paragraph "The Headings view answers one question:"
       strong "can a screen reader user navigate this page by structure?"
     paragraph "Headings are how screen reader users scan a page — the same way sighted users scan titles and section labels. The Headings view extracts every through and shows them as a leveled outline, like a table of contents."

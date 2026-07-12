@@ -96,6 +96,12 @@
       listitem
         link "A11yAssertionError with a message I don't understand"
       listitem
+        link "The CLI or MCP says Playwright isn't installed"
+      listitem
+        link "An audit of a logged-in page comes back empty (or shows the login screen)"
+      listitem
+        link "The MCP server refuses to open a file:// URL"
+      listitem
         link "Still stuck?"
   main
     heading "Troubleshooting" (level 1)
@@ -218,6 +224,49 @@
     paragraph "Every assertion is documented with an example in ."
       link "@real-a11y-dev/testing"
         code "@real-a11y-dev/testing"
+    separator
+    heading "The CLI or MCP says Playwright isn't installed" (level 2)
+    paragraph "Both and list Playwright as an peer dependency and import it lazily — the library API (types, ) loads without a browser, but the moment a command actually drives one, Playwright has to be present. If it isn't, you'll see:"
+      code "@real-a11y-dev/cli"
+      code "@real-a11y-dev/mcp"
+      strong "optional"
+      code "buildServer"
+    button "Copy Code"
+      code
+    paragraph "Install the peer and its browser binary:"
+    button "Copy Code"
+      code
+    paragraph "A separate "Chromium isn't downloaded yet" error means the package is installed but the browser binary isn't — run just the step."
+      code "playwright install chromium"
+    separator
+    heading "An audit of a logged-in page comes back empty (or shows the login screen)" (level 2)
+    paragraph "An authenticated audit needs a saved session, and it has to match the origin you're auditing:"
+    list
+      listitem "Record the session once with , then pass it with . Without the audit runs logged-out, so you get the sign-in page's tree instead of the app's."
+        strong "CLI."
+        code "real-a11y login <url> --save auth.json"
+        code "real-a11y audit <url> --storage-state auth.json"
+        code "--storage-state"
+      listitem "Point the server at the same file through the environment variable before it starts."
+        strong "MCP."
+        code "REAL_A11Y_MCP_STORAGE_STATE"
+    paragraph "If the session is present but the audit still looks logged-out, the file is usually (tokens expired — re-run ), or the app keeps its auth in , which doesn't capture — attach to a browser you logged into by hand with instead."
+      strong "stale"
+      code "login"
+      strong "session storage"
+      code "login"
+      code "--cdp"
+    paragraph "When a session is loaded, extraction is pinned to the target's own origin, so a redirect onto an auth domain is refused rather than silently audited ("not an allowed audit origin"). Allow the extra origin explicitly with (CLI) or (MCP)."
+      code "--audit-origin <origin>"
+      code "REAL_A11Y_MCP_ALLOWED_ORIGINS"
+    separator
+    heading "The MCP server refuses to open a file:// URL" (level 2)
+      code "file://"
+    paragraph "The MCP server blocks navigation by default — an LLM that can open and read the DOM back is a local-file exfiltration primitive. If you genuinely need to audit a local HTML file, opt in with in the server's environment. (The CLI approves a target you pass on the command line directly, so this refusal is specific to the MCP server.)"
+      code "file://"
+      code "file:///…/.env"
+      code "REAL_A11Y_MCP_ALLOW_FILE=1"
+      code "file://"
     separator
     heading "Still stuck?" (level 2)
     list

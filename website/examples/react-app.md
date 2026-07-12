@@ -6,7 +6,7 @@ A Vite + React 18 application demonstrating `@real-a11y-dev/react` hooks and the
 
 ## What it shows
 
-- `<SemanticNavigator />` mounted alongside the app in a split-panel layout
+- `<SemanticNavigator />` mounted as a floating portal panel over the app (`floating` + `enablePicker`)
 - `useSemanticTree()` powering a live "issues" badge (unlabeled buttons, missing headings)
 - `useActiveModal()` announcing when a dialog is open via an `aria-live` region
 - Runtime mode switching (A11y / DOM) via props
@@ -16,7 +16,7 @@ A Vite + React 18 application demonstrating `@real-a11y-dev/react` hooks and the
 
 ```sh
 git clone https://github.com/real-a11y/real-a11y-dev.git
-cd real-a11y
+cd real-a11y-dev
 pnpm install
 pnpm --filter @real-a11y-dev/example-react dev
 ```
@@ -25,7 +25,7 @@ Opens at `http://localhost:5175`.
 
 ## Key code
 
-### Split-panel layout
+### Floating panel
 
 ```tsx
 // examples/react-app/src/App.tsx
@@ -36,25 +36,33 @@ import { DemoApp } from "./DemoApp";
 export function App() {
   const rootRef = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<"a11y" | "dom">("a11y");
+  const [panelVisible, setPanelVisible] = useState(true);
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", height: "100vh" }}>
-      <div ref={rootRef} style={{ overflow: "auto", padding: 24 }}>
-        <DemoApp />
+    <div ref={rootRef} style={{ minHeight: "100vh" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px" }}>
+        <strong style={{ marginRight: "auto" }}>Real A11y — React example</strong>
+        <button onClick={() => setMode(m => m === "a11y" ? "dom" : "a11y")}>
+          {mode === "a11y" ? "A11y" : "DOM"} mode
+        </button>
+        <button onClick={() => setPanelVisible(v => !v)}>
+          {panelVisible ? "Hide" : "Show"} panel
+        </button>
       </div>
-      <aside style={{ borderLeft: "1px solid #eee", overflow: "hidden" }}>
-        <div style={{ padding: "8px 12px", borderBottom: "1px solid #eee" }}>
-          <button onClick={() => setMode(m => m === "a11y" ? "dom" : "a11y")}>
-            Mode: {mode}
-          </button>
-        </div>
+
+      <DemoApp />
+
+      {/* Floating Semantic Navigator — rendered into document.body via a portal */}
+      {panelVisible && (
         <SemanticNavigator
           root={rootRef}
           mode={mode}
+          floating
           highlightOnHover
-          style={{ height: "calc(100% - 41px)" }}
+          enablePicker
+          panelTitle="Semantic Navigator"
         />
-      </aside>
+      )}
     </div>
   );
 }

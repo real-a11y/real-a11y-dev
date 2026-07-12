@@ -50,22 +50,25 @@
 50. link "Narrowing the audit root"
 51. link "Snapshot test"
 52. link "How the adapter works"
-53. link "packages/testing/e2e/"
-54. button "Copy Code"
-55. generic
-56. button "Copy Code"
-57. generic
-58. button "Copy Code"
-59. generic
-60. button "Copy Code"
-61. generic
-62. button "Copy Code"
-63. generic
-64. button "Copy Code"
-65. generic
-66. button "Copy Code"
-67. generic
-68. button "Copy Code"
-69. generic
-70. link "Edit this page on GitHub"
-71. link "Next pageGetting Started"
+53. link "See also"
+54. link "packages/testing/e2e/"
+55. button "Copy Code"
+56. generic
+57. button "Copy Code"
+58. generic
+59. button "Copy Code"
+60. generic
+61. button "Copy Code"
+62. generic
+63. button "Copy Code"
+64. generic
+65. button "Copy Code"
+66. generic
+67. button "Copy Code"
+68. generic
+69. button "Copy Code"
+70. generic
+71. link "@real-a11y-dev/cli"
+72. link "@real-a11y-dev/mcp"
+73. link "Edit this page on GitHub"
+74. link "Next pageGetting Started"

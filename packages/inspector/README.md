@@ -50,6 +50,8 @@ inspector.destroy();
 | `highlightOnHover` | `boolean` | `false` | Highlight DOM element on tree node hover |
 | `scrollHostOnSelect` | `boolean` | `false` | Scroll element into view on select |
 | `focusHostOnActivate` | `boolean` | `false` | Gate actions that move focus on the host (`focus`, `increment`, `decrement`). When `false`, those actions silently no-op so the panel doesn't pull focus off itself in same-document mounts. |
+| `enablePicker` | `boolean` | `false` | Surface a DevTools-style "select an element in the page" picker (toolbar button + Ctrl/Cmd+Shift+C); off by default because it captures document-level clicks. |
+| `styleNonce` | `string` | — | CSP nonce applied to the injected `<style>` element. |
 | `onNodeSelect` | `(node) => void` | — | Callback when a node is selected |
 | `onAction` | `(request, result) => void` | — | Callback when an action is dispatched |
 

@@ -18,11 +18,11 @@ Demonstrates `@real-a11y-dev/testing/playwright` — the `attach()` adapter — 
 
 ```sh
 git clone https://github.com/real-a11y/real-a11y-dev.git
-cd real-a11y
+cd real-a11y-dev
 pnpm install
 
 # Install the Playwright browser (first time only)
-npx playwright install chromium --filter @real-a11y-dev/testing
+pnpm --filter @real-a11y-dev/testing exec playwright install chromium
 
 # Run the e2e tests
 pnpm --filter @real-a11y-dev/testing test:e2e
@@ -135,3 +135,8 @@ sn.assertHeadingOrder()
 ```
 
 The bundle (30 KB) is read from disk once and cached in the Node process — subsequent `attach()` calls add no I/O overhead.
+
+## See also
+
+- **[`@real-a11y-dev/cli`](https://github.com/real-a11y/real-a11y-dev/tree/main/packages/cli)** — `real-a11y snapshot` / `real-a11y diff` run findings-aware CI audits over a whole page set defined in `a11y.config.json`, no test harness required.
+- **[`@real-a11y-dev/mcp`](https://github.com/real-a11y/real-a11y-dev/tree/main/packages/mcp)** — the same audit engine exposed to AI agents for agent-driven accessibility checks.

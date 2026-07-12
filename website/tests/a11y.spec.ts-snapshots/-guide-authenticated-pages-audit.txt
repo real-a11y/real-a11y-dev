@@ -160,6 +160,14 @@
       strong "session expired"
       code "login"
       code "auth.json"
+    heading "In the MCP server" (level 3)
+    paragraph "The same drives the MCP server: point it at the file with and pin the origin with — the env-var mirror of the CLI's and . See the for both."
+      code "auth.json"
+      code "REAL_A11Y_MCP_STORAGE_STATE=auth.json"
+      code "REAL_A11Y_MCP_ALLOWED_ORIGINS"
+      code "--storage-state"
+      code "--audit-origin"
+      link "MCP configuration"
     heading "Attach to your logged-in browser (--cdp)" (level 2)
       code "--cdp"
     paragraph "For a one-off — or an app whose auth lives in , which a saved session can't capture — skip the file and attach to a Chrome you're already signed into. Start Chrome with remote debugging , log in, then point the tool at it:"

@@ -142,6 +142,20 @@
           cell "dev"
             strong "dev"
         row
+          cell "Run accessibility audits from the shell / CI (no code)"
+          cell "@real-a11y-dev/cli"
+            link "@real-a11y-dev/cli"
+              code "@real-a11y-dev/cli"
+          cell "dev"
+            strong "dev"
+        row
+          cell "Give an AI agent accessibility audit tools"
+          cell "@real-a11y-dev/mcp"
+            link "@real-a11y-dev/mcp"
+              code "@real-a11y-dev/mcp"
+          cell "run via npx"
+            code "npx"
+        row
           cell "Build your own tooling on the extraction engine"
           cell "@real-a11y-dev/core"
             link "@real-a11y-dev/core"
@@ -172,6 +186,24 @@
       code
     separator
     heading "Your first tree in 30 seconds" (level 2)
+    heading "CLI (no code)" (level 3)
+    paragraph "The fastest first result: audit or inspect any URL straight from the shell. The CLI drives a real browser via Playwright, so install it alongside a Chromium binary:"
+    button "Copy Code"
+      code
+    button "Copy Code"
+      code
+    paragraph "In CI, pick a machine envelope and the failure threshold:"
+    button "Copy Code"
+      code
+    paragraph "is the default ( | also available). See for / , device emulation, and auditing pages behind a login."
+      code "--fail-on error"
+      code "warning"
+      code "never"
+      link "@real-a11y-dev/cli"
+        code "@real-a11y-dev/cli"
+      code "snapshot"
+      code "diff"
+    separator
     heading "Framework-agnostic embed" (level 3)
     button "Copy Code"
       code
@@ -245,6 +277,18 @@
             code "@real-a11y-dev/storybook-addon"
           cell "≥ 20"
           cell "Storybook ≥ 8"
+        row
+          cell "@real-a11y-dev/cli"
+            code "@real-a11y-dev/cli"
+          cell "≥ 20"
+          cell "Real browser via optional peer playwright (lazily imported)"
+            code "playwright"
+        row
+          cell "@real-a11y-dev/mcp"
+            code "@real-a11y-dev/mcp"
+          cell "≥ 20"
+          cell "Real browser via optional peer playwright (lazily imported); runs in any MCP client"
+            code "playwright"
     separator
     heading "Keep it out of production" (level 2)
     paragraph "and render a full tree view (~23 KB gzipped for , plus Preact; see for the gated budgets). If you drop or into a component that ships to production, bundlers can't tree-shake the renderer away — . You want it dev-only."

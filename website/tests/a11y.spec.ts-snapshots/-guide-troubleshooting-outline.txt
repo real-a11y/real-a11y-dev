@@ -14,4 +14,7 @@ h1 Troubleshooting
   h2 React hydration mismatch when rendering the panel
   h2 Tests pass in jsdom but fail in Playwright (or vice versa)
   h2 A11yAssertionError with a message I don't understand
+  h2 The CLI or MCP says Playwright isn't installed
+  h2 An audit of a logged-in page comes back empty (or shows the login screen)
+  h2 The MCP server refuses to open a file:// URL
   h2 Still stuck?

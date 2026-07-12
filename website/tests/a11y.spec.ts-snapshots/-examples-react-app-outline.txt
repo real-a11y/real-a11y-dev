@@ -10,6 +10,6 @@ h1 Example: React App
   h2 What it shows
   h2 Run it locally
   h2 Key code
-    h3 Split-panel layout
+    h3 Floating panel
     h3 Issues badge with useSemanticTree
     h3 Modal announcer with useActiveModal

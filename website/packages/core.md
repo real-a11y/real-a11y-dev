@@ -7,6 +7,8 @@ description: The zero-dependency extraction engine every Real A11y package build
 
 > **TL;DR** — Extracts a browser-accurate accessibility tree from any DOM element, as plain data (`Map<string, SemanticNode>`). Zero runtime dependencies. Reach for this when you're **building your own tooling** on top of the engine; for apps, use one of the wrapper packages.
 
+> **Want a ready-made tool, not a custom build?** Audit from the shell with [`@real-a11y-dev/cli`](/packages/cli), or give an AI agent accessibility audits via [`@real-a11y-dev/mcp`](/packages/mcp) — both sit on this layer already, so you don't have to build them.
+
 The extraction engine. Every other package is built on top of this.
 
 ## Install
@@ -245,7 +247,7 @@ observer.stop();
 ```ts
 import type {
   SemanticNode,
-  SemanticTree,
+  ExtractionResult,
   SemanticNavigatorConfig,
   FindByRoleOptions,
   OutlineEntry,
@@ -253,7 +255,7 @@ import type {
   TreeDiff,
   LinearizeOptions,
   QueryInput,
-  TreeMode,
+  TreeViewMode,
   ActionType,
 } from "@real-a11y-dev/core";
 ```

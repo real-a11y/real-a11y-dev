@@ -16,12 +16,12 @@ A minimal Vite + TypeScript application demonstrating `@real-a11y-dev/inspector`
 
 ```sh
 git clone https://github.com/real-a11y/real-a11y-dev.git
-cd real-a11y
+cd real-a11y-dev
 pnpm install
 pnpm --filter @real-a11y-dev/example-vanilla dev
 ```
 
-Opens at `http://localhost:5174`.
+Opens at `http://localhost:5173` (Vite's default port).
 
 ## Key code
 
@@ -48,13 +48,14 @@ document.body.appendChild(panel);
 const sn = createInspector({
   root: document.getElementById("app")!,
   container: panel,
-  mode: "a11y",
+  viewMode: "a11y",
   highlightOnHover: true,
 });
 
 sn.mount();
 
 // Switch mode button
+let currentMode: "a11y" | "dom" = "a11y";
 document.getElementById("btn-mode")!.addEventListener("click", () => {
   const next = currentMode === "a11y" ? "dom" : "a11y";
   sn.setViewMode(next);

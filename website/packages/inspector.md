@@ -52,12 +52,17 @@ Returns an `InspectorInstance`.
 |---|---|---|---|
 | `root` | `Element` | — | **Required.** The DOM subtree to observe and render. |
 | `container` | `Element` | — | **Required.** The element that will host the panel. |
-| `mode` | `"a11y" \| "dom"` | `"a11y"` | Initial tree mode. |
+| `viewMode` | `"a11y" \| "dom" \| "tab"` | `"a11y"` | Initial tree view mode. |
+| `interactive` | `boolean` | `true` | Whether interactive actions (click, navigate, etc.) are dispatched. |
+| `theme` | `"light" \| "dark" \| "auto"` | `"auto"` | Color theme. |
 | `mount` | `"shadow" \| "light"` | `"shadow"` | `"shadow"` isolates styles via ShadowRoot. `"light"` renders directly into `container` (useful if you need to restyle). |
 | `highlightOnHover` | `boolean` | `false` | Highlight the corresponding DOM element when hovering a tree node. |
 | `scrollHostOnSelect` | `boolean` | `false` | Scroll the host DOM element into view when selecting a tree node. |
 | `focusHostOnActivate` | `boolean` | `false` | Move focus to the host DOM element when activating a tree node action. |
+| `enablePicker` | `boolean` | `false` | Surface a DevTools-style "select an element in the page" picker (toolbar button + Ctrl/Cmd+Shift+C); off by default because it captures document-level clicks. |
 | `styleNonce` | `string` | — | CSP nonce applied to injected `<style>` elements. |
+| `onNodeSelect` | `(node) => void` | — | Callback when a node is selected. |
+| `onAction` | `(request, result) => void` | — | Callback when an action is dispatched. |
 
 ::: tip Shadow DOM is the right default
 With `mount: "shadow"`, the panel's styles live inside the ShadowRoot and cannot conflict with your app. Your app's CSS cannot accidentally override the panel's layout. Keep this default unless you have a specific reason to opt out.

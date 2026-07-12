@@ -15,7 +15,7 @@ A Storybook 8 panel that shows the semantic tree, heading outline, and tab seque
 npm install -D @real-a11y-dev/storybook-addon
 ```
 
-**Peer dependencies:** `storybook >= 8`, `react >= 18`, `react-dom >= 18`, `@storybook/manager-api >= 8`, `@storybook/preview-api >= 8`
+**Peer dependencies:** `storybook >= 8`, `react >= 18`, `react-dom >= 18`, `@storybook/manager-api >= 8`, `@storybook/preview-api >= 8`, and `@storybook/theming >= 8` (optional)
 
 ---
 
@@ -44,15 +44,15 @@ That's it. No decorator, no parameters required. A **Semantic Navigator** panel 
 
 ## The panel
 
-The panel has three views:
+The panel embeds the full interactive **Semantic Navigator** tree — the same `TreePanel` used by the Chrome extension and inspector — rendered inside a CSS-isolated shadow root. A mode switcher in the panel header offers three views:
 
-| Tab | Shows |
+| Mode | Shows |
 |---|---|
-| **Tree** | Full semantic tree in `auditSnapshot()` format — indented text showing roles, names, and levels. |
-| **Outline** | Heading outline in `outlineSnapshot()` format — h1..h6 structure for quick structure review. |
-| **Tab sequence** | Focusable elements in tab order via `tabSequenceSnapshot()`. |
+| **A11y** | The accessibility tree — roles, accessible names, and ARIA states for every node in the story. |
+| **DOM** | The raw DOM tree — tag names and attributes, useful to confirm whether a semantic element is actually being rendered. |
+| **Tab** | Focusable elements in tab order, derived from the current a11y tree. |
 
-A mode switcher (A11y / DOM) is available in the panel header. Switching mode re-extracts the tree immediately.
+Switching between **A11y** and **DOM** re-extracts the story via the channel; **Tab** is a client-side transform of the current tree, so it switches instantly.
 
 ---
 
@@ -62,16 +62,16 @@ The addon follows Storybook 8's manager/preview split:
 
 - **Preview** (`@real-a11y-dev/storybook-addon/preview`) runs inside the story iframe. It observes `#storybook-root` with a `DomObserver` (200ms debounce) and emits `TREE_UPDATED` events over the Storybook channel whenever the story DOM changes.
 
-- **Manager** (`@real-a11y-dev/storybook-addon/manager`) runs in the Storybook UI shell (React). It subscribes to `TREE_UPDATED` events and renders the latest snapshot in the panel.
+- **Manager** (`@real-a11y-dev/storybook-addon/manager`) runs in the Storybook UI shell (React). It subscribes to `TREE_UPDATED` events, deserializes the tree (the `[id, node][]` array back into a `Map`), and renders the interactive `TreePanel` from `@real-a11y-dev/semantic-navigator-ui` inside a shadow root.
 
 ```
-Preview iframe                        Manager (Storybook UI)
-────────────────                      ──────────────────────
-story renders                         Panel subscribes
-DomObserver fires          channel    to TREE_UPDATED
-→ auditSnapshot() ──TREE_UPDATED───▶  → renders <pre>
-→ outlineSnapshot()
-→ tabSequenceSnapshot()
+Preview iframe                              Manager (Storybook UI)
+────────────────                            ──────────────────────
+story renders                               Panel subscribes to TREE_UPDATED
+DomObserver fires (200ms)
+→ extractA11yTree / extractDomTree
+→ TREE_UPDATED ───────── channel ─────────▶ deserialize tree (array → Map)
+   { tree, mode, extractedAt }              → render <TreePanel/> in a shadow root
 ```
 
 ---
@@ -90,20 +90,10 @@ Open any story and click the **Semantic Navigator** tab. Then:
 
 ## Story parameters
 
-You can disable the addon for individual stories:
-
-```ts
-export const MyStory: Story = {
-  parameters: {
-    semanticNavigator: {
-      disabled: true,
-    },
-  },
-};
-```
+The addon reads no story parameters today — it runs on every story with no per-story configuration required.
 
 ::: tip
-Per-story assertions (expected outline, expected tab sequence) are planned for v0.2. The channel architecture is already in place to support them.
+Per-story controls (disabling the panel for a specific story, expected-outline / expected-tab-sequence assertions) are planned for v0.2. The channel architecture is already in place to support them.
 :::
 
 ---
@@ -115,14 +105,21 @@ If you need to integrate with the addon from your own tooling:
 ```ts
 import { EVENTS, type TreeUpdatePayload } from "@real-a11y-dev/storybook-addon";
 
-// EVENTS.TREE_UPDATED — fired by the preview, consumed by the manager
-// EVENTS.SET_MODE     — fired by the manager, consumed by the preview
+// Preview → manager:
+//   EVENTS.TREE_UPDATED    — a fresh extraction (on every debounced DOM change)
+// Manager → preview:
+//   EVENTS.REQUEST_TREE    — ask for the current tree immediately (panel mount)
+//   EVENTS.SET_MODE        — re-extract with a new view mode
+//   EVENTS.HIGHLIGHT_NODE  — highlight a node in the story by id
+//   EVENTS.CLEAR_HIGHLIGHT — clear the highlight overlay
+//   EVENTS.ACTIVATE_NODE   — dispatch a node's primary action in the story
 
 const channel = addons.getChannel();
 channel.on(EVENTS.TREE_UPDATED, (payload: TreeUpdatePayload) => {
-  console.log(payload.serialized);   // auditSnapshot output
-  console.log(payload.outline);      // outlineSnapshot output
-  console.log(payload.tabSequence);  // tabSequenceSnapshot output
+  // payload.tree is a SerializableTree: { nodes: [id, node][], rootId }
+  const { nodes, rootId } = payload.tree;
+  console.log(rootId, `${nodes.length} nodes`);
+  console.log(payload.mode);         // "a11y" | "dom" | "tab"
   console.log(payload.extractedAt);  // Date.now() timestamp
 });
 ```

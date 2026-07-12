@@ -87,6 +87,8 @@
         link "Run it locally"
       listitem
         link "Key code"
+      listitem
+        link "See also"
   main
     heading "Example: Vitest Integration" (level 1)
     paragraph "Demonstrates in a Vitest + jsdom test suite — snapshots, structural assertions, and the chain."
@@ -130,6 +132,26 @@
     heading "Tab sequence test" (level 3)
     button "Copy Code"
       code
+    heading "See also" (level 2)
+    paragraph "jsdom runs the same audit engine as the browser, but it can't audit a real running app or gate CI on a live page set. For that:"
+    list
+      listitem "— the adapter runs these same assertions against a real browser page."
+        strong
+          link "Playwright E2E"
+        code "@real-a11y-dev/testing/playwright"
+        code "attach()"
+      listitem "— / / run findings-aware audits over the page set in , ideal for CI."
+        strong
+          link "@real-a11y-dev/cli"
+            code "@real-a11y-dev/cli"
+        code "real-a11y audit"
+        code "snapshot"
+        code "diff"
+        code "a11y.config.json"
+      listitem "— the same audit engine exposed to AI agents for agent-driven checks."
+        strong
+          link "@real-a11y-dev/mcp"
+            code "@real-a11y-dev/mcp"
   contentinfo
     link "Edit this page on GitHub"
     paragraph "Last updated:"

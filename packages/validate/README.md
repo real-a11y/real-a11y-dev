@@ -40,6 +40,8 @@ expect(container).toBeValidA11yTree();
 
 It extracts the element's accessibility tree, runs both validators, and fails on ARIA errors — invalid roles, missing required names/attributes, and the relationship violations above.
 
+Tests aren't the only consumer: the `real-a11y audit` CLI command and the MCP `audit_page` tool run these same `validateTree`/`validateNode` validators over a live page's extracted tree, so the ARIA rules are identical across tests, CI, and agents.
+
 ## Design
 
 [`@real-a11y-dev/core`](https://real-a11y.dev/packages/core) stays dependency-free; this package layers the `aria-query`-backed rules on top of core's tree, so consumers who only need extraction don't pay for the rules.

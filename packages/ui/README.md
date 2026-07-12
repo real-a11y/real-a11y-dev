@@ -1,8 +1,8 @@
 # @real-a11y-dev/semantic-navigator-ui
 
-Preact tree rendering components for [Semantic Navigator](https://github.com/real-a11y/semantic-navigator).
+Preact tree rendering components for [Semantic Navigator](https://real-a11y.dev).
 
-Provides the interactive tree view UI used by both the Chrome extension and the npm package. Built with Preact for minimal bundle size — the `TreeView` entry point measures ~5 KB gzipped (excluding `preact` and `@real-a11y-dev/core`, which consumers usually share).
+Provides the interactive tree view UI used by the inspector, the React wrapper, the Storybook addon, and the Chrome extension. Built with Preact for minimal bundle size — the `TreeView` entry point measures ~5 KB gzipped (excluding `preact` and `@real-a11y-dev/core`, which consumers usually share).
 
 ## Installation
 
@@ -28,6 +28,10 @@ import { TreeView } from "@real-a11y-dev/semantic-navigator-ui";
   onAction={(request) => console.log(request)}
 />
 ```
+
+### TreePanel
+
+Controlled counterpart to `TreeView`. Renders a pre-extracted `ExtractionResult` with full interactivity (search, filter, expand/collapse, tab sequence) but does **not** observe or extract from the DOM itself — all DOM side-effects are proxied back to the caller via callbacks. Used by the Storybook addon manager panel, where the tree data crosses the iframe boundary as serialized JSON and there is no live DOM root to observe.
 
 ### TreeToolbar
 

@@ -29,7 +29,8 @@ test("login form structure", () => {
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `mode` | `"a11y" \| "dom"` | `"a11y"` | Tree extraction mode. |
-| `redact` | `RegExp[]` | `[]` | Patterns replaced with `[redacted]` in names and text. Use this to keep snapshots deterministic. |
+| `redact` | `RegExp[]` | `[]` | Patterns replaced with `[REDACTED]` in accessible names. Use this to keep snapshots deterministic. |
+| `includeGeneric` | `boolean` | `false` | Include generic container nodes (`role="generic"`). |
 
 Example output:
 
@@ -176,4 +177,6 @@ All three helpers return the **same string** for the same DOM — on every run, 
 
 - [Matchers](/packages/testing/matchers) — `a11ySnapshot()` serializer so `expect(el).toMatchSnapshot()` renders the tree directly
 - [Playwright adapter](/packages/testing/playwright) — the same snapshots against a real browser
-- [CI Diff Bot recipe](/guide/ci-diff-bot) — wiring a snapshot generator into a PR workflow
+- [CI Diff Bot recipe](/guide/ci-diff-bot) — running [`@real-a11y-dev/cli`](/packages/cli)'s `snapshot` / `diff` in a PR workflow
+
+> **In-suite vs. headless.** The serializers on this page (`auditSnapshot` / `outlineSnapshot` / `tabSequenceSnapshot`) produce strings inside your test run, committed with `toMatchSnapshot()`. For a headless page-set audit of a deployed site — no test suite — use [`@real-a11y-dev/cli`](/packages/cli)'s identically-named `snapshot` command (a whole page set → one JSON artifact) and `diff`.

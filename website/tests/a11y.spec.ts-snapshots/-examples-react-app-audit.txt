@@ -98,8 +98,10 @@
         code "examples/react-app/"
     heading "What it shows" (level 2)
     list
-      listitem "mounted alongside the app in a split-panel layout"
+      listitem "mounted as a floating portal panel over the app ( + )"
         code "<SemanticNavigator />"
+        code "floating"
+        code "enablePicker"
       listitem "powering a live "issues" badge (unlabeled buttons, missing headings)"
         code "useSemanticTree()"
       listitem "announcing when a dialog is open via an region"
@@ -113,7 +115,7 @@
     paragraph "Opens at ."
       code "http://localhost:5175"
     heading "Key code" (level 2)
-    heading "Split-panel layout" (level 3)
+    heading "Floating panel" (level 3)
     button "Copy Code"
       code
     heading "Issues badge with useSemanticTree" (level 3)

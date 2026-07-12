@@ -1,6 +1,6 @@
 # @real-a11y-dev/serialize
 
-Deterministic text serialization of the [Semantic Navigator](https://real-a11y.dev) accessibility tree. The same string format the Real A11y panel, the testing snapshots, and the Chrome extension all share.
+Deterministic text serialization of the [Semantic Navigator](https://real-a11y.dev) accessibility tree. The same string format the Real A11y panel, the testing snapshots, the `real-a11y` CLI (`tree`/`outline`/`tabs`), the MCP server, and the Chrome extension all share.
 
 ```sh
 npm install @real-a11y-dev/serialize

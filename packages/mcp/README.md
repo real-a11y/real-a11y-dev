@@ -93,6 +93,21 @@ Auth material is always operator-configured, never a tool parameter — the agen
 just benefits from a session you set up. Use a dedicated low-privilege test
 account, and keep the storage-state file out of version control.
 
+## Programmatic use
+
+Beyond the MCP server, the package ships a `./browser` subpath export that gives
+you the Playwright-backed session standalone — without pulling in the MCP SDK
+dependency graph:
+
+```ts
+import { BrowserSession } from "@real-a11y-dev/mcp/browser";
+```
+
+`BrowserSession` (and its option types `BrowserSessionOptions`, `OpenOptions`,
+`SnapshotOptions`) drives a real browser, injects the extraction bundle, and
+returns findings / tree / outline / tab order from a single extraction — handy
+for scripting audits directly in Node without an MCP client.
+
 ## Status
 
 Beta, published on npm. Part of the `@real-a11y-dev` family (`core`, `testing`,

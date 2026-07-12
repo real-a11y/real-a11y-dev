@@ -222,6 +222,8 @@ test("home page structural audits", async ({ page }) => {
 
 The same `attach(page)` handle exposes `outlineSnapshot` and `tabSequenceSnapshot` — commit all three as fixtures and let PRs diff against them.
 
+For **cross-page** CI auditing, reach for the CLI instead of raw text snapshots: `npx real-a11y snapshot` writes one findings-aware JSON artifact from your `a11y.config.json`, and `npx real-a11y diff base.json pr.json` classifies findings as new / changed / fixed — robust to the DOM churn (re-indentation, renumbered locators) that defeats a line diff. See the [CI A11y Diff Bot](/guide/ci-diff-bot) recipe and the [CLI package](/packages/cli) reference.
+
 ---
 
 ## Known constraints

@@ -11,6 +11,7 @@ h1 Matchers
     h3 Vitest
     h3 Jest
   h2 Assertion matchers
+  h2 toBeValidA11yTree()
   h2 toHaveTabSequence(expected)
   h2 a11ySnapshot(root, options?) — snapshot serializer
     h3 a11ySnapshot vs auditSnapshot

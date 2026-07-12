@@ -38,12 +38,14 @@ Real A11y fills the space between rule-checking and element-querying: it exposes
 
 **Use all of them.** Real A11y is not a replacement for axe — it's a complement. Run axe for rule violations; use Real A11y for structural assertions; use Testing Library for user-interaction tests.
 
+And it isn't only for humans: the same structural audits are exposed to AI coding agents through an [MCP server](/packages/mcp) — a surface neither axe nor Testing Library offers.
+
 ---
 
 ## Design principles
 
 **1. One engine, every context.**
-The same extraction logic runs in jsdom (Vitest), in a real browser (Playwright), inside the Storybook preview iframe, and in the interactive tree panel. There's no "jsdom mode" with different behavior.
+The same extraction logic runs in jsdom (Vitest), in a real browser (Playwright), inside the Storybook preview iframe, in the interactive tree panel, from the shell (the `real-a11y` CLI), and inside an MCP server for AI agents. There's no "jsdom mode" with different behavior.
 
 **2. Deterministic output.**
 `auditSnapshot()` produces a stable string — same DOM, same string, every time, on every machine. No timestamps, no generated IDs, no ordering surprises. Safe to commit to version control.
@@ -55,4 +57,4 @@ The same extraction logic runs in jsdom (Vitest), in a real browser (Playwright)
 Shadow DOM isolation is the default. The embed panel can't break your app's layout; your app's styles can't break the panel. Every configuration that could cause a side effect (hover highlights, scroll-into-view, focus theft) is opt-in.
 
 **5. Framework-agnostic core.**
-`@real-a11y-dev/core` has zero non-standard dependencies. The React and Storybook packages are wrappers — the extraction engine is the same code.
+`@real-a11y-dev/core` has zero non-standard dependencies. The React, Storybook, CLI, and MCP packages are wrappers — the extraction engine is the same code.

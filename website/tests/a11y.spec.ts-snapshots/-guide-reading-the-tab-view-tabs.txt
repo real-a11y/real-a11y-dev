@@ -48,12 +48,14 @@
 48. link "Common patterns and what they look like"
 49. link "The relationship to the A11y view"
 50. link "tabSequenceSnapshot()"
-51. button "Copy Code"
-52. generic
+51. link "real-a11y tabs"
+52. link "get_tab_order"
 53. button "Copy Code"
 54. generic
 55. button "Copy Code"
 56. generic
-57. link "Edit this page on GitHub"
-58. link "Previous pageHeadings View"
-59. link "Next pagePanel features"
+57. button "Copy Code"
+58. generic
+59. link "Edit this page on GitHub"
+60. link "Previous pageHeadings View"
+61. link "Next pagePanel features"

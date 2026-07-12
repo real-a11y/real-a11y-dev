@@ -97,6 +97,8 @@
         link "Snapshot test"
       listitem
         link "How the adapter works"
+      listitem
+        link "See also"
   main
     heading "Example: Playwright E2E" (level 1)
     paragraph "Demonstrates — the adapter — against real fixture pages in a Playwright test suite."
@@ -182,6 +184,19 @@
       code
     paragraph "The bundle (30 KB) is read from disk once and cached in the Node process — subsequent calls add no I/O overhead."
       code "attach()"
+    heading "See also" (level 2)
+    list
+      listitem "— / run findings-aware CI audits over a whole page set defined in , no test harness required."
+        strong
+          link "@real-a11y-dev/cli"
+            code "@real-a11y-dev/cli"
+        code "real-a11y snapshot"
+        code "real-a11y diff"
+        code "a11y.config.json"
+      listitem "— the same audit engine exposed to AI agents for agent-driven accessibility checks."
+        strong
+          link "@real-a11y-dev/mcp"
+            code "@real-a11y-dev/mcp"
   contentinfo
     link "Edit this page on GitHub"
     paragraph "Last updated:"

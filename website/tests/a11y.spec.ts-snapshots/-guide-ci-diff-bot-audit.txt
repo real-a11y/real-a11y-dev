@@ -100,77 +100,116 @@
   main
     heading "CI A11y Diff Bot" (level 1)
     paragraph "Post a PR comment whenever the accessibility tree of any audited page changes. The bot catches regressions that no linter can: roles disappearing, labels silently emptied, landmarks removed, dialogs becoming unreachable."
+    paragraph "It's built on the shipped : audits a whole page set into one diffable JSON artifact, and classifies the findings between two artifacts as — an identity-aware comparison, not a raw text diff."
+      link "@real-a11y-dev/cli"
+        code "@real-a11y-dev/cli"
+      code "real-a11y snapshot"
+      code "real-a11y diff"
+      strong "new / changed / fixed"
     heading "How it works" (level 2)
     button "Copy Code"
       code
-    paragraph "Two jobs run in parallel — one on , one on the PR branch. A third job diffs the text output of and on the PR."
+    paragraph "Two jobs run in parallel — one on , one on the PR branch — and each writes a JSON snapshot artifact. A third job runs on the two artifacts and on the PR."
       code "main"
-      code "auditSnapshot()"
+      code "real-a11y diff"
       strong "posts or updates a single sticky comment"
+    paragraph "Because the diff is (each finding carries a stable fingerprint), it ignores the DOM churn that defeats a line diff — re-indentation, a renumbered locator, an inserted sibling — and reports only the violations that actually appeared, changed, or were fixed."
+      strong "finding-identity-aware"
+      code "v1:"
+      code ":nth-of-type"
     heading "What the comment looks like" (level 2)
     paragraph
       strong "No changes:"
     blockquote
-      paragraph "✅ A11y tree unchanged — No accessibility tree changes detected in this PR."
+      heading "Accessibility diff — 0 new · 0 changed · 0 fixed" (level 3)
+      paragraph "No accessibility finding changes."
     paragraph
       strong "Changes detected:"
     blockquote
-      paragraph "🔍 A11y tree changed —"
-        strong "3 lines added, 1 removed"
-      group "Show full diff"
-        button "Copy Code"
-          code
-    paragraph "The comment is — not spammed. If the PR is fixed and re-pushed, the comment updates to ✅."
+      heading "Accessibility diff — 2 new · 0 changed · 1 fixed" (level 3)
+      heading "Home" (level 4)
+      list
+        listitem "❌ : Unlabeled interactive element: button <button>"
+          strong "new"
+          code "no-unlabeled-interactive"
+        listitem "❌ : Image missing alt text: <img>"
+          strong "new"
+          code "image-alt"
+        listitem "✅ : Heading level skipped: h1 → h3"
+          strong "fixed"
+          code "heading-order"
+    paragraph "The comment is — not spammed. If the PR is fixed and re-pushed, the comment updates to . Only findings can fail the build ( exits at/above ); pre-existing debt and fixes never block a PR."
       strong "updated in place"
+      code "0 new"
+      strong "new"
+      code "diff"
+      code "1"
+      code "--fail-on"
     separator
     heading "Setup" (level 2)
     heading "1. Install" (level 3)
+    paragraph "The CLI drives a real browser through Playwright, which ships as an — install it alongside the CLI and fetch the Chromium binary once:"
+      strong "optional peer"
     button "Copy Code"
       code
-    heading "2. Drop in the snapshot script" (level 3)
-    paragraph "Copy this file into your repo at — it's yours to customize, version-control, and extend as your audit grows:"
-      code "scripts/a11y-snapshot.mjs"
+    paragraph "is pure — it reads two JSON files and never launches a browser — so only the snapshot jobs need Chromium."
+      code "diff"
+    heading "2. Describe your pages in a11y.config.json" (level 3)
+      code "a11y.config.json"
+    paragraph "Your snapshot — which pages, which rules, what to fail on — lives in your repo as , not in a copy-pasted script. auto-discovers (or takes ):"
+      emphasis "policy"
+      code "a11y.config.json"
+      code "real-a11y snapshot"
+      code "./a11y.config.json"
+      code "--config <file>"
     button "Copy Code"
       code
-    paragraph "Then wire it into your :"
-      code "package.json"
+    paragraph "is the diff's join key, so keep it stable across base and PR. narrows the audit to a subtree (a component, a form, a region). See for every key."
+      code "name"
+      code "rootSelector"
+      link "Configuration"
+    paragraph "Run it locally whenever you want — the output is a single JSON artifact:"
     button "Copy Code"
       code
-    paragraph "Run it locally whenever you want:"
-    button "Copy Code"
-      code
-    paragraph "Output goes to by default — add that to ."
-      code "a11y-snapshots.md"
+    paragraph "Add the snapshot artifacts (, ) to — they're build outputs, not fixtures."
+      code "base.json"
+      code "pr.json"
       code ".gitignore"
     blockquote
-      paragraph "is the public surface — plus the handle methods. Your snapshot (which pages, what order, how to redact, whether to fail on network errors) belongs in your repo, not in a dependency."
-        strong "Why an owned script?"
+      paragraph "— plus // — is the in-test surface for assertions inside your Playwright suite (see ). For , point at the CLI: one command captures every page's findings and views into a diffable artifact, and does the finding-aware comparison for you."
+        strong "The testing helpers still exist."
+          code "attach()"
         code "@real-a11y-dev/testing/playwright"
         code "attach()"
-        emphasis "policy"
+        code "auditSnapshot()"
+        code "outlineSnapshot()"
+        code "tabSequenceSnapshot()"
+        link "Combine with assertions"
+        emphasis "structural CI diffing"
+        code "real-a11y diff"
     heading "3. Add the workflow" (level 3)
     blockquote
-      paragraph "The workflow runs against the PR head the base branch. If the script and its devDependencies don't yet exist on , the job fails with (or an from if the lockfile points at a private registry). The diff comment never posts and you'll think the workflow is broken."
-        strong "Land steps 1 and 2 on first."
+      paragraph "The job checks out and runs there, so If they don't, the base job fails (, or a missing binary), the diff comment never posts, and you'll think the workflow is broken."
+        strong "Land step 2 on first."
           code "main"
-        code "npm run a11y:snapshot"
-        strong "both"
-        strong "and"
-        code "main"
         code "Snapshot (base)"
-        code "Missing script: a11y:snapshot"
-        code "ECONNREFUSED"
-        code "npm ci"
+        code "main"
+        code "real-a11y snapshot"
+        strong "and the devDependency must already exist on ."
+          code "a11y.config.json"
+          code "@real-a11y-dev/cli"
+          code "main"
+        code "snapshot needs pages to audit"
+        code "real-a11y"
       paragraph "Order of operations:"
       list
-        listitem "PR (or direct commit) to : install + , add , add the npm script."
+        listitem "PR (or direct commit) to : install + , add ."
           code "main"
-          code "@real-a11y-dev/testing"
-          code "@playwright/test"
-          code "scripts/a11y-snapshot.mjs"
-          code "a11y:snapshot"
+          code "@real-a11y-dev/cli"
+          code "playwright"
+          code "a11y.config.json"
           strong "No workflow yet."
-        listitem "Once that's merged, open a second PR adding . Both jobs now have the tooling they need."
+        listitem "Once that's merged, open a second PR adding . Both snapshot jobs now find the config and the CLI on the branch they check out."
           code ".github/workflows/a11y-diff.yml"
     paragraph "Create . Pick the template that matches your project:"
       code ".github/workflows/a11y-diff.yml"
@@ -183,12 +222,16 @@
         link "Static site (serve build output)"
       listitem
         link "pnpm monorepo"
-    paragraph "All templates call the same two helpers — (your owned script) for the snapshot job, for the PR comment. Only the "start the app" step changes."
-      code "npm run a11y:snapshot"
+    paragraph "All templates call the same two commands — for the snapshot jobs, (plus for the sticky comment) for the diff job. Only the "start the app" step changes."
+      code "npx real-a11y snapshot"
+      code "npx real-a11y diff"
       code "actions/github-script"
     separator
     heading "Configuration" (level 2)
-    paragraph "The CLI reads its inputs from environment variables."
+    paragraph "reads its page list from (auto-discovered in the working directory, or ). For drop-in compatibility it also honors two environment variables, which take precedence when set:"
+      code "real-a11y snapshot"
+      code "a11y.config.json"
+      code "--config <file>"
     table
       rowgroup
         row
@@ -199,26 +242,75 @@
         row
           cell "A11Y_PAGES"
             code "A11Y_PAGES"
-          cell "(library fixtures)"
-          cell "JSON array of { name, url, rootSelector? } objects describing each page to audit."
-            code "{ name, url, rootSelector? }"
+          cell "(config file)"
+          cell "JSON array of { name, url } objects. When set, it overrides the config's pages — handy for inlining the page list in the workflow. rootSelector and the other policy keys are config-only."
+            code "{ name, url }"
+            code "pages"
+            code "rootSelector"
         row
           cell "A11Y_SNAPSHOT_OUT"
             code "A11Y_SNAPSHOT_OUT"
-          cell "a11y-snapshots.md"
-            code "a11y-snapshots.md"
-          cell "Absolute or relative path where the markdown report is written."
-    heading "A11Y_PAGES shape" (level 3)
-      code "A11Y_PAGES"
+          cell "(stdout)"
+            emphasis "(stdout)"
+          cell "Fallback output path when --output / -o is omitted."
+            code "--output"
+            code "-o"
+    heading "a11y.config.json shape" (level 3)
+      code "a11y.config.json"
+    paragraph "The config is strict and — an unknown or typo'd key is a hard error, so a mistake can't silently un-gate CI."
+      strong "fail-closed"
+    table
+      rowgroup
+        row
+          rowheader "Key"
+          rowheader "Required"
+          rowheader "Description"
+      rowgroup
+        row
+          cell "pages"
+            code "pages"
+          cell "✅"
+          cell "Array of { name, url, rootSelector? }. name is the diff join key; url is any address the browser can reach; rootSelector is a CSS selector that scopes the audit to a subtree."
+            code "{ name, url, rootSelector? }"
+            code "name"
+            code "url"
+            code "rootSelector"
+        row
+          cell "rules"
+            code "rules"
+          cell
+          cell "Subset of the five rules — no-unlabeled-interactive, image-alt, heading-order, dialog-labeled, landmark-structure. Omit to run all."
+            code "no-unlabeled-interactive"
+            code "image-alt"
+            code "heading-order"
+            code "dialog-labeled"
+            code "landmark-structure"
+        row
+          cell "failOn"
+            code "failOn"
+          cell
+          cell "error | warning | never."
+            code "error"
+            code "warning"
+            code "never"
+        row
+          cell "device"
+            code "device"
+          cell
+          cell "Device to emulate, e.g. "iPhone 13" — audit the mobile layout."
+            code ""iPhone 13""
+        row
+          cell "redact"
+            code "redact"
+          cell
+          cell "Array of regex strings scrubbed from output before it's written."
     button "Copy Code"
       code
-    paragraph "is a CSS selector passed to . Scope-narrowed audits are useful when only part of a page is relevant to the PR (a component, a form, a specific region)."
-      code "rootSelector"
-      code "attach()"
     separator
     heading "Workflow templates" (level 2)
-    paragraph "Each template shares the same final step — a job that downloads both snapshot artifacts and posts the sticky PR comment. That step is identical across setups and is shown once at the end of this section."
+    paragraph "Each template shares the same final step — a job that downloads both snapshot artifacts, runs , and posts the sticky PR comment. That step is identical across setups and is shown once at the end of this section."
       strong "diff & comment"
+      code "real-a11y diff"
     heading "Next.js (dev server)" (level 3)
     blockquote
       paragraph "Using in ? errors out with — use the template instead, which serves the build output via ."
@@ -245,15 +337,40 @@
     button "Copy Code"
       code
     heading "Shared: diff & comment job" (level 3)
+    paragraph "renders the finding-aware comparison straight to Markdown (), which the job posts as the sticky comment. keeps the comment purely advisory so it posts — drop it (or add a second step) to also fail the build on findings."
+      code "real-a11y diff"
+      code "--format md"
+      code "--fail-on never"
+      emphasis "always"
+      code "npx real-a11y diff base.json pr.json"
+      strong "new"
     button "Copy Code"
       code
+    blockquote
+      paragraph "The job is with the PR checkout ( with no ), , and the artifact named ."
+        code "snapshot-pr"
+        code "snapshot-base"
+        code "actions/checkout@v4"
+        code "ref"
+        code "--output "$GITHUB_WORKSPACE/pr.json""
+        code "pr-snapshot"
     separator
     heading "Output format" (level 2)
-    paragraph "Each page produces three blocks: the a11y tree, the heading outline, and the tab sequence. Example:"
+    paragraph "writes per run. For each page it captures the fingerprinted findings plus the serialized semantic tree, heading outline, and tab sequence — and that JSON is exactly what consumes (the findings are what it compares). The envelope is stable (), deterministic (no timestamps, LF-only), and each finding carries a fingerprint:"
+      code "real-a11y snapshot"
+      strong "one JSON artifact"
+      code "real-a11y diff"
+      code "schemaVersion: 1"
+      code "v1:"
     button "Copy Code"
       code
-    paragraph "Deterministic — the same DOM always produces the same bytes. Safe to commit as a fixture if you'd rather diff against a static file than against ."
-      code "main"
+    paragraph "Pass for a human-readable report instead — the semantic tree, heading outline, and tab sequence per page, as Markdown:"
+      code "--md"
+    button "Copy Code"
+      code
+    paragraph "The JSON — not the Markdown — is what you feed into . Reach for when a human wants to read a single snapshot."
+      code "diff"
+      code "--md"
     separator
     heading "What it catches" (level 2)
     table
@@ -264,37 +381,51 @@
       rowgroup
         row
           cell "Input loses its label"
-          cell "✅"
+          cell "✅ (new no-unlabeled-interactive finding)"
+            code "no-unlabeled-interactive"
+        row
+          cell "Image loses its alt text"
+          cell "✅ (new image-alt finding)"
+            code "image-alt"
+        row
+          cell "Landmark removed (<main> deleted)"
+            code "<main>"
+          cell "✅ (new landmark-structure finding)"
+            code "landmark-structure"
+        row
+          cell "Heading level skipped"
+          cell "✅ (new heading-order finding)"
+            code "heading-order"
+        row
+          cell "Dialog no longer has accessible name"
+          cell "✅ (new dialog-labeled finding)"
+            code "dialog-labeled"
         row
           cell "Role changed (button → div)"
             code "button"
             code "div"
-          cell "✅"
-        row
-          cell "Landmark removed (<main> deleted)"
-            code "<main>"
-          cell "✅"
-        row
-          cell "Heading level skipped"
-          cell "✅ (outline section)"
+          cell "✅ (structural tree diff)"
         row
           cell "Focusable element removed from tab order"
-          cell "✅ (tab sequence section)"
-        row
-          cell "Dialog no longer has accessible name"
-          cell "✅"
+          cell "✅ (structural tabs diff)"
         row
           cell "ARIA state silently cleared"
-          cell "✅"
+          cell "✅ (structural tree diff)"
+    paragraph "The five rules surface as (new / changed / fixed); shape-only shifts that don't trip a rule — a role swap, a reordered tab sequence — show up in the advisory of the tree / outline / tabs views ( exposes these per page)."
+      strong "findings"
+      strong "structural diff"
+      code "--format json"
     separator
     heading "Combine with assertions" (level 2)
-    paragraph "The diff bot tells you — pair it with , , etc. to fail the build immediately on known-bad patterns:"
+    paragraph "The diff bot tells you — pair it with , , etc. from to fail the build immediately on known-bad patterns:"
       emphasis "something changed"
       code "assertHeadingOrder"
       code "assertNoUnlabeledInteractive"
+      link "@real-a11y-dev/testing"
+        code "@real-a11y-dev/testing"
     button "Copy Code"
       code
-    paragraph "The diff bot catches ; the assertions catch . Together they give you defense in depth."
+    paragraph "The diff bot catches ; the assertions catch . Together they give you defense in depth — the same engine on two surfaces: the CLI for the PR-wide diff, the testing library inside your e2e run."
       emphasis "unexpected regressions"
       emphasis "known-bad patterns"
   contentinfo

@@ -7,6 +7,8 @@ description: Snapshot every audited page on PR vs main and post a sticky comment
 
 Post a PR comment whenever the accessibility tree of any audited page changes. The bot catches regressions that no linter can: roles disappearing, labels silently emptied, landmarks removed, dialogs becoming unreachable.
 
+It's built on the shipped [`@real-a11y-dev/cli`](/packages/cli): `real-a11y snapshot` audits a whole page set into one diffable JSON artifact, and `real-a11y diff` classifies the findings between two artifacts as **new / changed / fixed** — an identity-aware comparison, not a raw text diff.
+
 ## How it works
 
 ```
@@ -19,39 +21,36 @@ Snapshot (base)     Snapshot (PR)
   - checkout main     - checkout HEAD
   - install deps      - install deps
   - start server      - start server
-  - auditSnapshot()   - auditSnapshot()
+  - real-a11y         - real-a11y
+    snapshot            snapshot
         │                   │
         └────────┬──────────┘
                  ▼
-           diff + comment
+        real-a11y diff + comment
          (updated on every push)
 ```
 
-Two jobs run in parallel — one on `main`, one on the PR branch. A third job diffs the text output of `auditSnapshot()` and **posts or updates a single sticky comment** on the PR.
+Two jobs run in parallel — one on `main`, one on the PR branch — and each writes a JSON snapshot artifact. A third job runs `real-a11y diff` on the two artifacts and **posts or updates a single sticky comment** on the PR.
+
+Because the diff is **finding-identity-aware** (each finding carries a stable `v1:` fingerprint), it ignores the DOM churn that defeats a line diff — re-indentation, a renumbered `:nth-of-type` locator, an inserted sibling — and reports only the violations that actually appeared, changed, or were fixed.
 
 ## What the comment looks like
 
 **No changes:**
-> ✅ A11y tree unchanged — No accessibility tree changes detected in this PR.
+> ### Accessibility diff — 0 new · 0 changed · 0 fixed
+>
+> No accessibility finding changes.
 
 **Changes detected:**
-> 🔍 A11y tree changed — **3 lines added, 1 removed**
+> ### Accessibility diff — 2 new · 0 changed · 1 fixed
 >
-> <details><summary>Show full diff</summary>
+> #### Home
 >
-> ```diff
-> ## Home
->
->  form "Contact form"
-> -  textbox "" (no label)
-> +  textbox "Full name"
-> +  textbox "Email address"
-> +  textbox "Message"
->    button "Send message"
-> ```
-> </details>
+> - ❌ **new** `no-unlabeled-interactive`: Unlabeled interactive element: button &lt;button&gt;
+> - ❌ **new** `image-alt`: Image missing alt text: &lt;img&gt;
+> - ✅ **fixed** `heading-order`: Heading level skipped: h1 → h3
 
-The comment is **updated in place** — not spammed. If the PR is fixed and re-pushed, the comment updates to ✅.
+The comment is **updated in place** — not spammed. If the PR is fixed and re-pushed, the comment updates to `0 new`. Only **new** findings can fail the build (`diff` exits `1` at/above `--fail-on`); pre-existing debt and fixes never block a PR.
 
 ---
 
@@ -59,113 +58,60 @@ The comment is **updated in place** — not spammed. If the PR is fixed and re-p
 
 ### 1. Install
 
+The CLI drives a real browser through Playwright, which ships as an **optional peer** — install it alongside the CLI and fetch the Chromium binary once:
+
 ```sh
 # npm
-npm install -D @real-a11y-dev/testing @playwright/test
+npm i -D @real-a11y-dev/cli playwright
 npx playwright install chromium
 
 # pnpm
-pnpm add -D @real-a11y-dev/testing @playwright/test
+pnpm add -D @real-a11y-dev/cli playwright
 pnpm exec playwright install chromium
 
 # yarn
-yarn add -D @real-a11y-dev/testing @playwright/test
+yarn add -D @real-a11y-dev/cli playwright
 yarn playwright install chromium
 ```
 
-### 2. Drop in the snapshot script
+`diff` is pure — it reads two JSON files and never launches a browser — so only the snapshot jobs need Chromium.
 
-Copy this file into your repo at `scripts/a11y-snapshot.mjs` — it's yours to customize, version-control, and extend as your audit grows:
+### 2. Describe your pages in `a11y.config.json`
 
-```js
-// scripts/a11y-snapshot.mjs
-//
-// Visits each configured page with Chromium and captures the accessibility
-// tree, heading outline, and tab sequence from @real-a11y-dev/testing.
-// Reads `A11Y_PAGES` and `A11Y_SNAPSHOT_OUT` from the environment.
-
-import { chromium } from "@playwright/test";
-import { attach } from "@real-a11y-dev/testing/playwright";
-import { writeFileSync } from "node:fs";
-import { resolve } from "node:path";
-
-const outFile = process.env.A11Y_SNAPSHOT_OUT
-  ?? resolve(process.cwd(), "a11y-snapshots.md");
-
-const pages = process.env.A11Y_PAGES
-  ? JSON.parse(process.env.A11Y_PAGES)
-  : [{ name: "Home", url: "http://localhost:3000" }];
-
-const slugify = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-
-const browser = await chromium.launch({ args: ["--no-sandbox"] });
-const context = await browser.newContext();
-const page = await context.newPage();
-
-const sections = [];
-for (const { name, url, rootSelector } of pages) {
-  console.log(`  auditing: ${name}  (${url})`);
-  try {
-    await page.goto(url, { waitUntil: "domcontentloaded" });
-    const sn = await attach(page, rootSelector ? { rootSelector } : {});
-    const [audit, outline, tabs] = await Promise.all([
-      sn.auditSnapshot(),
-      sn.outlineSnapshot(),
-      sn.tabSequenceSnapshot(),
-    ]);
-    sections.push([
-      `## ${name}`, "",
-      `<!-- id: ${slugify(name)} -->`, "",
-      "### A11y tree", "", "```", audit, "```", "",
-      "### Heading outline", "", "```", outline || "(no headings)", "```", "",
-      "### Tab sequence", "", "```", tabs || "(nothing focusable)", "```", "",
-    ].join("\n"));
-  } catch (err) {
-    sections.push([`## ${name}`, "", `> ⚠️ Snapshot failed: ${err.message}`, ""].join("\n"));
-  }
-}
-
-// Deliberately no generation timestamp in the file — including one would
-// make every PR's diff show a "change" even when the a11y tree is byte
-// identical, because the base + PR snapshot jobs run a few seconds apart.
-// CI logs and Git already record run/commit time.
-writeFileSync(
-  outFile,
-  `# A11y Snapshots\n\n` + sections.join("\n"),
-  "utf8",
-);
-console.log(`\n✓ Snapshots written to ${outFile}`);
-await browser.close();
-```
-
-Then wire it into your `package.json`:
+Your snapshot *policy* — which pages, which rules, what to fail on — lives in your repo as `a11y.config.json`, not in a copy-pasted script. `real-a11y snapshot` auto-discovers `./a11y.config.json` (or takes `--config <file>`):
 
 ```json
 {
-  "scripts": {
-    "a11y:snapshot": "node scripts/a11y-snapshot.mjs"
-  }
+  "pages": [
+    { "name": "Home",  "url": "http://localhost:3000" },
+    { "name": "About", "url": "http://localhost:3000/about" },
+    { "name": "Header nav", "url": "http://localhost:3000", "rootSelector": "header" }
+  ],
+  "rules": ["no-unlabeled-interactive", "image-alt", "heading-order", "dialog-labeled", "landmark-structure"],
+  "failOn": "error"
 }
 ```
 
-Run it locally whenever you want:
+`name` is the diff's join key, so keep it stable across base and PR. `rootSelector` narrows the audit to a subtree (a component, a form, a region). See [Configuration](#configuration) for every key.
+
+Run it locally whenever you want — the output is a single JSON artifact:
 
 ```sh
-npm run a11y:snapshot
+npx real-a11y snapshot --output base.json
 ```
 
-Output goes to `a11y-snapshots.md` by default — add that to `.gitignore`.
+Add the snapshot artifacts (`base.json`, `pr.json`) to `.gitignore` — they're build outputs, not fixtures.
 
-> **Why an owned script?** `@real-a11y-dev/testing/playwright` is the public surface — `attach()` plus the handle methods. Your snapshot *policy* (which pages, what order, how to redact, whether to fail on network errors) belongs in your repo, not in a dependency.
+> **The `attach()` testing helpers still exist.** `@real-a11y-dev/testing/playwright` — `attach()` plus `auditSnapshot()`/`outlineSnapshot()`/`tabSequenceSnapshot()` — is the in-test surface for assertions inside your Playwright suite (see [Combine with assertions](#combine-with-assertions)). For *structural CI diffing*, point at the CLI: one command captures every page's findings and views into a diffable artifact, and `real-a11y diff` does the finding-aware comparison for you.
 
 ### 3. Add the workflow
 
-> **Land steps 1 and 2 on `main` first.** The workflow runs `npm run a11y:snapshot` against **both** the PR head **and** the base branch. If the script and its devDependencies don't yet exist on `main`, the `Snapshot (base)` job fails with `Missing script: a11y:snapshot` (or an `ECONNREFUSED` from `npm ci` if the lockfile points at a private registry). The diff comment never posts and you'll think the workflow is broken.
+> **Land step 2 on `main` first.** The `Snapshot (base)` job checks out `main` and runs `real-a11y snapshot` there, so **`a11y.config.json` and the `@real-a11y-dev/cli` devDependency must already exist on `main`.** If they don't, the base job fails (`snapshot needs pages to audit`, or a missing `real-a11y` binary), the diff comment never posts, and you'll think the workflow is broken.
 >
 > Order of operations:
 >
-> 1. PR (or direct commit) to `main`: install `@real-a11y-dev/testing` + `@playwright/test`, add `scripts/a11y-snapshot.mjs`, add the `a11y:snapshot` npm script. **No workflow yet.**
-> 2. Once that's merged, open a second PR adding `.github/workflows/a11y-diff.yml`. Both jobs now have the tooling they need.
+> 1. PR (or direct commit) to `main`: install `@real-a11y-dev/cli` + `playwright`, add `a11y.config.json`. **No workflow yet.**
+> 2. Once that's merged, open a second PR adding `.github/workflows/a11y-diff.yml`. Both snapshot jobs now find the config and the CLI on the branch they check out.
 
 Create `.github/workflows/a11y-diff.yml`. Pick the template that matches your project:
 
@@ -174,38 +120,48 @@ Create `.github/workflows/a11y-diff.yml`. Pick the template that matches your pr
 - [Static site (serve build output)](#template-static)
 - [pnpm monorepo](#template-pnpm-monorepo)
 
-All templates call the same two helpers — `npm run a11y:snapshot` (your owned script) for the snapshot job, `actions/github-script` for the PR comment. Only the "start the app" step changes.
+All templates call the same two commands — `npx real-a11y snapshot` for the snapshot jobs, `npx real-a11y diff` (plus `actions/github-script` for the sticky comment) for the diff job. Only the "start the app" step changes.
 
 ---
 
 ## Configuration
 
-The CLI reads its inputs from environment variables.
+`real-a11y snapshot` reads its page list from `a11y.config.json` (auto-discovered in the working directory, or `--config <file>`). For drop-in compatibility it also honors two environment variables, which take precedence when set:
 
 | Variable | Default | Description |
 |---|---|---|
-| `A11Y_PAGES` | (library fixtures) | JSON array of `{ name, url, rootSelector? }` objects describing each page to audit. |
-| `A11Y_SNAPSHOT_OUT` | `a11y-snapshots.md` | Absolute or relative path where the markdown report is written. |
+| `A11Y_PAGES` | (config file) | JSON array of `{ name, url }` objects. When set, it overrides the config's `pages` — handy for inlining the page list in the workflow. `rootSelector` and the other policy keys are config-only. |
+| `A11Y_SNAPSHOT_OUT` | *(stdout)* | Fallback output path when `--output` / `-o` is omitted. |
 
-### `A11Y_PAGES` shape
+### `a11y.config.json` shape
+
+The config is strict and **fail-closed** — an unknown or typo'd key is a hard error, so a mistake can't silently un-gate CI.
+
+| Key | Required | Description |
+|---|---|---|
+| `pages` | ✅ | Array of `{ name, url, rootSelector? }`. `name` is the diff join key; `url` is any address the browser can reach; `rootSelector` is a CSS selector that scopes the audit to a subtree. |
+| `rules` | | Subset of the five rules — `no-unlabeled-interactive`, `image-alt`, `heading-order`, `dialog-labeled`, `landmark-structure`. Omit to run all. |
+| `failOn` | | `error` \| `warning` \| `never`. |
+| `device` | | Device to emulate, e.g. `"iPhone 13"` — audit the mobile layout. |
+| `redact` | | Array of regex strings scrubbed from output before it's written. |
 
 ```jsonc
-[
-  { "name": "Home",       "url": "http://localhost:3000" },
-  { "name": "Login",      "url": "http://localhost:3000/login" },
-  // Optional: narrow the audit to a subtree
-  { "name": "Header nav", "url": "http://localhost:3000", "rootSelector": "header" },
-  { "name": "Main",       "url": "http://localhost:3000", "rootSelector": "main"   }
-]
+{
+  "pages": [
+    { "name": "Home",       "url": "http://localhost:3000" },
+    { "name": "Login",      "url": "http://localhost:3000/login" },
+    // Optional: narrow the audit to a subtree
+    { "name": "Header nav", "url": "http://localhost:3000", "rootSelector": "header" },
+    { "name": "Main",       "url": "http://localhost:3000", "rootSelector": "main"   }
+  ]
+}
 ```
-
-`rootSelector` is a CSS selector passed to `attach()`. Scope-narrowed audits are useful when only part of a page is relevant to the PR (a component, a form, a specific region).
 
 ---
 
 ## Workflow templates
 
-Each template shares the same final step — a **diff & comment** job that downloads both snapshot artifacts and posts the sticky PR comment. That step is identical across setups and is shown once at the end of this section.
+Each template shares the same final step — a **diff & comment** job that downloads both snapshot artifacts, runs `real-a11y diff`, and posts the sticky PR comment. That step is identical across setups and is shown once at the end of this section.
 
 ### <a id="template-nextjs"></a>Next.js (dev server)
 
@@ -222,13 +178,6 @@ on:
 permissions:
   contents: read
   pull-requests: write
-
-env:
-  PAGES_JSON: |
-    [
-      { "name": "Home",  "url": "http://localhost:3000" },
-      { "name": "About", "url": "http://localhost:3000/about" }
-    ]
 
 jobs:
   snapshot-base: &snapshot
@@ -254,16 +203,13 @@ jobs:
       - name: Wait for server
         run: npx wait-on http://localhost:3000 --timeout 120000
 
-      - name: Generate a11y snapshots
-        run: npm run a11y:snapshot
-        env:
-          A11Y_PAGES: ${{ env.PAGES_JSON }}
-          A11Y_SNAPSHOT_OUT: ${{ github.workspace }}/base-snapshots.md
+      - name: Generate a11y snapshot
+        run: npx real-a11y snapshot --output "$GITHUB_WORKSPACE/base.json"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: base-snapshots
-          path: base-snapshots.md
+          name: base-snapshot
+          path: base.json
           if-no-files-found: error
 
   snapshot-pr:
@@ -271,8 +217,8 @@ jobs:
     name: Snapshot (PR)
     steps:
       - uses: actions/checkout@v4
-      # … rest identical to snapshot-base except for A11Y_SNAPSHOT_OUT
-      #   (use pr-snapshots.md) and the artifact name (pr-snapshots).
+      # … rest identical to snapshot-base except for --output
+      #   (use pr.json) and the artifact name (pr-snapshot).
 
   # See “Diff & comment” step below.
 ```
@@ -323,7 +269,7 @@ Replace `actions/setup-node`'s npm cache with pnpm's action and update the insta
 
       - run: pnpm install --frozen-lockfile
 
-      # Build + serve the app that hosts your a11y:snapshot script,
+      # Build + serve the app whose pages a11y.config.json points at,
       # e.g. if it lives in apps/web:
       - run: pnpm --filter web build
       - run: pnpm --filter web start &
@@ -331,14 +277,13 @@ Replace `actions/setup-node`'s npm cache with pnpm's action and update the insta
       - name: Wait for server
         run: npx wait-on http://localhost:3000 --timeout 120000
 
-      - name: Generate a11y snapshots
-        run: pnpm --filter web a11y:snapshot
-        env:
-          A11Y_PAGES: ${{ env.PAGES_JSON }}
-          A11Y_SNAPSHOT_OUT: ${{ github.workspace }}/base-snapshots.md
+      - name: Generate a11y snapshot
+        run: pnpm exec real-a11y snapshot --output "$GITHUB_WORKSPACE/base.json"
 ```
 
 ### <a id="diff-and-comment"></a>Shared: diff & comment job
+
+`real-a11y diff` renders the finding-aware comparison straight to Markdown (`--format md`), which the job posts as the sticky comment. `--fail-on never` keeps the comment purely advisory so it *always* posts — drop it (or add a second `npx real-a11y diff base.json pr.json` step) to also fail the build on **new** findings.
 
 ```yaml
   diff-and-comment:
@@ -346,18 +291,26 @@ Replace `actions/setup-node`'s npm cache with pnpm's action and update the insta
     needs: [snapshot-base, snapshot-pr]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: base-snapshots
-      - uses: actions/download-artifact@v4
-        with:
-          name: pr-snapshots
+      - uses: actions/checkout@v4
 
-      - name: Compute diff
-        id: diff
-        run: |
-          diff --unified=3 base-snapshots.md pr-snapshots.md > a11y.diff || true
-          echo "has_diff=$([ -s a11y.diff ] && echo true || echo false)" >> $GITHUB_OUTPUT
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci # `diff` is browser-free — no `playwright install` needed here
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: base-snapshot
+          path: .
+      - uses: actions/download-artifact@v4
+        with:
+          name: pr-snapshot
+          path: .
+
+      - name: Diff snapshots
+        run: npx real-a11y diff base.json pr.json --format md --fail-on never -o comment.md
 
       - name: Post sticky PR comment
         uses: actions/github-script@v7
@@ -365,48 +318,29 @@ Replace `actions/setup-node`'s npm cache with pnpm's action and update the insta
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
-            const hasDiff = '${{ steps.diff.outputs.has_diff }}' === 'true';
             const MARKER = '<!-- real-a11y-diff -->';
+            const body = MARKER + '\n' + fs.readFileSync('comment.md', 'utf8').trim();
 
-            let body;
-            if (!hasDiff) {
-              body = `${MARKER}\n## ✅ A11y tree unchanged\n\nNo accessibility tree changes detected in this PR.`;
-            } else {
-              const diff = fs.readFileSync('a11y.diff', 'utf8');
-              const added   = (diff.match(/^\+[^+]/gm) || []).length;
-              const removed = (diff.match(/^-[^-]/gm) || []).length;
-              const MAX = 60_000;
-              const diffBlock = diff.length > MAX
-                ? diff.slice(0, MAX) + '\n... (truncated — see artifacts for full diff)'
-                : diff;
-              body = [
-                MARKER,
-                '## 🔍 A11y tree changed',
-                '',
-                `**${added} line${added !== 1 ? 's' : ''} added, ${removed} removed** — review to confirm changes are intentional.`,
-                '',
-                '<details><summary>Show full diff</summary>',
-                '',
-                '```diff',
-                diffBlock,
-                '```',
-                '',
-                '</details>',
-              ].join('\n');
-            }
-
+            // Sticky comment: match on the marker as the FIRST line AND our own
+            // bot author. `includes()` is hijackable — an accessible name that
+            // quotes the marker inside any comment would collide; `startsWith`
+            // + author can't.
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
             });
-            const existing = comments.find(c => c.body?.includes(MARKER));
+            const mine = comments.find(
+              (c) =>
+                c.user?.login === 'github-actions[bot]' &&
+                c.body?.startsWith(MARKER),
+            );
 
-            if (existing) {
+            if (mine) {
               await github.rest.issues.updateComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                comment_id: existing.id,
+                comment_id: mine.id,
                 body,
               });
             } else {
@@ -419,11 +353,35 @@ Replace `actions/setup-node`'s npm cache with pnpm's action and update the insta
             }
 ```
 
+> The `snapshot-pr` job is `snapshot-base` with the PR checkout (`actions/checkout@v4` with no `ref`), `--output "$GITHUB_WORKSPACE/pr.json"`, and the artifact named `pr-snapshot`.
+
 ---
 
 ## Output format
 
-Each page produces three blocks: the a11y tree, the heading outline, and the tab sequence. Example:
+`real-a11y snapshot` writes **one JSON artifact** per run. For each page it captures the fingerprinted findings plus the serialized semantic tree, heading outline, and tab sequence — and that JSON is exactly what `real-a11y diff` consumes (the findings are what it compares). The envelope is stable (`schemaVersion: 1`), deterministic (no timestamps, LF-only), and each finding carries a `v1:` fingerprint:
+
+```json
+{
+  "schemaVersion": 1,
+  "tool": { "name": "@real-a11y-dev/cli", "version": "…" },
+  "pages": [
+    {
+      "name": "Home",
+      "url": "http://localhost:3000/",
+      "findings": [
+        { "rule": "no-unlabeled-interactive", "severity": "error",
+          "fingerprint": "v1:5ccd8ffcbc43cd09", "…": "…" }
+      ],
+      "tree": "main\n  heading \"Welcome\" (level 1)\n  …",
+      "outline": "h1 Welcome\n  h2 Featured\n  …",
+      "tabs": "01. link \"Skip to content\"\n02. …"
+    }
+  ]
+}
+```
+
+Pass `--md` for a human-readable report instead — the semantic tree, heading outline, and tab sequence per page, as Markdown:
 
 ```markdown
 ## Home
@@ -447,7 +405,7 @@ h1 Welcome
 04. button "Subscribe"
 ```
 
-Deterministic — the same DOM always produces the same bytes. Safe to commit as a fixture if you'd rather diff against a static file than against `main`.
+The JSON — not the Markdown — is what you feed into `diff`. Reach for `--md` when a human wants to read a single snapshot.
 
 ---
 
@@ -455,22 +413,27 @@ Deterministic — the same DOM always produces the same bytes. Safe to commit as
 
 | Regression | Caught? |
 |---|---|
-| Input loses its label | ✅ |
-| Role changed (`button` → `div`) | ✅ |
-| Landmark removed (`<main>` deleted) | ✅ |
-| Heading level skipped | ✅ (outline section) |
-| Focusable element removed from tab order | ✅ (tab sequence section) |
-| Dialog no longer has accessible name | ✅ |
-| ARIA state silently cleared | ✅ |
+| Input loses its label | ✅ (new `no-unlabeled-interactive` finding) |
+| Image loses its alt text | ✅ (new `image-alt` finding) |
+| Landmark removed (`<main>` deleted) | ✅ (new `landmark-structure` finding) |
+| Heading level skipped | ✅ (new `heading-order` finding) |
+| Dialog no longer has accessible name | ✅ (new `dialog-labeled` finding) |
+| Role changed (`button` → `div`) | ✅ (structural tree diff) |
+| Focusable element removed from tab order | ✅ (structural tabs diff) |
+| ARIA state silently cleared | ✅ (structural tree diff) |
+
+The five rules surface as **findings** (new / changed / fixed); shape-only shifts that don't trip a rule — a role swap, a reordered tab sequence — show up in the advisory **structural diff** of the tree / outline / tabs views (`--format json` exposes these per page).
 
 ---
 
 ## Combine with assertions
 
-The diff bot tells you *something changed* — pair it with `assertHeadingOrder`, `assertNoUnlabeledInteractive`, etc. to fail the build immediately on known-bad patterns:
+The diff bot tells you *something changed* — pair it with `assertHeadingOrder`, `assertNoUnlabeledInteractive`, etc. from [`@real-a11y-dev/testing`](/packages/testing) to fail the build immediately on known-bad patterns:
 
 ```ts
 // playwright.config.ts — runs on every PR via the e2e job
+import { attach } from "@real-a11y-dev/testing/playwright";
+
 test("page meets structural requirements", async ({ page }) => {
   await page.goto("http://localhost:3000");
   const sn = await attach(page);
@@ -481,4 +444,4 @@ test("page meets structural requirements", async ({ page }) => {
 });
 ```
 
-The diff bot catches _unexpected regressions_; the assertions catch _known-bad patterns_. Together they give you defense in depth.
+The diff bot catches _unexpected regressions_; the assertions catch _known-bad patterns_. Together they give you defense in depth — the same engine on two surfaces: the CLI for the PR-wide diff, the testing library inside your e2e run.

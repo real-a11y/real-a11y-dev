@@ -115,6 +115,8 @@
     paragraph "Screen reader users navigate primarily by headings. This view extracts just the heading elements and shows the document outline."
     img "Headings view: only the heading elements from the page, shown as indigo bars indented by level — one H1 at the top, followed by H2s and H3s forming the document outline."
     paragraph "A well-structured outline has exactly one H1, no skipped levels, and a logical nesting that mirrors the page's sections."
+    paragraph
+      link "Read more about the Headings view →"
     separator
     heading "TAB order view" (level 2)
     paragraph "Keyboard users press Tab to move between interactive elements. This view shows the exact sequence — a flat, numbered list of every focusable element."

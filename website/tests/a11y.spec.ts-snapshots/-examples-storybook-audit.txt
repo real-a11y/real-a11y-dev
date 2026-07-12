@@ -105,7 +105,7 @@
       listitem "Tree, Outline, and Tab sequence views"
       listitem "A11y mode vs DOM mode toggle"
       listitem "Panel updating live when a story's controls change (e.g., toggle a disabled prop)"
-      listitem "Stories for: Button, Form, Dialog, Navigation"
+      listitem "Stories for: Button, Form, Dialog, Menu, Toolbar, and more"
     heading "Run it locally" (level 2)
     button "Copy Code"
       code

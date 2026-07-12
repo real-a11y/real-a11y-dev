@@ -10,13 +10,13 @@ A Storybook 8 project with `@real-a11y-dev/storybook-addon` enabled — demonstr
 - Tree, Outline, and Tab sequence views
 - A11y mode vs DOM mode toggle
 - Panel updating live when a story's controls change (e.g., toggle a disabled prop)
-- Stories for: Button, Form, Dialog, Navigation
+- Stories for: Button, Form, Dialog, Menu, Toolbar, and more
 
 ## Run it locally
 
 ```sh
 git clone https://github.com/real-a11y/real-a11y-dev.git
-cd real-a11y
+cd real-a11y-dev
 pnpm install
 pnpm --filter @real-a11y-dev/example-storybook storybook
 ```

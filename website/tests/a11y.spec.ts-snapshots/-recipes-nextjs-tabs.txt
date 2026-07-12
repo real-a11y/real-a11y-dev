@@ -67,7 +67,9 @@
 67. generic
 68. button "Copy Code"
 69. generic
-70. link "Peer Dependencies"
-71. link "Edit this page on GitHub"
-72. link "Previous page@real-a11y-dev/cli"
-73. link "Next pageStorybook 8 + React 19"
+70. link "CI A11y Diff Bot"
+71. link "CLI package"
+72. link "Peer Dependencies"
+73. link "Edit this page on GitHub"
+74. link "Previous page@real-a11y-dev/cli"
+75. link "Next pageStorybook 8 + React 19"

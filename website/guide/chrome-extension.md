@@ -112,6 +112,30 @@ The extension surfaces the same engine as `@real-a11y-dev/inspector`, `@real-a11
 
 What only an extension can give you is the handful of capabilities that require a browser extension to reach across tabs and frames. The [screen curtain](#the-screen-curtain) above is one; here are the rest:
 
+### Copy the tree as a Markdown report
+
+The `Copy ▾` dropdown in the panel toolbar puts the current view on your clipboard as a Markdown accessibility report — the button's own tooltip reads *"Copy the tree as Markdown — paste into a bug report."* Only the extension has this: the clipboard/export code lives solely in the extension (`packages/extension/src/sidepanel/export.ts`), not in the shared `inspector` or `react` packages.
+
+Pick what to copy:
+
+- **Everything** — the tree, heading outline, and tab sequence in one document.
+- **A11y tree** / **DOM tree** — just the tree currently shown (the label follows your active view mode).
+- **Headings** — the heading outline (`h1`..`h6`).
+- **Tab sequence** — the focusable nodes in tab order.
+
+Every export opens with a reproducibility header, so a pasted report is self-describing:
+
+```md
+# Accessibility report — Checkout · Example Store
+
+- **URL:** https://example.com/checkout
+- **Scope:** dialog "Confirm order"
+- **Captured:** 2026-07-11T14:32:10.000Z
+- **Tool:** Semantic Navigator 0.1.7
+```
+
+The `Scope` line appears only when the panel is scoped to a subtree, so the report states exactly what it covers. Each selected view then follows as its own fenced `##` section — drop the whole thing into a GitHub issue or any Markdown tracker and the person reading it can see the structure without re-running anything.
+
 ### Cross-iframe tree merging
 
 iframes are merged into the parent tree at the correct depth. The extension's background script reaches across frame boundaries (a privilege only extensions have) and stitches each iframe's locally-extracted tree onto its `<iframe>` placeholder in the parent. Embedded widgets, third-party flows, payment forms — all in scope.

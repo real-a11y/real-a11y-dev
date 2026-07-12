@@ -106,6 +106,13 @@
         strong "TL;DR"
         code "Map<string, SemanticNode>"
         strong "building your own tooling"
+    blockquote
+      paragraph "Audit from the shell with , or give an AI agent accessibility audits via — both sit on this layer already, so you don't have to build them."
+        strong "Want a ready-made tool, not a custom build?"
+        link "@real-a11y-dev/cli"
+          code "@real-a11y-dev/cli"
+        link "@real-a11y-dev/mcp"
+          code "@real-a11y-dev/mcp"
     paragraph "The extraction engine. Every other package is built on top of this."
     heading "Install" (level 2)
     button "Copy Code"

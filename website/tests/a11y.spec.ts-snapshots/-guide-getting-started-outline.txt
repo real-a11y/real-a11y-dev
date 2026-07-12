@@ -10,6 +10,7 @@ h1 Getting Started
   h2 Pick your entry point
   h2 Quick install
   h2 Your first tree in 30 seconds
+    h3 CLI (no code)
     h3 Framework-agnostic embed
     h3 React
     h3 Testing (Vitest / Jest)

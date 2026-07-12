@@ -148,10 +148,10 @@ When an assertion throws `A11yAssertionError` inside the page, Playwright propag
 
 ```ts
 // Error message example:
-// "Found 2 unlabeled interactive element(s):
-//   - button (<button>)
-//   - textbox (<input>)"
-await expect(sn.assertNoUnlabeledInteractive()).rejects.toThrow("unlabeled");
+// "Found 2 accessibility issues:
+//   - Unlabeled interactive element: button <button>
+//   - Unlabeled interactive element: textbox <input>"
+await expect(sn.assertNoUnlabeledInteractive()).rejects.toThrow(/unlabeled/i);
 ```
 
 ## `SemanticNavigatorPageHandle` type

@@ -44,3 +44,4 @@ pnpm --filter @real-a11y-dev/example-testing test:watch
 
 - [`@real-a11y-dev/testing` package docs](../../packages/testing)
 - [`@real-a11y-dev/testing/playwright` adapter](../../packages/testing#playwright) for browser-based E2E audits
+- [`@real-a11y-dev/cli`](../../packages/cli) to snapshot/diff a real running app, and [`@real-a11y-dev/mcp`](../../packages/mcp) to give agents the same audits

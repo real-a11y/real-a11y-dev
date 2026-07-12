@@ -9,12 +9,15 @@
 h1 CI A11y Diff Bot
   h2 How it works
   h2 What the comment looks like
+    h3 Accessibility diff — 0 new · 0 changed · 0 fixed
+    h3 Accessibility diff — 2 new · 0 changed · 1 fixed
+      h4 Home
   h2 Setup
     h3 1. Install
-    h3 2. Drop in the snapshot script
+    h3 2. Describe your pages in a11y.config.json
     h3 3. Add the workflow
   h2 Configuration
-    h3 A11Y_PAGES shape
+    h3 a11y.config.json shape
   h2 Workflow templates
     h3 Next.js (dev server)
     h3 Vite / CRA SPA (preview server)
