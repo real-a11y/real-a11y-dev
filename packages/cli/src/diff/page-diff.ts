@@ -12,7 +12,7 @@ import {
   type DiffEntry,
   type DiffSummary,
 } from "./findings-diff.js";
-import { diffViews, type ViewDiff } from "./views-diff.js";
+import { diffViews, stripTabIndex, type ViewDiff } from "./views-diff.js";
 
 export type PageDiffStatus =
   | "ok"
@@ -41,7 +41,9 @@ function pageViews(base: SnapshotPage, pr: SnapshotPage) {
   return {
     tree: diffViews(base.tree, pr.tree),
     outline: diffViews(base.outline, pr.outline),
-    tabs: diffViews(base.tabs, pr.tabs),
+    // Tabs are numbered — compare by stop content so one insert isn't a
+    // renumber cascade.
+    tabs: diffViews(base.tabs, pr.tabs, stripTabIndex),
   };
 }
 

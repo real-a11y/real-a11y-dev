@@ -9,3 +9,5 @@ CI interop reporters and diff-side baselines. `snapshot --format` now speaks `sa
 - **`jsonl`** — one finding per line for `jq`/grep pipelines; no framing records; suppressed findings flagged.
 
 `diff` now takes `--baseline <file>` too: a NEW finding the baseline accepts renders as `new (baselined)` — reported, never gating — closing the loop with `snapshot --update-baseline`. The `a11y.config.json` page entries gain a `sourcePath` field (carried into the snapshot artifact) for SARIF anchoring. Reporters are exported from the programmatic API as `renderSarif`, `renderJUnit`, and `renderJsonl`.
+
+The structural (tab-order) view diff no longer explodes on an insertion: the serialized tab list is numbered, so adding one focus stop used to renumber every stop after it and report ~40 "changed" lines. The tab view now compares by stop content (the `NN.` counter is dropped before diffing), so one inserted stop is one added line — the tree and outline views are unchanged, keeping indentation depth and heading `(level N)`.
