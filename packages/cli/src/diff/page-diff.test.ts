@@ -89,4 +89,56 @@ describe("diffArtifacts", () => {
     expect(result.pages[0].views.tabs.added).toEqual(["link Docs"]);
     expect(result.pages[0].views.tabs.removed).toEqual(["link Home"]);
   });
+
+  it("populates structural on ok pages; [] on added/removed/incomparable", () => {
+    const base = artifact([
+      page("Home", [], { tree: 'main\n  navigation "Old"' }),
+      page("Gone", []),
+      page("Down", []),
+    ]);
+    const pr = artifact([
+      page("Home", [], { tree: 'main\n  navigation "New"' }),
+      page("Fresh", []),
+      page("Down", [], { status: "error", error: "boom" }),
+    ]);
+    const result = diffArtifacts(base, pr);
+    const byName = new Map(result.pages.map((p) => [p.name, p]));
+    expect(byName.get("Home")?.structural).toEqual([
+      expect.objectContaining({ kind: "landmark-renamed" }),
+    ]);
+    expect(byName.get("Fresh")?.structural).toEqual([]);
+    expect(byName.get("Gone")?.structural).toEqual([]);
+    expect(byName.get("Down")?.structural).toEqual([]);
+  });
+
+  it("plumbs ignoreViewLine through views AND structural", () => {
+    const base = artifact([
+      page("Home", [], { tree: 'main\n  time "Last updated: yesterday"' }),
+    ]);
+    const pr = artifact([
+      page("Home", [], { tree: 'main\n  time "Last updated: today"' }),
+    ]);
+    const noisy = diffArtifacts(base, pr);
+    expect(noisy.pages[0].views.tree.added).toHaveLength(1);
+    expect(noisy.pages[0].structural).not.toEqual([]);
+    const filtered = diffArtifacts(base, pr, {
+      ignoreViewLine: [/^time "/],
+    });
+    expect(filtered.pages[0].views.tree.added).toEqual([]);
+    expect(filtered.pages[0].structural).toEqual([]);
+  });
+
+  it("a pure tab reorder yields a statement despite empty view diffs", () => {
+    const base = artifact([
+      page("Home", [], { tabs: '01. link "A"\n02. link "B"' }),
+    ]);
+    const pr = artifact([
+      page("Home", [], { tabs: '01. link "B"\n02. link "A"' }),
+    ]);
+    const result = diffArtifacts(base, pr);
+    expect(result.pages[0].views.tabs).toEqual({ added: [], removed: [] });
+    expect(result.pages[0].structural).toEqual([
+      expect.objectContaining({ kind: "tab-order-reordered" }),
+    ]);
+  });
 });

@@ -13,6 +13,7 @@ import {
   type DiffSummary,
 } from "./findings-diff.js";
 import { diffViews, stripTabIndex, type ViewDiff } from "./views-diff.js";
+import { summarizeViews, type ViewChange } from "./views-summary.js";
 
 export type PageDiffStatus =
   | "ok"
@@ -25,8 +26,18 @@ export interface PageDiff {
   status: PageDiffStatus;
   entries: DiffEntry[];
   views: { tree: ViewDiff; outline: ViewDiff; tabs: ViewDiff };
+  /** Human structural summary — plain-language statements derived from the
+   * view diffs. Advisory: the exit gate never reads it. Empty for
+   * added/removed/incomparable pages. */
+  structural: ViewChange[];
   /** Why a page is incomparable (the errored side's message). */
   note?: string;
+}
+
+export interface DiffOptions {
+  /** Drop view lines matching any pattern before diffing (--ignore-view-line)
+   * — e.g. a generated "last updated" timestamp that differs on every build. */
+  ignoreViewLine?: readonly RegExp[];
 }
 
 export interface DiffResult {
@@ -37,20 +48,27 @@ export interface DiffResult {
 const EMPTY_VIEW: ViewDiff = { added: [], removed: [] };
 const EMPTY_VIEWS = { tree: EMPTY_VIEW, outline: EMPTY_VIEW, tabs: EMPTY_VIEW };
 
-function pageViews(base: SnapshotPage, pr: SnapshotPage) {
+type Ignore = ((trimmedLine: string) => boolean) | undefined;
+
+function pageViews(base: SnapshotPage, pr: SnapshotPage, ignore: Ignore) {
   return {
-    tree: diffViews(base.tree, pr.tree),
-    outline: diffViews(base.outline, pr.outline),
+    tree: diffViews(base.tree, pr.tree, undefined, ignore),
+    outline: diffViews(base.outline, pr.outline, undefined, ignore),
     // Tabs are numbered — compare by stop content so one insert isn't a
     // renumber cascade.
-    tabs: diffViews(base.tabs, pr.tabs, stripTabIndex),
+    tabs: diffViews(base.tabs, pr.tabs, stripTabIndex, ignore),
   };
 }
 
 export function diffArtifacts(
   base: SnapshotArtifact,
   pr: SnapshotArtifact,
+  options: DiffOptions = {},
 ): DiffResult {
+  const patterns = options.ignoreViewLine ?? [];
+  const ignore: Ignore = patterns.length
+    ? (line) => patterns.some((re) => re.test(line))
+    : undefined;
   const baseByName = new Map(base.pages.map((p) => [p.name, p]));
   const seen = new Set<string>();
   const pages: PageDiff[] = [];
@@ -65,6 +83,7 @@ export function diffArtifacts(
         status: "added",
         entries: diffFindings([], prPage.findings),
         views: EMPTY_VIEWS,
+        structural: [],
       });
       continue;
     }
@@ -74,6 +93,7 @@ export function diffArtifacts(
         status: "incomparable",
         entries: [],
         views: EMPTY_VIEWS,
+        structural: [],
         note:
           prPage.status === "error"
             ? prPage.error
@@ -81,11 +101,13 @@ export function diffArtifacts(
       });
       continue;
     }
+    const views = pageViews(basePage, prPage, ignore);
     pages.push({
       name: prPage.name,
       status: "ok",
       entries: diffFindings(basePage.findings, prPage.findings),
-      views: pageViews(basePage, prPage),
+      views,
+      structural: summarizeViews({ views, base: basePage, pr: prPage, ignore }),
     });
   }
 
@@ -96,6 +118,7 @@ export function diffArtifacts(
       status: "removed",
       entries: diffFindings(basePage.findings, []),
       views: EMPTY_VIEWS,
+      structural: [],
     });
   }
 

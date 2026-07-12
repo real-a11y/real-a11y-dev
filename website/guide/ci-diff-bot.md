@@ -49,8 +49,22 @@ Because the diff is **finding-identity-aware** (each finding carries a stable `v
 > - ❌ **new** `no-unlabeled-interactive`: Unlabeled interactive element: button &lt;button&gt;
 > - ❌ **new** `image-alt`: Image missing alt text: &lt;img&gt;
 > - ✅ **fixed** `heading-order`: Heading level skipped: h1 → h3
+>
+> **Structure (advisory — never blocks merge):**
+>
+> - Heading level changed: "Setup" h2 → h3
+> - Keyboard tab stop added: link "Skip to setup" (now stop 2 of 14)
+>
+> <details><summary>Raw view diff — tree +2/-1 · outline +1/-1 · tabs +1/-0</summary>…</details>
 
-The comment is **updated in place** — not spammed. If the PR is fixed and re-pushed, the comment updates to `0 new`. Only **new** findings can fail the build (`diff` exits `1` at/above `--fail-on`); pre-existing debt and fixes never block a PR.
+Findings lead (they're the gate); structural drift follows as **plain-language
+statements** any reviewer can verify — press <kbd>Tab</kbd>, glance at the
+heading — with the raw serialized lines demoted into a collapsed block. Even
+changes no line diff can see get a statement: a *pure reorder* of the tab
+order adds or removes no lines, but reads as
+`Keyboard tab order changed: 4 stops moved (same 14 stops)`.
+
+The comment is **updated in place** — not spammed. If the PR is fixed and re-pushed, the comment updates to `0 new`. Only **new** findings can fail the build (`diff` exits `1` at/above `--fail-on`); pre-existing debt and fixes never block a PR — structural statements are always advisory.
 
 ---
 
@@ -283,7 +297,11 @@ Replace `actions/setup-node`'s npm cache with pnpm's action and update the insta
 
 ### <a id="diff-and-comment"></a>Shared: diff & comment job
 
-`real-a11y diff` renders the finding-aware comparison straight to Markdown (`--format md`), which the job posts as the sticky comment. `--fail-on never` keeps the comment purely advisory so it *always* posts — drop it (or add a second `npx real-a11y diff base.json pr.json` step) to also fail the build on **new** findings.
+`real-a11y diff` renders the finding-aware comparison straight to Markdown (`--format md`) — findings first, then the plain-language structural statements per page with the raw lines collapsed — and the job posts it as the sticky comment. `--fail-on never` keeps the comment purely advisory so it *always* posts — drop it (or add a second `npx real-a11y diff base.json pr.json` step) to also fail the build on **new** findings.
+
+If your pages render generated content that differs on every build (a "last
+updated" timestamp, a build hash), add `--ignore-view-line '<regex>'` to the
+diff invocation so it doesn't read as drift on every page.
 
 ```yaml
   diff-and-comment:
@@ -419,10 +437,11 @@ The JSON — not the Markdown — is what you feed into `diff`. Reach for `--md`
 | Heading level skipped | ✅ (new `heading-order` finding) |
 | Dialog no longer has accessible name | ✅ (new `dialog-labeled` finding) |
 | Role changed (`button` → `div`) | ✅ (structural tree diff) |
-| Focusable element removed from tab order | ✅ (structural tabs diff) |
+| Focusable element removed from tab order | ✅ (`Keyboard tab stop removed: … — still on the page but no longer keyboard-focusable`) |
+| Tab order reordered (no lines added/removed) | ✅ (`Keyboard tab order changed: N stops moved`) |
 | ARIA state silently cleared | ✅ (structural tree diff) |
 
-The five rules surface as **findings** (new / changed / fixed); shape-only shifts that don't trip a rule — a role swap, a reordered tab sequence — show up in the advisory **structural diff** of the tree / outline / tabs views (`--format json` exposes these per page).
+The five rules surface as **findings** (new / changed / fixed); shape-only shifts that don't trip a rule — a landmark or heading change, a new tab stop, a role swap, a reordered tab sequence — surface as advisory **plain-language statements** per page, with the raw tree / outline / tabs line diffs collapsed beneath them (`--format json` exposes both, as `pages[].structural` and `pages[].views`).
 
 ---
 

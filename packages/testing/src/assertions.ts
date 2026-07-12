@@ -9,7 +9,7 @@ import {
 import { extract } from "@real-a11y-dev/serialize";
 
 /** Roles we consider intrinsically interactive for labeling checks. */
-const INTERACTIVE_ROLES = new Set([
+export const INTERACTIVE_ROLES: ReadonlySet<string> = new Set([
   "button",
   "link",
   "textbox",

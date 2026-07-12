@@ -99,6 +99,7 @@ const SNAPSHOT_FLAGS: Options = {
 const DIFF_FLAGS: Options = {
   "fail-on": { type: "string" },
   baseline: { type: "string" },
+  "ignore-view-line": { type: "string", multiple: true },
   format: { type: "string", short: "f" },
   output: { type: "string", short: "o" },
   quiet: { type: "boolean", short: "q" },
@@ -317,6 +318,8 @@ Flags:
   --fail-on <level>      error | warning | never          (default: error)
   --baseline <file>      NEW findings this baseline accepts don't gate
                          (they stay in the report, marked suppressed)
+  --ignore-view-line <regex>  Drop matching view lines before diffing
+                         (repeatable; e.g. '^time "' for a build timestamp)
   -f, --format <fmt>     pretty | json | md               (default: pretty)
   -o, --output <file>    Write the report to a file
   -q, --quiet            Suppress progress

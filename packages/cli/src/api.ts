@@ -42,9 +42,18 @@ export type {
   DiffSummary,
 } from "./diff/findings-diff.js";
 export { diffArtifacts } from "./diff/page-diff.js";
-export type { DiffResult, PageDiff } from "./diff/page-diff.js";
+export type { DiffResult, DiffOptions, PageDiff } from "./diff/page-diff.js";
 export { diffViews } from "./diff/views-diff.js";
 export type { ViewDiff } from "./diff/views-diff.js";
+
+// Human structural summary — plain-language statements over the view diffs.
+export { summarizeViews, VIEW_CHANGE_ORDER } from "./diff/views-summary.js";
+export type {
+  ViewChange,
+  ViewChangeKind,
+  RawViews,
+  SummarizeViewsInput,
+} from "./diff/views-summary.js";
 
 export {
   projectFinding,

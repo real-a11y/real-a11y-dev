@@ -30,10 +30,17 @@ export function stripTabIndex(line: string): string {
 function counts(
   text: string,
   normalize: (line: string) => string,
+  ignore?: (trimmedLine: string) => boolean,
 ): Map<string, number> {
   const m = new Map<string, number>();
   for (const raw of text.split("\n")) {
-    const line = normalize(raw.trim());
+    const trimmed = raw.trim();
+    if (trimmed === "") continue;
+    // Volatile-line filter (--ignore-view-line) — tested against the trimmed
+    // line BEFORE normalize, and dropped before the multiset so counts,
+    // statements, and raw arrays all agree.
+    if (ignore?.(trimmed)) continue;
+    const line = normalize(trimmed);
     if (line === "") continue;
     m.set(line, (m.get(line) ?? 0) + 1);
   }
@@ -44,9 +51,10 @@ export function diffViews(
   base: string,
   pr: string,
   normalize: (line: string) => string = (l) => l,
+  ignore?: (trimmedLine: string) => boolean,
 ): ViewDiff {
-  const b = counts(base, normalize);
-  const p = counts(pr, normalize);
+  const b = counts(base, normalize, ignore);
+  const p = counts(pr, normalize, ignore);
   const added: string[] = [];
   const removed: string[] = [];
   for (const [line, n] of p) {

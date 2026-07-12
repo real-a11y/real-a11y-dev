@@ -96,6 +96,36 @@ repo, not a copy-pasted script. The diff is
 finding-identity-aware: a renumbered `:nth-of-type` locator or a re-indented
 subtree is not a change — only an actual new/changed/fixed violation is.
 
+Structural drift that doesn't trip a rule is narrated in **plain language**,
+so a reviewer who isn't an a11y expert can still act on it:
+
+```text
+structure changed (advisory): tree +2/-1 · outline +1/-1 · tabs +1/-0
+  · Heading level changed: "Setup" h2 → h3
+  · Keyboard tab stop added: link "Skip" (now stop 1 of 2)
+```
+
+The statements cover what assistive-tech users actually feel: landmarks
+appearing/disappearing (`main` removal calls out broken skip-links), heading
+level changes and renames, keyboard tab stops added/removed — including the
+dangerous case where an element is *still on the page but no longer
+keyboard-focusable* — and pure reorders of the tab order or outline, which a
+line diff can't see at all. Anything the taxonomy doesn't recognize degrades
+to one honest `Other content changed: +N/-N lines` rollup, never silence. In
+Markdown the raw `+`/`-` view lines are demoted into a collapsed
+`<details>` block under the statements; in JSON they're `pages[].views` with
+the statements alongside as `pages[].structural` (`{ kind, message, … }` —
+key on `kind`, not the wording). Structural changes are **advisory only**:
+they never affect the exit code.
+
+Generated content that legitimately differs on every build (a "last updated"
+timestamp, a build hash) would otherwise read as drift on every page — drop
+it at the source with a repeatable regex:
+
+```sh
+real-a11y diff base.json pr.json --ignore-view-line '^time "'
+```
+
 ## Adopt the gate on existing debt
 
 A site with known findings can still gate on **new** ones. `--update-baseline`

@@ -132,11 +132,16 @@ jobs:
 
       # Findings-aware diff. `--fail-on never` keeps it advisory — this is a
       # reviewer signal, not a second gate on top of `website-a11y`. Human (md) +
-      # machine (json: findings + structural views).
+      # machine (json: findings + structural statements + views). The md output
+      # is the whole comment body: findings first, then the plain-language
+      # structural summary per route, raw lines demoted into a collapsed block.
+      # `--ignore-view-line '^time "'` drops the VitePress "Last updated"
+      # timestamp, which renders differently between the base and PR checkouts
+      # (shallow clone) and would otherwise show phantom drift on every page.
       - name: Diff snapshots
         run: |
-          node packages/cli/dist/index.js diff base.json pr.json --format md --fail-on never -o diff.md
-          node packages/cli/dist/index.js diff base.json pr.json --format json --fail-on never -o diff.json
+          node packages/cli/dist/index.js diff base.json pr.json --format md --fail-on never --ignore-view-line '^time "' -o diff.md
+          node packages/cli/dist/index.js diff base.json pr.json --format json --fail-on never --ignore-view-line '^time "' -o diff.json
 
       - name: Post PR comment
         uses: actions/github-script@v7
@@ -153,44 +158,14 @@ jobs:
             const s = result.summary;
             const findingChanges = s.new + s.changed + s.removed;
 
-            // Advisory structural drift, with the ACTUAL lines, collapsed per
-            // page. Drop the "Last updated" footer timestamp: it renders
-            // differently between the base and PR checkouts (shallow clone), so
-            // it would otherwise show a phantom +1/-1 on every unchanged page.
-            const VOLATILE = /^\s*time "/;
-            const CAP = 25;
-            const clean = (arr) => (arr ?? []).filter((l) => !VOLATILE.test(l));
-
-            const structBlocks = [];
-            for (const page of result.pages) {
-              const views = ['tree', 'outline', 'tabs']
-                .map((name) => {
-                  const v = page.views?.[name] ?? {};
-                  return { name, added: clean(v.added), removed: clean(v.removed) };
-                })
-                .filter((v) => v.added.length || v.removed.length);
-              if (!views.length) continue;
-
-              const summary = views
-                .map((v) => `${v.name} +${v.added.length}/-${v.removed.length}`)
-                .join(' · ');
-              const diffs = views
-                .map((v) => {
-                  const shown = [
-                    ...v.removed.slice(0, CAP).map((l) => `- ${l}`),
-                    ...v.added.slice(0, CAP).map((l) => `+ ${l}`),
-                  ];
-                  const hidden = v.added.length + v.removed.length - shown.length;
-                  const more = hidden > 0 ? `\n… ${hidden} more line(s)` : '';
-                  return '**' + v.name + '**\n```diff\n' + shown.join('\n') + more + '\n```';
-                })
-                .join('\n\n');
-              structBlocks.push(
-                `<details>\n<summary><b>${page.name}</b> — ${summary}</summary>\n\n${diffs}\n\n</details>`,
-              );
-            }
-
-            const anyChange = findingChanges > 0 || structBlocks.length > 0;
+            // The CLI computes the structural statements (pages[].structural);
+            // `?? []` keeps this script working against an older CLI's output.
+            // Reorder-only pages have EMPTY views but a statement, so this —
+            // not the view counts — is the drift signal.
+            const anyDrift = result.pages.some(
+              (p) => (p.structural ?? []).length > 0,
+            );
+            const anyChange = findingChanges > 0 || anyDrift;
 
             let body;
             if (!anyChange) {
@@ -203,19 +178,7 @@ jobs:
                 FOOTER,
               ].join('\n');
             } else {
-              const parts = [MARKER, md, ''];
-              if (structBlocks.length) {
-                parts.push(
-                  '#### Structural changes (advisory)',
-                  '',
-                  'The semantic tree / outline / tab order moved — review to confirm the change is intentional. Expand a page for the exact lines.',
-                  '',
-                  ...structBlocks,
-                  '',
-                );
-              }
-              parts.push(FOOTER);
-              body = parts.join('\n');
+              body = [MARKER, md, '', FOOTER].join('\n');
               // GitHub caps a comment at 65 536 chars.
               if (body.length > 60_000) {
                 body = body.slice(0, 60_000) + '\n\n_…truncated — see the job log for the full diff._';

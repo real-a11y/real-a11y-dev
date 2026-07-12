@@ -19,6 +19,7 @@ export {
   collectFindings,
   listByRole,
   ALL_RULES,
+  INTERACTIVE_ROLES,
 } from "./assertions.js";
 export type { Finding, A11yRule, RoleFilter } from "./assertions.js";
 
@@ -40,6 +41,7 @@ export {
   getOutline,
   getTabSequence,
   diffTrees,
+  ROLE_FILTER_GROUPS,
 } from "@real-a11y-dev/core";
 export type {
   SemanticNode,

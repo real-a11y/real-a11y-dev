@@ -7,7 +7,6 @@
 
 import type { DiffEntry } from "../diff/findings-diff.js";
 import type { DiffResult, PageDiff } from "../diff/page-diff.js";
-import type { ViewDiff } from "../diff/views-diff.js";
 
 import { palette } from "./color.js";
 
@@ -17,6 +16,13 @@ const ORDER: Record<DiffEntry["kind"], number> = {
   removed: 2,
   unchanged: 3,
 };
+
+/** Statements shown per page in pretty/md before "… N more" (json is uncapped). */
+const STATEMENT_CAP = 10;
+/** Raw lines shown per view per direction inside the collapsed md block. */
+const RAW_LINE_CAP = 25;
+
+const VIEW_NAMES = ["tree", "outline", "tabs"] as const;
 
 function sortEntries(entries: readonly DiffEntry[]): DiffEntry[] {
   return [...entries].sort(
@@ -31,9 +37,16 @@ function sortEntries(entries: readonly DiffEntry[]): DiffEntry[] {
   );
 }
 
-function viewLine(label: string, view: ViewDiff): string | null {
-  if (view.added.length === 0 && view.removed.length === 0) return null;
-  return `    ${label}: +${view.added.length} / -${view.removed.length} line(s)`;
+/** `tree +3/-1 · tabs +2/-0` — per-view counts, non-empty views only. */
+function viewCounts(page: PageDiff): string {
+  return VIEW_NAMES.filter(
+    (v) => page.views[v].added.length || page.views[v].removed.length,
+  )
+    .map(
+      (v) =>
+        `${v} +${page.views[v].added.length}/-${page.views[v].removed.length}`,
+    )
+    .join(" · ");
 }
 
 export interface DiffRenderOptions {
@@ -51,11 +64,6 @@ export function renderDiffPretty(
     const shown = sortEntries(page.entries).filter(
       (e) => e.kind !== "unchanged",
     );
-    const viewLines = [
-      viewLine("tree", page.views.tree),
-      viewLine("outline", page.views.outline),
-      viewLine("tabs", page.views.tabs),
-    ].filter((l): l is string => l !== null);
 
     if (page.status === "incomparable") {
       lines.push(c.bold(`== ${page.name}`));
@@ -64,7 +72,10 @@ export function renderDiffPretty(
       );
       continue;
     }
-    if (shown.length === 0 && viewLines.length === 0) continue;
+    // structural covers the views by totality (every non-empty view diff
+    // yields at least the rollup statement) AND catches reorder-only pages,
+    // whose view diffs are empty.
+    if (shown.length === 0 && page.structural.length === 0) continue;
 
     lines.push(
       c.bold(
@@ -95,9 +106,21 @@ export function renderDiffPretty(
         );
       }
     }
-    if (viewLines.length) {
-      lines.push(c.dim("  structure changed (advisory):"));
-      lines.push(...viewLines);
+    if (page.structural.length) {
+      const counts = viewCounts(page);
+      lines.push(
+        c.dim(`  structure changed (advisory):${counts ? ` ${counts}` : ""}`),
+      );
+      for (const s of page.structural.slice(0, STATEMENT_CAP)) {
+        lines.push(c.dim(`    · ${s.message}`));
+      }
+      if (page.structural.length > STATEMENT_CAP) {
+        lines.push(
+          c.dim(
+            `    · … ${page.structural.length - STATEMENT_CAP} more (see --format json)`,
+          ),
+        );
+      }
     }
   }
 
@@ -121,6 +144,7 @@ export function renderDiffJson(result: DiffResult): string {
       .filter((e) => e.kind === "removed")
       .map((e) => e.finding),
     views: p.views,
+    structural: p.structural,
   });
   return `${JSON.stringify(
     {
@@ -134,12 +158,94 @@ export function renderDiffJson(result: DiffResult): string {
   )}\n`;
 }
 
+/** Escape a statement for a markdown bullet. Accessible names are page
+ * content — a name containing `</details>`, `**`, or backticks must render
+ * literally, never as structure. Backslash-escapes markdown metacharacters
+ * and entity-escapes HTML. */
+function mdEscape(text: string): string {
+  return text
+    .replaceAll("\\", "\\\\")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replace(/[`*_[\]#|~]/g, (ch) => `\\${ch}`);
+}
+
+/** A ``` fence breaks if the content contains one — use one backtick more
+ * than the longest run in the content (min 3). */
+function fenceFor(lines: readonly string[]): string {
+  let longest = 0;
+  for (const line of lines) {
+    for (const run of line.match(/`+/g) ?? []) {
+      longest = Math.max(longest, run.length);
+    }
+  }
+  return "`".repeat(Math.max(3, longest + 1));
+}
+
+/** The per-page collapsed raw block: per-view ```diff fences, removed lines
+ * first, capped per direction. Empty string when all views are empty
+ * (reorder-only pages have statements but no raw lines). */
+function mdRawBlock(page: PageDiff): string[] {
+  const counts = viewCounts(page);
+  if (!counts) return [];
+  const out: string[] = [
+    "<details>",
+    `<summary>Raw view diff — ${counts}</summary>`,
+    "", // GitHub needs a blank line to render markdown inside <details>
+  ];
+  for (const view of VIEW_NAMES) {
+    const { added, removed } = page.views[view];
+    if (added.length === 0 && removed.length === 0) continue;
+    const removedShown = removed.slice(0, RAW_LINE_CAP);
+    const addedShown = added.slice(0, RAW_LINE_CAP);
+    const hidden =
+      removed.length - removedShown.length + (added.length - addedShown.length);
+    const body = [
+      ...removedShown.map((l) => `- ${l}`),
+      ...addedShown.map((l) => `+ ${l}`),
+      ...(hidden > 0 ? [`… ${hidden} more line(s)`] : []),
+    ];
+    const fence = fenceFor(body);
+    out.push(`**${view}**`, "", `${fence}diff`, ...body, fence, "");
+  }
+  out.push("</details>", "");
+  return out;
+}
+
+function mdStructural(page: PageDiff): string[] {
+  if (page.structural.length === 0) return [];
+  const out: string[] = ["**Structure (advisory — never blocks merge):**", ""];
+  for (const s of page.structural.slice(0, STATEMENT_CAP)) {
+    out.push(`- ${mdEscape(s.message)}`);
+  }
+  if (page.structural.length > STATEMENT_CAP) {
+    out.push(
+      `- … ${page.structural.length - STATEMENT_CAP} more — see raw diff below`,
+    );
+  }
+  out.push("");
+  out.push(...mdRawBlock(page));
+  return out;
+}
+
 export function renderDiffMarkdown(result: DiffResult): string {
   const { new: n, changed, removed } = result.summary;
   const out: string[] = [
     `### Accessibility diff — ${n} new · ${changed} changed · ${removed} fixed`,
     "",
   ];
+  const structuralPages = result.pages.filter(
+    (p) => p.structural.length > 0,
+  ).length;
+  if (n === 0 && changed === 0 && removed === 0) {
+    out.push(
+      structuralPages > 0
+        ? `No accessibility finding changes. Structural changes on ${structuralPages} page(s) — advisory, review below.`
+        : "No accessibility finding changes.",
+      "",
+    );
+  }
   for (const page of result.pages) {
     const shown = sortEntries(page.entries).filter(
       (e) => e.kind !== "unchanged",
@@ -153,7 +259,7 @@ export function renderDiffMarkdown(result: DiffResult): string {
       );
       continue;
     }
-    if (shown.length === 0) continue;
+    if (shown.length === 0 && page.structural.length === 0) continue;
     out.push(`#### ${page.name}`, "");
     for (const e of shown) {
       const f = e.finding;
@@ -170,10 +276,14 @@ export function renderDiffMarkdown(result: DiffResult): string {
       else if (e.kind === "removed")
         out.push(`- ✅ **fixed** \`${f.rule}\`: ${f.message}`);
     }
-    out.push("");
+    if (shown.length) out.push("");
+    out.push(...mdStructural(page));
   }
-  if (n === 0 && changed === 0 && removed === 0) {
-    out.push("No accessibility finding changes.", "");
+  if (structuralPages > 0) {
+    out.push(
+      "_Structural notes are advisory and never fail the check; container/nesting moves are not tracked._",
+      "",
+    );
   }
   return `${out.join("\n")}`;
 }

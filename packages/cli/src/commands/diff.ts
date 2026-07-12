@@ -27,6 +27,27 @@ import { parseSnapshotArtifact } from "../snapshot-artifact.js";
 
 import { outputOf } from "./common.js";
 
+/** `--ignore-view-line` is repeatable; each value must be a valid RegExp.
+ * Built without flags — `g` would make `.test` stateful across lines. */
+function parseIgnoreViewLine(
+  value: string | boolean | undefined | string[],
+): RegExp[] {
+  const raw = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? [value]
+      : [];
+  return raw.map((pattern) => {
+    try {
+      return new RegExp(pattern);
+    } catch {
+      throw new CliError(
+        `--ignore-view-line expects a valid regular expression — got "${pattern}"`,
+      );
+    }
+  });
+}
+
 function readArtifact(path: string, label: string) {
   const abs = resolve(path);
   let json: string;
@@ -51,6 +72,7 @@ export const diffCommand: CommandFn = async (positionals, flags) => {
   const failOn = parseFailOn(flags["fail-on"], "error");
   const format = parseFormat(flags.format, ["pretty", "json", "md"] as const);
   const output = outputOf(flags);
+  const ignoreViewLine = parseIgnoreViewLine(flags["ignore-view-line"]);
 
   const base = readArtifact(positionals[0], "base");
   const pr = readArtifact(positionals[1], "PR");
@@ -72,7 +94,7 @@ export const diffCommand: CommandFn = async (positionals, flags) => {
     }
   }
 
-  const result = diffArtifacts(base, pr);
+  const result = diffArtifacts(base, pr, { ignoreViewLine });
 
   const content =
     format === "json"
