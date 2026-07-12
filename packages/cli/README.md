@@ -91,6 +91,25 @@ your policy is in your repo, not a copy-pasted script. The diff is
 finding-identity-aware: a renumbered `:nth-of-type` locator or a re-indented
 subtree is not a change — only an actual new/changed/fixed violation is.
 
+## Adopt the gate on existing debt
+
+A site with known findings can still gate on **new** ones. `--update-baseline`
+records today's findings in `.a11y-baseline.json` (commit it); `--baseline` then
+suppresses exactly those, so `--fail-on` counts only what's genuinely new:
+
+```sh
+real-a11y snapshot --config a11y.config.json --update-baseline   # accept today
+real-a11y snapshot --config a11y.config.json \
+  --baseline .a11y-baseline.json --fail-on error                 # gate on NEW only
+```
+
+Suppressed findings stay in the report (marked `"suppressed": true` in JSON) —
+the baseline changes what *gates*, never what's *reported*. Matching uses the
+same identity matcher as `diff`, so locator churn doesn't un-suppress an
+accepted finding. When a baselined finding gets fixed, you get a stale-entry
+warning (never a failure); re-run `--update-baseline` to prune, and `note`
+fields you've added to entries survive the rewrite.
+
 ## Pages behind a login
 
 Log in once and reuse the session — no password ever reaches the tool:

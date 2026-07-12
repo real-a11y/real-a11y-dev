@@ -90,6 +90,8 @@
       listitem
         link "Track regressions across a PR"
       listitem
+        link "Adopt the gate on existing debt"
+      listitem
         link "Global flags"
       listitem
         link "Machine output"
@@ -224,6 +226,25 @@
       code "v1:"
       code ":nth-of-type"
       strong "not"
+    heading "Adopt the gate on existing debt" (level 2)
+    paragraph "Most real codebases have accessibility findings — which usually means the gate stays off. Baselines fix that: accept the current state once, then fail only on findings that are genuinely ."
+      emphasis "today"
+      strong "new"
+    button "Copy Code"
+      code
+    paragraph "Three properties make this safe to rely on:"
+    list
+      listitem "Suppressed findings stay in every report (marked in JSON) — the baseline changes what fails the build, never what you can see."
+        strong "Report truth, gate policy."
+        code ""suppressed": true"
+      listitem "The baseline uses the same two-tier matcher as , so a renumbered locator or a re-indented subtree doesn't silently un-suppress a finding you'd already accepted."
+        strong "Identity-matched, not string-matched."
+        code "diff"
+        code ":nth-of-type"
+      listitem "When a baselined finding is fixed, you get a stderr warning; prunes it — and carries forward any fields you've added to entries (e.g. a ticket link) that still match."
+        strong "Stale entries warn, never fail."
+        code "--update-baseline"
+        code "note"
     heading "Global flags" (level 2)
     table
       rowgroup
@@ -271,7 +292,7 @@
         row
           cell "--fail-on <level>"
             code "--fail-on <level>"
-          cell "error | warning | never — the gate threshold (default error), on audit/inspect/diff. View commands aren't gates: they always exit 0."
+          cell "error | warning | never — the gate threshold (default error), on audit/inspect/diff, and on snapshot (default never there). View commands aren't gates: they always exit 0."
             code "error"
             code "warning"
             code "never"
@@ -279,7 +300,16 @@
             code "audit"
             code "inspect"
             code "diff"
+            code "snapshot"
+            code "never"
             code "0"
+        row
+          cell "--baseline <file> / --update-baseline"
+            code "--baseline <file>"
+            code "--update-baseline"
+          cell "Suppress accepted findings / rewrite the baseline from the current run (snapshot — see Adopt the gate on existing debt )."
+            code "snapshot"
+            link "Adopt the gate on existing debt"
         row
           cell "-f, --format <fmt>"
             code "-f, --format <fmt>"

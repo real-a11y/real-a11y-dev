@@ -20,6 +20,9 @@ export interface FingerprintedFinding extends Finding {
   fingerprint: string;
   /** The tuple the hash was computed from. */
   id: FingerprintId;
+  /** Accepted by a `--baseline`: kept in the report, out of the `--fail-on`
+   *  count and `diff`'s NEW gate. Absent unless a baseline matched it. */
+  suppressed?: boolean;
 }
 
 /** Rules whose findings describe the document, not one node. */
