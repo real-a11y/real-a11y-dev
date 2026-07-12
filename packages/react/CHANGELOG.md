@@ -1,5 +1,14 @@
 # @real-a11y-dev/react
 
+## 0.1.0-beta.10
+
+### Patch Changes
+
+- Updated dependencies [7a56937]
+- Updated dependencies [fcd4bc9]
+  - @real-a11y-dev/core@0.1.0-beta.10
+  - @real-a11y-dev/inspector@0.1.0-beta.9
+
 ## 0.1.0-beta.9
 
 ### Patch Changes

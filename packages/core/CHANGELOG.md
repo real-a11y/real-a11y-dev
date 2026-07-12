@@ -1,5 +1,17 @@
 # @real-a11y-dev/core
 
+## 0.1.0-beta.10
+
+### Patch Changes
+
+- 7a56937: DomObserver: add a max-wait ceiling to the mutation debounce. The debounce was trailing-only, so a page that mutates faster than the debounce interval — streaming AI responses, progress bars, live tickers, animated `style` updates — kept resetting the timer and `onTreeChange` never fired, leaving consumers (the extension side panel, `testing`'s `flow()`/`waitForMutations`) frozen for the whole stream. A second, non-resetting ceiling timer now forces a flush at least every `maxWaitMs` (new optional constructor arg, default 1000ms, clamped to at least the debounce interval).
+
+  `testing`'s `waitForMutations` now threads its `timeout` through as the observer's ceiling, so the new default ceiling can't resolve a `timeout > 1000` wait early — its documented `timeout` contract is preserved.
+
+- fcd4bc9: Stop using a text input's value as its accessible name. `computeRawAccessibleName` returned `input.value` for **any** input when no label matched, so an unlabeled `<input type="text">` the user typed "John" into was named "John", and an unlabeled `<input type="checkbox">` inherited its default DOM value `"on"`. Both make a genuinely unlabeled control look labelled — the worst failure mode for an a11y tool, because `@real-a11y-dev/testing`'s `assertNoUnlabeledInteractive` would then pass a control that real screen readers announce as unlabeled.
+
+  Per HTML-AAM, `value` names only button-like inputs (`submit` / `reset` / `button`); text, checkbox, radio, and the rest do not use it. The value fallback is now gated to those types, and `title` is ordered before `placeholder` to match the spec. Labels, `aria-label`, and `aria-labelledby` still take precedence as before.
+
 ## 0.1.0-beta.9
 
 ### Patch Changes
