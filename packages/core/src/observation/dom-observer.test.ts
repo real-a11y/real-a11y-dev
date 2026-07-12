@@ -57,6 +57,120 @@ describe("DomObserver", () => {
     expect(onTreeChange).toHaveBeenCalledTimes(1);
   });
 
+  // ── Max-wait ceiling ────────────────────────────────────────────────────────
+  // A trailing-only debounce is starved forever by a stream that mutates more
+  // often than the debounce interval (streaming AI responses, progress bars,
+  // animated style updates). The ceiling forces a flush every maxWaitMs. These
+  // drive `input` events because that path calls scheduleChange synchronously,
+  // giving exact control over the fake clock.
+  describe("max-wait ceiling", () => {
+    function streamInputs(el: HTMLElement, everyMs: number, forMs: number) {
+      for (let t = 0; t < forMs; t += everyMs) {
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        vi.advanceTimersByTime(everyMs);
+      }
+    }
+
+    it("flushes a continuous stream at the ceiling instead of starving forever", () => {
+      const input = document.createElement("input");
+      document.body.appendChild(input);
+      // debounce 100, ceiling 500; events every 50ms never leave a 100ms gap.
+      observer = new DomObserver(
+        document.body,
+        onTreeChange,
+        100,
+        undefined,
+        500,
+      );
+      observer.start();
+
+      streamInputs(input, 50, 500);
+
+      // A trailing-only debounce would be at 0 calls here; the ceiling fired.
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps flushing periodically while the stream continues", () => {
+      const input = document.createElement("input");
+      document.body.appendChild(input);
+      observer = new DomObserver(
+        document.body,
+        onTreeChange,
+        100,
+        undefined,
+        500,
+      );
+      observer.start();
+
+      // ~1200ms of sustained 50ms-spaced events → at least two ceiling flushes.
+      streamInputs(input, 50, 1200);
+
+      expect(onTreeChange.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it("a single change still fires at the debounce interval, not the ceiling", () => {
+      const input = document.createElement("input");
+      document.body.appendChild(input);
+      observer = new DomObserver(
+        document.body,
+        onTreeChange,
+        100,
+        undefined,
+        1000,
+      );
+      observer.start();
+
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      vi.advanceTimersByTime(110);
+
+      // Fired at the 100ms debounce, not deferred to the 1000ms ceiling.
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("stop() cancels a pending ceiling flush", () => {
+      const input = document.createElement("input");
+      document.body.appendChild(input);
+      observer = new DomObserver(
+        document.body,
+        onTreeChange,
+        100,
+        undefined,
+        500,
+      );
+      observer.start();
+
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      vi.advanceTimersByTime(50);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      observer.stop();
+      vi.advanceTimersByTime(1000);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+
+    it("clamps the ceiling to at least one debounce interval", () => {
+      const input = document.createElement("input");
+      document.body.appendChild(input);
+      // ceiling (50) < debounce (200): clamp raises it to 200, so a single
+      // change fires at the debounce, not at an unclamped 50ms.
+      observer = new DomObserver(
+        document.body,
+        onTreeChange,
+        200,
+        undefined,
+        50,
+      );
+      observer.start();
+
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      vi.advanceTimersByTime(60);
+      expect(onTreeChange).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(160); // total 220 > 200
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+  });
+
   // ── Internal-sentinel filtering ────────────────────────────────────────────
   // These tests cover the bug fix where drawing the focus-highlight overlay
   // (or the screen curtain) on the host page would itself be a DOM mutation
