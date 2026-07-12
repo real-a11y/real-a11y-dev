@@ -10,7 +10,7 @@
     switch "Switch to dark theme"
     link "github"
   heading "Real A11yAccessibility tooling that works in the real world" (level 1)
-  paragraph "Beta (v0.1) — Extracts the accessibility tree as plain data. Use it through a Chrome extension, Storybook panel, React component, or testing library — one engine, every surface."
+  paragraph "Beta (v0.1) — Extracts the accessibility tree as plain data. Use it through a Chrome extension, Storybook panel, React component, testing library, CLI, or MCP server — one engine, every surface."
   link "Get Started"
   link "Chrome Extension"
   img "Real A11y"
@@ -25,6 +25,16 @@
   article
     heading "Test what users actually experience" (level 2)
     paragraph "@real-a11y-dev/testing gives you auditSnapshot(), assertHeadingOrder(), assertNoUnlabeledInteractive(), and a fluent flow() chain — all powered by the real accessibility tree, not synthetic mocks."
+  link "⌨️Audit from the shell and CI@real-a11y-dev/cli — the real-a11y command audits any URL from the shell with per-instance locators and CI-grade exit codes. snapshot + diff then track accessibility regressions across a PR, findings-aware.Explore the CLI"
+    article
+      heading "Audit from the shell and CI" (level 2)
+      paragraph "@real-a11y-dev/cli — the real-a11y command audits any URL from the shell with per-instance locators and CI-grade exit codes. snapshot + diff then track accessibility regressions across a PR, findings-aware."
+      paragraph "Explore the CLI"
+  link "🤖Accessibility for AI agents@real-a11y-dev/mcp — a Model Context Protocol server that hands the semantic tree and audits to AI agents over stdio. Point any MCP client at it and the agent can reason about what assistive tech actually perceives.Explore the MCP server"
+    article
+      heading "Accessibility for AI agents" (level 2)
+      paragraph "@real-a11y-dev/mcp — a Model Context Protocol server that hands the semantic tree and audits to AI agents over stdio. Point any MCP client at it and the agent can reason about what assistive tech actually perceives."
+      paragraph "Explore the MCP server"
   article
     heading "First-class React support" (level 2)
     paragraph "useSemanticTree() and useActiveModal() subscribe to DOM mutations via useSyncExternalStore — concurrent-mode safe, no boilerplate. Drop in"

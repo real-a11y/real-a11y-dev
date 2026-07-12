@@ -8,7 +8,7 @@ This policy covers the Real A11y website (`real-a11y.dev`), the Semantic Navigat
 
 - We don't collect personal data.
 - The Chrome extension runs entirely on your device. It does not send page content, URLs, or any other data to any server — ours or anyone else's.
-- The npm packages run on your device / in your CI. They make no network requests.
+- The npm library packages run on your device / in your CI and make no network requests. The CLI and MCP server load only the page you point them at — that request goes to your target URL, never to us.
 - The website may use privacy-respecting aggregate analytics (no cookies, no personal identifiers). If enabled, it's disclosed here.
 
 ## Chrome extension — Semantic Navigator
@@ -47,6 +47,8 @@ The `@real-a11y-dev/core`, `@real-a11y-dev/inspector`, `@real-a11y-dev/testing`,
 - Make no network requests.
 - Do not "phone home," collect usage data, or check for updates.
 - Have no side effects at install time beyond what `pnpm` / `npm` / `yarn` does normally.
+
+`@real-a11y-dev/cli` and `@real-a11y-dev/mcp` build on those libraries but additionally drive a headless browser (Playwright) so they can audit a live page. That browser loads **only the URL you give them** — the page you asked to audit — and reads its accessibility tree locally. They send no page content, no results, and no telemetry to us or any third party. Installing the browser with `npx playwright install` downloads it from Microsoft's Playwright CDN, the same as any Playwright project — that is the only network activity, and it is under your control.
 
 ## Website
 
