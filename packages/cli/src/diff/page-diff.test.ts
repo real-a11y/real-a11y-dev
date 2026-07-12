@@ -81,11 +81,12 @@ describe("diffArtifacts", () => {
     expect(result.summary.new).toBe(0);
   });
 
-  it("diffs the structural views for matching pages", () => {
+  it("diffs the structural views for matching pages (tabs stripped of NN.)", () => {
     const base = artifact([page("Home", [], { tabs: "01. link Home" })]);
     const pr = artifact([page("Home", [], { tabs: "01. link Docs" })]);
     const result = diffArtifacts(base, pr);
-    expect(result.pages[0].views.tabs.added).toEqual(["01. link Docs"]);
-    expect(result.pages[0].views.tabs.removed).toEqual(["01. link Home"]);
+    // The tab-order number is dropped so a renumber isn't a change.
+    expect(result.pages[0].views.tabs.added).toEqual(["link Docs"]);
+    expect(result.pages[0].views.tabs.removed).toEqual(["link Home"]);
   });
 });

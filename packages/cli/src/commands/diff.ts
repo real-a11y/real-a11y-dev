@@ -12,6 +12,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { parseFailOn, parseFormat, type CommandFn } from "../args.js";
+import { applyBaseline, loadBaseline } from "../baseline.js";
 import { diffArtifacts } from "../diff/page-diff.js";
 import { CliError, EXIT, exceedsThreshold } from "../exit.js";
 
@@ -53,6 +54,24 @@ export const diffCommand: CommandFn = async (positionals, flags) => {
 
   const base = readArtifact(positionals[0], "base");
   const pr = readArtifact(positionals[1], "PR");
+
+  // --baseline: mark accepted findings on the PR side BEFORE diffing — the
+  // suppressed flag rides the finding object into the entries, so a NEW
+  // finding the baseline accepts is reported (truth) but never gates (policy).
+  if (typeof flags.baseline === "string") {
+    const { stale } = applyBaseline(
+      pr.pages.map((p) => ({ name: p.name, findings: p.findings })),
+      loadBaseline(flags.baseline),
+    );
+    if (stale.length > 0) {
+      process.stderr.write(
+        `real-a11y: warning: ${stale.length} baseline entr${
+          stale.length === 1 ? "y no longer matches" : "ies no longer match"
+        } — run snapshot --update-baseline to prune\n`,
+      );
+    }
+  }
+
   const result = diffArtifacts(base, pr);
 
   const content =
@@ -65,9 +84,11 @@ export const diffCommand: CommandFn = async (positionals, flags) => {
           });
   writeReport(output, content);
 
-  // Only NEW findings gate — drift and fixes never fail the build.
+  // Only NEW findings gate — drift, fixes, and baselined findings never fail.
   const newFindings = result.pages.flatMap((p) =>
-    p.entries.filter((e) => e.kind === "new").map((e) => e.finding),
+    p.entries
+      .filter((e) => e.kind === "new" && !e.finding.suppressed)
+      .map((e) => e.finding),
   );
   return exceedsThreshold(newFindings, failOn) ? EXIT.FINDINGS : EXIT.OK;
 };

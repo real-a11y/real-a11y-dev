@@ -8,6 +8,13 @@
  * that actually appeared/vanished, not 20 "changed" lines. We do NOT strip the
  * `(level N)` suffix — that normalization is for custom-vs-native comparison;
  * here both sides carry it, and stripping would hide a real h2→h3 change.
+ *
+ * The `tabs` view is a NUMBERED list, so an inserted stop renumbers every stop
+ * after it — 40 "changed" lines for one real insertion. `stripTabIndex` drops
+ * the `NN.` prefix before comparison so the diff is the stop that actually
+ * appeared/vanished. (This makes a pure REORDER invisible to the multiset — a
+ * later order-aware pass surfaces "X now precedes Y"; here, unreadable churn was
+ * no more actionable than nothing.)
  */
 
 export interface ViewDiff {
@@ -15,19 +22,31 @@ export interface ViewDiff {
   removed: string[];
 }
 
-function counts(text: string): Map<string, number> {
+/** Drop the leading `NN. ` sequence number from a serialized tab-order line. */
+export function stripTabIndex(line: string): string {
+  return line.replace(/^\d+\.\s*/, "");
+}
+
+function counts(
+  text: string,
+  normalize: (line: string) => string,
+): Map<string, number> {
   const m = new Map<string, number>();
   for (const raw of text.split("\n")) {
-    const line = raw.trim();
+    const line = normalize(raw.trim());
     if (line === "") continue;
     m.set(line, (m.get(line) ?? 0) + 1);
   }
   return m;
 }
 
-export function diffViews(base: string, pr: string): ViewDiff {
-  const b = counts(base);
-  const p = counts(pr);
+export function diffViews(
+  base: string,
+  pr: string,
+  normalize: (line: string) => string = (l) => l,
+): ViewDiff {
+  const b = counts(base, normalize);
+  const p = counts(pr, normalize);
   const added: string[] = [];
   const removed: string[] = [];
   for (const [line, n] of p) {

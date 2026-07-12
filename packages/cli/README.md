@@ -110,6 +110,27 @@ accepted finding. When a baselined finding gets fixed, you get a stale-entry
 warning (never a failure); re-run `--update-baseline` to prune, and `note`
 fields you've added to entries survive the rewrite.
 
+`diff` takes `--baseline` too: a NEW finding the baseline accepts is reported
+as `new (baselined)` but never gates.
+
+## SARIF, JUnit, JSONL
+
+`snapshot --format` speaks the CI interop formats (`json` stays the default):
+
+```sh
+real-a11y snapshot --config a11y.config.json -f sarif -o a11y.sarif   # GitHub code scanning
+real-a11y snapshot --config a11y.config.json -f junit -o a11y.xml    # Jenkins / GitLab / Azure DevOps
+real-a11y snapshot --config a11y.config.json -f jsonl | jq .rule     # one finding per line
+```
+
+Upload the SARIF with `github/codeql-action/upload-sarif@v4` and findings land
+in the **Security tab**, deduplicated across runs by their `v1:` fingerprint.
+`sarif` requires a config file: GitHub only displays results anchored to repo
+file paths, so each result anchors to the page's `sourcePath` (set it per page
+in the config to point at the page's source file) or the config file itself.
+Baseline-suppressed findings are excluded from SARIF (GitHub ignores SARIF
+suppressions) and appear as `skipped` in JUnit.
+
 ## Pages behind a login
 
 Log in once and reuse the session — no password ever reaches the tool:

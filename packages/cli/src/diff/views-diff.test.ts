@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { diffViews, viewDiffEmpty } from "./views-diff.js";
+import { diffViews, stripTabIndex, viewDiffEmpty } from "./views-diff.js";
 
 describe("diffViews", () => {
   it("reports nothing for identical text (ignoring indentation)", () => {
@@ -35,5 +35,37 @@ describe("diffViews", () => {
 
   it("counts duplicates: two → three of a line yields one added", () => {
     expect(diffViews("x\nx", "x\nx\nx")).toEqual({ added: ["x"], removed: [] });
+  });
+
+  describe("tab-order (numbered) diff via stripTabIndex", () => {
+    // Inserting one stop at position 2 renumbers everything after it.
+    const base = '1. link "Home"\n2. link "Docs"\n3. link "About"';
+    const pr = '1. link "Home"\n2. link "New"\n3. link "Docs"\n4. link "About"';
+
+    it("naive diff explodes into a renumber cascade", () => {
+      const naive = diffViews(base, pr);
+      expect(naive.added.length + naive.removed.length).toBeGreaterThan(2);
+    });
+
+    it("with stripTabIndex, one insertion is one added line", () => {
+      expect(diffViews(base, pr, stripTabIndex)).toEqual({
+        added: ['link "New"'],
+        removed: [],
+      });
+    });
+
+    it("a real removal still shows, minus the number", () => {
+      expect(diffViews(pr, base, stripTabIndex)).toEqual({
+        added: [],
+        removed: ['link "New"'],
+      });
+    });
+
+    it("stripTabIndex drops only a leading `NN. ` counter", () => {
+      expect(stripTabIndex('42. button "Copy Code"')).toBe(
+        'button "Copy Code"',
+      );
+      expect(stripTabIndex('link "3. steps"')).toBe('link "3. steps"');
+    });
   });
 });
