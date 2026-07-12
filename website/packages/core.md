@@ -215,14 +215,23 @@ interface NodeChange {
 
 ### `DomObserver`
 
-Watches a DOM subtree for mutations and calls a callback (debounced).
+Watches a DOM subtree for mutations and calls a callback. Rapid mutations are
+debounced, and a max-wait ceiling ensures the callback still fires on a stream
+that never goes quiet (streaming responses, progress bars, animated content)
+instead of the debounce deferring it forever.
 
 ```ts
 import { DomObserver } from "@real-a11y-dev/core";
 
-const observer = new DomObserver(root, () => {
-  console.log("DOM changed, re-extract");
-}, 200); // 200ms debounce
+const observer = new DomObserver(
+  root,
+  () => {
+    console.log("DOM changed, re-extract");
+  },
+  200, // debounce: wait 200ms of quiet before firing
+  undefined, // internalIds: mutations to ignore (defaults to the overlay set)
+  1000, // maxWaitMs: flush at least this often during a continuous stream
+);
 
 observer.start();
 // Later:

@@ -98,7 +98,10 @@ function isInternalMutation(
 
 /**
  * Watches for DOM mutations and triggers a re-extraction callback.
- * Uses debouncing to batch rapid mutations (e.g., SPA transitions, streaming).
+ * Uses a trailing-edge debounce to batch rapid mutations (e.g. SPA
+ * transitions), with a max-wait ceiling so a mutation stream that never goes
+ * quiet — streaming AI responses, progress bars, animated `style` updates —
+ * still flushes at least every `maxWaitMs` instead of being deferred forever.
  *
  * Observes:
  * - childList + subtree — element insertions/removals
@@ -113,14 +116,25 @@ export class DomObserver {
   private observer: MutationObserver | null = null;
   private portalObserver: MutationObserver | null = null;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  // Non-resetting ceiling timer: armed on the first change of a burst and NOT
+  // cleared by later changes, so a continuous stream still flushes every
+  // maxWaitMs instead of being starved forever by the resetting debounce.
+  private maxWaitTimer: ReturnType<typeof setTimeout> | null = null;
   private inputListener: ((e: Event) => void) | null = null;
+  /** Upper bound on how long a mutation stream may defer a flush. */
+  private readonly maxWaitMs: number;
 
   constructor(
     private root: Element,
     private onTreeChange: () => void,
     private debounceMs = 300,
     private internalIds: ReadonlySet<string> = DEFAULT_INTERNAL_IDS,
-  ) {}
+    maxWaitMs = 1000,
+  ) {
+    // The ceiling can't be shorter than one debounce interval, or it would
+    // pre-empt normal debouncing and fire on the leading edge of every burst.
+    this.maxWaitMs = Math.max(maxWaitMs, debounceMs);
+  }
 
   start(): void {
     this.observer = new MutationObserver((mutations) => {
@@ -203,14 +217,37 @@ export class DomObserver {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
     }
+    if (this.maxWaitTimer) {
+      clearTimeout(this.maxWaitTimer);
+      this.maxWaitTimer = null;
+    }
   }
 
   private scheduleChange(): void {
+    // Trailing-edge debounce: reset the quiet-period timer on each change.
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
-    this.debounceTimer = setTimeout(() => {
+    this.debounceTimer = setTimeout(() => this.flushChange(), this.debounceMs);
+
+    // Max-wait ceiling: arm once at the start of a burst and do NOT reset it,
+    // so a stream that never goes quiet (streaming responses, progress bars,
+    // animated style updates) still flushes every maxWaitMs rather than
+    // deferring onTreeChange indefinitely.
+    if (this.maxWaitTimer === null) {
+      this.maxWaitTimer = setTimeout(() => this.flushChange(), this.maxWaitMs);
+    }
+  }
+
+  /** Fire the change callback and clear both the debounce and ceiling timers. */
+  private flushChange(): void {
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
-      this.onTreeChange();
-    }, this.debounceMs);
+    }
+    if (this.maxWaitTimer) {
+      clearTimeout(this.maxWaitTimer);
+      this.maxWaitTimer = null;
+    }
+    this.onTreeChange();
   }
 }
 

@@ -33,7 +33,20 @@ export function waitForMutations(
       resolve();
     };
 
-    const observer = new DomObserver(root, finish, debounceMs);
+    // Thread `timeout` through as the DomObserver max-wait ceiling. The core
+    // observer flushes at least every ceiling interval (default 1000ms); left
+    // at the default, a `timeout > 1000` caller waiting for a long stream to
+    // settle would resolve early at ~1000ms on a partially-updated tree. Making
+    // the ceiling equal `timeout` keeps that early flush from preempting the
+    // documented `timeout` contract — `finish` is idempotent and the timer
+    // below still bounds resolution.
+    const observer = new DomObserver(
+      root,
+      finish,
+      debounceMs,
+      undefined,
+      timeout,
+    );
     observer.start();
     const timer = setTimeout(finish, timeout);
   });
