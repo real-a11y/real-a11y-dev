@@ -37,17 +37,19 @@ concurrency:
 env:
   # The pages audited on BOTH sides. `name` is the diff's join key, so it must
   # match across base/PR — which it does, since this list drives both jobs. The
-  # port must match the `vitepress preview --port` below.
+  # port must match the `vitepress preview --port` below. `file` is each route's
+  # source markdown — the CLI ignores it; the comment step uses it to attribute
+  # a structural change to the file that caused it (or to flag engine drift).
   A11Y_PAGES: >-
-    [{"name":"Home","url":"http://localhost:4173/"},
-    {"name":"A11y Snapshots","url":"http://localhost:4173/guide/accessibility-snapshots"},
-    {"name":"core","url":"http://localhost:4173/packages/core"},
-    {"name":"inspector","url":"http://localhost:4173/packages/inspector"},
-    {"name":"react","url":"http://localhost:4173/packages/react"},
-    {"name":"storybook-addon","url":"http://localhost:4173/packages/storybook-addon"},
-    {"name":"testing","url":"http://localhost:4173/packages/testing"},
-    {"name":"mcp","url":"http://localhost:4173/packages/mcp"},
-    {"name":"cli","url":"http://localhost:4173/packages/cli"}]
+    [{"name":"Home","url":"http://localhost:4173/","file":"website/index.md"},
+    {"name":"A11y Snapshots","url":"http://localhost:4173/guide/accessibility-snapshots","file":"website/guide/accessibility-snapshots.md"},
+    {"name":"core","url":"http://localhost:4173/packages/core","file":"website/packages/core.md"},
+    {"name":"inspector","url":"http://localhost:4173/packages/inspector","file":"website/packages/inspector.md"},
+    {"name":"react","url":"http://localhost:4173/packages/react","file":"website/packages/react.md"},
+    {"name":"storybook-addon","url":"http://localhost:4173/packages/storybook-addon","file":"website/packages/storybook-addon.md"},
+    {"name":"testing","url":"http://localhost:4173/packages/testing","file":"website/packages/testing.md"},
+    {"name":"mcp","url":"http://localhost:4173/packages/mcp","file":"website/packages/mcp.md"},
+    {"name":"cli","url":"http://localhost:4173/packages/cli","file":"website/packages/cli.md"}]
 
 jobs:
   # ── Snapshot the BASE branch with the BASE engine (so an engine/CLI change in
@@ -161,6 +163,37 @@ jobs:
             const CAP = 25;
             const clean = (arr) => (arr ?? []).filter((l) => !VOLATILE.test(l));
 
+            // Attribute each page's drift to its source FILE: the page->file map
+            // rides in A11Y_PAGES, and the PR's changed-file list tells us
+            // whether the drift came from editing that file (link straight into
+            // the Files-changed tab) or from engine changes (file untouched).
+            const pageFile = new Map(
+              JSON.parse(process.env.A11Y_PAGES).map((p) => [p.name, p.file]),
+            );
+            const prFiles = new Set(
+              (
+                await github.paginate(github.rest.pulls.listFiles, {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: context.issue.number,
+                  per_page: 100,
+                })
+              ).map((f) => f.filename),
+            );
+            const fileNote = (name) => {
+              const file = pageFile.get(name);
+              if (!file) return '';
+              if (prFiles.has(file)) {
+                const anchor = require('crypto')
+                  .createHash('sha256')
+                  .update(file)
+                  .digest('hex');
+                const url = `https://github.com/${context.repo.owner}/${context.repo.repo}/pull/${context.issue.number}/files#diff-${anchor}`;
+                return ` · <a href="${url}"><code>${file}</code></a> (edited in this PR)`;
+              }
+              return ` · <code>${file}</code> not edited — engine/theme-driven`;
+            };
+
             const structBlocks = [];
             for (const page of result.pages) {
               const views = ['tree', 'outline', 'tabs']
@@ -186,7 +219,7 @@ jobs:
                 })
                 .join('\n\n');
               structBlocks.push(
-                `<details>\n<summary><b>${page.name}</b> — ${summary}</summary>\n\n${diffs}\n\n</details>`,
+                `<details>\n<summary><b>${page.name}</b> — ${summary}${fileNote(page.name)}</summary>\n\n${diffs}\n\n</details>`,
               );
             }
 
