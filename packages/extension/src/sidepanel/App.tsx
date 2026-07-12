@@ -32,6 +32,7 @@ import {
   useMemo,
 } from "preact/hooks";
 
+import { isTrustedSender } from "../routing.js";
 import type { ContentToPanel } from "../types.js";
 
 import { buildExportMarkdown, ALL_VIEWS } from "./export.js";
@@ -248,6 +249,11 @@ export function App() {
       message: ContentToPanel,
       sender: chrome.runtime.MessageSender,
     ) => {
+      // Only accept messages from our own extension's contexts (background,
+      // content scripts). Same-extension scoping already holds; this makes
+      // the trust boundary explicit before we mutate panel state.
+      if (!isTrustedSender(sender, chrome.runtime.id)) return;
+
       // Drop broadcasts that aren't for our tab. Background-relayed
       // messages carry an explicit `tabId`; content-direct messages
       // (LIVE_REGION) carry their tab in `sender.tab`. When neither is
