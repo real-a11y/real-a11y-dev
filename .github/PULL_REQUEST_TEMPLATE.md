@@ -37,14 +37,23 @@ Cutting a release or adding a package? There are tailored templates:
 - [ ] Chrome extension
 - [ ] Website / docs / examples
 
-## How was this tested?
+## How to verify
 
-<!-- Describe the tests you ran, or any manual verification you did.
-     For bug fixes: ideally a regression test that fails without your change. -->
+<!-- Concrete steps a reviewer can run on a fresh checkout of this branch: the
+     commands to run and what they should see. (These double as your own test
+     record — run them before opening.) For a bug fix, point at the regression
+     test that fails without the change.
 
-- [ ] `pnpm verify` passes (build + typecheck + format + lint + test — the same gate CI and the pre-push hook run)
+     Example:
+       pnpm i && pnpm --filter @real-a11y-dev/cli build
+       node packages/cli/dist/index.js audit https://example.com
+         -> exits 1 and lists the unlabeled-button finding
+     UI / docs: pnpm --filter @real-a11y-dev/website dev -> open the page ->
+       confirm the change renders (check the console and dark mode too). -->
+
+- [ ] The steps above run clean on a fresh checkout of this branch
+- [ ] `pnpm verify` passes (build + typecheck + format + lint + test — the gate CI and the pre-push hook run)
 - [ ] Added / updated tests where appropriate
-- [ ] Manually verified in (extension / example app / Storybook / …)
 
 ## Changesets & release
 
