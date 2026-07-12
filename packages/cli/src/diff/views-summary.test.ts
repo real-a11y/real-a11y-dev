@@ -385,6 +385,50 @@ describe("summarizeViews", () => {
       );
       expect(kinds(changes)).toEqual(["focus-stop-added"]);
     });
+
+    it("N identical removed stops coalesce to ONE statement (no tree leak)", () => {
+      // Two duplicate focusable stops removed: the tabs statement must consume
+      // BOTH matching tree lines, or the leftover re-reports as interactive.
+      const changes = summarize(
+        {
+          tree: 'main\n  link "Home"\n  link "Details"\n  link "Details"',
+          tabs: '01. link "Home"\n02. link "Details"\n03. link "Details"',
+        },
+        { tree: 'main\n  link "Home"', tabs: '01. link "Home"' },
+      );
+      expect(changes).toEqual([
+        expect.objectContaining({
+          kind: "focus-stop-removed",
+          message:
+            'Keyboard tab stop removed: link "Details" (element removed from the page) (×2)',
+          count: 2,
+        }),
+      ]);
+      expect(kinds(changes)).not.toContain("interactive-removed");
+    });
+
+    it("position stays ≤ total when --ignore-view-line drops an earlier stop", () => {
+      // "5 mins ago" is ignored, so "Home" is effectively the only stop — its
+      // position must be 1 of 1, never the raw counter's 2 (of 1).
+      const ignore = (line: string) => /mins ago/.test(line);
+      const changes = summarize(
+        {
+          tabs: '01. link "5 mins ago"\n02. link "Home"',
+          tree: 'main\n  link "5 mins ago"\n  link "Home"',
+        },
+        { tabs: '01. link "5 mins ago"', tree: 'main\n  link "5 mins ago"' },
+        ignore,
+      );
+      expect(changes).toEqual([
+        expect.objectContaining({
+          kind: "focus-stop-removed",
+          message:
+            'Keyboard tab stop removed: link "Home" (was stop 1 of 1) (element removed from the page)',
+          position: 1,
+          of: 1,
+        }),
+      ]);
+    });
   });
 
   describe("cross-view dedup", () => {

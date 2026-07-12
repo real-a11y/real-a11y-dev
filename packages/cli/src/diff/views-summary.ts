@@ -200,18 +200,20 @@ function total(ms: Multiset): number {
   return sum;
 }
 
-/** Consume one tree line matching (role, name), tolerating any `(level N)`
- * suffix — a role-overridden focusable carries a level in the tree but never
- * in the tabs view. */
-function takeByRoleName(ms: Multiset, role: string, name: string): boolean {
-  for (const key of ms.keys()) {
+/** Consume up to `n` tree lines matching (role, name), tolerating any
+ * `(level N)` suffix — a role-overridden focusable carries a level in the tree
+ * but never in the tabs view. Consuming `n` (not 1) matters when a tabs
+ * statement coalesces N identical stops: leaving N−1 tree lines behind would
+ * re-report them in the interactive stage. */
+function takeByRoleName(ms: Multiset, role: string, name: string, n = 1): void {
+  let remaining = n;
+  for (const key of [...ms.keys()]) {
+    if (remaining === 0) break;
     const parsed = parseRoleLine(key);
     if (parsed.role === role && (parsed.name ?? "") === name) {
-      take(ms, key);
-      return true;
+      remaining -= take(ms, key, remaining);
     }
   }
-  return false;
 }
 
 // ── raw-text scans ───────────────────────────────────────────────────────────
@@ -227,37 +229,34 @@ function rawLines(text: string, ignore: Ignore): string[] {
   return lines;
 }
 
-interface TabStop {
-  stripped: string;
-  /** Parsed from the line's own `NN.` counter — the counter IS the position. */
-  position?: number;
-}
-
-function tabStops(rawTabs: string, ignore: Ignore): TabStop[] {
-  const stops: TabStop[] = [];
+/** The tab-order sequence as stripped stop content (`NN.` counter removed,
+ * sentinel and ignored lines dropped), in document order. */
+function tabStops(rawTabs: string, ignore: Ignore): string[] {
+  const stops: string[] = [];
   for (const line of rawLines(rawTabs, ignore)) {
     if (line === NOTHING_FOCUSABLE) continue;
-    const counter = /^(\d+)\.\s/.exec(line);
-    stops.push(
-      counter
-        ? { stripped: stripTabIndex(line), position: Number(counter[1]) }
-        : { stripped: line },
-    );
+    stops.push(stripTabIndex(line));
   }
   return stops;
 }
 
-/** Position of a diffed stop in the raw sequence — only when the stripped
- * line occurs exactly once (never guess among duplicates). */
+/** Position of a diffed stop in the sequence — its 1-based index, only when
+ * the stripped line occurs exactly once (never guess among duplicates). The
+ * index (not the line's own `NN.` counter) keeps `position ≤ of` even when
+ * `--ignore-view-line` drops earlier stops from the sequence. */
 function findStop(
-  stops: readonly TabStop[],
+  stops: readonly string[],
   stripped: string,
 ): { position?: number; of: number } {
-  const matches = stops.filter((s) => s.stripped === stripped);
-  if (matches.length === 1 && matches[0].position !== undefined) {
-    return { position: matches[0].position, of: stops.length };
+  let found = -1;
+  for (let i = 0; i < stops.length; i++) {
+    if (stops[i] !== stripped) continue;
+    if (found !== -1) return { of: stops.length }; // duplicate — ambiguous
+    found = i;
   }
-  return { of: stops.length };
+  return found === -1
+    ? { of: stops.length }
+    : { position: found + 1, of: stops.length };
 }
 
 function outlineHeadings(rawOutline: string, ignore: Ignore): string[] {
@@ -408,7 +407,7 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
   for (const [key, n] of [...tabsRemoved]) {
     take(tabsRemoved, key, n);
     const { role, name = "" } = parseRoleLine(key);
-    takeByRoleName(treeRemoved, role, name);
+    takeByRoleName(treeRemoved, role, name, n);
     const { position, of } = findStop(baseStops, key);
     const still = countInTree(pr.tree, ignore, role, name);
     const variant =
@@ -438,7 +437,7 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
   for (const [key, n] of [...tabsAdded]) {
     take(tabsAdded, key, n);
     const { role, name = "" } = parseRoleLine(key);
-    takeByRoleName(treeAdded, role, name);
+    takeByRoleName(treeAdded, role, name, n);
     const { position, of } = findStop(prStops, key);
     const pos =
       n === 1 && position !== undefined
@@ -713,8 +712,8 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
     baseStops.length <= REORDER_LCS_LIMIT &&
     prStops.length <= REORDER_LCS_LIMIT
   ) {
-    const baseSeq = baseStops.map((s) => s.stripped);
-    const prSeq = prStops.map((s) => s.stripped);
+    const baseSeq = baseStops;
+    const prSeq = prStops;
     if (
       baseSeq.join("\n") !== prSeq.join("\n") &&
       sameMultiset(baseSeq, prSeq)
