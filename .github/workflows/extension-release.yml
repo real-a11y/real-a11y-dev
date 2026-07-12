@@ -31,6 +31,10 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history + tags so the release-notes script can diff against the
+          # previous extension-v* tag.
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
 
@@ -88,6 +92,21 @@ jobs:
           path: ${{ steps.meta.outputs.zip }}
           retention-days: 90
 
+      # Generate the "What's new" body from conventional commits touching the
+      # extension's bundled surface since the previous extension-v* tag. Writes
+      # release-notes.md, which the release step below uses as its body. It's a
+      # draft — the maintainer reviews it and polishes the Web Store copy by
+      # hand. See scripts/extension-release-notes.mjs.
+      - name: Generate release notes
+        run: |
+          node scripts/extension-release-notes.mjs \
+            --version "${{ steps.meta.outputs.version }}" \
+            --zip "semantic-navigator-v${{ steps.meta.outputs.version }}.zip" \
+            --size "${{ steps.meta.outputs.size }}" \
+            > release-notes.md
+          echo "----- generated release notes -----"
+          cat release-notes.md
+
       # Create or update a GitHub Release with the zip attached so the
       # maintainer can download it without re-running the workflow.
       # Tag-triggered runs use the pushed tag; workflow_dispatch falls
@@ -101,12 +120,4 @@ jobs:
           draft: true
           prerelease: ${{ contains(steps.meta.outputs.version, '-') }}
           files: ${{ steps.meta.outputs.zip }}
-          body: |
-            Chrome extension release `${{ steps.meta.outputs.version }}`.
-
-            **Manual upload to the Chrome Web Store is still required** — see
-            [`docs/maintainers/publishing.md`](https://github.com/real-a11y/real-a11y-dev/blob/main/docs/maintainers/publishing.md)
-            for the checklist.
-
-            Zip: `semantic-navigator-v${{ steps.meta.outputs.version }}.zip`
-            Size: ${{ steps.meta.outputs.size }} bytes
+          body_path: release-notes.md
