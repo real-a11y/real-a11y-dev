@@ -12,7 +12,6 @@
     "format:check": "prettier --check .",
     "typecheck": "pnpm -r --filter \"!@real-a11y-dev/website\" --filter \"!@real-a11y-dev/example-vanilla\" --filter \"!@real-a11y-dev/example-react\" --filter \"!@real-a11y-dev/example-storybook\" --filter \"!@real-a11y-dev/example-testing\" typecheck",
     "verify": "pnpm build && pnpm typecheck && pnpm format:check && pnpm lint && pnpm test && pnpm --filter @real-a11y-dev/website build",
-    "a11y:snapshot": "pnpm --filter @real-a11y-dev/testing snapshot",
     "rasterize-icons": "pnpm --filter @real-a11y-dev/testing exec node scripts/rasterize-extension-icons.mjs",
     "rasterize-og": "pnpm --filter @real-a11y-dev/testing exec node scripts/rasterize-og-image.mjs",
     "prepare": "husky",
