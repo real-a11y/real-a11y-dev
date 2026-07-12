@@ -145,10 +145,20 @@ the draft GitHub Release once the CWS submission is in.
 
 ## Verify the publish
 
-- `npm view @real-a11y-dev/<pkg> dist-tags` shows the new version on `beta` and
-  `latest`.
-- `npm view @real-a11y-dev/<pkg> versions` includes the new one.
-- The publish workflow run is green (both the publish and advance-latest steps).
+- The publish workflow run is green — check the **Publish** step and the
+  **Advance latest dist-tag** step. The latter prints `+latest: <pkg>@<version>`
+  for each move (or `warn ... already set`); that is npm's own write
+  confirmation and is the source of truth.
+- Confirm the tags from the registry. **`npm view` / `npm dist-tag ls` lag** —
+  they read the full packument, which is CDN-cached ~5–10 min, so right after a
+  publish they show the OLD `latest`. Don't trust them immediately, and don't
+  "re-fix" `latest` because of a stale read. For a fresh answer hit the dedicated
+  dist-tags endpoint:
+
+  ```bash
+  curl -s "https://registry.npmjs.org/-/package/@real-a11y-dev%2F<pkg>/dist-tags"
+  # → {"latest":"0.1.0-beta.N","beta":"0.1.0-beta.N"}
+  ```
 
 ## Gotchas
 
