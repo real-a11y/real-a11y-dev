@@ -161,6 +161,28 @@
         code "audit_page()"
     paragraph "Because it drives a real browser, JS-heavy SPAs render fully, and any URL the browser can reach works — public sites, a , or staging."
       strong "local dev server"
+    heading "Auditing a page behind a login" (level 3)
+    paragraph "To audit a page only a logged-in user can see, save a browser session once, then point the server at it — the assistant never touches credentials."
+    list
+      listitem
+        paragraph "with the CLI's login helper (a one-time human step):"
+          strong "Save a session"
+        button "Copy Code"
+          code
+        paragraph "A real browser opens; sign in by hand (passwords, SSO, MFA, and passkeys all work), then press Enter. Playwright's storage state — cookies and origin storage — is written to . Keep that file out of version control; it holds live session tokens."
+          code "auth.json"
+      listitem
+        paragraph "with two environment variables in your MCP config:"
+          strong "Point the server at it"
+        button "Copy Code"
+          code
+      listitem
+        paragraph "Every page now opens already authenticated, and tells the assistant the session is active so it won't try to log in. pins auditing to that origin, so a redirect can't route your session to another site."
+          strong "Audit as usual."
+          code "open_page"
+          code "REAL_A11Y_MCP_ALLOWED_ORIGINS"
+    paragraph "The session path is server configuration, never a tool argument, so tokens stay out of the assistant's context. See for the full workflow and security rules."
+      link "Authenticated pages"
     heading "Tools" (level 2)
     table
       rowgroup
