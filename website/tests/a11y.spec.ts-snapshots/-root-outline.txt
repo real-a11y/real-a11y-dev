@@ -2,6 +2,8 @@ h1 Real A11yAccessibility tooling that works in the real world
   h2 Chrome extension
   h2 One engine, every context
   h2 Test what users actually experience
+  h2 Audit from the shell and CI
+  h2 Accessibility for AI agents
   h2 First-class React support
   h2 Storybook panel out of the box
   h2 Shadow DOM isolation by default

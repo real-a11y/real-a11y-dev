@@ -51,14 +51,16 @@
 51. link "React component"
 52. link "Storybook addon"
 53. link "auditSnapshot()"
-54. button "Copy Code"
-55. generic
+54. link "real-a11y tree"
+55. link "get_semantic_tree"
 56. button "Copy Code"
 57. generic
 58. button "Copy Code"
 59. generic
 60. button "Copy Code"
 61. generic
-62. link "Edit this page on GitHub"
-63. link "Previous pageDOM View"
-64. link "Next pageHeadings View"
+62. button "Copy Code"
+63. generic
+64. link "Edit this page on GitHub"
+65. link "Previous pageDOM View"
+66. link "Next pageHeadings View"

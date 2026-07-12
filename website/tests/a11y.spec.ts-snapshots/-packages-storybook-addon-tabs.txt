@@ -61,11 +61,9 @@
 61. generic
 62. button "Copy Code"
 63. generic
-64. button "Copy Code"
-65. generic
-66. link "examples/storybook/"
-67. link "Storybook + React 19 recipe"
-68. link "Panel features reference"
-69. link "Edit this page on GitHub"
-70. link "Previous page@real-a11y-dev/react"
-71. link "Next page@real-a11y-dev/mcp"
+64. link "examples/storybook/"
+65. link "Storybook + React 19 recipe"
+66. link "Panel features reference"
+67. link "Edit this page on GitHub"
+68. link "Previous page@real-a11y-dev/react"
+69. link "Next page@real-a11y-dev/mcp"

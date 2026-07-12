@@ -121,6 +121,45 @@ Every assertion is documented with an example in [`@real-a11y-dev/testing`](/pac
 
 ---
 
+## The CLI or MCP says Playwright isn't installed
+
+Both `@real-a11y-dev/cli` and `@real-a11y-dev/mcp` list Playwright as an **optional** peer dependency and import it lazily — the library API (types, `buildServer`) loads without a browser, but the moment a command actually drives one, Playwright has to be present. If it isn't, you'll see:
+
+```
+Playwright is required to drive a browser, but it isn't installed.
+  npm i -D playwright && npx playwright install chromium
+```
+
+Install the peer and its browser binary:
+
+```sh
+npm i -D playwright
+npx playwright install chromium   # CI: add --with-deps
+```
+
+A separate "Chromium isn't downloaded yet" error means the package is installed but the browser binary isn't — run just the `playwright install chromium` step.
+
+---
+
+## An audit of a logged-in page comes back empty (or shows the login screen)
+
+An authenticated audit needs a saved session, and it has to match the origin you're auditing:
+
+- **CLI.** Record the session once with `real-a11y login <url> --save auth.json`, then pass it with `real-a11y audit <url> --storage-state auth.json`. Without `--storage-state` the audit runs logged-out, so you get the sign-in page's tree instead of the app's.
+- **MCP.** Point the server at the same file through the `REAL_A11Y_MCP_STORAGE_STATE` environment variable before it starts.
+
+If the session is present but the audit still looks logged-out, the file is usually **stale** (tokens expired — re-run `login`), or the app keeps its auth in **session storage**, which `login` doesn't capture — attach to a browser you logged into by hand with `--cdp` instead.
+
+When a session is loaded, extraction is pinned to the target's own origin, so a redirect onto an auth domain is refused rather than silently audited ("not an allowed audit origin"). Allow the extra origin explicitly with `--audit-origin <origin>` (CLI) or `REAL_A11Y_MCP_ALLOWED_ORIGINS` (MCP).
+
+---
+
+## The MCP server refuses to open a `file://` URL
+
+The MCP server blocks `file://` navigation by default — an LLM that can open `file:///…/.env` and read the DOM back is a local-file exfiltration primitive. If you genuinely need to audit a local HTML file, opt in with `REAL_A11Y_MCP_ALLOW_FILE=1` in the server's environment. (The CLI approves a `file://` target you pass on the command line directly, so this refusal is specific to the MCP server.)
+
+---
+
 ## Still stuck?
 
 - Check the [Peer Dependencies](/recipes/peer-dependencies) recipe — most "it doesn't install" issues are peer version mismatches.

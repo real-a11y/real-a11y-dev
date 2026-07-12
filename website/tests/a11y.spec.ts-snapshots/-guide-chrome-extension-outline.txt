@@ -13,6 +13,7 @@ h1 Semantic Navigator
   h2 The screen curtain
   h2 How it works
   h2 What's unique to the Chrome extension
+    h3 Copy the tree as a Markdown report
     h3 Cross-iframe tree merging
     h3 Keyboard bar — Esc · Tab · Shift+Tab · Enter · Space · ↑ · ↓
     h3 Close tab — × next to the page title

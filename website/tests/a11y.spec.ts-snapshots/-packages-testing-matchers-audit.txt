@@ -96,6 +96,8 @@
       listitem
         link "Assertion matchers"
       listitem
+        link "toBeValidA11yTree()"
+      listitem
         link "toHaveTabSequence(expected)"
       listitem
         link "a11ySnapshot(root, options?) — snapshot serializer"
@@ -185,6 +187,18 @@
     paragraph "On failure the matcher surfaces the underlying assertion's message:"
     button "Copy Code"
       code
+    heading "toBeValidA11yTree()" (level 2)
+      code "toBeValidA11yTree()"
+    paragraph "Asserts the extracted accessibility tree has no ARIA — invalid roles, missing required accessible names, and relationship violations (interactive nesting, presentational-children misuse). Backed by . Advisory don't fail it — only errors do."
+      strong "errors"
+      code "@real-a11y-dev/validate"
+      strong "warnings"
+    button "Copy Code"
+      code
+    paragraph "Unlike the four matchers above, this one doesn't wrap an function — it runs the semantic tree through and fails only on issues."
+      code "assert*"
+      code "@real-a11y-dev/validate"
+      code "severity: "error""
     heading "toHaveTabSequence(expected)" (level 2)
       code "toHaveTabSequence(expected)"
     paragraph "Asserts the computed Tab order equals an array of tokens, in the order a user would encounter pressing Tab (positive first)."
@@ -233,14 +247,13 @@
       code "redact"
       code "includeGeneric"
     list
-      listitem "returns a . The value your test holds the tree, so you can assert on it directly — , — log it, or write it to a file (that's what the does). It needs no setup."
+      listitem "returns a . The value your test holds the tree, so you can assert on it directly — , — log it, or write it to a file. It needs no setup."
         link "auditSnapshot()"
           code "auditSnapshot()"
         strong "plain string"
         emphasis "is"
         code "expect(s).toContain('button "Save"')"
         code "expect(s1).toBe(s2)"
-        link "CI diff bot"
       listitem "returns an that the registered serializer renders at snapshot time. It does nothing on its own, but it keeps / fully native — and crucially, : the tree is rendered as-is instead of escaped into a quoted string literal."
         code "a11ySnapshot()"
         strong "opaque boxed value"

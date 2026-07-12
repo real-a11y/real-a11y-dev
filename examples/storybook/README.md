@@ -5,8 +5,8 @@ A minimal Storybook 8 project with the Real A11y addon enabled. Every story gets
 ## What this shows
 
 - Wiring `@real-a11y-dev/storybook-addon` into `.storybook/main.ts` and `.storybook/preview.ts`
-- A couple of sample stories (`Button`, `Form`) so you can see what the panel looks like for well-structured vs. deliberately-broken markup
-- Per-story `parameters.realA11y` for expected outline / tab sequence, so regressions surface as warnings in the panel
+- A set of sample stories (`Button`, `Form`, `Dialog`, and more) so you can see what the panel looks like for well-structured vs. deliberately-broken markup
+- Live per-story views — semantic tree, heading outline, and tab sequence — with an A11y/DOM toggle, driven off the story's real canvas
 
 ## Run it
 

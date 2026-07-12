@@ -158,6 +158,13 @@
       code "attach(page)"
       code "outlineSnapshot"
       code "tabSequenceSnapshot"
+    paragraph "For CI auditing, reach for the CLI instead of raw text snapshots: writes one findings-aware JSON artifact from your , and classifies findings as new / changed / fixed — robust to the DOM churn (re-indentation, renumbered locators) that defeats a line diff. See the recipe and the reference."
+      strong "cross-page"
+      code "npx real-a11y snapshot"
+      code "a11y.config.json"
+      code "npx real-a11y diff base.json pr.json"
+      link "CI A11y Diff Bot"
+      link "CLI package"
     separator
     heading "Known constraints" (level 2)
     list

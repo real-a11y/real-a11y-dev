@@ -48,8 +48,8 @@
 48. link "Common patterns and what they look like"
 49. link "The relationship to the other views"
 50. link "outlineSnapshot()"
-51. button "Copy Code"
-52. generic
+51. link "real-a11y outline"
+52. link "get_heading_outline"
 53. button "Copy Code"
 54. generic
 55. button "Copy Code"
@@ -62,7 +62,9 @@
 62. generic
 63. button "Copy Code"
 64. generic
-65. table
-66. link "Edit this page on GitHub"
-67. link "Previous pageA11y View"
-68. link "Next pageTAB View"
+65. button "Copy Code"
+66. generic
+67. table
+68. link "Edit this page on GitHub"
+69. link "Previous pageA11y View"
+70. link "Next pageTAB View"

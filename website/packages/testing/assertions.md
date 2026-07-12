@@ -72,9 +72,9 @@ test("all buttons are labeled", () => {
 
 Error message example:
 ```
-A11yAssertionError: Found 2 unlabeled interactive element(s):
-  - button (no accessible name) at position 3 in tab sequence
-  - textbox (no accessible name) under form "Contact us"
+A11yAssertionError: Found 2 accessibility issues:
+  - Unlabeled interactive element: button <button> [#save]
+  - Unlabeled interactive element: textbox <input> [form > input — in <form>]
 ```
 
 ## `assertHeadingOrder(root)`

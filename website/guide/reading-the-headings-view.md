@@ -5,7 +5,7 @@ description: How to read the heading outline — the document structure that scr
 
 # Reading the Headings View
 
-> The Headings view matches the output of [`outlineSnapshot()`](/packages/testing#outlinesnapshot-root) in the testing package — same ordering, same formatting. Whether you're reading it in the Chrome extension, the Storybook addon, or a committed Playwright snapshot fixture, this page applies.
+> The Headings view matches the output of [`outlineSnapshot()`](/packages/testing/snapshots#outlinesnapshot-root) in the testing package — same ordering, same formatting. Whether you're reading it in the Chrome extension, the Storybook addon, a committed Playwright snapshot fixture, the [`real-a11y outline`](/packages/cli) command, or the [`get_heading_outline`](/packages/mcp) MCP tool, this page applies.
 
 The Headings view answers one question: **can a screen reader user navigate this page by structure?**
 

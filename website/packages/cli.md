@@ -29,9 +29,13 @@ CLI drives a real browser (via Playwright) rather than parsing markup, and needs
   loaded only when a command needs a browser.
 
 ```sh
-npm i -D @real-a11y-dev/cli playwright
+npm i -D @real-a11y-dev/cli@beta playwright
 npx playwright install chromium
 ```
+
+The package publishes on the `beta` dist-tag until `0.1.0`, so pin `@beta` (or
+an exact version) — an unpinned `@real-a11y-dev/cli` resolves the `latest` tag,
+which isn't published yet and fails with "No matching version found."
 
 Prefer an in-project install over a bare `npx @real-a11y-dev/cli`: `npx` resolves
 its own copy of Playwright, and its browser binaries are revision-locked, so a
@@ -129,9 +133,9 @@ typo'd key is an error, so a mistake can't silently un-gate CI.
 | `--viewport <WxH>` | Explicit viewport, e.g. `1280x800`. |
 | `--wait-until <state>` / `--settle <ms>` | Settle dynamic pages before extraction (`load` \| `domcontentloaded` \| `networkidle` \| `commit`). |
 | `--timeout <ms>` | Navigation timeout (default `30000`). |
-| `--rules <ids>` | Comma-separated subset of the five rules (`audit`/`inspect`). |
-| `--fail-on <level>` | `error` \| `warning` \| `never` — the gate threshold (default `error` for `audit`/`inspect`, `never` for views). |
-| `-f, --format <fmt>` | `pretty` (default) or `json`. Never auto-switched — piping only drops color. |
+| `--rules <ids>` | Comma-separated subset of the five rules (`audit`/`inspect`/`snapshot`). |
+| `--fail-on <level>` | `error` \| `warning` \| `never` — the gate threshold (default `error`), on `audit`/`inspect`/`diff`. View commands aren't gates: they always exit `0`. |
+| `-f, --format <fmt>` | `pretty` (default) or `json`; `diff` also takes `md` (`pretty` \| `json` \| `md`). Never auto-switched — piping only drops color. |
 | `-o, --output <file>` | Write the report to a file (progress stays on stderr). |
 | `--storage-state <file>` / `--audit-origin <origin>` | Audit as a saved login session (see [Authenticated pages](/guide/authenticated-pages)). |
 | `--cdp <endpoint>` | Attach to a running Chrome instead of launching one. |

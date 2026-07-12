@@ -41,6 +41,8 @@ This view extracts just the heading elements and shows the document outline.
 
 A well-structured outline has exactly one H1, no skipped levels, and a logical nesting that mirrors the page's sections.
 
+[Read more about the Headings view →](/guide/reading-the-headings-view)
+
 ---
 
 ## TAB order view

@@ -1,6 +1,6 @@
 ---
 title: Architecture — how the packages fit together
-description: A map of the Real A11y monorepo — what each of the six packages owns, how they depend on each other, and why the split is the way it is.
+description: A map of the Real A11y monorepo — what each package owns, how they depend on each other, and why the split is the way it is.
 ---
 
 # Architecture
@@ -19,30 +19,38 @@ Real A11y is a monorepo of small, composable packages built around one extractio
 | [`@real-a11y-dev/react`](/packages/react) | React integration — `<SemanticNavigator />` component + `useSemanticTree()` / `useActiveModal()` hooks. Wraps `inspector` for inline and floating modes. | `react >= 18`, `react-dom >= 18` |
 | [`@real-a11y-dev/testing`](/packages/testing) | Headless audit helpers — `auditSnapshot`, `outlineSnapshot`, `tabSequenceSnapshot`, `assert*`, `flow()`. A separate `/playwright` entrypoint ships a `Page`-handle adapter for real-browser E2E. **No UI.** | None (optional: `@playwright/test`) |
 | [`@real-a11y-dev/storybook-addon`](/packages/storybook-addon) | Storybook 8 panel — preview-side extractor posts tree snapshots over the Storybook channel; manager-side React panel renders them. | `storybook >= 8`, `react >= 18` |
+| [`@real-a11y-dev/serialize`](https://github.com/real-a11y/real-a11y-dev/tree/main/packages/serialize) | Deterministic text serialization of the tree — full tree, heading outline, and tab sequence. **No UI.** | `@real-a11y-dev/core` |
+| [`@real-a11y-dev/validate`](https://github.com/real-a11y/real-a11y-dev/tree/main/packages/validate) | ARIA-semantics validation — per-node rules plus tree-level relationship checks, backed by `aria-query` so it tracks the spec. Standalone. | `aria-query` |
+| [`@real-a11y-dev/mcp`](/packages/mcp) | Model Context Protocol server exposing `audit_page` / `get_semantic_tree` / `inspect_page` etc. to AI agents (bin `real-a11y-mcp`, plus a `./browser` subpath export). | `@real-a11y-dev/testing`, `@modelcontextprotocol/sdk` (optional peer: `playwright`) |
+| [`@real-a11y-dev/cli`](/packages/cli) | The `real-a11y` shell command — audits, perception views (`tree` / `outline` / `tabs` / `list` / `inspect`), and `snapshot` + `diff` from the shell and CI. | `@real-a11y-dev/testing`, `@real-a11y-dev/mcp` (optional peer: `playwright`) |
 
-A private `@real-a11y-dev/semantic-navigator-extension` workspace builds the Chrome extension using the same engine; it is not published to npm.
+A private `@real-a11y-dev/semantic-navigator-extension` workspace builds the Chrome extension using the same engine — unlike the packages above, it is not published to npm.
 
 ---
 
 ## Dependency graph
 
 ```
-              ┌──────────────────────── @real-a11y-dev/core ────────────────────────┐
-              │                  (extraction + queries, no UI)                      │
-              │                                                                     │
-              ▼                                                                     ▼
-  @real-a11y-dev/semantic-navigator-ui                                @real-a11y-dev/testing
-     (Preact tree-view components)                                     (headless assertions +
-              │                                                         Playwright adapter)
-              │
-     ┌────────┴────────────────────────┬─────────────────────────┐
-     ▼                                 ▼                         ▼
-  @real-a11y-dev/inspector     @real-a11y-dev/storybook-addon     (semantic-navigator-extension,
-  (framework-agnostic panel)   (preview + manager entries)        Chrome only, not published)
-              │
-              ▼
-  @real-a11y-dev/react
+              ┌───────────────────── @real-a11y-dev/core ─────────────────────┐
+              │                (extraction + queries, no UI)                  │
+              │                            │                                  │
+              ▼                            ▼                                  ▼
+  @real-a11y-dev/                 @real-a11y-dev/                  @real-a11y-dev/testing
+  semantic-navigator-ui           serialize                       (headless assertions +
+  (Preact tree-view)              (deterministic text)             Playwright adapter)
+              │                                                              │
+     ┌────────┴──────────┐                                        ┌──────────┴──────────┐
+     ▼                   ▼                                        ▼                     ▼
+  @real-a11y-dev/    @real-a11y-dev/                     @real-a11y-dev/mcp    @real-a11y-dev/cli
+  inspector          storybook-addon                     (MCP server for       (real-a11y shell;
+  (fw-agnostic)      (preview + manager)                  AI agents)            deps testing + mcp)
+     │                                                           │                     ▲
+     ▼                                                           └─────────────────────┘
+  @real-a11y-dev/react                                             cli also wraps mcp
   (<SemanticNavigator /> + hooks)
+
+  Standalone:  @real-a11y-dev/validate — aria-query-backed ARIA validation, no internal deps.
+  Private:     @real-a11y-dev/semantic-navigator-extension — Chrome extension, not published.
 ```
 
 Two observations:

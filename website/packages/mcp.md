@@ -92,6 +92,49 @@ Once it's connected, ask in plain language — the assistant picks the tools:
 Because it drives a real browser, JS-heavy SPAs render fully, and any URL the
 browser can reach works — public sites, a **local dev server**, or staging.
 
+### Auditing a page behind a login
+
+To audit a page only a logged-in user can see, save a browser session once, then
+point the server at it — the assistant never touches credentials.
+
+1. **Save a session** with the CLI's login helper (a one-time human step):
+
+   ```sh
+   npx -y @real-a11y-dev/cli login https://app.example.com --save auth.json
+   ```
+
+   A real browser opens; sign in by hand (passwords, SSO, MFA, and passkeys all
+   work), then press Enter. Playwright's storage state — cookies and origin
+   storage — is written to `auth.json`. Keep that file out of version control; it
+   holds live session tokens.
+
+2. **Point the server at it** with two environment variables in your MCP config:
+
+   ```json
+   {
+     "mcpServers": {
+       "real-a11y": {
+         "command": "npx",
+         "args": ["-y", "@real-a11y-dev/mcp"],
+         "env": {
+           "REAL_A11Y_MCP_STORAGE_STATE": "/absolute/path/to/auth.json",
+           "REAL_A11Y_MCP_ALLOWED_ORIGINS": "https://app.example.com"
+         }
+       }
+     }
+   }
+   ```
+
+3. **Audit as usual.** Every page now opens already authenticated, and
+   `open_page` tells the assistant the session is active so it won't try to log
+   in. `REAL_A11Y_MCP_ALLOWED_ORIGINS` pins auditing to that origin, so a redirect
+   can't route your session to another site.
+
+The session path is server configuration, never a tool argument, so tokens stay
+out of the assistant's context. See
+[Authenticated pages](/guide/authenticated-pages) for the full workflow and
+security rules.
+
 ## Tools
 
 | Tool | Purpose |

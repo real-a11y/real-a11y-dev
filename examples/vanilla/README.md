@@ -22,7 +22,7 @@ Open the URL Vite prints (typically `http://localhost:5173`). Edit `src/main.ts`
 
 ## Key file
 
-- [`src/main.ts`](./src/main.ts) — the entire wiring, ~40 lines.
+- [`src/main.ts`](./src/main.ts) — the entire wiring plus a small floating-panel shell (resize, drag-to-move, collapse/expand).
 
 ## See also
 

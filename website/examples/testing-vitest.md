@@ -17,7 +17,7 @@ Demonstrates `@real-a11y-dev/testing` in a Vitest + jsdom test suite — snapsho
 
 ```sh
 git clone https://github.com/real-a11y/real-a11y-dev.git
-cd real-a11y
+cd real-a11y-dev
 pnpm install
 pnpm --filter @real-a11y-dev/example-testing test
 ```
@@ -27,7 +27,7 @@ pnpm --filter @real-a11y-dev/example-testing test
 ### Snapshot test
 
 ```ts
-// examples/testing-vitest/src/LoginForm.test.ts
+// examples/testing-vitest/src/snapshot.test.ts
 import { render } from "@testing-library/react";
 import { auditSnapshot, assertNoUnlabeledInteractive } from "@real-a11y-dev/testing";
 import { LoginForm } from "./LoginForm";
@@ -48,7 +48,7 @@ describe("LoginForm accessibility", () => {
 ### Structural assertions
 
 ```ts
-// examples/testing-vitest/src/Page.test.ts
+// examples/testing-vitest/src/assertions.test.ts
 import { render } from "@testing-library/react";
 import {
   assertHeadingOrder,
@@ -78,9 +78,9 @@ describe("Page structure", () => {
 ### Flow chain — combobox interaction
 
 ```ts
-// examples/testing-vitest/src/CountrySelector.test.ts
+// examples/testing-vitest/src/flow.test.ts
 import { render } from "@testing-library/react";
-import { flow } from "@real-a11y-dev/testing";
+import { flow, findAllByRole } from "@real-a11y-dev/testing";
 import { CountrySelector } from "./CountrySelector";
 
 test("selecting a country closes the dropdown", async () => {
@@ -102,7 +102,7 @@ test("selecting a country closes the dropdown", async () => {
 ### Tab sequence test
 
 ```ts
-// examples/testing-vitest/src/Navigation.test.ts
+// examples/testing-vitest/src/tabs.test.tsx
 import { render } from "@testing-library/react";
 import { tabSequenceSnapshot } from "@real-a11y-dev/testing";
 import { Navigation } from "./Navigation";
@@ -112,3 +112,11 @@ test("navigation tab sequence is correct", () => {
   expect(tabSequenceSnapshot(container)).toMatchSnapshot();
 });
 ```
+
+## See also
+
+jsdom runs the same audit engine as the browser, but it can't audit a real running app or gate CI on a live page set. For that:
+
+- **[Playwright E2E](./playwright.md)** — the `@real-a11y-dev/testing/playwright` `attach()` adapter runs these same assertions against a real browser page.
+- **[`@real-a11y-dev/cli`](https://github.com/real-a11y/real-a11y-dev/tree/main/packages/cli)** — `real-a11y audit` / `snapshot` / `diff` run findings-aware audits over the page set in `a11y.config.json`, ideal for CI.
+- **[`@real-a11y-dev/mcp`](https://github.com/real-a11y/real-a11y-dev/tree/main/packages/mcp)** — the same audit engine exposed to AI agents for agent-driven checks.

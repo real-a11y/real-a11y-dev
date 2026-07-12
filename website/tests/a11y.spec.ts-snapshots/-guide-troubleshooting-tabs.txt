@@ -49,18 +49,25 @@
 49. link "React hydration mismatch when rendering the panel"
 50. link "Tests pass in jsdom but fail in Playwright (or vice versa)"
 51. link "A11yAssertionError with a message I don't understand"
-52. link "Still stuck?"
-53. button "Copy Code"
-54. generic
-55. button "Copy Code"
-56. generic
-57. button "Copy Code"
-58. generic
-59. button "Copy Code"
-60. generic
-61. link "@real-a11y-dev/testing"
-62. link "Peer Dependencies"
-63. link "Next.js"
-64. link "Storybook + React 19"
-65. link "Edit this page on GitHub"
-66. link "Previous pageArchitecture"
+52. link "The CLI or MCP says Playwright isn't installed"
+53. link "An audit of a logged-in page comes back empty (or shows the login screen)"
+54. link "The MCP server refuses to open a file:// URL"
+55. link "Still stuck?"
+56. button "Copy Code"
+57. generic
+58. button "Copy Code"
+59. generic
+60. button "Copy Code"
+61. generic
+62. button "Copy Code"
+63. generic
+64. link "@real-a11y-dev/testing"
+65. button "Copy Code"
+66. generic
+67. button "Copy Code"
+68. generic
+69. link "Peer Dependencies"
+70. link "Next.js"
+71. link "Storybook + React 19"
+72. link "Edit this page on GitHub"
+73. link "Previous pageArchitecture"

@@ -59,13 +59,14 @@
 59. generic
 60. button "Copy Code"
 61. generic
-62. button "Copy Code"
-63. generic
-64. link "MCP configuration"
-65. button "Copy Code"
-66. generic
-67. link "@real-a11y-dev/cli"
-68. link "@real-a11y-dev/mcp"
-69. link "Edit this page on GitHub"
-70. link "Previous pageCI Diff Bot"
-71. link "Next pageAccessible Names"
+62. link "MCP configuration"
+63. button "Copy Code"
+64. generic
+65. link "MCP configuration"
+66. button "Copy Code"
+67. generic
+68. link "@real-a11y-dev/cli"
+69. link "@real-a11y-dev/mcp"
+70. link "Edit this page on GitHub"
+71. link "Previous pageCI Diff Bot"
+72. link "Next pageAccessible Names"

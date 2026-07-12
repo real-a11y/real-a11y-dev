@@ -1,6 +1,6 @@
 ---
 title: Reading the DOM View
-description: How to interpret the DOM view — every element in the raw HTML nesting order, shown the same way across the Chrome extension, Storybook addon, and CLI output.
+description: 'How to interpret the DOM view — every element in the raw HTML nesting order, shown the same way across the Chrome extension, the React `<SemanticNavigator />`, the Storybook addon, and `auditSnapshot({ mode: "dom" })` from testing.'
 ---
 
 # Reading the DOM View

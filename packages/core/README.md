@@ -1,6 +1,6 @@
 # @real-a11y-dev/core
 
-Tree extraction, data model, and interaction engine for [Semantic Navigator](https://github.com/real-a11y/semantic-navigator).
+Tree extraction, data model, and interaction engine for [Semantic Navigator](https://github.com/real-a11y/real-a11y-dev).
 
 This package has zero UI dependencies. It handles DOM traversal, accessibility tree computation, role mapping, interaction dispatching, DOM observation, and search.
 
@@ -82,7 +82,7 @@ interface SemanticNode {
   parentId: string | null;
   childIds: string[];
   depth: number;
-  dom: { tagName, attributes, textContent, isHidden };
+  dom: { tagName, attributes, textContent, descendantText, isHidden };
   a11y: { role, name, description, states, properties, isExposedToAT };
   interaction: { isInteractive, actions, isFocusable, isEditable };
   ui: { expanded, highlighted, matchesFilter, selected };

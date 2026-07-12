@@ -51,23 +51,23 @@
 51. link "Tree diffing"
 52. link "DOM observation"
 53. link "Types"
-54. button "Copy Code"
-55. generic
-56. link "Keep it out of production"
-57. button "Copy Code"
-58. generic
+54. link "@real-a11y-dev/cli"
+55. link "@real-a11y-dev/mcp"
+56. button "Copy Code"
+57. generic
+58. link "Keep it out of production"
 59. button "Copy Code"
 60. generic
 61. button "Copy Code"
 62. generic
-63. table
-64. button "Copy Code"
-65. generic
+63. button "Copy Code"
+64. generic
+65. table
 66. button "Copy Code"
 67. generic
-68. table
-69. button "Copy Code"
-70. generic
+68. button "Copy Code"
+69. generic
+70. table
 71. button "Copy Code"
 72. generic
 73. button "Copy Code"
@@ -82,6 +82,8 @@
 82. generic
 83. button "Copy Code"
 84. generic
-85. link "Edit this page on GitHub"
-86. link "Previous pageOverview & Install"
-87. link "Next page@real-a11y-dev/inspector"
+85. button "Copy Code"
+86. generic
+87. link "Edit this page on GitHub"
+88. link "Previous pageOverview & Install"
+89. link "Next page@real-a11y-dev/inspector"

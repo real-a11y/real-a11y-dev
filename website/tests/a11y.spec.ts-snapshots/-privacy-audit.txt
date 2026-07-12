@@ -108,7 +108,7 @@
     list
       listitem "We don't collect personal data."
       listitem "The Chrome extension runs entirely on your device. It does not send page content, URLs, or any other data to any server — ours or anyone else's."
-      listitem "The npm packages run on your device / in your CI. They make no network requests."
+      listitem "The npm library packages run on your device / in your CI and make no network requests. The CLI and MCP server load only the page you point them at — that request goes to your target URL, never to us."
       listitem "The website may use privacy-respecting aggregate analytics (no cookies, no personal identifiers). If enabled, it's disclosed here."
     heading "Chrome extension — Semantic Navigator" (level 2)
     paragraph "The extension reads the DOM of the page you're currently viewing in order to build and display a semantic / accessibility tree in a side panel. It acts locally in your browser."
@@ -164,6 +164,11 @@
         code "pnpm"
         code "npm"
         code "yarn"
+    paragraph "and build on those libraries but additionally drive a headless browser (Playwright) so they can audit a live page. That browser loads — the page you asked to audit — and reads its accessibility tree locally. They send no page content, no results, and no telemetry to us or any third party. Installing the browser with downloads it from Microsoft's Playwright CDN, the same as any Playwright project — that is the only network activity, and it is under your control."
+      code "@real-a11y-dev/cli"
+      code "@real-a11y-dev/mcp"
+      strong "only the URL you give them"
+      code "npx playwright install"
     heading "Website" (level 2)
     paragraph "The site at is a static VitePress documentation site. The only first-party state is the search index and local preferences (theme selection) stored in your browser's ."
       code "real-a11y.dev"

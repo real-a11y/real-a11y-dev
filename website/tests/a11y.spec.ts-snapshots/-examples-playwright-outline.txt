@@ -15,3 +15,4 @@ h1 Example: Playwright E2E
   h2 Narrowing the audit root
   h2 Snapshot test
   h2 How the adapter works
+  h2 See also

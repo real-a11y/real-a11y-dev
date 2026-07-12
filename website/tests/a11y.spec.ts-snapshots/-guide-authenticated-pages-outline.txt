@@ -11,6 +11,7 @@ h1 Auditing authenticated pages
     h3 1. Save the session
     h3 2. Audit with it
     h3 Origin pinning
+    h3 In the MCP server
   h2 Attach to your logged-in browser (--cdp)
   h2 Security
     h3 In CI

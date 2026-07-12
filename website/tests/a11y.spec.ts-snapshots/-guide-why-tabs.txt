@@ -46,6 +46,7 @@
 46. link "How they complement each other"
 47. link "Design principles"
 48. table
-49. link "Edit this page on GitHub"
-50. link "Previous pageSnapshots vs. Other Tools"
-51. link "Next pageUnderstanding the Views"
+49. link "MCP server"
+50. link "Edit this page on GitHub"
+51. link "Previous pageSnapshots vs. Other Tools"
+52. link "Next pageUnderstanding the Views"

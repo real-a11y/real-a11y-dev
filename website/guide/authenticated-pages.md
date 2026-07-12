@@ -88,6 +88,14 @@ real-a11y audit https://app.example.com/dashboard \
 Refusal is also a useful signal: it usually means the **session expired** and
 the site bounced you to a login page. Re-run `login` to refresh `auth.json`.
 
+### In the MCP server
+
+The same `auth.json` drives the MCP server: point it at the file with
+`REAL_A11Y_MCP_STORAGE_STATE=auth.json` and pin the origin with
+`REAL_A11Y_MCP_ALLOWED_ORIGINS` — the env-var mirror of the CLI's
+`--storage-state` and `--audit-origin`. See the
+[MCP configuration](/packages/mcp#configuration) for both.
+
 ## Attach to your logged-in browser (`--cdp`)
 
 For a one-off — or an app whose auth lives in `sessionStorage`, which a saved

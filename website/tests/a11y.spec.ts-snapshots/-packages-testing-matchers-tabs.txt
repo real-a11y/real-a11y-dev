@@ -49,52 +49,54 @@
 49. link "Troubleshooting"
 50. link "Setup"
 51. link "Assertion matchers"
-52. link "toHaveTabSequence(expected)"
-53. link "a11ySnapshot(root, options?) — snapshot serializer"
-54. link "Vitest vs Jest type augmentation"
-55. link "See it running"
-56. link "See also"
-57. link "assertions"
-58. link "snapshots"
-59. button "Copy Code"
-60. generic
-61. link "Accessibility Snapshots"
-62. button "Copy Code"
-63. generic
-64. button "Copy Code"
-65. generic
-66. button "Copy Code"
-67. generic
-68. button "Copy Code"
-69. generic
-70. link "assert* function"
-71. table
-72. button "Copy Code"
-73. generic
-74. button "Copy Code"
-75. generic
-76. button "Copy Code"
-77. generic
-78. link "tabSequenceSnapshot"
+52. link "toBeValidA11yTree()"
+53. link "toHaveTabSequence(expected)"
+54. link "a11ySnapshot(root, options?) — snapshot serializer"
+55. link "Vitest vs Jest type augmentation"
+56. link "See it running"
+57. link "See also"
+58. link "assertions"
+59. link "snapshots"
+60. button "Copy Code"
+61. generic
+62. link "Accessibility Snapshots"
+63. button "Copy Code"
+64. generic
+65. button "Copy Code"
+66. generic
+67. button "Copy Code"
+68. generic
+69. button "Copy Code"
+70. generic
+71. link "assert* function"
+72. table
+73. button "Copy Code"
+74. generic
+75. button "Copy Code"
+76. generic
+77. button "Copy Code"
+78. generic
 79. button "Copy Code"
 80. generic
-81. button "Copy Code"
-82. generic
-83. button "Copy Code"
-84. generic
-85. link "redact"
+81. link "tabSequenceSnapshot"
+82. button "Copy Code"
+83. generic
+84. button "Copy Code"
+85. generic
 86. button "Copy Code"
 87. generic
 88. link "redact"
-89. link "auditSnapshot()"
-90. link "CI diff bot"
-91. table
-92. table
-93. link "examples/testing-vitest"
-94. link "examples/testing-jest"
-95. link "Assertions"
-96. link "Snapshots"
-97. link "Accessibility Snapshots"
-98. link "Edit this page on GitHub"
-99. link "Previous pageAssertions"
-100. link "Next pageFlow API"
+89. button "Copy Code"
+90. generic
+91. link "redact"
+92. link "auditSnapshot()"
+93. table
+94. table
+95. link "examples/testing-vitest"
+96. link "examples/testing-jest"
+97. link "Assertions"
+98. link "Snapshots"
+99. link "Accessibility Snapshots"
+100. link "Edit this page on GitHub"
+101. link "Previous pageAssertions"
+102. link "Next pageFlow API"

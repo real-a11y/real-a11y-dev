@@ -55,14 +55,24 @@ function App() {
 | `root` | `RefObject<Element \| null>` | — | **Required.** Ref to the DOM element to observe. |
 | `mode` | `"a11y" \| "dom"` | `"a11y"` | Tree extraction mode. Can be changed at runtime. |
 | `mount` | `"shadow" \| "light"` | `"shadow"` | Shadow DOM isolation mode. |
+| `theme` | `"light" \| "dark" \| "auto"` | `"auto"` | Panel color theme. |
+| `interactive` | `boolean` | `true` | Enable interactive actions on tree nodes. |
 | `highlightOnHover` | `boolean` | `false` | Highlight host element on tree node hover. |
 | `scrollHostOnSelect` | `boolean` | `false` | Scroll host element into view on selection. |
 | `focusHostOnActivate` | `boolean` | `false` | Focus host element on action activation. |
+| `enablePicker` | `boolean` | `false` | Surface a DevTools-style element picker (⦿ button + Ctrl/Cmd+Shift+C). |
 | `styleNonce` | `string` | — | CSP nonce for injected styles. |
-| `className` | `string` | — | Class name applied to the host `<div>`. |
-| `style` | `CSSProperties` | — | Inline styles for the host `<div>`. |
+| `onNodeSelect` | `(node: SemanticNode) => void` | — | Called when a tree node is selected. |
+| `onAction` | `(request: ActionRequest, result: ActionResult) => void` | — | Called after an interactive action is dispatched. |
+| `className` | `string` | — | Class name applied to the host `<div>` (inline mode only). |
+| `style` | `CSSProperties` | — | Inline styles for the host `<div>` (inline mode only). |
+| `floating` | `boolean` | `false` | Render as a fixed-position, draggable, resizable, collapsible panel portaled into `document.body` instead of an inline div. |
+| `panelTitle` | `string` | `"Semantic Navigator"` | Title shown in the floating panel's title bar. |
+| `panelWidth` | `number` | `380` | Initial floating panel width in px. |
+| `panelHeight` | `number` | `420` | Initial floating panel height in px. |
+| `panelGap` | `number` | `16` | Gap between the floating panel and the viewport edges in px. |
 
-The component creates its own internal `<div>` host and passes it to `createSemanticNavigator`. Changing `root` or `mount` remounts the navigator; changing `mode` uses the imperative `setViewMode()` API without remounting.
+The component creates its own internal `<div>` host and passes it to `createInspector`. Changing `root` or `mount` remounts the navigator; changing `mode` uses the imperative `setViewMode()` API without remounting.
 
 ::: tip Why `highlightOnHover` / `scrollHostOnSelect` / `focusHostOnActivate` default to false
 `<SemanticNavigator />` renders into the same document as your app, so activating a tree row could steal focus from the panel or scroll the page underneath you. The panel itself stays fully interactive either way — row selection, cross-link chip navigation, keyboard movement — what's gated is the side effect on the *real* DOM element. See [Panel interaction vs. host side effects](/guide/panel-features#panel-interaction-vs-host-side-effects) for the full rationale and when to flip them on.
@@ -92,7 +102,7 @@ function FocusAnnouncer({ rootRef }) {
 }
 ```
 
-**Returns:** `SemanticTree | null` — `null` before the first extraction.
+**Returns:** `ExtractionResult | null` — `null` before the first extraction.
 
 **Options:**
 
@@ -226,7 +236,7 @@ function A11yBadge({ rootRef }) {
 All hooks and components are fully typed. Import types from `@real-a11y-dev/core` for tree node types:
 
 ```ts
-import type { SemanticTree, SemanticNode } from "@real-a11y-dev/core";
+import type { ExtractionResult, SemanticNode } from "@real-a11y-dev/core";
 ```
 
 ---

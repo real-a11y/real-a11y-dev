@@ -62,6 +62,7 @@ opt out.
 | `list <cat> <url>` | One category: heading, link, button, form, landmark, image |
 | `snapshot` | Audit a page set → one diffable JSON artifact (or `--md`) |
 | `diff <base> <pr>` | Findings-aware diff of two snapshots — new / changed / fixed |
+| `login <url> --save <file>` | Save a login session for `--storage-state` audits |
 
 Every command takes `--format json` for a stable machine envelope
 (`schemaVersion: 1`, `pages[].findings[]` with stable `v1:` fingerprints),

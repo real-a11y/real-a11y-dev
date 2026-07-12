@@ -48,8 +48,9 @@
 48. link "TAB order view"
 49. link "Same content, four perspectives"
 50. link "Read more about the A11y view →"
-51. link "Read more about the TAB view →"
-52. table
-53. link "Edit this page on GitHub"
-54. link "Previous pageWhy Real A11y?"
-55. link "Next pageDOM View"
+51. link "Read more about the Headings view →"
+52. link "Read more about the TAB view →"
+53. table
+54. link "Edit this page on GitHub"
+55. link "Previous pageWhy Real A11y?"
+56. link "Next pageDOM View"

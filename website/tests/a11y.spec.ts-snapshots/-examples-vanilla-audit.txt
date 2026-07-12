@@ -108,8 +108,8 @@
     heading "Run it locally" (level 2)
     button "Copy Code"
       code
-    paragraph "Opens at ."
-      code "http://localhost:5174"
+    paragraph "Opens at (Vite's default port)."
+      code "http://localhost:5173"
     heading "Key code" (level 2)
     button "Copy Code"
       code

@@ -90,9 +90,22 @@ On failure the matcher surfaces the underlying assertion's message:
 ```
 expect(element).toHaveNoUnlabeledInteractive()
 
-Found 1 unlabeled interactive element(s):
-  - button (<button>)
+Found 1 accessibility issue:
+  - Unlabeled interactive element: button <button>
 ```
+
+## `toBeValidA11yTree()`
+
+Asserts the extracted accessibility tree has no ARIA **errors** — invalid roles, missing required accessible names, and relationship violations (interactive nesting, presentational-children misuse). Backed by `@real-a11y-dev/validate`. Advisory **warnings** don't fail it — only errors do.
+
+```ts
+expect(container).toBeValidA11yTree();
+
+// Negation asserts the tree *does* have an ARIA error
+expect(brokenContainer).not.toBeValidA11yTree();
+```
+
+Unlike the four matchers above, this one doesn't wrap an `assert*` function — it runs the semantic tree through `@real-a11y-dev/validate` and fails only on `severity: "error"` issues.
 
 ## `toHaveTabSequence(expected)`
 
@@ -148,7 +161,7 @@ See [`redact`](/packages/testing/snapshots#using-redact) for the full pattern re
 
 Both render the **same tree** — under the hood they call the same serializer with the same options (`mode`, `redact`, `includeGeneric`). The only difference is what they hand back, and therefore how the framework treats it:
 
-- [`auditSnapshot()`](/packages/testing/snapshots#auditsnapshot-root-options) returns a **plain string**. The value your test holds *is* the tree, so you can assert on it directly — `expect(s).toContain('button "Save"')`, `expect(s1).toBe(s2)` — log it, or write it to a file (that's what the [CI diff bot](/guide/ci-diff-bot) does). It needs no setup.
+- [`auditSnapshot()`](/packages/testing/snapshots#auditsnapshot-root-options) returns a **plain string**. The value your test holds *is* the tree, so you can assert on it directly — `expect(s).toContain('button "Save"')`, `expect(s1).toBe(s2)` — log it, or write it to a file. It needs no setup.
 - `a11ySnapshot()` returns an **opaque boxed value** that the registered serializer renders at snapshot time. It does nothing on its own, but it keeps `toMatchSnapshot()` / `toMatchInlineSnapshot()` fully native — and crucially, **inline snapshots stay readable**: the tree is rendered as-is instead of escaped into a quoted string literal.
 
 | Reach for `auditSnapshot` when… | Reach for `a11ySnapshot` when… |

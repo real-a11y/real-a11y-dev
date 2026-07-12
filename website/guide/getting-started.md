@@ -16,6 +16,8 @@ Real A11y is a suite of packages built around a single engine: `@real-a11y-dev/c
 | Run accessibility assertions in Playwright E2E tests | [`@real-a11y-dev/testing/playwright`](/packages/testing/playwright) | **dev** |
 | Use React hooks and a `<SemanticNavigator />` component | [`@real-a11y-dev/react`](/packages/react) | **dev** (recommended) |
 | Add an A11y tree panel to every Storybook story | [`@real-a11y-dev/storybook-addon`](/packages/storybook-addon) | **dev** |
+| Run accessibility audits from the shell / CI (no code) | [`@real-a11y-dev/cli`](/packages/cli) | **dev** |
+| Give an AI agent accessibility audit tools | [`@real-a11y-dev/mcp`](/packages/mcp) | run via `npx` |
 | Build your own tooling on the extraction engine | [`@real-a11y-dev/core`](/packages/core) | depends (see below) |
 
 ::: tip Install as a dev dependency by default
@@ -72,6 +74,34 @@ yarn add -D @real-a11y-dev/storybook-addon
 ---
 
 ## Your first tree in 30 seconds
+
+### CLI (no code)
+
+The fastest first result: audit or inspect any URL straight from the shell. The CLI drives a real browser via Playwright, so install it alongside a Chromium binary:
+
+```sh
+npm i -D @real-a11y-dev/cli playwright
+npx playwright install chromium
+```
+
+```sh
+# The CI gate — exits non-zero when a screen-reader-fidelity error is found:
+npx real-a11y audit https://example.com
+
+# Or just look at what assistive tech perceives — no test file, no config:
+npx real-a11y tree https://example.com
+npx real-a11y outline https://example.com
+```
+
+In CI, pick a machine envelope and the failure threshold:
+
+```sh
+npx real-a11y audit https://example.com --format json --fail-on error
+```
+
+`--fail-on error` is the default (`warning` | `never` also available). See [`@real-a11y-dev/cli`](/packages/cli) for `snapshot` / `diff`, device emulation, and auditing pages behind a login.
+
+---
 
 ### Framework-agnostic embed
 
@@ -204,6 +234,8 @@ That's it. A **Semantic Navigator** panel appears next to Controls and A11y for 
 | `@real-a11y-dev/testing` | ≥ 20 | jsdom or real browser |
 | `@real-a11y-dev/react` | ≥ 20 | React ≥ 18, modern browser |
 | `@real-a11y-dev/storybook-addon` | ≥ 20 | Storybook ≥ 8 |
+| `@real-a11y-dev/cli` | ≥ 20 | Real browser via optional peer `playwright` (lazily imported) |
+| `@real-a11y-dev/mcp` | ≥ 20 | Real browser via optional peer `playwright` (lazily imported); runs in any MCP client |
 
 ---
 

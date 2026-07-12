@@ -75,11 +75,12 @@ Visual snapshots and accessibility snapshots are the two halves of regression te
 
 ## The same tree, everywhere
 
-An accessibility snapshot is the serialized form of the tree you can also *see* live across Real A11y's surfaces — the [Chrome extension](/guide/chrome-extension), the [React panel](/packages/react), and the [Storybook addon](/packages/storybook-addon) all render the same extraction. What you inspect by eye in the panel is what you commit as a snapshot in tests.
+An accessibility snapshot is the serialized form of the tree you can also *see* live across Real A11y's surfaces — the [Chrome extension](/guide/chrome-extension), the [React panel](/packages/react), and the [Storybook addon](/packages/storybook-addon) all render the same extraction, and the [CLI](/packages/cli) serializes the same tree from your shell. What you inspect by eye in the panel is what you commit as a snapshot in tests.
 
 ## Start snapshotting
 
+- **From the shell** → the [`real-a11y` CLI](/packages/cli) (`real-a11y tree <url>`, or `real-a11y snapshot` for a whole page set)
 - **In Vitest / Jest** → [Snapshots reference](/packages/testing/snapshots), or the ergonomic [`a11ySnapshot()` matcher](/packages/testing/matchers#a11ysnapshot-root-options-snapshot-serializer)
 - **In Playwright** → [the `attach()` adapter](/packages/testing/playwright)
-- **In CI** → the [CI Diff Bot recipe](/guide/ci-diff-bot) posts tree diffs on every PR
+- **In CI** → the [CI Diff Bot recipe](/guide/ci-diff-bot) posts findings-aware diffs on every PR
 - **Comparing it to axe, visual testing, or Playwright?** → [How Accessibility Snapshots Compare](/guide/accessibility-snapshots-comparisons)
