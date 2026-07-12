@@ -17,5 +17,7 @@ playwright-report/
 # storybook build output (per-package)
 storybook-static/
 
-# Claude Code project settings (user-specific)
-.claude/
+# Claude Code settings stay user-specific (launch.json, settings.local.json),
+# but committed skills under .claude/skills/ are shared with the team.
+.claude/*
+!.claude/skills/
