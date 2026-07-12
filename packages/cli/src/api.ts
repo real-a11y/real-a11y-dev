@@ -23,6 +23,17 @@ export {
 } from "./snapshot-artifact.js";
 export type { SnapshotArtifact, SnapshotPage } from "./snapshot-artifact.js";
 
+// Baselines — accept today's debt, gate only what's new. Pure (fs read/serialize
+// helpers take/return data; the CLI owns the file writes).
+export {
+  applyBaseline,
+  BASELINE_SCHEMA_VERSION,
+  buildBaseline,
+  loadBaseline,
+  serializeBaseline,
+} from "./baseline.js";
+export type { Baseline, BaselineEntry, BaselinePage } from "./baseline.js";
+
 // Findings-aware diff.
 export { diffFindings } from "./diff/findings-diff.js";
 export type {

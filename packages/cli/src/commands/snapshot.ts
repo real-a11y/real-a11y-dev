@@ -13,10 +13,24 @@
 
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
+import { resolve } from "node:path";
 
-import { parseOpenOptions, parseRules, type CommandFn } from "../args.js";
+import {
+  parseFailOn,
+  parseOpenOptions,
+  parseRules,
+  type CommandFn,
+} from "../args.js";
+import {
+  applyBaseline,
+  buildBaseline,
+  DEFAULT_BASELINE_PATH,
+  loadBaseline,
+  serializeBaseline,
+  type Baseline,
+} from "../baseline.js";
 import { loadConfig, type ConfigPage } from "../config.js";
-import { CliError, EXIT } from "../exit.js";
+import { CliError, EXIT, exceedsThreshold } from "../exit.js";
 import { fingerprintFindings } from "../fingerprint.js";
 import { progress, writeReport } from "../output.js";
 import { renderSnapshotMarkdown } from "../render/md.js";
@@ -108,6 +122,10 @@ export const snapshotCommand: CommandFn = async (positionals, flags) => {
       ? flags.output
       : process.env.A11Y_SNAPSHOT_OUT;
   const quiet = flags.quiet === true;
+  const failOn = parseFailOn(flags["fail-on"], "never");
+  const baselinePath =
+    typeof flags.baseline === "string" ? flags.baseline : undefined;
+  const updateBaseline = flags["update-baseline"] === true;
 
   // Normalize + gate every target up front (config-sourced → the stricter gate).
   const targets: (Target & { page: ConfigPage })[] = configPages.map((page) => {
@@ -162,6 +180,46 @@ export const snapshotCommand: CommandFn = async (positionals, flags) => {
     await session.close();
   }
 
+  const baselinePages = snapshotPages.map((p) => ({
+    name: p.name,
+    findings: p.findings,
+  }));
+
+  // --update-baseline: accept the current state as the new baseline and stop —
+  // it writes the baseline file (not the artifact) and never gates.
+  if (updateBaseline) {
+    const writePath = baselinePath ?? DEFAULT_BASELINE_PATH;
+    let old: Baseline | undefined;
+    if (existsSync(resolve(writePath))) old = loadBaseline(writePath);
+    const { baseline, added, removed } = buildBaseline(baselinePages, old);
+    writeReport(writePath, serializeBaseline(baseline));
+    process.stderr.write(
+      `baseline ${writePath}: +${added} new, -${removed} stale\n`,
+    );
+    return snapshotPages.some((p) => p.status === "error")
+      ? EXIT.ERROR
+      : EXIT.OK;
+  }
+
+  // --baseline: suppress accepted findings (kept in the artifact, out of the
+  // gate) and warn about entries that no longer match.
+  if (baselinePath) {
+    const { suppressed, stale } = applyBaseline(
+      baselinePages,
+      loadBaseline(baselinePath),
+    );
+    if (suppressed > 0 && !quiet) {
+      process.stderr.write(`baseline: ${suppressed} finding(s) suppressed\n`);
+    }
+    if (stale.length > 0) {
+      process.stderr.write(
+        `real-a11y: warning: ${stale.length} baseline entr${
+          stale.length === 1 ? "y no longer matches" : "ies no longer match"
+        } — run --update-baseline to prune\n`,
+      );
+    }
+  }
+
   const artifact = buildArtifact(snapshotPages, {
     toolName: "@real-a11y-dev/cli",
     toolVersion: toolVersion(),
@@ -173,5 +231,9 @@ export const snapshotCommand: CommandFn = async (positionals, flags) => {
     asMarkdown ? renderSnapshotMarkdown(artifact) : serializeArtifact(artifact),
   );
 
-  return snapshotPages.some((p) => p.status === "error") ? EXIT.ERROR : EXIT.OK;
+  if (snapshotPages.some((p) => p.status === "error")) return EXIT.ERROR;
+  const active = snapshotPages
+    .flatMap((p) => p.findings)
+    .filter((f) => !f.suppressed);
+  return exceedsThreshold(active, failOn) ? EXIT.FINDINGS : EXIT.OK;
 };

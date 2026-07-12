@@ -85,6 +85,9 @@ const SNAPSHOT_FLAGS: Options = {
   config: { type: "string" },
   "no-config": { type: "boolean" },
   md: { type: "boolean" },
+  baseline: { type: "string" },
+  "update-baseline": { type: "boolean" },
+  "fail-on": { type: "string" },
   output: { type: "string", short: "o" },
   quiet: { type: "boolean", short: "q" },
   verbose: { type: "boolean" },
@@ -265,15 +268,26 @@ Pages come from A11Y_PAGES (JSON [{name,url}]) if set, else a11y.config.json
 (--config <file>, or auto-discovered). Output goes to --output, else
 A11Y_SNAPSHOT_OUT, else stdout.
 
+Adopt the gate on an existing codebase: --update-baseline records today's
+findings, then --baseline suppresses them so only NEW findings fail --fail-on.
+
 Examples:
   real-a11y snapshot --output base.json
   real-a11y snapshot --config a11y.config.json --md -o report.md
+  real-a11y snapshot --config a11y.config.json --update-baseline
+  real-a11y snapshot --config a11y.config.json --baseline .a11y-baseline.json --fail-on error
 
 Flags:
   --config <file>        Page list + policy (default: ./a11y.config.json)
   --no-config            Ignore an auto-discovered config
   --md                   Render a human markdown report instead of JSON
   --rules <ids>          Comma-separated subset (overrides config)
+  --baseline <file>      Suppress findings this baseline accepts (kept in the
+                         report, out of the --fail-on count)
+  --update-baseline      Rewrite the baseline from the current findings, then
+                         stop (writes .a11y-baseline.json, or --baseline's path)
+  --fail-on <level>      Gate on unsuppressed findings: error | warning | never
+                         (default: never — snapshot just writes the artifact)
   -o, --output <file>    Where to write (default: A11Y_SNAPSHOT_OUT or stdout)
 ${SHARED_FLAG_HELP}
 `,

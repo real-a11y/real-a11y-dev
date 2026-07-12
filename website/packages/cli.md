@@ -124,6 +124,33 @@ new / changed / fixed violation is. Pre-existing debt never blocks a PR
 (REMOVED and CHANGED don't gate), and the config is strict and fail-closed — a
 typo'd key is an error, so a mistake can't silently un-gate CI.
 
+## Adopt the gate on existing debt
+
+Most real codebases have accessibility findings *today* — which usually means
+the gate stays off. Baselines fix that: accept the current state once, then
+fail only on findings that are genuinely **new**.
+
+```sh
+# 1. Accept today's findings (commit the file it writes):
+real-a11y snapshot --config a11y.config.json --update-baseline
+
+# 2. Gate every run on NEW findings only:
+real-a11y snapshot --config a11y.config.json \
+  --baseline .a11y-baseline.json --fail-on error
+```
+
+Three properties make this safe to rely on:
+
+- **Report truth, gate policy.** Suppressed findings stay in every report
+  (marked `"suppressed": true` in JSON) — the baseline changes what fails the
+  build, never what you can see.
+- **Identity-matched, not string-matched.** The baseline uses the same two-tier
+  matcher as `diff`, so a renumbered `:nth-of-type` locator or a re-indented
+  subtree doesn't silently un-suppress a finding you'd already accepted.
+- **Stale entries warn, never fail.** When a baselined finding is fixed, you get
+  a stderr warning; `--update-baseline` prunes it — and carries forward any
+  `note` fields you've added to entries (e.g. a ticket link) that still match.
+
 ## Global flags
 
 | Flag | Effect |
@@ -134,7 +161,8 @@ typo'd key is an error, so a mistake can't silently un-gate CI.
 | `--wait-until <state>` / `--settle <ms>` | Settle dynamic pages before extraction (`load` \| `domcontentloaded` \| `networkidle` \| `commit`). |
 | `--timeout <ms>` | Navigation timeout (default `30000`). |
 | `--rules <ids>` | Comma-separated subset of the five rules (`audit`/`inspect`/`snapshot`). |
-| `--fail-on <level>` | `error` \| `warning` \| `never` — the gate threshold (default `error`), on `audit`/`inspect`/`diff`. View commands aren't gates: they always exit `0`. |
+| `--fail-on <level>` | `error` \| `warning` \| `never` — the gate threshold (default `error`), on `audit`/`inspect`/`diff`, and on `snapshot` (default `never` there). View commands aren't gates: they always exit `0`. |
+| `--baseline <file>` / `--update-baseline` | Suppress accepted findings / rewrite the baseline from the current run (`snapshot` — see [Adopt the gate on existing debt](#adopt-the-gate-on-existing-debt)). |
 | `-f, --format <fmt>` | `pretty` (default) or `json`; `diff` also takes `md` (`pretty` \| `json` \| `md`). Never auto-switched — piping only drops color. |
 | `-o, --output <file>` | Write the report to a file (progress stays on stderr). |
 | `--storage-state <file>` / `--audit-origin <origin>` | Audit as a saved login session (see [Authenticated pages](/guide/authenticated-pages)). |
