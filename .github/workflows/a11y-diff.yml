@@ -153,20 +153,44 @@ jobs:
             const s = result.summary;
             const findingChanges = s.new + s.changed + s.removed;
 
-            // Advisory structural drift: which views gained/lost lines per page.
-            const structRows = [];
+            // Advisory structural drift, with the ACTUAL lines, collapsed per
+            // page. Drop the "Last updated" footer timestamp: it renders
+            // differently between the base and PR checkouts (shallow clone), so
+            // it would otherwise show a phantom +1/-1 on every unchanged page.
+            const VOLATILE = /^\s*time "/;
+            const CAP = 25;
+            const clean = (arr) => (arr ?? []).filter((l) => !VOLATILE.test(l));
+
+            const structBlocks = [];
             for (const page of result.pages) {
-              const bits = [];
-              for (const view of ['tree', 'outline', 'tabs']) {
-                const v = page.views?.[view] ?? { added: [], removed: [] };
-                if (v.added.length || v.removed.length) {
-                  bits.push(`${view} +${v.added.length}/-${v.removed.length}`);
-                }
-              }
-              if (bits.length) structRows.push(`- **${page.name}** — ${bits.join(', ')}`);
+              const views = ['tree', 'outline', 'tabs']
+                .map((name) => {
+                  const v = page.views?.[name] ?? {};
+                  return { name, added: clean(v.added), removed: clean(v.removed) };
+                })
+                .filter((v) => v.added.length || v.removed.length);
+              if (!views.length) continue;
+
+              const summary = views
+                .map((v) => `${v.name} +${v.added.length}/-${v.removed.length}`)
+                .join(' · ');
+              const diffs = views
+                .map((v) => {
+                  const shown = [
+                    ...v.removed.slice(0, CAP).map((l) => `- ${l}`),
+                    ...v.added.slice(0, CAP).map((l) => `+ ${l}`),
+                  ];
+                  const hidden = v.added.length + v.removed.length - shown.length;
+                  const more = hidden > 0 ? `\n… ${hidden} more line(s)` : '';
+                  return '**' + v.name + '**\n```diff\n' + shown.join('\n') + more + '\n```';
+                })
+                .join('\n\n');
+              structBlocks.push(
+                `<details>\n<summary><b>${page.name}</b> — ${summary}</summary>\n\n${diffs}\n\n</details>`,
+              );
             }
 
-            const anyChange = findingChanges > 0 || structRows.length > 0;
+            const anyChange = findingChanges > 0 || structBlocks.length > 0;
 
             let body;
             if (!anyChange) {
@@ -180,8 +204,15 @@ jobs:
               ].join('\n');
             } else {
               const parts = [MARKER, md, ''];
-              if (structRows.length) {
-                parts.push('#### Structural changes (advisory)', '', ...structRows, '');
+              if (structBlocks.length) {
+                parts.push(
+                  '#### Structural changes (advisory)',
+                  '',
+                  'The semantic tree / outline / tab order moved — review to confirm the change is intentional. Expand a page for the exact lines.',
+                  '',
+                  ...structBlocks,
+                  '',
+                );
               }
               parts.push(FOOTER);
               body = parts.join('\n');
