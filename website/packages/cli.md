@@ -151,6 +151,9 @@ Three properties make this safe to rely on:
   a stderr warning; `--update-baseline` prunes it — and carries forward any
   `note` fields you've added to entries (e.g. a ticket link) that still match.
 
+`diff` takes `--baseline` too: a NEW finding the baseline accepts is reported as
+`new (baselined)` but never gates.
+
 ## Global flags
 
 | Flag | Effect |
@@ -162,8 +165,8 @@ Three properties make this safe to rely on:
 | `--timeout <ms>` | Navigation timeout (default `30000`). |
 | `--rules <ids>` | Comma-separated subset of the five rules (`audit`/`inspect`/`snapshot`). |
 | `--fail-on <level>` | `error` \| `warning` \| `never` — the gate threshold (default `error`), on `audit`/`inspect`/`diff`, and on `snapshot` (default `never` there). View commands aren't gates: they always exit `0`. |
-| `--baseline <file>` / `--update-baseline` | Suppress accepted findings / rewrite the baseline from the current run (`snapshot` — see [Adopt the gate on existing debt](#adopt-the-gate-on-existing-debt)). |
-| `-f, --format <fmt>` | `pretty` (default) or `json`; `diff` also takes `md` (`pretty` \| `json` \| `md`). Never auto-switched — piping only drops color. |
+| `--baseline <file>` / `--update-baseline` | Suppress accepted findings / rewrite the baseline from the current run (`snapshot` and `diff` — see [Adopt the gate on existing debt](#adopt-the-gate-on-existing-debt)). |
+| `-f, --format <fmt>` | `pretty` (default) or `json`; `diff` also takes `md`; `snapshot` takes `json` (default) \| `md` \| `sarif` \| `junit` \| `jsonl` (see [SARIF, JUnit, JSONL](#sarif-junit-jsonl)). Never auto-switched — piping only drops color. |
 | `-o, --output <file>` | Write the report to a file (progress stays on stderr). |
 | `--storage-state <file>` / `--audit-origin <origin>` | Audit as a saved login session (see [Authenticated pages](/guide/authenticated-pages)). |
 | `--cdp <endpoint>` | Attach to a running Chrome instead of launching one. |
@@ -195,6 +198,29 @@ multi-page, so scripts always read `.pages[0].…`:
 Each finding carries a stable `v1:` **fingerprint** — an identity robust to
 unrelated DOM churn, so a report can be diffed run-to-run without every
 re-indent reading as a change.
+
+### SARIF, JUnit, JSONL
+
+`snapshot --format` also speaks the CI interop formats:
+
+| Format | Feeds | Notes |
+| --- | --- | --- |
+| `sarif` | GitHub code scanning (Security tab), Azure DevOps, the VS Code SARIF viewer | Requires `--config` — GitHub only displays results anchored to repo **file paths**, so each result anchors to the page's `sourcePath` (declare it per page in the config) or the config file itself. Alert identity is the `v1:` fingerprint, so alerts don't churn on unrelated edits. Baseline-suppressed findings are excluded (GitHub ignores SARIF suppressions). |
+| `junit` | Jenkins, GitLab, Azure DevOps "Publish Test Results", CircleCI | One suite per page, one failing case per finding; baselined findings show as `skipped`; a clean page emits one passing case. |
+| `jsonl` | `jq` / grep pipelines, log ingesters | One finding per line, no framing records. Suppressed findings are flagged — filter with `jq 'select(.suppressed \| not)'`. |
+
+Wire SARIF into GitHub code scanning in two steps:
+
+```yaml
+- run: npx real-a11y snapshot --config a11y.config.json -f sarif -o a11y.sarif
+- uses: github/codeql-action/upload-sarif@v4
+  with:
+    sarif_file: a11y.sarif
+```
+
+Findings then appear as alerts in the repository's **Security** tab, tracked
+across runs by fingerprint. (Alerts on private repos need GitHub Advanced
+Security; public repos get them free.)
 
 ### Exit codes
 

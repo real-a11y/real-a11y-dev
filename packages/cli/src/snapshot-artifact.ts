@@ -19,6 +19,9 @@ export interface SnapshotPage {
   name: string;
   url: string;
   root: string;
+  /** Repo-relative source file for this page (from the config) — the SARIF
+   *  anchor. Absent when the config doesn't declare one. */
+  sourcePath?: string;
   status: "ok" | "error";
   /** Present (sanitized) when status is "error"; the page is incomparable. */
   error?: string;

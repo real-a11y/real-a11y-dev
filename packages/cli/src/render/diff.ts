@@ -74,8 +74,9 @@ export function renderDiffPretty(
     for (const e of shown) {
       const f = e.finding;
       if (e.kind === "new") {
-        const tag =
-          f.severity === "error"
+        const tag = f.suppressed
+          ? c.dim("+ new [baselined]")
+          : f.severity === "error"
             ? c.red("+ new [error]")
             : c.yellow("+ new [warning]");
         lines.push(`  ${tag} ${f.rule}: ${f.message}`);
@@ -157,7 +158,11 @@ export function renderDiffMarkdown(result: DiffResult): string {
     for (const e of shown) {
       const f = e.finding;
       if (e.kind === "new")
-        out.push(`- ❌ **new** \`${f.rule}\`: ${f.message}`);
+        out.push(
+          f.suppressed
+            ? `- ⚪ **new (baselined)** \`${f.rule}\`: ${f.message}`
+            : `- ❌ **new** \`${f.rule}\`: ${f.message}`,
+        );
       else if (e.kind === "changed")
         out.push(
           `- 🔁 **changed** \`${f.rule}\`: ${(e.changes ?? []).join("; ")}`,

@@ -59,5 +59,11 @@ export type { FailOn } from "./exit.js";
 export { JSON_SCHEMA_VERSION, renderJson, summarize } from "./render/json.js";
 export type { PageReport, Summary } from "./render/json.js";
 
+// Interop reporters — pure renderings of a snapshot artifact.
+export { renderSarif } from "./render/sarif.js";
+export type { SarifContext } from "./render/sarif.js";
+export { renderJUnit } from "./render/junit.js";
+export { renderJsonl } from "./render/jsonl.js";
+
 export { ALL_RULES } from "@real-a11y-dev/testing";
 export type { A11yRule, Finding } from "@real-a11y-dev/testing";

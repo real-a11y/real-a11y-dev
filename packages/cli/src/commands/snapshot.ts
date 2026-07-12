@@ -17,6 +17,7 @@ import { resolve } from "node:path";
 
 import {
   parseFailOn,
+  parseFormat,
   parseOpenOptions,
   parseRules,
   type CommandFn,
@@ -33,7 +34,10 @@ import { loadConfig, type ConfigPage } from "../config.js";
 import { CliError, EXIT, exceedsThreshold } from "../exit.js";
 import { fingerprintFindings } from "../fingerprint.js";
 import { progress, writeReport } from "../output.js";
+import { renderJsonl } from "../render/jsonl.js";
+import { renderJUnit } from "../render/junit.js";
 import { renderSnapshotMarkdown } from "../render/md.js";
+import { renderSarif } from "../render/sarif.js";
 import { redactUrl } from "../sanitize.js";
 import { createSession, openPage, snapshotPage } from "../session.js";
 import {
@@ -54,11 +58,14 @@ function toolVersion(): string {
   }
 }
 
-/** Pages from A11Y_PAGES env (diff-bot compat) if set, else the config file. */
+/** Pages from A11Y_PAGES env (diff-bot compat) if set, else the config file.
+ *  `configPath` (absolute) is set only on the config path — `sarif` anchors
+ *  its results to it. */
 function resolvePages(flags: Record<string, string | boolean | undefined>): {
   pages: ConfigPage[];
   rules?: string[];
   device?: string;
+  configPath?: string;
 } {
   const env = process.env.A11Y_PAGES;
   if (env) {
@@ -98,8 +105,16 @@ function resolvePages(flags: Record<string, string | boolean | undefined>): {
     );
   }
   const config = loadConfig(configPath);
-  return { pages: config.pages, rules: config.rules, device: config.device };
+  return {
+    pages: config.pages,
+    rules: config.rules,
+    device: config.device,
+    configPath: resolve(configPath),
+  };
 }
+
+const SNAPSHOT_FORMATS = ["json", "md", "sarif", "junit", "jsonl"] as const;
+type SnapshotFormat = (typeof SNAPSHOT_FORMATS)[number];
 
 export const snapshotCommand: CommandFn = async (positionals, flags) => {
   if (positionals.length > 0) {
@@ -111,12 +126,28 @@ export const snapshotCommand: CommandFn = async (positionals, flags) => {
     pages: configPages,
     rules: configRules,
     device: configDevice,
+    configPath,
   } = resolvePages(flags);
   const flagRules = parseRules(flags.rules);
   const rules = flagRules ?? (configRules as ReturnType<typeof parseRules>);
   const openOptions = parseOpenOptions(flags);
   if (configDevice && !openOptions.device) openOptions.device = configDevice;
-  const asMarkdown = flags.md === true;
+  // `--md` predates `--format` here and stays as an alias for `--format md`.
+  const format = parseFormat(flags.format, SNAPSHOT_FORMATS);
+  if (flags.md === true && flags.format !== undefined && format !== "md") {
+    throw new CliError(
+      `--md conflicts with --format ${format} — pick one`,
+      "(--md is shorthand for --format md)",
+    );
+  }
+  const effectiveFormat: SnapshotFormat =
+    flags.md === true && flags.format === undefined ? "md" : format;
+  if (effectiveFormat === "sarif" && !configPath) {
+    throw new CliError(
+      "--format sarif needs a config file — SARIF results anchor to repo file paths, and the config (or its pages' sourcePath) is that anchor",
+      "run with --config a11y.config.json instead of A11Y_PAGES",
+    );
+  }
   const output =
     typeof flags.output === "string"
       ? flags.output
@@ -155,6 +186,9 @@ export const snapshotCommand: CommandFn = async (positionals, flags) => {
           name: target.name,
           url: redactUrl(target.url),
           root,
+          ...(target.page.sourcePath
+            ? { sourcePath: target.page.sourcePath }
+            : {}),
           status: "ok",
           findings: fingerprintFindings(target.name, snap.findings),
           tree: snap.tree,
@@ -226,10 +260,17 @@ export const snapshotCommand: CommandFn = async (positionals, flags) => {
     ...(rules ? { rules } : {}),
     ...(openOptions.device ? { device: openOptions.device } : {}),
   });
-  writeReport(
-    output,
-    asMarkdown ? renderSnapshotMarkdown(artifact) : serializeArtifact(artifact),
-  );
+  const content =
+    effectiveFormat === "md"
+      ? renderSnapshotMarkdown(artifact)
+      : effectiveFormat === "sarif"
+        ? renderSarif(artifact, { configPath: configPath as string })
+        : effectiveFormat === "junit"
+          ? renderJUnit(artifact)
+          : effectiveFormat === "jsonl"
+            ? renderJsonl(artifact)
+            : serializeArtifact(artifact);
+  writeReport(output, content);
 
   if (snapshotPages.some((p) => p.status === "error")) return EXIT.ERROR;
   const active = snapshotPages

@@ -85,6 +85,7 @@ const SNAPSHOT_FLAGS: Options = {
   config: { type: "string" },
   "no-config": { type: "boolean" },
   md: { type: "boolean" },
+  format: { type: "string", short: "f" },
   baseline: { type: "string" },
   "update-baseline": { type: "boolean" },
   "fail-on": { type: "string" },
@@ -97,6 +98,7 @@ const SNAPSHOT_FLAGS: Options = {
 // diff is pure — two JSON files in, no browser, so no browser flags.
 const DIFF_FLAGS: Options = {
   "fail-on": { type: "string" },
+  baseline: { type: "string" },
   format: { type: "string", short: "f" },
   output: { type: "string", short: "o" },
   quiet: { type: "boolean", short: "q" },
@@ -280,10 +282,13 @@ Examples:
 Flags:
   --config <file>        Page list + policy (default: ./a11y.config.json)
   --no-config            Ignore an auto-discovered config
-  --md                   Render a human markdown report instead of JSON
+  -f, --format <fmt>     json | md | sarif | junit | jsonl   (default: json)
+                         sarif needs --config (results anchor to file paths;
+                         GitHub: upload with codeql-action/upload-sarif@v4)
+  --md                   Shorthand for --format md
   --rules <ids>          Comma-separated subset (overrides config)
   --baseline <file>      Suppress findings this baseline accepts (kept in the
-                         report, out of the --fail-on count)
+                         report, out of the --fail-on count and sarif)
   --update-baseline      Rewrite the baseline from the current findings, then
                          stop (writes .a11y-baseline.json, or --baseline's path)
   --fail-on <level>      Gate on unsuppressed findings: error | warning | never
@@ -309,6 +314,8 @@ Examples:
 
 Flags:
   --fail-on <level>      error | warning | never          (default: error)
+  --baseline <file>      NEW findings this baseline accepts don't gate
+                         (they stay in the report, marked suppressed)
   -f, --format <fmt>     pretty | json | md               (default: pretty)
   -o, --output <file>    Write the report to a file
   -q, --quiet            Suppress progress
