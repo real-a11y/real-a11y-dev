@@ -60,6 +60,8 @@ opt out.
 | `outline <url>` | Heading outline |
 | `tabs <url>` | Focusable elements in Tab order |
 | `list <cat> <url>` | One category: heading, link, button, form, landmark, image |
+| `snapshot` | Audit a page set → one diffable JSON artifact (or `--md`) |
+| `diff <base> <pr>` | Findings-aware diff of two snapshots — new / changed / fixed |
 
 Every command takes `--format json` for a stable machine envelope
 (`schemaVersion: 1`, `pages[].findings[]` with stable `v1:` fingerprints),
@@ -68,6 +70,25 @@ see `real-a11y <command> --help`.
 
 Local builds audit directly: `real-a11y audit ./dist/index.html` (paths you
 type need no ceremony).
+
+## Track regressions across a PR
+
+`snapshot` writes a diffable artifact of a whole page set; `diff` compares two
+and fails the build only on **new** findings — so pre-existing debt doesn't
+block, and a fix or unrelated DOM churn never reads as a regression:
+
+```sh
+# on the base branch, and again on the PR:
+real-a11y snapshot --config a11y.config.json -o base.json
+real-a11y snapshot --config a11y.config.json -o pr.json
+real-a11y diff base.json pr.json            # exit 1 only on NEW findings
+real-a11y diff base.json pr.json -f md      # a PR-comment-ready summary
+```
+
+The pages live in `a11y.config.json` (`{ "pages": [{ "name", "url" }] }`), so
+your policy is in your repo, not a copy-pasted script. The diff is
+finding-identity-aware: a renumbered `:nth-of-type` locator or a re-indented
+subtree is not a change — only an actual new/changed/fixed violation is.
 
 ## Pages behind a login
 

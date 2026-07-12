@@ -28,6 +28,59 @@ const DOC_RULES: ReadonlySet<string> = new Set([
   "landmark-structure",
 ]);
 
+/** True when a rule's findings describe the document (no node/locator). */
+export function isDocScopedRule(rule: string): boolean {
+  return DOC_RULES.has(rule);
+}
+
+/**
+ * The identity components a fingerprint was built from, as named fields —
+ * so the diff matcher reads `anchor`/`occ` instead of magic tuple indices.
+ * Derived from the finding's fields (same derivation the fingerprint uses),
+ * not by re-parsing the `id` tuple, so the two can't drift.
+ */
+export interface FindingComponents {
+  docScoped: boolean;
+  occ: number;
+  // node-scoped
+  role: string;
+  tagName: string;
+  anchor: string;
+  context: string;
+  // doc-scoped
+  kind: string;
+  name: string;
+}
+
+export function componentsOf(finding: FingerprintedFinding): FindingComponents {
+  const occ = finding.id[finding.id.length - 1];
+  const base = {
+    occ: typeof occ === "number" ? occ : 0,
+    role: "",
+    tagName: "",
+    anchor: "",
+    context: "",
+    kind: "",
+    name: "",
+  };
+  if (isDocScopedRule(finding.rule)) {
+    return {
+      ...base,
+      docScoped: true,
+      kind: docKind(finding),
+      name: finding.name ?? "",
+    };
+  }
+  return {
+    ...base,
+    docScoped: false,
+    role: finding.role ?? "",
+    tagName: finding.tagName ?? "",
+    anchor: anchorOf(finding.locator),
+    context: contextOf(finding.context),
+  };
+}
+
 /**
  * Classify a doc-level finding by its (fixed) message template, so counts and
  * names embedded in the text stay out of the identity — "found 2 → found 3"

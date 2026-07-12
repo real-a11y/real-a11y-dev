@@ -77,6 +77,30 @@ const LOGIN_FLAGS: Options = {
   help: { type: "boolean", short: "h" },
 };
 
+// snapshot audits a config-/env-supplied page set and writes the JSON artifact.
+const SNAPSHOT_FLAGS: Options = {
+  ...BROWSER_FLAGS,
+  "include-generic": { type: "boolean" },
+  rules: { type: "string" },
+  config: { type: "string" },
+  "no-config": { type: "boolean" },
+  md: { type: "boolean" },
+  output: { type: "string", short: "o" },
+  quiet: { type: "boolean", short: "q" },
+  verbose: { type: "boolean" },
+  help: { type: "boolean", short: "h" },
+};
+
+// diff is pure — two JSON files in, no browser, so no browser flags.
+const DIFF_FLAGS: Options = {
+  "fail-on": { type: "string" },
+  format: { type: "string", short: "f" },
+  output: { type: "string", short: "o" },
+  quiet: { type: "boolean", short: "q" },
+  verbose: { type: "boolean" },
+  help: { type: "boolean", short: "h" },
+};
+
 export const LIST_CATEGORIES = [
   "heading",
   "link",
@@ -228,14 +252,69 @@ Flags:
 `,
     load: async () => (await import("./commands/login.js")).loginCommand,
   },
+  snapshot: {
+    summary: "Audit a page set → a diffable JSON artifact",
+    options: SNAPSHOT_FLAGS,
+    help: `Usage: real-a11y snapshot [flags]
+
+Audit every page in a11y.config.json (or A11Y_PAGES) and write ONE JSON
+artifact — findings (with stable fingerprints) plus the tree/outline/tabs
+views per page. That artifact is the input to 'real-a11y diff'.
+
+Pages come from A11Y_PAGES (JSON [{name,url}]) if set, else a11y.config.json
+(--config <file>, or auto-discovered). Output goes to --output, else
+A11Y_SNAPSHOT_OUT, else stdout.
+
+Examples:
+  real-a11y snapshot --output base.json
+  real-a11y snapshot --config a11y.config.json --md -o report.md
+
+Flags:
+  --config <file>        Page list + policy (default: ./a11y.config.json)
+  --no-config            Ignore an auto-discovered config
+  --md                   Render a human markdown report instead of JSON
+  --rules <ids>          Comma-separated subset (overrides config)
+  -o, --output <file>    Where to write (default: A11Y_SNAPSHOT_OUT or stdout)
+${SHARED_FLAG_HELP}
+`,
+    load: async () => (await import("./commands/snapshot.js")).snapshotCommand,
+  },
+  diff: {
+    summary: "Findings-aware diff of two snapshot artifacts",
+    options: DIFF_FLAGS,
+    help: `Usage: real-a11y diff <base.json> <pr.json> [flags]
+
+Classify the findings in two snapshot artifacts as new / changed / fixed —
+robust to DOM churn (re-indentation, renumbered locators) that defeats a line
+diff. Pure: no browser. Exits 1 only on NEW findings at/above --fail-on;
+fixes and drift never fail the build.
+
+Examples:
+  real-a11y diff base.json pr.json
+  real-a11y diff base.json pr.json --format md -o comment.md
+
+Flags:
+  --fail-on <level>      error | warning | never          (default: error)
+  -f, --format <fmt>     pretty | json | md               (default: pretty)
+  -o, --output <file>    Write the report to a file
+  -q, --quiet            Suppress progress
+`,
+    load: async () => (await import("./commands/diff.js")).diffCommand,
+  },
+};
+
+const USAGE: Record<string, string> = {
+  audit: "audit <url...>",
+  list: "list <cat> <url>",
+  login: "login <url> --save",
+  snapshot: "snapshot",
+  diff: "diff <base> <pr>",
 };
 
 export function rootHelp(): string {
   const lines = Object.entries(COMMANDS).map(
     ([name, spec]) =>
-      `  ${name === "list" ? "list <cat> <url>" : `${name} <url${name === "audit" ? "..." : ""}>`}`.padEnd(
-        21,
-      ) + spec.summary,
+      `  ${USAGE[name] ?? `${name} <url>`}`.padEnd(21) + spec.summary,
   );
   return `real-a11y — audit what a screen reader hears, from your shell
 

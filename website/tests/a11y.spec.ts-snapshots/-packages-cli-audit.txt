@@ -88,6 +88,8 @@
       listitem
         link "Commands"
       listitem
+        link "Track regressions across a PR"
+      listitem
         link "Global flags"
       listitem
         link "Machine output"
@@ -184,6 +186,17 @@
             code "landmark"
             code "image"
         row
+          cell "snapshot"
+            code "snapshot"
+          cell "Audit a page set (from a11y.config.json or A11Y_PAGES) → one diffable JSON artifact, or --md for a human report."
+            code "a11y.config.json"
+            code "A11Y_PAGES"
+            code "--md"
+        row
+          cell "diff <base> <pr>"
+            code "diff <base> <pr>"
+          cell "Findings-aware diff of two snapshot artifacts — new / changed / fixed. Pure (no browser). See below."
+        row
           cell "login <url> --save <file>"
             code "login <url> --save <file>"
           cell "Save a login session for --storage-state audits (see Authenticated pages )."
@@ -191,6 +204,20 @@
             link "Authenticated pages"
     paragraph "Run for a command's flags."
       code "real-a11y <command> --help"
+    heading "Track regressions across a PR" (level 2)
+    paragraph "The flagship CI feature: snapshot a whole page set into a diffable artifact, then diff two of them and fail the build only on findings."
+      strong "new"
+    button "Copy Code"
+      code
+    paragraph "Pages live in — your policy in your repo:"
+      code "a11y.config.json"
+    button "Copy Code"
+      code
+    paragraph "The diff is , not a line diff: each finding carries a stable fingerprint, so a renumbered locator, a re-indented subtree, or an inserted sibling is a change — only an actual new / changed / fixed violation is. Pre-existing debt never blocks a PR (REMOVED and CHANGED don't gate), and the config is strict and fail-closed — a typo'd key is an error, so a mistake can't silently un-gate CI."
+      strong "finding-identity-aware"
+      code "v1:"
+      code ":nth-of-type"
+      strong "not"
     heading "Global flags" (level 2)
     table
       rowgroup
@@ -331,8 +358,10 @@
       listitem "Five rules today — unlabeled interactive elements, images missing alt text, heading order, dialog labeling, and landmark structure — plus the full semantic tree. It is not a complete WCAG or axe-core suite; it is semantic-tree-based and tuned to "what a screen reader announces." Pair it with for contrast, focus visibility, and other rendered checks."
         strong "Scope."
         link "axe-core"
-      listitem "You name the pages (arguments today; a config file is planned) — there is no link discovery."
+      listitem "You name the pages (as arguments, or in for ) — there is no link discovery."
         strong "Not a crawler."
+        code "a11y.config.json"
+        code "snapshot"
       listitem "Playwright + Chromium must be installable."
         strong "Requires a real browser."
     heading "See also" (level 2)
