@@ -79,8 +79,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test --config=playwright.config.ts",
-    "snapshot": "node scripts/snapshot.mjs"
+    "test:e2e": "playwright test --config=playwright.config.ts"
   },
   "dependencies": {
     "@real-a11y-dev/core": "workspace:*",

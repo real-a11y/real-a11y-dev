@@ -1,27 +1,44 @@
 name: A11y Tree Diff
 
-# Posts a PR comment when the accessibility tree of any audited page changes.
-# Two snapshot jobs run in parallel (base branch + PR branch); a third job
-# diffs the outputs and either posts or updates a single sticky comment.
+# Dogfood: audit the repo's own fixtures with `real-a11y snapshot` on both the
+# base branch and the PR, then `real-a11y diff` the two artifacts and post a
+# single sticky comment. Findings-aware (a new/changed/fixed violation, not a
+# raw line diff) plus an advisory structural view diff — so an engine change
+# that reshapes the tree still shows up.
 #
-# The comment is updated on every new push — not spammed with duplicates.
+# The comment is updated in place on every push, never spammed.
 
 on:
   pull_request:
     branches: [main]
-    # Only run when source files change — skip pure-docs, config, etc.
+    # Only run when something that can change the a11y tree changes.
     paths:
       - "packages/core/src/**"
+      - "packages/serialize/src/**"
       - "packages/testing/src/**"
       - "packages/testing/e2e/fixture*.html"
-      - "packages/testing/scripts/**"
+      - ".github/workflows/a11y-diff.yml"
 
 permissions:
   contents: read
-  pull-requests: write # needed to post/update PR comments
+  pull-requests: write # post/update the sticky comment
+
+# One run per PR ref — a quick second push cancels the first so two jobs can't
+# race the find-or-create comment.
+concurrency:
+  group: a11y-diff-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The pages audited on BOTH sides. `name` is the diff's join key, so it must
+  # match across base/PR — which it does, since this list drives both jobs.
+  # Relative paths resolve (and are gated behind --allow-file) against the repo
+  # root, where the snapshot command runs.
+  A11Y_PAGES: '[{"name":"fixture (well-structured)","url":"packages/testing/e2e/fixture.html"},{"name":"fixture-bad (broken)","url":"packages/testing/e2e/fixture-bad.html"}]'
 
 jobs:
-  # ── 1a. Snapshot: base branch (main) ───────────────────────────────────────
+  # ── Snapshot the BASE branch with the BASE engine (so an engine change in the
+  #    PR shows as drift, not just fixture edits) ─────────────────────────────
   snapshot-base:
     name: Snapshot (base)
     runs-on: ubuntu-latest
@@ -30,7 +47,6 @@ jobs:
         with:
           ref: ${{ github.base_ref }}
 
-      # pnpm version is read from `packageManager` in package.json.
       - uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v4
@@ -45,31 +61,25 @@ jobs:
         run: pnpm -r --filter='./packages/*' build
 
       - name: Install Playwright browser
-        run: pnpm --filter @real-a11y-dev/testing exec playwright install chromium --with-deps
+        run: pnpm --filter @real-a11y-dev/cli exec playwright install chromium --with-deps
 
-      - name: Generate a11y snapshots
-        run: pnpm --filter @real-a11y-dev/testing snapshot
-        env:
-          # A11Y_SNAPSHOT_OUT is relative to where the command runs (repo root
-          # when using --filter, but pnpm changes cwd to the package dir).
-          # The script uses `process.cwd()` implicitly — set an absolute path.
-          A11Y_SNAPSHOT_OUT: ${{ github.workspace }}/base-snapshots.md
+      - name: Snapshot base
+        run: node packages/cli/dist/index.js snapshot --allow-file -o base.json
 
       - uses: actions/upload-artifact@v4
         with:
-          name: base-snapshots
-          path: base-snapshots.md
+          name: base-snapshot
+          path: base.json
           if-no-files-found: error
 
-  # ── 1b. Snapshot: PR branch (head) ─────────────────────────────────────────
-  snapshot-pr:
-    name: Snapshot (PR)
+  # ── Snapshot the PR with the PR engine, diff against base, comment ──────────
+  audit-pr:
+    name: Audit PR & comment
+    needs: [snapshot-base]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        # Default checkout = PR head — no ref needed
 
-      # pnpm version is read from `packageManager` in package.json.
       - uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v4
@@ -84,155 +94,99 @@ jobs:
         run: pnpm -r --filter='./packages/*' build
 
       - name: Install Playwright browser
-        run: pnpm --filter @real-a11y-dev/testing exec playwright install chromium --with-deps
+        run: pnpm --filter @real-a11y-dev/cli exec playwright install chromium --with-deps
 
-      - name: Generate a11y snapshots
-        run: pnpm --filter @real-a11y-dev/testing snapshot
-        env:
-          A11Y_SNAPSHOT_OUT: ${{ github.workspace }}/pr-snapshots.md
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: pr-snapshots
-          path: pr-snapshots.md
-          if-no-files-found: error
-
-  # ── 2. Diff + post comment ──────────────────────────────────────────────────
-  diff-and-comment:
-    name: Diff & comment
-    needs: [snapshot-base, snapshot-pr]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: base-snapshots
+      - name: Snapshot PR
+        run: node packages/cli/dist/index.js snapshot --allow-file -o pr.json
 
       - uses: actions/download-artifact@v4
         with:
-          name: pr-snapshots
+          name: base-snapshot
 
-      # Produce a unified diff.  Exit code 1 = files differ (expected), 0 = same.
-      # `-F '^## '` (--show-function-line) appends the most-recent page heading
-      # to each hunk header, so reviewers can see *which* audited page changed
-      # without scrolling up to find the section.
-      - name: Compute diff
-        id: diff
+      # Findings-aware diff. `--fail-on never` keeps it advisory — the fixtures
+      # include an intentionally-broken page, so "new findings" isn't a build
+      # failure here. Human (md) + machine (json: findings + structural views).
+      - name: Diff snapshots
         run: |
-          diff --unified=3 -F '^## ' base-snapshots.md pr-snapshots.md > a11y.diff || true
-          echo "has_diff=$([ -s a11y.diff ] && echo true || echo false)" >> $GITHUB_OUTPUT
+          node packages/cli/dist/index.js diff base.json pr.json --format md --fail-on never -o diff.md
+          node packages/cli/dist/index.js diff base.json pr.json --format json --fail-on never -o diff.json
 
-      # Post or update a single sticky comment on the PR.
-      # Uses a <!-- real-a11y-diff --> marker to find and overwrite existing comments.
       - name: Post PR comment
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
-            const hasDiff = '${{ steps.diff.outputs.has_diff }}' === 'true';
             const MARKER = '<!-- real-a11y-diff -->';
+            const FOOTER =
+              '_Powered by [Real A11y](https://real-a11y.dev) — `real-a11y diff`_';
 
-            // Build the comment body
-            let body;
-            if (!hasDiff) {
-              body = [
-                MARKER,
-                '## ✅ A11y tree unchanged',
-                '',
-                'No accessibility tree changes detected in this PR.',
-                '',
-                '_Powered by [Real A11y](https://github.com/real-a11y/real-a11y-dev)_',
-              ].join('\n');
-            } else {
-              const diff = fs.readFileSync('a11y.diff', 'utf8');
+            const md = fs.readFileSync('diff.md', 'utf8').trim();
+            const result = JSON.parse(fs.readFileSync('diff.json', 'utf8'));
+            const s = result.summary;
+            const findingChanges = s.new + s.changed + s.removed;
 
-              // Summarise how many sections changed
-              const added   = (diff.match(/^\+[^+]/gm) || []).length;
-              const removed = (diff.match(/^-[^-]/gm) || []).length;
-              const summary = `${added} line${added !== 1 ? 's' : ''} added, ${removed} removed`;
-
-              // Per-page attribution. The `-F '^## '` flag we passed to diff
-              // appends the most-recent `## page heading` to each hunk header
-              // (e.g. `@@ -16,7 +16,7 @@ ## fixture.html (well-structured)`).
-              // Walk the diff line-by-line, keep track of which page's hunk
-              // we're inside, and tally added/removed lines per page.
-              const HUNK = /^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@ ## (.+)$/;
-              // Pre-seed a synthetic bucket for any +/- line that lands before
-              // the first hunk anchor (shouldn't happen in normal diff output,
-              // but keeps `byPage.get(current)` from being undefined).
-              const byPage = new Map([['(file header)', { added: 0, removed: 0 }]]);
-              let current = '(file header)';
-              for (const line of diff.split('\n')) {
-                const hunk = line.match(HUNK);
-                if (hunk) {
-                  current = hunk[1].trim();
-                  if (!byPage.has(current)) byPage.set(current, { added: 0, removed: 0 });
-                  continue;
+            // Advisory structural drift: which views gained/lost lines per page.
+            const structRows = [];
+            for (const page of result.pages) {
+              const bits = [];
+              for (const view of ['tree', 'outline', 'tabs']) {
+                const v = page.views?.[view] ?? { added: [], removed: [] };
+                if (v.added.length || v.removed.length) {
+                  bits.push(`${view} +${v.added.length}/-${v.removed.length}`);
                 }
-                if (line.startsWith('+++') || line.startsWith('---')) continue;
-                if (line.startsWith('+')) byPage.get(current).added++;
-                else if (line.startsWith('-')) byPage.get(current).removed++;
               }
-              // Drop the synthetic bucket if every diff line was attributed.
-              const fileHeader = byPage.get('(file header)');
-              if (fileHeader && fileHeader.added === 0 && fileHeader.removed === 0) {
-                byPage.delete('(file header)');
-              }
-              const pageRows = [...byPage.entries()].map(([page, { added, removed }]) =>
-                `- **${page}** — ${added} added, ${removed} removed`,
-              );
-
-              // Keep the diff under GitHub's 65 kB comment limit
-              const MAX = 60_000;
-              const diffBlock = diff.length > MAX
-                ? diff.slice(0, MAX) + '\n... (truncated — see artifacts for full diff)'
-                : diff;
-
-              body = [
-                MARKER,
-                '## 🔍 A11y tree changed',
-                '',
-                `**${summary}** — review to confirm changes are intentional.`,
-                '',
-                '**Changed pages:**',
-                '',
-                ...pageRows,
-                '',
-                '<details>',
-                '<summary>Show full diff</summary>',
-                '',
-                // 4-backtick fence: the snapshot file's per-section blocks
-                // (A11y tree, Heading outline, Tab sequence) are 3-backtick
-                // ``` fences. Wrapping the diff in ```diff (3 backticks) lets
-                // those inner closing fences terminate the outer block early —
-                // only the first section ends up `diff`-coloured. 4 backticks
-                // outside, 3 inside, nests cleanly.
-                '````diff',
-                diffBlock,
-                '````',
-                '',
-                '</details>',
-                '',
-                '_Powered by [Real A11y](https://github.com/real-a11y/real-a11y-dev)_',
-              ].join('\n');
+              if (bits.length) structRows.push(`- **${page.name}** — ${bits.join(', ')}`);
             }
 
-            // Find existing comment from a previous push to this PR
+            const anyChange = findingChanges > 0 || structRows.length > 0;
+
+            let body;
+            if (!anyChange) {
+              body = [
+                MARKER,
+                '## ✅ A11y unchanged',
+                '',
+                'No accessibility findings or tree structure changed in this PR.',
+                '',
+                FOOTER,
+              ].join('\n');
+            } else {
+              const parts = [MARKER, md, ''];
+              if (structRows.length) {
+                parts.push('#### Structural changes (advisory)', '', ...structRows, '');
+              }
+              parts.push(FOOTER);
+              body = parts.join('\n');
+              // GitHub caps a comment at 65 536 chars.
+              if (body.length > 60_000) {
+                body = body.slice(0, 60_000) + '\n\n_…truncated — see the job log for the full diff._';
+              }
+            }
+
+            // Sticky comment: match on the marker as the FIRST line AND our own
+            // bot author. `includes()` is hijackable — an accessible name quoting
+            // the marker inside any comment would collide; `startsWith` + author
+            // can't.
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
             });
-            const existing = comments.find(c => c.body?.includes(MARKER));
+            const mine = comments.find(
+              (c) =>
+                c.user?.login === 'github-actions[bot]' &&
+                c.body?.startsWith(MARKER),
+            );
 
-            if (existing) {
+            if (mine) {
               await github.rest.issues.updateComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                comment_id: existing.id,
+                comment_id: mine.id,
                 body,
               });
-              console.log('Updated existing a11y-diff comment:', existing.id);
+              console.log('Updated a11y-diff comment', mine.id);
             } else {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
