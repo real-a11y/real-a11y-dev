@@ -1,22 +1,27 @@
 name: A11y Tree Diff
 
-# Dogfood: audit the repo's own fixtures with `real-a11y snapshot` on both the
-# base branch and the PR, then `real-a11y diff` the two artifacts and post a
-# single sticky comment. Findings-aware (a new/changed/fixed violation, not a
-# raw line diff) plus an advisory structural view diff — so an engine change
-# that reshapes the tree still shows up.
+# Dogfood: audit our OWN docs site with `real-a11y snapshot` on both the base
+# branch and the PR, then `real-a11y diff` the two artifacts and post a single
+# sticky comment. Findings-aware (a new/changed/fixed violation, not a raw line
+# diff) plus an advisory structural view diff — so an engine change that
+# reshapes the tree of a real page still shows up.
 #
-# The comment is updated in place on every push, never spammed.
+# This exercises the shipped CLI end-to-end (multi-page snapshot + diff) against
+# real content, not just fixtures. The committed baselines in `website-a11y`
+# stay the hard gate; this is the reviewer-facing "did our code move a11y?"
+# signal. The comment is updated in place on every push, never spammed.
 
 on:
   pull_request:
     branches: [main]
-    # Only run when something that can change the a11y tree changes.
+    # Only run when OUR code that can change the a11y tree changes — an engine
+    # or CLI change is exactly what we want to see reflected on real pages. Pure
+    # docs edits are covered by the `website-a11y` gate, not here.
     paths:
       - "packages/core/src/**"
       - "packages/serialize/src/**"
       - "packages/testing/src/**"
-      - "packages/testing/e2e/fixture*.html"
+      - "packages/cli/src/**"
       - ".github/workflows/a11y-diff.yml"
 
 permissions:
@@ -31,14 +36,22 @@ concurrency:
 
 env:
   # The pages audited on BOTH sides. `name` is the diff's join key, so it must
-  # match across base/PR — which it does, since this list drives both jobs.
-  # Relative paths resolve (and are gated behind --allow-file) against the repo
-  # root, where the snapshot command runs.
-  A11Y_PAGES: '[{"name":"fixture (well-structured)","url":"packages/testing/e2e/fixture.html"},{"name":"fixture-bad (broken)","url":"packages/testing/e2e/fixture-bad.html"}]'
+  # match across base/PR — which it does, since this list drives both jobs. The
+  # port must match the `vitepress preview --port` below.
+  A11Y_PAGES: >-
+    [{"name":"Home","url":"http://localhost:4173/"},
+    {"name":"A11y Snapshots","url":"http://localhost:4173/guide/accessibility-snapshots"},
+    {"name":"core","url":"http://localhost:4173/packages/core"},
+    {"name":"inspector","url":"http://localhost:4173/packages/inspector"},
+    {"name":"react","url":"http://localhost:4173/packages/react"},
+    {"name":"storybook-addon","url":"http://localhost:4173/packages/storybook-addon"},
+    {"name":"testing","url":"http://localhost:4173/packages/testing"},
+    {"name":"mcp","url":"http://localhost:4173/packages/mcp"},
+    {"name":"cli","url":"http://localhost:4173/packages/cli"}]
 
 jobs:
-  # ── Snapshot the BASE branch with the BASE engine (so an engine change in the
-  #    PR shows as drift, not just fixture edits) ─────────────────────────────
+  # ── Snapshot the BASE branch with the BASE engine (so an engine/CLI change in
+  #    the PR shows as drift on real pages, not just content edits) ────────────
   snapshot-base:
     name: Snapshot (base)
     runs-on: ubuntu-latest
@@ -60,11 +73,19 @@ jobs:
       - name: Build packages
         run: pnpm -r --filter='./packages/*' build
 
+      - name: Build website
+        run: pnpm --filter @real-a11y-dev/website build
+
       - name: Install Playwright browser
         run: pnpm --filter @real-a11y-dev/cli exec playwright install chromium --with-deps
 
+      # Serve the built site, wait for it, snapshot every page, then let the
+      # backgrounded server die with the step. A11Y_PAGES points at :4173.
       - name: Snapshot base
-        run: node packages/cli/dist/index.js snapshot --allow-file -o base.json
+        run: |
+          pnpm --filter @real-a11y-dev/website exec vitepress preview --port 4173 &
+          for i in $(seq 1 60); do curl -sf http://localhost:4173/ >/dev/null && break; sleep 1; done
+          node packages/cli/dist/index.js snapshot --wait-until networkidle --settle 1000 -o base.json
 
       - uses: actions/upload-artifact@v4
         with:
@@ -93,19 +114,25 @@ jobs:
       - name: Build packages
         run: pnpm -r --filter='./packages/*' build
 
+      - name: Build website
+        run: pnpm --filter @real-a11y-dev/website build
+
       - name: Install Playwright browser
         run: pnpm --filter @real-a11y-dev/cli exec playwright install chromium --with-deps
 
       - name: Snapshot PR
-        run: node packages/cli/dist/index.js snapshot --allow-file -o pr.json
+        run: |
+          pnpm --filter @real-a11y-dev/website exec vitepress preview --port 4173 &
+          for i in $(seq 1 60); do curl -sf http://localhost:4173/ >/dev/null && break; sleep 1; done
+          node packages/cli/dist/index.js snapshot --wait-until networkidle --settle 1000 -o pr.json
 
       - uses: actions/download-artifact@v4
         with:
           name: base-snapshot
 
-      # Findings-aware diff. `--fail-on never` keeps it advisory — the fixtures
-      # include an intentionally-broken page, so "new findings" isn't a build
-      # failure here. Human (md) + machine (json: findings + structural views).
+      # Findings-aware diff. `--fail-on never` keeps it advisory — this is a
+      # reviewer signal, not a second gate on top of `website-a11y`. Human (md) +
+      # machine (json: findings + structural views).
       - name: Diff snapshots
         run: |
           node packages/cli/dist/index.js diff base.json pr.json --format md --fail-on never -o diff.md
