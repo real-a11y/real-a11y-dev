@@ -1,3 +1,5 @@
+import { resolve } from "node:path";
+
 import type { Finding } from "@real-a11y-dev/testing";
 import { describe, expect, it } from "vitest";
 
@@ -41,7 +43,10 @@ function page(
 const meta = { toolName: "@real-a11y-dev/cli", toolVersion: "1.2.3" };
 
 describe("renderSarif", () => {
-  const ctx = { configPath: "C:/repo/a11y.config.json", rootDir: "C:/repo" };
+  // Real, platform-absolute paths so `relative()` shortens them on Windows AND
+  // Linux (a hardcoded "C:/repo" isn't absolute on POSIX).
+  const rootDir = resolve("repo-fixture");
+  const ctx = { configPath: resolve(rootDir, "a11y.config.json"), rootDir };
 
   it("emits a valid 2.1.0 skeleton with per-rule metadata", () => {
     const artifact = buildArtifact([page("Home", [finding()])], meta);
