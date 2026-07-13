@@ -10,11 +10,11 @@
     "test:e2e": "playwright test"
   },
   "devDependencies": {
-    "@axe-core/playwright": "^4.10.0",
-    "@playwright/test": "^1.51.1",
-    "@real-a11y-dev/design": "^0.1.0",
+    "@axe-core/playwright": "^4.12.1",
+    "@playwright/test": "^1.61.1",
+    "@real-a11y-dev/design": "^0.2.0",
     "@real-a11y-dev/testing": "workspace:*",
-    "markdown-it-anchor": "^9.2.0",
+    "markdown-it-anchor": "^9.2.1",
     "vitepress": "^1.6.3"
   }
 }
