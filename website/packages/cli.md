@@ -247,6 +247,70 @@ Three properties make this safe to rely on:
 | `--storage-state <file>` / `--audit-origin <origin>` | Audit as a saved login session (see [Authenticated pages](/guide/authenticated-pages)). |
 | `--cdp <endpoint>` | Attach to a running Chrome instead of launching one. |
 
+Most of these can be set once in the config instead of passed every run — see [Configure once](#configure-once) below.
+
+## Configure once
+
+Put your project's settings in an **`a11y.config.json`** and every command picks
+them up — the Jest/ESLint model. A `defaults` block seeds any flag you don't
+pass; `pages` (for `snapshot`/`diff`) live alongside it.
+
+```json
+{
+  "defaults": {
+    "device": "iPhone 13",
+    "waitUntil": "networkidle",
+    "rules": ["no-unlabeled-interactive", "image-alt"],
+    "failOn": "error"
+  },
+  "pages": [
+    { "name": "Home", "url": "http://localhost:3000" },
+    { "name": "Login", "url": "http://localhost:3000/login", "rootSelector": "main" }
+  ]
+}
+```
+
+```sh
+real-a11y audit http://localhost:3000   # runs as iPhone 13, networkidle, fail-on error — no flags
+real-a11y tree http://localhost:3000    # same emulation, no flags
+```
+
+- **Discovery:** auto-discovered as `a11y.config.json` in the current directory.
+  `--config <file>` points elsewhere; `--no-config` ignores it (on every
+  command).
+- **Precedence:** `flag > environment variable > config defaults > built-in`. An
+  explicit flag always wins, so a config default is a floor you can override
+  per run.
+- **Fail-closed:** the config is strict — an unknown or mistyped key (or a bad
+  value, like `failOn: "sometimes"`) is a hard error, so a typo can never
+  silently un-gate CI.
+
+Every key under `defaults` mirrors a flag:
+
+| `defaults` key | Flag | Applies to |
+| --- | --- | --- |
+| `root` | `--root` | audit, inspect, tree/outline/tabs/list, snapshot |
+| `device` / `viewport` | `--device` / `--viewport` | ↑ |
+| `waitUntil` / `settleMs` / `timeoutMs` | `--wait-until` / `--settle` / `--timeout` | ↑ + login |
+| `headful` | `--headful` | audit, inspect, views, snapshot |
+| `storageState` / `auditOrigins` | `--storage-state` / `--audit-origin` | ↑ |
+| `format` | `-f, --format` | all (validated per command) |
+| `rules` | `--rules` | audit, inspect, snapshot |
+| `failOn` | `--fail-on` | audit, inspect, snapshot, diff |
+| `annotate` | `--no-annotate` (as `annotate: false`) | audit, inspect |
+| `includeGeneric` | `--include-generic` | tree, inspect, snapshot |
+| `baseline` | `--baseline` | snapshot, diff |
+| `ignoreViewLine` / `maxLines` / `maxPages` / `explain` | `--ignore-view-line` / `--max-lines` / `--max-pages` / `--explain` | diff |
+
+Path defaults (`storageState`, `baseline`) resolve relative to the config file,
+so a committed config is portable. `format` is validated per command — a global
+`format: "sarif"` works for `snapshot` but errors on `audit` (which only takes
+`pretty | json`). The runtime flags (`--output`, `--quiet`, `--verbose`, and the
+security-sensitive `--allow-file`/`--cdp`) are deliberately **not** config-settable.
+
+Top-level `rules` / `failOn` / `device` are accepted as shorthand for
+`defaults.*` (kept for compatibility; `defaults` wins if both are set).
+
 ## Machine output
 
 `--format json` emits one stable envelope for every command, single- or

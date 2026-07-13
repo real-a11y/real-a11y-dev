@@ -30,7 +30,7 @@ import {
   serializeBaseline,
   type Baseline,
 } from "../baseline.js";
-import { loadConfig, type ConfigPage } from "../config.js";
+import { resolveConfig, type ConfigPage } from "../config.js";
 import { CliError, EXIT, exceedsThreshold } from "../exit.js";
 import { fingerprintFindings } from "../fingerprint.js";
 import { progress, writeReport } from "../output.js";
@@ -61,16 +61,13 @@ function toolVersion(): string {
 /** Pages to snapshot, in precedence order: positional URLs (like every other
  *  command), else A11Y_PAGES env (diff-bot compat), else the config file.
  *  `configPath` (absolute) is set only on the config path — `sarif` anchors
- *  its results to it. */
+ *  its results to it. Policy fields (rules/device/failOn) come from the
+ *  config's `defaults`, already merged into `flags` by run.ts — resolved here
+ *  only for `pages` + the SARIF anchor. */
 function resolvePages(
   positionals: readonly string[],
   flags: Record<string, string | boolean | undefined>,
-): {
-  pages: ConfigPage[];
-  rules?: string[];
-  device?: string;
-  configPath?: string;
-} {
+): { pages: ConfigPage[]; configPath?: string } {
   // Positional URLs are the ad-hoc path — name defaults to the URL, matching
   // `audit`/`tree`. The config stays the multi-page/policy source.
   if (positionals.length > 0) {
@@ -100,43 +97,27 @@ function resolvePages(
     return { pages };
   }
 
-  const configPath =
-    typeof flags.config === "string"
-      ? flags.config
-      : flags["no-config"] === true
-        ? undefined
-        : existsSync("a11y.config.json")
-          ? "a11y.config.json"
-          : undefined;
-  if (!configPath) {
+  // Same discovery run.ts already used for `defaults` — memoized, so no
+  // second parse.
+  const resolved = resolveConfig(flags);
+  if (!resolved) {
     throw new CliError(
       "snapshot needs pages to audit",
       "pass a URL (real-a11y snapshot <url>), add an a11y.config.json, or set A11Y_PAGES",
     );
   }
-  const config = loadConfig(configPath);
-  return {
-    pages: config.pages,
-    rules: config.rules,
-    device: config.device,
-    configPath: resolve(configPath),
-  };
+  return { pages: resolved.config.pages, configPath: resolved.path };
 }
 
 const SNAPSHOT_FORMATS = ["json", "md", "sarif", "junit", "jsonl"] as const;
 type SnapshotFormat = (typeof SNAPSHOT_FORMATS)[number];
 
 export const snapshotCommand: CommandFn = async (positionals, flags) => {
-  const {
-    pages: configPages,
-    rules: configRules,
-    device: configDevice,
-    configPath,
-  } = resolvePages(positionals, flags);
-  const flagRules = parseRules(flags.rules);
-  const rules = flagRules ?? (configRules as ReturnType<typeof parseRules>);
+  const { pages: configPages, configPath } = resolvePages(positionals, flags);
+  // rules/device (and every other policy flag) already carry the config
+  // `defaults` — run.ts merged them into `flags` before dispatch.
+  const rules = parseRules(flags.rules);
   const openOptions = parseOpenOptions(flags);
-  if (configDevice && !openOptions.device) openOptions.device = configDevice;
   // `--md` predates `--format` here and stays as an alias for `--format md`.
   const format = parseFormat(flags.format, SNAPSHOT_FORMATS);
   if (flags.md === true && flags.format !== undefined && format !== "md") {

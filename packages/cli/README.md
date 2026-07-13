@@ -72,6 +72,29 @@ see `real-a11y <command> --help`.
 Local builds audit directly: `real-a11y audit ./dist/index.html` (paths you
 type need no ceremony).
 
+## Configure once
+
+Set your project's flags once in an `a11y.config.json` and every command picks
+them up (the Jest/ESLint model) — precedence is `flag > env > config > built-in`:
+
+```json
+{
+  "defaults": { "device": "iPhone 13", "waitUntil": "networkidle", "failOn": "error" },
+  "pages": [{ "name": "Home", "url": "http://localhost:3000" }]
+}
+```
+
+```sh
+real-a11y audit http://localhost:3000   # iPhone 13, networkidle, fail-on error — no flags
+real-a11y audit http://localhost:3000 --no-config   # ignore the config for this run
+```
+
+The config is auto-discovered in the current directory (`--config <file>` to
+point elsewhere) and strict — a typo'd key or bad value is a hard error, so it
+can't silently un-gate CI. Every flag except the per-run and security-sensitive
+ones (`--output`, `--quiet`, `--allow-file`, `--cdp`) has a `defaults` key; see
+the [CLI reference](https://real-a11y.dev/packages/cli#configure-once).
+
 ## Track regressions across a PR
 
 `snapshot` writes a diffable artifact of one page or a whole set; `diff`

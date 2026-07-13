@@ -44,9 +44,17 @@ const OUTPUT_FLAGS: Options = {
   help: { type: "boolean", short: "h" },
 };
 
+// Every command accepts these so an a11y.config.json can seed its flags (the
+// `defaults` block). run.ts discovers + merges the config after parsing.
+const CONFIG_FLAGS: Options = {
+  config: { type: "string" },
+  "no-config": { type: "boolean" },
+};
+
 const AUDIT_FLAGS: Options = {
   ...BROWSER_FLAGS,
   ...OUTPUT_FLAGS,
+  ...CONFIG_FLAGS,
   rules: { type: "string" },
   "fail-on": { type: "string" },
   "no-annotate": { type: "boolean" },
@@ -63,12 +71,14 @@ const INSPECT_FLAGS: Options = {
 const VIEW_FLAGS: Options = {
   ...BROWSER_FLAGS,
   ...OUTPUT_FLAGS,
+  ...CONFIG_FLAGS,
   "include-generic": { type: "boolean" },
 };
 
 // login is a narrow, interactive command: no format/output/emulation/auth
 // flags — it forces headful and writes a session file.
 const LOGIN_FLAGS: Options = {
+  ...CONFIG_FLAGS,
   save: { type: "string" },
   "wait-until": { type: "string" },
   settle: { type: "string" },
@@ -80,10 +90,9 @@ const LOGIN_FLAGS: Options = {
 // snapshot audits a config-/env-supplied page set and writes the JSON artifact.
 const SNAPSHOT_FLAGS: Options = {
   ...BROWSER_FLAGS,
+  ...CONFIG_FLAGS,
   "include-generic": { type: "boolean" },
   rules: { type: "string" },
-  config: { type: "string" },
-  "no-config": { type: "boolean" },
   md: { type: "boolean" },
   format: { type: "string", short: "f" },
   baseline: { type: "string" },
@@ -97,6 +106,7 @@ const SNAPSHOT_FLAGS: Options = {
 
 // diff is pure — two JSON files in, no browser, so no browser flags.
 const DIFF_FLAGS: Options = {
+  ...CONFIG_FLAGS,
   "fail-on": { type: "string" },
   baseline: { type: "string" },
   "ignore-view-line": { type: "string", multiple: true },
@@ -135,6 +145,9 @@ const SHARED_FLAG_HELP = `  --root <selector>      Scope extraction             
                          (repeatable; defaults to the target's own origin)
   --cdp <endpoint>       Attach to a running Chrome — the interactive way to
                          audit a login (no emulation flags over CDP)
+  --config <file>        a11y.config.json (auto-discovered in cwd) — its
+                         "defaults" seed any flag you don't pass
+  --no-config            Ignore an auto-discovered config
   -q, --quiet            Suppress progress
   --verbose              Extra diagnostics on stderr`;
 
@@ -285,8 +298,6 @@ Examples:
   real-a11y snapshot --config a11y.config.json --baseline .a11y-baseline.json --fail-on error
 
 Flags:
-  --config <file>        Page list + policy (default: ./a11y.config.json)
-  --no-config            Ignore an auto-discovered config
   -f, --format <fmt>     json | md | sarif | junit | jsonl   (default: json)
                          sarif needs --config (results anchor to file paths;
                          GitHub: upload with codeql-action/upload-sarif@v4)
@@ -335,6 +346,9 @@ Flags:
                          (they stay in the report, marked suppressed)
   --ignore-view-line <regex>  Drop matching view lines before diffing
                          (repeatable; e.g. '^time "' for a build timestamp)
+  --config <file>        a11y.config.json whose "defaults" seed unset flags
+                         (auto-discovered in cwd)
+  --no-config            Ignore an auto-discovered config
   -f, --format <fmt>     pretty | json | md               (default: pretty)
   -o, --output <file>    Write the report to a file
   -q, --quiet            Suppress progress
