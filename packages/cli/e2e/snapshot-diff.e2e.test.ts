@@ -165,15 +165,29 @@ describe("diff", () => {
     expect(stderr).toContain("schemaVersion 999");
   });
 
-  it("narrates structural drift in plain language (md + json agree)", async () => {
+  it("is neutral by default; --explain adds the plain-language summary", async () => {
     // more.json adds a second unlabeled button vs base — a new tab stop.
-    const md = await runCli(["diff", base, more, "--format", "md"]);
-    expect(md.stdout).toContain(
+    const neutral = await runCli(["diff", base, more, "--format", "md"]);
+    // Neutral: raw diff + a hint, but NO plain-language statements.
+    expect(neutral.stdout).toContain("**Raw view diff —");
+    expect(neutral.stdout).not.toContain("Keyboard tab stop added");
+    expect(neutral.stdout).toContain("Run with `--explain`");
+
+    const explained = await runCli([
+      "diff",
+      base,
+      more,
+      "--format",
+      "md",
+      "--explain",
+    ]);
+    expect(explained.stdout).toContain(
       "**Structure (advisory — never blocks merge):**",
     );
-    expect(md.stdout).toContain("Keyboard tab stop added: button");
-    expect(md.stdout).toContain("**Raw view diff —");
-    expect(md.stdout).not.toContain("<details>");
+    expect(explained.stdout).toContain("Keyboard tab stop added: button");
+    expect(explained.stdout).not.toContain("<details>");
+
+    // JSON carries the full data regardless of --explain (machine surface).
     const json = await runCli(["diff", base, more, "--format", "json"]);
     const parsed = JSON.parse(json.stdout) as {
       pages: { structural: { kind: string }[] }[];

@@ -352,11 +352,13 @@
     button "Copy Code"
       code
     heading "Shared: diff & comment job" (level 3)
-    paragraph "renders the finding-aware comparison straight to Markdown () — findings first, then the plain-language structural statements per page with the color-coded raw / diff inline beneath them — and the job posts it as the sticky comment. keeps the comment purely advisory so it posts — drop it (or add a second step) to also fail the build on findings."
-      code "real-a11y diff"
+    paragraph "renders the finding-aware comparison straight to Markdown () — findings first, then the plain-language structural statements per page with the color-coded raw / diff inline beneath them — and the job posts it as the sticky comment. ( is opt-in: the bare is neutral — findings plus the raw view diff — and the bot turns on the plain-language layer for reviewers.) keeps the comment purely advisory so it posts — drop it (or add a second step) to also fail the build on findings."
+      code "real-a11y diff --explain"
       code "--format md"
       code "+"
       code "-"
+      code "--explain"
+      code "diff"
       code "--fail-on never"
       emphasis "always"
       code "npx real-a11y diff base.json pr.json"

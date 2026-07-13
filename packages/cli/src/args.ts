@@ -100,6 +100,7 @@ const DIFF_FLAGS: Options = {
   "fail-on": { type: "string" },
   baseline: { type: "string" },
   "ignore-view-line": { type: "string", multiple: true },
+  explain: { type: "boolean" },
   format: { type: "string", short: "f" },
   output: { type: "string", short: "o" },
   quiet: { type: "boolean", short: "q" },
@@ -310,12 +311,19 @@ robust to DOM churn (re-indentation, renumbered locators) that defeats a line
 diff. Pure: no browser. Exits 1 only on NEW findings at/above --fail-on;
 fixes and drift never fail the build.
 
+Output is neutral by default — findings plus the raw structural view diff.
+Add --explain for a plain-language summary of the structural changes
+("Heading level changed: h2 → h3", "tab stop removed …").
+
 Examples:
   real-a11y diff base.json pr.json
-  real-a11y diff base.json pr.json --format md -o comment.md
+  real-a11y diff base.json pr.json --explain
+  real-a11y diff base.json pr.json --format md --explain -o comment.md
 
 Flags:
   --fail-on <level>      error | warning | never          (default: error)
+  --explain              Add a plain-language summary of structural changes
+                         (off by default — the neutral diff makes no inferences)
   --baseline <file>      NEW findings this baseline accepts don't gate
                          (they stay in the report, marked suppressed)
   --ignore-view-line <regex>  Drop matching view lines before diffing

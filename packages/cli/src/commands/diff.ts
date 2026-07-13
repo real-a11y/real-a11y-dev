@@ -96,13 +96,15 @@ export const diffCommand: CommandFn = async (positionals, flags) => {
 
   const result = diffArtifacts(base, pr, { ignoreViewLine });
 
+  const explain = flags.explain === true;
   const content =
     format === "json"
       ? renderDiffJson(result)
       : format === "md"
-        ? renderDiffMarkdown(result)
+        ? renderDiffMarkdown(result, { explain })
         : renderDiffPretty(result, {
             color: output === undefined && colorEnabled(),
+            explain,
           });
   writeReport(output, content);
 

@@ -96,16 +96,22 @@ repo, not a copy-pasted script. The diff is
 finding-identity-aware: a renumbered `:nth-of-type` locator or a re-indented
 subtree is not a change — only an actual new/changed/fixed violation is.
 
-Structural drift that doesn't trip a rule is narrated in **plain language**,
-so a reviewer who isn't an a11y expert can still act on it:
+Structural drift that doesn't trip a rule shows as a neutral view diff by
+default. Add **`--explain`** for a plain-language summary, so a reviewer who
+isn't an a11y expert can act on it without reading raw serialized lines:
 
 ```text
+$ real-a11y diff base.json pr.json --explain
 structure changed (advisory): tree +2/-1 · outline +1/-1 · tabs +1/-0
   · Heading level changed: "Setup" h2 → h3
   · Keyboard tab stop added: link "Skip" (now stop 1 of 2)
 ```
 
-The statements cover what assistive-tech users actually feel: landmarks
+`--explain` is opt-in on purpose: the statements are an interpretive layer
+(pairing heuristics, cross-view inference), so the default `diff` stays
+**neutral** — findings plus the raw view diff, both facts — and never makes a
+claim the raw diff can't back up. The statements cover what assistive-tech
+users actually feel: landmarks
 appearing/disappearing (`main` removal calls out broken skip-links), heading
 level changes and renames, keyboard tab stops added/removed — including the
 dangerous case where an element is *still on the page but no longer

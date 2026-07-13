@@ -1,8 +1,13 @@
 /**
- * Render a findings-aware diff. The default (pretty) leads with what a reviewer
- * cares about — NEW violations — then CHANGED, then FIXED, with the advisory
- * structural view-diff last. The summary line is always last so a
- * scan-from-the-bottom reader finds the outcome.
+ * Render a findings-aware diff. Leads with what a reviewer cares about — NEW
+ * violations — then CHANGED, then FIXED, then the structural view diff.
+ *
+ * Default output is NEUTRAL: findings + the raw `+`/`-` structural view diff,
+ * both facts. The plain-language structural statements ("Heading level
+ * changed: h2 → h3") are an interpretive layer — pairing heuristics,
+ * cross-view inference — and are opt-in via `explain`, so the default never
+ * makes a claim the raw diff can't back up. `--format json` always carries the
+ * full data (`views` + `structural`); `explain` only governs human output.
  */
 
 import type { DiffEntry } from "../diff/findings-diff.js";
@@ -51,6 +56,8 @@ function viewCounts(page: PageDiff): string {
 
 export interface DiffRenderOptions {
   color: boolean;
+  /** Add the plain-language structural statements (interpretive layer). */
+  explain?: boolean;
 }
 
 export function renderDiffPretty(
@@ -58,7 +65,9 @@ export function renderDiffPretty(
   options: DiffRenderOptions,
 ): string {
   const c = palette(options.color);
+  const explain = options.explain ?? false;
   const lines: string[] = [];
+  const anyStructural = result.pages.some((p) => p.structural.length > 0);
 
   for (const page of result.pages) {
     const shown = sortEntries(page.entries).filter(
@@ -72,10 +81,15 @@ export function renderDiffPretty(
       );
       continue;
     }
-    // structural covers the views by totality (every non-empty view diff
-    // yields at least the rollup statement) AND catches reorder-only pages,
-    // whose view diffs are empty.
-    if (shown.length === 0 && page.structural.length === 0) continue;
+    const counts = viewCounts(page);
+    const hasStructural = page.structural.length > 0;
+    // Neutral: findings or a raw view-line change. `explain` additionally
+    // surfaces reorder-only pages, whose view diffs are empty (the reorder is
+    // only visible via the analysis).
+    const show = explain
+      ? shown.length > 0 || hasStructural
+      : shown.length > 0 || counts !== "";
+    if (!show) continue;
 
     lines.push(
       c.bold(
@@ -106,8 +120,7 @@ export function renderDiffPretty(
         );
       }
     }
-    if (page.structural.length) {
-      const counts = viewCounts(page);
+    if (explain && hasStructural) {
       lines.push(
         c.dim(`  structure changed (advisory):${counts ? ` ${counts}` : ""}`),
       );
@@ -121,10 +134,18 @@ export function renderDiffPretty(
           ),
         );
       }
+    } else if (!explain && counts !== "") {
+      // Neutral: the counts are the fact; the +/- lines are in --format json.
+      lines.push(c.dim(`  structure changed (advisory): ${counts}`));
     }
   }
 
   const { new: n, changed, removed } = result.summary;
+  if (!explain && anyStructural) {
+    lines.push(
+      c.dim("Run with --explain for a plain-language structural summary."),
+    );
+  }
   if (lines.length) lines.push("");
   const summary = `${n} new · ${changed} changed · ${removed} fixed`;
   lines.push(c.bold(n > 0 ? c.red(summary) : summary));
@@ -227,16 +248,28 @@ function mdStructural(page: PageDiff): string[] {
   return out;
 }
 
-export function renderDiffMarkdown(result: DiffResult): string {
+export interface DiffMarkdownOptions {
+  /** Add the plain-language structural statements (interpretive layer). */
+  explain?: boolean;
+}
+
+export function renderDiffMarkdown(
+  result: DiffResult,
+  options: DiffMarkdownOptions = {},
+): string {
+  const explain = options.explain ?? false;
   const { new: n, changed, removed } = result.summary;
+  const noFindings = n === 0 && changed === 0 && removed === 0;
+  const anyStructural = result.pages.some((p) => p.structural.length > 0);
   const structuralPages = result.pages.filter(
     (p) => p.structural.length > 0,
   ).length;
-  // The findings triplet alone reads as "nothing changed" when only the
-  // structure moved — surface the structural drift in the header (which is
-  // what an email/notification title shows), not just a buried lead-in line.
+  // In `explain` mode the header summarizes the structural drift (which is what
+  // an email/notification title shows) so a findings-clean-but-structure-moved
+  // diff doesn't read as an all-zero "nothing changed". Neutral output keeps
+  // the header findings-only — the raw diff below carries the structural facts.
   const structHeader =
-    structuralPages > 0
+    explain && structuralPages > 0
       ? ` · structure changed on ${structuralPages} page${
           structuralPages === 1 ? "" : "s"
         }`
@@ -245,9 +278,9 @@ export function renderDiffMarkdown(result: DiffResult): string {
     `### Accessibility diff — ${n} new · ${changed} changed · ${removed} fixed${structHeader}`,
     "",
   ];
-  if (n === 0 && changed === 0 && removed === 0) {
+  if (noFindings) {
     out.push(
-      structuralPages > 0
+      explain && structuralPages > 0
         ? "No accessibility finding changes — but the semantic structure moved (advisory, review below)."
         : "No accessibility finding changes.",
       "",
@@ -266,7 +299,12 @@ export function renderDiffMarkdown(result: DiffResult): string {
       );
       continue;
     }
-    if (shown.length === 0 && page.structural.length === 0) continue;
+    const counts = viewCounts(page);
+    const hasStructural = page.structural.length > 0;
+    const show = explain
+      ? shown.length > 0 || hasStructural
+      : shown.length > 0 || counts !== "";
+    if (!show) continue;
     out.push(`#### ${page.name}`, "");
     for (const e of shown) {
       const f = e.finding;
@@ -284,11 +322,18 @@ export function renderDiffMarkdown(result: DiffResult): string {
         out.push(`- ✅ **fixed** \`${f.rule}\`: ${f.message}`);
     }
     if (shown.length) out.push("");
-    out.push(...mdStructural(page));
+    // Explain: statements + the raw block. Neutral: the raw block alone.
+    if (explain && hasStructural) out.push(...mdStructural(page));
+    else if (!explain && counts !== "") out.push(...mdRawBlock(page));
   }
-  if (structuralPages > 0) {
+  if (explain && structuralPages > 0) {
     out.push(
       "_Structural notes are advisory and never fail the check; container/nesting moves are not tracked._",
+      "",
+    );
+  } else if (!explain && anyStructural) {
+    out.push(
+      "_Run with `--explain` for a plain-language summary of the structural changes._",
       "",
     );
   }

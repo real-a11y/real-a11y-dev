@@ -130,16 +130,21 @@ typo'd key is an error, so a mistake can't silently un-gate CI.
 
 ### Structural changes, in plain language
 
-Shape shifts that don't trip a rule are narrated as **statements any reviewer
-can act on**, not raw serialized lines:
+By default `diff` is **neutral** — findings plus the raw `+`/`-` view diff,
+both facts. Add **`--explain`** and shape shifts that don't trip a rule are
+narrated as **statements any reviewer can act on**, not raw serialized lines:
 
 ```text
+$ real-a11y diff base.json pr.json --explain
 structure changed (advisory): tree +2/-1 · outline +1/-1 · tabs +1/-0
   · Heading level changed: "Setup" h2 → h3
   · Keyboard tab stop added: link "Skip" (now stop 1 of 2)
 ```
 
-The taxonomy covers what assistive-tech users actually feel:
+`--explain` is opt-in because the statements are an interpretive layer
+(pairing heuristics, cross-view inference); the default never makes a claim the
+raw diff can't back up. The taxonomy covers what assistive-tech users actually
+feel:
 
 - **Landmarks** added / removed / renamed — removing `main` calls out that
   skip-to-content may break.
@@ -213,6 +218,7 @@ Three properties make this safe to rely on:
 | `--rules <ids>` | Comma-separated subset of the five rules (`audit`/`inspect`/`snapshot`). |
 | `--fail-on <level>` | `error` \| `warning` \| `never` — the gate threshold (default `error`), on `audit`/`inspect`/`diff`, and on `snapshot` (default `never` there). View commands aren't gates: they always exit `0`. |
 | `--baseline <file>` / `--update-baseline` | Suppress accepted findings / rewrite the baseline from the current run (`snapshot` and `diff` — see [Adopt the gate on existing debt](#adopt-the-gate-on-existing-debt)). |
+| `--explain` | Add a plain-language summary of structural changes (`diff`, off by default — the neutral diff makes no inferences). |
 | `--ignore-view-line <regex>` | Drop matching view lines before diffing (`diff`, repeatable) — for generated content that differs on every build, e.g. `'^time "'` for a "last updated" timestamp. |
 | `-f, --format <fmt>` | `pretty` (default) or `json`; `diff` also takes `md`; `snapshot` takes `json` (default) \| `md` \| `sarif` \| `junit` \| `jsonl` (see [SARIF, JUnit, JSONL](#sarif-junit-jsonl)). Never auto-switched — piping only drops color. |
 | `-o, --output <file>` | Write the report to a file (progress stays on stderr). |

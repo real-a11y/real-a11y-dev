@@ -302,7 +302,7 @@ Replace `actions/setup-node`'s npm cache with pnpm's action and update the insta
 
 ### <a id="diff-and-comment"></a>Shared: diff & comment job
 
-`real-a11y diff` renders the finding-aware comparison straight to Markdown (`--format md`) — findings first, then the plain-language structural statements per page with the color-coded raw `+`/`-` diff inline beneath them — and the job posts it as the sticky comment. `--fail-on never` keeps the comment purely advisory so it *always* posts — drop it (or add a second `npx real-a11y diff base.json pr.json` step) to also fail the build on **new** findings.
+`real-a11y diff --explain` renders the finding-aware comparison straight to Markdown (`--format md`) — findings first, then the plain-language structural statements per page with the color-coded raw `+`/`-` diff inline beneath them — and the job posts it as the sticky comment. (`--explain` is opt-in: the bare `diff` is neutral — findings plus the raw view diff — and the bot turns on the plain-language layer for reviewers.) `--fail-on never` keeps the comment purely advisory so it *always* posts — drop it (or add a second `npx real-a11y diff base.json pr.json` step) to also fail the build on **new** findings.
 
 If your pages render generated content that differs on every build (a "last
 updated" timestamp, a build hash), add `--ignore-view-line '<regex>'` to the

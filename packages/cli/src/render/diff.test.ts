@@ -99,21 +99,36 @@ describe("renderDiffPretty", () => {
     expect(out).toContain("+ new [error]");
   });
 
-  it("renders structural statements under the advisory header with counts", () => {
+  it("is neutral by default: counts only, no statements, an --explain hint", () => {
     const out = renderDiffPretty(structural, { color: false });
     expect(out).toContain(
       "structure changed (advisory): tree +2/-1 · outline +1/-1 · tabs +1/-0",
     );
+    expect(out).not.toContain("Heading level changed");
+    expect(out).toContain(
+      "Run with --explain for a plain-language structural summary.",
+    );
+  });
+
+  it("--explain adds the plain-language statements (and drops the hint)", () => {
+    const out = renderDiffPretty(structural, { color: false, explain: true });
     expect(out).toContain('· Heading level changed: "Setup" h2 → h3');
     expect(out).toContain(
       '· Keyboard tab stop added: link "Skip" (now stop 1 of 2)',
     );
+    expect(out).not.toContain("Run with --explain");
   });
 
-  it("no longer skips a reorder-only page (empty views, one statement)", () => {
-    const out = renderDiffPretty(reorderOnly, { color: false });
-    expect(out).toContain("== Docs");
-    expect(out).toContain("Keyboard tab order changed");
+  it("a reorder-only page: neutral hides it (with a hint), --explain shows it", () => {
+    const neutral = renderDiffPretty(reorderOnly, { color: false });
+    expect(neutral).not.toContain("== Docs");
+    expect(neutral).toContain("Run with --explain");
+    const explained = renderDiffPretty(reorderOnly, {
+      color: false,
+      explain: true,
+    });
+    expect(explained).toContain("== Docs");
+    expect(explained).toContain("Keyboard tab order changed");
   });
 });
 
@@ -183,55 +198,69 @@ describe("renderDiffMarkdown", () => {
     );
   });
 
-  it("renders the structural section: statements, then the inline raw diff", () => {
+  it("is neutral by default: raw diff, no statements, findings-only header + hint", () => {
     const out = renderDiffMarkdown(structural);
-    expect(out).toContain("#### Docs");
-    expect(out).toContain("**Structure (advisory — never blocks merge):**");
-    expect(out).toContain('- Heading level changed: "Setup" h2 → h3');
-    // Statements come BEFORE the raw diff; the raw lines follow, rendered
-    // inline (not in <details>) so email keeps the green/red coloring.
-    expect(out.indexOf("Heading level changed")).toBeLessThan(
-      out.indexOf("Raw view diff"),
+    // Header stays findings-only; the raw diff below carries the structure.
+    expect(out.split("\n")[0]).toBe(
+      "### Accessibility diff — 0 new · 0 changed · 0 fixed",
     );
+    expect(out).toContain("#### Docs");
+    expect(out).not.toContain("**Structure (advisory");
+    expect(out).not.toContain("Heading level changed");
     expect(out).toContain(
       "**Raw view diff — tree +2/-1 · outline +1/-1 · tabs +1/-0**",
     );
     expect(out).not.toContain("<details>");
-    expect(out).toContain('- heading "Setup" (level 2)');
     expect(out).toContain('+ heading "Setup" (level 3)');
     expect(out).toContain("```diff");
     expect(out).toContain(
-      "_Structural notes are advisory and never fail the check; container/nesting moves are not tracked._",
+      "_Run with `--explain` for a plain-language summary of the structural changes._",
     );
   });
 
-  it("surfaces structural drift in the header, not just a buried lead-in", () => {
-    const out = renderDiffMarkdown(structural);
-    // The header (what an email/notification title shows) must not read as an
-    // all-zero "nothing changed" when the structure moved.
+  it("--explain: header suffix + lead-in, statements before the inline raw diff", () => {
+    const out = renderDiffMarkdown(structural, { explain: true });
+    // The header (an email/notification title) names the drift so it doesn't
+    // read as an all-zero "nothing changed".
     expect(out.split("\n")[0]).toBe(
       "### Accessibility diff — 0 new · 0 changed · 0 fixed · structure changed on 1 page",
     );
     expect(out).toContain(
       "No accessibility finding changes — but the semantic structure moved (advisory, review below).",
     );
+    expect(out).toContain("**Structure (advisory — never blocks merge):**");
+    expect(out).toContain('- Heading level changed: "Setup" h2 → h3');
+    expect(out.indexOf("Heading level changed")).toBeLessThan(
+      out.indexOf("Raw view diff"),
+    );
+    expect(out).toContain(
+      "**Raw view diff — tree +2/-1 · outline +1/-1 · tabs +1/-0**",
+    );
+    expect(out).toContain('- heading "Setup" (level 2)');
+    expect(out).toContain(
+      "_Structural notes are advisory and never fail the check; container/nesting moves are not tracked._",
+    );
   });
 
   it("keeps the header findings-only when nothing structural moved", () => {
     // `result` has a finding but identical tree/outline/tabs → no structural.
-    expect(renderDiffMarkdown(result).split("\n")[0]).toBe(
+    expect(renderDiffMarkdown(result, { explain: true }).split("\n")[0]).toBe(
       "### Accessibility diff — 1 new · 0 changed · 0 fixed",
     );
   });
 
-  it("renders a reorder-only page with statements and NO raw diff block", () => {
-    const out = renderDiffMarkdown(reorderOnly);
-    expect(out).toContain("#### Docs");
-    expect(out).toContain("Keyboard tab order changed");
-    expect(out).not.toContain("Raw view diff");
+  it("a reorder-only page: neutral hides it (hint), --explain shows the statement", () => {
+    const neutral = renderDiffMarkdown(reorderOnly);
+    expect(neutral).not.toContain("#### Docs");
+    expect(neutral).toContain("_Run with `--explain`");
+    const explained = renderDiffMarkdown(reorderOnly, { explain: true });
+    expect(explained).toContain("#### Docs");
+    expect(explained).toContain("Keyboard tab order changed");
+    // A reorder adds/removes no lines, so there's no raw diff to show.
+    expect(explained).not.toContain("Raw view diff");
   });
 
-  it("escapes hostile accessible names in statements", () => {
+  it("escapes hostile accessible names in --explain statements", () => {
     const hostile = diffArtifacts(
       buildArtifact([page("Home", [], { tree: "main" })], {
         toolName: "c",
@@ -246,7 +275,7 @@ describe("renderDiffMarkdown", () => {
         { toolName: "c", toolVersion: "0" },
       ),
     );
-    const out = renderDiffMarkdown(hostile);
+    const out = renderDiffMarkdown(hostile, { explain: true });
     // The statement bullet must not leak raw HTML/markdown structure…
     const bullet = out.split("\n").find((l) => l.startsWith("- New landmark"));
     expect(bullet).toBeDefined();

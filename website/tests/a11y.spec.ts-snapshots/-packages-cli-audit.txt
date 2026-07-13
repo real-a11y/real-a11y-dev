@@ -228,11 +228,18 @@
       code ":nth-of-type"
       strong "not"
     heading "Structural changes, in plain language" (level 3)
-    paragraph "Shape shifts that don't trip a rule are narrated as , not raw serialized lines:"
+    paragraph "By default is — findings plus the raw / view diff, both facts. Add and shape shifts that don't trip a rule are narrated as , not raw serialized lines:"
+      code "diff"
+      strong "neutral"
+      code "+"
+      code "-"
+      strong
+        code "--explain"
       strong "statements any reviewer can act on"
     button "Copy Code"
       code
-    paragraph "The taxonomy covers what assistive-tech users actually feel:"
+    paragraph "is opt-in because the statements are an interpretive layer (pairing heuristics, cross-view inference); the default never makes a claim the raw diff can't back up. The taxonomy covers what assistive-tech users actually feel:"
+      code "--explain"
     list
       listitem "added / removed / renamed — removing calls out that skip-to-content may break."
         strong "Landmarks"
@@ -354,6 +361,11 @@
             code "snapshot"
             code "diff"
             link "Adopt the gate on existing debt"
+        row
+          cell "--explain"
+            code "--explain"
+          cell "Add a plain-language summary of structural changes (diff, off by default — the neutral diff makes no inferences)."
+            code "diff"
         row
           cell "--ignore-view-line <regex>"
             code "--ignore-view-line <regex>"

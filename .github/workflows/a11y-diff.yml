@@ -131,16 +131,17 @@ jobs:
           name: base-snapshot
 
       # Findings-aware diff. `--fail-on never` keeps it advisory — this is a
-      # reviewer signal, not a second gate on top of `website-a11y`. Human (md) +
-      # machine (json: findings + structural statements + views). The md output
-      # is the whole comment body: findings first, then the plain-language
-      # structural summary per route, raw lines demoted into a collapsed block.
-      # `--ignore-view-line '^time "'` drops the VitePress "Last updated"
-      # timestamp, which renders differently between the base and PR checkouts
-      # (shallow clone) and would otherwise show phantom drift on every page.
+      # reviewer signal, not a second gate on top of `website-a11y`. `--explain`
+      # adds the plain-language structural summary (opt-in; the bare CLI stays
+      # neutral) so the comment reads for a whole team. The md output is the
+      # whole comment body: findings first, then the statements per route, then
+      # the color-coded raw diff. `--ignore-view-line '^time "'` drops the
+      # VitePress "Last updated" timestamp, which renders differently between the
+      # base and PR checkouts (shallow clone) and would otherwise show phantom
+      # drift on every page.
       - name: Diff snapshots
         run: |
-          node packages/cli/dist/index.js diff base.json pr.json --format md --fail-on never --ignore-view-line '^time "' -o diff.md
+          node packages/cli/dist/index.js diff base.json pr.json --format md --explain --fail-on never --ignore-view-line '^time "' -o diff.md
           node packages/cli/dist/index.js diff base.json pr.json --format json --fail-on never --ignore-view-line '^time "' -o diff.json
 
       - name: Post PR comment
