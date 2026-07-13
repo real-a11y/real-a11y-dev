@@ -43,6 +43,9 @@ const dataUrl = (html: string): string =>
 // An unlabeled button trips `no-unlabeled-interactive` (error), but NOT
 // `image-alt` — so a config that narrows rules to image-alt makes it pass.
 const UNLABELED = dataUrl("<main><h1>Hi</h1><button></button></main>");
+// A clean page — no findings — so a run's exit code reflects flag handling, not
+// violations (snapshot's fail-on defaults to `never` regardless).
+const CLEAN = dataUrl("<main><h1>Hi</h1></main>");
 
 let dir: string;
 function config(obj: unknown): void {
@@ -106,5 +109,37 @@ describe("a11y.config.json defaults (built bin)", () => {
     const { code, stderr } = await runCli(["audit", UNLABELED, "-q"], dir);
     expect(code).toBe(2);
     expect(stderr).toMatch(/defaults.failOn must be/);
+  });
+
+  it("an explicit --md wins over a config defaults.format (no conflict)", async () => {
+    // Before the command-scoping/suppression fix, defaults.format seeded
+    // values.format and snapshot's --md/--format guard hard-errored (exit 2),
+    // blaming a --format the user never typed. --md must win.
+    config({
+      defaults: { format: "json" },
+      pages: [{ name: "x", url: "http://x" }],
+    });
+    const out = join(dir, "out.md");
+    const { code, stderr } = await runCli(
+      ["snapshot", CLEAN, "--md", "-o", out, "-q"],
+      dir,
+    );
+    expect(stderr).not.toMatch(/conflicts with/);
+    expect(code).toBe(0); // clean page + snapshot fail-on `never`
+  });
+
+  it("a config defaults.device doesn't defeat an explicit --cdp", async () => {
+    // The cdp/emulation guard must not fire on a config-seeded device — the run
+    // gets past arg-parsing and fails only at the (unreachable) CDP endpoint.
+    config({
+      defaults: { device: "iPhone 13" },
+      pages: [{ name: "x", url: "http://x" }],
+    });
+    const { stderr } = await runCli(
+      ["audit", CLEAN, "--cdp", "http://127.0.0.1:9", "-q"],
+      dir,
+    );
+    // The fix: the mutual-exclusivity guard no longer trips on a config default.
+    expect(stderr).not.toMatch(/can't be combined with/);
   });
 });

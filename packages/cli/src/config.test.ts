@@ -173,10 +173,18 @@ describe("mergeDefaults (virtual flags)", () => {
     defaults,
     dir,
   });
+  // A permissive declared set (every defaultable flag) for the tests that only
+  // exercise shaping/precedence; the scoping tests below pass a real command's
+  // narrower set on purpose.
+  const ALL = new Set(DEFAULTABLE_FLAGS);
 
   it("seeds an unset flag but never overrides an explicit one", () => {
     const values: Record<string, unknown> = { device: "Pixel 7" }; // explicit
-    mergeDefaults(values, config({ device: "iPhone 13", failOn: "warning" }));
+    mergeDefaults(
+      values,
+      config({ device: "iPhone 13", failOn: "warning" }),
+      ALL,
+    );
     expect(values.device).toBe("Pixel 7"); // flag wins
     expect(values["fail-on"]).toBe("warning"); // camel→kebab, filled in
   });
@@ -191,6 +199,7 @@ describe("mergeDefaults (virtual flags)", () => {
         auditOrigins: ["https://a.com"],
         explain: true,
       }),
+      ALL,
     );
     expect(values.settle).toBe("500"); // number → string (parseMs takes a string)
     expect(values.rules).toBe("image-alt,heading-order"); // array → CSV flag
@@ -200,10 +209,10 @@ describe("mergeDefaults (virtual flags)", () => {
 
   it("maps annotate:false to the negated --no-annotate flag", () => {
     const off: Record<string, unknown> = {};
-    mergeDefaults(off, config({ annotate: false }));
+    mergeDefaults(off, config({ annotate: false }), ALL);
     expect(off["no-annotate"]).toBe(true);
     const on: Record<string, unknown> = {};
-    mergeDefaults(on, config({ annotate: true }));
+    mergeDefaults(on, config({ annotate: true }), ALL);
     expect(on["no-annotate"]).toBeUndefined(); // the default — no negation
   });
 
@@ -212,8 +221,45 @@ describe("mergeDefaults (virtual flags)", () => {
     mergeDefaults(
       values,
       config({ baseline: ".a11y-baseline.json" }, "/repo/cfg"),
+      ALL,
     );
     expect(values.baseline).toBe(resolve("/repo/cfg", ".a11y-baseline.json"));
+  });
+
+  it("skips a default the running command doesn't declare", () => {
+    // `login` is interactive/desktop-only: its flag set omits emulation. A
+    // config default must not reach a flag the command would reject.
+    const loginFlags = new Set(Object.keys(COMMANDS.login.options));
+    const values: Record<string, unknown> = {};
+    mergeDefaults(
+      values,
+      config({ device: "iPhone 13", settleMs: 200 }),
+      loginFlags,
+    );
+    expect(values.device).toBeUndefined(); // login has no --device → not seeded
+    expect(values.settle).toBe("200"); // login declares --settle → seeded
+  });
+
+  it("won't let a default defeat a mutually-exclusive explicit flag", () => {
+    // --cdp excludes emulation + --storage-state (their guards would hard-error).
+    const cdp: Record<string, unknown> = { cdp: "http://127.0.0.1:9222" };
+    mergeDefaults(
+      cdp,
+      config({
+        device: "iPhone 13",
+        storageState: "auth.json",
+        waitUntil: "networkidle",
+      }),
+      ALL,
+    );
+    expect(cdp.device).toBeUndefined(); // suppressed by explicit --cdp
+    expect(cdp["storage-state"]).toBeUndefined(); // suppressed by explicit --cdp
+    expect(cdp["wait-until"]).toBe("networkidle"); // unrelated default still seeds
+
+    // --md is the alias for --format md, so it excludes a config `format`.
+    const md: Record<string, unknown> = { md: true };
+    mergeDefaults(md, config({ format: "json" }), ALL);
+    expect(md.format).toBeUndefined();
   });
 });
 

@@ -347,29 +347,57 @@ export const DEFAULTABLE_FLAGS: readonly string[] = [...DEFAULT_KEYS].map(
 // committed config is portable regardless of the cwd a command runs from.
 const PATH_KEYS = new Set(["storageState", "baseline"]);
 
+// Some flags are mutually exclusive with a config-settable flag: when the user
+// explicitly passes the trigger flag (left), seeding the excluded default
+// (right) would trip the command's own guard and hard-error, blaming a flag the
+// user never typed — a config default defeating an explicit one. So an explicit
+// trigger suppresses those defaults. Mirrors the guards in parseOpenOptions
+// (`--cdp` vs emulation), sessionFlags (`--cdp` vs `--storage-state`), and
+// snapshot's `--md`/`--format`. Triggers are never config-settable themselves.
+const EXCLUDED_BY: Record<string, readonly string[]> = {
+  cdp: ["device", "viewport", "headful", "storage-state"],
+  md: ["format"],
+};
+
 /**
  * Merge a config's `defaults` into the parsed flags as "virtual flags": for
  * each default whose flag is unset, inject the value in the flag's raw shape so
- * the command's own parser validates it. Mutates `values`. `flag > default`
- * falls out of the unset check.
+ * the command's own parser validates it. Mutates `values`.
+ *
+ * A default is only seeded when it (1) is a flag the running command actually
+ * declares (`declared`) — so a default can't reach a command whose parser would
+ * reject the equivalent flag (e.g. emulation into the desktop-only `login`); (2)
+ * isn't suppressed by a mutually-exclusive explicit flag; and (3) is unset. That
+ * keeps precedence honest: `flag > default`, and a config default never reaches
+ * or defeats a flag the CLI itself wouldn't accept for that command.
  */
 export function mergeDefaults(
   values: Record<string, unknown>,
   config: A11yConfig,
+  declared: ReadonlySet<string>,
 ): void {
+  // Flags the user explicitly passed suppress the config defaults they exclude.
+  const suppressed = new Set<string>();
+  for (const [trigger, excluded] of Object.entries(EXCLUDED_BY)) {
+    if (values[trigger] !== undefined) {
+      for (const flag of excluded) suppressed.add(flag);
+    }
+  }
+  const seedable = (flag: string): boolean =>
+    declared.has(flag) && !suppressed.has(flag) && values[flag] === undefined;
+
   const d = config.defaults as Record<string, unknown>;
   for (const key of Object.keys(d)) {
     const val = d[key];
     if (val === undefined) continue;
     // `annotate` is the positive form of the negated flag `--no-annotate`.
     if (key === "annotate") {
-      if (val === false && values["no-annotate"] === undefined) {
+      if (val === false && seedable("no-annotate"))
         values["no-annotate"] = true;
-      }
       continue;
     }
     const flag = KEY_TO_FLAG[key] ?? key;
-    if (values[flag] !== undefined) continue; // an explicit flag wins
+    if (!seedable(flag)) continue;
     if (key === "rules") values[flag] = (val as string[]).join(",");
     else if (Array.isArray(val)) values[flag] = val as string[];
     else if (typeof val === "number") values[flag] = String(val);
