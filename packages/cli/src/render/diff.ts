@@ -103,8 +103,22 @@ function cappedBlocks(
 
 const plural = (n: number) => (n === 1 ? "" : "s");
 
+/** Wrap page-controlled text in a backtick-safe inline code span. A code span
+ * renders its content literally (so `<`, `**`, `</details>` are inert), and
+ * sizing the fence past the longest backtick run + padding handles a name that
+ * itself contains backticks. */
+function codeSpan(text: string): string {
+  let longest = 0;
+  for (const run of text.match(/`+/g) ?? []) {
+    longest = Math.max(longest, run.length);
+  }
+  const fence = "`".repeat(longest + 1);
+  const pad = text.startsWith("`") || text.endsWith("`") ? " " : "";
+  return `${fence}${pad}${text}${pad}${fence}`;
+}
+
 function pageList(pages: readonly PageDiff[]): string {
-  return pages.map((p) => `\`${p.name}\``).join(", ");
+  return pages.map((p) => codeSpan(p.name)).join(", ");
 }
 
 export interface DiffRenderOptions {
@@ -255,6 +269,12 @@ export function renderDiffJson(result: DiffResult): string {
       .map((e) => e.finding),
     views: p.views,
     structural: p.structural,
+    // Whether the unified diff has any hunk — the "did the structure change"
+    // signal for consumers that don't render the hunks (the a11y-diff workflow
+    // reads this to decide the comment). `structural` misses a pure TREE
+    // reorder (no tree-reorder statement pass); `viewHunks` catches it, so this
+    // is the honest per-page changed flag.
+    structuralDiff: hasHunks(p),
   });
   return `${JSON.stringify(
     {
@@ -380,16 +400,19 @@ export function renderDiffMarkdown(
   const overflow = changedPages.slice(maxPages);
 
   for (const page of detailed) {
+    // Page names come from config and notes wrap arbitrary error strings —
+    // both are page-controlled, so escape them before they hit the heading /
+    // prose (a name/error with `<`, `**`, or `</details>` must not inject).
     if (page.status === "incomparable") {
       out.push(
-        `#### ${page.name}`,
+        `#### ${mdEscape(page.name)}`,
         "",
-        `⚠️ incomparable — ${page.note ?? "a snapshot errored"}`,
+        `⚠️ incomparable — ${mdEscape(page.note ?? "a snapshot errored")}`,
         "",
       );
       continue;
     }
-    out.push(`#### ${page.name}`, "");
+    out.push(`#### ${mdEscape(page.name)}`, "");
     const shown = shownEntries(page);
     for (const e of shown) {
       const f = e.finding;

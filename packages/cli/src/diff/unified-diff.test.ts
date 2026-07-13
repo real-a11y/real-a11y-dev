@@ -42,14 +42,17 @@ describe("unifiedDiff", () => {
     expect(unifiedDiff(base, pr, 3)).toHaveLength(1);
   });
 
-  it("splits into TWO hunks when changes are far apart", () => {
+  it("splits into TWO hunks when changes are far apart, with correct @@ on both", () => {
     const base = "a\nb\nc\nd\ne\nf\ng\nh\ni\nj";
     const pr = "A\nb\nc\nd\ne\nf\ng\nh\ni\nJ";
     const hunks = unifiedDiff(base, pr, 2);
     expect(hunks).toHaveLength(2);
-    // First hunk starts at line 1, last hunk ends at line 10.
     expect(hunks[0].lines[0]).toEqual({ tag: "-", text: "a" });
     expect(hunks[1].lines.at(-1)).toEqual({ tag: "+", text: "J" });
+    // The SECOND hunk's line numbers must be right (pre-hunk line counting) —
+    // change j→J is at line 10, shown with 2 lines of leading context (h, i).
+    expect(hunkHeader(hunks[0])).toBe("@@ -1,3 +1,3 @@");
+    expect(hunkHeader(hunks[1])).toBe("@@ -8,3 +8,3 @@");
   });
 
   it("computes @@ line numbers (git omits ,len when it is 1)", () => {

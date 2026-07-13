@@ -163,12 +163,14 @@ jobs:
             const s = result.summary;
             const findingChanges = s.new + s.changed + s.removed;
 
-            // The CLI computes the structural statements (pages[].structural);
-            // `?? []` keeps this script working against an older CLI's output.
-            // Reorder-only pages have EMPTY views but a statement, so this —
-            // not the view counts — is the drift signal.
+            // `structuralDiff` (per page) is TRUE whenever the unified diff has
+            // any hunk — the honest "structure changed" signal. It's a superset
+            // of `structural` (plain-language statements), which misses a pure
+            // TREE reorder; keying anyChange on it stops the bot posting a
+            // false "unchanged" while diff.md actually shows a change. The
+            // `?? []`/`||` fallbacks keep it working against an older CLI.
             const anyDrift = result.pages.some(
-              (p) => (p.structural ?? []).length > 0,
+              (p) => (p.structural ?? []).length > 0 || p.structuralDiff,
             );
             const anyChange = findingChanges > 0 || anyDrift;
 

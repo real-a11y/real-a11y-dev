@@ -188,6 +188,47 @@ describe("renderDiffJson", () => {
   it("is deterministic — double render is byte-equal", () => {
     expect(renderDiffJson(structural)).toBe(renderDiffJson(structural));
   });
+
+  it("adds structuralDiff — true for a pure tree reorder that statements miss", () => {
+    // Two landmarks swap order: the multiset diff is empty and there's no
+    // tree-reorder statement pass, so `structural` is []. But the unified diff
+    // catches it — structuralDiff is the honest per-page "structure changed".
+    const reorder = diffArtifacts(
+      buildArtifact(
+        [
+          page("Home", [], {
+            tree: 'main\n  navigation "A"\n  navigation "B"',
+          }),
+        ],
+        { toolName: "c", toolVersion: "0" },
+      ),
+      buildArtifact(
+        [
+          page("Home", [], {
+            tree: 'main\n  navigation "B"\n  navigation "A"',
+          }),
+        ],
+        { toolName: "c", toolVersion: "0" },
+      ),
+    );
+    const parsed = JSON.parse(renderDiffJson(reorder)) as {
+      pages: { structural: unknown[]; structuralDiff: boolean }[];
+    };
+    expect(parsed.pages[0].structural).toEqual([]);
+    expect(parsed.pages[0].structuralDiff).toBe(true);
+    // A genuinely clean page reports structuralDiff: false.
+    const clean = diffArtifacts(
+      buildArtifact([page("Home", [])], { toolName: "c", toolVersion: "0" }),
+      buildArtifact([page("Home", [])], { toolName: "c", toolVersion: "0" }),
+    );
+    expect(
+      (
+        JSON.parse(renderDiffJson(clean)) as {
+          pages: { structuralDiff: boolean }[];
+        }
+      ).pages[0].structuralDiff,
+    ).toBe(false);
+  });
 });
 
 describe("renderDiffMarkdown", () => {
@@ -311,5 +352,33 @@ describe("renderDiffMarkdown", () => {
       .split("\n")
       .find((l) => l.startsWith("+") && l.includes("navigation"));
     expect(diffLine).toContain("</details>**bold**");
+  });
+
+  it("escapes hostile page names in the heading and route index", () => {
+    // Page names come from config — a backtick or `<` must not break the
+    // comment. Two changed pages so the route index renders.
+    const hostile = diffArtifacts(
+      buildArtifact(
+        [
+          page("a`b", [], { tree: "main" }),
+          page("<img>", [], { tree: "main" }),
+        ],
+        { toolName: "c", toolVersion: "0" },
+      ),
+      buildArtifact(
+        [
+          page("a`b", [], { tree: 'main\n  link "x"' }),
+          page("<img>", [], { tree: 'main\n  link "y"' }),
+        ],
+        { toolName: "c", toolVersion: "0" },
+      ),
+    );
+    const out = renderDiffMarkdown(hostile);
+    // Route index wraps names in a backtick-run-safe code span.
+    expect(out).toContain("Pages with a11y changes (2):");
+    expect(out).toContain("``a`b``"); // fenced past the embedded backtick
+    // The `####` heading escapes `<` so it can't inject HTML.
+    expect(out).toContain("#### &lt;img&gt;");
+    expect(out).not.toContain("#### <img>");
   });
 });
