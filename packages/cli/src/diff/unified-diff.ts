@@ -98,20 +98,25 @@ export function unifiedDiff(
     return acc;
   }, []);
 
+  // Emit a hunk spanning changes[from..to] with `context` lines on each side.
+  const flush = (hunks: Hunk[], from: number, to: number) => {
+    const start = Math.max(0, changed[from] - context);
+    const end = Math.min(ops.length - 1, changed[to] + context);
+    hunks.push(buildHunk(ops, start, end));
+  };
+  // Walk consecutive changes; split into a new hunk when the gap between two
+  // changes exceeds both their context windows (so the windows wouldn't
+  // touch). `changed` is non-empty here (we returned early on an all-equal
+  // diff), so the trailing group is always flushed after the loop.
   const hunks: Hunk[] = [];
-  let groupStartChange = 0;
-  for (let k = 0; k <= changed.length; k++) {
-    const isLast = k === changed.length;
-    const gap = isLast ? Infinity : changed[k] - changed[k - 1] - 1; // equal ops between two changes
-    if (k > 0 && (isLast || gap > 2 * context)) {
-      const firstChange = changed[groupStartChange];
-      const lastChange = changed[k - 1];
-      const start = Math.max(0, firstChange - context);
-      const end = Math.min(ops.length - 1, lastChange + context);
-      hunks.push(buildHunk(ops, start, end));
-      groupStartChange = k;
+  let groupStart = 0;
+  for (let k = 1; k < changed.length; k++) {
+    if (changed[k] - changed[k - 1] - 1 > 2 * context) {
+      flush(hunks, groupStart, k - 1);
+      groupStart = k;
     }
   }
+  flush(hunks, groupStart, changed.length - 1);
   return hunks;
 }
 
