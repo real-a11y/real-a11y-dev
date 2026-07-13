@@ -27,6 +27,41 @@ import { parseSnapshotArtifact } from "../snapshot-artifact.js";
 
 import { outputOf } from "./common.js";
 
+/** `--ignore-view-line` is repeatable; each value must be a valid RegExp.
+ * Built without flags — `g` would make `.test` stateful across lines. */
+function parseIgnoreViewLine(
+  value: string | boolean | undefined | string[],
+): RegExp[] {
+  const raw = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? [value]
+      : [];
+  return raw.map((pattern) => {
+    try {
+      return new RegExp(pattern);
+    } catch {
+      throw new CliError(
+        `--ignore-view-line expects a valid regular expression — got "${pattern}"`,
+      );
+    }
+  });
+}
+
+/** A positive-integer cap flag (--max-lines / --max-pages); undefined = off. */
+function parsePositive(
+  name: string,
+  value: string | boolean | undefined,
+): number | undefined {
+  if (value === undefined) return undefined;
+  const raw = String(value).trim();
+  const n = Number(raw);
+  if (raw === "" || !Number.isInteger(n) || n < 1) {
+    throw new CliError(`${name} expects a positive integer — got "${raw}"`);
+  }
+  return n;
+}
+
 function readArtifact(path: string, label: string) {
   const abs = resolve(path);
   let json: string;
@@ -51,6 +86,9 @@ export const diffCommand: CommandFn = async (positionals, flags) => {
   const failOn = parseFailOn(flags["fail-on"], "error");
   const format = parseFormat(flags.format, ["pretty", "json", "md"] as const);
   const output = outputOf(flags);
+  const ignoreViewLine = parseIgnoreViewLine(flags["ignore-view-line"]);
+  const maxLines = parsePositive("--max-lines", flags["max-lines"]);
+  const maxPages = parsePositive("--max-pages", flags["max-pages"]);
 
   const base = readArtifact(positionals[0], "base");
   const pr = readArtifact(positionals[1], "PR");
@@ -72,15 +110,19 @@ export const diffCommand: CommandFn = async (positionals, flags) => {
     }
   }
 
-  const result = diffArtifacts(base, pr);
+  const result = diffArtifacts(base, pr, { ignoreViewLine });
 
+  const explain = flags.explain === true;
   const content =
     format === "json"
       ? renderDiffJson(result)
       : format === "md"
-        ? renderDiffMarkdown(result)
+        ? renderDiffMarkdown(result, { explain, maxLines, maxPages })
         : renderDiffPretty(result, {
             color: output === undefined && colorEnabled(),
+            explain,
+            maxLines,
+            maxPages,
           });
   writeReport(output, content);
 

@@ -37,6 +37,21 @@ describe("diffViews", () => {
     expect(diffViews("x\nx", "x\nx\nx")).toEqual({ added: ["x"], removed: [] });
   });
 
+  it("drops ignored lines in both directions before the multiset", () => {
+    const ignore = (line: string) => /^time "/.test(line);
+    const base = 'main\n  time "Last updated: yesterday"\n  link "Docs"';
+    const pr = 'main\n  time "Last updated: today"\n  link "Docs"';
+    expect(diffViews(base, pr, undefined, ignore)).toEqual({
+      added: [],
+      removed: [],
+    });
+    // The predicate sees the TRIMMED line (indentation already gone).
+    expect(diffViews(base, pr)).toEqual({
+      added: ['time "Last updated: today"'],
+      removed: ['time "Last updated: yesterday"'],
+    });
+  });
+
   describe("tab-order (numbered) diff via stripTabIndex", () => {
     // Inserting one stop at position 2 renumbers everything after it.
     const base = '1. link "Home"\n2. link "Docs"\n3. link "About"';

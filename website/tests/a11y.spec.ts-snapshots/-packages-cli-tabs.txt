@@ -74,25 +74,33 @@
 74. generic
 75. button "Copy Code"
 76. generic
-77. table
-78. link "Adopt the gate on existing debt"
-79. link "SARIF, JUnit, JSONL"
-80. link "Authenticated pages"
+77. button "Copy Code"
+78. generic
+79. button "Copy Code"
+80. generic
 81. button "Copy Code"
 82. generic
-83. table
-84. button "Copy Code"
-85. generic
-86. table
-87. button "Copy Code"
-88. generic
+83. button "Copy Code"
+84. generic
+85. table
+86. link "Adopt the gate on existing debt"
+87. link "SARIF, JUnit, JSONL"
+88. link "Authenticated pages"
 89. button "Copy Code"
 90. generic
-91. link "Authenticated pages"
-92. link "axe-core"
-93. link "Authenticated pages"
-94. link "@real-a11y-dev/mcp"
-95. link "@real-a11y-dev/testing"
-96. link "Edit this page on GitHub"
-97. link "Previous page@real-a11y-dev/mcp"
-98. link "Next pageNext.js (App Router + React 19)"
+91. table
+92. button "Copy Code"
+93. generic
+94. table
+95. button "Copy Code"
+96. generic
+97. button "Copy Code"
+98. generic
+99. link "Authenticated pages"
+100. link "axe-core"
+101. link "Authenticated pages"
+102. link "@real-a11y-dev/mcp"
+103. link "@real-a11y-dev/testing"
+104. link "Edit this page on GitHub"
+105. link "Previous page@real-a11y-dev/mcp"
+106. link "Next pageNext.js (App Router + React 19)"

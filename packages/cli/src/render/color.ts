@@ -1,7 +1,7 @@
 /**
- * Hand-rolled ANSI (4 codes — not worth a dependency). Color is presentation
- * only: severity is always carried by the `[error]`/`[warning]` text tags, so
- * nothing is conveyed by color alone.
+ * Hand-rolled ANSI (5 codes — not worth a dependency). Color is presentation
+ * only: severity is always carried by the `[error]`/`[warning]` text tags and
+ * diff direction by the `+`/`-` markers, so nothing is conveyed by color alone.
  *
  * Enablement: FORCE_COLOR wins, NO_COLOR disables, otherwise TTY — plus
  * GITHUB_ACTIONS, whose logs render ANSI even though stdout is a pipe (the
@@ -19,6 +19,7 @@ export function colorEnabled(
 
 export interface Palette {
   red(s: string): string;
+  green(s: string): string;
   yellow(s: string): string;
   bold(s: string): string;
   dim(s: string): string;
@@ -32,12 +33,19 @@ const identity = (s: string): string => s;
 
 export function palette(enabled: boolean): Palette {
   if (!enabled) {
-    return { red: identity, yellow: identity, bold: identity, dim: identity };
+    return {
+      red: identity,
+      green: identity,
+      yellow: identity,
+      bold: identity,
+      dim: identity,
+    };
   }
   return {
-    red: wrap("\u001B[31m", "\u001B[39m"),
-    yellow: wrap("\u001B[33m", "\u001B[39m"),
-    bold: wrap("\u001B[1m", "\u001B[22m"),
-    dim: wrap("\u001B[2m", "\u001B[22m"),
+    red: wrap("[31m", "[39m"),
+    green: wrap("[32m", "[39m"),
+    yellow: wrap("[33m", "[39m"),
+    bold: wrap("[1m", "[22m"),
+    dim: wrap("[2m", "[22m"),
   };
 }

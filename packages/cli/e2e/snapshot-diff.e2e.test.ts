@@ -164,4 +164,98 @@ describe("diff", () => {
     expect(code).toBe(2);
     expect(stderr).toContain("schemaVersion 999");
   });
+
+  it("is neutral by default (unified diff); --explain adds the summary", async () => {
+    // more.json adds a second unlabeled button vs base — a new tab stop.
+    const neutral = await runCli(["diff", base, more, "--format", "md"]);
+    // Neutral: a real unified diff (```diff + @@ hunk) + a hint, no statements.
+    expect(neutral.stdout).toContain("```diff");
+    expect(neutral.stdout).toContain("@@");
+    expect(neutral.stdout).not.toContain("Keyboard tab stop added");
+    expect(neutral.stdout).toContain("Run with `--explain`");
+
+    const explained = await runCli([
+      "diff",
+      base,
+      more,
+      "--format",
+      "md",
+      "--explain",
+    ]);
+    expect(explained.stdout).toContain(
+      "**Structure (advisory — never blocks merge):**",
+    );
+    expect(explained.stdout).toContain("Keyboard tab stop added: button");
+    expect(explained.stdout).not.toContain("<details>");
+
+    // JSON carries the full data regardless of --explain (machine surface).
+    const json = await runCli(["diff", base, more, "--format", "json"]);
+    const parsed = JSON.parse(json.stdout) as {
+      pages: { structural: { kind: string }[] }[];
+    };
+    expect(parsed.pages[0].structural.map((s) => s.kind)).toContain(
+      "focus-stop-added",
+    );
+    // LF-only output on every platform (byte-stable report promise).
+    expect(json.stdout).not.toContain("\r");
+  });
+
+  it("--max-lines caps the diff with a pointer to the full diff", async () => {
+    const { stdout } = await runCli([
+      "diff",
+      base,
+      more,
+      "--format",
+      "md",
+      "--max-lines",
+      "1",
+    ]);
+    expect(stdout).toMatch(/… \d+ more diff line/);
+    expect(stdout).toContain("see the full diff in the job log");
+  });
+
+  it("structural drift alone never gates (advisory contract)", async () => {
+    const { code } = await runCli(["diff", clean, clean]);
+    expect(code).toBe(0);
+    // base→more adds a finding AND structure; --fail-on never stays 0.
+    const never = await runCli(["diff", base, more, "--fail-on", "never"]);
+    expect(never.code).toBe(0);
+  });
+
+  it("--ignore-view-line drops matching lines from views and statements", async () => {
+    // Repeatable; the predicate sees the TRIMMED line, so the tabs pattern
+    // must account for the `NN. ` counter still being present.
+    const { stdout } = await runCli([
+      "diff",
+      base,
+      more,
+      "--format",
+      "json",
+      "--ignore-view-line",
+      "^button$",
+      "--ignore-view-line",
+      String.raw`^\d+\. button$`,
+    ]);
+    const parsed = JSON.parse(stdout) as {
+      pages: {
+        views: { tree: { added: string[] }; tabs: { added: string[] } };
+        structural: { kind: string }[];
+      }[];
+    };
+    expect(parsed.pages[0].views.tree.added).toEqual([]);
+    expect(parsed.pages[0].views.tabs.added).toEqual([]);
+    expect(parsed.pages[0].structural).toEqual([]);
+  });
+
+  it("rejects an invalid --ignore-view-line regex (exit 2)", async () => {
+    const { code, stderr } = await runCli([
+      "diff",
+      base,
+      more,
+      "--ignore-view-line",
+      "([",
+    ]);
+    expect(code).toBe(2);
+    expect(stderr).toContain("valid regular expression");
+  });
 });
