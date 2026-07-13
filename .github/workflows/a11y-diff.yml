@@ -130,18 +130,20 @@ jobs:
         with:
           name: base-snapshot
 
-      # Findings-aware diff. `--fail-on never` keeps it advisory — this is a
-      # reviewer signal, not a second gate on top of `website-a11y`. `--explain`
-      # adds the plain-language structural summary (opt-in; the bare CLI stays
-      # neutral) so the comment reads for a whole team. The md output is the
-      # whole comment body: findings first, then the statements per route, then
-      # the color-coded raw diff. `--ignore-view-line '^time "'` drops the
-      # VitePress "Last updated" timestamp, which renders differently between the
-      # base and PR checkouts (shallow clone) and would otherwise show phantom
-      # drift on every page.
-      - name: Diff snapshots
+      # The FULL diff to stdout — captured in this job's log, uncapped, so the
+      # complete structural diff is always one click away even when the comment
+      # is truncated. `--ignore-view-line '^time "'` drops the VitePress "Last
+      # updated" timestamp (differs between the base/PR shallow checkouts).
+      - name: Structural diff (full — expand for the complete diff)
+        run: node packages/cli/dist/index.js diff base.json pr.json --explain --fail-on never --ignore-view-line '^time "'
+
+      # The comment build. `--explain` adds the plain-language summary (opt-in;
+      # the bare CLI stays neutral). `--max-pages 5 --max-lines 20` keep the
+      # sticky comment scannable — the first 5 changed routes, 20 diff lines
+      # each; the rest are listed and point to the full diff in the job log.
+      - name: Diff snapshots (comment)
         run: |
-          node packages/cli/dist/index.js diff base.json pr.json --format md --explain --fail-on never --ignore-view-line '^time "' -o diff.md
+          node packages/cli/dist/index.js diff base.json pr.json --format md --explain --fail-on never --ignore-view-line '^time "' --max-pages 5 --max-lines 20 -o diff.md
           node packages/cli/dist/index.js diff base.json pr.json --format json --fail-on never --ignore-view-line '^time "' -o diff.json
 
       - name: Post PR comment
@@ -151,7 +153,9 @@ jobs:
           script: |
             const fs = require('fs');
             const MARKER = '<!-- real-a11y-diff -->';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const FOOTER =
+              `[See the full structural diff](${runUrl}) · ` +
               '_Powered by [Real A11y](https://real-a11y.dev) — `real-a11y diff`_';
 
             const md = fs.readFileSync('diff.md', 'utf8').trim();

@@ -48,6 +48,20 @@ function parseIgnoreViewLine(
   });
 }
 
+/** A positive-integer cap flag (--max-lines / --max-pages); undefined = off. */
+function parsePositive(
+  name: string,
+  value: string | boolean | undefined,
+): number | undefined {
+  if (value === undefined) return undefined;
+  const raw = String(value).trim();
+  const n = Number(raw);
+  if (raw === "" || !Number.isInteger(n) || n < 1) {
+    throw new CliError(`${name} expects a positive integer — got "${raw}"`);
+  }
+  return n;
+}
+
 function readArtifact(path: string, label: string) {
   const abs = resolve(path);
   let json: string;
@@ -73,6 +87,8 @@ export const diffCommand: CommandFn = async (positionals, flags) => {
   const format = parseFormat(flags.format, ["pretty", "json", "md"] as const);
   const output = outputOf(flags);
   const ignoreViewLine = parseIgnoreViewLine(flags["ignore-view-line"]);
+  const maxLines = parsePositive("--max-lines", flags["max-lines"]);
+  const maxPages = parsePositive("--max-pages", flags["max-pages"]);
 
   const base = readArtifact(positionals[0], "base");
   const pr = readArtifact(positionals[1], "PR");
@@ -101,10 +117,12 @@ export const diffCommand: CommandFn = async (positionals, flags) => {
     format === "json"
       ? renderDiffJson(result)
       : format === "md"
-        ? renderDiffMarkdown(result, { explain })
+        ? renderDiffMarkdown(result, { explain, maxLines, maxPages })
         : renderDiffPretty(result, {
             color: output === undefined && colorEnabled(),
             explain,
+            maxLines,
+            maxPages,
           });
   writeReport(output, content);
 

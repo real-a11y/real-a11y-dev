@@ -99,12 +99,11 @@ describe("renderDiffPretty", () => {
     expect(out).toContain("+ new [error]");
   });
 
-  it("is neutral by default: counts only, no statements, an --explain hint", () => {
+  it("is neutral by default: the unified diff, no statements, an --explain hint", () => {
     const out = renderDiffPretty(structural, { color: false });
-    expect(out).toContain(
-      "structure changed (advisory): tree +2/-1 · outline +1/-1 · tabs +1/-0",
-    );
-    expect(out).not.toContain("Heading level changed");
+    expect(out).toContain("== Docs");
+    expect(out).toContain('heading "Setup" (level 3)'); // a + line in the diff
+    expect(out).not.toContain("Heading level changed"); // no statement
     expect(out).toContain(
       "Run with --explain for a plain-language structural summary.",
     );
@@ -119,9 +118,11 @@ describe("renderDiffPretty", () => {
     expect(out).not.toContain("Run with --explain");
   });
 
-  it("a reorder-only page: neutral hides it (with a hint), --explain shows it", () => {
+  it("a reorder shows in both modes (unified diff catches it); --explain names it", () => {
+    // The unified diff of the numbered tabs sees the reorder (the multiset
+    // didn't), so the page is no longer invisible in neutral mode.
     const neutral = renderDiffPretty(reorderOnly, { color: false });
-    expect(neutral).not.toContain("== Docs");
+    expect(neutral).toContain("== Docs");
     expect(neutral).toContain("Run with --explain");
     const explained = renderDiffPretty(reorderOnly, {
       color: false,
@@ -129,6 +130,14 @@ describe("renderDiffPretty", () => {
     });
     expect(explained).toContain("== Docs");
     expect(explained).toContain("Keyboard tab order changed");
+  });
+
+  it("caps with --max-lines and --max-pages", () => {
+    const capped = renderDiffPretty(structural, {
+      color: false,
+      maxLines: 2,
+    });
+    expect(capped).toMatch(/… \d+ more diff line/);
   });
 });
 
@@ -198,30 +207,29 @@ describe("renderDiffMarkdown", () => {
     );
   });
 
-  it("is neutral by default: raw diff, no statements, findings-only header + hint", () => {
+  it("is neutral by default: the unified diff, no statements, header names the drift", () => {
     const out = renderDiffMarkdown(structural);
-    // Header stays findings-only; the raw diff below carries the structure.
+    // "structure changed on N pages" is a fact — it rides the header in both
+    // modes so an all-zero triplet doesn't read as "nothing changed".
     expect(out.split("\n")[0]).toBe(
-      "### Accessibility diff — 0 new · 0 changed · 0 fixed",
+      "### Accessibility diff — 0 new · 0 changed · 0 fixed · structure changed on 1 page",
     );
     expect(out).toContain("#### Docs");
     expect(out).not.toContain("**Structure (advisory");
     expect(out).not.toContain("Heading level changed");
-    expect(out).toContain(
-      "**Raw view diff — tree +2/-1 · outline +1/-1 · tabs +1/-0**",
-    );
-    expect(out).not.toContain("<details>");
-    expect(out).toContain('+ heading "Setup" (level 3)');
+    expect(out).toContain("_tree_");
     expect(out).toContain("```diff");
+    expect(out).toContain("@@");
+    expect(out).toContain('-  heading "Setup" (level 2)'); // tag + indented text
+    expect(out).toContain('+  heading "Setup" (level 3)');
+    expect(out).not.toContain("<details>");
     expect(out).toContain(
       "_Run with `--explain` for a plain-language summary of the structural changes._",
     );
   });
 
-  it("--explain: header suffix + lead-in, statements before the inline raw diff", () => {
+  it("--explain: statements before the unified diff; header names the drift", () => {
     const out = renderDiffMarkdown(structural, { explain: true });
-    // The header (an email/notification title) names the drift so it doesn't
-    // read as an all-zero "nothing changed".
     expect(out.split("\n")[0]).toBe(
       "### Accessibility diff — 0 new · 0 changed · 0 fixed · structure changed on 1 page",
     );
@@ -230,13 +238,11 @@ describe("renderDiffMarkdown", () => {
     );
     expect(out).toContain("**Structure (advisory — never blocks merge):**");
     expect(out).toContain('- Heading level changed: "Setup" h2 → h3');
+    // Statements come BEFORE the unified diff.
     expect(out.indexOf("Heading level changed")).toBeLessThan(
-      out.indexOf("Raw view diff"),
+      out.indexOf("```diff"),
     );
-    expect(out).toContain(
-      "**Raw view diff — tree +2/-1 · outline +1/-1 · tabs +1/-0**",
-    );
-    expect(out).toContain('- heading "Setup" (level 2)');
+    expect(out).toContain('-  heading "Setup" (level 2)');
     expect(out).toContain(
       "_Structural notes are advisory and never fail the check; container/nesting moves are not tracked._",
     );
@@ -249,18 +255,36 @@ describe("renderDiffMarkdown", () => {
     );
   });
 
-  it("a reorder-only page: neutral hides it (hint), --explain shows the statement", () => {
+  it("a reorder shows in both modes; --explain names it", () => {
     const neutral = renderDiffMarkdown(reorderOnly);
-    expect(neutral).not.toContain("#### Docs");
-    expect(neutral).toContain("_Run with `--explain`");
+    expect(neutral).toContain("#### Docs"); // unified diff catches the reorder
+    expect(neutral).toContain("```diff");
     const explained = renderDiffMarkdown(reorderOnly, { explain: true });
-    expect(explained).toContain("#### Docs");
     expect(explained).toContain("Keyboard tab order changed");
-    // A reorder adds/removes no lines, so there's no raw diff to show.
-    expect(explained).not.toContain("Raw view diff");
   });
 
-  it("escapes hostile accessible names in --explain statements", () => {
+  it("lists changed routes and caps with --max-pages / --max-lines", () => {
+    const two = diffArtifacts(
+      buildArtifact(
+        [page("A", [], { tree: "main" }), page("B", [], { tree: "main" })],
+        { toolName: "c", toolVersion: "0" },
+      ),
+      buildArtifact(
+        [
+          page("A", [], { tree: 'main\n  link "x"' }),
+          page("B", [], { tree: 'main\n  link "y"' }),
+        ],
+        { toolName: "c", toolVersion: "0" },
+      ),
+    );
+    const out = renderDiffMarkdown(two, { maxPages: 1 });
+    expect(out).toContain("**Pages with a11y changes (2):** `A`, `B`");
+    expect(out).toContain("#### A");
+    expect(out).not.toContain("#### B"); // capped; listed in the overflow note
+    expect(out).toContain("and 1 more page with changes: `B`");
+  });
+
+  it("escapes hostile accessible names in --explain statements; the diff keeps them verbatim", () => {
     const hostile = diffArtifacts(
       buildArtifact([page("Home", [], { tree: "main" })], {
         toolName: "c",
@@ -282,7 +306,10 @@ describe("renderDiffMarkdown", () => {
     expect(bullet).not.toContain("</details>");
     expect(bullet).toContain("&lt;/details&gt;");
     expect(bullet).toContain("\\*\\*bold\\*\\*");
-    // …while the raw block keeps the line verbatim inside its fence.
-    expect(out).toContain('+ navigation "</details>**bold** `tick`"');
+    // …while the unified diff keeps the line verbatim inside its fence.
+    const diffLine = out
+      .split("\n")
+      .find((l) => l.startsWith("+") && l.includes("navigation"));
+    expect(diffLine).toContain("</details>**bold**");
   });
 });

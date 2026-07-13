@@ -55,6 +55,10 @@ export type {
   SummarizeViewsInput,
 } from "./diff/views-summary.js";
 
+// Unified structural diff — git-style hunks with context.
+export { unifiedDiff, hunkHeader, hunkLineCount } from "./diff/unified-diff.js";
+export type { DiffLine, Hunk, ViewHunks } from "./diff/unified-diff.js";
+
 export {
   projectFinding,
   projectFindings,

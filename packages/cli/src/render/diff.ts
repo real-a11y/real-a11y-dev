@@ -1,19 +1,21 @@
 /**
- * Render a findings-aware diff. Leads with what a reviewer cares about — NEW
- * violations — then CHANGED, then FIXED, then the structural view diff.
+ * Render a findings-aware diff. Leads with NEW violations, then CHANGED, then
+ * FIXED, then the structural view diff.
  *
- * Default output is NEUTRAL: findings + the raw `+`/`-` structural view diff,
- * both facts. The plain-language structural statements ("Heading level
- * changed: h2 → h3") are an interpretive layer — pairing heuristics,
- * cross-view inference — and are opt-in via `explain`, so the default never
- * makes a claim the raw diff can't back up. `--format json` always carries the
- * full data (`views` + `structural`); `explain` only governs human output.
+ * The structural half is a real UNIFIED DIFF (context + order + indentation) —
+ * what a reviewer reads to locate a change, like a PR file diff. Neutral by
+ * default: findings + that diff, both facts. `--explain` adds the interpretive
+ * plain-language statements on top. Full by default; `--max-lines` and
+ * `--max-pages` cap the output for CI comments (the full diff still prints to
+ * the job log). `--format json` always carries the machine data
+ * (`views` + `structural`); the flags only govern human output.
  */
 
 import type { DiffEntry } from "../diff/findings-diff.js";
 import type { DiffResult, PageDiff } from "../diff/page-diff.js";
+import { hunkHeader } from "../diff/unified-diff.js";
 
-import { palette } from "./color.js";
+import { palette, type Palette } from "./color.js";
 
 const ORDER: Record<DiffEntry["kind"], number> = {
   new: 0,
@@ -22,10 +24,8 @@ const ORDER: Record<DiffEntry["kind"], number> = {
   unchanged: 3,
 };
 
-/** Statements shown per page in pretty/md before "… N more" (json is uncapped). */
+/** Plain-language statements shown per page before "… N more" (json is uncapped). */
 const STATEMENT_CAP = 10;
-/** Raw lines shown per view per direction inside the collapsed md block. */
-const RAW_LINE_CAP = 25;
 
 const VIEW_NAMES = ["tree", "outline", "tabs"] as const;
 
@@ -42,22 +42,113 @@ function sortEntries(entries: readonly DiffEntry[]): DiffEntry[] {
   );
 }
 
-/** `tree +3/-1 · tabs +2/-0` — per-view counts, non-empty views only. */
-function viewCounts(page: PageDiff): string {
-  return VIEW_NAMES.filter(
-    (v) => page.views[v].added.length || page.views[v].removed.length,
-  )
-    .map(
-      (v) =>
-        `${v} +${page.views[v].added.length}/-${page.views[v].removed.length}`,
-    )
-    .join(" · ");
+function shownEntries(page: PageDiff): DiffEntry[] {
+  return sortEntries(page.entries).filter((e) => e.kind !== "unchanged");
+}
+
+/** The serialized structure differs (any view has a hunk). */
+function hasHunks(page: PageDiff): boolean {
+  return VIEW_NAMES.some((v) => page.viewHunks[v].length > 0);
+}
+
+/** A page worth showing: a finding change, a structural diff, or incomparable. */
+function isChanged(page: PageDiff): boolean {
+  return (
+    page.status === "incomparable" ||
+    shownEntries(page).length > 0 ||
+    hasHunks(page)
+  );
+}
+
+// ── unified diff → capped line blocks ────────────────────────────────────────
+
+interface DiffBlock {
+  view: string;
+  /** Raw diff-content lines: `@@ … @@` headers and `±text`/` text` lines. */
+  lines: string[];
+}
+
+/** Flatten a page's per-view hunks into blocks, capping the TOTAL diff-content
+ * lines across all views at `maxLines` (Infinity = uncapped). */
+function cappedBlocks(
+  page: PageDiff,
+  maxLines: number,
+): { blocks: DiffBlock[]; hidden: number } {
+  let budget = maxLines;
+  let hidden = 0;
+  const blocks: DiffBlock[] = [];
+  for (const view of VIEW_NAMES) {
+    const hunks = page.viewHunks[view];
+    if (hunks.length === 0) continue;
+    const content: string[] = [];
+    for (const h of hunks) {
+      content.push(hunkHeader(h));
+      for (const l of h.lines) content.push(`${l.tag}${l.text}`);
+    }
+    if (budget <= 0) {
+      hidden += content.length;
+    } else if (content.length > budget) {
+      blocks.push({ view, lines: content.slice(0, budget) });
+      hidden += content.length - budget;
+      budget = 0;
+    } else {
+      blocks.push({ view, lines: content });
+      budget -= content.length;
+    }
+  }
+  return { blocks, hidden };
+}
+
+// ── shared helpers ───────────────────────────────────────────────────────────
+
+const plural = (n: number) => (n === 1 ? "" : "s");
+
+function pageList(pages: readonly PageDiff[]): string {
+  return pages.map((p) => `\`${p.name}\``).join(", ");
 }
 
 export interface DiffRenderOptions {
   color: boolean;
   /** Add the plain-language structural statements (interpretive layer). */
   explain?: boolean;
+  /** Cap the structural diff to N lines per page (default: unlimited). */
+  maxLines?: number;
+  /** Detail at most N changed pages (default: unlimited). */
+  maxPages?: number;
+}
+
+// ── pretty (terminal) ────────────────────────────────────────────────────────
+
+function prettyViewDiff(
+  page: PageDiff,
+  maxLines: number,
+  c: Palette,
+): string[] {
+  const { blocks, hidden } = cappedBlocks(page, maxLines);
+  const out: string[] = [];
+  for (const b of blocks) {
+    out.push(c.dim(`  ${b.view}`));
+    for (const line of b.lines) {
+      const head = line[0];
+      const colored =
+        head === "-"
+          ? c.red(line)
+          : head === "+"
+            ? c.green(line)
+            : head === "@"
+              ? c.dim(line)
+              : line;
+      out.push(`  ${colored}`);
+    }
+  }
+  if (hidden > 0) {
+    out.push(
+      c.dim(
+        `  … ${hidden} more diff line${plural(hidden)} (run without --max-lines, or see the job log)`,
+      ),
+    );
+  }
+  return out;
 }
 
 export function renderDiffPretty(
@@ -66,14 +157,16 @@ export function renderDiffPretty(
 ): string {
   const c = palette(options.color);
   const explain = options.explain ?? false;
+  const maxLines = options.maxLines ?? Infinity;
+  const maxPages = options.maxPages ?? Infinity;
   const lines: string[] = [];
-  const anyStructural = result.pages.some((p) => p.structural.length > 0);
 
-  for (const page of result.pages) {
-    const shown = sortEntries(page.entries).filter(
-      (e) => e.kind !== "unchanged",
-    );
+  const changed = result.pages.filter(isChanged);
+  const structPages = result.pages.filter(hasHunks).length;
+  const detailed = changed.slice(0, maxPages);
+  const overflow = changed.slice(maxPages);
 
+  for (const page of detailed) {
     if (page.status === "incomparable") {
       lines.push(c.bold(`== ${page.name}`));
       lines.push(
@@ -81,22 +174,12 @@ export function renderDiffPretty(
       );
       continue;
     }
-    const counts = viewCounts(page);
-    const hasStructural = page.structural.length > 0;
-    // Neutral: findings or a raw view-line change. `explain` additionally
-    // surfaces reorder-only pages, whose view diffs are empty (the reorder is
-    // only visible via the analysis).
-    const show = explain
-      ? shown.length > 0 || hasStructural
-      : shown.length > 0 || counts !== "";
-    if (!show) continue;
-
     lines.push(
       c.bold(
         `== ${page.name}${page.status !== "ok" ? ` (${page.status})` : ""}`,
       ),
     );
-    for (const e of shown) {
+    for (const e of shownEntries(page)) {
       const f = e.finding;
       if (e.kind === "new") {
         const tag = f.suppressed
@@ -120,10 +203,8 @@ export function renderDiffPretty(
         );
       }
     }
-    if (explain && hasStructural) {
-      lines.push(
-        c.dim(`  structure changed (advisory):${counts ? ` ${counts}` : ""}`),
-      );
+    if (explain && page.structural.length) {
+      lines.push(c.dim("  structure changed (advisory):"));
       for (const s of page.structural.slice(0, STATEMENT_CAP)) {
         lines.push(c.dim(`    · ${s.message}`));
       }
@@ -134,23 +215,31 @@ export function renderDiffPretty(
           ),
         );
       }
-    } else if (!explain && counts !== "") {
-      // Neutral: the counts are the fact; the +/- lines are in --format json.
-      lines.push(c.dim(`  structure changed (advisory): ${counts}`));
     }
+    lines.push(...prettyViewDiff(page, maxLines, c));
   }
 
-  const { new: n, changed, removed } = result.summary;
-  if (!explain && anyStructural) {
+  if (overflow.length) {
+    lines.push(
+      c.dim(
+        `… and ${overflow.length} more page${plural(overflow.length)} with changes: ${overflow.map((p) => p.name).join(", ")}`,
+      ),
+    );
+  }
+  if (!explain && structPages > 0) {
     lines.push(
       c.dim("Run with --explain for a plain-language structural summary."),
     );
   }
+
+  const { new: n, changed: ch, removed } = result.summary;
   if (lines.length) lines.push("");
-  const summary = `${n} new · ${changed} changed · ${removed} fixed`;
+  const summary = `${n} new · ${ch} changed · ${removed} fixed`;
   lines.push(c.bold(n > 0 ? c.red(summary) : summary));
   return `${lines.join("\n")}\n`;
 }
+
+// ── json (machine surface — unchanged by the flags) ──────────────────────────
 
 export function renderDiffJson(result: DiffResult): string {
   const page = (p: PageDiff) => ({
@@ -179,10 +268,11 @@ export function renderDiffJson(result: DiffResult): string {
   )}\n`;
 }
 
-/** Escape a statement for a markdown bullet. Accessible names are page
- * content — a name containing `</details>`, `**`, or backticks must render
- * literally, never as structure. Backslash-escapes markdown metacharacters
- * and entity-escapes HTML. */
+// ── markdown (PR comment) ────────────────────────────────────────────────────
+
+/** Escape a statement for a markdown bullet. Accessible names are page content
+ * — a name containing `</details>`, `**`, or backticks must render literally,
+ * never as structure. */
 function mdEscape(text: string): string {
   return text
     .replaceAll("\\", "\\\\")
@@ -192,8 +282,8 @@ function mdEscape(text: string): string {
     .replace(/[`*_[\]#|~]/g, (ch) => `\\${ch}`);
 }
 
-/** A ``` fence breaks if the content contains one — use one backtick more
- * than the longest run in the content (min 3). */
+/** A ``` fence breaks if the content contains one — use one backtick more than
+ * the longest run in the content (min 3). */
 function fenceFor(lines: readonly string[]): string {
   let longest = 0;
   for (const line of lines) {
@@ -204,35 +294,7 @@ function fenceFor(lines: readonly string[]): string {
   return "`".repeat(Math.max(3, longest + 1));
 }
 
-/** The per-page raw view diff: a bold heading, then per-view ```diff fences
- * (removed lines first, capped per direction). Rendered INLINE, not inside a
- * <details> — GitHub only inlines the green/red diff colors in notification
- * emails for a fence that isn't nested in raw HTML, and email clients
- * auto-expand <details> anyway. Empty when all views are empty (a reorder-only
- * page has statements but no added/removed lines). */
-function mdRawBlock(page: PageDiff): string[] {
-  const counts = viewCounts(page);
-  if (!counts) return [];
-  const out: string[] = [`**Raw view diff — ${counts}**`, ""];
-  for (const view of VIEW_NAMES) {
-    const { added, removed } = page.views[view];
-    if (added.length === 0 && removed.length === 0) continue;
-    const removedShown = removed.slice(0, RAW_LINE_CAP);
-    const addedShown = added.slice(0, RAW_LINE_CAP);
-    const hidden =
-      removed.length - removedShown.length + (added.length - addedShown.length);
-    const body = [
-      ...removedShown.map((l) => `- ${l}`),
-      ...addedShown.map((l) => `+ ${l}`),
-      ...(hidden > 0 ? [`… ${hidden} more line(s)`] : []),
-    ];
-    const fence = fenceFor(body);
-    out.push(`_${view}_`, "", `${fence}diff`, ...body, fence, "");
-  }
-  return out;
-}
-
-function mdStructural(page: PageDiff): string[] {
+function mdStatements(page: PageDiff): string[] {
   if (page.structural.length === 0) return [];
   const out: string[] = ["**Structure (advisory — never blocks merge):**", ""];
   for (const s of page.structural.slice(0, STATEMENT_CAP)) {
@@ -240,17 +302,35 @@ function mdStructural(page: PageDiff): string[] {
   }
   if (page.structural.length > STATEMENT_CAP) {
     out.push(
-      `- … ${page.structural.length - STATEMENT_CAP} more — see raw diff below`,
+      `- … ${page.structural.length - STATEMENT_CAP} more — see the diff below`,
     );
   }
   out.push("");
-  out.push(...mdRawBlock(page));
+  return out;
+}
+
+/** Per-view unified diff, rendered inline as ```diff blocks (not in <details>
+ * — email keeps the green/red coloring). */
+function mdViewDiff(page: PageDiff, maxLines: number): string[] {
+  const { blocks, hidden } = cappedBlocks(page, maxLines);
+  const out: string[] = [];
+  for (const b of blocks) {
+    const fence = fenceFor(b.lines);
+    out.push(`_${b.view}_`, "", `${fence}diff`, ...b.lines, fence, "");
+  }
+  if (hidden > 0) {
+    out.push(
+      `_… ${hidden} more diff line${plural(hidden)} — see the full diff in the job log._`,
+      "",
+    );
+  }
   return out;
 }
 
 export interface DiffMarkdownOptions {
-  /** Add the plain-language structural statements (interpretive layer). */
   explain?: boolean;
+  maxLines?: number;
+  maxPages?: number;
 }
 
 export function renderDiffMarkdown(
@@ -258,38 +338,48 @@ export function renderDiffMarkdown(
   options: DiffMarkdownOptions = {},
 ): string {
   const explain = options.explain ?? false;
+  const maxLines = options.maxLines ?? Infinity;
+  const maxPages = options.maxPages ?? Infinity;
   const { new: n, changed, removed } = result.summary;
   const noFindings = n === 0 && changed === 0 && removed === 0;
-  const anyStructural = result.pages.some((p) => p.structural.length > 0);
-  const structuralPages = result.pages.filter(
-    (p) => p.structural.length > 0,
-  ).length;
-  // In `explain` mode the header summarizes the structural drift (which is what
-  // an email/notification title shows) so a findings-clean-but-structure-moved
-  // diff doesn't read as an all-zero "nothing changed". Neutral output keeps
-  // the header findings-only — the raw diff below carries the structural facts.
+
+  const changedPages = result.pages.filter(isChanged);
+  const structPages = result.pages.filter(hasHunks).length;
+  // "structure changed on N pages" is a fact (the serialized views differ), so
+  // it rides the header in both modes — an all-zero findings triplet otherwise
+  // reads as "nothing changed" in an email title.
   const structHeader =
-    explain && structuralPages > 0
-      ? ` · structure changed on ${structuralPages} page${
-          structuralPages === 1 ? "" : "s"
-        }`
+    structPages > 0
+      ? ` · structure changed on ${structPages} page${plural(structPages)}`
       : "";
   const out: string[] = [
     `### Accessibility diff — ${n} new · ${changed} changed · ${removed} fixed${structHeader}`,
     "",
   ];
+
   if (noFindings) {
     out.push(
-      explain && structuralPages > 0
-        ? "No accessibility finding changes — but the semantic structure moved (advisory, review below)."
+      structPages > 0
+        ? explain
+          ? "No accessibility finding changes — but the semantic structure moved (advisory, review below)."
+          : "No accessibility finding changes — the structural diff is below."
         : "No accessibility finding changes.",
       "",
     );
   }
-  for (const page of result.pages) {
-    const shown = sortEntries(page.entries).filter(
-      (e) => e.kind !== "unchanged",
+
+  // Route index — scan the affected pages at a glance before the details.
+  if (changedPages.length >= 2) {
+    out.push(
+      `**Pages with a11y changes (${changedPages.length}):** ${pageList(changedPages)}`,
+      "",
     );
+  }
+
+  const detailed = changedPages.slice(0, maxPages);
+  const overflow = changedPages.slice(maxPages);
+
+  for (const page of detailed) {
     if (page.status === "incomparable") {
       out.push(
         `#### ${page.name}`,
@@ -299,13 +389,8 @@ export function renderDiffMarkdown(
       );
       continue;
     }
-    const counts = viewCounts(page);
-    const hasStructural = page.structural.length > 0;
-    const show = explain
-      ? shown.length > 0 || hasStructural
-      : shown.length > 0 || counts !== "";
-    if (!show) continue;
     out.push(`#### ${page.name}`, "");
+    const shown = shownEntries(page);
     for (const e of shown) {
       const f = e.finding;
       if (e.kind === "new")
@@ -322,16 +407,23 @@ export function renderDiffMarkdown(
         out.push(`- ✅ **fixed** \`${f.rule}\`: ${f.message}`);
     }
     if (shown.length) out.push("");
-    // Explain: statements + the raw block. Neutral: the raw block alone.
-    if (explain && hasStructural) out.push(...mdStructural(page));
-    else if (!explain && counts !== "") out.push(...mdRawBlock(page));
+    if (explain) out.push(...mdStatements(page));
+    out.push(...mdViewDiff(page, maxLines));
   }
-  if (explain && structuralPages > 0) {
+
+  if (overflow.length) {
+    out.push(
+      `_… and ${overflow.length} more page${plural(overflow.length)} with changes: ${pageList(overflow)} — see the full diff in the job log._`,
+      "",
+    );
+  }
+
+  if (explain && structPages > 0) {
     out.push(
       "_Structural notes are advisory and never fail the check; container/nesting moves are not tracked._",
       "",
     );
-  } else if (!explain && anyStructural) {
+  } else if (!explain && structPages > 0) {
     out.push(
       "_Run with `--explain` for a plain-language summary of the structural changes._",
       "",

@@ -101,6 +101,8 @@ const DIFF_FLAGS: Options = {
   baseline: { type: "string" },
   "ignore-view-line": { type: "string", multiple: true },
   explain: { type: "boolean" },
+  "max-lines": { type: "string" },
+  "max-pages": { type: "string" },
   format: { type: "string", short: "f" },
   output: { type: "string", short: "o" },
   quiet: { type: "boolean", short: "q" },
@@ -311,19 +313,24 @@ robust to DOM churn (re-indentation, renumbered locators) that defeats a line
 diff. Pure: no browser. Exits 1 only on NEW findings at/above --fail-on;
 fixes and drift never fail the build.
 
-Output is neutral by default — findings plus the raw structural view diff.
-Add --explain for a plain-language summary of the structural changes
-("Heading level changed: h2 → h3", "tab stop removed …").
+Output is neutral by default — findings plus a real unified diff of the
+structure (context + order + indentation, like a PR file diff), shown in full.
+Add --explain for a plain-language summary of the changes ("Heading level
+changed: h2 → h3", "tab stop removed …").
 
 Examples:
   real-a11y diff base.json pr.json
   real-a11y diff base.json pr.json --explain
-  real-a11y diff base.json pr.json --format md --explain -o comment.md
+  real-a11y diff base.json pr.json --format md --explain --max-pages 5 --max-lines 20 -o comment.md
 
 Flags:
   --fail-on <level>      error | warning | never          (default: error)
   --explain              Add a plain-language summary of structural changes
                          (off by default — the neutral diff makes no inferences)
+  --max-lines <n>        Cap the structural diff to n lines per page, then
+                         "… N more" (default: full — for CI comments)
+  --max-pages <n>        Detail at most n changed pages, then list the rest
+                         (default: all — for CI comments)
   --baseline <file>      NEW findings this baseline accepts don't gate
                          (they stay in the report, marked suppressed)
   --ignore-view-line <regex>  Drop matching view lines before diffing

@@ -165,11 +165,12 @@ describe("diff", () => {
     expect(stderr).toContain("schemaVersion 999");
   });
 
-  it("is neutral by default; --explain adds the plain-language summary", async () => {
+  it("is neutral by default (unified diff); --explain adds the summary", async () => {
     // more.json adds a second unlabeled button vs base — a new tab stop.
     const neutral = await runCli(["diff", base, more, "--format", "md"]);
-    // Neutral: raw diff + a hint, but NO plain-language statements.
-    expect(neutral.stdout).toContain("**Raw view diff —");
+    // Neutral: a real unified diff (```diff + @@ hunk) + a hint, no statements.
+    expect(neutral.stdout).toContain("```diff");
+    expect(neutral.stdout).toContain("@@");
     expect(neutral.stdout).not.toContain("Keyboard tab stop added");
     expect(neutral.stdout).toContain("Run with `--explain`");
 
@@ -197,6 +198,20 @@ describe("diff", () => {
     );
     // LF-only output on every platform (byte-stable report promise).
     expect(json.stdout).not.toContain("\r");
+  });
+
+  it("--max-lines caps the diff with a pointer to the full diff", async () => {
+    const { stdout } = await runCli([
+      "diff",
+      base,
+      more,
+      "--format",
+      "md",
+      "--max-lines",
+      "1",
+    ]);
+    expect(stdout).toMatch(/… \d+ more diff line/);
+    expect(stdout).toContain("see the full diff in the job log");
   });
 
   it("structural drift alone never gates (advisory contract)", async () => {

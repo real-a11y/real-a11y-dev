@@ -42,12 +42,13 @@ Because the diff is **finding-identity-aware** (each finding carries a stable `v
 > No accessibility finding changes.
 
 **Changes detected:**
-> ### Accessibility diff — 2 new · 0 changed · 1 fixed
+> ### Accessibility diff — 2 new · 0 changed · 1 fixed · structure changed on 2 pages
+>
+> **Pages with a11y changes (2):** `Home`, `Settings`
 >
 > #### Home
 >
 > - ❌ **new** `no-unlabeled-interactive`: Unlabeled interactive element: button &lt;button&gt;
-> - ❌ **new** `image-alt`: Image missing alt text: &lt;img&gt;
 > - ✅ **fixed** `heading-order`: Heading level skipped: h1 → h3
 >
 > **Structure (advisory — never blocks merge):**
@@ -55,17 +56,23 @@ Because the diff is **finding-identity-aware** (each finding carries a stable `v
 > - Heading level changed: "Setup" h2 → h3
 > - Keyboard tab stop added: link "Skip to setup" (now stop 2 of 14)
 >
-> **Raw view diff — tree +2/-1 · outline +1/-1 · tabs +1/-0**
+> _tree_
 > ```diff
-> - heading "Setup" (level 2)
-> + heading "Setup" (level 3)
+> @@ -3,7 +3,8 @@
+>      link "About"
+> -    button "Toggle theme"
+> +    button "Switch to dark mode"
+>      link "Cambiar a español"
 > ```
 
-Findings lead (they're the gate); structural drift follows as **plain-language
-statements** any reviewer can verify — press <kbd>Tab</kbd>, glance at the
-heading — with the raw serialized `+`/`-` lines inline beneath them (color-coded,
-so a PR email keeps the green/red). Even
-changes no line diff can see get a statement: a *pure reorder* of the tab
+A **route index** lists every page that changed; findings lead (they're the
+gate); then the **plain-language statements** any reviewer can verify — press
+<kbd>Tab</kbd>, glance at the heading — and a **real unified diff** (context +
+order + indentation, color-coded so a PR email keeps the green/red). The
+comment caps at the first 5 routes and 20 diff lines each; the **full diff is
+always in the job log** (the workflow prints it uncapped) and linked from the
+comment footer. Even changes no line diff can see get a statement: a *pure
+reorder* of the tab
 order adds or removes no lines, but reads as
 `Keyboard tab order changed: 4 stops moved (same 14 stops)`.
 

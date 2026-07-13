@@ -140,5 +140,42 @@ describe("diffArtifacts", () => {
     expect(result.pages[0].structural).toEqual([
       expect.objectContaining({ kind: "tab-order-reordered" }),
     ]);
+    // The unified diff DOES see the reorder (numbered lines differ) even though
+    // the multiset didn't — so the page isn't invisible in neutral output.
+    expect(result.pages[0].viewHunks.tabs.length).toBeGreaterThan(0);
+  });
+
+  it("builds a per-view unified diff (context + indentation), [] when clean", () => {
+    const base = artifact([
+      page("Home", [], { tree: 'main\n  link "Home"\n  button "Go"' }),
+    ]);
+    const pr = artifact([
+      page("Home", [], { tree: 'main\n  link "Home"\n  button "Submit"' }),
+    ]);
+    const hunks = diffArtifacts(base, pr).pages[0].viewHunks;
+    expect(hunks.tree).toHaveLength(1);
+    expect(hunks.tree[0].lines).toContainEqual({
+      tag: "-",
+      text: '  button "Go"',
+    });
+    expect(hunks.tree[0].lines).toContainEqual({
+      tag: "+",
+      text: '  button "Submit"',
+    });
+    expect(hunks.outline).toEqual([]);
+    // A clean page has no hunks on any view.
+    const clean = diffArtifacts(base, base).pages[0].viewHunks;
+    expect(clean).toEqual({ tree: [], outline: [], tabs: [] });
+  });
+
+  it("--ignore-view-line keeps volatile lines out of the unified diff too", () => {
+    const base = artifact([
+      page("Home", [], { tree: 'main\n  time "yesterday"\n  link "x"' }),
+    ]);
+    const pr = artifact([
+      page("Home", [], { tree: 'main\n  time "today"\n  link "x"' }),
+    ]);
+    const filtered = diffArtifacts(base, pr, { ignoreViewLine: [/^time "/] });
+    expect(filtered.pages[0].viewHunks.tree).toEqual([]);
   });
 });

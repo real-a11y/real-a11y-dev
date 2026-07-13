@@ -14,6 +14,7 @@ import {
 } from "./findings-diff.js";
 import { diffViews, stripTabIndex, type ViewDiff } from "./views-diff.js";
 import { summarizeViews, type ViewChange } from "./views-summary.js";
+import { unifiedDiff, type ViewHunks } from "./unified-diff.js";
 
 export type PageDiffStatus =
   | "ok"
@@ -30,6 +31,10 @@ export interface PageDiff {
    * view diffs. Advisory: the exit gate never reads it. Empty for
    * added/removed/incomparable pages. */
   structural: ViewChange[];
+  /** Git-style unified diff of each view (context + order + indentation) — the
+   * neutral, reviewable structural output. Empty hunks for
+   * added/removed/incomparable pages. */
+  viewHunks: ViewHunks;
   /** Why a page is incomparable (the errored side's message). */
   note?: string;
 }
@@ -47,6 +52,7 @@ export interface DiffResult {
 
 const EMPTY_VIEW: ViewDiff = { added: [], removed: [] };
 const EMPTY_VIEWS = { tree: EMPTY_VIEW, outline: EMPTY_VIEW, tabs: EMPTY_VIEW };
+const EMPTY_HUNKS: ViewHunks = { tree: [], outline: [], tabs: [] };
 
 type Ignore = ((trimmedLine: string) => boolean) | undefined;
 
@@ -57,6 +63,40 @@ function pageViews(base: SnapshotPage, pr: SnapshotPage, ignore: Ignore) {
     // Tabs are numbered — compare by stop content so one insert isn't a
     // renumber cascade.
     tabs: diffViews(base.tabs, pr.tabs, stripTabIndex, ignore),
+  };
+}
+
+/** Drop ignored lines (matched on the trimmed form, like diffViews) while
+ * keeping indentation, so the unified diff never shows a volatile line. */
+function stripIgnored(text: string, ignore: Ignore): string {
+  if (!ignore) return text;
+  return text
+    .split("\n")
+    .filter((line) => !ignore(line.trim()))
+    .join("\n");
+}
+
+/** Unified diff per view — tabs keep their `NN.` numbers (position context),
+ * unlike the multiset which strips them; a pure insert cascades here but
+ * `--explain` reports it as one line. */
+function pageHunks(
+  base: SnapshotPage,
+  pr: SnapshotPage,
+  ignore: Ignore,
+): ViewHunks {
+  return {
+    tree: unifiedDiff(
+      stripIgnored(base.tree, ignore),
+      stripIgnored(pr.tree, ignore),
+    ),
+    outline: unifiedDiff(
+      stripIgnored(base.outline, ignore),
+      stripIgnored(pr.outline, ignore),
+    ),
+    tabs: unifiedDiff(
+      stripIgnored(base.tabs, ignore),
+      stripIgnored(pr.tabs, ignore),
+    ),
   };
 }
 
@@ -84,6 +124,7 @@ export function diffArtifacts(
         entries: diffFindings([], prPage.findings),
         views: EMPTY_VIEWS,
         structural: [],
+        viewHunks: EMPTY_HUNKS,
       });
       continue;
     }
@@ -94,6 +135,7 @@ export function diffArtifacts(
         entries: [],
         views: EMPTY_VIEWS,
         structural: [],
+        viewHunks: EMPTY_HUNKS,
         note:
           prPage.status === "error"
             ? prPage.error
@@ -108,6 +150,7 @@ export function diffArtifacts(
       entries: diffFindings(basePage.findings, prPage.findings),
       views,
       structural: summarizeViews({ views, base: basePage, pr: prPage, ignore }),
+      viewHunks: pageHunks(basePage, prPage, ignore),
     });
   }
 
@@ -119,6 +162,7 @@ export function diffArtifacts(
       entries: diffFindings(basePage.findings, []),
       views: EMPTY_VIEWS,
       structural: [],
+      viewHunks: EMPTY_HUNKS,
     });
   }
 

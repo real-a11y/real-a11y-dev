@@ -96,34 +96,56 @@ repo, not a copy-pasted script. The diff is
 finding-identity-aware: a renumbered `:nth-of-type` locator or a re-indented
 subtree is not a change — only an actual new/changed/fixed violation is.
 
-Structural drift that doesn't trip a rule shows as a neutral view diff by
-default. Add **`--explain`** for a plain-language summary, so a reviewer who
-isn't an a11y expert can act on it without reading raw serialized lines:
+Structural drift that doesn't trip a rule shows as a **real unified diff** —
+context lines, order, indentation, like a PR file diff — so you can see *where*
+in the tree the change happened, shown in full by default:
+
+````text
+$ real-a11y diff base.json pr.json
+#### home
+```diff
+@@ -3,7 +3,8 @@
+     link "About"
+-    button "Toggle theme"
++    button "Switch to dark mode"
+     link "Cambiar a español"
+   main
++    complementary "Semantic Navigator"
+```
+````
+
+Add **`--explain`** for a plain-language summary on top, so a reviewer who
+isn't an a11y expert can act on it without reading the raw lines:
 
 ```text
 $ real-a11y diff base.json pr.json --explain
-structure changed (advisory): tree +2/-1 · outline +1/-1 · tabs +1/-0
   · Heading level changed: "Setup" h2 → h3
   · Keyboard tab stop added: link "Skip" (now stop 1 of 2)
 ```
 
 `--explain` is opt-in on purpose: the statements are an interpretive layer
 (pairing heuristics, cross-view inference), so the default `diff` stays
-**neutral** — findings plus the raw view diff, both facts — and never makes a
-claim the raw diff can't back up. The statements cover what assistive-tech
-users actually feel: landmarks
-appearing/disappearing (`main` removal calls out broken skip-links), heading
-level changes and renames, keyboard tab stops added/removed — including the
-dangerous case where an element is *still on the page but no longer
-keyboard-focusable* — and pure reorders of the tab order or outline, which a
-line diff can't see at all. Anything the taxonomy doesn't recognize degrades
-to one honest `Other content changed: +N/-N lines` rollup, never silence. In
-Markdown the raw `+`/`-` view lines follow the statements as a
-color-coded ```diff block (kept inline, not collapsed, so email keeps the
-green/red); in JSON they're `pages[].views` with
-the statements alongside as `pages[].structural` (`{ kind, message, … }` —
-key on `kind`, not the wording). Structural changes are **advisory only**:
-they never affect the exit code.
+**neutral** — findings plus the unified diff, both facts — and never makes a
+claim the diff can't back up. The statements cover what assistive-tech users
+actually feel: landmarks appearing/disappearing (`main` removal calls out
+broken skip-links), heading level changes and renames, keyboard tab stops
+added/removed — including the dangerous case where an element is *still on the
+page but no longer keyboard-focusable* — and pure reorders of the tab order or
+outline. Anything the taxonomy doesn't recognize degrades to one honest
+`Other content changed` rollup, never silence. In JSON the statements ship as
+`pages[].structural` (`{ kind, message, … }` — key on `kind`, not the wording)
+alongside the multiset `pages[].views`. Structural changes are **advisory
+only**: they never affect the exit code.
+
+For CI comments, cap the output — the full diff still prints (uncapped) to
+stdout, so run it once unbounded to a log and once capped to the comment:
+
+```sh
+real-a11y diff base.json pr.json --explain --max-pages 5 --max-lines 20 -o comment.md
+```
+
+`--max-pages N` details the first N changed routes and lists the rest;
+`--max-lines N` caps each page's diff and points to the full output.
 
 Generated content that legitimately differs on every build (a "last updated"
 timestamp, a build hash) would otherwise read as drift on every page — drop
