@@ -57,21 +57,21 @@
 57. generic
 58. button "Copy Code"
 59. generic
-60. link "Configuration"
-61. button "Copy Code"
-62. generic
-63. link "Combine with assertions"
-64. link "Next.js (dev server)"
-65. link "Vite / CRA SPA (preview server)"
-66. link "Static site (serve build output)"
-67. link "pnpm monorepo"
-68. table
-69. table
-70. button "Copy Code"
-71. generic
-72. link "Static site"
-73. button "Copy Code"
-74. generic
+60. button "Copy Code"
+61. generic
+62. link "Configuration"
+63. button "Copy Code"
+64. generic
+65. link "Combine with assertions"
+66. link "Next.js (dev server)"
+67. link "Vite / CRA SPA (preview server)"
+68. link "Static site (serve build output)"
+69. link "pnpm monorepo"
+70. table
+71. table
+72. button "Copy Code"
+73. generic
+74. link "Static site"
 75. button "Copy Code"
 76. generic
 77. button "Copy Code"
@@ -84,10 +84,12 @@
 84. generic
 85. button "Copy Code"
 86. generic
-87. table
-88. link "@real-a11y-dev/testing"
-89. button "Copy Code"
-90. generic
-91. link "Edit this page on GitHub"
-92. link "Previous pagePeer Dependencies"
-93. link "Next pageAuthenticated Pages"
+87. button "Copy Code"
+88. generic
+89. table
+90. link "@real-a11y-dev/testing"
+91. button "Copy Code"
+92. generic
+93. link "Edit this page on GitHub"
+94. link "Previous pagePeer Dependencies"
+95. link "Next pageAuthenticated Pages"

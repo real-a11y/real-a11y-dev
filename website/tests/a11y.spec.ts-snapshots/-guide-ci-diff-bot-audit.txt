@@ -143,9 +143,14 @@
       list
         listitem "Heading level changed: "Setup" h2 → h3"
         listitem "Keyboard tab stop added: link "Skip to setup" (now stop 2 of 14)"
-      group "Raw view diff — tree +2/-1 · outline +1/-1 · tabs +1/-0"
-    paragraph "Findings lead (they're the gate); structural drift follows as any reviewer can verify — press , glance at the heading — with the raw serialized lines demoted into a collapsed block. Even changes no line diff can see get a statement: a of the tab order adds or removes no lines, but reads as ."
+      paragraph
+        strong "Raw view diff — tree +2/-1 · outline +1/-1 · tabs +1/-0"
+      button "Copy Code"
+        code
+    paragraph "Findings lead (they're the gate); structural drift follows as any reviewer can verify — press , glance at the heading — with the raw serialized / lines inline beneath them (color-coded, so a PR email keeps the green/red). Even changes no line diff can see get a statement: a of the tab order adds or removes no lines, but reads as ."
       strong "plain-language statements"
+      code "+"
+      code "-"
       emphasis "pure reorder"
       code "Keyboard tab order changed: 4 stops moved (same 14 stops)"
     paragraph "The comment is — not spammed. If the PR is fixed and re-pushed, the comment updates to . Only findings can fail the build ( exits at/above ); pre-existing debt and fixes never block a PR — structural statements are always advisory."
@@ -347,9 +352,11 @@
     button "Copy Code"
       code
     heading "Shared: diff & comment job" (level 3)
-    paragraph "renders the finding-aware comparison straight to Markdown () — findings first, then the plain-language structural statements per page with the raw lines collapsed — and the job posts it as the sticky comment. keeps the comment purely advisory so it posts — drop it (or add a second step) to also fail the build on findings."
+    paragraph "renders the finding-aware comparison straight to Markdown () — findings first, then the plain-language structural statements per page with the color-coded raw / diff inline beneath them — and the job posts it as the sticky comment. keeps the comment purely advisory so it posts — drop it (or add a second step) to also fail the build on findings."
       code "real-a11y diff"
       code "--format md"
+      code "+"
+      code "-"
       code "--fail-on never"
       emphasis "always"
       code "npx real-a11y diff base.json pr.json"
@@ -428,7 +435,7 @@
         row
           cell "ARIA state silently cleared"
           cell "✅ (structural tree diff)"
-    paragraph "The five rules surface as (new / changed / fixed); shape-only shifts that don't trip a rule — a landmark or heading change, a new tab stop, a role swap, a reordered tab sequence — surface as advisory per page, with the raw tree / outline / tabs line diffs collapsed beneath them ( exposes both, as and )."
+    paragraph "The five rules surface as (new / changed / fixed); shape-only shifts that don't trip a rule — a landmark or heading change, a new tab stop, a role swap, a reordered tab sequence — surface as advisory per page, with the raw tree / outline / tabs line diffs inline beneath them ( exposes both, as and )."
       strong "findings"
       strong "plain-language statements"
       code "--format json"

@@ -16,7 +16,7 @@ The taxonomy covers what assistive-tech users actually feel: landmarks added/rem
 Where it lands:
 
 - **pretty** — statements under the existing dim `structure changed (advisory):` header, which now carries the per-view counts inline.
-- **md** — a per-page `**Structure (advisory — never blocks merge):**` section after the finding bullets, with the raw `+`/`-` lines demoted into a collapsed `<details>` block (25 lines/view/direction, statement names markdown-escaped). Structural-only pages now render (they were skipped entirely).
+- **md** — a per-page `**Structure (advisory — never blocks merge):**` section after the finding bullets, with the color-coded raw `+`/`-` diff inline beneath the statements (25 lines/view/direction, statement names markdown-escaped; rendered inline rather than in `<details>` so PR-notification emails keep the green/red). The header also names structural drift (`… · structure changed on N page(s)`) so a findings-clean-but-structure-moved diff doesn't read as an all-zero "nothing changed". Structural-only pages now render (they were skipped entirely).
 - **json** — additive `pages[].structural: [{ kind, view, message, role?, name?, from?, to?, position?, of?, count? }]`; `schemaVersion` stays 1, `pages[].views` untouched. Key on `kind` — `message` wording may be refined in patches.
 
 New repeatable flag `--ignore-view-line <regex>` drops matching view lines before diffing (tested against the trimmed line), so generated content that differs on every build — a "last updated" timestamp, a build hash — doesn't read as drift on every page. The a11y-diff workflow now uses it instead of filtering in the comment script, and the CLI's md output is the entire comment body.

@@ -112,8 +112,9 @@ dangerous case where an element is *still on the page but no longer
 keyboard-focusable* — and pure reorders of the tab order or outline, which a
 line diff can't see at all. Anything the taxonomy doesn't recognize degrades
 to one honest `Other content changed: +N/-N lines` rollup, never silence. In
-Markdown the raw `+`/`-` view lines are demoted into a collapsed
-`<details>` block under the statements; in JSON they're `pages[].views` with
+Markdown the raw `+`/`-` view lines follow the statements as a
+color-coded ```diff block (kept inline, not collapsed, so email keeps the
+green/red); in JSON they're `pages[].views` with
 the statements alongside as `pages[].structural` (`{ kind, message, … }` —
 key on `kind`, not the wording). Structural changes are **advisory only**:
 they never affect the exit code.

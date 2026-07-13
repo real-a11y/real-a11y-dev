@@ -156,8 +156,9 @@ The taxonomy covers what assistive-tech users actually feel:
 Anything the taxonomy doesn't recognize degrades to one honest
 `Other content changed: +N/-N lines` rollup — never silence. Rename pairings
 are strictly 1:1 and degrade to add/remove on any ambiguity, so the summary
-never guesses. In `--format md` the raw `+`/`-` lines are demoted into a
-collapsed `<details>` block under the statements; in `--format json` the
+never guesses. In `--format md` the raw `+`/`-` lines follow the statements as
+a color-coded ```diff block (inline, so email keeps the green/red); in
+`--format json` the
 statements ship as `pages[].structural` (`{ kind, message, … }` — key on
 `kind`; the `message` wording may be refined in patches). Structural changes
 are **advisory only**: they never affect the exit code.

@@ -183,39 +183,52 @@ describe("renderDiffMarkdown", () => {
     );
   });
 
-  it("renders the structural section: statements, then the collapsed raw block", () => {
+  it("renders the structural section: statements, then the inline raw diff", () => {
     const out = renderDiffMarkdown(structural);
     expect(out).toContain("#### Docs");
     expect(out).toContain("**Structure (advisory — never blocks merge):**");
     expect(out).toContain('- Heading level changed: "Setup" h2 → h3');
-    // Statements come BEFORE the raw block; raw lines are demoted inside it.
+    // Statements come BEFORE the raw diff; the raw lines follow, rendered
+    // inline (not in <details>) so email keeps the green/red coloring.
     expect(out.indexOf("Heading level changed")).toBeLessThan(
-      out.indexOf("<details>"),
+      out.indexOf("Raw view diff"),
     );
     expect(out).toContain(
-      "<summary>Raw view diff — tree +2/-1 · outline +1/-1 · tabs +1/-0</summary>",
+      "**Raw view diff — tree +2/-1 · outline +1/-1 · tabs +1/-0**",
     );
+    expect(out).not.toContain("<details>");
     expect(out).toContain('- heading "Setup" (level 2)');
     expect(out).toContain('+ heading "Setup" (level 3)');
     expect(out).toContain("```diff");
-    expect(out).toContain("</details>");
     expect(out).toContain(
       "_Structural notes are advisory and never fail the check; container/nesting moves are not tracked._",
     );
   });
 
-  it("leads with the structural-drift note when findings are all zero", () => {
+  it("surfaces structural drift in the header, not just a buried lead-in", () => {
     const out = renderDiffMarkdown(structural);
+    // The header (what an email/notification title shows) must not read as an
+    // all-zero "nothing changed" when the structure moved.
+    expect(out.split("\n")[0]).toBe(
+      "### Accessibility diff — 0 new · 0 changed · 0 fixed · structure changed on 1 page",
+    );
     expect(out).toContain(
-      "No accessibility finding changes. Structural changes on 1 page(s) — advisory, review below.",
+      "No accessibility finding changes — but the semantic structure moved (advisory, review below).",
     );
   });
 
-  it("renders a reorder-only page with statements and NO raw block", () => {
+  it("keeps the header findings-only when nothing structural moved", () => {
+    // `result` has a finding but identical tree/outline/tabs → no structural.
+    expect(renderDiffMarkdown(result).split("\n")[0]).toBe(
+      "### Accessibility diff — 1 new · 0 changed · 0 fixed",
+    );
+  });
+
+  it("renders a reorder-only page with statements and NO raw diff block", () => {
     const out = renderDiffMarkdown(reorderOnly);
     expect(out).toContain("#### Docs");
     expect(out).toContain("Keyboard tab order changed");
-    expect(out).not.toContain("<details>");
+    expect(out).not.toContain("Raw view diff");
   });
 
   it("escapes hostile accessible names in statements", () => {

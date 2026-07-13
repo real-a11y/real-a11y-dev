@@ -183,17 +183,16 @@ function fenceFor(lines: readonly string[]): string {
   return "`".repeat(Math.max(3, longest + 1));
 }
 
-/** The per-page collapsed raw block: per-view ```diff fences, removed lines
- * first, capped per direction. Empty string when all views are empty
- * (reorder-only pages have statements but no raw lines). */
+/** The per-page raw view diff: a bold heading, then per-view ```diff fences
+ * (removed lines first, capped per direction). Rendered INLINE, not inside a
+ * <details> — GitHub only inlines the green/red diff colors in notification
+ * emails for a fence that isn't nested in raw HTML, and email clients
+ * auto-expand <details> anyway. Empty when all views are empty (a reorder-only
+ * page has statements but no added/removed lines). */
 function mdRawBlock(page: PageDiff): string[] {
   const counts = viewCounts(page);
   if (!counts) return [];
-  const out: string[] = [
-    "<details>",
-    `<summary>Raw view diff — ${counts}</summary>`,
-    "", // GitHub needs a blank line to render markdown inside <details>
-  ];
+  const out: string[] = [`**Raw view diff — ${counts}**`, ""];
   for (const view of VIEW_NAMES) {
     const { added, removed } = page.views[view];
     if (added.length === 0 && removed.length === 0) continue;
@@ -207,9 +206,8 @@ function mdRawBlock(page: PageDiff): string[] {
       ...(hidden > 0 ? [`… ${hidden} more line(s)`] : []),
     ];
     const fence = fenceFor(body);
-    out.push(`**${view}**`, "", `${fence}diff`, ...body, fence, "");
+    out.push(`_${view}_`, "", `${fence}diff`, ...body, fence, "");
   }
-  out.push("</details>", "");
   return out;
 }
 
@@ -231,17 +229,26 @@ function mdStructural(page: PageDiff): string[] {
 
 export function renderDiffMarkdown(result: DiffResult): string {
   const { new: n, changed, removed } = result.summary;
-  const out: string[] = [
-    `### Accessibility diff — ${n} new · ${changed} changed · ${removed} fixed`,
-    "",
-  ];
   const structuralPages = result.pages.filter(
     (p) => p.structural.length > 0,
   ).length;
+  // The findings triplet alone reads as "nothing changed" when only the
+  // structure moved — surface the structural drift in the header (which is
+  // what an email/notification title shows), not just a buried lead-in line.
+  const structHeader =
+    structuralPages > 0
+      ? ` · structure changed on ${structuralPages} page${
+          structuralPages === 1 ? "" : "s"
+        }`
+      : "";
+  const out: string[] = [
+    `### Accessibility diff — ${n} new · ${changed} changed · ${removed} fixed${structHeader}`,
+    "",
+  ];
   if (n === 0 && changed === 0 && removed === 0) {
     out.push(
       structuralPages > 0
-        ? `No accessibility finding changes. Structural changes on ${structuralPages} page(s) — advisory, review below.`
+        ? "No accessibility finding changes — but the semantic structure moved (advisory, review below)."
         : "No accessibility finding changes.",
       "",
     );

@@ -172,7 +172,8 @@ describe("diff", () => {
       "**Structure (advisory — never blocks merge):**",
     );
     expect(md.stdout).toContain("Keyboard tab stop added: button");
-    expect(md.stdout).toContain("<summary>Raw view diff —");
+    expect(md.stdout).toContain("**Raw view diff —");
+    expect(md.stdout).not.toContain("<details>");
     const json = await runCli(["diff", base, more, "--format", "json"]);
     const parsed = JSON.parse(json.stdout) as {
       pages: { structural: { kind: string }[] }[];

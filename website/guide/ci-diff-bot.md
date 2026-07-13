@@ -55,11 +55,16 @@ Because the diff is **finding-identity-aware** (each finding carries a stable `v
 > - Heading level changed: "Setup" h2 → h3
 > - Keyboard tab stop added: link "Skip to setup" (now stop 2 of 14)
 >
-> <details><summary>Raw view diff — tree +2/-1 · outline +1/-1 · tabs +1/-0</summary>…</details>
+> **Raw view diff — tree +2/-1 · outline +1/-1 · tabs +1/-0**
+> ```diff
+> - heading "Setup" (level 2)
+> + heading "Setup" (level 3)
+> ```
 
 Findings lead (they're the gate); structural drift follows as **plain-language
 statements** any reviewer can verify — press <kbd>Tab</kbd>, glance at the
-heading — with the raw serialized lines demoted into a collapsed block. Even
+heading — with the raw serialized `+`/`-` lines inline beneath them (color-coded,
+so a PR email keeps the green/red). Even
 changes no line diff can see get a statement: a *pure reorder* of the tab
 order adds or removes no lines, but reads as
 `Keyboard tab order changed: 4 stops moved (same 14 stops)`.
@@ -297,7 +302,7 @@ Replace `actions/setup-node`'s npm cache with pnpm's action and update the insta
 
 ### <a id="diff-and-comment"></a>Shared: diff & comment job
 
-`real-a11y diff` renders the finding-aware comparison straight to Markdown (`--format md`) — findings first, then the plain-language structural statements per page with the raw lines collapsed — and the job posts it as the sticky comment. `--fail-on never` keeps the comment purely advisory so it *always* posts — drop it (or add a second `npx real-a11y diff base.json pr.json` step) to also fail the build on **new** findings.
+`real-a11y diff` renders the finding-aware comparison straight to Markdown (`--format md`) — findings first, then the plain-language structural statements per page with the color-coded raw `+`/`-` diff inline beneath them — and the job posts it as the sticky comment. `--fail-on never` keeps the comment purely advisory so it *always* posts — drop it (or add a second `npx real-a11y diff base.json pr.json` step) to also fail the build on **new** findings.
 
 If your pages render generated content that differs on every build (a "last
 updated" timestamp, a build hash), add `--ignore-view-line '<regex>'` to the
@@ -441,7 +446,7 @@ The JSON — not the Markdown — is what you feed into `diff`. Reach for `--md`
 | Tab order reordered (no lines added/removed) | ✅ (`Keyboard tab order changed: N stops moved`) |
 | ARIA state silently cleared | ✅ (structural tree diff) |
 
-The five rules surface as **findings** (new / changed / fixed); shape-only shifts that don't trip a rule — a landmark or heading change, a new tab stop, a role swap, a reordered tab sequence — surface as advisory **plain-language statements** per page, with the raw tree / outline / tabs line diffs collapsed beneath them (`--format json` exposes both, as `pages[].structural` and `pages[].views`).
+The five rules surface as **findings** (new / changed / fixed); shape-only shifts that don't trip a rule — a landmark or heading change, a new tab stop, a role swap, a reordered tab sequence — surface as advisory **plain-language statements** per page, with the raw tree / outline / tabs line diffs inline beneath them (`--format json` exposes both, as `pages[].structural` and `pages[].views`).
 
 ---
 
