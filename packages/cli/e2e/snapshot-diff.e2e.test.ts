@@ -95,6 +95,35 @@ describe("snapshot", () => {
     expect(code).toBe(2);
     expect(stderr).toContain("needs pages");
   });
+
+  it("takes a positional URL like every other command (config optional)", async () => {
+    const url = dataUrl("<main><h1>Hi</h1><button></button></main>");
+    const { code, stdout } = await runCli(["snapshot", url, "-q"], {
+      // No A11Y_PAGES and no config — the positional is the only page source.
+      A11Y_PAGES: "",
+    });
+    expect(code).toBe(0);
+    const artifact = JSON.parse(stdout) as {
+      schemaVersion: number;
+      pages: { name: string; url: string; findings: unknown[] }[];
+    };
+    expect(artifact.schemaVersion).toBe(1);
+    expect(artifact.pages).toHaveLength(1);
+    // Page name defaults to the URL, matching `audit`/`tree`.
+    expect(artifact.pages[0].name).toBe(artifact.pages[0].url);
+    expect(artifact.pages[0].findings).toHaveLength(1);
+  });
+
+  it("snapshots several positional URLs into one artifact", async () => {
+    const a = dataUrl("<main><h1>A</h1></main>");
+    const b = dataUrl("<main><h1>B</h1><button></button></main>");
+    const { code, stdout } = await runCli(["snapshot", a, b, "-q"], {
+      A11Y_PAGES: "",
+    });
+    expect(code).toBe(0);
+    const artifact = JSON.parse(stdout) as { pages: unknown[] };
+    expect(artifact.pages).toHaveLength(2);
+  });
 });
 
 describe("diff", () => {

@@ -60,7 +60,7 @@ opt out.
 | `outline <url>` | Heading outline |
 | `tabs <url>` | Focusable elements in Tab order |
 | `list <cat> <url>` | One category: heading, link, button, form, landmark, image |
-| `snapshot` | Audit a page set → one diffable JSON artifact (or `--md`) |
+| `snapshot [url...]` | Audit a URL (or a config page set) → one diffable JSON artifact (or `--md`) |
 | `diff <base> <pr>` | Findings-aware diff of two snapshots — new / changed / fixed |
 | `login <url> --save <file>` | Save a login session for `--storage-state` audits |
 
@@ -74,20 +74,25 @@ type need no ceremony).
 
 ## Track regressions across a PR
 
-`snapshot` writes a diffable artifact of a whole page set; `diff` compares two
-and fails the build only on **new** findings — so pre-existing debt doesn't
-block, and a fix or unrelated DOM churn never reads as a regression:
+`snapshot` writes a diffable artifact of one page or a whole set; `diff`
+compares two and fails the build only on **new** findings — so pre-existing
+debt doesn't block, and a fix or unrelated DOM churn never reads as a
+regression:
 
 ```sh
-# on the base branch, and again on the PR:
+# a single page — a URL positional, like every other command:
+real-a11y snapshot https://example.com -o base.json
+
+# or a whole set (base branch, then PR):
 real-a11y snapshot --config a11y.config.json -o base.json
 real-a11y snapshot --config a11y.config.json -o pr.json
 real-a11y diff base.json pr.json            # exit 1 only on NEW findings
 real-a11y diff base.json pr.json -f md      # a PR-comment-ready summary
 ```
 
-The pages live in `a11y.config.json` (`{ "pages": [{ "name", "url" }] }`), so
-your policy is in your repo, not a copy-pasted script. The diff is
+Pages come from positional URLs, else `A11Y_PAGES`, else `a11y.config.json`
+(`{ "pages": [{ "name", "url" }] }`) — so a multi-page policy lives in your
+repo, not a copy-pasted script. The diff is
 finding-identity-aware: a renumbered `:nth-of-type` locator or a re-indented
 subtree is not a change — only an actual new/changed/fixed violation is.
 

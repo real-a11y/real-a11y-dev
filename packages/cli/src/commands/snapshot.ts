@@ -58,15 +58,25 @@ function toolVersion(): string {
   }
 }
 
-/** Pages from A11Y_PAGES env (diff-bot compat) if set, else the config file.
+/** Pages to snapshot, in precedence order: positional URLs (like every other
+ *  command), else A11Y_PAGES env (diff-bot compat), else the config file.
  *  `configPath` (absolute) is set only on the config path — `sarif` anchors
  *  its results to it. */
-function resolvePages(flags: Record<string, string | boolean | undefined>): {
+function resolvePages(
+  positionals: readonly string[],
+  flags: Record<string, string | boolean | undefined>,
+): {
   pages: ConfigPage[];
   rules?: string[];
   device?: string;
   configPath?: string;
 } {
+  // Positional URLs are the ad-hoc path — name defaults to the URL, matching
+  // `audit`/`tree`. The config stays the multi-page/policy source.
+  if (positionals.length > 0) {
+    return { pages: positionals.map((url) => ({ name: url, url })) };
+  }
+
   const env = process.env.A11Y_PAGES;
   if (env) {
     let parsed: unknown;
@@ -101,7 +111,7 @@ function resolvePages(flags: Record<string, string | boolean | undefined>): {
   if (!configPath) {
     throw new CliError(
       "snapshot needs pages to audit",
-      "add an a11y.config.json (or set A11Y_PAGES) — see --help",
+      "pass a URL (real-a11y snapshot <url>), add an a11y.config.json, or set A11Y_PAGES",
     );
   }
   const config = loadConfig(configPath);
@@ -117,17 +127,12 @@ const SNAPSHOT_FORMATS = ["json", "md", "sarif", "junit", "jsonl"] as const;
 type SnapshotFormat = (typeof SNAPSHOT_FORMATS)[number];
 
 export const snapshotCommand: CommandFn = async (positionals, flags) => {
-  if (positionals.length > 0) {
-    throw new CliError(
-      "snapshot takes no positional URLs — list pages in a11y.config.json or A11Y_PAGES",
-    );
-  }
   const {
     pages: configPages,
     rules: configRules,
     device: configDevice,
     configPath,
-  } = resolvePages(flags);
+  } = resolvePages(positionals, flags);
   const flagRules = parseRules(flags.rules);
   const rules = flagRules ?? (configRules as ReturnType<typeof parseRules>);
   const openOptions = parseOpenOptions(flags);

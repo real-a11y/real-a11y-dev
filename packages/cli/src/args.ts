@@ -260,21 +260,22 @@ Flags:
   snapshot: {
     summary: "Audit a page set → a diffable JSON artifact",
     options: SNAPSHOT_FLAGS,
-    help: `Usage: real-a11y snapshot [flags]
+    help: `Usage: real-a11y snapshot [url...] [flags]
 
-Audit every page in a11y.config.json (or A11Y_PAGES) and write ONE JSON
-artifact — findings (with stable fingerprints) plus the tree/outline/tabs
-views per page. That artifact is the input to 'real-a11y diff'.
+Audit one or more pages and write ONE JSON artifact — findings (with stable
+fingerprints) plus the tree/outline/tabs views per page. That artifact is the
+input to 'real-a11y diff'.
 
-Pages come from A11Y_PAGES (JSON [{name,url}]) if set, else a11y.config.json
-(--config <file>, or auto-discovered). Output goes to --output, else
-A11Y_SNAPSHOT_OUT, else stdout.
+Pages, in precedence order: positional URLs, else A11Y_PAGES (JSON
+[{name,url}]), else a11y.config.json (--config <file>, or auto-discovered).
+Output goes to --output, else A11Y_SNAPSHOT_OUT, else stdout.
 
 Adopt the gate on an existing codebase: --update-baseline records today's
 findings, then --baseline suppresses them so only NEW findings fail --fail-on.
 
 Examples:
-  real-a11y snapshot --output base.json
+  real-a11y snapshot https://example.com -o base.json
+  real-a11y snapshot --output base.json                 # pages from a11y.config.json
   real-a11y snapshot --config a11y.config.json --md -o report.md
   real-a11y snapshot --config a11y.config.json --update-baseline
   real-a11y snapshot --config a11y.config.json --baseline .a11y-baseline.json --fail-on error
@@ -328,7 +329,7 @@ const USAGE: Record<string, string> = {
   audit: "audit <url...>",
   list: "list <cat> <url>",
   login: "login <url> --save",
-  snapshot: "snapshot",
+  snapshot: "snapshot [url...]",
   diff: "diff <base> <pr>",
 };
 

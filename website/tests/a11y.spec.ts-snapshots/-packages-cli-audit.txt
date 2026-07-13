@@ -194,11 +194,11 @@
             code "landmark"
             code "image"
         row
-          cell "snapshot"
-            code "snapshot"
-          cell "Audit a page set (from a11y.config.json or A11Y_PAGES) → one diffable JSON artifact, or --md for a human report."
-            code "a11y.config.json"
+          cell "snapshot [url...]"
+            code "snapshot [url...]"
+          cell "Audit a URL (like every other command), or a page set from A11Y_PAGES / a11y.config.json → one diffable JSON artifact, or --md for a human report."
             code "A11Y_PAGES"
+            code "a11y.config.json"
             code "--md"
         row
           cell "diff <base> <pr>"
@@ -213,11 +213,12 @@
     paragraph "Run for a command's flags."
       code "real-a11y <command> --help"
     heading "Track regressions across a PR" (level 2)
-    paragraph "The flagship CI feature: snapshot a whole page set into a diffable artifact, then diff two of them and fail the build only on findings."
+    paragraph "The flagship CI feature: snapshot one page or a whole set into a diffable artifact, then diff two of them and fail the build only on findings."
       strong "new"
     button "Copy Code"
       code
-    paragraph "Pages live in — your policy in your repo:"
+    paragraph "Pages come from positional URLs, else , else — your multi-page policy in your repo:"
+      code "A11Y_PAGES"
       code "a11y.config.json"
     button "Copy Code"
       code

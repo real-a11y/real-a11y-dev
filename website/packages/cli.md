@@ -84,7 +84,7 @@ ceremony).
 | `outline <url>` | Heading outline (h1–h6) in document order. |
 | `tabs <url>` | Focusable elements in keyboard Tab order. |
 | `list <category> <url>` | One category — `heading` / `link` / `button` / `form` / `landmark` / `image` — as role + name + locator. |
-| `snapshot` | Audit a page set (from `a11y.config.json` or `A11Y_PAGES`) → one diffable JSON artifact, or `--md` for a human report. |
+| `snapshot [url...]` | Audit a URL (like every other command), or a page set from `A11Y_PAGES` / `a11y.config.json` → one diffable JSON artifact, or `--md` for a human report. |
 | `diff <base> <pr>` | Findings-aware diff of two snapshot artifacts — new / changed / fixed. Pure (no browser). See below. |
 | `login <url> --save <file>` | Save a login session for `--storage-state` audits (see [Authenticated pages](/guide/authenticated-pages)). |
 
@@ -92,11 +92,14 @@ Run `real-a11y <command> --help` for a command's flags.
 
 ## Track regressions across a PR
 
-The flagship CI feature: snapshot a whole page set into a diffable artifact,
-then diff two of them and fail the build only on **new** findings.
+The flagship CI feature: snapshot one page or a whole set into a diffable
+artifact, then diff two of them and fail the build only on **new** findings.
 
 ```sh
-# on the base branch, and again on the PR
+# a single page — a URL positional, like every other command
+real-a11y snapshot https://example.com -o base.json
+
+# or a whole set (base branch, then PR)
 real-a11y snapshot --config a11y.config.json -o base.json
 real-a11y snapshot --config a11y.config.json -o pr.json
 
@@ -104,7 +107,8 @@ real-a11y diff base.json pr.json          # exit 1 only on NEW findings
 real-a11y diff base.json pr.json -f md    # a PR-comment-ready summary
 ```
 
-Pages live in `a11y.config.json` — your policy in your repo:
+Pages come from positional URLs, else `A11Y_PAGES`, else `a11y.config.json` —
+your multi-page policy in your repo:
 
 ```json
 {
