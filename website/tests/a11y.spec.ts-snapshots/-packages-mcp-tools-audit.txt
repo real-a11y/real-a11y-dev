@@ -223,9 +223,10 @@
     paragraph
       emphasis "Read-only · scoped by · prefer on dynamic pages."
         code "rootSelector"
-    paragraph "Return the audit findings the semantic tree, heading outline, and tab order — all derived from extraction, so they are guaranteed to describe the same instant. Prefer this over separate + calls on moving pages (SPAs, pages with consent dialogs), where each separate call could catch a different state."
+    paragraph "Return the audit findings the semantic tree, heading outline, and tab order — all derived from extraction, so they are guaranteed to describe the same instant. The element focused at capture time is marked in each view, so the agent can see, e.g., that opening a dialog moved focus into it. Prefer this over separate + calls on moving pages (SPAs, pages with consent dialogs), where each separate call could catch a different state."
       strong "and"
       strong "one"
+      code "[focused]"
       link "audit_page"
         code "audit_page"
       code "get_*"
@@ -254,7 +255,8 @@
     paragraph
       emphasis "Read-only · scoped by ."
         code "rootSelector"
-    paragraph "Return the page's accessibility tree as a deterministic, indented role + accessible-name outline — what a screen reader would traverse. Stable across runs and token-efficient."
+    paragraph "Return the page's accessibility tree as a deterministic, indented role + accessible-name outline — what a screen reader would traverse. The element focused at capture time is marked . Stable across runs and token-efficient."
+      code "[focused]"
     paragraph "Parameters:"
     list
       listitem "— string — optional (default )."
@@ -288,7 +290,8 @@
     paragraph
       emphasis "Read-only · scoped by ."
         code "rootSelector"
-    paragraph "Return the focusable elements in the order a keyboard user reaches them with Tab — numbered, each with role + accessible name. Surfaces focus traps, illogical order, and unreachable controls."
+    paragraph "Return the focusable elements in the order a keyboard user reaches them with Tab — numbered, each with role + accessible name. The stop focused at capture time is marked . Surfaces focus traps, illogical order, and unreachable controls."
+      code "[focused]"
     paragraph "Parameters:"
     list
       listitem "— string — optional (default )."

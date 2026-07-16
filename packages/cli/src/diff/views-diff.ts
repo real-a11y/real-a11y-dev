@@ -27,6 +27,27 @@ export function stripTabIndex(line: string): string {
   return line.replace(/^\d+\.\s*/, "");
 }
 
+/** The trailing focus marker emitted by @real-a11y-dev/serialize (`markFocus`). */
+const FOCUS_MARKER = " [focused]";
+
+/**
+ * Drop a trailing ` [focused]` marker. Focus is not structure — stripping it
+ * before the multiset diff keeps a pure focus move (same elements, different
+ * focused one) from surfacing as phantom add/remove churn. The transition is
+ * reported separately as a `focus-changed` statement (see views-summary.ts).
+ *
+ * Tree/tabs names are quote-shielded (`role "name"`), so this is exact there.
+ * Outline names are unquoted (`h2 name`), so a heading whose accessible name
+ * literally ends in " [focused]" is ambiguous and can be over-stripped — a
+ * negligible, non-occurring input; the equal-level / same-name guards in
+ * summarizeViews keep it from producing a nonsensical statement.
+ */
+export function stripFocusMarker(line: string): string {
+  return line.endsWith(FOCUS_MARKER)
+    ? line.slice(0, -FOCUS_MARKER.length)
+    : line;
+}
+
 function counts(
   text: string,
   normalize: (line: string) => string,
@@ -34,7 +55,12 @@ function counts(
 ): Map<string, number> {
   const m = new Map<string, number>();
   for (const raw of text.split("\n")) {
-    const trimmed = raw.trim();
+    // Strip the focus marker FIRST — before the ignore test — so a user's
+    // `--ignore-view-line` pattern matches a line identically whether or not it
+    // is focused. Testing ignore on the marked line would let a transient
+    // `[focused]` flip an end-anchored pattern and resurface an ignored,
+    // focus-only change as phantom churn.
+    const trimmed = stripFocusMarker(raw.trim());
     if (trimmed === "") continue;
     // Volatile-line filter (--ignore-view-line) — tested against the trimmed
     // line BEFORE normalize, and dropped before the multiset so counts,

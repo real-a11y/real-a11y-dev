@@ -10,7 +10,8 @@ import {
 } from "./views-summary.js";
 
 /** Run raw view texts through the same normalization page-diff uses, then
- * summarize — the tests exercise the whole path a real diff takes. */
+ * summarize — the tests exercise the whole path a real diff takes. (diffViews
+ * strips the focus marker itself, so the normalize args match pageViews.) */
 function summarize(
   base: Partial<RawViews>,
   pr: Partial<RawViews>,
@@ -428,6 +429,118 @@ describe("summarizeViews", () => {
           of: 1,
         }),
       ]);
+    });
+  });
+
+  describe("focus (markFocus [focused] marker)", () => {
+    it("a pure focus move is ONE focus-changed statement, no add/remove churn", () => {
+      const changes = summarize(
+        { tree: 'main\n  button "A" [focused]\n  button "B"' },
+        { tree: 'main\n  button "A"\n  button "B" [focused]' },
+      );
+      // The buttons are unchanged once the marker is stripped — the only signal
+      // is that focus moved. No phantom interactive-added/removed.
+      expect(kinds(changes)).toEqual(["focus-changed"]);
+      expect(messages(changes)).toEqual([
+        'Focused element changed: button "A" → button "B"',
+      ]);
+    });
+
+    it("reports focus appearing (nothing → element)", () => {
+      const changes = summarize(
+        { tree: 'main\n  textbox "Email"' },
+        { tree: 'main\n  textbox "Email" [focused]' },
+      );
+      expect(kinds(changes)).toEqual(["focus-changed"]);
+      expect(changes[0]).toMatchObject({
+        kind: "focus-changed",
+        message:
+          'Focus now starts on textbox "Email" (nothing was focused before)',
+        to: 'textbox "Email"',
+      });
+      expect(changes[0].from).toBeUndefined();
+    });
+
+    it("reports focus vanishing (element → nothing)", () => {
+      const changes = summarize(
+        { tree: 'main\n  textbox "Email" [focused]' },
+        { tree: 'main\n  textbox "Email"' },
+      );
+      expect(changes[0]).toMatchObject({
+        kind: "focus-changed",
+        message: 'Focus no longer starts anywhere (was textbox "Email")',
+        from: 'textbox "Email"',
+      });
+      expect(changes[0].to).toBeUndefined();
+    });
+
+    it("says nothing when the same element stays focused", () => {
+      const changes = summarize(
+        { tree: 'main\n  textbox "Email" [focused]\n  button "Go"' },
+        { tree: 'main\n  textbox "Email" [focused]\n  button "Go"' },
+      );
+      expect(changes).toEqual([]);
+    });
+
+    it("ignores the marker in the tab view too (no focus-stop churn)", () => {
+      const changes = summarize(
+        {
+          tree: 'link "Home" [focused]\nbutton "Go"',
+          tabs: '01. link "Home" [focused]\n02. button "Go"',
+        },
+        {
+          tree: 'link "Home"\nbutton "Go" [focused]',
+          tabs: '01. link "Home"\n02. button "Go" [focused]',
+        },
+      );
+      expect(kinds(changes)).toEqual(["focus-changed"]);
+    });
+
+    it("composes with a real structural change (focus moved onto a new element)", () => {
+      const changes = summarize(
+        { tree: 'main\n  button "A" [focused]' },
+        { tree: 'main\n  button "A"\n  button "New" [focused]' },
+      );
+      expect(kinds(changes).sort()).toEqual(
+        ["focus-changed", "interactive-added"].sort(),
+      );
+    });
+
+    it("honors --ignore-view-line despite the marker (no phantom on an ignored, focus-only change)", () => {
+      // End-anchored ignore matches the UNMARKED line; a focus move onto that
+      // line must not resurface it — the marker is stripped before the ignore
+      // test, so both sides drop symmetrically and focus is suppressed too.
+      const ignore = (l: string) => /^searchbox "Search"$/.test(l);
+      const changes = summarize(
+        { tree: 'main\n  searchbox "Search"' },
+        { tree: 'main\n  searchbox "Search" [focused]' },
+        ignore,
+      );
+      expect(changes).toEqual([]);
+    });
+
+    it("does not emit a nonsensical heading statement when a heading name ends in the marker text", () => {
+      // Pathological: a heading whose accessible name is literally
+      // "Draft [focused]" collides with the stripped marker on the unquoted
+      // outline line. The equal-level / same-name guards keep it from producing
+      // a phantom "h2 -> h2" level change or an "X -> X" rename.
+      const changes = summarize(
+        {
+          tree: 'heading "Draft [focused]" (level 2)',
+          outline: "h2 Draft [focused]",
+        },
+        {
+          tree: 'heading "Draft [focused]" (level 2) [focused]',
+          outline: "h2 Draft [focused] [focused]",
+        },
+      );
+      expect(kinds(changes)).toContain("focus-changed");
+      expect(kinds(changes)).not.toContain("heading-level-changed");
+      expect(kinds(changes)).not.toContain("heading-renamed");
+      // The tree cancels cleanly (quote-shielded), so focus is reported right.
+      expect(messages(changes)).toContain(
+        'Focus now starts on heading "Draft [focused]" (level 2) (nothing was focused before)',
+      );
     });
   });
 

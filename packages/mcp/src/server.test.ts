@@ -152,6 +152,26 @@ describe("MCP server wiring", () => {
     expect(out).toMatch(/NATIVE tree/);
   });
 
+  it("compare_trees requests the custom tree WITHOUT the focus marker", async () => {
+    session.responses.auditSnapshot = 'main\n  button "Go"';
+    const client = await connect(session);
+    await client.callTool({ name: "compare_trees", arguments: {} });
+    const call = session.calls.find((c) => c.fn === "auditSnapshot");
+    // The native tree carries no [focused] marker; a marker on the custom side
+    // would register as a spurious custom-vs-native divergence.
+    expect(call?.args).toEqual([{ markFocus: false }]);
+  });
+
+  it("advertises the [focused] marker in the get_* / inspect descriptions", async () => {
+    const client = await connect(session);
+    const tools = (await client.listTools()).tools;
+    const desc = (name: string) =>
+      tools.find((t) => t.name === name)?.description ?? "";
+    expect(desc("get_semantic_tree")).toMatch(/\[focused\]/);
+    expect(desc("get_tab_order")).toMatch(/\[focused\]/);
+    expect(desc("inspect_page")).toMatch(/\[focused\]/);
+  });
+
   it("get_native_tree returns the browser's tree", async () => {
     session.nativeResponse = { tree: 'main\n  button "Go"', pairs: [] };
     const client = await connect(session);

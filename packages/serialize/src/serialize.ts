@@ -16,6 +16,14 @@ export interface SerializeOptions {
   redact?: RegExp[];
   /** Include generic container nodes (`role="generic"`). Default false. */
   includeGeneric?: boolean;
+  /**
+   * Mark the element focused at extraction time with a trailing `[focused]`.
+   * Default `true`. The marker appears only when something inside the tree
+   * actually holds focus — a fresh page (focus on `<body>`) serializes
+   * unchanged. Pass `false` for marker-free output, e.g. when diffing against a
+   * tree from a source that has no focus concept (a native browser tree).
+   */
+  markFocus?: boolean;
 }
 
 function redactText(input: string, patterns: RegExp[] | undefined): string {
@@ -34,15 +42,24 @@ function toTree(input: SerializeInput, mode: "a11y" | "dom" = "a11y") {
  * Serialize the full semantic tree (or a DOM root) as a deterministic indented
  * string of roles + accessible names.
  *
- * The format is stable across runs: roles and accessible names only, no ids,
- * no timestamps. Suitable for snapshot comparisons and shareable reports.
+ * The format is stable across runs: roles, accessible names, and a `[focused]`
+ * marker on the element focused at extraction time — no node ids, no
+ * timestamps. Determinism is run-to-run (same steps → same focus → same
+ * output); pass `markFocus: false` to drop the marker. Suitable for snapshot
+ * comparisons and shareable reports.
  */
 export function serializeTree(
   input: SerializeInput,
   options: SerializeOptions = {},
 ): string {
-  const { mode = "a11y", redact, includeGeneric = false } = options;
+  const {
+    mode = "a11y",
+    redact,
+    includeGeneric = false,
+    markFocus = true,
+  } = options;
   const tree = toTree(input, mode);
+  const focusedId = markFocus ? tree.focusedId : undefined;
 
   const visible = linearize(tree);
   const lines: string[] = [];
@@ -53,7 +70,10 @@ export function serializeTree(
     const nameSuffix = name ? ` "${name}"` : "";
     const level = node.a11y.properties?.level;
     const levelSuffix = level ? ` (level ${level})` : "";
-    lines.push(`${indent}${node.a11y.role}${nameSuffix}${levelSuffix}`);
+    const focusSuffix = node.id === focusedId ? " [focused]" : "";
+    lines.push(
+      `${indent}${node.a11y.role}${nameSuffix}${levelSuffix}${focusSuffix}`,
+    );
   }
   return lines.join("\n");
 }
@@ -62,11 +82,20 @@ export function serializeTree(
  * Serialize the heading outline (`h1`..`h6` in document order) as an indented
  * string. Accepts a DOM root or a pre-extracted tree.
  */
-export function serializeOutline(input: SerializeInput): string {
-  const entries = getOutline(toTree(input));
+export function serializeOutline(
+  input: SerializeInput,
+  options: SerializeOptions = {},
+): string {
+  const { markFocus = true } = options;
+  const tree = toTree(input);
+  const focusedId = markFocus ? tree.focusedId : undefined;
+  const entries = getOutline(tree);
   if (entries.length === 0) return "(no headings)";
   return entries
-    .map((e) => `${"  ".repeat(Math.max(0, e.level - 1))}h${e.level} ${e.name}`)
+    .map((e) => {
+      const marker = e.id === focusedId ? " [focused]" : "";
+      return `${"  ".repeat(Math.max(0, e.level - 1))}h${e.level} ${e.name}${marker}`;
+    })
     .join("\n");
 }
 
@@ -75,13 +104,20 @@ export function serializeOutline(input: SerializeInput): string {
  * user encounters while pressing Tab. Accepts a DOM root or a pre-extracted
  * tree.
  */
-export function serializeTabSequence(input: SerializeInput): string {
-  const seq = getTabSequence(toTree(input));
+export function serializeTabSequence(
+  input: SerializeInput,
+  options: SerializeOptions = {},
+): string {
+  const { markFocus = true } = options;
+  const tree = toTree(input);
+  const focusedId = markFocus ? tree.focusedId : undefined;
+  const seq = getTabSequence(tree);
   if (seq.length === 0) return "(nothing focusable)";
   return seq
     .map((n, i) => {
       const name = n.a11y.name ? ` "${n.a11y.name}"` : "";
-      return `${String(i + 1).padStart(2, "0")}. ${n.a11y.role}${name}`;
+      const marker = n.id === focusedId ? " [focused]" : "";
+      return `${String(i + 1).padStart(2, "0")}. ${n.a11y.role}${name}${marker}`;
     })
     .join("\n");
 }

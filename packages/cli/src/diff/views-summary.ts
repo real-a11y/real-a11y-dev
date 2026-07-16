@@ -25,7 +25,11 @@
 
 import { INTERACTIVE_ROLES, ROLE_FILTER_GROUPS } from "@real-a11y-dev/testing";
 
-import { stripTabIndex, type ViewDiff } from "./views-diff.js";
+import {
+  stripFocusMarker,
+  stripTabIndex,
+  type ViewDiff,
+} from "./views-diff.js";
 
 export type ViewChangeKind =
   | "tabs-emptied"
@@ -41,6 +45,7 @@ export type ViewChangeKind =
   | "focus-stop-added"
   | "focus-stop-removed"
   | "focus-stop-renamed"
+  | "focus-changed"
   | "tab-order-reordered"
   | "interactive-added"
   | "interactive-removed"
@@ -98,6 +103,7 @@ export const VIEW_CHANGE_ORDER: readonly ViewChangeKind[] = [
   "landmark-removed",
   "focus-stop-removed",
   "heading-level-changed",
+  "focus-changed",
   "tab-order-reordered",
   "heading-order-changed",
   "landmark-added",
@@ -144,7 +150,7 @@ interface ParsedLine {
  * everything between the first `"` and the LAST `"`.
  */
 function parseRoleLine(line: string): ParsedLine {
-  let rest = line;
+  let rest = stripFocusMarker(line);
   let level: number | undefined;
   const suffix = / \(level (\d+)\)$/.exec(rest);
   if (suffix) {
@@ -170,7 +176,7 @@ function parseRoleLine(line: string): ParsedLine {
 function parseOutlineLine(
   line: string,
 ): { level: number; name: string } | null {
-  const m = /^h(\d+)(?: (.*))?$/.exec(line);
+  const m = /^h(\d+)(?: (.*))?$/.exec(stripFocusMarker(line));
   if (!m) return null;
   return { level: Number(m[1]), name: m[2] ?? "" };
 }
@@ -221,12 +227,62 @@ function takeByRoleName(ms: Multiset, role: string, name: string, n = 1): void {
 function rawLines(text: string, ignore: Ignore): string[] {
   const lines: string[] = [];
   for (const raw of text.split("\n")) {
-    const line = raw.trim();
+    // Strip the focus marker before the ignore test (matching counts()), so an
+    // ignore pattern matches regardless of focus, and focus never perturbs stop
+    // positions, counts, or the still-on-page check — it's reported separately
+    // via focusChange.
+    const line = stripFocusMarker(raw.trim());
     if (line === "") continue;
     if (ignore?.(line)) continue;
     lines.push(line);
   }
   return lines;
+}
+
+/**
+ * The focused node's `role "name"` descriptor in a serialized tree, or null
+ * when nothing is marked. Read from the tree view — it carries every element,
+ * unlike the outline (headings only) or tabs (focusables only).
+ */
+function focusedDescriptor(rawTree: string, ignore: Ignore): string | null {
+  for (const raw of rawTree.split("\n")) {
+    const line = raw.trim();
+    if (line === "" || !line.endsWith(" [focused]")) continue;
+    // Test ignore on the stripped descriptor (matching counts()), so a line the
+    // user ignored doesn't report a focus change either.
+    const descriptor = stripFocusMarker(line);
+    if (!ignore?.(descriptor)) return descriptor;
+  }
+  return null;
+}
+
+/**
+ * The `focus-changed` statement, when the element focused at capture time
+ * differs between base and PR — a moved autofocus target, or focus that
+ * appeared/vanished. A pure focus move leaves no structural diff, so this is
+ * the only signal that the keyboard entry point changed.
+ */
+function focusChange(
+  baseTree: string,
+  prTree: string,
+  ignore: Ignore,
+): ViewChange | null {
+  const from = focusedDescriptor(baseTree, ignore);
+  const to = focusedDescriptor(prTree, ignore);
+  if (from === to) return null;
+  const message =
+    from === null
+      ? `Focus now starts on ${to} (nothing was focused before)`
+      : to === null
+        ? `Focus no longer starts anywhere (was ${from})`
+        : `Focused element changed: ${from} → ${to}`;
+  return {
+    kind: "focus-changed",
+    view: "tree",
+    message,
+    ...(from !== null ? { from } : {}),
+    ...(to !== null ? { to } : {}),
+  };
 }
 
 /** The tab-order sequence as stripped stop content (`NN.` counter removed,
@@ -326,6 +382,11 @@ const withCount = (message: string, n: number) =>
 export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
   const { views, base, pr, ignore } = input;
   const changes: ViewChange[] = [];
+
+  // Focus is stripped from the multiset views (see page-diff.ts) so it never
+  // shows as add/remove churn — surface the transition as its own statement.
+  const focus = focusChange(base.tree, pr.tree, ignore);
+  if (focus) changes.push(focus);
 
   const treeAdded = toMultiset(views.tree.added);
   const treeRemoved = toMultiset(views.tree.removed);
@@ -609,6 +670,11 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
       for (let i = 0; i < Math.min(b.added.length, b.removed.length); i++) {
         const a = b.removed[i];
         const to = b.added[i];
+        // Equal levels normally can't pair (identical lines already cancelled),
+        // but an accessible name literally ending in " [focused]" collides with
+        // the stripped focus marker on the unquoted outline line — never emit a
+        // no-op "h2 → h2".
+        if (a === to) continue;
         const id = `${a}→${to}`;
         const prev = pairs.get(id);
         if (prev) prev.n++;
@@ -657,6 +723,9 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
       if (b.added[0].count !== 1 || b.removed[0].count !== 1) continue;
       const oldName = b.removed[0].name;
       const newName = b.added[0].name;
+      // Same-name "rename" is never real — guards the outline focus-marker
+      // collision (a name ending in " [focused]" parses equal on both sides).
+      if (oldName === newName) continue;
       take(outlineRemoved, b.removed[0].key);
       take(outlineAdded, b.added[0].key);
       takeTreeHeading(treeRemoved, oldName, level);

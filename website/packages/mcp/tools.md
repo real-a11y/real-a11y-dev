@@ -71,7 +71,7 @@ An agent calls this to get the full defect list, or narrows it — e.g. audit on
 
 *Read-only · scoped by `rootSelector` · prefer on dynamic pages.*
 
-Return the audit findings **and** the semantic tree, heading outline, and tab order — all derived from **one** extraction, so they are guaranteed to describe the same instant. Prefer this over separate [`audit_page`](#audit_page) + `get_*` calls on moving pages (SPAs, pages with consent dialogs), where each separate call could catch a different state.
+Return the audit findings **and** the semantic tree, heading outline, and tab order — all derived from **one** extraction, so they are guaranteed to describe the same instant. The element focused at capture time is marked `[focused]` in each view, so the agent can see, e.g., that opening a dialog moved focus into it. Prefer this over separate [`audit_page`](#audit_page) + `get_*` calls on moving pages (SPAs, pages with consent dialogs), where each separate call could catch a different state.
 
 Parameters:
 
@@ -93,7 +93,7 @@ Token-efficient perception primitives — the individual slices of what a screen
 
 *Read-only · scoped by `rootSelector`.*
 
-Return the page's accessibility tree as a deterministic, indented role + accessible-name outline — what a screen reader would traverse. Stable across runs and token-efficient.
+Return the page's accessibility tree as a deterministic, indented role + accessible-name outline — what a screen reader would traverse. The element focused at capture time is marked `[focused]`. Stable across runs and token-efficient.
 
 Parameters:
 
@@ -118,7 +118,7 @@ An agent calls this to flag skipped levels or a missing/duplicate `h1`.
 
 *Read-only · scoped by `rootSelector`.*
 
-Return the focusable elements in the order a keyboard user reaches them with Tab — numbered, each with role + accessible name. Surfaces focus traps, illogical order, and unreachable controls.
+Return the focusable elements in the order a keyboard user reaches them with Tab — numbered, each with role + accessible name. The stop focused at capture time is marked `[focused]`. Surfaces focus traps, illogical order, and unreachable controls.
 
 Parameters:
 

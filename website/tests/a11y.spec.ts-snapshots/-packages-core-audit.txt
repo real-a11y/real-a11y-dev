@@ -146,6 +146,13 @@
     button "Copy Code"
       code
     paragraph "Resolves ARIA roles, computes accessible names via the full ANDC algorithm, detects hidden subtrees, and maps interaction capabilities."
+    paragraph "is the id of the element that held focus at extraction time, when it's inside the extracted subtree — absent when focus rested on / (nothing meaningfully focused) or fell outside the tree. The serializers in render it as a marker."
+      code "focusedId"
+      code "<body>"
+      code "<html>"
+      link "@real-a11y-dev/testing"
+        code "@real-a11y-dev/testing"
+      code "[focused]"
     heading "extractDomTree(root)" (level 3)
       code "extractDomTree(root)"
     paragraph "Same shape as , but uses raw tag names as roles instead of ARIA roles. Useful when you want to audit DOM structure rather than accessibility semantics."
