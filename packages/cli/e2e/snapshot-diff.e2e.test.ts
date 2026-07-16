@@ -90,10 +90,10 @@ describe("snapshot", () => {
     expect(artifact.pages[0].tree).toContain("button");
   });
 
-  it("errors (exit 2) when given no pages", async () => {
+  it("errors (exit 2) when given no URLs", async () => {
     const { code, stderr } = await runCli(["snapshot"], { A11Y_PAGES: "" });
     expect(code).toBe(2);
-    expect(stderr).toContain("needs pages");
+    expect(stderr).toContain("needs URLs");
   });
 
   it("takes a positional URL like every other command (config optional)", async () => {

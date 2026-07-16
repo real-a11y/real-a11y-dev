@@ -30,7 +30,7 @@ import {
   serializeBaseline,
   type Baseline,
 } from "../baseline.js";
-import { loadConfig, type ConfigPage } from "../config.js";
+import { type ConfigPage } from "../config.js";
 import { CliError, EXIT, exceedsThreshold } from "../exit.js";
 import { fingerprintFindings } from "../fingerprint.js";
 import { progress, writeReport } from "../output.js";
@@ -47,7 +47,7 @@ import {
 } from "../snapshot-artifact.js";
 import { assertAllowedUrl, normalizeTarget } from "../url-gate.js";
 
-import { sessionFlags, type Target } from "./common.js";
+import { resolvePageList, sessionFlags, type Target } from "./common.js";
 
 function toolVersion(): string {
   try {
@@ -58,85 +58,24 @@ function toolVersion(): string {
   }
 }
 
-/** Pages to snapshot, in precedence order: positional URLs (like every other
- *  command), else A11Y_PAGES env (diff-bot compat), else the config file.
- *  `configPath` (absolute) is set only on the config path — `sarif` anchors
- *  its results to it. */
-function resolvePages(
-  positionals: readonly string[],
-  flags: Record<string, string | boolean | undefined>,
-): {
-  pages: ConfigPage[];
-  rules?: string[];
-  device?: string;
-  configPath?: string;
-} {
-  // Positional URLs are the ad-hoc path — name defaults to the URL, matching
-  // `audit`/`tree`. The config stays the multi-page/policy source.
-  if (positionals.length > 0) {
-    return { pages: positionals.map((url) => ({ name: url, url })) };
-  }
-
-  const env = process.env.A11Y_PAGES;
-  if (env) {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(env);
-    } catch {
-      throw new CliError(
-        "A11Y_PAGES is not valid JSON (expected [{name,url}])",
-      );
-    }
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      throw new CliError("A11Y_PAGES must be a non-empty [{name,url}] array");
-    }
-    const pages = parsed.map((p, i) => {
-      const o = p as Record<string, unknown>;
-      if (typeof o?.name !== "string" || typeof o?.url !== "string") {
-        throw new CliError(`A11Y_PAGES[${i}] needs string "name" and "url"`);
-      }
-      return { name: o.name, url: o.url } satisfies ConfigPage;
-    });
-    return { pages };
-  }
-
-  const configPath =
-    typeof flags.config === "string"
-      ? flags.config
-      : flags["no-config"] === true
-        ? undefined
-        : existsSync("a11y.config.json")
-          ? "a11y.config.json"
-          : undefined;
-  if (!configPath) {
-    throw new CliError(
-      "snapshot needs pages to audit",
-      "pass a URL (real-a11y snapshot <url>), add an a11y.config.json, or set A11Y_PAGES",
-    );
-  }
-  const config = loadConfig(configPath);
-  return {
-    pages: config.pages,
-    rules: config.rules,
-    device: config.device,
-    configPath: resolve(configPath),
-  };
-}
-
 const SNAPSHOT_FORMATS = ["json", "md", "sarif", "junit", "jsonl"] as const;
 type SnapshotFormat = (typeof SNAPSHOT_FORMATS)[number];
 
 export const snapshotCommand: CommandFn = async (positionals, flags) => {
-  const {
-    pages: configPages,
-    rules: configRules,
-    device: configDevice,
-    configPath,
-  } = resolvePages(positionals, flags);
-  const flagRules = parseRules(flags.rules);
-  const rules = flagRules ?? (configRules as ReturnType<typeof parseRules>);
+  const { pages: configPages, configPath } = resolvePageList(
+    positionals,
+    flags,
+  );
+  if (configPages.length === 0) {
+    throw new CliError(
+      "snapshot needs URLs to audit",
+      "pass a URL (real-a11y snapshot <url>), add `urls` to a11y.config.json, or set A11Y_PAGES",
+    );
+  }
+  // rules/device (and every other policy flag) already carry the config
+  // `defaults` — run.ts merged them into `flags` before dispatch.
+  const rules = parseRules(flags.rules);
   const openOptions = parseOpenOptions(flags);
-  if (configDevice && !openOptions.device) openOptions.device = configDevice;
   // `--md` predates `--format` here and stays as an alias for `--format md`.
   const format = parseFormat(flags.format, SNAPSHOT_FORMATS);
   if (flags.md === true && flags.format !== undefined && format !== "md") {

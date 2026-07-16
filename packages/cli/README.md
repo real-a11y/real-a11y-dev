@@ -72,6 +72,46 @@ see `real-a11y <command> --help`.
 Local builds audit directly: `real-a11y audit ./dist/index.html` (paths you
 type need no ceremony).
 
+## Configure once
+
+Set your project's flags once in an `a11y.config.json` and every command picks
+them up (the Jest/ESLint model) — precedence is `flag > env > config > built-in`:
+
+```json
+{
+  "defaults": { "device": "iPhone 13", "waitUntil": "networkidle", "failOn": "error" }
+}
+```
+
+```sh
+real-a11y audit http://localhost:3000   # iPhone 13, networkidle, fail-on error — no flags
+real-a11y audit http://localhost:3000 --no-config   # ignore the config for this run
+```
+
+Add a **`urls`** list — bare URL strings, or `{ url, name?, rootSelector? }`
+objects — to name your project's routes once; then a bare `real-a11y audit` (or
+`snapshot`) audits them all, no URL to re-type:
+
+```json
+{
+  "defaults": { "failOn": "error" },
+  "urls": ["http://localhost:3000/", "http://localhost:3000/about"]
+}
+```
+
+```sh
+real-a11y audit                       # audits every URL in the config
+real-a11y audit https://example.com   # a one-off — the list is ignored
+```
+
+The config is auto-discovered in the current directory (`--config <file>` to
+point elsewhere) and strict — a typo'd key or bad value is a hard error, so it
+can't silently un-gate CI. Both blocks are optional — a `defaults`-only config
+is valid. Every flag except the per-run and security-sensitive ones
+(`--output`, `--quiet`, `--allow-file`, `--cdp`) has a `defaults` key; see the
+[CLI reference](https://real-a11y.dev/packages/cli#configure-once). (`pages` is
+still accepted as the former name for `urls`.)
+
 ## Track regressions across a PR
 
 `snapshot` writes a diffable artifact of one page or a whole set; `diff`
@@ -90,9 +130,9 @@ real-a11y diff base.json pr.json            # exit 1 only on NEW findings
 real-a11y diff base.json pr.json -f md      # a PR-comment-ready summary
 ```
 
-Pages come from positional URLs, else `A11Y_PAGES`, else `a11y.config.json`
-(`{ "pages": [{ "name", "url" }] }`) — so a multi-page policy lives in your
-repo, not a copy-pasted script. The diff is
+Pages come from positional URLs, else `A11Y_PAGES`, else the `urls` list in
+`a11y.config.json` — so a multi-page policy lives in your repo, not a
+copy-pasted script. The diff is
 finding-identity-aware: a renumbered `:nth-of-type` locator or a re-indented
 subtree is not a change — only an actual new/changed/fixed violation is.
 

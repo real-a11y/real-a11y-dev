@@ -9,6 +9,7 @@ import { createRequire } from "node:module";
 import { parseArgs } from "node:util";
 
 import { COMMANDS, rootHelp, type FlagValues } from "./args.js";
+import { mergeDefaults, resolveConfig } from "./config.js";
 import { CliError, EXIT, formatCliError } from "./exit.js";
 
 function readVersion(spec: string): string | undefined {
@@ -79,6 +80,19 @@ export async function run(argv: string[]): Promise<number> {
     if ((values as FlagValues).help === true) {
       process.stdout.write(command.help);
       return EXIT.OK;
+    }
+    // Seed unset flags from a11y.config.json's `defaults` (browser-free; runs
+    // only after the --help/--version short-circuits above). An explicit flag
+    // already parsed into `values` wins; the config value fills the gap and is
+    // validated by the command's own parser downstream. Scoped to this
+    // command's declared flags so a default can't reach a flag it would reject.
+    const resolved = resolveConfig(values);
+    if (resolved) {
+      mergeDefaults(
+        values,
+        resolved.config,
+        new Set(Object.keys(command.options)),
+      );
     }
     const fn = await command.load();
     return await fn(positionals, values as FlagValues);
