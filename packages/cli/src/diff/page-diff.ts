@@ -62,31 +62,29 @@ const EMPTY_HUNKS: ViewHunks = { tree: [], outline: [], tabs: [] };
 type Ignore = ((trimmedLine: string) => boolean) | undefined;
 
 function pageViews(base: SnapshotPage, pr: SnapshotPage, ignore: Ignore) {
-  // Strip the `[focused]` marker before the multiset diff so a pure focus move
-  // (same elements, only the focused one differs) produces no structural churn
-  // — the transition is reported as a `focus-changed` statement instead. The
-  // unified diff (pageHunks) keeps the marker; it's the literal reviewable view.
+  // `diffViews` strips the `[focused]` marker itself (before the ignore test),
+  // so a pure focus move (same elements, only the focused one differs) produces
+  // no structural churn — the transition is reported as a `focus-changed`
+  // statement instead. The unified diff (pageHunks) keeps the marker; it's the
+  // literal reviewable view.
   return {
-    tree: diffViews(base.tree, pr.tree, stripFocusMarker, ignore),
-    outline: diffViews(base.outline, pr.outline, stripFocusMarker, ignore),
+    tree: diffViews(base.tree, pr.tree, undefined, ignore),
+    outline: diffViews(base.outline, pr.outline, undefined, ignore),
     // Tabs are numbered — compare by stop content so one insert isn't a
     // renumber cascade.
-    tabs: diffViews(
-      base.tabs,
-      pr.tabs,
-      (l) => stripFocusMarker(stripTabIndex(l)),
-      ignore,
-    ),
+    tabs: diffViews(base.tabs, pr.tabs, stripTabIndex, ignore),
   };
 }
 
 /** Drop ignored lines (matched on the trimmed form, like diffViews) while
- * keeping indentation, so the unified diff never shows a volatile line. */
+ * keeping indentation, so the unified diff never shows a volatile line. The
+ * ignore test sees the focus-marker-stripped line (matching diffViews), so a
+ * transient `[focused]` can't flip an ignore pattern and keep only one side. */
 function stripIgnored(text: string, ignore: Ignore): string {
   if (!ignore) return text;
   return text
     .split("\n")
-    .filter((line) => !ignore(line.trim()))
+    .filter((line) => !ignore(stripFocusMarker(line.trim())))
     .join("\n");
 }
 

@@ -227,12 +227,14 @@ function takeByRoleName(ms: Multiset, role: string, name: string, n = 1): void {
 function rawLines(text: string, ignore: Ignore): string[] {
   const lines: string[] = [];
   for (const raw of text.split("\n")) {
-    const line = raw.trim();
+    // Strip the focus marker before the ignore test (matching counts()), so an
+    // ignore pattern matches regardless of focus, and focus never perturbs stop
+    // positions, counts, or the still-on-page check — it's reported separately
+    // via focusChange.
+    const line = stripFocusMarker(raw.trim());
     if (line === "") continue;
     if (ignore?.(line)) continue;
-    // Focus is reported separately (see focusChange); strip its marker so it
-    // never perturbs stop positions, counts, or the still-on-page check.
-    lines.push(stripFocusMarker(line));
+    lines.push(line);
   }
   return lines;
 }
@@ -245,8 +247,11 @@ function rawLines(text: string, ignore: Ignore): string[] {
 function focusedDescriptor(rawTree: string, ignore: Ignore): string | null {
   for (const raw of rawTree.split("\n")) {
     const line = raw.trim();
-    if (line === "" || ignore?.(line)) continue;
-    if (line.endsWith(" [focused]")) return stripFocusMarker(line);
+    if (line === "" || !line.endsWith(" [focused]")) continue;
+    // Test ignore on the stripped descriptor (matching counts()), so a line the
+    // user ignored doesn't report a focus change either.
+    const descriptor = stripFocusMarker(line);
+    if (!ignore?.(descriptor)) return descriptor;
   }
   return null;
 }
@@ -665,6 +670,11 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
       for (let i = 0; i < Math.min(b.added.length, b.removed.length); i++) {
         const a = b.removed[i];
         const to = b.added[i];
+        // Equal levels normally can't pair (identical lines already cancelled),
+        // but an accessible name literally ending in " [focused]" collides with
+        // the stripped focus marker on the unquoted outline line — never emit a
+        // no-op "h2 → h2".
+        if (a === to) continue;
         const id = `${a}→${to}`;
         const prev = pairs.get(id);
         if (prev) prev.n++;
@@ -713,6 +723,9 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
       if (b.added[0].count !== 1 || b.removed[0].count !== 1) continue;
       const oldName = b.removed[0].name;
       const newName = b.added[0].name;
+      // Same-name "rename" is never real — guards the outline focus-marker
+      // collision (a name ending in " [focused]" parses equal on both sides).
+      if (oldName === newName) continue;
       take(outlineRemoved, b.removed[0].key);
       take(outlineAdded, b.added[0].key);
       takeTreeHeading(treeRemoved, oldName, level);

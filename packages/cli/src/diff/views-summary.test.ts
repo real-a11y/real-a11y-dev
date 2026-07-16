@@ -1,7 +1,7 @@
 import { ROLE_FILTER_GROUPS } from "@real-a11y-dev/testing";
 import { describe, expect, it } from "vitest";
 
-import { diffViews, stripFocusMarker, stripTabIndex } from "./views-diff.js";
+import { diffViews, stripTabIndex } from "./views-diff.js";
 import {
   summarizeViews,
   VIEW_CHANGE_ORDER,
@@ -10,7 +10,8 @@ import {
 } from "./views-summary.js";
 
 /** Run raw view texts through the same normalization page-diff uses, then
- * summarize — the tests exercise the whole path a real diff takes. */
+ * summarize — the tests exercise the whole path a real diff takes. (diffViews
+ * strips the focus marker itself, so the normalize args match pageViews.) */
 function summarize(
   base: Partial<RawViews>,
   pr: Partial<RawViews>,
@@ -19,14 +20,9 @@ function summarize(
   const b: RawViews = { tree: "", outline: "", tabs: "", ...base };
   const p: RawViews = { tree: "", outline: "", tabs: "", ...pr };
   const views = {
-    tree: diffViews(b.tree, p.tree, stripFocusMarker, ignore),
-    outline: diffViews(b.outline, p.outline, stripFocusMarker, ignore),
-    tabs: diffViews(
-      b.tabs,
-      p.tabs,
-      (l) => stripFocusMarker(stripTabIndex(l)),
-      ignore,
-    ),
+    tree: diffViews(b.tree, p.tree, undefined, ignore),
+    outline: diffViews(b.outline, p.outline, undefined, ignore),
+    tabs: diffViews(b.tabs, p.tabs, stripTabIndex, ignore),
   };
   return summarizeViews({ views, base: b, pr: p, ignore });
 }
@@ -507,6 +503,43 @@ describe("summarizeViews", () => {
       );
       expect(kinds(changes).sort()).toEqual(
         ["focus-changed", "interactive-added"].sort(),
+      );
+    });
+
+    it("honors --ignore-view-line despite the marker (no phantom on an ignored, focus-only change)", () => {
+      // End-anchored ignore matches the UNMARKED line; a focus move onto that
+      // line must not resurface it — the marker is stripped before the ignore
+      // test, so both sides drop symmetrically and focus is suppressed too.
+      const ignore = (l: string) => /^searchbox "Search"$/.test(l);
+      const changes = summarize(
+        { tree: 'main\n  searchbox "Search"' },
+        { tree: 'main\n  searchbox "Search" [focused]' },
+        ignore,
+      );
+      expect(changes).toEqual([]);
+    });
+
+    it("does not emit a nonsensical heading statement when a heading name ends in the marker text", () => {
+      // Pathological: a heading whose accessible name is literally
+      // "Draft [focused]" collides with the stripped marker on the unquoted
+      // outline line. The equal-level / same-name guards keep it from producing
+      // a phantom "h2 -> h2" level change or an "X -> X" rename.
+      const changes = summarize(
+        {
+          tree: 'heading "Draft [focused]" (level 2)',
+          outline: "h2 Draft [focused]",
+        },
+        {
+          tree: 'heading "Draft [focused]" (level 2) [focused]',
+          outline: "h2 Draft [focused] [focused]",
+        },
+      );
+      expect(kinds(changes)).toContain("focus-changed");
+      expect(kinds(changes)).not.toContain("heading-level-changed");
+      expect(kinds(changes)).not.toContain("heading-renamed");
+      // The tree cancels cleanly (quote-shielded), so focus is reported right.
+      expect(messages(changes)).toContain(
+        'Focus now starts on heading "Draft [focused]" (level 2) (nothing was focused before)',
       );
     });
   });
