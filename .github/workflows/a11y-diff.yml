@@ -27,6 +27,7 @@ on:
 permissions:
   contents: read
   pull-requests: write # post/update the sticky comment
+  actions: read # read the jobs API to deep-link the full-diff step log
 
 # One run per PR ref — a quick second push cancels the first so two jobs can't
 # race the find-or-create comment.
@@ -153,9 +154,32 @@ jobs:
           script: |
             const fs = require('fs');
             const MARKER = '<!-- real-a11y-diff -->';
+
+            // Deep-link "the full structural diff" to the exact job step that
+            // prints it uncapped — not just the run summary. Resolve the job +
+            // step by the step's NAME via the jobs API (so the `#step:N:1`
+            // anchor follows the step even if earlier steps are reordered), and
+            // fall back to the run URL if the lookup fails (API hiccup / rename).
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const FULL_DIFF_STEP = 'Structural diff (full — expand for the complete diff)';
+            let fullDiffUrl = runUrl;
+            try {
+              const { data } = await github.rest.actions.listJobsForWorkflowRun({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: context.runId,
+                per_page: 100,
+              });
+              const job = data.jobs.find((j) =>
+                j.steps?.some((st) => st.name === FULL_DIFF_STEP),
+              );
+              const step = job?.steps?.find((st) => st.name === FULL_DIFF_STEP);
+              if (job && step) fullDiffUrl = `${job.html_url}#step:${step.number}:1`;
+            } catch (err) {
+              console.log('full-diff step link lookup failed, using run URL:', err.message);
+            }
             const FOOTER =
-              `[See the full structural diff](${runUrl}) · ` +
+              `[See the full structural diff](${fullDiffUrl}) · ` +
               '_Powered by [Real A11y](https://real-a11y.dev) — `real-a11y diff`_';
 
             const md = fs.readFileSync('diff.md', 'utf8').trim();

@@ -248,7 +248,9 @@ export function renderDiffPretty(
 
   const { new: n, changed: ch, removed } = result.summary;
   if (lines.length) lines.push("");
-  const summary = `${n} new · ${ch} changed · ${removed} fixed`;
+  // "findings:" mirrors the markdown header's labeled axes — the trailing count
+  // is findings (the gate), distinct from the per-page structure notes above.
+  const summary = `findings: ${n} new · ${ch} changed · ${removed} fixed`;
   lines.push(c.bold(n > 0 ? c.red(summary) : summary));
   return `${lines.join("\n")}\n`;
 }
@@ -365,28 +367,26 @@ export function renderDiffMarkdown(
 
   const changedPages = result.pages.filter(isChanged);
   const structPages = result.pages.filter(hasHunks).length;
-  // "structure changed on N pages" is a fact (the serialized views differ), so
-  // it rides the header in both modes — an all-zero findings triplet otherwise
-  // reads as "nothing changed" in an email title.
-  const structHeader =
+  // Two labeled axes so the counts can't be misread. **Findings** are the
+  // accessibility problems that gate CI; **structure** is the shape of the
+  // semantic tree (advisory, never gates). Reporting both on one line let an
+  // all-zero findings triplet sit next to "structure changed" and read as a
+  // contradiction — adding a valid new section moves the structure without
+  // introducing a single new finding.
+  const findingsLine =
+    `${n} new · ${changed} changed · ${removed} fixed` +
+    (noFindings ? " — none changed" : "");
+  const structureLine =
     structPages > 0
-      ? ` · structure changed on ${structPages} page${plural(structPages)}`
-      : "";
+      ? `changed on ${structPages} page${plural(structPages)} — new or reordered headings, landmarks, or tab stops`
+      : "unchanged";
   const out: string[] = [
-    `### Accessibility diff — ${n} new · ${changed} changed · ${removed} fixed${structHeader}`,
+    "### Accessibility diff",
+    "",
+    `**Findings** (gate CI): ${findingsLine}`,
+    `**Structure** (advisory): ${structureLine}`,
     "",
   ];
-
-  if (noFindings) {
-    out.push(
-      structPages > 0
-        ? explain
-          ? "No accessibility finding changes — but the semantic structure moved (advisory, review below)."
-          : "No accessibility finding changes — the structural diff is below."
-        : "No accessibility finding changes.",
-      "",
-    );
-  }
 
   // Route index — scan the affected pages at a glance before the details.
   if (changedPages.length >= 2) {

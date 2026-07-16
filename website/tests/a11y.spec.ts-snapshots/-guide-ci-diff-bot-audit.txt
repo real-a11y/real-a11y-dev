@@ -118,15 +118,26 @@
       code "v1:"
       code ":nth-of-type"
     heading "What the comment looks like" (level 2)
+    paragraph "The header reports — (the accessibility problems that gate CI) and (the shape of the semantic tree, always advisory). Keeping them apart means an all-clean findings line next to a moved structure never reads as a contradiction: adding a valid new section changes the structure without introducing a single new finding."
+      strong "two separate axes"
+      emphasis "findings"
+      emphasis "structure"
     paragraph
       strong "No changes:"
     blockquote
-      heading "Accessibility diff — 0 new · 0 changed · 0 fixed" (level 3)
-      paragraph "No accessibility finding changes."
+      heading "Accessibility diff" (level 3)
+      paragraph "(gate CI): 0 new · 0 changed · 0 fixed — none changed"
+        strong "Findings"
+      paragraph "(advisory): unchanged"
+        strong "Structure"
     paragraph
       strong "Changes detected:"
     blockquote
-      heading "Accessibility diff — 2 new · 0 changed · 1 fixed · structure changed on 2 pages" (level 3)
+      heading "Accessibility diff" (level 3)
+      paragraph "(gate CI): 2 new · 0 changed · 1 fixed"
+        strong "Findings"
+      paragraph "(advisory): changed on 2 pages — new or reordered headings, landmarks, or tab stops"
+        strong "Structure"
       paragraph ","
         strong "Pages with a11y changes (2):"
         code "Home"
