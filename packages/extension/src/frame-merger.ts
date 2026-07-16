@@ -36,6 +36,35 @@ export interface MergeResult {
 }
 
 /**
+ * Number of hops from `frameId` up to the top frame (frameId 0) by walking
+ * the `parentFrameId` chain. The top frame is depth 0, its direct children
+ * depth 1, grandchildren depth 2, and so on.
+ *
+ * Used to merge frames parent-first. A frame whose parent info is missing —
+ * or unreachable because a chain link never announced — is treated as a
+ * direct child of the top frame (depth 1), matching the `?? 0` parent
+ * fallback the merge uses. The `seen` guard makes a malformed/cyclic chain
+ * terminate instead of looping forever.
+ */
+function frameHierarchyDepth(
+  frameId: number,
+  frameInfoMap: Map<number, FrameInfo>,
+): number {
+  let depth = 0;
+  let current = frameId;
+  const seen = new Set<number>();
+  while (current !== 0) {
+    if (seen.has(current)) break;
+    seen.add(current);
+    const info = frameInfoMap.get(current);
+    if (!info) break;
+    depth++;
+    current = info.parentFrameId;
+  }
+  return depth;
+}
+
+/**
  * Merge per-frame trees into a single tree.
  *
  * Returns `null` if the top frame (frameId 0) has not announced itself yet —
@@ -57,7 +86,24 @@ export function mergeFrameTrees(opts: {
     nodeToFrame.set(nodeId, 0);
   }
 
-  const childFrameIds = Array.from(opts.frames.keys()).filter((id) => id !== 0);
+  // Process child frames parent-first. The map's key order is announce
+  // order, and all frames run their content scripts independently at
+  // document_idle — a light grandchild nested inside a heavy parent
+  // routinely announces first. If we merged in that order, the grandchild
+  // would be processed before its parent's prefixed nodes exist in `nodes`,
+  // so the attach below (`nodes.get(iframeNodeId)`) would miss: the child's
+  // root would never be linked into its parent iframe's `childIds` (leaving
+  // the subtree present but unreachable, i.e. invisible in the rendered
+  // tree) and its depth would fall back to the parent's frame-local depth.
+  // Sorting by hierarchy depth guarantees a frame's parent is always merged
+  // first, regardless of announce order.
+  const childFrameIds = Array.from(opts.frames.keys())
+    .filter((id) => id !== 0)
+    .sort(
+      (a, b) =>
+        frameHierarchyDepth(a, opts.frameInfoMap) -
+        frameHierarchyDepth(b, opts.frameInfoMap),
+    );
 
   for (const childFrameId of childFrameIds) {
     const childTree = opts.frames.get(childFrameId);

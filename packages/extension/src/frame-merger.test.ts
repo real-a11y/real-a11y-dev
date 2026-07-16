@@ -246,6 +246,78 @@ describe("mergeFrameTrees", () => {
     expect(result!.nodeToFrame.get("f5-c-root")).toBe(5);
   });
 
+  it("attaches a nested grandchild frame even when it announces before its parent", () => {
+    // Two levels of nesting: top(0) → A(5) → B(9). All content scripts run
+    // independently at document_idle, so the light grandchild B routinely
+    // announces before the heavier parent A. Reproduce that by inserting B
+    // into the frames map BEFORE A. The merge must still link B under A.
+    const top = makeFrame(0, "https://top.test/", [
+      ["root", makeNode("root", { childIds: ["ifr-a"] })],
+      [
+        "ifr-a",
+        makeNode("ifr-a", {
+          tagName: "iframe",
+          attrs: { src: "https://a.test/" },
+          parentId: "root",
+          depth: 1,
+        }),
+      ],
+    ]);
+
+    const frameA = makeFrame(5, "https://a.test/", [
+      ["a-root", makeNode("a-root", { childIds: ["a-ifr"] })],
+      [
+        "a-ifr",
+        makeNode("a-ifr", {
+          tagName: "iframe",
+          attrs: { src: "https://b.test/" },
+          parentId: "a-root",
+          depth: 1,
+        }),
+      ],
+    ]);
+
+    const frameB = makeFrame(9, "https://b.test/", [
+      ["b-root", makeNode("b-root", { childIds: ["b-1"] })],
+      ["b-1", makeNode("b-1", { parentId: "b-root", depth: 1 })],
+    ]);
+
+    // Insertion order [0, 9, 5]: grandchild B announced before parent A.
+    const result = mergeFrameTrees({
+      frames: new Map([
+        [0, top],
+        [9, frameB],
+        [5, frameA],
+      ]),
+      frameInfoMap: new Map<number, FrameInfo>([
+        [5, { parentFrameId: 0, url: "https://a.test/" }],
+        [9, { parentFrameId: 5, url: "https://b.test/" }],
+      ]),
+    });
+
+    expect(result).not.toBeNull();
+
+    // A's root hangs under the top frame's iframe.
+    expect(result!.nodes.get("f5-a-root")!.parentId).toBe("ifr-a");
+    expect(result!.nodes.get("ifr-a")!.childIds).toContain("f5-a-root");
+
+    // B's root hangs under A's iframe — the case that used to be dropped.
+    expect(result!.nodes.get("f9-b-root")!.parentId).toBe("f5-a-ifr");
+    expect(result!.nodes.get("f5-a-ifr")!.childIds).toContain("f9-b-root");
+
+    // Depths stack across both levels: ifr-a(1) → f5-a-root(2) → f5-a-ifr(3)
+    // → f9-b-root(4) → f9-b-1(5). A frame-local fallback would have made
+    // f9-b-root depth 1 instead.
+    expect(result!.nodes.get("f5-a-root")!.depth).toBe(2);
+    expect(result!.nodes.get("f5-a-ifr")!.depth).toBe(3);
+    expect(result!.nodes.get("f9-b-root")!.depth).toBe(4);
+    expect(result!.nodes.get("f9-b-1")!.depth).toBe(5);
+
+    // Routing map still identifies frame ownership at every level.
+    expect(result!.nodeToFrame.get("f5-a-ifr")).toBe(5);
+    expect(result!.nodeToFrame.get("f9-b-root")).toBe(9);
+  });
+
   it("expanded UI state is set true for nodes within the first three depth levels", () => {
     const iframeNode = makeNode("ifr", {
       tagName: "iframe",
