@@ -70,17 +70,13 @@
 70. button "Copy Code"
 71. generic
 72. link "Authenticated pages"
-73. table
-74. link "Authenticated pages"
-75. link "Authenticated pages"
-76. button "Copy Code"
-77. generic
-78. button "Copy Code"
-79. generic
-80. link "Playwright MCP"
-81. link "axe-core"
-82. link "Tools reference"
-83. link "@real-a11y-dev/testing — Assertions"
-84. link "Edit this page on GitHub"
-85. link "Previous page@real-a11y-dev/storybook-addon"
-86. link "Next pageTools reference"
+73. link "Environment"
+74. button "Copy Code"
+75. generic
+76. link "Playwright MCP"
+77. link "axe-core"
+78. link "Tools reference"
+79. link "@real-a11y-dev/testing — Assertions"
+80. link "Edit this page on GitHub"
+81. link "Previous page@real-a11y-dev/storybook-addon"
+82. link "Next pageTools reference"

@@ -180,12 +180,10 @@
       code "snapshot"
     button "Copy Code"
       code
-    paragraph "The config is auto-discovered as in the current directory ( points elsewhere, ignores it). Precedence is , so a default is a floor you override per run. And it's : an unknown key or bad value is a hard error, so a typo can never silently un-gate CI. Every key, and which command each applies to, is in the ."
+    paragraph "It's auto-discovered as (point elsewhere, or to ignore it), fail-closed on a typo'd key, and a flag always wins over a config default. Every key — and which command each applies to — is in the ."
       code "a11y.config.json"
       code "--config"
       code "--no-config"
-      code "flag > env var > config defaults > built-in"
-      strong "fail-closed"
       link "configuration reference"
     heading "Track regressions across a PR" (level 2)
     paragraph "The flagship CI feature: snapshot one page or a whole set into a diffable artifact, then diff two of them and fail the build only on findings."

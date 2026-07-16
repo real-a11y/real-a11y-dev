@@ -117,12 +117,10 @@ real-a11y audit                          # audits every URL in the config
 real-a11y audit http://localhost:3000    # iPhone 13, networkidle, fail-on error — no flags
 ```
 
-The config is auto-discovered as `a11y.config.json` in the current directory
-(`--config` points elsewhere, `--no-config` ignores it). Precedence is
-`flag > env var > config defaults > built-in`, so a default is a floor you
-override per run. And it's **fail-closed**: an unknown key or bad value is a hard
-error, so a typo can never silently un-gate CI. Every key, and which command each
-applies to, is in the [configuration reference](/packages/cli/configuration).
+It's auto-discovered as `a11y.config.json` (point `--config` elsewhere, or
+`--no-config` to ignore it), fail-closed on a typo'd key, and a flag always wins
+over a config default. Every key — and which command each applies to — is in the
+[configuration reference](/packages/cli/configuration).
 
 ## Track regressions across a PR
 

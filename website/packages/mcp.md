@@ -136,32 +136,11 @@ security rules.
 
 ## Configuration
 
-Set these environment variables on the server process — most clients accept an
-`"env"` object alongside `command` / `args` in the config block above.
-
-| Variable | Effect |
-| --- | --- |
-| `REAL_A11Y_MCP_CDP` | Attach to an already-running Chrome over CDP (e.g. `http://localhost:9222`) instead of launching one — the interactive way to audit a login. |
-| `REAL_A11Y_MCP_HEADFUL` | `1` launches a visible browser instead of headless. |
-| `REAL_A11Y_MCP_ALLOW_FILE` | `1` permits auditing `file://` URLs (off by default — an agent that can open `file:///…/.env` and read the DOM back is a local-file exfiltration risk). |
-| `REAL_A11Y_MCP_STORAGE_STATE` | Path to a saved login session (a Playwright storage-state file) — audit authenticated pages as that session. Never a tool parameter, so session tokens stay out of the agent's context. See [Authenticated pages](/guide/authenticated-pages). |
-| `REAL_A11Y_MCP_ALLOWED_ORIGINS` | Comma-separated origins auditing is pinned to when a session is loaded — strongly recommended with `STORAGE_STATE` so a redirect can't audit an unintended site. |
-
-When a storage state is configured, `open_page` tells the agent the session is
-already active so it won't try to log in — see the
-[Authenticated pages](/guide/authenticated-pages) guide for the full workflow
-and security rules.
-
-::: warning Use a dedicated profile for CDP
-Attaching over CDP connects to whatever Chrome is listening on that port —
-**including your everyday browser and its logged-in sessions**, which an
-LLM-driven server can then read. Launch a throwaway instance rather than enabling
-remote debugging on your main profile:
-:::
-
-```sh
-chrome --remote-debugging-port=9222 --user-data-dir=/tmp/a11y-cdp
-```
+All server behavior is set through `REAL_A11Y_MCP_*` environment variables, in
+the `"env"` block of the config above — attaching to a running Chrome over CDP,
+headful mode, `file://` access, a saved login session, and origin pinning. Each
+one, with its values and security notes, is documented in
+[Environment](/packages/mcp/tools#environment) in the tools reference.
 
 ## Scripting audits without an MCP client
 
