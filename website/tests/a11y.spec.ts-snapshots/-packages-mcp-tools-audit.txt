@@ -1,0 +1,417 @@
+  link "Skip to content"
+  banner
+    link "Real A11y"
+    button "Search"
+    navigation "Main Navigation"
+      link "Guide"
+      link "Recipes"
+      link "Packages"
+      button "v0.1 · Beta"
+    switch "Switch to dark theme"
+    link "github"
+  complementary
+    navigation "Sidebar Navigation"
+      button "Introduction"
+        heading "Introduction" (level 2)
+      link "Getting Started"
+        paragraph "Getting Started"
+      link "Core Concepts"
+        paragraph "Core Concepts"
+      link "Accessibility Snapshots"
+        paragraph "Accessibility Snapshots"
+      link "Snapshots vs. Other Tools"
+        paragraph "Snapshots vs. Other Tools"
+      link "Why Real A11y?"
+        paragraph "Why Real A11y?"
+      button "Reading the Tree"
+        heading "Reading the Tree" (level 2)
+      link "Understanding the Views"
+        paragraph "Understanding the Views"
+      link "DOM View"
+        paragraph "DOM View"
+      link "A11y View"
+        paragraph "A11y View"
+      link "Headings View"
+        paragraph "Headings View"
+      link "TAB View"
+        paragraph "TAB View"
+      link "Panel features"
+        paragraph "Panel features"
+      button "Chrome Extension"
+        heading "Chrome Extension" (level 2)
+      link "Overview & Install"
+        paragraph "Overview & Install"
+      button "Packages"
+        heading "Packages" (level 2)
+      link "@real-a11y-dev/core"
+        paragraph "@real-a11y-dev/core"
+      link "@real-a11y-dev/inspector"
+        paragraph "@real-a11y-dev/inspector"
+        link "@real-a11y-dev/testing"
+          heading "@real-a11y-dev/testing" (level 3)
+        button "toggle section"
+      link "@real-a11y-dev/react"
+        paragraph "@real-a11y-dev/react"
+      link "@real-a11y-dev/storybook-addon"
+        paragraph "@real-a11y-dev/storybook-addon"
+        link "@real-a11y-dev/mcp"
+          heading "@real-a11y-dev/mcp" (level 3)
+        button "toggle section"
+      link "Tools reference"
+        paragraph "Tools reference"
+        link "@real-a11y-dev/cli"
+          heading "@real-a11y-dev/cli" (level 3)
+        button "toggle section"
+      button "Recipes"
+        heading "Recipes" (level 2)
+      link "Next.js (App Router + React 19)"
+        paragraph "Next.js (App Router + React 19)"
+      link "Storybook 8 + React 19"
+        paragraph "Storybook 8 + React 19"
+      link "Peer Dependencies"
+        paragraph "Peer Dependencies"
+      link "CI Diff Bot"
+        paragraph "CI Diff Bot"
+      button "Reference"
+        heading "Reference" (level 2)
+      link "Authenticated Pages"
+        paragraph "Authenticated Pages"
+      link "Accessible Names"
+        paragraph "Accessible Names"
+      link "Architecture"
+        paragraph "Architecture"
+      link "Troubleshooting"
+        paragraph "Troubleshooting"
+  navigation "On this page"
+    heading "On this page" (level 2)
+    list
+      listitem
+        link "Session"
+      listitem
+        link "Audit"
+      listitem
+        link "Views"
+      listitem
+        link "Native cross-check"
+      listitem
+        link "Environment"
+  main
+    heading "MCP tools reference" (level 1)
+    paragraph "The Real A11y MCP server exposes to an MCP client (Claude Code, Claude Desktop, Cursor, and any other MCP-capable assistant). Each tool drives a real Chromium page and reports what a screen reader would actually perceive — computed roles, accessible names, and the defects assistive tech announces as broken — not what the HTML source claims."
+      strong "ten tools"
+    paragraph "The tools share browser page. A typical run is → an audit or view tool (, , or a view) → . Because every tool reads the same mutable page, calls must run — a second call mid-flight would race the first's navigation."
+      strong "one"
+      link "open_page"
+        code "open_page"
+      link "audit_page"
+        code "audit_page"
+      link "inspect_page"
+        code "inspect_page"
+      code "get_*"
+      link "close_browser"
+        code "close_browser"
+      strong "sequentially, never in parallel"
+    paragraph "Every audit and extraction tool takes an optional (default ) that scopes the work to one region or component. The two native-tree tools (, ) read the whole document and take no arguments. Tool output is capped at — a larger page is truncated with a note to narrow with ."
+      code "rootSelector"
+      code ""body""
+      link "get_native_tree"
+        code "get_native_tree"
+      link "compare_trees"
+        code "compare_trees"
+      strong "40,000 characters"
+      code "rootSelector"
+    paragraph "Server behavior is configured entirely through — saved-login sessions, origin pinning, access, CDP attach. Credentials are never tool parameters, so session tokens stay out of the agent's context. On startup the server validates that configuration and on a malformed storage-state file or an invalid origin (see )."
+      link "environment variables"
+      code "file://"
+      strong "refuses to start"
+      link "Environment"
+    heading "Session" (level 2)
+    paragraph "Bracket every audit with these two. navigates and readies the page; tears the browser down."
+      code "open_page"
+      code "close_browser"
+    heading "open_page" (level 3)
+      code "open_page"
+    paragraph
+      emphasis "Session · mutates the shared page · call first."
+    paragraph "Navigate the browser to a URL and inject the extraction engine so the page is ready for queries. On dynamic sites (SPAs, consent dialogs) set and/or so the page settles before extraction. Pass to audit the layout — which can differ substantially from desktop (a collapses to a hamburger , content is hidden or reordered)."
+      code "waitUntil: "networkidle""
+      code "settleMs"
+      code "device"
+      strong "mobile or tablet"
+      code "menubar"
+      code "button"
+    paragraph "Parameters:"
+    list
+      listitem "— string (absolute URL) — — the page to open. Only , , and are allowed; is refused unless ."
+        strong
+          code "url"
+        strong "required"
+        code "http"
+        code "https"
+        code "data:"
+        code "file://"
+        link "REAL_A11Y_MCP_ALLOW_FILE=1"
+          code "REAL_A11Y_MCP_ALLOW_FILE=1"
+      listitem "— | | | — optional (default ) — navigation wait state. is the most reliable "the SPA finished rendering" signal, at the cost of latency."
+        strong
+          code "waitUntil"
+        code ""load""
+        code ""domcontentloaded""
+        code ""networkidle""
+        code ""commit""
+        code ""load""
+        code ""networkidle""
+      listitem "— integer, 0–15000 — optional (default ) — extra fixed wait after the wait state for late JS and consent dialogs to settle."
+        strong
+          code "settleMs"
+        code "0"
+      listitem "— integer, 0–120000 — optional (default ) — navigation timeout."
+        strong
+          code "timeoutMs"
+        code "30000"
+      listitem "— string — optional — a Playwright device name (, , ) to emulate. Omit for desktop. Not supported over ."
+        strong
+          code "device"
+        code ""iPhone 13""
+        code ""Pixel 7""
+        code ""iPad Pro 11""
+        link "REAL_A11Y_MCP_CDP"
+          code "REAL_A11Y_MCP_CDP"
+      listitem "— object (both positive) — optional — explicit viewport override, layered on top of ."
+        strong
+          code "viewport"
+        code "{ width: integer, height: integer }"
+        code "device"
+    paragraph "An agent calls this before any other tool, e.g. to open a signup flow's mobile layout before auditing it:"
+    button "Copy Code"
+      code
+    heading "close_browser" (level 3)
+      code "close_browser"
+    paragraph
+      emphasis "Session · tears down the browser · takes no arguments."
+    paragraph "Close the browser session and free resources. Over a CDP attach it closes only the tab the server created and disconnects — it never closes the user's own Chrome or their other tabs."
+    paragraph "Parameters: none."
+    heading "Audit" (level 2)
+    paragraph "The reason the server exists. Both tools report violations a screen reader would announce; adds the three views from the same extraction."
+      link "inspect_page"
+        code "inspect_page"
+    heading "audit_page" (level 3)
+      code "audit_page"
+    paragraph
+      emphasis "Read-only · scoped by · the primary tool."
+        code "rootSelector"
+    paragraph "Run the accessibility rules against the current page and return every violation — unlabeled interactive controls, images missing alt text, skipped/missing/duplicate heading levels, unlabeled dialogs, and broken landmark structure. Findings come back grouped and counted (so "17 unlabeled links" is one row, each with its CSS locator) plus a machine-readable JSON block."
+    paragraph "Parameters:"
+    list
+      listitem "— string — optional (default ) — CSS selector for the audit root."
+        strong
+          code "rootSelector"
+        code ""body""
+      listitem "— array of | | | | — optional — a subset of rules to run. Omit to run all."
+        strong
+          code "rules"
+        code ""no-unlabeled-interactive""
+        code ""image-alt""
+        code ""heading-order""
+        code ""dialog-labeled""
+        code ""landmark-structure""
+    paragraph "An agent calls this to get the full defect list, or narrows it — e.g. audit only the cookie-consent dialog for labeling:"
+    button "Copy Code"
+      code
+    heading "inspect_page" (level 3)
+      code "inspect_page"
+    paragraph
+      emphasis "Read-only · scoped by · prefer on dynamic pages."
+        code "rootSelector"
+    paragraph "Return the audit findings the semantic tree, heading outline, and tab order — all derived from extraction, so they are guaranteed to describe the same instant. Prefer this over separate + calls on moving pages (SPAs, pages with consent dialogs), where each separate call could catch a different state."
+      strong "and"
+      strong "one"
+      link "audit_page"
+        code "audit_page"
+      code "get_*"
+    paragraph "Parameters:"
+    list
+      listitem "— string — optional (default ) — CSS selector for the extraction root."
+        strong
+          code "rootSelector"
+        code ""body""
+      listitem "— array of the five rule ids above — optional — subset for the findings section. Omit to run all."
+        strong
+          code "rules"
+      listitem "— boolean — optional (default ) — include generic container nodes () in the tree."
+        strong
+          code "includeGeneric"
+        code "false"
+        code "role=generic"
+    paragraph "An agent calls this for a consistent whole-page picture in a single round-trip:"
+    button "Copy Code"
+      code
+    heading "Views" (level 2)
+    paragraph "Token-efficient perception primitives — the individual slices of what a screen reader traverses. All are read-only and scoped by ."
+      code "rootSelector"
+    heading "get_semantic_tree" (level 3)
+      code "get_semantic_tree"
+    paragraph
+      emphasis "Read-only · scoped by ."
+        code "rootSelector"
+    paragraph "Return the page's accessibility tree as a deterministic, indented role + accessible-name outline — what a screen reader would traverse. Stable across runs and token-efficient."
+    paragraph "Parameters:"
+    list
+      listitem "— string — optional (default )."
+        strong
+          code "rootSelector"
+        code ""body""
+      listitem "— boolean — optional (default ) — include generic container nodes ()."
+        strong
+          code "includeGeneric"
+        code "false"
+        code "role=generic"
+    paragraph "An agent calls this to reason about page structure or diff it against another rendering."
+    heading "get_heading_outline" (level 3)
+      code "get_heading_outline"
+    paragraph
+      emphasis "Read-only · scoped by ."
+        code "rootSelector"
+    paragraph "Return the heading outline (– in document order) as an indented list — the structure a screen-reader user navigates by heading."
+      code "h1"
+      code "h6"
+    paragraph "Parameters:"
+    list
+      listitem "— string — optional (default )."
+        strong
+          code "rootSelector"
+        code ""body""
+    paragraph "An agent calls this to flag skipped levels or a missing/duplicate ."
+      code "h1"
+    heading "get_tab_order" (level 3)
+      code "get_tab_order"
+    paragraph
+      emphasis "Read-only · scoped by ."
+        code "rootSelector"
+    paragraph "Return the focusable elements in the order a keyboard user reaches them with Tab — numbered, each with role + accessible name. Surfaces focus traps, illogical order, and unreachable controls."
+    paragraph "Parameters:"
+    list
+      listitem "— string — optional (default )."
+        strong
+          code "rootSelector"
+        code ""body""
+    paragraph "An agent calls this to check keyboard operability of a form or menu."
+    heading "list_elements" (level 3)
+      code "list_elements"
+    paragraph
+      emphasis "Read-only · scoped by ."
+        code "rootSelector"
+    paragraph "List every element of one category as role + accessible name + CSS locator — a focused view of one kind of element (e.g. pairs with the rule, with labeling)."
+      code "image"
+      code "image-alt"
+      code "form"
+    paragraph "Parameters:"
+    list
+      listitem "— | | | | | — — the category to list."
+        strong
+          code "filter"
+        code ""heading""
+        code ""link""
+        code ""button""
+        code ""form""
+        code ""landmark""
+        code ""image""
+        strong "required"
+      listitem "— string — optional (default )."
+        strong
+          code "rootSelector"
+        code ""body""
+    paragraph "An agent calls this to review one element type without pulling the whole tree:"
+    button "Copy Code"
+      code
+    heading "Native cross-check" (level 2)
+    paragraph "Chromium-only fidelity oracles. Both read the whole document, take no arguments, and compare Real A11y's custom engine against the browser's own computation."
+    heading "get_native_tree" (level 3)
+      code "get_native_tree"
+    paragraph
+      emphasis "Read-only · whole document · Chromium only."
+    paragraph "Return Chromium's accessibility tree — computed by Blink, read via CDP — as role + accessible name. This is the browser's authoritative tree, not Real A11y's custom extraction."
+      strong "own"
+    paragraph "Parameters: none."
+    paragraph "An agent calls this to see what the browser itself exposes, independent of the custom engine."
+    heading "compare_trees" (level 3)
+      code "compare_trees"
+    paragraph
+      emphasis "Read-only · whole document · Chromium only."
+    paragraph "Diff Real A11y's custom tree against Chromium's native tree and report where they disagree on role or accessible name — a fidelity oracle that surfaces custom-engine bugs (e.g. an unlabeled input the custom engine names by its typed value). Compares only name-bearing roles, order- and indent-insensitively; matching nodes are omitted. Some "only in native" entries are iframe/shadow-DOM content the custom engine doesn't traverse, not name bugs."
+    paragraph "Parameters: none."
+    paragraph "An agent calls this to sanity-check the engine before trusting a surprising finding."
+    heading "Environment" (level 2)
+    paragraph "Set these on the server process — most clients accept an object alongside / . All are read by the stdio entry point at startup; the storage-state and origin values are ."
+      code ""env""
+      code "command"
+      code "args"
+      strong "validated before the server accepts any tool call"
+    heading "REAL_A11Y_MCP_CDP" (level 3)
+      code "REAL_A11Y_MCP_CDP"
+    paragraph
+      emphasis "string (URL) · optional."
+    paragraph "Attach to an already-running Chrome over the DevTools protocol (e.g. ) instead of launching a fresh browser — the interactive way to audit a login. Device/viewport emulation is available over CDP (it reuses the running browser's own context). Use a throwaway profile, not your everyday Chrome:"
+      code "http://localhost:9222"
+      strong "not"
+    button "Copy Code"
+      code
+    heading "REAL_A11Y_MCP_HEADFUL" (level 3)
+      code "REAL_A11Y_MCP_HEADFUL"
+    paragraph
+      emphasis "· optional."
+        code ""1""
+    paragraph "Set to to launch a visible browser instead of headless. Ignored when is set."
+      code "1"
+      link "REAL_A11Y_MCP_CDP"
+        code "REAL_A11Y_MCP_CDP"
+    heading "REAL_A11Y_MCP_ALLOW_FILE" (level 3)
+      code "REAL_A11Y_MCP_ALLOW_FILE"
+    paragraph
+      emphasis "· optional."
+        code ""1""
+    paragraph "Set to to permit auditing URLs. Off by default — an agent that can open and read the DOM back is a local-file exfiltration risk. URLs are always allowed (caller-supplied inline content, not a filesystem read)."
+      code "1"
+      code "file://"
+      code "file:///…/.env"
+      code "data:"
+    heading "REAL_A11Y_MCP_STORAGE_STATE" (level 3)
+      code "REAL_A11Y_MCP_STORAGE_STATE"
+    paragraph
+      emphasis "string (path) · optional."
+    paragraph "Path to a saved login session — a Playwright storage-state JSON (cookies + origin storage) — loaded into every launched context so pages open already authenticated. Create it out-of-band (e.g. the CLI's helper); it is a tool parameter, so session tokens stay out of the agent's context. When set, tells the agent the session is active so it won't try to log in. At startup the server verifies the path is a readable file containing a valid storage-state shape ( / ) and refuses to start otherwise; errors quote the path only, never its contents. Cannot be combined with (a CDP connection carries its own session)."
+      code "login"
+      strong "never"
+      link "open_page"
+        code "open_page"
+      code ""cookies""
+      code ""origins""
+      link "REAL_A11Y_MCP_CDP"
+        code "REAL_A11Y_MCP_CDP"
+    heading "REAL_A11Y_MCP_ALLOWED_ORIGINS" (level 3)
+      code "REAL_A11Y_MCP_ALLOWED_ORIGINS"
+    paragraph
+      emphasis "comma-separated origins · optional."
+    paragraph "Origins that auditing is pinned to — enforced on the URL after redirects, so a redirect can't route to an unintended site. The pin applies , with or without a loaded session. It's strongly recommended alongside — and the server prints a startup warning if a session is loaded it — but the pin itself doesn't depend on a session. Each entry is normalized to its origin at startup, and an invalid value refuses to start."
+      strong "final"
+      strong "whenever this variable is set"
+      link "REAL_A11Y_MCP_STORAGE_STATE"
+        code "REAL_A11Y_MCP_STORAGE_STATE"
+      emphasis "without"
+    button "Copy Code"
+      code
+    paragraph "Proxy"
+    paragraph "There is no variable — Chromium doesn't honor / on its own, and a proxy is a constructor option, not read from the environment by the stdio server. Configure it only if you embed directly."
+      code "REAL_A11Y_MCP_PROXY"
+      code "HTTP_PROXY"
+      code "HTTPS_PROXY"
+      strong "programmatic"
+      code "BrowserSession"
+      code "BrowserSession"
+  contentinfo
+    link "Edit this page on GitHub"
+    paragraph "Last updated:"
+      time "[redacted]"
+    navigation "Pager"
+      link "Previous page@real-a11y-dev/mcp"
+      link "Next page@real-a11y-dev/cli"

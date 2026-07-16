@@ -3,23 +3,17 @@
   h2 Chrome Extension
   h2 Packages
     h3 @real-a11y-dev/testing
+    h3 @real-a11y-dev/mcp
+    h3 @real-a11y-dev/cli
   h2 Recipes
   h2 Reference
   h2 On this page
 h1 @real-a11y-dev/mcp
-  h2 Prerequisites
-  h2 Getting started
-    h3 Installation
-    h3 Your first audit
-    h3 Auditing a page behind a login
-  h2 Tools
-  h2 Features
-    h3 Consistency on dynamic pages
-    h3 Mobile & tablet
-    h3 Cross-checking against the browser
+  h2 Connect it to your client
+  h2 Your first audit
+  h2 Auditing a page behind a login
   h2 Configuration
-  h2 Quick reference
+  h2 Scripting audits without an MCP client
   h2 How it compares to Playwright MCP
-  h2 Under the hood
   h2 Limitations
   h2 See also

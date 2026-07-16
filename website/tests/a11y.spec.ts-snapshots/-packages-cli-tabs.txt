@@ -30,84 +30,82 @@
 30. button "toggle section"
 31. link "@real-a11y-dev/react"
 32. link "@real-a11y-dev/storybook-addon"
-33. link "@real-a11y-dev/mcp"
-34. link "@real-a11y-dev/cli"
-35. button "Recipes"
-36. link "Next.js (App Router + React 19)"
-37. link "Storybook 8 + React 19"
-38. link "Peer Dependencies"
-39. link "CI Diff Bot"
-40. button "Reference"
-41. link "Authenticated Pages"
-42. link "Accessible Names"
-43. link "Architecture"
-44. link "Troubleshooting"
-45. link "Prerequisites"
-46. link "Your first audit"
-47. link "Commands"
-48. link "Track regressions across a PR"
-49. link "Adopt the gate on existing debt"
-50. link "Global flags"
-51. link "Configure once"
-52. link "Machine output"
-53. link "In CI"
-54. link "Pages behind a login"
-55. link "Limitations"
-56. link "See also"
-57. link "extension"
-58. link "testing library"
-59. link "MCP server"
-60. button "Copy Code"
-61. generic
-62. button "Copy Code"
-63. generic
-64. button "Copy Code"
-65. generic
+33. generic
+34. link "@real-a11y-dev/mcp"
+35. button "toggle section"
+36. generic
+37. link "@real-a11y-dev/cli"
+38. button "toggle section"
+39. link "Commands & flags"
+40. link "Configuration"
+41. button "Recipes"
+42. link "Next.js (App Router + React 19)"
+43. link "Storybook 8 + React 19"
+44. link "Peer Dependencies"
+45. link "CI Diff Bot"
+46. button "Reference"
+47. link "Authenticated Pages"
+48. link "Accessible Names"
+49. link "Architecture"
+50. link "Troubleshooting"
+51. link "Prerequisites"
+52. link "Your first audit"
+53. link "Configure once"
+54. link "Track regressions across a PR"
+55. link "Adopt the gate on existing debt"
+56. link "In CI"
+57. link "Pages behind a login"
+58. link "Output you can trust"
+59. link "Limitations"
+60. link "See also"
+61. link "extension"
+62. link "testing library"
+63. link "MCP server"
+64. link "/packages/cli/commands"
+65. link "/packages/cli/configuration"
 66. button "Copy Code"
 67. generic
 68. button "Copy Code"
 69. generic
-70. table
-71. link "Authenticated pages"
+70. button "Copy Code"
+71. generic
 72. button "Copy Code"
 73. generic
 74. button "Copy Code"
 75. generic
-76. button "Copy Code"
-77. generic
-78. button "Copy Code"
-79. generic
-80. button "Copy Code"
-81. generic
+76. link "command reference"
+77. button "Copy Code"
+78. generic
+79. button "Copy Code"
+80. generic
+81. link "configuration reference"
 82. button "Copy Code"
 83. generic
 84. button "Copy Code"
 85. generic
-86. table
-87. link "Adopt the gate on existing debt"
-88. link "SARIF, JUnit, JSONL"
-89. link "Authenticated pages"
-90. link "Configure once"
+86. button "Copy Code"
+87. generic
+88. button "Copy Code"
+89. generic
+90. link "command reference"
 91. button "Copy Code"
 92. generic
 93. button "Copy Code"
 94. generic
-95. table
-96. button "Copy Code"
-97. generic
-98. table
-99. button "Copy Code"
-100. generic
-101. table
-102. button "Copy Code"
-103. generic
-104. button "Copy Code"
-105. generic
+95. button "Copy Code"
+96. generic
+97. link "command reference"
+98. button "Copy Code"
+99. generic
+100. link "Authenticated pages"
+101. button "Copy Code"
+102. generic
+103. link "axe-core"
+104. link "Command + flag reference"
+105. link "Configuration reference"
 106. link "Authenticated pages"
-107. link "axe-core"
-108. link "Authenticated pages"
-109. link "@real-a11y-dev/mcp"
-110. link "@real-a11y-dev/testing"
-111. link "Edit this page on GitHub"
-112. link "Previous page@real-a11y-dev/mcp"
-113. link "Next pageNext.js (App Router + React 19)"
+107. link "@real-a11y-dev/mcp"
+108. link "@real-a11y-dev/testing"
+109. link "Edit this page on GitHub"
+110. link "Previous pageTools reference"
+111. link "Next pageCommands & flags"

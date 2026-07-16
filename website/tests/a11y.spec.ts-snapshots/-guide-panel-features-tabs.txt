@@ -30,54 +30,58 @@
 30. button "toggle section"
 31. link "@real-a11y-dev/react"
 32. link "@real-a11y-dev/storybook-addon"
-33. link "@real-a11y-dev/mcp"
-34. link "@real-a11y-dev/cli"
-35. button "Recipes"
-36. link "Next.js (App Router + React 19)"
-37. link "Storybook 8 + React 19"
-38. link "Peer Dependencies"
-39. link "CI Diff Bot"
-40. button "Reference"
-41. link "Authenticated Pages"
-42. link "Accessible Names"
-43. link "Architecture"
-44. link "Troubleshooting"
-45. link "Search"
-46. link "Role filters"
-47. link "Focus tracking"
-48. link "Scoping"
-49. link "Live region monitoring"
-50. link "Keyboard navigation"
-51. link "Panel interaction vs. host side effects"
-52. link "See also"
-53. link "Chrome extension"
-54. link "@real-a11y-dev/inspector"
-55. link "React component"
-56. link "Storybook addon"
-57. table
-58. table
-59. table
-60. link "Chrome extension"
-61. link "Panel interaction vs. host side effects"
-62. link "troubleshooting page"
+33. generic
+34. link "@real-a11y-dev/mcp"
+35. button "toggle section"
+36. generic
+37. link "@real-a11y-dev/cli"
+38. button "toggle section"
+39. button "Recipes"
+40. link "Next.js (App Router + React 19)"
+41. link "Storybook 8 + React 19"
+42. link "Peer Dependencies"
+43. link "CI Diff Bot"
+44. button "Reference"
+45. link "Authenticated Pages"
+46. link "Accessible Names"
+47. link "Architecture"
+48. link "Troubleshooting"
+49. link "Search"
+50. link "Role filters"
+51. link "Focus tracking"
+52. link "Scoping"
+53. link "Live region monitoring"
+54. link "Keyboard navigation"
+55. link "Panel interaction vs. host side effects"
+56. link "See also"
+57. link "Chrome extension"
+58. link "@real-a11y-dev/inspector"
+59. link "React component"
+60. link "Storybook addon"
+61. table
+62. table
 63. table
-64. link "the rationale"
-65. link "the package reference"
-66. table
-67. link "the testing reference"
-68. table
-69. table
+64. link "Chrome extension"
+65. link "Panel interaction vs. host side effects"
+66. link "troubleshooting page"
+67. table
+68. link "the rationale"
+69. link "the package reference"
 70. table
-71. button "Copy Code"
-72. generic
-73. button "Copy Code"
-74. generic
-75. link "Reading the DOM View"
-76. link "A11y View"
-77. link "TAB View"
-78. link "Accessible Names"
-79. link "Architecture"
-80. link "Troubleshooting"
-81. link "Edit this page on GitHub"
-82. link "Previous pageTAB View"
-83. link "Next pageOverview & Install"
+71. link "the testing reference"
+72. table
+73. table
+74. table
+75. button "Copy Code"
+76. generic
+77. button "Copy Code"
+78. generic
+79. link "Reading the DOM View"
+80. link "A11y View"
+81. link "TAB View"
+82. link "Accessible Names"
+83. link "Architecture"
+84. link "Troubleshooting"
+85. link "Edit this page on GitHub"
+86. link "Previous pageTAB View"
+87. link "Next pageOverview & Install"

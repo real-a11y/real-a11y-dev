@@ -1,0 +1,31 @@
+  h2 Introduction
+  h2 Reading the Tree
+  h2 Chrome Extension
+  h2 Packages
+    h3 @real-a11y-dev/testing
+    h3 @real-a11y-dev/mcp
+    h3 @real-a11y-dev/cli
+  h2 Recipes
+  h2 Reference
+  h2 On this page
+h1 MCP tools reference
+  h2 Session
+    h3 open_page
+    h3 close_browser
+  h2 Audit
+    h3 audit_page
+    h3 inspect_page
+  h2 Views
+    h3 get_semantic_tree
+    h3 get_heading_outline
+    h3 get_tab_order
+    h3 list_elements
+  h2 Native cross-check
+    h3 get_native_tree
+    h3 compare_trees
+  h2 Environment
+    h3 REAL_A11Y_MCP_CDP
+    h3 REAL_A11Y_MCP_HEADFUL
+    h3 REAL_A11Y_MCP_ALLOW_FILE
+    h3 REAL_A11Y_MCP_STORAGE_STATE
+    h3 REAL_A11Y_MCP_ALLOWED_ORIGINS

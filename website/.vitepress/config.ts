@@ -247,8 +247,21 @@ export default defineConfig({
             text: "@real-a11y-dev/storybook-addon",
             link: "/packages/storybook-addon",
           },
-          { text: "@real-a11y-dev/mcp", link: "/packages/mcp" },
-          { text: "@real-a11y-dev/cli", link: "/packages/cli" },
+          {
+            text: "@real-a11y-dev/mcp",
+            link: "/packages/mcp",
+            collapsed: true,
+            items: [{ text: "Tools reference", link: "/packages/mcp/tools" }],
+          },
+          {
+            text: "@real-a11y-dev/cli",
+            link: "/packages/cli",
+            collapsed: true,
+            items: [
+              { text: "Commands & flags", link: "/packages/cli/commands" },
+              { text: "Configuration", link: "/packages/cli/configuration" },
+            ],
+          },
         ],
       },
       {

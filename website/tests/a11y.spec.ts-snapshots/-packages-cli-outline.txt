@@ -3,23 +3,20 @@
   h2 Chrome Extension
   h2 Packages
     h3 @real-a11y-dev/testing
+    h3 @real-a11y-dev/mcp
+    h3 @real-a11y-dev/cli
   h2 Recipes
   h2 Reference
   h2 On this page
 h1 @real-a11y-dev/cli
   h2 Prerequisites
   h2 Your first audit
-  h2 Commands
+  h2 Configure once
   h2 Track regressions across a PR
     h3 Structural changes
   h2 Adopt the gate on existing debt
-  h2 Global flags
-  h2 Configure once
-  h2 Machine output
-    h3 SARIF, JUnit, JSONL
-    h3 Exit codes
-    h3 Stability contract
   h2 In CI
   h2 Pages behind a login
+  h2 Output you can trust
   h2 Limitations
   h2 See also

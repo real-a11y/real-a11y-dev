@@ -1,0 +1,38 @@
+  h2 Introduction
+  h2 Reading the Tree
+  h2 Chrome Extension
+  h2 Packages
+    h3 @real-a11y-dev/testing
+    h3 @real-a11y-dev/mcp
+    h3 @real-a11y-dev/cli
+  h2 Recipes
+  h2 Reference
+  h2 On this page
+h1 a11y.config.json
+  h2 Top-level keys
+    h3 urls
+    h3 defaults
+    h3 redact
+  h2 defaults keys
+    h3 root
+    h3 device
+    h3 viewport
+    h3 waitUntil
+    h3 settleMs
+    h3 timeoutMs
+    h3 headful
+    h3 storageState
+    h3 auditOrigins
+    h3 format
+    h3 rules
+    h3 failOn
+    h3 annotate
+    h3 includeGeneric
+    h3 baseline
+    h3 ignoreViewLine
+    h3 maxLines
+    h3 maxPages
+    h3 explain
+  h2 Not settable
+  h2 Legacy shorthands
+  h2 See also
