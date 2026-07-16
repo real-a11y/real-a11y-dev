@@ -35,20 +35,9 @@ concurrency:
   group: a11y-diff-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  # The pages audited on BOTH sides. `name` is the diff's join key, so it must
-  # match across base/PR — which it does, since this list drives both jobs. The
-  # port must match the `vitepress preview --port` below.
-  A11Y_PAGES: >-
-    [{"name":"Home","url":"http://localhost:4173/"},
-    {"name":"A11y Snapshots","url":"http://localhost:4173/guide/accessibility-snapshots"},
-    {"name":"core","url":"http://localhost:4173/packages/core"},
-    {"name":"inspector","url":"http://localhost:4173/packages/inspector"},
-    {"name":"react","url":"http://localhost:4173/packages/react"},
-    {"name":"storybook-addon","url":"http://localhost:4173/packages/storybook-addon"},
-    {"name":"testing","url":"http://localhost:4173/packages/testing"},
-    {"name":"mcp","url":"http://localhost:4173/packages/mcp"},
-    {"name":"cli","url":"http://localhost:4173/packages/cli"}]
+# The audited routes live in one place — `.github/a11y-ci.config.json` — which
+# drives the base + PR snapshots here (and the scan in `a11y-semantic-scan.yml`).
+# Its port must match the `vitepress preview --port` below.
 
 jobs:
   # ── Snapshot the BASE branch with the BASE engine (so an engine/CLI change in
@@ -80,13 +69,22 @@ jobs:
       - name: Install Playwright browser
         run: pnpm --filter @real-a11y-dev/cli exec playwright install chromium --with-deps
 
-      # Serve the built site, wait for it, snapshot every page, then let the
-      # backgrounded server die with the step. A11Y_PAGES points at :4173.
+      # base_ref may predate the route config, so overlay the PR's copy (via the
+      # always-available refs/pull/<n>/head — works for forks too) so both sides
+      # audit the SAME routes. This is what the old PR-defined A11Y_PAGES env did
+      # implicitly.
+      - name: Overlay the PR's a11y route config
+        run: |
+          git fetch --no-tags --depth=1 origin "refs/pull/${{ github.event.pull_request.number }}/head"
+          git checkout FETCH_HEAD -- .github/a11y-ci.config.json
+
+      # Serve the built site, wait for it, snapshot every route from the config,
+      # then let the backgrounded server die with the step.
       - name: Snapshot base
         run: |
           pnpm --filter @real-a11y-dev/website exec vitepress preview --port 4173 &
           for i in $(seq 1 60); do curl -sf http://localhost:4173/ >/dev/null && break; sleep 1; done
-          node packages/cli/dist/index.js snapshot --wait-until networkidle --settle 1000 -o base.json
+          node packages/cli/dist/index.js snapshot --config .github/a11y-ci.config.json --wait-until networkidle --settle 1000 -o base.json
 
       - uses: actions/upload-artifact@v4
         with:
@@ -121,11 +119,15 @@ jobs:
       - name: Install Playwright browser
         run: pnpm --filter @real-a11y-dev/cli exec playwright install chromium --with-deps
 
+      # Serve the built site, wait for it, snapshot every route from the config,
+      # then let the backgrounded server die with the step. (Code-scanning SARIF
+      # for the Security tab is a separate workflow — `a11y-semantic-scan.yml` —
+      # that analyzes the default branch, which is what the Security tab shows.)
       - name: Snapshot PR
         run: |
           pnpm --filter @real-a11y-dev/website exec vitepress preview --port 4173 &
           for i in $(seq 1 60); do curl -sf http://localhost:4173/ >/dev/null && break; sleep 1; done
-          node packages/cli/dist/index.js snapshot --wait-until networkidle --settle 1000 -o pr.json
+          node packages/cli/dist/index.js snapshot --config .github/a11y-ci.config.json --wait-until networkidle --settle 1000 -o pr.json
 
       - uses: actions/download-artifact@v4
         with:

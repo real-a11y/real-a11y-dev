@@ -1,0 +1,49 @@
+{
+  "urls": [
+    {
+      "name": "Home",
+      "url": "http://localhost:4173/",
+      "sourcePath": "website/index.md"
+    },
+    {
+      "name": "A11y Snapshots",
+      "url": "http://localhost:4173/guide/accessibility-snapshots",
+      "sourcePath": "website/guide/accessibility-snapshots.md"
+    },
+    {
+      "name": "core",
+      "url": "http://localhost:4173/packages/core",
+      "sourcePath": "website/packages/core.md"
+    },
+    {
+      "name": "inspector",
+      "url": "http://localhost:4173/packages/inspector",
+      "sourcePath": "website/packages/inspector.md"
+    },
+    {
+      "name": "react",
+      "url": "http://localhost:4173/packages/react",
+      "sourcePath": "website/packages/react.md"
+    },
+    {
+      "name": "storybook-addon",
+      "url": "http://localhost:4173/packages/storybook-addon",
+      "sourcePath": "website/packages/storybook-addon.md"
+    },
+    {
+      "name": "testing",
+      "url": "http://localhost:4173/packages/testing",
+      "sourcePath": "website/packages/testing.md"
+    },
+    {
+      "name": "mcp",
+      "url": "http://localhost:4173/packages/mcp",
+      "sourcePath": "website/packages/mcp.md"
+    },
+    {
+      "name": "cli",
+      "url": "http://localhost:4173/packages/cli",
+      "sourcePath": "website/packages/cli.md"
+    }
+  ]
+}
