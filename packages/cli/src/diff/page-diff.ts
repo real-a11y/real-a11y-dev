@@ -12,7 +12,12 @@ import {
   type DiffEntry,
   type DiffSummary,
 } from "./findings-diff.js";
-import { diffViews, stripTabIndex, type ViewDiff } from "./views-diff.js";
+import {
+  diffViews,
+  stripFocusMarker,
+  stripTabIndex,
+  type ViewDiff,
+} from "./views-diff.js";
 import { summarizeViews, type ViewChange } from "./views-summary.js";
 import { unifiedDiff, type ViewHunks } from "./unified-diff.js";
 
@@ -57,12 +62,21 @@ const EMPTY_HUNKS: ViewHunks = { tree: [], outline: [], tabs: [] };
 type Ignore = ((trimmedLine: string) => boolean) | undefined;
 
 function pageViews(base: SnapshotPage, pr: SnapshotPage, ignore: Ignore) {
+  // Strip the `[focused]` marker before the multiset diff so a pure focus move
+  // (same elements, only the focused one differs) produces no structural churn
+  // — the transition is reported as a `focus-changed` statement instead. The
+  // unified diff (pageHunks) keeps the marker; it's the literal reviewable view.
   return {
-    tree: diffViews(base.tree, pr.tree, undefined, ignore),
-    outline: diffViews(base.outline, pr.outline, undefined, ignore),
+    tree: diffViews(base.tree, pr.tree, stripFocusMarker, ignore),
+    outline: diffViews(base.outline, pr.outline, stripFocusMarker, ignore),
     // Tabs are numbered — compare by stop content so one insert isn't a
     // renumber cascade.
-    tabs: diffViews(base.tabs, pr.tabs, stripTabIndex, ignore),
+    tabs: diffViews(
+      base.tabs,
+      pr.tabs,
+      (l) => stripFocusMarker(stripTabIndex(l)),
+      ignore,
+    ),
   };
 }
 

@@ -96,9 +96,11 @@
       listitem
         link "auditSnapshot(root, options?)"
       listitem
-        link "outlineSnapshot(root)"
+        link "outlineSnapshot(root, options?)"
       listitem
-        link "tabSequenceSnapshot(root)"
+        link "tabSequenceSnapshot(root, options?)"
+      listitem
+        link "Focus marker"
       listitem
         link "Determinism"
       listitem
@@ -163,6 +165,16 @@
             code "false"
           cell "Include generic container nodes (role="generic")."
             code "role="generic""
+        row
+          cell "markFocus"
+            code "markFocus"
+          cell "boolean"
+            code "boolean"
+          cell "true"
+            code "true"
+          cell "Mark the element focused at extraction time with a trailing [focused]. See Focus marker ."
+            code "[focused]"
+            link "Focus marker"
     paragraph "Example output:"
     button "Copy Code"
       code
@@ -227,28 +239,69 @@
           code "a11ySnapshot"
         link "Playwright adapter"
         code "RegExp"
-    heading "outlineSnapshot(root)" (level 2)
-      code "outlineSnapshot(root)"
+    heading "outlineSnapshot(root, options?)" (level 2)
+      code "outlineSnapshot(root, options?)"
     paragraph "Returns a string of the heading outline only — useful for structure audits."
     button "Copy Code"
       code
     paragraph "Example output:"
     button "Copy Code"
       code
-    heading "tabSequenceSnapshot(root)" (level 2)
-      code "tabSequenceSnapshot(root)"
+    paragraph "Honors (default ) — a focused heading is shown with a trailing . See ."
+      code "markFocus"
+      code "true"
+      code "[focused]"
+      link "Focus marker"
+    heading "tabSequenceSnapshot(root, options?)" (level 2)
+      code "tabSequenceSnapshot(root, options?)"
     paragraph "Returns the tab sequence as a numbered list."
     button "Copy Code"
       code
     paragraph "Example output:"
     button "Copy Code"
       code
+    paragraph "Honors (default ) — the currently-focused stop is shown with a trailing . See ."
+      code "markFocus"
+      code "true"
+      code "[focused]"
+      link "Focus marker"
+    heading "Focus marker" (level 2)
+    paragraph "Every serializer marks the element that held focus with a trailing . This turns focus management — invisible in a plain tree dump — into a one-line, committable assertion."
+      strong "when the tree was extracted"
+      code "[focused]"
+    paragraph "It's on by default. The marker appears : a freshly-rendered page (focus resting on ) serializes exactly as before, so snapshots of un-interacted UI don't change."
+      strong "only when something inside the tree actually holds focus"
+      code "<body>"
+    heading "Assert where an interaction put focus" (level 3)
+    button "Copy Code"
+      code
+    heading "Assert a modal orients the user (the outline view)" (level 3)
+    paragraph "Focusing a dialog's primary heading when it opens is an excellent practice — it instantly orients keyboard and screen-reader users without landing on a destructive button or the first form field. The heading outline makes that contract assertable in one line:"
+    button "Copy Code"
+      code
+    paragraph "If focus had instead fallen to the destructive button — or nowhere — the marker would move (or vanish), and the assertion would fail."
+      strong "Delete"
+    heading "Turning it off" (level 3)
+    paragraph "Pass for marker-free output — e.g. when comparing against a tree from a source that has no concept of focus:"
+      code "markFocus: false"
+    button "Copy Code"
+      code
+    heading "Upgrading an existing suite" (level 3)
+    paragraph "Because the marker is on by default, a committed snapshot will gain a line the first time you run it on this version. That's the marker surfacing focus the snapshot was silently omitting — review the diff and re-record once ( / ). Snapshots of un-interacted UI (focus on ) are unaffected."
+      strong "captured after an interaction that moved focus"
+      code "[focused]"
+      code "vitest -u"
+      code "jest -u"
+      code "<body>"
     heading "Determinism" (level 2)
-    paragraph "All three helpers return the for the same DOM — on every run, on every machine. No timestamps, no generated IDs, no ordering surprises. That's the property that makes safe in CI without flakes. For genuinely variable content, use ."
+    paragraph "All three helpers return the for the same DOM — on every run, on every machine. No timestamps, no generated IDs, no ordering surprises. The marker is deterministic too: the same interaction leaves focus on the same element, so the same steps always produce the same string. That's the property that makes safe in CI without flakes. For genuinely variable content, use ; to drop the focus marker entirely, pass ."
       strong "same string"
+      code "[focused]"
       code "toMatchSnapshot()"
       link "redact"
         code "redact"
+      link "markFocus: false"
+        code "markFocus: false"
     heading "See also" (level 2)
     list
       listitem "— serializer so renders the tree directly"

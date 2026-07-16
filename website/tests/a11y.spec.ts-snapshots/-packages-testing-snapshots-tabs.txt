@@ -52,19 +52,19 @@
 52. link "Architecture"
 53. link "Troubleshooting"
 54. link "auditSnapshot(root, options?)"
-55. link "outlineSnapshot(root)"
-56. link "tabSequenceSnapshot(root)"
-57. link "Determinism"
-58. link "See also"
-59. link "@real-a11y-dev/testing"
-60. link "Matchers"
-61. link "matchers"
-62. link "a11ySnapshot vs auditSnapshot"
-63. button "Copy Code"
-64. generic
-65. table
-66. button "Copy Code"
-67. generic
+55. link "outlineSnapshot(root, options?)"
+56. link "tabSequenceSnapshot(root, options?)"
+57. link "Focus marker"
+58. link "Determinism"
+59. link "See also"
+60. link "@real-a11y-dev/testing"
+61. link "Matchers"
+62. link "matchers"
+63. link "a11ySnapshot vs auditSnapshot"
+64. button "Copy Code"
+65. generic
+66. table
+67. link "Focus marker"
 68. button "Copy Code"
 69. generic
 70. button "Copy Code"
@@ -77,22 +77,33 @@
 77. generic
 78. button "Copy Code"
 79. generic
-80. link "a11ySnapshot"
-81. link "Playwright adapter"
-82. button "Copy Code"
-83. generic
+80. button "Copy Code"
+81. generic
+82. link "a11ySnapshot"
+83. link "Playwright adapter"
 84. button "Copy Code"
 85. generic
 86. button "Copy Code"
 87. generic
-88. button "Copy Code"
-89. generic
-90. link "redact"
-91. link "Matchers"
-92. link "Playwright adapter"
-93. link "CI Diff Bot recipe"
-94. link "@real-a11y-dev/cli"
-95. link "@real-a11y-dev/cli"
-96. link "Edit this page on GitHub"
-97. link "Previous page@real-a11y-dev/testing"
-98. link "Next pageAssertions"
+88. link "Focus marker"
+89. button "Copy Code"
+90. generic
+91. button "Copy Code"
+92. generic
+93. link "Focus marker"
+94. button "Copy Code"
+95. generic
+96. button "Copy Code"
+97. generic
+98. button "Copy Code"
+99. generic
+100. link "redact"
+101. link "markFocus: false"
+102. link "Matchers"
+103. link "Playwright adapter"
+104. link "CI Diff Bot recipe"
+105. link "@real-a11y-dev/cli"
+106. link "@real-a11y-dev/cli"
+107. link "Edit this page on GitHub"
+108. link "Previous page@real-a11y-dev/testing"
+109. link "Next pageAssertions"

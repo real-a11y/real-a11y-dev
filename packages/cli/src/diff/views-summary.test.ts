@@ -1,7 +1,7 @@
 import { ROLE_FILTER_GROUPS } from "@real-a11y-dev/testing";
 import { describe, expect, it } from "vitest";
 
-import { diffViews, stripTabIndex } from "./views-diff.js";
+import { diffViews, stripFocusMarker, stripTabIndex } from "./views-diff.js";
 import {
   summarizeViews,
   VIEW_CHANGE_ORDER,
@@ -19,9 +19,14 @@ function summarize(
   const b: RawViews = { tree: "", outline: "", tabs: "", ...base };
   const p: RawViews = { tree: "", outline: "", tabs: "", ...pr };
   const views = {
-    tree: diffViews(b.tree, p.tree, undefined, ignore),
-    outline: diffViews(b.outline, p.outline, undefined, ignore),
-    tabs: diffViews(b.tabs, p.tabs, stripTabIndex, ignore),
+    tree: diffViews(b.tree, p.tree, stripFocusMarker, ignore),
+    outline: diffViews(b.outline, p.outline, stripFocusMarker, ignore),
+    tabs: diffViews(
+      b.tabs,
+      p.tabs,
+      (l) => stripFocusMarker(stripTabIndex(l)),
+      ignore,
+    ),
   };
   return summarizeViews({ views, base: b, pr: p, ignore });
 }
@@ -428,6 +433,81 @@ describe("summarizeViews", () => {
           of: 1,
         }),
       ]);
+    });
+  });
+
+  describe("focus (markFocus [focused] marker)", () => {
+    it("a pure focus move is ONE focus-changed statement, no add/remove churn", () => {
+      const changes = summarize(
+        { tree: 'main\n  button "A" [focused]\n  button "B"' },
+        { tree: 'main\n  button "A"\n  button "B" [focused]' },
+      );
+      // The buttons are unchanged once the marker is stripped — the only signal
+      // is that focus moved. No phantom interactive-added/removed.
+      expect(kinds(changes)).toEqual(["focus-changed"]);
+      expect(messages(changes)).toEqual([
+        'Focused element changed: button "A" → button "B"',
+      ]);
+    });
+
+    it("reports focus appearing (nothing → element)", () => {
+      const changes = summarize(
+        { tree: 'main\n  textbox "Email"' },
+        { tree: 'main\n  textbox "Email" [focused]' },
+      );
+      expect(kinds(changes)).toEqual(["focus-changed"]);
+      expect(changes[0]).toMatchObject({
+        kind: "focus-changed",
+        message:
+          'Focus now starts on textbox "Email" (nothing was focused before)',
+        to: 'textbox "Email"',
+      });
+      expect(changes[0].from).toBeUndefined();
+    });
+
+    it("reports focus vanishing (element → nothing)", () => {
+      const changes = summarize(
+        { tree: 'main\n  textbox "Email" [focused]' },
+        { tree: 'main\n  textbox "Email"' },
+      );
+      expect(changes[0]).toMatchObject({
+        kind: "focus-changed",
+        message: 'Focus no longer starts anywhere (was textbox "Email")',
+        from: 'textbox "Email"',
+      });
+      expect(changes[0].to).toBeUndefined();
+    });
+
+    it("says nothing when the same element stays focused", () => {
+      const changes = summarize(
+        { tree: 'main\n  textbox "Email" [focused]\n  button "Go"' },
+        { tree: 'main\n  textbox "Email" [focused]\n  button "Go"' },
+      );
+      expect(changes).toEqual([]);
+    });
+
+    it("ignores the marker in the tab view too (no focus-stop churn)", () => {
+      const changes = summarize(
+        {
+          tree: 'link "Home" [focused]\nbutton "Go"',
+          tabs: '01. link "Home" [focused]\n02. button "Go"',
+        },
+        {
+          tree: 'link "Home"\nbutton "Go" [focused]',
+          tabs: '01. link "Home"\n02. button "Go" [focused]',
+        },
+      );
+      expect(kinds(changes)).toEqual(["focus-changed"]);
+    });
+
+    it("composes with a real structural change (focus moved onto a new element)", () => {
+      const changes = summarize(
+        { tree: 'main\n  button "A" [focused]' },
+        { tree: 'main\n  button "A"\n  button "New" [focused]' },
+      );
+      expect(kinds(changes).sort()).toEqual(
+        ["focus-changed", "interactive-added"].sort(),
+      );
     });
   });
 

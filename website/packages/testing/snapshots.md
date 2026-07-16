@@ -218,9 +218,9 @@ Pass `markFocus: false` for marker-free output — e.g. when comparing against a
 auditSnapshot(document.body, { markFocus: false });
 ```
 
-::: warning Upgrading an existing suite
+### Upgrading an existing suite
+
 Because the marker is on by default, a committed snapshot **captured after an interaction that moved focus** will gain a `[focused]` line the first time you run it on this version. That's the marker surfacing focus the snapshot was silently omitting — review the diff and re-record once (`vitest -u` / `jest -u`). Snapshots of un-interacted UI (focus on `<body>`) are unaffected.
-:::
 
 ## Determinism
 

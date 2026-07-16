@@ -27,6 +27,21 @@ export function stripTabIndex(line: string): string {
   return line.replace(/^\d+\.\s*/, "");
 }
 
+/** The trailing focus marker emitted by @real-a11y-dev/serialize (`markFocus`). */
+const FOCUS_MARKER = " [focused]";
+
+/**
+ * Drop a trailing ` [focused]` marker. Focus is not structure — stripping it
+ * before the multiset diff keeps a pure focus move (same elements, different
+ * focused one) from surfacing as phantom add/remove churn. The transition is
+ * reported separately as a `focus-changed` statement (see views-summary.ts).
+ */
+export function stripFocusMarker(line: string): string {
+  return line.endsWith(FOCUS_MARKER)
+    ? line.slice(0, -FOCUS_MARKER.length)
+    : line;
+}
+
 function counts(
   text: string,
   normalize: (line: string) => string,

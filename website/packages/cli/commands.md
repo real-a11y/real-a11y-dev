@@ -495,6 +495,12 @@ h2 → h3", "Keyboard tab stop removed …") to the neutral diff. Opt-in because
 statements are an interpretive layer; the default never makes a claim the diff
 can't back up. Advisory only — it never affects the exit code.
 
+This includes a **`Focused element changed: … → …`** statement when the element
+focused at capture time differs between the two snapshots (a moved autofocus
+target, or focus that appeared or vanished). Because focus isn't structure, it's
+excluded from the structural diff — a page where _only_ focus moved shows no
+add/remove churn, just this one statement.
+
 ### `--ignore-view-line <regex>`
 
 - **Type:** JS regex (repeatable) · **Default:** none · **Commands:** diff

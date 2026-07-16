@@ -14,7 +14,12 @@ h1 Snapshots
       h4 Without redact — the snapshot flakes
       h4 With redact — stable structure, masked text
       h4 Realistic patterns
-  h2 outlineSnapshot(root)
-  h2 tabSequenceSnapshot(root)
+  h2 outlineSnapshot(root, options?)
+  h2 tabSequenceSnapshot(root, options?)
+  h2 Focus marker
+    h3 Assert where an interaction put focus
+    h3 Assert a modal orients the user (the outline view)
+    h3 Turning it off
+    h3 Upgrading an existing suite
   h2 Determinism
   h2 See also
