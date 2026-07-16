@@ -31,6 +31,7 @@ test("login form structure", () => {
 | `mode` | `"a11y" \| "dom"` | `"a11y"` | Tree extraction mode. |
 | `redact` | `RegExp[]` | `[]` | Patterns replaced with `[REDACTED]` in accessible names. Use this to keep snapshots deterministic. |
 | `includeGeneric` | `boolean` | `false` | Include generic container nodes (`role="generic"`). |
+| `markFocus` | `boolean` | `true` | Mark the element focused at extraction time with a trailing `[focused]`. See [Focus marker](#focus-marker). |
 
 Example output:
 
@@ -133,7 +134,7 @@ expect(auditSnapshot(container, { redact: COMMON_REDACTS })).toMatchSnapshot();
 
 > Available everywhere snapshots are: `auditSnapshot` and the [`a11ySnapshot`](/packages/testing/matchers#a11ysnapshot-root-options-snapshot-serializer) matcher in jsdom, and the [Playwright adapter](/packages/testing/playwright#redacting-variable-content) — which marshals each `RegExp` across the browser boundary for you.
 
-## `outlineSnapshot(root)`
+## `outlineSnapshot(root, options?)`
 
 Returns a string of the heading outline only — useful for structure audits.
 
@@ -151,7 +152,9 @@ h1 Introduction
   h2 API reference
 ```
 
-## `tabSequenceSnapshot(root)`
+Honors `markFocus` (default `true`) — a focused heading is shown with a trailing `[focused]`. See [Focus marker](#focus-marker).
+
+## `tabSequenceSnapshot(root, options?)`
 
 Returns the tab sequence as a numbered list.
 
@@ -169,9 +172,59 @@ Example output:
 5. button "Submit search"
 ```
 
+Honors `markFocus` (default `true`) — the currently-focused stop is shown with a trailing `[focused]`. See [Focus marker](#focus-marker).
+
+## Focus marker
+
+Every serializer marks the element that held focus **when the tree was extracted** with a trailing `[focused]`. This turns focus management — invisible in a plain tree dump — into a one-line, committable assertion.
+
+It's on by default. The marker appears **only when something inside the tree actually holds focus**: a freshly-rendered page (focus resting on `<body>`) serializes exactly as before, so snapshots of un-interacted UI don't change.
+
+### Assert where an interaction put focus
+
+```ts
+render(<SignIn />);
+screen.getByLabelText("Email").focus();
+
+expect(auditSnapshot(document.body)).toMatchInlineSnapshot(`
+  main
+    heading "Sign in" (level 1)
+    form "Sign-in form"
+      textbox "Email" [focused]
+      button "Sign in"
+`);
+```
+
+### Assert a modal orients the user (the outline view)
+
+Focusing a dialog's primary heading when it opens is an excellent practice — it instantly orients keyboard and screen-reader users without landing on a destructive button or the first form field. The heading outline makes that contract assertable in one line:
+
+```ts
+openDeleteAccountDialog();
+
+expect(outlineSnapshot(document.body)).toMatchInlineSnapshot(`
+  h1 Dashboard
+    h2 Delete account [focused]
+`);
+```
+
+If focus had instead fallen to the destructive **Delete** button — or nowhere — the marker would move (or vanish), and the assertion would fail.
+
+### Turning it off
+
+Pass `markFocus: false` for marker-free output — e.g. when comparing against a tree from a source that has no concept of focus:
+
+```ts
+auditSnapshot(document.body, { markFocus: false });
+```
+
+::: warning Upgrading an existing suite
+Because the marker is on by default, a committed snapshot **captured after an interaction that moved focus** will gain a `[focused]` line the first time you run it on this version. That's the marker surfacing focus the snapshot was silently omitting — review the diff and re-record once (`vitest -u` / `jest -u`). Snapshots of un-interacted UI (focus on `<body>`) are unaffected.
+:::
+
 ## Determinism
 
-All three helpers return the **same string** for the same DOM — on every run, on every machine. No timestamps, no generated IDs, no ordering surprises. That's the property that makes `toMatchSnapshot()` safe in CI without flakes. For genuinely variable content, use [`redact`](#using-redact).
+All three helpers return the **same string** for the same DOM — on every run, on every machine. No timestamps, no generated IDs, no ordering surprises. The `[focused]` marker is deterministic too: the same interaction leaves focus on the same element, so the same steps always produce the same string. That's the property that makes `toMatchSnapshot()` safe in CI without flakes. For genuinely variable content, use [`redact`](#using-redact); to drop the focus marker entirely, pass [`markFocus: false`](#focus-marker).
 
 ## See also
 

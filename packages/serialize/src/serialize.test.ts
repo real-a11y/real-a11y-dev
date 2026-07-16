@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 
 import {
   serializeTree,
@@ -63,5 +63,77 @@ describe("serializeTabSequence", () => {
     const out = serializeTabSequence(document.body);
     expect(out).toContain('01. link "Home"');
     expect(out).toContain('02. button "Go"');
+  });
+});
+
+describe("focus marker (markFocus)", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("marks the focused node in the tree by default", () => {
+    document.body.innerHTML = `
+      <main>
+        <label>Email <input id="e" /></label>
+        <button>Sign in</button>
+      </main>`;
+    document.getElementById("e")!.focus();
+    const out = serializeTree(document.body);
+    expect(out).toContain('textbox "Email" [focused]');
+    expect(out).not.toContain('button "Sign in" [focused]');
+  });
+
+  it("omits the marker when nothing is focused", () => {
+    document.body.innerHTML = `<main><button>Go</button></main>`;
+    expect(serializeTree(document.body)).not.toContain("[focused]");
+  });
+
+  it("markFocus:false produces marker-free output even with focus", () => {
+    document.body.innerHTML = `<main><input aria-label="Email" id="e" /></main>`;
+    document.getElementById("e")!.focus();
+    expect(serializeTree(document.body, { markFocus: false })).not.toContain(
+      "[focused]",
+    );
+  });
+
+  it("marks only the focused node among duplicate names", () => {
+    document.body.innerHTML = `
+      <input aria-label="Email" id="a" />
+      <input aria-label="Email" id="b" />`;
+    document.getElementById("b")!.focus();
+    const out = serializeTree(document.body);
+    // Exactly one marker, and it's on the second textbox (document order).
+    expect(out.match(/\[focused\]/g)).toHaveLength(1);
+    const emailLines = out.split("\n").filter((l) => l.includes('"Email"'));
+    expect(emailLines[0]).not.toContain("[focused]");
+    expect(emailLines[1]).toContain("[focused]");
+  });
+
+  it("keeps the marker after the (level N) suffix on a heading", () => {
+    document.body.innerHTML = `<h2 tabindex="-1" id="h">Delete account</h2>`;
+    document.getElementById("h")!.focus();
+    expect(serializeTree(document.body)).toContain(
+      'heading "Delete account" (level 2) [focused]',
+    );
+  });
+
+  it("marks a focused heading in the outline (modal orientation)", () => {
+    document.body.innerHTML = `
+      <h1>Dashboard</h1>
+      <div role="dialog" aria-label="Confirm">
+        <h2 tabindex="-1" id="h">Delete account</h2>
+      </div>`;
+    document.getElementById("h")!.focus();
+    const out = serializeOutline(document.body);
+    expect(out).toContain("h2 Delete account [focused]");
+    expect(out).not.toContain("h1 Dashboard [focused]");
+  });
+
+  it("marks the focused stop in the tab sequence", () => {
+    document.body.innerHTML = `<a href="#a">Home</a><button id="g">Go</button>`;
+    document.getElementById("g")!.focus();
+    const out = serializeTabSequence(document.body);
+    expect(out).toContain('button "Go" [focused]');
+    expect(out).not.toContain('link "Home" [focused]');
   });
 });

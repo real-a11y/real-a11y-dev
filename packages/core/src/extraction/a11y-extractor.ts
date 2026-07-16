@@ -11,7 +11,11 @@ import { extractDomTree } from "./dom-extractor.js";
  * This produces a tree that more closely matches what a screen reader sees.
  */
 export function extractA11yTree(root: Element): ExtractionResult {
-  const { nodes: domNodes, rootId } = extractDomTree(root);
+  const {
+    nodes: domNodes,
+    rootId,
+    focusedId: domFocusedId,
+  } = extractDomTree(root);
   const a11yNodes = new Map<string, SemanticNode>();
 
   // legend/summary: text is consumed as the fieldset/details accessible name.
@@ -120,7 +124,12 @@ export function extractA11yTree(root: Element): ExtractionResult {
 
   processNode(rootId, null, 0);
 
-  return { nodes: a11yNodes, rootId };
+  // Inherit focus only if the focused element survived a11y filtering — a
+  // focused generic/decorative node that was flattened out isn't in this view.
+  const focusedId =
+    domFocusedId && a11yNodes.has(domFocusedId) ? domFocusedId : undefined;
+
+  return { nodes: a11yNodes, rootId, ...(focusedId ? { focusedId } : {}) };
 }
 
 /**

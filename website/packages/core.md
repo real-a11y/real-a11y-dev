@@ -41,10 +41,12 @@ Extracts the accessibility tree from a DOM element.
 import { extractA11yTree } from "@real-a11y-dev/core";
 
 const tree = extractA11yTree(document.getElementById("app"));
-// tree: { nodes: Map<string, SemanticNode>; rootId: string }
+// tree: { nodes: Map<string, SemanticNode>; rootId: string; focusedId?: string }
 ```
 
 Resolves ARIA roles, computes accessible names via the full ANDC algorithm, detects hidden subtrees, and maps interaction capabilities.
+
+`focusedId` is the id of the element that held focus at extraction time, when it's inside the extracted subtree — absent when focus rested on `<body>`/`<html>` (nothing meaningfully focused) or fell outside the tree. The serializers in [`@real-a11y-dev/testing`](/packages/testing/snapshots#focus-marker) render it as a `[focused]` marker.
 
 ### `extractDomTree(root)`
 

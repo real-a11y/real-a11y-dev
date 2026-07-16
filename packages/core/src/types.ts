@@ -84,6 +84,13 @@ export interface SemanticNode {
 export interface ExtractionResult {
   nodes: Map<string, SemanticNode>;
   rootId: string;
+  /**
+   * Node id of the element that held focus at extraction time, if that element
+   * is present in this tree. Absent when focus rested on `<body>`/`<html>`
+   * (nothing meaningfully focused) or the focused element lies outside the
+   * extracted subtree. Serializers render it as a trailing `[focused]` marker.
+   */
+  focusedId?: string;
 }
 
 /** Request to perform an action on a node */

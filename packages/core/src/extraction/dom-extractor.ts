@@ -777,6 +777,45 @@ export function getElementRefs(): ElementRefMap {
 }
 
 /**
+ * Resolve the element that actually holds focus in `doc`, or `null` when
+ * nothing meaningful does.
+ *
+ * Two normalizations matter:
+ *  - Focus resting on `<body>`/`<html>` (or `null`) is the *absence* of focus,
+ *    not "the body is focused" — treat it as none, so a fresh page produces no
+ *    marker and committed snapshots don't churn.
+ *  - `document.activeElement` reports the shadow *host* when focus is inside a
+ *    shadow tree; descend through nested roots to the real target.
+ */
+export function resolveFocusedElement(doc: Document | null): Element | null {
+  if (!doc) return null;
+  let active: Element | null = doc.activeElement;
+  if (!active || active === doc.body || active === doc.documentElement) {
+    return null;
+  }
+  while (active.shadowRoot?.activeElement) {
+    active = active.shadowRoot.activeElement;
+  }
+  return active;
+}
+
+/**
+ * The id of the focused element, kept only if that element was captured as a
+ * node in `nodes` (i.e. it's inside the extracted subtree). `findId` is a pure
+ * reverse lookup — an element never walked in this extraction has no id here,
+ * and a stale id from a prior extraction fails the `nodes.has` membership check.
+ */
+function focusedNodeId(
+  root: Element,
+  nodes: Map<string, SemanticNode>,
+): string | undefined {
+  const el = resolveFocusedElement(root.ownerDocument);
+  if (!el) return undefined;
+  const id = elementRefs.findId(el);
+  return id && nodes.has(id) ? id : undefined;
+}
+
+/**
  * Check if an element is actually visible on screen, considering all ancestors.
  *
  * `isSubtreeHidden()` only checks the element itself — `display:none` is NOT
@@ -1027,5 +1066,6 @@ export function extractDomTree(root: Element): ExtractionResult {
 
   const rootId = walk(effectiveRoot, null, 0);
 
-  return { nodes, rootId: rootId || "" };
+  const focusedId = focusedNodeId(effectiveRoot, nodes);
+  return { nodes, rootId: rootId || "", ...(focusedId ? { focusedId } : {}) };
 }

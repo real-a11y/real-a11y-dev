@@ -439,7 +439,7 @@ export function buildServer(
       title: "Inspect page (single snapshot)",
       annotations: READ_ONLY,
       description:
-        "Return the audit findings AND the semantic tree, heading outline, and tab order — all derived from ONE extraction, so they are guaranteed internally consistent. Prefer this over separate audit_page + get_* calls on dynamic pages (SPAs, pages with consent dialogs) where separate calls could catch different states.",
+        "Return the audit findings AND the semantic tree, heading outline, and tab order — all derived from ONE extraction, so they are guaranteed internally consistent. The element focused at capture time is marked `[focused]` in each view. Prefer this over separate audit_page + get_* calls on dynamic pages (SPAs, pages with consent dialogs) where separate calls could catch different states.",
       inputSchema: {
         rootSelector,
         rules: z
@@ -468,7 +468,7 @@ export function buildServer(
       title: "Get semantic tree",
       annotations: READ_ONLY,
       description:
-        "Return the page's accessibility tree as a deterministic, indented role + accessible-name outline (what a screen reader would traverse). Token-efficient and stable across runs.",
+        "Return the page's accessibility tree as a deterministic, indented role + accessible-name outline (what a screen reader would traverse). The element focused at capture time is marked `[focused]`. Token-efficient and stable across runs.",
       inputSchema: {
         rootSelector,
         includeGeneric: z
@@ -509,7 +509,7 @@ export function buildServer(
       title: "Get tab order",
       annotations: READ_ONLY,
       description:
-        "Return the focusable elements in the order a keyboard user encounters them when pressing Tab, numbered, with role + accessible name.",
+        "Return the focusable elements in the order a keyboard user encounters them when pressing Tab, numbered, with role + accessible name. The stop focused at capture time is marked `[focused]`.",
       inputSchema: { rootSelector },
     },
     async ({ rootSelector }) => {
@@ -570,7 +570,9 @@ export function buildServer(
     },
     async () => {
       const [customTree, native] = await Promise.all([
-        session.call<string>("auditSnapshot", "body", [{}]),
+        // markFocus:false — the native tree has no focus marker, so a `[focused]`
+        // suffix would register as a spurious custom-vs-native divergence.
+        session.call<string>("auditSnapshot", "body", [{ markFocus: false }]),
         session.nativeAX(),
       ]);
       return text(renderCompare(customTree, native));
