@@ -35,34 +35,34 @@
 35. link "Playwright adapter"
 36. link "@real-a11y-dev/react"
 37. link "@real-a11y-dev/storybook-addon"
-38. link "@real-a11y-dev/mcp"
-39. link "@real-a11y-dev/cli"
-40. button "Recipes"
-41. link "Next.js (App Router + React 19)"
-42. link "Storybook 8 + React 19"
-43. link "Peer Dependencies"
-44. link "CI Diff Bot"
-45. button "Reference"
-46. link "Authenticated Pages"
-47. link "Accessible Names"
-48. link "Architecture"
-49. link "Troubleshooting"
-50. link "auditSnapshot(root, options?)"
-51. link "outlineSnapshot(root)"
-52. link "tabSequenceSnapshot(root)"
-53. link "Determinism"
-54. link "See also"
-55. link "@real-a11y-dev/testing"
-56. link "Matchers"
-57. link "matchers"
-58. link "a11ySnapshot vs auditSnapshot"
-59. button "Copy Code"
-60. generic
-61. table
-62. button "Copy Code"
-63. generic
-64. button "Copy Code"
-65. generic
+38. generic
+39. link "@real-a11y-dev/mcp"
+40. button "toggle section"
+41. generic
+42. link "@real-a11y-dev/cli"
+43. button "toggle section"
+44. button "Recipes"
+45. link "Next.js (App Router + React 19)"
+46. link "Storybook 8 + React 19"
+47. link "Peer Dependencies"
+48. link "CI Diff Bot"
+49. button "Reference"
+50. link "Authenticated Pages"
+51. link "Accessible Names"
+52. link "Architecture"
+53. link "Troubleshooting"
+54. link "auditSnapshot(root, options?)"
+55. link "outlineSnapshot(root)"
+56. link "tabSequenceSnapshot(root)"
+57. link "Determinism"
+58. link "See also"
+59. link "@real-a11y-dev/testing"
+60. link "Matchers"
+61. link "matchers"
+62. link "a11ySnapshot vs auditSnapshot"
+63. button "Copy Code"
+64. generic
+65. table
 66. button "Copy Code"
 67. generic
 68. button "Copy Code"
@@ -73,22 +73,26 @@
 73. generic
 74. button "Copy Code"
 75. generic
-76. link "a11ySnapshot"
-77. link "Playwright adapter"
+76. button "Copy Code"
+77. generic
 78. button "Copy Code"
 79. generic
-80. button "Copy Code"
-81. generic
+80. link "a11ySnapshot"
+81. link "Playwright adapter"
 82. button "Copy Code"
 83. generic
 84. button "Copy Code"
 85. generic
-86. link "redact"
-87. link "Matchers"
-88. link "Playwright adapter"
-89. link "CI Diff Bot recipe"
-90. link "@real-a11y-dev/cli"
-91. link "@real-a11y-dev/cli"
-92. link "Edit this page on GitHub"
-93. link "Previous page@real-a11y-dev/testing"
-94. link "Next pageAssertions"
+86. button "Copy Code"
+87. generic
+88. button "Copy Code"
+89. generic
+90. link "redact"
+91. link "Matchers"
+92. link "Playwright adapter"
+93. link "CI Diff Bot recipe"
+94. link "@real-a11y-dev/cli"
+95. link "@real-a11y-dev/cli"
+96. link "Edit this page on GitHub"
+97. link "Previous page@real-a11y-dev/testing"
+98. link "Next pageAssertions"

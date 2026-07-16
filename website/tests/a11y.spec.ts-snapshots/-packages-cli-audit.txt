@@ -54,10 +54,16 @@
         paragraph "@real-a11y-dev/react"
       link "@real-a11y-dev/storybook-addon"
         paragraph "@real-a11y-dev/storybook-addon"
-      link "@real-a11y-dev/mcp"
-        paragraph "@real-a11y-dev/mcp"
-      link "@real-a11y-dev/cli"
-        paragraph "@real-a11y-dev/cli"
+        link "@real-a11y-dev/mcp"
+          heading "@real-a11y-dev/mcp" (level 3)
+        button "toggle section"
+        link "@real-a11y-dev/cli"
+          heading "@real-a11y-dev/cli" (level 3)
+        button "toggle section"
+      link "Commands & flags"
+        paragraph "Commands & flags"
+      link "Configuration"
+        paragraph "Configuration"
       button "Recipes"
         heading "Recipes" (level 2)
       link "Next.js (App Router + React 19)"
@@ -86,21 +92,17 @@
       listitem
         link "Your first audit"
       listitem
-        link "Commands"
+        link "Configure once"
       listitem
         link "Track regressions across a PR"
       listitem
         link "Adopt the gate on existing debt"
       listitem
-        link "Global flags"
-      listitem
-        link "Configure once"
-      listitem
-        link "Machine output"
-      listitem
         link "In CI"
       listitem
         link "Pages behind a login"
+      listitem
+        link "Output you can trust"
       listitem
         link "Limitations"
       listitem
@@ -116,6 +118,11 @@
       link "extension"
       link "testing library"
       link "MCP server"
+    paragraph "This page is a guide: install it, then walk the workflows it's built for — the CI gate, PR regression tracking, adopting the gate on existing debt, and pages behind a login."
+    paragraph "Looking for the exhaustive lists?"
+    paragraph "Full command + flag reference → . Every config key → ."
+      link "/packages/cli/commands"
+      link "/packages/cli/configuration"
     heading "Prerequisites" (level 2)
     paragraph "Accessibility is a property of the page — the roles, names, and visibility a browser actually computes, not what's in the HTML source. So the CLI drives a real browser (via Playwright) rather than parsing markup, and needs:"
       strong "rendered"
@@ -151,79 +158,36 @@
     paragraph "Because it drives a real browser, JS-heavy SPAs render fully, and any URL the browser can reach works — public sites, a , staging, or a built file ( — paths you type need no ceremony)."
       strong "local dev server"
       code "real-a11y audit ./dist/index.html"
-    heading "Commands" (level 2)
-    table
-      rowgroup
-        row
-          rowheader "Command"
-          rowheader "What it prints"
-      rowgroup
-        row
-          cell "audit <url…>"
-            strong
-              code "audit <url…>"
-          cell "Flagship. Every violation — unlabeled controls, images missing alt text, skipped/missing/duplicate headings, unlabeled dialogs, broken landmark structure — grouped by rule, each with a CSS locator + severity. Exits 1 on errors (the CI gate)."
-            strong "Flagship."
-            strong "locator"
-            strong "severity"
-            code "1"
-        row
-          cell "inspect <url>"
-            code "inspect <url>"
-          cell "Findings plus the semantic tree, heading outline, and tab order — all from one extraction, guaranteed internally consistent."
-            strong "plus"
-            strong "one"
-        row
-          cell "tree <url>"
-            code "tree <url>"
-          cell "The semantic tree (role + accessible name)."
-        row
-          cell "outline <url>"
-            code "outline <url>"
-          cell "Heading outline (h1–h6) in document order."
-        row
-          cell "tabs <url>"
-            code "tabs <url>"
-          cell "Focusable elements in keyboard Tab order."
-        row
-          cell "list <category> <url>"
-            code "list <category> <url>"
-          cell "One category — heading / link / button / form / landmark / image — as role + name + locator."
-            code "heading"
-            code "link"
-            code "button"
-            code "form"
-            code "landmark"
-            code "image"
-        row
-          cell "snapshot [url...]"
-            code "snapshot [url...]"
-          cell "Audit a URL (like every other command), or a page set from A11Y_PAGES / a11y.config.json → one diffable JSON artifact, or --md for a human report."
-            code "A11Y_PAGES"
-            code "a11y.config.json"
-            code "--md"
-        row
-          cell "diff <base> <pr>"
-            code "diff <base> <pr>"
-          cell "Findings-aware diff of two snapshot artifacts — new / changed / fixed. Pure (no browser). See below."
-        row
-          cell "login <url> --save <file>"
-            code "login <url> --save <file>"
-          cell "Save a login session for --storage-state audits (see Authenticated pages )."
-            code "--storage-state"
-            link "Authenticated pages"
-    paragraph "Run for a command's flags."
-      code "real-a11y <command> --help"
+    paragraph "is the flagship, but there are read-only view commands too — , , , — each printing one facet of the same extraction. See the for the full set."
+      code "audit"
+      code "inspect"
+      code "outline"
+      code "tabs"
+      code "list <category>"
+      link "command reference"
+    heading "Configure once" (level 2)
+    paragraph "Put your project's settings in an and every command picks them up — the Jest/ESLint model. A block seeds any flag you don't pass; an optional list names the routes you audit. Both are optional — a -only config is valid."
+      strong
+        code "a11y.config.json"
+      code "defaults"
+      code "urls"
+      code "defaults"
+    button "Copy Code"
+      code
+    paragraph "With a list, a bare (or ) audits every entry — pass a URL only for a one-off:"
+      code "urls"
+      code "real-a11y audit"
+      code "snapshot"
+    button "Copy Code"
+      code
+    paragraph "It's auto-discovered as (point elsewhere, or to ignore it), fail-closed on a typo'd key, and a flag always wins over a config default. Every key — and which command each applies to — is in the ."
+      code "a11y.config.json"
+      code "--config"
+      code "--no-config"
+      link "configuration reference"
     heading "Track regressions across a PR" (level 2)
     paragraph "The flagship CI feature: snapshot one page or a whole set into a diffable artifact, then diff two of them and fail the build only on findings."
       strong "new"
-    button "Copy Code"
-      code
-    paragraph "Pages come from positional URLs, else , else the list in — your multi-page policy in your repo. A entry is a bare URL string, or an object when you want a custom name or root selector:"
-      code "A11Y_PAGES"
-      code "urls"
-      code "a11y.config.json"
-      code "urls"
     button "Copy Code"
       code
     paragraph "The diff is , not a line diff: each finding carries a stable fingerprint, so a renumbered locator, a re-indented subtree, or an inserted sibling is a change — only an actual new / changed / fixed violation is. Pre-existing debt never blocks a PR (REMOVED and CHANGED don't gate), and the config is strict and fail-closed — a typo'd key is an error, so a mistake can't silently un-gate CI."
@@ -239,50 +203,22 @@
       emphasis "where"
     button "Copy Code"
       code
-    paragraph "Add and the shape shifts that don't trip a rule are also narrated as :"
+    paragraph "Add and the shape shifts that don't trip a rule are also narrated as — a heading dropping from h2 to h3, a landmark removed, an element still on the page but no longer keyboard-focusable, a pure reorder of the tab order that no line diff would catch:"
       strong
         code "--explain"
       strong "statements any reviewer can act on"
     button "Copy Code"
       code
-    paragraph "is opt-in because the statements are an interpretive layer (pairing heuristics, cross-view inference); the default never makes a claim the diff can't back up. The taxonomy covers what assistive-tech users actually feel:"
+    paragraph "is opt-in because the statements are an interpretive layer; the default never makes a claim the diff can't back up. Anything the taxonomy doesn't recognize degrades to one honest rollup — never silence. Structural changes are : they never affect the exit code."
       code "--explain"
-    list
-      listitem "added / removed / renamed — removing calls out that skip-to-content may break."
-        strong "Landmarks"
-        code "main"
-      listitem "— level changes (), renames, additions, removals, and a page losing its headings as one headline statement."
-        strong "Headings"
-        code "h2 → h3"
-        emphasis "all"
-      listitem "added / removed with their position () — including the dangerous variant where the element is ."
-        strong "Keyboard tab stops"
-        code "now stop 2 of 14"
-        emphasis "still on the page but no longer keyboard-focusable"
-      listitem "of the tab order or heading outline — invisible to any line diff, since no line was added or removed."
-        strong "Pure reorders"
-      listitem "Interactive elements outside the tab order (, , — arrow-key targets inside composite widgets)."
-        code "menuitem"
-        code "option"
-        code "tab"
-    paragraph "Anything the taxonomy doesn't recognize degrades to one honest rollup — never silence. Rename pairings are strictly 1:1 and degrade to add/remove on any ambiguity, so the summary never guesses. In the statements ship as ( — key on ; the wording may be refined in patches) alongside the multiset . Structural changes are : they never affect the exit code."
       code "Other content changed"
-      code "--format json"
-      code "pages[].structural"
-      code "{ kind, message, … }"
-      code "kind"
-      code "message"
-      code "pages[].views"
       strong "advisory only"
-    paragraph "The full diff prints by default. For CI comments, details the first changed routes (and lists the rest) and caps each page's diff — run once uncapped to a log and once capped to the comment:"
-      code "--max-pages <n>"
-      emphasis "n"
-      code "--max-lines <n>"
+    paragraph "Generated content that differs on every build (a "last updated" timestamp, a build hash) would otherwise read as drift on every page — drop it at the source with a repeatable regex, and cap the output for a CI comment:"
     button "Copy Code"
       code
-    paragraph "Generated content that differs on every build (a "last updated" timestamp, a build hash) would otherwise read as drift on every page — drop it at the source with a repeatable regex:"
-    button "Copy Code"
-      code
+    paragraph "The full diff prints to stdout regardless; the caps only shape the file you post. See the for every flag."
+      link "command reference"
+      code "diff"
     heading "Adopt the gate on existing debt" (level 2)
     paragraph "Most real codebases have accessibility findings — which usually means the gate stays off. Baselines fix that: accept the current state once, then fail only on findings that are genuinely ."
       emphasis "today"
@@ -306,358 +242,47 @@
       code "diff"
       code "--baseline"
       code "new (baselined)"
-    heading "Global flags" (level 2)
-    table
-      rowgroup
-        row
-          rowheader "Flag"
-          rowheader "Effect"
-      rowgroup
-        row
-          cell "--root <selector>"
-            code "--root <selector>"
-          cell "Scope extraction to a region or component (default body)."
-            code "body"
-        row
-          cell "--device <name>"
-            code "--device <name>"
-          cell "Emulate a device — "iPhone 13", "Pixel 7" — to audit the mobile layout."
-            code ""iPhone 13""
-            code ""Pixel 7""
-        row
-          cell "--viewport <WxH>"
-            code "--viewport <WxH>"
-          cell "Explicit viewport, e.g. 1280x800."
-            code "1280x800"
-        row
-          cell "--wait-until <state> / --settle <ms>"
-            code "--wait-until <state>"
-            code "--settle <ms>"
-          cell "Settle dynamic pages before extraction (load | domcontentloaded | networkidle | commit)."
-            code "load"
-            code "domcontentloaded"
-            code "networkidle"
-            code "commit"
-        row
-          cell "--timeout <ms>"
-            code "--timeout <ms>"
-          cell "Navigation timeout (default 30000)."
-            code "30000"
-        row
-          cell "--rules <ids>"
-            code "--rules <ids>"
-          cell "Comma-separated subset of the five rules (audit/inspect/snapshot)."
-            code "audit"
-            code "inspect"
-            code "snapshot"
-        row
-          cell "--fail-on <level>"
-            code "--fail-on <level>"
-          cell "error | warning | never — the gate threshold (default error), on audit/inspect/diff, and on snapshot (default never there). View commands aren't gates: they always exit 0."
-            code "error"
-            code "warning"
-            code "never"
-            code "error"
-            code "audit"
-            code "inspect"
-            code "diff"
-            code "snapshot"
-            code "never"
-            code "0"
-        row
-          cell "--baseline <file> / --update-baseline"
-            code "--baseline <file>"
-            code "--update-baseline"
-          cell "Suppress accepted findings / rewrite the baseline from the current run (snapshot and diff — see Adopt the gate on existing debt )."
-            code "snapshot"
-            code "diff"
-            link "Adopt the gate on existing debt"
-        row
-          cell "--explain"
-            code "--explain"
-          cell "Add a plain-language summary of structural changes (diff, off by default — the neutral diff makes no inferences)."
-            code "diff"
-        row
-          cell "--max-lines <n> / --max-pages <n>"
-            code "--max-lines <n>"
-            code "--max-pages <n>"
-          cell "Cap the structural diff to n lines per page / detail at most n changed routes (diff, default full — for CI comments; the full diff still prints to stdout)."
-            emphasis "n"
-            emphasis "n"
-            code "diff"
-        row
-          cell "--ignore-view-line <regex>"
-            code "--ignore-view-line <regex>"
-          cell "Drop matching view lines before diffing (diff, repeatable) — for generated content that differs on every build, e.g. '^time "[redacted]"last updated" timestamp."
-            code "diff"
-            code "'^time "[redacted]"
-        row
-          cell "-f, --format <fmt>"
-            code "-f, --format <fmt>"
-          cell "pretty (default) or json; diff also takes md; snapshot takes json (default) | md | sarif | junit | jsonl (see SARIF, JUnit, JSONL ). Never auto-switched — piping only drops color."
-            code "pretty"
-            code "json"
-            code "diff"
-            code "md"
-            code "snapshot"
-            code "json"
-            code "md"
-            code "sarif"
-            code "junit"
-            code "jsonl"
-            link "SARIF, JUnit, JSONL"
-        row
-          cell "-o, --output <file>"
-            code "-o, --output <file>"
-          cell "Write the report to a file (progress stays on stderr)."
-        row
-          cell "--storage-state <file> / --audit-origin <origin>"
-            code "--storage-state <file>"
-            code "--audit-origin <origin>"
-          cell "Audit as a saved login session (see Authenticated pages )."
-            link "Authenticated pages"
-        row
-          cell "--cdp <endpoint>"
-            code "--cdp <endpoint>"
-          cell "Attach to a running Chrome instead of launching one."
-    paragraph "Most of these can be set once in the config instead of passed every run — see below."
-      link "Configure once"
-    heading "Configure once" (level 2)
-    paragraph "Put your project's settings in an and every command picks them up — the Jest/ESLint model. A block seeds any flag you don't pass; an optional list names the routes you audit. Both are optional — a -only config is valid."
-      strong
-        code "a11y.config.json"
-      code "defaults"
-      code "urls"
-      code "defaults"
-    button "Copy Code"
-      code
-    paragraph "A entry is a bare URL string (its name defaults to the URL) or an object with plus an optional / / . With a list, a bare (or ) audits every entry — pass a URL only for a one-off:"
-      code "urls"
-      code "url"
-      code "name"
-      code "rootSelector"
-      code "sourcePath"
-      code "urls"
-      code "real-a11y audit"
-      code "snapshot"
-    button "Copy Code"
-      code
-    list
-      listitem "auto-discovered as in the current directory. points elsewhere; ignores it (on every command)."
-        strong "Discovery:"
-        code "a11y.config.json"
-        code "--config <file>"
-        code "--no-config"
-      listitem "optional — only / and a bare read it (single-view commands like still take one URL). is still accepted as the former name."
-        strong "(was ):"
-          code "urls"
-          code "pages"
-        code "snapshot"
-        code "diff"
-        code "audit"
-        code "tree"
-        code "pages"
-      listitem ". An explicit flag always wins, so a config default is a floor you can override per run."
-        strong "Precedence:"
-        code "flag > environment variable > config defaults > built-in"
-      listitem "the config is strict — an unknown or mistyped key (or a bad value, like ) is a hard error, so a typo can never silently un-gate CI."
-        strong "Fail-closed:"
-        code "failOn: "sometimes""
-    paragraph "Every key under mirrors a flag:"
-      code "defaults"
-    table
-      rowgroup
-        row
-          rowheader "defaults key"
-            code "defaults"
-          rowheader "Flag"
-          rowheader "Applies to"
-      rowgroup
-        row
-          cell "root"
-            code "root"
-          cell "--root"
-            code "--root"
-          cell "audit, inspect, tree/outline/tabs/list, snapshot"
-        row
-          cell "device / viewport"
-            code "device"
-            code "viewport"
-          cell "--device / --viewport"
-            code "--device"
-            code "--viewport"
-          cell "↑"
-        row
-          cell "waitUntil / settleMs / timeoutMs"
-            code "waitUntil"
-            code "settleMs"
-            code "timeoutMs"
-          cell "--wait-until / --settle / --timeout"
-            code "--wait-until"
-            code "--settle"
-            code "--timeout"
-          cell "↑ + login"
-        row
-          cell "headful"
-            code "headful"
-          cell "--headful"
-            code "--headful"
-          cell "audit, inspect, views, snapshot"
-        row
-          cell "storageState / auditOrigins"
-            code "storageState"
-            code "auditOrigins"
-          cell "--storage-state / --audit-origin"
-            code "--storage-state"
-            code "--audit-origin"
-          cell "↑"
-        row
-          cell "format"
-            code "format"
-          cell "-f, --format"
-            code "-f, --format"
-          cell "all (validated per command)"
-        row
-          cell "rules"
-            code "rules"
-          cell "--rules"
-            code "--rules"
-          cell "audit, inspect, snapshot"
-        row
-          cell "failOn"
-            code "failOn"
-          cell "--fail-on"
-            code "--fail-on"
-          cell "audit, inspect, snapshot, diff"
-        row
-          cell "annotate"
-            code "annotate"
-          cell "--no-annotate (as annotate: false)"
-            code "--no-annotate"
-            code "annotate: false"
-          cell "audit, inspect"
-        row
-          cell "includeGeneric"
-            code "includeGeneric"
-          cell "--include-generic"
-            code "--include-generic"
-          cell "tree, inspect, snapshot"
-        row
-          cell "baseline"
-            code "baseline"
-          cell "--baseline"
-            code "--baseline"
-          cell "snapshot, diff"
-        row
-          cell "ignoreViewLine / maxLines / maxPages / explain"
-            code "ignoreViewLine"
-            code "maxLines"
-            code "maxPages"
-            code "explain"
-          cell "--ignore-view-line / --max-lines / --max-pages / --explain"
-            code "--ignore-view-line"
-            code "--max-lines"
-            code "--max-pages"
-            code "--explain"
-          cell "diff"
-    paragraph "Path defaults (, ) resolve relative to the config file, so a committed config is portable. is validated per command — a global works for but errors on (which only takes ). The runtime flags (, , , and the security-sensitive /) are deliberately config-settable."
-      code "storageState"
-      code "baseline"
-      code "format"
-      code "format: "sarif""
-      code "snapshot"
+    heading "In CI" (level 2)
+    paragraph "is a gate with no extra flags. Under GitHub Actions it additionally emits grouped annotations on the checks surface and a job-summary report — automatically ( to opt out):"
       code "audit"
-      code "pretty | json"
-      code "--output"
-      code "--quiet"
-      code "--verbose"
-      code "--allow-file"
+      code "::error"
+      code "--no-annotate"
+    button "Copy Code"
+      code
+    paragraph "also speaks the CI interop formats — for GitHub code scanning (Security tab), for Jenkins/GitLab test reporting, for pipelines. Wiring SARIF into GitHub code scanning is two steps:"
+      code "snapshot"
+      code "sarif"
+      code "junit"
+      code "jsonl"
+      code "jq"
+    button "Copy Code"
+      code
+    paragraph "Findings then appear as alerts in the repository's tab, tracked across runs by fingerprint. The full format matrix — what each one feeds and its caveats — is in the ."
+      strong "Security"
+      link "command reference"
+    heading "Pages behind a login" (level 2)
+    paragraph "Log in once and reuse the session — no password ever reaches the tool:"
+    button "Copy Code"
+      code
+    paragraph "See the guide for the full workflow, the security rules, and the interactive alternative."
+      link "Authenticated pages"
       code "--cdp"
-      strong "not"
-    paragraph "Top-level / / are accepted as shorthand for (kept for compatibility; wins if both are set)."
-      code "rules"
-      code "failOn"
-      code "device"
-      code "defaults.*"
-      code "defaults"
-    heading "Machine output" (level 2)
+    heading "Output you can trust" (level 2)
     paragraph "emits one stable envelope for every command, single- or multi-page, so scripts always read :"
       code "--format json"
       code ".pages[0].…"
     button "Copy Code"
       code
-    paragraph "Each finding carries a stable — an identity robust to unrelated DOM churn, so a report can be diffed run-to-run without every re-indent reading as a change."
+    paragraph "Each finding carries that — an identity robust to unrelated DOM churn, so a report can be diffed run-to-run without every re-indent reading as a change. What the contract guarantees:"
       code "v1:"
       strong "fingerprint"
-    paragraph "additionally carries, per page, the raw view line diffs () and the plain-language structural statements () — key on (stable; new kinds may be added within 0.x), not on the wording. Both live in the same envelope: additions are additive-only."
-      code "diff --format json"
-      code "pages[].views.{tree,outline,tabs}.{added,removed}"
-      code "pages[].structural: [{ kind, view, message, … }]"
-      code "kind"
-      code "message"
-      code "schemaVersion: 1"
-    heading "SARIF, JUnit, JSONL" (level 3)
-    paragraph "also speaks the CI interop formats:"
-      code "snapshot --format"
-    table
-      rowgroup
-        row
-          rowheader "Format"
-          rowheader "Feeds"
-          rowheader "Notes"
-      rowgroup
-        row
-          cell "sarif"
-            code "sarif"
-          cell "GitHub code scanning (Security tab), Azure DevOps, the VS Code SARIF viewer"
-          cell "Requires --config — GitHub only displays results anchored to repo file paths, so each result anchors to the page's sourcePath (declare it per page in the config) or the config file itself. Alert identity is the v1: fingerprint, so alerts don't churn on unrelated edits. Baseline-suppressed findings are excluded (GitHub ignores SARIF suppressions)."
-            code "--config"
-            strong "file paths"
-            code "sourcePath"
-            code "v1:"
-        row
-          cell "junit"
-            code "junit"
-          cell "Jenkins, GitLab, Azure DevOps "Publish Test Results", CircleCI"
-          cell "One suite per page, one failing case per finding; baselined findings show as skipped; a clean page emits one passing case."
-            code "skipped"
-        row
-          cell "jsonl"
-            code "jsonl"
-          cell "jq / grep pipelines, log ingesters"
-            code "jq"
-          cell "One finding per line, no framing records. Suppressed findings are flagged — filter with jq 'select(.suppressed | not)'."
-            code "jq 'select(.suppressed | not)'"
-    paragraph "Wire SARIF into GitHub code scanning in two steps:"
-    button "Copy Code"
-      code
-    paragraph "Findings then appear as alerts in the repository's tab, tracked across runs by fingerprint. (Alerts on private repos need GitHub Advanced Security; public repos get them free.)"
-      strong "Security"
-    heading "Exit codes" (level 3)
-    table
-      rowgroup
-        row
-          rowheader "Code"
-          rowheader "Meaning"
-      rowgroup
-        row
-          cell "0"
-            code "0"
-          cell "No findings at/above --fail-on."
-            code "--fail-on"
-        row
-          cell "1"
-            code "1"
-          cell "Findings at/above the threshold (the CI gate)."
-        row
-          cell "2"
-            code "2"
-          cell "Usage / navigation / engine error."
-    heading "Stability contract" (level 3)
     list
-      listitem "Exit codes are ."
-        code "0/1/2"
+      listitem "Exit codes are — clean, findings at/above (the gate), usage/navigation/engine error."
         strong "frozen"
+        code "0"
+        code "1"
+        code "--fail-on"
+        code "2"
       listitem "carries ; within 0.x, changes are additive-only."
         code "--format json"
         code "schemaVersion"
@@ -671,20 +296,6 @@
         code "NO_COLOR"
         code "FORCE_COLOR"
         strong "No telemetry"
-    heading "In CI" (level 2)
-    paragraph "is a gate with no extra flags. Under GitHub Actions it additionally emits grouped annotations on the checks surface and a job-summary report — automatically ( to opt out):"
-      code "audit"
-      code "::error"
-      code "--no-annotate"
-    button "Copy Code"
-      code
-    heading "Pages behind a login" (level 2)
-    paragraph "Log in once and reuse the session — no password ever reaches the tool:"
-    button "Copy Code"
-      code
-    paragraph "See the guide for the full workflow, the security rules, and the interactive alternative."
-      link "Authenticated pages"
-      code "--cdp"
     heading "Limitations" (level 2)
     list
       listitem "Five rules today — unlabeled interactive elements, images missing alt text, heading order, dialog labeling, and landmark structure — plus the full semantic tree. It is not a complete WCAG or axe-core suite; it is semantic-tree-based and tuned to "what a screen reader announces." Pair it with for contrast, focus visibility, and other rendered checks."
@@ -698,6 +309,11 @@
         strong "Requires a real browser."
     heading "See also" (level 2)
     list
+      listitem "— every command and flag."
+        link "Command + flag reference"
+      listitem "— every key."
+        link "Configuration reference"
+        code "a11y.config.json"
       listitem "— audit behind a login."
         link "Authenticated pages"
       listitem "— the same engine for AI agents."
@@ -711,5 +327,5 @@
     paragraph "Last updated:"
       time "[redacted]"
     navigation "Pager"
-      link "Previous page@real-a11y-dev/mcp"
-      link "Next pageNext.js (App Router + React 19)"
+      link "Previous pageTools reference"
+      link "Next pageCommands & flags"

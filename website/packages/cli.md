@@ -18,6 +18,15 @@ scripts, and a way to audit pages behind a login. It's the same engine as the
 [extension](/guide/chrome-extension), the [testing library](/packages/testing),
 and the [MCP server](/packages/mcp) — one audit, a different surface.
 
+This page is a guide: install it, then walk the workflows it's built for — the CI
+gate, PR regression tracking, adopting the gate on existing debt, and pages
+behind a login.
+
+::: tip Looking for the exhaustive lists?
+Full command + flag reference → [/packages/cli/commands](/packages/cli/commands).
+Every config key → [/packages/cli/configuration](/packages/cli/configuration).
+:::
+
 ## Prerequisites
 
 Accessibility is a property of the **rendered** page — the roles, names, and
@@ -74,21 +83,44 @@ browser can reach works — public sites, a **local dev server**, staging, or a
 built file (`real-a11y audit ./dist/index.html` — paths you type need no
 ceremony).
 
-## Commands
+`audit` is the flagship, but there are read-only view commands too — `inspect`,
+`outline`, `tabs`, `list <category>` — each printing one facet of the same
+extraction. See the [command reference](/packages/cli/commands) for the full set.
 
-| Command | What it prints |
-| --- | --- |
-| **`audit <url…>`** | **Flagship.** Every violation — unlabeled controls, images missing alt text, skipped/missing/duplicate headings, unlabeled dialogs, broken landmark structure — grouped by rule, each with a CSS **locator** + **severity**. Exits `1` on errors (the CI gate). |
-| `inspect <url>` | Findings **plus** the semantic tree, heading outline, and tab order — all from **one** extraction, guaranteed internally consistent. |
-| `tree <url>` | The semantic tree (role + accessible name). |
-| `outline <url>` | Heading outline (h1–h6) in document order. |
-| `tabs <url>` | Focusable elements in keyboard Tab order. |
-| `list <category> <url>` | One category — `heading` / `link` / `button` / `form` / `landmark` / `image` — as role + name + locator. |
-| `snapshot [url...]` | Audit a URL (like every other command), or a page set from `A11Y_PAGES` / `a11y.config.json` → one diffable JSON artifact, or `--md` for a human report. |
-| `diff <base> <pr>` | Findings-aware diff of two snapshot artifacts — new / changed / fixed. Pure (no browser). See below. |
-| `login <url> --save <file>` | Save a login session for `--storage-state` audits (see [Authenticated pages](/guide/authenticated-pages)). |
+## Configure once
 
-Run `real-a11y <command> --help` for a command's flags.
+Put your project's settings in an **`a11y.config.json`** and every command picks
+them up — the Jest/ESLint model. A `defaults` block seeds any flag you don't
+pass; an optional `urls` list names the routes you audit. Both are optional — a
+`defaults`-only config is valid.
+
+```json
+{
+  "defaults": {
+    "device": "iPhone 13",
+    "waitUntil": "networkidle",
+    "rules": ["no-unlabeled-interactive", "image-alt"],
+    "failOn": "error"
+  },
+  "urls": [
+    "http://localhost:3000",
+    { "name": "Login", "url": "http://localhost:3000/login", "rootSelector": "main" }
+  ]
+}
+```
+
+With a `urls` list, a bare `real-a11y audit` (or `snapshot`) audits every entry —
+pass a URL only for a one-off:
+
+```sh
+real-a11y audit                          # audits every URL in the config
+real-a11y audit http://localhost:3000    # iPhone 13, networkidle, fail-on error — no flags
+```
+
+It's auto-discovered as `a11y.config.json` (point `--config` elsewhere, or
+`--no-config` to ignore it), fail-closed on a typo'd key, and a flag always wins
+over a config default. Every key — and which command each applies to — is in the
+[configuration reference](/packages/cli/configuration).
 
 ## Track regressions across a PR
 
@@ -105,23 +137,6 @@ real-a11y snapshot --config a11y.config.json -o pr.json
 
 real-a11y diff base.json pr.json          # exit 1 only on NEW findings
 real-a11y diff base.json pr.json -f md    # a PR-comment-ready summary
-```
-
-Pages come from positional URLs, else `A11Y_PAGES`, else the `urls` list in
-`a11y.config.json` — your multi-page policy in your repo. A `urls` entry is a
-bare URL string, or an object when you want a custom name or root selector:
-
-```json
-{
-  "urls": [
-    "http://localhost:3000",
-    { "name": "Login", "url": "http://localhost:3000/login", "rootSelector": "main" }
-  ],
-  "defaults": {
-    "rules": ["no-unlabeled-interactive", "image-alt", "heading-order"],
-    "failOn": "error"
-  }
-}
 ```
 
 The diff is **finding-identity-aware**, not a line diff: each finding carries a
@@ -151,7 +166,9 @@ $ real-a11y diff base.json pr.json
 ````
 
 Add **`--explain`** and the shape shifts that don't trip a rule are also
-narrated as **statements any reviewer can act on**:
+narrated as **statements any reviewer can act on** — a heading dropping from h2
+to h3, a landmark removed, an element still on the page but no longer
+keyboard-focusable, a pure reorder of the tab order that no line diff would catch:
 
 ```text
 $ real-a11y diff base.json pr.json --explain
@@ -159,46 +176,22 @@ $ real-a11y diff base.json pr.json --explain
   · Keyboard tab stop added: link "Skip" (now stop 1 of 2)
 ```
 
-`--explain` is opt-in because the statements are an interpretive layer
-(pairing heuristics, cross-view inference); the default never makes a claim the
-diff can't back up. The taxonomy covers what assistive-tech users actually
-feel:
-
-- **Landmarks** added / removed / renamed — removing `main` calls out that
-  skip-to-content may break.
-- **Headings** — level changes (`h2 → h3`), renames, additions, removals, and
-  a page losing *all* its headings as one headline statement.
-- **Keyboard tab stops** added / removed with their position (`now stop 2 of
-  14`) — including the dangerous variant where the element is *still on the
-  page but no longer keyboard-focusable*.
-- **Pure reorders** of the tab order or heading outline — invisible to any
-  line diff, since no line was added or removed.
-- Interactive elements outside the tab order (`menuitem`, `option`, `tab` —
-  arrow-key targets inside composite widgets).
-
-Anything the taxonomy doesn't recognize degrades to one honest
-`Other content changed` rollup — never silence. Rename pairings are strictly
-1:1 and degrade to add/remove on any ambiguity, so the summary never guesses.
-In `--format json` the statements ship as `pages[].structural` (`{ kind,
-message, … }` — key on `kind`; the `message` wording may be refined in patches)
-alongside the multiset `pages[].views`. Structural changes are **advisory
-only**: they never affect the exit code.
-
-The full diff prints by default. For CI comments, `--max-pages <n>` details the
-first _n_ changed routes (and lists the rest) and `--max-lines <n>` caps each
-page's diff — run once uncapped to a log and once capped to the comment:
-
-```sh
-real-a11y diff base.json pr.json --explain --max-pages 5 --max-lines 20 -o comment.md
-```
+`--explain` is opt-in because the statements are an interpretive layer; the
+default never makes a claim the diff can't back up. Anything the taxonomy doesn't
+recognize degrades to one honest `Other content changed` rollup — never silence.
+Structural changes are **advisory only**: they never affect the exit code.
 
 Generated content that differs on every build (a "last updated" timestamp, a
-build hash) would otherwise read as drift on every page — drop it at the
-source with a repeatable regex:
+build hash) would otherwise read as drift on every page — drop it at the source
+with a repeatable regex, and cap the output for a CI comment:
 
 ```sh
-real-a11y diff base.json pr.json --ignore-view-line '^time "'
+real-a11y diff base.json pr.json --explain \
+  --ignore-view-line '^time "' --max-pages 5 --max-lines 20 -o comment.md
 ```
+
+The full diff prints to stdout regardless; the caps only shape the file you post.
+See the [command reference](/packages/cli/commands) for every `diff` flag.
 
 ## Adopt the gate on existing debt
 
@@ -230,101 +223,46 @@ Three properties make this safe to rely on:
 `diff` takes `--baseline` too: a NEW finding the baseline accepts is reported as
 `new (baselined)` but never gates.
 
-## Global flags
+## In CI
 
-| Flag | Effect |
-| --- | --- |
-| `--root <selector>` | Scope extraction to a region or component (default `body`). |
-| `--device <name>` | Emulate a device — `"iPhone 13"`, `"Pixel 7"` — to audit the mobile layout. |
-| `--viewport <WxH>` | Explicit viewport, e.g. `1280x800`. |
-| `--wait-until <state>` / `--settle <ms>` | Settle dynamic pages before extraction (`load` \| `domcontentloaded` \| `networkidle` \| `commit`). |
-| `--timeout <ms>` | Navigation timeout (default `30000`). |
-| `--rules <ids>` | Comma-separated subset of the five rules (`audit`/`inspect`/`snapshot`). |
-| `--fail-on <level>` | `error` \| `warning` \| `never` — the gate threshold (default `error`), on `audit`/`inspect`/`diff`, and on `snapshot` (default `never` there). View commands aren't gates: they always exit `0`. |
-| `--baseline <file>` / `--update-baseline` | Suppress accepted findings / rewrite the baseline from the current run (`snapshot` and `diff` — see [Adopt the gate on existing debt](#adopt-the-gate-on-existing-debt)). |
-| `--explain` | Add a plain-language summary of structural changes (`diff`, off by default — the neutral diff makes no inferences). |
-| `--max-lines <n>` / `--max-pages <n>` | Cap the structural diff to _n_ lines per page / detail at most _n_ changed routes (`diff`, default full — for CI comments; the full diff still prints to stdout). |
-| `--ignore-view-line <regex>` | Drop matching view lines before diffing (`diff`, repeatable) — for generated content that differs on every build, e.g. `'^time "'` for a "last updated" timestamp. |
-| `-f, --format <fmt>` | `pretty` (default) or `json`; `diff` also takes `md`; `snapshot` takes `json` (default) \| `md` \| `sarif` \| `junit` \| `jsonl` (see [SARIF, JUnit, JSONL](#sarif-junit-jsonl)). Never auto-switched — piping only drops color. |
-| `-o, --output <file>` | Write the report to a file (progress stays on stderr). |
-| `--storage-state <file>` / `--audit-origin <origin>` | Audit as a saved login session (see [Authenticated pages](/guide/authenticated-pages)). |
-| `--cdp <endpoint>` | Attach to a running Chrome instead of launching one. |
+`audit` is a gate with no extra flags. Under GitHub Actions it additionally
+emits grouped `::error` annotations on the checks surface and a job-summary
+report — automatically (`--no-annotate` to opt out):
 
-Most of these can be set once in the config instead of passed every run — see [Configure once](#configure-once) below.
-
-## Configure once
-
-Put your project's settings in an **`a11y.config.json`** and every command picks
-them up — the Jest/ESLint model. A `defaults` block seeds any flag you don't
-pass; an optional `urls` list names the routes you audit. Both are optional — a
-`defaults`-only config is valid.
-
-```json
-{
-  "defaults": {
-    "device": "iPhone 13",
-    "waitUntil": "networkidle",
-    "rules": ["no-unlabeled-interactive", "image-alt"],
-    "failOn": "error"
-  },
-  "urls": [
-    "http://localhost:3000",
-    { "name": "Login", "url": "http://localhost:3000/login", "rootSelector": "main" }
-  ]
-}
+```yaml
+- run: npm ci && npm run build && npx serve dist -l 3000 &
+- run: npx wait-on http://localhost:3000
+- run: npx real-a11y audit http://localhost:3000   # exits 1 on errors
 ```
 
-A `urls` entry is a bare URL string (its name defaults to the URL) or an object
-with `url` plus an optional `name` / `rootSelector` / `sourcePath`. With a `urls`
-list, a bare `real-a11y audit` (or `snapshot`) audits every entry — pass a URL
-only for a one-off:
+`snapshot` also speaks the CI interop formats — `sarif` for GitHub code scanning
+(Security tab), `junit` for Jenkins/GitLab test reporting, `jsonl` for `jq`
+pipelines. Wiring SARIF into GitHub code scanning is two steps:
+
+```yaml
+- run: npx real-a11y snapshot --config a11y.config.json -f sarif -o a11y.sarif
+- uses: github/codeql-action/upload-sarif@v4
+  with:
+    sarif_file: a11y.sarif
+```
+
+Findings then appear as alerts in the repository's **Security** tab, tracked
+across runs by fingerprint. The full format matrix — what each one feeds and its
+caveats — is in the [command reference](/packages/cli/commands).
+
+## Pages behind a login
+
+Log in once and reuse the session — no password ever reaches the tool:
 
 ```sh
-real-a11y audit                          # audits every URL in the config
-real-a11y audit http://localhost:3000    # iPhone 13, networkidle, fail-on error — no flags
-real-a11y tree http://localhost:3000     # same emulation, one URL, no flags
+real-a11y login https://app.example.com --save auth.json     # log in by hand, press Enter
+real-a11y audit https://app.example.com/dashboard --storage-state auth.json
 ```
 
-- **Discovery:** auto-discovered as `a11y.config.json` in the current directory.
-  `--config <file>` points elsewhere; `--no-config` ignores it (on every
-  command).
-- **`urls` (was `pages`):** optional — only `snapshot`/`diff` and a bare `audit`
-  read it (single-view commands like `tree` still take one URL). `pages` is
-  still accepted as the former name.
-- **Precedence:** `flag > environment variable > config defaults > built-in`. An
-  explicit flag always wins, so a config default is a floor you can override
-  per run.
-- **Fail-closed:** the config is strict — an unknown or mistyped key (or a bad
-  value, like `failOn: "sometimes"`) is a hard error, so a typo can never
-  silently un-gate CI.
+See the [Authenticated pages](/guide/authenticated-pages) guide for the full
+workflow, the security rules, and the interactive `--cdp` alternative.
 
-Every key under `defaults` mirrors a flag:
-
-| `defaults` key | Flag | Applies to |
-| --- | --- | --- |
-| `root` | `--root` | audit, inspect, tree/outline/tabs/list, snapshot |
-| `device` / `viewport` | `--device` / `--viewport` | ↑ |
-| `waitUntil` / `settleMs` / `timeoutMs` | `--wait-until` / `--settle` / `--timeout` | ↑ + login |
-| `headful` | `--headful` | audit, inspect, views, snapshot |
-| `storageState` / `auditOrigins` | `--storage-state` / `--audit-origin` | ↑ |
-| `format` | `-f, --format` | all (validated per command) |
-| `rules` | `--rules` | audit, inspect, snapshot |
-| `failOn` | `--fail-on` | audit, inspect, snapshot, diff |
-| `annotate` | `--no-annotate` (as `annotate: false`) | audit, inspect |
-| `includeGeneric` | `--include-generic` | tree, inspect, snapshot |
-| `baseline` | `--baseline` | snapshot, diff |
-| `ignoreViewLine` / `maxLines` / `maxPages` / `explain` | `--ignore-view-line` / `--max-lines` / `--max-pages` / `--explain` | diff |
-
-Path defaults (`storageState`, `baseline`) resolve relative to the config file,
-so a committed config is portable. `format` is validated per command — a global
-`format: "sarif"` works for `snapshot` but errors on `audit` (which only takes
-`pretty | json`). The runtime flags (`--output`, `--quiet`, `--verbose`, and the
-security-sensitive `--allow-file`/`--cdp`) are deliberately **not** config-settable.
-
-Top-level `rules` / `failOn` / `device` are accepted as shorthand for
-`defaults.*` (kept for compatibility; `defaults` wins if both are set).
-
-## Machine output
+## Output you can trust
 
 `--format json` emits one stable envelope for every command, single- or
 multi-page, so scripts always read `.pages[0].…`:
@@ -348,51 +286,12 @@ multi-page, so scripts always read `.pages[0].…`:
 }
 ```
 
-Each finding carries a stable `v1:` **fingerprint** — an identity robust to
-unrelated DOM churn, so a report can be diffed run-to-run without every
-re-indent reading as a change.
+Each finding carries that `v1:` **fingerprint** — an identity robust to unrelated
+DOM churn, so a report can be diffed run-to-run without every re-indent reading
+as a change. What the contract guarantees:
 
-`diff --format json` additionally carries, per page, the raw view line diffs
-(`pages[].views.{tree,outline,tabs}.{added,removed}`) and the plain-language
-structural statements (`pages[].structural: [{ kind, view, message, … }]`) —
-key on `kind` (stable; new kinds may be added within 0.x), not on the
-`message` wording. Both live in the same `schemaVersion: 1` envelope:
-additions are additive-only.
-
-### SARIF, JUnit, JSONL
-
-`snapshot --format` also speaks the CI interop formats:
-
-| Format | Feeds | Notes |
-| --- | --- | --- |
-| `sarif` | GitHub code scanning (Security tab), Azure DevOps, the VS Code SARIF viewer | Requires `--config` — GitHub only displays results anchored to repo **file paths**, so each result anchors to the page's `sourcePath` (declare it per page in the config) or the config file itself. Alert identity is the `v1:` fingerprint, so alerts don't churn on unrelated edits. Baseline-suppressed findings are excluded (GitHub ignores SARIF suppressions). |
-| `junit` | Jenkins, GitLab, Azure DevOps "Publish Test Results", CircleCI | One suite per page, one failing case per finding; baselined findings show as `skipped`; a clean page emits one passing case. |
-| `jsonl` | `jq` / grep pipelines, log ingesters | One finding per line, no framing records. Suppressed findings are flagged — filter with `jq 'select(.suppressed \| not)'`. |
-
-Wire SARIF into GitHub code scanning in two steps:
-
-```yaml
-- run: npx real-a11y snapshot --config a11y.config.json -f sarif -o a11y.sarif
-- uses: github/codeql-action/upload-sarif@v4
-  with:
-    sarif_file: a11y.sarif
-```
-
-Findings then appear as alerts in the repository's **Security** tab, tracked
-across runs by fingerprint. (Alerts on private repos need GitHub Advanced
-Security; public repos get them free.)
-
-### Exit codes
-
-| Code | Meaning |
-| --- | --- |
-| `0` | No findings at/above `--fail-on`. |
-| `1` | Findings at/above the threshold (the CI gate). |
-| `2` | Usage / navigation / engine error. |
-
-### Stability contract
-
-- Exit codes `0/1/2` are **frozen**.
+- Exit codes are **frozen** — `0` clean, `1` findings at/above `--fail-on` (the
+  gate), `2` usage/navigation/engine error.
 - `--format json` carries `schemaVersion`; within 0.x, changes are additive-only.
 - Fingerprints (`v1:…`) are immutable per version — a better algorithm ships as
   `v2` alongside, never by mutating `v1`.
@@ -401,30 +300,6 @@ Security; public repos get them free.)
 - Output never conveys severity by color alone (always a text tag), and honors
   `NO_COLOR` / `FORCE_COLOR`. **No telemetry** — the only network traffic is to
   the page you audit.
-
-## In CI
-
-`audit` is a gate with no extra flags. Under GitHub Actions it additionally
-emits grouped `::error` annotations on the checks surface and a job-summary
-report — automatically (`--no-annotate` to opt out):
-
-```yaml
-- run: npm ci && npm run build && npx serve dist -l 3000 &
-- run: npx wait-on http://localhost:3000
-- run: npx real-a11y audit http://localhost:3000   # exits 1 on errors
-```
-
-## Pages behind a login
-
-Log in once and reuse the session — no password ever reaches the tool:
-
-```sh
-real-a11y login https://app.example.com --save auth.json     # log in by hand, press Enter
-real-a11y audit https://app.example.com/dashboard --storage-state auth.json
-```
-
-See the [Authenticated pages](/guide/authenticated-pages) guide for the full
-workflow, the security rules, and the interactive `--cdp` alternative.
 
 ## Limitations
 
@@ -440,6 +315,8 @@ workflow, the security rules, and the interactive `--cdp` alternative.
 
 ## See also
 
+- [Command + flag reference](/packages/cli/commands) — every command and flag.
+- [Configuration reference](/packages/cli/configuration) — every `a11y.config.json` key.
 - [Authenticated pages](/guide/authenticated-pages) — audit behind a login.
 - [`@real-a11y-dev/mcp`](/packages/mcp) — the same engine for AI agents.
 - [`@real-a11y-dev/testing`](/packages/testing) — the same engine in your tests.

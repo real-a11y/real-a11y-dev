@@ -64,10 +64,12 @@
         paragraph "@real-a11y-dev/react"
       link "@real-a11y-dev/storybook-addon"
         paragraph "@real-a11y-dev/storybook-addon"
-      link "@real-a11y-dev/mcp"
-        paragraph "@real-a11y-dev/mcp"
-      link "@real-a11y-dev/cli"
-        paragraph "@real-a11y-dev/cli"
+        link "@real-a11y-dev/mcp"
+          heading "@real-a11y-dev/mcp" (level 3)
+        button "toggle section"
+        link "@real-a11y-dev/cli"
+          heading "@real-a11y-dev/cli" (level 3)
+        button "toggle section"
       button "Recipes"
         heading "Recipes" (level 2)
       link "Next.js (App Router + React 19)"

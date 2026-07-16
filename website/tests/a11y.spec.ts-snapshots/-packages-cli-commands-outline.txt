@@ -1,0 +1,57 @@
+  h2 Introduction
+  h2 Reading the Tree
+  h2 Chrome Extension
+  h2 Packages
+    h3 @real-a11y-dev/testing
+    h3 @real-a11y-dev/mcp
+    h3 @real-a11y-dev/cli
+  h2 Recipes
+  h2 Reference
+  h2 On this page
+h1 Commands & flags
+  h2 Commands
+    h3 audit <url...>
+    h3 inspect <url>
+    h3 tree <url>
+    h3 outline <url>
+    h3 tabs <url>
+    h3 list <category> <url>
+    h3 snapshot [url...]
+    h3 diff <base.json> <pr.json>
+    h3 login <url> --save <file>
+  h2 Flags
+  h2 Browser & page
+    h3 --root <selector>
+    h3 --device <name>
+    h3 --viewport <WxH>
+    h3 --wait-until <state>
+    h3 --settle <ms>
+    h3 --timeout <ms>
+    h3 --headful
+    h3 --cdp <endpoint>
+    h3 --allow-file
+    h3 --storage-state <file>
+    h3 --audit-origin <origin>
+  h2 Output
+    h3 -f, --format <fmt>
+    h3 -o, --output <file>
+    h3 -q, --quiet
+    h3 --verbose
+    h3 -h, --help
+  h2 Config
+    h3 --config <file>
+    h3 --no-config
+  h2 Gate
+    h3 --rules <ids>
+    h3 --fail-on <level>
+    h3 --no-annotate
+  h2 Command-specific
+    h3 --include-generic
+    h3 --md
+    h3 --baseline <file>
+    h3 --update-baseline
+    h3 --explain
+    h3 --ignore-view-line <regex>
+    h3 --max-lines <n>
+    h3 --max-pages <n>
+    h3 --save <file>
