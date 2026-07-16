@@ -9,6 +9,7 @@ coverage/
 **/.vitepress/dist/
 a11y-snapshots.md
 a11y.diff
+a11y.sarif
 # local scratch config at the repo root (this repo drives CI via A11Y_PAGES, not
 # a committed config); example configs elsewhere stay committable.
 /a11y.config.json

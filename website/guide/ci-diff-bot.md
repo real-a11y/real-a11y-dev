@@ -120,9 +120,9 @@ Your snapshot *policy* — which pages, which rules, what to fail on — lives i
 
 ```json
 {
-  "pages": [
-    { "name": "Home",  "url": "http://localhost:3000" },
-    { "name": "About", "url": "http://localhost:3000/about" },
+  "urls": [
+    "http://localhost:3000",
+    "http://localhost:3000/about",
     { "name": "Header nav", "url": "http://localhost:3000", "rootSelector": "header" }
   ],
   "rules": ["no-unlabeled-interactive", "image-alt", "heading-order", "dialog-labeled", "landmark-structure"],
@@ -130,7 +130,7 @@ Your snapshot *policy* — which pages, which rules, what to fail on — lives i
 }
 ```
 
-`name` is the diff's join key, so keep it stable across base and PR. `rootSelector` narrows the audit to a subtree (a component, a form, a region). See [Configuration](#configuration) for every key.
+A `urls` entry is a bare URL string (its `name` — the diff's join key — defaults to the URL) or an object when you need a custom `name`, a `rootSelector` (narrows the audit to a subtree), or a `sourcePath` (for the [Security tab](#findings-in-the-security-tab-sarif)). See [Configuration](#configuration) for every key.
 
 Run it locally whenever you want — the output is a single JSON artifact:
 
@@ -144,7 +144,7 @@ Add the snapshot artifacts (`base.json`, `pr.json`) to `.gitignore` — they're 
 
 ### 3. Add the workflow
 
-> **Land step 2 on `main` first.** The `Snapshot (base)` job checks out `main` and runs `real-a11y snapshot` there, so **`a11y.config.json` and the `@real-a11y-dev/cli` devDependency must already exist on `main`.** If they don't, the base job fails (`snapshot needs pages to audit`, or a missing `real-a11y` binary), the diff comment never posts, and you'll think the workflow is broken.
+> **Land step 2 on `main` first.** The `Snapshot (base)` job checks out `main` and runs `real-a11y snapshot` there, so **`a11y.config.json` and the `@real-a11y-dev/cli` devDependency must already exist on `main`.** If they don't, the base job fails (`snapshot needs URLs to audit`, or a missing `real-a11y` binary), the diff comment never posts, and you'll think the workflow is broken.
 >
 > Order of operations:
 >
@@ -168,7 +168,7 @@ All templates call the same two commands — `npx real-a11y snapshot` for the sn
 
 | Variable | Default | Description |
 |---|---|---|
-| `A11Y_PAGES` | (config file) | JSON array of `{ name, url }` objects. When set, it overrides the config's `pages` — handy for inlining the page list in the workflow. `rootSelector` and the other policy keys are config-only. |
+| `A11Y_PAGES` | (config file) | JSON array of `{ name, url }` objects. When set, it overrides the config's `urls` — handy for inlining the page list in the workflow. `rootSelector`, `sourcePath`, and the other policy keys are config-only. |
 | `A11Y_SNAPSHOT_OUT` | *(stdout)* | Fallback output path when `--output` / `-o` is omitted. |
 
 ### `a11y.config.json` shape
@@ -177,20 +177,22 @@ The config is strict and **fail-closed** — an unknown or typo'd key is a hard 
 
 | Key | Required | Description |
 |---|---|---|
-| `pages` | ✅ | Array of `{ name, url, rootSelector? }`. `name` is the diff join key; `url` is any address the browser can reach; `rootSelector` is a CSS selector that scopes the audit to a subtree. |
+| `urls` | ✅ (or `A11Y_PAGES`) | The routes to audit. Each entry is a URL **string**, or an object `{ url, name?, rootSelector?, sourcePath? }`. `name` is the diff join key (defaults to the URL, so keep URLs stable across base/PR); `rootSelector` scopes the audit to a subtree; `sourcePath` is the repo file findings anchor to for SARIF (see [the Security tab](#findings-in-the-security-tab-sarif)). Formerly `pages` — still accepted. |
 | `rules` | | Subset of the five rules — `no-unlabeled-interactive`, `image-alt`, `heading-order`, `dialog-labeled`, `landmark-structure`. Omit to run all. |
 | `failOn` | | `error` \| `warning` \| `never`. |
 | `device` | | Device to emulate, e.g. `"iPhone 13"` — audit the mobile layout. |
+| `defaults` | | Set any CLI flag once for every command (`device`, `waitUntil`, `rules`, …) — see the [CLI reference](/packages/cli#configure-once). |
 | `redact` | | Array of regex strings scrubbed from output before it's written. |
 
 ```jsonc
 {
-  "pages": [
-    { "name": "Home",       "url": "http://localhost:3000" },
-    { "name": "Login",      "url": "http://localhost:3000/login" },
+  "urls": [
+    "http://localhost:3000",
+    { "name": "Login", "url": "http://localhost:3000/login" },
     // Optional: narrow the audit to a subtree
     { "name": "Header nav", "url": "http://localhost:3000", "rootSelector": "header" },
-    { "name": "Main",       "url": "http://localhost:3000", "rootSelector": "main"   }
+    // Optional: anchor SARIF findings to the route's source file
+    { "name": "About", "url": "http://localhost:3000/about", "sourcePath": "src/pages/about.tsx" }
   ]
 }
 ```
@@ -466,6 +468,42 @@ The JSON — not the Markdown — is what you feed into `diff`. Reach for `--md`
 | ARIA state silently cleared | ✅ (structural tree diff) |
 
 The five rules surface as **findings** (new / changed / fixed); shape-only shifts that don't trip a rule — a landmark or heading change, a new tab stop, a role swap, a reordered tab sequence — surface as advisory **plain-language statements** per page, with the raw tree / outline / tabs line diffs inline beneath them (`--format json` exposes both, as `pages[].structural` and `pages[].views`).
+
+---
+
+## Findings in the Security tab (SARIF)
+
+The bot posts a **PR comment**; you can _also_ surface a11y findings in GitHub's **Security → Code scanning** tab. `real-a11y snapshot --format sarif` emits [SARIF 2.1.0](https://sarifweb.azurewebsites.net/), and `github/codeql-action/upload-sarif` sends it to code scanning — each finding carries a stable `v1:` fingerprint, so alerts dedupe across runs.
+
+Two things make it land well:
+
+- **Anchor findings to source.** A code-scanning result attaches to a **repo file**, so give each route a `sourcePath` in `a11y.config.json` pointing at its source (a route file, template, or component). Without one, every finding anchors to the config file itself.
+- **Scan the _default branch_, not just PRs.** The Security tab shows the **default branch's** analyses — a PR-scoped upload only appears under a `?query=pr:<n>` filter. So run the SARIF upload on **push to your default branch** (a weekly schedule keeps it fresh even when only content changes):
+
+```yaml
+# .github/workflows/a11y-code-scan.yml — a companion to the diff bot
+name: A11y Semantic Scan
+on:
+  push: { branches: [main] }
+  schedule: [{ cron: "0 6 * * 1" }] # weekly — catch content drift
+  workflow_dispatch: {}
+permissions:
+  contents: read
+  security-events: write # upload SARIF to code scanning
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # …install deps, build, and start your site (as in the templates above)…
+      - run: npx real-a11y snapshot --config a11y.config.json -f sarif -o a11y.sarif
+      - uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: a11y.sarif
+          category: real-a11y # keep it distinct from CodeQL / other scanners
+```
+
+Findings never gate — `snapshot` defaults to `--fail-on never`, so code scanning only _surfaces_ them for triage. (Real A11y's own repo dogfoods exactly this pattern.)
 
 ---
 

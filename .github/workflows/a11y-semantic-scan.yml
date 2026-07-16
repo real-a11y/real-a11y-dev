@@ -1,0 +1,74 @@
+name: A11y Semantic Scan
+
+# Dogfood `real-a11y snapshot --format sarif`: scan the DEFAULT BRANCH's semantic
+# accessibility tree (the roles + names a screen reader hears — what real-a11y
+# validates, not the source) and upload the SARIF to GitHub code scanning, so
+# findings show in the Security tab. Code scanning only populates that tab from
+# analyses of the default branch — the a11y-diff workflow uploads for PR refs,
+# which don't surface there — so this runs on push to `main` (plus a weekly
+# sweep to catch content drift, and manual dispatch). Advisory: never gates.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/core/src/**"
+      - "packages/serialize/src/**"
+      - "packages/testing/src/**"
+      - "packages/cli/src/**"
+      - "website/**"
+      - ".github/a11y-ci.config.json"
+      - ".github/workflows/a11y-semantic-scan.yml"
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC — re-scan main even without a push
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  security-events: write # upload SARIF to code scanning
+
+concurrency:
+  group: a11y-semantic-scan-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    name: Scan main & upload SARIF
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm -r --filter='./packages/*' build
+
+      - name: Build website
+        run: pnpm --filter @real-a11y-dev/website build
+
+      - name: Install Playwright browser
+        run: pnpm --filter @real-a11y-dev/cli exec playwright install chromium --with-deps
+
+      # Serve the built site and snapshot every route from the shared config into
+      # SARIF (results anchor to each page's `sourcePath`). Default branch, so the
+      # config is present — no overlay needed.
+      - name: Snapshot the site → SARIF
+        run: |
+          pnpm --filter @real-a11y-dev/website exec vitepress preview --port 4173 &
+          for i in $(seq 1 60); do curl -sf http://localhost:4173/ >/dev/null && break; sleep 1; done
+          node packages/cli/dist/index.js snapshot --config .github/a11y-ci.config.json --wait-until networkidle --settle 1000 -f sarif -o a11y.sarif
+
+      # Uploads for the default branch (refs/heads/main) → the Security tab.
+      # A distinct `category` keeps it separate from CodeQL / Scorecard.
+      - name: Upload a11y findings to code scanning (SARIF)
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: a11y.sarif
+          category: real-a11y

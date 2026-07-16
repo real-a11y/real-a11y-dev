@@ -96,6 +96,8 @@
       listitem
         link "What it catches"
       listitem
+        link "Findings in the Security tab (SARIF)"
+      listitem
         link "Combine with assertions"
   main
     heading "CI A11y Diff Bot" (level 1)
@@ -192,9 +194,13 @@
       code "--config <file>"
     button "Copy Code"
       code
-    paragraph "is the diff's join key, so keep it stable across base and PR. narrows the audit to a subtree (a component, a form, a region). See for every key."
+    paragraph "A entry is a bare URL string (its — the diff's join key — defaults to the URL) or an object when you need a custom , a (narrows the audit to a subtree), or a (for the ). See for every key."
+      code "urls"
+      code "name"
       code "name"
       code "rootSelector"
+      code "sourcePath"
+      link "Security tab"
       link "Configuration"
     paragraph "Run it locally whenever you want — the output is a single JSON artifact:"
     button "Copy Code"
@@ -227,7 +233,7 @@
           code "a11y.config.json"
           code "@real-a11y-dev/cli"
           code "main"
-        code "snapshot needs pages to audit"
+        code "snapshot needs URLs to audit"
         code "real-a11y"
       paragraph "Order of operations:"
       list
@@ -271,10 +277,11 @@
           cell "A11Y_PAGES"
             code "A11Y_PAGES"
           cell "(config file)"
-          cell "JSON array of { name, url } objects. When set, it overrides the config's pages — handy for inlining the page list in the workflow. rootSelector and the other policy keys are config-only."
+          cell "JSON array of { name, url } objects. When set, it overrides the config's urls — handy for inlining the page list in the workflow. rootSelector, sourcePath, and the other policy keys are config-only."
             code "{ name, url }"
-            code "pages"
+            code "urls"
             code "rootSelector"
+            code "sourcePath"
         row
           cell "A11Y_SNAPSHOT_OUT"
             code "A11Y_SNAPSHOT_OUT"
@@ -295,14 +302,18 @@
           rowheader "Description"
       rowgroup
         row
-          cell "pages"
-            code "pages"
-          cell "✅"
-          cell "Array of { name, url, rootSelector? }. name is the diff join key; url is any address the browser can reach; rootSelector is a CSS selector that scopes the audit to a subtree."
-            code "{ name, url, rootSelector? }"
+          cell "urls"
+            code "urls"
+          cell "✅ (or A11Y_PAGES)"
+            code "A11Y_PAGES"
+          cell "The routes to audit. Each entry is a URL string, or an object { url, name?, rootSelector?, sourcePath? }. name is the diff join key (defaults to the URL, so keep URLs stable across base/PR); rootSelector scopes the audit to a subtree; sourcePath is the repo file findings anchor to for SARIF (see the Security tab ). Formerly pages — still accepted."
+            strong "string"
+            code "{ url, name?, rootSelector?, sourcePath? }"
             code "name"
-            code "url"
             code "rootSelector"
+            code "sourcePath"
+            link "the Security tab"
+            code "pages"
         row
           cell "rules"
             code "rules"
@@ -327,6 +338,15 @@
           cell
           cell "Device to emulate, e.g. "iPhone 13" — audit the mobile layout."
             code ""iPhone 13""
+        row
+          cell "defaults"
+            code "defaults"
+          cell
+          cell "Set any CLI flag once for every command (device, waitUntil, rules, …) — see the CLI reference ."
+            code "device"
+            code "waitUntil"
+            code "rules"
+            link "CLI reference"
         row
           cell "redact"
             code "redact"
@@ -456,6 +476,35 @@
       code "--format json"
       code "pages[].structural"
       code "pages[].views"
+    separator
+    heading "Findings in the Security tab (SARIF)" (level 2)
+    paragraph "The bot posts a ; you can surface a11y findings in GitHub's tab. emits , and sends it to code scanning — each finding carries a stable fingerprint, so alerts dedupe across runs."
+      strong "PR comment"
+      emphasis "also"
+      strong "Security → Code scanning"
+      code "real-a11y snapshot --format sarif"
+      link "SARIF 2.1.0"
+      code "github/codeql-action/upload-sarif"
+      code "v1:"
+    paragraph "Two things make it land well:"
+    list
+      listitem "A code-scanning result attaches to a , so give each route a in pointing at its source (a route file, template, or component). Without one, every finding anchors to the config file itself."
+        strong "Anchor findings to source."
+        strong "repo file"
+        code "sourcePath"
+        code "a11y.config.json"
+      listitem "The Security tab shows the analyses — a PR-scoped upload only appears under a filter. So run the SARIF upload on (a weekly schedule keeps it fresh even when only content changes):"
+        strong "Scan the , not just PRs."
+          emphasis "default branch"
+        strong "default branch's"
+        code "?query=pr:<n>"
+        strong "push to your default branch"
+    button "Copy Code"
+      code
+    paragraph "Findings never gate — defaults to , so code scanning only them for triage. (Real A11y's own repo dogfoods exactly this pattern.)"
+      code "snapshot"
+      code "--fail-on never"
+      emphasis "surfaces"
     separator
     heading "Combine with assertions" (level 2)
     paragraph "The diff bot tells you — pair it with , , etc. from to fail the build immediately on known-bad patterns:"
