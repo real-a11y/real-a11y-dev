@@ -60,7 +60,6 @@ describe("a11y.config.json defaults (built bin)", () => {
   it("audit picks up defaults.rules from the cwd config", async () => {
     config({
       defaults: { rules: ["image-alt"] },
-      pages: [{ name: "x", url: "http://x" }],
     });
     // no-unlabeled-interactive is filtered out by the config → clean → exit 0.
     const { code } = await runCli(["audit", UNLABELED, "-q"], dir);
@@ -70,7 +69,6 @@ describe("a11y.config.json defaults (built bin)", () => {
   it("--no-config ignores it (the unlabeled button gates again)", async () => {
     config({
       defaults: { rules: ["image-alt"] },
-      pages: [{ name: "x", url: "http://x" }],
     });
     const { code } = await runCli(
       ["audit", UNLABELED, "--no-config", "-q"],
@@ -82,7 +80,6 @@ describe("a11y.config.json defaults (built bin)", () => {
   it("an explicit flag overrides the config default", async () => {
     config({
       defaults: { rules: ["image-alt"] },
-      pages: [{ name: "x", url: "http://x" }],
     });
     const { code } = await runCli(
       ["audit", UNLABELED, "--rules", "no-unlabeled-interactive", "-q"],
@@ -94,7 +91,6 @@ describe("a11y.config.json defaults (built bin)", () => {
   it("defaults.format is validated per command (sarif is snapshot-only)", async () => {
     config({
       defaults: { format: "sarif" },
-      pages: [{ name: "x", url: "http://x" }],
     });
     const { code, stderr } = await runCli(["audit", UNLABELED, "-q"], dir);
     expect(code).toBe(2);
@@ -104,7 +100,6 @@ describe("a11y.config.json defaults (built bin)", () => {
   it("a mistyped defaults value fails closed at load", async () => {
     config({
       defaults: { failOn: "sometimes" },
-      pages: [{ name: "x", url: "http://x" }],
     });
     const { code, stderr } = await runCli(["audit", UNLABELED, "-q"], dir);
     expect(code).toBe(2);
@@ -117,7 +112,6 @@ describe("a11y.config.json defaults (built bin)", () => {
     // blaming a --format the user never typed. --md must win.
     config({
       defaults: { format: "json" },
-      pages: [{ name: "x", url: "http://x" }],
     });
     const out = join(dir, "out.md");
     const { code, stderr } = await runCli(
@@ -133,7 +127,6 @@ describe("a11y.config.json defaults (built bin)", () => {
     // gets past arg-parsing and fails only at the (unreachable) CDP endpoint.
     config({
       defaults: { device: "iPhone 13" },
-      pages: [{ name: "x", url: "http://x" }],
     });
     const { stderr } = await runCli(
       ["audit", CLEAN, "--cdp", "http://127.0.0.1:9", "-q"],
@@ -141,5 +134,20 @@ describe("a11y.config.json defaults (built bin)", () => {
     );
     // The fix: the mutual-exclusivity guard no longer trips on a config default.
     expect(stderr).not.toMatch(/can't be combined with/);
+  });
+
+  it("audit with no URL falls back to the config `urls` list", async () => {
+    // The headline fix: list your routes once (here as a bare string), then run
+    // `real-a11y audit` with no positional — no re-typing the URL.
+    config({ urls: [CLEAN] });
+    const { code } = await runCli(["audit", "-q"], dir);
+    expect(code).toBe(0); // CLEAN has no findings
+  });
+
+  it("audit with no URL and no config list errors clearly", async () => {
+    config({ defaults: { device: "iPhone 13" } }); // defaults only, no `urls`
+    const { code, stderr } = await runCli(["audit", "-q"], dir);
+    expect(code).toBe(2);
+    expect(stderr).toMatch(/no URL given/);
   });
 });

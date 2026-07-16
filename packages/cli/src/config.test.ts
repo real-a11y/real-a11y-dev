@@ -28,12 +28,12 @@ function writeConfig(content: unknown): string {
 describe("loadConfig", () => {
   it("loads a valid config and records its directory", () => {
     const file = writeConfig({
-      pages: [{ name: "Home", url: "http://localhost:3000" }],
+      urls: [{ name: "Home", url: "http://localhost:3000" }],
       rules: ["image-alt"],
       failOn: "error",
     });
     const config = loadConfig(file);
-    expect(config.pages).toEqual([
+    expect(config.urls).toEqual([
       { name: "Home", url: "http://localhost:3000" },
     ]);
     // Top-level rules/failOn/device are back-compat shorthand — they fold into
@@ -43,9 +43,36 @@ describe("loadConfig", () => {
     expect(config.dir).toBe(file.replace(/[/\\]a11y\.config\.json$/, ""));
   });
 
+  it("accepts bare-string urls and an object; name defaults to the url", () => {
+    const { urls } = loadConfig(
+      writeConfig({
+        urls: ["http://localhost:3000/", { url: "http://x/about" }],
+      }),
+    );
+    expect(urls).toEqual([
+      { name: "http://localhost:3000/", url: "http://localhost:3000/" },
+      { name: "http://x/about", url: "http://x/about" },
+    ]);
+  });
+
+  it("is valid with no url list (a defaults-only config)", () => {
+    const { urls, defaults } = loadConfig(
+      writeConfig({ defaults: { device: "iPhone 13" } }),
+    );
+    expect(urls).toEqual([]);
+    expect(defaults.device).toBe("iPhone 13");
+  });
+
+  it("accepts `pages` as a legacy alias for `urls`", () => {
+    const { urls } = loadConfig(
+      writeConfig({ pages: [{ name: "H", url: "http://x" }] }),
+    );
+    expect(urls).toEqual([{ name: "H", url: "http://x" }]);
+  });
+
   it("fails closed on an unknown top-level key (a typo must not un-gate)", () => {
     const file = writeConfig({
-      pages: [{ name: "H", url: "http://x" }],
+      urls: [{ name: "H", url: "http://x" }],
       failon: "error", // typo
     });
     try {
@@ -57,27 +84,29 @@ describe("loadConfig", () => {
     }
   });
 
-  it("rejects unknown keys inside a page", () => {
+  it("rejects unknown keys inside a url entry", () => {
     const file = writeConfig({
-      pages: [{ name: "H", url: "http://x", waitUntil: "load" }],
+      urls: [{ name: "H", url: "http://x", waitUntil: "load" }],
     });
     expect(() => loadConfig(file)).toThrow(
-      /unknown key "waitUntil" in pages\[0\]/,
+      /unknown key "waitUntil" in urls\[0\]/,
     );
   });
 
-  it("requires a non-empty pages array", () => {
+  it("rejects an explicitly empty url list (each name kept in the error)", () => {
+    expect(() => loadConfig(writeConfig({ urls: [] }))).toThrow(
+      /"urls" must be a non-empty/,
+    );
     expect(() => loadConfig(writeConfig({ pages: [] }))).toThrow(
-      /non-empty "pages"/,
+      /"pages" must be a non-empty/,
     );
-    expect(() => loadConfig(writeConfig({ rules: [] }))).toThrow(/"pages"/);
   });
 
-  it("validates rules, failOn, and page field types", () => {
+  it("validates rules, failOn, and url field types", () => {
     expect(() =>
       loadConfig(
         writeConfig({
-          pages: [{ name: "H", url: "http://x" }],
+          urls: [{ name: "H", url: "http://x" }],
           rules: ["nope"],
         }),
       ),
@@ -85,20 +114,23 @@ describe("loadConfig", () => {
     expect(() =>
       loadConfig(
         writeConfig({
-          pages: [{ name: "H", url: "http://x" }],
+          urls: [{ name: "H", url: "http://x" }],
           failOn: "sometimes",
         }),
       ),
     ).toThrow(/"failOn" must be/);
     expect(() =>
-      loadConfig(writeConfig({ pages: [{ name: 5, url: "http://x" }] })),
-    ).toThrow(/pages\[0\]\.name must be a string/);
+      loadConfig(writeConfig({ urls: [{ name: 5, url: "http://x" }] })),
+    ).toThrow(/urls\[0\]\.name must be a string/);
+    expect(() => loadConfig(writeConfig({ urls: [{ name: "H" }] }))).toThrow(
+      /urls\[0\]\.url must be a string/,
+    );
   });
 
   it("compile-checks redact patterns", () => {
     expect(() =>
       loadConfig(
-        writeConfig({ pages: [{ name: "H", url: "http://x" }], redact: ["("] }),
+        writeConfig({ urls: [{ name: "H", url: "http://x" }], redact: ["("] }),
       ),
     ).toThrow(/invalid regex/);
   });
@@ -120,10 +152,9 @@ describe("loadConfig", () => {
 const PAGES = [{ name: "H", url: "http://x" }];
 
 describe("config defaults", () => {
-  it("loads an allowlisted defaults block", () => {
+  it("loads an allowlisted defaults block (no url list required)", () => {
     const { defaults } = loadConfig(
       writeConfig({
-        pages: PAGES,
         defaults: { device: "iPhone 13", failOn: "warning", maxLines: 20 },
       }),
     );
@@ -136,29 +167,23 @@ describe("config defaults", () => {
 
   it("fails closed on an unknown or mistyped defaults key", () => {
     expect(() =>
-      loadConfig(writeConfig({ pages: PAGES, defaults: { devise: "x" } })),
+      loadConfig(writeConfig({ defaults: { devise: "x" } })),
     ).toThrow(/unknown key "devise" in defaults/);
     expect(() =>
-      loadConfig(writeConfig({ pages: PAGES, defaults: { headful: "yes" } })),
+      loadConfig(writeConfig({ defaults: { headful: "yes" } })),
     ).toThrow(/defaults.headful must be true or false/);
     expect(() =>
-      loadConfig(writeConfig({ pages: PAGES, defaults: { rules: ["nope"] } })),
+      loadConfig(writeConfig({ defaults: { rules: ["nope"] } })),
     ).toThrow(/unknown rule/);
     expect(() =>
-      loadConfig(
-        writeConfig({ pages: PAGES, defaults: { failOn: "sometimes" } }),
-      ),
+      loadConfig(writeConfig({ defaults: { failOn: "sometimes" } })),
     ).toThrow(/defaults.failOn must be/);
   });
 
   it("top-level rules/failOn/device fold into defaults; defaults wins", () => {
     // both set → defaults wins
     const { defaults } = loadConfig(
-      writeConfig({
-        pages: PAGES,
-        failOn: "error",
-        defaults: { failOn: "never" },
-      }),
+      writeConfig({ failOn: "error", defaults: { failOn: "never" } }),
     );
     expect(defaults.failOn).toBe("never");
   });
@@ -169,7 +194,7 @@ describe("mergeDefaults (virtual flags)", () => {
     defaults: A11yConfig["defaults"],
     dir = "/repo",
   ): A11yConfig => ({
-    pages: PAGES,
+    urls: PAGES,
     defaults,
     dir,
   });
@@ -266,7 +291,7 @@ describe("mergeDefaults (virtual flags)", () => {
 describe("resolveConfig", () => {
   it("discovers via --config and memoizes by path; --no-config skips", () => {
     clearConfigCache();
-    const file = writeConfig({ pages: PAGES, defaults: { device: "X" } });
+    const file = writeConfig({ urls: PAGES, defaults: { device: "X" } });
     const a = resolveConfig({ config: file });
     const b = resolveConfig({ config: file });
     expect(a?.config).toBe(b?.config); // same instance — memoized, one parse

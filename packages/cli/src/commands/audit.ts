@@ -28,7 +28,7 @@ import { createSession, openPage, snapshotPage } from "../session.js";
 import {
   isAuthenticated,
   outputOf,
-  resolveTargets,
+  resolveAuditTargets,
   rootOf,
   sessionFlags,
 } from "./common.js";
@@ -39,7 +39,7 @@ export const auditCommand: CommandFn = async (positionals, flags) => {
   const failOn = parseFailOn(flags["fail-on"], "error");
   const format = parseFormat(flags.format, ["pretty", "json"] as const);
   const openOptions = parseOpenOptions(flags);
-  const targets = resolveTargets(positionals, flags);
+  const targets = resolveAuditTargets(positionals, flags);
   const output = outputOf(flags);
   const quiet = flags.quiet === true;
   const authed = isAuthenticated(flags);

@@ -107,17 +107,20 @@ real-a11y diff base.json pr.json          # exit 1 only on NEW findings
 real-a11y diff base.json pr.json -f md    # a PR-comment-ready summary
 ```
 
-Pages come from positional URLs, else `A11Y_PAGES`, else `a11y.config.json` —
-your multi-page policy in your repo:
+Pages come from positional URLs, else `A11Y_PAGES`, else the `urls` list in
+`a11y.config.json` — your multi-page policy in your repo. A `urls` entry is a
+bare URL string, or an object when you want a custom name or root selector:
 
 ```json
 {
-  "pages": [
-    { "name": "Home", "url": "http://localhost:3000" },
+  "urls": [
+    "http://localhost:3000",
     { "name": "Login", "url": "http://localhost:3000/login", "rootSelector": "main" }
   ],
-  "rules": ["no-unlabeled-interactive", "image-alt", "heading-order"],
-  "failOn": "error"
+  "defaults": {
+    "rules": ["no-unlabeled-interactive", "image-alt", "heading-order"],
+    "failOn": "error"
+  }
 }
 ```
 
@@ -253,7 +256,8 @@ Most of these can be set once in the config instead of passed every run — see 
 
 Put your project's settings in an **`a11y.config.json`** and every command picks
 them up — the Jest/ESLint model. A `defaults` block seeds any flag you don't
-pass; `pages` (for `snapshot`/`diff`) live alongside it.
+pass; an optional `urls` list names the routes you audit. Both are optional — a
+`defaults`-only config is valid.
 
 ```json
 {
@@ -263,21 +267,30 @@ pass; `pages` (for `snapshot`/`diff`) live alongside it.
     "rules": ["no-unlabeled-interactive", "image-alt"],
     "failOn": "error"
   },
-  "pages": [
-    { "name": "Home", "url": "http://localhost:3000" },
+  "urls": [
+    "http://localhost:3000",
     { "name": "Login", "url": "http://localhost:3000/login", "rootSelector": "main" }
   ]
 }
 ```
 
+A `urls` entry is a bare URL string (its name defaults to the URL) or an object
+with `url` plus an optional `name` / `rootSelector` / `sourcePath`. With a `urls`
+list, a bare `real-a11y audit` (or `snapshot`) audits every entry — pass a URL
+only for a one-off:
+
 ```sh
-real-a11y audit http://localhost:3000   # runs as iPhone 13, networkidle, fail-on error — no flags
-real-a11y tree http://localhost:3000    # same emulation, no flags
+real-a11y audit                          # audits every URL in the config
+real-a11y audit http://localhost:3000    # iPhone 13, networkidle, fail-on error — no flags
+real-a11y tree http://localhost:3000     # same emulation, one URL, no flags
 ```
 
 - **Discovery:** auto-discovered as `a11y.config.json` in the current directory.
   `--config <file>` points elsewhere; `--no-config` ignores it (on every
   command).
+- **`urls` (was `pages`):** optional — only `snapshot`/`diff` and a bare `audit`
+  read it (single-view commands like `tree` still take one URL). `pages` is
+  still accepted as the former name.
 - **Precedence:** `flag > environment variable > config defaults > built-in`. An
   explicit flag always wins, so a config default is a floor you can override
   per run.
@@ -421,8 +434,8 @@ workflow, the security rules, and the interactive `--cdp` alternative.
   semantic-tree-based and tuned to "what a screen reader announces." Pair it with
   [axe-core](https://github.com/dequelabs/axe-core) for contrast, focus
   visibility, and other rendered checks.
-- **Not a crawler.** You name the pages (as arguments, or in
-  `a11y.config.json` for `snapshot`) — there is no link discovery.
+- **Not a crawler.** You name the URLs (as arguments, or the `urls` list in
+  `a11y.config.json`) — there is no link discovery.
 - **Requires a real browser.** Playwright + Chromium must be installable.
 
 ## See also

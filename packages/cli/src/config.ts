@@ -22,6 +22,7 @@ import { ALL_RULES, type A11yRule } from "@real-a11y-dev/testing";
 import { CliError, type FailOn } from "./exit.js";
 
 export interface ConfigPage {
+  /** Diff join key + display label. Defaults to `url` when not given. */
   name: string;
   url: string;
   rootSelector?: string;
@@ -53,7 +54,9 @@ export interface A11yDefaults {
 }
 
 export interface A11yConfig {
-  pages: ConfigPage[];
+  /** The project's audit targets. Empty when the config only sets `defaults` —
+   *  `snapshot`/`diff` and a bare `audit` fall back to this list. */
+  urls: ConfigPage[];
   /** Always present (possibly empty). Top-level rules/failOn/device fold in. */
   defaults: A11yDefaults;
   redact?: string[];
@@ -63,9 +66,10 @@ export interface A11yConfig {
 
 const MAX_BYTES = 1_000_000;
 const MAX_PAGES = 100;
-// Top-level: `pages` + `defaults` + `redact`, plus rules/failOn/device kept as
-// back-compat shorthand that folds into `defaults`.
+// Top-level: `urls` + `defaults` + `redact`, plus `pages` (legacy alias for
+// `urls`) and rules/failOn/device kept as back-compat shorthand for `defaults`.
 const TOP_KEYS = new Set([
+  "urls",
   "pages",
   "defaults",
   "redact",
@@ -73,7 +77,7 @@ const TOP_KEYS = new Set([
   "failOn",
   "device",
 ]);
-const PAGE_KEYS = new Set(["name", "url", "rootSelector", "sourcePath"]);
+const URL_KEYS = new Set(["name", "url", "rootSelector", "sourcePath"]);
 const RULE_SET: ReadonlySet<string> = new Set(ALL_RULES);
 
 // Coarse types validated at load; "rules"/"failOn" get the extra enum check.
@@ -192,6 +196,31 @@ function validateDefaults(raw: unknown): A11yDefaults {
   return out as A11yDefaults;
 }
 
+/** A `urls` entry is either a bare URL string (name defaults to the URL) or an
+ *  object with `url` plus an optional `name`/`rootSelector`/`sourcePath`. */
+function parseUrlEntry(raw: unknown, where: string): ConfigPage {
+  if (typeof raw === "string") return { name: raw, url: raw };
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new CliError(
+      `${where} must be a URL string or an object with a "url"`,
+    );
+  }
+  const p = raw as Record<string, unknown>;
+  rejectUnknown(p, URL_KEYS, where);
+  const url = asString(p.url, `${where}.url`);
+  const page: ConfigPage = {
+    name: p.name !== undefined ? asString(p.name, `${where}.name`) : url,
+    url,
+  };
+  if (p.rootSelector !== undefined) {
+    page.rootSelector = asString(p.rootSelector, `${where}.rootSelector`);
+  }
+  if (p.sourcePath !== undefined) {
+    page.sourcePath = asString(p.sourcePath, `${where}.sourcePath`);
+  }
+  return page;
+}
+
 export function loadConfig(path: string): A11yConfig {
   const abs = resolve(path);
   let raw: string;
@@ -217,32 +246,25 @@ export function loadConfig(path: string): A11yConfig {
   const c = parsed as Record<string, unknown>;
   rejectUnknown(c, TOP_KEYS, "a11y.config.json");
 
-  if (!Array.isArray(c.pages) || c.pages.length === 0) {
-    throw new CliError('config needs a non-empty "pages" array');
+  // `urls` is optional: a config can set only `defaults` (for `audit` etc.).
+  // `pages` is the legacy alias; `urls` wins if both are present. The key name
+  // (`urls` vs `pages`) rides into the error messages so they stay accurate.
+  const listKey = c.urls !== undefined ? "urls" : "pages";
+  const rawList = c.urls !== undefined ? c.urls : c.pages;
+  let urls: ConfigPage[] = [];
+  if (rawList !== undefined) {
+    if (!Array.isArray(rawList) || rawList.length === 0) {
+      throw new CliError(
+        `config "${listKey}" must be a non-empty array of URLs (a string, or an object with a "url")`,
+      );
+    }
+    if (rawList.length > MAX_PAGES) {
+      throw new CliError(
+        `config "${listKey}" has ${rawList.length} entries — the cap is ${MAX_PAGES}`,
+      );
+    }
+    urls = rawList.map((raw, i) => parseUrlEntry(raw, `${listKey}[${i}]`));
   }
-  if (c.pages.length > MAX_PAGES) {
-    throw new CliError(
-      `config has ${c.pages.length} pages — the cap is ${MAX_PAGES}`,
-    );
-  }
-  const pages: ConfigPage[] = c.pages.map((raw, i) => {
-    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
-      throw new CliError(`pages[${i}] must be an object`);
-    }
-    const p = raw as Record<string, unknown>;
-    rejectUnknown(p, PAGE_KEYS, `pages[${i}]`);
-    const page: ConfigPage = {
-      name: asString(p.name, `pages[${i}].name`),
-      url: asString(p.url, `pages[${i}].url`),
-    };
-    if (p.rootSelector !== undefined) {
-      page.rootSelector = asString(p.rootSelector, `pages[${i}].rootSelector`);
-    }
-    if (p.sourcePath !== undefined) {
-      page.sourcePath = asString(p.sourcePath, `pages[${i}].sourcePath`);
-    }
-    return page;
-  });
 
   const defaults: A11yDefaults =
     c.defaults !== undefined ? validateDefaults(c.defaults) : {};
@@ -263,7 +285,7 @@ export function loadConfig(path: string): A11yConfig {
     defaults.device = asString(c.device, '"device"');
   }
 
-  const config: A11yConfig = { pages, defaults, dir: dirname(abs) };
+  const config: A11yConfig = { urls, defaults, dir: dirname(abs) };
 
   if (c.redact !== undefined) {
     if (!Array.isArray(c.redact)) {
@@ -302,9 +324,9 @@ function discoverConfigPath(flags: ConfigFlags): string | undefined {
 
 let configCache: { path: string; config: A11yConfig } | undefined;
 
-/** Discover + load the config once, memoized by resolved path — so run.ts and
- * snapshot's resolvePages don't parse the file twice. Returns the config plus
- * its path (snapshot needs the path for SARIF anchoring). */
+/** Discover + load the config once, memoized by resolved path — so run.ts's
+ * defaults merge and `resolvePageList` don't parse the file twice. Returns the
+ * config plus its path (snapshot needs the path for SARIF anchoring). */
 export function resolveConfig(
   flags: ConfigFlags,
 ): { config: A11yConfig; path: string } | undefined {

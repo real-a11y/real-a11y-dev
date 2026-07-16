@@ -1,6 +1,7 @@
 /** Shared target/flag plumbing for the browser-driving commands. */
 
 import type { FlagValues } from "../args.js";
+import { resolveConfig, type ConfigPage } from "../config.js";
 import { CliError } from "../exit.js";
 import { assertWritableTarget } from "../output.js";
 import { redactUrl } from "../sanitize.js";
@@ -58,6 +59,83 @@ export function singleTarget(
     );
   }
   return resolveTargets(positionals, flags)[0];
+}
+
+function parseEnvPages(env: string): ConfigPage[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(env);
+  } catch {
+    throw new CliError("A11Y_PAGES is not valid JSON (expected [{name,url}])");
+  }
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    throw new CliError("A11Y_PAGES must be a non-empty [{name,url}] array");
+  }
+  return parsed.map((p, i) => {
+    const o = p as Record<string, unknown>;
+    if (typeof o?.name !== "string" || typeof o?.url !== "string") {
+      throw new CliError(`A11Y_PAGES[${i}] needs string "name" and "url"`);
+    }
+    return { name: o.name, url: o.url };
+  });
+}
+
+/**
+ * The audit list in precedence order: positional URLs → `A11Y_PAGES` env → the
+ * config `urls`. `source` is the url-gate source ("arg" for positionals, the
+ * stricter "config" for env/config). `configPath` (absolute) is set only on the
+ * config path — `sarif` anchors to it. Empty `pages` = nothing was supplied.
+ * Shared by `audit` and `snapshot` so both resolve targets identically.
+ */
+export function resolvePageList(
+  positionals: readonly string[],
+  flags: FlagValues,
+): { pages: ConfigPage[]; source: "arg" | "config"; configPath?: string } {
+  if (positionals.length > 0) {
+    return {
+      pages: positionals.map((url) => ({ name: url, url })),
+      source: "arg",
+    };
+  }
+  const env = process.env.A11Y_PAGES;
+  if (env) return { pages: parseEnvPages(env), source: "config" };
+  const resolved = resolveConfig(flags);
+  if (resolved) {
+    return {
+      pages: resolved.config.urls,
+      source: "config",
+      configPath: resolved.path,
+    };
+  }
+  return { pages: [], source: "config" };
+}
+
+/** `audit`'s targets: positional URLs, else the project's `urls` list (env or
+ *  config) — so a bare `real-a11y audit` in a configured repo audits every
+ *  route without re-typing a URL. Single-view commands stay positional-only. */
+export function resolveAuditTargets(
+  positionals: readonly string[],
+  flags: FlagValues,
+): Target[] {
+  const { pages, source } = resolvePageList(positionals, flags);
+  if (pages.length === 0) {
+    throw new CliError(
+      "no URL given",
+      "pass a URL (real-a11y audit <url>) or add `urls` to a11y.config.json",
+    );
+  }
+  const targets = pages.map((p) => {
+    const url = normalizeTarget(p.url);
+    const fileApproved = assertAllowedUrl(url, {
+      source,
+      allowFile: flags["allow-file"] === true,
+    });
+    return { url, name: redactUrl(url), fileApproved };
+  });
+  if (targets.some((t) => t.fileApproved)) {
+    process.env.REAL_A11Y_MCP_ALLOW_FILE = "1";
+  }
+  return targets;
 }
 
 /** True when this run loads a saved session — commands thread it to openPage. */
