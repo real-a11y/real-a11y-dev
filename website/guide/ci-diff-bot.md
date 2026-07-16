@@ -36,13 +36,25 @@ Because the diff is **finding-identity-aware** (each finding carries a stable `v
 
 ## What the comment looks like
 
+The header reports **two separate axes** — _findings_ (the accessibility
+problems that gate CI) and _structure_ (the shape of the semantic tree, always
+advisory). Keeping them apart means an all-clean findings line next to a moved
+structure never reads as a contradiction: adding a valid new section changes the
+structure without introducing a single new finding.
+
 **No changes:**
-> ### Accessibility diff — 0 new · 0 changed · 0 fixed
+> ### Accessibility diff
 >
-> No accessibility finding changes.
+> **Findings** (gate CI): 0 new · 0 changed · 0 fixed — none changed
+>
+> **Structure** (advisory): unchanged
 
 **Changes detected:**
-> ### Accessibility diff — 2 new · 0 changed · 1 fixed · structure changed on 2 pages
+> ### Accessibility diff
+>
+> **Findings** (gate CI): 2 new · 0 changed · 1 fixed
+>
+> **Structure** (advisory): changed on 2 pages — new or reordered headings, landmarks, or tab stops
 >
 > **Pages with a11y changes (2):** `Home`, `Settings`
 >

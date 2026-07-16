@@ -9,8 +9,8 @@
 h1 CI A11y Diff Bot
   h2 How it works
   h2 What the comment looks like
-    h3 Accessibility diff — 0 new · 0 changed · 0 fixed
-    h3 Accessibility diff — 2 new · 0 changed · 1 fixed · structure changed on 2 pages
+    h3 Accessibility diff
+    h3 Accessibility diff
       h4 Home
   h2 Setup
     h3 1. Install

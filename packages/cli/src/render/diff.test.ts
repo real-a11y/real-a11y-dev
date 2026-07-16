@@ -90,7 +90,7 @@ describe("renderDiffPretty", () => {
     expect(out).toContain("+ new [error] no-unlabeled-interactive");
     expect(out).toContain("#save");
     expect(out.trimEnd().split("\n").at(-1)).toBe(
-      "1 new · 0 changed · 0 fixed",
+      "findings: 1 new · 0 changed · 0 fixed",
     );
   });
 
@@ -234,7 +234,10 @@ describe("renderDiffJson", () => {
 describe("renderDiffMarkdown", () => {
   it("renders a PR-comment-ready summary", () => {
     const out = renderDiffMarkdown(result);
-    expect(out).toMatch(/### Accessibility diff — 1 new/);
+    expect(out.split("\n")[0]).toBe("### Accessibility diff");
+    expect(out).toContain(
+      "**Findings** (gate CI): 1 new · 0 changed · 0 fixed",
+    );
     expect(out).toMatch(/\*\*new\*\* `no-unlabeled-interactive`/);
   });
 
@@ -243,20 +246,28 @@ describe("renderDiffMarkdown", () => {
       buildArtifact([page("Home", [])], { toolName: "c", toolVersion: "0" }),
       buildArtifact([page("Home", [])], { toolName: "c", toolVersion: "0" }),
     );
-    expect(renderDiffMarkdown(clean)).toContain(
-      "No accessibility finding changes.",
+    const out = renderDiffMarkdown(clean);
+    // Both axes are reported, each labeled — findings gate, structure is advisory.
+    expect(out).toContain(
+      "**Findings** (gate CI): 0 new · 0 changed · 0 fixed — none changed",
     );
+    expect(out).toContain("**Structure** (advisory): unchanged");
   });
 
   it("is neutral by default: the unified diff, no statements, header names the drift", () => {
     const out = renderDiffMarkdown(structural);
-    // "structure changed on N pages" is a fact — it rides the header in both
-    // modes so an all-zero triplet doesn't read as "nothing changed".
-    expect(out.split("\n")[0]).toBe(
-      "### Accessibility diff — 0 new · 0 changed · 0 fixed · structure changed on 1 page",
+    // Findings and structure are separate labeled lines, so an all-zero findings
+    // triplet next to a structure change no longer reads as a contradiction.
+    expect(out.split("\n")[0]).toBe("### Accessibility diff");
+    expect(out).toContain(
+      "**Findings** (gate CI): 0 new · 0 changed · 0 fixed — none changed",
+    );
+    expect(out).toContain(
+      "**Structure** (advisory): changed on 1 page — new or reordered headings, landmarks, or tab stops",
     );
     expect(out).toContain("#### Docs");
-    expect(out).not.toContain("**Structure (advisory");
+    // No per-page structural statements section in neutral mode.
+    expect(out).not.toContain("never blocks merge");
     expect(out).not.toContain("Heading level changed");
     expect(out).toContain("_tree_");
     expect(out).toContain("```diff");
@@ -271,11 +282,12 @@ describe("renderDiffMarkdown", () => {
 
   it("--explain: statements before the unified diff; header names the drift", () => {
     const out = renderDiffMarkdown(structural, { explain: true });
-    expect(out.split("\n")[0]).toBe(
-      "### Accessibility diff — 0 new · 0 changed · 0 fixed · structure changed on 1 page",
+    expect(out.split("\n")[0]).toBe("### Accessibility diff");
+    expect(out).toContain(
+      "**Findings** (gate CI): 0 new · 0 changed · 0 fixed — none changed",
     );
     expect(out).toContain(
-      "No accessibility finding changes — but the semantic structure moved (advisory, review below).",
+      "**Structure** (advisory): changed on 1 page — new or reordered headings, landmarks, or tab stops",
     );
     expect(out).toContain("**Structure (advisory — never blocks merge):**");
     expect(out).toContain('- Heading level changed: "Setup" h2 → h3');
@@ -289,11 +301,13 @@ describe("renderDiffMarkdown", () => {
     );
   });
 
-  it("keeps the header findings-only when nothing structural moved", () => {
+  it("reports structure unchanged when nothing structural moved", () => {
     // `result` has a finding but identical tree/outline/tabs → no structural.
-    expect(renderDiffMarkdown(result, { explain: true }).split("\n")[0]).toBe(
-      "### Accessibility diff — 1 new · 0 changed · 0 fixed",
+    const out = renderDiffMarkdown(result, { explain: true });
+    expect(out).toContain(
+      "**Findings** (gate CI): 1 new · 0 changed · 0 fixed",
     );
+    expect(out).toContain("**Structure** (advisory): unchanged");
   });
 
   it("a reorder shows in both modes; --explain names it", () => {
