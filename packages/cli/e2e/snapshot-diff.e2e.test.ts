@@ -131,7 +131,7 @@ describe("diff", () => {
     const { code, stdout } = await runCli(["diff", base, more]);
     expect(code).toBe(1);
     expect(stdout).toContain("+ new");
-    expect(stdout.trimEnd().split("\n").at(-1)).toMatch(/^1 new/);
+    expect(stdout.trimEnd().split("\n").at(-1)).toMatch(/^findings: 1 new/);
   });
 
   it("exits 0 when a finding is FIXED (fixes never gate)", async () => {
