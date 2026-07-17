@@ -196,7 +196,7 @@
       code "--config <file>"
     button "Copy Code"
       code
-    paragraph "A entry is a bare URL string (its — the diff's join key — defaults to the URL) or an object when you need a custom , a (narrows the audit to a subtree), or a (for the ). See for every key."
+    paragraph "A entry is a bare URL string (its — the diff's join key — defaults to the URL) or an object when you need a custom , a (narrows the audit to a subtree), or a (for the ). See for every key. Give every entry an explicit when base and PR are served from different hosts or ports — otherwise the names default to URLs that never match, and warns that it compared nothing."
       code "urls"
       code "name"
       code "name"
@@ -204,6 +204,9 @@
       code "sourcePath"
       link "Security tab"
       link "Configuration"
+      code "name"
+      link "diff"
+        code "diff"
     paragraph "Run it locally whenever you want — the output is a single JSON artifact:"
     button "Copy Code"
       code

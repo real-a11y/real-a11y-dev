@@ -172,6 +172,15 @@ Add [`--explain`](#explain) for a plain-language summary, or report a single
 axis with [`--only findings | views`](#only-axis) (an output filter — the exit
 gate is unchanged).
 
+Pages are matched by their `name`, never by URL — base and PR legitimately run on
+different hosts and ports. A page whose name is on only one side is reported as
+added or removed and is never compared. Since a bare `urls` entry (or a
+positional `snapshot` URL) takes the URL as its name, snapshotting the two sides
+from different origins leaves nothing to join on: give the pages explicit names
+(config `urls` entries, or `A11Y_PAGES` as `[{ name, url }]`) so both runs agree.
+If no name matches at all, `diff` warns on stderr that it compared nothing — the
+report and exit code are unaffected.
+
 ```sh
 real-a11y diff base.json pr.json
 real-a11y diff base.json pr.json --explain

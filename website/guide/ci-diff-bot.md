@@ -130,7 +130,7 @@ Your snapshot *policy* — which pages, which rules, what to fail on — lives i
 }
 ```
 
-A `urls` entry is a bare URL string (its `name` — the diff's join key — defaults to the URL) or an object when you need a custom `name`, a `rootSelector` (narrows the audit to a subtree), or a `sourcePath` (for the [Security tab](#findings-in-the-security-tab-sarif)). See [Configuration](#configuration) for every key.
+A `urls` entry is a bare URL string (its `name` — the diff's join key — defaults to the URL) or an object when you need a custom `name`, a `rootSelector` (narrows the audit to a subtree), or a `sourcePath` (for the [Security tab](#findings-in-the-security-tab-sarif)). See [Configuration](#configuration) for every key. Give every entry an explicit `name` when base and PR are served from different hosts or ports — otherwise the names default to URLs that never match, and [`diff`](/packages/cli/commands#diff-base-json-pr-json) warns that it compared nothing.
 
 Run it locally whenever you want — the output is a single JSON artifact:
 

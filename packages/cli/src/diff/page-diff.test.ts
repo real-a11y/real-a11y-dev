@@ -8,7 +8,7 @@ import {
   type SnapshotPage,
 } from "../snapshot-artifact.js";
 
-import { diffArtifacts } from "./page-diff.js";
+import { diffArtifacts, noPagesMatched } from "./page-diff.js";
 
 const button: Finding = {
   rule: "no-unlabeled-interactive",
@@ -177,5 +177,30 @@ describe("diffArtifacts", () => {
     ]);
     const filtered = diffArtifacts(base, pr, { ignoreViewLine: [/^time "/] });
     expect(filtered.pages[0].viewHunks.tree).toEqual([]);
+  });
+});
+
+describe("noPagesMatched", () => {
+  it("is true when both sides have pages but share no name", () => {
+    const base = artifact([page("http://localhost:3000/", [])]);
+    const pr = artifact([page("http://localhost:4173/", [])]);
+    expect(noPagesMatched(base, pr)).toBe(true);
+    // The diff still runs — it just compares nothing.
+    const result = diffArtifacts(base, pr);
+    expect(result.pages.map((p) => p.status)).toEqual(["added", "removed"]);
+  });
+
+  it("is false when at least one name is on both sides", () => {
+    const base = artifact([page("Home", []), page("Gone", [])]);
+    const pr = artifact([page("Home", []), page("New", [])]);
+    expect(noPagesMatched(base, pr)).toBe(false);
+  });
+
+  it("is false when either side has no pages — nothing to match against", () => {
+    const empty = artifact([]);
+    const home = artifact([page("Home", [])]);
+    expect(noPagesMatched(empty, home)).toBe(false);
+    expect(noPagesMatched(home, empty)).toBe(false);
+    expect(noPagesMatched(empty, empty)).toBe(false);
   });
 });
