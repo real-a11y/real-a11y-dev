@@ -39,6 +39,14 @@ export interface SnapshotArtifact {
     rules: string[] | null;
     device: string | null;
     viewport: string | null;
+    /**
+     * Set when the artifact was captured with `--only` — it carries ONE axis
+     * and is a machine EXPORT, not a diffable snapshot. `diff` rejects partial
+     * artifacts (an empty-because-filtered axis is indistinguishable from
+     * empty-because-clean and would read as everything-new / all-removed).
+     * Additive: absent/null = full artifact.
+     */
+    only: "findings" | "views" | null;
   };
   pages: SnapshotPage[];
 }
@@ -49,6 +57,7 @@ export interface ArtifactMeta {
   rules?: string[];
   device?: string;
   viewport?: string;
+  only?: "findings" | "views";
 }
 
 export function buildArtifact(
@@ -62,9 +71,27 @@ export function buildArtifact(
       rules: meta.rules ?? null,
       device: meta.device ?? null,
       viewport: meta.viewport ?? null,
+      only: meta.only ?? null,
     },
     pages,
   };
+}
+
+/**
+ * Reject a partial (`--only`) artifact where a FULL one is required — the diff
+ * path. Reads defensively: hand-made artifacts may lack `meta` entirely.
+ */
+export function assertFullArtifact(
+  artifact: SnapshotArtifact,
+  label = "snapshot",
+): void {
+  const only = artifact.meta?.only;
+  if (only === "findings" || only === "views") {
+    throw new CliError(
+      `${label} is a partial snapshot (captured with --only ${only}) — diff needs full artifacts; an empty-because-filtered axis would read as everything-new or all-removed`,
+      "re-generate it without --only: real-a11y snapshot --output <file>",
+    );
+  }
 }
 
 export function serializeArtifact(artifact: SnapshotArtifact): string {

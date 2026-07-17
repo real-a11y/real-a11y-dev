@@ -4,6 +4,7 @@ import { CliError } from "./exit.js";
 import { fingerprintFindings } from "./fingerprint.js";
 import {
   ARTIFACT_SCHEMA_VERSION,
+  assertFullArtifact,
   buildArtifact,
   parseSnapshotArtifact,
   serializeArtifact,
@@ -81,5 +82,48 @@ describe("parseSnapshotArtifact", () => {
     expect(parsed.pages[0].tree).toBe("");
     expect(parsed.pages[0].findings).toEqual([]);
     expect(parsed.pages[0].status).toBe("ok");
+  });
+});
+
+describe("partial artifacts (--only)", () => {
+  const meta = { toolName: "@real-a11y-dev/cli", toolVersion: "0.0.1" };
+
+  it("buildArtifact records meta.only, defaulting to null (= full)", () => {
+    expect(buildArtifact([page()], meta).meta.only).toBeNull();
+    expect(buildArtifact([page()], { ...meta, only: "views" }).meta.only).toBe(
+      "views",
+    );
+  });
+
+  it("meta.only survives the serialize/parse round-trip", () => {
+    const partial = buildArtifact([page({ findings: [] })], {
+      ...meta,
+      only: "views",
+    });
+    const parsed = parseSnapshotArtifact(serializeArtifact(partial));
+    expect(parsed.meta.only).toBe("views");
+  });
+
+  it("assertFullArtifact passes a full artifact and rejects both partial axes", () => {
+    expect(() =>
+      assertFullArtifact(buildArtifact([page()], meta)),
+    ).not.toThrow();
+    for (const only of ["findings", "views"] as const) {
+      try {
+        assertFullArtifact(buildArtifact([page()], { ...meta, only }), "base");
+        expect.unreachable();
+      } catch (err) {
+        expect(err).toBeInstanceOf(CliError);
+        expect((err as CliError).message).toContain(`--only ${only}`);
+        expect((err as CliError).hint).toContain("without --only");
+      }
+    }
+  });
+
+  it("assertFullArtifact tolerates a hand-made artifact without meta", () => {
+    const bare = parseSnapshotArtifact(
+      JSON.stringify({ schemaVersion: 1, pages: [{ name: "Home" }] }),
+    );
+    expect(() => assertFullArtifact(bare)).not.toThrow();
   });
 });

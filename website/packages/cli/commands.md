@@ -532,15 +532,20 @@ line by passing the other value.
   `--format json` the filtered axis's arrays are omitted (`views`/`structural`
   vs `new`/`changed`/`removed`); the summary and per-page `structuralDiff`
   boolean always ship.
-- **snapshot** — shapes the **`--format md` report** only. The JSON artifact is
-  never filtered (it's the diffable input and always carries both axes), and
-  `sarif`/`junit`/`jsonl` are findings-shaped by construction — combining
-  `--only` with any non-`md` format fails fast with a hint.
+- **snapshot** — shapes the **`--format md` report**, or writes a **partial
+  `--format json` artifact**: the filtered axis is stripped and `meta.only`
+  records the capture mode. A partial artifact is a machine export (smaller
+  payload, custom tooling), **not a diffable snapshot** — `diff` rejects it
+  outright, because an empty-because-filtered axis is indistinguishable from
+  empty-because-clean and would read as everything-new or all-removed.
+  `sarif`/`junit`/`jsonl` are findings-shaped by construction and reject the
+  flag.
 
 ```sh
 real-a11y diff base.json pr.json --only findings
 real-a11y diff base.json pr.json --only views --explain
 real-a11y snapshot https://example.com --md --only views -o views.md
+real-a11y snapshot https://example.com --only views -o views.json   # partial artifact (meta.only: "views")
 ```
 
 ### `--ignore-view-line <regex>`

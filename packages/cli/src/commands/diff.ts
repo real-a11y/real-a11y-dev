@@ -28,7 +28,10 @@ import {
   renderDiffMarkdown,
   renderDiffPretty,
 } from "../render/diff.js";
-import { parseSnapshotArtifact } from "../snapshot-artifact.js";
+import {
+  assertFullArtifact,
+  parseSnapshotArtifact,
+} from "../snapshot-artifact.js";
 
 import { outputOf } from "./common.js";
 
@@ -105,6 +108,10 @@ export const diffCommand: CommandFn = async (positionals, flags) => {
 
   const base = readArtifact(positionals[0], "base");
   const pr = readArtifact(positionals[1], "PR");
+  // A snapshot captured with --only carries one axis — diffing it would read
+  // the missing axis as everything-new / all-removed. Refuse loudly instead.
+  assertFullArtifact(base, `base snapshot (${positionals[0]})`);
+  assertFullArtifact(pr, `PR snapshot (${positionals[1]})`);
 
   // --baseline: mark accepted findings on the PR side BEFORE diffing — the
   // suppressed flag rides the finding object into the entries, so a NEW

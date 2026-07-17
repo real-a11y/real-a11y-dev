@@ -94,19 +94,16 @@ export const snapshotCommand: CommandFn = async (positionals, flags) => {
     );
   }
 
-  // --only shapes the human md REPORT only. The JSON artifact is the diffable
-  // input and always carries both axes (a filtered artifact couldn't be
-  // diffed); sarif/junit/jsonl are findings-shaped by construction. The
-  // --fail-on gate runs on the full findings regardless of the filter.
+  // --only shapes the md report, or writes a PARTIAL json artifact (marked
+  // `meta.only` — a machine export `diff` refuses, so a filtered base can
+  // never silently poison a CI diff). sarif/junit/jsonl are findings-shaped
+  // by construction and reject the flag. The --fail-on gate always runs on
+  // the FULL findings, captured before any stripping.
   const only = parseOnly(flags.only);
-  if (only && effectiveFormat !== "md") {
+  if (only && effectiveFormat !== "md" && effectiveFormat !== "json") {
     throw new CliError(
-      `--only ${only} shapes the md report — --format ${effectiveFormat} ${
-        effectiveFormat === "json"
-          ? "is the diffable artifact and always carries both axes"
-          : "is findings-shaped by construction"
-      }`,
-      "add --format md (or --md) for a filtered human report",
+      `--only ${only} shapes the md report or the json export — --format ${effectiveFormat} is findings-shaped by construction`,
+      "use --format md for a filtered report, or --format json for a partial artifact",
     );
   }
   const output =
@@ -221,6 +218,27 @@ export const snapshotCommand: CommandFn = async (positionals, flags) => {
     ...(rules ? { rules } : {}),
     ...(openOptions.device ? { device: openOptions.device } : {}),
   });
+  // json + --only: a partial artifact — the filtered axis is stripped from
+  // the pages and `meta.only` marks it so `diff` can refuse it outright.
+  // Built AFTER the gate's findings are captured; never fed to the renderers
+  // below (md filters at render time; sarif/junit/jsonl reject --only).
+  const partial =
+    only && effectiveFormat === "json"
+      ? buildArtifact(
+          snapshotPages.map((p) =>
+            only === "views"
+              ? { ...p, findings: [] }
+              : { ...p, tree: "", outline: "", tabs: "" },
+          ),
+          {
+            toolName: "@real-a11y-dev/cli",
+            toolVersion: toolVersion(),
+            ...(rules ? { rules } : {}),
+            ...(openOptions.device ? { device: openOptions.device } : {}),
+            only,
+          },
+        )
+      : undefined;
   const content =
     effectiveFormat === "md"
       ? renderSnapshotMarkdown(artifact, only)
@@ -230,7 +248,7 @@ export const snapshotCommand: CommandFn = async (positionals, flags) => {
           ? renderJUnit(artifact)
           : effectiveFormat === "jsonl"
             ? renderJsonl(artifact)
-            : serializeArtifact(artifact);
+            : serializeArtifact(partial ?? artifact);
   writeReport(output, content);
 
   if (snapshotPages.some((p) => p.status === "error")) return EXIT.ERROR;

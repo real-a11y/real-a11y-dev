@@ -195,9 +195,12 @@ stays to explain it. Under `--only findings`, view-axis modifiers like
 `--explain` and `--max-lines` are simply inert (nothing left to modify).
 
 The same flag shapes `snapshot`'s **md report** (`--md --only views` exports a
-page set's tree/outline/tabs; `--md --only findings` a findings report). The
-JSON artifact is never filtered — it's the diffable input and always carries
-both axes.
+page set's tree/outline/tabs; `--md --only findings` a findings report) — or
+writes a **partial JSON artifact** (`--only views -o views.json`): the filtered
+axis is stripped and `meta.only` records the capture mode. Partial artifacts
+are machine exports, not diff inputs — `diff` rejects them outright, since an
+empty-because-filtered axis would otherwise read as everything-new or
+all-removed.
 
 Generated content that legitimately differs on every build (a "last updated"
 timestamp, a build hash) would otherwise read as drift on every page — drop
