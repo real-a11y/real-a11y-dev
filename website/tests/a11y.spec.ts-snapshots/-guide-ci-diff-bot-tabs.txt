@@ -66,41 +66,42 @@
 66. generic
 67. link "Security tab"
 68. link "Configuration"
-69. button "Copy Code"
-70. generic
-71. link "Combine with assertions"
-72. link "Next.js (dev server)"
-73. link "Vite / CRA SPA (preview server)"
-74. link "Static site (serve build output)"
-75. link "pnpm monorepo"
-76. table
+69. link "diff"
+70. button "Copy Code"
+71. generic
+72. link "Combine with assertions"
+73. link "Next.js (dev server)"
+74. link "Vite / CRA SPA (preview server)"
+75. link "Static site (serve build output)"
+76. link "pnpm monorepo"
 77. table
-78. link "the Security tab"
-79. link "CLI reference"
-80. button "Copy Code"
-81. generic
-82. link "Static site"
-83. button "Copy Code"
-84. generic
-85. button "Copy Code"
-86. generic
-87. button "Copy Code"
-88. generic
-89. button "Copy Code"
-90. generic
-91. button "Copy Code"
-92. generic
-93. button "Copy Code"
-94. generic
-95. button "Copy Code"
-96. generic
-97. table
-98. link "SARIF 2.1.0"
-99. button "Copy Code"
-100. generic
-101. link "@real-a11y-dev/testing"
-102. button "Copy Code"
-103. generic
-104. link "Edit this page on GitHub"
-105. link "Previous pagePeer Dependencies"
-106. link "Next pageAuthenticated Pages"
+78. table
+79. link "the Security tab"
+80. link "CLI reference"
+81. button "Copy Code"
+82. generic
+83. link "Static site"
+84. button "Copy Code"
+85. generic
+86. button "Copy Code"
+87. generic
+88. button "Copy Code"
+89. generic
+90. button "Copy Code"
+91. generic
+92. button "Copy Code"
+93. generic
+94. button "Copy Code"
+95. generic
+96. button "Copy Code"
+97. generic
+98. table
+99. link "SARIF 2.1.0"
+100. button "Copy Code"
+101. generic
+102. link "@real-a11y-dev/testing"
+103. button "Copy Code"
+104. generic
+105. link "Edit this page on GitHub"
+106. link "Previous pagePeer Dependencies"
+107. link "Next pageAuthenticated Pages"
