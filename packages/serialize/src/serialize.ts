@@ -1,4 +1,9 @@
-import type { ExtractionResult } from "@real-a11y-dev/core";
+import type {
+  ExtractionResult,
+  NodeChange,
+  SemanticNode,
+  TreeDiff,
+} from "@real-a11y-dev/core";
 import { linearize, getOutline, getTabSequence } from "@real-a11y-dev/core";
 
 import { extract } from "./extract.js";
@@ -31,6 +36,20 @@ function redactText(input: string, patterns: RegExp[] | undefined): string {
   let out = input;
   for (const p of patterns) out = out.replace(p, "[REDACTED]");
   return out;
+}
+
+/**
+ * The shared node label — `role "name" (level N)` — with no indentation and no
+ * focus marker. This is the vocabulary every serializer speaks; `serializeTree`
+ * wraps it with indent + focus, `serializeTreeDiff` prefixes it with `+`/`-`/`~`.
+ * Never contains a node id (ids are internal, test-order-dependent).
+ */
+function nodeLabel(node: SemanticNode, redact?: RegExp[]): string {
+  const name = redactText(node.a11y.name, redact);
+  const nameSuffix = name ? ` "${name}"` : "";
+  const level = node.a11y.properties?.level;
+  const levelSuffix = level ? ` (level ${level})` : "";
+  return `${node.a11y.role}${nameSuffix}${levelSuffix}`;
 }
 
 /** Resolve an input to a tree, extracting from the DOM only when needed. */
@@ -66,14 +85,8 @@ export function serializeTree(
   for (const node of visible) {
     if (!includeGeneric && node.a11y.role === "generic") continue;
     const indent = "  ".repeat(node.depth);
-    const name = redactText(node.a11y.name, redact);
-    const nameSuffix = name ? ` "${name}"` : "";
-    const level = node.a11y.properties?.level;
-    const levelSuffix = level ? ` (level ${level})` : "";
     const focusSuffix = node.id === focusedId ? " [focused]" : "";
-    lines.push(
-      `${indent}${node.a11y.role}${nameSuffix}${levelSuffix}${focusSuffix}`,
-    );
+    lines.push(`${indent}${nodeLabel(node, redact)}${focusSuffix}`);
   }
   return lines.join("\n");
 }
@@ -120,4 +133,116 @@ export function serializeTabSequence(
       return `${String(i + 1).padStart(2, "0")}. ${n.a11y.role}${name}${marker}`;
     })
     .join("\n");
+}
+
+// ─── tree diff ───────────────────────────────────────────────────────────────
+
+export interface TreeDiffSerializeOptions {
+  /** Redact matching substrings from names/values (like `SerializeOptions.redact`). */
+  redact?: RegExp[];
+  /**
+   * Focus at the two capture points, resolved by the CALLER (a captured tree
+   * can't answer "what was focused then" after the fact, and core `diffTrees`
+   * stays focus-agnostic). When the focused node differs, a trailing
+   * `focus: <before> → <after>` line is rendered; `(none)` marks a null side.
+   */
+  focusBefore?: SemanticNode | null;
+  focusAfter?: SemanticNode | null;
+}
+
+/** `n children` / `1 child` — child-LIST changes render as counts, never ids. */
+function childCount(n: number): string {
+  return `${n} ${n === 1 ? "child" : "children"}`;
+}
+
+/** Walk a dot-path (`a11y.states.expanded`) to its value; undefined if absent. */
+function resolvePath(node: SemanticNode, path: string): unknown {
+  return path
+    .split(".")
+    .reduce<unknown>(
+      (acc, key) =>
+        acc == null ? undefined : (acc as Record<string, unknown>)[key],
+      node,
+    );
+}
+
+/** A single field value, rendered: strings quoted (and redacted), `(unset)`
+ *  for a field present on only one side. */
+function formatValue(value: unknown, redact?: RegExp[]): string {
+  if (value === undefined) return "(unset)";
+  if (typeof value === "string") {
+    return JSON.stringify(redactText(value, redact));
+  }
+  return JSON.stringify(value);
+}
+
+/** `<path> <before> → <after>` for one changed field of a node. */
+function changeDetail(
+  change: NodeChange,
+  path: string,
+  redact?: RegExp[],
+): string {
+  if (path === "childIds") {
+    return `childIds ${childCount(change.before.childIds.length)} → ${childCount(
+      change.after.childIds.length,
+    )}`;
+  }
+  const before = formatValue(resolvePath(change.before, path), redact);
+  const after = formatValue(resolvePath(change.after, path), redact);
+  return `${path} ${before} → ${after}`;
+}
+
+/** `focus: <before> → <after>`, or null when focus didn't move. */
+function focusLine(
+  before: SemanticNode | null | undefined,
+  after: SemanticNode | null | undefined,
+  redact?: RegExp[],
+): string | null {
+  const beforeId = before?.id ?? null;
+  const afterId = after?.id ?? null;
+  if (beforeId === afterId) return null; // both absent, or the same node
+  const from = before ? nodeLabel(before, redact) : "(none)";
+  const to = after ? nodeLabel(after, redact) : "(none)";
+  return `focus: ${from} → ${to}`;
+}
+
+/**
+ * Serialize a {@link TreeDiff} (from core `diffTrees`) as a committable,
+ * snapshot-stable change list — the interaction-effect counterpart to
+ * `serializeTree`. Assert what one interaction changed in a single line each:
+ *
+ * ```
+ * + option "Spain"
+ * - listitem "Old entry"
+ * ~ combobox "Country": a11y.states.expanded false → true
+ * ~ main "Results": childIds 3 children → 5 children
+ * focus: button "Country" → listbox "Countries"
+ * ```
+ *
+ * One line per added/removed node, one per (node, changed-field) pair, then an
+ * optional focus transition (see {@link TreeDiffSerializeOptions}). Nodes are
+ * labeled `role "name" (level N)` — never a node id, so the output is stable
+ * across runs and safe to commit. Section order and within-section order follow
+ * the diff's own (document) order; an empty diff renders `(no changes)`.
+ */
+export function serializeTreeDiff(
+  diff: TreeDiff,
+  options: TreeDiffSerializeOptions = {},
+): string {
+  const { redact, focusBefore, focusAfter } = options;
+  const lines: string[] = [];
+
+  for (const node of diff.added) lines.push(`+ ${nodeLabel(node, redact)}`);
+  for (const node of diff.removed) lines.push(`- ${nodeLabel(node, redact)}`);
+  for (const change of diff.changed) {
+    const label = nodeLabel(change.after, redact);
+    for (const path of change.changes) {
+      lines.push(`~ ${label}: ${changeDetail(change, path, redact)}`);
+    }
+  }
+
+  const focus = focusLine(focusBefore, focusAfter, redact);
+  if (focus) lines.push(focus);
+
+  return lines.length ? lines.join("\n") : "(no changes)";
 }
