@@ -49,12 +49,13 @@ describe("renderSnapshotMarkdown", () => {
     expect(out).not.toContain("### Tab order");
   });
 
-  it("--views-only drops the finding bullets but keeps the issue count (explains --fail-on)", () => {
+  it("--only views is a pure structure export — no finding bullets, no issue count", () => {
     const out = renderSnapshotMarkdown(artifact, "views");
-    expect(out).toContain("1 issue(s) — 1 error(s), 0 warning(s)");
+    expect(out).not.toContain("issue(s)");
     expect(out).not.toContain("- [error]");
     expect(out).toContain("### Semantic tree");
     expect(out).toContain('button "Save"');
+    // (A --fail-on exit is explained on stderr by the snapshot command.)
   });
 
   it("errored pages render their failure note under either filter", () => {

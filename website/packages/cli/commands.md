@@ -519,8 +519,10 @@ default of `explain: true` never conflicts with an explicit filter.
 Report just one axis: `--only findings` (the accessibility problems) or
 `--only views` (the tree/outline/tab-order structure). An **output filter** —
 the exit gate is computed from the full findings either way, so a filtered CI
-run can exit non-zero while showing only structure; the always-present findings
-summary (diff) / per-page issue count (snapshot md) is what explains it.
+run can exit non-zero while showing only structure. What explains a gating
+exit: on `diff`, the always-present one-line findings summary; on `snapshot`,
+a stderr note (`real-a11y: gate: …`) — the views-only report itself stays a
+pure structure export with no findings content at all.
 
 An enum on purpose: contradictory states are unrepresentable, and a config
 default (`"defaults": { "only": "findings" }`) is overridable from the command

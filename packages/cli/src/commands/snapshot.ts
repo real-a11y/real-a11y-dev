@@ -255,5 +255,16 @@ export const snapshotCommand: CommandFn = async (positionals, flags) => {
   const active = snapshotPages
     .flatMap((p) => p.findings)
     .filter((f) => !f.suppressed);
-  return exceedsThreshold(active, failOn) ? EXIT.FINDINGS : EXIT.OK;
+  const gateFired = exceedsThreshold(active, failOn);
+  // A views-only report carries no findings content, so a gating exit would
+  // be inexplicable from the output alone — say why on stderr, where CI logs
+  // show it next to the exit code. (The gate always runs on the FULL
+  // findings; --only never changes what gates, only what's reported.)
+  if (gateFired && only === "views") {
+    const errors = active.filter((f) => f.severity === "error").length;
+    process.stderr.write(
+      `real-a11y: gate: ${active.length} unsuppressed finding(s) — ${errors} error(s) — at/above --fail-on ${failOn}; the report is views-only, drop --only views to see them\n`,
+    );
+  }
+  return gateFired ? EXIT.FINDINGS : EXIT.OK;
 };

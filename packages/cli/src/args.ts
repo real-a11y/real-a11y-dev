@@ -304,9 +304,10 @@ Flags:
                          sarif needs --config (results anchor to file paths;
                          GitHub: upload with codeql-action/upload-sarif@v4)
   --md                   Shorthand for --format md
-  --only <axis>          findings | views — shape the md report to one axis
-                         (the issue count stays; --fail-on still gates on the
-                         full findings; the JSON artifact is never filtered)
+  --only <axis>          findings | views — one-axis md report, or a PARTIAL
+                         json artifact (marked meta.only; diff refuses it).
+                         --fail-on still gates on the full findings; a gating
+                         views-only run explains itself on stderr
   --rules <ids>          Comma-separated subset (overrides config)
   --baseline <file>      Suppress findings this baseline accepts (kept in the
                          report, out of the --fail-on count and sarif)

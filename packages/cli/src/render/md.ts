@@ -23,15 +23,16 @@ function pageSection(page: SnapshotPage, only?: SnapshotSection): string {
     parts.push(`> Snapshot failed: ${page.error ?? "unknown error"}`, "");
     return parts.join("\n");
   }
-  // The one-line issue count always renders — under --views-only it's what
-  // explains a --fail-on exit code the hidden bullets would otherwise justify.
-  const errors = page.findings.filter((f) => f.severity === "error").length;
-  const warnings = page.findings.length - errors;
-  parts.push(
-    `${page.findings.length} issue(s) — ${errors} error(s), ${warnings} warning(s)`,
-    "",
-  );
+  // `--only views` is an EXPORT of the structure — no findings content at
+  // all, not even the count (a --fail-on exit is explained on stderr by the
+  // snapshot command instead, where CI logs show it next to the exit code).
   if (only !== "views") {
+    const errors = page.findings.filter((f) => f.severity === "error").length;
+    const warnings = page.findings.length - errors;
+    parts.push(
+      `${page.findings.length} issue(s) — ${errors} error(s), ${warnings} warning(s)`,
+      "",
+    );
     for (const f of page.findings) {
       const where = f.locator ? ` \`${f.locator}\`` : "";
       parts.push(`- [${f.severity}] \`${f.rule}\`: ${f.message}${where}`);
