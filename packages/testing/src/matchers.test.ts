@@ -107,8 +107,8 @@ describe("a11ySnapshot serializer", () => {
     const root = mount(`<main><h1>Hi</h1><button>Go</button></main>`);
     expect(a11ySnapshot(root)).toMatchInlineSnapshot(`
       main
-          heading "Hi" (level 1)
-          button "Go"
+        heading "Hi" (level 1)
+        button "Go"
     `);
   });
 

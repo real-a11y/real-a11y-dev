@@ -58,6 +58,41 @@ function toTree(input: SerializeInput, mode: "a11y" | "dom" = "a11y") {
 }
 
 /**
+ * Indent depth for each node we print, counted as its number of *printed*
+ * ancestors.
+ *
+ * `node.depth` is the node's depth in the extracted tree, which is the wrong
+ * ruler here: this serializer hides nodes (generics, and anything `linearize`
+ * filters), and a hidden node's slot has to close up behind it. Printing
+ * `node.depth` instead left children indented under a parent that isn't on the
+ * page — a `<div aria-label="Decor">` around a button rendered the button as a
+ * child of whatever preceded it. Counting printed ancestors is also why this
+ * walks `parentId` rather than comparing depths: two nodes at the same depth
+ * can have different parents, only one of which survived.
+ */
+function printedDepths(
+  tree: ExtractionResult,
+  printed: SemanticNode[],
+): Map<string, number> {
+  const printedIds = new Set(printed.map((n) => n.id));
+  const depths = new Map<string, number>();
+
+  const depthOf = (id: string): number => {
+    const cached = depths.get(id);
+    if (cached !== undefined) return cached;
+    const parentId = tree.nodes.get(id)?.parentId;
+    const depth = parentId
+      ? depthOf(parentId) + (printedIds.has(parentId) ? 1 : 0)
+      : 0;
+    depths.set(id, depth);
+    return depth;
+  };
+
+  for (const node of printed) depthOf(node.id);
+  return depths;
+}
+
+/**
  * Serialize the full semantic tree (or a DOM root) as a deterministic indented
  * string of roles + accessible names.
  *
@@ -80,11 +115,14 @@ export function serializeTree(
   const tree = toTree(input, mode);
   const focusedId = markFocus ? tree.focusedId : undefined;
 
-  const visible = linearize(tree);
+  const printed = linearize(tree).filter(
+    (node) => includeGeneric || node.a11y.role !== "generic",
+  );
+  const depths = printedDepths(tree, printed);
+
   const lines: string[] = [];
-  for (const node of visible) {
-    if (!includeGeneric && node.a11y.role === "generic") continue;
-    const indent = "  ".repeat(node.depth);
+  for (const node of printed) {
+    const indent = "  ".repeat(depths.get(node.id) ?? 0);
     const focusSuffix = node.id === focusedId ? " [focused]" : "";
     lines.push(`${indent}${nodeLabel(node, redact)}${focusSuffix}`);
   }

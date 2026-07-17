@@ -26,6 +26,49 @@ describe("serializeTree", () => {
     );
   });
 
+  it("starts the outermost kept node at indent 0", () => {
+    // The extractor keeps the root even when it's generic (`<body>`, or a
+    // mount wrapper). Dropping it at print time must not leave every line
+    // indented by the level it occupied.
+    document.body.innerHTML = `<main><h1>Sign in</h1></main>`;
+    expect(serializeTree(document.body)).toBe(
+      ["main", '  heading "Sign in" (level 1)'].join("\n"),
+    );
+  });
+
+  it("re-parents children of a dropped NAMED generic", () => {
+    // A generic with an accessible name survives extraction, so the serializer
+    // is what drops it — and its children must not keep the indent level of a
+    // parent that is no longer printed. Before this was fixed, `button "Save"`
+    // rendered one level deeper than `heading`, i.e. as the heading's child.
+    document.body.innerHTML = `
+      <main>
+        <h1>Dash</h1>
+        <div aria-label="Decor"><button>Save</button></div>
+      </main>`;
+    expect(serializeTree(document.body)).toBe(
+      ["main", '  heading "Dash" (level 1)', '  button "Save"'].join("\n"),
+    );
+  });
+
+  it("re-parents across a dropped generic in dom mode", () => {
+    // `dom` mode does no extraction-time flattening, so every wrapper is a
+    // generic the serializer drops — the indent must close up behind each one.
+    document.body.innerHTML = `<main><div><span><button>Save</button></span></div></main>`;
+    expect(serializeTree(document.body, { mode: "dom" })).toBe(
+      ["main", '  button "Save"'].join("\n"),
+    );
+  });
+
+  it("keeps true nesting intact when generics are included", () => {
+    document.body.innerHTML = `<main><div aria-label="Decor"><button>Save</button></div></main>`;
+    expect(serializeTree(document.body, { includeGeneric: true })).toBe(
+      ["generic", "  main", '    generic "Decor"', '      button "Save"'].join(
+        "\n",
+      ),
+    );
+  });
+
   it("redacts matching substrings in accessible names", () => {
     document.body.innerHTML = `<button aria-label="Saved 2 minutes ago">x</button>`;
     const out = serializeTree(document.body, {
