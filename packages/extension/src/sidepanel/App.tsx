@@ -15,15 +15,15 @@ import {
   buildControlsIndex,
 } from "@real-a11y-dev/core";
 import {
-  serializeTree,
-  serializeOutline,
-  serializeTabSequence,
-} from "@real-a11y-dev/serialize";
-import {
   useTreeKeyboard,
   useInputModality,
 } from "@real-a11y-dev/semantic-navigator-ui";
 import { useSearch } from "@real-a11y-dev/semantic-navigator-ui";
+import {
+  serializeTree,
+  serializeOutline,
+  serializeTabSequence,
+} from "@real-a11y-dev/serialize";
 import {
   useState,
   useEffect,

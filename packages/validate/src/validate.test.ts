@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest";
 
-import { validateNode, validateTree, type ValidatedNode } from "./validate.js";
 import {
   isValidRole,
   isPresentationalChildren,
   requiredOwnedRoles,
   suggestedChildRoles,
 } from "./aria-schema.js";
+import { validateNode, validateTree, type ValidatedNode } from "./validate.js";
 
 interface NodeSpec {
   role: string;

@@ -12,6 +12,7 @@ import {
   type DiffEntry,
   type DiffSummary,
 } from "./findings-diff.js";
+import { unifiedDiff, type ViewHunks } from "./unified-diff.js";
 import {
   diffViews,
   stripFocusMarker,
@@ -19,7 +20,6 @@ import {
   type ViewDiff,
 } from "./views-diff.js";
 import { summarizeViews, type ViewChange } from "./views-summary.js";
-import { unifiedDiff, type ViewHunks } from "./unified-diff.js";
 
 export type PageDiffStatus =
   | "ok"
