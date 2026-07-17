@@ -141,6 +141,117 @@ describe("renderDiffPretty", () => {
   });
 });
 
+describe("only-filters (--findings-only / --views-only)", () => {
+  // One page with BOTH a new finding and a structural change — each filter
+  // must isolate its half.
+  const both = diffArtifacts(
+    buildArtifact([page("Home", [], { tree: "main" })], {
+      toolName: "cli",
+      toolVersion: "0",
+    }),
+    buildArtifact([page("Home", [button], { tree: 'main\n  link "Skip"' })], {
+      toolName: "cli",
+      toolVersion: "0",
+    }),
+  );
+
+  it("pretty --findings-only: findings, no unified diff, no --explain hint", () => {
+    const out = renderDiffPretty(both, { color: false, only: "findings" });
+    expect(out).toContain("+ new [error] no-unlabeled-interactive");
+    expect(out).not.toContain("@@"); // no hunks
+    expect(out).not.toContain("Run with --explain");
+    expect(out).toContain("findings: 1 new"); // summary always
+  });
+
+  it("pretty --views-only: unified diff, no finding entries, summary kept (explains the exit code)", () => {
+    const out = renderDiffPretty(both, { color: false, only: "views" });
+    expect(out).not.toContain("+ new [error]");
+    expect(out).toContain("@@");
+    expect(out).toContain('+  link "Skip"');
+    // The one-line findings summary stays — a --views-only CI run can exit 1
+    // and the output must say why.
+    expect(out).toContain("findings: 1 new · 0 changed · 0 fixed");
+  });
+
+  it("pretty filters page RELEVANCE too: a views-only-changed page vanishes under --findings-only", () => {
+    const out = renderDiffPretty(structural, {
+      color: false,
+      only: "findings",
+    });
+    expect(out).not.toContain("== Docs"); // page had no finding changes
+  });
+
+  it("--explain is inert under --findings-only (like --max-lines: nothing left to modify)", () => {
+    // The filter removes the whole structure axis, so its modifiers have
+    // nothing to apply to — no statements, no hint, and no error. This is
+    // what lets a config `defaults: { explain: true }` coexist with an
+    // explicit --findings-only.
+    const out = renderDiffPretty(both, {
+      color: false,
+      only: "findings",
+      explain: true,
+    });
+    expect(out).toContain("+ new [error]");
+    expect(out).not.toContain("structure changed (advisory):");
+    expect(out).not.toContain("Run with --explain");
+  });
+
+  it("json --findings-only omits views/structural, keeps new + structuralDiff + summary", () => {
+    const parsed = JSON.parse(renderDiffJson(both, "findings")) as {
+      summary: { new: number };
+      pages: Record<string, unknown>[];
+    };
+    expect(parsed.summary.new).toBe(1);
+    expect(parsed.pages[0]).toHaveProperty("new");
+    expect(parsed.pages[0]).not.toHaveProperty("views");
+    expect(parsed.pages[0]).not.toHaveProperty("structural");
+    expect(parsed.pages[0]).toHaveProperty("structuralDiff", true);
+  });
+
+  it("json --views-only omits the finding arrays, keeps views/structural + summary", () => {
+    const parsed = JSON.parse(renderDiffJson(both, "views")) as {
+      summary: { new: number };
+      pages: Record<string, unknown>[];
+    };
+    expect(parsed.summary.new).toBe(1); // headline stays
+    expect(parsed.pages[0]).not.toHaveProperty("new");
+    expect(parsed.pages[0]).not.toHaveProperty("changed");
+    expect(parsed.pages[0]).not.toHaveProperty("removed");
+    expect(parsed.pages[0]).toHaveProperty("views");
+    expect(parsed.pages[0]).toHaveProperty("structural");
+  });
+
+  it("md --findings-only: bullets without the diff fence or structure hint; both header axes stay", () => {
+    const out = renderDiffMarkdown(both, { only: "findings" });
+    expect(out).toContain("**Findings** (gate CI): 1 new");
+    expect(out).toContain("**Structure** (advisory):"); // headline always
+    expect(out).toMatch(/\*\*new\*\* `no-unlabeled-interactive`/);
+    expect(out).not.toContain("```diff");
+    expect(out).not.toContain("Run with `--explain`");
+  });
+
+  it("md --views-only: the diff fence without finding bullets", () => {
+    const out = renderDiffMarkdown(both, { only: "views" });
+    expect(out).toContain("```diff");
+    expect(out).not.toMatch(/\*\*new\*\* `/);
+    expect(out).toContain("**Findings** (gate CI): 1 new"); // headline always
+  });
+
+  it("incomparable pages show under either filter (an errored side matters to both axes)", () => {
+    const broken = diffArtifacts(
+      buildArtifact([page("Home", [])], { toolName: "c", toolVersion: "0" }),
+      buildArtifact([{ ...page("Home", []), status: "error", error: "boom" }], {
+        toolName: "c",
+        toolVersion: "0",
+      }),
+    );
+    for (const only of ["findings", "views"] as const) {
+      const out = renderDiffPretty(broken, { color: false, only });
+      expect(out).toContain("incomparable");
+    }
+  });
+});
+
 describe("renderDiffJson", () => {
   it("emits a stable envelope with new/changed/removed per page", () => {
     const parsed = JSON.parse(renderDiffJson(result)) as {

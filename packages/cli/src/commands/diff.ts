@@ -11,7 +11,12 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { parseFailOn, parseFormat, type CommandFn } from "../args.js";
+import {
+  parseFailOn,
+  parseFormat,
+  parseOnly,
+  type CommandFn,
+} from "../args.js";
 import { applyBaseline, loadBaseline } from "../baseline.js";
 import { diffArtifacts } from "../diff/page-diff.js";
 import { CliError, EXIT, exceedsThreshold } from "../exit.js";
@@ -23,7 +28,10 @@ import {
   renderDiffMarkdown,
   renderDiffPretty,
 } from "../render/diff.js";
-import { parseSnapshotArtifact } from "../snapshot-artifact.js";
+import {
+  assertFullArtifact,
+  parseSnapshotArtifact,
+} from "../snapshot-artifact.js";
 
 import { outputOf } from "./common.js";
 
@@ -90,8 +98,20 @@ export const diffCommand: CommandFn = async (positionals, flags) => {
   const maxLines = parsePositive("--max-lines", flags["max-lines"]);
   const maxPages = parsePositive("--max-pages", flags["max-pages"]);
 
+  // --only filters what's REPORTED, never what gates: the exit code is
+  // computed from the full result either way, so `--only views` in a CI job
+  // can't silently disable enforcement. Under `--only findings` the view-axis
+  // modifiers (--explain, --max-lines, --ignore-view-line) have nothing left
+  // to modify and are uniformly inert — deliberate, so a config default like
+  // `defaults: { explain: true }` can't wedge the command.
+  const only = parseOnly(flags.only);
+
   const base = readArtifact(positionals[0], "base");
   const pr = readArtifact(positionals[1], "PR");
+  // A snapshot captured with --only carries one axis — diffing it would read
+  // the missing axis as everything-new / all-removed. Refuse loudly instead.
+  assertFullArtifact(base, `base snapshot (${positionals[0]})`);
+  assertFullArtifact(pr, `PR snapshot (${positionals[1]})`);
 
   // --baseline: mark accepted findings on the PR side BEFORE diffing — the
   // suppressed flag rides the finding object into the entries, so a NEW
@@ -115,14 +135,15 @@ export const diffCommand: CommandFn = async (positionals, flags) => {
   const explain = flags.explain === true;
   const content =
     format === "json"
-      ? renderDiffJson(result)
+      ? renderDiffJson(result, only)
       : format === "md"
-        ? renderDiffMarkdown(result, { explain, maxLines, maxPages })
+        ? renderDiffMarkdown(result, { explain, maxLines, maxPages, only })
         : renderDiffPretty(result, {
             color: output === undefined && colorEnabled(),
             explain,
             maxLines,
             maxPages,
+            only,
           });
   writeReport(output, content);
 

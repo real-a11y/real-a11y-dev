@@ -18,6 +18,7 @@ import { resolve } from "node:path";
 import {
   parseFailOn,
   parseFormat,
+  parseOnly,
   parseOpenOptions,
   parseRules,
   type CommandFn,
@@ -90,6 +91,19 @@ export const snapshotCommand: CommandFn = async (positionals, flags) => {
     throw new CliError(
       "--format sarif needs a config file — SARIF results anchor to repo file paths, and the config (or its pages' sourcePath) is that anchor",
       "run with --config a11y.config.json instead of A11Y_PAGES",
+    );
+  }
+
+  // --only shapes the md report, or writes a PARTIAL json artifact (marked
+  // `meta.only` — a machine export `diff` refuses, so a filtered base can
+  // never silently poison a CI diff). sarif/junit/jsonl are findings-shaped
+  // by construction and reject the flag. The --fail-on gate always runs on
+  // the FULL findings, captured before any stripping.
+  const only = parseOnly(flags.only);
+  if (only && effectiveFormat !== "md" && effectiveFormat !== "json") {
+    throw new CliError(
+      `--only ${only} shapes the md report or the json export — --format ${effectiveFormat} is findings-shaped by construction`,
+      "use --format md for a filtered report, or --format json for a partial artifact",
     );
   }
   const output =
@@ -204,21 +218,53 @@ export const snapshotCommand: CommandFn = async (positionals, flags) => {
     ...(rules ? { rules } : {}),
     ...(openOptions.device ? { device: openOptions.device } : {}),
   });
+  // json + --only: a partial artifact — the filtered axis is stripped from
+  // the pages and `meta.only` marks it so `diff` can refuse it outright.
+  // Built AFTER the gate's findings are captured; never fed to the renderers
+  // below (md filters at render time; sarif/junit/jsonl reject --only).
+  const partial =
+    only && effectiveFormat === "json"
+      ? buildArtifact(
+          snapshotPages.map((p) =>
+            only === "views"
+              ? { ...p, findings: [] }
+              : { ...p, tree: "", outline: "", tabs: "" },
+          ),
+          {
+            toolName: "@real-a11y-dev/cli",
+            toolVersion: toolVersion(),
+            ...(rules ? { rules } : {}),
+            ...(openOptions.device ? { device: openOptions.device } : {}),
+            only,
+          },
+        )
+      : undefined;
   const content =
     effectiveFormat === "md"
-      ? renderSnapshotMarkdown(artifact)
+      ? renderSnapshotMarkdown(artifact, only)
       : effectiveFormat === "sarif"
         ? renderSarif(artifact, { configPath: configPath as string })
         : effectiveFormat === "junit"
           ? renderJUnit(artifact)
           : effectiveFormat === "jsonl"
             ? renderJsonl(artifact)
-            : serializeArtifact(artifact);
+            : serializeArtifact(partial ?? artifact);
   writeReport(output, content);
 
   if (snapshotPages.some((p) => p.status === "error")) return EXIT.ERROR;
   const active = snapshotPages
     .flatMap((p) => p.findings)
     .filter((f) => !f.suppressed);
-  return exceedsThreshold(active, failOn) ? EXIT.FINDINGS : EXIT.OK;
+  const gateFired = exceedsThreshold(active, failOn);
+  // A views-only report carries no findings content, so a gating exit would
+  // be inexplicable from the output alone — say why on stderr, where CI logs
+  // show it next to the exit code. (The gate always runs on the FULL
+  // findings; --only never changes what gates, only what's reported.)
+  if (gateFired && only === "views") {
+    const errors = active.filter((f) => f.severity === "error").length;
+    process.stderr.write(
+      `real-a11y: gate: ${active.length} unsuppressed finding(s) — ${errors} error(s) — at/above --fail-on ${failOn}; the report is views-only, drop --only views to see them\n`,
+    );
+  }
+  return gateFired ? EXIT.FINDINGS : EXIT.OK;
 };

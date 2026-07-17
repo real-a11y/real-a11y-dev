@@ -145,6 +145,7 @@ writes the artifact unless you ask it to gate.
 ```sh
 real-a11y snapshot https://example.com -o base.json
 real-a11y snapshot --config a11y.config.json --md -o report.md
+real-a11y snapshot https://example.com --md --only views -o views.md
 real-a11y snapshot --config a11y.config.json --update-baseline
 real-a11y snapshot --config a11y.config.json --baseline .a11y-baseline.json --fail-on error
 ```
@@ -153,7 +154,8 @@ real-a11y snapshot --config a11y.config.json --baseline .a11y-baseline.json --fa
 [`--rules`](#rules-ids) · [`--fail-on`](#fail-on-level) (default `never`) ·
 [`--include-generic`](#include-generic) ·
 [`-f, --format`](#f-format-fmt) (`json | md | sarif | junit | jsonl`) ·
-[`--md`](#md) · [`--baseline`](#baseline-file) ·
+[`--md`](#md) · [`--only`](#only-axis) (`findings | views`, md-report-only) ·
+[`--baseline`](#baseline-file) ·
 [`--update-baseline`](#update-baseline) · [`-o, --output`](#o-output-file) ·
 [`-q, --quiet`](#q-quiet) · [`--verbose`](#verbose) · [`-h, --help`](#h-help).
 
@@ -166,16 +168,20 @@ on NEW findings at or above [`--fail-on`](#fail-on-level); fixes and drift never
 fail the build.
 
 Default output is neutral — findings plus a real unified diff of the structure.
-Add [`--explain`](#explain) for a plain-language summary.
+Add [`--explain`](#explain) for a plain-language summary, or report a single
+axis with [`--only findings | views`](#only-axis) (an output filter — the exit
+gate is unchanged).
 
 ```sh
 real-a11y diff base.json pr.json
 real-a11y diff base.json pr.json --explain
+real-a11y diff base.json pr.json --only findings
 real-a11y diff base.json pr.json --format md --explain --max-pages 5 --max-lines 20 -o comment.md
 ```
 
 **Flags:** [Config](#config) · [`--fail-on`](#fail-on-level) (default `error`) ·
-[`--explain`](#explain) · [`--max-lines`](#max-lines-n) ·
+[`--explain`](#explain) · [`--only`](#only-axis) (`findings | views`) ·
+[`--max-lines`](#max-lines-n) ·
 [`--max-pages`](#max-pages-n) · [`--baseline`](#baseline-file) ·
 [`--ignore-view-line`](#ignore-view-line-regex) ·
 [`-f, --format`](#f-format-fmt) (`pretty | json | md`) ·
@@ -500,6 +506,49 @@ focused at capture time differs between the two snapshots (a moved autofocus
 target, or focus that appeared or vanished). Because focus isn't structure, it's
 excluded from the structural diff — a page where _only_ focus moved shows no
 add/remove churn, just this one statement.
+
+Under [`--only findings`](#only-axis) the statements are inert — the filter
+removes the structure axis they summarize (same as `--max-lines`), so a config
+default of `explain: true` never conflicts with an explicit filter.
+
+### `--only <axis>`
+
+- **Type:** `findings | views` · **Default:** the full two-axis report ·
+  **Commands:** diff, snapshot
+
+Report just one axis: `--only findings` (the accessibility problems) or
+`--only views` (the tree/outline/tab-order structure). An **output filter** —
+the exit gate is computed from the full findings either way, so a filtered CI
+run can exit non-zero while showing only structure. What explains a gating
+exit: on `diff`, the always-present one-line findings summary; on `snapshot`,
+a stderr note (`real-a11y: gate: …`) — the views-only report itself stays a
+pure structure export with no findings content at all.
+
+An enum on purpose: contradictory states are unrepresentable, and a config
+default (`"defaults": { "only": "findings" }`) is overridable from the command
+line by passing the other value.
+
+- **diff** — `--only findings` hides the view hunks; view-axis modifiers
+  (`--explain`, `--max-lines`, `--ignore-view-line`) become inert. `--only
+  views` hides per-finding entries; composes with [`--explain`](#explain). In
+  `--format json` the filtered axis's arrays are omitted (`views`/`structural`
+  vs `new`/`changed`/`removed`); the summary and per-page `structuralDiff`
+  boolean always ship.
+- **snapshot** — shapes the **`--format md` report**, or writes a **partial
+  `--format json` artifact**: the filtered axis is stripped and `meta.only`
+  records the capture mode. A partial artifact is a machine export (smaller
+  payload, custom tooling), **not a diffable snapshot** — `diff` rejects it
+  outright, because an empty-because-filtered axis is indistinguishable from
+  empty-because-clean and would read as everything-new or all-removed.
+  `sarif`/`junit`/`jsonl` are findings-shaped by construction and reject the
+  flag.
+
+```sh
+real-a11y diff base.json pr.json --only findings
+real-a11y diff base.json pr.json --only views --explain
+real-a11y snapshot https://example.com --md --only views -o views.md
+real-a11y snapshot https://example.com --only views -o views.json   # partial artifact (meta.only: "views")
+```
 
 ### `--ignore-view-line <regex>`
 

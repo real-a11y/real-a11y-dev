@@ -329,6 +329,12 @@ If your pages render generated content that differs on every build (a "last
 updated" timestamp, a build hash), add `--ignore-view-line '<regex>'` to the
 diff invocation so it doesn't read as drift on every page.
 
+Want a leaner comment? `--only findings` posts just the findings delta and
+`--only views` just the structural diff. It's an output filter — the exit
+gate still runs on the full result, so a gating `--only views` step can fail
+the build on a new finding while the comment shows only structure (the
+one-line findings summary explains why).
+
 ```yaml
   diff-and-comment:
     name: Diff & comment

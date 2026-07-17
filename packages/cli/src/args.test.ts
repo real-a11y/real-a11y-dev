@@ -4,6 +4,7 @@ import {
   parseFailOn,
   parseFormat,
   parseListCategory,
+  parseOnly,
   parseOpenOptions,
   parseRules,
 } from "./args.js";
@@ -38,6 +39,24 @@ describe("parseFailOn / parseFormat", () => {
     expect(() => parseFormat("sarif", ["pretty", "json"])).toThrow(
       /pretty \| json/,
     );
+  });
+});
+
+describe("parseOnly", () => {
+  it("returns undefined (= full report) when omitted", () => {
+    expect(parseOnly(undefined)).toBeUndefined();
+  });
+
+  it("accepts the two axes", () => {
+    expect(parseOnly("findings")).toBe("findings");
+    expect(parseOnly("views")).toBe("views");
+  });
+
+  it("rejects anything else, naming the valid values", () => {
+    expect(() => parseOnly("a11y-trees")).toThrow(CliError);
+    expect(() => parseOnly("a11y-trees")).toThrow(/findings \| views/);
+    // A bare `--only` (boolean true from parseArgs) is not a valid axis.
+    expect(() => parseOnly(true)).toThrow(CliError);
   });
 });
 
