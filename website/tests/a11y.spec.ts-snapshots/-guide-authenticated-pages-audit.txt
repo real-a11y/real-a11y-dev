@@ -1,228 +1,228 @@
-  link "Skip to content"
-  banner
-    link "Real A11y"
-    button "Search"
-    navigation "Main Navigation"
-      link "Guide"
-      link "Recipes"
-      link "Packages"
-      button "v0.1 · Beta"
-    switch "Switch to dark theme"
-    link "github"
-  complementary
-    navigation "Sidebar Navigation"
-      button "Introduction"
-        heading "Introduction" (level 2)
-      link "Getting Started"
-        paragraph "Getting Started"
-      link "Core Concepts"
-        paragraph "Core Concepts"
-      link "Accessibility Snapshots"
-        paragraph "Accessibility Snapshots"
-      link "Snapshots vs. Other Tools"
-        paragraph "Snapshots vs. Other Tools"
-      link "Why Real A11y?"
-        paragraph "Why Real A11y?"
-      button "Reading the Tree"
-        heading "Reading the Tree" (level 2)
-      link "Understanding the Views"
-        paragraph "Understanding the Views"
-      link "DOM View"
-        paragraph "DOM View"
-      link "A11y View"
-        paragraph "A11y View"
-      link "Headings View"
-        paragraph "Headings View"
-      link "TAB View"
-        paragraph "TAB View"
-      link "Panel features"
-        paragraph "Panel features"
-      button "Chrome Extension"
-        heading "Chrome Extension" (level 2)
-      link "Overview & Install"
-        paragraph "Overview & Install"
-      button "Packages"
-        heading "Packages" (level 2)
-      link "@real-a11y-dev/core"
-        paragraph "@real-a11y-dev/core"
-      link "@real-a11y-dev/inspector"
-        paragraph "@real-a11y-dev/inspector"
-        link "@real-a11y-dev/testing"
-          heading "@real-a11y-dev/testing" (level 3)
-        button "toggle section"
-      link "@real-a11y-dev/react"
-        paragraph "@real-a11y-dev/react"
-      link "@real-a11y-dev/storybook-addon"
-        paragraph "@real-a11y-dev/storybook-addon"
-        link "@real-a11y-dev/mcp"
-          heading "@real-a11y-dev/mcp" (level 3)
-        button "toggle section"
-        link "@real-a11y-dev/cli"
-          heading "@real-a11y-dev/cli" (level 3)
-        button "toggle section"
-      button "Recipes"
-        heading "Recipes" (level 2)
-      link "Next.js (App Router + React 19)"
-        paragraph "Next.js (App Router + React 19)"
-      link "Storybook 8 + React 19"
-        paragraph "Storybook 8 + React 19"
-      link "Peer Dependencies"
-        paragraph "Peer Dependencies"
-      link "CI Diff Bot"
-        paragraph "CI Diff Bot"
-      button "Reference"
-        heading "Reference" (level 2)
-      link "Authenticated Pages"
-        paragraph "Authenticated Pages"
-      link "Accessible Names"
-        paragraph "Accessible Names"
-      link "Architecture"
-        paragraph "Architecture"
-      link "Troubleshooting"
-        paragraph "Troubleshooting"
-  navigation "On this page"
-    heading "On this page" (level 2)
-    list
-      listitem
-        link "Saved session (recommended)"
-      listitem
-        link "Attach to your logged-in browser (--cdp)"
-      listitem
-        link "Security"
-      listitem
-        link "See also"
-  main
-    heading "Auditing authenticated pages" (level 1)
-    paragraph "Most real accessibility problems live a login — the dashboard, the settings screen, the checkout. Both the and the can audit those pages, and the guiding rule is the same for both: Your password is never typed by an agent, never passed as a flag, never stored in shell history."
-      emphasis "behind"
-      link "CLI"
-      link "MCP server"
-      strong "you log in; the tool reuses the session."
-    paragraph "There are two ways in. Reach for the first by default."
-    table
-      rowgroup
-        row
-          rowheader "Aspect"
-          rowheader "Saved session (--storage-state)"
-            strong "Saved session"
-            code "--storage-state"
-          rowheader "Attach to your browser (--cdp)"
-            strong "Attach to your browser"
-            code "--cdp"
-      rowgroup
-        row
-          cell "How"
-          cell "Log in once, save a session file, reuse it"
-          cell "Point the tool at a Chrome you're already logged into"
-        row
-          cell "Best for"
-          cell "Repeatable audits, CI, "the logged-in dashboard""
-          cell "One-off / interactive, SSO or MFA too painful to script"
-        row
-          cell "Reproducible?"
-          cell "Yes — commit the workflow, not the file"
-          cell "No — depends on your live browser"
-        row
-          cell "Device emulation"
-          cell "Works"
-          cell "Not available (reuses the running browser)"
-        row
-          cell "Password to the tool?"
-          cell "No"
-          cell "No"
-    heading "Saved session (recommended)" (level 2)
-    heading "1. Save the session" (level 3)
-    paragraph "Run once. It opens a browser — log in by hand, and MFA, SSO, and passkeys all work, because a person is driving. Then press in the terminal to save."
+link "Skip to content"
+banner
+  link "Real A11y"
+  button "Search"
+  navigation "Main Navigation"
+    link "Guide"
+    link "Recipes"
+    link "Packages"
+    button "v0.1 · Beta"
+  switch "Switch to dark theme"
+  link "github"
+complementary
+  navigation "Sidebar Navigation"
+    button "Introduction"
+      heading "Introduction" (level 2)
+    link "Getting Started"
+      paragraph "Getting Started"
+    link "Core Concepts"
+      paragraph "Core Concepts"
+    link "Accessibility Snapshots"
+      paragraph "Accessibility Snapshots"
+    link "Snapshots vs. Other Tools"
+      paragraph "Snapshots vs. Other Tools"
+    link "Why Real A11y?"
+      paragraph "Why Real A11y?"
+    button "Reading the Tree"
+      heading "Reading the Tree" (level 2)
+    link "Understanding the Views"
+      paragraph "Understanding the Views"
+    link "DOM View"
+      paragraph "DOM View"
+    link "A11y View"
+      paragraph "A11y View"
+    link "Headings View"
+      paragraph "Headings View"
+    link "TAB View"
+      paragraph "TAB View"
+    link "Panel features"
+      paragraph "Panel features"
+    button "Chrome Extension"
+      heading "Chrome Extension" (level 2)
+    link "Overview & Install"
+      paragraph "Overview & Install"
+    button "Packages"
+      heading "Packages" (level 2)
+    link "@real-a11y-dev/core"
+      paragraph "@real-a11y-dev/core"
+    link "@real-a11y-dev/inspector"
+      paragraph "@real-a11y-dev/inspector"
+    link "@real-a11y-dev/testing"
+      heading "@real-a11y-dev/testing" (level 3)
+    button "toggle section"
+    link "@real-a11y-dev/react"
+      paragraph "@real-a11y-dev/react"
+    link "@real-a11y-dev/storybook-addon"
+      paragraph "@real-a11y-dev/storybook-addon"
+    link "@real-a11y-dev/mcp"
+      heading "@real-a11y-dev/mcp" (level 3)
+    button "toggle section"
+    link "@real-a11y-dev/cli"
+      heading "@real-a11y-dev/cli" (level 3)
+    button "toggle section"
+    button "Recipes"
+      heading "Recipes" (level 2)
+    link "Next.js (App Router + React 19)"
+      paragraph "Next.js (App Router + React 19)"
+    link "Storybook 8 + React 19"
+      paragraph "Storybook 8 + React 19"
+    link "Peer Dependencies"
+      paragraph "Peer Dependencies"
+    link "CI Diff Bot"
+      paragraph "CI Diff Bot"
+    button "Reference"
+      heading "Reference" (level 2)
+    link "Authenticated Pages"
+      paragraph "Authenticated Pages"
+    link "Accessible Names"
+      paragraph "Accessible Names"
+    link "Architecture"
+      paragraph "Architecture"
+    link "Troubleshooting"
+      paragraph "Troubleshooting"
+navigation "On this page"
+  heading "On this page" (level 2)
+  list
+    listitem
+      link "Saved session (recommended)"
+    listitem
+      link "Attach to your logged-in browser (--cdp)"
+    listitem
+      link "Security"
+    listitem
+      link "See also"
+main
+  heading "Auditing authenticated pages" (level 1)
+  paragraph "Most real accessibility problems live a login — the dashboard, the settings screen, the checkout. Both the and the can audit those pages, and the guiding rule is the same for both: Your password is never typed by an agent, never passed as a flag, never stored in shell history."
+    emphasis "behind"
+    link "CLI"
+    link "MCP server"
+    strong "you log in; the tool reuses the session."
+  paragraph "There are two ways in. Reach for the first by default."
+  table
+    rowgroup
+      row
+        rowheader "Aspect"
+        rowheader "Saved session (--storage-state)"
+          strong "Saved session"
+          code "--storage-state"
+        rowheader "Attach to your browser (--cdp)"
+          strong "Attach to your browser"
+          code "--cdp"
+    rowgroup
+      row
+        cell "How"
+        cell "Log in once, save a session file, reuse it"
+        cell "Point the tool at a Chrome you're already logged into"
+      row
+        cell "Best for"
+        cell "Repeatable audits, CI, "the logged-in dashboard""
+        cell "One-off / interactive, SSO or MFA too painful to script"
+      row
+        cell "Reproducible?"
+        cell "Yes — commit the workflow, not the file"
+        cell "No — depends on your live browser"
+      row
+        cell "Device emulation"
+        cell "Works"
+        cell "Not available (reuses the running browser)"
+      row
+        cell "Password to the tool?"
+        cell "No"
+        cell "No"
+  heading "Saved session (recommended)" (level 2)
+  heading "1. Save the session" (level 3)
+  paragraph "Run once. It opens a browser — log in by hand, and MFA, SSO, and passkeys all work, because a person is driving. Then press in the terminal to save."
+    code "login"
+    strong "visible"
+    strong "Enter"
+  button "Copy Code"
+  code
+  button "Copy Code"
+  code
+  paragraph "Accept cookie banners before pressing Enter"
+  paragraph "If the site shows a cookie-consent dialog, accept or dismiss it in the login window before saving — otherwise the consent cookie isn't in your session and the banner reappears (and can dominate the audited tree) on every later run."
+  heading "2. Audit with it" (level 3)
+  paragraph "Pass the file to any browser command:"
+  button "Copy Code"
+  code
+  paragraph "Give single-page apps time to hydrate"
+  paragraph "A logged-in SPA reads the session, calls its API, and renders — all after the initial load. If you capture a half-rendered or redirected view, settle it: ."
+    code "--wait-until networkidle --settle 3000"
+  heading "Origin pinning" (level 3)
+  paragraph "When a session is loaded, auditing is . If a page redirects off that origin, extraction is refused (exit ) rather than silently auditing wherever it landed:"
+    strong "pinned to the origin you asked for"
+    code "2"
+  button "Copy Code"
+  code
+  paragraph "This is a safeguard: a saved session carries live cookies, and a stray or hostile redirect to another cookie-matching origin could otherwise pull an unintended authenticated page into your report. If the redirect is legitimate — an SSO bounce that ends on a second origin — allow it explicitly:"
+  button "Copy Code"
+  code
+  paragraph "Refusal is also a useful signal: it usually means the and the site bounced you to a login page. Re-run to refresh ."
+    strong "session expired"
+    code "login"
+    code "auth.json"
+  heading "In the MCP server" (level 3)
+  paragraph "The same drives the MCP server: point it at the file with and pin the origin with — the env-var mirror of the CLI's and . See the for both."
+    code "auth.json"
+    code "REAL_A11Y_MCP_STORAGE_STATE=auth.json"
+    code "REAL_A11Y_MCP_ALLOWED_ORIGINS"
+    code "--storage-state"
+    code "--audit-origin"
+    link "MCP configuration"
+  heading "Attach to your logged-in browser (--cdp)" (level 2)
+    code "--cdp"
+  paragraph "For a one-off — or an app whose auth lives in , which a saved session can't capture — skip the file and attach to a Chrome you're already signed into. Start Chrome with remote debugging , log in, then point the tool at it:"
+    code "sessionStorage"
+    strong "on a throwaway profile"
+  button "Copy Code"
+  code
+  paragraph "Use a dedicated profile for CDP"
+  paragraph "Attaching over CDP connects to whatever Chrome is on that port — (email, banking). Always launch a separate profile with its own , never enable remote debugging on your main profile."
+    strong "including your everyday browser and its logged-in sessions"
+    strong "--user-data-dir"
+  paragraph "The MCP server uses the same mechanism via the environment variable — see the ."
+    code "REAL_A11Y_MCP_CDP"
+    link "MCP configuration"
+  heading "Security" (level 2)
+  paragraph "The saved session file is a — treat like a password:"
+    strong "credential"
+    code "auth.json"
+  list
+    listitem "It holds live session tokens. writes it with owner-only permissions and warns if it lands un-gitignored inside a repo — add it to ."
+      strong "Never commit it."
       code "login"
-      strong "visible"
-      strong "Enter"
-    button "Copy Code"
-      code
-    button "Copy Code"
-      code
-    paragraph "Accept cookie banners before pressing Enter"
-    paragraph "If the site shows a cookie-consent dialog, accept or dismiss it in the login window before saving — otherwise the consent cookie isn't in your session and the banner reappears (and can dominate the audited tree) on every later run."
-    heading "2. Audit with it" (level 3)
-    paragraph "Pass the file to any browser command:"
-    button "Copy Code"
-      code
-    paragraph "Give single-page apps time to hydrate"
-    paragraph "A logged-in SPA reads the session, calls its API, and renders — all after the initial load. If you capture a half-rendered or redirected view, settle it: ."
-      code "--wait-until networkidle --settle 3000"
-    heading "Origin pinning" (level 3)
-    paragraph "When a session is loaded, auditing is . If a page redirects off that origin, extraction is refused (exit ) rather than silently auditing wherever it landed:"
-      strong "pinned to the origin you asked for"
-      code "2"
-    button "Copy Code"
-      code
-    paragraph "This is a safeguard: a saved session carries live cookies, and a stray or hostile redirect to another cookie-matching origin could otherwise pull an unintended authenticated page into your report. If the redirect is legitimate — an SSO bounce that ends on a second origin — allow it explicitly:"
-    button "Copy Code"
-      code
-    paragraph "Refusal is also a useful signal: it usually means the and the site bounced you to a login page. Re-run to refresh ."
-      strong "session expired"
+      code ".gitignore"
+    listitem ", not your admin or personal account. Anyone (or any agent) with the file can read every page that session can reach."
+      strong "Use a dedicated low-privilege test account"
+    listitem "— it stops working when the site's session expires. is the re-auth path."
+      strong "It's short-lived"
       code "login"
-      code "auth.json"
-    heading "In the MCP server" (level 3)
-    paragraph "The same drives the MCP server: point it at the file with and pin the origin with — the env-var mirror of the CLI's and . See the for both."
-      code "auth.json"
-      code "REAL_A11Y_MCP_STORAGE_STATE=auth.json"
-      code "REAL_A11Y_MCP_ALLOWED_ORIGINS"
-      code "--storage-state"
-      code "--audit-origin"
-      link "MCP configuration"
-    heading "Attach to your logged-in browser (--cdp)" (level 2)
+    listitem "Apps that keep auth there will land logged-out after a saved-session restore — use for those."
+      strong "is not captured."
+        code "sessionStorage"
       code "--cdp"
-    paragraph "For a one-off — or an app whose auth lives in , which a saved session can't capture — skip the file and attach to a Chrome you're already signed into. Start Chrome with remote debugging , log in, then point the tool at it:"
-      code "sessionStorage"
-      strong "on a throwaway profile"
-    button "Copy Code"
-      code
-    paragraph "Use a dedicated profile for CDP"
-    paragraph "Attaching over CDP connects to whatever Chrome is on that port — (email, banking). Always launch a separate profile with its own , never enable remote debugging on your main profile."
-      strong "including your everyday browser and its logged-in sessions"
-      strong "--user-data-dir"
-    paragraph "The MCP server uses the same mechanism via the environment variable — see the ."
-      code "REAL_A11Y_MCP_CDP"
-      link "MCP configuration"
-    heading "Security" (level 2)
-    paragraph "The saved session file is a — treat like a password:"
-      strong "credential"
-      code "auth.json"
-    list
-      listitem "It holds live session tokens. writes it with owner-only permissions and warns if it lands un-gitignored inside a repo — add it to ."
-        strong "Never commit it."
-        code "login"
-        code ".gitignore"
-      listitem ", not your admin or personal account. Anyone (or any agent) with the file can read every page that session can reach."
-        strong "Use a dedicated low-privilege test account"
-      listitem "— it stops working when the site's session expires. is the re-auth path."
-        strong "It's short-lived"
-        code "login"
-      listitem "Apps that keep auth there will land logged-out after a saved-session restore — use for those."
-        strong "is not captured."
-          code "sessionStorage"
-        code "--cdp"
-    heading "In CI" (level 3)
-    paragraph "Provision the file from a secret at job start; hosted runners are ephemeral, so no cleanup step is needed:"
-    button "Copy Code"
-      code
-    paragraph "Rotate by re-running locally and updating the secret."
-      code "login"
-    paragraph "Never run untrusted config with a live session"
-    paragraph "Do not audit a pull-request-controlled URL or config while a secret-provisioned session is loaded (e.g. under a trigger). A PR could point the audit at an attacker page that redirects into your authenticated site. Keep the audit target a literal in the workflow — origin pinning then fails closed on any redirect elsewhere."
-      strong "pull_request_target"
-    heading "See also" (level 2)
-    list
-      listitem "— the full command reference."
-        link "@real-a11y-dev/cli"
-          code "@real-a11y-dev/cli"
-      listitem "— the same audit for AI agents."
-        link "@real-a11y-dev/mcp"
-          code "@real-a11y-dev/mcp"
-  contentinfo
-    link "Edit this page on GitHub"
-    paragraph "Last updated:"
-      time "[redacted]"
-    navigation "Pager"
-      link "Previous pageCI Diff Bot"
-      link "Next pageAccessible Names"
+  heading "In CI" (level 3)
+  paragraph "Provision the file from a secret at job start; hosted runners are ephemeral, so no cleanup step is needed:"
+  button "Copy Code"
+  code
+  paragraph "Rotate by re-running locally and updating the secret."
+    code "login"
+  paragraph "Never run untrusted config with a live session"
+  paragraph "Do not audit a pull-request-controlled URL or config while a secret-provisioned session is loaded (e.g. under a trigger). A PR could point the audit at an attacker page that redirects into your authenticated site. Keep the audit target a literal in the workflow — origin pinning then fails closed on any redirect elsewhere."
+    strong "pull_request_target"
+  heading "See also" (level 2)
+  list
+    listitem "— the full command reference."
+      link "@real-a11y-dev/cli"
+        code "@real-a11y-dev/cli"
+    listitem "— the same audit for AI agents."
+      link "@real-a11y-dev/mcp"
+        code "@real-a11y-dev/mcp"
+contentinfo
+  link "Edit this page on GitHub"
+  paragraph "Last updated:"
+    time "[redacted]"
+  navigation "Pager"
+    link "Previous pageCI Diff Bot"
+    link "Next pageAccessible Names"

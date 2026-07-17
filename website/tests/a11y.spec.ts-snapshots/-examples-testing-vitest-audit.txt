@@ -1,162 +1,162 @@
-  link "Skip to content"
-  banner
-    link "Real A11y"
-    button "Search"
-    navigation "Main Navigation"
-      link "Guide"
-      link "Recipes"
-      link "Packages"
-      button "v0.1 · Beta"
-    switch "Switch to dark theme"
-    link "github"
-  complementary
-    navigation "Sidebar Navigation"
-      button "Introduction"
-        heading "Introduction" (level 2)
-      link "Getting Started"
-        paragraph "Getting Started"
-      link "Core Concepts"
-        paragraph "Core Concepts"
-      link "Accessibility Snapshots"
-        paragraph "Accessibility Snapshots"
-      link "Snapshots vs. Other Tools"
-        paragraph "Snapshots vs. Other Tools"
-      link "Why Real A11y?"
-        paragraph "Why Real A11y?"
-      button "Reading the Tree"
-        heading "Reading the Tree" (level 2)
-      link "Understanding the Views"
-        paragraph "Understanding the Views"
-      link "DOM View"
-        paragraph "DOM View"
-      link "A11y View"
-        paragraph "A11y View"
-      link "Headings View"
-        paragraph "Headings View"
-      link "TAB View"
-        paragraph "TAB View"
-      link "Panel features"
-        paragraph "Panel features"
-      button "Chrome Extension"
-        heading "Chrome Extension" (level 2)
-      link "Overview & Install"
-        paragraph "Overview & Install"
-      button "Packages"
-        heading "Packages" (level 2)
-      link "@real-a11y-dev/core"
-        paragraph "@real-a11y-dev/core"
-      link "@real-a11y-dev/inspector"
-        paragraph "@real-a11y-dev/inspector"
-        link "@real-a11y-dev/testing"
-          heading "@real-a11y-dev/testing" (level 3)
-        button "toggle section"
-      link "@real-a11y-dev/react"
-        paragraph "@real-a11y-dev/react"
-      link "@real-a11y-dev/storybook-addon"
-        paragraph "@real-a11y-dev/storybook-addon"
-        link "@real-a11y-dev/mcp"
-          heading "@real-a11y-dev/mcp" (level 3)
-        button "toggle section"
-        link "@real-a11y-dev/cli"
-          heading "@real-a11y-dev/cli" (level 3)
-        button "toggle section"
-      button "Recipes"
-        heading "Recipes" (level 2)
-      link "Next.js (App Router + React 19)"
-        paragraph "Next.js (App Router + React 19)"
-      link "Storybook 8 + React 19"
-        paragraph "Storybook 8 + React 19"
-      link "Peer Dependencies"
-        paragraph "Peer Dependencies"
-      link "CI Diff Bot"
-        paragraph "CI Diff Bot"
-      button "Reference"
-        heading "Reference" (level 2)
-      link "Authenticated Pages"
-        paragraph "Authenticated Pages"
-      link "Accessible Names"
-        paragraph "Accessible Names"
-      link "Architecture"
-        paragraph "Architecture"
-      link "Troubleshooting"
-        paragraph "Troubleshooting"
-  navigation "On this page"
-    heading "On this page" (level 2)
-    list
-      listitem
-        link "What it shows"
-      listitem
-        link "Run it locally"
-      listitem
-        link "Key code"
-      listitem
-        link "See also"
-  main
-    heading "Example: Vitest Integration" (level 1)
-    paragraph "Demonstrates in a Vitest + jsdom test suite — snapshots, structural assertions, and the chain."
-      code "@real-a11y-dev/testing"
+link "Skip to content"
+banner
+  link "Real A11y"
+  button "Search"
+  navigation "Main Navigation"
+    link "Guide"
+    link "Recipes"
+    link "Packages"
+    button "v0.1 · Beta"
+  switch "Switch to dark theme"
+  link "github"
+complementary
+  navigation "Sidebar Navigation"
+    button "Introduction"
+      heading "Introduction" (level 2)
+    link "Getting Started"
+      paragraph "Getting Started"
+    link "Core Concepts"
+      paragraph "Core Concepts"
+    link "Accessibility Snapshots"
+      paragraph "Accessibility Snapshots"
+    link "Snapshots vs. Other Tools"
+      paragraph "Snapshots vs. Other Tools"
+    link "Why Real A11y?"
+      paragraph "Why Real A11y?"
+    button "Reading the Tree"
+      heading "Reading the Tree" (level 2)
+    link "Understanding the Views"
+      paragraph "Understanding the Views"
+    link "DOM View"
+      paragraph "DOM View"
+    link "A11y View"
+      paragraph "A11y View"
+    link "Headings View"
+      paragraph "Headings View"
+    link "TAB View"
+      paragraph "TAB View"
+    link "Panel features"
+      paragraph "Panel features"
+    button "Chrome Extension"
+      heading "Chrome Extension" (level 2)
+    link "Overview & Install"
+      paragraph "Overview & Install"
+    button "Packages"
+      heading "Packages" (level 2)
+    link "@real-a11y-dev/core"
+      paragraph "@real-a11y-dev/core"
+    link "@real-a11y-dev/inspector"
+      paragraph "@real-a11y-dev/inspector"
+    link "@real-a11y-dev/testing"
+      heading "@real-a11y-dev/testing" (level 3)
+    button "toggle section"
+    link "@real-a11y-dev/react"
+      paragraph "@real-a11y-dev/react"
+    link "@real-a11y-dev/storybook-addon"
+      paragraph "@real-a11y-dev/storybook-addon"
+    link "@real-a11y-dev/mcp"
+      heading "@real-a11y-dev/mcp" (level 3)
+    button "toggle section"
+    link "@real-a11y-dev/cli"
+      heading "@real-a11y-dev/cli" (level 3)
+    button "toggle section"
+    button "Recipes"
+      heading "Recipes" (level 2)
+    link "Next.js (App Router + React 19)"
+      paragraph "Next.js (App Router + React 19)"
+    link "Storybook 8 + React 19"
+      paragraph "Storybook 8 + React 19"
+    link "Peer Dependencies"
+      paragraph "Peer Dependencies"
+    link "CI Diff Bot"
+      paragraph "CI Diff Bot"
+    button "Reference"
+      heading "Reference" (level 2)
+    link "Authenticated Pages"
+      paragraph "Authenticated Pages"
+    link "Accessible Names"
+      paragraph "Accessible Names"
+    link "Architecture"
+      paragraph "Architecture"
+    link "Troubleshooting"
+      paragraph "Troubleshooting"
+navigation "On this page"
+  heading "On this page" (level 2)
+  list
+    listitem
+      link "What it shows"
+    listitem
+      link "Run it locally"
+    listitem
+      link "Key code"
+    listitem
+      link "See also"
+main
+  heading "Example: Vitest Integration" (level 1)
+  paragraph "Demonstrates in a Vitest + jsdom test suite — snapshots, structural assertions, and the chain."
+    code "@real-a11y-dev/testing"
+    code "flow()"
+  paragraph
+    strong "Source:"
+    link "examples/testing-vitest/"
+      code "examples/testing-vitest/"
+  heading "What it shows" (level 2)
+  list
+    listitem "as a Vitest snapshot"
+      code "auditSnapshot()"
+    listitem "in a form component test"
+      code "assertNoUnlabeledInteractive()"
+    listitem "checking page-level heading structure"
+      code "assertHeadingOrder()"
+    listitem "verifying //"
+      code "assertLandmarkStructure()"
+      code "main"
+      code "header"
+      code "footer"
+    listitem "chaining through a combobox interaction"
       code "flow()"
-    paragraph
-      strong "Source:"
-      link "examples/testing-vitest/"
-        code "examples/testing-vitest/"
-    heading "What it shows" (level 2)
-    list
-      listitem "as a Vitest snapshot"
-        code "auditSnapshot()"
-      listitem "in a form component test"
-        code "assertNoUnlabeledInteractive()"
-      listitem "checking page-level heading structure"
-        code "assertHeadingOrder()"
-      listitem "verifying //"
-        code "assertLandmarkStructure()"
-        code "main"
-        code "header"
-        code "footer"
-      listitem "chaining through a combobox interaction"
-        code "flow()"
-      listitem "+ for structure tests"
-        code "outlineSnapshot()"
-        code "tabSequenceSnapshot()"
-    heading "Run it locally" (level 2)
-    button "Copy Code"
-      code
-    heading "Key code" (level 2)
-    heading "Snapshot test" (level 3)
-    button "Copy Code"
-      code
-    heading "Structural assertions" (level 3)
-    button "Copy Code"
-      code
-    heading "Flow chain — combobox interaction" (level 3)
-    button "Copy Code"
-      code
-    heading "Tab sequence test" (level 3)
-    button "Copy Code"
-      code
-    heading "See also" (level 2)
-    paragraph "jsdom runs the same audit engine as the browser, but it can't audit a real running app or gate CI on a live page set. For that:"
-    list
-      listitem "— the adapter runs these same assertions against a real browser page."
-        strong
-          link "Playwright E2E"
-        code "@real-a11y-dev/testing/playwright"
-        code "attach()"
-      listitem "— / / run findings-aware audits over the page set in , ideal for CI."
-        strong
-          link "@real-a11y-dev/cli"
-            code "@real-a11y-dev/cli"
-        code "real-a11y audit"
-        code "snapshot"
-        code "diff"
-        code "a11y.config.json"
-      listitem "— the same audit engine exposed to AI agents for agent-driven checks."
-        strong
-          link "@real-a11y-dev/mcp"
-            code "@real-a11y-dev/mcp"
-  contentinfo
-    link "Edit this page on GitHub"
-    paragraph "Last updated:"
-      time "[redacted]"
-    navigation "Pager"
-      link "Next pageGetting Started"
+    listitem "+ for structure tests"
+      code "outlineSnapshot()"
+      code "tabSequenceSnapshot()"
+  heading "Run it locally" (level 2)
+  button "Copy Code"
+  code
+  heading "Key code" (level 2)
+  heading "Snapshot test" (level 3)
+  button "Copy Code"
+  code
+  heading "Structural assertions" (level 3)
+  button "Copy Code"
+  code
+  heading "Flow chain — combobox interaction" (level 3)
+  button "Copy Code"
+  code
+  heading "Tab sequence test" (level 3)
+  button "Copy Code"
+  code
+  heading "See also" (level 2)
+  paragraph "jsdom runs the same audit engine as the browser, but it can't audit a real running app or gate CI on a live page set. For that:"
+  list
+    listitem "— the adapter runs these same assertions against a real browser page."
+      strong
+        link "Playwright E2E"
+      code "@real-a11y-dev/testing/playwright"
+      code "attach()"
+    listitem "— / / run findings-aware audits over the page set in , ideal for CI."
+      strong
+        link "@real-a11y-dev/cli"
+          code "@real-a11y-dev/cli"
+      code "real-a11y audit"
+      code "snapshot"
+      code "diff"
+      code "a11y.config.json"
+    listitem "— the same audit engine exposed to AI agents for agent-driven checks."
+      strong
+        link "@real-a11y-dev/mcp"
+          code "@real-a11y-dev/mcp"
+contentinfo
+  link "Edit this page on GitHub"
+  paragraph "Last updated:"
+    time "[redacted]"
+  navigation "Pager"
+    link "Next pageGetting Started"

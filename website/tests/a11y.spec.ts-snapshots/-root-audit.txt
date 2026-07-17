@@ -1,51 +1,51 @@
-  link "Skip to content"
-  banner
-    link "Real A11y"
-    button "Search"
-    navigation "Main Navigation"
-      link "Guide"
-      link "Recipes"
-      link "Packages"
-      button "v0.1 · Beta"
-    switch "Switch to dark theme"
-    link "github"
-  heading "Real A11yAccessibility tooling that works in the real world" (level 1)
-  paragraph "Beta (v0.1) — Extracts the accessibility tree as plain data. Use it through a Chrome extension, Storybook panel, React component, testing library, CLI, or MCP server — one engine, every surface."
-  link "Get Started"
-  link "Chrome Extension"
-  img "Real A11y"
-  link "🧩Chrome extensionOpen the side panel on any website and explore its DOM, A11y, and TAB views live. Highlights elements on the page as you navigate the tree. No code, no setup.Install the extension"
-    article
-      heading "Chrome extension" (level 2)
-      paragraph "Open the side panel on any website and explore its DOM, A11y, and TAB views live. Highlights elements on the page as you navigate the tree. No code, no setup."
-      paragraph "Install the extension"
+link "Skip to content"
+banner
+  link "Real A11y"
+  button "Search"
+  navigation "Main Navigation"
+    link "Guide"
+    link "Recipes"
+    link "Packages"
+    button "v0.1 · Beta"
+  switch "Switch to dark theme"
+  link "github"
+heading "Real A11yAccessibility tooling that works in the real world" (level 1)
+paragraph "Beta (v0.1) — Extracts the accessibility tree as plain data. Use it through a Chrome extension, Storybook panel, React component, testing library, CLI, or MCP server — one engine, every surface."
+link "Get Started"
+link "Chrome Extension"
+img "Real A11y"
+link "🧩Chrome extensionOpen the side panel on any website and explore its DOM, A11y, and TAB views live. Highlights elements on the page as you navigate the tree. No code, no setup.Install the extension"
   article
-    heading "One engine, every context" (level 2)
-    paragraph "@real-a11y-dev/core extracts the full semantic tree from any DOM — roles, accessible names, focus state, modal context, live regions. Every other package is just a different lens on that tree."
+    heading "Chrome extension" (level 2)
+    paragraph "Open the side panel on any website and explore its DOM, A11y, and TAB views live. Highlights elements on the page as you navigate the tree. No code, no setup."
+    paragraph "Install the extension"
+article
+  heading "One engine, every context" (level 2)
+  paragraph "@real-a11y-dev/core extracts the full semantic tree from any DOM — roles, accessible names, focus state, modal context, live regions. Every other package is just a different lens on that tree."
+article
+  heading "Test what users actually experience" (level 2)
+  paragraph "@real-a11y-dev/testing gives you auditSnapshot(), assertHeadingOrder(), assertNoUnlabeledInteractive(), and a fluent flow() chain — all powered by the real accessibility tree, not synthetic mocks."
+link "⌨️Audit from the shell and CI@real-a11y-dev/cli — the real-a11y command audits any URL from the shell with per-instance locators and CI-grade exit codes. snapshot + diff then track accessibility regressions across a PR, findings-aware.Explore the CLI"
   article
-    heading "Test what users actually experience" (level 2)
-    paragraph "@real-a11y-dev/testing gives you auditSnapshot(), assertHeadingOrder(), assertNoUnlabeledInteractive(), and a fluent flow() chain — all powered by the real accessibility tree, not synthetic mocks."
-  link "⌨️Audit from the shell and CI@real-a11y-dev/cli — the real-a11y command audits any URL from the shell with per-instance locators and CI-grade exit codes. snapshot + diff then track accessibility regressions across a PR, findings-aware.Explore the CLI"
-    article
-      heading "Audit from the shell and CI" (level 2)
-      paragraph "@real-a11y-dev/cli — the real-a11y command audits any URL from the shell with per-instance locators and CI-grade exit codes. snapshot + diff then track accessibility regressions across a PR, findings-aware."
-      paragraph "Explore the CLI"
-  link "🤖Accessibility for AI agents@real-a11y-dev/mcp — a Model Context Protocol server that hands the semantic tree and audits to AI agents over stdio. Point any MCP client at it and the agent can reason about what assistive tech actually perceives.Explore the MCP server"
-    article
-      heading "Accessibility for AI agents" (level 2)
-      paragraph "@real-a11y-dev/mcp — a Model Context Protocol server that hands the semantic tree and audits to AI agents over stdio. Point any MCP client at it and the agent can reason about what assistive tech actually perceives."
-      paragraph "Explore the MCP server"
+    heading "Audit from the shell and CI" (level 2)
+    paragraph "@real-a11y-dev/cli — the real-a11y command audits any URL from the shell with per-instance locators and CI-grade exit codes. snapshot + diff then track accessibility regressions across a PR, findings-aware."
+    paragraph "Explore the CLI"
+link "🤖Accessibility for AI agents@real-a11y-dev/mcp — a Model Context Protocol server that hands the semantic tree and audits to AI agents over stdio. Point any MCP client at it and the agent can reason about what assistive tech actually perceives.Explore the MCP server"
   article
-    heading "First-class React support" (level 2)
-    paragraph "useSemanticTree() and useActiveModal() subscribe to DOM mutations via useSyncExternalStore — concurrent-mode safe, no boilerplate. Drop in"
-  article
-    heading "Storybook panel out of the box" (level 2)
-    paragraph "Install @real-a11y-dev/storybook-addon and every story gets an A11y tree panel showing the semantic structure, heading outline, and tab sequence — updated live as the story renders."
-  article
-    heading "Shadow DOM isolation by default" (level 2)
-    paragraph "The semantic-navigator embed mounts inside a ShadowRoot so its styles never leak into your app and your app's styles never override the panel. CSS conflicts are eliminated at the architecture level."
-  contentinfo
-    paragraph "Released under the MIT License. · ·"
-      link "Privacy"
-      link "Accessibility"
-    paragraph "Copyright © 2024-present Real A11y contributors"
+    heading "Accessibility for AI agents" (level 2)
+    paragraph "@real-a11y-dev/mcp — a Model Context Protocol server that hands the semantic tree and audits to AI agents over stdio. Point any MCP client at it and the agent can reason about what assistive tech actually perceives."
+    paragraph "Explore the MCP server"
+article
+  heading "First-class React support" (level 2)
+  paragraph "useSemanticTree() and useActiveModal() subscribe to DOM mutations via useSyncExternalStore — concurrent-mode safe, no boilerplate. Drop in"
+article
+  heading "Storybook panel out of the box" (level 2)
+  paragraph "Install @real-a11y-dev/storybook-addon and every story gets an A11y tree panel showing the semantic structure, heading outline, and tab sequence — updated live as the story renders."
+article
+  heading "Shadow DOM isolation by default" (level 2)
+  paragraph "The semantic-navigator embed mounts inside a ShadowRoot so its styles never leak into your app and your app's styles never override the panel. CSS conflicts are eliminated at the architecture level."
+contentinfo
+  paragraph "Released under the MIT License. · ·"
+    link "Privacy"
+    link "Accessibility"
+  paragraph "Copyright © 2024-present Real A11y contributors"

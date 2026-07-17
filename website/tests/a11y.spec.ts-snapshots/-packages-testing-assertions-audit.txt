@@ -1,259 +1,259 @@
-  link "Skip to content"
-  banner
-    link "Real A11y"
-    button "Search"
-    navigation "Main Navigation"
-      link "Guide"
-      link "Recipes"
-      link "Packages"
-      button "v0.1 · Beta"
-    switch "Switch to dark theme"
-    link "github"
-  complementary
-    navigation "Sidebar Navigation"
-      button "Introduction"
-        heading "Introduction" (level 2)
-      link "Getting Started"
-        paragraph "Getting Started"
-      link "Core Concepts"
-        paragraph "Core Concepts"
-      link "Accessibility Snapshots"
-        paragraph "Accessibility Snapshots"
-      link "Snapshots vs. Other Tools"
-        paragraph "Snapshots vs. Other Tools"
-      link "Why Real A11y?"
-        paragraph "Why Real A11y?"
-      button "Reading the Tree"
-        heading "Reading the Tree" (level 2)
-      link "Understanding the Views"
-        paragraph "Understanding the Views"
-      link "DOM View"
-        paragraph "DOM View"
-      link "A11y View"
-        paragraph "A11y View"
-      link "Headings View"
-        paragraph "Headings View"
-      link "TAB View"
-        paragraph "TAB View"
-      link "Panel features"
-        paragraph "Panel features"
-      button "Chrome Extension"
-        heading "Chrome Extension" (level 2)
-      link "Overview & Install"
-        paragraph "Overview & Install"
-      button "Packages"
-        heading "Packages" (level 2)
-      link "@real-a11y-dev/core"
-        paragraph "@real-a11y-dev/core"
-      link "@real-a11y-dev/inspector"
-        paragraph "@real-a11y-dev/inspector"
-        link "@real-a11y-dev/testing"
-          heading "@real-a11y-dev/testing" (level 3)
-        button "toggle section"
-      link "Snapshots"
-        paragraph "Snapshots"
-      link "Assertions"
-        paragraph "Assertions"
+link "Skip to content"
+banner
+  link "Real A11y"
+  button "Search"
+  navigation "Main Navigation"
+    link "Guide"
+    link "Recipes"
+    link "Packages"
+    button "v0.1 · Beta"
+  switch "Switch to dark theme"
+  link "github"
+complementary
+  navigation "Sidebar Navigation"
+    button "Introduction"
+      heading "Introduction" (level 2)
+    link "Getting Started"
+      paragraph "Getting Started"
+    link "Core Concepts"
+      paragraph "Core Concepts"
+    link "Accessibility Snapshots"
+      paragraph "Accessibility Snapshots"
+    link "Snapshots vs. Other Tools"
+      paragraph "Snapshots vs. Other Tools"
+    link "Why Real A11y?"
+      paragraph "Why Real A11y?"
+    button "Reading the Tree"
+      heading "Reading the Tree" (level 2)
+    link "Understanding the Views"
+      paragraph "Understanding the Views"
+    link "DOM View"
+      paragraph "DOM View"
+    link "A11y View"
+      paragraph "A11y View"
+    link "Headings View"
+      paragraph "Headings View"
+    link "TAB View"
+      paragraph "TAB View"
+    link "Panel features"
+      paragraph "Panel features"
+    button "Chrome Extension"
+      heading "Chrome Extension" (level 2)
+    link "Overview & Install"
+      paragraph "Overview & Install"
+    button "Packages"
+      heading "Packages" (level 2)
+    link "@real-a11y-dev/core"
+      paragraph "@real-a11y-dev/core"
+    link "@real-a11y-dev/inspector"
+      paragraph "@real-a11y-dev/inspector"
+    link "@real-a11y-dev/testing"
+      heading "@real-a11y-dev/testing" (level 3)
+    button "toggle section"
+    link "Snapshots"
+      paragraph "Snapshots"
+    link "Assertions"
+      paragraph "Assertions"
+    link "Matchers"
+      paragraph "Matchers"
+    link "Flow API"
+      paragraph "Flow API"
+    link "Playwright adapter"
+      paragraph "Playwright adapter"
+    link "@real-a11y-dev/react"
+      paragraph "@real-a11y-dev/react"
+    link "@real-a11y-dev/storybook-addon"
+      paragraph "@real-a11y-dev/storybook-addon"
+    link "@real-a11y-dev/mcp"
+      heading "@real-a11y-dev/mcp" (level 3)
+    button "toggle section"
+    link "@real-a11y-dev/cli"
+      heading "@real-a11y-dev/cli" (level 3)
+    button "toggle section"
+    button "Recipes"
+      heading "Recipes" (level 2)
+    link "Next.js (App Router + React 19)"
+      paragraph "Next.js (App Router + React 19)"
+    link "Storybook 8 + React 19"
+      paragraph "Storybook 8 + React 19"
+    link "Peer Dependencies"
+      paragraph "Peer Dependencies"
+    link "CI Diff Bot"
+      paragraph "CI Diff Bot"
+    button "Reference"
+      heading "Reference" (level 2)
+    link "Authenticated Pages"
+      paragraph "Authenticated Pages"
+    link "Accessible Names"
+      paragraph "Accessible Names"
+    link "Architecture"
+      paragraph "Architecture"
+    link "Troubleshooting"
+      paragraph "Troubleshooting"
+navigation "On this page"
+  heading "On this page" (level 2)
+  list
+    listitem
+      link "collectFindings(root, rules?)"
+    listitem
+      link "listByRole(root, filter)"
+    listitem
+      link "assertNoUnlabeledInteractive(root)"
+    listitem
+      link "assertHeadingOrder(root)"
+    listitem
+      link "assertDialogsLabeled(root)"
+    listitem
+      link "assertLandmarkStructure(root)"
+    listitem
+      link "A11yAssertionError"
+    listitem
+      link "See also"
+main
+  heading "Assertions" (level 1)
+  paragraph "These throw with a descriptive message on failure. Designed for use directly in / blocks without wrapping in ."
+    code "A11yAssertionError"
+    code "it()"
+    code "test()"
+    code "expect()"
+  paragraph "Part of . Prefer the form? See , which wraps these same checks."
+    link "@real-a11y-dev/testing"
+      code "@real-a11y-dev/testing"
+    code "expect(el).toHaveValidHeadingOrder()"
+    link "Matchers"
+  heading "collectFindings(root, rules?)" (level 2)
+    code "collectFindings(root, rules?)"
+  paragraph "The non-throwing primitive underneath every helper. It runs the rules over a tree extraction and returns violation as a structured , instead of throwing on the first. Reach for it to build a report, a custom matcher, or to feed an audit to another tool."
+    code "assert*"
+    strong "single"
+    strong "every"
+    code "Finding[]"
+  button "Copy Code"
+  code
+  paragraph "is a DOM an already-extracted tree (). Passing a pre-extracted tree runs the rules over the snapshot used for the serialized tree / outline / tab order, so a multi-view report can't be internally inconsistent on a page that changes between extractions."
+    code "root"
+    code "Element"
+    strong "or"
+    code "ExtractionResult"
+    emphasis "same"
+  paragraph "Each carries:"
+    code "Finding"
+  table
+    rowgroup
+      row
+        rowheader "Field"
+        rowheader "Meaning"
+    rowgroup
+      row
+        cell "rule"
+          code "rule"
+        cell "Which rule fired — one of ALL_RULES (below)."
+          code "ALL_RULES"
+      row
+        cell "severity"
+          code "severity"
+        cell ""error" blocks use (unlabeled controls, unlabeled dialogs); "warning" is triage-later (heading order, duplicate landmarks, images missing alt)."
+          code ""error""
+          code ""warning""
+      row
+        cell "message"
+          code "message"
+        cell "Self-contained description of the problem."
+      row
+        cell "role / name / tagName"
+          code "role"
+          code "name"
+          code "tagName"
+        cell "The offending node, when the finding is node-scoped."
+      row
+        cell "locator"
+          code "locator"
+        cell "Best-effort CSS selector path, so the element is findable."
+      row
+        cell "context"
+          code "context"
+        cell "Disambiguating href / nearest landmark, when available."
+          code "href"
+  heading "ALL_RULES" (level 3)
+    code "ALL_RULES"
+  paragraph "The full rule set runs by default:"
+    code "collectFindings"
+  button "Copy Code"
+  code
+  paragraph "Pass a subset as the second argument to run only some. The four helpers below are thin wrappers over for one rule each."
+    code "assert*"
+    code "collectFindings"
+  heading "listByRole(root, filter)" (level 2)
+    code "listByRole(root, filter)"
+  paragraph "Lists every element in one category — , , , , , or — as plus a best-effort locator, using the same role groups as the extension's filter tabs. Returns a formatted string; a token-efficient way to review one kind of element at a time."
+    code ""link""
+    code ""button""
+    code ""form""
+    code ""landmark""
+    code ""image""
+    code ""heading""
+    code "role "name""
+  button "Copy Code"
+  code
+  heading "assertNoUnlabeledInteractive(root)" (level 2)
+    code "assertNoUnlabeledInteractive(root)"
+  paragraph "Throws if any interactive element (button, link, textbox, combobox, checkbox, radio, etc.) has an empty accessible name."
+  button "Copy Code"
+  code
+  paragraph "Error message example:"
+  button "Copy Code"
+  code
+  heading "assertHeadingOrder(root)" (level 2)
+    code "assertHeadingOrder(root)"
+  paragraph "Throws if:"
+  list
+    listitem "There is not exactly one"
+      code "h1"
+    listitem "Any heading level is skipped (e.g., followed directly by )"
+      code "h2"
+      code "h4"
+  button "Copy Code"
+  code
+  heading "assertDialogsLabeled(root)" (level 2)
+    code "assertDialogsLabeled(root)"
+  paragraph "Throws if any or element has no accessible name (via or )."
+    code "dialog"
+    code "alertdialog"
+    code "aria-label"
+    code "aria-labelledby"
+  button "Copy Code"
+  code
+  heading "assertLandmarkStructure(root)" (level 2)
+    code "assertLandmarkStructure(root)"
+  paragraph "Throws if:"
+  list
+    listitem "There is no landmark"
+      code "main"
+    listitem "There is more than one landmark"
+      code "main"
+    listitem "There is more than one (header) landmark"
+      code "banner"
+    listitem "There is more than one (footer) landmark"
+      code "contentinfo"
+  button "Copy Code"
+  code
+  heading "A11yAssertionError" (level 2)
+    code "A11yAssertionError"
+  paragraph "All four assertions throw this error type on failure. Import it to catch or assert against it directly:"
+  button "Copy Code"
+  code
+  heading "See also" (level 2)
+  list
+    listitem "— the same checks as matchers with negation"
       link "Matchers"
-        paragraph "Matchers"
-      link "Flow API"
-        paragraph "Flow API"
+      code "expect"
+      code ".not"
+    listitem "— run these assertions against a real browser"
       link "Playwright adapter"
-        paragraph "Playwright adapter"
-      link "@real-a11y-dev/react"
-        paragraph "@real-a11y-dev/react"
-      link "@real-a11y-dev/storybook-addon"
-        paragraph "@real-a11y-dev/storybook-addon"
-        link "@real-a11y-dev/mcp"
-          heading "@real-a11y-dev/mcp" (level 3)
-        button "toggle section"
-        link "@real-a11y-dev/cli"
-          heading "@real-a11y-dev/cli" (level 3)
-        button "toggle section"
-      button "Recipes"
-        heading "Recipes" (level 2)
-      link "Next.js (App Router + React 19)"
-        paragraph "Next.js (App Router + React 19)"
-      link "Storybook 8 + React 19"
-        paragraph "Storybook 8 + React 19"
-      link "Peer Dependencies"
-        paragraph "Peer Dependencies"
-      link "CI Diff Bot"
-        paragraph "CI Diff Bot"
-      button "Reference"
-        heading "Reference" (level 2)
-      link "Authenticated Pages"
-        paragraph "Authenticated Pages"
-      link "Accessible Names"
-        paragraph "Accessible Names"
-      link "Architecture"
-        paragraph "Architecture"
-      link "Troubleshooting"
-        paragraph "Troubleshooting"
-  navigation "On this page"
-    heading "On this page" (level 2)
-    list
-      listitem
-        link "collectFindings(root, rules?)"
-      listitem
-        link "listByRole(root, filter)"
-      listitem
-        link "assertNoUnlabeledInteractive(root)"
-      listitem
-        link "assertHeadingOrder(root)"
-      listitem
-        link "assertDialogsLabeled(root)"
-      listitem
-        link "assertLandmarkStructure(root)"
-      listitem
-        link "A11yAssertionError"
-      listitem
-        link "See also"
-  main
-    heading "Assertions" (level 1)
-    paragraph "These throw with a descriptive message on failure. Designed for use directly in / blocks without wrapping in ."
-      code "A11yAssertionError"
-      code "it()"
-      code "test()"
-      code "expect()"
-    paragraph "Part of . Prefer the form? See , which wraps these same checks."
-      link "@real-a11y-dev/testing"
-        code "@real-a11y-dev/testing"
-      code "expect(el).toHaveValidHeadingOrder()"
-      link "Matchers"
-    heading "collectFindings(root, rules?)" (level 2)
-      code "collectFindings(root, rules?)"
-    paragraph "The non-throwing primitive underneath every helper. It runs the rules over a tree extraction and returns violation as a structured , instead of throwing on the first. Reach for it to build a report, a custom matcher, or to feed an audit to another tool."
-      code "assert*"
-      strong "single"
-      strong "every"
-      code "Finding[]"
-    button "Copy Code"
-      code
-    paragraph "is a DOM an already-extracted tree (). Passing a pre-extracted tree runs the rules over the snapshot used for the serialized tree / outline / tab order, so a multi-view report can't be internally inconsistent on a page that changes between extractions."
-      code "root"
-      code "Element"
-      strong "or"
-      code "ExtractionResult"
-      emphasis "same"
-    paragraph "Each carries:"
-      code "Finding"
-    table
-      rowgroup
-        row
-          rowheader "Field"
-          rowheader "Meaning"
-      rowgroup
-        row
-          cell "rule"
-            code "rule"
-          cell "Which rule fired — one of ALL_RULES (below)."
-            code "ALL_RULES"
-        row
-          cell "severity"
-            code "severity"
-          cell ""error" blocks use (unlabeled controls, unlabeled dialogs); "warning" is triage-later (heading order, duplicate landmarks, images missing alt)."
-            code ""error""
-            code ""warning""
-        row
-          cell "message"
-            code "message"
-          cell "Self-contained description of the problem."
-        row
-          cell "role / name / tagName"
-            code "role"
-            code "name"
-            code "tagName"
-          cell "The offending node, when the finding is node-scoped."
-        row
-          cell "locator"
-            code "locator"
-          cell "Best-effort CSS selector path, so the element is findable."
-        row
-          cell "context"
-            code "context"
-          cell "Disambiguating href / nearest landmark, when available."
-            code "href"
-    heading "ALL_RULES" (level 3)
-      code "ALL_RULES"
-    paragraph "The full rule set runs by default:"
-      code "collectFindings"
-    button "Copy Code"
-      code
-    paragraph "Pass a subset as the second argument to run only some. The four helpers below are thin wrappers over for one rule each."
-      code "assert*"
-      code "collectFindings"
-    heading "listByRole(root, filter)" (level 2)
-      code "listByRole(root, filter)"
-    paragraph "Lists every element in one category — , , , , , or — as plus a best-effort locator, using the same role groups as the extension's filter tabs. Returns a formatted string; a token-efficient way to review one kind of element at a time."
-      code ""link""
-      code ""button""
-      code ""form""
-      code ""landmark""
-      code ""image""
-      code ""heading""
-      code "role "name""
-    button "Copy Code"
-      code
-    heading "assertNoUnlabeledInteractive(root)" (level 2)
-      code "assertNoUnlabeledInteractive(root)"
-    paragraph "Throws if any interactive element (button, link, textbox, combobox, checkbox, radio, etc.) has an empty accessible name."
-    button "Copy Code"
-      code
-    paragraph "Error message example:"
-    button "Copy Code"
-      code
-    heading "assertHeadingOrder(root)" (level 2)
-      code "assertHeadingOrder(root)"
-    paragraph "Throws if:"
-    list
-      listitem "There is not exactly one"
-        code "h1"
-      listitem "Any heading level is skipped (e.g., followed directly by )"
-        code "h2"
-        code "h4"
-    button "Copy Code"
-      code
-    heading "assertDialogsLabeled(root)" (level 2)
-      code "assertDialogsLabeled(root)"
-    paragraph "Throws if any or element has no accessible name (via or )."
-      code "dialog"
-      code "alertdialog"
-      code "aria-label"
-      code "aria-labelledby"
-    button "Copy Code"
-      code
-    heading "assertLandmarkStructure(root)" (level 2)
-      code "assertLandmarkStructure(root)"
-    paragraph "Throws if:"
-    list
-      listitem "There is no landmark"
-        code "main"
-      listitem "There is more than one landmark"
-        code "main"
-      listitem "There is more than one (header) landmark"
-        code "banner"
-      listitem "There is more than one (footer) landmark"
-        code "contentinfo"
-    button "Copy Code"
-      code
-    heading "A11yAssertionError" (level 2)
-      code "A11yAssertionError"
-    paragraph "All four assertions throw this error type on failure. Import it to catch or assert against it directly:"
-    button "Copy Code"
-      code
-    heading "See also" (level 2)
-    list
-      listitem "— the same checks as matchers with negation"
-        link "Matchers"
-        code "expect"
-        code ".not"
-      listitem "— run these assertions against a real browser"
-        link "Playwright adapter"
-  contentinfo
-    link "Edit this page on GitHub"
-    paragraph "Last updated:"
-      time "[redacted]"
-    navigation "Pager"
-      link "Previous pageSnapshots"
-      link "Next pageMatchers"
+contentinfo
+  link "Edit this page on GitHub"
+  paragraph "Last updated:"
+    time "[redacted]"
+  navigation "Pager"
+    link "Previous pageSnapshots"
+    link "Next pageMatchers"

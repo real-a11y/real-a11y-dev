@@ -1,171 +1,171 @@
-  link "Skip to content"
-  banner
-    link "Real A11y"
-    button "Search"
-    navigation "Main Navigation"
-      link "Guide"
-      link "Recipes"
-      link "Packages"
-      button "v0.1 · Beta"
-    switch "Switch to dark theme"
-    link "github"
-  complementary
-    navigation "Sidebar Navigation"
-      button "Introduction"
-        heading "Introduction" (level 2)
-      link "Getting Started"
-        paragraph "Getting Started"
-      link "Core Concepts"
-        paragraph "Core Concepts"
-      link "Accessibility Snapshots"
-        paragraph "Accessibility Snapshots"
-      link "Snapshots vs. Other Tools"
-        paragraph "Snapshots vs. Other Tools"
-      link "Why Real A11y?"
-        paragraph "Why Real A11y?"
-      button "Reading the Tree"
-        heading "Reading the Tree" (level 2)
-      link "Understanding the Views"
-        paragraph "Understanding the Views"
-      link "DOM View"
-        paragraph "DOM View"
-      link "A11y View"
-        paragraph "A11y View"
-      link "Headings View"
-        paragraph "Headings View"
-      link "TAB View"
-        paragraph "TAB View"
-      link "Panel features"
-        paragraph "Panel features"
-      button "Chrome Extension"
-        heading "Chrome Extension" (level 2)
-      link "Overview & Install"
-        paragraph "Overview & Install"
-      button "Packages"
-        heading "Packages" (level 2)
-      link "@real-a11y-dev/core"
-        paragraph "@real-a11y-dev/core"
-      link "@real-a11y-dev/inspector"
-        paragraph "@real-a11y-dev/inspector"
-        link "@real-a11y-dev/testing"
-          heading "@real-a11y-dev/testing" (level 3)
-        button "toggle section"
-      link "@real-a11y-dev/react"
-        paragraph "@real-a11y-dev/react"
-      link "@real-a11y-dev/storybook-addon"
-        paragraph "@real-a11y-dev/storybook-addon"
-        link "@real-a11y-dev/mcp"
-          heading "@real-a11y-dev/mcp" (level 3)
-        button "toggle section"
-        link "@real-a11y-dev/cli"
-          heading "@real-a11y-dev/cli" (level 3)
-        button "toggle section"
-      button "Recipes"
-        heading "Recipes" (level 2)
-      link "Next.js (App Router + React 19)"
-        paragraph "Next.js (App Router + React 19)"
-      link "Storybook 8 + React 19"
-        paragraph "Storybook 8 + React 19"
-      link "Peer Dependencies"
-        paragraph "Peer Dependencies"
-      link "CI Diff Bot"
-        paragraph "CI Diff Bot"
-      button "Reference"
-        heading "Reference" (level 2)
-      link "Authenticated Pages"
-        paragraph "Authenticated Pages"
-      link "Accessible Names"
-        paragraph "Accessible Names"
-      link "Architecture"
-        paragraph "Architecture"
-      link "Troubleshooting"
-        paragraph "Troubleshooting"
-  navigation "On this page"
-    heading "On this page" (level 2)
-    list
-      listitem
-        link "Install"
-      listitem
-        link "Register the addon"
-      listitem
-        link "React 19 — pin the JSX runtime"
-      listitem
-        link "When you don't need this"
-      listitem
-        link "Clear the cache after adding the addon"
-      listitem
-        link "CI"
-      listitem
-        link "Known constraints"
-  main
-    heading "Storybook 8 + React 19" (level 1)
-    paragraph "is tested against Storybook 8.x with React 18 and React 19. If you're on React 19 the Vite pipeline needs one small nudge — explained below."
-      code "@real-a11y-dev/storybook-addon"
-    heading "Install" (level 2)
-    button "Copy Code"
-      code
-    paragraph "Peer dependencies (Storybook's own framework package + manager API + React) must already be installed in your project."
-    heading "Register the addon" (level 2)
-    button "Copy Code"
-      code
-    paragraph "A panel appears next to Controls and A11y for every story, showing the tree, heading outline, and tab sequence."
-      strong "Semantic Navigator"
-    separator
-    heading "React 19 — pin the JSX runtime" (level 2)
-    paragraph "Storybook externalizes for addon manager bundles but does externalize . When Vite's esbuild falls back to the classic JSX transform (which it does for some source files under React 19 + Storybook 8.6), story files emit calls that fail with — because automatic runtime is the default for React 19 projects and classic transform needs in scope."
-      code "react"
-      strong "not"
-      code "react/jsx-runtime"
-      code "React.createElement(...)"
-      code "ReferenceError: React is not defined"
-      code "React"
-    paragraph "The one-line fix lives in :"
-      code ".storybook/main.ts"
-    button "Copy Code"
-      code
-    paragraph "No source-file changes required — stories can keep writing JSX without ."
+link "Skip to content"
+banner
+  link "Real A11y"
+  button "Search"
+  navigation "Main Navigation"
+    link "Guide"
+    link "Recipes"
+    link "Packages"
+    button "v0.1 · Beta"
+  switch "Switch to dark theme"
+  link "github"
+complementary
+  navigation "Sidebar Navigation"
+    button "Introduction"
+      heading "Introduction" (level 2)
+    link "Getting Started"
+      paragraph "Getting Started"
+    link "Core Concepts"
+      paragraph "Core Concepts"
+    link "Accessibility Snapshots"
+      paragraph "Accessibility Snapshots"
+    link "Snapshots vs. Other Tools"
+      paragraph "Snapshots vs. Other Tools"
+    link "Why Real A11y?"
+      paragraph "Why Real A11y?"
+    button "Reading the Tree"
+      heading "Reading the Tree" (level 2)
+    link "Understanding the Views"
+      paragraph "Understanding the Views"
+    link "DOM View"
+      paragraph "DOM View"
+    link "A11y View"
+      paragraph "A11y View"
+    link "Headings View"
+      paragraph "Headings View"
+    link "TAB View"
+      paragraph "TAB View"
+    link "Panel features"
+      paragraph "Panel features"
+    button "Chrome Extension"
+      heading "Chrome Extension" (level 2)
+    link "Overview & Install"
+      paragraph "Overview & Install"
+    button "Packages"
+      heading "Packages" (level 2)
+    link "@real-a11y-dev/core"
+      paragraph "@real-a11y-dev/core"
+    link "@real-a11y-dev/inspector"
+      paragraph "@real-a11y-dev/inspector"
+    link "@real-a11y-dev/testing"
+      heading "@real-a11y-dev/testing" (level 3)
+    button "toggle section"
+    link "@real-a11y-dev/react"
+      paragraph "@real-a11y-dev/react"
+    link "@real-a11y-dev/storybook-addon"
+      paragraph "@real-a11y-dev/storybook-addon"
+    link "@real-a11y-dev/mcp"
+      heading "@real-a11y-dev/mcp" (level 3)
+    button "toggle section"
+    link "@real-a11y-dev/cli"
+      heading "@real-a11y-dev/cli" (level 3)
+    button "toggle section"
+    button "Recipes"
+      heading "Recipes" (level 2)
+    link "Next.js (App Router + React 19)"
+      paragraph "Next.js (App Router + React 19)"
+    link "Storybook 8 + React 19"
+      paragraph "Storybook 8 + React 19"
+    link "Peer Dependencies"
+      paragraph "Peer Dependencies"
+    link "CI Diff Bot"
+      paragraph "CI Diff Bot"
+    button "Reference"
+      heading "Reference" (level 2)
+    link "Authenticated Pages"
+      paragraph "Authenticated Pages"
+    link "Accessible Names"
+      paragraph "Accessible Names"
+    link "Architecture"
+      paragraph "Architecture"
+    link "Troubleshooting"
+      paragraph "Troubleshooting"
+navigation "On this page"
+  heading "On this page" (level 2)
+  list
+    listitem
+      link "Install"
+    listitem
+      link "Register the addon"
+    listitem
+      link "React 19 — pin the JSX runtime"
+    listitem
+      link "When you don't need this"
+    listitem
+      link "Clear the cache after adding the addon"
+    listitem
+      link "CI"
+    listitem
+      link "Known constraints"
+main
+  heading "Storybook 8 + React 19" (level 1)
+  paragraph "is tested against Storybook 8.x with React 18 and React 19. If you're on React 19 the Vite pipeline needs one small nudge — explained below."
+    code "@real-a11y-dev/storybook-addon"
+  heading "Install" (level 2)
+  button "Copy Code"
+  code
+  paragraph "Peer dependencies (Storybook's own framework package + manager API + React) must already be installed in your project."
+  heading "Register the addon" (level 2)
+  button "Copy Code"
+  code
+  paragraph "A panel appears next to Controls and A11y for every story, showing the tree, heading outline, and tab sequence."
+    strong "Semantic Navigator"
+  separator
+  heading "React 19 — pin the JSX runtime" (level 2)
+  paragraph "Storybook externalizes for addon manager bundles but does externalize . When Vite's esbuild falls back to the classic JSX transform (which it does for some source files under React 19 + Storybook 8.6), story files emit calls that fail with — because automatic runtime is the default for React 19 projects and classic transform needs in scope."
+    code "react"
+    strong "not"
+    code "react/jsx-runtime"
+    code "React.createElement(...)"
+    code "ReferenceError: React is not defined"
+    code "React"
+  paragraph "The one-line fix lives in :"
+    code ".storybook/main.ts"
+  button "Copy Code"
+  code
+  paragraph "No source-file changes required — stories can keep writing JSX without ."
+    code "import React from "react""
+  heading "When you don't need this" (level 2)
+    emphasis "don't"
+  list
+    listitem "React 18 projects — the default transform is already compatible."
+    listitem "Projects that always at the top of every component/story (classic-runtime hygiene)."
       code "import React from "react""
-    heading "When you don't need this" (level 2)
-      emphasis "don't"
-    list
-      listitem "React 18 projects — the default transform is already compatible."
-      listitem "Projects that always at the top of every component/story (classic-runtime hygiene)."
-        code "import React from "react""
-      listitem "Future Storybook versions where this is fixed upstream."
-    paragraph "If you hit at story render time, add the override."
-      code "React is not defined"
+    listitem "Future Storybook versions where this is fixed upstream."
+  paragraph "If you hit at story render time, add the override."
+    code "React is not defined"
+    code "viteFinal"
+  separator
+  heading "Clear the cache after adding the addon" (level 2)
+  paragraph "Storybook caches its addon bundles under . If you install the addon and it doesn't appear — or if you change addon configuration and nothing updates — clear the cache:"
+    code "node_modules/.cache/storybook/"
+  button "Copy Code"
+  code
+  paragraph "Then restart ."
+    code "storybook dev"
+  separator
+  heading "CI" (level 2)
+  paragraph "Storybook's addon build is deterministic; include Storybook in your regular CI jobs."
+  button "Copy Code"
+  code
+  paragraph "For accessibility-specific CI coverage on Storybook stories, pair it with the Playwright adapter — load the built Storybook and run against each story's iframe. That's more setup than most projects need; for per-story audits the panel itself + manual review is usually enough."
+    code "auditSnapshot()"
+  separator
+  heading "Known constraints" (level 2)
+  list
+    listitem "is required. The addon's manager entry uses the v8 API."
+      strong "Storybook ≥ 8.0"
+      code "@storybook/manager-api"
+    listitem "as a peer. React 19 works with the override above."
+      strong "React ≥ 18"
       code "viteFinal"
-    separator
-    heading "Clear the cache after adding the addon" (level 2)
-    paragraph "Storybook caches its addon bundles under . If you install the addon and it doesn't appear — or if you change addon configuration and nothing updates — clear the cache:"
-      code "node_modules/.cache/storybook/"
-    button "Copy Code"
-      code
-    paragraph "Then restart ."
-      code "storybook dev"
-    separator
-    heading "CI" (level 2)
-    paragraph "Storybook's addon build is deterministic; include Storybook in your regular CI jobs."
-    button "Copy Code"
-      code
-    paragraph "For accessibility-specific CI coverage on Storybook stories, pair it with the Playwright adapter — load the built Storybook and run against each story's iframe. That's more setup than most projects need; for per-story audits the panel itself + manual review is usually enough."
-      code "auditSnapshot()"
-    separator
-    heading "Known constraints" (level 2)
-    list
-      listitem "is required. The addon's manager entry uses the v8 API."
-        strong "Storybook ≥ 8.0"
-        code "@storybook/manager-api"
-      listitem "as a peer. React 19 works with the override above."
-        strong "React ≥ 18"
-        code "viteFinal"
-      listitem "If anything in your Storybook config transitively loads a second copy of React (some legacy addons do this), the manager will crash. Run — there should be exactly one resolution."
-        strong "Mixed React versions on the page will fail."
-        code "npm ls react"
-  contentinfo
-    link "Edit this page on GitHub"
-    paragraph "Last updated:"
-      time "[redacted]"
-    navigation "Pager"
-      link "Previous pageNext.js (App Router + React 19)"
-      link "Next pagePeer Dependencies"
+    listitem "If anything in your Storybook config transitively loads a second copy of React (some legacy addons do this), the manager will crash. Run — there should be exactly one resolution."
+      strong "Mixed React versions on the page will fail."
+      code "npm ls react"
+contentinfo
+  link "Edit this page on GitHub"
+  paragraph "Last updated:"
+    time "[redacted]"
+  navigation "Pager"
+    link "Previous pageNext.js (App Router + React 19)"
+    link "Next pagePeer Dependencies"
