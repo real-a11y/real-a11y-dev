@@ -155,6 +155,36 @@ function childCount(n: number): string {
   return `${n} ${n === 1 ? "child" : "children"}`;
 }
 
+/**
+ * A child-list change, id-free. core flags `childIds` when the child count OR
+ * the child order differs, so counts alone would render a pure reorder as an
+ * identical `N → N` (a change line showing no difference). Instead: report the
+ * count transition, annotate `(reordered)` when surviving children moved, and
+ * render a pure reorder as `reordered (N children)` — no misleading arrow. Ids
+ * are used only to detect membership/order changes, never emitted; the exact
+ * permutation isn't recoverable here (the moved children carry no change of
+ * their own), so a reorder is reported as a fact, not a sequence.
+ */
+function childIdsDetail(change: NodeChange): string {
+  const before = change.before.childIds;
+  const after = change.after.childIds;
+  const beforeSet = new Set(before);
+  const afterSet = new Set(after);
+  const removed = before.filter((id) => !afterSet.has(id)).length;
+  const added = after.filter((id) => !beforeSet.has(id)).length;
+
+  if (added === 0 && removed === 0) {
+    // Same membership, so `childIds` was flagged for order alone.
+    return `childIds reordered (${childCount(after.length)})`;
+  }
+  // Did the children present on BOTH sides also change relative order?
+  const survivorsBefore = before.filter((id) => afterSet.has(id));
+  const survivorsAfter = after.filter((id) => beforeSet.has(id));
+  const reordered = survivorsBefore.join(",") !== survivorsAfter.join(",");
+  const suffix = reordered ? " (reordered)" : "";
+  return `childIds ${childCount(before.length)} → ${childCount(after.length)}${suffix}`;
+}
+
 /** Walk a dot-path (`a11y.states.expanded`) to its value; undefined if absent. */
 function resolvePath(node: SemanticNode, path: string): unknown {
   return path
@@ -182,11 +212,7 @@ function changeDetail(
   path: string,
   redact?: RegExp[],
 ): string {
-  if (path === "childIds") {
-    return `childIds ${childCount(change.before.childIds.length)} → ${childCount(
-      change.after.childIds.length,
-    )}`;
-  }
+  if (path === "childIds") return childIdsDetail(change);
   const before = formatValue(resolvePath(change.before, path), redact);
   const after = formatValue(resolvePath(change.after, path), redact);
   return `${path} ${before} → ${after}`;
@@ -198,9 +224,14 @@ function focusLine(
   after: SemanticNode | null | undefined,
   redact?: RegExp[],
 ): string | null {
+  // A transition needs BOTH endpoints. `undefined` = "not supplied" (caller
+  // isn't tracking focus, or supplied only one side); only an explicit `null`
+  // means "nothing focused". Conflating them would render a one-sided call as
+  // a false focus-lost/gained claim, so require both to be present.
+  if (before === undefined || after === undefined) return null;
   const beforeId = before?.id ?? null;
   const afterId = after?.id ?? null;
-  if (beforeId === afterId) return null; // both absent, or the same node
+  if (beforeId === afterId) return null; // both null, or the same node
   const from = before ? nodeLabel(before, redact) : "(none)";
   const to = after ? nodeLabel(after, redact) : "(none)";
   return `focus: ${from} → ${to}`;

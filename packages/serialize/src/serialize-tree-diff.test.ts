@@ -108,6 +108,57 @@ describe("serializeTreeDiff", () => {
     expect(out).not.toContain("sn-");
   });
 
+  it("renders a pure child reorder as `reordered (N children)`, not an identical N → N", () => {
+    // core flags childIds on an order change even when the count is unchanged.
+    const before = mk("list", {
+      id: "sn-l",
+      name: "Tabs",
+      childIds: ["sn-1", "sn-2", "sn-3"],
+    });
+    const after = mk("list", {
+      id: "sn-l",
+      name: "Tabs",
+      childIds: ["sn-3", "sn-2", "sn-1"],
+    });
+    const out = serializeTreeDiff({
+      ...empty,
+      changed: [{ id: "sn-l", before, after, changes: ["childIds"] }],
+    });
+    expect(out).toBe('~ list "Tabs": childIds reordered (3 children)');
+    expect(out).not.toContain("→"); // no misleading identical-sides arrow
+    expect(out).not.toContain("sn-");
+  });
+
+  it("annotates (reordered) when membership AND order both changed", () => {
+    const before = mk("list", {
+      id: "sn-l",
+      childIds: ["sn-1", "sn-2", "sn-3"],
+    });
+    // drop sn-3, and swap the surviving two
+    const after = mk("list", { id: "sn-l", childIds: ["sn-2", "sn-1"] });
+    expect(
+      serializeTreeDiff({
+        ...empty,
+        changed: [{ id: "sn-l", before, after, changes: ["childIds"] }],
+      }),
+    ).toBe("~ list: childIds 3 children → 2 children (reordered)");
+  });
+
+  it("does not annotate (reordered) when survivors keep their order", () => {
+    const before = mk("list", { id: "sn-l", childIds: ["sn-1", "sn-2"] });
+    // prepend a new child — survivors sn-1, sn-2 stay in order
+    const after = mk("list", {
+      id: "sn-l",
+      childIds: ["sn-9", "sn-1", "sn-2"],
+    });
+    expect(
+      serializeTreeDiff({
+        ...empty,
+        changed: [{ id: "sn-l", before, after, changes: ["childIds"] }],
+      }),
+    ).toBe("~ list: childIds 2 children → 3 children");
+  });
+
   it("singularizes a one-child count", () => {
     const before = mk("list", { id: "sn-l", childIds: [] });
     const after = mk("list", { id: "sn-l", childIds: ["sn-1"] });
@@ -195,6 +246,20 @@ describe("serializeTreeDiff", () => {
       ).toBe("(no changes)");
     });
 
+    it("requires BOTH sides — a one-sided call is not a false focus-lost/gained", () => {
+      // undefined = "not supplied", distinct from null = "nothing focused".
+      expect(serializeTreeDiff(empty, { focusBefore: btn })).toBe(
+        "(no changes)",
+      );
+      expect(serializeTreeDiff(empty, { focusAfter: dialog })).toBe(
+        "(no changes)",
+      );
+      // …but an explicit null on one side IS a real transition.
+      expect(
+        serializeTreeDiff(empty, { focusBefore: btn, focusAfter: null }),
+      ).toBe('focus: button "Open" → (none)');
+    });
+
     it("appends after the change sections", () => {
       const out = serializeTreeDiff(
         { ...empty, added: [mk("option", { id: "sn-o", name: "Spain" })] },
@@ -271,6 +336,25 @@ describe("serializeTreeDiff — end to end with real extraction", () => {
     expect(out).toContain('+ option "France"');
     expect(out).toMatch(/~ button "Country": a11y\.states\.expanded/);
     // The pinned invariant: a committed diff never carries a node id.
+    expect(out).not.toContain("sn-");
+  });
+
+  it("catches a pure child reorder (the regression a count-only diff would miss)", () => {
+    const root = document.createElement("div");
+    root.innerHTML = `<ul role="list"><li>A</li><li>B</li><li>C</li></ul>`;
+    document.body.appendChild(root);
+
+    const ul = root.querySelector("ul")!;
+    const before = extract(root);
+    // Reverse by re-appending the SAME <li> nodes (same WeakMap ids → a pure
+    // reorder, not add/remove).
+    [...ul.children].reverse().forEach((li) => ul.appendChild(li));
+    const after = extract(root);
+
+    const out = serializeTreeDiff(diffTrees(before, after));
+    // The reorder is visible (not a silent `3 children → 3 children` no-op),
+    // so a committed snapshot would flag this regression.
+    expect(out).toMatch(/childIds reordered \(3 children\)/);
     expect(out).not.toContain("sn-");
   });
 });

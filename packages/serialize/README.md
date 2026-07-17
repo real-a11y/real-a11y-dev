@@ -61,7 +61,9 @@ serializeTreeDiff(diffTrees(before, after));
 One line per added (`+`) / removed (`-`) node, one per changed field (`~`), in
 document order. Nodes are labeled `role "name" (level N)` — **never a node id**,
 so the output is snapshot-stable; a child-list change renders as counts for the
-same reason. An empty diff renders `(no changes)`.
+same reason. A pure reorder shows `childIds reordered (3 children)` (so a
+tab-order or menu reorder isn't a silent no-op). An empty diff renders
+`(no changes)`.
 
 Options: `redact` (as above), plus `focusBefore` / `focusAfter` — pass the
 focused node at each capture point and the diff gains a trailing focus line,
