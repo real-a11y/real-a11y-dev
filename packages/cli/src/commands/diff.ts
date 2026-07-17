@@ -18,7 +18,7 @@ import {
   type CommandFn,
 } from "../args.js";
 import { applyBaseline, loadBaseline } from "../baseline.js";
-import { diffArtifacts } from "../diff/page-diff.js";
+import { diffArtifacts, noPagesMatched } from "../diff/page-diff.js";
 import { CliError, EXIT, exceedsThreshold } from "../exit.js";
 
 import { writeReport } from "../output.js";
@@ -112,6 +112,18 @@ export const diffCommand: CommandFn = async (positionals, flags) => {
   // the missing axis as everything-new / all-removed. Refuse loudly instead.
   assertFullArtifact(base, `base snapshot (${positionals[0]})`);
   assertFullArtifact(pr, `PR snapshot (${positionals[1]})`);
+
+  // A diff that matches nothing still renders (every page added/removed) and
+  // still exits on its NEW findings — it just never compares structure, so
+  // --explain has nothing to say. Say so; the usual cause is names derived from
+  // positional URLs that differ by host/port between the two runs.
+  if (noPagesMatched(base, pr)) {
+    process.stderr.write(
+      "real-a11y: warning: no pages matched by name between the two snapshots — " +
+        "pages join by NAME, not URL; snapshot both sides with the same page names " +
+        "(config `urls` entries or A11Y_PAGES [{name,url}])\n",
+    );
+  }
 
   // --baseline: mark accepted findings on the PR side BEFORE diffing — the
   // suppressed flag rides the finding object into the entries, so a NEW

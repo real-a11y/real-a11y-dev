@@ -112,6 +112,23 @@ function pageHunks(
   };
 }
 
+/**
+ * True when both sides have pages but share no `name` at all — so every page
+ * classifies as added/removed and no pair is ever structurally compared. Since
+ * the join is by name (never URL), this is nearly always a snapshotting slip:
+ * both sides taken with positional URLs, whose auto-derived names then differ
+ * by host/port. A genuine full rewrite trips it too, hence a warning, not an
+ * error. Empty on either side is not this case — nothing to match against.
+ */
+export function noPagesMatched(
+  base: SnapshotArtifact,
+  pr: SnapshotArtifact,
+): boolean {
+  if (base.pages.length === 0 || pr.pages.length === 0) return false;
+  const baseNames = new Set(base.pages.map((p) => p.name));
+  return !pr.pages.some((p) => baseNames.has(p.name));
+}
+
 export function diffArtifacts(
   base: SnapshotArtifact,
   pr: SnapshotArtifact,
