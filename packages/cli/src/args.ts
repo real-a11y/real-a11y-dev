@@ -95,6 +95,7 @@ const SNAPSHOT_FLAGS: Options = {
   rules: { type: "string" },
   md: { type: "boolean" },
   format: { type: "string", short: "f" },
+  only: { type: "string" },
   baseline: { type: "string" },
   "update-baseline": { type: "boolean" },
   "fail-on": { type: "string" },
@@ -111,8 +112,7 @@ const DIFF_FLAGS: Options = {
   baseline: { type: "string" },
   "ignore-view-line": { type: "string", multiple: true },
   explain: { type: "boolean" },
-  "findings-only": { type: "boolean" },
-  "views-only": { type: "boolean" },
+  only: { type: "string" },
   "max-lines": { type: "string" },
   "max-pages": { type: "string" },
   format: { type: "string", short: "f" },
@@ -304,6 +304,9 @@ Flags:
                          sarif needs --config (results anchor to file paths;
                          GitHub: upload with codeql-action/upload-sarif@v4)
   --md                   Shorthand for --format md
+  --only <axis>          findings | views — shape the md report to one axis
+                         (the issue count stays; --fail-on still gates on the
+                         full findings; the JSON artifact is never filtered)
   --rules <ids>          Comma-separated subset (overrides config)
   --baseline <file>      Suppress findings this baseline accepts (kept in the
                          report, out of the --fail-on count and sarif)
@@ -340,10 +343,8 @@ Flags:
   --fail-on <level>      error | warning | never          (default: error)
   --explain              Add a plain-language summary of structural changes
                          (off by default — the neutral diff makes no inferences)
-  --findings-only        Show only the findings delta; hide the structural
-                         views (output filter — the exit gate is unchanged)
-  --views-only           Show only the structural views; hide per-finding
-                         detail (the gate still runs on NEW findings)
+  --only <axis>          findings | views — report just one axis (output
+                         filter; the exit gate still runs on NEW findings)
   --max-lines <n>        Cap the structural diff to n lines per page, then
                          "… N more" (default: full — for CI comments)
   --max-pages <n>        Detail at most n changed pages, then list the rest
@@ -431,6 +432,21 @@ export function parseFormat<T extends string>(
   if ((allowed as readonly string[]).includes(String(value))) return value as T;
   throw new CliError(
     `--format expects ${allowed.join(" | ")} — got "${String(value)}"`,
+  );
+}
+
+/** The report axis for `--only`; undefined = the full two-axis report. An enum
+ * (not a boolean pair) so contradictory states are unrepresentable and a
+ * config default is overridable from the command line. */
+export type OnlyAxis = "findings" | "views";
+
+export function parseOnly(
+  value: string | boolean | undefined,
+): OnlyAxis | undefined {
+  if (value === undefined) return undefined;
+  if (value === "findings" || value === "views") return value;
+  throw new CliError(
+    `--only expects findings | views — got "${String(value)}"`,
   );
 }
 

@@ -51,8 +51,7 @@ h1 Commands & flags
     h3 --baseline <file>
     h3 --update-baseline
     h3 --explain
-    h3 --findings-only
-    h3 --views-only
+    h3 --only <axis>
     h3 --ignore-view-line <regex>
     h3 --max-lines <n>
     h3 --max-pages <n>

@@ -11,7 +11,12 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { parseFailOn, parseFormat, type CommandFn } from "../args.js";
+import {
+  parseFailOn,
+  parseFormat,
+  parseOnly,
+  type CommandFn,
+} from "../args.js";
 import { applyBaseline, loadBaseline } from "../baseline.js";
 import { diffArtifacts } from "../diff/page-diff.js";
 import { CliError, EXIT, exceedsThreshold } from "../exit.js";
@@ -90,28 +95,13 @@ export const diffCommand: CommandFn = async (positionals, flags) => {
   const maxLines = parsePositive("--max-lines", flags["max-lines"]);
   const maxPages = parsePositive("--max-pages", flags["max-pages"]);
 
-  // Output filters — they govern what's REPORTED, never what gates: the exit
-  // code is computed from the full result either way, so putting --views-only
-  // in a CI job can't silently disable enforcement.
-  const findingsOnly = flags["findings-only"] === true;
-  const viewsOnly = flags["views-only"] === true;
-  if (findingsOnly && viewsOnly) {
-    throw new CliError(
-      "--findings-only and --views-only are mutually exclusive",
-      "omit both for the full report",
-    );
-  }
-  if (findingsOnly && flags.explain === true) {
-    throw new CliError(
-      "--explain summarizes the structural views that --findings-only hides",
-      "drop one of the two (an a11y.config.json defaults block may be supplying it)",
-    );
-  }
-  const only = findingsOnly
-    ? ("findings" as const)
-    : viewsOnly
-      ? ("views" as const)
-      : undefined;
+  // --only filters what's REPORTED, never what gates: the exit code is
+  // computed from the full result either way, so `--only views` in a CI job
+  // can't silently disable enforcement. Under `--only findings` the view-axis
+  // modifiers (--explain, --max-lines, --ignore-view-line) have nothing left
+  // to modify and are uniformly inert — deliberate, so a config default like
+  // `defaults: { explain: true }` can't wedge the command.
+  const only = parseOnly(flags.only);
 
   const base = readArtifact(positionals[0], "base");
   const pr = readArtifact(positionals[1], "PR");

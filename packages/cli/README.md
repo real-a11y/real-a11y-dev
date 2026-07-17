@@ -187,12 +187,17 @@ real-a11y diff base.json pr.json --explain --max-pages 5 --max-lines 20 -o comme
 `--max-pages N` details the first N changed routes and lists the rest;
 `--max-lines N` caps each page's diff and points to the full output.
 
-To show just one axis, `--findings-only` hides the structural views and
-`--views-only` hides the per-finding detail. Both are **output filters**: the
-exit gate always runs on the full result, so a `--views-only` job can exit `1`
+To report just one axis, pass `--only findings` (hide the structural views) or
+`--only views` (hide the per-finding detail). It's an **output filter**: the
+exit gate always runs on the full result, so an `--only views` job can exit `1`
 on a new finding while showing only structure — the one-line findings summary
-stays to explain it. (`--findings-only` conflicts with `--explain`, whose
-statements summarize the views it hides.)
+stays to explain it. Under `--only findings`, view-axis modifiers like
+`--explain` and `--max-lines` are simply inert (nothing left to modify).
+
+The same flag shapes `snapshot`'s **md report** (`--md --only views` exports a
+page set's tree/outline/tabs; `--md --only findings` a findings report). The
+JSON artifact is never filtered — it's the diffable input and always carries
+both axes.
 
 Generated content that legitimately differs on every build (a "last updated"
 timestamp, a build hash) would otherwise read as drift on every page — drop

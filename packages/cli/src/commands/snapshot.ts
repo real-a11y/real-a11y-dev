@@ -18,6 +18,7 @@ import { resolve } from "node:path";
 import {
   parseFailOn,
   parseFormat,
+  parseOnly,
   parseOpenOptions,
   parseRules,
   type CommandFn,
@@ -90,6 +91,22 @@ export const snapshotCommand: CommandFn = async (positionals, flags) => {
     throw new CliError(
       "--format sarif needs a config file — SARIF results anchor to repo file paths, and the config (or its pages' sourcePath) is that anchor",
       "run with --config a11y.config.json instead of A11Y_PAGES",
+    );
+  }
+
+  // --only shapes the human md REPORT only. The JSON artifact is the diffable
+  // input and always carries both axes (a filtered artifact couldn't be
+  // diffed); sarif/junit/jsonl are findings-shaped by construction. The
+  // --fail-on gate runs on the full findings regardless of the filter.
+  const only = parseOnly(flags.only);
+  if (only && effectiveFormat !== "md") {
+    throw new CliError(
+      `--only ${only} shapes the md report — --format ${effectiveFormat} ${
+        effectiveFormat === "json"
+          ? "is the diffable artifact and always carries both axes"
+          : "is findings-shaped by construction"
+      }`,
+      "add --format md (or --md) for a filtered human report",
     );
   }
   const output =
@@ -206,7 +223,7 @@ export const snapshotCommand: CommandFn = async (positionals, flags) => {
   });
   const content =
     effectiveFormat === "md"
-      ? renderSnapshotMarkdown(artifact)
+      ? renderSnapshotMarkdown(artifact, only)
       : effectiveFormat === "sarif"
         ? renderSarif(artifact, { configPath: configPath as string })
         : effectiveFormat === "junit"

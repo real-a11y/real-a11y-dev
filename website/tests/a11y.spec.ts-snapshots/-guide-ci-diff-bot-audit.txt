@@ -400,10 +400,10 @@
       strong "new"
     paragraph "If your pages render generated content that differs on every build (a "last updated" timestamp, a build hash), add to the diff invocation so it doesn't read as drift on every page."
       code "--ignore-view-line '<regex>'"
-    paragraph "Want a leaner comment? posts just the findings delta and just the structural diff. Both are output filters — the exit gate still runs on the full result, so a gating step can fail the build on a new finding while the comment shows only structure (the one-line findings summary explains why)."
-      code "--findings-only"
-      code "--views-only"
-      code "--views-only"
+    paragraph "Want a leaner comment? posts just the findings delta and just the structural diff. It's an output filter — the exit gate still runs on the full result, so a gating step can fail the build on a new finding while the comment shows only structure (the one-line findings summary explains why)."
+      code "--only findings"
+      code "--only views"
+      code "--only views"
     button "Copy Code"
       code
     blockquote

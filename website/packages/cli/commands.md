@@ -145,6 +145,7 @@ writes the artifact unless you ask it to gate.
 ```sh
 real-a11y snapshot https://example.com -o base.json
 real-a11y snapshot --config a11y.config.json --md -o report.md
+real-a11y snapshot https://example.com --md --only views -o views.md
 real-a11y snapshot --config a11y.config.json --update-baseline
 real-a11y snapshot --config a11y.config.json --baseline .a11y-baseline.json --fail-on error
 ```
@@ -153,7 +154,8 @@ real-a11y snapshot --config a11y.config.json --baseline .a11y-baseline.json --fa
 [`--rules`](#rules-ids) · [`--fail-on`](#fail-on-level) (default `never`) ·
 [`--include-generic`](#include-generic) ·
 [`-f, --format`](#f-format-fmt) (`json | md | sarif | junit | jsonl`) ·
-[`--md`](#md) · [`--baseline`](#baseline-file) ·
+[`--md`](#md) · [`--only`](#only-axis) (`findings | views`, md-report-only) ·
+[`--baseline`](#baseline-file) ·
 [`--update-baseline`](#update-baseline) · [`-o, --output`](#o-output-file) ·
 [`-q, --quiet`](#q-quiet) · [`--verbose`](#verbose) · [`-h, --help`](#h-help).
 
@@ -166,20 +168,20 @@ on NEW findings at or above [`--fail-on`](#fail-on-level); fixes and drift never
 fail the build.
 
 Default output is neutral — findings plus a real unified diff of the structure.
-Add [`--explain`](#explain) for a plain-language summary, or filter one axis's
-detail with [`--findings-only`](#findings-only) / [`--views-only`](#views-only)
-(output filters — the exit gate is unchanged).
+Add [`--explain`](#explain) for a plain-language summary, or report a single
+axis with [`--only findings | views`](#only-axis) (an output filter — the exit
+gate is unchanged).
 
 ```sh
 real-a11y diff base.json pr.json
 real-a11y diff base.json pr.json --explain
-real-a11y diff base.json pr.json --findings-only
+real-a11y diff base.json pr.json --only findings
 real-a11y diff base.json pr.json --format md --explain --max-pages 5 --max-lines 20 -o comment.md
 ```
 
 **Flags:** [Config](#config) · [`--fail-on`](#fail-on-level) (default `error`) ·
-[`--explain`](#explain) · [`--findings-only`](#findings-only) ·
-[`--views-only`](#views-only) · [`--max-lines`](#max-lines-n) ·
+[`--explain`](#explain) · [`--only`](#only-axis) (`findings | views`) ·
+[`--max-lines`](#max-lines-n) ·
 [`--max-pages`](#max-pages-n) · [`--baseline`](#baseline-file) ·
 [`--ignore-view-line`](#ignore-view-line-regex) ·
 [`-f, --format`](#f-format-fmt) (`pretty | json | md`) ·
@@ -505,41 +507,40 @@ target, or focus that appeared or vanished). Because focus isn't structure, it's
 excluded from the structural diff — a page where _only_ focus moved shows no
 add/remove churn, just this one statement.
 
-Conflicts with [`--findings-only`](#findings-only), which hides the structural
-views the statements summarize.
+Under [`--only findings`](#only-axis) the statements are inert — the filter
+removes the structure axis they summarize (same as `--max-lines`), so a config
+default of `explain: true` never conflicts with an explicit filter.
 
-### `--findings-only`
+### `--only <axis>`
 
-- **Type:** boolean · **Default:** `false` · **Commands:** diff
+- **Type:** `findings | views` · **Default:** the full two-axis report ·
+  **Commands:** diff, snapshot
 
-Show only the findings delta (new / changed / fixed) — hide the structural view
-diff. An **output filter**: the exit gate is computed from the full result
-either way, and `--format json` omits the `views`/`structural` arrays while
-keeping the per-page `structuralDiff` boolean and the summary.
+Report just one axis: `--only findings` (the accessibility problems) or
+`--only views` (the tree/outline/tab-order structure). An **output filter** —
+the exit gate is computed from the full findings either way, so a filtered CI
+run can exit non-zero while showing only structure; the always-present findings
+summary (diff) / per-page issue count (snapshot md) is what explains it.
 
-Mutually exclusive with [`--views-only`](#views-only); conflicts with
-[`--explain`](#explain) (its statements summarize the views this flag hides —
-if you didn't pass `--explain`, check your `a11y.config.json` defaults).
+An enum on purpose: contradictory states are unrepresentable, and a config
+default (`"defaults": { "only": "findings" }`) is overridable from the command
+line by passing the other value.
 
-```sh
-real-a11y diff base.json pr.json --findings-only
-```
-
-### `--views-only`
-
-- **Type:** boolean · **Default:** `false` · **Commands:** diff
-
-Show only the structural view diff — hide the per-finding detail. The one-line
-findings summary still prints and **the exit gate still runs on NEW findings**,
-so a `--views-only` run in CI can exit `1` while showing no finding entries;
-the summary line is what explains it. In `--format json` the `new`/`changed`/
-`removed` arrays are omitted; the summary stays.
-
-Mutually exclusive with [`--findings-only`](#findings-only); composes with
-[`--explain`](#explain).
+- **diff** — `--only findings` hides the view hunks; view-axis modifiers
+  (`--explain`, `--max-lines`, `--ignore-view-line`) become inert. `--only
+  views` hides per-finding entries; composes with [`--explain`](#explain). In
+  `--format json` the filtered axis's arrays are omitted (`views`/`structural`
+  vs `new`/`changed`/`removed`); the summary and per-page `structuralDiff`
+  boolean always ship.
+- **snapshot** — shapes the **`--format md` report** only. The JSON artifact is
+  never filtered (it's the diffable input and always carries both axes), and
+  `sarif`/`junit`/`jsonl` are findings-shaped by construction — combining
+  `--only` with any non-`md` format fails fast with a hint.
 
 ```sh
-real-a11y diff base.json pr.json --views-only --explain
+real-a11y diff base.json pr.json --only findings
+real-a11y diff base.json pr.json --only views --explain
+real-a11y snapshot https://example.com --md --only views -o views.md
 ```
 
 ### `--ignore-view-line <regex>`

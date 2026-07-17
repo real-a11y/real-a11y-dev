@@ -181,6 +181,21 @@ describe("only-filters (--findings-only / --views-only)", () => {
     expect(out).not.toContain("== Docs"); // page had no finding changes
   });
 
+  it("--explain is inert under --findings-only (like --max-lines: nothing left to modify)", () => {
+    // The filter removes the whole structure axis, so its modifiers have
+    // nothing to apply to — no statements, no hint, and no error. This is
+    // what lets a config `defaults: { explain: true }` coexist with an
+    // explicit --findings-only.
+    const out = renderDiffPretty(both, {
+      color: false,
+      only: "findings",
+      explain: true,
+    });
+    expect(out).toContain("+ new [error]");
+    expect(out).not.toContain("structure changed (advisory):");
+    expect(out).not.toContain("Run with --explain");
+  });
+
   it("json --findings-only omits views/structural, keeps new + structuralDiff + summary", () => {
     const parsed = JSON.parse(renderDiffJson(both, "findings")) as {
       summary: { new: number };
