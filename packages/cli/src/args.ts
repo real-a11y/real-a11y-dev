@@ -111,6 +111,8 @@ const DIFF_FLAGS: Options = {
   baseline: { type: "string" },
   "ignore-view-line": { type: "string", multiple: true },
   explain: { type: "boolean" },
+  "findings-only": { type: "boolean" },
+  "views-only": { type: "boolean" },
   "max-lines": { type: "string" },
   "max-pages": { type: "string" },
   format: { type: "string", short: "f" },
@@ -338,6 +340,10 @@ Flags:
   --fail-on <level>      error | warning | never          (default: error)
   --explain              Add a plain-language summary of structural changes
                          (off by default — the neutral diff makes no inferences)
+  --findings-only        Show only the findings delta; hide the structural
+                         views (output filter — the exit gate is unchanged)
+  --views-only           Show only the structural views; hide per-finding
+                         detail (the gate still runs on NEW findings)
   --max-lines <n>        Cap the structural diff to n lines per page, then
                          "… N more" (default: full — for CI comments)
   --max-pages <n>        Detail at most n changed pages, then list the rest

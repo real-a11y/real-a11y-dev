@@ -166,16 +166,20 @@ on NEW findings at or above [`--fail-on`](#fail-on-level); fixes and drift never
 fail the build.
 
 Default output is neutral — findings plus a real unified diff of the structure.
-Add [`--explain`](#explain) for a plain-language summary.
+Add [`--explain`](#explain) for a plain-language summary, or filter one axis's
+detail with [`--findings-only`](#findings-only) / [`--views-only`](#views-only)
+(output filters — the exit gate is unchanged).
 
 ```sh
 real-a11y diff base.json pr.json
 real-a11y diff base.json pr.json --explain
+real-a11y diff base.json pr.json --findings-only
 real-a11y diff base.json pr.json --format md --explain --max-pages 5 --max-lines 20 -o comment.md
 ```
 
 **Flags:** [Config](#config) · [`--fail-on`](#fail-on-level) (default `error`) ·
-[`--explain`](#explain) · [`--max-lines`](#max-lines-n) ·
+[`--explain`](#explain) · [`--findings-only`](#findings-only) ·
+[`--views-only`](#views-only) · [`--max-lines`](#max-lines-n) ·
 [`--max-pages`](#max-pages-n) · [`--baseline`](#baseline-file) ·
 [`--ignore-view-line`](#ignore-view-line-regex) ·
 [`-f, --format`](#f-format-fmt) (`pretty | json | md`) ·
@@ -500,6 +504,43 @@ focused at capture time differs between the two snapshots (a moved autofocus
 target, or focus that appeared or vanished). Because focus isn't structure, it's
 excluded from the structural diff — a page where _only_ focus moved shows no
 add/remove churn, just this one statement.
+
+Conflicts with [`--findings-only`](#findings-only), which hides the structural
+views the statements summarize.
+
+### `--findings-only`
+
+- **Type:** boolean · **Default:** `false` · **Commands:** diff
+
+Show only the findings delta (new / changed / fixed) — hide the structural view
+diff. An **output filter**: the exit gate is computed from the full result
+either way, and `--format json` omits the `views`/`structural` arrays while
+keeping the per-page `structuralDiff` boolean and the summary.
+
+Mutually exclusive with [`--views-only`](#views-only); conflicts with
+[`--explain`](#explain) (its statements summarize the views this flag hides —
+if you didn't pass `--explain`, check your `a11y.config.json` defaults).
+
+```sh
+real-a11y diff base.json pr.json --findings-only
+```
+
+### `--views-only`
+
+- **Type:** boolean · **Default:** `false` · **Commands:** diff
+
+Show only the structural view diff — hide the per-finding detail. The one-line
+findings summary still prints and **the exit gate still runs on NEW findings**,
+so a `--views-only` run in CI can exit `1` while showing no finding entries;
+the summary line is what explains it. In `--format json` the `new`/`changed`/
+`removed` arrays are omitted; the summary stays.
+
+Mutually exclusive with [`--findings-only`](#findings-only); composes with
+[`--explain`](#explain).
+
+```sh
+real-a11y diff base.json pr.json --views-only --explain
+```
 
 ### `--ignore-view-line <regex>`
 

@@ -7,8 +7,12 @@
  * default: findings + that diff, both facts. `--explain` adds the interpretive
  * plain-language statements on top. Full by default; `--max-lines` and
  * `--max-pages` cap the output for CI comments (the full diff still prints to
- * the job log). `--format json` always carries the machine data
- * (`views` + `structural`); the flags only govern human output.
+ * the job log; json is uncapped).
+ *
+ * `--findings-only` / `--views-only` filter the PER-PAGE DETAIL of one axis
+ * out of every format (json omits the filtered arrays) — the headline summary
+ * always reports both axes, and the exit gate is computed from the full
+ * result regardless, so a filter in a CI job can't disable enforcement.
  */
 
 import type { DiffEntry } from "../diff/findings-diff.js";
@@ -51,13 +55,16 @@ function hasHunks(page: PageDiff): boolean {
   return VIEW_NAMES.some((v) => page.viewHunks[v].length > 0);
 }
 
-/** A page worth showing: a finding change, a structural diff, or incomparable. */
-function isChanged(page: PageDiff): boolean {
-  return (
-    page.status === "incomparable" ||
-    shownEntries(page).length > 0 ||
-    hasHunks(page)
-  );
+/** Which axis of the report to render; undefined = both. */
+export type DiffSection = "findings" | "views";
+
+/** A page worth showing under the active filter: a finding change, a
+ * structural diff, or incomparable (an errored side matters to both axes). */
+function isChanged(page: PageDiff, only?: DiffSection): boolean {
+  if (page.status === "incomparable") return true;
+  if (only === "findings") return shownEntries(page).length > 0;
+  if (only === "views") return hasHunks(page);
+  return shownEntries(page).length > 0 || hasHunks(page);
 }
 
 // ── unified diff → capped line blocks ────────────────────────────────────────
@@ -129,6 +136,8 @@ export interface DiffRenderOptions {
   maxLines?: number;
   /** Detail at most N changed pages (default: unlimited). */
   maxPages?: number;
+  /** Render only one axis's per-page detail (--findings-only / --views-only). */
+  only?: DiffSection;
 }
 
 // ── pretty (terminal) ────────────────────────────────────────────────────────
@@ -173,9 +182,10 @@ export function renderDiffPretty(
   const explain = options.explain ?? false;
   const maxLines = options.maxLines ?? Infinity;
   const maxPages = options.maxPages ?? Infinity;
+  const only = options.only;
   const lines: string[] = [];
 
-  const changed = result.pages.filter(isChanged);
+  const changed = result.pages.filter((p) => isChanged(p, only));
   const structPages = result.pages.filter(hasHunks).length;
   const detailed = changed.slice(0, maxPages);
   const overflow = changed.slice(maxPages);
@@ -193,44 +203,48 @@ export function renderDiffPretty(
         `== ${page.name}${page.status !== "ok" ? ` (${page.status})` : ""}`,
       ),
     );
-    for (const e of shownEntries(page)) {
-      const f = e.finding;
-      if (e.kind === "new") {
-        const tag = f.suppressed
-          ? c.dim("+ new [baselined]")
-          : f.severity === "error"
-            ? c.red("+ new [error]")
-            : c.yellow("+ new [warning]");
-        lines.push(`  ${tag} ${f.rule}: ${f.message}`);
-        if (f.locator)
+    if (only !== "views") {
+      for (const e of shownEntries(page)) {
+        const f = e.finding;
+        if (e.kind === "new") {
+          const tag = f.suppressed
+            ? c.dim("+ new [baselined]")
+            : f.severity === "error"
+              ? c.red("+ new [error]")
+              : c.yellow("+ new [warning]");
+          lines.push(`  ${tag} ${f.rule}: ${f.message}`);
+          if (f.locator)
+            lines.push(
+              `      ${f.locator}${f.context ? `  ${c.dim(f.context)}` : ""}`,
+            );
+        } else if (e.kind === "changed") {
           lines.push(
-            `      ${f.locator}${f.context ? `  ${c.dim(f.context)}` : ""}`,
+            `  ${c.yellow("~ changed")} ${f.rule}: ${(e.changes ?? []).join("; ")}`,
           );
-      } else if (e.kind === "changed") {
-        lines.push(
-          `  ${c.yellow("~ changed")} ${f.rule}: ${(e.changes ?? []).join("; ")}`,
-        );
-        if (f.locator) lines.push(`      ${c.dim(f.locator)}`);
-      } else if (e.kind === "removed") {
-        lines.push(
-          `  ${c.dim(`- fixed [${f.severity}]`)} ${f.rule}: ${f.message}`,
-        );
+          if (f.locator) lines.push(`      ${c.dim(f.locator)}`);
+        } else if (e.kind === "removed") {
+          lines.push(
+            `  ${c.dim(`- fixed [${f.severity}]`)} ${f.rule}: ${f.message}`,
+          );
+        }
       }
     }
-    if (explain && page.structural.length) {
-      lines.push(c.dim("  structure changed (advisory):"));
-      for (const s of page.structural.slice(0, STATEMENT_CAP)) {
-        lines.push(c.dim(`    · ${s.message}`));
+    if (only !== "findings") {
+      if (explain && page.structural.length) {
+        lines.push(c.dim("  structure changed (advisory):"));
+        for (const s of page.structural.slice(0, STATEMENT_CAP)) {
+          lines.push(c.dim(`    · ${s.message}`));
+        }
+        if (page.structural.length > STATEMENT_CAP) {
+          lines.push(
+            c.dim(
+              `    · … ${page.structural.length - STATEMENT_CAP} more (see --format json)`,
+            ),
+          );
+        }
       }
-      if (page.structural.length > STATEMENT_CAP) {
-        lines.push(
-          c.dim(
-            `    · … ${page.structural.length - STATEMENT_CAP} more (see --format json)`,
-          ),
-        );
-      }
+      lines.push(...prettyViewDiff(page, maxLines, c));
     }
-    lines.push(...prettyViewDiff(page, maxLines, c));
   }
 
   if (overflow.length) {
@@ -240,7 +254,7 @@ export function renderDiffPretty(
       ),
     );
   }
-  if (!explain && structPages > 0) {
+  if (!explain && structPages > 0 && only !== "findings") {
     lines.push(
       c.dim("Run with --explain for a plain-language structural summary."),
     );
@@ -255,22 +269,35 @@ export function renderDiffPretty(
   return `${lines.join("\n")}\n`;
 }
 
-// ── json (machine surface — unchanged by the flags) ──────────────────────────
+// ── json (machine surface — only-filters omit one axis's detail arrays) ─────
 
-export function renderDiffJson(result: DiffResult): string {
+export function renderDiffJson(result: DiffResult, only?: DiffSection): string {
   const page = (p: PageDiff) => ({
     name: p.name,
     status: p.status,
     ...(p.note ? { note: p.note } : {}),
-    new: p.entries.filter((e) => e.kind === "new").map((e) => e.finding),
-    changed: p.entries
-      .filter((e) => e.kind === "changed")
-      .map((e) => ({ finding: e.finding, base: e.base, changes: e.changes })),
-    removed: p.entries
-      .filter((e) => e.kind === "removed")
-      .map((e) => e.finding),
-    views: p.views,
-    structural: p.structural,
+    // Findings detail — omitted under --views-only. The top-level `summary`
+    // and per-page `structuralDiff` always ship: they're the headline both
+    // axes need (the summary is also what explains a non-zero exit code).
+    ...(only !== "views"
+      ? {
+          new: p.entries.filter((e) => e.kind === "new").map((e) => e.finding),
+          changed: p.entries
+            .filter((e) => e.kind === "changed")
+            .map((e) => ({
+              finding: e.finding,
+              base: e.base,
+              changes: e.changes,
+            })),
+          removed: p.entries
+            .filter((e) => e.kind === "removed")
+            .map((e) => e.finding),
+        }
+      : {}),
+    // Structural detail — omitted under --findings-only.
+    ...(only !== "findings"
+      ? { views: p.views, structural: p.structural }
+      : {}),
     // Whether the unified diff has any hunk — the "did the structure change"
     // signal for consumers that don't render the hunks (the a11y-diff workflow
     // reads this to decide the comment). `structural` misses a pure TREE
@@ -353,6 +380,8 @@ export interface DiffMarkdownOptions {
   explain?: boolean;
   maxLines?: number;
   maxPages?: number;
+  /** Render only one axis's per-page detail (--findings-only / --views-only). */
+  only?: DiffSection;
 }
 
 export function renderDiffMarkdown(
@@ -362,10 +391,11 @@ export function renderDiffMarkdown(
   const explain = options.explain ?? false;
   const maxLines = options.maxLines ?? Infinity;
   const maxPages = options.maxPages ?? Infinity;
+  const only = options.only;
   const { new: n, changed, removed } = result.summary;
   const noFindings = n === 0 && changed === 0 && removed === 0;
 
-  const changedPages = result.pages.filter(isChanged);
+  const changedPages = result.pages.filter((p) => isChanged(p, only));
   const structPages = result.pages.filter(hasHunks).length;
   // Two labeled axes so the counts can't be misread. **Findings** are the
   // accessibility problems that gate CI; **structure** is the shape of the
@@ -413,25 +443,29 @@ export function renderDiffMarkdown(
       continue;
     }
     out.push(`#### ${mdEscape(page.name)}`, "");
-    const shown = shownEntries(page);
-    for (const e of shown) {
-      const f = e.finding;
-      if (e.kind === "new")
-        out.push(
-          f.suppressed
-            ? `- ⚪ **new (baselined)** \`${f.rule}\`: ${f.message}`
-            : `- ❌ **new** \`${f.rule}\`: ${f.message}`,
-        );
-      else if (e.kind === "changed")
-        out.push(
-          `- 🔁 **changed** \`${f.rule}\`: ${(e.changes ?? []).join("; ")}`,
-        );
-      else if (e.kind === "removed")
-        out.push(`- ✅ **fixed** \`${f.rule}\`: ${f.message}`);
+    if (only !== "views") {
+      const shown = shownEntries(page);
+      for (const e of shown) {
+        const f = e.finding;
+        if (e.kind === "new")
+          out.push(
+            f.suppressed
+              ? `- ⚪ **new (baselined)** \`${f.rule}\`: ${f.message}`
+              : `- ❌ **new** \`${f.rule}\`: ${f.message}`,
+          );
+        else if (e.kind === "changed")
+          out.push(
+            `- 🔁 **changed** \`${f.rule}\`: ${(e.changes ?? []).join("; ")}`,
+          );
+        else if (e.kind === "removed")
+          out.push(`- ✅ **fixed** \`${f.rule}\`: ${f.message}`);
+      }
+      if (shown.length) out.push("");
     }
-    if (shown.length) out.push("");
-    if (explain) out.push(...mdStatements(page));
-    out.push(...mdViewDiff(page, maxLines));
+    if (only !== "findings") {
+      if (explain) out.push(...mdStatements(page));
+      out.push(...mdViewDiff(page, maxLines));
+    }
   }
 
   if (overflow.length) {
@@ -441,16 +475,18 @@ export function renderDiffMarkdown(
     );
   }
 
-  if (explain && structPages > 0) {
-    out.push(
-      "_Structural notes are advisory and never fail the check; container/nesting moves are not tracked._",
-      "",
-    );
-  } else if (!explain && structPages > 0) {
-    out.push(
-      "_Run with `--explain` for a plain-language summary of the structural changes._",
-      "",
-    );
+  if (only !== "findings") {
+    if (explain && structPages > 0) {
+      out.push(
+        "_Structural notes are advisory and never fail the check; container/nesting moves are not tracked._",
+        "",
+      );
+    } else if (!explain && structPages > 0) {
+      out.push(
+        "_Run with `--explain` for a plain-language summary of the structural changes._",
+        "",
+      );
+    }
   }
   return `${out.join("\n")}`;
 }

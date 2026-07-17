@@ -187,6 +187,13 @@ real-a11y diff base.json pr.json --explain --max-pages 5 --max-lines 20 -o comme
 `--max-pages N` details the first N changed routes and lists the rest;
 `--max-lines N` caps each page's diff and points to the full output.
 
+To show just one axis, `--findings-only` hides the structural views and
+`--views-only` hides the per-finding detail. Both are **output filters**: the
+exit gate always runs on the full result, so a `--views-only` job can exit `1`
+on a new finding while showing only structure — the one-line findings summary
+stays to explain it. (`--findings-only` conflicts with `--explain`, whose
+statements summarize the views it hides.)
+
 Generated content that legitimately differs on every build (a "last updated"
 timestamp, a build hash) would otherwise read as drift on every page — drop
 it at the source with a repeatable regex:
