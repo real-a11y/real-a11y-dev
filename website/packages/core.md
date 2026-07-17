@@ -202,16 +202,28 @@ const diff = diffTrees(before, after);
 // { added: SemanticNode[], removed: SemanticNode[], changed: NodeChange[] }
 ```
 
+Node ids come from a per-DOM-node `WeakMap`, so the same element keeps its id
+across extractions — that's what makes this an identity-aware comparison rather
+than a text diff. It also means `diffTrees` only works **within one live
+document**: ids don't survive serialization, so two separately-captured
+snapshots can't be compared this way (for that, use the
+[CLI's](/packages/cli) artifact diff).
+
 **`NodeChange`:**
 
 ```ts
 interface NodeChange {
   id: string;
-  before: Partial<SemanticNode>;
-  after: Partial<SemanticNode>;
-  fields: string[]; // e.g. ["a11y.name", "a11y.states.expanded"]
+  before: SemanticNode;
+  after: SemanticNode;
+  /** Dot-paths that differ, e.g. ["a11y.name", "a11y.states.expanded"] */
+  changes: string[];
 }
 ```
+
+To render a diff as a committable change list (`+ option "Spain"`,
+`~ combobox "Country": a11y.states.expanded false → true`), pass it to
+`serializeTreeDiff` from `@real-a11y-dev/serialize`.
 
 ---
 

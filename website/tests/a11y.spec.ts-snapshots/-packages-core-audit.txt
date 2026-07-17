@@ -315,11 +315,21 @@
     paragraph "Compares two tree snapshots and returns what changed."
     button "Copy Code"
       code
+    paragraph "Node ids come from a per-DOM-node , so the same element keeps its id across extractions — that's what makes this an identity-aware comparison rather than a text diff. It also means only works : ids don't survive serialization, so two separately-captured snapshots can't be compared this way (for that, use the artifact diff)."
+      code "WeakMap"
+      code "diffTrees"
+      strong "within one live document"
+      link "CLI's"
     paragraph
       strong ":"
         code "NodeChange"
     button "Copy Code"
       code
+    paragraph "To render a diff as a committable change list (, ), pass it to from ."
+      code "+ option "Spain""
+      code "~ combobox "Country": a11y.states.expanded false → true"
+      code "serializeTreeDiff"
+      code "@real-a11y-dev/serialize"
     separator
     heading "DOM observation" (level 2)
     heading "DomObserver" (level 3)

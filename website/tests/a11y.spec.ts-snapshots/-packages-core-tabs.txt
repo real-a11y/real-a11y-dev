@@ -83,12 +83,13 @@
 83. generic
 84. button "Copy Code"
 85. generic
-86. button "Copy Code"
-87. generic
-88. button "Copy Code"
-89. generic
-90. button "Copy Code"
-91. generic
-92. link "Edit this page on GitHub"
-93. link "Previous pageOverview & Install"
-94. link "Next page@real-a11y-dev/inspector"
+86. link "CLI's"
+87. button "Copy Code"
+88. generic
+89. button "Copy Code"
+90. generic
+91. button "Copy Code"
+92. generic
+93. link "Edit this page on GitHub"
+94. link "Previous pageOverview & Install"
+95. link "Next page@real-a11y-dev/inspector"
