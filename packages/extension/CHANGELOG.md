@@ -21,6 +21,10 @@
   navigated away from — and because node ids are reused across pages,
   clicking a row could fire an action on the wrong element on the restored
   page. The panel now re-syncs to the restored page. ([#161])
+- Clean up the panel's on-page state on **every** tab when the side panel
+  closes, not just the active one. Previously a background tab kept its
+  screen curtain (with no UI to dismiss it) and kept drawing focus overlays
+  after the panel was gone. ([#168])
 
 ## 0.1.7
 
@@ -71,3 +75,4 @@ Earlier releases predate this changelog.
 [#127]: https://github.com/real-a11y/real-a11y-dev/pull/127
 [#151]: https://github.com/real-a11y/real-a11y-dev/pull/151
 [#161]: https://github.com/real-a11y/real-a11y-dev/pull/161
+[#168]: https://github.com/real-a11y/real-a11y-dev/pull/168
