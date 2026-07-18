@@ -309,13 +309,26 @@ describe("flow", () => {
   });
 
   it("respects a custom waitTimeout option", async () => {
-    const root = mount(`<main><button>Go</button></main>`);
-    const start = Date.now();
-    // 50ms waitTimeout — no mutation will fire, so the wait resolves at the
-    // timeout. Confirms options.waitTimeout is wired through to waitForMutations.
-    await flow(root, { waitTimeout: 50 })
-      .findByRole("button", { name: "Go" })
-      .click();
-    expect(Date.now() - start).toBeLessThan(150);
+    // No mutation fires, so each flow waits out its full timeout, then resolves.
+    // Time a short-timeout flow against a default-timeout one: a comparison,
+    // not an absolute bound, so the fixed jsdom/findByRole/dispatch overhead
+    // cancels out instead of eating the budget — an absolute `< 150ms` bound
+    // failed on Windows/slow envs (issue #162).
+    const time = async (options: Parameters<typeof flow>[1]) => {
+      const root = mount(`<main><button>Go</button></main>`);
+      const start = Date.now();
+      await flow(root, options).findByRole("button", { name: "Go" }).click();
+      return Date.now() - start;
+    };
+    // Warm up first: the very first flow pays ~100ms one-time cold-start
+    // (module init, first extraction) that only the leading run sees and would
+    // otherwise shrink the measured gap. Both timed runs below are then warm.
+    await time({ waitTimeout: 50 });
+    const short = await time({ waitTimeout: 50 });
+    const def = await time({}); // default 200ms
+    // ~150ms apart in practice (200 − 50); a generous floor proves the option
+    // is wired through rather than falling back to the default, independent of
+    // absolute machine speed.
+    expect(def - short).toBeGreaterThan(80);
   });
 });
