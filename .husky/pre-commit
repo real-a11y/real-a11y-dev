@@ -1,0 +1,6 @@
+# Auto-fix staged files before commit: eslint --fix + prettier, scoped to the
+# files you're actually committing (config: "lint-staged" in package.json).
+# Keeps import/order and formatting from ever reaching CI as a failure.
+#
+# Skip in emergencies with `git commit --no-verify`.
+pnpm lint-staged
