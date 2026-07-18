@@ -1,8 +1,9 @@
 import { extract } from "@real-a11y-dev/serialize";
 import { describe, it, expect, afterEach } from "vitest";
 
-import { a11yDiff, capture, flow } from "./index.js";
 import { a11ySnapshotSerializer } from "./snapshot-box.js";
+
+import { a11yDiff, capture, flow } from "./index.js";
 
 function mount(html: string): HTMLElement {
   document.body.innerHTML = "";
