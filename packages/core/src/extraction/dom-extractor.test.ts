@@ -15,6 +15,84 @@ function createPage(html: string): Element {
   return div;
 }
 
+describe("DOM clobbering resilience", () => {
+  it("does not crash when an element's `id` property is clobbered by a named child", () => {
+    // Regression: a <form> (or the other legacy named-property elements) with a
+    // child named `id` makes `element.id` return that CHILD ELEMENT instead of a
+    // string. The walk did `element.id.startsWith("__sn-")`, which threw
+    // "TypeError: y.startsWith is not a function" and crashed the whole
+    // extraction — the panel showed "Connecting to page..." forever.
+    const root = createPage(`
+      <main>
+        <form aria-label="Search">
+          <input name="id" aria-label="Query" />
+          <button type="submit">Go</button>
+        </form>
+      </main>
+    `);
+
+    // Force the clobber deterministically (jsdom's named-property override is
+    // not guaranteed) — this mirrors what a real browser does for <form>.
+    const form = root.querySelector("form")!;
+    Object.defineProperty(form, "id", {
+      configurable: true,
+      get: () => form.querySelector('[name="id"]'),
+    });
+    expect(typeof form.id).not.toBe("string"); // sanity: id now returns an element
+
+    expect(() => extractA11yTree(root)).not.toThrow();
+
+    // The form and its controls still make it into the tree.
+    const names = [...extractA11yTree(root).nodes.values()].map(
+      (n) => n.a11y.name,
+    );
+    expect(names).toContain("Search");
+    expect(names).toContain("Query");
+  });
+
+  it("does not crash and keeps the subtree when `children`/`childNodes`/`textContent` are clobbered", () => {
+    // e.g. a "number of children" field: <input name="children"> shadows
+    // `form.children` so it returns the input, and `for (const c of form.children)`
+    // used to throw "children is not iterable", aborting the whole extraction.
+    const root = createPage(`
+      <main>
+        <form aria-label="Household">
+          <input name="children" aria-label="Number of children" />
+          <input name="textContent" aria-label="Notes" />
+          <button type="submit">Save</button>
+        </form>
+      </main>
+    `);
+
+    const form = root.querySelector("form")!;
+    // Force the named-property override for each structural prop.
+    Object.defineProperty(form, "children", {
+      configurable: true,
+      get: () => form.querySelector('[name="children"]'),
+    });
+    Object.defineProperty(form, "childNodes", {
+      configurable: true,
+      get: () => form.querySelector('[name="children"]'),
+    });
+    Object.defineProperty(form, "textContent", {
+      configurable: true,
+      get: () => form.querySelector('[name="textContent"]'),
+    });
+
+    expect(() => extractA11yTree(root)).not.toThrow();
+
+    // The form's controls survive — the real children were read through the
+    // native accessor, not the clobbered property.
+    const names = [...extractA11yTree(root).nodes.values()].map(
+      (n) => n.a11y.name,
+    );
+    expect(names).toContain("Household");
+    expect(names).toContain("Number of children");
+    expect(names).toContain("Notes");
+    expect(names).toContain("Save");
+  });
+});
+
 describe("extractDomTree", () => {
   it("extracts a simple DOM tree", () => {
     const root = createPage(`

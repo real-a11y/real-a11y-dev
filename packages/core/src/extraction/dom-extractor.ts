@@ -11,6 +11,53 @@ import {
 /** Tags to skip entirely during extraction */
 const SKIP_TAGS = new Set(["script", "style", "noscript", "template", "head"]);
 
+// --- DOM clobbering guards ---------------------------------------------------
+// `<form>` is the one HTML element with `[LegacyOverrideBuiltIns]`: a listed
+// control whose `name`/`id` matches a DOM property name shadows that property,
+// so reading it returns the child ELEMENT instead of the real value. On a form
+// with `<input name="id">` (ubiquitous — hidden record-id fields) `form.id` is
+// the input, and `<input name="children">` (e.g. a "number of children" field)
+// makes `form.children` the input. The walk has no per-element error boundary,
+// so a string/iteration method on such a value throws and the ENTIRE extraction
+// aborts (the panel hangs on "Connecting to page…"). We read structural props
+// through the native prototype accessors, which the named getter cannot
+// override; `id` is read via `getAttribute` at each use site.
+const elementProto = typeof Element !== "undefined" ? Element.prototype : null;
+const nodeProto = typeof Node !== "undefined" ? Node.prototype : null;
+const childrenGetter = elementProto
+  ? Object.getOwnPropertyDescriptor(elementProto, "children")?.get
+  : undefined;
+const childNodesGetter = nodeProto
+  ? Object.getOwnPropertyDescriptor(nodeProto, "childNodes")?.get
+  : undefined;
+const textContentGetter = nodeProto
+  ? Object.getOwnPropertyDescriptor(nodeProto, "textContent")?.get
+  : undefined;
+
+/** Clobber-immune `element.children` (always an array of the real children). */
+function safeChildren(element: Element): Element[] {
+  const kids = childrenGetter
+    ? (childrenGetter.call(element) as HTMLCollection)
+    : element.children;
+  return Array.from(kids);
+}
+
+/** Clobber-immune `node.childNodes`. */
+function safeChildNodes(node: Node): ChildNode[] {
+  const kids = childNodesGetter
+    ? (childNodesGetter.call(node) as NodeListOf<ChildNode>)
+    : node.childNodes;
+  return Array.from(kids);
+}
+
+/** Clobber-immune `node.textContent`, coerced to a string. */
+function safeTextContent(node: Node): string {
+  const text = textContentGetter
+    ? textContentGetter.call(node)
+    : node.textContent;
+  return typeof text === "string" ? text : "";
+}
+
 /** Tags/roles that are focusable by default */
 const NATIVELY_FOCUSABLE = new Set([
   "a",
@@ -398,7 +445,7 @@ function getAccessibleTextContent(
   visited: Set<Element>,
 ): string {
   let text = "";
-  for (const child of element.childNodes) {
+  for (const child of safeChildNodes(element)) {
     if (child.nodeType === Node.TEXT_NODE) {
       text += child.textContent || "";
     } else if (child.nodeType === Node.ELEMENT_NODE) {
@@ -599,7 +646,7 @@ function computeRawAccessibleName(
 /** Get direct text content of an element, excluding child element text */
 function getDirectTextContent(element: Element): string {
   let text = "";
-  for (const child of element.childNodes) {
+  for (const child of safeChildNodes(element)) {
     if (child.nodeType === Node.TEXT_NODE) {
       text += child.textContent || "";
     }
@@ -617,7 +664,7 @@ const DESCENDANT_TEXT_MAX = 240;
  * `<svg>` with `<text>`, decorative wrappers around copy, etc.).
  */
 function getDescendantText(element: Element): string {
-  const raw = element.textContent ?? "";
+  const raw = safeTextContent(element);
   const collapsed = raw.replace(/\s+/g, " ").trim();
   if (collapsed.length <= DESCENDANT_TEXT_MAX) return collapsed;
   return collapsed.slice(0, DESCENDANT_TEXT_MAX - 1) + "…";
@@ -989,7 +1036,11 @@ export function extractDomTree(root: Element): ExtractionResult {
     if (SKIP_TAGS.has(tag)) return null;
 
     // Skip Semantic Navigator internal elements (highlight overlay, curtain, etc.)
-    if (element.id?.startsWith("__sn-")) return null;
+    // Read the id via getAttribute, not the `.id` property: on a <form> (or the
+    // legacy named-property elements) a child named `id` clobbers `element.id`
+    // to return that element, so `.id.startsWith(...)` would throw a TypeError
+    // and crash the whole extraction. getAttribute always yields a string|null.
+    if (element.getAttribute("id")?.startsWith("__sn-")) return null;
 
     // Skip entire subtrees of display:none / hidden elements
     if (isSubtreeHidden(element)) return null;
@@ -1054,7 +1105,7 @@ export function extractDomTree(root: Element): ExtractionResult {
     nodes.set(id, node);
 
     // Walk children
-    for (const child of element.children) {
+    for (const child of safeChildren(element)) {
       const childId = walk(child, id, depth + 1);
       if (childId) {
         node.childIds.push(childId);

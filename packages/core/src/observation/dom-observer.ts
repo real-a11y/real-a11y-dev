@@ -51,7 +51,9 @@ const DEFAULT_INTERNAL_IDS: ReadonlySet<string> = new Set([
 function isInternalNode(node: Node, internalIds: ReadonlySet<string>): boolean {
   if (node.nodeType !== 1 /* ELEMENT_NODE */) return false;
   const el = node as Element;
-  return internalIds.has(el.id);
+  // Read via getAttribute, not `.id`: on a clobbered <form> the `.id` property
+  // is a child element, not a string (see dom-extractor's clobbering guards).
+  return internalIds.has(el.getAttribute("id") ?? "");
 }
 
 /**
@@ -373,7 +375,7 @@ function isPortalOverlayContainer(
 ): boolean {
   if (node.nodeType !== 1 /* ELEMENT_NODE */) return false;
   const el = node as Element;
-  if (internalIds.has(el.id)) return false;
+  if (internalIds.has(el.getAttribute("id") ?? "")) return false;
   if (el.matches?.(PORTAL_OVERLAY_SELECTOR)) return true;
   return !!el.querySelector?.(PORTAL_OVERLAY_SELECTOR);
 }
