@@ -1,6 +1,5 @@
-import { useState } from "react";
-
 import * as RadixToast from "@radix-ui/react-toast";
+import { useState } from "react";
 
 import type { ToastExampleProps } from "./types.js";
 
