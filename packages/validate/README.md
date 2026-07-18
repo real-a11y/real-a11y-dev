@@ -42,6 +42,10 @@ It extracts the element's accessibility tree, runs both validators, and fails on
 
 Tests aren't the only consumer: the `real-a11y audit` CLI command and the MCP `audit_page` tool run these same `validateTree`/`validateNode` validators over a live page's extracted tree, so the ARIA rules are identical across tests, CI, and agents.
 
+## Not [`@real-a11y-dev/audit`](https://real-a11y.dev/packages/audit)
+
+That same `real-a11y audit` command pairs these ARIA-conformance checks with the **best-practice** findings from [`@real-a11y-dev/audit`](https://real-a11y.dev/packages/audit) — heading order, landmark structure, unlabeled controls, missing alt text. The two are complementary siblings, neither built on the other: `validate` answers _is the ARIA spec-legal?_, `audit` answers _does the page follow accessibility best practice?_ A page can pass one and fail the other (three `<h1>`s are spec-legal but bad practice). Reach for **`validate`** to check ARIA *correctness*, **`audit`** for accessibility *quality*.
+
 ## Design
 
 [`@real-a11y-dev/core`](https://real-a11y.dev/packages/core) stays dependency-free; this package layers the `aria-query`-backed rules on top of core's tree, so consumers who only need extraction don't pay for the rules.

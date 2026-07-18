@@ -23,7 +23,8 @@ export { a11yDiff } from "./diff.js";
 export type { A11yDiffOptions } from "./diff.js";
 export type { ChangeSpec, NodeMatcher, ChangedMatcher } from "./change-spec.js";
 
-// Assertions
+// Audit engine — the canonical home is @real-a11y-dev/audit; re-exported here
+// so test authors get the assertions + findings API from one entrypoint.
 export {
   assertNoUnlabeledInteractive,
   assertHeadingOrder,
@@ -34,8 +35,8 @@ export {
   listByRole,
   ALL_RULES,
   INTERACTIVE_ROLES,
-} from "./assertions.js";
-export type { Finding, A11yRule, RoleFilter } from "./assertions.js";
+} from "@real-a11y-dev/audit";
+export type { Finding, A11yRule, RoleFilter } from "@real-a11y-dev/audit";
 
 // Raw primitives
 export { dispatch } from "./dispatch.js";

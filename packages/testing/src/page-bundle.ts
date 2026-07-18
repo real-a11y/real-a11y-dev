@@ -24,7 +24,7 @@ export {
   A11yAssertionError,
   collectFindings,
   listByRole,
-} from "./assertions.js";
+} from "@real-a11y-dev/audit";
 
 export {
   extractA11yTree,
