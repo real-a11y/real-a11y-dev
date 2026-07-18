@@ -18,9 +18,15 @@
 // `registerA11yMatchers(expect)` from their test setup file. Nothing here runs
 // on import, so the package's main entry stays `sideEffects: false`.
 
+import {
+  assertNoUnlabeledInteractive,
+  assertHeadingOrder,
+  assertDialogsLabeled,
+  assertLandmarkStructure,
+  A11yAssertionError,
+} from "@real-a11y-dev/audit";
 import type { SemanticNode } from "@real-a11y-dev/core";
 import { getTabSequence } from "@real-a11y-dev/core";
-
 import {
   extract,
   serializeTree,
@@ -32,13 +38,6 @@ import {
   type ValidatedNode,
 } from "@real-a11y-dev/validate";
 
-import {
-  assertNoUnlabeledInteractive,
-  assertHeadingOrder,
-  assertDialogsLabeled,
-  assertLandmarkStructure,
-  A11yAssertionError,
-} from "./assertions.js";
 import {
   a11ySnapshotSerializer,
   boxSnapshot,

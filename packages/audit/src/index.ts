@@ -1,4 +1,5 @@
 import {
+  extractA11yTree,
   findAllByRole,
   getElementRefs,
   getOutline,
@@ -6,7 +7,6 @@ import {
   ROLE_FILTER_GROUPS,
   type ExtractionResult,
 } from "@real-a11y-dev/core";
-import { extract } from "@real-a11y-dev/serialize";
 
 /** Roles we consider intrinsically interactive for labeling checks. */
 export const INTERACTIVE_ROLES: ReadonlySet<string> = new Set([
@@ -164,7 +164,7 @@ export function collectFindings(
   root: Element | ExtractionResult,
   rules: readonly A11yRule[] = ALL_RULES,
 ): Finding[] {
-  const tree = root instanceof Element ? extract(root, "a11y") : root;
+  const tree = root instanceof Element ? extractA11yTree(root) : root;
   const want = new Set(rules);
   const findings: Finding[] = [];
 
@@ -305,7 +305,7 @@ export function listByRole(
 ): string {
   const roles = ROLE_FILTER_GROUPS[filter];
   if (!roles) return `(unknown filter "${filter}")`;
-  const tree = root instanceof Element ? extract(root, "a11y") : root;
+  const tree = root instanceof Element ? extractA11yTree(root) : root;
   const lines: string[] = [];
   for (const node of linearize(tree)) {
     if (!roles.includes(node.a11y.role)) continue;
