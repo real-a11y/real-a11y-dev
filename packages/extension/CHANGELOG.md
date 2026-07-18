@@ -16,6 +16,11 @@
   content script announced before its parent's. Child frames are now
   merged parent-first, so a grandchild frame's subtree is always attached
   under its parent iframe regardless of announce order. ([#151])
+- Refresh the side panel when a page is restored from the back/forward
+  cache. Previously, pressing Back left the panel showing the page you
+  navigated away from — and because node ids are reused across pages,
+  clicking a row could fire an action on the wrong element on the restored
+  page. The panel now re-syncs to the restored page. ([#161])
 
 ## 0.1.7
 
@@ -65,3 +70,4 @@ Earlier releases predate this changelog.
 [#120]: https://github.com/real-a11y/real-a11y-dev/pull/120
 [#127]: https://github.com/real-a11y/real-a11y-dev/pull/127
 [#151]: https://github.com/real-a11y/real-a11y-dev/pull/151
+[#161]: https://github.com/real-a11y/real-a11y-dev/pull/161
