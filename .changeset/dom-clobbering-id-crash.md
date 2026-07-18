@@ -1,0 +1,5 @@
+---
+"@real-a11y-dev/core": patch
+---
+
+Fix a `TypeError: ...startsWith is not a function` crash that aborted the **entire** extraction on pages that trip DOM clobbering. `<form>` is the one HTML element with `[LegacyOverrideBuiltIns]`: a listed control whose `name`/`id` matches a DOM property shadows that property, so reading it returns the child **element** instead of the real value. The walk read `element.id` to skip Semantic Navigator's own overlay nodes, so a `<form>` with `<input name="id">` (ubiquitous hidden record-id fields) made `.id` an element and `.startsWith("__sn-")` threw — the panel then hung on "Connecting to page…" forever, because the walk has no per-element error boundary. The id is now read via `getAttribute("id")`, and the structural reads in the walk (`children`, `childNodes`, `textContent` — e.g. a `<input name="children">` "number of children" field) go through the native prototype accessors, which a named getter cannot override. Extraction now survives clobbered forms with the subtree intact instead of failing wholesale.
