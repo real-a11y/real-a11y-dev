@@ -53,31 +53,40 @@
 53. link "Troubleshooting"
 54. link "Why flow() (vs Testing Library)?"
 55. link "Available steps"
-56. link "flow(root, options?)"
-57. link "Utilities"
-58. link "See also"
-59. link "@real-a11y-dev/testing"
-60. button "Copy Code"
-61. generic
-62. button "Copy Code"
-63. generic
-64. button "Copy Code"
-65. generic
-66. table
-67. link "Playwright adapter"
-68. table
-69. button "Copy Code"
-70. generic
-71. table
-72. button "Copy Code"
-73. generic
-74. button "Copy Code"
-75. generic
-76. table
-77. button "Copy Code"
-78. generic
-79. link "Matchers"
-80. link "Playwright adapter"
-81. link "Edit this page on GitHub"
-82. link "Previous pageMatchers"
-83. link "Next pagePlaywright adapter"
+56. link "Asserting what an interaction changed"
+57. link "flow(root, options?)"
+58. link "Utilities"
+59. link "See also"
+60. link "@real-a11y-dev/testing"
+61. button "Copy Code"
+62. generic
+63. button "Copy Code"
+64. generic
+65. button "Copy Code"
+66. generic
+67. table
+68. link "Playwright adapter"
+69. table
+70. link "Asserting what an interaction changed"
+71. button "Copy Code"
+72. generic
+73. button "Copy Code"
+74. generic
+75. link "/matchers"
+76. button "Copy Code"
+77. generic
+78. link "diffTrees"
+79. link "CLI's"
+80. table
+81. button "Copy Code"
+82. generic
+83. button "Copy Code"
+84. generic
+85. table
+86. button "Copy Code"
+87. generic
+88. link "Matchers"
+89. link "Playwright adapter"
+90. link "Edit this page on GitHub"
+91. link "Previous pageMatchers"
+92. link "Next pagePlaywright adapter"

@@ -39,6 +39,11 @@ import {
   assertLandmarkStructure,
   A11yAssertionError,
 } from "./assertions.js";
+import {
+  a11ySnapshotSerializer,
+  boxSnapshot,
+  type A11ySnapshotBox,
+} from "./snapshot-box.js";
 
 type Tree = { nodes: Map<string, SemanticNode>; rootId: string };
 
@@ -231,41 +236,22 @@ export const a11yMatchers = {
 
 // ─── snapshot serializer ─────────────────────────────────────────────────────
 
-const SNAPSHOT_BRAND = "@real-a11y-dev/a11y-snapshot";
-
-interface A11ySnapshotBox {
-  readonly [SNAPSHOT_BRAND]: true;
-  readonly text: string;
-}
-
 /**
  * Wrap a DOM root (or pre-extracted tree) so `expect(...).toMatchSnapshot()`
  * prints the deterministic a11y tree via the registered serializer, instead of
- * the framework's default DOM-element dump.
+ * the framework's default DOM-element dump. (`a11yDiff` produces the same box
+ * shape for a change list — one serializer renders both.)
  */
 export function a11ySnapshot(
   root: Element | Tree,
   options?: SerializeOptions,
 ): A11ySnapshotBox {
-  return { [SNAPSHOT_BRAND]: true, text: serializeTree(root, options) };
+  return boxSnapshot(serializeTree(root, options));
 }
 
-/**
- * pretty-format plugin recognised by both Jest and Vitest. Register via
- * {@link registerA11yMatchers} or each framework's `snapshotSerializers` config.
- */
-export const a11ySnapshotSerializer = {
-  test(val: unknown): val is A11ySnapshotBox {
-    return (
-      typeof val === "object" &&
-      val !== null &&
-      (val as Record<string, unknown>)[SNAPSHOT_BRAND] === true
-    );
-  },
-  serialize(val: A11ySnapshotBox): string {
-    return val.text;
-  },
-};
+// The pretty-format plugin lives in ./snapshot-box (shared with a11yDiff);
+// re-exported here so existing `registerA11yMatchers` / import sites are unchanged.
+export { a11ySnapshotSerializer };
 
 // ─── registration ────────────────────────────────────────────────────────────
 

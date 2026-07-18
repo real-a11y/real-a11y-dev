@@ -99,6 +99,7 @@ The two libraries see different things. RTL sees what *sighted users using a mou
 | `.select(value)` | Dispatch a select action with the given value (native `<select>`). |
 | `.type(text)` | Dispatch a type action with the given text (textbox, searchbox). |
 | `.expectTree(snapshot)` | Assert the current tree's serialization matches `snapshot` (see caveat below). |
+| `.expectChanges(spec \| string \| fn)` | Assert **what the interaction(s) changed** in the tree since the diff window opened (see [Asserting what an interaction changed](#asserting-what-an-interaction-changed)). |
 | `.expectActiveModal(predicate)` | Assert the active dialog. Pass `null` to assert no dialog is open, or `(name) => boolean` to assert one is open and its accessible name satisfies the predicate. |
 | `.expect(fn)` | Run a custom assertion with the current tree as argument. |
 
@@ -125,6 +126,62 @@ The first `role="dialog"` or `role="alertdialog"` in document order is treated a
 ### `expectTree` — caveat
 
 `expectTree` re-serializes the tree with **default options** (no `redact`, `mode: "a11y"`, generic nodes flattened). A snapshot captured via `auditSnapshot(root, { redact: [...] })` or `{ mode: "dom" }` will not match. For redacted or DOM-mode comparisons, use `.expect((tree) => { … })` and call `serializeTree`/`auditSnapshot` yourself.
+
+## Asserting what an interaction changed
+
+The differentiator over element-querying: assert the **effect** of an interaction on the whole tree — options appearing, `aria-expanded` flipping, focus moving — not just one element's final state. Two styles, same underlying diff.
+
+### Style A — `capture` + `a11yDiff` (imperative, inline snapshot)
+
+Capture the tree before, interact with whatever you like (`userEvent`, `fireEvent`, a raw click), then diff against the live root:
+
+```ts
+import { capture, a11yDiff } from "@real-a11y-dev/testing";
+
+test("opening the country picker", () => {
+  render(<CountrySelector />);
+  const before = capture(document.body);
+
+  fireEvent.click(screen.getByRole("combobox", { name: /country/i }));
+
+  expect(a11yDiff(before, document.body)).toMatchInlineSnapshot(`
+    + option "Spain"
+    + option "France"
+    ~ combobox "Country": a11y.states.expanded false → true
+    ~ listbox "Countries": childIds 0 children → 2 children
+  `);
+});
+```
+
+`a11yDiff` returns a boxed value that renders through the **same snapshot serializer** as `auditSnapshot` — register it once (`registerA11yMatchers` from [`/matchers`](/packages/testing/matchers)) and `toMatchSnapshot()` / `toMatchInlineSnapshot()` print the change list verbatim. `before` must be a pre-captured tree (extracting it at assert time would diff the tree against itself); `after` can be a live `Element`, captured for you. A `focus:` line appears only when both sides carry focus context (both `capture()`d).
+
+### Style B — `flow().expectChanges` (fluent, structured)
+
+Inside a flow, `expectChanges` diffs everything since the chain's first action (or the previous `expectChanges`, which resets the window):
+
+```ts
+await flow(document.body)
+  .findByRole("combobox", { name: /country/i })
+  .click()
+  .expectChanges({
+    added: [
+      { role: "option", name: "Spain" },
+      { role: "option", name: "France" },
+    ],
+    changed: [{ role: "combobox", changes: ["a11y.states.expanded"] }],
+    exact: true,
+  });
+```
+
+Three forms:
+
+- **`ChangeSpec`** — the ergonomic default. `added` / `removed` / `changed` are matched by `role` + optional `name` (string = case-insensitive exact, RegExp = tested); a `ChangedMatcher` may list `changes` (dot-paths that must appear). **Subset by default** — resilient to incidental changes; `exact: true` asserts nothing else changed (a `childIds`-only change on a container is treated as the structural shadow of an add/remove and never counts as an extra).
+- **`string`** — trim-compared against the `serializeTreeDiff` output, like `expectTree`. Includes the `focus:` line.
+- **`(diff) => void`** — the escape hatch; throw to fail.
+
+Calling `expectChanges` before any action throws. A `ChangeSpec` / `string` failure ends with the full rendered diff, so "what *did* change?" is always answered.
+
+Under the hood both styles are core's [`diffTrees`](/packages/core#difftrees-before-after) rendered by `serializeTreeDiff` — an **in-realm** comparison keyed on node identity (a live before/after in one document), distinct from the [CLI's](/packages/cli) cross-process artifact diff.
 
 ## `flow(root, options?)`
 

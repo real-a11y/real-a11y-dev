@@ -15,6 +15,9 @@ h1 Flow API
   h2 Available steps
     h3 expectActiveModal — examples
     h3 expectTree — caveat
+  h2 Asserting what an interaction changed
+    h3 Style A — capture + a11yDiff (imperative, inline snapshot)
+    h3 Style B — flow().expectChanges (fluent, structured)
   h2 flow(root, options?)
   h2 Utilities
     h3 waitForMutations(root, options?)

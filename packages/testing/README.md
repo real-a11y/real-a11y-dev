@@ -25,6 +25,41 @@ test("login form is fully labeled", () => {
 });
 ```
 
+## Assert what an interaction changed
+
+Capture the tree before, interact, then diff — assert the **effect** of the interaction (options appearing, `aria-expanded` flipping, focus moving), not just one element's final state:
+
+```ts
+import { capture, a11yDiff } from "@real-a11y-dev/testing";
+
+test("opening the country picker", () => {
+  const { container } = render(<CountrySelector />);
+  const before = capture(container);
+
+  fireEvent.click(screen.getByRole("combobox", { name: /country/i }));
+
+  expect(a11yDiff(before, container)).toMatchInlineSnapshot(`
+    + option "Spain"
+    ~ combobox "Country": a11y.states.expanded false → true
+    focus: combobox "Country" → listbox "Countries"
+  `);
+});
+```
+
+Or fluently, inside a `flow()`, with a structured matcher:
+
+```ts
+await flow(container)
+  .findByRole("combobox", { name: /country/i })
+  .click()
+  .expectChanges({
+    added: [{ role: "option", name: "Spain" }],
+    changed: [{ role: "combobox", changes: ["a11y.states.expanded"] }],
+  });
+```
+
+See the [Flow docs](https://real-a11y.dev/packages/testing/flow#asserting-what-an-interaction-changed) for both styles.
+
 ## Playwright adapter
 
 ```ts
