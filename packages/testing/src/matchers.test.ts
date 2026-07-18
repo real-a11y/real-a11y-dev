@@ -100,6 +100,13 @@ describe("toHaveTabSequence", () => {
       /Tab sequence mismatch[\s\S]*expected[\s\S]*actual/,
     );
   });
+
+  it("matches a straight-quote token against a rendered curly apostrophe", () => {
+    // The rendered label uses a curly apostrophe (U+2019); the test author
+    // types a plain one. They should still match.
+    const root = mount(`<button aria-label="Don’t save">x</button>`);
+    expect(root).toHaveTabSequence([`button "Don't save"`]);
+  });
 });
 
 describe("a11ySnapshot serializer", () => {
