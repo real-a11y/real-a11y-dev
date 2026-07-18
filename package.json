@@ -40,6 +40,7 @@
     "globals": "^17.5.0",
     "husky": "^9.1.7",
     "jsdom": "^29.0.2",
+    "lint-staged": "^17.0.8",
     "prettier": "^3.8.2",
     "publint": "^0.3.0",
     "size-limit": "^11.1.6",
@@ -51,6 +52,13 @@
   "packageManager": "pnpm@9.15.0",
   "engines": {
     "node": ">=20"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx,mjs,cjs}": [
+      "eslint --fix --no-warn-ignored",
+      "prettier --write --ignore-unknown"
+    ],
+    "*.{json,jsonc,yml,yaml,css,scss,html,md}": "prettier --write --ignore-unknown"
   },
   "pnpm": {
     "overrides": {
