@@ -404,6 +404,14 @@ function startObserving() {
     subtree: true,
     characterData: true,
   });
+  // Emit the current tree the moment we arm. On panel open the panel also
+  // drives this via REQUEST_TREE, but a bfcache restore re-arms us through
+  // FRAME_HELLO -> SET_OBSERVING(true) with no REQUEST_TREE and no mutation to
+  // follow. Without this the panel would keep rendering the page we navigated
+  // away from — and dispatch clicks to the wrong elements on the restored page
+  // (node ids are a per-frame counter, so the ids collide). The 200ms merge
+  // debounce in the background collapses this with any duplicate send.
+  sendTree();
 }
 
 /** Disarm observation when the panel disconnects. Idempotent. */
@@ -431,3 +439,22 @@ safeSendMessage({ type: "FRAME_HELLO", payload: { frameUrl: location.href } });
 
 window.addEventListener("popstate", onNavigated);
 window.addEventListener("hashchange", onNavigated);
+
+// Back/forward-cache restore. When the user navigates A → B and presses Back,
+// A is served from bfcache: no content-script re-injection, no mutations (so
+// the DomObserver stays silent), and NO popstate for the cross-document
+// traversal — only `pageshow` with `persisted === true`. Without this handler
+// the panel keeps rendering page B's tree while the user is on A. That is not
+// just stale: node ids are a per-frame counter (`sn-<n>`), so B's ids collide
+// with A's still-live elements, and clicking a node in the stale tree
+// dispatches an action on an unrelated element on A. Re-announce + re-send so
+// the panel snaps back to the restored page.
+//
+// No `pagehide` teardown on the way into bfcache: the page is frozen there so
+// the observer does no work. If we were still observing at freeze,
+// `onNavigated` re-sends the tree immediately on restore; if the panel had
+// been closed on this page (observingEnabled=false), the `FRAME_HELLO` above
+// re-arms us when a panel is connected and `startObserving` emits the tree.
+window.addEventListener("pageshow", (e) => {
+  if (e.persisted) onNavigated();
+});
