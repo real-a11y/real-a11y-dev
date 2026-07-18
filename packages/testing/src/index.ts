@@ -6,8 +6,22 @@ export {
   serializeTree as auditSnapshot,
   serializeOutline as outlineSnapshot,
   serializeTabSequence as tabSequenceSnapshot,
+  serializeTreeDiff,
+  extract,
 } from "@real-a11y-dev/serialize";
-export type { SerializeOptions } from "@real-a11y-dev/serialize";
+export type {
+  SerializeOptions,
+  TreeDiffSerializeOptions,
+} from "@real-a11y-dev/serialize";
+
+// Interaction diff (assert what an interaction changed) — capture the tree
+// before, diff against a fresh capture after. `a11yDiff`'s box renders through
+// the same serializer as `a11ySnapshot` (register via `registerA11yMatchers`).
+export { capture } from "./capture.js";
+export type { A11yCapture } from "./capture.js";
+export { a11yDiff } from "./diff.js";
+export type { A11yDiffOptions } from "./diff.js";
+export type { ChangeSpec, NodeMatcher, ChangedMatcher } from "./change-spec.js";
 
 // Assertions
 export {

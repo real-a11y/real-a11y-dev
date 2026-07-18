@@ -98,6 +98,8 @@ navigation "On this page"
     listitem
       link "Available steps"
     listitem
+      link "Asserting what an interaction changed"
+    listitem
       link "flow(root, options?)"
     listitem
       link "Utilities"
@@ -216,6 +218,12 @@ main
         cell "Assert the current tree's serialization matches snapshot (see caveat below)."
           code "snapshot"
       row
+        cell ".expectChanges(spec | string | fn)"
+          code ".expectChanges(spec | string | fn)"
+        cell "Assert what the interaction(s) changed in the tree since the diff window opened (see Asserting what an interaction changed )."
+          strong "what the interaction(s) changed"
+          link "Asserting what an interaction changed"
+      row
         cell ".expectActiveModal(predicate)"
           code ".expectActiveModal(predicate)"
         cell "Assert the active dialog. Pass null to assert no dialog is open, or (name) => boolean to assert one is open and its accessible name satisfies the predicate."
@@ -246,6 +254,74 @@ main
     code ".expect((tree) => { … })"
     code "serializeTree"
     code "auditSnapshot"
+  heading "Asserting what an interaction changed" (level 2)
+  paragraph "The differentiator over element-querying: assert the of an interaction on the whole tree — options appearing, flipping, focus moving — not just one element's final state. Two styles, same underlying diff."
+    strong "effect"
+    code "aria-expanded"
+  heading "Style A — capture + a11yDiff (imperative, inline snapshot)" (level 3)
+    code "capture"
+    code "a11yDiff"
+  paragraph "Capture the tree before, interact with whatever you like (, , a raw click), then diff against the live root:"
+    code "userEvent"
+    code "fireEvent"
+  button "Copy Code"
+  code
+  paragraph "returns a boxed value that renders through the as — register it once ( from ) and / print the change list verbatim. must be a pre-captured tree (extracting it at assert time would diff the tree against itself); can be a live , captured for you. A line appears only when both sides carry focus context (both d)."
+    code "a11yDiff"
+    strong "same snapshot serializer"
+    code "auditSnapshot"
+    code "registerA11yMatchers"
+    link "/matchers"
+      code "/matchers"
+    code "toMatchSnapshot()"
+    code "toMatchInlineSnapshot()"
+    code "before"
+    code "after"
+    code "Element"
+    code "focus:"
+    code "capture()"
+  heading "Style B — flow().expectChanges (fluent, structured)" (level 3)
+    code "flow().expectChanges"
+  paragraph "Inside a flow, diffs everything since the chain's first action (or the previous , which resets the window):"
+    code "expectChanges"
+    code "expectChanges"
+  button "Copy Code"
+  code
+  paragraph "Three forms:"
+  list
+    listitem "— the ergonomic default. / / are matched by + optional (string = case-insensitive exact, RegExp = tested); a may list (dot-paths that must appear). — resilient to incidental changes; asserts nothing else changed (a -only change on a container is treated as the structural shadow of an add/remove and never counts as an extra)."
+      strong
+        code "ChangeSpec"
+      code "added"
+      code "removed"
+      code "changed"
+      code "role"
+      code "name"
+      code "ChangedMatcher"
+      code "changes"
+      strong "Subset by default"
+      code "exact: true"
+      code "childIds"
+    listitem "— trim-compared against the output, like . Includes the line."
+      strong
+        code "string"
+      code "serializeTreeDiff"
+      code "expectTree"
+      code "focus:"
+    listitem "— the escape hatch; throw to fail."
+      strong
+        code "(diff) => void"
+  paragraph "Calling before any action throws. A / failure ends with the full rendered diff, so "what change?" is always answered."
+    code "expectChanges"
+    code "ChangeSpec"
+    code "string"
+    emphasis "did"
+  paragraph "Under the hood both styles are core's rendered by — an comparison keyed on node identity (a live before/after in one document), distinct from the cross-process artifact diff."
+    link "diffTrees"
+      code "diffTrees"
+    code "serializeTreeDiff"
+    strong "in-realm"
+    link "CLI's"
   heading "flow(root, options?)" (level 2)
     code "flow(root, options?)"
   table

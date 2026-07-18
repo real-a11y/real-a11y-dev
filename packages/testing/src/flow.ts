@@ -1,8 +1,18 @@
-import type { ActionType, SemanticNode } from "@real-a11y-dev/core";
-import { findByRole, type FindByRoleOptions } from "@real-a11y-dev/core";
+import type { ActionType, SemanticNode, TreeDiff } from "@real-a11y-dev/core";
+import {
+  diffTrees,
+  findByRole,
+  type FindByRoleOptions,
+} from "@real-a11y-dev/core";
 
-import { extract, serializeTree } from "@real-a11y-dev/serialize";
+import {
+  extract,
+  serializeTree,
+  serializeTreeDiff,
+} from "@real-a11y-dev/serialize";
 
+import { capture, type A11yCapture } from "./capture.js";
+import { checkChangeSpec, type ChangeSpec } from "./change-spec.js";
 import { dispatch } from "./dispatch.js";
 import { waitForMutations } from "./wait.js";
 
@@ -40,6 +50,12 @@ type Step = () => Promise<void>;
 export class FlowChain implements PromiseLike<void> {
   private readonly steps: Step[] = [];
   private current: SemanticNode | null = null;
+  /**
+   * The tree captured just before the FIRST action of the current diff window.
+   * `action()` sets it (once); `expectChanges` diffs against it and resets it,
+   * opening a fresh window for the next action.
+   */
+  private baseline: A11yCapture | null = null;
 
   constructor(
     private readonly root: Element,
@@ -70,6 +86,10 @@ export class FlowChain implements PromiseLike<void> {
           `flow: cannot ${action}() — call findByRole() first to select a node.`,
         );
       }
+      // Open the diff window at the first action after chain start / the last
+      // expectChanges — captured BEFORE dispatch, so a preceding findByRole
+      // never pollutes it.
+      this.baseline ??= capture(this.root);
       const result = await dispatch(this.current, action, payload);
       if (!result.success) {
         throw new Error(
@@ -117,6 +137,68 @@ export class FlowChain implements PromiseLike<void> {
           `flow.expectTree: tree does not match expected snapshot.\n--- expected\n${expected}\n--- actual\n${actual}`,
         );
       }
+    });
+    return this;
+  }
+
+  /**
+   * Assert what the interaction(s) since the diff window opened changed in the
+   * tree — the differentiator over element-querying. The window is everything
+   * since the chain's first action (or the previous `expectChanges`), and it
+   * resets afterward so a later `expectChanges` covers only the next steps.
+   *
+   * Three forms:
+   * - **`ChangeSpec`** (the ergonomic default) — subset-matched by role/name;
+   *   `exact: true` asserts nothing else changed:
+   *   ```ts
+   *   .expectChanges({
+   *     added: [{ role: "option", name: "Spain" }],
+   *     changed: [{ role: "combobox", changes: ["a11y.states.expanded"] }],
+   *   })
+   *   ```
+   * - **`string`** — trim-compared against the `serializeTreeDiff` output
+   *   (mirrors `expectTree`; includes the `focus:` line).
+   * - **predicate** — `(diff) => void`, the escape hatch (throw to fail).
+   *
+   * Throws if no action has run yet. A `ChangeSpec`/`string` failure ends with
+   * the full rendered diff, so "what DID change?" is always answered.
+   */
+  expectChanges(
+    expected: string | ChangeSpec | ((diff: TreeDiff) => void),
+  ): this {
+    this.steps.push(async () => {
+      if (!this.baseline) {
+        throw new Error(
+          "flow.expectChanges: no action has run — nothing to diff.",
+        );
+      }
+      const now = capture(this.root);
+      const diff = diffTrees(this.baseline.tree, now.tree);
+      const render = () =>
+        serializeTreeDiff(diff, {
+          focusBefore: this.baseline?.focus,
+          focusAfter: now.focus,
+        });
+
+      if (typeof expected === "string") {
+        const actual = render();
+        if (actual.trim() !== expected.trim()) {
+          throw new Error(
+            `flow.expectChanges: diff does not match expected.\n--- expected\n${expected}\n--- actual\n${actual}`,
+          );
+        }
+      } else if (typeof expected === "function") {
+        expected(diff);
+      } else {
+        const problems = checkChangeSpec(diff, expected);
+        if (problems.length) {
+          throw new Error(
+            `flow.expectChanges:\n  ${problems.join("\n  ")}\n--- actual diff\n${render()}`,
+          );
+        }
+      }
+
+      this.baseline = null; // close the window; next action opens a fresh one
     });
     return this;
   }
