@@ -116,6 +116,87 @@ describe("checkChangeSpec", () => {
     ).toBe(true);
   });
 
+  it("is order-independent — a general matcher before a specific one still finds a complete assignment", () => {
+    // { role: option } + { role: option, name: Spain }. Greedy first-fit would
+    // let the nameless matcher eat "Spain" and falsely report the specific one
+    // missing; maximum matching assigns nameless→France, specific→Spain.
+    for (const added of [
+      [mk("option", "Spain"), mk("option", "France")],
+      [mk("option", "France"), mk("option", "Spain")],
+    ]) {
+      expect(
+        checkChangeSpec(
+          { added, removed: [], changed: [] },
+          {
+            added: [{ role: "option" }, { role: "option", name: "Spain" }],
+          },
+        ),
+      ).toEqual([]);
+    }
+  });
+
+  it("order-independence holds for changed matchers too", () => {
+    const changes: TreeDiff["changed"] = [
+      {
+        id: "sn-1",
+        before: mk("combobox"),
+        after: mk("combobox"),
+        changes: ["a11y.states.expanded"],
+      },
+      {
+        id: "sn-2",
+        before: mk("combobox"),
+        after: mk("combobox"),
+        changes: ["a11y.name"],
+      },
+    ];
+    // Generic {combobox} listed first must not starve the specific
+    // {combobox, changes:[expanded]}.
+    expect(
+      checkChangeSpec(
+        { added: [], removed: [], changed: changes },
+        {
+          changed: [
+            { role: "combobox" },
+            { role: "combobox", changes: ["a11y.states.expanded"] },
+          ],
+        },
+      ),
+    ).toEqual([]);
+  });
+
+  it("a global/sticky RegExp name matches statelessly across repeated calls", () => {
+    const spec = { added: [{ role: "combobox", name: /Country/g }] };
+    const d: TreeDiff = {
+      added: [mk("combobox", "Country")],
+      removed: [],
+      changed: [],
+    };
+    // Would alternate [] / ["expected…"] on the old stateful .test().
+    expect(checkChangeSpec(d, spec)).toEqual([]);
+    expect(checkChangeSpec(d, spec)).toEqual([]);
+    expect(checkChangeSpec(d, spec)).toEqual([]);
+  });
+
+  it("a shared global RegExp across two matchers matches both", () => {
+    const rx = /item/g; // matches both node names below
+    expect(
+      checkChangeSpec(
+        {
+          added: [mk("option", "item"), mk("option", "item")],
+          removed: [],
+          changed: [],
+        },
+        {
+          added: [
+            { role: "option", name: rx },
+            { role: "option", name: rx },
+          ],
+        },
+      ),
+    ).toEqual([]);
+  });
+
   it("greedy 1:1 — two matchers need two distinct nodes", () => {
     expect(
       checkChangeSpec(diff, {

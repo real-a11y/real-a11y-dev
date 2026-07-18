@@ -36,9 +36,16 @@ function normalizeName(s: string): string {
 
 function nameMatches(name: string, want: string | RegExp | undefined): boolean {
   if (want === undefined) return true;
-  return want instanceof RegExp
-    ? want.test(name)
-    : normalizeName(name) === normalizeName(want);
+  if (typeof want === "string")
+    return normalizeName(name) === normalizeName(want);
+  // Clone off any global/sticky flag: `RegExp.test` on a `/g`|/y` regex
+  // advances `lastIndex`, so a caller's shared or module-level pattern would
+  // otherwise match statefully — alternating pass/fail across calls/matchers.
+  const re =
+    want.global || want.sticky
+      ? new RegExp(want.source, want.flags.replace(/[gy]/g, ""))
+      : want;
+  return re.test(name);
 }
 
 function nodeMatches(node: SemanticNode, m: NodeMatcher): boolean {
@@ -55,50 +62,85 @@ function describeNode(n: SemanticNode): string {
   return n.a11y.name ? `${n.a11y.role} "${n.a11y.name}"` : n.a11y.role;
 }
 
-/** Greedy 1:1 assignment of matchers to nodes (a matcher consumes one node). */
+/**
+ * Maximum 1:1 assignment of matchers to items (Kuhn's augmenting-path bipartite
+ * matching). Greedy first-fit is WRONG here: a general matcher listed before a
+ * specific one could consume the specific matcher's only viable item, reporting
+ * a false "missing" even when a complete assignment exists — flipping on
+ * incidental item order the spec author doesn't control. This finds a complete
+ * assignment whenever one exists, so the result is order-independent.
+ *
+ * Returns the indices of matchers left unmatched and items left unassigned.
+ */
+function maxMatch(
+  matcherCount: number,
+  itemCount: number,
+  compatible: (mi: number, ii: number) => boolean,
+): { missing: number[]; extras: number[] } {
+  const itemToMatcher = new Array<number>(itemCount).fill(-1);
+  const augment = (mi: number, seen: boolean[]): boolean => {
+    for (let ii = 0; ii < itemCount; ii++) {
+      if (seen[ii] || !compatible(mi, ii)) continue;
+      seen[ii] = true;
+      // Free item, or its current matcher can be re-homed down the path.
+      if (itemToMatcher[ii] === -1 || augment(itemToMatcher[ii], seen)) {
+        itemToMatcher[ii] = mi;
+        return true;
+      }
+    }
+    return false;
+  };
+  for (let mi = 0; mi < matcherCount; mi++) {
+    augment(mi, new Array<boolean>(itemCount).fill(false));
+  }
+  const matched = new Array<boolean>(matcherCount).fill(false);
+  for (let ii = 0; ii < itemCount; ii++) {
+    if (itemToMatcher[ii] !== -1) matched[itemToMatcher[ii]] = true;
+  }
+  const missing: number[] = [];
+  for (let mi = 0; mi < matcherCount; mi++) if (!matched[mi]) missing.push(mi);
+  const extras: number[] = [];
+  for (let ii = 0; ii < itemCount; ii++) {
+    if (itemToMatcher[ii] === -1) extras.push(ii);
+  }
+  return { missing, extras };
+}
+
 function matchNodes(
   nodes: readonly SemanticNode[],
   matchers: readonly NodeMatcher[],
 ): { missing: NodeMatcher[]; extras: SemanticNode[] } {
-  const used = new Set<number>();
-  const missing: NodeMatcher[] = [];
-  for (const m of matchers) {
-    let hit = -1;
-    for (let i = 0; i < nodes.length; i++) {
-      if (!used.has(i) && nodeMatches(nodes[i], m)) {
-        hit = i;
-        break;
-      }
-    }
-    if (hit === -1) missing.push(m);
-    else used.add(hit);
-  }
-  return { missing, extras: nodes.filter((_, i) => !used.has(i)) };
+  const { missing, extras } = maxMatch(
+    matchers.length,
+    nodes.length,
+    (mi, ii) => nodeMatches(nodes[ii], matchers[mi]),
+  );
+  return {
+    missing: missing.map((mi) => matchers[mi]),
+    extras: extras.map((ii) => nodes[ii]),
+  };
 }
 
 function matchChanged(
   changes: readonly NodeChange[],
   matchers: readonly ChangedMatcher[],
 ): { missing: ChangedMatcher[]; extras: NodeChange[] } {
-  const used = new Set<number>();
-  const missing: ChangedMatcher[] = [];
-  for (const m of matchers) {
-    let hit = -1;
-    for (let i = 0; i < changes.length; i++) {
-      if (used.has(i)) continue;
-      const c = changes[i];
-      const pathsPresent = (m.changes ?? []).every((p) =>
-        c.changes.includes(p),
+  const { missing, extras } = maxMatch(
+    matchers.length,
+    changes.length,
+    (mi, ii) => {
+      const m = matchers[mi];
+      const c = changes[ii];
+      return (
+        nodeMatches(c.after, m) &&
+        (m.changes ?? []).every((p) => c.changes.includes(p))
       );
-      if (nodeMatches(c.after, m) && pathsPresent) {
-        hit = i;
-        break;
-      }
-    }
-    if (hit === -1) missing.push(m);
-    else used.add(hit);
-  }
-  return { missing, extras: changes.filter((_, i) => !used.has(i)) };
+    },
+  );
+  return {
+    missing: missing.map((mi) => matchers[mi]),
+    extras: extras.map((ii) => changes[ii]),
+  };
 }
 
 /**
