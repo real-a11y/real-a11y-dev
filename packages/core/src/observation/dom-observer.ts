@@ -115,6 +115,12 @@ function isInternalMutation(
 export class DomObserver {
   private observer: MutationObserver | null = null;
   private portalObserver: MutationObserver | null = null;
+  // One deep observer per currently-open portal overlay that mounts OUTSIDE
+  // `root` (Radix/Headless-UI/Teleport modals, menus, listboxes). The primary
+  // observer only covers `root`'s subtree, so without these a portal's
+  // open/close re-extracts but changes INSIDE it (typing, aria-* flips,
+  // submenu/content swaps) never do — the panel goes stale.
+  private portalContentObservers = new Map<Element, MutationObserver>();
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   // Non-resetting ceiling timer: armed on the first change of a burst and NOT
   // cleared by later changes, so a continuous stream still flushes every
@@ -186,14 +192,36 @@ export class DomObserver {
     const body = this.root.ownerDocument?.body;
     if (body && body !== this.root && !this.root.contains(body)) {
       this.portalObserver = new MutationObserver((mutations) => {
+        let sawPortal = false;
         for (const m of mutations) {
-          for (const node of [...m.addedNodes, ...m.removedNodes]) {
+          // Removals before additions: a node reported in BOTH (a reparent
+          // among body's children) then ends up observed, not torn down.
+          for (const node of m.removedNodes) {
+            // Key teardown on IDENTITY, not overlay shape. A wrapper can be
+            // emptied first — its role-bearing child removed by a Radix/
+            // Headless-UI exit animation — before it detaches, so
+            // isPortalOverlayContainer would no longer match it. But it is
+            // still the Map key we tracked on mount; re-checking the shape
+            // here would leak its observer + listeners.
+            if (this.portalContentObservers.has(node as Element)) {
+              this.unobservePortalContent(node as Element);
+              sawPortal = true;
+            } else if (isPortalOverlayContainer(node, this.internalIds)) {
+              // A portal-shaped node we weren't tracking closed (e.g. one that
+              // was already open before start()) — still worth a re-extract.
+              sawPortal = true;
+            }
+          }
+          for (const node of m.addedNodes) {
             if (isPortalOverlayContainer(node, this.internalIds)) {
-              this.scheduleChange();
-              return;
+              // Watch INSIDE the newly-opened overlay too, so its internal
+              // changes keep the tree fresh — not just its open/close.
+              this.observePortalContent(node as Element);
+              sawPortal = true;
             }
           }
         }
+        if (sawPortal) this.scheduleChange();
       });
       this.portalObserver.observe(body, { childList: true });
     }
@@ -208,6 +236,16 @@ export class DomObserver {
       this.portalObserver.disconnect();
       this.portalObserver = null;
     }
+    // Tear down every open-portal observer + its input listeners. Runs before
+    // `inputListener` is nulled below, since removeEventListener needs it.
+    for (const [portal, observer] of this.portalContentObservers) {
+      observer.disconnect();
+      if (this.inputListener) {
+        portal.removeEventListener("input", this.inputListener, true);
+        portal.removeEventListener("change", this.inputListener, true);
+      }
+    }
+    this.portalContentObservers.clear();
     if (this.inputListener) {
       this.root.removeEventListener("input", this.inputListener, true);
       this.root.removeEventListener("change", this.inputListener, true);
@@ -220,6 +258,58 @@ export class DomObserver {
     if (this.maxWaitTimer) {
       clearTimeout(this.maxWaitTimer);
       this.maxWaitTimer = null;
+    }
+  }
+
+  /**
+   * Watch the contents of a portal-mounted overlay that lives OUTSIDE `root`
+   * (Radix/Headless-UI/Teleport modals, menus, listboxes). The extractor
+   * pivots onto the overlay via findActiveModal/findPortalOverlay, but the
+   * primary observer only covers `root`'s subtree — so without this the
+   * overlay's open/close re-extracts while changes INSIDE it (typing, aria-*
+   * flips, submenu/content swaps) never do, and the panel goes stale.
+   *
+   * Idempotent; skips overlays already inside `root` (the primary observer
+   * covers those) and ones already being watched.
+   */
+  private observePortalContent(portal: Element): void {
+    if (this.root.contains(portal)) return;
+    if (this.portalContentObservers.has(portal)) return;
+
+    const observer = new MutationObserver((mutations) => {
+      const allInternal = mutations.every((m) =>
+        isInternalMutation(m, this.internalIds),
+      );
+      if (allInternal) return;
+      this.scheduleChange();
+    });
+    observer.observe(portal, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: OBSERVED_ATTRIBUTES,
+      characterData: true,
+      characterDataOldValue: false,
+    });
+    this.portalContentObservers.set(portal, observer);
+
+    // Typing inside the portal — like the primary root, `input`/`change`
+    // events aren't visible to a MutationObserver.
+    if (this.inputListener) {
+      portal.addEventListener("input", this.inputListener, true);
+      portal.addEventListener("change", this.inputListener, true);
+    }
+  }
+
+  /** Tear down the observer + input listeners for a portal that unmounted. */
+  private unobservePortalContent(portal: Element): void {
+    const observer = this.portalContentObservers.get(portal);
+    if (!observer) return;
+    observer.disconnect();
+    this.portalContentObservers.delete(portal);
+    if (this.inputListener) {
+      portal.removeEventListener("input", this.inputListener, true);
+      portal.removeEventListener("change", this.inputListener, true);
     }
   }
 

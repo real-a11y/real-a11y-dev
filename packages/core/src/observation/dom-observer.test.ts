@@ -552,6 +552,167 @@ describe("DomObserver", () => {
 
       expect(onTreeChange).not.toHaveBeenCalled();
     });
+
+    // Deep observation: when `root` is a subtree (the React hook / inspector
+    // pass a user root, unlike the extension which passes documentElement),
+    // the portal mounts OUTSIDE root, so the primary observer can't see into
+    // it. Without a per-portal observer, the modal's open/close re-extracts
+    // but nothing inside it does — the panel shows the initial state and goes
+    // stale.
+    describe("deep content observation (portal outside root)", () => {
+      function openPortalModal(): HTMLElement {
+        const portal = document.createElement("div");
+        const dialog = document.createElement("div");
+        dialog.setAttribute("role", "dialog");
+        dialog.setAttribute("aria-modal", "true");
+        dialog.innerHTML = "<p>Initial</p>";
+        portal.appendChild(dialog);
+        document.body.appendChild(portal);
+        return dialog;
+      }
+
+      it("fires on a child added INSIDE an open portal, not just its mount", async () => {
+        observer = new DomObserver(appRoot, onTreeChange, 100);
+        observer.start();
+
+        const dialog = openPortalModal();
+        await settleObserver(100); // the mount itself fired
+        onTreeChange.mockClear();
+
+        dialog.appendChild(document.createElement("button"));
+        await settleObserver(100);
+
+        expect(onTreeChange).toHaveBeenCalledTimes(1);
+      });
+
+      it("fires on an aria-* flip inside an open portal", async () => {
+        observer = new DomObserver(appRoot, onTreeChange, 100);
+        observer.start();
+
+        const dialog = openPortalModal();
+        const btn = document.createElement("button");
+        btn.setAttribute("aria-expanded", "false");
+        dialog.appendChild(btn);
+        await settleObserver(100);
+        onTreeChange.mockClear();
+
+        btn.setAttribute("aria-expanded", "true");
+        await settleObserver(100);
+
+        expect(onTreeChange).toHaveBeenCalledTimes(1);
+      });
+
+      it("fires on typing (input event) inside an open portal", async () => {
+        observer = new DomObserver(appRoot, onTreeChange, 100);
+        observer.start();
+
+        const dialog = openPortalModal();
+        const input = document.createElement("input");
+        dialog.appendChild(input);
+        await settleObserver(100);
+        onTreeChange.mockClear();
+
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        vi.advanceTimersByTime(110);
+
+        expect(onTreeChange).toHaveBeenCalledTimes(1);
+      });
+
+      it("stops observing a portal's contents after it unmounts", async () => {
+        observer = new DomObserver(appRoot, onTreeChange, 100);
+        observer.start();
+
+        // Mount the dialog directly at body top level so its removal is the
+        // node the portal observer sees.
+        const dialog = document.createElement("div");
+        dialog.setAttribute("aria-modal", "true");
+        document.body.appendChild(dialog);
+        await settleObserver(100);
+
+        dialog.remove();
+        await settleObserver(100); // close fired
+        onTreeChange.mockClear();
+
+        // The detached dialog is no longer watched — mutating it does nothing.
+        dialog.appendChild(document.createElement("span"));
+        await settleObserver(100);
+
+        expect(onTreeChange).not.toHaveBeenCalled();
+      });
+
+      it("stop() disconnects portal content observers", async () => {
+        observer = new DomObserver(appRoot, onTreeChange, 100);
+        observer.start();
+
+        const dialog = openPortalModal();
+        await settleObserver(100);
+        observer.stop();
+        onTreeChange.mockClear();
+
+        dialog.appendChild(document.createElement("span"));
+        await settleObserver(100);
+
+        expect(onTreeChange).not.toHaveBeenCalled();
+      });
+
+      it("tears down when the wrapper is removed with the dialog still inside", async () => {
+        // Whole-tree unmount: the tracked key is the wrapper, and it's still
+        // overlay-shaped at removal time.
+        observer = new DomObserver(appRoot, onTreeChange, 100);
+        observer.start();
+
+        const portal = document.createElement("div");
+        const dialog = document.createElement("div");
+        dialog.setAttribute("role", "dialog");
+        dialog.setAttribute("aria-modal", "true");
+        portal.appendChild(dialog);
+        document.body.appendChild(portal);
+        await settleObserver(100);
+
+        portal.remove();
+        await settleObserver(100);
+        onTreeChange.mockClear();
+
+        dialog.appendChild(document.createElement("span"));
+        await settleObserver(100);
+        expect(onTreeChange).not.toHaveBeenCalled();
+      });
+
+      it("tears down even when the dialog is removed BEFORE its wrapper (exit-animation order)", async () => {
+        // Radix Presence / Headless UI Transition remove the role-bearing
+        // child first, then the now-empty wrapper. The wrapper is the tracked
+        // key but no longer matches the overlay selector — teardown must key
+        // on identity, not shape, or the observer + capture listeners leak.
+        observer = new DomObserver(appRoot, onTreeChange, 100);
+        observer.start();
+
+        const portal = document.createElement("div");
+        const dialog = document.createElement("div");
+        dialog.setAttribute("role", "dialog");
+        dialog.setAttribute("aria-modal", "true");
+        const input = document.createElement("input");
+        dialog.appendChild(input);
+        portal.appendChild(dialog);
+        document.body.appendChild(portal);
+        await settleObserver(100);
+
+        dialog.remove(); // inner removed first — wrapper is now empty
+        await settleObserver(100);
+        portal.remove(); // then the empty wrapper detaches
+        await settleObserver(100);
+        onTreeChange.mockClear();
+
+        // If the wrapper observer leaked, this childList change would fire.
+        portal.appendChild(document.createElement("span"));
+        await settleObserver(100);
+        expect(onTreeChange).not.toHaveBeenCalled();
+
+        // And if its capture-phase input listener leaked, this would fire.
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        vi.advanceTimersByTime(110);
+        expect(onTreeChange).not.toHaveBeenCalled();
+      });
+    });
   });
 
   // The selector that drives the secondary observer covers non-modal
