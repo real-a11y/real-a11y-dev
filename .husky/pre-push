@@ -4,3 +4,8 @@
 #
 # Skip in emergencies with `git push --no-verify`.
 pnpm verify
+
+# Bundle-size budget gate (mirrors CI). `verify` already built the public
+# packages, so size-limit reads fresh dist/ output — no rebuild needed.
+# Budgets live in .size-limit.json.
+pnpm size-limit
