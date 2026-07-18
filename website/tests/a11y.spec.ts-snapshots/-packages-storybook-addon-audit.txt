@@ -1,252 +1,252 @@
-  link "Skip to content"
-  banner
-    link "Real A11y"
-    button "Search"
-    navigation "Main Navigation"
-      link "Guide"
-      link "Recipes"
-      link "Packages"
-      button "v0.1 · Beta"
-    switch "Switch to dark theme"
-    link "github"
-  complementary
-    navigation "Sidebar Navigation"
-      button "Introduction"
-        heading "Introduction" (level 2)
-      link "Getting Started"
-        paragraph "Getting Started"
-      link "Core Concepts"
-        paragraph "Core Concepts"
-      link "Accessibility Snapshots"
-        paragraph "Accessibility Snapshots"
-      link "Snapshots vs. Other Tools"
-        paragraph "Snapshots vs. Other Tools"
-      link "Why Real A11y?"
-        paragraph "Why Real A11y?"
-      button "Reading the Tree"
-        heading "Reading the Tree" (level 2)
-      link "Understanding the Views"
-        paragraph "Understanding the Views"
-      link "DOM View"
-        paragraph "DOM View"
-      link "A11y View"
-        paragraph "A11y View"
-      link "Headings View"
-        paragraph "Headings View"
-      link "TAB View"
-        paragraph "TAB View"
-      link "Panel features"
-        paragraph "Panel features"
-      button "Chrome Extension"
-        heading "Chrome Extension" (level 2)
-      link "Overview & Install"
-        paragraph "Overview & Install"
-      button "Packages"
-        heading "Packages" (level 2)
-      link "@real-a11y-dev/core"
-        paragraph "@real-a11y-dev/core"
-      link "@real-a11y-dev/inspector"
-        paragraph "@real-a11y-dev/inspector"
-        link "@real-a11y-dev/testing"
-          heading "@real-a11y-dev/testing" (level 3)
-        button "toggle section"
-      link "@real-a11y-dev/react"
-        paragraph "@real-a11y-dev/react"
-      link "@real-a11y-dev/storybook-addon"
-        paragraph "@real-a11y-dev/storybook-addon"
-        link "@real-a11y-dev/mcp"
-          heading "@real-a11y-dev/mcp" (level 3)
-        button "toggle section"
-        link "@real-a11y-dev/cli"
-          heading "@real-a11y-dev/cli" (level 3)
-        button "toggle section"
-      button "Recipes"
-        heading "Recipes" (level 2)
-      link "Next.js (App Router + React 19)"
-        paragraph "Next.js (App Router + React 19)"
-      link "Storybook 8 + React 19"
-        paragraph "Storybook 8 + React 19"
-      link "Peer Dependencies"
-        paragraph "Peer Dependencies"
-      link "CI Diff Bot"
-        paragraph "CI Diff Bot"
-      button "Reference"
-        heading "Reference" (level 2)
-      link "Authenticated Pages"
-        paragraph "Authenticated Pages"
-      link "Accessible Names"
-        paragraph "Accessible Names"
-      link "Architecture"
-        paragraph "Architecture"
+link "Skip to content"
+banner
+  link "Real A11y"
+  button "Search"
+  navigation "Main Navigation"
+    link "Guide"
+    link "Recipes"
+    link "Packages"
+    button "v0.1 · Beta"
+  switch "Switch to dark theme"
+  link "github"
+complementary
+  navigation "Sidebar Navigation"
+    button "Introduction"
+      heading "Introduction" (level 2)
+    link "Getting Started"
+      paragraph "Getting Started"
+    link "Core Concepts"
+      paragraph "Core Concepts"
+    link "Accessibility Snapshots"
+      paragraph "Accessibility Snapshots"
+    link "Snapshots vs. Other Tools"
+      paragraph "Snapshots vs. Other Tools"
+    link "Why Real A11y?"
+      paragraph "Why Real A11y?"
+    button "Reading the Tree"
+      heading "Reading the Tree" (level 2)
+    link "Understanding the Views"
+      paragraph "Understanding the Views"
+    link "DOM View"
+      paragraph "DOM View"
+    link "A11y View"
+      paragraph "A11y View"
+    link "Headings View"
+      paragraph "Headings View"
+    link "TAB View"
+      paragraph "TAB View"
+    link "Panel features"
+      paragraph "Panel features"
+    button "Chrome Extension"
+      heading "Chrome Extension" (level 2)
+    link "Overview & Install"
+      paragraph "Overview & Install"
+    button "Packages"
+      heading "Packages" (level 2)
+    link "@real-a11y-dev/core"
+      paragraph "@real-a11y-dev/core"
+    link "@real-a11y-dev/inspector"
+      paragraph "@real-a11y-dev/inspector"
+    link "@real-a11y-dev/testing"
+      heading "@real-a11y-dev/testing" (level 3)
+    button "toggle section"
+    link "@real-a11y-dev/react"
+      paragraph "@real-a11y-dev/react"
+    link "@real-a11y-dev/storybook-addon"
+      paragraph "@real-a11y-dev/storybook-addon"
+    link "@real-a11y-dev/mcp"
+      heading "@real-a11y-dev/mcp" (level 3)
+    button "toggle section"
+    link "@real-a11y-dev/cli"
+      heading "@real-a11y-dev/cli" (level 3)
+    button "toggle section"
+    button "Recipes"
+      heading "Recipes" (level 2)
+    link "Next.js (App Router + React 19)"
+      paragraph "Next.js (App Router + React 19)"
+    link "Storybook 8 + React 19"
+      paragraph "Storybook 8 + React 19"
+    link "Peer Dependencies"
+      paragraph "Peer Dependencies"
+    link "CI Diff Bot"
+      paragraph "CI Diff Bot"
+    button "Reference"
+      heading "Reference" (level 2)
+    link "Authenticated Pages"
+      paragraph "Authenticated Pages"
+    link "Accessible Names"
+      paragraph "Accessible Names"
+    link "Architecture"
+      paragraph "Architecture"
+    link "Troubleshooting"
+      paragraph "Troubleshooting"
+navigation "On this page"
+  heading "On this page" (level 2)
+  list
+    listitem
+      link "Install"
+    listitem
+      link "Setup"
+    listitem
+      link "The panel"
+    listitem
+      link "How it works"
+    listitem
+      link "Using the panel effectively"
+    listitem
+      link "Story parameters"
+    listitem
+      link "Channel events"
+    listitem
       link "Troubleshooting"
-        paragraph "Troubleshooting"
-  navigation "On this page"
-    heading "On this page" (level 2)
-    list
-      listitem
-        link "Install"
-      listitem
-        link "Setup"
-      listitem
-        link "The panel"
-      listitem
-        link "How it works"
-      listitem
-        link "Using the panel effectively"
-      listitem
-        link "Story parameters"
-      listitem
-        link "Channel events"
-      listitem
-        link "Troubleshooting"
-      listitem
-        link "See it running"
-      listitem
-        link "Panel features"
-  main
-    heading "@real-a11y-dev/storybook-addon" (level 1)
-    blockquote
-      paragraph "— One line in and every story gets a Semantic Navigator panel next to Controls / A11y — showing the tree, heading outline, and tab sequence, updating live as the story re-renders. Reach for this when you and want per-story a11y insight without writing tests."
-        strong "TL;DR"
-        code ".storybook/main.ts"
-        strong "develop components in Storybook"
-    paragraph "A Storybook 8 panel that shows the semantic tree, heading outline, and tab sequence for every story — updated live as the story renders."
-    heading "Install" (level 2)
-    button "Copy Code"
-      code
-    paragraph ", , , , , and (optional)"
-      strong "Peer dependencies:"
-      code "storybook >= 8"
-      code "react >= 18"
-      code "react-dom >= 18"
-      code "@storybook/manager-api >= 8"
-      code "@storybook/preview-api >= 8"
-      code "@storybook/theming >= 8"
-    separator
-    heading "Setup" (level 2)
-    paragraph "Add the addon to :"
+    listitem
+      link "See it running"
+    listitem
+      link "Panel features"
+main
+  heading "@real-a11y-dev/storybook-addon" (level 1)
+  blockquote
+    paragraph "— One line in and every story gets a Semantic Navigator panel next to Controls / A11y — showing the tree, heading outline, and tab sequence, updating live as the story re-renders. Reach for this when you and want per-story a11y insight without writing tests."
+      strong "TL;DR"
       code ".storybook/main.ts"
-    button "Copy Code"
-      code
-    paragraph "That's it. No decorator, no parameters required. A panel appears next to Controls, Actions, and A11y for every story."
-      strong "Semantic Navigator"
-    separator
-    heading "The panel" (level 2)
-    paragraph "The panel embeds the full interactive tree — the same used by the Chrome extension and inspector — rendered inside a CSS-isolated shadow root. A mode switcher in the panel header offers three views:"
-      strong "Semantic Navigator"
-      code "TreePanel"
-    table
-      rowgroup
-        row
-          rowheader "Mode"
-          rowheader "Shows"
-      rowgroup
-        row
-          cell "A11y"
-            strong "A11y"
-          cell "The accessibility tree — roles, accessible names, and ARIA states for every node in the story."
-        row
-          cell "DOM"
-            strong "DOM"
-          cell "The raw DOM tree — tag names and attributes, useful to confirm whether a semantic element is actually being rendered."
-        row
-          cell "Tab"
-            strong "Tab"
-          cell "Focusable elements in tab order, derived from the current a11y tree."
-    paragraph "Switching between and re-extracts the story via the channel; is a client-side transform of the current tree, so it switches instantly."
-      strong "A11y"
-      strong "DOM"
-      strong "Tab"
-    separator
-    heading "How it works" (level 2)
-    paragraph "The addon follows Storybook 8's manager/preview split:"
-    list
-      listitem
-        paragraph "() runs inside the story iframe. It observes with a (200ms debounce) and emits events over the Storybook channel whenever the story DOM changes."
-          strong "Preview"
-          code "@real-a11y-dev/storybook-addon/preview"
-          code "#storybook-root"
-          code "DomObserver"
-          code "TREE_UPDATED"
-      listitem
-        paragraph "() runs in the Storybook UI shell (React). It subscribes to events, deserializes the tree (the array back into a ), and renders the interactive from inside a shadow root."
-          strong "Manager"
-          code "@real-a11y-dev/storybook-addon/manager"
-          code "TREE_UPDATED"
-          code "[id, node][]"
-          code "Map"
-          code "TreePanel"
-          code "@real-a11y-dev/semantic-navigator-ui"
-    button "Copy Code"
-      code
-    separator
-    heading "Using the panel effectively" (level 2)
-    paragraph "Open any story and click the tab. Then:"
-      strong "Semantic Navigator"
-    list
-      listitem "— inspect the role, accessible name, and ARIA states of every element in the story canvas. Compare what you see here to what the design intent was."
-        strong "Tree"
-      listitem "— verify the heading hierarchy at a glance. Stories that embed full page templates should still produce a coherent outline."
-        strong "Outline"
-      listitem "— press the keyboard-navigation icon and confirm the focus order matches user expectation. Disabled controls correctly drop out of the sequence; positive values show a warning badge."
-        strong "Tab sequence"
-        code "tabindex"
-      listitem "— flip between A11y and DOM modes. In DOM mode you see raw tag names (e.g. instead of the implicit role); useful to confirm whether a semantic element is actually being rendered."
-        strong "Mode toggle"
-        code "div"
-      listitem "— change a prop (e.g. , ) in the Controls panel and watch the Semantic Navigator panel re-extract within 200 ms. Great for regression-checking state-dependent a11y."
-        strong "Combine with Controls"
-        code "disabled"
-        code "aria-label"
-    separator
-    heading "Story parameters" (level 2)
-    paragraph "The addon reads no story parameters today — it runs on every story with no per-story configuration required."
-    paragraph "TIP"
-    paragraph "Per-story controls (disabling the panel for a specific story, expected-outline / expected-tab-sequence assertions) are planned for v0.2. The channel architecture is already in place to support them."
-    separator
-    heading "Channel events" (level 2)
-    paragraph "If you need to integrate with the addon from your own tooling:"
-    button "Copy Code"
-      code
-    separator
-    heading "Troubleshooting" (level 2)
-    paragraph
-      strong "Panel shows "Waiting for story to render…""
-    paragraph "This means the preview hasn't emitted a event yet. Check:"
-      code "TREE_UPDATED"
-    list
-      listitem "The story is in view mode (not )"
-        code "story"
-        code "docs"
-      listitem "exists in the iframe DOM"
+      strong "develop components in Storybook"
+  paragraph "A Storybook 8 panel that shows the semantic tree, heading outline, and tab sequence for every story — updated live as the story renders."
+  heading "Install" (level 2)
+  button "Copy Code"
+  code
+  paragraph ", , , , , and (optional)"
+    strong "Peer dependencies:"
+    code "storybook >= 8"
+    code "react >= 18"
+    code "react-dom >= 18"
+    code "@storybook/manager-api >= 8"
+    code "@storybook/preview-api >= 8"
+    code "@storybook/theming >= 8"
+  separator
+  heading "Setup" (level 2)
+  paragraph "Add the addon to :"
+    code ".storybook/main.ts"
+  button "Copy Code"
+  code
+  paragraph "That's it. No decorator, no parameters required. A panel appears next to Controls, Actions, and A11y for every story."
+    strong "Semantic Navigator"
+  separator
+  heading "The panel" (level 2)
+  paragraph "The panel embeds the full interactive tree — the same used by the Chrome extension and inspector — rendered inside a CSS-isolated shadow root. A mode switcher in the panel header offers three views:"
+    strong "Semantic Navigator"
+    code "TreePanel"
+  table
+    rowgroup
+      row
+        rowheader "Mode"
+        rowheader "Shows"
+    rowgroup
+      row
+        cell "A11y"
+          strong "A11y"
+        cell "The accessibility tree — roles, accessible names, and ARIA states for every node in the story."
+      row
+        cell "DOM"
+          strong "DOM"
+        cell "The raw DOM tree — tag names and attributes, useful to confirm whether a semantic element is actually being rendered."
+      row
+        cell "Tab"
+          strong "Tab"
+        cell "Focusable elements in tab order, derived from the current a11y tree."
+  paragraph "Switching between and re-extracts the story via the channel; is a client-side transform of the current tree, so it switches instantly."
+    strong "A11y"
+    strong "DOM"
+    strong "Tab"
+  separator
+  heading "How it works" (level 2)
+  paragraph "The addon follows Storybook 8's manager/preview split:"
+  list
+    listitem
+      paragraph "() runs inside the story iframe. It observes with a (200ms debounce) and emits events over the Storybook channel whenever the story DOM changes."
+        strong "Preview"
+        code "@real-a11y-dev/storybook-addon/preview"
         code "#storybook-root"
-      listitem "No errors in the Storybook preview console"
-    paragraph
-      strong "Panel content is out of date after a story change"
-    paragraph "The addon listens to and events. If your framework delays rendering past the event, the first snapshot may capture an empty state. A second extraction fires automatically on the next DOM mutation, so the panel catches up within 200ms."
-      code "storyRendered"
-      code "storyChanged"
-      code "storyRendered"
-    separator
-    heading "See it running" (level 2)
-    list
-      listitem "— : Button / Form / Dialog / Navigation stories showing how the panel reacts to Controls changes."
-        strong "Storybook 8 + Vite + React"
-        link "examples/storybook/"
-          code "examples/storybook/"
-      listitem "— the covers the JSX override needed with React 19 projects."
-        strong "Storybook 8 + React 19"
-        link "Storybook + React 19 recipe"
-        code "viteFinal"
-    separator
-    heading "Panel features" (level 2)
-    paragraph "Inside every story's panel: search, role filters, focus tracking, scoping, live region monitoring, keyboard navigation. Same UI as the Chrome extension and inspector — see the shared reference for what each control does and when to reach for it."
-    paragraph "→"
-      link "Panel features reference"
-  contentinfo
-    link "Edit this page on GitHub"
-    paragraph "Last updated:"
-      time "[redacted]"
-    navigation "Pager"
-      link "Previous page@real-a11y-dev/react"
-      link "Next page@real-a11y-dev/mcp"
+        code "DomObserver"
+        code "TREE_UPDATED"
+    listitem
+      paragraph "() runs in the Storybook UI shell (React). It subscribes to events, deserializes the tree (the array back into a ), and renders the interactive from inside a shadow root."
+        strong "Manager"
+        code "@real-a11y-dev/storybook-addon/manager"
+        code "TREE_UPDATED"
+        code "[id, node][]"
+        code "Map"
+        code "TreePanel"
+        code "@real-a11y-dev/semantic-navigator-ui"
+  button "Copy Code"
+  code
+  separator
+  heading "Using the panel effectively" (level 2)
+  paragraph "Open any story and click the tab. Then:"
+    strong "Semantic Navigator"
+  list
+    listitem "— inspect the role, accessible name, and ARIA states of every element in the story canvas. Compare what you see here to what the design intent was."
+      strong "Tree"
+    listitem "— verify the heading hierarchy at a glance. Stories that embed full page templates should still produce a coherent outline."
+      strong "Outline"
+    listitem "— press the keyboard-navigation icon and confirm the focus order matches user expectation. Disabled controls correctly drop out of the sequence; positive values show a warning badge."
+      strong "Tab sequence"
+      code "tabindex"
+    listitem "— flip between A11y and DOM modes. In DOM mode you see raw tag names (e.g. instead of the implicit role); useful to confirm whether a semantic element is actually being rendered."
+      strong "Mode toggle"
+      code "div"
+    listitem "— change a prop (e.g. , ) in the Controls panel and watch the Semantic Navigator panel re-extract within 200 ms. Great for regression-checking state-dependent a11y."
+      strong "Combine with Controls"
+      code "disabled"
+      code "aria-label"
+  separator
+  heading "Story parameters" (level 2)
+  paragraph "The addon reads no story parameters today — it runs on every story with no per-story configuration required."
+  paragraph "TIP"
+  paragraph "Per-story controls (disabling the panel for a specific story, expected-outline / expected-tab-sequence assertions) are planned for v0.2. The channel architecture is already in place to support them."
+  separator
+  heading "Channel events" (level 2)
+  paragraph "If you need to integrate with the addon from your own tooling:"
+  button "Copy Code"
+  code
+  separator
+  heading "Troubleshooting" (level 2)
+  paragraph
+    strong "Panel shows "Waiting for story to render…""
+  paragraph "This means the preview hasn't emitted a event yet. Check:"
+    code "TREE_UPDATED"
+  list
+    listitem "The story is in view mode (not )"
+      code "story"
+      code "docs"
+    listitem "exists in the iframe DOM"
+      code "#storybook-root"
+    listitem "No errors in the Storybook preview console"
+  paragraph
+    strong "Panel content is out of date after a story change"
+  paragraph "The addon listens to and events. If your framework delays rendering past the event, the first snapshot may capture an empty state. A second extraction fires automatically on the next DOM mutation, so the panel catches up within 200ms."
+    code "storyRendered"
+    code "storyChanged"
+    code "storyRendered"
+  separator
+  heading "See it running" (level 2)
+  list
+    listitem "— : Button / Form / Dialog / Navigation stories showing how the panel reacts to Controls changes."
+      strong "Storybook 8 + Vite + React"
+      link "examples/storybook/"
+        code "examples/storybook/"
+    listitem "— the covers the JSX override needed with React 19 projects."
+      strong "Storybook 8 + React 19"
+      link "Storybook + React 19 recipe"
+      code "viteFinal"
+  separator
+  heading "Panel features" (level 2)
+  paragraph "Inside every story's panel: search, role filters, focus tracking, scoping, live region monitoring, keyboard navigation. Same UI as the Chrome extension and inspector — see the shared reference for what each control does and when to reach for it."
+  paragraph "→"
+    link "Panel features reference"
+contentinfo
+  link "Edit this page on GitHub"
+  paragraph "Last updated:"
+    time "[redacted]"
+  navigation "Pager"
+    link "Previous page@real-a11y-dev/react"
+    link "Next page@real-a11y-dev/mcp"

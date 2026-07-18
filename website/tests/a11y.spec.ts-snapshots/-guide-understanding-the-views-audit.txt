@@ -1,165 +1,165 @@
-  link "Skip to content"
-  banner
-    link "Real A11y"
-    button "Search"
-    navigation "Main Navigation"
-      link "Guide"
-      link "Recipes"
-      link "Packages"
-      button "v0.1 · Beta"
-    switch "Switch to dark theme"
-    link "github"
-  complementary
-    navigation "Sidebar Navigation"
-      button "Introduction"
-        heading "Introduction" (level 2)
-      link "Getting Started"
-        paragraph "Getting Started"
-      link "Core Concepts"
-        paragraph "Core Concepts"
-      link "Accessibility Snapshots"
-        paragraph "Accessibility Snapshots"
-      link "Snapshots vs. Other Tools"
-        paragraph "Snapshots vs. Other Tools"
-      link "Why Real A11y?"
-        paragraph "Why Real A11y?"
-      button "Reading the Tree"
-        heading "Reading the Tree" (level 2)
-      link "Understanding the Views"
-        paragraph "Understanding the Views"
-      link "DOM View"
-        paragraph "DOM View"
-      link "A11y View"
-        paragraph "A11y View"
-      link "Headings View"
-        paragraph "Headings View"
-      link "TAB View"
-        paragraph "TAB View"
-      link "Panel features"
-        paragraph "Panel features"
-      button "Chrome Extension"
-        heading "Chrome Extension" (level 2)
-      link "Overview & Install"
-        paragraph "Overview & Install"
-      button "Packages"
-        heading "Packages" (level 2)
-      link "@real-a11y-dev/core"
-        paragraph "@real-a11y-dev/core"
-      link "@real-a11y-dev/inspector"
-        paragraph "@real-a11y-dev/inspector"
-        link "@real-a11y-dev/testing"
-          heading "@real-a11y-dev/testing" (level 3)
-        button "toggle section"
-      link "@real-a11y-dev/react"
-        paragraph "@real-a11y-dev/react"
-      link "@real-a11y-dev/storybook-addon"
-        paragraph "@real-a11y-dev/storybook-addon"
-        link "@real-a11y-dev/mcp"
-          heading "@real-a11y-dev/mcp" (level 3)
-        button "toggle section"
-        link "@real-a11y-dev/cli"
-          heading "@real-a11y-dev/cli" (level 3)
-        button "toggle section"
-      button "Recipes"
-        heading "Recipes" (level 2)
-      link "Next.js (App Router + React 19)"
-        paragraph "Next.js (App Router + React 19)"
-      link "Storybook 8 + React 19"
-        paragraph "Storybook 8 + React 19"
-      link "Peer Dependencies"
-        paragraph "Peer Dependencies"
-      link "CI Diff Bot"
-        paragraph "CI Diff Bot"
-      button "Reference"
-        heading "Reference" (level 2)
-      link "Authenticated Pages"
-        paragraph "Authenticated Pages"
-      link "Accessible Names"
-        paragraph "Accessible Names"
-      link "Architecture"
-        paragraph "Architecture"
-      link "Troubleshooting"
-        paragraph "Troubleshooting"
-  navigation "On this page"
-    heading "On this page" (level 2)
-    list
-      listitem
-        link "The visual layout"
-      listitem
-        link "A11y Tree view"
-      listitem
-        link "Headings view"
-      listitem
-        link "TAB order view"
-      listitem
-        link "Same content, four perspectives"
-  main
-    heading "Understanding the views" (level 1)
-    paragraph "Real A11y gives you multiple ways to inspect the same page. Each view answers a different question — but they all describe the ."
-      strong "same content"
-    heading "The visual layout" (level 2)
-    paragraph "This is what sighted users see: a spatial arrangement of sections, text, images, forms, and links."
-    img "Visual view: a website layout with a blue header, teal navigation sidebar, purple main content area with headings, text, images, inputs, and a button, an amber aside panel, and a slate footer."
-    paragraph "Every colored shape represents a piece of content. The colors are consistent across all diagrams below — so you can track each element across views."
-    separator
-    heading "A11y Tree view" (level 2)
-    paragraph "Assistive technology doesn't see the 2D layout. It reads the same content as a , organized by landmark roles."
-      strong "hierarchical tree"
-    img "A11y tree view: the same website content rearranged as a tree diagram with document as the root, branching into banner, navigation, main, complementary, and contentinfo landmarks, each containing their child elements."
-    paragraph "Same shapes, same colors — different structure. The tree shows each element is (its role), (its accessible name), and in the hierarchy."
-      strong "what"
-      strong "what it's called"
-      strong "where it sits"
-    paragraph
-      link "Read more about the A11y view →"
-    separator
-    heading "Headings view" (level 2)
-    paragraph "Screen reader users navigate primarily by headings. This view extracts just the heading elements and shows the document outline."
-    img "Headings view: only the heading elements from the page, shown as indigo bars indented by level — one H1 at the top, followed by H2s and H3s forming the document outline."
-    paragraph "A well-structured outline has exactly one H1, no skipped levels, and a logical nesting that mirrors the page's sections."
-    paragraph
-      link "Read more about the Headings view →"
-    separator
-    heading "TAB order view" (level 2)
-    paragraph "Keyboard users press Tab to move between interactive elements. This view shows the exact sequence — a flat, numbered list of every focusable element."
-    img "Tab order view: focusable elements shown as numbered bars in sequence — sky-blue links, rose inputs, and a green button — each labeled with which landmark section it belongs to."
-    paragraph "The color of each bar tells you the element type (link, input, button), and the badge on the right tells you which section it came from. The order should match the visual flow."
-    paragraph
-      link "Read more about the TAB view →"
-    separator
-    heading "Same content, four perspectives" (level 2)
-    table
-      rowgroup
-        row
-          rowheader "View"
-          rowheader "Question it answers"
-          rowheader "What you see"
-      rowgroup
-        row
-          cell "Visual"
-            strong "Visual"
-          cell "How does it look?"
-          cell "2D spatial layout"
-        row
-          cell "A11y Tree"
-            strong "A11y Tree"
-          cell "What does AT hear?"
-          cell "Hierarchical tree with roles and names"
-        row
-          cell "Headings"
-            strong "Headings"
-          cell "What's the document outline?"
-          cell "Heading levels as a table of contents"
-        row
-          cell "TAB order"
-            strong "TAB order"
-          cell "Can keyboard users reach everything?"
-          cell "Flat numbered list of focusable elements"
-    paragraph "All four describe the same page. When they agree, the experience is equivalent for everyone. When they disagree, someone is getting a broken experience."
-  contentinfo
-    link "Edit this page on GitHub"
-    paragraph "Last updated:"
-      time "[redacted]"
-    navigation "Pager"
-      link "Previous pageWhy Real A11y?"
-      link "Next pageDOM View"
+link "Skip to content"
+banner
+  link "Real A11y"
+  button "Search"
+  navigation "Main Navigation"
+    link "Guide"
+    link "Recipes"
+    link "Packages"
+    button "v0.1 · Beta"
+  switch "Switch to dark theme"
+  link "github"
+complementary
+  navigation "Sidebar Navigation"
+    button "Introduction"
+      heading "Introduction" (level 2)
+    link "Getting Started"
+      paragraph "Getting Started"
+    link "Core Concepts"
+      paragraph "Core Concepts"
+    link "Accessibility Snapshots"
+      paragraph "Accessibility Snapshots"
+    link "Snapshots vs. Other Tools"
+      paragraph "Snapshots vs. Other Tools"
+    link "Why Real A11y?"
+      paragraph "Why Real A11y?"
+    button "Reading the Tree"
+      heading "Reading the Tree" (level 2)
+    link "Understanding the Views"
+      paragraph "Understanding the Views"
+    link "DOM View"
+      paragraph "DOM View"
+    link "A11y View"
+      paragraph "A11y View"
+    link "Headings View"
+      paragraph "Headings View"
+    link "TAB View"
+      paragraph "TAB View"
+    link "Panel features"
+      paragraph "Panel features"
+    button "Chrome Extension"
+      heading "Chrome Extension" (level 2)
+    link "Overview & Install"
+      paragraph "Overview & Install"
+    button "Packages"
+      heading "Packages" (level 2)
+    link "@real-a11y-dev/core"
+      paragraph "@real-a11y-dev/core"
+    link "@real-a11y-dev/inspector"
+      paragraph "@real-a11y-dev/inspector"
+    link "@real-a11y-dev/testing"
+      heading "@real-a11y-dev/testing" (level 3)
+    button "toggle section"
+    link "@real-a11y-dev/react"
+      paragraph "@real-a11y-dev/react"
+    link "@real-a11y-dev/storybook-addon"
+      paragraph "@real-a11y-dev/storybook-addon"
+    link "@real-a11y-dev/mcp"
+      heading "@real-a11y-dev/mcp" (level 3)
+    button "toggle section"
+    link "@real-a11y-dev/cli"
+      heading "@real-a11y-dev/cli" (level 3)
+    button "toggle section"
+    button "Recipes"
+      heading "Recipes" (level 2)
+    link "Next.js (App Router + React 19)"
+      paragraph "Next.js (App Router + React 19)"
+    link "Storybook 8 + React 19"
+      paragraph "Storybook 8 + React 19"
+    link "Peer Dependencies"
+      paragraph "Peer Dependencies"
+    link "CI Diff Bot"
+      paragraph "CI Diff Bot"
+    button "Reference"
+      heading "Reference" (level 2)
+    link "Authenticated Pages"
+      paragraph "Authenticated Pages"
+    link "Accessible Names"
+      paragraph "Accessible Names"
+    link "Architecture"
+      paragraph "Architecture"
+    link "Troubleshooting"
+      paragraph "Troubleshooting"
+navigation "On this page"
+  heading "On this page" (level 2)
+  list
+    listitem
+      link "The visual layout"
+    listitem
+      link "A11y Tree view"
+    listitem
+      link "Headings view"
+    listitem
+      link "TAB order view"
+    listitem
+      link "Same content, four perspectives"
+main
+  heading "Understanding the views" (level 1)
+  paragraph "Real A11y gives you multiple ways to inspect the same page. Each view answers a different question — but they all describe the ."
+    strong "same content"
+  heading "The visual layout" (level 2)
+  paragraph "This is what sighted users see: a spatial arrangement of sections, text, images, forms, and links."
+  img "Visual view: a website layout with a blue header, teal navigation sidebar, purple main content area with headings, text, images, inputs, and a button, an amber aside panel, and a slate footer."
+  paragraph "Every colored shape represents a piece of content. The colors are consistent across all diagrams below — so you can track each element across views."
+  separator
+  heading "A11y Tree view" (level 2)
+  paragraph "Assistive technology doesn't see the 2D layout. It reads the same content as a , organized by landmark roles."
+    strong "hierarchical tree"
+  img "A11y tree view: the same website content rearranged as a tree diagram with document as the root, branching into banner, navigation, main, complementary, and contentinfo landmarks, each containing their child elements."
+  paragraph "Same shapes, same colors — different structure. The tree shows each element is (its role), (its accessible name), and in the hierarchy."
+    strong "what"
+    strong "what it's called"
+    strong "where it sits"
+  paragraph
+    link "Read more about the A11y view →"
+  separator
+  heading "Headings view" (level 2)
+  paragraph "Screen reader users navigate primarily by headings. This view extracts just the heading elements and shows the document outline."
+  img "Headings view: only the heading elements from the page, shown as indigo bars indented by level — one H1 at the top, followed by H2s and H3s forming the document outline."
+  paragraph "A well-structured outline has exactly one H1, no skipped levels, and a logical nesting that mirrors the page's sections."
+  paragraph
+    link "Read more about the Headings view →"
+  separator
+  heading "TAB order view" (level 2)
+  paragraph "Keyboard users press Tab to move between interactive elements. This view shows the exact sequence — a flat, numbered list of every focusable element."
+  img "Tab order view: focusable elements shown as numbered bars in sequence — sky-blue links, rose inputs, and a green button — each labeled with which landmark section it belongs to."
+  paragraph "The color of each bar tells you the element type (link, input, button), and the badge on the right tells you which section it came from. The order should match the visual flow."
+  paragraph
+    link "Read more about the TAB view →"
+  separator
+  heading "Same content, four perspectives" (level 2)
+  table
+    rowgroup
+      row
+        rowheader "View"
+        rowheader "Question it answers"
+        rowheader "What you see"
+    rowgroup
+      row
+        cell "Visual"
+          strong "Visual"
+        cell "How does it look?"
+        cell "2D spatial layout"
+      row
+        cell "A11y Tree"
+          strong "A11y Tree"
+        cell "What does AT hear?"
+        cell "Hierarchical tree with roles and names"
+      row
+        cell "Headings"
+          strong "Headings"
+        cell "What's the document outline?"
+        cell "Heading levels as a table of contents"
+      row
+        cell "TAB order"
+          strong "TAB order"
+        cell "Can keyboard users reach everything?"
+        cell "Flat numbered list of focusable elements"
+  paragraph "All four describe the same page. When they agree, the experience is equivalent for everyone. When they disagree, someone is getting a broken experience."
+contentinfo
+  link "Edit this page on GitHub"
+  paragraph "Last updated:"
+    time "[redacted]"
+  navigation "Pager"
+    link "Previous pageWhy Real A11y?"
+    link "Next pageDOM View"

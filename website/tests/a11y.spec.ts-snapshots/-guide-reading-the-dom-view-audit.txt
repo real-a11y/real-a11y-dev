@@ -1,208 +1,208 @@
-  link "Skip to content"
-  banner
-    link "Real A11y"
-    button "Search"
-    navigation "Main Navigation"
-      link "Guide"
-      link "Recipes"
-      link "Packages"
-      button "v0.1 · Beta"
-    switch "Switch to dark theme"
-    link "github"
-  complementary
-    navigation "Sidebar Navigation"
-      button "Introduction"
-        heading "Introduction" (level 2)
-      link "Getting Started"
-        paragraph "Getting Started"
-      link "Core Concepts"
-        paragraph "Core Concepts"
-      link "Accessibility Snapshots"
-        paragraph "Accessibility Snapshots"
-      link "Snapshots vs. Other Tools"
-        paragraph "Snapshots vs. Other Tools"
-      link "Why Real A11y?"
-        paragraph "Why Real A11y?"
-      button "Reading the Tree"
-        heading "Reading the Tree" (level 2)
-      link "Understanding the Views"
-        paragraph "Understanding the Views"
-      link "DOM View"
-        paragraph "DOM View"
-      link "A11y View"
-        paragraph "A11y View"
-      link "Headings View"
-        paragraph "Headings View"
-      link "TAB View"
-        paragraph "TAB View"
-      link "Panel features"
-        paragraph "Panel features"
-      button "Chrome Extension"
-        heading "Chrome Extension" (level 2)
-      link "Overview & Install"
-        paragraph "Overview & Install"
-      button "Packages"
-        heading "Packages" (level 2)
-      link "@real-a11y-dev/core"
-        paragraph "@real-a11y-dev/core"
-      link "@real-a11y-dev/inspector"
-        paragraph "@real-a11y-dev/inspector"
-        link "@real-a11y-dev/testing"
-          heading "@real-a11y-dev/testing" (level 3)
-        button "toggle section"
-      link "@real-a11y-dev/react"
-        paragraph "@real-a11y-dev/react"
-      link "@real-a11y-dev/storybook-addon"
-        paragraph "@real-a11y-dev/storybook-addon"
-        link "@real-a11y-dev/mcp"
-          heading "@real-a11y-dev/mcp" (level 3)
-        button "toggle section"
-        link "@real-a11y-dev/cli"
-          heading "@real-a11y-dev/cli" (level 3)
-        button "toggle section"
-      button "Recipes"
-        heading "Recipes" (level 2)
-      link "Next.js (App Router + React 19)"
-        paragraph "Next.js (App Router + React 19)"
-      link "Storybook 8 + React 19"
-        paragraph "Storybook 8 + React 19"
-      link "Peer Dependencies"
-        paragraph "Peer Dependencies"
-      link "CI Diff Bot"
-        paragraph "CI Diff Bot"
-      button "Reference"
-        heading "Reference" (level 2)
-      link "Authenticated Pages"
-        paragraph "Authenticated Pages"
-      link "Accessible Names"
-        paragraph "Accessible Names"
-      link "Architecture"
-        paragraph "Architecture"
-      link "Troubleshooting"
-        paragraph "Troubleshooting"
-  navigation "On this page"
-    heading "On this page" (level 2)
-    list
-      listitem
-        link "What you see"
-      listitem
-        link "When to use it"
-      listitem
-        link "What to look for"
-      listitem
-        link "How it relates to the other views"
-  main
-    heading "Reading the DOM View" (level 1)
-    blockquote
-      paragraph "The DOM view is the same tree across every Real A11y surface — the , the , the , and the option on . This page applies to all of them."
-        link "Chrome extension"
-        code "<SemanticNavigator />"
-        link "React component"
-        link "Storybook addon"
-        code "mode: "dom""
-        link "auditSnapshot()"
-          code "auditSnapshot()"
-    paragraph "The DOM view shows you the raw HTML structure of your page — every element, in the exact nesting order it exists in the document. Think of it as your browser's Elements panel, trimmed down to structure and meaning."
-    paragraph "It answers the question:"
-      strong ""What did I actually write?""
-    img "Visual view: a website with blue header, teal nav, purple main content, amber aside, and slate footer arranged as a spatial layout."
-    img "A11y tree diagram: the same sections shown as a tree with document as root, branching into banner, navigation, main, complementary, and contentinfo nodes with their children."
-    paragraph "Left: what sighted users see. Right: the document structure. The DOM view shows the raw HTML that produces both."
-    separator
-    heading "What you see" (level 2)
-    paragraph "Each row in the tree is one DOM element. You'll see:"
-    list
-      listitem "The — , , , , etc."
-        strong "tag name"
-        code "<button>"
-        code "<nav>"
-        code "<div>"
-        code "<input>"
-      listitem "A short if the element has text content"
-        strong "text snippet"
-      listitem "Key — , , , , , and so on"
-        strong "attributes"
-        code "id"
-        code "class"
-        code "role"
-        code "aria-*"
-        code "type"
-    paragraph "Elements nest exactly as they do in HTML. Expanding a node shows its children."
-    separator
-    heading "When to use it" (level 2)
-    paragraph "The A11y view can feel abstract — a heading with no children, a landmark that swallowed half the page. The DOM view lets you trace back to the actual markup to understand why."
-      strong "Cross-referencing structure."
-    paragraph "Unnecessary wrapper s, a buried inside a , an sitting outside its — structure issues are easiest to see here."
-      strong "Spotting structural problems."
-      code "<div>"
+link "Skip to content"
+banner
+  link "Real A11y"
+  button "Search"
+  navigation "Main Navigation"
+    link "Guide"
+    link "Recipes"
+    link "Packages"
+    button "v0.1 · Beta"
+  switch "Switch to dark theme"
+  link "github"
+complementary
+  navigation "Sidebar Navigation"
+    button "Introduction"
+      heading "Introduction" (level 2)
+    link "Getting Started"
+      paragraph "Getting Started"
+    link "Core Concepts"
+      paragraph "Core Concepts"
+    link "Accessibility Snapshots"
+      paragraph "Accessibility Snapshots"
+    link "Snapshots vs. Other Tools"
+      paragraph "Snapshots vs. Other Tools"
+    link "Why Real A11y?"
+      paragraph "Why Real A11y?"
+    button "Reading the Tree"
+      heading "Reading the Tree" (level 2)
+    link "Understanding the Views"
+      paragraph "Understanding the Views"
+    link "DOM View"
+      paragraph "DOM View"
+    link "A11y View"
+      paragraph "A11y View"
+    link "Headings View"
+      paragraph "Headings View"
+    link "TAB View"
+      paragraph "TAB View"
+    link "Panel features"
+      paragraph "Panel features"
+    button "Chrome Extension"
+      heading "Chrome Extension" (level 2)
+    link "Overview & Install"
+      paragraph "Overview & Install"
+    button "Packages"
+      heading "Packages" (level 2)
+    link "@real-a11y-dev/core"
+      paragraph "@real-a11y-dev/core"
+    link "@real-a11y-dev/inspector"
+      paragraph "@real-a11y-dev/inspector"
+    link "@real-a11y-dev/testing"
+      heading "@real-a11y-dev/testing" (level 3)
+    button "toggle section"
+    link "@real-a11y-dev/react"
+      paragraph "@real-a11y-dev/react"
+    link "@real-a11y-dev/storybook-addon"
+      paragraph "@real-a11y-dev/storybook-addon"
+    link "@real-a11y-dev/mcp"
+      heading "@real-a11y-dev/mcp" (level 3)
+    button "toggle section"
+    link "@real-a11y-dev/cli"
+      heading "@real-a11y-dev/cli" (level 3)
+    button "toggle section"
+    button "Recipes"
+      heading "Recipes" (level 2)
+    link "Next.js (App Router + React 19)"
+      paragraph "Next.js (App Router + React 19)"
+    link "Storybook 8 + React 19"
+      paragraph "Storybook 8 + React 19"
+    link "Peer Dependencies"
+      paragraph "Peer Dependencies"
+    link "CI Diff Bot"
+      paragraph "CI Diff Bot"
+    button "Reference"
+      heading "Reference" (level 2)
+    link "Authenticated Pages"
+      paragraph "Authenticated Pages"
+    link "Accessible Names"
+      paragraph "Accessible Names"
+    link "Architecture"
+      paragraph "Architecture"
+    link "Troubleshooting"
+      paragraph "Troubleshooting"
+navigation "On this page"
+  heading "On this page" (level 2)
+  list
+    listitem
+      link "What you see"
+    listitem
+      link "When to use it"
+    listitem
+      link "What to look for"
+    listitem
+      link "How it relates to the other views"
+main
+  heading "Reading the DOM View" (level 1)
+  blockquote
+    paragraph "The DOM view is the same tree across every Real A11y surface — the , the , the , and the option on . This page applies to all of them."
+      link "Chrome extension"
+      code "<SemanticNavigator />"
+      link "React component"
+      link "Storybook addon"
+      code "mode: "dom""
+      link "auditSnapshot()"
+        code "auditSnapshot()"
+  paragraph "The DOM view shows you the raw HTML structure of your page — every element, in the exact nesting order it exists in the document. Think of it as your browser's Elements panel, trimmed down to structure and meaning."
+  paragraph "It answers the question:"
+    strong ""What did I actually write?""
+  img "Visual view: a website with blue header, teal nav, purple main content, amber aside, and slate footer arranged as a spatial layout."
+  img "A11y tree diagram: the same sections shown as a tree with document as root, branching into banner, navigation, main, complementary, and contentinfo nodes with their children."
+  paragraph "Left: what sighted users see. Right: the document structure. The DOM view shows the raw HTML that produces both."
+  separator
+  heading "What you see" (level 2)
+  paragraph "Each row in the tree is one DOM element. You'll see:"
+  list
+    listitem "The — , , , , etc."
+      strong "tag name"
       code "<button>"
-      code "<table>"
+      code "<nav>"
+      code "<div>"
       code "<input>"
-      code "<form>"
-    paragraph "If you added to a container but it's not behaving right, the DOM view will confirm whether the attribute landed where you think it did."
-      strong "Checking what ARIA you actually applied."
-      code "role="dialog""
-    separator
-    heading "What to look for" (level 2)
-    heading "Semantic HTML vs. fake HTML" (level 3)
-    paragraph "There's a real difference between a and a . Both show up in the DOM view. The gets keyboard support, focus management, and correct announcement for free. The gets none of that unless you wire it up manually."
-      code "<button>"
-      code "<div role="button">"
-      code "<button>"
-      code "<div>"
-    paragraph "When you see custom elements (, ) carrying attributes, that's a yellow flag — not necessarily wrong, but worth a second look in the A11y view to confirm the name and states are also correct."
-      code "<div>"
-      code "<span>"
+    listitem "A short if the element has text content"
+      strong "text snippet"
+    listitem "Key — , , , , , and so on"
+      strong "attributes"
+      code "id"
+      code "class"
       code "role"
-    heading "Nesting that doesn't make sense" (level 3)
-    paragraph "Certain HTML nesting rules are invisible until something breaks:"
-    list
-      listitem "A inside another — invalid HTML, creates unpredictable behavior"
-        code "<button>"
-        code "<button>"
-      listitem "An that isn't a direct child of or"
-        code "<li>"
-        code "<ul>"
-        code "<ol>"
-      listitem "A without a matching or a wrapped input inside it"
-        code "<label>"
-        code "for"
-      listitem "Block elements (, ) nested inside inline elements (, )"
-        code "<div>"
-        code "<p>"
-        code "<span>"
-        code "<a>"
-    paragraph "The DOM view makes these patterns obvious at a glance."
-    heading "Too many <div>s between meaningful elements" (level 3)
+      code "aria-*"
+      code "type"
+  paragraph "Elements nest exactly as they do in HTML. Expanding a node shows its children."
+  separator
+  heading "When to use it" (level 2)
+  paragraph "The A11y view can feel abstract — a heading with no children, a landmark that swallowed half the page. The DOM view lets you trace back to the actual markup to understand why."
+    strong "Cross-referencing structure."
+  paragraph "Unnecessary wrapper s, a buried inside a , an sitting outside its — structure issues are easiest to see here."
+    strong "Spotting structural problems."
+    code "<div>"
+    code "<button>"
+    code "<table>"
+    code "<input>"
+    code "<form>"
+  paragraph "If you added to a container but it's not behaving right, the DOM view will confirm whether the attribute landed where you think it did."
+    strong "Checking what ARIA you actually applied."
+    code "role="dialog""
+  separator
+  heading "What to look for" (level 2)
+  heading "Semantic HTML vs. fake HTML" (level 3)
+  paragraph "There's a real difference between a and a . Both show up in the DOM view. The gets keyboard support, focus management, and correct announcement for free. The gets none of that unless you wire it up manually."
+    code "<button>"
+    code "<div role="button">"
+    code "<button>"
+    code "<div>"
+  paragraph "When you see custom elements (, ) carrying attributes, that's a yellow flag — not necessarily wrong, but worth a second look in the A11y view to confirm the name and states are also correct."
+    code "<div>"
+    code "<span>"
+    code "role"
+  heading "Nesting that doesn't make sense" (level 3)
+  paragraph "Certain HTML nesting rules are invisible until something breaks:"
+  list
+    listitem "A inside another — invalid HTML, creates unpredictable behavior"
+      code "<button>"
+      code "<button>"
+    listitem "An that isn't a direct child of or"
+      code "<li>"
+      code "<ul>"
+      code "<ol>"
+    listitem "A without a matching or a wrapped input inside it"
+      code "<label>"
+      code "for"
+    listitem "Block elements (, ) nested inside inline elements (, )"
       code "<div>"
-    paragraph "A label and its input should be close in the tree. If you see five levels of wrapping before you reach an , it's a sign the component structure grew organically and might be worth simplifying — both for accessibility and for maintainability."
-      code "<div>"
-      code "<input>"
-    separator
-    heading "How it relates to the other views" (level 2)
-    table
-      rowgroup
-        row
-          rowheader "View"
-          rowheader "What it answers"
-      rowgroup
-        row
-          cell "DOM"
-            strong "DOM"
-          cell "What did I write?"
-        row
-          cell "A11y"
-            strong "A11y"
-          cell "What do assistive technologies see?"
-        row
-          cell "TAB"
-            strong "TAB"
-          cell "What does a keyboard user navigate through, and in what order?"
-    paragraph "The DOM view is your starting point for structural debugging. Anything that looks wrong here will likely show up as a problem in the A11y or TAB views too — so fix it at the source."
-  contentinfo
-    link "Edit this page on GitHub"
-    paragraph "Last updated:"
-      time "[redacted]"
-    navigation "Pager"
-      link "Previous pageUnderstanding the Views"
-      link "Next pageA11y View"
+      code "<p>"
+      code "<span>"
+      code "<a>"
+  paragraph "The DOM view makes these patterns obvious at a glance."
+  heading "Too many <div>s between meaningful elements" (level 3)
+    code "<div>"
+  paragraph "A label and its input should be close in the tree. If you see five levels of wrapping before you reach an , it's a sign the component structure grew organically and might be worth simplifying — both for accessibility and for maintainability."
+    code "<div>"
+    code "<input>"
+  separator
+  heading "How it relates to the other views" (level 2)
+  table
+    rowgroup
+      row
+        rowheader "View"
+        rowheader "What it answers"
+    rowgroup
+      row
+        cell "DOM"
+          strong "DOM"
+        cell "What did I write?"
+      row
+        cell "A11y"
+          strong "A11y"
+        cell "What do assistive technologies see?"
+      row
+        cell "TAB"
+          strong "TAB"
+        cell "What does a keyboard user navigate through, and in what order?"
+  paragraph "The DOM view is your starting point for structural debugging. Anything that looks wrong here will likely show up as a problem in the A11y or TAB views too — so fix it at the source."
+contentinfo
+  link "Edit this page on GitHub"
+  paragraph "Last updated:"
+    time "[redacted]"
+  navigation "Pager"
+    link "Previous pageUnderstanding the Views"
+    link "Next pageA11y View"

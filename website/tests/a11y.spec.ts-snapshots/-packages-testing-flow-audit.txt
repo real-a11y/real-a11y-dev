@@ -1,318 +1,318 @@
-  link "Skip to content"
-  banner
-    link "Real A11y"
-    button "Search"
-    navigation "Main Navigation"
-      link "Guide"
-      link "Recipes"
-      link "Packages"
-      button "v0.1 · Beta"
-    switch "Switch to dark theme"
-    link "github"
-  complementary
-    navigation "Sidebar Navigation"
-      button "Introduction"
-        heading "Introduction" (level 2)
-      link "Getting Started"
-        paragraph "Getting Started"
-      link "Core Concepts"
-        paragraph "Core Concepts"
-      link "Accessibility Snapshots"
-        paragraph "Accessibility Snapshots"
-      link "Snapshots vs. Other Tools"
-        paragraph "Snapshots vs. Other Tools"
-      link "Why Real A11y?"
-        paragraph "Why Real A11y?"
-      button "Reading the Tree"
-        heading "Reading the Tree" (level 2)
-      link "Understanding the Views"
-        paragraph "Understanding the Views"
-      link "DOM View"
-        paragraph "DOM View"
-      link "A11y View"
-        paragraph "A11y View"
-      link "Headings View"
-        paragraph "Headings View"
-      link "TAB View"
-        paragraph "TAB View"
-      link "Panel features"
-        paragraph "Panel features"
-      button "Chrome Extension"
-        heading "Chrome Extension" (level 2)
-      link "Overview & Install"
-        paragraph "Overview & Install"
-      button "Packages"
-        heading "Packages" (level 2)
-      link "@real-a11y-dev/core"
-        paragraph "@real-a11y-dev/core"
-      link "@real-a11y-dev/inspector"
-        paragraph "@real-a11y-dev/inspector"
-        link "@real-a11y-dev/testing"
-          heading "@real-a11y-dev/testing" (level 3)
-        button "toggle section"
-      link "Snapshots"
-        paragraph "Snapshots"
-      link "Assertions"
-        paragraph "Assertions"
+link "Skip to content"
+banner
+  link "Real A11y"
+  button "Search"
+  navigation "Main Navigation"
+    link "Guide"
+    link "Recipes"
+    link "Packages"
+    button "v0.1 · Beta"
+  switch "Switch to dark theme"
+  link "github"
+complementary
+  navigation "Sidebar Navigation"
+    button "Introduction"
+      heading "Introduction" (level 2)
+    link "Getting Started"
+      paragraph "Getting Started"
+    link "Core Concepts"
+      paragraph "Core Concepts"
+    link "Accessibility Snapshots"
+      paragraph "Accessibility Snapshots"
+    link "Snapshots vs. Other Tools"
+      paragraph "Snapshots vs. Other Tools"
+    link "Why Real A11y?"
+      paragraph "Why Real A11y?"
+    button "Reading the Tree"
+      heading "Reading the Tree" (level 2)
+    link "Understanding the Views"
+      paragraph "Understanding the Views"
+    link "DOM View"
+      paragraph "DOM View"
+    link "A11y View"
+      paragraph "A11y View"
+    link "Headings View"
+      paragraph "Headings View"
+    link "TAB View"
+      paragraph "TAB View"
+    link "Panel features"
+      paragraph "Panel features"
+    button "Chrome Extension"
+      heading "Chrome Extension" (level 2)
+    link "Overview & Install"
+      paragraph "Overview & Install"
+    button "Packages"
+      heading "Packages" (level 2)
+    link "@real-a11y-dev/core"
+      paragraph "@real-a11y-dev/core"
+    link "@real-a11y-dev/inspector"
+      paragraph "@real-a11y-dev/inspector"
+    link "@real-a11y-dev/testing"
+      heading "@real-a11y-dev/testing" (level 3)
+    button "toggle section"
+    link "Snapshots"
+      paragraph "Snapshots"
+    link "Assertions"
+      paragraph "Assertions"
+    link "Matchers"
+      paragraph "Matchers"
+    link "Flow API"
+      paragraph "Flow API"
+    link "Playwright adapter"
+      paragraph "Playwright adapter"
+    link "@real-a11y-dev/react"
+      paragraph "@real-a11y-dev/react"
+    link "@real-a11y-dev/storybook-addon"
+      paragraph "@real-a11y-dev/storybook-addon"
+    link "@real-a11y-dev/mcp"
+      heading "@real-a11y-dev/mcp" (level 3)
+    button "toggle section"
+    link "@real-a11y-dev/cli"
+      heading "@real-a11y-dev/cli" (level 3)
+    button "toggle section"
+    button "Recipes"
+      heading "Recipes" (level 2)
+    link "Next.js (App Router + React 19)"
+      paragraph "Next.js (App Router + React 19)"
+    link "Storybook 8 + React 19"
+      paragraph "Storybook 8 + React 19"
+    link "Peer Dependencies"
+      paragraph "Peer Dependencies"
+    link "CI Diff Bot"
+      paragraph "CI Diff Bot"
+    button "Reference"
+      heading "Reference" (level 2)
+    link "Authenticated Pages"
+      paragraph "Authenticated Pages"
+    link "Accessible Names"
+      paragraph "Accessible Names"
+    link "Architecture"
+      paragraph "Architecture"
+    link "Troubleshooting"
+      paragraph "Troubleshooting"
+navigation "On this page"
+  heading "On this page" (level 2)
+  list
+    listitem
+      link "Why flow() (vs Testing Library)?"
+    listitem
+      link "Available steps"
+    listitem
+      link "flow(root, options?)"
+    listitem
+      link "Utilities"
+    listitem
+      link "See also"
+main
+  heading "Flow API" (level 1)
+  paragraph "Fluent interaction chains that assert about the after each step. Each / / etc. dispatches a real DOM action, then re-extracts the tree so the next step sees the post-interaction state."
+    strong "accessibility tree"
+    code ".click()"
+    code ".type()"
+  paragraph "Part of ."
+    link "@real-a11y-dev/testing"
+      code "@real-a11y-dev/testing"
+  button "Copy Code"
+  code
+  heading "Why flow() (vs Testing Library)?" (level 2)
+    code "flow()"
+  paragraph "Testing Library asserts about the . asserts about the — the same tree screen-reader users perceive and the same tree the Real A11y panel shows. That difference changes which tests are easy to write."
+    strong "rendered DOM"
+    code "flow()"
+    strong "extracted accessibility tree"
+  paragraph "is a Testing Library replacement. They compose well: for input-fidelity (real keyboard/pointer sequences); for tree-shape and "is the right region active" assertions."
+    code "flow()"
+    strong "not"
+    code "userEvent"
+    code "flow()"
+  heading "Side-by-side: same test, both libraries" (level 3)
+  paragraph "A common flow — open a confirm dialog, dismiss it, assert it closed:"
+  button "Copy Code"
+  code
+  button "Copy Code"
+  code
+  paragraph "Both pass on the same component. The Flow version is shorter because is a single tree-level invariant — "exactly one dialog is open AND its name matches." Expressing the same in RTL stitches + + + together. And because Flow re-extracts the tree after , the next already sees the new dialog without an explicit scope."
+    code "expectActiveModal"
+    code "getByRole"
+    code "within"
+    code "toHaveAccessibleName"
+    code "queryByRole"
+    code ".click()"
+    code "findByRole"
+    code "within(dialog)"
+  heading "When to use which" (level 3)
+  table
+    rowgroup
+      row
+        rowheader "Reach for Testing Library when…"
+        rowheader "Reach for flow() when…"
+          code "flow()"
+    rowgroup
+      row
+        cell "You need userEvent keyboard/pointer fidelity (tab(), keyboard("{Enter}"), hover, paste, etc.)"
+          code "userEvent"
+          code "tab()"
+          code "keyboard("{Enter}")"
+        cell "The assertion is about the a11y tree shape, not a single element"
+      row
+        cell "Per-element matchers fit (toHaveValue, toBeChecked, toBeDisabled)"
+          code "toHaveValue"
+          code "toBeChecked"
+          code "toBeDisabled"
+        cell "You want to assert "the right modal is now open" or "no modal is open" in one step"
+      row
+        cell "Your codebase is already deep in RTL idioms and you want to stay consistent"
+        cell "The same audit logic must also run in a real browser via the Playwright adapter"
+          link "Playwright adapter"
+      row
+        cell "Testing one component in isolation"
+        cell "The test traces a flow that crosses multiple components/regions"
+      row
+        cell "You care about the simulated input (e.g. testing a custom keyboard handler)"
+        cell "You care about the outcome in the a11y tree (states, structure, active modal)"
+          strong "outcome"
+  paragraph "The two libraries see different things. RTL sees what experience. sees what experience after the same actions. For most teams the right answer is ."
+    emphasis "sighted users using a mouse and keyboard"
+    code "flow()"
+    emphasis "AT users"
+    strong "both, in the same suite"
+  heading "Available steps" (level 2)
+  table
+    rowgroup
+      row
+        rowheader "Step"
+        rowheader "Description"
+    rowgroup
+      row
+        cell ".findByRole(role, opts?)"
+          code ".findByRole(role, opts?)"
+        cell "Move the cursor to the first matching node. Throws if not found."
+      row
+        cell ".click()"
+          code ".click()"
+        cell "Dispatch a click action on the current node."
+      row
+        cell ".submit()"
+          code ".submit()"
+        cell "Dispatch a submit action (form)."
+      row
+        cell ".toggle()"
+          code ".toggle()"
+        cell "Dispatch a toggle action (<details>/<summary>; falls back to click for ARIA disclosures)."
+          code "<details>"
+          code "<summary>"
+      row
+        cell ".select(value)"
+          code ".select(value)"
+        cell "Dispatch a select action with the given value (native <select>)."
+          code "<select>"
+      row
+        cell ".type(text)"
+          code ".type(text)"
+        cell "Dispatch a type action with the given text (textbox, searchbox)."
+      row
+        cell ".expectTree(snapshot)"
+          code ".expectTree(snapshot)"
+        cell "Assert the current tree's serialization matches snapshot (see caveat below)."
+          code "snapshot"
+      row
+        cell ".expectActiveModal(predicate)"
+          code ".expectActiveModal(predicate)"
+        cell "Assert the active dialog. Pass null to assert no dialog is open, or (name) => boolean to assert one is open and its accessible name satisfies the predicate."
+          code "null"
+          code "(name) => boolean"
+      row
+        cell ".expect(fn)"
+          code ".expect(fn)"
+        cell "Run a custom assertion with the current tree as argument."
+  paragraph "The flow is lazy — steps queue up and run when you the chain."
+    code "await"
+  heading "expectActiveModal — examples" (level 3)
+    code "expectActiveModal"
+  button "Copy Code"
+  code
+  paragraph "The first or in document order is treated as the active modal."
+    code "role="dialog""
+    code "role="alertdialog""
+  heading "expectTree — caveat" (level 3)
+    code "expectTree"
+  paragraph "re-serializes the tree with (no , , generic nodes flattened). A snapshot captured via or will not match. For redacted or DOM-mode comparisons, use and call / yourself."
+    code "expectTree"
+    strong "default options"
+    code "redact"
+    code "mode: "a11y""
+    code "auditSnapshot(root, { redact: [...] })"
+    code "{ mode: "dom" }"
+    code ".expect((tree) => { … })"
+    code "serializeTree"
+    code "auditSnapshot"
+  heading "flow(root, options?)" (level 2)
+    code "flow(root, options?)"
+  table
+    rowgroup
+      row
+        rowheader "Option"
+        rowheader "Type"
+        rowheader "Default"
+        rowheader "Description"
+    rowgroup
+      row
+        cell "waitTimeout"
+          code "waitTimeout"
+        cell "number"
+          code "number"
+        cell "200 ms"
+          code "200"
+        cell "Max wait for the post-action debounced mutation cycle. Increase for slow async UIs; decrease for tighter feedback in pure-DOM flows."
+  button "Copy Code"
+  code
+  heading "Utilities" (level 2)
+  heading "waitForMutations(root, options?)" (level 3)
+    code "waitForMutations(root, options?)"
+  paragraph "Resolves after the next debounced DOM mutation cycle. Useful after programmatic DOM changes."
+  button "Copy Code"
+  code
+  paragraph
+    strong "Options:"
+  table
+    rowgroup
+      row
+        rowheader "Option"
+        rowheader "Type"
+        rowheader "Default"
+    rowgroup
+      row
+        cell "timeout"
+          code "timeout"
+        cell "number"
+          code "number"
+        cell "1000 ms"
+          code "1000"
+      row
+        cell "debounceMs"
+          code "debounceMs"
+        cell "number"
+          code "number"
+        cell "50 ms"
+          code "50"
+  heading "dispatch(node, action?, payload?)" (level 3)
+    code "dispatch(node, action?, payload?)"
+  paragraph "Dispatches an action on a directly."
+    code "SemanticNode"
+  button "Copy Code"
+  code
+  heading "See also" (level 2)
+  list
+    listitem "— -style assertions, including post- modal checks"
       link "Matchers"
-        paragraph "Matchers"
-      link "Flow API"
-        paragraph "Flow API"
+      code "expect"
+      code "flow()"
+    listitem "— run the same audits in a real browser"
       link "Playwright adapter"
-        paragraph "Playwright adapter"
-      link "@real-a11y-dev/react"
-        paragraph "@real-a11y-dev/react"
-      link "@real-a11y-dev/storybook-addon"
-        paragraph "@real-a11y-dev/storybook-addon"
-        link "@real-a11y-dev/mcp"
-          heading "@real-a11y-dev/mcp" (level 3)
-        button "toggle section"
-        link "@real-a11y-dev/cli"
-          heading "@real-a11y-dev/cli" (level 3)
-        button "toggle section"
-      button "Recipes"
-        heading "Recipes" (level 2)
-      link "Next.js (App Router + React 19)"
-        paragraph "Next.js (App Router + React 19)"
-      link "Storybook 8 + React 19"
-        paragraph "Storybook 8 + React 19"
-      link "Peer Dependencies"
-        paragraph "Peer Dependencies"
-      link "CI Diff Bot"
-        paragraph "CI Diff Bot"
-      button "Reference"
-        heading "Reference" (level 2)
-      link "Authenticated Pages"
-        paragraph "Authenticated Pages"
-      link "Accessible Names"
-        paragraph "Accessible Names"
-      link "Architecture"
-        paragraph "Architecture"
-      link "Troubleshooting"
-        paragraph "Troubleshooting"
-  navigation "On this page"
-    heading "On this page" (level 2)
-    list
-      listitem
-        link "Why flow() (vs Testing Library)?"
-      listitem
-        link "Available steps"
-      listitem
-        link "flow(root, options?)"
-      listitem
-        link "Utilities"
-      listitem
-        link "See also"
-  main
-    heading "Flow API" (level 1)
-    paragraph "Fluent interaction chains that assert about the after each step. Each / / etc. dispatches a real DOM action, then re-extracts the tree so the next step sees the post-interaction state."
-      strong "accessibility tree"
-      code ".click()"
-      code ".type()"
-    paragraph "Part of ."
-      link "@real-a11y-dev/testing"
-        code "@real-a11y-dev/testing"
-    button "Copy Code"
-      code
-    heading "Why flow() (vs Testing Library)?" (level 2)
-      code "flow()"
-    paragraph "Testing Library asserts about the . asserts about the — the same tree screen-reader users perceive and the same tree the Real A11y panel shows. That difference changes which tests are easy to write."
-      strong "rendered DOM"
-      code "flow()"
-      strong "extracted accessibility tree"
-    paragraph "is a Testing Library replacement. They compose well: for input-fidelity (real keyboard/pointer sequences); for tree-shape and "is the right region active" assertions."
-      code "flow()"
-      strong "not"
-      code "userEvent"
-      code "flow()"
-    heading "Side-by-side: same test, both libraries" (level 3)
-    paragraph "A common flow — open a confirm dialog, dismiss it, assert it closed:"
-    button "Copy Code"
-      code
-    button "Copy Code"
-      code
-    paragraph "Both pass on the same component. The Flow version is shorter because is a single tree-level invariant — "exactly one dialog is open AND its name matches." Expressing the same in RTL stitches + + + together. And because Flow re-extracts the tree after , the next already sees the new dialog without an explicit scope."
-      code "expectActiveModal"
-      code "getByRole"
-      code "within"
-      code "toHaveAccessibleName"
-      code "queryByRole"
-      code ".click()"
-      code "findByRole"
-      code "within(dialog)"
-    heading "When to use which" (level 3)
-    table
-      rowgroup
-        row
-          rowheader "Reach for Testing Library when…"
-          rowheader "Reach for flow() when…"
-            code "flow()"
-      rowgroup
-        row
-          cell "You need userEvent keyboard/pointer fidelity (tab(), keyboard("{Enter}"), hover, paste, etc.)"
-            code "userEvent"
-            code "tab()"
-            code "keyboard("{Enter}")"
-          cell "The assertion is about the a11y tree shape, not a single element"
-        row
-          cell "Per-element matchers fit (toHaveValue, toBeChecked, toBeDisabled)"
-            code "toHaveValue"
-            code "toBeChecked"
-            code "toBeDisabled"
-          cell "You want to assert "the right modal is now open" or "no modal is open" in one step"
-        row
-          cell "Your codebase is already deep in RTL idioms and you want to stay consistent"
-          cell "The same audit logic must also run in a real browser via the Playwright adapter"
-            link "Playwright adapter"
-        row
-          cell "Testing one component in isolation"
-          cell "The test traces a flow that crosses multiple components/regions"
-        row
-          cell "You care about the simulated input (e.g. testing a custom keyboard handler)"
-          cell "You care about the outcome in the a11y tree (states, structure, active modal)"
-            strong "outcome"
-    paragraph "The two libraries see different things. RTL sees what experience. sees what experience after the same actions. For most teams the right answer is ."
-      emphasis "sighted users using a mouse and keyboard"
-      code "flow()"
-      emphasis "AT users"
-      strong "both, in the same suite"
-    heading "Available steps" (level 2)
-    table
-      rowgroup
-        row
-          rowheader "Step"
-          rowheader "Description"
-      rowgroup
-        row
-          cell ".findByRole(role, opts?)"
-            code ".findByRole(role, opts?)"
-          cell "Move the cursor to the first matching node. Throws if not found."
-        row
-          cell ".click()"
-            code ".click()"
-          cell "Dispatch a click action on the current node."
-        row
-          cell ".submit()"
-            code ".submit()"
-          cell "Dispatch a submit action (form)."
-        row
-          cell ".toggle()"
-            code ".toggle()"
-          cell "Dispatch a toggle action (<details>/<summary>; falls back to click for ARIA disclosures)."
-            code "<details>"
-            code "<summary>"
-        row
-          cell ".select(value)"
-            code ".select(value)"
-          cell "Dispatch a select action with the given value (native <select>)."
-            code "<select>"
-        row
-          cell ".type(text)"
-            code ".type(text)"
-          cell "Dispatch a type action with the given text (textbox, searchbox)."
-        row
-          cell ".expectTree(snapshot)"
-            code ".expectTree(snapshot)"
-          cell "Assert the current tree's serialization matches snapshot (see caveat below)."
-            code "snapshot"
-        row
-          cell ".expectActiveModal(predicate)"
-            code ".expectActiveModal(predicate)"
-          cell "Assert the active dialog. Pass null to assert no dialog is open, or (name) => boolean to assert one is open and its accessible name satisfies the predicate."
-            code "null"
-            code "(name) => boolean"
-        row
-          cell ".expect(fn)"
-            code ".expect(fn)"
-          cell "Run a custom assertion with the current tree as argument."
-    paragraph "The flow is lazy — steps queue up and run when you the chain."
-      code "await"
-    heading "expectActiveModal — examples" (level 3)
-      code "expectActiveModal"
-    button "Copy Code"
-      code
-    paragraph "The first or in document order is treated as the active modal."
-      code "role="dialog""
-      code "role="alertdialog""
-    heading "expectTree — caveat" (level 3)
-      code "expectTree"
-    paragraph "re-serializes the tree with (no , , generic nodes flattened). A snapshot captured via or will not match. For redacted or DOM-mode comparisons, use and call / yourself."
-      code "expectTree"
-      strong "default options"
-      code "redact"
-      code "mode: "a11y""
-      code "auditSnapshot(root, { redact: [...] })"
-      code "{ mode: "dom" }"
-      code ".expect((tree) => { … })"
-      code "serializeTree"
-      code "auditSnapshot"
-    heading "flow(root, options?)" (level 2)
-      code "flow(root, options?)"
-    table
-      rowgroup
-        row
-          rowheader "Option"
-          rowheader "Type"
-          rowheader "Default"
-          rowheader "Description"
-      rowgroup
-        row
-          cell "waitTimeout"
-            code "waitTimeout"
-          cell "number"
-            code "number"
-          cell "200 ms"
-            code "200"
-          cell "Max wait for the post-action debounced mutation cycle. Increase for slow async UIs; decrease for tighter feedback in pure-DOM flows."
-    button "Copy Code"
-      code
-    heading "Utilities" (level 2)
-    heading "waitForMutations(root, options?)" (level 3)
-      code "waitForMutations(root, options?)"
-    paragraph "Resolves after the next debounced DOM mutation cycle. Useful after programmatic DOM changes."
-    button "Copy Code"
-      code
-    paragraph
-      strong "Options:"
-    table
-      rowgroup
-        row
-          rowheader "Option"
-          rowheader "Type"
-          rowheader "Default"
-      rowgroup
-        row
-          cell "timeout"
-            code "timeout"
-          cell "number"
-            code "number"
-          cell "1000 ms"
-            code "1000"
-        row
-          cell "debounceMs"
-            code "debounceMs"
-          cell "number"
-            code "number"
-          cell "50 ms"
-            code "50"
-    heading "dispatch(node, action?, payload?)" (level 3)
-      code "dispatch(node, action?, payload?)"
-    paragraph "Dispatches an action on a directly."
-      code "SemanticNode"
-    button "Copy Code"
-      code
-    heading "See also" (level 2)
-    list
-      listitem "— -style assertions, including post- modal checks"
-        link "Matchers"
-        code "expect"
-        code "flow()"
-      listitem "— run the same audits in a real browser"
-        link "Playwright adapter"
-  contentinfo
-    link "Edit this page on GitHub"
-    paragraph "Last updated:"
-      time "[redacted]"
-    navigation "Pager"
-      link "Previous pageMatchers"
-      link "Next pagePlaywright adapter"
+contentinfo
+  link "Edit this page on GitHub"
+  paragraph "Last updated:"
+    time "[redacted]"
+  navigation "Pager"
+    link "Previous pageMatchers"
+    link "Next pagePlaywright adapter"

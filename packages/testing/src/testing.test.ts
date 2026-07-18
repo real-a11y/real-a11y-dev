@@ -241,11 +241,11 @@ describe("flow", () => {
   describe("expectTree", () => {
     it("passes when the serialized tree matches", async () => {
       const root = mount(`<main><h1>Hi</h1><button>Go</button></main>`);
-      // The wrapper <div> from mount() is generic (filtered out), so <main>
-      // serializes at depth 1 (two-space indent), its children at depth 2.
-      await flow(root).expectTree(`  main
-    heading "Hi" (level 1)
-    button "Go"`);
+      // The wrapper <div> from mount() is generic and filtered out, so <main>
+      // is the outermost printed node and starts at indent 0.
+      await flow(root).expectTree(`main
+  heading "Hi" (level 1)
+  button "Go"`);
     });
 
     it("throws with a diff when the serialized tree differs", async () => {

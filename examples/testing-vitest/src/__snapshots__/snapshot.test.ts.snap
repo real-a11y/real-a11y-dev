@@ -1,13 +1,13 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
 exports[`auditSnapshot > captures the full a11y tree of a form 1`] = `
-"  main
-    heading "Sign in" (level 1)
-    form "Sign-in form"
-      textbox "Email"
-      textbox "Password"
-      button "Sign in"
-      link "Forgot password?""
+"main
+  heading "Sign in" (level 1)
+  form "Sign-in form"
+    textbox "Email"
+    textbox "Password"
+    button "Sign in"
+    link "Forgot password?""
 `;
 
 exports[`outlineSnapshot > formats a nested heading outline 1`] = `

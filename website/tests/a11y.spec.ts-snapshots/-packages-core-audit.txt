@@ -1,350 +1,350 @@
-  link "Skip to content"
-  banner
-    link "Real A11y"
-    button "Search"
-    navigation "Main Navigation"
-      link "Guide"
-      link "Recipes"
-      link "Packages"
-      button "v0.1 · Beta"
-    switch "Switch to dark theme"
-    link "github"
-  complementary
-    navigation "Sidebar Navigation"
-      button "Introduction"
-        heading "Introduction" (level 2)
-      link "Getting Started"
-        paragraph "Getting Started"
-      link "Core Concepts"
-        paragraph "Core Concepts"
-      link "Accessibility Snapshots"
-        paragraph "Accessibility Snapshots"
-      link "Snapshots vs. Other Tools"
-        paragraph "Snapshots vs. Other Tools"
-      link "Why Real A11y?"
-        paragraph "Why Real A11y?"
-      button "Reading the Tree"
-        heading "Reading the Tree" (level 2)
-      link "Understanding the Views"
-        paragraph "Understanding the Views"
-      link "DOM View"
-        paragraph "DOM View"
-      link "A11y View"
-        paragraph "A11y View"
-      link "Headings View"
-        paragraph "Headings View"
-      link "TAB View"
-        paragraph "TAB View"
-      link "Panel features"
-        paragraph "Panel features"
-      button "Chrome Extension"
-        heading "Chrome Extension" (level 2)
-      link "Overview & Install"
-        paragraph "Overview & Install"
-      button "Packages"
-        heading "Packages" (level 2)
-      link "@real-a11y-dev/core"
-        paragraph "@real-a11y-dev/core"
-      link "@real-a11y-dev/inspector"
-        paragraph "@real-a11y-dev/inspector"
-        link "@real-a11y-dev/testing"
-          heading "@real-a11y-dev/testing" (level 3)
-        button "toggle section"
-      link "@real-a11y-dev/react"
-        paragraph "@real-a11y-dev/react"
-      link "@real-a11y-dev/storybook-addon"
-        paragraph "@real-a11y-dev/storybook-addon"
-        link "@real-a11y-dev/mcp"
-          heading "@real-a11y-dev/mcp" (level 3)
-        button "toggle section"
-        link "@real-a11y-dev/cli"
-          heading "@real-a11y-dev/cli" (level 3)
-        button "toggle section"
-      button "Recipes"
-        heading "Recipes" (level 2)
-      link "Next.js (App Router + React 19)"
-        paragraph "Next.js (App Router + React 19)"
-      link "Storybook 8 + React 19"
-        paragraph "Storybook 8 + React 19"
-      link "Peer Dependencies"
-        paragraph "Peer Dependencies"
-      link "CI Diff Bot"
-        paragraph "CI Diff Bot"
-      button "Reference"
-        heading "Reference" (level 2)
-      link "Authenticated Pages"
-        paragraph "Authenticated Pages"
-      link "Accessible Names"
-        paragraph "Accessible Names"
-      link "Architecture"
-        paragraph "Architecture"
-      link "Troubleshooting"
-        paragraph "Troubleshooting"
-  navigation "On this page"
-    heading "On this page" (level 2)
-    list
-      listitem
-        link "Install"
-      listitem
-        link "Extraction"
-      listitem
-        link "Query helpers"
-      listitem
-        link "Tree traversal"
-      listitem
-        link "Structure queries"
-      listitem
-        link "Disclosure-pair index"
-      listitem
-        link "Tree diffing"
-      listitem
-        link "DOM observation"
-      listitem
-        link "Types"
-  main
-    heading "@real-a11y-dev/core" (level 1)
-    blockquote
-      paragraph "— Extracts a browser-accurate accessibility tree from any DOM element, as plain data (). Zero runtime dependencies. Reach for this when you're on top of the engine; for apps, use one of the wrapper packages."
-        strong "TL;DR"
-        code "Map<string, SemanticNode>"
-        strong "building your own tooling"
-    blockquote
-      paragraph "Audit from the shell with , or give an AI agent accessibility audits via — both sit on this layer already, so you don't have to build them."
-        strong "Want a ready-made tool, not a custom build?"
-        link "@real-a11y-dev/cli"
-          code "@real-a11y-dev/cli"
-        link "@real-a11y-dev/mcp"
-          code "@real-a11y-dev/mcp"
-    paragraph "The extraction engine. Every other package is built on top of this."
-    heading "Install" (level 2)
-    button "Copy Code"
-      code
-    paragraph "has no runtime dependencies. It uses standard DOM APIs only."
-      code "@real-a11y-dev/core"
-    paragraph "Which type of dependency do I need?"
-    list
-      listitem "is the right default for most apps — you're using inside tests, Storybook, or a dev-only audit panel gated by / . See ."
-        strong "(dev)"
-          code "-D"
-        code "core"
-        code "import.meta.env.DEV"
-        code "process.env.NODE_ENV"
-        link "Keep it out of production"
-      listitem "if you're publishing your own package that uses at runtime (e.g. a new audit tool on top of the engine)."
-        strong "Regular"
-          code "dependency"
-        code "core"
-      listitem "if you're publishing a library that composes with other Real A11y packages — lets consumers share a single copy."
-        strong
-          code "peerDependency"
-        code "core"
-    separator
-    heading "Extraction" (level 2)
-    heading "extractA11yTree(root)" (level 3)
-      code "extractA11yTree(root)"
-    paragraph "Extracts the accessibility tree from a DOM element."
-    button "Copy Code"
-      code
-    paragraph "Resolves ARIA roles, computes accessible names via the full ANDC algorithm, detects hidden subtrees, and maps interaction capabilities."
-    paragraph "is the id of the element that held focus at extraction time, when it's inside the extracted subtree — absent when focus rested on / (nothing meaningfully focused) or fell outside the tree. The serializers in render it as a marker."
-      code "focusedId"
-      code "<body>"
-      code "<html>"
-      link "@real-a11y-dev/testing"
-        code "@real-a11y-dev/testing"
-      code "[focused]"
-    heading "extractDomTree(root)" (level 3)
-      code "extractDomTree(root)"
-    paragraph "Same shape as , but uses raw tag names as roles instead of ARIA roles. Useful when you want to audit DOM structure rather than accessibility semantics."
-      code "extractA11yTree"
-    button "Copy Code"
-      code
-    separator
-    heading "Query helpers" (level 2)
-    heading "findByRole(tree, role, options?)" (level 3)
-      code "findByRole(tree, role, options?)"
-    paragraph "Returns the first matching the given role, or ."
-      code "SemanticNode"
-      code "null"
-    button "Copy Code"
-      code
-    paragraph
-      strong "Options:"
-    table
-      rowgroup
-        row
-          rowheader "Option"
-          rowheader "Type"
-          rowheader "Description"
-      rowgroup
-        row
-          cell "name"
-            code "name"
-          cell "string | RegExp"
-            code "string | RegExp"
-          cell "Filter by accessible name. String: exact match (case/whitespace-normalized). RegExp: .test()."
-            code ".test()"
-        row
-          cell "level"
-            code "level"
-          cell "number"
-            code "number"
-          cell "Filter by heading level (1–6)."
-        row
-          cell "checked"
-            code "checked"
-          cell "boolean"
-            code "boolean"
-          cell "Filter by aria-checked state."
-            code "aria-checked"
-        row
-          cell "expanded"
-            code "expanded"
-          cell "boolean"
-            code "boolean"
-          cell "Filter by aria-expanded state."
-            code "aria-expanded"
-        row
-          cell "selected"
-            code "selected"
-          cell "boolean"
-            code "boolean"
-          cell "Filter by aria-selected state."
-            code "aria-selected"
-        row
-          cell "pressed"
-            code "pressed"
-          cell "boolean"
-            code "boolean"
-          cell "Filter by aria-pressed state."
-            code "aria-pressed"
-        row
-          cell "disabled"
-            code "disabled"
-          cell "boolean"
-            code "boolean"
-          cell "Filter by aria-disabled state."
-            code "aria-disabled"
-        row
-          cell "includeHidden"
-            code "includeHidden"
-          cell "boolean"
-            code "boolean"
-          cell "Include nodes in aria-hidden subtrees (default: false)."
-            code "aria-hidden"
-    heading "findAllByRole(tree, role, options?)" (level 3)
-      code "findAllByRole(tree, role, options?)"
-    paragraph "Returns all matching nodes as ."
-      code "SemanticNode[]"
-    button "Copy Code"
-      code
-    separator
-    heading "Tree traversal" (level 2)
-    heading "linearize(tree, options?)" (level 3)
-      code "linearize(tree, options?)"
-    paragraph "Returns all nodes in pre-order (DOM order), skipping hidden nodes by default."
-    button "Copy Code"
-      code
-    paragraph
-      strong "Options:"
-    table
-      rowgroup
-        row
-          rowheader "Option"
-          rowheader "Type"
-          rowheader "Default"
-          rowheader "Description"
-      rowgroup
-        row
-          cell "includeHidden"
-            code "includeHidden"
-          cell "boolean"
-            code "boolean"
-          cell "false"
-            code "false"
-          cell "Include aria-hidden subtrees"
-            code "aria-hidden"
-    separator
-    heading "Structure queries" (level 2)
-    heading "getOutline(tree)" (level 3)
-      code "getOutline(tree)"
-    paragraph "Returns heading nodes as a flat outline list."
-    button "Copy Code"
-      code
-    heading "getTabSequence(tree)" (level 3)
-      code "getTabSequence(tree)"
-    paragraph "Returns focusable nodes in computed tab order."
-    button "Copy Code"
-      code
-    separator
-    heading "Disclosure-pair index" (level 2)
-    heading "buildControlsIndex(nodes)" (level 3)
-      code "buildControlsIndex(nodes)"
-    paragraph "Resolves the relationship across a tree and returns adjacency maps in both directions, so callers can render cross-links between disclosure triggers (button, tab, combobox) and the elements they open (menu, panel, listbox)."
+link "Skip to content"
+banner
+  link "Real A11y"
+  button "Search"
+  navigation "Main Navigation"
+    link "Guide"
+    link "Recipes"
+    link "Packages"
+    button "v0.1 · Beta"
+  switch "Switch to dark theme"
+  link "github"
+complementary
+  navigation "Sidebar Navigation"
+    button "Introduction"
+      heading "Introduction" (level 2)
+    link "Getting Started"
+      paragraph "Getting Started"
+    link "Core Concepts"
+      paragraph "Core Concepts"
+    link "Accessibility Snapshots"
+      paragraph "Accessibility Snapshots"
+    link "Snapshots vs. Other Tools"
+      paragraph "Snapshots vs. Other Tools"
+    link "Why Real A11y?"
+      paragraph "Why Real A11y?"
+    button "Reading the Tree"
+      heading "Reading the Tree" (level 2)
+    link "Understanding the Views"
+      paragraph "Understanding the Views"
+    link "DOM View"
+      paragraph "DOM View"
+    link "A11y View"
+      paragraph "A11y View"
+    link "Headings View"
+      paragraph "Headings View"
+    link "TAB View"
+      paragraph "TAB View"
+    link "Panel features"
+      paragraph "Panel features"
+    button "Chrome Extension"
+      heading "Chrome Extension" (level 2)
+    link "Overview & Install"
+      paragraph "Overview & Install"
+    button "Packages"
+      heading "Packages" (level 2)
+    link "@real-a11y-dev/core"
+      paragraph "@real-a11y-dev/core"
+    link "@real-a11y-dev/inspector"
+      paragraph "@real-a11y-dev/inspector"
+    link "@real-a11y-dev/testing"
+      heading "@real-a11y-dev/testing" (level 3)
+    button "toggle section"
+    link "@real-a11y-dev/react"
+      paragraph "@real-a11y-dev/react"
+    link "@real-a11y-dev/storybook-addon"
+      paragraph "@real-a11y-dev/storybook-addon"
+    link "@real-a11y-dev/mcp"
+      heading "@real-a11y-dev/mcp" (level 3)
+    button "toggle section"
+    link "@real-a11y-dev/cli"
+      heading "@real-a11y-dev/cli" (level 3)
+    button "toggle section"
+    button "Recipes"
+      heading "Recipes" (level 2)
+    link "Next.js (App Router + React 19)"
+      paragraph "Next.js (App Router + React 19)"
+    link "Storybook 8 + React 19"
+      paragraph "Storybook 8 + React 19"
+    link "Peer Dependencies"
+      paragraph "Peer Dependencies"
+    link "CI Diff Bot"
+      paragraph "CI Diff Bot"
+    button "Reference"
+      heading "Reference" (level 2)
+    link "Authenticated Pages"
+      paragraph "Authenticated Pages"
+    link "Accessible Names"
+      paragraph "Accessible Names"
+    link "Architecture"
+      paragraph "Architecture"
+    link "Troubleshooting"
+      paragraph "Troubleshooting"
+navigation "On this page"
+  heading "On this page" (level 2)
+  list
+    listitem
+      link "Install"
+    listitem
+      link "Extraction"
+    listitem
+      link "Query helpers"
+    listitem
+      link "Tree traversal"
+    listitem
+      link "Structure queries"
+    listitem
+      link "Disclosure-pair index"
+    listitem
+      link "Tree diffing"
+    listitem
+      link "DOM observation"
+    listitem
+      link "Types"
+main
+  heading "@real-a11y-dev/core" (level 1)
+  blockquote
+    paragraph "— Extracts a browser-accurate accessibility tree from any DOM element, as plain data (). Zero runtime dependencies. Reach for this when you're on top of the engine; for apps, use one of the wrapper packages."
+      strong "TL;DR"
+      code "Map<string, SemanticNode>"
+      strong "building your own tooling"
+  blockquote
+    paragraph "Audit from the shell with , or give an AI agent accessibility audits via — both sit on this layer already, so you don't have to build them."
+      strong "Want a ready-made tool, not a custom build?"
+      link "@real-a11y-dev/cli"
+        code "@real-a11y-dev/cli"
+      link "@real-a11y-dev/mcp"
+        code "@real-a11y-dev/mcp"
+  paragraph "The extraction engine. Every other package is built on top of this."
+  heading "Install" (level 2)
+  button "Copy Code"
+  code
+  paragraph "has no runtime dependencies. It uses standard DOM APIs only."
+    code "@real-a11y-dev/core"
+  paragraph "Which type of dependency do I need?"
+  list
+    listitem "is the right default for most apps — you're using inside tests, Storybook, or a dev-only audit panel gated by / . See ."
+      strong "(dev)"
+        code "-D"
+      code "core"
+      code "import.meta.env.DEV"
+      code "process.env.NODE_ENV"
+      link "Keep it out of production"
+    listitem "if you're publishing your own package that uses at runtime (e.g. a new audit tool on top of the engine)."
+      strong "Regular"
+        code "dependency"
+      code "core"
+    listitem "if you're publishing a library that composes with other Real A11y packages — lets consumers share a single copy."
+      strong
+        code "peerDependency"
+      code "core"
+  separator
+  heading "Extraction" (level 2)
+  heading "extractA11yTree(root)" (level 3)
+    code "extractA11yTree(root)"
+  paragraph "Extracts the accessibility tree from a DOM element."
+  button "Copy Code"
+  code
+  paragraph "Resolves ARIA roles, computes accessible names via the full ANDC algorithm, detects hidden subtrees, and maps interaction capabilities."
+  paragraph "is the id of the element that held focus at extraction time, when it's inside the extracted subtree — absent when focus rested on / (nothing meaningfully focused) or fell outside the tree. The serializers in render it as a marker."
+    code "focusedId"
+    code "<body>"
+    code "<html>"
+    link "@real-a11y-dev/testing"
+      code "@real-a11y-dev/testing"
+    code "[focused]"
+  heading "extractDomTree(root)" (level 3)
+    code "extractDomTree(root)"
+  paragraph "Same shape as , but uses raw tag names as roles instead of ARIA roles. Useful when you want to audit DOM structure rather than accessibility semantics."
+    code "extractA11yTree"
+  button "Copy Code"
+  code
+  separator
+  heading "Query helpers" (level 2)
+  heading "findByRole(tree, role, options?)" (level 3)
+    code "findByRole(tree, role, options?)"
+  paragraph "Returns the first matching the given role, or ."
+    code "SemanticNode"
+    code "null"
+  button "Copy Code"
+  code
+  paragraph
+    strong "Options:"
+  table
+    rowgroup
+      row
+        rowheader "Option"
+        rowheader "Type"
+        rowheader "Description"
+    rowgroup
+      row
+        cell "name"
+          code "name"
+        cell "string | RegExp"
+          code "string | RegExp"
+        cell "Filter by accessible name. String: exact match (case/whitespace-normalized). RegExp: .test()."
+          code ".test()"
+      row
+        cell "level"
+          code "level"
+        cell "number"
+          code "number"
+        cell "Filter by heading level (1–6)."
+      row
+        cell "checked"
+          code "checked"
+        cell "boolean"
+          code "boolean"
+        cell "Filter by aria-checked state."
+          code "aria-checked"
+      row
+        cell "expanded"
+          code "expanded"
+        cell "boolean"
+          code "boolean"
+        cell "Filter by aria-expanded state."
+          code "aria-expanded"
+      row
+        cell "selected"
+          code "selected"
+        cell "boolean"
+          code "boolean"
+        cell "Filter by aria-selected state."
+          code "aria-selected"
+      row
+        cell "pressed"
+          code "pressed"
+        cell "boolean"
+          code "boolean"
+        cell "Filter by aria-pressed state."
+          code "aria-pressed"
+      row
+        cell "disabled"
+          code "disabled"
+        cell "boolean"
+          code "boolean"
+        cell "Filter by aria-disabled state."
+          code "aria-disabled"
+      row
+        cell "includeHidden"
+          code "includeHidden"
+        cell "boolean"
+          code "boolean"
+        cell "Include nodes in aria-hidden subtrees (default: false)."
+          code "aria-hidden"
+  heading "findAllByRole(tree, role, options?)" (level 3)
+    code "findAllByRole(tree, role, options?)"
+  paragraph "Returns all matching nodes as ."
+    code "SemanticNode[]"
+  button "Copy Code"
+  code
+  separator
+  heading "Tree traversal" (level 2)
+  heading "linearize(tree, options?)" (level 3)
+    code "linearize(tree, options?)"
+  paragraph "Returns all nodes in pre-order (DOM order), skipping hidden nodes by default."
+  button "Copy Code"
+  code
+  paragraph
+    strong "Options:"
+  table
+    rowgroup
+      row
+        rowheader "Option"
+        rowheader "Type"
+        rowheader "Default"
+        rowheader "Description"
+    rowgroup
+      row
+        cell "includeHidden"
+          code "includeHidden"
+        cell "boolean"
+          code "boolean"
+        cell "false"
+          code "false"
+        cell "Include aria-hidden subtrees"
+          code "aria-hidden"
+  separator
+  heading "Structure queries" (level 2)
+  heading "getOutline(tree)" (level 3)
+    code "getOutline(tree)"
+  paragraph "Returns heading nodes as a flat outline list."
+  button "Copy Code"
+  code
+  heading "getTabSequence(tree)" (level 3)
+    code "getTabSequence(tree)"
+  paragraph "Returns focusable nodes in computed tab order."
+  button "Copy Code"
+  code
+  separator
+  heading "Disclosure-pair index" (level 2)
+  heading "buildControlsIndex(nodes)" (level 3)
+    code "buildControlsIndex(nodes)"
+  paragraph "Resolves the relationship across a tree and returns adjacency maps in both directions, so callers can render cross-links between disclosure triggers (button, tab, combobox) and the elements they open (menu, panel, listbox)."
+    code "aria-controls"
+  button "Copy Code"
+  code
+  paragraph "The lookup happens entirely in tree-node id space — DOM ids are resolved internally so callers never deal with them."
+  paragraph
+    strong "Two link sources, merged into the same maps:"
+  list
+    listitem "— the principled relationship. Always preferred."
+      strong "Explicit"
+        code "aria-controls"
+    listitem "— for triggers that expose + but no , paired with the next visible element of the matching role ( → , → , etc.). Common in apps that skip . Conservative by design: skipped when the trigger already has , won't poach an element that's already an explicit target, and excludes hidden candidates."
+      strong "Heuristic fallback"
+      code "aria-haspopup"
+      code "aria-expanded="true""
       code "aria-controls"
-    button "Copy Code"
-      code
-    paragraph "The lookup happens entirely in tree-node id space — DOM ids are resolved internally so callers never deal with them."
-    paragraph
-      strong "Two link sources, merged into the same maps:"
-    list
-      listitem "— the principled relationship. Always preferred."
-        strong "Explicit"
-          code "aria-controls"
-      listitem "— for triggers that expose + but no , paired with the next visible element of the matching role ( → , → , etc.). Common in apps that skip . Conservative by design: skipped when the trigger already has , won't poach an element that's already an explicit target, and excludes hidden candidates."
-        strong "Heuristic fallback"
-        code "aria-haspopup"
-        code "aria-expanded="true""
-        code "aria-controls"
-        code "aria-haspopup="menu""
-        code "role="menu""
-        code "aria-haspopup="listbox""
-        code "role="listbox""
-        code "aria-controls"
-        code "aria-controls"
-    paragraph "The set lists trigger ids whose link came from the heuristic — render those cross-links with a "likely" affordance (different style, hedged tooltip) instead of presenting them as ground truth."
-      code "inferred"
-    heading "ControlsIndex" (level 3)
-      code "ControlsIndex"
-    button "Copy Code"
-      code
-    separator
-    heading "Tree diffing" (level 2)
-    heading "diffTrees(before, after)" (level 3)
-      code "diffTrees(before, after)"
-    paragraph "Compares two tree snapshots and returns what changed."
-    button "Copy Code"
-      code
-    paragraph "Node ids come from a per-DOM-node , so the same element keeps its id across extractions — that's what makes this an identity-aware comparison rather than a text diff. It also means only works : ids don't survive serialization, so two separately-captured snapshots can't be compared this way (for that, use the artifact diff)."
-      code "WeakMap"
-      code "diffTrees"
-      strong "within one live document"
-      link "CLI's"
-    paragraph
-      strong ":"
-        code "NodeChange"
-    button "Copy Code"
-      code
-    paragraph "To render a diff as a committable change list (, ), pass it to from ."
-      code "+ option "Spain""
-      code "~ combobox "Country": a11y.states.expanded false → true"
-      code "serializeTreeDiff"
-      code "@real-a11y-dev/serialize"
-    separator
-    heading "DOM observation" (level 2)
-    heading "DomObserver" (level 3)
-      code "DomObserver"
-    paragraph "Watches a DOM subtree for mutations and calls a callback. Rapid mutations are debounced, and a max-wait ceiling ensures the callback still fires on a stream that never goes quiet (streaming responses, progress bars, animated content) instead of the debounce deferring it forever."
-    button "Copy Code"
-      code
-    separator
-    heading "Types" (level 2)
-    button "Copy Code"
-      code
-  contentinfo
-    link "Edit this page on GitHub"
-    paragraph "Last updated:"
-      time "[redacted]"
-    navigation "Pager"
-      link "Previous pageOverview & Install"
-      link "Next page@real-a11y-dev/inspector"
+      code "aria-haspopup="menu""
+      code "role="menu""
+      code "aria-haspopup="listbox""
+      code "role="listbox""
+      code "aria-controls"
+      code "aria-controls"
+  paragraph "The set lists trigger ids whose link came from the heuristic — render those cross-links with a "likely" affordance (different style, hedged tooltip) instead of presenting them as ground truth."
+    code "inferred"
+  heading "ControlsIndex" (level 3)
+    code "ControlsIndex"
+  button "Copy Code"
+  code
+  separator
+  heading "Tree diffing" (level 2)
+  heading "diffTrees(before, after)" (level 3)
+    code "diffTrees(before, after)"
+  paragraph "Compares two tree snapshots and returns what changed."
+  button "Copy Code"
+  code
+  paragraph "Node ids come from a per-DOM-node , so the same element keeps its id across extractions — that's what makes this an identity-aware comparison rather than a text diff. It also means only works : ids don't survive serialization, so two separately-captured snapshots can't be compared this way (for that, use the artifact diff)."
+    code "WeakMap"
+    code "diffTrees"
+    strong "within one live document"
+    link "CLI's"
+  paragraph
+    strong ":"
+      code "NodeChange"
+  button "Copy Code"
+  code
+  paragraph "To render a diff as a committable change list (, ), pass it to from ."
+    code "+ option "Spain""
+    code "~ combobox "Country": a11y.states.expanded false → true"
+    code "serializeTreeDiff"
+    code "@real-a11y-dev/serialize"
+  separator
+  heading "DOM observation" (level 2)
+  heading "DomObserver" (level 3)
+    code "DomObserver"
+  paragraph "Watches a DOM subtree for mutations and calls a callback. Rapid mutations are debounced, and a max-wait ceiling ensures the callback still fires on a stream that never goes quiet (streaming responses, progress bars, animated content) instead of the debounce deferring it forever."
+  button "Copy Code"
+  code
+  separator
+  heading "Types" (level 2)
+  button "Copy Code"
+  code
+contentinfo
+  link "Edit this page on GitHub"
+  paragraph "Last updated:"
+    time "[redacted]"
+  navigation "Pager"
+    link "Previous pageOverview & Install"
+    link "Next page@real-a11y-dev/inspector"

@@ -1,9 +1,9 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
 exports[`a11ySnapshot serializer > renders the semantic tree (not the DOM) into toMatchSnapshot() 1`] = `
-  main
-    heading "Sign in" (level 1)
-    form "Sign-in form"
-      textbox "Email"
-      button "Sign in"
+main
+  heading "Sign in" (level 1)
+  form "Sign-in form"
+    textbox "Email"
+    button "Sign in"
 `;

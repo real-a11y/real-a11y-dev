@@ -1,207 +1,207 @@
-  link "Skip to content"
-  banner
-    link "Real A11y"
-    button "Search"
-    navigation "Main Navigation"
-      link "Guide"
-      link "Recipes"
-      link "Packages"
-      button "v0.1 · Beta"
-    switch "Switch to dark theme"
-    link "github"
-  complementary
-    navigation "Sidebar Navigation"
-      button "Introduction"
-        heading "Introduction" (level 2)
-      link "Getting Started"
-        paragraph "Getting Started"
-      link "Core Concepts"
-        paragraph "Core Concepts"
-      link "Accessibility Snapshots"
-        paragraph "Accessibility Snapshots"
-      link "Snapshots vs. Other Tools"
-        paragraph "Snapshots vs. Other Tools"
-      link "Why Real A11y?"
-        paragraph "Why Real A11y?"
-      button "Reading the Tree"
-        heading "Reading the Tree" (level 2)
-      link "Understanding the Views"
-        paragraph "Understanding the Views"
-      link "DOM View"
-        paragraph "DOM View"
-      link "A11y View"
-        paragraph "A11y View"
-      link "Headings View"
-        paragraph "Headings View"
-      link "TAB View"
-        paragraph "TAB View"
-      link "Panel features"
-        paragraph "Panel features"
-      button "Chrome Extension"
-        heading "Chrome Extension" (level 2)
-      link "Overview & Install"
-        paragraph "Overview & Install"
-      button "Packages"
-        heading "Packages" (level 2)
-      link "@real-a11y-dev/core"
-        paragraph "@real-a11y-dev/core"
-      link "@real-a11y-dev/inspector"
-        paragraph "@real-a11y-dev/inspector"
-        link "@real-a11y-dev/testing"
-          heading "@real-a11y-dev/testing" (level 3)
-        button "toggle section"
-      link "@real-a11y-dev/react"
-        paragraph "@real-a11y-dev/react"
-      link "@real-a11y-dev/storybook-addon"
-        paragraph "@real-a11y-dev/storybook-addon"
-        link "@real-a11y-dev/mcp"
-          heading "@real-a11y-dev/mcp" (level 3)
-        button "toggle section"
-        link "@real-a11y-dev/cli"
-          heading "@real-a11y-dev/cli" (level 3)
-        button "toggle section"
-      button "Recipes"
-        heading "Recipes" (level 2)
-      link "Next.js (App Router + React 19)"
-        paragraph "Next.js (App Router + React 19)"
-      link "Storybook 8 + React 19"
-        paragraph "Storybook 8 + React 19"
-      link "Peer Dependencies"
-        paragraph "Peer Dependencies"
-      link "CI Diff Bot"
-        paragraph "CI Diff Bot"
-      button "Reference"
-        heading "Reference" (level 2)
-      link "Authenticated Pages"
-        paragraph "Authenticated Pages"
-      link "Accessible Names"
-        paragraph "Accessible Names"
-      link "Architecture"
-        paragraph "Architecture"
-      link "Troubleshooting"
-        paragraph "Troubleshooting"
-  navigation "On this page"
-    heading "On this page" (level 2)
-    list
-      listitem
-        link "What it shows"
-      listitem
-        link "Run it locally"
-      listitem
-        link "Setup"
-      listitem
-        link "Good fixture — assertions pass"
-      listitem
-        link "Bad fixture — assertions throw"
-      listitem
-        link "Narrowing the audit root"
-      listitem
-        link "Snapshot test"
-      listitem
-        link "How the adapter works"
-      listitem
-        link "See also"
-  main
-    heading "Example: Playwright E2E" (level 1)
-    paragraph "Demonstrates — the adapter — against real fixture pages in a Playwright test suite."
-      code "@real-a11y-dev/testing/playwright"
-      code "attach()"
-    paragraph
-      strong "Source:"
-      link "packages/testing/e2e/"
-        code "packages/testing/e2e/"
-    heading "What it shows" (level 2)
-    list
-      listitem "injecting the audit engine into a real browser page"
-        code "attach(page)"
-      listitem "producing a stable string for snapshot tests"
-        code "auditSnapshot()"
-      listitem "verifying heading structure"
-        code "outlineSnapshot()"
-      listitem "verifying tab order"
-        code "tabSequenceSnapshot()"
-      listitem "All four assertions (, , , ) passing on a well-structured page"
-        code "assertHeadingOrder"
-        code "assertNoUnlabeledInteractive"
-        code "assertLandmarkStructure"
-        code "assertDialogsLabeled"
-      listitem "The same assertions on a broken page — error messages surfaced in the test runner"
-        strong "throwing"
-      listitem "narrowing the audit to a specific subtree"
-        code "rootSelector"
-    heading "Run it locally" (level 2)
-    button "Copy Code"
-      code
-    heading "Setup" (level 2)
-    button "Copy Code"
-      code
-    heading "Good fixture — assertions pass" (level 2)
-    button "Copy Code"
-      code
-    paragraph "The good fixture has:"
-    list
-      listitem "One with two sections (no skipped levels)"
-        code "<h1>"
-        code "<h2>"
-      listitem "Labeled , , landmarks"
-        code "<header>"
-        code "<main>"
-        code "<footer>"
-      listitem "A form with proper elements on every input"
-        code "<label>"
-      listitem "A with"
-        code "<dialog>"
-        code "aria-labelledby"
-    heading "Bad fixture — assertions throw" (level 2)
-    button "Copy Code"
-      code
-    paragraph "The bad fixture has:"
-    list
-      listitem "No (starts at , then jumps to )"
-        code "<h1>"
-        code "<h2>"
-        code "<h4>"
-      listitem "No landmark"
-        code "<main>"
-      listitem "An unlabeled and unlabeled"
-        code "<button>"
-        code "<input>"
-      listitem "An open with no or"
-        code "<dialog>"
-        code "aria-label"
-        code "aria-labelledby"
-    heading "Narrowing the audit root" (level 2)
-    button "Copy Code"
-      code
-    heading "Snapshot test" (level 2)
-    button "Copy Code"
-      code
-    paragraph "Commit output with to catch unintended accessibility regressions in CI:"
+link "Skip to content"
+banner
+  link "Real A11y"
+  button "Search"
+  navigation "Main Navigation"
+    link "Guide"
+    link "Recipes"
+    link "Packages"
+    button "v0.1 · Beta"
+  switch "Switch to dark theme"
+  link "github"
+complementary
+  navigation "Sidebar Navigation"
+    button "Introduction"
+      heading "Introduction" (level 2)
+    link "Getting Started"
+      paragraph "Getting Started"
+    link "Core Concepts"
+      paragraph "Core Concepts"
+    link "Accessibility Snapshots"
+      paragraph "Accessibility Snapshots"
+    link "Snapshots vs. Other Tools"
+      paragraph "Snapshots vs. Other Tools"
+    link "Why Real A11y?"
+      paragraph "Why Real A11y?"
+    button "Reading the Tree"
+      heading "Reading the Tree" (level 2)
+    link "Understanding the Views"
+      paragraph "Understanding the Views"
+    link "DOM View"
+      paragraph "DOM View"
+    link "A11y View"
+      paragraph "A11y View"
+    link "Headings View"
+      paragraph "Headings View"
+    link "TAB View"
+      paragraph "TAB View"
+    link "Panel features"
+      paragraph "Panel features"
+    button "Chrome Extension"
+      heading "Chrome Extension" (level 2)
+    link "Overview & Install"
+      paragraph "Overview & Install"
+    button "Packages"
+      heading "Packages" (level 2)
+    link "@real-a11y-dev/core"
+      paragraph "@real-a11y-dev/core"
+    link "@real-a11y-dev/inspector"
+      paragraph "@real-a11y-dev/inspector"
+    link "@real-a11y-dev/testing"
+      heading "@real-a11y-dev/testing" (level 3)
+    button "toggle section"
+    link "@real-a11y-dev/react"
+      paragraph "@real-a11y-dev/react"
+    link "@real-a11y-dev/storybook-addon"
+      paragraph "@real-a11y-dev/storybook-addon"
+    link "@real-a11y-dev/mcp"
+      heading "@real-a11y-dev/mcp" (level 3)
+    button "toggle section"
+    link "@real-a11y-dev/cli"
+      heading "@real-a11y-dev/cli" (level 3)
+    button "toggle section"
+    button "Recipes"
+      heading "Recipes" (level 2)
+    link "Next.js (App Router + React 19)"
+      paragraph "Next.js (App Router + React 19)"
+    link "Storybook 8 + React 19"
+      paragraph "Storybook 8 + React 19"
+    link "Peer Dependencies"
+      paragraph "Peer Dependencies"
+    link "CI Diff Bot"
+      paragraph "CI Diff Bot"
+    button "Reference"
+      heading "Reference" (level 2)
+    link "Authenticated Pages"
+      paragraph "Authenticated Pages"
+    link "Accessible Names"
+      paragraph "Accessible Names"
+    link "Architecture"
+      paragraph "Architecture"
+    link "Troubleshooting"
+      paragraph "Troubleshooting"
+navigation "On this page"
+  heading "On this page" (level 2)
+  list
+    listitem
+      link "What it shows"
+    listitem
+      link "Run it locally"
+    listitem
+      link "Setup"
+    listitem
+      link "Good fixture — assertions pass"
+    listitem
+      link "Bad fixture — assertions throw"
+    listitem
+      link "Narrowing the audit root"
+    listitem
+      link "Snapshot test"
+    listitem
+      link "How the adapter works"
+    listitem
+      link "See also"
+main
+  heading "Example: Playwright E2E" (level 1)
+  paragraph "Demonstrates — the adapter — against real fixture pages in a Playwright test suite."
+    code "@real-a11y-dev/testing/playwright"
+    code "attach()"
+  paragraph
+    strong "Source:"
+    link "packages/testing/e2e/"
+      code "packages/testing/e2e/"
+  heading "What it shows" (level 2)
+  list
+    listitem "injecting the audit engine into a real browser page"
+      code "attach(page)"
+    listitem "producing a stable string for snapshot tests"
       code "auditSnapshot()"
-      code "toMatchSnapshot()"
-    button "Copy Code"
-      code
-    heading "How the adapter works" (level 2)
-    button "Copy Code"
-      code
-    paragraph "The bundle (30 KB) is read from disk once and cached in the Node process — subsequent calls add no I/O overhead."
-      code "attach()"
-    heading "See also" (level 2)
-    list
-      listitem "— / run findings-aware CI audits over a whole page set defined in , no test harness required."
-        strong
-          link "@real-a11y-dev/cli"
-            code "@real-a11y-dev/cli"
-        code "real-a11y snapshot"
-        code "real-a11y diff"
-        code "a11y.config.json"
-      listitem "— the same audit engine exposed to AI agents for agent-driven accessibility checks."
-        strong
-          link "@real-a11y-dev/mcp"
-            code "@real-a11y-dev/mcp"
-  contentinfo
-    link "Edit this page on GitHub"
-    paragraph "Last updated:"
-      time "[redacted]"
-    navigation "Pager"
-      link "Next pageGetting Started"
+    listitem "verifying heading structure"
+      code "outlineSnapshot()"
+    listitem "verifying tab order"
+      code "tabSequenceSnapshot()"
+    listitem "All four assertions (, , , ) passing on a well-structured page"
+      code "assertHeadingOrder"
+      code "assertNoUnlabeledInteractive"
+      code "assertLandmarkStructure"
+      code "assertDialogsLabeled"
+    listitem "The same assertions on a broken page — error messages surfaced in the test runner"
+      strong "throwing"
+    listitem "narrowing the audit to a specific subtree"
+      code "rootSelector"
+  heading "Run it locally" (level 2)
+  button "Copy Code"
+  code
+  heading "Setup" (level 2)
+  button "Copy Code"
+  code
+  heading "Good fixture — assertions pass" (level 2)
+  button "Copy Code"
+  code
+  paragraph "The good fixture has:"
+  list
+    listitem "One with two sections (no skipped levels)"
+      code "<h1>"
+      code "<h2>"
+    listitem "Labeled , , landmarks"
+      code "<header>"
+      code "<main>"
+      code "<footer>"
+    listitem "A form with proper elements on every input"
+      code "<label>"
+    listitem "A with"
+      code "<dialog>"
+      code "aria-labelledby"
+  heading "Bad fixture — assertions throw" (level 2)
+  button "Copy Code"
+  code
+  paragraph "The bad fixture has:"
+  list
+    listitem "No (starts at , then jumps to )"
+      code "<h1>"
+      code "<h2>"
+      code "<h4>"
+    listitem "No landmark"
+      code "<main>"
+    listitem "An unlabeled and unlabeled"
+      code "<button>"
+      code "<input>"
+    listitem "An open with no or"
+      code "<dialog>"
+      code "aria-label"
+      code "aria-labelledby"
+  heading "Narrowing the audit root" (level 2)
+  button "Copy Code"
+  code
+  heading "Snapshot test" (level 2)
+  button "Copy Code"
+  code
+  paragraph "Commit output with to catch unintended accessibility regressions in CI:"
+    code "auditSnapshot()"
+    code "toMatchSnapshot()"
+  button "Copy Code"
+  code
+  heading "How the adapter works" (level 2)
+  button "Copy Code"
+  code
+  paragraph "The bundle (30 KB) is read from disk once and cached in the Node process — subsequent calls add no I/O overhead."
+    code "attach()"
+  heading "See also" (level 2)
+  list
+    listitem "— / run findings-aware CI audits over a whole page set defined in , no test harness required."
+      strong
+        link "@real-a11y-dev/cli"
+          code "@real-a11y-dev/cli"
+      code "real-a11y snapshot"
+      code "real-a11y diff"
+      code "a11y.config.json"
+    listitem "— the same audit engine exposed to AI agents for agent-driven accessibility checks."
+      strong
+        link "@real-a11y-dev/mcp"
+          code "@real-a11y-dev/mcp"
+contentinfo
+  link "Edit this page on GitHub"
+  paragraph "Last updated:"
+    time "[redacted]"
+  navigation "Pager"
+    link "Next pageGetting Started"
