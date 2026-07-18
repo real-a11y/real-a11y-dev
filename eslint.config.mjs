@@ -63,8 +63,12 @@ export default [
     files: ["**/*.{ts,tsx,js,jsx,mjs,cjs}"],
     plugins: { import: importPlugin },
     rules: {
+      // Error, not warn: a warning never fails CI, so import-order drift
+      // accumulated silently until someone ran `eslint --fix` by hand. As an
+      // error the `lint` gate blocks it, and it's 100% autofixable
+      // (`pnpm lint:fix`), so this costs contributors nothing.
       "import/order": [
-        "warn",
+        "error",
         {
           groups: [
             "builtin",
