@@ -317,7 +317,10 @@ describe("isTrustedSender", () => {
 
 // ─── planPanelDisconnectCleanup ─────────────────────────────────────────────
 
-import { planPanelDisconnectCleanup } from "./routing.js";
+import {
+  planPanelDisconnectCleanup,
+  planPanelDisconnectCleanupAllTabs,
+} from "./routing.js";
 
 describe("planPanelDisconnectCleanup", () => {
   it("disables the focus tracker and clears the highlight when curtain is off", () => {
@@ -354,5 +357,58 @@ describe("planPanelDisconnectCleanup", () => {
     for (const item of plan) {
       expect(item.frameId).toBeUndefined();
     }
+  });
+});
+
+describe("planPanelDisconnectCleanupAllTabs", () => {
+  it("cleans up EVERY tab, not just the active one", () => {
+    // Regression: disconnect used to tear down only the active tab, so a
+    // background tab's curtain and focus overlays lingered after the panel
+    // closed with no way to dismiss them.
+    const plan = planPanelDisconnectCleanupAllTabs({
+      tabIds: [1, 2, 3],
+      curtainTabs: new Set(),
+    });
+
+    // three tabs × { SET_OBSERVING, SET_FOCUS_TRACKER, CLEAR_HIGHLIGHT }
+    expect(plan).toHaveLength(9);
+    for (const tabId of [1, 2, 3]) {
+      const forTab = plan
+        .filter((m) => m.tabId === tabId)
+        .map((m) => m.body.type);
+      expect(forTab).toEqual([
+        "SET_OBSERVING",
+        "SET_FOCUS_TRACKER",
+        "CLEAR_HIGHLIGHT",
+      ]);
+    }
+  });
+
+  it("lifts the curtain only on tabs where it was on", () => {
+    const plan = planPanelDisconnectCleanupAllTabs({
+      tabIds: [1, 2],
+      curtainTabs: new Set([2]),
+    });
+
+    const curtainTabs = plan
+      .filter((m) => m.body.type === "TOGGLE_CURTAIN")
+      .map((m) => m.tabId);
+    expect(curtainTabs).toEqual([2]);
+  });
+
+  it("dedupes repeated tab ids", () => {
+    const plan = planPanelDisconnectCleanupAllTabs({
+      tabIds: [1, 1, 2, 1],
+      curtainTabs: new Set(),
+    });
+
+    expect(plan).toHaveLength(6); // 2 unique tabs × 3 messages
+    expect(new Set(plan.map((m) => m.tabId))).toEqual(new Set([1, 2]));
+  });
+
+  it("returns an empty plan when no tab has state", () => {
+    expect(
+      planPanelDisconnectCleanupAllTabs({ tabIds: [], curtainTabs: new Set() }),
+    ).toEqual([]);
   });
 });

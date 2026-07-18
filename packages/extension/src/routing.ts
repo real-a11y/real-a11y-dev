@@ -168,8 +168,8 @@ export function planFrameHello(opts: {
 }
 
 /**
- * Decide what the background should broadcast to the active tab when the
- * side panel closes. Three things need teardown:
+ * Decide what the background should broadcast to one tab when the side panel
+ * closes. Three things need teardown:
  *
  *   1. **Focus tracker**: turn it off so the `focusin` listener in the
  *      content script stops redrawing the highlight overlay on tab keystrokes
@@ -206,6 +206,34 @@ export function planPanelDisconnectCleanup(opts: {
     });
   }
 
+  return out;
+}
+
+/**
+ * Expand {@link planPanelDisconnectCleanup} across EVERY tab the panel drove,
+ * not just the active one. The focus tracker is enabled on any tab whose
+ * frames announce while the panel is connected, and the curtain is tracked per
+ * tab — so on disconnect a background tab would otherwise keep its black
+ * curtain (with no UI to lift it) and keep drawing focus overlays. `tabIds` is
+ * the full set to clean (deduped); the curtain teardown is emitted only for
+ * tabs in `curtainTabs`.
+ */
+export function planPanelDisconnectCleanupAllTabs(opts: {
+  tabIds: Iterable<number>;
+  curtainTabs: ReadonlySet<number>;
+}): PlannedTabMessage[] {
+  const seen = new Set<number>();
+  const out: PlannedTabMessage[] = [];
+  for (const tabId of opts.tabIds) {
+    if (seen.has(tabId)) continue;
+    seen.add(tabId);
+    out.push(
+      ...planPanelDisconnectCleanup({
+        tabId,
+        curtainOn: opts.curtainTabs.has(tabId),
+      }),
+    );
+  }
   return out;
 }
 

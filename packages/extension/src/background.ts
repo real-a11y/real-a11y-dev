@@ -8,7 +8,7 @@ import {
   parseNodeId,
   planFrameAnnouncementResponse,
   planFrameHello,
-  planPanelDisconnectCleanup,
+  planPanelDisconnectCleanupAllTabs,
 } from "./routing.js";
 import {
   type TabState,
@@ -111,6 +111,31 @@ async function broadcastToAllFrames(tabId: number, message: unknown) {
 }
 
 /**
+ * Send several messages to every frame of a tab, enumerating the frame list
+ * ONCE. Cheaper than calling {@link broadcastToAllFrames} per message when a
+ * whole batch targets the same tab (e.g. the panel-disconnect cleanup, which
+ * sweeps every tab with 3-4 messages each).
+ */
+async function broadcastMessagesToAllFrames(
+  tabId: number,
+  messages: readonly unknown[],
+) {
+  const frames = await chrome.webNavigation
+    .getAllFrames({ tabId })
+    .catch(() => null);
+  if (!frames) return; /* tab closed or query failed */
+  for (const { frameId } of frames) {
+    for (const message of messages) {
+      chrome.tabs.sendMessage(tabId, message, { frameId }, () => {
+        if (chrome.runtime.lastError) {
+          /* frame may have no content script */
+        }
+      });
+    }
+  }
+}
+
+/**
  * Execute a plan produced by the pure routing.ts planners. An item with a
  * `frameId` targets that one frame; without one it goes to the tab (top
  * frame). Errors (a frame with no content script) are swallowed.
@@ -142,6 +167,10 @@ function dispatchPlan(plan: PlannedTabMessage[]) {
 // avoiding the race where the panel's one-shot SET_FOCUS_TRACKER on mount
 // arrives before the content script is listening.
 let sidepanelConnected = false;
+// The connected side-panel ports. Chrome renders one side panel PER WINDOW, so
+// there can be several at once — ref-counted here so the disconnect teardown
+// runs only when the LAST panel closes (the panel-driven state below is global).
+const sidepanelPorts = new Set<chrome.runtime.Port>();
 
 // When the side panel connects, flip the flag. When it disconnects, tear down
 // everything the panel was driving on the page:
@@ -152,6 +181,7 @@ let sidepanelConnected = false;
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== "sidepanel") return;
 
+  sidepanelPorts.add(port);
   sidepanelConnected = true;
 
   // The freshly-mounted panel needs to know which tab it's bound to before
@@ -176,17 +206,53 @@ chrome.runtime.onConnect.addListener((port) => {
   })();
 
   port.onDisconnect.addListener(() => {
+    sidepanelPorts.delete(port);
+    // Only tear the panel-driven state down when the LAST panel closes.
+    // Chrome renders one side panel PER WINDOW (each connects its own port),
+    // but sidepanelConnected / activeTabId / tabCurtainOn are global — so
+    // closing one window's panel while another window's panel is still open
+    // must NOT stop observing or lift the curtain on that other window.
+    if (sidepanelPorts.size > 0) return;
     sidepanelConnected = false;
-    if (!activeTabId) return;
-    const curtainWasOn = !!tabCurtainOn.get(activeTabId);
-    const plan = planPanelDisconnectCleanup({
-      tabId: activeTabId,
-      curtainOn: curtainWasOn,
-    });
-    for (const item of plan) {
-      broadcastToAllFrames(item.tabId, item.body);
-    }
-    if (curtainWasOn) tabCurtainOn.set(activeTabId, false);
+
+    // The panel arms the focus tracker (and observer) on any tab whose frames
+    // announce while it is connected — background tabs included, and
+    // FRAME_HELLO-only tabs that never reach `tabStates`. Left alone, those
+    // tabs keep drawing focus overlays after the panel is gone and stay stuck
+    // behind a curtain with no UI to dismiss it (and a stale `tabCurtainOn`
+    // entry re-applies the curtain on that tab's next navigation). Broadcasting
+    // the teardown to EVERY tab is complete by construction; a tab that was
+    // never armed simply no-ops on the idempotent messages. `chrome.tabs.query`
+    // returns tab ids without the `tabs` permission.
+    void chrome.tabs
+      .query({})
+      .then((tabs) => {
+        // A panel reconnected while we were querying — leave its fresh state be.
+        if (sidepanelConnected) return;
+
+        const curtainTabs = new Set<number>();
+        for (const [tabId, on] of tabCurtainOn) if (on) curtainTabs.add(tabId);
+        tabCurtainOn.clear();
+
+        const tabIds = tabs
+          .map((t) => t.id)
+          .filter((id): id is number => id !== undefined);
+        const plan = planPanelDisconnectCleanupAllTabs({ tabIds, curtainTabs });
+
+        // Group by tab so each tab's frames are enumerated once, not per message.
+        const byTab = new Map<number, unknown[]>();
+        for (const item of plan) {
+          const list = byTab.get(item.tabId) ?? [];
+          list.push(item.body);
+          byTab.set(item.tabId, list);
+        }
+        for (const [tabId, messages] of byTab) {
+          void broadcastMessagesToAllFrames(tabId, messages);
+        }
+      })
+      .catch(() => {
+        /* window/tab enumeration can fail during teardown; nothing to do */
+      });
   });
 });
 
