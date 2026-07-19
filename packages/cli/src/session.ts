@@ -15,15 +15,16 @@ import type {
   SnapshotOptions,
 } from "@real-a11y-dev/mcp/browser";
 
-import { registerCleanup } from "./cleanup.js";
-import { CliError } from "./exit.js";
 import {
   projectSnapshot,
   redactUrl,
   redactUrlsIn,
   sanitizeText,
   type CleanSnapshot,
-} from "./sanitize.js";
+} from "@real-a11y-dev/snapshot";
+
+import { registerCleanup } from "./cleanup.js";
+import { CliError } from "./exit.js";
 import { assertFinalUrl } from "./url-gate.js";
 
 function proxyFromEnv():

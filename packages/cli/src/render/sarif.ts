@@ -23,7 +23,7 @@ import { basename, isAbsolute, relative } from "node:path";
 
 import { ALL_RULES } from "@real-a11y-dev/audit";
 
-import type { SnapshotArtifact } from "../snapshot-artifact.js";
+import type { SnapshotArtifact } from "@real-a11y-dev/snapshot";
 
 /** Most severe level each rule can emit (per assertions.ts) — SARIF wants the
  *  rule-level default; the per-result `level` still carries the actual one. */

@@ -1,9 +1,12 @@
 import type { Finding } from "@real-a11y-dev/audit";
-import { describe, expect, it } from "vitest";
 
-import { diffArtifacts } from "../diff/page-diff.js";
-import { fingerprintFindings } from "../fingerprint.js";
-import { buildArtifact, type SnapshotPage } from "../snapshot-artifact.js";
+import {
+  buildArtifact,
+  diffArtifacts,
+  fingerprintFindings,
+  type SnapshotPage,
+} from "@real-a11y-dev/snapshot";
+import { describe, expect, it } from "vitest";
 
 import {
   renderDiffJson,

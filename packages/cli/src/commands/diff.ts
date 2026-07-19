@@ -12,13 +12,21 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import {
+  applyBaseline,
+  loadBaseline,
+  diffArtifacts,
+  noPagesMatched,
+  assertFullArtifact,
+  parseSnapshotArtifact,
+} from "@real-a11y-dev/snapshot";
+
+import {
   parseFailOn,
   parseFormat,
   parseOnly,
   type CommandFn,
 } from "../args.js";
-import { applyBaseline, loadBaseline } from "../baseline.js";
-import { diffArtifacts, noPagesMatched } from "../diff/page-diff.js";
+
 import { CliError, EXIT, exceedsThreshold } from "../exit.js";
 
 import { writeReport } from "../output.js";
@@ -28,10 +36,6 @@ import {
   renderDiffMarkdown,
   renderDiffPretty,
 } from "../render/diff.js";
-import {
-  assertFullArtifact,
-  parseSnapshotArtifact,
-} from "../snapshot-artifact.js";
 
 import { outputOf } from "./common.js";
 

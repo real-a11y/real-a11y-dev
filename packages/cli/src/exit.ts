@@ -28,7 +28,10 @@ export class CliError extends Error {
   }
 }
 
-export function formatCliError(err: CliError): string {
+export function formatCliError(err: {
+  message: string;
+  hint?: string;
+}): string {
   const hint = err.hint ? `\n  hint: ${err.hint}` : "";
   return `real-a11y: error: ${err.message}${hint}`;
 }

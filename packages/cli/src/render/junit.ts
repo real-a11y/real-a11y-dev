@@ -7,7 +7,7 @@
  * ingesters that treat an empty suite as "no tests ran" stay happy.
  */
 
-import type { SnapshotArtifact } from "../snapshot-artifact.js";
+import type { SnapshotArtifact } from "@real-a11y-dev/snapshot";
 
 function esc(text: string): string {
   return text

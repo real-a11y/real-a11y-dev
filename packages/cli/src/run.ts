@@ -8,6 +8,8 @@
 import { createRequire } from "node:module";
 import { parseArgs } from "node:util";
 
+import { SnapshotFormatError } from "@real-a11y-dev/snapshot";
+
 import { COMMANDS, rootHelp, type FlagValues } from "./args.js";
 import { mergeDefaults, resolveConfig } from "./config.js";
 import { CliError, EXIT, formatCliError } from "./exit.js";
@@ -97,7 +99,7 @@ export async function run(argv: string[]): Promise<number> {
     const fn = await command.load();
     return await fn(positionals, values as FlagValues);
   } catch (err) {
-    if (err instanceof CliError) {
+    if (err instanceof CliError || err instanceof SnapshotFormatError) {
       process.stderr.write(`${formatCliError(err)}\n`);
       return EXIT.ERROR;
     }

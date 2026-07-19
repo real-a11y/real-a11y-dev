@@ -1,7 +1,6 @@
 import type { Finding } from "@real-a11y-dev/audit";
+import { fingerprintFindings } from "@real-a11y-dev/snapshot";
 import { afterEach, describe, expect, it, vi } from "vitest";
-
-import { fingerprintFindings } from "../fingerprint.js";
 
 import { emitAnnotations } from "./annotations.js";
 import { colorEnabled } from "./color.js";

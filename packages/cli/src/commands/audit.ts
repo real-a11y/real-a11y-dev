@@ -4,6 +4,8 @@
  * becomes an `error` entry (exit 2) while the others still report.
  */
 
+import { fingerprintFindings, redactUrl } from "@real-a11y-dev/snapshot";
+
 import {
   parseFailOn,
   parseFormat,
@@ -12,7 +14,6 @@ import {
   type CommandFn,
 } from "../args.js";
 import { CliError, EXIT, exceedsThreshold, formatCliError } from "../exit.js";
-import { fingerprintFindings } from "../fingerprint.js";
 import { progress, writeReport } from "../output.js";
 import {
   appendStepSummary,
@@ -22,7 +23,7 @@ import {
 import { colorEnabled } from "../render/color.js";
 import { renderJson, type PageReport } from "../render/json.js";
 import { renderPretty } from "../render/pretty.js";
-import { redactUrl } from "../sanitize.js";
+
 import { createSession, openPage, snapshotPage } from "../session.js";
 
 import {

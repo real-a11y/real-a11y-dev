@@ -9,7 +9,7 @@
  * changes need no bump); a version mismatch is a hard error ("re-snapshot").
  */
 
-import { CliError } from "./exit.js";
+import { SnapshotFormatError } from "./errors.js";
 import type { FingerprintedFinding } from "./fingerprint.js";
 
 export const ARTIFACT_SCHEMA_VERSION = 1;
@@ -87,7 +87,7 @@ export function assertFullArtifact(
 ): void {
   const only = artifact.meta?.only;
   if (only === "findings" || only === "views") {
-    throw new CliError(
+    throw new SnapshotFormatError(
       `${label} is a partial snapshot (captured with --only ${only}) — diff needs full artifacts; an empty-because-filtered axis would read as everything-new or all-removed`,
       "re-generate it without --only: real-a11y snapshot --output <file>",
     );
@@ -112,20 +112,22 @@ export function parseSnapshotArtifact(
   try {
     parsed = JSON.parse(json);
   } catch {
-    throw new CliError(`${label} is not valid JSON`);
+    throw new SnapshotFormatError(`${label} is not valid JSON`);
   }
   if (typeof parsed !== "object" || parsed === null) {
-    throw new CliError(`${label} is not a Real A11y snapshot artifact`);
+    throw new SnapshotFormatError(
+      `${label} is not a Real A11y snapshot artifact`,
+    );
   }
   const a = parsed as Partial<SnapshotArtifact>;
   if (a.schemaVersion !== ARTIFACT_SCHEMA_VERSION) {
-    throw new CliError(
+    throw new SnapshotFormatError(
       `${label} has schemaVersion ${String(a.schemaVersion)} — this build reads ${ARTIFACT_SCHEMA_VERSION}.`,
       "re-generate it with a matching real-a11y version: real-a11y snapshot",
     );
   }
   if (!Array.isArray(a.pages)) {
-    throw new CliError(`${label} has no "pages" array`);
+    throw new SnapshotFormatError(`${label} has no "pages" array`);
   }
   for (const page of a.pages) {
     if (
@@ -133,7 +135,7 @@ export function parseSnapshotArtifact(
       page === null ||
       typeof (page as SnapshotPage).name !== "string"
     ) {
-      throw new CliError(`${label} has a page without a "name"`);
+      throw new SnapshotFormatError(`${label} has a page without a "name"`);
     }
     const p = page as SnapshotPage;
     if (!Array.isArray(p.findings)) p.findings = [];

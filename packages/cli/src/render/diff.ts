@@ -15,9 +15,8 @@
  * result regardless, so a filter in a CI job can't disable enforcement.
  */
 
-import type { DiffEntry } from "../diff/findings-diff.js";
-import type { DiffResult, PageDiff } from "../diff/page-diff.js";
-import { hunkHeader } from "../diff/unified-diff.js";
+import type { DiffEntry, DiffResult, PageDiff } from "@real-a11y-dev/snapshot";
+import { hunkHeader } from "@real-a11y-dev/snapshot";
 
 import { palette, type Palette } from "./color.js";
 

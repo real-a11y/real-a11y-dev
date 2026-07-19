@@ -24,6 +24,12 @@ const ATTW_EXCLUDE_ENTRYPOINTS = {
   "@real-a11y-dev/semantic-navigator-ui": ["styles"],
 };
 
+// A command-only package ships a `bin` and no importable `.` export — it is a
+// CLI, not a library. attw resolves a package's import surface, so with nothing
+// to import it reports "Resolution failed"; there is genuinely nothing for it to
+// check. publint still runs (the package.json is validated either way).
+const ATTW_SKIP_PACKAGES = new Set(["@real-a11y-dev/cli"]);
+
 async function findPublicPackages() {
   const out = [];
   for (const entry of await readdir(packagesDir, { withFileTypes: true })) {
@@ -68,13 +74,17 @@ for (const pkg of pkgs) {
   });
   if (publintCode !== 0) failures++;
 
-  const attwArgs = ["exec", "attw", "--pack", ".", "--profile", "esm-only"];
-  const exclude = ATTW_EXCLUDE_ENTRYPOINTS[pkg.name];
-  if (exclude && exclude.length > 0) {
-    attwArgs.push("--exclude-entrypoints", ...exclude);
+  if (ATTW_SKIP_PACKAGES.has(pkg.name)) {
+    console.log(`(attw skipped — ${pkg.name} is a command, not a library)`);
+  } else {
+    const attwArgs = ["exec", "attw", "--pack", ".", "--profile", "esm-only"];
+    const exclude = ATTW_EXCLUDE_ENTRYPOINTS[pkg.name];
+    if (exclude && exclude.length > 0) {
+      attwArgs.push("--exclude-entrypoints", ...exclude);
+    }
+    const attwCode = await run("pnpm", attwArgs, { cwd: pkg.dir });
+    if (attwCode !== 0) failures++;
   }
-  const attwCode = await run("pnpm", attwArgs, { cwd: pkg.dir });
-  if (attwCode !== 0) failures++;
 }
 
 if (failures > 0) {

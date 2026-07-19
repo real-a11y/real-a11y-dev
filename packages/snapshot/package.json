@@ -1,13 +1,13 @@
 {
-  "name": "@real-a11y-dev/cli",
+  "name": "@real-a11y-dev/snapshot",
   "version": "0.1.0-beta.0",
-  "description": "Audit what a screen reader hears, from your shell — semantic-tree accessibility audits with CI-grade exit codes and formats",
+  "description": "The Real A11y snapshot engine — deterministic finding fingerprints, the diffable a11y-snapshot.json artifact, the findings/views/unified diff, and baselines. Node-only; the single home for what the CLI and MCP both capture and compare.",
   "license": "MIT",
   "author": "Juan Crisostomo (Real A11y)",
   "repository": {
     "type": "git",
     "url": "https://github.com/real-a11y/real-a11y-dev.git",
-    "directory": "packages/cli"
+    "directory": "packages/snapshot"
   },
   "homepage": "https://real-a11y.dev",
   "bugs": {
@@ -16,24 +16,32 @@
   "keywords": [
     "a11y",
     "accessibility",
-    "aria",
-    "cli",
-    "audit",
-    "ci",
-    "semantic-tree",
-    "screen-reader"
+    "snapshot",
+    "diff",
+    "fingerprint",
+    "baseline",
+    "ci"
   ],
   "engines": {
     "node": ">=20"
   },
   "type": "module",
-  "bin": {
-    "real-a11y": "./dist/index.js"
-  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": {
+        "import": "./dist/index.d.ts",
+        "require": "./dist/index.d.cts"
+      },
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
   "files": [
-    "dist",
-    "LICENSE"
+    "dist"
   ],
   "publishConfig": {
     "access": "public",
@@ -44,24 +52,14 @@
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:e2e": "vitest run --config vitest.e2e.config.ts"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@real-a11y-dev/audit": "workspace:*",
-    "@real-a11y-dev/mcp": "workspace:*",
-    "@real-a11y-dev/snapshot": "workspace:*"
-  },
-  "peerDependencies": {
-    "playwright": ">=1.49.0 <2"
-  },
-  "peerDependenciesMeta": {
-    "playwright": {
-      "optional": true
-    }
+    "@real-a11y-dev/core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "playwright": "^1.49.0",
     "tsup": "^8.3.0",
     "typescript": "^5.6.0",
     "vitest": "^3.2.7"

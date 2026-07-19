@@ -6,7 +6,7 @@
  * `jq 'select(.suppressed | not)'`.
  */
 
-import type { SnapshotArtifact } from "../snapshot-artifact.js";
+import type { SnapshotArtifact } from "@real-a11y-dev/snapshot";
 
 export function renderJsonl(artifact: SnapshotArtifact): string {
   const lines: string[] = [];
