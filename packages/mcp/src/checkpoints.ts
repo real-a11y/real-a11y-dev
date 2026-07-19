@@ -147,11 +147,21 @@ export function renderDiff(
     : "Checkpoint diff (vs. saved)";
   const header = `${title}: ${s.new} new, ${s.removed} fixed, ${s.changed} changed, ${s.unchanged} unchanged.`;
 
-  if (s.new + s.removed + s.changed === 0) {
+  const findingsChanged = s.new + s.removed + s.changed > 0;
+  const structuralChanged = diff.pages.some((p) => p.structural.length > 0);
+
+  // Only short-circuit when NOTHING moved. A deploy can leave every finding
+  // identical while reshuffling the page — suppressing the advisory structural
+  // summary there would silently drop the most useful signal in the
+  // cross-deploy workflow (and both tools promise that summary).
+  if (!findingsChanged && !structuralChanged) {
     return `${header}\nNo accessibility findings changed.`;
   }
 
   const out: string[] = [header];
+  if (!findingsChanged) {
+    out.push("", "No accessibility findings changed — but the structure did:");
+  }
   const pick = (entries: DiffEntry[], kind: DiffClass) =>
     entries.filter((e) => e.kind === kind);
 

@@ -19,13 +19,17 @@ const finding = (over: Partial<Finding> = {}): Finding => ({
   ...over,
 });
 
-const page = (name: string, findings: Finding[]): SnapshotPage =>
+const page = (
+  name: string,
+  findings: Finding[],
+  tree = "button",
+): SnapshotPage =>
   buildSnapshotPage(
     name,
     "https://example.com/",
     {
       findings,
-      tree: "button",
+      tree,
       outline: "(no headings)",
       tabOrder: "1. button",
     },
@@ -98,6 +102,17 @@ describe("renderDiff", () => {
     const out = renderDiff(diffCheckpointPages(before, after));
     expect(out).toMatch(/1 new/);
     expect(out).toMatch(/NEW — gates CI/);
+  });
+
+  it("still reports structural changes when no findings changed", () => {
+    // A deploy can reshuffle the page without adding a finding — the advisory
+    // structural summary is the whole signal there, so it must not be skipped.
+    const before = page("home", [finding()], "button");
+    const after = page("home", [finding()], 'button\nlink "Docs"');
+    const out = renderDiff(diffCheckpointPages(before, after));
+    expect(out).toMatch(/0 new, 0 fixed/);
+    expect(out).toMatch(/structure did/);
+    expect(out).toMatch(/Structural changes/);
   });
 
   it("reports a FIXED finding", () => {

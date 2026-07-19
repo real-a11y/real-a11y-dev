@@ -161,7 +161,7 @@ main
     strong "local dev server"
   paragraph "Every tool + parameters →"
     link "/packages/mcp/tools"
-  paragraph "This is a guide. For the full tool reference — all ten tools, their parameters, and when to reach for each — see the ."
+  paragraph "This is a guide. For the full tool reference — all sixteen tools, their parameters, and when to reach for each — see the ."
     link "tools reference"
   heading "Auditing a page behind a login" (level 2)
   paragraph "To audit a page only a logged-in user can see, save a browser session once, then point the server at it — the assistant never touches credentials."
