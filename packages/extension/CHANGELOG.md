@@ -25,6 +25,15 @@
   closes, not just the active one. Previously a background tab kept its
   screen curtain (with no UI to dismiss it) and kept drawing focus overlays
   after the panel was gone. ([#168])
+- Open the panel's inline text-entry box for **custom contenteditable text
+  widgets** — an ARIA `textbox`/`combobox`/`searchbox` built as a
+  `contenteditable` `<div>` (Slack's message box and search, Notion, Google
+  Docs, and other Quill/ProseMirror/Lexical editors). Double-clicking one
+  previously did nothing because the field-state read only understood native
+  `<input>`/`<textarea>`/`<select>`; it now also reads contenteditable hosts
+  (current text via `textContent`, never revealing a secret). Note the
+  actual text insertion into model-driven editors remains best-effort — see
+  `ActionDispatcher`. ([#178])
 
 ## 0.1.7
 
@@ -76,3 +85,4 @@ Earlier releases predate this changelog.
 [#151]: https://github.com/real-a11y/real-a11y-dev/pull/151
 [#161]: https://github.com/real-a11y/real-a11y-dev/pull/161
 [#168]: https://github.com/real-a11y/real-a11y-dev/pull/168
+[#178]: https://github.com/real-a11y/real-a11y-dev/pull/178

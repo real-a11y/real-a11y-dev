@@ -8,10 +8,10 @@ import {
   DomObserver,
   createPicker,
   getElementRefs,
-  isSensitiveField,
 } from "@real-a11y-dev/core";
 import type { TreeViewMode } from "@real-a11y-dev/core";
 
+import { computeFieldState } from "./field-state.js";
 import { isTrustedSender } from "./routing.js";
 import type { PanelToContent } from "./types.js";
 
@@ -262,39 +262,9 @@ chrome.runtime.onMessage.addListener(
           sendResponse({ success: false });
           break;
         }
-        const tag = el.tagName.toLowerCase();
-
-        if (tag === "select") {
-          const select = el as HTMLSelectElement;
-          // A payment select (e.g. autocomplete="cc-exp-month") is sensitive:
-          // keep the option list so the picker still renders, but don't reveal
-          // which one is currently chosen.
-          const sensitive = isSensitiveField(select);
-          const options = Array.from(select.options).map((opt) => ({
-            value: opt.value,
-            label: opt.textContent?.trim() || opt.value,
-            selected: sensitive ? false : opt.selected,
-          }));
-          sendResponse({
-            success: true,
-            type: "select",
-            value: sensitive ? "" : select.value,
-            options,
-          });
-        } else if (tag === "input" || tag === "textarea") {
-          const input = el as HTMLInputElement;
-          // Never read a secret back to the panel. The field can still be
-          // typed into (the panel overwrites), it just can't reveal what's
-          // already there.
-          sendResponse({
-            success: true,
-            type: input.type || "text",
-            value: isSensitiveField(input) ? "" : input.value,
-            placeholder: input.placeholder || "",
-          });
-        } else {
-          sendResponse({ success: false });
-        }
+        // Covers native <select>/<input>/<textarea> AND custom contenteditable
+        // text widgets (ARIA textbox/combobox/searchbox — Slack, Notion, etc.).
+        sendResponse(computeFieldState(el));
         break;
       }
 
