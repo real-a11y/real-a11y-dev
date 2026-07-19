@@ -149,3 +149,38 @@ test.describe("bad fixture — assertions should throw", () => {
     await expect(sn.assertDialogsLabeled()).rejects.toThrow();
   });
 });
+
+// ─── Contenteditable rich-text widgets (Slack-shaped) ────────────────────────
+// Real rich editors (Slack, Notion, Google Docs, Quill/ProseMirror/Lexical)
+// build their textbox/combobox on a contenteditable <div>, not a native
+// <input>. These assert the extractor sees them as the right ARIA widgets.
+
+test.describe("contenteditable rich-text widgets", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto(fixtureUrl("fixture-contenteditable.html"));
+  });
+
+  test("a contenteditable role=textbox serializes as a textbox (Slack message box)", async ({
+    page,
+  }) => {
+    const sn = await attach(page);
+    const snapshot = await sn.auditSnapshot();
+    expect(snapshot).toContain('textbox "Message to general"');
+  });
+
+  test("an editable (contenteditable) combobox serializes as a combobox (Slack search)", async ({
+    page,
+  }) => {
+    const sn = await attach(page);
+    const snapshot = await sn.auditSnapshot();
+    expect(snapshot).toContain('combobox "Search"');
+  });
+
+  test("a native <input role=combobox> serializes as a combobox (W3C APG example shape)", async ({
+    page,
+  }) => {
+    const sn = await attach(page);
+    const snapshot = await sn.auditSnapshot();
+    expect(snapshot).toContain('combobox "State"');
+  });
+});

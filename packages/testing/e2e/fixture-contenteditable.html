@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Contenteditable rich-text widgets</title>
+  </head>
+  <body>
+    <main>
+      <h1>Contenteditable rich-text widgets</h1>
+
+      <!--
+        Slack's message composer, replicated: an ARIA textbox hosted on a
+        contenteditable <div> (Quill's `.ql-editor`). This is the W3C APG
+        multi-line Textbox pattern — the case a native <input> can't express.
+        An empty Quill editor is `<p><br></p>`.
+      -->
+      <div
+        class="ql-editor"
+        contenteditable="true"
+        role="textbox"
+        dir="auto"
+        aria-label="Message to general"
+        aria-multiline="true"
+      >
+        <p><br /></p>
+      </div>
+
+      <!--
+        Slack's search box, replicated: an EDITABLE combobox (ARIA 1.2
+        editable-combobox pattern) hosted on a contenteditable <div>. You type
+        a query into it; it controls a popup listbox of suggestions.
+      -->
+      <div
+        class="ql-editor"
+        contenteditable="true"
+        role="combobox"
+        dir="auto"
+        aria-label="Search"
+        aria-autocomplete="list"
+        aria-expanded="false"
+        aria-controls="search-suggestions"
+        aria-multiline="false"
+      >
+        <p><br /></p>
+      </div>
+      <ul id="search-suggestions" role="listbox" aria-label="Suggestions"></ul>
+
+      <!--
+        W3C APG "Editable Combobox With List Autocomplete" example shape: a
+        NATIVE <input role="combobox">. Included for contrast — native inputs
+        were always classified as text fields via the input branch.
+      -->
+      <label for="state">State</label>
+      <input
+        id="state"
+        type="text"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded="false"
+        aria-controls="state-listbox"
+      />
+      <ul id="state-listbox" role="listbox" aria-label="States"></ul>
+    </main>
+  </body>
+</html>
