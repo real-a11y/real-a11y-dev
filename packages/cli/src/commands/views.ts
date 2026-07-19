@@ -6,6 +6,12 @@
  */
 
 import {
+  redactUrl,
+  sanitizeText,
+  type CleanSnapshot,
+} from "@real-a11y-dev/snapshot";
+
+import {
   parseFormat,
   parseListCategory,
   parseOpenOptions,
@@ -15,7 +21,6 @@ import {
 import { EXIT } from "../exit.js";
 import { progress, writeReport } from "../output.js";
 import { renderJson, type PageReport } from "../render/json.js";
-import { redactUrl, sanitizeText, type CleanSnapshot } from "../sanitize.js";
 import { callPage, createSession, openPage, snapshotPage } from "../session.js";
 
 import {

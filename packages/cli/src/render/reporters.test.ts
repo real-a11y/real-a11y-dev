@@ -1,10 +1,13 @@
 import { resolve } from "node:path";
 
 import type { Finding } from "@real-a11y-dev/audit";
-import { describe, expect, it } from "vitest";
 
-import { fingerprintFindings } from "../fingerprint.js";
-import { buildArtifact, type SnapshotPage } from "../snapshot-artifact.js";
+import {
+  buildArtifact,
+  fingerprintFindings,
+  type SnapshotPage,
+} from "@real-a11y-dev/snapshot";
+import { describe, expect, it } from "vitest";
 
 import { renderJsonl } from "./jsonl.js";
 import { renderJUnit } from "./junit.js";

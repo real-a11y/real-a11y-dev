@@ -16,6 +16,20 @@ import { createRequire } from "node:module";
 import { resolve } from "node:path";
 
 import {
+  applyBaseline,
+  buildArtifact,
+  buildBaseline,
+  DEFAULT_BASELINE_PATH,
+  fingerprintFindings,
+  loadBaseline,
+  redactUrl,
+  serializeArtifact,
+  serializeBaseline,
+  type Baseline,
+  type SnapshotPage,
+} from "@real-a11y-dev/snapshot";
+
+import {
   parseFailOn,
   parseFormat,
   parseOnly,
@@ -23,29 +37,17 @@ import {
   parseRules,
   type CommandFn,
 } from "../args.js";
-import {
-  applyBaseline,
-  buildBaseline,
-  DEFAULT_BASELINE_PATH,
-  loadBaseline,
-  serializeBaseline,
-  type Baseline,
-} from "../baseline.js";
 import { type ConfigPage } from "../config.js";
 import { CliError, EXIT, exceedsThreshold } from "../exit.js";
-import { fingerprintFindings } from "../fingerprint.js";
+
 import { progress, writeReport } from "../output.js";
 import { renderJsonl } from "../render/jsonl.js";
 import { renderJUnit } from "../render/junit.js";
 import { renderSnapshotMarkdown } from "../render/md.js";
 import { renderSarif } from "../render/sarif.js";
-import { redactUrl } from "../sanitize.js";
+
 import { createSession, openPage, snapshotPage } from "../session.js";
-import {
-  buildArtifact,
-  serializeArtifact,
-  type SnapshotPage,
-} from "../snapshot-artifact.js";
+
 import { assertAllowedUrl, normalizeTarget } from "../url-gate.js";
 
 import { resolvePageList, sessionFlags, type Target } from "./common.js";

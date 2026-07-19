@@ -22,8 +22,9 @@ Real A11y is a monorepo of small, composable packages built around one extractio
 | [`@real-a11y-dev/serialize`](https://github.com/real-a11y/real-a11y-dev/tree/main/packages/serialize) | Deterministic text serialization of the tree — full tree, heading outline, and tab sequence. **No UI.** | `@real-a11y-dev/core` |
 | [`@real-a11y-dev/validate`](https://github.com/real-a11y/real-a11y-dev/tree/main/packages/validate) | ARIA-semantics validation — per-node rules plus tree-level relationship checks, backed by `aria-query` so it tracks the spec. Standalone. | `aria-query` |
 | [`@real-a11y-dev/audit`](https://github.com/real-a11y/real-a11y-dev/tree/main/packages/audit) | Audit engine — the `Finding` data model, the a11y rule set, `collectFindings`, and the `assert*` primitives. The one place a finding is defined and detected; `testing`, `mcp`, and `cli` all render what it produces. **No UI.** | `@real-a11y-dev/core` |
-| [`@real-a11y-dev/mcp`](/packages/mcp) | Model Context Protocol server exposing `audit_page` / `get_semantic_tree` / `inspect_page` etc. to AI agents (bin `real-a11y-mcp`, plus a `./browser` subpath export). | `@real-a11y-dev/testing`, `@modelcontextprotocol/sdk` (optional peer: `playwright`) |
-| [`@real-a11y-dev/cli`](/packages/cli) | The `real-a11y` shell command — audits, perception views (`tree` / `outline` / `tabs` / `list` / `inspect`), and `snapshot` + `diff` from the shell and CI. | `@real-a11y-dev/testing`, `@real-a11y-dev/mcp` (optional peer: `playwright`) |
+| [`@real-a11y-dev/snapshot`](https://github.com/real-a11y/real-a11y-dev/tree/main/packages/snapshot) | Snapshot engine — deterministic finding fingerprints, the diffable `a11y-snapshot.json` artifact, the findings/views/unified diff, and baselines. Node-only; the single place a snapshot is captured and compared, so the CLI and MCP diff identically. **No UI.** | `@real-a11y-dev/audit`, `@real-a11y-dev/core` |
+| [`@real-a11y-dev/mcp`](/packages/mcp) | Model Context Protocol server exposing `audit_page` / `get_semantic_tree` / `inspect_page` etc. to AI agents (bin `real-a11y-mcp`, plus a `./browser` subpath export). | `@real-a11y-dev/audit`, `@real-a11y-dev/testing`, `@modelcontextprotocol/sdk` (optional peer: `playwright`) |
+| [`@real-a11y-dev/cli`](/packages/cli) | The `real-a11y` shell command — audits, perception views (`tree` / `outline` / `tabs` / `list` / `inspect`), and `snapshot` + `diff` from the shell and CI. A command, not a library — the programmatic engine lives in `snapshot`. | `@real-a11y-dev/audit`, `@real-a11y-dev/snapshot`, `@real-a11y-dev/mcp` (optional peer: `playwright`) |
 
 A private `@real-a11y-dev/semantic-navigator-extension` workspace builds the Chrome extension using the same engine — unlike the packages above, it is not published to npm.
 
@@ -32,34 +33,29 @@ A private `@real-a11y-dev/semantic-navigator-extension` workspace builds the Chr
 ## Dependency graph
 
 ```
-        ┌───────────────────────── @real-a11y-dev/core ─────────────────────────┐
-        │                     (extraction + queries, no UI)                      │
-        │                  │                    │                    │           │
-        ▼                  ▼                    ▼                    ▼            │
-  @real-a11y-dev/    @real-a11y-dev/      @real-a11y-dev/      @real-a11y-dev/testing
-  semantic-nav-ui    serialize            audit                (snapshots + interaction
-  (Preact view)      (deterministic       (Finding model,       diff; re-exports audit's
-        │             text)                rules, collect,       assert*/collectFindings;
-        │                                  assert*)              Playwright adapter)
-   ┌────┴──────┐                                                          │
-   ▼           ▼                                              ┌───────────┴───────────┐
-  inspector   storybook-addon                                 ▼                       ▼
-  (fw-        (preview +                             @real-a11y-dev/mcp      @real-a11y-dev/cli
-   agnostic)   manager)                              (MCP server for         (real-a11y shell;
-   │                                                  AI agents)              deps testing + mcp)
-   ▼                                                         │                        ▲
-  @real-a11y-dev/react                                       └────────────────────────┘
-  (<SemanticNavigator /> + hooks)                              cli also wraps mcp
+  @real-a11y-dev/core — extraction, queries, role constants (no UI, no deps)
+        │
+        ├─▶ semantic-navigator-ui (Preact)  ─▶ inspector ─▶ react
+        │                                    └─▶ storybook-addon
+        ├─▶ serialize   (deterministic text)
+        ├─▶ validate    (aria-query ARIA validity — standalone)
+        └─▶ audit       (Finding model, rules, collectFindings, assert*)
+                 │
+                 ├─▶ snapshot   (fingerprints, artifact, findings/views diff, baselines — Node-only)
+                 ├─▶ testing    (matchers, interaction diff, Playwright adapter)
+                 ├─▶ mcp        (MCP server for AI agents)  ── also depends on → testing (page-bundle)
+                 └─▶ cli        (the real-a11y shell, bin-only)  ── also depends on → snapshot, mcp
 
-  testing depends on { core, serialize, validate, audit }.
-  mcp and cli reach the audit engine through testing's re-export (no direct audit dep yet).
+  cli → { audit, snapshot, mcp }        mcp → { audit, testing }
+  audit is imported directly everywhere — no reaching the engine through the test-helper package.
+  snapshot is Node-only (node:crypto) and never enters the page bundle.
   Standalone:  @real-a11y-dev/validate — aria-query-backed ARIA validation, no internal deps.
   Private:     @real-a11y-dev/semantic-navigator-extension — Chrome extension, not published.
 ```
 
 Two observations:
 
-1. **`@real-a11y-dev/testing` has zero UI dependency.** Assertions and snapshots only read the tree; they never render. That's what makes them safe for jsdom and fast enough to run in every unit test.
+1. **`@real-a11y-dev/testing` and `@real-a11y-dev/snapshot` have zero UI dependency.** Assertions, snapshots, and diffs only read the tree or operate on data; they never render. That's what makes them safe for jsdom and Node and fast enough to run in every unit test.
 2. **The UI package is bundled into consumers.** `inspector`, `react`, and `storybook-addon` each pull `@real-a11y-dev/semantic-navigator-ui` through `noExternal` in tsup, shipping self-contained artifacts. Consumers only ever install the top-level package; they never reason about Preact versions or tree-view internals.
 
 ---
@@ -77,6 +73,9 @@ React 18 concurrent-mode safety requires `useSyncExternalStore`; SSR (Next.js Ap
 
 ### The findings engine has one home
 A finding — "this button has no accessible name" — is defined and detected in exactly one place: `@real-a11y-dev/audit`. The `Finding` type, the rule set, `collectFindings`, and the `assert*` primitives all live there, depending on nothing but `core`. Everything downstream only *renders* what the engine produces: `testing` re-exports it for test authors, and `mcp`/`cli` format it for agents and the shell. Keeping detection separate from presentation means a new rule is written once and every surface reports it, and a production package like `cli` never has to pull in a test-helper package to reach the engine.
+
+### The snapshot engine has one home
+Like a finding, a _snapshot_ — the diffable `a11y-snapshot.json`, its frozen `v1:` fingerprints, and the diff over them — is built and compared in exactly one place: `@real-a11y-dev/snapshot`, Node-only and depending on nothing but `audit` and `core`. The CLI and the MCP server both capture through it and diff through it, so a snapshot taken by one and compared by the other is byte-for-byte identical: fingerprint parity stops being a discipline ("both surfaces must build the artifact the same way") and becomes structural (there is only one place the code lives). This is also why the CLI is a command, not a library — anyone who wants the engine programmatically imports `snapshot` directly, and the CLI ships just its `bin`.
 
 ### UI is bundled, not shipped separately
 In theory `@real-a11y-dev/semantic-navigator-ui` could be a normal dependency. In practice consumers always want the exact tree-view version the parent package was tested against. Bundling via `noExternal` eliminates an entire class of peer-range support questions and lets the UI refactor freely inside any release that also updates its consumers.

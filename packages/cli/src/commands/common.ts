@@ -1,10 +1,11 @@
 /** Shared target/flag plumbing for the browser-driving commands. */
 
+import { redactUrl } from "@real-a11y-dev/snapshot";
+
 import type { FlagValues } from "../args.js";
 import { resolveConfig, type ConfigPage } from "../config.js";
 import { CliError } from "../exit.js";
 import { assertWritableTarget } from "../output.js";
-import { redactUrl } from "../sanitize.js";
 import type { SessionFlags } from "../session.js";
 import { validateStorageStatePath } from "../storage-state.js";
 import { assertAllowedUrl, normalizeTarget } from "../url-gate.js";

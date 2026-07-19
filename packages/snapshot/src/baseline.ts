@@ -19,7 +19,7 @@ import { resolve } from "node:path";
 import type { Finding } from "@real-a11y-dev/audit";
 
 import { diffFindings } from "./diff/findings-diff.js";
-import { CliError } from "./exit.js";
+import { SnapshotFormatError } from "./errors.js";
 import type { FingerprintId, FingerprintedFinding } from "./fingerprint.js";
 
 export const BASELINE_SCHEMA_VERSION = 1;
@@ -100,7 +100,7 @@ export function loadBaseline(path: string): Baseline {
   try {
     raw = readFileSync(abs, "utf8");
   } catch {
-    throw new CliError(
+    throw new SnapshotFormatError(
       `baseline file not found or unreadable: ${abs}`,
       "create it first: real-a11y snapshot --update-baseline",
     );
@@ -109,20 +109,20 @@ export function loadBaseline(path: string): Baseline {
   try {
     parsed = JSON.parse(raw);
   } catch {
-    throw new CliError(`baseline is not valid JSON: ${abs}`);
+    throw new SnapshotFormatError(`baseline is not valid JSON: ${abs}`);
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    throw new CliError(`baseline must be a JSON object: ${abs}`);
+    throw new SnapshotFormatError(`baseline must be a JSON object: ${abs}`);
   }
   const b = parsed as Partial<Baseline>;
   if (b.schemaVersion !== BASELINE_SCHEMA_VERSION) {
-    throw new CliError(
+    throw new SnapshotFormatError(
       `baseline has schemaVersion ${String(b.schemaVersion)} — this build reads ${BASELINE_SCHEMA_VERSION}.`,
       "regenerate it: real-a11y snapshot --update-baseline",
     );
   }
   if (!Array.isArray(b.entries)) {
-    throw new CliError(`baseline has no "entries" array: ${abs}`);
+    throw new SnapshotFormatError(`baseline has no "entries" array: ${abs}`);
   }
   for (const e of b.entries) {
     if (
@@ -132,7 +132,7 @@ export function loadBaseline(path: string): Baseline {
       typeof (e as BaselineEntry).page !== "string" ||
       !Array.isArray((e as BaselineEntry).id)
     ) {
-      throw new CliError(`baseline has a malformed entry: ${abs}`);
+      throw new SnapshotFormatError(`baseline has a malformed entry: ${abs}`);
     }
   }
   return b as Baseline;

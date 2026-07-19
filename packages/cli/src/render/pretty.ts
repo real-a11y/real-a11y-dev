@@ -5,7 +5,7 @@
  * outcome is always findable. ASCII markers only; LF only; deterministic.
  */
 
-import type { FingerprintedFinding } from "../fingerprint.js";
+import type { FingerprintedFinding } from "@real-a11y-dev/snapshot";
 
 import { palette } from "./color.js";
 import { summarizeAll, type PageReport } from "./json.js";

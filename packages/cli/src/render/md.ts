@@ -6,7 +6,7 @@
  * accessible name from ever rendering as markdown).
  */
 
-import type { SnapshotArtifact, SnapshotPage } from "../snapshot-artifact.js";
+import type { SnapshotArtifact, SnapshotPage } from "@real-a11y-dev/snapshot";
 
 /** Which axis of the report to render; undefined = both. Mirrors the diff
  * renderer's filter — an OUTPUT concern only (the --fail-on gate always runs

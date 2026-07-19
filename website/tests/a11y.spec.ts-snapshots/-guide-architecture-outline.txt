@@ -16,6 +16,7 @@ h1 Architecture
     h3 React-specific concerns live in @real-a11y-dev/react
     h3 Testing is fully headless
     h3 The findings engine has one home
+    h3 The snapshot engine has one home
     h3 UI is bundled, not shipped separately
   h2 Build pipeline per package
   h2 The SemanticNode data model

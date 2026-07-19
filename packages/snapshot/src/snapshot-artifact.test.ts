@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { CliError } from "./exit.js";
+import { SnapshotFormatError } from "./errors.js";
 import { fingerprintFindings } from "./fingerprint.js";
 import {
   ARTIFACT_SCHEMA_VERSION,
@@ -53,9 +53,11 @@ describe("parseSnapshotArtifact", () => {
       parseSnapshotArtifact(json);
       expect.unreachable();
     } catch (err) {
-      expect(err).toBeInstanceOf(CliError);
-      expect((err as CliError).message).toContain("schemaVersion 999");
-      expect((err as CliError).hint).toContain("real-a11y snapshot");
+      expect(err).toBeInstanceOf(SnapshotFormatError);
+      expect((err as SnapshotFormatError).message).toContain(
+        "schemaVersion 999",
+      );
+      expect((err as SnapshotFormatError).hint).toContain("real-a11y snapshot");
     }
   });
 
@@ -113,9 +115,11 @@ describe("partial artifacts (--only)", () => {
         assertFullArtifact(buildArtifact([page()], { ...meta, only }), "base");
         expect.unreachable();
       } catch (err) {
-        expect(err).toBeInstanceOf(CliError);
-        expect((err as CliError).message).toContain(`--only ${only}`);
-        expect((err as CliError).hint).toContain("without --only");
+        expect(err).toBeInstanceOf(SnapshotFormatError);
+        expect((err as SnapshotFormatError).message).toContain(
+          `--only ${only}`,
+        );
+        expect((err as SnapshotFormatError).hint).toContain("without --only");
       }
     }
   });

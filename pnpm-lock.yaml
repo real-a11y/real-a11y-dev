@@ -267,12 +267,12 @@ importers:
       '@real-a11y-dev/audit':
         specifier: workspace:*
         version: link:../audit
-      '@real-a11y-dev/core':
-        specifier: workspace:*
-        version: link:../core
       '@real-a11y-dev/mcp':
         specifier: workspace:*
         version: link:../mcp
+      '@real-a11y-dev/snapshot':
+        specifier: workspace:*
+        version: link:../snapshot
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
@@ -484,6 +484,28 @@ importers:
       jsdom:
         specifier: ^29.0.2
         version: 29.0.2
+      tsup:
+        specifier: ^8.3.0
+        version: 8.5.1(jiti@2.6.1)(postcss@8.5.19)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.7
+        version: 3.2.7(@types/node@22.19.17)(@vitest/browser@3.2.7)(jiti@2.6.1)(jsdom@29.0.2)(lightningcss@1.32.0)(yaml@2.9.0)
+
+  packages/snapshot:
+    dependencies:
+      '@real-a11y-dev/audit':
+        specifier: workspace:*
+        version: link:../audit
+      '@real-a11y-dev/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.17
       tsup:
         specifier: ^8.3.0
         version: 8.5.1(jiti@2.6.1)(postcss@8.5.19)(typescript@5.9.3)(yaml@2.9.0)

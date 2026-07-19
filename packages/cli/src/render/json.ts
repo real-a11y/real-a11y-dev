@@ -8,7 +8,7 @@
 
 import type { Finding } from "@real-a11y-dev/audit";
 
-import type { FingerprintedFinding } from "../fingerprint.js";
+import type { FingerprintedFinding } from "@real-a11y-dev/snapshot";
 
 export const JSON_SCHEMA_VERSION = 1;
 
