@@ -115,6 +115,18 @@ describe("serializeOutline", () => {
     document.body.innerHTML = `<p>no headings here</p>`;
     expect(serializeOutline(document.body)).toBe("(no headings)");
   });
+
+  it("redacts EVERY occurrence in a heading name, not just the first", () => {
+    // Regression: `serializeOutline` accepted `redact` but emitted `e.name` raw,
+    // so the option was a silent no-op — headings leaked user data / timestamps
+    // into what is meant to be a committable, PII-free outline. And once applied,
+    // it must (like the tree serializer) mask every match, not just the first.
+    document.body.innerHTML = `<h1>Paid $28.50 then $2.00</h1>`;
+    const out = serializeOutline(document.body, { redact: [/\$[\d.]+/] });
+    expect(out).toContain("h1 Paid [REDACTED] then [REDACTED]");
+    expect(out).not.toContain("$28.50");
+    expect(out).not.toContain("$2.00");
+  });
 });
 
 describe("serializeTabSequence", () => {
@@ -123,6 +135,18 @@ describe("serializeTabSequence", () => {
     const out = serializeTabSequence(document.body);
     expect(out).toContain('01. link "Home"');
     expect(out).toContain('02. button "Go"');
+  });
+
+  it("redacts EVERY occurrence in an accessible name, not just the first", () => {
+    // Regression: `serializeTabSequence` accepted `redact` but emitted
+    // `n.a11y.name` raw, so the option was a silent no-op — the tab-order report
+    // leaked user data. And once applied, it must mask every match, not just the
+    // first.
+    document.body.innerHTML = `<button aria-label="Paid $28.50 then $2.00">x</button>`;
+    const out = serializeTabSequence(document.body, { redact: [/\$[\d.]+/] });
+    expect(out).toContain('01. button "Paid [REDACTED] then [REDACTED]"');
+    expect(out).not.toContain("$28.50");
+    expect(out).not.toContain("$2.00");
   });
 });
 

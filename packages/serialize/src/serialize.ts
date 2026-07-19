@@ -153,6 +153,7 @@ export function serializeOutline(
   options: SerializeOptions = {},
 ): string {
   const { markFocus = true } = options;
+  const redact = ensureGlobalFlags(options.redact);
   const tree = toTree(input);
   const focusedId = markFocus ? tree.focusedId : undefined;
   const entries = getOutline(tree);
@@ -160,7 +161,8 @@ export function serializeOutline(
   return entries
     .map((e) => {
       const marker = e.id === focusedId ? " [focused]" : "";
-      return `${"  ".repeat(Math.max(0, e.level - 1))}h${e.level} ${e.name}${marker}`;
+      const name = redactText(e.name, redact);
+      return `${"  ".repeat(Math.max(0, e.level - 1))}h${e.level} ${name}${marker}`;
     })
     .join("\n");
 }
@@ -175,13 +177,15 @@ export function serializeTabSequence(
   options: SerializeOptions = {},
 ): string {
   const { markFocus = true } = options;
+  const redact = ensureGlobalFlags(options.redact);
   const tree = toTree(input);
   const focusedId = markFocus ? tree.focusedId : undefined;
   const seq = getTabSequence(tree);
   if (seq.length === 0) return "(nothing focusable)";
   return seq
     .map((n, i) => {
-      const name = n.a11y.name ? ` "${n.a11y.name}"` : "";
+      const redacted = redactText(n.a11y.name, redact);
+      const name = redacted ? ` "${redacted}"` : "";
       const marker = n.id === focusedId ? " [focused]" : "";
       return `${String(i + 1).padStart(2, "0")}. ${n.a11y.role}${name}${marker}`;
     })
