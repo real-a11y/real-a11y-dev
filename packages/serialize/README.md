@@ -77,3 +77,25 @@ focus: button "Save" → (none)          ← focus was lost
 Focus is supplied by the caller because a tree captured earlier can't answer
 "what was focused then" after the fact (`ExtractionResult.focusedId` records it
 at capture time).
+
+## `verifyContract(contract, target, options?)`
+
+Assert that a serialized tree **satisfies an authored contract** — a partial
+tree in the same `role "name" (level N)` grammar. Containment by default (extra
+nodes in the target are allowed, with ancestor semantics), `{ strict: true }`
+for exact equality. Pure text in, verdict out:
+
+```ts
+import { verifyContract, serializeTree } from "@real-a11y-dev/serialize";
+
+const { pass, message } = verifyContract(
+  `main\n  heading "Sign in" (level 1)\n  button "Sign in"`,
+  serializeTree(document.body),
+);
+```
+
+The [`toMatchA11yContract`](https://real-a11y.dev/packages/testing/matchers)
+matcher wraps this for tests; because the engine is plain text-in/verdict-out,
+the same contract file can also gate a build from a CLI or a saved snapshot.
+`parseA11yTree` (parse the grammar into nodes) and `foldTypography` (the
+name-comparison normalizer) are exported alongside it.

@@ -1,6 +1,5 @@
 import type { NodeChange, SemanticNode, TreeDiff } from "@real-a11y-dev/core";
-
-import { foldTypography } from "./normalize.js";
+import { foldTypography } from "@real-a11y-dev/serialize";
 
 /** Match a diffed node by role and (optionally) accessible name. */
 export interface NodeMatcher {

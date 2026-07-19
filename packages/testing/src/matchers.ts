@@ -29,8 +29,11 @@ import type { SemanticNode } from "@real-a11y-dev/core";
 import { getTabSequence } from "@real-a11y-dev/core";
 import {
   extract,
+  foldTypography,
   serializeTree,
+  verifyContract,
   type SerializeOptions,
+  type VerifyContractOptions,
 } from "@real-a11y-dev/serialize";
 import {
   validateNode,
@@ -38,7 +41,6 @@ import {
   type ValidatedNode,
 } from "@real-a11y-dev/validate";
 
-import { foldTypography } from "./normalize.js";
 import {
   a11ySnapshotSerializer,
   boxSnapshot,
@@ -209,6 +211,42 @@ function toBeValidA11yTree(received: unknown): MatcherResult {
   };
 }
 
+// ─── contract matcher ────────────────────────────────────────────────────────
+
+/**
+ * Assert a DOM root (extracted on the spot) or an already-serialized tree
+ * string SATISFIES an authored a11y contract — containment by default (extra
+ * nodes allowed), `{ strict: true }` for exact equality. Backed by
+ * `verifyContract` in `@real-a11y-dev/serialize`.
+ */
+function toMatchA11yContract(
+  received: unknown,
+  contractText: string,
+  options: VerifyContractOptions = {},
+): MatcherResult {
+  let targetText: string;
+  if (received instanceof Element) {
+    targetText = serializeTree(received);
+  } else if (typeof received === "string") {
+    targetText = received;
+  } else {
+    return {
+      pass: false,
+      message: () =>
+        `toMatchA11yContract: expected a DOM Element or a serialized tree string, received ${describe(received)}`,
+    };
+  }
+
+  const result = verifyContract(contractText, targetText, options);
+  return {
+    pass: result.pass,
+    message: () =>
+      result.pass
+        ? `expected the tree NOT to satisfy the a11y contract, but all ${result.total} contract nodes matched`
+        : result.message,
+  };
+}
+
 // ─── the matcher bundle ──────────────────────────────────────────────────────
 
 export const a11yMatchers = {
@@ -238,6 +276,7 @@ export const a11yMatchers = {
   },
   toHaveTabSequence,
   toBeValidA11yTree,
+  toMatchA11yContract,
 };
 
 // ─── snapshot serializer ─────────────────────────────────────────────────────
@@ -302,6 +341,12 @@ export interface A11yMatchers<R = unknown> {
   toHaveTabSequence(expected: string[]): R;
   /** The extracted a11y tree has no ARIA errors (roles, names, relationships). */
   toBeValidA11yTree(): R;
+  /**
+   * The tree (a DOM Element, extracted on the spot, or a serialized string)
+   * satisfies an authored a11y contract — containment by default, `strict` for
+   * exact equality.
+   */
+  toMatchA11yContract(contract: string, options?: VerifyContractOptions): R;
 }
 
 declare global {

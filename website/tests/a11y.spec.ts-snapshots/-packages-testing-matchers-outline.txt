@@ -15,6 +15,7 @@ h1 Matchers
   h2 Assertion matchers
   h2 toBeValidA11yTree()
   h2 toHaveTabSequence(expected)
+  h2 toMatchA11yContract(contract, options?)
   h2 a11ySnapshot(root, options?) — snapshot serializer
     h3 a11ySnapshot vs auditSnapshot
     h3 Modal scoping in snapshots

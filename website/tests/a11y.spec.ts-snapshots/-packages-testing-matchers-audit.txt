@@ -102,6 +102,8 @@ navigation "On this page"
     listitem
       link "toHaveTabSequence(expected)"
     listitem
+      link "toMatchA11yContract(contract, options?)"
+    listitem
       link "a11ySnapshot(root, options?) — snapshot serializer"
     listitem
       link "Vitest vs Jest type augmentation"
@@ -218,6 +220,49 @@ main
     strong "typographic punctuation normalized"
     code "button "Don't save""
     code "Don’t"
+  heading "toMatchA11yContract(contract, options?)" (level 2)
+    code "toMatchA11yContract(contract, options?)"
+  paragraph "Asserts the tree — a partial a11y tree, written in the same grammar the snapshots use. Think of it as the of accessibility trees: unlike a full snapshot, the contract lists only the nodes you care about, and ."
+    strong "satisfies an authored contract"
+    code "role "name" (level N)"
+    code "toMatchObject"
+    strong "extra nodes in the implementation are allowed"
+  button "Copy Code"
+  code
+  paragraph "Matching is :"
+    strong "containment with ancestor semantics"
+  list
+    listitem "every contract node must appear with the same role (and name / / when the contract specifies them — an );"
+      code "(level N)"
+      code "[focused]"
+      strong "omitted name matches any name"
+    listitem "each node must sit somewhere its contract parent's match — intermediate wrappers in the implementation are fine, so matches even when the real markup nests it in a ;"
+      strong "under"
+      code "textbox "Email address""
+      code "group "Credentials""
+    listitem "contract nodes must appear in document order;"
+    listitem "extra target nodes are always allowed."
+  paragraph "That resilience is the point: a contract survives the noise a real page accumulates, so it stays green through cosmetic churn and fails only on a regression — a shipped as a , a heading demoted, a field that lost its label. When it fails, the message pinpoints the first missing node and why:"
+    strong "structural"
+    code "<button>"
+    code "<div onclick>"
+  button "Copy Code"
+  code
+  paragraph "can be a DOM Element (extracted on the spot) (a committed artifact). Names fold typographic punctuation like does, so a contract typed with plain quotes matches curly-quote labels. A contract may carry comments and a frontmatter block (e.g. a source URL) — both are ignored for matching."
+    strong "Received"
+    strong "or an already-serialized tree string"
+    code "auditSnapshot"
+    code "toHaveTabSequence"
+    code "#"
+    code "---"
+  paragraph "switches to exact tree equality — the contract behaves like a committed snapshot baseline (and, unlike containment, compares names byte-exact). Use it only where you truly render a component in isolation and nothing else should be present."
+    strong
+      code "{ strict: true }"
+  button "Copy Code"
+  code
+  paragraph "The underlying engine is in (pure text-in → verdict-out), so the same contract file can gate a build from a CLI or a saved snapshot, not just a live test."
+    code "verifyContract"
+    code "@real-a11y-dev/serialize"
   heading "a11ySnapshot(root, options?) — snapshot serializer" (level 2)
     code "a11ySnapshot(root, options?)"
   paragraph "Wrap a DOM root (or a pre-extracted tree) so / render the instead of a DOM dump — fully native to each framework's snapshot tooling (/, obsolete detection all work)."

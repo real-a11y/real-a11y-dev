@@ -1,6 +1,6 @@
 ---
 title: "Matchers — @real-a11y-dev/testing"
-description: Custom expect matchers for Vitest and Jest — toHaveNoUnlabeledInteractive, toHaveValidHeadingOrder, toHaveTabSequence — plus the a11ySnapshot serializer.
+description: Custom expect matchers for Vitest and Jest — toHaveNoUnlabeledInteractive, toHaveValidHeadingOrder, toHaveTabSequence, toMatchA11yContract — plus the a11ySnapshot serializer.
 ---
 
 # Matchers
@@ -128,6 +128,61 @@ expect(container).toHaveTabSequence(['button "Cancel"', 'button "Delete"']);
 ```
 
 Names are matched with **typographic punctuation normalized**, so a plain token like `button "Don't save"` matches a label the page renders with a curly apostrophe (`Don’t`). Curly quotes, the ellipsis character, en/em dashes, and non-breaking spaces all fold to their ASCII forms for the comparison — you never have to paste smart quotes to make a token match. (Roles and everything else compare exactly; only accessible-name typography is folded.)
+
+## `toMatchA11yContract(contract, options?)`
+
+Asserts the tree **satisfies an authored contract** — a partial a11y tree, written in the same `role "name" (level N)` grammar the snapshots use. Think of it as the `toMatchObject` of accessibility trees: unlike a full snapshot, the contract lists only the nodes you care about, and **extra nodes in the implementation are allowed**.
+
+```ts
+// The tree must CONTAIN this structure, in this order, nested this way —
+// but a skip link, a cookie banner, or extra wrappers don't break it.
+expect(container).toMatchA11yContract(`
+  main
+    heading "Sign in" (level 1)
+    form
+      textbox "Email address"
+      textbox "Password"
+      button "Sign in"
+    link "Forgot password?"
+`);
+```
+
+Matching is **containment with ancestor semantics**:
+
+- every contract node must appear with the same role (and name / `(level N)` / `[focused]` when the contract specifies them — an **omitted name matches any name**);
+- each node must sit somewhere **under** its contract parent's match — intermediate wrappers in the implementation are fine, so `textbox "Email address"` matches even when the real markup nests it in a `group "Credentials"`;
+- contract nodes must appear in document order;
+- extra target nodes are always allowed.
+
+That resilience is the point: a contract survives the noise a real page accumulates, so it stays green through cosmetic churn and fails only on a **structural** regression — a `<button>` shipped as a `<div onclick>`, a heading demoted, a field that lost its label. When it fails, the message pinpoints the first missing node and why:
+
+```
+a11y contract not satisfied: matched 5/7 nodes.
+
+  ✓ main   (line 5)
+  ✓   heading "Sign in" (level 1)   (line 6)
+  ✓   form   (line 7)
+  ✓     textbox "Email address"   (line 9)
+  ✓     textbox "Password"   (line 10)
+  ✖     button "Sign in"   ← NOT FOUND
+  ·   link "Forgot password?"
+
+  ✖ button "Sign in": not found under form (matched line 7), after textbox "Password" (line 10).
+```
+
+**Received** can be a DOM Element (extracted on the spot) **or an already-serialized tree string** (a committed `auditSnapshot` artifact). Names fold typographic punctuation like `toHaveTabSequence` does, so a contract typed with plain quotes matches curly-quote labels. A contract may carry `#` comments and a `---` frontmatter block (e.g. a source URL) — both are ignored for matching.
+
+**`{ strict: true }`** switches to exact tree equality — the contract behaves like a committed snapshot baseline (and, unlike containment, compares names byte-exact). Use it only where you truly render a component in isolation and nothing else should be present.
+
+```ts
+// containment: everything listed must be present (default)
+expect(container).toMatchA11yContract(contract);
+
+// strict: the tree must equal the contract exactly, nothing more
+expect(inIsolation).toMatchA11yContract(contract, { strict: true });
+```
+
+The underlying engine is `verifyContract` in `@real-a11y-dev/serialize` (pure text-in → verdict-out), so the same contract file can gate a build from a CLI or a saved snapshot, not just a live test.
 
 ## `a11ySnapshot(root, options?)` — snapshot serializer
 
