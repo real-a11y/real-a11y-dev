@@ -19,10 +19,16 @@ concurrency:
 jobs:
   # Primary correctness gate: build + typecheck + format + lint + tests +
   # the testing example's audit snapshots + the runnable npm-side examples.
-  # Matrixed across Node 20 (the engines.node floor) and 22 (the next LTS),
-  # and across Linux + macOS so we catch path/EOL surprises early. Windows
-  # is intentionally skipped — the contributor base is Linux/macOS, the
-  # extension only ships through Chrome, and CI cost grows fast on a 3x3.
+  # Matrixed across Node 20 (the dev default + engines floor) and 22, on Linux
+  # + macOS so we catch path/EOL surprises early. Windows is intentionally
+  # skipped — the contributor base is Linux/macOS, the extension only ships
+  # through Chrome, and CI cost grows fast on a 3x3.
+  # Node 24 is NOT here because this job builds the docs site, and VitePress 1.6
+  # throws ERR_REQUIRE_CYCLE_MODULE on Node's newer require(esm) cycle rule —
+  # present in current 24.x AND the newest 22.x (fixed only in alpha VitePress
+  # 2.0). CI's `22` still resolves to an older, working 22.x; if that ever
+  # advances past the break, drop 22 here. The docs build itself needs Node 20.
+  # The libraries are Node-24 clean and covered by `packages-node24` below.
   verify:
     strategy:
       fail-fast: false
@@ -215,6 +221,34 @@ jobs:
           path: website/playwright-report/
           retention-days: 7
 
+  # Node 24 (current Active LTS) coverage for the LIBRARIES only. The `verify`
+  # matrix stops at 22 because it builds the docs site, which VitePress can't do
+  # on Node 24 yet (see that job's note). The packages themselves are Node-24
+  # clean, so exercise them here: the root `build`/`typecheck`/`test` scripts
+  # already exclude the website + examples, so this is a pure library lane. When
+  # VitePress 2 ships stable and the docs build on 24, fold 24 into `verify` and
+  # delete this job.
+  packages-node24:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build, typecheck, and test the libraries on Node 24
+        run: |
+          pnpm build
+          pnpm typecheck
+          pnpm test
+
   # Require a changeset whenever a *published* package's source changes, so a
   # release's changelog and version bump never silently go missing. We check
   # the PR's own diff rather than `changeset status`: the packages are `linked`
@@ -255,11 +289,11 @@ jobs:
   test:
     if: always()
     runs-on: ubuntu-latest
-    needs: [verify, e2e, examples-dev, website-a11y, changeset]
+    needs: [verify, packages-node24, e2e, examples-dev, website-a11y, changeset]
     steps:
       - name: Aggregate result
         run: |
-          if [ "${{ needs.verify.result }}" != "success" ] || [ "${{ needs.e2e.result }}" != "success" ] || [ "${{ needs.examples-dev.result }}" != "success" ] || [ "${{ needs.website-a11y.result }}" != "success" ] || [ "${{ needs.changeset.result }}" != "success" ]; then
-            echo "verify=${{ needs.verify.result }} e2e=${{ needs.e2e.result }} examples-dev=${{ needs.examples-dev.result }} website-a11y=${{ needs.website-a11y.result }} changeset=${{ needs.changeset.result }}"
+          if [ "${{ needs.verify.result }}" != "success" ] || [ "${{ needs.packages-node24.result }}" != "success" ] || [ "${{ needs.e2e.result }}" != "success" ] || [ "${{ needs.examples-dev.result }}" != "success" ] || [ "${{ needs.website-a11y.result }}" != "success" ] || [ "${{ needs.changeset.result }}" != "success" ]; then
+            echo "verify=${{ needs.verify.result }} packages-node24=${{ needs.packages-node24.result }} e2e=${{ needs.e2e.result }} examples-dev=${{ needs.examples-dev.result }} website-a11y=${{ needs.website-a11y.result }} changeset=${{ needs.changeset.result }}"
             exit 1
           fi

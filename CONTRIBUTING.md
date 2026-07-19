@@ -6,7 +6,19 @@ Thanks for your interest in contributing to Real A11y. This guide covers how to 
 
 ### Prerequisites
 
-- Node.js >= 20 (a `.nvmrc` is provided — run `nvm use` or `fnm use`)
+- Node.js 20 — a `.nvmrc` is provided (`nvm use` / `fnm use`), and the repo is
+  pinned to `20.20.2` for [Volta](https://volta.sh) users, who get it
+  automatically on `cd`. The published packages support Node 20+ (`engines`) and
+  CI exercises the libraries on 20, 22, and 24, but **the docs build needs
+  Node 20**: VitePress 1.6 (the latest stable) throws `ERR_REQUIRE_CYCLE_MODULE`
+  on Node's newer `require(esm)` cycle enforcement, which is present in current
+  Node **22.x and 24.x** — 20.x is the last line where `pnpm --filter …/website
+  build` still works. The fix only exists in the still-alpha VitePress 2.0, so
+  we stay on 20 for the docs until VitePress 2 ships stable.
+  > **Volta gotcha:** Volta binds a global `pnpm` to whatever Node was the
+  > default when you installed it, and pnpm runs the docs build on _that_ Node
+  > regardless of this pin. If `pnpm exec node --version` isn't 20.x, rebind:
+  > `volta install node@20 && volta install pnpm@<version>`.
 - pnpm >= 9
 
 ### Setup
