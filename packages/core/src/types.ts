@@ -115,6 +115,20 @@ export interface TreeMutation {
   parentId?: string;
 }
 
+/** Change payload passed to a {@link DomObserver} callback.
+ *
+ * Includes the underlying MutationRecords and any synthetic dirty roots
+ * (for example, form-control input events that MutationObserver cannot see).
+ * Consumers that don't need incremental data can ignore the argument.
+ */
+export interface TreeChange {
+  mutations?: MutationRecord[];
+  /** Synthetic dirty roots for changes that don't produce MutationRecords. */
+  dirtyRoots?: Element[];
+  /** If true, the consumer should not attempt an incremental update. */
+  full?: boolean;
+}
+
 /** Configuration for the Semantic Navigator */
 export interface SemanticNavigatorConfig {
   /** Element whose subtree is extracted and displayed. */

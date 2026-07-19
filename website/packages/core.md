@@ -236,13 +236,17 @@ debounced, and a max-wait ceiling ensures the callback still fires on a stream
 that never goes quiet (streaming responses, progress bars, animated content)
 instead of the debounce deferring it forever.
 
+The callback receives a `TreeChange` object containing the accumulated
+`MutationRecord`s and any synthetic dirty roots produced by `input`/`change`
+events (which MutationObserver cannot see natively).
+
 ```ts
-import { DomObserver } from "@real-a11y-dev/core";
+import { DomObserver, type TreeChange } from "@real-a11y-dev/core";
 
 const observer = new DomObserver(
   root,
-  () => {
-    console.log("DOM changed, re-extract");
+  (change?: TreeChange) => {
+    console.log("DOM changed, re-extract", change);
   },
   200, // debounce: wait 200ms of quiet before firing
   undefined, // internalIds: mutations to ignore (defaults to the overlay set)
@@ -253,6 +257,37 @@ observer.start();
 // Later:
 observer.stop();
 ```
+
+---
+
+## Live tree extraction
+
+### `LiveTreeExtractor`
+
+Stateful extractor that keeps the previous tree in memory and re-extracts only
+the subtrees that changed, falling back to a full extraction when a mutation
+has non-local accessibility effects (portal/modal scope changes, `id`,
+`aria-labelledby`, `aria-describedby`, `for`, etc.).
+
+Used by the Chrome extension, React hook, and Storybook addon to keep the tree
+fresh during typing or small DOM updates without paying the cost of a full page
+walk every time.
+
+```ts
+import { LiveTreeExtractor, DomObserver } from "@real-a11y-dev/core";
+
+const extractor = new LiveTreeExtractor(document.body, { mode: "a11y" });
+
+const observer = new DomObserver(document.body, (change) => {
+  const tree = extractor.refresh(change);
+  // tree is the same shape as extractA11yTree/ extractDomTree
+});
+
+observer.start();
+```
+
+`mode` is `"a11y"` (default) or `"dom"`. Call `extractor.extract()` for an
+unconditional full re-extract, or `extractor.setMode(mode)` to switch views.
 
 ---
 
@@ -271,5 +306,7 @@ import type {
   QueryInput,
   TreeViewMode,
   ActionType,
+  TreeChange,
+  LiveTreeExtractorOptions,
 } from "@real-a11y-dev/core";
 ```

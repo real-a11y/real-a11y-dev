@@ -46,14 +46,38 @@ dispatcher.dispatch({ nodeId: "sn-15", action: "type", payload: { value: "hello"
 dispatcher.dispatch({ nodeId: "sn-3", action: "navigate" });
 ```
 
+### Live tree extraction
+
+`LiveTreeExtractor` keeps a previous tree in memory and re-extracts only the
+subtrees that changed, falling back to a full extraction when a mutation has
+non-local accessibility effects (portal/modal scope changes, `aria-labelledby`,
+`id`, etc.). It is used by the extension and React hook under the hood.
+
+```ts
+import { LiveTreeExtractor, DomObserver } from "@real-a11y-dev/core";
+
+const extractor = new LiveTreeExtractor(document.body, { mode: "a11y" });
+const observer = new DomObserver(document.body, (change) => {
+  const tree = extractor.refresh(change);
+  console.log("Tree updated:", tree);
+});
+
+observer.start();
+```
+
+`mode` is `"a11y"` (default) or `"dom"`. `refresh(change)` accepts the
+`TreeChange` payload from a `DomObserver` callback, or no argument for a full
+re-extract.
+
 ### DOM observation
 
 ```ts
-import { DomObserver } from "@real-a11y-dev/core";
+import { DomObserver, type TreeChange } from "@real-a11y-dev/core";
 
-const observer = new DomObserver(document.body, (mutations) => {
-  // Re-extract tree on DOM changes
-  console.log("Tree changed:", mutations);
+const observer = new DomObserver(document.body, (change?: TreeChange) => {
+  // `change.mutations` has the underlying MutationRecords,
+  // `change.dirtyRoots` has synthetic roots for input/change events.
+  console.log("Tree changed:", change);
 });
 
 observer.start();
