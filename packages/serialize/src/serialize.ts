@@ -31,6 +31,25 @@ export interface SerializeOptions {
   markFocus?: boolean;
 }
 
+/**
+ * Redaction must replace EVERY occurrence. `String.prototype.replace(regexp, …)`
+ * only replaces the FIRST match unless the RegExp is global, so a name holding a
+ * repeated secret or timestamp — two `$`-amounts, two "N min ago"s — would leak
+ * every occurrence after the first into output meant to be a committed,
+ * deterministic snapshot. Normalize each pattern to global once per serialize
+ * call: an already-global regex is returned unchanged, and `.replace` resets a
+ * global regex's `lastIndex`, so reusing one instance across every node is safe.
+ */
+function ensureGlobalFlags(
+  patterns: RegExp[] | undefined,
+): RegExp[] | undefined {
+  return patterns?.map((p) =>
+    p.global ? p : new RegExp(p.source, `${p.flags}g`),
+  );
+}
+
+/** Apply the redaction patterns (already normalized to global by
+ *  {@link ensureGlobalFlags}) to a string. */
 function redactText(input: string, patterns: RegExp[] | undefined): string {
   if (!patterns?.length) return input;
   let out = input;
@@ -106,12 +125,8 @@ export function serializeTree(
   input: SerializeInput,
   options: SerializeOptions = {},
 ): string {
-  const {
-    mode = "a11y",
-    redact,
-    includeGeneric = false,
-    markFocus = true,
-  } = options;
+  const { mode = "a11y", includeGeneric = false, markFocus = true } = options;
+  const redact = ensureGlobalFlags(options.redact);
   const tree = toTree(input, mode);
   const focusedId = markFocus ? tree.focusedId : undefined;
 
@@ -298,7 +313,8 @@ export function serializeTreeDiff(
   diff: TreeDiff,
   options: TreeDiffSerializeOptions = {},
 ): string {
-  const { redact, focusBefore, focusAfter } = options;
+  const { focusBefore, focusAfter } = options;
+  const redact = ensureGlobalFlags(options.redact);
   const lines: string[] = [];
 
   for (const node of diff.added) lines.push(`+ ${nodeLabel(node, redact)}`);

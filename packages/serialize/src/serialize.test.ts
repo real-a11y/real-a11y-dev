@@ -78,6 +78,23 @@ describe("serializeTree", () => {
     expect(out).not.toContain("2 minutes ago");
   });
 
+  it("redacts EVERY occurrence in a name, not just the first", () => {
+    // Regression: redactText used a plain `.replace`, which replaces only the
+    // FIRST match unless the RegExp is global — so a name with two matches of a
+    // (natural, non-global) pattern leaked every occurrence after the first.
+    document.body.innerHTML = `<button aria-label="Paid $28.50 then $2.00">x</button>`;
+    const out = serializeTree(document.body, { redact: [/\$[\d.]+/] });
+    expect(out).toContain("Paid [REDACTED] then [REDACTED]");
+    expect(out).not.toContain("$28.50");
+    expect(out).not.toContain("$2.00");
+  });
+
+  it("respects a pattern that is already global", () => {
+    document.body.innerHTML = `<button aria-label="a1 b2 c3">x</button>`;
+    const out = serializeTree(document.body, { redact: [/\d/g] });
+    expect(out).toContain("a[REDACTED] b[REDACTED] c[REDACTED]");
+  });
+
   it("collapses whitespace and newlines in accessible names", () => {
     // Pages sometimes leave raw newlines/indentation inside a name; the
     // serializer must flatten them so the name stays on one line.
