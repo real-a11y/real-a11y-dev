@@ -115,6 +115,11 @@ export class LiveTreeExtractor {
           // Re-extracting the target subtree covers both local attribute
           // updates and visibility-affecting changes like aria-hidden/class.
           dirty.add(target);
+          // A name-affecting attribute (aria-label, role, alt, title, …) on a
+          // descendant also changes the accessible name of an enclosing
+          // name-from-content host, which is computed from that descendant's
+          // content. Re-extract the host too so its name doesn't go stale.
+          dirty.add(this.nameRelevantAncestor(target));
         } else if (m.type === "characterData") {
           const target = m.target as CharacterData;
           if (target.parentElement) {
@@ -321,19 +326,28 @@ export class LiveTreeExtractor {
     return false;
   }
 
+  /**
+   * The outermost name-from-content host whose accessible name is computed from
+   * `el`'s content. Nested hosts (`<a><h3>text</h3></a>`) both derive their name
+   * from the inner text, so re-extracting only the innermost would leave the
+   * outer host's name stale — we climb to the outermost, stopping at a
+   * name-barrier role, which halts content-name propagation to ancestors.
+   * Falls back to `el` when no enclosing host exists.
+   */
   private nameRelevantAncestor(el: Element): Element {
     let node: Element | null = el;
+    let outermostHost: Element | null = null;
     while (
       node &&
       node !== this.root &&
       node !== this.root.ownerDocument?.body &&
       node !== this.root.ownerDocument?.documentElement
     ) {
-      if (isNameFromContentHost(node)) return node;
+      if (isNameFromContentHost(node)) outermostHost = node;
       if (isNameBarrierRole(getImplicitRole(node))) break;
       node = node.parentElement;
     }
-    return el;
+    return outermostHost ?? el;
   }
 
   private expandDependencies(dirty: Set<Element>): void {

@@ -387,4 +387,74 @@ describe("LiveTreeExtractor", () => {
 
     observer.stop();
   });
+
+  it("updates an enclosing name-host when a descendant widget's attribute changes", async () => {
+    // A named widget contributes its COMPUTED name to a name-from-content
+    // host, so the heading is named "API docs" (the link's aria-label).
+    document.body.innerHTML = `<main><h3><a href="#" aria-label="API docs">config.ts</a></h3></main>`;
+
+    const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
+    let lastChange: TreeChange | undefined;
+    const observer = new DomObserver(
+      document.body,
+      (change) => {
+        lastChange = change;
+      },
+      50,
+    );
+    observer.start();
+
+    // Only the inner link's aria-label changes; the enclosing heading's name
+    // is derived from that link, so the heading must be re-extracted too.
+    const link = document.querySelector("a")!;
+    link.setAttribute("aria-label", "README");
+
+    await vi.advanceTimersByTimeAsync(100);
+
+    const result = live.refresh(lastChange);
+    const expected = extractA11yTree(document.body);
+
+    expect(result.nodes).toEqual(expected.nodes);
+
+    const heading = [...result.nodes.values()].find(
+      (n) => n.a11y.role === "heading",
+    );
+    expect(heading?.a11y.name).toBe("README");
+
+    observer.stop();
+  });
+
+  it("updates the outermost host when a nested host's text changes", async () => {
+    document.body.innerHTML = `<main><a href="#"><h3>Old</h3></a></main>`;
+
+    const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
+    let lastChange: TreeChange | undefined;
+    const observer = new DomObserver(
+      document.body,
+      (change) => {
+        lastChange = change;
+      },
+      50,
+    );
+    observer.start();
+
+    // Both the heading and the enclosing link derive their name from this
+    // text, so re-extracting only the innermost host would leave the link
+    // name stale.
+    const heading = document.querySelector("h3")!;
+    heading.textContent = "New";
+
+    await vi.advanceTimersByTimeAsync(100);
+
+    const result = live.refresh(lastChange);
+    const expected = extractA11yTree(document.body);
+
+    expect(result.nodes).toEqual(expected.nodes);
+
+    const names = [...result.nodes.values()].map((n) => n.a11y.name);
+    expect(names).toContain("New");
+    expect(names).not.toContain("Old");
+
+    observer.stop();
+  });
 });
