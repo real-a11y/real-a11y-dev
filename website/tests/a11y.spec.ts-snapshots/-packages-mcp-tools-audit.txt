@@ -92,6 +92,8 @@ navigation "On this page"
     listitem
       link "Views"
     listitem
+      link "Checkpoints"
+    listitem
       link "Native cross-check"
     listitem
       link "Environment"
@@ -327,6 +329,99 @@ main
   paragraph "An agent calls this to review one element type without pulling the whole tree:"
   button "Copy Code"
   code
+  heading "Checkpoints" (level 2)
+  paragraph "Give the agent the CLI's snapshot + diff power mid-session: capture the page's findings under a name, change something (deploy, feature toggle, DOM edit), then ask what's — with the same fingerprint identity the CI a11y-diff bot uses. Checkpoints are held in memory (LRU-capped at 20) and , so you can checkpoint one deploy and diff another. clears the store. (Unlike Axis-A tree-checkpoints, these are pure data — not bound to the page instance that was live when saved.)"
+    strong "new / changed / fixed"
+    code "v1:"
+    strong "survive navigation by design"
+    code "close_browser"
+  heading "save_checkpoint" (level 3)
+    code "save_checkpoint"
+  paragraph
+    emphasis "Snapshots the current page into the named store."
+  paragraph "Snapshot the current page's accessibility findings and store them under ; re-saving a name overwrites it. Fingerprints go through the same the CLI's command uses, so a checkpoint is directly comparable to a CI baseline."
+    code "name"
+    code "buildSnapshotPage"
+    code "snapshot"
+  paragraph "Parameters:"
+  list
+    listitem "— string — required — the checkpoint label (the store key)."
+      strong
+        code "name"
+    listitem "— string — optional (default ) — CSS selector for the snapshot root."
+      strong
+        code "rootSelector"
+      code ""body""
+    listitem "— array of the five rule ids — optional — subset for the findings. Omit to run all."
+      strong
+        code "rules"
+  heading "diff_checkpoint" (level 3)
+    code "diff_checkpoint"
+  paragraph
+    emphasis "Read-only · re-snapshots the current page and diffs it against a stored checkpoint."
+  paragraph "Re-snapshot the current page and diff it against checkpoint : which findings are (the only class that gates CI), , or , plus an advisory structural summary. Use after a change, or after navigating to a different deploy of the same page."
+    code "name"
+    strong "NEW"
+    strong "CHANGED"
+    strong "FIXED"
+  paragraph "Parameters:"
+  list
+    listitem "— string — required — the checkpoint to diff against."
+      strong
+        code "name"
+    listitem "— string — optional (default )."
+      strong
+        code "rootSelector"
+      code ""body""
+  paragraph "The headline cross-deploy workflow — diff prod against a preview in one session:"
+  button "Copy Code"
+  code
+  heading "diff_checkpoints" (level 3)
+    code "diff_checkpoints"
+  paragraph
+    emphasis "Read-only · diffs two stored checkpoints."
+  paragraph "Diff two already-stored checkpoints against each other (no re-snapshot): which findings are new / changed / fixed going from to ."
+    code "base"
+    code "head"
+  paragraph "Parameters:"
+  list
+    listitem "— string — required."
+      strong
+        code "base"
+    listitem "— string — required."
+      strong
+        code "head"
+  heading "list_checkpoints" (level 3)
+    code "list_checkpoints"
+  paragraph
+    emphasis "Read-only."
+  paragraph "List the stored checkpoint labels with their finding counts and approximate tree sizes. No parameters."
+  heading "export_checkpoint" (level 3)
+    code "export_checkpoint"
+  paragraph
+    emphasis "Read-only."
+  paragraph "Return a stored checkpoint as a Real A11y snapshot artifact — the same the CLI writes (same , same fingerprints). Persist it to your own file to diff across sessions, or feed it to the CI a11y-diff. Output is capped, so it is best for small roots."
+    code "a11y-snapshot.json"
+    code "schemaVersion"
+  paragraph "Parameters:"
+  list
+    listitem "— string — required."
+      strong
+        code "name"
+  heading "import_checkpoint" (level 3)
+    code "import_checkpoint"
+  paragraph
+    emphasis "Loads an external artifact into the store."
+  paragraph "Load an externally-held Real A11y snapshot artifact (e.g. a CLI-generated baseline) into the store under , so a live page can be diffed against it. Input is validated strictly; the artifact's first page is stored."
+    code "name"
+  paragraph "Parameters:"
+  list
+    listitem "— string — required — the label to store it under."
+      strong
+        code "name"
+    listitem "— string — required — a serialized Real A11y snapshot artifact (JSON)."
+      strong
+        code "artifact"
   heading "Native cross-check" (level 2)
   paragraph "Chromium-only fidelity oracles. Both read the whole document, take no arguments, and compare Real A11y's custom engine against the browser's own computation."
   heading "get_native_tree" (level 3)

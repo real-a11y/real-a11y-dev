@@ -58,6 +58,7 @@
     "@modelcontextprotocol/sdk": "^1.12.0",
     "@real-a11y-dev/audit": "workspace:*",
     "@real-a11y-dev/browser": "workspace:*",
+    "@real-a11y-dev/snapshot": "workspace:*",
     "zod": "^3.25.0"
   },
   "peerDependencies": {

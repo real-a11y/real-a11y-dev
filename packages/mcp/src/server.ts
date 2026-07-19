@@ -17,7 +17,22 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ALL_RULES } from "@real-a11y-dev/audit";
 import type { A11yRule, Finding } from "@real-a11y-dev/audit";
 import type { A11ySession, PageSnapshot } from "@real-a11y-dev/browser";
+import {
+  buildArtifact,
+  buildSnapshotPage,
+  parseSnapshotArtifact,
+  projectSnapshot,
+  serializeArtifact,
+  SnapshotFormatError,
+} from "@real-a11y-dev/snapshot";
 import { z } from "zod";
+
+import {
+  CheckpointStore,
+  diffCheckpointPages,
+  diffLabeledCheckpoints,
+  renderDiff,
+} from "./checkpoints.js";
 
 export { BrowserSession } from "@real-a11y-dev/browser";
 export type {
@@ -308,6 +323,16 @@ export function buildServer(
     },
   );
 
+  // ── Checkpoints (Axis-B findings diff) ──────────────────────────────────
+  // A named, in-memory store of a11y snapshots. Each is pure data (strings +
+  // fingerprinted findings, no DOM references), so checkpoints deliberately
+  // SURVIVE navigation — that enables the cross-deploy diff (checkpoint prod →
+  // open preview → diff_checkpoint). Only close_browser clears them, as session
+  // hygiene. (Contrast Axis-A tree-checkpoints, which are page-instance-bound.)
+  const checkpoints = new CheckpointStore();
+  // Last-opened URL, recorded on a checkpoint's (cosmetic, redacted) url field.
+  let currentUrl = "";
+
   // ── Session ────────────────────────────────────────────────────────────
   server.registerTool(
     "open_page",
@@ -373,6 +398,7 @@ export function buildServer(
         device,
         viewport,
       });
+      currentUrl = info.url;
       const emu = device
         ? ` [${device}]`
         : viewport
@@ -402,6 +428,7 @@ export function buildServer(
     },
     async () => {
       await session.close();
+      checkpoints.clear();
       return text("Browser session closed.");
     },
   );
@@ -575,6 +602,176 @@ export function buildServer(
         session.nativeAX(),
       ]);
       return text(renderCompare(customTree, native));
+    },
+  );
+
+  // ── Checkpoints (Axis-B findings diff) ───────────────────────────────────
+  const errText = (msg: string) => ({
+    content: [{ type: "text" as const, text: msg }],
+    isError: true as const,
+  });
+  const checkpointName = z
+    .string()
+    .min(1)
+    .max(64)
+    .describe("Checkpoint label — the in-memory store key.");
+
+  server.registerTool(
+    "save_checkpoint",
+    {
+      title: "Save a11y checkpoint",
+      description:
+        "Snapshot the CURRENT page's accessibility findings and store them under `name`. Later call diff_checkpoint to see which findings are new / changed / fixed — the same identity semantics (fingerprints) the CI a11y-diff uses. Checkpoints survive navigation, so you can checkpoint one deploy and diff another: save 'prod', open the preview URL, then diff_checkpoint('prod').",
+      inputSchema: {
+        name: checkpointName,
+        rootSelector,
+        rules: z
+          .array(z.enum(RULES))
+          .optional()
+          .describe("Subset of rules for the findings. Omit to run all."),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ name, rootSelector, rules }) => {
+      const raw = await session.snapshot(rootSelector, { rules });
+      const page = buildSnapshotPage(name, currentUrl, projectSnapshot(raw), {
+        root: rootSelector,
+      });
+      checkpoints.save(name, page);
+      const treeKb = (page.tree.length / 1024).toFixed(1);
+      return text(
+        `"${name}" saved: ${page.findings.length} finding(s) (tree ${treeKb} KB). ${checkpoints.size} checkpoint(s) stored.`,
+      );
+    },
+  );
+
+  server.registerTool(
+    "diff_checkpoint",
+    {
+      title: "Diff current page vs a checkpoint",
+      annotations: READ_ONLY,
+      description:
+        "Re-snapshot the CURRENT page and diff it against the stored checkpoint `name`: which accessibility findings are NEW (these gate CI), CHANGED, or FIXED, plus an advisory structural summary. Use after a change (deploy, feature toggle, DOM edit) or after navigating to a different deploy of the same page.",
+      inputSchema: { name: checkpointName, rootSelector },
+    },
+    async ({ name, rootSelector }) => {
+      const base = checkpoints.get(name);
+      if (!base) {
+        return errText(
+          `No checkpoint named "${name}". Save one first with save_checkpoint.`,
+        );
+      }
+      const raw = await session.snapshot(rootSelector);
+      const head = buildSnapshotPage(name, currentUrl, projectSnapshot(raw), {
+        root: rootSelector,
+      });
+      return text(renderDiff(diffCheckpointPages(base, head)));
+    },
+  );
+
+  server.registerTool(
+    "diff_checkpoints",
+    {
+      title: "Diff two stored checkpoints",
+      annotations: READ_ONLY,
+      description:
+        "Diff two already-stored checkpoints against each other (no re-snapshot): which findings are new / changed / fixed going from `base` to `head`.",
+      inputSchema: { base: checkpointName, head: checkpointName },
+    },
+    async ({ base, head }) => {
+      const b = checkpoints.get(base);
+      if (!b) return errText(`No checkpoint named "${base}".`);
+      const h = checkpoints.get(head);
+      if (!h) return errText(`No checkpoint named "${head}".`);
+      return text(renderDiff(diffLabeledCheckpoints(b, h), { base, head }));
+    },
+  );
+
+  server.registerTool(
+    "list_checkpoints",
+    {
+      title: "List checkpoints",
+      annotations: READ_ONLY,
+      description:
+        "List the stored checkpoint labels with their finding counts and approximate tree sizes.",
+      inputSchema: {},
+    },
+    async () => {
+      if (checkpoints.size === 0) {
+        return text("No checkpoints saved. Use save_checkpoint first.");
+      }
+      const lines = checkpoints
+        .entries()
+        .map(
+          ([name, p]) =>
+            `  ${name}: ${p.findings.length} finding(s), tree ${(p.tree.length / 1024).toFixed(1)} KB`,
+        );
+      return text(`${checkpoints.size} checkpoint(s):\n${lines.join("\n")}`);
+    },
+  );
+
+  server.registerTool(
+    "export_checkpoint",
+    {
+      title: "Export a checkpoint as JSON",
+      annotations: READ_ONLY,
+      description:
+        "Return a stored checkpoint as a Real A11y snapshot artifact — the same a11y-snapshot.json the CLI writes (same schemaVersion, same fingerprints). Persist it to your own file to diff across sessions, or feed it to the CI a11y-diff. Output is capped, so it is best for small roots.",
+      inputSchema: { name: checkpointName },
+    },
+    async ({ name }) => {
+      const page = checkpoints.get(name);
+      if (!page) return errText(`No checkpoint named "${name}".`);
+      const artifact = buildArtifact([page], {
+        toolName: "@real-a11y-dev/mcp",
+        toolVersion: packageVersion(),
+      });
+      return text(serializeArtifact(artifact));
+    },
+  );
+
+  server.registerTool(
+    "import_checkpoint",
+    {
+      title: "Import a checkpoint from JSON",
+      description:
+        "Load an externally-held Real A11y snapshot artifact (e.g. a CLI-generated baseline) into the store under `name`, so a live page can be diffed against it. Input is validated strictly; the artifact's first page is stored.",
+      inputSchema: {
+        name: checkpointName,
+        artifact: z
+          .string()
+          .describe("A serialized Real A11y snapshot artifact (JSON)."),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ name, artifact }) => {
+      try {
+        const parsed = parseSnapshotArtifact(artifact);
+        const page = parsed.pages[0];
+        if (!page) return errText(`Artifact for "${name}" has no pages.`);
+        checkpoints.save(name, page);
+        const extra =
+          parsed.pages.length > 1
+            ? ` (first of ${parsed.pages.length} pages)`
+            : "";
+        return text(
+          `Imported "${name}": ${page.findings.length} finding(s)${extra}. ${checkpoints.size} checkpoint(s) stored.`,
+        );
+      } catch (err) {
+        const msg =
+          err instanceof SnapshotFormatError ? err.message : "invalid artifact";
+        return errText(`Could not import "${name}": ${msg}`);
+      }
     },
   );
 

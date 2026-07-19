@@ -452,6 +452,9 @@ importers:
       '@real-a11y-dev/browser':
         specifier: workspace:*
         version: link:../browser
+      '@real-a11y-dev/snapshot':
+        specifier: workspace:*
+        version: link:../snapshot
       zod:
         specifier: ^3.25.0
         version: 3.25.76

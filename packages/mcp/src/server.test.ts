@@ -8,6 +8,11 @@ import type {
   PageSnapshot,
   SnapshotOptions,
 } from "@real-a11y-dev/browser";
+import {
+  buildSnapshotPage,
+  parseSnapshotArtifact,
+  projectSnapshot,
+} from "@real-a11y-dev/snapshot";
 import { describe, it, expect, beforeEach } from "vitest";
 
 import {
@@ -113,13 +118,19 @@ describe("MCP server wiring", () => {
         "audit_page",
         "close_browser",
         "compare_trees",
+        "diff_checkpoint",
+        "diff_checkpoints",
+        "export_checkpoint",
         "get_heading_outline",
         "get_native_tree",
         "get_semantic_tree",
         "get_tab_order",
+        "import_checkpoint",
         "inspect_page",
+        "list_checkpoints",
         "list_elements",
         "open_page",
+        "save_checkpoint",
       ].sort(),
     );
   });
@@ -467,5 +478,113 @@ describe("renderSnapshot", () => {
     expect(out).toMatch(/2 tab stops/);
     expect(out).toMatch(/No accessibility issues found/);
     expect(out).toContain("h1 Title");
+  });
+});
+
+describe("checkpoints", () => {
+  let session: FakeSession;
+  beforeEach(() => {
+    session = new FakeSession();
+  });
+
+  const button = (locator: string): Finding => ({
+    rule: "no-unlabeled-interactive",
+    severity: "error",
+    message: "Unlabeled interactive element: button <button>",
+    role: "button",
+    tagName: "BUTTON",
+    locator,
+  });
+  const rawWith = (findings: Finding[]): PageSnapshot => ({
+    findings,
+    tree: "button",
+    outline: "(no headings)",
+    tabOrder: "1. button",
+  });
+
+  it("save_checkpoint then diff_checkpoint surfaces a NEW finding after a change", async () => {
+    const client = await connect(session);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/" },
+    });
+    session.snapshotResponse = rawWith([button("#save")]);
+    const saved = textOf(
+      await client.callTool({
+        name: "save_checkpoint",
+        arguments: { name: "before" },
+      }),
+    );
+    expect(saved).toMatch(/"before" saved: 1 finding/);
+
+    // A change introduces a second unlabeled button.
+    session.snapshotResponse = rawWith([button("#save"), button("#cancel")]);
+    const diff = textOf(
+      await client.callTool({
+        name: "diff_checkpoint",
+        arguments: { name: "before" },
+      }),
+    );
+    expect(diff).toMatch(/1 new/);
+    expect(diff).toMatch(/NEW — gates CI/);
+  });
+
+  it("diff_checkpoint errors when the checkpoint is missing", async () => {
+    const client = await connect(session);
+    const res = await client.callTool({
+      name: "diff_checkpoint",
+      arguments: { name: "nope" },
+    });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toMatch(/No checkpoint named "nope"/);
+  });
+
+  it("close_browser clears the store", async () => {
+    const client = await connect(session);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/" },
+    });
+    session.snapshotResponse = rawWith([button("#save")]);
+    await client.callTool({
+      name: "save_checkpoint",
+      arguments: { name: "before" },
+    });
+    await client.callTool({ name: "close_browser", arguments: {} });
+    const list = textOf(
+      await client.callTool({ name: "list_checkpoints", arguments: {} }),
+    );
+    expect(list).toMatch(/No checkpoints saved/);
+  });
+
+  // The correctness invariant: an MCP checkpoint's fingerprints are identical to
+  // the CLI's for the same page — both flow through the shared buildSnapshotPage.
+  it("export_checkpoint fingerprints match the CLI's buildSnapshotPage (golden)", async () => {
+    const raw = rawWith([button("#save"), button("#cancel")]);
+    const url = "https://example.com/";
+    const name = "home";
+
+    // The CLI path (cli/commands/snapshot.ts): projectSnapshot, then assemble.
+    const cliPage = buildSnapshotPage(name, url, projectSnapshot(raw), {
+      root: "body",
+    });
+
+    // The MCP path: open → save → export, then parse the artifact back.
+    session.snapshotResponse = raw;
+    const client = await connect(session);
+    await client.callTool({ name: "open_page", arguments: { url } });
+    await client.callTool({ name: "save_checkpoint", arguments: { name } });
+    const exported = textOf(
+      await client.callTool({
+        name: "export_checkpoint",
+        arguments: { name },
+      }),
+    );
+    const mcpPage = parseSnapshotArtifact(exported).pages[0];
+
+    expect(mcpPage.findings.length).toBe(2);
+    expect(mcpPage.findings.map((f) => f.fingerprint)).toEqual(
+      cliPage.findings.map((f) => f.fingerprint),
+    );
   });
 });

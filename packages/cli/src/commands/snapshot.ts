@@ -19,8 +19,8 @@ import {
   applyBaseline,
   buildArtifact,
   buildBaseline,
+  buildSnapshotPage,
   DEFAULT_BASELINE_PATH,
-  fingerprintFindings,
   loadBaseline,
   redactUrl,
   serializeArtifact,
@@ -142,19 +142,14 @@ export const snapshotCommand: CommandFn = async (positionals, flags) => {
         const snap = await snapshotPage(session, root, {
           ...(rules ? { rules } : {}),
         });
-        snapshotPages.push({
-          name: target.name,
-          url: redactUrl(target.url),
-          root,
-          ...(target.page.sourcePath
-            ? { sourcePath: target.page.sourcePath }
-            : {}),
-          status: "ok",
-          findings: fingerprintFindings(target.name, snap.findings),
-          tree: snap.tree,
-          outline: snap.outline,
-          tabs: snap.tabOrder,
-        });
+        snapshotPages.push(
+          buildSnapshotPage(target.name, target.url, snap, {
+            root,
+            ...(target.page.sourcePath
+              ? { sourcePath: target.page.sourcePath }
+              : {}),
+          }),
+        );
       } catch (err) {
         if (!(err instanceof CliError)) throw err;
         snapshotPages.push({
