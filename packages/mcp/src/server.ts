@@ -18,6 +18,7 @@ import { ALL_RULES } from "@real-a11y-dev/audit";
 import type { A11yRule, Finding } from "@real-a11y-dev/audit";
 import type { A11ySession, PageSnapshot } from "@real-a11y-dev/browser";
 import {
+  assertFullArtifact,
   buildArtifact,
   buildSnapshotPage,
   fingerprintFindings,
@@ -782,6 +783,10 @@ export function buildServer(
     async ({ name, artifact }) => {
       try {
         const parsed = parseSnapshotArtifact(artifact);
+        // Refuse a partial (`--only`) capture, exactly as `real-a11y diff` does:
+        // an imported checkpoint becomes the diff BASE, and a filtered-away axis
+        // would read as everything-new — reported as findings that "gate CI".
+        assertFullArtifact(parsed, `artifact for "${name}"`);
         const src = parsed.pages[0];
         if (!src) return errText(`Artifact for "${name}" has no pages.`);
         // Store under `name` with the page renamed and re-fingerprinted to that

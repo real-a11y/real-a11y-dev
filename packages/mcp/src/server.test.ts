@@ -708,4 +708,34 @@ describe("checkpoints", () => {
     const snaps = session.calls.filter((c) => c.fn === "snapshot");
     expect(snaps.at(-1)?.rootSelector).toBe("[role=dialog]");
   });
+
+  it("import_checkpoint rejects a partial (--only) artifact", async () => {
+    const client = await connect(session);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/" },
+    });
+    session.snapshotResponse = rawWith([button("#save")]);
+    await client.callTool({
+      name: "save_checkpoint",
+      arguments: { name: "home" },
+    });
+    const full = textOf(
+      await client.callTool({
+        name: "export_checkpoint",
+        arguments: { name: "home" },
+      }),
+    );
+    // Mark it views-only, as `real-a11y snapshot --only views` would: the
+    // findings axis is filtered away and would read as everything-new.
+    const partial = JSON.parse(full);
+    partial.meta.only = "views";
+    partial.pages[0].findings = [];
+    const res = await client.callTool({
+      name: "import_checkpoint",
+      arguments: { name: "partial", artifact: JSON.stringify(partial) },
+    });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toMatch(/partial snapshot/);
+  });
 });
