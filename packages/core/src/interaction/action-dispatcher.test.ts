@@ -292,6 +292,80 @@ describe("ActionDispatcher", () => {
       expect(result.success).toBe(false);
       expect(result.error).toMatch(/no longer in DOM/i);
     });
+
+    it("writes into a contenteditable custom textbox without throwing (ProseMirror/Lexical shape)", () => {
+      // The extractor assigns `type` to ARIA textboxes, which in real apps are
+      // usually contenteditable <div>s. The old handleType called the native
+      // HTMLInputElement value setter on them, which brand-checks its receiver
+      // and threw an uncaught "Illegal invocation" TypeError out of dispatch.
+      const editor = document.createElement("div");
+      editor.setAttribute("role", "textbox");
+      editor.setAttribute("contenteditable", "true");
+      document.body.appendChild(editor);
+      refs.set("n1", editor);
+
+      const inputSpy = vi.fn();
+      editor.addEventListener("input", inputSpy);
+
+      const result = dispatcher.dispatch({
+        nodeId: "n1",
+        action: "type",
+        payload: { value: "hello editor" },
+      });
+
+      expect(result.success).toBe(true);
+      expect(editor.textContent).toBe("hello editor");
+      expect(inputSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("lets a model-driven editor own the insertion (beforeinput preventDefault)", () => {
+      // ProseMirror/Lexical/Draft consume a cancelable beforeinput and insert
+      // into their own document model. The dispatcher must NOT clobber the DOM
+      // textContent underneath them (that write would just be reverted) — when
+      // the event is handled it leaves the DOM alone and fires no `input`.
+      const editor = document.createElement("div");
+      editor.setAttribute("role", "textbox");
+      editor.setAttribute("contenteditable", "true");
+      editor.textContent = "existing";
+      document.body.appendChild(editor);
+      refs.set("n1", editor);
+
+      const beforeInputSpy = vi.fn((e: Event) => e.preventDefault());
+      const inputSpy = vi.fn();
+      editor.addEventListener("beforeinput", beforeInputSpy as EventListener);
+      editor.addEventListener("input", inputSpy);
+
+      const result = dispatcher.dispatch({
+        nodeId: "n1",
+        action: "type",
+        payload: { value: "new value" },
+      });
+
+      expect(result.success).toBe(true);
+      expect(beforeInputSpy).toHaveBeenCalledTimes(1);
+      // Not overwritten — the editor owns its model update.
+      expect(editor.textContent).toBe("existing");
+      // And no redundant `input` from us; the editor emits its own.
+      expect(inputSpy).not.toHaveBeenCalled();
+    });
+
+    it("fails gracefully (no throw) for a non-editable, non-input element", () => {
+      // A role="textbox" that is neither contenteditable nor a form control:
+      // we can't type into it, but we must return a result, never throw.
+      const div = document.createElement("div");
+      div.setAttribute("role", "textbox");
+      document.body.appendChild(div);
+      refs.set("n1", div);
+
+      const result = dispatcher.dispatch({
+        nodeId: "n1",
+        action: "type",
+        payload: { value: "nope" },
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBeTruthy();
+    });
   });
 
   // Slider / spinbutton stepping. Two paths share one entry point:
@@ -444,6 +518,30 @@ describe("ActionDispatcher", () => {
       dispatcher.dispatch({ nodeId: "n1", action: "decrement" });
 
       expect(value).toBe(6);
+    });
+  });
+
+  describe("error handling", () => {
+    it("converts a synchronous handler throw into a failed result instead of propagating", () => {
+      // A handler can throw synchronously (a native setter's brand check, or
+      // a page API like scrollIntoView blowing up). dispatch() must never let
+      // that escape — in the extension it would crash out of the content-
+      // script message handler and hang the panel's action.
+      const el = document.createElement("div");
+      document.body.appendChild(el);
+      refs.set("n1", el);
+
+      const original = el.scrollIntoView;
+      el.scrollIntoView = () => {
+        throw new Error("scroll boom");
+      };
+      try {
+        const result = dispatcher.dispatch({ nodeId: "n1", action: "scroll" });
+        expect(result.success).toBe(false);
+        expect(result.error).toMatch(/boom/);
+      } finally {
+        el.scrollIntoView = original;
+      }
     });
   });
 });

@@ -59,29 +59,44 @@ export class ActionDispatcher {
       return { success: false, error: "Element no longer in DOM" };
     }
 
-    switch (request.action) {
-      case "click":
-        return this.handleClick(element);
-      case "navigate":
-        return this.handleNavigate(element);
-      case "focus":
-        return this.handleFocus(element);
-      case "type":
-        return this.handleType(element, request.payload);
-      case "submit":
-        return this.handleSubmit(element);
-      case "toggle":
-        return this.handleToggle(element);
-      case "select":
-        return this.handleSelect(element, request.payload);
-      case "scroll":
-        return this.handleScroll(element);
-      case "increment":
-        return this.handleStep(element, 1);
-      case "decrement":
-        return this.handleStep(element, -1);
-      default:
-        return { success: false, error: `Unknown action: ${request.action}` };
+    // Any handler can throw — a native setter's brand check on the wrong
+    // element type, or a page's own event listener throwing during one of our
+    // synthetic dispatches. Never let that escape: in the extension it would
+    // blow out of the content-script message handler and leave the panel's
+    // action hanging with no response.
+    try {
+      switch (request.action) {
+        case "click":
+          return this.handleClick(element);
+        case "navigate":
+          return this.handleNavigate(element);
+        case "focus":
+          return this.handleFocus(element);
+        case "type":
+          return this.handleType(element, request.payload);
+        case "submit":
+          return this.handleSubmit(element);
+        case "toggle":
+          return this.handleToggle(element);
+        case "select":
+          return this.handleSelect(element, request.payload);
+        case "scroll":
+          return this.handleScroll(element);
+        case "increment":
+          return this.handleStep(element, 1);
+        case "decrement":
+          return this.handleStep(element, -1);
+        default:
+          return {
+            success: false,
+            error: `Unknown action: ${request.action}`,
+          };
+      }
+    } catch (err) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
     }
   }
 
@@ -126,28 +141,74 @@ export class ActionDispatcher {
       return { success: false, error: "No value provided for type action" };
     }
 
-    const el = element as HTMLInputElement | HTMLTextAreaElement;
-
-    // Use the native setter from the element's own prototype so frameworks
-    // (React, Angular, Vue) see the change. The input and textarea setters
-    // are NOT interchangeable — each performs internal-slot checks and
-    // throws TypeError when called on the wrong element type.
-    const proto =
-      el instanceof HTMLTextAreaElement
-        ? HTMLTextAreaElement.prototype
-        : HTMLInputElement.prototype;
-    const descriptor = Object.getOwnPropertyDescriptor(proto, "value");
-
-    if (descriptor?.set) {
-      descriptor.set.call(el, value);
-    } else {
-      el.value = value;
+    // Native <input>/<textarea>: write through the element's OWN prototype
+    // setter so frameworks (React, Angular, Vue) see the change. The input
+    // and textarea setters are NOT interchangeable — each brand-checks its
+    // receiver and throws TypeError on the wrong element type — so match the
+    // prototype to the element. The `instanceof` guard also keeps a custom
+    // widget from ever reaching the native setter (that was an uncaught
+    // "Illegal invocation" crash when the extractor assigned `type` to an
+    // ARIA textbox that is really a contenteditable <div>).
+    if (
+      element instanceof HTMLInputElement ||
+      element instanceof HTMLTextAreaElement
+    ) {
+      const proto =
+        element instanceof HTMLTextAreaElement
+          ? HTMLTextAreaElement.prototype
+          : HTMLInputElement.prototype;
+      const descriptor = Object.getOwnPropertyDescriptor(proto, "value");
+      if (descriptor?.set) {
+        descriptor.set.call(element, value);
+      } else {
+        element.value = value;
+      }
+      element.dispatchEvent(new Event("input", { bubbles: true }));
+      element.dispatchEvent(new Event("change", { bubbles: true }));
+      return { success: true };
     }
 
-    el.dispatchEvent(new Event("input", { bubbles: true }));
-    el.dispatchEvent(new Event("change", { bubbles: true }));
+    // Custom ARIA textbox / searchbox / spinbutton — in real apps these are
+    // usually contenteditable <div>/<span>s. There's no `.value`, so drive the
+    // platform text-insertion sequence: fire a cancelable `beforeinput`, and
+    // only write `textContent` ourselves if nothing handled it. Model-driven
+    // editors (ProseMirror, Lexical, Draft) consume `beforeinput` and insert
+    // into their own document model — writing `textContent` under them would
+    // just get reverted — so when the event is handled we leave the DOM alone.
+    // Plain contenteditable has no such listener, so we do the write. This is
+    // best-effort: an editor that only inserts from a real caret/Selection may
+    // still need key simulation. `isContentEditable` covers real browsers
+    // (incl. inherited editability); the attribute check is the jsdom fallback.
+    const htmlEl = element as HTMLElement;
+    const ceAttr = htmlEl.getAttribute("contenteditable");
+    const editable =
+      htmlEl.isContentEditable ||
+      ceAttr === "" ||
+      ceAttr === "true" ||
+      ceAttr === "plaintext-only";
+    if (editable) {
+      const notHandled = htmlEl.dispatchEvent(
+        new InputEvent("beforeinput", {
+          bubbles: true,
+          cancelable: true,
+          inputType: "insertText",
+          data: value,
+        }),
+      );
+      if (notHandled) {
+        htmlEl.textContent = value;
+        htmlEl.dispatchEvent(
+          new InputEvent("input", {
+            bubbles: true,
+            inputType: "insertText",
+            data: value,
+          }),
+        );
+      }
+      return { success: true };
+    }
 
-    return { success: true };
+    return { success: false, error: "Element does not accept text input" };
   }
 
   private handleSubmit(element: Element): ActionResult {
