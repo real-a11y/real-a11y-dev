@@ -25,7 +25,6 @@ import {
 export const MAX_CHECKPOINTS = 20;
 
 /**
-/**
  * A stored checkpoint: the snapshotted page plus the rule subset it was
  * captured with. The rules are remembered so a later `diff_checkpoint`
  * re-snapshots with the SAME rules — otherwise a checkpoint saved with a subset
