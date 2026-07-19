@@ -5,7 +5,8 @@
  * that only use the jsdom/Vitest helpers.
  *
  * Architecture:
- *   1. `attach()` reads the pre-built IIFE page-bundle from dist/.
+ *   1. `attach()` reads the pre-built IIFE page-bundle from
+ *      `@real-a11y-dev/browser` (the single home for the injected bundle).
  *   2. Injects it into the Playwright page via `page.addScriptTag()`.
  *      This sets `window.__realA11y__` inside the browser.
  *   3. Returns a `SemanticNavigatorPageHandle` whose methods call
@@ -16,23 +17,18 @@
  */
 
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+
+import { PAGE_BUNDLE_PATH } from "@real-a11y-dev/browser";
 
 // ---------------------------------------------------------------------------
-// Bundle path — resolved relative to this compiled file (dist/playwright.js).
-// tsup appends `.global` to the filename when globalName is set.
+// Bundle path — the injected IIFE page-bundle lives in @real-a11y-dev/browser,
+// which exports its absolute path (it computes it from its own dist location,
+// so this works whether testing is run from src or dist, and avoids a fragile
+// cross-package resolve of an ESM-only entry).
 // ---------------------------------------------------------------------------
 
 function getPageBundlePath(): string {
-  // Works from both the TypeScript source location (src/) and the compiled
-  // output location (dist/). In both cases, `../dist/` resolves to the
-  // package-level dist/ directory where the IIFE bundle lives.
-  //
-  // From src/playwright.ts:  src/ → ../dist/ = dist/ ✓
-  // From dist/playwright.js: dist/ → ../dist/ = dist/ ✓  (redundant but correct)
-  return fileURLToPath(
-    new URL("../dist/page-bundle.iife.global.js", import.meta.url),
-  );
+  return PAGE_BUNDLE_PATH;
 }
 
 // Cache the bundle content so subsequent `attach()` calls in the same

@@ -1,9 +1,11 @@
 /**
- * Browser session for the MCP server.
+ * The Real A11y browser session — the one way to drive a real browser.
  *
- * Mirrors the architecture of `@real-a11y-dev/testing/playwright`: drive a real
- * browser with Playwright, inject the pre-built IIFE page-bundle (which sets
- * `window.__realA11y__`), and route each a11y query through `page.evaluate()`.
+ * Drives a live Chromium with Playwright, injects the pre-built IIFE
+ * page-bundle (which sets `window.__realA11y__`), and routes each a11y query
+ * through `page.evaluate()`. The CLI and the MCP server both drive the browser
+ * through this; `@real-a11y-dev/testing/playwright` is a thinner adapter that
+ * injects the same bundle.
  *
  * A real browser is required — the extraction engine depends on
  * `getComputedStyle`/layout to decide what is exposed to assistive tech, which
@@ -11,8 +13,7 @@
  */
 
 import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import type { Finding } from "@real-a11y-dev/audit";
 import type {
@@ -22,12 +23,19 @@ import type {
   Page,
 } from "playwright";
 
-/** Resolve the testing package's injected page-bundle from node_modules. */
+/**
+ * Absolute path to the injected IIFE page-bundle shipped in this package's
+ * `dist/`, beside the compiled module. Exported so a sibling adapter — the
+ * `@real-a11y-dev/testing` Playwright adapter — resolves the exact same file
+ * without a fragile cross-package `require.resolve` (this package is ESM-only,
+ * so CJS resolution of its entry fails).
+ */
+export const PAGE_BUNDLE_PATH = fileURLToPath(
+  new URL("./page-bundle.iife.global.js", import.meta.url),
+);
+
 function bundlePath(): string {
-  const require = createRequire(import.meta.url);
-  // Resolves to @real-a11y-dev/testing/dist/index.* — the bundle sits beside it.
-  const testingEntry = require.resolve("@real-a11y-dev/testing");
-  return join(dirname(testingEntry), "page-bundle.iife.global.js");
+  return PAGE_BUNDLE_PATH;
 }
 
 let cachedBundle: string | undefined;
@@ -38,7 +46,7 @@ function readBundle(): string {
     } catch {
       // Don't leak the absolute local path into tool output.
       throw new Error(
-        "Real A11y extraction bundle is missing — reinstall dependencies (is @real-a11y-dev/testing installed?).",
+        "Real A11y extraction bundle is missing — reinstall dependencies (is @real-a11y-dev/browser installed?).",
       );
     }
   }
@@ -361,7 +369,7 @@ export class BrowserSession implements A11ySession {
           if (!ra) throw new Error("__realA11y__ is not present on the page.");
           if (typeof ra[fn] !== "function") {
             throw new Error(
-              `Real A11y bundle has no "${fn}" — the installed @real-a11y-dev/testing is too old for this MCP server; upgrade it.`,
+              `Real A11y bundle has no "${fn}" — the installed @real-a11y-dev/browser is too old; upgrade it.`,
             );
           }
           let root: Element | null;
@@ -404,7 +412,7 @@ export class BrowserSession implements A11ySession {
             | undefined;
           if (!ra || typeof ra.extractA11yTree !== "function") {
             throw new Error(
-              "Real A11y bundle missing/too old — upgrade @real-a11y-dev/testing.",
+              "Real A11y bundle missing/too old — upgrade @real-a11y-dev/browser.",
             );
           }
           let el: Element | null;

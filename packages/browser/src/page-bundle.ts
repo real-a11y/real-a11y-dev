@@ -1,10 +1,11 @@
 /**
- * IIFE page-bundle entry — compiled to `dist/page-bundle.iife.js`.
+ * IIFE page-bundle entry — compiled to `dist/page-bundle.iife.global.js`
+ * (tsup appends `.global` because a `globalName` is set for the iife format).
  *
- * This bundle is injected into the browser page by the Playwright (and future
- * WebdriverIO) adapters via `page.addScriptTag()`. It sets
- * `window.__realA11y__` with the snapshot and assertion helpers so the adapter
- * can call them via `page.evaluate()`.
+ * This bundle is injected into the browser page by `BrowserSession` and the
+ * `@real-a11y-dev/testing/playwright` adapter via `page.addScriptTag()` /
+ * `page.evaluate()`. It sets `window.__realA11y__` with the snapshot and
+ * assertion helpers so the caller can invoke them by name inside the page.
  *
  * Keep this file minimal: only include what needs to run _inside the page_.
  * Do NOT import Node-only modules here.

@@ -25,7 +25,8 @@
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
-import { BrowserSession } from "./browser.js";
+import { BrowserSession } from "@real-a11y-dev/browser";
+
 import { assertValidStorageState, parseAllowedOrigins } from "./config.js";
 import { buildServer } from "./server.js";
 

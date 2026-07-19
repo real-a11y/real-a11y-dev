@@ -2,14 +2,14 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { ALL_RULES } from "@real-a11y-dev/audit";
 import type { Finding } from "@real-a11y-dev/audit";
-import { describe, it, expect, beforeEach } from "vitest";
-
 import type {
   A11ySession,
   OpenOptions,
   PageSnapshot,
   SnapshotOptions,
-} from "./browser.js";
+} from "@real-a11y-dev/browser";
+import { describe, it, expect, beforeEach } from "vitest";
+
 import {
   buildServer,
   renderAudit,

@@ -16,17 +16,16 @@ import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ALL_RULES } from "@real-a11y-dev/audit";
 import type { A11yRule, Finding } from "@real-a11y-dev/audit";
+import type { A11ySession, PageSnapshot } from "@real-a11y-dev/browser";
 import { z } from "zod";
 
-import type { A11ySession, PageSnapshot } from "./browser.js";
-
-export { BrowserSession } from "./browser.js";
+export { BrowserSession } from "@real-a11y-dev/browser";
 export type {
   A11ySession,
   BrowserSessionOptions,
   PageSnapshot,
   SnapshotOptions,
-} from "./browser.js";
+} from "@real-a11y-dev/browser";
 
 // Built from testing's ALL_RULES so the tool schema can never drift from the
 // rules the engine actually runs (a hand-maintained copy dropped `image-alt`).

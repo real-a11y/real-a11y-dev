@@ -6,9 +6,9 @@
  */
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { BrowserSession } from "@real-a11y-dev/browser";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 
-import { BrowserSession } from "../src/browser.js";
 import { buildServer } from "../src/server.js";
 
 const session = new BrowserSession({ headless: true });

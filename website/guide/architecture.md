@@ -17,14 +17,15 @@ Real A11y is a monorepo of small, composable packages built around one extractio
 | [`@real-a11y-dev/semantic-navigator-ui`](https://github.com/real-a11y/real-a11y-dev/tree/main/packages/ui) | Preact tree-view components — TreePanel, TreeNode, FilteredList, TabSequenceView, theming CSS. Consumed as a build-time dependency of the packages below; **not usually installed directly**. | `preact` |
 | [`@real-a11y-dev/inspector`](/packages/inspector) | Framework-agnostic inspector. `createInspector({ root, container })` mounts the tree panel into any DOM node, isolated via Shadow DOM. | (bundles `semantic-navigator-ui` + `core` + `preact`) |
 | [`@real-a11y-dev/react`](/packages/react) | React integration — `<SemanticNavigator />` component + `useSemanticTree()` / `useActiveModal()` hooks. Wraps `inspector` for inline and floating modes. | `react >= 18`, `react-dom >= 18` |
-| [`@real-a11y-dev/testing`](/packages/testing) | Headless audit helpers — `auditSnapshot`, `outlineSnapshot`, `tabSequenceSnapshot`, `flow()`, plus the interaction-diff API (`capture`, `a11yDiff`). Re-exports the `assert*`/`collectFindings` surface from `@real-a11y-dev/audit`. A separate `/playwright` entrypoint ships a `Page`-handle adapter for real-browser E2E. **No UI.** | `@real-a11y-dev/audit` (optional: `@playwright/test`) |
+| [`@real-a11y-dev/testing`](/packages/testing) | Headless audit helpers — `auditSnapshot`, `outlineSnapshot`, `tabSequenceSnapshot`, `flow()`, plus the interaction-diff API (`capture`, `a11yDiff`). Re-exports the `assert*`/`collectFindings` surface from `@real-a11y-dev/audit`. A separate `/playwright` entrypoint ships a `Page`-handle adapter that injects `@real-a11y-dev/browser`'s page-bundle for real-browser E2E. **No UI.** | `@real-a11y-dev/audit`, `@real-a11y-dev/browser` (optional: `@playwright/test`) |
 | [`@real-a11y-dev/storybook-addon`](/packages/storybook-addon) | Storybook 8 panel — preview-side extractor posts tree snapshots over the Storybook channel; manager-side React panel renders them. | `storybook >= 8`, `react >= 18` |
 | [`@real-a11y-dev/serialize`](https://github.com/real-a11y/real-a11y-dev/tree/main/packages/serialize) | Deterministic text serialization of the tree — full tree, heading outline, and tab sequence. **No UI.** | `@real-a11y-dev/core` |
 | [`@real-a11y-dev/validate`](https://github.com/real-a11y/real-a11y-dev/tree/main/packages/validate) | ARIA-semantics validation — per-node rules plus tree-level relationship checks, backed by `aria-query` so it tracks the spec. Standalone. | `aria-query` |
 | [`@real-a11y-dev/audit`](https://github.com/real-a11y/real-a11y-dev/tree/main/packages/audit) | Audit engine — the `Finding` data model, the a11y rule set, `collectFindings`, and the `assert*` primitives. The one place a finding is defined and detected; `testing`, `mcp`, and `cli` all render what it produces. **No UI.** | `@real-a11y-dev/core` |
 | [`@real-a11y-dev/snapshot`](https://github.com/real-a11y/real-a11y-dev/tree/main/packages/snapshot) | Snapshot engine — deterministic finding fingerprints, the diffable `a11y-snapshot.json` artifact, the findings/views/unified diff, and baselines. Node-only; the single place a snapshot is captured and compared, so the CLI and MCP diff identically. **No UI.** | `@real-a11y-dev/audit`, `@real-a11y-dev/core` |
-| [`@real-a11y-dev/mcp`](/packages/mcp) | Model Context Protocol server exposing `audit_page` / `get_semantic_tree` / `inspect_page` etc. to AI agents (bin `real-a11y-mcp`, plus a `./browser` subpath export). | `@real-a11y-dev/audit`, `@real-a11y-dev/testing`, `@modelcontextprotocol/sdk` (optional peer: `playwright`) |
-| [`@real-a11y-dev/cli`](/packages/cli) | The `real-a11y` shell command — audits, perception views (`tree` / `outline` / `tabs` / `list` / `inspect`), and `snapshot` + `diff` from the shell and CI. A command, not a library — the programmatic engine lives in `snapshot`. | `@real-a11y-dev/audit`, `@real-a11y-dev/snapshot`, `@real-a11y-dev/mcp` (optional peer: `playwright`) |
+| [`@real-a11y-dev/browser`](https://github.com/real-a11y/real-a11y-dev/tree/main/packages/browser) | Browser driver — the Playwright `BrowserSession` plus the injected page-bundle it ships. The one place that touches Playwright; the CLI, the MCP server, and the testing adapter all drive a real Chromium through it. | `@real-a11y-dev/audit`, `@real-a11y-dev/serialize`, `@real-a11y-dev/core` (optional peer: `playwright`) |
+| [`@real-a11y-dev/mcp`](/packages/mcp) | Model Context Protocol server exposing `audit_page` / `get_semantic_tree` / `inspect_page` etc. to AI agents (bin `real-a11y-mcp`). | `@real-a11y-dev/audit`, `@real-a11y-dev/browser`, `@modelcontextprotocol/sdk` (optional peer: `playwright`) |
+| [`@real-a11y-dev/cli`](/packages/cli) | The `real-a11y` shell command — audits, perception views (`tree` / `outline` / `tabs` / `list` / `inspect`), and `snapshot` + `diff` from the shell and CI. A command, not a library — the programmatic engine lives in `snapshot`. | `@real-a11y-dev/audit`, `@real-a11y-dev/snapshot`, `@real-a11y-dev/browser` (optional peer: `playwright`) |
 
 A private `@real-a11y-dev/semantic-navigator-extension` workspace builds the Chrome extension using the same engine — unlike the packages above, it is not published to npm.
 
@@ -42,13 +43,15 @@ A private `@real-a11y-dev/semantic-navigator-extension` workspace builds the Chr
         └─▶ audit       (Finding model, rules, collectFindings, assert*)
                  │
                  ├─▶ snapshot   (fingerprints, artifact, findings/views diff, baselines — Node-only)
-                 ├─▶ testing    (matchers, interaction diff, Playwright adapter)
-                 ├─▶ mcp        (MCP server for AI agents)  ── also depends on → testing (page-bundle)
-                 └─▶ cli        (the real-a11y shell, bin-only)  ── also depends on → snapshot, mcp
+                 ├─▶ browser    (Playwright BrowserSession + the injected page-bundle)
+                 ├─▶ testing    (matchers, interaction diff; adapter injects browser's bundle)
+                 ├─▶ mcp        (MCP server for AI agents)  ── also depends on → browser
+                 └─▶ cli        (the real-a11y shell, bin-only)  ── also depends on → snapshot, browser
 
-  cli → { audit, snapshot, mcp }        mcp → { audit, testing }
-  audit is imported directly everywhere — no reaching the engine through the test-helper package.
-  snapshot is Node-only (node:crypto) and never enters the page bundle.
+  cli → { audit, snapshot, browser }    mcp → { audit, browser }    testing → { …, browser }
+  browser is the ONLY package that touches Playwright — everything above it is browserless.
+  audit is imported directly everywhere — no reaching an engine through the test-helper package.
+  snapshot is Node-only (node:crypto) and never enters the page bundle; browser *builds* it.
   Standalone:  @real-a11y-dev/validate — aria-query-backed ARIA validation, no internal deps.
   Private:     @real-a11y-dev/semantic-navigator-extension — Chrome extension, not published.
 ```
@@ -76,6 +79,9 @@ A finding — "this button has no accessible name" — is defined and detected i
 
 ### The snapshot engine has one home
 Like a finding, a _snapshot_ — the diffable `a11y-snapshot.json`, its frozen `v1:` fingerprints, and the diff over them — is built and compared in exactly one place: `@real-a11y-dev/snapshot`, Node-only and depending on nothing but `audit` and `core`. The CLI and the MCP server both capture through it and diff through it, so a snapshot taken by one and compared by the other is byte-for-byte identical: fingerprint parity stops being a discipline ("both surfaces must build the artifact the same way") and becomes structural (there is only one place the code lives). This is also why the CLI is a command, not a library — anyone who wants the engine programmatically imports `snapshot` directly, and the CLI ships just its `bin`.
+
+### The real browser lives in one place
+Driving a real Chromium — launching Playwright, injecting the page-bundle, marshalling calls across `page.evaluate()` — is the one genuinely heavyweight dependency in the stack. It all lives in `@real-a11y-dev/browser`: the `BrowserSession` and the injected bundle it ships, depending on `audit`/`serialize`/`core` and an *optional* `playwright` peer. The CLI, the MCP server, and the testing Playwright adapter all drive the browser through this single package, so there is exactly one place the bundle is built and one contract for injecting it — a tree captured by any of the three is identical. Everything above `browser` is browserless and Node- or jsdom-safe; a consumer that only needs the engine never pulls Playwright into its graph.
 
 ### UI is bundled, not shipped separately
 In theory `@real-a11y-dev/semantic-navigator-ui` could be a normal dependency. In practice consumers always want the exact tree-view version the parent package was tested against. Bundling via `noExternal` eliminates an entire class of peer-range support questions and lets the UI refactor freely inside any release that also updates its consumers.
