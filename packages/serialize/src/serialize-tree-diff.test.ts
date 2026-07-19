@@ -295,6 +295,37 @@ describe("serializeTreeDiff", () => {
     expect(out).not.toContain("2 minutes ago");
   });
 
+  it("redacts EVERY occurrence in a name and change value, not just the first", () => {
+    // Regression: non-global `.replace` left the second match in place, both in
+    // the node label (redacted name) and in the rendered `before → after` value.
+    const out = serializeTreeDiff(
+      {
+        added: [],
+        removed: [],
+        changed: [
+          {
+            id: "sn-s",
+            before: mk("status", {
+              id: "sn-s",
+              name: "Total $28.50 plus $2.00",
+            }),
+            after: mk("status", {
+              id: "sn-s",
+              name: "Total $30.00 plus $3.00",
+            }),
+            changes: ["a11y.name"],
+          },
+        ],
+      },
+      { redact: [/\$[\d.]+/] },
+    );
+    // Positive form: both occurrences masked, nothing over-blanked.
+    expect(out).toContain("Total [REDACTED] plus [REDACTED]");
+    for (const leaked of ["$28.50", "$2.00", "$30.00", "$3.00"]) {
+      expect(out).not.toContain(leaked);
+    }
+  });
+
   it("never emits a node id (sn-) across any section", () => {
     const before = mk("list", { id: "sn-99", name: "Nav", childIds: ["sn-1"] });
     const after = mk("list", {
