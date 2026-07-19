@@ -642,7 +642,7 @@ export function buildServer(
       const page = buildSnapshotPage(name, currentUrl, projectSnapshot(raw), {
         root: rootSelector,
       });
-      checkpoints.save(name, page);
+      checkpoints.save(name, { page, rules });
       const treeKb = (page.tree.length / 1024).toFixed(1);
       return text(
         `"${name}" saved: ${page.findings.length} finding(s) (tree ${treeKb} KB). ${checkpoints.size} checkpoint(s) stored.`,
@@ -666,11 +666,13 @@ export function buildServer(
           `No checkpoint named "${name}". Save one first with save_checkpoint.`,
         );
       }
-      const raw = await session.snapshot(rootSelector);
+      // Re-snapshot with the SAME rule set the checkpoint was captured with, so
+      // findings from rules the base never ran don't read as spurious NEW.
+      const raw = await session.snapshot(rootSelector, { rules: base.rules });
       const head = buildSnapshotPage(name, currentUrl, projectSnapshot(raw), {
         root: rootSelector,
       });
-      return text(renderDiff(diffCheckpointPages(base, head)));
+      return text(renderDiff(diffCheckpointPages(base.page, head)));
     },
   );
 
@@ -688,7 +690,9 @@ export function buildServer(
       if (!b) return errText(`No checkpoint named "${base}".`);
       const h = checkpoints.get(head);
       if (!h) return errText(`No checkpoint named "${head}".`);
-      return text(renderDiff(diffLabeledCheckpoints(b, h), { base, head }));
+      return text(
+        renderDiff(diffLabeledCheckpoints(b.page, h.page), { base, head }),
+      );
     },
   );
 
@@ -708,8 +712,8 @@ export function buildServer(
       const lines = checkpoints
         .entries()
         .map(
-          ([name, p]) =>
-            `  ${name}: ${p.findings.length} finding(s), tree ${(p.tree.length / 1024).toFixed(1)} KB`,
+          ([name, cp]) =>
+            `  ${name}: ${cp.page.findings.length} finding(s), tree ${(cp.page.tree.length / 1024).toFixed(1)} KB`,
         );
       return text(`${checkpoints.size} checkpoint(s):\n${lines.join("\n")}`);
     },
@@ -725,13 +729,23 @@ export function buildServer(
       inputSchema: { name: checkpointName },
     },
     async ({ name }) => {
-      const page = checkpoints.get(name);
-      if (!page) return errText(`No checkpoint named "${name}".`);
-      const artifact = buildArtifact([page], {
+      const cp = checkpoints.get(name);
+      if (!cp) return errText(`No checkpoint named "${name}".`);
+      const artifact = buildArtifact([cp.page], {
         toolName: "@real-a11y-dev/mcp",
         toolVersion: packageVersion(),
+        ...(cp.rules ? { rules: cp.rules } : {}),
       });
-      return text(serializeArtifact(artifact));
+      const json = serializeArtifact(artifact);
+      // Never truncate a JSON artifact into invalid JSON — the outer bounded()
+      // cap would corrupt it. Fail cleanly so the agent narrows the root and
+      // re-exports valid JSON instead of importing garbage.
+      if (json.length > MAX_OUTPUT_CHARS) {
+        return errText(
+          `Checkpoint "${name}" is too large to export inline (${Math.round(json.length / 1024)} KB > ${MAX_OUTPUT_CHARS / 1024} KB cap). Re-save it with a narrower rootSelector.`,
+        );
+      }
+      return text(json);
     },
   );
 
@@ -759,7 +773,10 @@ export function buildServer(
         const parsed = parseSnapshotArtifact(artifact);
         const page = parsed.pages[0];
         if (!page) return errText(`Artifact for "${name}" has no pages.`);
-        checkpoints.save(name, page);
+        checkpoints.save(name, {
+          page,
+          rules: parsed.meta?.rules ?? undefined,
+        });
         const extra =
           parsed.pages.length > 1
             ? ` (first of ${parsed.pages.length} pages)`

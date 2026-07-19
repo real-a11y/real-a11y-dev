@@ -34,7 +34,7 @@ const page = (name: string, findings: Finding[]): SnapshotPage =>
 
 describe("CheckpointStore", () => {
   it("evicts the least-recently-saved when over capacity", () => {
-    const store = new CheckpointStore(2);
+    const store = new CheckpointStore<SnapshotPage>(2);
     store.save("a", page("a", []));
     store.save("b", page("b", []));
     store.save("c", page("c", [])); // evicts "a"
@@ -45,7 +45,7 @@ describe("CheckpointStore", () => {
   });
 
   it("re-saving a name refreshes its recency", () => {
-    const store = new CheckpointStore(2);
+    const store = new CheckpointStore<SnapshotPage>(2);
     store.save("a", page("a", []));
     store.save("b", page("b", []));
     store.save("a", page("a", [])); // "a" is now newest
@@ -55,7 +55,7 @@ describe("CheckpointStore", () => {
   });
 
   it("clear() empties the store", () => {
-    const store = new CheckpointStore();
+    const store = new CheckpointStore<SnapshotPage>();
     store.save("a", page("a", []));
     store.clear();
     expect(store.size).toBe(0);

@@ -25,25 +25,38 @@ import {
 export const MAX_CHECKPOINTS = 20;
 
 /**
+/**
+ * A stored checkpoint: the snapshotted page plus the rule subset it was
+ * captured with. The rules are remembered so a later `diff_checkpoint`
+ * re-snapshots with the SAME rules — otherwise a checkpoint saved with a subset
+ * would diff against an all-rules re-snapshot and report the omitted rules'
+ * findings as spurious NEW (or FIXED). `undefined` means "all rules".
+ */
+export interface Checkpoint {
+  page: SnapshotPage;
+  rules?: string[];
+}
+
+/**
  * A bounded, insertion-ordered store of named checkpoints. Re-saving a name
  * moves it to newest; once full, the least-recently-saved checkpoint is
  * evicted, so a runaway agent can't grow the map without bound.
  */
-export class CheckpointStore {
-  private readonly map = new Map<string, SnapshotPage>();
+export class CheckpointStore<T = Checkpoint> {
+  private readonly map = new Map<string, T>();
 
   constructor(private readonly cap: number = MAX_CHECKPOINTS) {}
 
-  save(name: string, page: SnapshotPage): void {
+  save(name: string, value: T): void {
     this.map.delete(name); // re-save ⇒ move to newest
-    this.map.set(name, page);
+    this.map.set(name, value);
     while (this.map.size > this.cap) {
       const oldest = this.map.keys().next().value as string;
       this.map.delete(oldest);
     }
   }
 
-  get(name: string): SnapshotPage | undefined {
+  get(name: string): T | undefined {
     return this.map.get(name);
   }
 
@@ -59,7 +72,7 @@ export class CheckpointStore {
     return this.map.size;
   }
 
-  entries(): Array<[string, SnapshotPage]> {
+  entries(): Array<[string, T]> {
     return [...this.map];
   }
 }

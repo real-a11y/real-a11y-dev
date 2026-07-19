@@ -587,4 +587,70 @@ describe("checkpoints", () => {
       cliPage.findings.map((f) => f.fingerprint),
     );
   });
+
+  it("diff_checkpoint re-snapshots with the rules the checkpoint was saved with", async () => {
+    const client = await connect(session);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/" },
+    });
+    session.snapshotResponse = rawWith([]);
+    await client.callTool({
+      name: "save_checkpoint",
+      arguments: { name: "hp", rules: ["heading-order"] },
+    });
+    await client.callTool({
+      name: "diff_checkpoint",
+      arguments: { name: "hp" },
+    });
+    // The diff's re-snapshot must carry the same rule subset, not all rules —
+    // otherwise the omitted rules would surface as spurious NEW.
+    const snaps = session.calls.filter((c) => c.fn === "snapshot");
+    expect(snaps.at(-1)?.args[0]).toEqual({ rules: ["heading-order"] });
+  });
+
+  it("export_checkpoint round-trips as valid JSON for a normal page", async () => {
+    const client = await connect(session);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/" },
+    });
+    session.snapshotResponse = rawWith([button("#save")]);
+    await client.callTool({
+      name: "save_checkpoint",
+      arguments: { name: "ok" },
+    });
+    const exported = textOf(
+      await client.callTool({
+        name: "export_checkpoint",
+        arguments: { name: "ok" },
+      }),
+    );
+    expect(() => parseSnapshotArtifact(exported)).not.toThrow();
+  });
+
+  it("export_checkpoint fails cleanly instead of truncating a too-large artifact", async () => {
+    const client = await connect(session);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/" },
+    });
+    // The tree field is not length-capped; make it exceed the 40k output cap.
+    session.snapshotResponse = {
+      findings: [],
+      tree: "x".repeat(45_000),
+      outline: "",
+      tabOrder: "",
+    };
+    await client.callTool({
+      name: "save_checkpoint",
+      arguments: { name: "big" },
+    });
+    const res = await client.callTool({
+      name: "export_checkpoint",
+      arguments: { name: "big" },
+    });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toMatch(/too large to export inline/);
+  });
 });
