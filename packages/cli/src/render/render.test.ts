@@ -1,4 +1,4 @@
-import type { Finding } from "@real-a11y-dev/testing";
+import type { Finding } from "@real-a11y-dev/audit";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { fingerprintFindings } from "../fingerprint.js";

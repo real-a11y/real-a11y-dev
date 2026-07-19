@@ -16,7 +16,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import type { Finding } from "@real-a11y-dev/testing";
+import type { Finding } from "@real-a11y-dev/audit";
 
 import { diffFindings } from "./diff/findings-diff.js";
 import { CliError } from "./exit.js";

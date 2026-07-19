@@ -7,8 +7,8 @@
  * renderers assume clean input.
  */
 
-import type { Finding } from "@real-a11y-dev/testing";
-import { ALL_RULES } from "@real-a11y-dev/testing";
+import type { Finding } from "@real-a11y-dev/audit";
+import { ALL_RULES } from "@real-a11y-dev/audit";
 
 /**
  * C0 controls (minus \t \n), DEL, C1 controls, and bidi override/isolate

@@ -23,7 +23,8 @@
  * across Node builds; page content is arbitrary Unicode).
  */
 
-import { INTERACTIVE_ROLES, ROLE_FILTER_GROUPS } from "@real-a11y-dev/testing";
+import { INTERACTIVE_ROLES } from "@real-a11y-dev/audit";
+import { ROLE_FILTER_GROUPS } from "@real-a11y-dev/core";
 
 import {
   stripFocusMarker,

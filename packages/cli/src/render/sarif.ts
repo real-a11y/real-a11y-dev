@@ -21,7 +21,7 @@
 
 import { basename, isAbsolute, relative } from "node:path";
 
-import { ALL_RULES } from "@real-a11y-dev/testing";
+import { ALL_RULES } from "@real-a11y-dev/audit";
 
 import type { SnapshotArtifact } from "../snapshot-artifact.js";
 

@@ -1,7 +1,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { ALL_RULES } from "@real-a11y-dev/testing";
-import type { Finding } from "@real-a11y-dev/testing";
+import { ALL_RULES } from "@real-a11y-dev/audit";
+import type { Finding } from "@real-a11y-dev/audit";
 import { describe, it, expect, beforeEach } from "vitest";
 
 import type {
