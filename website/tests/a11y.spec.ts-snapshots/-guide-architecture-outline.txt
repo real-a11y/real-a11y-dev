@@ -17,6 +17,7 @@ h1 Architecture
     h3 Testing is fully headless
     h3 The findings engine has one home
     h3 The snapshot engine has one home
+    h3 The real browser lives in one place
     h3 UI is bundled, not shipped separately
   h2 Build pipeline per package
   h2 The SemanticNode data model

@@ -1,13 +1,13 @@
 {
-  "name": "@real-a11y-dev/cli",
+  "name": "@real-a11y-dev/browser",
   "version": "0.1.0-beta.0",
-  "description": "Audit what a screen reader hears, from your shell — semantic-tree accessibility audits with CI-grade exit codes and formats",
+  "description": "Drive a real browser for Real A11y — the Playwright-based BrowserSession plus the injected page-bundle. The one way to extract a live accessibility tree from a real Chromium.",
   "license": "MIT",
   "author": "Juan Crisostomo (Real A11y)",
   "repository": {
     "type": "git",
     "url": "https://github.com/real-a11y/real-a11y-dev.git",
-    "directory": "packages/cli"
+    "directory": "packages/browser"
   },
   "homepage": "https://real-a11y.dev",
   "bugs": {
@@ -17,23 +17,26 @@
     "a11y",
     "accessibility",
     "aria",
-    "cli",
-    "audit",
-    "ci",
-    "semantic-tree",
-    "screen-reader"
+    "playwright",
+    "browser",
+    "accessibility-tree"
   ],
   "engines": {
     "node": ">=20"
   },
   "type": "module",
-  "bin": {
-    "real-a11y": "./dist/index.js"
-  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "files": [
-    "dist",
-    "LICENSE"
+    "dist"
   ],
   "publishConfig": {
     "access": "public",
@@ -44,12 +47,12 @@
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:e2e": "vitest run --config vitest.e2e.config.ts"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@real-a11y-dev/audit": "workspace:*",
-    "@real-a11y-dev/browser": "workspace:*",
-    "@real-a11y-dev/snapshot": "workspace:*"
+    "@real-a11y-dev/core": "workspace:*",
+    "@real-a11y-dev/serialize": "workspace:*"
   },
   "peerDependencies": {
     "playwright": ">=1.49.0 <2"

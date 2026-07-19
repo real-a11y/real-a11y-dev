@@ -1,7 +1,7 @@
 /**
  * Adapter between CLI flags and the shared engine's BrowserSession — imported
- * from `@real-a11y-dev/mcp/browser` (the subpath that carries none of the MCP
- * SDK graph), and only ever dynamically, so browser-free invocations never
+ * from `@real-a11y-dev/browser` (a standalone package that carries none of the
+ * MCP SDK graph), and only ever dynamically, so browser-free invocations never
  * resolve playwright.
  *
  * Also owns the two friendliest errors in the tool: Playwright missing and
@@ -13,7 +13,7 @@ import type {
   BrowserSession,
   OpenOptions,
   SnapshotOptions,
-} from "@real-a11y-dev/mcp/browser";
+} from "@real-a11y-dev/browser";
 
 import {
   projectSnapshot,
@@ -86,7 +86,7 @@ export async function createSession(
     }
     throw err;
   }
-  const { BrowserSession } = await import("@real-a11y-dev/mcp/browser");
+  const { BrowserSession } = await import("@real-a11y-dev/browser");
   const proxy = proxyFromEnv();
   const session = new BrowserSession({
     headless: !flags.headful,

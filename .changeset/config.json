@@ -9,6 +9,7 @@
       "@real-a11y-dev/serialize",
       "@real-a11y-dev/audit",
       "@real-a11y-dev/snapshot",
+      "@real-a11y-dev/browser",
       "@real-a11y-dev/semantic-navigator-ui",
       "@real-a11y-dev/inspector",
       "@real-a11y-dev/react",
