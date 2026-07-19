@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 import { resetIdCounter } from "../utils/id-generator.js";
 
@@ -16,6 +16,10 @@ function createPage(html: string): Element {
 }
 
 describe("DOM clobbering resilience", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("does not crash when an element's `id` property is clobbered by a named child", () => {
     // Regression: a <form> (or the other legacy named-property elements) with a
     // child named `id` makes `element.id` return that CHILD ELEMENT instead of a
@@ -90,6 +94,105 @@ describe("DOM clobbering resilience", () => {
     expect(names).toContain("Number of children");
     expect(names).toContain("Notes");
     expect(names).toContain("Save");
+  });
+
+  it("does not drop the subtree when the `hidden` property is clobbered by a named child", () => {
+    // Regression: a <form> with <input name="hidden"> (or id="hidden") makes
+    // `form.hidden` return that CHILD ELEMENT — a truthy value — so the naive
+    // `if (element.hidden)` in isSubtreeHidden treated the form as hidden and
+    // silently dropped its ENTIRE subtree. isHiddenFromAT had the same read, so
+    // the form would also be filtered out of the a11y view. Not a crash — quiet
+    // data loss. Both now read the real state via the prototype getter.
+    const root = createPage(`
+      <main>
+        <form aria-label="Filters">
+          <input name="hidden" aria-label="Include archived" />
+          <button type="submit">Apply</button>
+        </form>
+      </main>
+    `);
+
+    const form = root.querySelector("form")!;
+    // Force the clobber deterministically (jsdom does not auto-override).
+    Object.defineProperty(form, "hidden", {
+      configurable: true,
+      get: () => form.querySelector('[name="hidden"]'),
+    });
+    expect(typeof form.hidden).not.toBe("boolean"); // sanity: now an element
+
+    // isSubtreeHidden must not be fooled — the form and its controls stay in
+    // the raw DOM tree.
+    const domTree = extractDomTree(root);
+    const domNames = [...domTree.nodes.values()].map((n) => n.a11y.name);
+    expect(domNames).toContain("Filters");
+    expect(domNames).toContain("Include archived");
+    expect(domNames).toContain("Apply");
+
+    // isHiddenFromAT must not be fooled either — the form stays exposed to AT
+    // (otherwise the a11y view would filter it back out).
+    const formNode = [...domTree.nodes.values()].find(
+      (n) => n.a11y.name === "Filters",
+    )!;
+    expect(formNode.a11y.isExposedToAT).toBe(true);
+
+    // ...and it survives a11y filtering.
+    const a11yNames = [...extractA11yTree(root).nodes.values()].map(
+      (n) => n.a11y.name,
+    );
+    expect(a11yNames).toContain("Filters");
+    expect(a11yNames).toContain("Apply");
+  });
+
+  it("skips only the offending element (and its subtree) when its processing throws, keeping the rest of the tree", () => {
+    // The per-element error boundary. If ANY read on ONE element throws — here a
+    // clobbered `tagName` (`<input name="tagName">` on a [LegacyOverrideBuiltIns]
+    // <form> makes `element.tagName.toLowerCase()` throw) — that element and its
+    // subtree are dropped, but siblings and ancestors still extract. Before the
+    // boundary a single throw unwound the whole walk and the panel hung forever.
+    const root = createPage(`
+      <main>
+        <h1>Before</h1>
+        <section aria-label="Doomed">
+          <button>Doomed button</button>
+        </section>
+        <h2>After</h2>
+      </main>
+    `);
+
+    const doomed = root.querySelector("section")!;
+    // Clobber tagName to a non-string so `.toLowerCase()` throws on this element.
+    Object.defineProperty(doomed, "tagName", {
+      configurable: true,
+      get: () => root.querySelector("h1"), // an element, not a string
+    });
+
+    // The boundary warns (outside production) rather than staying silent.
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    expect(() => extractDomTree(root)).not.toThrow();
+    const result = extractDomTree(root);
+    const names = [...result.nodes.values()].map((n) => n.a11y.name);
+
+    // The rest of the tree survives.
+    expect(names).toContain("Before");
+    expect(names).toContain("After");
+
+    // The doomed element and its whole subtree are gone.
+    expect(names).not.toContain("Doomed");
+    expect(names).not.toContain("Doomed button");
+
+    // No orphaned half-built node: every node in the map is reachable from the
+    // root through childIds (the caught element committed nothing).
+    const reachable = new Set<string>();
+    const visit = (id: string): void => {
+      if (reachable.has(id)) return;
+      reachable.add(id);
+      for (const childId of result.nodes.get(id)!.childIds) visit(childId);
+    };
+    visit(result.rootId);
+    expect(reachable.size).toBe(result.nodes.size);
+
+    expect(warnSpy).toHaveBeenCalled();
   });
 });
 

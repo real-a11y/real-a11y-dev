@@ -4,6 +4,8 @@
  * and HTML Accessibility API Mappings (https://w3c.github.io/html-aam/).
  */
 
+import { safeHidden } from "./clobber-safe.js";
+
 type RoleResolver = string | ((el: Element) => string);
 
 function hasAccessibleName(el: Element): boolean {
@@ -188,7 +190,10 @@ export function isHiddenFromAT(element: Element): boolean {
   // element drops out, children are promoted to the parent).
 
   const htmlEl = element as HTMLElement;
-  if (htmlEl.hidden) return true;
+  // Clobber-immune read: on a `<form>` with `<input name="hidden">` the plain
+  // `.hidden` property returns that input (truthy), which would wrongly hide the
+  // whole form. safeHidden() reads the real state via the prototype getter.
+  if (safeHidden(element)) return true;
 
   // The HTML `inert` attribute makes an element and its entire subtree
   // inaccessible to AT (and non-focusable). Treated the same as aria-hidden.
