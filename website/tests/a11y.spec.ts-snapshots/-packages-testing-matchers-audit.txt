@@ -106,6 +106,8 @@ navigation "On this page"
     listitem
       link "a11ySnapshot(root, options?) — snapshot serializer"
     listitem
+      link "Rules, contracts, and snapshots — which to reach for"
+    listitem
       link "Vitest vs Jest type augmentation"
     listitem
       link "See it running"
@@ -334,6 +336,88 @@ main
   heading "Modal scoping in snapshots" (level 3)
   paragraph "Because the snapshot reflects the extracted a11y tree, an open dialog the snapshot — content behind a modal is inert to assistive tech, so it drops out and the snapshot captures only the dialog. That makes the snapshot a precise regression artifact for the modal state, not just the page."
     strong "scopes"
+  heading "Rules, contracts, and snapshots — which to reach for" (level 2)
+  paragraph "Three of these matchers assert about the same tree but answer different questions, so it's worth being precise about when each earns its place."
+  table
+    rowgroup
+      row
+        rowheader
+        rowheader "Rule-basedtoBeValidA11yTree, toHaveNoUnlabeledInteractive, …"
+          code "toBeValidA11yTree"
+          code "toHaveNoUnlabeledInteractive"
+        rowheader "ContracttoMatchA11yContract"
+          code "toMatchA11yContract"
+        rowheader "Snapshota11ySnapshot + toMatchSnapshot"
+          code "a11ySnapshot"
+          code "toMatchSnapshot"
+    rowgroup
+      row
+        cell "Asks"
+        cell ""Is this markup legal?""
+          strong "legal"
+        cell ""Is this the markup I meant?""
+          strong "meant"
+        cell ""Did anything change?""
+          strong "anything"
+      row
+        cell "Source of truth"
+        cell "ARIA rules"
+        cell "A spec you author"
+        cell "The last recording"
+      row
+        cell "Authoring cost"
+        cell "none"
+        cell "you write the contract"
+        cell "none (-u records it)"
+          code "-u"
+      row
+        cell "Scope"
+        cell "whole tree, blanket"
+        cell "only the nodes you list"
+        cell "whole tree, total"
+      row
+        cell "Churn on cosmetic change"
+        cell "no"
+        cell "no"
+        cell "yes"
+          strong "yes"
+  heading "Rules and contracts catch disjoint bugs" (level 3)
+    emphasis "disjoint"
+  paragraph "The most important thing to internalize: and are . Each passes where the other fails."
+    code "toBeValidA11yTree()"
+    code "toMatchA11yContract()"
+    strong "orthogonal"
+  paragraph "— a rule can't help you:"
+    strong "Valid ARIA, but violates your intent"
+  button "Copy Code"
+  code
+  paragraph ": a named link is perfectly legal ARIA, and nothing in the spec says this is wrong. : you specified a button."
+    code "toBeValidA11yTree()"
+    strong "passes"
+    code "toMatchA11yContract('button "Sign in"')"
+    strong "fails"
+    emphasis "Validity can't know your intent."
+  paragraph "— a contract can't help you:"
+    strong "Matches your intent, but invalid ARIA"
+  button "Copy Code"
+  code
+  paragraph ": containment only checks the nodes you listed, and the extra button is an allowed extra. : requires an accessible name."
+    code "toMatchA11yContract('main\n button "Save"')"
+    strong "passes"
+    code "toBeValidA11yTree()"
+    strong "fails"
+    code "button"
+    emphasis "A contract can't catch what you never thought to specify."
+  heading "In practice" (level 3)
+  list
+    listitem "is a blanket floor with zero authoring cost — apply it broadly."
+      strong "Rules everywhere."
+      code "toBeValidA11yTree()"
+    listitem "— a login form, a checkout step, a modal's focus scope. The rule catches "this is broken ARIA"; the contract catches "this is valid ARIA that's no longer the thing we designed.""
+      strong "A contract for the flows where structure the requirement"
+        emphasis "is"
+    listitem "of a stable surface and accept the churn. Contracts are the deliberate middle ground: more intentional than a snapshot (a failure always means something you chose to care about), more expressive than a rule (it knows your design, which no rule engine can infer)."
+      strong "A snapshot when you want total coverage"
   heading "Vitest vs Jest type augmentation" (level 2)
   paragraph "The matcher signatures are identical; only the type wiring differs:"
   table

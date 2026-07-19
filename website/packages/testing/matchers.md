@@ -232,6 +232,47 @@ When in doubt: `auditSnapshot` for "I need the string," `a11ySnapshot` for "I'm 
 
 Because the snapshot reflects the extracted a11y tree, an open dialog **scopes** the snapshot — content behind a modal is inert to assistive tech, so it drops out and the snapshot captures only the dialog. That makes the snapshot a precise regression artifact for the modal state, not just the page.
 
+## Rules, contracts, and snapshots — which to reach for
+
+Three of these matchers assert about the same tree but answer different questions, so it's worth being precise about when each earns its place.
+
+| | Rule-based<br/>`toBeValidA11yTree`, `toHaveNoUnlabeledInteractive`, … | Contract<br/>`toMatchA11yContract` | Snapshot<br/>`a11ySnapshot` + `toMatchSnapshot` |
+|---|---|---|---|
+| Asks | "Is this markup **legal**?" | "Is this the markup I **meant**?" | "Did **anything** change?" |
+| Source of truth | ARIA rules | A spec you author | The last recording |
+| Authoring cost | none | you write the contract | none (`-u` records it) |
+| Scope | whole tree, blanket | only the nodes you list | whole tree, total |
+| Churn on cosmetic change | no | no | **yes** |
+
+### Rules and contracts catch *disjoint* bugs
+
+The most important thing to internalize: `toBeValidA11yTree()` and `toMatchA11yContract()` are **orthogonal**. Each passes where the other fails.
+
+**Valid ARIA, but violates your intent** — a rule can't help you:
+
+```html
+<a href="/signin">Sign in</a>   <!-- you meant a button -->
+```
+
+`toBeValidA11yTree()` **passes**: a named link is perfectly legal ARIA, and nothing in the spec says this is wrong. `toMatchA11yContract('button "Sign in"')` **fails**: you specified a button. *Validity can't know your intent.*
+
+**Matches your intent, but invalid ARIA** — a contract can't help you:
+
+```html
+<main>
+  <button>Save</button>
+  <button aria-label=""></button>   <!-- unnamed -->
+</main>
+```
+
+`toMatchA11yContract('main\n  button "Save"')` **passes**: containment only checks the nodes you listed, and the extra button is an allowed extra. `toBeValidA11yTree()` **fails**: `button` requires an accessible name. *A contract can't catch what you never thought to specify.*
+
+### In practice
+
+- **Rules everywhere.** `toBeValidA11yTree()` is a blanket floor with zero authoring cost — apply it broadly.
+- **A contract for the flows where structure *is* the requirement** — a login form, a checkout step, a modal's focus scope. The rule catches "this is broken ARIA"; the contract catches "this is valid ARIA that's no longer the thing we designed."
+- **A snapshot when you want total coverage** of a stable surface and accept the churn. Contracts are the deliberate middle ground: more intentional than a snapshot (a failure always means something you chose to care about), more expressive than a rule (it knows your design, which no rule engine can infer).
+
 ## Vitest vs Jest type augmentation
 
 The matcher signatures are identical; only the type wiring differs:

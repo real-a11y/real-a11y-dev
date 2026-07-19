@@ -19,6 +19,9 @@ h1 Matchers
   h2 a11ySnapshot(root, options?) — snapshot serializer
     h3 a11ySnapshot vs auditSnapshot
     h3 Modal scoping in snapshots
+  h2 Rules, contracts, and snapshots — which to reach for
+    h3 Rules and contracts catch disjoint bugs
+    h3 In practice
   h2 Vitest vs Jest type augmentation
   h2 See it running
   h2 See also
