@@ -101,6 +101,10 @@ function buildSerializableTree(change?: TreeChange): SerializableTree {
 }
 
 function publish(change?: TreeChange) {
+  // The extractor only exists once a story has rendered (start()). A channel
+  // event such as SET_MODE can arrive before that, so publishing must be a
+  // no-op until then rather than dereferencing a null extractor.
+  if (!liveExtractor) return;
   const channel = addons.getChannel();
 
   const payload: TreeUpdatePayload = {
@@ -142,6 +146,7 @@ function stop() {
   observer = null;
   focusManager = null;
   dispatcher = null;
+  liveExtractor = null;
 }
 
 // ── Bootstrap ────────────────────────────────────────────────────────────────

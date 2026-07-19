@@ -123,6 +123,11 @@ export class LiveTreeExtractor {
         } else if (m.type === "characterData") {
           const target = m.target as CharacterData;
           if (target.parentElement) {
+            // Add the direct parent too (not just its name host): it may carry
+            // the id an aria-labelledby/-describedby referrer points at, and
+            // expandDependencies only discovers referrers from elements in the
+            // dirty set. Mirrors the attribute / childList branches.
+            dirty.add(target.parentElement);
             dirty.add(this.nameRelevantAncestor(target.parentElement));
           }
         }
