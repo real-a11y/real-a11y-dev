@@ -20,6 +20,7 @@ import type { A11ySession, PageSnapshot } from "@real-a11y-dev/browser";
 import {
   buildArtifact,
   buildSnapshotPage,
+  fingerprintFindings,
   parseSnapshotArtifact,
   projectSnapshot,
   serializeArtifact,
@@ -657,7 +658,15 @@ export function buildServer(
       annotations: READ_ONLY,
       description:
         "Re-snapshot the CURRENT page and diff it against the stored checkpoint `name`: which accessibility findings are NEW (these gate CI), CHANGED, or FIXED, plus an advisory structural summary. Use after a change (deploy, feature toggle, DOM edit) or after navigating to a different deploy of the same page.",
-      inputSchema: { name: checkpointName, rootSelector },
+      inputSchema: {
+        name: checkpointName,
+        rootSelector: z
+          .string()
+          .optional()
+          .describe(
+            "CSS root for the re-snapshot. Defaults to the root the checkpoint was saved with.",
+          ),
+      },
     },
     async ({ name, rootSelector }) => {
       const base = checkpoints.get(name);
@@ -666,11 +675,13 @@ export function buildServer(
           `No checkpoint named "${name}". Save one first with save_checkpoint.`,
         );
       }
-      // Re-snapshot with the SAME rule set the checkpoint was captured with, so
-      // findings from rules the base never ran don't read as spurious NEW.
-      const raw = await session.snapshot(rootSelector, { rules: base.rules });
+      // Re-snapshot with the SAME root AND rule set the checkpoint was captured
+      // with (unless the caller overrides the root), so findings from a wider
+      // scope or from rules the base never ran don't read as spurious NEW.
+      const root = rootSelector ?? base.page.root;
+      const raw = await session.snapshot(root, { rules: base.rules });
       const head = buildSnapshotPage(name, currentUrl, projectSnapshot(raw), {
-        root: rootSelector,
+        root,
       });
       return text(renderDiff(diffCheckpointPages(base.page, head)));
     },
@@ -771,8 +782,18 @@ export function buildServer(
     async ({ name, artifact }) => {
       try {
         const parsed = parseSnapshotArtifact(artifact);
-        const page = parsed.pages[0];
-        if (!page) return errText(`Artifact for "${name}" has no pages.`);
+        const src = parsed.pages[0];
+        if (!src) return errText(`Artifact for "${name}" has no pages.`);
+        // Store under `name` with the page renamed and re-fingerprinted to that
+        // label — exactly as save_checkpoint does — so a later diff_checkpoint
+        // (which builds the head under `name`) joins and matches. The artifact's
+        // original page name would otherwise never equal the store label, and
+        // the diff would report every finding as both NEW and FIXED.
+        const page = {
+          ...src,
+          name,
+          findings: fingerprintFindings(name, src.findings),
+        };
         checkpoints.save(name, {
           page,
           rules: parsed.meta?.rules ?? undefined,

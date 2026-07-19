@@ -120,9 +120,11 @@ export function diffLabeledCheckpoints(
 
 // ── rendering ────────────────────────────────────────────────────────────
 
-/** Cap per-section entries so a massively-changed page can't blow the agent's
- *  context — never rely on the server's outer `bounded()` slice, which would
- *  cut the text mid-structure. */
+/** Cap per-section entries so a massively-changed page produces a bounded,
+ *  readable delta rather than thousands of lines. A pathological diff (hundreds
+ *  of long messages) can still brush the server's outer `bounded()` cap — that
+ *  mid-line truncation is acceptable for human-readable text, unlike the JSON
+ *  export, which errors rather than emit invalid JSON. */
 const MAX_ENTRIES = 200;
 const MAX_STRUCTURAL = 50;
 

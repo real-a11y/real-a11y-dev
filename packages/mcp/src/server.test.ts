@@ -653,4 +653,59 @@ describe("checkpoints", () => {
     expect(res.isError).toBe(true);
     expect(textOf(res)).toMatch(/too large to export inline/);
   });
+
+  it("import under a new label then diff_checkpoint of an unchanged page reports no change", async () => {
+    const client = await connect(session);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/" },
+    });
+    session.snapshotResponse = rawWith([button("#save")]);
+    // Save as "home" and export — the artifact's page name is "home".
+    await client.callTool({
+      name: "save_checkpoint",
+      arguments: { name: "home" },
+    });
+    const artifact = textOf(
+      await client.callTool({
+        name: "export_checkpoint",
+        arguments: { name: "home" },
+      }),
+    );
+    // Import under a DIFFERENT label — artifact page name ("home") ≠ label.
+    await client.callTool({
+      name: "import_checkpoint",
+      arguments: { name: "baseline", artifact },
+    });
+    // The live page is unchanged, so the diff must be 0 new / 0 fixed — not
+    // every finding double-counted as NEW+FIXED from a name-join miss.
+    const diff = textOf(
+      await client.callTool({
+        name: "diff_checkpoint",
+        arguments: { name: "baseline" },
+      }),
+    );
+    expect(diff).toMatch(/0 new, 0 fixed/);
+  });
+
+  it("diff_checkpoint re-snapshots with the root the checkpoint was saved with", async () => {
+    const client = await connect(session);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/" },
+    });
+    session.snapshotResponse = rawWith([]);
+    await client.callTool({
+      name: "save_checkpoint",
+      arguments: { name: "modal", rootSelector: "[role=dialog]" },
+    });
+    // No rootSelector on the diff — it must fall back to the checkpoint's root,
+    // not re-audit the whole "body" and surface the rest of the page as NEW.
+    await client.callTool({
+      name: "diff_checkpoint",
+      arguments: { name: "modal" },
+    });
+    const snaps = session.calls.filter((c) => c.fn === "snapshot");
+    expect(snaps.at(-1)?.rootSelector).toBe("[role=dialog]");
+  });
 });
