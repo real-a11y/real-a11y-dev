@@ -459,6 +459,42 @@ describe("LiveTreeExtractor", () => {
     observer.stop();
   });
 
+  it("updates a name host when a descendant gains a name-barrier role", async () => {
+    document.body.innerHTML = `<main><button><span>Save</span></button></main>`;
+
+    const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
+    let lastChange: TreeChange | undefined;
+    const observer = new DomObserver(
+      document.body,
+      (change) => {
+        lastChange = change;
+      },
+      50,
+    );
+    observer.start();
+
+    // Making the span a name-barrier role removes its text from the button's
+    // computed name. The post-mutation role would stop the ancestor climb at
+    // the span, so the enclosing button must still be re-extracted.
+    const span = document.querySelector("span")!;
+    span.setAttribute("role", "list");
+
+    await vi.advanceTimersByTimeAsync(100);
+
+    const result = live.refresh(lastChange);
+    const expected = extractA11yTree(document.body);
+
+    expect(result.nodes).toEqual(expected.nodes);
+
+    const button = [...result.nodes.values()].find(
+      (n) => n.a11y.role === "button",
+    );
+    // A barrier-role descendant no longer contributes to the button's name.
+    expect(button?.a11y.name).not.toBe("Save");
+
+    observer.stop();
+  });
+
   it("updates the outermost host when a nested host's text changes", async () => {
     document.body.innerHTML = `<main><a href="#"><h3>Old</h3></a></main>`;
 

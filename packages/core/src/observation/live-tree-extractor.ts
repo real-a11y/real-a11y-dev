@@ -120,6 +120,14 @@ export class LiveTreeExtractor {
           // name-from-content host, which is computed from that descendant's
           // content. Re-extract the host too so its name doesn't go stale.
           dirty.add(this.nameRelevantAncestor(target));
+          // A `role` change can turn the target into a name-barrier role, and
+          // nameRelevantAncestor reads the post-mutation role, so its climb
+          // stops at the now-barrier target and never reaches an enclosing
+          // host whose name just lost (or gained) this subtree's text. Climb
+          // from the parent so that host is still re-extracted.
+          if (attr === "role" && target.parentElement) {
+            dirty.add(this.nameRelevantAncestor(target.parentElement));
+          }
         } else if (m.type === "characterData") {
           const target = m.target as CharacterData;
           if (target.parentElement) {
