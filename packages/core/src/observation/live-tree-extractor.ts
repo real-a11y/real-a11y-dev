@@ -298,17 +298,7 @@ export class LiveTreeExtractor {
     // characterData path's `nameRelevantAncestor` climb.
     dirty.add(this.nameRelevantAncestor(target));
 
-    const handleNode = (n: Node): boolean => {
-      if (n.nodeType !== 1 /* ELEMENT_NODE */) return false;
-      const el = n as Element;
-
-      if (
-        el.matches?.(PORTAL_OVERLAY_SELECTOR) ||
-        el.querySelector?.(PORTAL_OVERLAY_SELECTOR)
-      ) {
-        return true;
-      }
-
+    const markReferenced = (el: Element): void => {
       const id = el.getAttribute("id");
       if (id) {
         const referrers = this.referrersById.get(id);
@@ -324,6 +314,28 @@ export class LiveTreeExtractor {
           const refEl = el.ownerDocument?.getElementById(refId);
           if (refEl) dirty.add(refEl);
         }
+      }
+    };
+
+    const handleNode = (n: Node): boolean => {
+      if (n.nodeType !== 1 /* ELEMENT_NODE */) return false;
+      const el = n as Element;
+
+      if (
+        el.matches?.(PORTAL_OVERLAY_SELECTOR) ||
+        el.querySelector?.(PORTAL_OVERLAY_SELECTOR)
+      ) {
+        return true;
+      }
+
+      // The id a referrer points at (or a reference attribute) may live on a
+      // descendant of the added/removed node, not just the node itself, so
+      // scan the whole subtree to keep referrers in sync with a full extract.
+      markReferenced(el);
+      for (const desc of el.querySelectorAll(
+        "[id], [aria-labelledby], [aria-describedby], [for]",
+      )) {
+        markReferenced(desc);
       }
 
       return false;

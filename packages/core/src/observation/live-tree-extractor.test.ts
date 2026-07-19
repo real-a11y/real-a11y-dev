@@ -495,6 +495,71 @@ describe("LiveTreeExtractor", () => {
     observer.stop();
   });
 
+  it("invalidates an aria-labelledby referrer when its nested target is removed", async () => {
+    // The referrer button sits in a different container than the removed
+    // wrapper, so re-extracting only the mutation target's subtree would miss
+    // it — the fix must find the referrer via the wrapper's nested id.
+    document.body.innerHTML = `<main><section id="host"><div id="wrap"><span id="lbl">Old</span></div></section><button aria-labelledby="lbl">x</button></main>`;
+
+    const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
+    let lastChange: TreeChange | undefined;
+    const observer = new DomObserver(
+      document.body,
+      (change) => {
+        lastChange = change;
+      },
+      50,
+    );
+    observer.start();
+
+    // The removed node is the wrapper; the referenced id lives on a descendant,
+    // so the button's name still has to be recomputed against a full extract.
+    document.getElementById("wrap")!.remove();
+
+    await vi.advanceTimersByTimeAsync(100);
+
+    const result = live.refresh(lastChange);
+    const expected = extractA11yTree(document.body);
+
+    expect(result.nodes).toEqual(expected.nodes);
+
+    observer.stop();
+  });
+
+  it("keeps parity when a node is reparented between siblings", async () => {
+    document.body.innerHTML = `<main><ul id="a"><li>One</li></ul><ul id="b"></ul></main>`;
+
+    const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
+    let lastChange: TreeChange | undefined;
+    const observer = new DomObserver(
+      document.body,
+      (change) => {
+        lastChange = change;
+      },
+      50,
+    );
+    observer.start();
+
+    const li = document.querySelector("#a li")!;
+    document.getElementById("b")!.appendChild(li);
+
+    await vi.advanceTimersByTimeAsync(100);
+
+    const result = live.refresh(lastChange);
+    const expected = extractA11yTree(document.body);
+
+    expect(result.nodes).toEqual(expected.nodes);
+
+    // Every child id resolves to a node — no dangling reference after the move.
+    for (const node of result.nodes.values()) {
+      for (const childId of node.childIds) {
+        expect(result.nodes.has(childId)).toBe(true);
+      }
+    }
+
+    observer.stop();
+  });
+
   it("updates the outermost host when a nested host's text changes", async () => {
     document.body.innerHTML = `<main><a href="#"><h3>Old</h3></a></main>`;
 
