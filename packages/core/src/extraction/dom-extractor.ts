@@ -109,8 +109,27 @@ function getActions(element: Element): ActionType[] {
     actions.push("click");
   } else if (role === "radio") {
     actions.push("click");
-  } else if (role === "combobox" || role === "listbox") {
-    // Custom combobox/listbox widget — dispatch click to open it natively.
+  } else if (role === "combobox") {
+    // An ARIA combobox is either EDITABLE (a text field you type into, e.g.
+    // Slack's search — the ARIA 1.2 editable-combobox pattern) or SELECT-ONLY
+    // (a popup button with no text entry). A non-native combobox is editable
+    // exactly when it's a contenteditable host; a native <input role="combobox">
+    // is already handled by the tag === "input" branch above. (aria-autocomplete
+    // describes autocomplete *behavior*, not editability — a non-editable div
+    // can't be typed into regardless, so it isn't the signal here.)
+    const ce = element.getAttribute("contenteditable");
+    const editable = ce === "" || ce === "true" || ce === "plaintext-only";
+    if (editable) {
+      // Treat like a textbox so the panel opens its inline input. Deliberately
+      // NOT "click": click outranks type in getPrimaryAction, so a co-present
+      // click would re-hijack the primary action and re-break text entry.
+      actions.push("focus", "type");
+    } else {
+      // Select-only combobox — dispatch click to open the popup natively.
+      actions.push("click");
+    }
+  } else if (role === "listbox") {
+    // Custom listbox widget — dispatch click to open/interact natively.
     // We can't enumerate options from a custom control via GET_FIELD_STATE.
     // Native <select> elements are handled above by the tag === "select" branch.
     actions.push("click");
