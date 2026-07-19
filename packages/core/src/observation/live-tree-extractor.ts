@@ -157,7 +157,8 @@ export class LiveTreeExtractor {
         return this.extract();
       }
       const { parentId, depth } = existing;
-      this.deleteSubtree(getNodeId(r));
+      const rId = getNodeId(r);
+      this.deleteSubtree(rId);
       extractDomTree(r, {
         nodes: this.domNodes,
         parentId,
@@ -165,6 +166,16 @@ export class LiveTreeExtractor {
         descriptionTargetIds: this.descriptionTargetIds,
         includeFocused: false,
       });
+      // If the re-extract skipped the root (it became hidden, or is now an
+      // aria-describedby text provider), the parent still references its now
+      // deleted id. Drop that dangling child so the DOM map stays consistent
+      // with a clean extraction.
+      if (!this.domNodes.has(rId) && parentId) {
+        const parent = this.domNodes.get(parentId);
+        if (parent) {
+          parent.childIds = parent.childIds.filter((cid) => cid !== rId);
+        }
+      }
       this.updateAncestorDescendantText(r);
     }
 
@@ -261,6 +272,13 @@ export class LiveTreeExtractor {
     }
 
     dirty.add(target);
+
+    // A childList change can be a text replacement delivered as node churn
+    // (e.g. `el.textContent = "..."` swaps the text node). If `target` sits
+    // inside a name-from-content host, that host's accessible name is built
+    // from this text, so it must be re-extracted too — mirroring the
+    // characterData path's `nameRelevantAncestor` climb.
+    dirty.add(this.nameRelevantAncestor(target));
 
     const handleNode = (n: Node): boolean => {
       if (n.nodeType !== 1 /* ELEMENT_NODE */) return false;

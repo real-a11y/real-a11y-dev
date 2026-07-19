@@ -135,6 +135,13 @@ export class DomObserver {
   private pendingMutations: MutationRecord[] = [];
   /** Synthetic dirty roots (e.g. form-control input events). */
   private pendingDirtyRoots: Element[] = [];
+  /**
+   * Set when a change can't be handled incrementally and the consumer must do
+   * a full re-extraction — e.g. a portal/overlay mounting or unmounting
+   * OUTSIDE `root`, which the portal observer detects without any
+   * MutationRecord that maps into the observed subtree.
+   */
+  private pendingFull = false;
   /** Upper bound on how long a mutation stream may defer a flush. */
   private readonly maxWaitMs: number;
 
@@ -235,7 +242,13 @@ export class DomObserver {
             }
           }
         }
-        if (sawPortal) this.scheduleChange();
+        if (sawPortal) {
+          // Portal mounts/unmounts happen outside `root`, so they produce no
+          // MutationRecord the incremental path can splice. Flag a full
+          // re-extraction so the extractor re-evaluates portal/modal scope.
+          this.pendingFull = true;
+          this.scheduleChange();
+        }
       });
       this.portalObserver.observe(body, { childList: true });
     }
@@ -275,6 +288,7 @@ export class DomObserver {
     }
     this.pendingMutations = [];
     this.pendingDirtyRoots = [];
+    this.pendingFull = false;
   }
 
   /**
@@ -375,9 +389,11 @@ export class DomObserver {
       dirtyRoots: this.pendingDirtyRoots.length
         ? this.pendingDirtyRoots
         : undefined,
+      ...(this.pendingFull ? { full: true } : {}),
     };
     this.pendingMutations = [];
     this.pendingDirtyRoots = [];
+    this.pendingFull = false;
     this.onTreeChange(change);
   }
 }

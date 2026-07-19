@@ -28,4 +28,6 @@ h1 @real-a11y-dev/core
     h3 diffTrees(before, after)
   h2 DOM observation
     h3 DomObserver
+  h2 Live tree extraction
+    h3 LiveTreeExtractor
   h2 Types

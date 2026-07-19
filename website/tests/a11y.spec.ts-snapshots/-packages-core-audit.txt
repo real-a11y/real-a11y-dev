@@ -100,6 +100,8 @@ navigation "On this page"
     listitem
       link "DOM observation"
     listitem
+      link "Live tree extraction"
+    listitem
       link "Types"
 main
   heading "@real-a11y-dev/core" (level 1)
@@ -335,8 +337,31 @@ main
   heading "DomObserver" (level 3)
     code "DomObserver"
   paragraph "Watches a DOM subtree for mutations and calls a callback. Rapid mutations are debounced, and a max-wait ceiling ensures the callback still fires on a stream that never goes quiet (streaming responses, progress bars, animated content) instead of the debounce deferring it forever."
+  paragraph "The callback receives a object containing the accumulated s and any synthetic dirty roots produced by / events (which MutationObserver cannot see natively)."
+    code "TreeChange"
+    code "MutationRecord"
+    code "input"
+    code "change"
   button "Copy Code"
   code
+  separator
+  heading "Live tree extraction" (level 2)
+  heading "LiveTreeExtractor" (level 3)
+    code "LiveTreeExtractor"
+  paragraph "Stateful extractor that keeps the previous tree in memory and re-extracts only the subtrees that changed, falling back to a full extraction when a mutation has non-local accessibility effects (portal/modal scope changes, , , , , etc.)."
+    code "id"
+    code "aria-labelledby"
+    code "aria-describedby"
+    code "for"
+  paragraph "Used by the Chrome extension, React hook, and Storybook addon to keep the tree fresh during typing or small DOM updates without paying the cost of a full page walk every time."
+  button "Copy Code"
+  code
+  paragraph "is (default) or . Call for an unconditional full re-extract, or to switch views."
+    code "mode"
+    code ""a11y""
+    code ""dom""
+    code "extractor.extract()"
+    code "extractor.setMode(mode)"
   separator
   heading "Types" (level 2)
   button "Copy Code"

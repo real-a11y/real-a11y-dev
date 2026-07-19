@@ -4,6 +4,7 @@ import {
   LiveTreeExtractor,
   DomObserver,
   extractA11yTree,
+  extractDomTree,
   resetIdCounter,
 } from "../index.js";
 import type { TreeChange } from "../types.js";
@@ -277,6 +278,112 @@ describe("LiveTreeExtractor", () => {
 
     const divId = result.nodes.get(result.rootId!)?.childIds[0];
     expect(result.nodes.get(divId!)?.dom.textContent).toBe("New");
+
+    observer.stop();
+  });
+
+  it("includes a portal overlay mounted outside a scoped root", async () => {
+    document.body.innerHTML = `<div id="app"><main><button>Open</button></main></div>`;
+    const root = document.getElementById("app")!;
+
+    const live = new LiveTreeExtractor(root, { mode: "dom" });
+    let lastChange: TreeChange | undefined;
+    const observer = new DomObserver(
+      root,
+      (change) => {
+        lastChange = change;
+      },
+      50,
+    );
+    observer.start();
+
+    // A dropdown menu portals into <body>, outside the observed root. The
+    // primary observer never sees it — only the top-level portal observer does.
+    const menu = document.createElement("div");
+    menu.setAttribute("role", "menu");
+    menu.innerHTML = `<div role="menuitem">Copy</div>`;
+    document.body.appendChild(menu);
+
+    await vi.advanceTimersByTimeAsync(100);
+
+    // The portal observer can't map an out-of-root mount to a MutationRecord,
+    // so it must flag a full re-extraction rather than a silent no-op.
+    expect(lastChange?.full).toBe(true);
+
+    const result = live.refresh(lastChange);
+    const expected = extractDomTree(root);
+
+    expect(result.nodes).toEqual(expected.nodes);
+    // The extractor pivots to <body> and the portal content joins the tree.
+    const roles = [...result.nodes.values()].map((n) => n.a11y.role);
+    expect(roles).toContain("menu");
+    expect(roles).toContain("menuitem");
+
+    observer.stop();
+  });
+
+  it("drops a dangling child reference when an element is hidden (dom mode)", async () => {
+    document.body.innerHTML = `<main><button>Btn</button><div id="panel"><p>Content</p></div></main>`;
+
+    const live = new LiveTreeExtractor(document.body, { mode: "dom" });
+    let lastChange: TreeChange | undefined;
+    const observer = new DomObserver(
+      document.body,
+      (change) => {
+        lastChange = change;
+      },
+      50,
+    );
+    observer.start();
+
+    const panel = document.getElementById("panel")!;
+    panel.style.display = "none";
+
+    await vi.advanceTimersByTimeAsync(100);
+
+    const result = live.refresh(lastChange);
+    const expected = extractDomTree(document.body);
+
+    expect(result.nodes).toEqual(expected.nodes);
+
+    // Every child id must resolve to a node — no dangling references.
+    for (const node of result.nodes.values()) {
+      for (const childId of node.childIds) {
+        expect(result.nodes.has(childId)).toBe(true);
+      }
+    }
+
+    observer.stop();
+  });
+
+  it("updates a name-host's name when nested text changes via childList", async () => {
+    document.body.innerHTML = `<main><button><span class="label"><em>Old</em></span></button></main>`;
+
+    const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
+    let lastChange: TreeChange | undefined;
+    const observer = new DomObserver(
+      document.body,
+      (change) => {
+        lastChange = change;
+      },
+      50,
+    );
+    observer.start();
+
+    // Replacing the span's content swaps its <em> child for a text node,
+    // producing a childList mutation on the span (not characterData).
+    const span = document.querySelector("span.label")!;
+    span.textContent = "New";
+
+    await vi.advanceTimersByTimeAsync(100);
+
+    const result = live.refresh(lastChange);
+    const expected = extractA11yTree(document.body);
+
+    expect(result.nodes).toEqual(expected.nodes);
+
+    const buttonId = result.nodes.get(result.rootId!)?.childIds[0];
+    expect(result.nodes.get(buttonId!)?.a11y.name).toBe("New");
 
     observer.stop();
   });
