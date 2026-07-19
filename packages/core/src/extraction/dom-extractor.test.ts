@@ -371,6 +371,59 @@ describe("extractDomTree", () => {
     expect(input.interaction.actions).toContain("decrement");
   });
 
+  it("classifies an editable (contenteditable) combobox as typeable, not click", () => {
+    // Slack's search box: the ARIA 1.2 editable-combobox pattern hosted on a
+    // contenteditable <div>. It IS a text field, so it must open the panel's
+    // inline input like a textbox.
+    const root = createPage(
+      `<div role="combobox" contenteditable="true" aria-label="Query"
+            aria-autocomplete="list" aria-expanded="true"
+            aria-controls="lb"><p>in:new-channel</p></div>`,
+    );
+    const { nodes, rootId } = extractDomTree(root);
+    const combo = nodes.get(nodes.get(rootId)!.childIds[0])!;
+    expect(combo.interaction.actions).toContain("type");
+    expect(combo.interaction.actions).toContain("focus");
+    // "click" would outrank "type" in getPrimaryAction and re-hijack the
+    // primary action, so it must NOT be present for an editable combobox.
+    expect(combo.interaction.actions).not.toContain("click");
+  });
+
+  it('treats a contenteditable="plaintext-only" combobox as typeable', () => {
+    const root = createPage(
+      `<div role="combobox" contenteditable="plaintext-only" aria-label="Q">x</div>`,
+    );
+    const { nodes, rootId } = extractDomTree(root);
+    const combo = nodes.get(nodes.get(rootId)!.childIds[0])!;
+    expect(combo.interaction.actions).toContain("type");
+    expect(combo.interaction.actions).not.toContain("click");
+  });
+
+  it("keeps a select-only combobox click-driven (no text entry)", () => {
+    // No contenteditable → a popup button, not a text field. Opening it is a
+    // click; there's nothing to type into on the combobox element itself.
+    const root = createPage(
+      `<div role="combobox" aria-expanded="false" aria-controls="lb" tabindex="0">Choose a state</div>`,
+    );
+    const { nodes, rootId } = extractDomTree(root);
+    const combo = nodes.get(nodes.get(rootId)!.childIds[0])!;
+    expect(combo.interaction.actions).toContain("click");
+    expect(combo.interaction.actions).not.toContain("type");
+  });
+
+  it("classifies a native <input role='combobox'> as typeable (W3C APG example)", () => {
+    // The APG editable-combobox example uses a native input; it already worked
+    // via the tag branch. Guard it so splitting the role branch doesn't regress
+    // it (and confirm the role branch isn't what handles native inputs).
+    const root = createPage(
+      `<input type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="lb">`,
+    );
+    const { nodes, rootId } = extractDomTree(root);
+    const combo = nodes.get(nodes.get(rootId)!.childIds[0])!;
+    expect(combo.interaction.actions).toContain("type");
+    expect(combo.interaction.actions).not.toContain("click");
+  });
+
   it("computes correct roles", () => {
     const root = createPage(`
       <nav aria-label="Main">
