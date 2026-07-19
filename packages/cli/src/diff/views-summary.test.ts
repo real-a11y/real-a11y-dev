@@ -1,4 +1,4 @@
-import { ROLE_FILTER_GROUPS } from "@real-a11y-dev/testing";
+import { ROLE_FILTER_GROUPS } from "@real-a11y-dev/core";
 import { describe, expect, it } from "vitest";
 
 import { diffViews, stripTabIndex } from "./views-diff.js";
@@ -31,9 +31,9 @@ const messages = (changes: ViewChange[]) => changes.map((c) => c.message);
 const kinds = (changes: ViewChange[]) => changes.map((c) => c.kind);
 
 describe("summarizeViews", () => {
-  // The landmark set is imported from core (via testing) — if the group ever
-  // changes there, the summary semantics change with it; this pin makes that
-  // an explicit decision instead of silent drift.
+  // The landmark set is imported from core — if the group ever changes there,
+  // the summary semantics change with it; this pin makes that an explicit
+  // decision instead of silent drift.
   it("pins the landmark role set", () => {
     expect([...(ROLE_FILTER_GROUPS["landmark"] ?? [])].sort()).toEqual([
       "banner",

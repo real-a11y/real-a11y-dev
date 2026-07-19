@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 
-import type { Finding } from "@real-a11y-dev/testing";
+import type { Finding } from "@real-a11y-dev/audit";
 import { describe, expect, it } from "vitest";
 
 import { fingerprintFindings } from "../fingerprint.js";

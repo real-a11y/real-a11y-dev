@@ -10,7 +10,7 @@
 
 import { createHash } from "node:crypto";
 
-import type { Finding } from "@real-a11y-dev/testing";
+import type { Finding } from "@real-a11y-dev/audit";
 
 /** The canonical identity tuple — JSON-serializable, human-inspectable. */
 export type FingerprintId = (string | number)[];

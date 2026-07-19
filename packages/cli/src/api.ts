@@ -78,5 +78,5 @@ export type { SarifContext } from "./render/sarif.js";
 export { renderJUnit } from "./render/junit.js";
 export { renderJsonl } from "./render/jsonl.js";
 
-export { ALL_RULES } from "@real-a11y-dev/testing";
-export type { A11yRule, Finding } from "@real-a11y-dev/testing";
+export { ALL_RULES } from "@real-a11y-dev/audit";
+export type { A11yRule, Finding } from "@real-a11y-dev/audit";

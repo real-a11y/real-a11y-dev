@@ -9,8 +9,8 @@
 
 import type { ParseArgsConfig } from "node:util";
 
+import { ALL_RULES, type A11yRule } from "@real-a11y-dev/audit";
 import type { OpenOptions } from "@real-a11y-dev/mcp/browser";
-import { ALL_RULES, type A11yRule } from "@real-a11y-dev/testing";
 
 import { CliError, type FailOn } from "./exit.js";
 

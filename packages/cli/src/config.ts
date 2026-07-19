@@ -17,7 +17,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
-import { ALL_RULES, type A11yRule } from "@real-a11y-dev/testing";
+import { ALL_RULES, type A11yRule } from "@real-a11y-dev/audit";
 
 import { CliError, type FailOn } from "./exit.js";
 

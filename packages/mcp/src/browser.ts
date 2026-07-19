@@ -14,7 +14,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 
-import type { Finding } from "@real-a11y-dev/testing";
+import type { Finding } from "@real-a11y-dev/audit";
 import type {
   Browser,
   BrowserContext,

@@ -264,12 +264,15 @@ importers:
 
   packages/cli:
     dependencies:
+      '@real-a11y-dev/audit':
+        specifier: workspace:*
+        version: link:../audit
+      '@real-a11y-dev/core':
+        specifier: workspace:*
+        version: link:../core
       '@real-a11y-dev/mcp':
         specifier: workspace:*
         version: link:../mcp
-      '@real-a11y-dev/testing':
-        specifier: workspace:*
-        version: link:../testing
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
@@ -412,6 +415,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.12.0
         version: 1.29.0(zod@3.25.76)
+      '@real-a11y-dev/audit':
+        specifier: workspace:*
+        version: link:../audit
       '@real-a11y-dev/testing':
         specifier: workspace:*
         version: link:../testing

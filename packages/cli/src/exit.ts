@@ -1,4 +1,4 @@
-import type { Finding } from "@real-a11y-dev/testing";
+import type { Finding } from "@real-a11y-dev/audit";
 
 /**
  * The frozen exit-code contract: 0 clean, 1 findings at/above `--fail-on`,

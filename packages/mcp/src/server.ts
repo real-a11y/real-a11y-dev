@@ -14,8 +14,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { ALL_RULES } from "@real-a11y-dev/testing";
-import type { A11yRule, Finding } from "@real-a11y-dev/testing";
+import { ALL_RULES } from "@real-a11y-dev/audit";
+import type { A11yRule, Finding } from "@real-a11y-dev/audit";
 import { z } from "zod";
 
 import type { A11ySession, PageSnapshot } from "./browser.js";
