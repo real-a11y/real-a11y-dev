@@ -1,0 +1,5 @@
+---
+"@real-a11y-dev/core": patch
+---
+
+Harden the extraction walk against two more DOM-clobbering surfaces. A `<form>` with `<input name="hidden">` (or `id="hidden"`) made `element.hidden` return that input — a truthy value — so `isSubtreeHidden` and `isHiddenFromAT` silently dropped the whole form subtree (quiet data loss, not a crash); both now read the real state through the captured `HTMLElement.prototype` `hidden` getter, which no named control can shadow. And the walk now processes each element inside a per-element `try/catch`, so a single pathological node — e.g. a clobbered `tagName` on a `<form>` making `.toLowerCase()` throw, or any future unknown clobbering — degrades to "skip this node and its subtree" instead of aborting the entire extraction and hanging the panel on "Connecting to page…". A caught element commits nothing, so it never leaves a half-built node behind. The clobber-safe reads are consolidated in a new internal `clobber-safe` module shared by the extractor and the role map.

@@ -3,6 +3,12 @@ import { ElementRefMap } from "../utils/element-ref.js";
 import { getNodeId } from "../utils/id-generator.js";
 
 import {
+  safeChildren,
+  safeChildNodes,
+  safeTextContent,
+  safeHidden,
+} from "./clobber-safe.js";
+import {
   getImplicitRole,
   isHiddenFromAT,
   getHeadingLevel,
@@ -10,53 +16,6 @@ import {
 
 /** Tags to skip entirely during extraction */
 const SKIP_TAGS = new Set(["script", "style", "noscript", "template", "head"]);
-
-// --- DOM clobbering guards ---------------------------------------------------
-// `<form>` is the one HTML element with `[LegacyOverrideBuiltIns]`: a listed
-// control whose `name`/`id` matches a DOM property name shadows that property,
-// so reading it returns the child ELEMENT instead of the real value. On a form
-// with `<input name="id">` (ubiquitous — hidden record-id fields) `form.id` is
-// the input, and `<input name="children">` (e.g. a "number of children" field)
-// makes `form.children` the input. The walk has no per-element error boundary,
-// so a string/iteration method on such a value throws and the ENTIRE extraction
-// aborts (the panel hangs on "Connecting to page…"). We read structural props
-// through the native prototype accessors, which the named getter cannot
-// override; `id` is read via `getAttribute` at each use site.
-const elementProto = typeof Element !== "undefined" ? Element.prototype : null;
-const nodeProto = typeof Node !== "undefined" ? Node.prototype : null;
-const childrenGetter = elementProto
-  ? Object.getOwnPropertyDescriptor(elementProto, "children")?.get
-  : undefined;
-const childNodesGetter = nodeProto
-  ? Object.getOwnPropertyDescriptor(nodeProto, "childNodes")?.get
-  : undefined;
-const textContentGetter = nodeProto
-  ? Object.getOwnPropertyDescriptor(nodeProto, "textContent")?.get
-  : undefined;
-
-/** Clobber-immune `element.children` (always an array of the real children). */
-function safeChildren(element: Element): Element[] {
-  const kids = childrenGetter
-    ? (childrenGetter.call(element) as HTMLCollection)
-    : element.children;
-  return Array.from(kids);
-}
-
-/** Clobber-immune `node.childNodes`. */
-function safeChildNodes(node: Node): ChildNode[] {
-  const kids = childNodesGetter
-    ? (childNodesGetter.call(node) as NodeListOf<ChildNode>)
-    : node.childNodes;
-  return Array.from(kids);
-}
-
-/** Clobber-immune `node.textContent`, coerced to a string. */
-function safeTextContent(node: Node): string {
-  const text = textContentGetter
-    ? textContentGetter.call(node)
-    : node.textContent;
-  return typeof text === "string" ? text : "";
-}
 
 /** Tags/roles that are focusable by default */
 const NATIVELY_FOCUSABLE = new Set([
@@ -199,7 +158,10 @@ function getActions(element: Element): ActionType[] {
 /** Check if an element's subtree is completely hidden (display:none, hidden attr, content-visibility:hidden, inert) */
 function isSubtreeHidden(element: Element): boolean {
   const htmlEl = element as HTMLElement;
-  if (htmlEl.hidden) return true;
+  // Clobber-immune read: a `<form>` with `<input name="hidden">` makes
+  // `htmlEl.hidden` return that input (truthy), which would drop the whole
+  // form subtree. safeHidden() reads the real state via the prototype getter.
+  if (safeHidden(element)) return true;
 
   // The HTML `inert` attribute hides the element AND its entire subtree
   // from both AT and keyboard navigation.
@@ -985,6 +947,30 @@ function findPortalOverlay(doc: Document, root: Element): Element | null {
   return null;
 }
 
+/**
+ * Report — outside production — that an element was skipped mid-extraction.
+ *
+ * The walk wraps each element so a single pathological node (usually DOM
+ * clobbering that slipped past the targeted guards) degrades to "skip this
+ * node" instead of aborting the whole tree. That silent recovery is the right
+ * runtime behavior, but the gap should stay debuggable, so we surface the
+ * element and the error for inspection. Gated off in production to avoid
+ * console noise; this package has no `@types/node`, so `process` is reached
+ * through a `globalThis` cast.
+ */
+function warnSkippedElement(element: Element, error: unknown): void {
+  const proc = (globalThis as { process?: { env?: { NODE_ENV?: string } } })
+    .process;
+  if (proc?.env?.NODE_ENV === "production") return;
+  if (typeof console !== "undefined") {
+    console.warn(
+      "[real-a11y] Skipped an element during extraction to keep the rest of the tree intact:",
+      element,
+      error,
+    );
+  }
+}
+
 /** Extract a complete DOM tree from a root element */
 export function extractDomTree(root: Element): ExtractionResult {
   const nodes = new Map<string, SemanticNode>();
@@ -1027,84 +1013,124 @@ export function extractDomTree(root: Element): ExtractionResult {
     }
   }
 
+  /**
+   * Build the semantic node for `element`, or return `null` to skip it (and,
+   * by extension, its subtree).
+   *
+   * The whole body runs inside a try/catch so that a single pathological
+   * element cannot abort the ENTIRE extraction. The reported crash was DOM
+   * clobbering: on a `<form>` (the one element with `[LegacyOverrideBuiltIns]`)
+   * a child named `tagName` — `<input name="tagName">` — shadows
+   * `element.tagName`, so `.toLowerCase()` threw, and with no per-element
+   * boundary the walk unwound completely and the panel hung on "Connecting to
+   * page…" forever. The targeted guards (`getAttribute("id")`, the `safe*`
+   * reads) defuse the plausible cases; this boundary is the catch-all for the
+   * rest — including future unknown clobbering — degrading to "skip this node"
+   * instead of losing the whole tree.
+   *
+   * Nothing here mutates `nodes` / `elementRefs`; the caller commits the node
+   * only on success, so a caught element never leaves a half-built node behind.
+   */
+  function buildNode(
+    element: Element,
+    parentId: string | null,
+    depth: number,
+  ): { id: string; node: SemanticNode } | null {
+    try {
+      const tag = element.tagName.toLowerCase();
+      if (SKIP_TAGS.has(tag)) return null;
+
+      // Skip Semantic Navigator internal elements (highlight overlay, curtain, etc.)
+      // Read the id via getAttribute, not the `.id` property: on a <form> (or the
+      // legacy named-property elements) a child named `id` clobbers `element.id`
+      // to return that element, so `.id.startsWith(...)` would throw a TypeError
+      // and crash the whole extraction. getAttribute always yields a string|null.
+      if (element.getAttribute("id")?.startsWith("__sn-")) return null;
+
+      // Skip entire subtrees of display:none / hidden elements
+      if (isSubtreeHidden(element)) return null;
+
+      // Skip elements that serve solely as aria-describedby text providers.
+      // Their content is shown inline on the referencing element as a description.
+      const ownId = element.getAttribute("id");
+      if (ownId && descriptionTargetIds.has(ownId)) return null;
+
+      const id = getNodeId(element);
+      const role = getImplicitRole(element);
+      const actions = getActions(element);
+      const isFocusable =
+        NATIVELY_FOCUSABLE.has(tag) ||
+        element.getAttribute("tabindex") !== null;
+
+      const node: SemanticNode = {
+        id,
+        parentId,
+        childIds: [],
+        depth,
+        dom: {
+          tagName: tag,
+          attributes: getKeyAttributes(element),
+          textContent: getDirectTextContent(element),
+          descendantText: getDescendantText(element),
+          isHidden: isVisuallyHidden(element),
+        },
+        a11y: {
+          role,
+          name: computeAccessibleName(element),
+          description: computeAccessibleDescription(element),
+          states: getAriaStates(element),
+          properties: {
+            ...(getHeadingLevel(element) !== null
+              ? { level: String(getHeadingLevel(element)) }
+              : {}),
+          },
+          isExposedToAT: !isHiddenFromAT(element),
+        },
+        interaction: {
+          isInteractive: actions.length > 0,
+          actions,
+          isFocusable,
+          isEditable:
+            (tag === "input" &&
+              TEXT_INPUT_TYPES.has(
+                (element as HTMLInputElement).type || "text",
+              )) ||
+            tag === "textarea" ||
+            element.getAttribute("contenteditable") === "true",
+        },
+        ui: {
+          expanded: depth < 2,
+          highlighted: false,
+          matchesFilter: true,
+          selected: false,
+        },
+      };
+
+      return { id, node };
+    } catch (error) {
+      // One bad element must not take down the walk. Skip it and its subtree;
+      // siblings and ancestors still extract.
+      warnSkippedElement(element, error);
+      return null;
+    }
+  }
+
   function walk(
     element: Element,
     parentId: string | null,
     depth: number,
   ): string | null {
-    const tag = element.tagName.toLowerCase();
-    if (SKIP_TAGS.has(tag)) return null;
+    const built = buildNode(element, parentId, depth);
+    if (!built) return null;
+    const { id, node } = built;
 
-    // Skip Semantic Navigator internal elements (highlight overlay, curtain, etc.)
-    // Read the id via getAttribute, not the `.id` property: on a <form> (or the
-    // legacy named-property elements) a child named `id` clobbers `element.id`
-    // to return that element, so `.id.startsWith(...)` would throw a TypeError
-    // and crash the whole extraction. getAttribute always yields a string|null.
-    if (element.getAttribute("id")?.startsWith("__sn-")) return null;
-
-    // Skip entire subtrees of display:none / hidden elements
-    if (isSubtreeHidden(element)) return null;
-
-    // Skip elements that serve solely as aria-describedby text providers.
-    // Their content is shown inline on the referencing element as a description.
-    const ownId = element.getAttribute("id");
-    if (ownId && descriptionTargetIds.has(ownId)) return null;
-
-    const id = getNodeId(element);
+    // Commit the finished node. Neither map write can throw, so a node that was
+    // built successfully is never orphaned by a later failure.
     elementRefs.set(id, element);
-
-    const role = getImplicitRole(element);
-    const actions = getActions(element);
-    const isFocusable =
-      NATIVELY_FOCUSABLE.has(tag) || element.getAttribute("tabindex") !== null;
-
-    const node: SemanticNode = {
-      id,
-      parentId,
-      childIds: [],
-      depth,
-      dom: {
-        tagName: tag,
-        attributes: getKeyAttributes(element),
-        textContent: getDirectTextContent(element),
-        descendantText: getDescendantText(element),
-        isHidden: isVisuallyHidden(element),
-      },
-      a11y: {
-        role,
-        name: computeAccessibleName(element),
-        description: computeAccessibleDescription(element),
-        states: getAriaStates(element),
-        properties: {
-          ...(getHeadingLevel(element) !== null
-            ? { level: String(getHeadingLevel(element)) }
-            : {}),
-        },
-        isExposedToAT: !isHiddenFromAT(element),
-      },
-      interaction: {
-        isInteractive: actions.length > 0,
-        actions,
-        isFocusable,
-        isEditable:
-          (tag === "input" &&
-            TEXT_INPUT_TYPES.has(
-              (element as HTMLInputElement).type || "text",
-            )) ||
-          tag === "textarea" ||
-          element.getAttribute("contenteditable") === "true",
-      },
-      ui: {
-        expanded: depth < 2,
-        highlighted: false,
-        matchesFilter: true,
-        selected: false,
-      },
-    };
-
     nodes.set(id, node);
 
-    // Walk children
+    // Walk children. Each child is isolated by buildNode's own boundary, so a
+    // single pathological descendant can't take out its siblings or ancestors.
     for (const child of safeChildren(element)) {
       const childId = walk(child, id, depth + 1);
       if (childId) {
