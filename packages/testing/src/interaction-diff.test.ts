@@ -129,6 +129,39 @@ describe("flow().expectChanges", () => {
       });
   });
 
+  it("ChangeSpec name matches across smart-quote typography (string and RegExp)", async () => {
+    // The rendered option uses a curly apostrophe + ellipsis; the spec is typed
+    // with plain ASCII. Both the string and the RegExp form should still match.
+    const root = withClick(
+      `<main><button id="act">Open</button><ul role="list" id="lb"></ul></main>`,
+      (r) =>
+        r
+          .querySelector("#lb")!
+          .insertAdjacentHTML(
+            "beforeend",
+            '<li role="option">Spain — don’t wait…</li>',
+          ),
+    );
+    await flow(root)
+      .findByRole("button", { name: "Open" })
+      .click()
+      .expectChanges({
+        added: [{ role: "option", name: "Spain - don't wait..." }],
+      });
+
+    const root2 = withClick(
+      `<main><button id="act">Open</button><ul role="list" id="lb2"></ul></main>`,
+      (r) =>
+        r
+          .querySelector("#lb2")!
+          .insertAdjacentHTML("beforeend", '<li role="option">Don’t save</li>'),
+    );
+    await flow(root2)
+      .findByRole("button", { name: "Open" })
+      .click()
+      .expectChanges({ added: [{ role: "option", name: /don't save/i }] });
+  });
+
   it("string form is the trim-compared serializeTreeDiff output", async () => {
     const root = withClick(
       `<main><button id="act">Add</button><ul role="list" id="lb"></ul></main>`,

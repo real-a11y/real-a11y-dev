@@ -1,9 +1,16 @@
 import type { NodeChange, SemanticNode, TreeDiff } from "@real-a11y-dev/core";
 
+import { foldTypography } from "./normalize.js";
+
 /** Match a diffed node by role and (optionally) accessible name. */
 export interface NodeMatcher {
   role: string;
-  /** String → case-insensitive, whitespace-normalized exact; RegExp → tested. */
+  /**
+   * String → case-, whitespace-, and typography-normalized exact match (so
+   * `"Don't"` matches a rendered curly `"Don’t"`); RegExp → tested against the
+   * typography-folded name (so `/Don't/` matches too), but case-sensitive
+   * unless the pattern says otherwise.
+   */
   name?: string | RegExp;
 }
 
@@ -31,7 +38,7 @@ export interface ChangeSpec {
 }
 
 function normalizeName(s: string): string {
-  return s.replace(/\s+/g, " ").trim().toLowerCase();
+  return foldTypography(s).replace(/\s+/g, " ").trim().toLowerCase();
 }
 
 function nameMatches(name: string, want: string | RegExp | undefined): boolean {
@@ -45,7 +52,10 @@ function nameMatches(name: string, want: string | RegExp | undefined): boolean {
     want.global || want.sticky
       ? new RegExp(want.source, want.flags.replace(/[gy]/g, ""))
       : want;
-  return re.test(name);
+  // Test against the typography-folded name so a straight-quote pattern still
+  // matches a rendered curly quote (the string branch normalizes both sides;
+  // do the same here). Whitespace/case are left to the pattern.
+  return re.test(foldTypography(name));
 }
 
 function nodeMatches(node: SemanticNode, m: NodeMatcher): boolean {

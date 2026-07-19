@@ -127,6 +127,8 @@ await flow(container).findByRole("button", { name: "Delete account" }).click();
 expect(container).toHaveTabSequence(['button "Cancel"', 'button "Delete"']);
 ```
 
+Names are matched with **typographic punctuation normalized**, so a plain token like `button "Don't save"` matches a label the page renders with a curly apostrophe (`Don’t`). Curly quotes, the ellipsis character, en/em dashes, and non-breaking spaces all fold to their ASCII forms for the comparison — you never have to paste smart quotes to make a token match. (Roles and everything else compare exactly; only accessible-name typography is folded.)
+
 ## `a11ySnapshot(root, options?)` — snapshot serializer
 
 Wrap a DOM root (or a pre-extracted tree) so `toMatchSnapshot()` / `toMatchInlineSnapshot()` render the **semantic tree** instead of a DOM dump — fully native to each framework's snapshot tooling (`-u`/`--update`, obsolete detection all work).

@@ -289,7 +289,7 @@ main
   code
   paragraph "Three forms:"
   list
-    listitem "— the ergonomic default. / / are matched by + optional (string = case-insensitive exact, RegExp = tested); a may list (dot-paths that must appear). — resilient to incidental changes; asserts nothing else changed (a -only change on a container is treated as the structural shadow of an add/remove and never counts as an extra)."
+    listitem "— the ergonomic default. / / are matched by + optional (string = case-, whitespace-, and typography-normalized exact; RegExp = tested against the folded name). A may list (dot-paths that must appear). — resilient to incidental changes; asserts nothing else changed (a -only change on a container is treated as the structural shadow of an add/remove and never counts as an extra)."
       strong
         code "ChangeSpec"
       code "added"
@@ -302,12 +302,14 @@ main
       strong "Subset by default"
       code "exact: true"
       code "childIds"
-    listitem "— trim-compared against the output, like . Includes the line."
+    listitem "— trim-compared against the output, like . Includes the line. (This whole-diff text form compares literally — unlike the name match, it is typography-folded, so it stays a faithful snapshot.)"
       strong
         code "string"
       code "serializeTreeDiff"
       code "expectTree"
       code "focus:"
+      code "ChangeSpec"
+      strong "not"
     listitem "— the escape hatch; throw to fail."
       strong
         code "(diff) => void"

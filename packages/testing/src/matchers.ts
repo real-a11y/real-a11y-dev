@@ -38,6 +38,7 @@ import {
   type ValidatedNode,
 } from "@real-a11y-dev/validate";
 
+import { foldTypography } from "./normalize.js";
 import {
   a11ySnapshotSerializer,
   boxSnapshot,
@@ -121,7 +122,13 @@ function toHaveTabSequence(
     };
   }
   const actual = tabTokens(received);
-  const pass = this.equals(actual, expected);
+  // Compare with typography folded so a hand-typed straight quote matches a
+  // rendered curly one (a name like `link "Don't save"`). The message still
+  // shows the raw tokens, so the committed record stays faithful.
+  const pass = this.equals(
+    actual.map(foldTypography),
+    expected.map(foldTypography),
+  );
   return {
     pass,
     message: () =>
