@@ -92,7 +92,9 @@ navigation "On this page"
     listitem
       link "Views"
     listitem
-      link "Checkpoints"
+      link "Findings checkpoints"
+    listitem
+      link "Tree checkpoints"
     listitem
       link "Native cross-check"
     listitem
@@ -100,7 +102,7 @@ navigation "On this page"
 main
   heading "MCP tools reference" (level 1)
   paragraph "The Real A11y MCP server exposes to an MCP client (Claude Code, Claude Desktop, Cursor, and any other MCP-capable assistant). Each tool drives a real Chromium page and reports what a screen reader would actually perceive — computed roles, accessible names, and the defects assistive tech announces as broken — not what the HTML source claims."
-    strong "sixteen tools"
+    strong "eighteen tools"
   paragraph "The tools share browser page. A typical run is → an audit or view tool (, , or a view) → . Because every tool reads the same mutable page, calls must run — a second call mid-flight would race the first's navigation."
     strong "one"
     link "open_page"
@@ -329,14 +331,18 @@ main
   paragraph "An agent calls this to review one element type without pulling the whole tree:"
   button "Copy Code"
   code
-  heading "Checkpoints" (level 2)
-  paragraph "Give the agent the CLI's snapshot + diff power mid-session: capture the page's findings under a name, change something (deploy, feature toggle, DOM edit), then ask what's — with the same fingerprint identity the CI a11y-diff bot uses. Checkpoints are held in memory (LRU-capped at 20) and , so you can checkpoint one deploy and diff another. clears the store. (Unlike Axis-A tree-checkpoints, these are pure data — not bound to the page instance that was live when saved.)"
+  heading "Findings checkpoints" (level 2)
+  paragraph "Give the agent the CLI's snapshot + diff power mid-session: capture the page's findings under a name, change something (deploy, feature toggle, DOM edit), then ask what's — with the same fingerprint identity the CI a11y-diff bot uses. Checkpoints are held in memory (LRU-capped at 20) and , so you can checkpoint one deploy and diff another. clears the store."
     strong "new / changed / fixed"
     code "v1:"
     strong "survive navigation by design"
     code "close_browser"
-  heading "save_checkpoint" (level 3)
-    code "save_checkpoint"
+  paragraph "These capture the accessibility . To capture the tree and diff what an interaction changed, see — which are bound to the page instance and do not survive navigation."
+    emphasis "problems"
+    emphasis "structure"
+    link "tree checkpoints"
+  heading "checkpoint_findings" (level 3)
+    code "checkpoint_findings"
   paragraph
     emphasis "Snapshots the current page into the named store."
   paragraph "Snapshot the current page's accessibility findings and store them under ; re-saving a name overwrites it. Fingerprints go through the same the CLI's command uses, so a checkpoint is directly comparable to a CI baseline."
@@ -355,8 +361,8 @@ main
     listitem "— array of the five rule ids — optional — subset for the findings. Omit to run all."
       strong
         code "rules"
-  heading "diff_checkpoint" (level 3)
-    code "diff_checkpoint"
+  heading "diff_findings" (level 3)
+    code "diff_findings"
   paragraph
     emphasis "Read-only · re-snapshots the current page and diffs it against a stored checkpoint."
   paragraph "Re-snapshot the current page and diff it against checkpoint : which findings are (the only class that gates CI), , or , plus an advisory structural summary. Use after a change, or after navigating to a different deploy of the same page."
@@ -422,6 +428,48 @@ main
     listitem "— string — required — a serialized Real A11y snapshot artifact (JSON)."
       strong
         code "artifact"
+  heading "Tree checkpoints" (level 2)
+  paragraph "Where the answer , these answer — the precise structural delta of a click, a keypress, or a dialog opening."
+    link "findings checkpoints"
+    emphasis ""what accessibility problems changed?""
+    emphasis ""what did that interaction change?""
+  paragraph "The two are deliberately different in lifetime. A snapshot checkpoint is pure data and . A tree checkpoint holds the extracted tree — its node identities are bound to that page instance — so it is . Capture, interact, diff, all within one page load."
+    strong "survives navigation"
+    strong "inside the page"
+    strong "discarded the moment the page navigates"
+  heading "checkpoint_tree" (level 3)
+    code "checkpoint_tree"
+  paragraph
+    emphasis "Captures the current tree in the page as a comparison point."
+  paragraph "Capture the current accessibility tree as the baseline for an interaction diff. Then interact with the page and call . Re-capturing re-baselines."
+    link "diff_tree"
+      code "diff_tree"
+  paragraph "Parameters:"
+  list
+    listitem "— string — optional (default ) — CSS selector for the extraction root."
+      strong
+        code "rootSelector"
+      code ""body""
+  heading "diff_tree" (level 3)
+    code "diff_tree"
+  paragraph
+    emphasis "Read-only · diffs the live tree against the checkpoint."
+  paragraph "Diff the current accessibility tree against the one captured by : which nodes were , , or , plus a line when focus moved. This is what makes an interaction's effect legible — e.g. that opening a dialog added a node moved focus into it, or that a "Load more" button appended twelve links but left focus stranded."
+    code "checkpoint_tree"
+    strong "added"
+    strong "removed"
+    strong "changed"
+    code "focus:"
+    code "dialog"
+    emphasis "and"
+  paragraph "Parameters:"
+  list
+    listitem "— string — optional — CSS root for the re-extraction. , so the diff stays like-for-like instead of silently widening to and reporting the rest of the page as added."
+      strong
+        code "rootSelector"
+      strong "Defaults to the root the checkpoint was captured with"
+      code "body"
+  paragraph "Errors if no checkpoint exists on the current page — including after a navigation, which discards it."
   heading "Native cross-check" (level 2)
   paragraph "Chromium-only fidelity oracles. Both read the whole document, take no arguments, and compare Real A11y's custom engine against the browser's own computation."
   heading "get_native_tree" (level 3)

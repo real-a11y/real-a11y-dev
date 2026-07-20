@@ -13,7 +13,7 @@ export interface BuildSnapshotPageOptions {
  * Assemble a diffable {@link SnapshotPage} from an already-projected snapshot.
  *
  * This is the single assembler both the CLI (`real-a11y snapshot`) and the MCP
- * server (`save_checkpoint`) call, so a snapshot captured by one and diffed by
+ * server (`checkpoint_findings`) call, so a snapshot captured by one and diffed by
  * the other carries **identical fingerprints**. It fingerprints the findings
  * under `name` (the stable join key, never the URL), redacts the URL, and
  * renames the raw `tabOrder` field to the artifact's `tabs`.

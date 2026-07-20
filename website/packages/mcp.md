@@ -87,7 +87,7 @@ Because it drives a real browser, JS-heavy SPAs render fully, and any URL the
 browser can reach works — public sites, a **local dev server**, or staging.
 
 ::: tip Every tool + parameters → [/packages/mcp/tools](/packages/mcp/tools)
-This is a guide. For the full tool reference — all sixteen tools, their
+This is a guide. For the full tool reference — all eighteen tools, their
 parameters, and when to reach for each — see the
 [tools reference](/packages/mcp/tools).
 :::
