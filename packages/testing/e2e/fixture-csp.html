@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!--
+      Strict Content-Security-Policy: `script-src 'self'` omits
+      'unsafe-inline', so appending an inline <script> (what
+      `page.addScriptTag({ content })` does) is blocked outright. Injecting the
+      bundle with `page.evaluate(source)` goes through the debugger protocol
+      and is not subject to page CSP, so `attach()` still works here.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self'" />
+    <title>CSP fixture</title>
+  </head>
+  <body>
+    <main>
+      <h1>CSP page</h1>
+      <button>Go</button>
+    </main>
+  </body>
+</html>
