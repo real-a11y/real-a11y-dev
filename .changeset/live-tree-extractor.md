@@ -1,6 +1,6 @@
 ---
 "@real-a11y-dev/core": minor
-"@real-a11y-dev/semantic-navigator-extension": minor
+"@real-a11y-dev/core": minor
 "@real-a11y-dev/react": minor
 "@real-a11y-dev/storybook-addon": minor
 ---
