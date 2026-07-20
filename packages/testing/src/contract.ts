@@ -260,8 +260,31 @@ function search(contract: FlatNode[], target: FlatNode[]): SearchOutcome {
   let bestAssigned: number[] = [];
   let steps = 0;
 
+  // Memoize FAILED states. Without this the search is exponential on the
+  // *failure* path — proving a mismatch means exhausting every assignment, and
+  // an unconstrained contract node (no name) matches every same-role node in
+  // the target, so C(targets, contractNodes) combinations get re-explored. A
+  // contract with a handful of unnamed nodes against a real page would blow the
+  // step guard and throw instead of reporting a clean mismatch.
+  //
+  // Whether `solve(k, minT)` can succeed is fully determined by `k`, `minT`,
+  // and the assignments of k's ANCESTORS: in pre-order every later node's
+  // parent is an ancestor of k (or of a node after it), so no other earlier
+  // choice can influence the outcome. That makes the key sound, and contracts
+  // are shallow, so it stays short.
+  const failed = new Set<string>();
+  const stateKey = (k: number, minT: number): string => {
+    let key = `${k}:${minT}`;
+    for (let p = contract[k]!.parent; p !== -1; p = contract[p]!.parent) {
+      key += `|${p}=${assigned[p]}`;
+    }
+    return key;
+  };
+
   const solve = (k: number, minT: number): boolean => {
     if (k === m) return true;
+    const key = stateKey(k, minT);
+    if (failed.has(key)) return false;
     const c = contract[k]!;
     const parentT = c.parent === -1 ? -1 : assigned[c.parent]!;
     const lo = Math.max(minT, parentT + 1);
@@ -283,6 +306,7 @@ function search(contract: FlatNode[], target: FlatNode[]): SearchOutcome {
       bestAssigned = assigned.slice(0, k);
     }
     assigned[k] = -1;
+    failed.add(key);
     return false;
   };
 

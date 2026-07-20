@@ -245,3 +245,47 @@ describe("verifyContract — typography and strict", () => {
     expect(() => verifyContract("", "main")).toThrow(/empty/);
   });
 });
+
+// ─── ambiguity: proving a mismatch must stay decidable ───────────────────────
+
+describe("verifyContract — ambiguous contracts stay decidable", () => {
+  /** A list of `n` indistinguishable items — every one matches an unnamed
+   *  `listitem`, which is what makes the search space combinatorial. */
+  function bigList(n: number, extra = ""): string {
+    const items = Array.from(
+      { length: n },
+      (_, i) => `<li>item ${i}</li>`,
+    ).join("");
+    return serializeTree(mount(`<ul role="list">${items}${extra}</ul>`));
+  }
+
+  it("returns a verdict, not a thrown error, when an unnamed contract FAILS", () => {
+    // An unnamed contract node matches every same-role node, so proving a
+    // mismatch means exhausting the combinations — C(200, 8) here. Memoized
+    // failure states keep that polynomial; without them the step guard trips
+    // and throws, turning a legitimate mismatch into an opaque engine error
+    // (and making `.not.toMatchA11yContract()` throw instead of pass).
+    const contract = [
+      "list",
+      ...Array<string>(8).fill("  listitem"),
+      '  button "Never"',
+    ].join("\n");
+
+    const r = verifyContract(contract, bigList(200));
+    expect(r.pass).toBe(false);
+    expect(r.matched).toBe(9);
+    expect(r.message).toContain('✖ button "Never"');
+  });
+
+  it("still finds a match when the same ambiguous contract IS satisfiable", () => {
+    // Memoizing failures must not prune a reachable solution.
+    const contract = [
+      "list",
+      ...Array<string>(8).fill("  listitem"),
+      '  button "Go"',
+    ].join("\n");
+
+    const target = bigList(200, "<li><button>Go</button></li>");
+    expect(verifyContract(contract, target).pass).toBe(true);
+  });
+});
