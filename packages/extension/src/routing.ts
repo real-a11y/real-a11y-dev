@@ -267,3 +267,24 @@ export function isTrustedSender(
 ): boolean {
   return Boolean(ownExtensionId) && sender?.id === ownExtensionId;
 }
+
+/**
+ * How a `HIGHLIGHT_NODE` should be applied on the page.
+ *
+ * Hover is a **preview**: draw the overlay where the element already sits.
+ * Only a selection (click / arrow key) may move the viewport or real focus.
+ * Sharing one behaviour between the two meant a pointer sweeping down the tree
+ * scroll-jumped the host page and fired its focus/blur handlers — flyouts,
+ * validation — once per row it crossed.
+ *
+ * Pure so the distinction is an asserted contract rather than an inline
+ * boolean a later edit could quietly collapse back into one behaviour.
+ */
+export function planHighlight(opts: { hover?: boolean }): {
+  scroll: boolean;
+  moveFocus: boolean;
+} {
+  return opts.hover
+    ? { scroll: false, moveFocus: false }
+    : { scroll: true, moveFocus: true };
+}

@@ -42,6 +42,18 @@
   re-extraction, so the panel keeps matching what a screen reader sees.
   ([#182])
 
+- Add a **Load tree** button to the "Connecting to page…" screen. Switching
+  tabs clears the tree and drops the panel into that disconnected state, but
+  the toolbar's refresh button only renders in the connected UI — so the
+  documented recovery path was unreachable and the panel healed only if the
+  new page happened to mutate its DOM (or you reloaded it). ([#192])
+- Stop hovering panel rows from scrolling the page and moving real focus.
+  Hover and selection shared one `HIGHLIGHT_NODE` message, so sweeping the
+  pointer down the tree scroll-jumped the host page and fired its own
+  focus/blur handlers — flyout menus, validation — once per row crossed.
+  Hover is now a preview: overlay only, no scroll, no focus change. Click and
+  arrow-key selection still scroll to and focus the element. ([#192])
+
 ## 0.1.7
 
 ### Patch Changes
@@ -94,3 +106,4 @@ Earlier releases predate this changelog.
 [#168]: https://github.com/real-a11y/real-a11y-dev/pull/168
 [#178]: https://github.com/real-a11y/real-a11y-dev/pull/178
 [#182]: https://github.com/real-a11y/real-a11y-dev/pull/182
+[#192]: https://github.com/real-a11y/real-a11y-dev/pull/192

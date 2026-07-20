@@ -6,6 +6,7 @@ import {
   normalizeUrl,
   urlsMatch,
   planFrameAnnouncementResponse,
+  planHighlight,
   planFrameHello,
   isTrustedSender,
 } from "./routing.js";
@@ -410,5 +411,30 @@ describe("planPanelDisconnectCleanupAllTabs", () => {
     expect(
       planPanelDisconnectCleanupAllTabs({ tabIds: [], curtainTabs: new Set() }),
     ).toEqual([]);
+  });
+});
+
+describe("planHighlight", () => {
+  it("previews on hover: no page scroll and no real focus move", () => {
+    // Hover and select used to share one behaviour, so sweeping the pointer
+    // down the tree scroll-jumped the host page and fired its focus/blur
+    // handlers once per row crossed.
+    expect(planHighlight({ hover: true })).toEqual({
+      scroll: false,
+      moveFocus: false,
+    });
+  });
+
+  it("scrolls and moves focus for a selection", () => {
+    expect(planHighlight({ hover: false })).toEqual({
+      scroll: true,
+      moveFocus: true,
+    });
+  });
+
+  it("treats an absent hover flag as a selection", () => {
+    // Older panel builds omit the flag entirely; selection is the safe default
+    // because it preserves the click/arrow-key behaviour.
+    expect(planHighlight({})).toEqual({ scroll: true, moveFocus: true });
   });
 });

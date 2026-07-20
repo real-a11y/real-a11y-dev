@@ -11,7 +11,7 @@ import {
 import type { TreeViewMode, TreeChange } from "@real-a11y-dev/core";
 
 import { computeFieldState } from "./field-state.js";
-import { isTrustedSender } from "./routing.js";
+import { isTrustedSender, planHighlight } from "./routing.js";
 import type { PanelToContent } from "./types.js";
 
 const isSubFrame = window !== window.top;
@@ -187,16 +187,19 @@ chrome.runtime.onMessage.addListener(
       }
 
       case "HIGHLIGHT_NODE": {
-        const nodeId = message.payload.nodeId;
+        const { nodeId, hover } = message.payload;
 
         // Skip visual indicator and focus() when the curtain is on —
         // the page is hidden so there's nothing to highlight, and calling
         // focus() would trigger native browser focus rings on a covered page.
         if (!curtainVisible) {
-          focusManager.highlightElement(nodeId);
+          // Hover previews the element in place; only a selection may move the
+          // viewport or real focus. See planHighlight for why.
+          const { scroll, moveFocus } = planHighlight({ hover });
+          focusManager.highlightElement(nodeId, { scroll });
 
           const element = elementRefs.get(nodeId);
-          if (element && isFocusable(element)) {
+          if (moveFocus && element && isFocusable(element)) {
             focusingFromTree = true;
             // preventScroll: highlightElement() above already centered the
             // element. Letting .focus() trigger its own "nearest" scroll on

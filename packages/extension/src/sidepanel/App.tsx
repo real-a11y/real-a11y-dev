@@ -682,9 +682,13 @@ export function App() {
     (id: string | null) => {
       if (!isMouseModality()) return;
       if (id) {
+        // `hover` keeps this a preview: overlay only, no page scroll and no
+        // real focus change. Without it, sweeping the pointer down the tree
+        // scroll-jumped the page and fired a focus event on the host page for
+        // every row it passed over.
         chrome.runtime.sendMessage({
           type: "HIGHLIGHT_NODE",
-          payload: { nodeId: id },
+          payload: { nodeId: id, hover: true },
         });
       } else {
         chrome.runtime.sendMessage({ type: "CLEAR_HIGHLIGHT" });
@@ -867,9 +871,36 @@ export function App() {
           </div>
         </div>
         <div class="sn-empty">
-          Connecting to page...
-          <br />
-          <small>Make sure you're on a web page, then reload.</small>
+          <div class="sn-empty-stack">
+            <span>
+              Connecting to page...
+              <br />
+              <small>
+                Switched tabs? Load this tab's tree — or reload the page.
+              </small>
+            </span>
+            {/*
+              Switching tabs clears the tree and drops us here, but the
+              toolbar's refresh button lives in the connected UI below this
+              early return — so the recovery path the code comment points at
+              was unreachable, and the panel only healed if the new page
+              happened to mutate. This is that affordance. Tagged with
+              `myTabId` for the same reason the toolbar button is: so it can't
+              race the background's activeTabId update after a tab switch.
+            */}
+            <button
+              class="sn-input-panel-btn sn-input-panel-btn--primary"
+              onClick={() => {
+                chrome.runtime.sendMessage({
+                  type: "REQUEST_TREE",
+                  tabId: myTabId ?? undefined,
+                  payload: { viewMode },
+                });
+              }}
+            >
+              Load tree
+            </button>
+          </div>
         </div>
       </div>
     );
