@@ -21,7 +21,15 @@ import {
   createPicker,
   getElementRefs,
 } from "@real-a11y-dev/core";
-import { useState, useCallback, useRef, useEffect } from "preact/hooks";
+import {
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+  useMemo,
+} from "preact/hooks";
+
+import { buildTreeDiffView } from "../diff.js";
 
 import { TreePanel } from "./TreePanel.js";
 
@@ -68,6 +76,13 @@ export interface TreeViewProps {
    * preventDefaults them while active, so opt-in only.
    */
   enablePicker?: boolean;
+  /**
+   * Show the toolbar's checkpoint button: capture the tree, interact with the
+   * page, and rows that appeared or changed since are marked in place.
+   * Defaults to `true` — it is a passive, read-only capture that never touches
+   * the host page.
+   */
+  enableDiff?: boolean;
   /** Callback when a node is selected */
   onNodeSelect?: (node: SemanticNode) => void;
   /** Callback when an action is dispatched */
@@ -83,6 +98,7 @@ export function TreeView({
   scrollHostOnSelect = false,
   focusHostOnActivate = false,
   enablePicker = false,
+  enableDiff = true,
   onNodeSelect,
   onAction,
 }: TreeViewProps) {
@@ -99,6 +115,29 @@ export function TreeView({
     setViewMode(initialViewMode);
   }, [initialViewMode]);
   const [treeData, setTreeData] = useState<ExtractionResult | null>(null);
+
+  // Diff baseline. Capturing keeps a reference to the extraction as it was;
+  // every re-extraction produces a fresh result object, so the baseline is not
+  // mutated out from under us and the highlight updates live as the user
+  // interacts with the page.
+  const [baseline, setBaseline] = useState<ExtractionResult | null>(null);
+  const diff = useMemo(
+    () =>
+      baseline && treeData ? buildTreeDiffView(baseline, treeData) : undefined,
+    [baseline, treeData],
+  );
+  const toggleDiff = useCallback(
+    () => setBaseline((current) => (current ? null : treeData)),
+    [treeData],
+  );
+
+  // Switching view drops the baseline: the DOM and a11y trees are different
+  // extractions with different nodes, so a baseline captured in one is not
+  // comparable against the other — it would diff into noise.
+  const handleViewModeChange = useCallback((mode: TreeViewMode) => {
+    setViewMode(mode);
+    setBaseline(null);
+  }, []);
   // Picker: panel-side mirror of the page-side createPicker state. The
   // picker itself owns the listeners + cursor; this state drives the
   // toolbar button's aria-pressed and the toggle.
@@ -246,8 +285,12 @@ export function TreeView({
     <TreePanel
       treeData={treeData}
       viewMode={viewMode}
-      onViewModeChange={setViewMode}
+      onViewModeChange={handleViewModeChange}
       theme={theme}
+      diff={diff}
+      enableDiff={enableDiff}
+      diffActive={baseline !== null}
+      onToggleDiff={toggleDiff}
       onSelect={handleSelect}
       onActivate={handleActivate}
       onHover={handleHover}

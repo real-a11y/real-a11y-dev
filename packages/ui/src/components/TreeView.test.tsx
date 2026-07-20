@@ -116,4 +116,37 @@ describe("TreeView (smoke)", () => {
       root.remove();
     }
   });
+
+  it("drops the diff baseline when the view mode changes", async () => {
+    const root = makeRoot();
+    try {
+      render(<TreeView root={root} />, container);
+      await waitFor(container, '[aria-label="Checkpoint tree for diff"]');
+
+      const checkpoint = container.querySelector(
+        '[aria-label="Checkpoint tree for diff"]',
+      ) as HTMLButtonElement;
+      checkpoint.click();
+      await waitFor(
+        container,
+        '[aria-label="Checkpoint tree for diff"][aria-pressed="true"]',
+      );
+
+      // Switching view re-extracts with a different extractor, so the captured
+      // baseline is no longer comparable — it must be dropped rather than
+      // diffed against a tree it shares no nodes with.
+      const domBtn = Array.from(
+        container.querySelectorAll(".sn-toggle-btn"),
+      ).find((b) => b.textContent === "DOM") as HTMLButtonElement;
+      domBtn.click();
+
+      await waitFor(
+        container,
+        '[aria-label="Checkpoint tree for diff"][aria-pressed="false"]',
+      );
+      expect(container.querySelector(".sn-diff-marker")).toBeNull();
+    } finally {
+      root.remove();
+    }
+  });
 });

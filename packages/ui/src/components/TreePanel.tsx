@@ -32,6 +32,7 @@ import {
   useEffect,
 } from "preact/hooks";
 
+import type { TreeDiffView } from "../diff.js";
 import { useInputModality } from "../hooks/useInputModality.js";
 import { useSearch } from "../hooks/useSearch.js";
 import { useTreeKeyboard } from "../hooks/useTreeKeyboard.js";
@@ -92,6 +93,19 @@ export interface TreePanelProps {
   /** Theme — default "auto". */
   theme?: "light" | "dark" | "auto";
   /**
+   * Highlight what changed since a captured baseline. Rows present in
+   * `treeData` get an added/changed marker; nodes that are gone are summarized
+   * below the tree, since they have no row (and no host element) to point at.
+   * Omit — or pass an empty view — to render normally.
+   */
+  diff?: TreeDiffView;
+  /** Show the toolbar's checkpoint button, which drives `diff`. */
+  enableDiff?: boolean;
+  /** True while a baseline is captured — drives the button's pressed state. */
+  diffActive?: boolean;
+  /** Called when the checkpoint button is clicked (capture / clear). */
+  onToggleDiff?: () => void;
+  /**
    * Called when a node is selected. Callers use this to apply a highlight
    * overlay on the real DOM element (e.g. via FocusManager or over a channel).
    */
@@ -106,7 +120,6 @@ export interface TreePanelProps {
    * the real-DOM highlight overlay.
    */
   onHover?: (nodeId: string | null) => void;
-  /** User-facing callback — fired on every node selection. */
   /** User-facing callback — fired on every node selection. */
   onNodeSelect?: (node: SemanticNode) => void;
 
@@ -139,6 +152,10 @@ export function TreePanel({
   viewMode,
   onViewModeChange,
   theme = "auto",
+  diff,
+  enableDiff = false,
+  diffActive = false,
+  onToggleDiff,
   onSelect,
   onActivate,
   onHover,
@@ -378,6 +395,9 @@ export function TreePanel({
         enablePicker={enablePicker}
         pickModeOn={pickModeOn}
         onTogglePickMode={onTogglePickMode}
+        enableDiff={enableDiff}
+        diffActive={diffActive}
+        onToggleDiff={onToggleDiff}
       />
       <div class="sn-tree-container">
         {viewMode === "tab" ? (
@@ -449,6 +469,7 @@ export function TreePanel({
                   viewMode={viewMode}
                   isSelected={id === selectedId}
                   isFlashing={id === flashingId}
+                  diffStatus={diff?.status.get(id)}
                   onSelect={handleSelect}
                   onToggle={handleToggle}
                   onActivate={handleActivate}
@@ -466,7 +487,44 @@ export function TreePanel({
             )}
           </div>
         )}
+        {diff && diff.removed.length > 0 && (
+          <RemovedNodes nodes={diff.removed} />
+        )}
       </div>
     </div>
+  );
+}
+
+/** Cap the rendered list — a large teardown shouldn't produce a wall of rows. */
+const MAX_REMOVED_SHOWN = 50;
+
+/**
+ * Nodes that existed at the checkpoint and are gone now. They get no tree row:
+ * their elements have left the DOM, so there is nothing to select, highlight,
+ * or act on. A native `<details>` carries the disclosure semantics — no
+ * `aria-expanded`/`aria-controls` bookkeeping, and no duplicate-id hazard when
+ * two panels are mounted at once.
+ */
+function RemovedNodes({ nodes }: { nodes: SemanticNode[] }) {
+  const shown = nodes.slice(0, MAX_REMOVED_SHOWN);
+  return (
+    <details class="sn-removed">
+      <summary class="sn-removed-summary">
+        {nodes.length} removed since checkpoint
+      </summary>
+      <ul class="sn-removed-list">
+        {shown.map((node) => (
+          <li key={node.id} class="sn-removed-item">
+            {node.a11y.role}
+            {node.a11y.name ? ` "${node.a11y.name}"` : ""}
+          </li>
+        ))}
+        {nodes.length > shown.length && (
+          <li class="sn-removed-item sn-removed-item--more">
+            … and {nodes.length - shown.length} more
+          </li>
+        )}
+      </ul>
+    </details>
   );
 }
