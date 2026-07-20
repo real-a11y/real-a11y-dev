@@ -90,15 +90,30 @@ export class FlowChain implements PromiseLike<void> {
       // expectChanges — captured BEFORE dispatch, so a preceding findByRole
       // never pollutes it.
       this.baseline ??= capture(this.root);
+
+      // Start observing BEFORE dispatching. `ActionDispatcher.dispatch` is
+      // fully synchronous — a handler's DOM writes (and the input/change
+      // events from `type()`) land *while* dispatch runs. An observer created
+      // afterwards never sees them, so the wait could only ever end at the
+      // timeout: every step paid the full `waitTimeout` as dead wait, giving a
+      // 10-step chain a hard 2s floor. `waitForMutations` starts its
+      // DomObserver synchronously, so holding the promise here means the
+      // observer is live before the first event fires, and the step resolves
+      // one debounce after the action instead.
+      const settled = waitForMutations(this.root, {
+        timeout: this.options.waitTimeout ?? 200,
+      });
+
       const result = await dispatch(this.current, action, payload);
       if (!result.success) {
+        // Don't make the failure path wait the timeout out. The pending
+        // observer stops itself when its own timer fires.
+        void settled;
         throw new Error(
           `flow.${action}: dispatch failed on ${this.current.a11y.role} "${this.current.a11y.name}": ${result.error ?? "unknown error"}`,
         );
       }
-      await waitForMutations(this.root, {
-        timeout: this.options.waitTimeout ?? 200,
-      });
+      await settled;
     });
     return this;
   }

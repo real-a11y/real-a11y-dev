@@ -331,4 +331,36 @@ describe("flow", () => {
     // absolute machine speed.
     expect(def - short).toBeGreaterThan(80);
   });
+
+  it("resolves as soon as the action's own synchronous mutations settle", async () => {
+    // `dispatch` is fully synchronous, so a handler's DOM writes land *during*
+    // the dispatch call. When the observer was created afterwards it never saw
+    // them, so the step could only ever end at the timeout — every action paid
+    // the full `waitTimeout` as dead wait.
+    //
+    // Compare a mutating action against an inert one rather than asserting an
+    // absolute bound — see the waitTimeout test above and issue #162.
+    const time = async (withHandler: boolean) => {
+      const root = mount(`<main><button>Go</button></main>`);
+      if (withHandler) {
+        root.querySelector("button")!.addEventListener("click", () => {
+          root.appendChild(document.createElement("p"));
+        });
+      }
+      const start = Date.now();
+      await flow(root, { waitTimeout: 1000 })
+        .findByRole("button", { name: "Go" })
+        .click();
+      return Date.now() - start;
+    };
+
+    await time(true); // warm up — the first flow pays a one-time cold start
+    const mutating = await time(true);
+    const inert = await time(false);
+
+    // The mutating step settles one debounce (~50ms) after the click; the inert
+    // one has nothing to observe and waits out the full 1000ms timeout. Half is
+    // a generous margin that still fails loudly if the observer starts late.
+    expect(mutating).toBeLessThan(inert / 2);
+  });
 });
