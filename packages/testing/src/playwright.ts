@@ -7,8 +7,10 @@
  * Architecture:
  *   1. `attach()` reads the pre-built IIFE page-bundle from
  *      `@real-a11y-dev/browser` (the single home for the injected bundle).
- *   2. Injects it into the Playwright page via `page.addScriptTag()`.
- *      This sets `window.__realA11y__` inside the browser.
+ *   2. Injects it into the Playwright page by evaluating its source, which
+ *      sets `window.__realA11y__` inside the browser. Evaluating rather than
+ *      appending a `<script>` keeps injection working on pages that ship a
+ *      strict Content-Security-Policy (see `attach`).
  *   3. Returns a `SemanticNavigatorPageHandle` whose methods call
  *      `page.evaluate()`, routing each call through the injected bundle.
  *
@@ -49,7 +51,15 @@ function readBundle(): string {
 
 /** Minimal structural type for a Playwright `Page`. Accepts the real type. */
 export type PlaywrightPage = {
-  evaluate<R>(pageFunction: (arg: unknown) => R, arg?: unknown): Promise<R>;
+  /**
+   * Playwright accepts either a function (with an optional serialisable
+   * argument) or a raw source string. The string form is how `attach` injects
+   * the page bundle — see the CSP note there.
+   */
+  evaluate<R>(
+    pageFunction: ((arg: unknown) => R) | string,
+    arg?: unknown,
+  ): Promise<R>;
   addScriptTag(options: { content?: string; url?: string }): Promise<unknown>;
 };
 
@@ -125,9 +135,17 @@ export async function attach(
 ): Promise<SemanticNavigatorPageHandle> {
   const rootSelector = options.rootSelector ?? "body";
 
-  // Inject the IIFE bundle. Calling this multiple times on the same page is
-  // harmless — the IIFE is idempotent and overwrites the same global.
-  await page.addScriptTag({ content: readBundle() });
+  // Inject the bundle by EVALUATING its source rather than appending a
+  // <script> element. `addScriptTag` inserts a real inline <script>, which a
+  // page whose CSP `script-src` lacks 'unsafe-inline' blocks outright — and
+  // pointing tests at a production-like deployment is exactly when that bites.
+  // `page.evaluate(source)` runs through the debugger protocol instead and is
+  // not subject to the page's CSP (the same approach axe-core's Playwright
+  // adapter takes). The bundle is `var __realA11y__ = (…)(…)`, so evaluating it
+  // completes with `undefined` — nothing non-serialisable crosses back.
+  // Calling this repeatedly on one page stays harmless: the IIFE just
+  // overwrites the same global.
+  await page.evaluate(readBundle());
 
   // Verify the injection succeeded before returning the handle.
   const ready = await page.evaluate(
@@ -137,7 +155,9 @@ export async function attach(
   if (!ready) {
     throw new Error(
       "@real-a11y-dev/testing/playwright: injection failed — " +
-        "__realA11y__ is not an object after addScriptTag.",
+        "`__realA11y__` is not an object after injecting the page bundle. " +
+        "If the page sends a Content-Security-Policy, create the browser " +
+        "context with `{ bypassCSP: true }` and try again.",
     );
   }
 
@@ -153,7 +173,18 @@ export async function attach(
           string,
           (root: Element, ...a: unknown[]) => unknown
         >;
-        const root = document.querySelector(selector) ?? document.body;
+        // Fail loudly on a selector that matches nothing. Falling back to
+        // <body> would silently audit the whole page — a typo'd or since-
+        // refactored `rootSelector` would then pass assertions and snapshot
+        // the entire document while looking like it checked one region.
+        // (The implicit default is the literal selector "body", which always
+        // matches, so this only ever fires for an explicit selector.)
+        const root = document.querySelector(selector);
+        if (!root) {
+          throw new Error(
+            `@real-a11y-dev/testing/playwright: rootSelector "${selector}" matched no element.`,
+          );
+        }
         return ra[fn](root, ...args) as T;
       },
       { selector: rootSelector, fn: fnName, args: extraArgs } satisfies EvalArg,
@@ -186,7 +217,14 @@ export async function attach(
             string,
             (root: Element, options?: unknown) => unknown
           >;
-          const root = document.querySelector(a.selector) ?? document.body;
+          // Same contract as evalFn: a non-matching rootSelector is an error,
+          // not a silent widening of the audit to the whole document.
+          const root = document.querySelector(a.selector);
+          if (!root) {
+            throw new Error(
+              `@real-a11y-dev/testing/playwright: rootSelector "${a.selector}" matched no element.`,
+            );
+          }
           const options: Record<string, unknown> = {};
           if (a.mode) options.mode = a.mode;
           if (a.includeGeneric !== undefined)

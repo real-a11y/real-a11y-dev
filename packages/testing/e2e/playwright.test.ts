@@ -184,3 +184,42 @@ test.describe("contenteditable rich-text widgets", () => {
     expect(snapshot).toContain('combobox "State"');
   });
 });
+
+// ─── Injection + root resolution hardening ───────────────────────────────────
+
+test.describe("strict CSP page", () => {
+  test("attach() injects the bundle despite a strict Content-Security-Policy", async ({
+    page,
+  }) => {
+    // This fixture sends `script-src 'self'` (no 'unsafe-inline'), so appending
+    // an inline <script> — what `addScriptTag({ content })` does — is blocked.
+    // Evaluating the bundle source instead is not subject to page CSP, which is
+    // what makes auditing a production-like deployment possible at all.
+    await page.goto(fixtureUrl("fixture-csp.html"));
+    const sn = await attach(page);
+    const snapshot = await sn.auditSnapshot();
+    expect(snapshot).toContain("CSP page");
+  });
+});
+
+test.describe("rootSelector that matches nothing", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto(fixtureUrl("fixture.html"));
+  });
+
+  test("auditSnapshot rejects instead of silently auditing the whole body", async ({
+    page,
+  }) => {
+    const sn = await attach(page, { rootSelector: "#does-not-exist" });
+    await expect(sn.auditSnapshot()).rejects.toThrow(/#does-not-exist/);
+  });
+
+  test("assertions reject instead of running against the whole body", async ({
+    page,
+  }) => {
+    // Same contract on the evalFn path that every assertion helper routes
+    // through — a typo'd selector must not quietly pass by auditing everything.
+    const sn = await attach(page, { rootSelector: "#does-not-exist" });
+    await expect(sn.assertHeadingOrder()).rejects.toThrow(/matched no element/);
+  });
+});
