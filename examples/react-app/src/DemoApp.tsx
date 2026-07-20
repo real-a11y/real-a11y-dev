@@ -1,9 +1,13 @@
 import { useRef, useState, type ReactNode } from "react";
 import {
+  ChartBroken,
+  ChartCorrect,
   ComboboxAsyncBroken,
   ComboboxAsyncCorrect,
   ComboboxBroken,
   ComboboxCorrect,
+  DataTableBroken,
+  DataTableCorrect,
   DialogBroken,
   DialogCorrect,
   DialogNestedBroken,
@@ -16,6 +20,10 @@ import {
   ListboxMultiCorrect,
   MenuBroken,
   MenuCorrect,
+  MultiStepFormBroken,
+  MultiStepFormCorrect,
+  PaginationBroken,
+  PaginationCorrect,
   SliderBroken,
   SliderCorrect,
   TabsBroken,
@@ -28,6 +36,8 @@ import {
   TreeCheckableCorrect,
   TreeViewBroken,
   TreeViewCorrect,
+  VideoPlayerBroken,
+  VideoPlayerCorrect,
   type TabsExampleProps,
 } from "@real-a11y-dev/example-patterns";
 
@@ -95,6 +105,14 @@ function SideBySide({ left, right }: { left: ReactNode; right: ReactNode }) {
       </div>
     </div>
   );
+}
+
+/** Small stateful wrapper so each Pagination variant tracks its own current page. */
+function PaginationDemo({ variant }: { variant: "correct" | "broken" }) {
+  const [page, setPage] = useState(3);
+  const Component =
+    variant === "correct" ? PaginationCorrect : PaginationBroken;
+  return <Component currentPage={page} totalPages={7} onPageChange={setPage} />;
 }
 
 /**
@@ -708,6 +726,208 @@ export function DemoApp() {
                 ]}
                 defaultExpandedIds={["fruits", "veg"]}
                 defaultCheckedIds={["apple"]}
+              />
+            }
+          />
+        </section>
+
+        {/* Section 20 — Content pattern: Data table */}
+        <section
+          aria-labelledby="datatable-heading"
+          style={{ marginBottom: 40 }}
+        >
+          <h2 id="datatable-heading">
+            Content: Data table — correct vs broken
+          </h2>
+          <p style={{ color: "#666", marginBottom: 16 }}>
+            Both grids show the same roster. The correct one is a native{" "}
+            <code>{"<table>"}</code> with <code>{"<caption>"}</code>,{" "}
+            <code>{"<th scope='col'>"}</code>, and{" "}
+            <code>{"<th scope='row'>"}</code> — screen readers announce
+            header/cell relationships when navigating. The broken one is a{" "}
+            <code>{"<div>"}</code> grid with visually-styled headers only.
+          </p>
+          <SideBySide
+            left={
+              <DataTableCorrect
+                caption="Team roster"
+                columns={[
+                  { id: "name", label: "Name" },
+                  { id: "role", label: "Role" },
+                  { id: "team", label: "Team" },
+                ]}
+                rows={[
+                  {
+                    id: "1",
+                    cells: {
+                      name: "Ada Lovelace",
+                      role: "Engineer",
+                      team: "Platform",
+                    },
+                  },
+                  {
+                    id: "2",
+                    cells: {
+                      name: "Grace Hopper",
+                      role: "Manager",
+                      team: "Runtime",
+                    },
+                  },
+                ]}
+              />
+            }
+            right={
+              <DataTableBroken
+                caption="Team roster"
+                columns={[
+                  { id: "name", label: "Name" },
+                  { id: "role", label: "Role" },
+                  { id: "team", label: "Team" },
+                ]}
+                rows={[
+                  {
+                    id: "1",
+                    cells: {
+                      name: "Ada Lovelace",
+                      role: "Engineer",
+                      team: "Platform",
+                    },
+                  },
+                  {
+                    id: "2",
+                    cells: {
+                      name: "Grace Hopper",
+                      role: "Manager",
+                      team: "Runtime",
+                    },
+                  },
+                ]}
+              />
+            }
+          />
+        </section>
+
+        {/* Section 21 — Content pattern: Video player */}
+        <section aria-labelledby="video-heading" style={{ marginBottom: 40 }}>
+          <h2 id="video-heading">Content: Video player — correct vs broken</h2>
+          <p style={{ color: "#666", marginBottom: 16 }}>
+            The correct video ships <code>controls</code>, an{" "}
+            <code>aria-label</code>, and a{" "}
+            <code>{"<track kind='captions'>"}</code> — meets WCAG 1.2.2
+            (Captions) and 2.2.2 (Pause/Stop/Hide). The broken video autoplays
+            muted with no controls, no name, no captions.
+          </p>
+          <SideBySide
+            left={
+              <VideoPlayerCorrect
+                src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
+                label="Product tour"
+              />
+            }
+            right={
+              <VideoPlayerBroken
+                src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
+                label="Product tour"
+              />
+            }
+          />
+        </section>
+
+        {/* Section 22 — Content pattern: Chart */}
+        <section aria-labelledby="chart-heading" style={{ marginBottom: 40 }}>
+          <h2 id="chart-heading">Content: Chart — correct vs broken</h2>
+          <p style={{ color: "#666", marginBottom: 16 }}>
+            The correct SVG has <code>role="img"</code> +{" "}
+            <code>{"<title>"}</code> + <code>{"<desc>"}</code> plus an sr-only{" "}
+            <code>{"<table>"}</code> data alternative. The broken SVG is a raw
+            shape with no name and no way to read the underlying values.
+          </p>
+          <SideBySide
+            left={
+              <ChartCorrect
+                title="Monthly revenue"
+                description="Revenue trends across the first five months: peak in May, dip in March."
+                data={[
+                  { id: "jan", label: "Jan", value: 12 },
+                  { id: "feb", label: "Feb", value: 18 },
+                  { id: "mar", label: "Mar", value: 9 },
+                  { id: "apr", label: "Apr", value: 14 },
+                  { id: "may", label: "May", value: 22 },
+                ]}
+                unit="USD"
+              />
+            }
+            right={
+              <ChartBroken
+                title="Monthly revenue"
+                description="Revenue trends across the first five months: peak in May, dip in March."
+                data={[
+                  { id: "jan", label: "Jan", value: 12 },
+                  { id: "feb", label: "Feb", value: 18 },
+                  { id: "mar", label: "Mar", value: 9 },
+                  { id: "apr", label: "Apr", value: 14 },
+                  { id: "may", label: "May", value: 22 },
+                ]}
+                unit="USD"
+              />
+            }
+          />
+        </section>
+
+        {/* Section 23 — Content pattern: Pagination */}
+        <section
+          aria-labelledby="pagination-heading"
+          style={{ marginBottom: 40 }}
+        >
+          <h2 id="pagination-heading">
+            Content: Pagination — correct vs broken
+          </h2>
+          <p style={{ color: "#666", marginBottom: 16 }}>
+            The correct one is a <code>{'<nav aria-label="Pagination">'}</code>{" "}
+            with per-page <code>aria-label</code>s and{" "}
+            <code>aria-current="page"</code> on the active button. The broken
+            one is a flat row of buttons with no landmark and no current-page
+            signal.
+          </p>
+          <SideBySide
+            left={<PaginationDemo variant="correct" />}
+            right={<PaginationDemo variant="broken" />}
+          />
+        </section>
+
+        {/* Section 24 — Content pattern: Multi-step form */}
+        <section
+          aria-labelledby="multistep-heading"
+          style={{ marginBottom: 40 }}
+        >
+          <h2 id="multistep-heading">
+            Content: Multi-step form — correct vs broken
+          </h2>
+          <p style={{ color: "#666", marginBottom: 16 }}>
+            The correct form uses <code>{"<ol aria-label='Progress'>"}</code>{" "}
+            with <code>aria-current="step"</code>,{" "}
+            <code>{"<fieldset>/<legend>"}</code> per step, and error messages
+            linked via <code>aria-invalid</code> + <code>aria-describedby</code>{" "}
+            + <code>role="alert"</code>. The broken one has none of that —
+            errors render as red text disconnected from the field.
+          </p>
+          <SideBySide
+            left={
+              <MultiStepFormCorrect
+                steps={[
+                  { id: "account", label: "Account" },
+                  { id: "profile", label: "Profile" },
+                  { id: "review", label: "Review" },
+                ]}
+              />
+            }
+            right={
+              <MultiStepFormBroken
+                steps={[
+                  { id: "account", label: "Account" },
+                  { id: "profile", label: "Profile" },
+                  { id: "review", label: "Review" },
+                ]}
               />
             }
           />
