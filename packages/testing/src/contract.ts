@@ -362,8 +362,16 @@ function hintsFor(
       );
     }
     if (c.node.name !== undefined) {
+      // Fold typography here too — matching does, and this is the hint that
+      // actually explains a role swap ("is the button rendered as a link?").
+      // Comparing byte-for-byte would drop it precisely when the page uses
+      // smart punctuation.
+      const wantName = foldTypography(c.node.name);
       const sameName = candidates.filter(
-        (t) => t.node.name === c.node.name && t.node.role !== c.node.role,
+        (t) =>
+          t.node.name !== undefined &&
+          foldTypography(t.node.name) === wantName &&
+          t.node.role !== c.node.role,
       );
       for (const t of sameName.slice(0, 3)) {
         hints.push(

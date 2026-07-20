@@ -289,3 +289,18 @@ describe("verifyContract — ambiguous contracts stay decidable", () => {
     expect(verifyContract(contract, target).pass).toBe(true);
   });
 });
+
+describe("verifyContract — diagnostics fold typography too", () => {
+  it("hints 'same name, different role' when the rendered name uses smart quotes", () => {
+    // Rendered as a LINK with a curly apostrophe; the contract wants a BUTTON
+    // typed with a straight one. The role swap is the bug to surface, so the
+    // hint's name comparison must fold typography the way matching does —
+    // otherwise the clearest explanation is silently dropped.
+    const el = mount(`<main><a href="/save">Don’t save</a></main>`);
+    const r = verifyContract(`main\n  button "Don't save"`, serializeTree(el));
+
+    expect(r.pass).toBe(false);
+    expect(r.message).toContain("same name, different role");
+    expect(r.message).toContain("is the button rendered as a link?");
+  });
+});
