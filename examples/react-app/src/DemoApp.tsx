@@ -820,13 +820,14 @@ export function DemoApp() {
           <SideBySide
             left={
               <VideoPlayerCorrect
-                src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
+                src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/friday.mp4"
                 label="Product tour"
+                captionsSrc="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/friday.vtt"
               />
             }
             right={
               <VideoPlayerBroken
-                src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
+                src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/friday.mp4"
                 label="Product tour"
               />
             }
