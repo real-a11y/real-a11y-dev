@@ -1,0 +1,10 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:04.000
+This is a sample captions track shipped with the demo.
+
+00:00:04.000 --> 00:00:08.000
+The "correct" video wires it up via <track kind="captions">.
+
+00:00:08.000 --> 00:00:12.000
+The "broken" video omits it entirely — no text alternative.

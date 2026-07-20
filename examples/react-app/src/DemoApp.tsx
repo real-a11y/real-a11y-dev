@@ -819,15 +819,20 @@ export function DemoApp() {
           </p>
           <SideBySide
             left={
+              // Video src uses MDN's current canonical shared-assets host
+              // (the old interactive-examples.mdn.mozilla.net host is
+              // deprecated). Captions point at a committed local .vtt in
+              // public/ so the a11y-critical track can never link-rot —
+              // even if the remote video 404s, the <track> still renders.
               <VideoPlayerCorrect
-                src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/friday.mp4"
+                src="https://mdn.github.io/shared-assets/videos/flower.mp4"
                 label="Product tour"
-                captionsSrc="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/friday.vtt"
+                captionsSrc="/captions.vtt"
               />
             }
             right={
               <VideoPlayerBroken
-                src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/friday.mp4"
+                src="https://mdn.github.io/shared-assets/videos/flower.mp4"
                 label="Product tour"
               />
             }
