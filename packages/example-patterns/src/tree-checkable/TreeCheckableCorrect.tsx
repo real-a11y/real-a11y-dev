@@ -89,7 +89,12 @@ export function TreeCheckableCorrect({
   const [expanded, setExpanded] = useState<Set<string>>(
     () => new Set(defaultExpandedIds ?? []),
   );
-  const [activeId, setActiveId] = useState<string>(nodes[0].id);
+  // Empty-nodes guard — the initial activeId is a plain string so we
+  // can't `?? undefined` it without leaking that null to
+  // aria-activedescendant. Empty string is fine: it resolves to no
+  // element (harmless), and every render path below checks rows.length
+  // before dereferencing rows[0].
+  const [activeId, setActiveId] = useState<string>(nodes[0]?.id ?? "");
 
   const rows: FlatRow[] = [];
   flatten(nodes, expanded, 0, rows);
@@ -139,7 +144,7 @@ export function TreeCheckableCorrect({
     // row so keyboard users can always recover without a mouse.
     if (idx < 0) {
       const navKeys = ["ArrowDown", "ArrowUp", "Home", "End"];
-      if (navKeys.includes(e.key)) {
+      if (navKeys.includes(e.key) && rows.length > 0) {
         e.preventDefault();
         setActiveId(rows[0].node.id);
       }
