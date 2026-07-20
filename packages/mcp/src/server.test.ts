@@ -119,9 +119,9 @@ describe("MCP server wiring", () => {
         "checkpoint_tree",
         "close_browser",
         "compare_trees",
-        "diff_checkpoint",
+        "diff_findings",
         "diff_checkpoints",
-        "diff_since_checkpoint",
+        "diff_tree",
         "export_checkpoint",
         "get_heading_outline",
         "get_native_tree",
@@ -132,7 +132,7 @@ describe("MCP server wiring", () => {
         "list_checkpoints",
         "list_elements",
         "open_page",
-        "save_checkpoint",
+        "checkpoint_findings",
       ].sort(),
     );
   });
@@ -504,7 +504,7 @@ describe("checkpoints", () => {
     tabOrder: "1. button",
   });
 
-  it("save_checkpoint then diff_checkpoint surfaces a NEW finding after a change", async () => {
+  it("checkpoint_findings then diff_findings surfaces a NEW finding after a change", async () => {
     const client = await connect(session);
     await client.callTool({
       name: "open_page",
@@ -513,7 +513,7 @@ describe("checkpoints", () => {
     session.snapshotResponse = rawWith([button("#save")]);
     const saved = textOf(
       await client.callTool({
-        name: "save_checkpoint",
+        name: "checkpoint_findings",
         arguments: { name: "before" },
       }),
     );
@@ -523,7 +523,7 @@ describe("checkpoints", () => {
     session.snapshotResponse = rawWith([button("#save"), button("#cancel")]);
     const diff = textOf(
       await client.callTool({
-        name: "diff_checkpoint",
+        name: "diff_findings",
         arguments: { name: "before" },
       }),
     );
@@ -531,10 +531,10 @@ describe("checkpoints", () => {
     expect(diff).toMatch(/NEW — gates CI/);
   });
 
-  it("diff_checkpoint errors when the checkpoint is missing", async () => {
+  it("diff_findings errors when the checkpoint is missing", async () => {
     const client = await connect(session);
     const res = await client.callTool({
-      name: "diff_checkpoint",
+      name: "diff_findings",
       arguments: { name: "nope" },
     });
     expect(res.isError).toBe(true);
@@ -549,7 +549,7 @@ describe("checkpoints", () => {
     });
     session.snapshotResponse = rawWith([button("#save")]);
     await client.callTool({
-      name: "save_checkpoint",
+      name: "checkpoint_findings",
       arguments: { name: "before" },
     });
     await client.callTool({ name: "close_browser", arguments: {} });
@@ -575,7 +575,7 @@ describe("checkpoints", () => {
     session.snapshotResponse = raw;
     const client = await connect(session);
     await client.callTool({ name: "open_page", arguments: { url } });
-    await client.callTool({ name: "save_checkpoint", arguments: { name } });
+    await client.callTool({ name: "checkpoint_findings", arguments: { name } });
     const exported = textOf(
       await client.callTool({
         name: "export_checkpoint",
@@ -590,7 +590,7 @@ describe("checkpoints", () => {
     );
   });
 
-  it("diff_checkpoint re-snapshots with the rules the checkpoint was saved with", async () => {
+  it("diff_findings re-snapshots with the rules the checkpoint was saved with", async () => {
     const client = await connect(session);
     await client.callTool({
       name: "open_page",
@@ -598,11 +598,11 @@ describe("checkpoints", () => {
     });
     session.snapshotResponse = rawWith([]);
     await client.callTool({
-      name: "save_checkpoint",
+      name: "checkpoint_findings",
       arguments: { name: "hp", rules: ["heading-order"] },
     });
     await client.callTool({
-      name: "diff_checkpoint",
+      name: "diff_findings",
       arguments: { name: "hp" },
     });
     // The diff's re-snapshot must carry the same rule subset, not all rules —
@@ -619,7 +619,7 @@ describe("checkpoints", () => {
     });
     session.snapshotResponse = rawWith([button("#save")]);
     await client.callTool({
-      name: "save_checkpoint",
+      name: "checkpoint_findings",
       arguments: { name: "ok" },
     });
     const exported = textOf(
@@ -645,7 +645,7 @@ describe("checkpoints", () => {
       tabOrder: "",
     };
     await client.callTool({
-      name: "save_checkpoint",
+      name: "checkpoint_findings",
       arguments: { name: "big" },
     });
     const res = await client.callTool({
@@ -656,7 +656,7 @@ describe("checkpoints", () => {
     expect(textOf(res)).toMatch(/too large to export inline/);
   });
 
-  it("import under a new label then diff_checkpoint of an unchanged page reports no change", async () => {
+  it("import under a new label then diff_findings of an unchanged page reports no change", async () => {
     const client = await connect(session);
     await client.callTool({
       name: "open_page",
@@ -665,7 +665,7 @@ describe("checkpoints", () => {
     session.snapshotResponse = rawWith([button("#save")]);
     // Save as "home" and export — the artifact's page name is "home".
     await client.callTool({
-      name: "save_checkpoint",
+      name: "checkpoint_findings",
       arguments: { name: "home" },
     });
     const artifact = textOf(
@@ -683,14 +683,14 @@ describe("checkpoints", () => {
     // every finding double-counted as NEW+FIXED from a name-join miss.
     const diff = textOf(
       await client.callTool({
-        name: "diff_checkpoint",
+        name: "diff_findings",
         arguments: { name: "baseline" },
       }),
     );
     expect(diff).toMatch(/0 new, 0 fixed/);
   });
 
-  it("diff_checkpoint re-snapshots with the root the checkpoint was saved with", async () => {
+  it("diff_findings re-snapshots with the root the checkpoint was saved with", async () => {
     const client = await connect(session);
     await client.callTool({
       name: "open_page",
@@ -698,20 +698,20 @@ describe("checkpoints", () => {
     });
     session.snapshotResponse = rawWith([]);
     await client.callTool({
-      name: "save_checkpoint",
+      name: "checkpoint_findings",
       arguments: { name: "modal", rootSelector: "[role=dialog]" },
     });
     // No rootSelector on the diff — it must fall back to the checkpoint's root,
     // not re-audit the whole "body" and surface the rest of the page as NEW.
     await client.callTool({
-      name: "diff_checkpoint",
+      name: "diff_findings",
       arguments: { name: "modal" },
     });
     const snaps = session.calls.filter((c) => c.fn === "snapshot");
     expect(snaps.at(-1)?.rootSelector).toBe("[role=dialog]");
   });
 
-  it("diff_since_checkpoint re-extracts with the root the tree checkpoint used", async () => {
+  it("diff_tree re-extracts with the root the tree checkpoint used", async () => {
     session.responses.checkpointTree = "Tree checkpoint captured — 12 node(s).";
     session.responses.diffSinceCheckpoint = '+ button "Save"';
     const client = await connect(session);
@@ -722,7 +722,7 @@ describe("checkpoints", () => {
     // No rootSelector on the diff — it must reuse the captured root rather than
     // silently widening to <body> and reporting the rest of the page as added.
     const res = await client.callTool({
-      name: "diff_since_checkpoint",
+      name: "diff_tree",
       arguments: {},
     });
     const call = session.calls
@@ -746,7 +746,7 @@ describe("checkpoints", () => {
       arguments: { url: "https://example.com/other" },
     });
     await client.callTool({
-      name: "diff_since_checkpoint",
+      name: "diff_tree",
       arguments: {},
     });
     const call = session.calls
@@ -763,7 +763,7 @@ describe("checkpoints", () => {
     });
     session.snapshotResponse = rawWith([button("#save")]);
     await client.callTool({
-      name: "save_checkpoint",
+      name: "checkpoint_findings",
       arguments: { name: "home" },
     });
     const full = textOf(

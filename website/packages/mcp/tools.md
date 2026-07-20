@@ -143,11 +143,13 @@ An agent calls this to review one element type without pulling the whole tree:
 { "filter": "image", "rootSelector": "main" }
 ```
 
-## Checkpoints
+## Findings checkpoints
 
-Give the agent the CLI's snapshot + diff power mid-session: capture the page's findings under a name, change something (deploy, feature toggle, DOM edit), then ask what's **new / changed / fixed** — with the same `v1:` fingerprint identity the CI a11y-diff bot uses. Checkpoints are held in memory (LRU-capped at 20) and **survive navigation by design**, so you can checkpoint one deploy and diff another. `close_browser` clears the store. (Unlike Axis-A tree-checkpoints, these are pure data — not bound to the page instance that was live when saved.)
+Give the agent the CLI's snapshot + diff power mid-session: capture the page's findings under a name, change something (deploy, feature toggle, DOM edit), then ask what's **new / changed / fixed** — with the same `v1:` fingerprint identity the CI a11y-diff bot uses. Checkpoints are held in memory (LRU-capped at 20) and **survive navigation by design**, so you can checkpoint one deploy and diff another. `close_browser` clears the store.
 
-### `save_checkpoint`
+These capture the accessibility _problems_. To capture the tree _structure_ and diff what an interaction changed, see [tree checkpoints](#tree-checkpoints) — which are bound to the page instance and do not survive navigation.
+
+### `checkpoint_findings`
 
 _Snapshots the current page into the named store._
 
@@ -159,7 +161,7 @@ Parameters:
 - **`rootSelector`** — string — optional (default `"body"`) — CSS selector for the snapshot root.
 - **`rules`** — array of the five rule ids — optional — subset for the findings. Omit to run all.
 
-### `diff_checkpoint`
+### `diff_findings`
 
 _Read-only · re-snapshots the current page and diffs it against a stored checkpoint._
 
@@ -173,8 +175,8 @@ Parameters:
 The headline cross-deploy workflow — diff prod against a preview in one session:
 
 ```json
-// open_page("https://example.com")       → save_checkpoint({ "name": "prod" })
-// open_page("https://preview.example.com") → diff_checkpoint({ "name": "prod" })
+// open_page("https://example.com")       → checkpoint_findings({ "name": "prod" })
+// open_page("https://preview.example.com") → diff_findings({ "name": "prod" })
 ```
 
 ### `diff_checkpoints`
@@ -217,7 +219,7 @@ Parameters:
 
 ## Tree checkpoints
 
-Where the [checkpoint tools](#checkpoints) answer _"what accessibility problems changed?"_, these answer _"what did that interaction change?"_ — the precise structural delta of a click, a keypress, or a dialog opening.
+Where the [findings checkpoints](#findings-checkpoints) answer _"what accessibility problems changed?"_, these answer _"what did that interaction change?"_ — the precise structural delta of a click, a keypress, or a dialog opening.
 
 The two are deliberately different in lifetime. A snapshot checkpoint is pure data and **survives navigation**. A tree checkpoint holds the extracted tree **inside the page** — its node identities are bound to that page instance — so it is **discarded the moment the page navigates**. Capture, interact, diff, all within one page load.
 
@@ -225,13 +227,13 @@ The two are deliberately different in lifetime. A snapshot checkpoint is pure da
 
 _Captures the current tree in the page as a comparison point._
 
-Capture the current accessibility tree as the baseline for an interaction diff. Then interact with the page and call [`diff_since_checkpoint`](#diff_since_checkpoint). Re-capturing re-baselines.
+Capture the current accessibility tree as the baseline for an interaction diff. Then interact with the page and call [`diff_tree`](#diff_tree). Re-capturing re-baselines.
 
 Parameters:
 
 - **`rootSelector`** — string — optional (default `"body"`) — CSS selector for the extraction root.
 
-### `diff_since_checkpoint`
+### `diff_tree`
 
 _Read-only · diffs the live tree against the checkpoint._
 

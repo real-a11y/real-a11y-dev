@@ -32,7 +32,7 @@ function focusNode(tree: ExtractionResult): SemanticNode | null {
 /** Capture the current tree as the comparison point. Re-capturing re-baselines. */
 export function checkpointTree(root: Element): string {
   captured = extractA11yTree(root);
-  return `Tree checkpoint captured — ${captured.nodes.size} node(s). Interact with the page, then call diff_since_checkpoint.`;
+  return `Tree checkpoint captured — ${captured.nodes.size} node(s). Interact with the page, then call diff_tree.`;
 }
 
 /** Diff the live tree against the checkpoint captured in THIS page load. */

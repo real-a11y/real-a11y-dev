@@ -26,7 +26,7 @@ export const MAX_CHECKPOINTS = 20;
 
 /**
  * A stored checkpoint: the snapshotted page plus the rule subset it was
- * captured with. The rules are remembered so a later `diff_checkpoint`
+ * captured with. The rules are remembered so a later `diff_findings`
  * re-snapshots with the SAME rules — otherwise a checkpoint saved with a subset
  * would diff against an all-rules re-snapshot and report the omitted rules'
  * findings as spurious NEW (or FIXED). `undefined` means "all rules".
@@ -86,7 +86,7 @@ function asArtifact(page: SnapshotPage): SnapshotArtifact {
 
 /**
  * Diff two checkpoint pages that were fingerprinted under the **same** page
- * name (the `save_checkpoint`/`diff_checkpoint` pair, or a re-snapshot vs its
+ * name (the `checkpoint_findings`/`diff_findings` pair, or a re-snapshot vs its
  * stored base). Their fingerprints are directly comparable.
  */
 export function diffCheckpointPages(

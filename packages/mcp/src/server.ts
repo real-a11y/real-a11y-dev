@@ -329,7 +329,7 @@ export function buildServer(
   // A named, in-memory store of a11y snapshots. Each is pure data (strings +
   // fingerprinted findings, no DOM references), so checkpoints deliberately
   // SURVIVE navigation — that enables the cross-deploy diff (checkpoint prod →
-  // open preview → diff_checkpoint). Only close_browser clears them, as session
+  // open preview → diff_findings). Only close_browser clears them, as session
   // hygiene. (Contrast Axis-A tree-checkpoints, which are page-instance-bound.)
   const checkpoints = new CheckpointStore();
   // Last-opened URL, recorded on a checkpoint's (cosmetic, redacted) url field.
@@ -627,11 +627,11 @@ export function buildServer(
     .describe("Checkpoint label — the in-memory store key.");
 
   server.registerTool(
-    "save_checkpoint",
+    "checkpoint_findings",
     {
       title: "Save a11y checkpoint",
       description:
-        "Snapshot the CURRENT page's accessibility findings and store them under `name`. Later call diff_checkpoint to see which findings are new / changed / fixed — the same identity semantics (fingerprints) the CI a11y-diff uses. Checkpoints survive navigation, so you can checkpoint one deploy and diff another: save 'prod', open the preview URL, then diff_checkpoint('prod').",
+        "Snapshot the CURRENT page's accessibility findings and store them under `name`. Later call diff_findings to see which findings are new / changed / fixed — the same identity semantics (fingerprints) the CI a11y-diff uses. Checkpoints survive navigation, so you can checkpoint one deploy and diff another: save 'prod', open the preview URL, then diff_findings('prod').",
       inputSchema: {
         name: checkpointName,
         rootSelector,
@@ -661,7 +661,7 @@ export function buildServer(
   );
 
   server.registerTool(
-    "diff_checkpoint",
+    "diff_findings",
     {
       title: "Diff current page vs a checkpoint",
       annotations: READ_ONLY,
@@ -681,7 +681,7 @@ export function buildServer(
       const base = checkpoints.get(name);
       if (!base) {
         return errText(
-          `No checkpoint named "${name}". Save one first with save_checkpoint.`,
+          `No checkpoint named "${name}". Save one first with checkpoint_findings.`,
         );
       }
       // Re-snapshot with the SAME root AND rule set the checkpoint was captured
@@ -727,7 +727,7 @@ export function buildServer(
     },
     async () => {
       if (checkpoints.size === 0) {
-        return text("No checkpoints saved. Use save_checkpoint first.");
+        return text("No checkpoints saved. Use checkpoint_findings first.");
       }
       const lines = checkpoints
         .entries()
@@ -798,7 +798,7 @@ export function buildServer(
         const src = parsed.pages[0];
         if (!src) return errText(`Artifact for "${name}" has no pages.`);
         // Store under `name` with the page renamed and re-fingerprinted to that
-        // label — exactly as save_checkpoint does — so a later diff_checkpoint
+        // label — exactly as checkpoint_findings does — so a later diff_findings
         // (which builds the head under `name`) joins and matches. The artifact's
         // original page name would otherwise never equal the store label, and
         // the diff would report every finding as both NEW and FIXED.
@@ -832,7 +832,7 @@ export function buildServer(
     {
       title: "Checkpoint the tree (for an interaction diff)",
       description:
-        "Capture the CURRENT accessibility tree in the page as a comparison point. Then interact — click, type, open a dialog — and call diff_since_checkpoint to see exactly which nodes were added, removed, or changed, and where focus moved. Unlike save_checkpoint (which stores findings and survives navigation), a tree checkpoint is bound to THIS page instance and is discarded when the page navigates.",
+        "Capture the CURRENT accessibility tree in the page as a comparison point. Then interact — click, type, open a dialog — and call diff_tree to see exactly which nodes were added, removed, or changed, and where focus moved. Unlike checkpoint_findings (which stores findings and survives navigation), a tree checkpoint is bound to THIS page instance and is discarded when the page navigates.",
       inputSchema: { rootSelector },
       annotations: {
         readOnlyHint: false,
@@ -849,7 +849,7 @@ export function buildServer(
   );
 
   server.registerTool(
-    "diff_since_checkpoint",
+    "diff_tree",
     {
       title: "Diff the tree since the checkpoint",
       annotations: READ_ONLY,

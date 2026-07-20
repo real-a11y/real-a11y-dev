@@ -269,7 +269,7 @@ describe("MCP end-to-end against a real browser", () => {
     // Wait past the scripted mutation, then diff against the checkpoint.
     await new Promise((resolve) => setTimeout(resolve, 2200));
     const diff = textOf(
-      await client.callTool({ name: "diff_since_checkpoint", arguments: {} }),
+      await client.callTool({ name: "diff_tree", arguments: {} }),
     );
     expect(diff).toContain("Added later");
   });
@@ -287,7 +287,7 @@ describe("MCP end-to-end against a real browser", () => {
     });
     await client.callTool({ name: "checkpoint_tree", arguments: {} });
     const diff = textOf(
-      await client.callTool({ name: "diff_since_checkpoint", arguments: {} }),
+      await client.callTool({ name: "diff_tree", arguments: {} }),
     );
     expect(diff).toMatch(/No tree changes since the checkpoint/);
     expect(diff).not.toContain("(no changes)");
@@ -307,7 +307,7 @@ describe("MCP end-to-end against a real browser", () => {
       arguments: { url: dataUrl("<!doctype html><main><h1>B</h1></main>") },
     });
     const res = await client.callTool({
-      name: "diff_since_checkpoint",
+      name: "diff_tree",
       arguments: {},
     });
     expect(res.isError).toBe(true);
