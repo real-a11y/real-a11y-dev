@@ -1,7 +1,7 @@
+import { serializeTree } from "@real-a11y-dev/serialize";
 import { describe, it, expect } from "vitest";
 
 import { parseA11yTree, verifyContract } from "./contract.js";
-import { serializeTree } from "./serialize.js";
 
 function mount(html: string): HTMLElement {
   document.body.innerHTML = "";

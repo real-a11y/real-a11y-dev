@@ -182,7 +182,7 @@ expect(container).toMatchA11yContract(contract);
 expect(inIsolation).toMatchA11yContract(contract, { strict: true });
 ```
 
-The underlying engine is `verifyContract` in `@real-a11y-dev/serialize` (pure text-in → verdict-out), so the same contract file can gate a build from a CLI or a saved snapshot, not just a live test.
+Because a serialized string is accepted, the same contract can be checked against a **committed snapshot artifact** — not only a live test render.
 
 ## `a11ySnapshot(root, options?)` — snapshot serializer
 
@@ -236,7 +236,7 @@ Because the snapshot reflects the extracted a11y tree, an open dialog **scopes**
 
 Three of these matchers assert about the same tree but answer different questions, so it's worth being precise about when each earns its place.
 
-| | Rule-based<br/>`toBeValidA11yTree`, `toHaveNoUnlabeledInteractive`, … | Contract<br/>`toMatchA11yContract` | Snapshot<br/>`a11ySnapshot` + `toMatchSnapshot` |
+| Dimension | Rule-based<br/>`toBeValidA11yTree`, `toHaveNoUnlabeledInteractive`, … | Contract<br/>`toMatchA11yContract` | Snapshot<br/>`a11ySnapshot` + `toMatchSnapshot` |
 |---|---|---|---|
 | Asks | "Is this markup **legal**?" | "Is this the markup I **meant**?" | "Did **anything** change?" |
 | Source of truth | ARIA rules | A spec you author | The last recording |

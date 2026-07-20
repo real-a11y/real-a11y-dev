@@ -262,9 +262,8 @@ main
       code "{ strict: true }"
   button "Copy Code"
   code
-  paragraph "The underlying engine is in (pure text-in → verdict-out), so the same contract file can gate a build from a CLI or a saved snapshot, not just a live test."
-    code "verifyContract"
-    code "@real-a11y-dev/serialize"
+  paragraph "Because a serialized string is accepted, the same contract can be checked against a — not only a live test render."
+    strong "committed snapshot artifact"
   heading "a11ySnapshot(root, options?) — snapshot serializer" (level 2)
     code "a11ySnapshot(root, options?)"
   paragraph "Wrap a DOM root (or a pre-extracted tree) so / render the instead of a DOM dump — fully native to each framework's snapshot tooling (/, obsolete detection all work)."
@@ -341,7 +340,7 @@ main
   table
     rowgroup
       row
-        rowheader
+        rowheader "Dimension"
         rowheader "Rule-basedtoBeValidA11yTree, toHaveNoUnlabeledInteractive, …"
           code "toBeValidA11yTree"
           code "toHaveNoUnlabeledInteractive"

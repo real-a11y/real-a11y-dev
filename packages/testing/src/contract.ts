@@ -1,6 +1,12 @@
 // a11y contract verification — assert that a serialized tree SATISFIES an
 // authored contract.
 //
+// INTERNAL to this package: `toMatchA11yContract` is the public surface. The
+// engine is deliberately framework-agnostic (pure text in, verdict out) so that
+// when a second consumer appears — a CLI `verify` verb — it can be lifted into
+// a shared package. Until then it stays private rather than committing a
+// package's public API to a placement we'd likely move.
+//
 // A *contract* is a tree written in the same grammar `serializeTree` emits:
 //
 //     role "name" (level N) [focused]      — 2-space indent per depth
@@ -26,7 +32,7 @@
 // Matching is ordered tree embedding by backtracking — linear-ish for
 // contract-sized trees, with a step guard against pathological ambiguity.
 
-import { foldTypography } from "./normalize.js";
+import { foldTypography } from "@real-a11y-dev/serialize";
 
 // ─── parsing ─────────────────────────────────────────────────────────────────
 
@@ -413,10 +419,13 @@ export interface VerifyContractResult {
 
 /**
  * Verify a serialized target tree against an authored contract. Pure text in,
- * verdict out — the {@link https://real-a11y.dev/packages/testing/matchers
- * `toMatchA11yContract`} matcher and a CLI `verify` verb are thin wrappers over
- * this. `targetText` is typically {@link serializeTree} output (or a committed
+ * verdict out; `targetText` is typically `serializeTree` output (or a committed
  * snapshot artifact).
+ *
+ * @internal Not part of the public API. `toMatchA11yContract` is the supported
+ * surface. This engine is framework-agnostic on purpose — when a second
+ * consumer needs it (a CLI `verify` verb), extract it to a shared package
+ * rather than exporting it from here.
  */
 export function verifyContract(
   contractText: string,

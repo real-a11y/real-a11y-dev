@@ -31,9 +31,7 @@ import {
   extract,
   foldTypography,
   serializeTree,
-  verifyContract,
   type SerializeOptions,
-  type VerifyContractOptions,
 } from "@real-a11y-dev/serialize";
 import {
   validateNode,
@@ -41,6 +39,7 @@ import {
   type ValidatedNode,
 } from "@real-a11y-dev/validate";
 
+import { verifyContract, type VerifyContractOptions } from "./contract.js";
 import {
   a11ySnapshotSerializer,
   boxSnapshot,
