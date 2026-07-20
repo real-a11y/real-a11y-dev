@@ -183,4 +183,41 @@ describe("TreeView (smoke)", () => {
       root.remove();
     }
   });
+
+  it("drops the diff baseline when the root is swapped in place", async () => {
+    // `createInspector` re-keys TreeView on setRoot(), so it remounts and
+    // never reaches this — but TreeView is a public export, and a consumer
+    // rendering it directly with a changing `root` and no key gets no such
+    // help. Node ids are per-element, so the old root's baseline shares no
+    // ids with the new root's tree: every row would read as added.
+    const rootA = makeRoot();
+    const rootB = makeRoot();
+    try {
+      render(<TreeView root={rootA} />, container);
+      await waitFor(container, '[aria-label="Checkpoint tree for diff"]');
+
+      (
+        container.querySelector(
+          '[aria-label="Checkpoint tree for diff"]',
+        ) as HTMLButtonElement
+      ).click();
+      await waitFor(
+        container,
+        '[aria-label="Checkpoint tree for diff"][aria-pressed="true"]',
+      );
+
+      // Same component instance, no key change — only the prop moves.
+      render(<TreeView root={rootB} />, container);
+
+      await waitFor(
+        container,
+        '[aria-label="Checkpoint tree for diff"][aria-pressed="false"]',
+      );
+      expect(container.querySelector(".sn-diff-marker")).toBeNull();
+      expect(container.querySelector(".sn-removed")).toBeNull();
+    } finally {
+      rootA.remove();
+      rootB.remove();
+    }
+  });
 });

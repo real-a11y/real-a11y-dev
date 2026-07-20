@@ -47,9 +47,9 @@ The toolbar's checkpoint button (`⎌`) captures the tree as it is right now. In
 
 The marking is not color-only: added rows carry a `+` and changed rows a `~`, each paired with visually-hidden text so the status is announced, and a forced-colors fallback swaps the tint for a border. Nodes that were **removed** are listed in a `<details>` below the tree rather than as rows — their elements are gone from the DOM, so there is nothing to highlight, focus, or act on.
 
-Switching between DOM and A11Y view drops the baseline: they are different extractions, so a checkpoint from one is not comparable against the other.
+A baseline is only comparable against the same kind of extraction of the same subtree, so it is dropped when either the view mode or the `root` changes — a checkpoint taken in the A11Y view, or against a different root, would diff into noise.
 
-Pass `enableDiff={false}` to hide the button. The building block is also exported on its own, for hosts that drive the baseline themselves:
+**Only `TreeView` ships this ready to use**, where it defaults to on (`enableDiff={false}` hides the button). `TreePanel` is the controlled component: it renders whatever `diff` you hand it and defaults `enableDiff` to off, because the host owns the baseline. Wiring diff mode into a `TreePanel` host means holding a baseline `ExtractionResult`, deriving the view, and resetting it yourself:
 
 ```ts
 import { buildTreeDiffView } from "@real-a11y-dev/semantic-navigator-ui";
@@ -59,7 +59,7 @@ view.status.get(nodeId); // "added" | "changed" | undefined
 view.removed; // SemanticNode[] — gone from the current tree
 ```
 
-`TreePanel` accepts the result as its `diff` prop.
+Pass the result as `TreePanel`'s `diff` prop, along with `enableDiff`, `diffActive`, and `onToggleDiff` to drive the button.
 
 > This is the in-page, interaction-scoped diff. It is keyed on live node identity, so it dies on navigation. For a diff that survives navigation and gates CI, use the snapshot fingerprint diff in [`@real-a11y-dev/snapshot`](../snapshot) / the MCP checkpoint tools.
 

@@ -121,42 +121,65 @@ export function TreeView({
   // mutated out from under us and the highlight updates live as the user
   // interacts with the page.
   //
-  // The captured view mode is stored ALONGSIDE the extraction. A baseline is
-  // only comparable against the same kind of extraction: the DOM and a11y
-  // trees are built by different extractors and share almost no node ids, so
-  // diffing one against the other reports nearly every row as added/removed —
-  // the "diff into noise" this feature exists to avoid. Carrying the mode with
-  // the data makes that a property of the baseline itself rather than
-  // something each call site has to remember to enforce; the mode can change
+  // What the baseline was captured FROM — the view mode and the root — is
+  // stored alongside the extraction, and the diff only runs when both still
+  // match. A baseline is comparable only against the same kind of extraction
+  // of the same subtree:
+  //
+  //   - mode: the DOM and a11y trees are built by different extractors and
+  //     share almost no node ids.
+  //   - root: node ids are per-element, so a different subtree yields a
+  //     disjoint id set.
+  //
+  // Either mismatch makes `diffTrees` report nearly every row as added and
+  // every baseline row as removed — the "diff into noise" this feature exists
+  // to avoid. (Ids are never recycled onto a different element, so the failure
+  // is bounded to noise; it cannot mis-attribute a change to the wrong row.)
+  //
+  // Carrying the provenance with the data makes comparability a property of
+  // the baseline itself, rather than something each call site has to remember
+  // to enforce. Both inputs can change by more than one route: the mode moves
   // through the toolbar OR through the `initialViewMode` prop (that is how
   // `InspectorInstance.setViewMode()` and the React wrapper's `mode` prop
-  // arrive), and a guard living in one of those paths would miss the other.
+  // arrive), and the root is swapped by whoever renders us. A guard living in
+  // one of those paths would miss the others.
   const [baseline, setBaseline] = useState<{
     mode: TreeViewMode;
+    root: Element;
     result: ExtractionResult;
   } | null>(null);
   const diff = useMemo(
     () =>
-      baseline && treeData && baseline.mode === viewMode
+      baseline &&
+      treeData &&
+      baseline.mode === viewMode &&
+      baseline.root === root
         ? buildTreeDiffView(baseline.result, treeData)
         : undefined,
-    [baseline, treeData, viewMode],
+    [baseline, treeData, viewMode, root],
   );
   const toggleDiff = useCallback(
     () =>
       setBaseline((current) =>
-        current || !treeData ? null : { mode: viewMode, result: treeData },
+        current || !treeData
+          ? null
+          : { mode: viewMode, root, result: treeData },
       ),
-    [treeData, viewMode],
+    [treeData, viewMode, root],
   );
 
-  // Drop a baseline that the view mode has moved away from, so the checkpoint
-  // button stops reading as pressed once its capture is no longer comparable.
-  // Keyed on `viewMode` itself — the single point every mode change passes
-  // through, whichever door it came in by.
+  // Drop a baseline whose provenance no longer holds, so the checkpoint button
+  // stops reading as pressed once its capture has become uncomparable. The
+  // guard above already prevents a stale diff from rendering; this keeps the
+  // control honest about it.
+  //
+  // `packages/inspector` happens to re-key TreeView on `setRoot()`, which
+  // remounts and discards this state anyway — but TreeView is a public export,
+  // and a consumer rendering it directly with a changing `root` and no key
+  // gets no such help.
   useEffect(() => {
     setBaseline(null);
-  }, [viewMode]);
+  }, [viewMode, root]);
   // Picker: panel-side mirror of the page-side createPicker state. The
   // picker itself owns the listeners + cursor; this state drives the
   // toolbar button's aria-pressed and the toggle.
