@@ -19,6 +19,9 @@ import {
 } from "@real-a11y-dev/core";
 import { serializeTreeDiff } from "@real-a11y-dev/serialize";
 
+/** What `serializeTreeDiff` renders when nothing differs. */
+const EMPTY_DIFF = "(no changes)";
+
 let captured: ExtractionResult | undefined;
 
 /** The node focused at capture time — the serializer renders the focus move. */
@@ -44,5 +47,13 @@ export function diffSinceCheckpoint(root: Element): string {
     focusBefore: focusNode(captured),
     focusAfter: focusNode(after),
   });
-  return rendered || "No tree changes since the checkpoint.";
+  // serializeTreeDiff renders this exact sentinel for an empty diff. Swap it
+  // for something an agent can act on. Matching the literal — rather than
+  // re-deriving "did anything change" from the diff — keeps the failure mode
+  // safe: if the sentinel ever changes, the terse text shows through instead of
+  // this message wrongly claiming nothing changed (a focus-only move still
+  // renders a line, and must never be reported as "no changes").
+  return rendered === EMPTY_DIFF
+    ? "No tree changes since the checkpoint."
+    : rendered;
 }

@@ -274,6 +274,25 @@ describe("MCP end-to-end against a real browser", () => {
     expect(diff).toContain("Added later");
   });
 
+  it("says so plainly when nothing changed since the checkpoint", async () => {
+    // The serializer's terse "(no changes)" sentinel must be swapped for
+    // something the agent can act on — this asserts the real rendered path.
+    await client.callTool({
+      name: "open_page",
+      arguments: {
+        url: dataUrl(
+          "<!doctype html><main><h1>Static</h1><button>Only</button></main>",
+        ),
+      },
+    });
+    await client.callTool({ name: "checkpoint_tree", arguments: {} });
+    const diff = textOf(
+      await client.callTool({ name: "diff_since_checkpoint", arguments: {} }),
+    );
+    expect(diff).toMatch(/No tree changes since the checkpoint/);
+    expect(diff).not.toContain("(no changes)");
+  });
+
   it("invalidates the tree checkpoint on navigation", async () => {
     // A tree checkpoint is bound to the page instance: navigating replaces the
     // bundle (and its module state), so the diff must fail loudly, not compare
