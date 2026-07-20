@@ -30,6 +30,12 @@ function leafIds(node: TreeCheckableNodeDef): string[] {
   return node.children.flatMap(leafIds);
 }
 
+/** All ids under `node` (inclusive) — parents + descendants. */
+function descendantIds(node: TreeCheckableNodeDef): string[] {
+  if (!node.children || node.children.length === 0) return [node.id];
+  return [node.id, ...node.children.flatMap(descendantIds)];
+}
+
 function checkedStateOf(
   node: TreeCheckableNodeDef,
   checked: ReadonlySet<string>,
@@ -106,15 +112,39 @@ export function TreeCheckableCorrect({
   function toggleExpanded(id: string) {
     setExpanded((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
+      const collapsing = next.has(id);
+      if (collapsing) next.delete(id);
       else next.add(id);
       return next;
     });
+    // If we're collapsing a branch that contains the active row, snap
+    // activeId up to the collapsed parent so the active row stays visible.
+    // Without this, a mouse click on the chevron would orphan activeId
+    // and the keyboard would be stuck until a fresh mouse click.
+    if (expanded.has(id)) {
+      const node = rows.find((r) => r.node.id === id)?.node;
+      if (node) {
+        const under = new Set(descendantIds(node));
+        under.delete(id); // the parent itself is fine
+        if (under.has(activeId)) setActiveId(id);
+      }
+    }
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLUListElement>) {
     const idx = rows.findIndex((r) => r.node.id === activeId);
-    if (idx < 0) return;
+    // Safety net for the "active row is no longer visible" case
+    // (e.g. the toggle-recovery above missed a race, or activeId was
+    // stale). Any navigation key seeds activeId to the first visible
+    // row so keyboard users can always recover without a mouse.
+    if (idx < 0) {
+      const navKeys = ["ArrowDown", "ArrowUp", "Home", "End"];
+      if (navKeys.includes(e.key)) {
+        e.preventDefault();
+        setActiveId(rows[0].node.id);
+      }
+      return;
+    }
     const row = rows[idx];
     if (e.key === "ArrowDown") {
       e.preventDefault();
@@ -152,11 +182,19 @@ export function TreeCheckableCorrect({
     font: "inherit",
   };
 
+  // Use the aria-activedescendant focus model rather than roving
+  // tabindex — the container <ul> is the single tab stop; the
+  // currently-active row is announced via aria-activedescendant so a
+  // screen reader's virtual cursor follows arrow-key navigation
+  // without needing per-<li>.focus() calls after every state update.
+  const rowDomId = (id: string) => `treeitem-checkable-${id}`;
+
   return (
     <ul
       role="tree"
       aria-label={label}
       tabIndex={0}
+      aria-activedescendant={rowDomId(activeId)}
       onKeyDown={onKeyDown}
       style={{
         margin: 0,
@@ -175,6 +213,7 @@ export function TreeCheckableCorrect({
         return (
           <li
             key={row.node.id}
+            id={rowDomId(row.node.id)}
             role="treeitem"
             aria-level={row.depth + 1}
             aria-posinset={row.posinset}
@@ -182,7 +221,6 @@ export function TreeCheckableCorrect({
             aria-checked={state}
             aria-selected={isActive}
             {...(row.hasChildren ? { "aria-expanded": row.isExpanded } : {})}
-            tabIndex={isActive ? 0 : -1}
             onClick={() => setActiveId(row.node.id)}
             style={{
               listStyle: "none",

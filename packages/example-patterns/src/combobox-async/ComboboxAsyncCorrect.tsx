@@ -79,6 +79,21 @@ export function ComboboxAsyncCorrect({
     <ComboBox
       inputValue={filter}
       onInputChange={setFilter}
+      // Disable RAC's built-in filter — we're pre-filtering `results`
+      // ourselves via useEffect (that's what makes this the "async"
+      // variant). Without this, RAC would filter the already-filtered
+      // list a second time against the same `inputValue`, so partial
+      // matches would silently disappear.
+      defaultFilter={() => true}
+      // Keep the popover open with an empty collection so the
+      // `role="status"` region + the `aria-busy` empty state stay
+      // visible during a fetch. Without this, an empty listbox auto-
+      // closes the popover and the loading indicator is never seen.
+      allowsEmptyCollection
+      // Ensure the popover opens as soon as the user focuses the
+      // input (rather than requiring a keystroke) so the loading
+      // state is visible on first open.
+      menuTrigger="focus"
       style={{ display: "inline-flex", flexDirection: "column", gap: 4 }}
     >
       <Label style={{ font: "inherit" }}>{label}</Label>
