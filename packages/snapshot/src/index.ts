@@ -25,6 +25,11 @@ export {
 } from "./snapshot-artifact.js";
 export type { SnapshotArtifact, SnapshotPage } from "./snapshot-artifact.js";
 
+// The shared page assembler — the single home for capture→fingerprint, so the
+// CLI and the MCP server compute identical fingerprints for the same page.
+export { buildSnapshotPage } from "./snapshot-page.js";
+export type { BuildSnapshotPageOptions } from "./snapshot-page.js";
+
 // Baselines — accept today's debt, gate only what's new.
 export {
   applyBaseline,

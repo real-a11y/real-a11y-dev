@@ -8,6 +8,11 @@ import type {
   PageSnapshot,
   SnapshotOptions,
 } from "@real-a11y-dev/browser";
+import {
+  buildSnapshotPage,
+  parseSnapshotArtifact,
+  projectSnapshot,
+} from "@real-a11y-dev/snapshot";
 import { describe, it, expect, beforeEach } from "vitest";
 
 import {
@@ -113,13 +118,19 @@ describe("MCP server wiring", () => {
         "audit_page",
         "close_browser",
         "compare_trees",
+        "diff_checkpoint",
+        "diff_checkpoints",
+        "export_checkpoint",
         "get_heading_outline",
         "get_native_tree",
         "get_semantic_tree",
         "get_tab_order",
+        "import_checkpoint",
         "inspect_page",
+        "list_checkpoints",
         "list_elements",
         "open_page",
+        "save_checkpoint",
       ].sort(),
     );
   });
@@ -467,5 +478,264 @@ describe("renderSnapshot", () => {
     expect(out).toMatch(/2 tab stops/);
     expect(out).toMatch(/No accessibility issues found/);
     expect(out).toContain("h1 Title");
+  });
+});
+
+describe("checkpoints", () => {
+  let session: FakeSession;
+  beforeEach(() => {
+    session = new FakeSession();
+  });
+
+  const button = (locator: string): Finding => ({
+    rule: "no-unlabeled-interactive",
+    severity: "error",
+    message: "Unlabeled interactive element: button <button>",
+    role: "button",
+    tagName: "BUTTON",
+    locator,
+  });
+  const rawWith = (findings: Finding[]): PageSnapshot => ({
+    findings,
+    tree: "button",
+    outline: "(no headings)",
+    tabOrder: "1. button",
+  });
+
+  it("save_checkpoint then diff_checkpoint surfaces a NEW finding after a change", async () => {
+    const client = await connect(session);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/" },
+    });
+    session.snapshotResponse = rawWith([button("#save")]);
+    const saved = textOf(
+      await client.callTool({
+        name: "save_checkpoint",
+        arguments: { name: "before" },
+      }),
+    );
+    expect(saved).toMatch(/"before" saved: 1 finding/);
+
+    // A change introduces a second unlabeled button.
+    session.snapshotResponse = rawWith([button("#save"), button("#cancel")]);
+    const diff = textOf(
+      await client.callTool({
+        name: "diff_checkpoint",
+        arguments: { name: "before" },
+      }),
+    );
+    expect(diff).toMatch(/1 new/);
+    expect(diff).toMatch(/NEW — gates CI/);
+  });
+
+  it("diff_checkpoint errors when the checkpoint is missing", async () => {
+    const client = await connect(session);
+    const res = await client.callTool({
+      name: "diff_checkpoint",
+      arguments: { name: "nope" },
+    });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toMatch(/No checkpoint named "nope"/);
+  });
+
+  it("close_browser clears the store", async () => {
+    const client = await connect(session);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/" },
+    });
+    session.snapshotResponse = rawWith([button("#save")]);
+    await client.callTool({
+      name: "save_checkpoint",
+      arguments: { name: "before" },
+    });
+    await client.callTool({ name: "close_browser", arguments: {} });
+    const list = textOf(
+      await client.callTool({ name: "list_checkpoints", arguments: {} }),
+    );
+    expect(list).toMatch(/No checkpoints saved/);
+  });
+
+  // The correctness invariant: an MCP checkpoint's fingerprints are identical to
+  // the CLI's for the same page — both flow through the shared buildSnapshotPage.
+  it("export_checkpoint fingerprints match the CLI's buildSnapshotPage (golden)", async () => {
+    const raw = rawWith([button("#save"), button("#cancel")]);
+    const url = "https://example.com/";
+    const name = "home";
+
+    // The CLI path (cli/commands/snapshot.ts): projectSnapshot, then assemble.
+    const cliPage = buildSnapshotPage(name, url, projectSnapshot(raw), {
+      root: "body",
+    });
+
+    // The MCP path: open → save → export, then parse the artifact back.
+    session.snapshotResponse = raw;
+    const client = await connect(session);
+    await client.callTool({ name: "open_page", arguments: { url } });
+    await client.callTool({ name: "save_checkpoint", arguments: { name } });
+    const exported = textOf(
+      await client.callTool({
+        name: "export_checkpoint",
+        arguments: { name },
+      }),
+    );
+    const mcpPage = parseSnapshotArtifact(exported).pages[0];
+
+    expect(mcpPage.findings.length).toBe(2);
+    expect(mcpPage.findings.map((f) => f.fingerprint)).toEqual(
+      cliPage.findings.map((f) => f.fingerprint),
+    );
+  });
+
+  it("diff_checkpoint re-snapshots with the rules the checkpoint was saved with", async () => {
+    const client = await connect(session);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/" },
+    });
+    session.snapshotResponse = rawWith([]);
+    await client.callTool({
+      name: "save_checkpoint",
+      arguments: { name: "hp", rules: ["heading-order"] },
+    });
+    await client.callTool({
+      name: "diff_checkpoint",
+      arguments: { name: "hp" },
+    });
+    // The diff's re-snapshot must carry the same rule subset, not all rules —
+    // otherwise the omitted rules would surface as spurious NEW.
+    const snaps = session.calls.filter((c) => c.fn === "snapshot");
+    expect(snaps.at(-1)?.args[0]).toEqual({ rules: ["heading-order"] });
+  });
+
+  it("export_checkpoint round-trips as valid JSON for a normal page", async () => {
+    const client = await connect(session);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/" },
+    });
+    session.snapshotResponse = rawWith([button("#save")]);
+    await client.callTool({
+      name: "save_checkpoint",
+      arguments: { name: "ok" },
+    });
+    const exported = textOf(
+      await client.callTool({
+        name: "export_checkpoint",
+        arguments: { name: "ok" },
+      }),
+    );
+    expect(() => parseSnapshotArtifact(exported)).not.toThrow();
+  });
+
+  it("export_checkpoint fails cleanly instead of truncating a too-large artifact", async () => {
+    const client = await connect(session);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/" },
+    });
+    // The tree field is not length-capped; make it exceed the 40k output cap.
+    session.snapshotResponse = {
+      findings: [],
+      tree: "x".repeat(45_000),
+      outline: "",
+      tabOrder: "",
+    };
+    await client.callTool({
+      name: "save_checkpoint",
+      arguments: { name: "big" },
+    });
+    const res = await client.callTool({
+      name: "export_checkpoint",
+      arguments: { name: "big" },
+    });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toMatch(/too large to export inline/);
+  });
+
+  it("import under a new label then diff_checkpoint of an unchanged page reports no change", async () => {
+    const client = await connect(session);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/" },
+    });
+    session.snapshotResponse = rawWith([button("#save")]);
+    // Save as "home" and export — the artifact's page name is "home".
+    await client.callTool({
+      name: "save_checkpoint",
+      arguments: { name: "home" },
+    });
+    const artifact = textOf(
+      await client.callTool({
+        name: "export_checkpoint",
+        arguments: { name: "home" },
+      }),
+    );
+    // Import under a DIFFERENT label — artifact page name ("home") ≠ label.
+    await client.callTool({
+      name: "import_checkpoint",
+      arguments: { name: "baseline", artifact },
+    });
+    // The live page is unchanged, so the diff must be 0 new / 0 fixed — not
+    // every finding double-counted as NEW+FIXED from a name-join miss.
+    const diff = textOf(
+      await client.callTool({
+        name: "diff_checkpoint",
+        arguments: { name: "baseline" },
+      }),
+    );
+    expect(diff).toMatch(/0 new, 0 fixed/);
+  });
+
+  it("diff_checkpoint re-snapshots with the root the checkpoint was saved with", async () => {
+    const client = await connect(session);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/" },
+    });
+    session.snapshotResponse = rawWith([]);
+    await client.callTool({
+      name: "save_checkpoint",
+      arguments: { name: "modal", rootSelector: "[role=dialog]" },
+    });
+    // No rootSelector on the diff — it must fall back to the checkpoint's root,
+    // not re-audit the whole "body" and surface the rest of the page as NEW.
+    await client.callTool({
+      name: "diff_checkpoint",
+      arguments: { name: "modal" },
+    });
+    const snaps = session.calls.filter((c) => c.fn === "snapshot");
+    expect(snaps.at(-1)?.rootSelector).toBe("[role=dialog]");
+  });
+
+  it("import_checkpoint rejects a partial (--only) artifact", async () => {
+    const client = await connect(session);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/" },
+    });
+    session.snapshotResponse = rawWith([button("#save")]);
+    await client.callTool({
+      name: "save_checkpoint",
+      arguments: { name: "home" },
+    });
+    const full = textOf(
+      await client.callTool({
+        name: "export_checkpoint",
+        arguments: { name: "home" },
+      }),
+    );
+    // Mark it views-only, as `real-a11y snapshot --only views` would: the
+    // findings axis is filtered away and would read as everything-new.
+    const partial = JSON.parse(full);
+    partial.meta.only = "views";
+    partial.pages[0].findings = [];
+    const res = await client.callTool({
+      name: "import_checkpoint",
+      arguments: { name: "partial", artifact: JSON.stringify(partial) },
+    });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toMatch(/partial snapshot/);
   });
 });

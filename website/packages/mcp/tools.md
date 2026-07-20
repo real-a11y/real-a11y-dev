@@ -5,7 +5,7 @@ description: Every tool the Real A11y MCP server exposes — open_page, audit_pa
 
 # MCP tools reference
 
-The Real A11y MCP server exposes **ten tools** to an MCP client (Claude Code, Claude Desktop, Cursor, and any other MCP-capable assistant). Each tool drives a real Chromium page and reports what a screen reader would actually perceive — computed roles, accessible names, and the defects assistive tech announces as broken — not what the HTML source claims.
+The Real A11y MCP server exposes **sixteen tools** to an MCP client (Claude Code, Claude Desktop, Cursor, and any other MCP-capable assistant). Each tool drives a real Chromium page and reports what a screen reader would actually perceive — computed roles, accessible names, and the defects assistive tech announces as broken — not what the HTML source claims.
 
 The tools share **one** browser page. A typical run is [`open_page`](#open_page) → an audit or view tool ([`audit_page`](#audit_page), [`inspect_page`](#inspect_page), or a `get_*` view) → [`close_browser`](#close_browser). Because every tool reads the same mutable page, calls must run **sequentially, never in parallel** — a second call mid-flight would race the first's navigation.
 
@@ -142,6 +142,78 @@ An agent calls this to review one element type without pulling the whole tree:
 ```json
 { "filter": "image", "rootSelector": "main" }
 ```
+
+## Checkpoints
+
+Give the agent the CLI's snapshot + diff power mid-session: capture the page's findings under a name, change something (deploy, feature toggle, DOM edit), then ask what's **new / changed / fixed** — with the same `v1:` fingerprint identity the CI a11y-diff bot uses. Checkpoints are held in memory (LRU-capped at 20) and **survive navigation by design**, so you can checkpoint one deploy and diff another. `close_browser` clears the store. (Unlike Axis-A tree-checkpoints, these are pure data — not bound to the page instance that was live when saved.)
+
+### `save_checkpoint`
+
+_Snapshots the current page into the named store._
+
+Snapshot the current page's accessibility findings and store them under `name`; re-saving a name overwrites it. Fingerprints go through the same `buildSnapshotPage` the CLI's `snapshot` command uses, so a checkpoint is directly comparable to a CI baseline.
+
+Parameters:
+
+- **`name`** — string — required — the checkpoint label (the store key).
+- **`rootSelector`** — string — optional (default `"body"`) — CSS selector for the snapshot root.
+- **`rules`** — array of the five rule ids — optional — subset for the findings. Omit to run all.
+
+### `diff_checkpoint`
+
+_Read-only · re-snapshots the current page and diffs it against a stored checkpoint._
+
+Re-snapshot the current page and diff it against checkpoint `name`: which findings are **NEW** (the only class that gates CI), **CHANGED**, or **FIXED**, plus an advisory structural summary. Use after a change, or after navigating to a different deploy of the same page.
+
+Parameters:
+
+- **`name`** — string — required — the checkpoint to diff against.
+- **`rootSelector`** — string — optional (default `"body"`).
+
+The headline cross-deploy workflow — diff prod against a preview in one session:
+
+```json
+// open_page("https://example.com")       → save_checkpoint({ "name": "prod" })
+// open_page("https://preview.example.com") → diff_checkpoint({ "name": "prod" })
+```
+
+### `diff_checkpoints`
+
+_Read-only · diffs two stored checkpoints._
+
+Diff two already-stored checkpoints against each other (no re-snapshot): which findings are new / changed / fixed going from `base` to `head`.
+
+Parameters:
+
+- **`base`** — string — required.
+- **`head`** — string — required.
+
+### `list_checkpoints`
+
+_Read-only._
+
+List the stored checkpoint labels with their finding counts and approximate tree sizes. No parameters.
+
+### `export_checkpoint`
+
+_Read-only._
+
+Return a stored checkpoint as a Real A11y snapshot artifact — the same `a11y-snapshot.json` the CLI writes (same `schemaVersion`, same fingerprints). Persist it to your own file to diff across sessions, or feed it to the CI a11y-diff. Output is capped, so it is best for small roots.
+
+Parameters:
+
+- **`name`** — string — required.
+
+### `import_checkpoint`
+
+_Loads an external artifact into the store._
+
+Load an externally-held Real A11y snapshot artifact (e.g. a CLI-generated baseline) into the store under `name`, so a live page can be diffed against it. Input is validated strictly; the artifact's first page is stored.
+
+Parameters:
+
+- **`name`** — string — required — the label to store it under.
+- **`artifact`** — string — required — a serialized Real A11y snapshot artifact (JSON).
 
 ## Native cross-check
 

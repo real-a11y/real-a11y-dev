@@ -50,36 +50,39 @@
 50. link "Session"
 51. link "Audit"
 52. link "Views"
-53. link "Native cross-check"
-54. link "Environment"
-55. link "open_page"
-56. link "audit_page"
-57. link "inspect_page"
-58. link "close_browser"
-59. link "get_native_tree"
-60. link "compare_trees"
-61. link "environment variables"
-62. link "Environment"
-63. link "REAL_A11Y_MCP_ALLOW_FILE=1"
-64. link "REAL_A11Y_MCP_CDP"
-65. button "Copy Code"
-66. generic
-67. link "inspect_page"
-68. button "Copy Code"
-69. generic
-70. link "audit_page"
-71. button "Copy Code"
-72. generic
-73. button "Copy Code"
-74. generic
-75. button "Copy Code"
-76. generic
-77. link "REAL_A11Y_MCP_CDP"
-78. link "open_page"
-79. link "REAL_A11Y_MCP_CDP"
-80. link "REAL_A11Y_MCP_STORAGE_STATE"
-81. button "Copy Code"
-82. generic
-83. link "Edit this page on GitHub"
-84. link "Previous page@real-a11y-dev/mcp"
-85. link "Next page@real-a11y-dev/cli"
+53. link "Checkpoints"
+54. link "Native cross-check"
+55. link "Environment"
+56. link "open_page"
+57. link "audit_page"
+58. link "inspect_page"
+59. link "close_browser"
+60. link "get_native_tree"
+61. link "compare_trees"
+62. link "environment variables"
+63. link "Environment"
+64. link "REAL_A11Y_MCP_ALLOW_FILE=1"
+65. link "REAL_A11Y_MCP_CDP"
+66. button "Copy Code"
+67. generic
+68. link "inspect_page"
+69. button "Copy Code"
+70. generic
+71. link "audit_page"
+72. button "Copy Code"
+73. generic
+74. button "Copy Code"
+75. generic
+76. button "Copy Code"
+77. generic
+78. button "Copy Code"
+79. generic
+80. link "REAL_A11Y_MCP_CDP"
+81. link "open_page"
+82. link "REAL_A11Y_MCP_CDP"
+83. link "REAL_A11Y_MCP_STORAGE_STATE"
+84. button "Copy Code"
+85. generic
+86. link "Edit this page on GitHub"
+87. link "Previous page@real-a11y-dev/mcp"
+88. link "Next page@real-a11y-dev/cli"
