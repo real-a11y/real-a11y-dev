@@ -28,17 +28,28 @@ export function MultiStepFormCorrect({
   const [current, setCurrent] = useState(initialStepIndex);
   const [email, setEmail] = useState("");
   const [attemptedNext, setAttemptedNext] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const emailInvalid = attemptedNext && email.trim() === "" && current === 0;
+  const isLastStep = current === steps.length - 1;
 
   const emailId = useId();
   const emailErrorId = useId();
 
-  const goNext = () => {
+  // The forward button doubles as Next (intermediate steps) and Submit
+  // (last step). It stays enabled the whole way through; on the last
+  // step a click completes the flow instead of clamping to the same
+  // step. The success message is a role="status" region so AT users
+  // hear the confirmation.
+  const goForward = () => {
     if (current === 0 && email.trim() === "") {
       setAttemptedNext(true);
       return;
     }
     setAttemptedNext(false);
+    if (isLastStep) {
+      setSubmitted(true);
+      return;
+    }
     setCurrent((c) => Math.min(c + 1, steps.length - 1));
   };
   const goPrev = () => setCurrent((c) => Math.max(c - 1, 0));
@@ -170,22 +181,26 @@ export function MultiStepFormCorrect({
         </button>
         <button
           type="button"
-          onClick={goNext}
-          disabled={current === steps.length - 1}
+          onClick={goForward}
           style={{
             padding: "6px 12px",
             border: "1px solid var(--vp-c-brand, #2e79ff)",
             borderRadius: 6,
             background: "var(--vp-c-brand, #2e79ff)",
             color: "#fff",
-            cursor: current === steps.length - 1 ? "not-allowed" : "pointer",
+            cursor: "pointer",
             font: "inherit",
-            opacity: current === steps.length - 1 ? 0.5 : 1,
           }}
         >
-          {current === steps.length - 1 ? "Submit" : "Next"}
+          {isLastStep ? "Submit" : "Next"}
         </button>
       </div>
+
+      {submitted ? (
+        <div role="status" style={{ color: "#2f855a", fontWeight: 600 }}>
+          ✓ Form submitted.
+        </div>
+      ) : null}
     </form>
   );
 }

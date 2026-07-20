@@ -26,14 +26,20 @@ export function MultiStepFormBroken({
   const [current, setCurrent] = useState(initialStepIndex);
   const [email, setEmail] = useState("");
   const [attemptedNext, setAttemptedNext] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const showEmailError = attemptedNext && email.trim() === "" && current === 0;
+  const isLastStep = current === steps.length - 1;
 
-  const goNext = () => {
+  const goForward = () => {
     if (current === 0 && email.trim() === "") {
       setAttemptedNext(true);
       return;
     }
     setAttemptedNext(false);
+    if (isLastStep) {
+      setSubmitted(true);
+      return;
+    }
     setCurrent((c) => Math.min(c + 1, steps.length - 1));
   };
   const goPrev = () => setCurrent((c) => Math.max(c - 1, 0));
@@ -150,22 +156,29 @@ export function MultiStepFormBroken({
         </button>
         <button
           type="button"
-          onClick={goNext}
-          disabled={current === steps.length - 1}
+          onClick={goForward}
           style={{
             padding: "6px 12px",
             border: "1px solid var(--vp-c-brand, #2e79ff)",
             borderRadius: 6,
             background: "var(--vp-c-brand, #2e79ff)",
             color: "#fff",
-            cursor: current === steps.length - 1 ? "not-allowed" : "pointer",
+            cursor: "pointer",
             font: "inherit",
-            opacity: current === steps.length - 1 ? 0.5 : 1,
           }}
         >
-          {current === steps.length - 1 ? "Submit" : "Next"}
+          {isLastStep ? "Submit" : "Next"}
         </button>
       </div>
+
+      {/* Broken by construction: the success confirmation is a plain
+          <p> with no role="status" / aria-live, so AT users never hear
+          that the form submitted. */}
+      {submitted ? (
+        <p style={{ color: "#2f855a", fontWeight: 600, margin: 0 }}>
+          ✓ Form submitted.
+        </p>
+      ) : null}
     </form>
   );
 }

@@ -43,6 +43,32 @@ describe("Content pattern: Multi-step form — correct vs broken", () => {
     expect(alert?.textContent).toContain("required");
   });
 
+  it("correct form's forward button stays operable through Submit on the last step", () => {
+    const { container, getByRole } = render(
+      <MultiStepFormCorrect steps={steps} />,
+    );
+
+    // Fill the required field so step 0 can advance.
+    const input = container.querySelector("input")!;
+    fireEvent.change(input, { target: { value: "ada@example.com" } });
+
+    // Step 0 → 1 → 2. On the last step the label becomes "Submit".
+    fireEvent.click(getByRole("button", { name: /next/i }));
+    fireEvent.click(getByRole("button", { name: /next/i }));
+
+    const submit = getByRole("button", { name: /submit/i });
+    // Regression: the Submit button must NOT be disabled (it used to be
+    // gated by `disabled={current === steps.length - 1}`, making the
+    // final action permanently dead).
+    expect(submit.hasAttribute("disabled")).toBe(false);
+
+    fireEvent.click(submit);
+
+    // Submission is announced via a role="status" region.
+    const status = container.querySelector('[role="status"]');
+    expect(status?.textContent).toContain("submitted");
+  });
+
   it("broken form has no aria-current, no fieldset/legend, and errors are unlinked <p>s", () => {
     const { container, getByRole } = render(
       <MultiStepFormBroken steps={steps} />,
