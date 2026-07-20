@@ -54,6 +54,18 @@
   Hover is now a preview: overlay only, no scroll, no focus change. Click and
   arrow-key selection still scroll to and focus the element. ([#192])
 
+### Minor Changes
+
+- Add **diff mode** to the side panel. The toolbar's new checkpoint button
+  (`⎌`) captures the tree as it is right now; interact with the page, and
+  rows that appeared or changed since are marked in place — a green `+` for
+  added, an amber `~` for changed — with the status also in text for screen
+  readers and a high-contrast fallback. Nodes that were removed are listed
+  in a disclosure below the tree instead of as rows, since their elements no
+  longer exist to highlight or act on. Switching between DOM and A11Y view
+  clears the checkpoint: they are different extractions, so one is not
+  comparable against the other. ([#190])
+
 ## 0.1.7
 
 ### Patch Changes
@@ -106,4 +118,5 @@ Earlier releases predate this changelog.
 [#168]: https://github.com/real-a11y/real-a11y-dev/pull/168
 [#178]: https://github.com/real-a11y/real-a11y-dev/pull/178
 [#182]: https://github.com/real-a11y/real-a11y-dev/pull/182
+[#190]: https://github.com/real-a11y/real-a11y-dev/pull/190
 [#192]: https://github.com/real-a11y/real-a11y-dev/pull/192
