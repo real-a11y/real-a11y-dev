@@ -77,3 +77,20 @@ focus: button "Save" → (none)          ← focus was lost
 Focus is supplied by the caller because a tree captured earlier can't answer
 "what was focused then" after the fact (`ExtractionResult.focusedId` records it
 at capture time).
+
+## `foldTypography(name)`
+
+Folds typographic variants in an accessible name to their ASCII forms — curly
+quotes and apostrophes, the ellipsis character, en/em dashes, non-breaking
+spaces, plus Unicode NFC:
+
+```ts
+foldTypography("Don’t save"); // -> "Don't save"
+```
+
+Design tools and CMSes emit smart typography while a developer hand-typing an
+expected name uses plain ASCII, so the two differ byte-for-byte even though a
+reader (and a screen reader) sees the same string. This exists for **comparison
+only** — `@real-a11y-dev/testing`'s name matchers fold both sides before
+comparing. Serialized output is never folded: it stays faithful to what
+assistive tech actually announces.
