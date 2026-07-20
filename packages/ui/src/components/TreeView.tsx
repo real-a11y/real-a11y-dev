@@ -87,6 +87,17 @@ export function TreeView({
   onAction,
 }: TreeViewProps) {
   const [viewMode, setViewMode] = useState<TreeViewMode>(initialViewMode);
+  // `initialViewMode` seeds the state, but it must also SYNC when it changes
+  // after mount — that is how `InspectorInstance.setViewMode()` (and the React
+  // wrapper's `mode` prop) reach the rendered tree. Without this the prop is
+  // only ever read as the useState initializer, so a post-mount mode change was
+  // silently ignored while `getTree()` already reported the new mode. Syncing
+  // here rather than re-keying the component preserves expansion state, and the
+  // toolbar's own DOM/A11Y toggle still works between prop changes (this effect
+  // only fires when the prop itself changes).
+  useEffect(() => {
+    setViewMode(initialViewMode);
+  }, [initialViewMode]);
   const [treeData, setTreeData] = useState<ExtractionResult | null>(null);
   // Picker: panel-side mirror of the page-side createPicker state. The
   // picker itself owns the listeners + cursor; this state drives the

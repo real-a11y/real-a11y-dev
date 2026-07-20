@@ -15,7 +15,32 @@ export interface UseSemanticTreeOptions {
 }
 
 /**
- * Subscribe to a live Semantic Navigator tree rooted at `ref.current`.
+ * The root to observe: the element itself, or a React ref object holding it.
+ *
+ * Prefer passing the **element** when the root can mount later than this hook
+ * or be replaced — e.g. from a callback ref stored in state:
+ *
+ * ```tsx
+ * const [root, setRoot] = useState<HTMLElement | null>(null);
+ * const tree = useSemanticTree(root);
+ * return <main ref={setRoot}>…</main>;
+ * ```
+ *
+ * An element changes identity when it is created or swapped, so the observer
+ * re-attaches. A ref OBJECT is stable by design, so React cannot notify this
+ * hook when `ref.current` changes — passing a ref only re-attaches when some
+ * other state change re-renders the component.
+ */
+export type SemanticTreeTarget = Element | { current: Element | null } | null;
+
+function resolveTarget(target: SemanticTreeTarget): Element | null {
+  if (!target) return null;
+  return "current" in target ? target.current : target;
+}
+
+/**
+ * Subscribe to a live Semantic Navigator tree rooted at `target` — an element,
+ * or a ref object holding one (see {@link SemanticTreeTarget}).
  *
  * Re-renders on every debounced DOM mutation inside the root, so the
  * returned {@link ExtractionResult} is always fresh. Uses
@@ -25,13 +50,14 @@ export interface UseSemanticTreeOptions {
  * is still empty).
  */
 export function useSemanticTree(
-  ref: { current: Element | null },
+  target: SemanticTreeTarget,
   options: UseSemanticTreeOptions = {},
 ): ExtractionResult | null {
   const { mode = "a11y", debounceMs = 300 } = options;
 
-  // A per-mount store — we deliberately recreate it when `mode` or the ref'd
-  // element changes, by re-running the effect below.
+  // A per-mount store. It is created once and kept for the life of the
+  // component; only the OBSERVER is torn down and recreated when the root
+  // element, mode, or debounce window changes (see the effect below).
   const storeRef = useRef<{
     tree: ExtractionResult | null;
     listeners: Set<() => void>;
@@ -45,7 +71,9 @@ export function useSemanticTree(
   // Wire an observer that re-extracts on mutations and notifies React.
   useEffect(() => {
     const store = storeRef.current!;
-    const root = ref.current;
+    // Resolve HERE, not during render: a ref's `.current` is populated after
+    // the commit, so reading it during render would see `null` on first paint.
+    const root = resolveTarget(target);
     if (!root) return;
 
     const extract = () =>
@@ -64,7 +92,11 @@ export function useSemanticTree(
       store.observer?.stop();
       store.observer = null;
     };
-  }, [ref, mode, debounceMs]);
+    // `target` in the deps is what makes a REPLACED or LATE-MOUNTED root
+    // re-attach: when an element is passed, its identity changes and the
+    // observer is rebuilt on the new node. (A ref object is stable by design,
+    // so React cannot signal a `.current` change — see SemanticTreeTarget.)
+  }, [target, mode, debounceMs]);
 
   return useSyncExternalStore(
     (onChange) => {
