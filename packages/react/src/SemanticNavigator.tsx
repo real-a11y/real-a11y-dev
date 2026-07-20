@@ -445,7 +445,12 @@ export function SemanticNavigator({
   panelHeight = 420,
   panelGap = PANEL_GAP,
 }: SemanticNavigatorProps) {
-  const hostRef = useRef<HTMLDivElement | null>(null);
+  // The host element is tracked in STATE via a callback ref, not a plain ref:
+  // React notifies us when the node actually attaches, which is what drives the
+  // create-inspector effect below. A `useRef` can't do that — in floating mode
+  // the host lives inside a portal that only renders on a later commit, so the
+  // effect's first pass would see `null` and never re-run.
+  const [hostEl, setHostEl] = useState<HTMLDivElement | null>(null);
   const instanceRef = useRef<InspectorInstance | null>(null);
 
   // `floating` mode portals into `document.body`, which isn't available during
@@ -458,11 +463,11 @@ export function SemanticNavigator({
   // Build / tear down the instance when root element or mount mode changes.
   useEffect(() => {
     const el = root.current;
-    if (!el || !hostRef.current) return;
+    if (!el || !hostEl) return;
 
     const instance = createInspector({
       root: el,
-      container: hostRef.current,
+      container: hostEl,
       viewMode: mode,
       mount,
       theme,
@@ -483,7 +488,9 @@ export function SemanticNavigator({
       instanceRef.current = null;
     };
     // Callbacks and flags are updated imperatively below — not a remount trigger.
-  }, [root.current, mount]);
+    // `hostEl` is a dep so the inspector is created as soon as the host attaches
+    // (floating mode portals it in on a later commit).
+  }, [root.current, mount, hostEl]);
 
   // Cheap prop update — swap view mode without remounting.
   useEffect(() => {
@@ -495,7 +502,7 @@ export function SemanticNavigator({
   // In floating mode it lives inside the FloatingPanel content area.
   const hostDiv = (
     <div
-      ref={hostRef}
+      ref={setHostEl}
       className={floating ? undefined : className}
       style={floating ? { height: "100%", flex: 1, minHeight: 0 } : style}
     />

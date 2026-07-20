@@ -81,6 +81,51 @@ describe("createInspector", () => {
     expect(headingAfter?.a11y.name).toBe("Second");
   });
 
+  it("setViewMode() updates the rendered tree, not just getTree()", async () => {
+    const { root, container } = mountDoc(
+      `<main><h1>Title</h1><button>Go</button></main>`,
+    );
+    const nav = createInspector({ root, container, viewMode: "a11y" });
+    nav.mount();
+
+    const pressed = () => {
+      const btns = Array.from(
+        container.shadowRoot!.querySelectorAll(".sn-toggle-btn"),
+      );
+      const find = (label: string) =>
+        btns.find((b) => b.textContent?.trim() === label);
+      return {
+        dom: find("DOM")?.getAttribute("aria-pressed"),
+        a11y: find("A11Y")?.getAttribute("aria-pressed"),
+      };
+    };
+
+    // Preact flushes effect-driven state updates over several async hops
+    // (prop → sync effect → setState → rerender → re-extract → rerender), so
+    // poll rather than using a fixed timeout — see TreeView.test.tsx.
+    const waitUntil = async (fn: () => boolean, timeoutMs = 2000) => {
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        if (fn()) return;
+        await new Promise((r) => setTimeout(r, 5));
+      }
+    };
+
+    await waitUntil(() => pressed().a11y === "true");
+    expect(pressed()).toEqual({ dom: "false", a11y: "true" });
+
+    nav.setViewMode("dom");
+    await waitUntil(() => pressed().dom === "true");
+
+    // The UI must follow the API. Previously the toolbar stayed on A11Y while
+    // getTree() already reported DOM, so the data API and the rendered tree
+    // silently disagreed after any post-mount setViewMode().
+    expect(pressed()).toEqual({ dom: "true", a11y: "false" });
+    expect(nav.getTree().nodes.size).toBeGreaterThan(0);
+
+    nav.unmount();
+  });
+
   it("unmount() is idempotent and clears the shadow render", () => {
     const { root, container } = mountDoc("<h1>Hi</h1>");
     const nav = createInspector({ root, container });

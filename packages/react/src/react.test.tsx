@@ -1,5 +1,5 @@
 import { act, cleanup, render } from "@testing-library/react";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { describe, it, expect, afterEach } from "vitest";
 
 import { SemanticNavigator, useSemanticTree, useActiveModal } from "./index.js";
@@ -85,6 +85,41 @@ describe("<SemanticNavigator />", () => {
     expect(pickBtn?.getAttribute("aria-pressed")).toBe("false");
     expect(pickBtn?.getAttribute("aria-label")).toBe("Pick element in page");
   });
+
+  it("attaches the inspector in floating mode when the root is already set on first render", async () => {
+    // The common `{open && <SemanticNavigator floating />}` pattern: by the time
+    // the navigator first renders, `root.current` is ALREADY populated, and the
+    // floating host lives in a portal that only appears on a later commit. The
+    // panel used to render its title-bar chrome with an empty body because the
+    // create-inspector effect never re-ran once the host existed.
+    function App() {
+      const rootRef = useRef<HTMLDivElement>(null);
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <div ref={rootRef}>
+            <button>Go</button>
+          </div>
+          <button onClick={() => setOpen(true)}>Open panel</button>
+          {open && <SemanticNavigator root={rootRef} floating />}
+        </>
+      );
+    }
+
+    const { getByText } = render(<App />);
+    // First commit populates rootRef; now toggle the navigator on.
+    await act(async () => {
+      getByText("Open panel").click();
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    // The floating panel portals into document.body — its host div must have a
+    // shadow root, i.e. the inspector actually mounted.
+    const mounted = Array.from(document.body.querySelectorAll("div")).some(
+      (d) => d.shadowRoot !== null,
+    );
+    expect(mounted).toBe(true);
+  });
 });
 
 describe("useSemanticTree", () => {
@@ -125,6 +160,111 @@ describe("useSemanticTree", () => {
     );
     expect(afterButtons.length).toBeGreaterThanOrEqual(2);
   });
+
+  it("attaches to a root that mounts after the first commit", async () => {
+    // Data-gated / conditional UI: the root doesn't exist on first render.
+    // Passing the ELEMENT (via a callback ref in state) lets the hook re-attach
+    // when it appears — a stable ref object cannot signal that.
+    let latest: ReturnType<typeof useSemanticTree> = null;
+    function Subject() {
+      const [root, setRoot] = useState<HTMLDivElement | null>(null);
+      const [show, setShow] = useState(false);
+      latest = useSemanticTree(root);
+      return (
+        <>
+          <button onClick={() => setShow(true)}>show</button>
+          {show && (
+            <div ref={setRoot}>
+              <button>Late</button>
+            </div>
+          )}
+        </>
+      );
+    }
+
+    const { getByText } = render(<Subject />);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+    expect(latest).toBeNull(); // nothing to observe yet
+
+    await act(async () => {
+      getByText("show").click();
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    expect(latest).not.toBeNull();
+    const names = Array.from(latest!.nodes.values()).map((n) => n.a11y.name);
+    expect(names).toContain("Late");
+  });
+
+  it("re-attaches when the root element is replaced", async () => {
+    // A `key` change swaps the DOM node. The observer must move to the new
+    // element instead of continuing to watch the detached one.
+    let latest: ReturnType<typeof useSemanticTree> = null;
+    function Subject() {
+      const [root, setRoot] = useState<HTMLDivElement | null>(null);
+      const [k, setK] = useState(0);
+      latest = useSemanticTree(root);
+      return (
+        <>
+          <button onClick={() => setK(1)}>swap</button>
+          <div key={k} ref={setRoot}>
+            <button>{k === 0 ? "First" : "Second"}</button>
+          </div>
+        </>
+      );
+    }
+
+    const { getByText } = render(<Subject />);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(
+      Array.from(latest!.nodes.values()).map((n) => n.a11y.name),
+    ).toContain("First");
+
+    await act(async () => {
+      getByText("swap").click();
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    expect(
+      Array.from(latest!.nodes.values()).map((n) => n.a11y.name),
+    ).toContain("Second");
+  });
+
+  it("clears the tree when the observed root is removed", async () => {
+    // The store's tree is only written by the observer's flush, so tearing the
+    // observer down must also drop it — otherwise consumers keep being served
+    // a tree describing content that is no longer on the page.
+    let latest: ReturnType<typeof useSemanticTree> = null;
+    function Subject() {
+      const [root, setRoot] = useState<HTMLDivElement | null>(null);
+      const [show, setShow] = useState(true);
+      latest = useSemanticTree(root);
+      return (
+        <>
+          <button onClick={() => setShow(false)}>hide</button>
+          {show && (
+            <div ref={setRoot}>
+              <button>Inside</button>
+            </div>
+          )}
+        </>
+      );
+    }
+
+    const { getByText } = render(<Subject />);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(latest).not.toBeNull();
+
+    await act(async () => {
+      getByText("hide").click();
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    expect(latest).toBeNull();
+  });
 });
 
 describe("useActiveModal", () => {
@@ -149,6 +289,39 @@ describe("useActiveModal", () => {
       await new Promise((r) => setTimeout(r, 400));
     });
     expect(latest?.a11y.name).toBe("Confirm");
+  });
+
+  it("stops reporting a dialog once its root is removed", async () => {
+    // App code that reacts to modal presence must not keep believing a dialog
+    // is open after the element holding it has been unmounted.
+    let latest: ReturnType<typeof useActiveModal> = null;
+    function Subject() {
+      const [root, setRoot] = useState<HTMLDivElement | null>(null);
+      const [show, setShow] = useState(true);
+      latest = useActiveModal(root);
+      return (
+        <>
+          <button onClick={() => setShow(false)}>hide</button>
+          {show && (
+            <div ref={setRoot}>
+              <div role="dialog" aria-label="Confirm" />
+            </div>
+          )}
+        </>
+      );
+    }
+
+    const { getByText } = render(<Subject />);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(latest?.a11y.name).toBe("Confirm");
+
+    await act(async () => {
+      getByText("hide").click();
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    expect(latest).toBeNull();
   });
 });
 
