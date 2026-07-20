@@ -7,7 +7,7 @@ import {
   extractDomTree,
   resetIdCounter,
 } from "../index.js";
-import type { TreeChange } from "../types.js";
+import type { ExtractionResult, TreeChange } from "../types.js";
 
 describe("LiveTreeExtractor", () => {
   beforeEach(() => {
@@ -592,5 +592,129 @@ describe("LiveTreeExtractor", () => {
     expect(names).not.toContain("Old");
 
     observer.stop();
+  });
+
+  describe("extraction scope", () => {
+    /**
+     * A synthetic attribute change. The scope logic under test lives in
+     * `refresh`, so drive it directly rather than through DomObserver's
+     * debounce — and for an out-of-root overlay the primary observer would
+     * never deliver the record anyway.
+     */
+    const attrChange = (
+      target: Element,
+      attributeName: string,
+    ): TreeChange => ({
+      mutations: [
+        {
+          type: "attributes",
+          target,
+          attributeName,
+        } as unknown as MutationRecord,
+      ],
+    });
+
+    const firstNodeWithTag = (result: ExtractionResult, tag: string) =>
+      [...result.nodes.values()].find((n) => n.dom.tagName === tag);
+
+    it("re-scopes to a modal when aria-modal is toggled on in place", () => {
+      document.body.innerHTML = `
+        <main id="app">
+          <p>Background</p>
+          <div id="dlg" role="dialog"><button>Confirm</button></div>
+        </main>
+      `;
+      const root = document.getElementById("app")!;
+      const live = new LiveTreeExtractor(root, { mode: "a11y" });
+
+      const dlg = document.getElementById("dlg")!;
+      dlg.setAttribute("aria-modal", "true");
+
+      const result = live.refresh(attrChange(dlg, "aria-modal"));
+      const expected = extractA11yTree(root);
+
+      // Scoping is EXCLUSIVE to the modal: content behind it is inert to AT.
+      expect(result.rootId).toBe(expected.rootId);
+      expect(result.nodes).toEqual(expected.nodes);
+      const names = [...result.nodes.values()].map((n) => n.a11y.name);
+      expect(names).not.toContain("Background");
+    });
+
+    it("restores the surrounding tree when aria-modal is removed in place", () => {
+      document.body.innerHTML = `
+        <main id="app">
+          <p>Background</p>
+          <div id="dlg" role="dialog" aria-modal="true">
+            <button>Confirm</button>
+          </div>
+        </main>
+      `;
+      const root = document.getElementById("app")!;
+      const live = new LiveTreeExtractor(root, { mode: "a11y" });
+
+      const dlg = document.getElementById("dlg")!;
+      dlg.removeAttribute("aria-modal");
+
+      const result = live.refresh(attrChange(dlg, "aria-modal"));
+      const expected = extractA11yTree(root);
+
+      // Without a scope re-check the tree stays rooted at the closed dialog
+      // and the rest of the page never comes back.
+      expect(result.rootId).toBe(expected.rootId);
+      expect(result.nodes).toEqual(expected.nodes);
+      expect(
+        [...result.nodes.values()].some(
+          (n) => n.dom.textContent === "Background",
+        ),
+      ).toBe(true);
+    });
+
+    it("un-pivots when an out-of-root overlay loses its overlay role", () => {
+      // The overlay sits inside a portal wrapper rather than directly under
+      // <body>: a direct child would make the `role` name-host climb add <body>
+      // (the effective root) to the dirty set, tripping the existing
+      // "effective root dirty alongside others" guard and masking the scope bug.
+      document.body.innerHTML = `
+        <main id="app"><p>Background</p></main>
+        <div id="portal">
+          <div id="menu" role="menu"><button>Item</button></div>
+        </div>
+      `;
+      const root = document.getElementById("app")!;
+      const live = new LiveTreeExtractor(root, { mode: "a11y" });
+
+      // The portal overlay pivots extraction to <body> so it joins the tree.
+      const menu = document.getElementById("menu")!;
+      menu.removeAttribute("role");
+
+      const result = live.refresh(attrChange(menu, "role"));
+      const expected = extractA11yTree(root);
+
+      expect(result.rootId).toBe(expected.rootId);
+      expect(result.nodes).toEqual(expected.nodes);
+    });
+
+    it("keeps repositioning an open overlay incremental", () => {
+      document.body.innerHTML = `
+        <main id="app"><p>Background</p></main>
+        <div id="menu" role="menu"><button>Item</button></div>
+      `;
+      const root = document.getElementById("app")!;
+      const live = new LiveTreeExtractor(root, { mode: "dom" });
+
+      const before = live.extract();
+      const backgroundBefore = firstNodeWithTag(before, "p");
+      expect(backgroundBefore).toBeDefined();
+
+      // Floating-UI-style reposition: inline style churn on the open menu.
+      // The scope is unchanged, so this must NOT trigger a full re-extract.
+      const menu = document.getElementById("menu")!;
+      menu.setAttribute("style", "transform: translate(10px, 0)");
+      const after = live.refresh(attrChange(menu, "style"));
+
+      // A full extraction rebuilds every node object; an incremental splice
+      // leaves untouched nodes referentially identical.
+      expect(firstNodeWithTag(after, "p")).toBe(backgroundBefore);
+    });
   });
 });

@@ -995,6 +995,29 @@ function findPortalOverlay(doc: Document, root: Element): Element | null {
 }
 
 /**
+ * The element extraction is actually scoped to, in priority order:
+ *   1. Active modal — content behind a modal is inert to AT, so the tree
+ *      scopes EXCLUSIVELY to the modal.
+ *   2. Portal overlay outside `root` — a non-modal overlay (menu, tooltip,
+ *      toast, listbox) mounted into body by React Portal / Vue Teleport.
+ *      Pivot to body so the portal content joins the tree.
+ *   3. The configured root — the default.
+ *
+ * Exported so {@link LiveTreeExtractor} can ask "did the scope move?" on an
+ * incremental refresh without duplicating — and drifting from — the selector
+ * lists above. Scope is a property of the whole document (overlay shape AND
+ * the full ancestor visibility chain), so it cannot be inferred from a single
+ * mutated element; the incremental path has to re-derive it.
+ */
+export function resolveEffectiveRoot(root: Element): Element {
+  const doc = root.ownerDocument;
+  if (!doc) return root;
+  const activeModal = findActiveModal(doc);
+  if (activeModal) return activeModal;
+  return findPortalOverlay(doc, root) ?? root;
+}
+
+/**
  * Report — outside production — that an element was skipped mid-extraction.
  *
  * The walk wraps each element so a single pathological node (usually DOM
@@ -1180,18 +1203,7 @@ export function extractDomTree(
     options.descriptionTargetIds ?? new Set<string>();
 
   if (!isPartial || !options.descriptionTargetIds) {
-    // Scope selection, in priority order:
-    //   1. Active modal — scopes exclusively to the modal (content
-    //      behind a modal is inert to AT).
-    //   2. Portal overlay outside root — non-modal overlay (menu,
-    //      tooltip, toast, listbox) mounted into body by React Portal
-    //      etc. Pivot to body so the portal content joins the tree.
-    //   3. Configured root — the default.
-    const activeModal = findActiveModal(root.ownerDocument);
-    const portalRoot = activeModal
-      ? null
-      : findPortalOverlay(root.ownerDocument, root);
-    effectiveRoot = activeModal || portalRoot || root;
+    effectiveRoot = resolveEffectiveRoot(root);
 
     // Pre-collect aria-labelledby targets so we don't accidentally hide them.
     // (Elements that are labelledby targets are visible content — they label something.)

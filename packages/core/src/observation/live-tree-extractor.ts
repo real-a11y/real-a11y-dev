@@ -5,6 +5,7 @@ import {
   getElementRefs,
   isNameBarrierRole,
   isNameFromContentHost,
+  resolveEffectiveRoot,
   resolveFocusedElement,
 } from "../extraction/dom-extractor.js";
 import { getImplicitRole } from "../extraction/role-map.js";
@@ -26,6 +27,36 @@ const REFERENCE_ATTRS = new Set([
   "aria-labelledby",
   "aria-describedby",
   "for",
+]);
+
+/**
+ * Attributes whose change can move the extraction *scope* — either by creating
+ * or destroying a modal/overlay candidate (`aria-modal`, `role`, `open`) or by
+ * flipping one's visibility, its own or an ancestor's (`class`, `style`,
+ * `hidden`, `inert`), since `findActiveModal`/`findPortalOverlay` both gate on
+ * visibility.
+ *
+ * A hit here does NOT force a full extraction. It only arms ONE
+ * `resolveEffectiveRoot()` recomputation for the whole batch; the full
+ * extraction happens only if the scope actually moved.
+ *
+ * Deciding from the mutated element alone would be both too narrow and far too
+ * broad. Too narrow: the common Vue-Teleport / Angular-CDK pattern hides an
+ * overlay by toggling `display` on a ROLELESS wrapper, and `isActuallyVisible`
+ * consults the whole ancestor chain — a wrapper matches no overlay selector, so
+ * the rescope would be missed. Too broad: an open menu repositioned by Floating
+ * UI rewrites inline `style` on the `[role="menu"]` element every scroll frame
+ * without the scope ever changing, and each of those would have forced a
+ * full-page walk.
+ */
+const SCOPE_ATTRS = new Set([
+  "aria-modal",
+  "role",
+  "open",
+  "class",
+  "style",
+  "hidden",
+  "inert",
 ]);
 
 const PORTAL_OVERLAY_SELECTOR =
@@ -51,6 +82,19 @@ export class LiveTreeExtractor {
   private rootId = "";
   private focusedId: string | undefined;
   private effectiveRoot: Element | null = null;
+  /**
+   * The scope `resolveEffectiveRoot()` reported at the last full extraction.
+   *
+   * Deliberately NOT the same as `effectiveRoot`, which is recovered from the
+   * materialized root NODE and silently falls back to `this.root` when the
+   * scope root produced no node (e.g. an `inert` modal: `checkVisibility()`
+   * ignores `inert`, so it is chosen as the scope but then skipped by the walk,
+   * leaving `rootId === ""`). Comparing a freshly resolved scope against that
+   * fallback would report "moved" on every refresh forever — a permanent
+   * full-extract loop, exactly what this class exists to avoid. Compare like
+   * with like.
+   */
+  private scopeRoot: Element;
 
   private labelTargetIds = new Set<string>();
   private descriptionTargetIds = new Set<string>();
@@ -59,15 +103,32 @@ export class LiveTreeExtractor {
 
   constructor(root: Element, options: LiveTreeExtractorOptions = {}) {
     this.root = root;
+    // Definite assignment: extract() sets this, but TS can't see through it.
+    this.scopeRoot = root;
     this.mode = options.mode ?? "a11y";
     this.extract();
   }
 
   /** Perform a full, clean extraction from the configured root. */
   extract(): ExtractionResult {
+    // Resolve before extracting. Both run in the same synchronous task, so the
+    // DOM cannot change between them and `extractDomTree` is guaranteed to pick
+    // this same scope — which is what makes the later `scopeMoved()` comparison
+    // meaningful. The duplicated resolution is a tiny fraction of a full walk.
+    this.scopeRoot = resolveEffectiveRoot(this.root);
     const result = extractDomTree(this.root);
     this.adoptResult(result);
     return this.currentResult();
+  }
+
+  /**
+   * True if the extraction scope moved since the last full extraction.
+   *
+   * Strictly cheaper than the `extract()` it guards — `extract()` performs this
+   * exact resolution as its first step — so checking is never a net loss.
+   */
+  private scopeMoved(): boolean {
+    return resolveEffectiveRoot(this.root) !== this.scopeRoot;
   }
 
   /**
@@ -91,6 +152,7 @@ export class LiveTreeExtractor {
 
     const dirty = new Set<Element>();
     let needsFull = false;
+    let scopeSuspect = false;
 
     if (change.dirtyRoots) {
       for (const el of change.dirtyRoots) {
@@ -111,6 +173,12 @@ export class LiveTreeExtractor {
           if (REFERENCE_ATTRS.has(attr)) {
             needsFull = true;
             break;
+          }
+          // Arm the scope check but keep going: one recomputation covers the
+          // whole batch however many mutations it holds. Deliberately NOT a
+          // decision based on `target` alone — see SCOPE_ATTRS.
+          if (SCOPE_ATTRS.has(attr)) {
+            scopeSuspect = true;
           }
           // Re-extracting the target subtree covers both local attribute
           // updates and visibility-affecting changes like aria-hidden/class.
@@ -142,13 +210,20 @@ export class LiveTreeExtractor {
       }
     }
 
-    if (needsFull) {
+    // At most ONE resolveEffectiveRoot() per refresh regardless of batch size:
+    // a 500-mutation animation burst pays for it once. A scope move can never
+    // be spliced — the tree roots somewhere else entirely — so it must fall
+    // back to a full extraction.
+    if (needsFull || (scopeSuspect && this.scopeMoved())) {
       return this.extract();
     }
 
     if (dirty.size === 0) {
-      // No actionable dirty roots — return the previous result unchanged.
-      return this.currentResult();
+      // Nothing actionable to splice. The scope can still have moved without
+      // producing a usable record — a portal mounting into a container that
+      // existed at page load is never seen by the body-level portal observer —
+      // so confirm the scope is stable before returning the previous result.
+      return this.scopeMoved() ? this.extract() : this.currentResult();
     }
 
     this.expandDependencies(dirty);
