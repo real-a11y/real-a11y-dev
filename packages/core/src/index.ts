@@ -24,6 +24,7 @@ export type {
   ActionRequest,
   ActionResult,
   TreeMutation,
+  TreeChange,
   SemanticNavigatorConfig,
 } from "./types.js";
 
@@ -49,6 +50,10 @@ export type { Picker, PickerOptions } from "./interaction/picker.js";
 
 // Observation
 export { DomObserver } from "./observation/dom-observer.js";
+export {
+  LiveTreeExtractor,
+  type LiveTreeExtractorOptions,
+} from "./observation/live-tree-extractor.js";
 
 // Search
 export {

@@ -382,6 +382,59 @@ const NAME_BARRIER_ROLES = new Set<string>([
   "meter",
 ]);
 
+/** Tags whose text content is used as an accessible name per accname-1.2. */
+const NAMES_FROM_CONTENT_TAGS = new Set<string>([
+  "a",
+  "button",
+  "summary",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "label",
+  "legend",
+  "caption",
+  "figcaption",
+  "option",
+  "td",
+  "th",
+]);
+
+/** Roles whose own text content is used as an accessible name. */
+const NAMES_FROM_CONTENT_ROLES = new Set<string>([
+  "button",
+  "link",
+  "heading",
+  "option",
+  "treeitem",
+  "tab",
+  "menuitem",
+  "cell",
+]);
+
+/**
+ * True if `element` is a host whose accessible name can come from its
+ * descendant text content. Used by the incremental extractor to decide
+ * whether a text mutation must invalidate an ancestor's name.
+ */
+export function isNameFromContentHost(element: Element): boolean {
+  const tag = element.tagName.toLowerCase();
+  if (NAMES_FROM_CONTENT_TAGS.has(tag)) return true;
+  const explicitRole = element.getAttribute("role")?.trim().split(/\s+/)[0];
+  if (explicitRole && NAMES_FROM_CONTENT_ROLES.has(explicitRole)) return true;
+  return false;
+}
+
+/**
+ * True if `role` acts as a name-from-content barrier — text inside an element
+ * with this role does not bubble up to name an ancestor.
+ */
+export function isNameBarrierRole(role: string): boolean {
+  return NAME_BARRIER_ROLES.has(role);
+}
+
 /**
  * Named widgets encountered as descendants during name-from-content
  * contribute their *computed accessible name* — not their raw subtree text,
@@ -583,34 +636,9 @@ function computeRawAccessibleName(
   // 8. Recursive text content — ONLY for elements whose ARIA role supports
   //    "name from content" (headings, links, buttons, table cells, options).
   //    NOT for generic containers (div, span, p) which would grab huge text blobs.
-  const NAMES_FROM_CONTENT_TAGS = new Set([
-    "a",
-    "button",
-    "summary",
-    "h1",
-    "h2",
-    "h3",
-    "h4",
-    "h5",
-    "h6",
-    "label",
-    "legend",
-    "caption",
-    "figcaption",
-    "option",
-    "td",
-    "th",
-  ]);
-  const explicitRole = element.getAttribute("role");
+  const explicitRole = element.getAttribute("role")?.trim().split(/\s+/)[0];
   const namesFromContentRole =
-    explicitRole === "button" ||
-    explicitRole === "link" ||
-    explicitRole === "heading" ||
-    explicitRole === "option" ||
-    explicitRole === "treeitem" ||
-    explicitRole === "tab" ||
-    explicitRole === "menuitem" ||
-    explicitRole === "cell";
+    !!explicitRole && NAMES_FROM_CONTENT_ROLES.has(explicitRole);
 
   if (NAMES_FROM_CONTENT_TAGS.has(tag) || namesFromContentRole) {
     const fullText = getAccessibleTextContent(element, visited).trim();
@@ -644,7 +672,7 @@ const DESCENDANT_TEXT_MAX = 240;
  * spec but which carry meaningful descendant text (`<code>`, `<pre>`,
  * `<svg>` with `<text>`, decorative wrappers around copy, etc.).
  */
-function getDescendantText(element: Element): string {
+export function getDescendantText(element: Element): string {
   const raw = safeTextContent(element);
   const collapsed = raw.replace(/\s+/g, " ").trim();
   if (collapsed.length <= DESCENDANT_TEXT_MAX) return collapsed;
@@ -967,6 +995,29 @@ function findPortalOverlay(doc: Document, root: Element): Element | null {
 }
 
 /**
+ * The element extraction is actually scoped to, in priority order:
+ *   1. Active modal — content behind a modal is inert to AT, so the tree
+ *      scopes EXCLUSIVELY to the modal.
+ *   2. Portal overlay outside `root` — a non-modal overlay (menu, tooltip,
+ *      toast, listbox) mounted into body by React Portal / Vue Teleport.
+ *      Pivot to body so the portal content joins the tree.
+ *   3. The configured root — the default.
+ *
+ * Exported so {@link LiveTreeExtractor} can ask "did the scope move?" on an
+ * incremental refresh without duplicating — and drifting from — the selector
+ * lists above. Scope is a property of the whole document (overlay shape AND
+ * the full ancestor visibility chain), so it cannot be inferred from a single
+ * mutated element; the incremental path has to re-derive it.
+ */
+export function resolveEffectiveRoot(root: Element): Element {
+  const doc = root.ownerDocument;
+  if (!doc) return root;
+  const activeModal = findActiveModal(doc);
+  if (activeModal) return activeModal;
+  return findPortalOverlay(doc, root) ?? root;
+}
+
+/**
  * Report — outside production — that an element was skipped mid-extraction.
  *
  * The walk wraps each element so a single pathological node (usually DOM
@@ -990,178 +1041,211 @@ function warnSkippedElement(element: Element, error: unknown): void {
   }
 }
 
+/**
+ * Options for {@link extractDomTree}. Primarily for internal incremental
+ * extraction; the public single-argument form is unchanged.
+ */
+export interface ExtractDomTreeOptions {
+  /** Existing nodes map to update in-place. When provided, extraction is partial. */
+  nodes?: Map<string, SemanticNode>;
+  /** Parent id for the root of this partial extraction. */
+  parentId?: string | null;
+  /** Depth offset for the root of this partial extraction. */
+  baseDepth?: number;
+  /** Precomputed description-target id set. Required for partial extraction. */
+  descriptionTargetIds?: ReadonlySet<string>;
+  /** Whether to compute the focused element id. Default true for full extractions. */
+  includeFocused?: boolean;
+}
+
+/**
+ * Build the semantic node for `element`, or return `null` to skip it (and,
+ * by extension, its subtree).
+ *
+ * The whole body runs inside a try/catch so that a single pathological
+ * element cannot abort the ENTIRE extraction. The reported crash was DOM
+ * clobbering: on a `<form>` (the one element with `[LegacyOverrideBuiltIns]`)
+ * a child named `tagName` — `<input name="tagName">` — shadows
+ * `element.tagName`, so `.toLowerCase()` threw, and with no per-element
+ * boundary the walk unwound completely and the panel hung on "Connecting to
+ * page…" forever. The targeted guards (`getAttribute("id")`, the `safe*`
+ * reads) defuse the plausible cases; this boundary is the catch-all for the
+ * rest — including future unknown clobbering — degrading to "skip this node"
+ * instead of losing the whole tree.
+ *
+ * Nothing here mutates `nodes` / `elementRefs`; the caller commits the node
+ * only on success, so a caught element never leaves a half-built node behind.
+ */
+function buildNode(
+  element: Element,
+  parentId: string | null,
+  depth: number,
+  descriptionTargetIds: ReadonlySet<string>,
+): { id: string; node: SemanticNode } | null {
+  try {
+    const tag = element.tagName.toLowerCase();
+    if (SKIP_TAGS.has(tag)) return null;
+
+    // Skip Semantic Navigator internal elements (highlight overlay, curtain, etc.)
+    // Read the id via getAttribute, not the `.id` property: on a <form> (or the
+    // legacy named-property elements) a child named `id` clobbers `element.id`
+    // to return that element, so `.id.startsWith(...)` would throw a TypeError
+    // and crash the whole extraction. getAttribute always yields a string|null.
+    if (element.getAttribute("id")?.startsWith("__sn-")) return null;
+
+    // Skip entire subtrees of display:none / hidden elements
+    if (isSubtreeHidden(element)) return null;
+
+    // Skip elements that serve solely as aria-describedby text providers.
+    // Their content is shown inline on the referencing element as a description.
+    const ownId = element.getAttribute("id");
+    if (ownId && descriptionTargetIds.has(ownId)) return null;
+
+    const id = getNodeId(element);
+    const role = getImplicitRole(element);
+    const actions = getActions(element);
+    const isFocusable =
+      NATIVELY_FOCUSABLE.has(tag) || element.getAttribute("tabindex") !== null;
+
+    const node: SemanticNode = {
+      id,
+      parentId,
+      childIds: [],
+      depth,
+      dom: {
+        tagName: tag,
+        attributes: getKeyAttributes(element),
+        textContent: getDirectTextContent(element),
+        descendantText: getDescendantText(element),
+        isHidden: isVisuallyHidden(element),
+      },
+      a11y: {
+        role,
+        name: computeAccessibleName(element),
+        description: computeAccessibleDescription(element),
+        states: getAriaStates(element),
+        properties: {
+          ...(getHeadingLevel(element) !== null
+            ? { level: String(getHeadingLevel(element)) }
+            : {}),
+        },
+        isExposedToAT: !isHiddenFromAT(element),
+      },
+      interaction: {
+        isInteractive: actions.length > 0,
+        actions,
+        isFocusable,
+        isEditable:
+          (tag === "input" &&
+            TEXT_INPUT_TYPES.has(
+              (element as HTMLInputElement).type || "text",
+            )) ||
+          tag === "textarea" ||
+          element.getAttribute("contenteditable") === "true",
+      },
+      ui: {
+        expanded: depth < 2,
+        highlighted: false,
+        matchesFilter: true,
+        selected: false,
+      },
+    };
+
+    return { id, node };
+  } catch (error) {
+    // One bad element must not take down the walk. Skip it and its subtree;
+    // siblings and ancestors still extract.
+    warnSkippedElement(element, error);
+    return null;
+  }
+}
+
+function walk(
+  element: Element,
+  parentId: string | null,
+  depth: number,
+  nodes: Map<string, SemanticNode>,
+  descriptionTargetIds: ReadonlySet<string>,
+): string | null {
+  const built = buildNode(element, parentId, depth, descriptionTargetIds);
+  if (!built) return null;
+  const { id, node } = built;
+
+  // Commit the finished node. Neither map write can throw, so a node that was
+  // built successfully is never orphaned by a later failure.
+  elementRefs.set(id, element);
+  nodes.set(id, node);
+
+  // Walk children. Each child is isolated by buildNode's own boundary, so a
+  // single pathological descendant can't take out its siblings or ancestors.
+  for (const child of safeChildren(element)) {
+    const childId = walk(child, id, depth + 1, nodes, descriptionTargetIds);
+    if (childId) {
+      node.childIds.push(childId);
+    }
+  }
+
+  return id;
+}
+
 /** Extract a complete DOM tree from a root element */
-export function extractDomTree(root: Element): ExtractionResult {
-  const nodes = new Map<string, SemanticNode>();
+export function extractDomTree(
+  root: Element,
+  options: ExtractDomTreeOptions = {},
+): ExtractionResult {
+  const nodes = options.nodes ?? new Map<string, SemanticNode>();
+  const parentId = options.parentId ?? null;
+  const baseDepth = options.baseDepth ?? 0;
+  const isPartial = options.nodes != null;
 
-  // Scope selection, in priority order:
-  //   1. Active modal — scopes exclusively to the modal (content
-  //      behind a modal is inert to AT).
-  //   2. Portal overlay outside root — non-modal overlay (menu,
-  //      tooltip, toast, listbox) mounted into body by React Portal
-  //      etc. Pivot to body so the portal content joins the tree.
-  //   3. Configured root — the default.
-  const activeModal = findActiveModal(root.ownerDocument);
-  const portalRoot = activeModal
-    ? null
-    : findPortalOverlay(root.ownerDocument, root);
-  const effectiveRoot = activeModal || portalRoot || root;
+  let effectiveRoot: Element;
+  let descriptionTargetIds: ReadonlySet<string> =
+    options.descriptionTargetIds ?? new Set<string>();
 
-  // Pre-collect aria-labelledby targets so we don't accidentally hide them.
-  // (Elements that are labelledby targets are visible content — they label something.)
-  const labelTargetIds = new Set<string>();
-  for (const el of effectiveRoot.querySelectorAll("[aria-labelledby]")) {
-    for (const id of (el.getAttribute("aria-labelledby") || "")
-      .split(/\s+/)
-      .filter(Boolean)) {
-      labelTargetIds.add(id);
-    }
-  }
+  if (!isPartial || !options.descriptionTargetIds) {
+    effectiveRoot = resolveEffectiveRoot(root);
 
-  // Pre-collect aria-describedby targets.
-  // These elements' text is shown inline on the referencing element as a description.
-  // Hide them from the tree to avoid redundancy — unless they're also labelledby targets.
-  const descriptionTargetIds = new Set<string>();
-  for (const el of effectiveRoot.querySelectorAll("[aria-describedby]")) {
-    for (const id of (el.getAttribute("aria-describedby") || "")
-      .split(/\s+/)
-      .filter(Boolean)) {
-      if (!labelTargetIds.has(id)) {
-        descriptionTargetIds.add(id);
-      }
-    }
-  }
-
-  /**
-   * Build the semantic node for `element`, or return `null` to skip it (and,
-   * by extension, its subtree).
-   *
-   * The whole body runs inside a try/catch so that a single pathological
-   * element cannot abort the ENTIRE extraction. The reported crash was DOM
-   * clobbering: on a `<form>` (the one element with `[LegacyOverrideBuiltIns]`)
-   * a child named `tagName` — `<input name="tagName">` — shadows
-   * `element.tagName`, so `.toLowerCase()` threw, and with no per-element
-   * boundary the walk unwound completely and the panel hung on "Connecting to
-   * page…" forever. The targeted guards (`getAttribute("id")`, the `safe*`
-   * reads) defuse the plausible cases; this boundary is the catch-all for the
-   * rest — including future unknown clobbering — degrading to "skip this node"
-   * instead of losing the whole tree.
-   *
-   * Nothing here mutates `nodes` / `elementRefs`; the caller commits the node
-   * only on success, so a caught element never leaves a half-built node behind.
-   */
-  function buildNode(
-    element: Element,
-    parentId: string | null,
-    depth: number,
-  ): { id: string; node: SemanticNode } | null {
-    try {
-      const tag = element.tagName.toLowerCase();
-      if (SKIP_TAGS.has(tag)) return null;
-
-      // Skip Semantic Navigator internal elements (highlight overlay, curtain, etc.)
-      // Read the id via getAttribute, not the `.id` property: on a <form> (or the
-      // legacy named-property elements) a child named `id` clobbers `element.id`
-      // to return that element, so `.id.startsWith(...)` would throw a TypeError
-      // and crash the whole extraction. getAttribute always yields a string|null.
-      if (element.getAttribute("id")?.startsWith("__sn-")) return null;
-
-      // Skip entire subtrees of display:none / hidden elements
-      if (isSubtreeHidden(element)) return null;
-
-      // Skip elements that serve solely as aria-describedby text providers.
-      // Their content is shown inline on the referencing element as a description.
-      const ownId = element.getAttribute("id");
-      if (ownId && descriptionTargetIds.has(ownId)) return null;
-
-      const id = getNodeId(element);
-      const role = getImplicitRole(element);
-      const actions = getActions(element);
-      const isFocusable =
-        NATIVELY_FOCUSABLE.has(tag) ||
-        element.getAttribute("tabindex") !== null;
-
-      const node: SemanticNode = {
-        id,
-        parentId,
-        childIds: [],
-        depth,
-        dom: {
-          tagName: tag,
-          attributes: getKeyAttributes(element),
-          textContent: getDirectTextContent(element),
-          descendantText: getDescendantText(element),
-          isHidden: isVisuallyHidden(element),
-        },
-        a11y: {
-          role,
-          name: computeAccessibleName(element),
-          description: computeAccessibleDescription(element),
-          states: getAriaStates(element),
-          properties: {
-            ...(getHeadingLevel(element) !== null
-              ? { level: String(getHeadingLevel(element)) }
-              : {}),
-          },
-          isExposedToAT: !isHiddenFromAT(element),
-        },
-        interaction: {
-          isInteractive: actions.length > 0,
-          actions,
-          isFocusable,
-          isEditable:
-            (tag === "input" &&
-              TEXT_INPUT_TYPES.has(
-                (element as HTMLInputElement).type || "text",
-              )) ||
-            tag === "textarea" ||
-            element.getAttribute("contenteditable") === "true",
-        },
-        ui: {
-          expanded: depth < 2,
-          highlighted: false,
-          matchesFilter: true,
-          selected: false,
-        },
-      };
-
-      return { id, node };
-    } catch (error) {
-      // One bad element must not take down the walk. Skip it and its subtree;
-      // siblings and ancestors still extract.
-      warnSkippedElement(element, error);
-      return null;
-    }
-  }
-
-  function walk(
-    element: Element,
-    parentId: string | null,
-    depth: number,
-  ): string | null {
-    const built = buildNode(element, parentId, depth);
-    if (!built) return null;
-    const { id, node } = built;
-
-    // Commit the finished node. Neither map write can throw, so a node that was
-    // built successfully is never orphaned by a later failure.
-    elementRefs.set(id, element);
-    nodes.set(id, node);
-
-    // Walk children. Each child is isolated by buildNode's own boundary, so a
-    // single pathological descendant can't take out its siblings or ancestors.
-    for (const child of safeChildren(element)) {
-      const childId = walk(child, id, depth + 1);
-      if (childId) {
-        node.childIds.push(childId);
+    // Pre-collect aria-labelledby targets so we don't accidentally hide them.
+    // (Elements that are labelledby targets are visible content — they label something.)
+    const labelTargetIds = new Set<string>();
+    for (const el of effectiveRoot.querySelectorAll("[aria-labelledby]")) {
+      for (const id of (el.getAttribute("aria-labelledby") || "")
+        .split(/\s+/)
+        .filter(Boolean)) {
+        labelTargetIds.add(id);
       }
     }
 
-    return id;
+    // Pre-collect aria-describedby targets.
+    // These elements' text is shown inline on the referencing element as a description.
+    // Hide them from the tree to avoid redundancy — unless they're also labelledby targets.
+    const freshDescriptionTargetIds = new Set<string>();
+    for (const el of effectiveRoot.querySelectorAll("[aria-describedby]")) {
+      for (const id of (el.getAttribute("aria-describedby") || "")
+        .split(/\s+/)
+        .filter(Boolean)) {
+        if (!labelTargetIds.has(id)) {
+          freshDescriptionTargetIds.add(id);
+        }
+      }
+    }
+    descriptionTargetIds = freshDescriptionTargetIds;
+  } else {
+    effectiveRoot = root;
   }
 
-  const rootId = walk(effectiveRoot, null, 0);
+  const startRoot = isPartial ? root : effectiveRoot;
+  const rootId = walk(
+    startRoot,
+    parentId,
+    baseDepth,
+    nodes,
+    descriptionTargetIds,
+  );
 
-  const focusedId = focusedNodeId(effectiveRoot, nodes);
+  const includeFocused = options.includeFocused ?? !isPartial;
+  const focusedId = includeFocused
+    ? focusedNodeId(effectiveRoot, nodes)
+    : undefined;
   return { nodes, rootId: rootId || "", ...(focusedId ? { focusedId } : {}) };
 }

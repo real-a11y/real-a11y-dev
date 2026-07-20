@@ -34,6 +34,13 @@
   (current text via `textContent`, never revealing a secret). Note the
   actual text insertion into model-driven editors remains best-effort — see
   `ActionDispatcher`. ([#178])
+- Keep the panel's tree in sync incrementally instead of re-walking the whole
+  page on every DOM change. Typing into a field or a small widget update now
+  re-extracts only the affected subtree, which keeps the panel responsive on
+  large pages. Changes that can move what the tree is scoped to — a modal
+  opening or closing, a portal mounting — still fall back to a full
+  re-extraction, so the panel keeps matching what a screen reader sees.
+  ([#182])
 
 ## 0.1.7
 
@@ -86,3 +93,4 @@ Earlier releases predate this changelog.
 [#161]: https://github.com/real-a11y/real-a11y-dev/pull/161
 [#168]: https://github.com/real-a11y/real-a11y-dev/pull/168
 [#178]: https://github.com/real-a11y/real-a11y-dev/pull/178
+[#182]: https://github.com/real-a11y/real-a11y-dev/pull/182

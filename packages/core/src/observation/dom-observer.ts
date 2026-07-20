@@ -1,3 +1,5 @@
+import type { TreeChange } from "../types.js";
+
 /** Observed attribute changes that affect the tree */
 const OBSERVED_ATTRIBUTES = [
   "role",
@@ -14,6 +16,11 @@ const OBSERVED_ATTRIBUTES = [
   "aria-modal",
   "class",
   "id",
+  // `for` re-points a <label> at a different control, which changes the
+  // accessible name of BOTH the old and new target. LiveTreeExtractor treats
+  // it as a reference attribute and falls back to a full extraction — but only
+  // if the change is actually observed, so it has to be in this filter.
+  "for",
   "disabled",
   "checked",
   "href",
@@ -129,12 +136,23 @@ export class DomObserver {
   // maxWaitMs instead of being starved forever by the resetting debounce.
   private maxWaitTimer: ReturnType<typeof setTimeout> | null = null;
   private inputListener: ((e: Event) => void) | null = null;
+  /** Accumulated MutationRecords across the current debounce window. */
+  private pendingMutations: MutationRecord[] = [];
+  /** Synthetic dirty roots (e.g. form-control input events). */
+  private pendingDirtyRoots: Element[] = [];
+  /**
+   * Set when a change can't be handled incrementally and the consumer must do
+   * a full re-extraction — e.g. a portal/overlay mounting or unmounting
+   * OUTSIDE `root`, which the portal observer detects without any
+   * MutationRecord that maps into the observed subtree.
+   */
+  private pendingFull = false;
   /** Upper bound on how long a mutation stream may defer a flush. */
   private readonly maxWaitMs: number;
 
   constructor(
     private root: Element,
-    private onTreeChange: () => void,
+    private onTreeChange: (change?: TreeChange) => void,
     private debounceMs = 300,
     private internalIds: ReadonlySet<string> = DEFAULT_INTERNAL_IDS,
     maxWaitMs = 1000,
@@ -154,6 +172,7 @@ export class DomObserver {
       );
       if (allInternal) return;
 
+      this.recordMutations(mutations);
       this.scheduleChange();
     });
 
@@ -171,7 +190,12 @@ export class DomObserver {
     // input/change events (capture phase, in case a handler stops propagation)
     // so the tree stays in sync with what users type into <input>, <textarea>,
     // <select>, and contenteditable nodes.
-    this.inputListener = () => this.scheduleChange();
+    this.inputListener = (e: Event) => {
+      if (e.target instanceof Element) {
+        this.pendingDirtyRoots.push(e.target);
+      }
+      this.scheduleChange();
+    };
     this.root.addEventListener("input", this.inputListener, true);
     this.root.addEventListener("change", this.inputListener, true);
 
@@ -223,7 +247,13 @@ export class DomObserver {
             }
           }
         }
-        if (sawPortal) this.scheduleChange();
+        if (sawPortal) {
+          // Portal mounts/unmounts happen outside `root`, so they produce no
+          // MutationRecord the incremental path can splice. Flag a full
+          // re-extraction so the extractor re-evaluates portal/modal scope.
+          this.pendingFull = true;
+          this.scheduleChange();
+        }
       });
       this.portalObserver.observe(body, { childList: true });
     }
@@ -261,6 +291,9 @@ export class DomObserver {
       clearTimeout(this.maxWaitTimer);
       this.maxWaitTimer = null;
     }
+    this.pendingMutations = [];
+    this.pendingDirtyRoots = [];
+    this.pendingFull = false;
   }
 
   /**
@@ -283,6 +316,7 @@ export class DomObserver {
         isInternalMutation(m, this.internalIds),
       );
       if (allInternal) return;
+      this.recordMutations(mutations);
       this.scheduleChange();
     });
     observer.observe(portal, {
@@ -329,6 +363,19 @@ export class DomObserver {
     }
   }
 
+  /**
+   * Store non-internal mutations so they can be delivered to the callback
+   * when the debounce fires. Internal-sentinel mutations are filtered out
+   * because the callback should not react to the inspector's own overlays.
+   */
+  private recordMutations(mutations: MutationRecord[]): void {
+    for (const m of mutations) {
+      if (!isInternalMutation(m, this.internalIds)) {
+        this.pendingMutations.push(m);
+      }
+    }
+  }
+
   /** Fire the change callback and clear both the debounce and ceiling timers. */
   private flushChange(): void {
     if (this.debounceTimer) {
@@ -339,7 +386,20 @@ export class DomObserver {
       clearTimeout(this.maxWaitTimer);
       this.maxWaitTimer = null;
     }
-    this.onTreeChange();
+
+    const change: TreeChange = {
+      mutations: this.pendingMutations.length
+        ? this.pendingMutations
+        : undefined,
+      dirtyRoots: this.pendingDirtyRoots.length
+        ? this.pendingDirtyRoots
+        : undefined,
+      ...(this.pendingFull ? { full: true } : {}),
+    };
+    this.pendingMutations = [];
+    this.pendingDirtyRoots = [];
+    this.pendingFull = false;
+    this.onTreeChange(change);
   }
 }
 

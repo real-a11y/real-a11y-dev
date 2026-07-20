@@ -43,6 +43,28 @@ describe("DomObserver", () => {
     expect(onTreeChange).toHaveBeenCalledTimes(1);
   });
 
+  it("observes label[for] re-targeting", async () => {
+    document.body.innerHTML = `
+      <label id="lbl" for="one">Name</label>
+      <input id="one" /><input id="two" />
+    `;
+    observer = new DomObserver(document.body, onTreeChange, 100);
+    observer.start();
+
+    // Re-pointing a label changes the accessible name of both the old and the
+    // new control. LiveTreeExtractor treats `for` as a reference attribute and
+    // falls back to a full extraction — which only happens if it is observed.
+    document.getElementById("lbl")!.setAttribute("for", "two");
+
+    await settleObserver(100);
+
+    expect(onTreeChange).toHaveBeenCalledTimes(1);
+    const change = onTreeChange.mock.calls[0]![0];
+    expect(
+      change.mutations?.some((m: MutationRecord) => m.attributeName === "for"),
+    ).toBe(true);
+  });
+
   it("debounces rapid mutations into a single callback", async () => {
     observer = new DomObserver(document.body, onTreeChange, 100);
     observer.start();

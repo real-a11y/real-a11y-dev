@@ -1,15 +1,14 @@
 /// <reference types="chrome" />
 
 import {
-  extractDomTree,
-  extractA11yTree,
+  LiveTreeExtractor,
   ActionDispatcher,
   FocusManager,
   DomObserver,
   createPicker,
   getElementRefs,
 } from "@real-a11y-dev/core";
-import type { TreeViewMode } from "@real-a11y-dev/core";
+import type { TreeViewMode, TreeChange } from "@real-a11y-dev/core";
 
 import { computeFieldState } from "./field-state.js";
 import { isTrustedSender } from "./routing.js";
@@ -19,6 +18,20 @@ const isSubFrame = window !== window.top;
 
 let currentViewMode: TreeViewMode = "a11y";
 let focusingFromTree = false;
+let liveExtractor: LiveTreeExtractor | null = null;
+
+function liveMode(): "dom" | "a11y" {
+  return currentViewMode === "dom" ? "dom" : "a11y";
+}
+
+function getLiveExtractor(): LiveTreeExtractor {
+  if (!liveExtractor) {
+    liveExtractor = new LiveTreeExtractor(document.documentElement, {
+      mode: liveMode(),
+    });
+  }
+  return liveExtractor;
+}
 // The focus tracker exists to inform the side panel of real-DOM focus changes.
 // Starts OFF — the panel turns it on via SET_FOCUS_TRACKER when it connects,
 // and the background turns it off when the panel disconnects. Without this
@@ -87,11 +100,14 @@ function teardown(): void {
 }
 
 /** Extract tree and send to background as per-frame data */
-function sendTree() {
-  const result =
-    currentViewMode === "dom"
-      ? extractDomTree(document.documentElement)
-      : extractA11yTree(document.documentElement);
+function sendTree(change?: TreeChange) {
+  const extractor = getLiveExtractor();
+  const mode = liveMode();
+  if (extractor.mode !== mode) {
+    extractor.setMode(mode);
+  }
+
+  const result = change ? extractor.refresh(change) : extractor.extract();
 
   const serialized = Array.from(result.nodes.entries());
 
@@ -107,8 +123,8 @@ function sendTree() {
 }
 
 /** Set up DOM observer for live updates */
-const observer = new DomObserver(document.documentElement, () => {
-  sendTree();
+const observer = new DomObserver(document.documentElement, (change) => {
+  sendTree(change);
 });
 
 // ─── Element picker (DevTools-style "select an element in the page") ─────────

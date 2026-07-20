@@ -9,13 +9,13 @@
  * applies them to the real story DOM via FocusManager / ActionDispatcher.
  */
 import {
-  extractDomTree,
-  extractA11yTree,
+  LiveTreeExtractor,
   DomObserver,
   FocusManager,
   ActionDispatcher,
   getElementRefs,
 } from "@real-a11y-dev/core";
+import type { TreeChange } from "@real-a11y-dev/core";
 import { addons } from "@storybook/preview-api";
 
 import {
@@ -75,14 +75,15 @@ function getStoryRoot(): Element {
 let observer: DomObserver | null = null;
 let focusManager: FocusManager | null = null;
 let dispatcher: ActionDispatcher | null = null;
+let liveExtractor: LiveTreeExtractor | null = null;
 let currentMode: TreeMode = "a11y";
 
-function buildSerializableTree(
-  root: Element,
-  mode: TreeMode,
-): SerializableTree {
-  // "tab" mode displays data from the a11y tree — no separate extraction.
-  const result = mode === "dom" ? extractDomTree(root) : extractA11yTree(root);
+function liveExtractorMode(mode: TreeMode): "dom" | "a11y" {
+  return mode === "dom" ? "dom" : "a11y";
+}
+
+function buildSerializableTree(change?: TreeChange): SerializableTree {
+  const result = liveExtractor!.refresh(change);
 
   // Reset ui state so the manager always starts fresh (expanded, visible, etc.)
   for (const node of result.nodes.values()) {
@@ -99,12 +100,15 @@ function buildSerializableTree(
   };
 }
 
-function publish() {
-  const root = getStoryRoot();
+function publish(change?: TreeChange) {
+  // The extractor only exists once a story has rendered (start()). A channel
+  // event such as SET_MODE can arrive before that, so publishing must be a
+  // no-op until then rather than dereferencing a null extractor.
+  if (!liveExtractor) return;
   const channel = addons.getChannel();
 
   const payload: TreeUpdatePayload = {
-    tree: buildSerializableTree(root, currentMode),
+    tree: buildSerializableTree(change),
     mode: currentMode,
     extractedAt: Date.now(),
   };
@@ -119,12 +123,16 @@ function start() {
   focusManager = new FocusManager(refs);
   dispatcher = new ActionDispatcher(refs);
 
+  liveExtractor = new LiveTreeExtractor(root, {
+    mode: liveExtractorMode(currentMode),
+  });
+
   // Re-extract (and refresh the element WeakMap) on every DOM mutation.
   observer = new DomObserver(
     root,
-    () => {
+    (change) => {
       // Re-extraction rebuilds the WeakMap so highlight refs stay fresh.
-      publish();
+      publish(change);
     },
     200,
   );
@@ -138,6 +146,7 @@ function stop() {
   observer = null;
   focusManager = null;
   dispatcher = null;
+  liveExtractor = null;
 }
 
 // ── Bootstrap ────────────────────────────────────────────────────────────────
@@ -153,6 +162,7 @@ if (typeof document !== "undefined") {
   // Manager requests a mode change → re-extract with the new mode.
   channel.on(EVENTS.SET_MODE, (mode: TreeMode) => {
     currentMode = mode;
+    liveExtractor?.setMode(liveExtractorMode(currentMode));
     publish();
   });
 

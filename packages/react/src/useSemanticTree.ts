@@ -1,8 +1,8 @@
 import {
   DomObserver,
-  extractA11yTree,
-  extractDomTree,
+  LiveTreeExtractor,
   type ExtractionResult,
+  type TreeChange,
   type TreeViewMode,
 } from "@real-a11y-dev/core";
 import { useEffect, useRef, useSyncExternalStore } from "react";
@@ -54,6 +54,7 @@ export function useSemanticTree(
   options: UseSemanticTreeOptions = {},
 ): ExtractionResult | null {
   const { mode = "a11y", debounceMs = 300 } = options;
+  const liveMode: "dom" | "a11y" = mode === "dom" ? "dom" : "a11y";
 
   // A per-mount store. It is created once and kept for the life of the
   // component; only the OBSERVER is torn down and recreated when the root
@@ -63,6 +64,7 @@ export function useSemanticTree(
     listeners: Set<() => void>;
     observer: DomObserver | null;
   } | null>(null);
+  const liveRef = useRef<LiveTreeExtractor | null>(null);
 
   if (!storeRef.current) {
     storeRef.current = { tree: null, listeners: new Set(), observer: null };
@@ -88,11 +90,10 @@ export function useSemanticTree(
       return;
     }
 
-    const extract = () =>
-      mode === "dom" ? extractDomTree(root) : extractA11yTree(root);
+    liveRef.current = new LiveTreeExtractor(root, { mode: liveMode });
 
-    const flush = () => {
-      store.tree = extract();
+    const flush = (change?: TreeChange) => {
+      store.tree = liveRef.current!.refresh(change);
       for (const l of store.listeners) l();
     };
 
