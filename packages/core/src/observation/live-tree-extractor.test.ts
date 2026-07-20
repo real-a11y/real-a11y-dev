@@ -633,6 +633,39 @@ describe("LiveTreeExtractor", () => {
     }
   });
 
+  it("does not resurrect a node removed later in the same batch", () => {
+    document.body.innerHTML = `
+      <main id="app">
+        <div id="p"><span id="e">Gone</span></div>
+      </main>
+    `;
+    const root = document.getElementById("app")!;
+    const live = new LiveTreeExtractor(root, { mode: "dom" });
+
+    const p = document.getElementById("p")!;
+    const e = document.getElementById("e")!;
+
+    // One batch: `e` is mutated (entering the dirty set), then detached. Its
+    // subtree must stay deleted — re-extracting a detached element succeeds,
+    // because getComputedStyle reports nothing hidden for it.
+    e.setAttribute("class", "x");
+    p.removeChild(e);
+
+    const result = live.refresh({
+      mutations: [
+        { type: "attributes", target: e, attributeName: "class" },
+        { type: "childList", target: p, addedNodes: [], removedNodes: [e] },
+      ] as unknown as MutationRecord[],
+    });
+    const expected = extractDomTree(root);
+
+    expect(result.nodes.size).toBe(expected.nodes.size);
+    expect(result.nodes).toEqual(expected.nodes);
+    expect(
+      [...result.nodes.values()].some((n) => n.dom.textContent === "Gone"),
+    ).toBe(false);
+  });
+
   describe("extraction scope", () => {
     /**
      * A synthetic attribute change. The scope logic under test lives in

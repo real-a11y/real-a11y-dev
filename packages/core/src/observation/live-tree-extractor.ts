@@ -270,6 +270,17 @@ export class LiveTreeExtractor {
     }
 
     for (const p of plans) {
+      // A root detached earlier in this same batch must not be resurrected.
+      // `getComputedStyle` on a detached element reports nothing hidden, so
+      // `buildNode` would happily rebuild the subtree that was just removed
+      // from the document, leaving it in the map as an orphan (unreachable
+      // from the root, but present in `dom` mode output) and pinning the
+      // detached elements via elementRefs. Pass 1 already deleted it; leave
+      // it deleted and drop the parent's reference.
+      if (!p.root.isConnected) {
+        this.detachFromParent(p.parentId, p.id);
+        continue;
+      }
       extractDomTree(p.root, {
         nodes: this.domNodes,
         parentId: p.parentId,
@@ -281,11 +292,8 @@ export class LiveTreeExtractor {
       // aria-describedby text provider), the parent still references its now
       // deleted id. Drop that dangling child so the DOM map stays consistent
       // with a clean extraction.
-      if (!this.domNodes.has(p.id) && p.parentId) {
-        const parent = this.domNodes.get(p.parentId);
-        if (parent) {
-          parent.childIds = parent.childIds.filter((cid) => cid !== p.id);
-        }
+      if (!this.domNodes.has(p.id)) {
+        this.detachFromParent(p.parentId, p.id);
       }
       this.updateAncestorDescendantText(p.root);
     }
@@ -526,6 +534,19 @@ export class LiveTreeExtractor {
       if (el === this.root || el === this.effectiveRoot) break;
       el = el.parentElement;
     }
+  }
+
+  /**
+   * Remove `childId` from its parent's child list, if both still exist.
+   * Keeps the map free of parents pointing at nodes that are no longer in it —
+   * `buildA11yTree` tolerates a dangling id, but `dom` mode hands the map
+   * straight to consumers.
+   */
+  private detachFromParent(parentId: string | null, childId: string): void {
+    if (!parentId) return;
+    const parent = this.domNodes.get(parentId);
+    if (!parent) return;
+    parent.childIds = parent.childIds.filter((cid) => cid !== childId);
   }
 
   private deleteSubtree(nodeId: string): void {
