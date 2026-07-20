@@ -481,17 +481,34 @@ export class LiveTreeExtractor {
     while (changed) {
       changed = false;
       for (const el of Array.from(dirty)) {
-        const id = el.getAttribute("id");
-        if (id) {
-          const referrers = this.referrersById.get(id);
-          if (referrers) {
-            for (const ref of referrers) {
-              if (!dirty.has(ref)) {
-                dirty.add(ref);
-                changed = true;
+        // Walk the ancestor chain, not just `el`. An aria-labelledby /
+        // aria-describedby reference points at a whole element, and the
+        // referrer borrows that element's entire text — so a change anywhere
+        // inside it makes the referrer's name/description stale. The id
+        // commonly sits on a plain wrapper (`<div id="lbl"><span>…</span>`)
+        // that is neither the changed node's parent nor a name-from-content
+        // host, so nothing else would ever seed it into the dirty set.
+        //
+        // Stop at the effective root — that is the scope `referrersById` was
+        // indexed over, and it may sit ABOVE `this.root` when a portal pivoted
+        // extraction to body.
+        const stopAt = this.effectiveRoot ?? this.root;
+        let ancestor: Element | null = el;
+        while (ancestor) {
+          const id = ancestor.getAttribute("id");
+          if (id) {
+            const referrers = this.referrersById.get(id);
+            if (referrers) {
+              for (const ref of referrers) {
+                if (!dirty.has(ref)) {
+                  dirty.add(ref);
+                  changed = true;
+                }
               }
             }
           }
+          if (ancestor === stopAt) break;
+          ancestor = ancestor.parentElement;
         }
 
         if (el.tagName.toLowerCase() === "label") {

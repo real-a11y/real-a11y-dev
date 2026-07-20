@@ -633,6 +633,63 @@ describe("LiveTreeExtractor", () => {
     }
   });
 
+  // The id a referrer points at often sits on a plain wrapper several levels
+  // above the text that actually changed. That wrapper is neither the text's
+  // direct parent nor a name-from-content host, so nothing seeds it into the
+  // dirty set — the referrer has to be found by walking up from the change.
+  it("refreshes an aria-labelledby referrer when nested wrapper text changes", () => {
+    document.body.innerHTML = `
+      <main id="app">
+        <div id="lbl"><span id="s">Old</span></div>
+        <button aria-labelledby="lbl"></button>
+      </main>
+    `;
+    const root = document.getElementById("app")!;
+    const live = new LiveTreeExtractor(root, { mode: "a11y" });
+
+    const text = document.getElementById("s")!.firstChild!;
+    text.textContent = "New";
+
+    const result = live.refresh({
+      mutations: [
+        { type: "characterData", target: text },
+      ] as unknown as MutationRecord[],
+    });
+    const expected = extractA11yTree(root);
+
+    expect(result.nodes).toEqual(expected.nodes);
+    const names = [...result.nodes.values()].map((n) => n.a11y.name);
+    expect(names).toContain("New");
+    expect(names).not.toContain("Old");
+  });
+
+  it("refreshes an aria-labelledby referrer when nested wrapper text is replaced", () => {
+    document.body.innerHTML = `
+      <main id="app">
+        <div id="lbl"><span id="s">Old</span></div>
+        <button aria-labelledby="lbl"></button>
+      </main>
+    `;
+    const root = document.getElementById("app")!;
+    const live = new LiveTreeExtractor(root, { mode: "a11y" });
+
+    // textContent= is a childList mutation, not characterData.
+    const s = document.getElementById("s")!;
+    s.textContent = "New";
+
+    const result = live.refresh({
+      mutations: [
+        { type: "childList", target: s, addedNodes: [], removedNodes: [] },
+      ] as unknown as MutationRecord[],
+    });
+    const expected = extractA11yTree(root);
+
+    expect(result.nodes).toEqual(expected.nodes);
+    const names = [...result.nodes.values()].map((n) => n.a11y.name);
+    expect(names).toContain("New");
+    expect(names).not.toContain("Old");
+  });
+
   it("does not resurrect a node removed later in the same batch", () => {
     document.body.innerHTML = `
       <main id="app">
