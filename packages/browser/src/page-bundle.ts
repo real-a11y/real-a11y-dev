@@ -35,3 +35,7 @@ export {
   getTabSequence,
   linearize,
 } from "@real-a11y-dev/core";
+
+// Axis-A tree checkpoints. The captured tree stays in the page (node ids are
+// realm-bound), so only the rendered diff crosses the evaluate() boundary.
+export { checkpointTree, diffSinceCheckpoint } from "./tree-checkpoint.js";

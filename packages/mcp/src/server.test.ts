@@ -116,10 +116,12 @@ describe("MCP server wiring", () => {
     expect(names).toEqual(
       [
         "audit_page",
+        "checkpoint_tree",
         "close_browser",
         "compare_trees",
         "diff_checkpoint",
         "diff_checkpoints",
+        "diff_since_checkpoint",
         "export_checkpoint",
         "get_heading_outline",
         "get_native_tree",
@@ -707,6 +709,50 @@ describe("checkpoints", () => {
     });
     const snaps = session.calls.filter((c) => c.fn === "snapshot");
     expect(snaps.at(-1)?.rootSelector).toBe("[role=dialog]");
+  });
+
+  it("diff_since_checkpoint re-extracts with the root the tree checkpoint used", async () => {
+    session.responses.checkpointTree = "Tree checkpoint captured — 12 node(s).";
+    session.responses.diffSinceCheckpoint = '+ button "Save"';
+    const client = await connect(session);
+    await client.callTool({
+      name: "checkpoint_tree",
+      arguments: { rootSelector: "[role=dialog]" },
+    });
+    // No rootSelector on the diff — it must reuse the captured root rather than
+    // silently widening to <body> and reporting the rest of the page as added.
+    const res = await client.callTool({
+      name: "diff_since_checkpoint",
+      arguments: {},
+    });
+    const call = session.calls
+      .filter((c) => c.fn === "diffSinceCheckpoint")
+      .at(-1);
+    expect(call?.rootSelector).toBe("[role=dialog]");
+    expect(textOf(res)).toContain('+ button "Save"');
+  });
+
+  it("a tree checkpoint does not survive navigation", async () => {
+    session.responses.checkpointTree = "Tree checkpoint captured — 3 node(s).";
+    const client = await connect(session);
+    await client.callTool({
+      name: "checkpoint_tree",
+      arguments: { rootSelector: "[role=dialog]" },
+    });
+    // Navigating replaces the page bundle, wiping the in-page tree; the server
+    // must forget the captured root too rather than reusing a stale one.
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/other" },
+    });
+    await client.callTool({
+      name: "diff_since_checkpoint",
+      arguments: {},
+    });
+    const call = session.calls
+      .filter((c) => c.fn === "diffSinceCheckpoint")
+      .at(-1);
+    expect(call?.rootSelector).toBe("body");
   });
 
   it("import_checkpoint rejects a partial (--only) artifact", async () => {

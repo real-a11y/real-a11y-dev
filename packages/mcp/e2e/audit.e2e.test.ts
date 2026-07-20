@@ -243,4 +243,55 @@ describe("MCP end-to-end against a real browser", () => {
     );
     expect(cmp).toMatch(/agree/); // custom and native match — the fix + oracle
   });
+
+  it("keeps a tree checkpoint in-page and diffs a later DOM change", async () => {
+    // The captured tree lives in the page bundle's module state. This proves it
+    // survives BETWEEN separate page.evaluate() calls — the premise the whole
+    // Axis-A design rests on, which the faked unit tests cannot exercise.
+    const html = `<!doctype html><html><head><title>Diff</title></head><body>
+      <main><h1>Title</h1><button>First</button></main>
+      <script>
+        setTimeout(function () {
+          document.querySelector('main').insertAdjacentHTML(
+            'beforeend', '<button>Added later</button>');
+        }, 1500);
+      </script>
+    </body></html>`;
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: dataUrl(html), settleMs: 0 },
+    });
+    const captured = textOf(
+      await client.callTool({ name: "checkpoint_tree", arguments: {} }),
+    );
+    expect(captured).toMatch(/Tree checkpoint captured/);
+
+    // Wait past the scripted mutation, then diff against the checkpoint.
+    await new Promise((resolve) => setTimeout(resolve, 2200));
+    const diff = textOf(
+      await client.callTool({ name: "diff_since_checkpoint", arguments: {} }),
+    );
+    expect(diff).toContain("Added later");
+  });
+
+  it("invalidates the tree checkpoint on navigation", async () => {
+    // A tree checkpoint is bound to the page instance: navigating replaces the
+    // bundle (and its module state), so the diff must fail loudly, not compare
+    // against a stale or silently-empty baseline.
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: dataUrl("<!doctype html><main><h1>A</h1></main>") },
+    });
+    await client.callTool({ name: "checkpoint_tree", arguments: {} });
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: dataUrl("<!doctype html><main><h1>B</h1></main>") },
+    });
+    const res = await client.callTool({
+      name: "diff_since_checkpoint",
+      arguments: {},
+    });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toMatch(/No tree checkpoint/);
+  });
 });

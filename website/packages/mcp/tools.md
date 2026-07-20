@@ -5,7 +5,7 @@ description: Every tool the Real A11y MCP server exposes — open_page, audit_pa
 
 # MCP tools reference
 
-The Real A11y MCP server exposes **sixteen tools** to an MCP client (Claude Code, Claude Desktop, Cursor, and any other MCP-capable assistant). Each tool drives a real Chromium page and reports what a screen reader would actually perceive — computed roles, accessible names, and the defects assistive tech announces as broken — not what the HTML source claims.
+The Real A11y MCP server exposes **eighteen tools** to an MCP client (Claude Code, Claude Desktop, Cursor, and any other MCP-capable assistant). Each tool drives a real Chromium page and reports what a screen reader would actually perceive — computed roles, accessible names, and the defects assistive tech announces as broken — not what the HTML source claims.
 
 The tools share **one** browser page. A typical run is [`open_page`](#open_page) → an audit or view tool ([`audit_page`](#audit_page), [`inspect_page`](#inspect_page), or a `get_*` view) → [`close_browser`](#close_browser). Because every tool reads the same mutable page, calls must run **sequentially, never in parallel** — a second call mid-flight would race the first's navigation.
 
@@ -214,6 +214,34 @@ Parameters:
 
 - **`name`** — string — required — the label to store it under.
 - **`artifact`** — string — required — a serialized Real A11y snapshot artifact (JSON).
+
+## Tree checkpoints
+
+Where the [checkpoint tools](#checkpoints) answer _"what accessibility problems changed?"_, these answer _"what did that interaction change?"_ — the precise structural delta of a click, a keypress, or a dialog opening.
+
+The two are deliberately different in lifetime. A snapshot checkpoint is pure data and **survives navigation**. A tree checkpoint holds the extracted tree **inside the page** — its node identities are bound to that page instance — so it is **discarded the moment the page navigates**. Capture, interact, diff, all within one page load.
+
+### `checkpoint_tree`
+
+_Captures the current tree in the page as a comparison point._
+
+Capture the current accessibility tree as the baseline for an interaction diff. Then interact with the page and call [`diff_since_checkpoint`](#diff_since_checkpoint). Re-capturing re-baselines.
+
+Parameters:
+
+- **`rootSelector`** — string — optional (default `"body"`) — CSS selector for the extraction root.
+
+### `diff_since_checkpoint`
+
+_Read-only · diffs the live tree against the checkpoint._
+
+Diff the current accessibility tree against the one captured by `checkpoint_tree`: which nodes were **added**, **removed**, or **changed**, plus a `focus:` line when focus moved. This is what makes an interaction's effect legible — e.g. that opening a dialog added a `dialog` node _and_ moved focus into it, or that a "Load more" button appended twelve links but left focus stranded.
+
+Parameters:
+
+- **`rootSelector`** — string — optional — CSS root for the re-extraction. **Defaults to the root the checkpoint was captured with**, so the diff stays like-for-like instead of silently widening to `body` and reporting the rest of the page as added.
+
+Errors if no checkpoint exists on the current page — including after a navigation, which discards it.
 
 ## Native cross-check
 

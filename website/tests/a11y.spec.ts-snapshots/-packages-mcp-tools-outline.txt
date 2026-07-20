@@ -27,6 +27,9 @@ h1 MCP tools reference
     h3 list_checkpoints
     h3 export_checkpoint
     h3 import_checkpoint
+  h2 Tree checkpoints
+    h3 checkpoint_tree
+    h3 diff_since_checkpoint
   h2 Native cross-check
     h3 get_native_tree
     h3 compare_trees

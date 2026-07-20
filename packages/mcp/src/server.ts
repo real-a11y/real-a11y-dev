@@ -334,6 +334,10 @@ export function buildServer(
   const checkpoints = new CheckpointStore();
   // Last-opened URL, recorded on a checkpoint's (cosmetic, redacted) url field.
   let currentUrl = "";
+  // Axis-A tree checkpoint: the captured tree lives in the PAGE (node ids are
+  // realm-bound). The server only remembers which root it was captured with, so
+  // the diff re-extracts like-for-like instead of silently widening to <body>.
+  let treeCheckpointRoot: string | undefined;
 
   // ── Session ────────────────────────────────────────────────────────────
   server.registerTool(
@@ -401,6 +405,9 @@ export function buildServer(
         viewport,
       });
       currentUrl = info.url;
+      // Navigation replaces the page bundle, which wipes the in-page tree
+      // checkpoint — drop the remembered root so server state stays honest.
+      treeCheckpointRoot = undefined;
       const emu = device
         ? ` [${device}]`
         : viewport
@@ -431,6 +438,7 @@ export function buildServer(
     async () => {
       await session.close();
       checkpoints.clear();
+      treeCheckpointRoot = undefined;
       return text("Browser session closed.");
     },
   );
@@ -814,6 +822,56 @@ export function buildServer(
         const msg =
           err instanceof SnapshotFormatError ? err.message : "invalid artifact";
         return errText(`Could not import "${name}": ${msg}`);
+      }
+    },
+  );
+
+  // ── Tree checkpoints (Axis-A interaction diff) ───────────────────────────
+  server.registerTool(
+    "checkpoint_tree",
+    {
+      title: "Checkpoint the tree (for an interaction diff)",
+      description:
+        "Capture the CURRENT accessibility tree in the page as a comparison point. Then interact — click, type, open a dialog — and call diff_since_checkpoint to see exactly which nodes were added, removed, or changed, and where focus moved. Unlike save_checkpoint (which stores findings and survives navigation), a tree checkpoint is bound to THIS page instance and is discarded when the page navigates.",
+      inputSchema: { rootSelector },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ rootSelector }) => {
+      const out = await session.call<string>("checkpointTree", rootSelector);
+      treeCheckpointRoot = rootSelector;
+      return text(out);
+    },
+  );
+
+  server.registerTool(
+    "diff_since_checkpoint",
+    {
+      title: "Diff the tree since the checkpoint",
+      annotations: READ_ONLY,
+      description:
+        "Diff the CURRENT accessibility tree against the one captured by checkpoint_tree: nodes added, removed, or changed, plus a focus move. This is the interaction diff — the precise answer to 'what did that click actually change for a screen reader?'. Re-extracts with the root the checkpoint used unless you override it.",
+      inputSchema: {
+        rootSelector: z
+          .string()
+          .optional()
+          .describe(
+            "CSS root for the re-extraction. Defaults to the root the checkpoint was captured with.",
+          ),
+      },
+    },
+    async ({ rootSelector }) => {
+      // Like-for-like: re-extract from the checkpoint's root unless overridden,
+      // so the diff can't silently widen to <body> and invent added nodes.
+      const root = rootSelector ?? treeCheckpointRoot ?? "body";
+      try {
+        return text(await session.call<string>("diffSinceCheckpoint", root));
+      } catch (err) {
+        return errText(err instanceof Error ? err.message : String(err));
       }
     },
   );
