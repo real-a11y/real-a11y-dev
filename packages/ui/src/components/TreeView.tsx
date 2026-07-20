@@ -120,24 +120,43 @@ export function TreeView({
   // every re-extraction produces a fresh result object, so the baseline is not
   // mutated out from under us and the highlight updates live as the user
   // interacts with the page.
-  const [baseline, setBaseline] = useState<ExtractionResult | null>(null);
+  //
+  // The captured view mode is stored ALONGSIDE the extraction. A baseline is
+  // only comparable against the same kind of extraction: the DOM and a11y
+  // trees are built by different extractors and share almost no node ids, so
+  // diffing one against the other reports nearly every row as added/removed —
+  // the "diff into noise" this feature exists to avoid. Carrying the mode with
+  // the data makes that a property of the baseline itself rather than
+  // something each call site has to remember to enforce; the mode can change
+  // through the toolbar OR through the `initialViewMode` prop (that is how
+  // `InspectorInstance.setViewMode()` and the React wrapper's `mode` prop
+  // arrive), and a guard living in one of those paths would miss the other.
+  const [baseline, setBaseline] = useState<{
+    mode: TreeViewMode;
+    result: ExtractionResult;
+  } | null>(null);
   const diff = useMemo(
     () =>
-      baseline && treeData ? buildTreeDiffView(baseline, treeData) : undefined,
-    [baseline, treeData],
+      baseline && treeData && baseline.mode === viewMode
+        ? buildTreeDiffView(baseline.result, treeData)
+        : undefined,
+    [baseline, treeData, viewMode],
   );
   const toggleDiff = useCallback(
-    () => setBaseline((current) => (current ? null : treeData)),
-    [treeData],
+    () =>
+      setBaseline((current) =>
+        current || !treeData ? null : { mode: viewMode, result: treeData },
+      ),
+    [treeData, viewMode],
   );
 
-  // Switching view drops the baseline: the DOM and a11y trees are different
-  // extractions with different nodes, so a baseline captured in one is not
-  // comparable against the other — it would diff into noise.
-  const handleViewModeChange = useCallback((mode: TreeViewMode) => {
-    setViewMode(mode);
+  // Drop a baseline that the view mode has moved away from, so the checkpoint
+  // button stops reading as pressed once its capture is no longer comparable.
+  // Keyed on `viewMode` itself — the single point every mode change passes
+  // through, whichever door it came in by.
+  useEffect(() => {
     setBaseline(null);
-  }, []);
+  }, [viewMode]);
   // Picker: panel-side mirror of the page-side createPicker state. The
   // picker itself owns the listeners + cursor; this state drives the
   // toolbar button's aria-pressed and the toggle.
@@ -285,7 +304,7 @@ export function TreeView({
     <TreePanel
       treeData={treeData}
       viewMode={viewMode}
-      onViewModeChange={handleViewModeChange}
+      onViewModeChange={setViewMode}
       theme={theme}
       diff={diff}
       enableDiff={enableDiff}

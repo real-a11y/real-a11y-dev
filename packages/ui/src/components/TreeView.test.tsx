@@ -149,4 +149,38 @@ describe("TreeView (smoke)", () => {
       root.remove();
     }
   });
+
+  it("drops the diff baseline when the mode changes via the prop", async () => {
+    // The host can switch views without touching the toolbar —
+    // `InspectorInstance.setViewMode()` and the React wrapper's `mode` prop
+    // both arrive as a changed `initialViewMode`. That path must honor the
+    // same rule: a baseline captured in one view is not comparable against
+    // the other, so it has to go.
+    const root = makeRoot();
+    try {
+      render(<TreeView root={root} initialViewMode="a11y" />, container);
+      await waitFor(container, '[aria-label="Checkpoint tree for diff"]');
+
+      (
+        container.querySelector(
+          '[aria-label="Checkpoint tree for diff"]',
+        ) as HTMLButtonElement
+      ).click();
+      await waitFor(
+        container,
+        '[aria-label="Checkpoint tree for diff"][aria-pressed="true"]',
+      );
+
+      render(<TreeView root={root} initialViewMode="dom" />, container);
+
+      await waitFor(
+        container,
+        '[aria-label="Checkpoint tree for diff"][aria-pressed="false"]',
+      );
+      expect(container.querySelector(".sn-diff-marker")).toBeNull();
+      expect(container.querySelector(".sn-removed")).toBeNull();
+    } finally {
+      root.remove();
+    }
+  });
 });
