@@ -74,7 +74,19 @@ export function useSemanticTree(
     // Resolve HERE, not during render: a ref's `.current` is populated after
     // the commit, so reading it during render would see `null` on first paint.
     const root = resolveTarget(target);
-    if (!root) return;
+    if (!root) {
+      // The root went away (element unmounted, or a ref was cleared). The
+      // store's tree is only ever written by `flush()` below, so returning
+      // here without clearing would keep serving the tree we built for content
+      // that is no longer on the page — `useActiveModal` would go on reporting
+      // a dialog that has been removed. Drop it and notify so consumers see
+      // `null`, matching the "null until the first extraction" contract.
+      if (store.tree !== null) {
+        store.tree = null;
+        for (const l of store.listeners) l();
+      }
+      return;
+    }
 
     const extract = () =>
       mode === "dom" ? extractDomTree(root) : extractA11yTree(root);

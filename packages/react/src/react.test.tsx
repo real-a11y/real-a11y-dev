@@ -231,6 +231,40 @@ describe("useSemanticTree", () => {
       Array.from(latest!.nodes.values()).map((n) => n.a11y.name),
     ).toContain("Second");
   });
+
+  it("clears the tree when the observed root is removed", async () => {
+    // The store's tree is only written by the observer's flush, so tearing the
+    // observer down must also drop it — otherwise consumers keep being served
+    // a tree describing content that is no longer on the page.
+    let latest: ReturnType<typeof useSemanticTree> = null;
+    function Subject() {
+      const [root, setRoot] = useState<HTMLDivElement | null>(null);
+      const [show, setShow] = useState(true);
+      latest = useSemanticTree(root);
+      return (
+        <>
+          <button onClick={() => setShow(false)}>hide</button>
+          {show && (
+            <div ref={setRoot}>
+              <button>Inside</button>
+            </div>
+          )}
+        </>
+      );
+    }
+
+    const { getByText } = render(<Subject />);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(latest).not.toBeNull();
+
+    await act(async () => {
+      getByText("hide").click();
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    expect(latest).toBeNull();
+  });
 });
 
 describe("useActiveModal", () => {
@@ -255,6 +289,39 @@ describe("useActiveModal", () => {
       await new Promise((r) => setTimeout(r, 400));
     });
     expect(latest?.a11y.name).toBe("Confirm");
+  });
+
+  it("stops reporting a dialog once its root is removed", async () => {
+    // App code that reacts to modal presence must not keep believing a dialog
+    // is open after the element holding it has been unmounted.
+    let latest: ReturnType<typeof useActiveModal> = null;
+    function Subject() {
+      const [root, setRoot] = useState<HTMLDivElement | null>(null);
+      const [show, setShow] = useState(true);
+      latest = useActiveModal(root);
+      return (
+        <>
+          <button onClick={() => setShow(false)}>hide</button>
+          {show && (
+            <div ref={setRoot}>
+              <div role="dialog" aria-label="Confirm" />
+            </div>
+          )}
+        </>
+      );
+    }
+
+    const { getByText } = render(<Subject />);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(latest?.a11y.name).toBe("Confirm");
+
+    await act(async () => {
+      getByText("hide").click();
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    expect(latest).toBeNull();
   });
 });
 
