@@ -16,6 +16,11 @@ const OBSERVED_ATTRIBUTES = [
   "aria-modal",
   "class",
   "id",
+  // `for` re-points a <label> at a different control, which changes the
+  // accessible name of BOTH the old and new target. LiveTreeExtractor treats
+  // it as a reference attribute and falls back to a full extraction — but only
+  // if the change is actually observed, so it has to be in this filter.
+  "for",
   "disabled",
   "checked",
   "href",

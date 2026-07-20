@@ -236,26 +236,44 @@ export class LiveTreeExtractor {
 
     const roots = this.collapseToOutermost(dirty);
 
-    // Verify every outermost root is already represented in the current map.
+    // Every outermost root must already be represented in the current map;
+    // capture where each one sits before anything is deleted.
+    const plans: {
+      root: Element;
+      id: string;
+      parentId: string | null;
+      depth: number;
+    }[] = [];
     for (const r of roots) {
       const id = getNodeId(r);
-      if (!this.domNodes.has(id)) {
-        return this.extract();
-      }
-    }
-
-    for (const r of roots) {
-      const existing = this.domNodes.get(getNodeId(r));
+      const existing = this.domNodes.get(id);
       if (!existing) {
         return this.extract();
       }
-      const { parentId, depth } = existing;
-      const rId = getNodeId(r);
-      this.deleteSubtree(rId);
-      extractDomTree(r, {
+      plans.push({
+        root: r,
+        id,
+        parentId: existing.parentId,
+        depth: existing.depth,
+      });
+    }
+
+    // Delete every dirty subtree BEFORE re-extracting any of them. Interleaving
+    // the two is unsafe when a node moved between two dirty containers in the
+    // same batch: re-extracting the destination re-adds the node under its new
+    // parent, and a later deleteSubtree on the source would then follow the
+    // source's stale childIds and delete the node that now lives under the
+    // destination — dropping it from the tree and leaving the destination
+    // pointing at a missing child.
+    for (const p of plans) {
+      this.deleteSubtree(p.id);
+    }
+
+    for (const p of plans) {
+      extractDomTree(p.root, {
         nodes: this.domNodes,
-        parentId,
-        baseDepth: depth,
+        parentId: p.parentId,
+        baseDepth: p.depth,
         descriptionTargetIds: this.descriptionTargetIds,
         includeFocused: false,
       });
@@ -263,13 +281,13 @@ export class LiveTreeExtractor {
       // aria-describedby text provider), the parent still references its now
       // deleted id. Drop that dangling child so the DOM map stays consistent
       // with a clean extraction.
-      if (!this.domNodes.has(rId) && parentId) {
-        const parent = this.domNodes.get(parentId);
+      if (!this.domNodes.has(p.id) && p.parentId) {
+        const parent = this.domNodes.get(p.parentId);
         if (parent) {
-          parent.childIds = parent.childIds.filter((cid) => cid !== rId);
+          parent.childIds = parent.childIds.filter((cid) => cid !== p.id);
         }
       }
-      this.updateAncestorDescendantText(r);
+      this.updateAncestorDescendantText(p.root);
     }
 
     this.focusedId = this.resolveFocused();

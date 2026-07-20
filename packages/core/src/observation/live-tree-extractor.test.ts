@@ -594,6 +594,45 @@ describe("LiveTreeExtractor", () => {
     observer.stop();
   });
 
+  it("keeps a reparented node when its destination was dirtied first", () => {
+    document.body.innerHTML = `
+      <main id="app">
+        <div id="a"><span id="y">Moved</span></div>
+        <div id="b"></div>
+      </main>
+    `;
+    const root = document.getElementById("app")!;
+    const live = new LiveTreeExtractor(root, { mode: "dom" });
+
+    const a = document.getElementById("a")!;
+    const b = document.getElementById("b")!;
+    const y = document.getElementById("y")!;
+
+    // One batch: an attribute change on the DESTINATION lands before the move,
+    // so `b` enters the dirty set ahead of the move's source `a`. Re-extracting
+    // `b` re-adds `y`; a later deleteSubtree(`a`) must not then follow `a`'s
+    // stale childIds and delete the node that now lives under `b`.
+    b.setAttribute("class", "highlight");
+    b.appendChild(y);
+
+    const result = live.refresh({
+      mutations: [
+        { type: "attributes", target: b, attributeName: "class" },
+        { type: "childList", target: a, addedNodes: [], removedNodes: [y] },
+        { type: "childList", target: b, addedNodes: [y], removedNodes: [] },
+      ] as unknown as MutationRecord[],
+    });
+    const expected = extractDomTree(root);
+
+    expect(result.nodes).toEqual(expected.nodes);
+    // No parent may reference a node that is not in the map.
+    for (const node of result.nodes.values()) {
+      for (const childId of node.childIds) {
+        expect(result.nodes.has(childId)).toBe(true);
+      }
+    }
+  });
+
   describe("extraction scope", () => {
     /**
      * A synthetic attribute change. The scope logic under test lives in
