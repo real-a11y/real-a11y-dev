@@ -1318,6 +1318,32 @@ describe("media elements (video/audio)", () => {
     expect(chaptersOnly.a11y.properties["captions"]).toBe("false");
   });
 
+  it("normalizes track kind the way browsers do (missing → subtitles, case-insensitive, invalid → metadata)", () => {
+    // Verified against Chromium's HTMLTrackElement.kind normalization.
+    // A kind-less track defaults to the subtitles state — it IS a text
+    // alternative and must count.
+    const kindless = mediaNode(
+      `<video src="x.mp4"><track src="en.vtt" srclang="en" label="English"></video>`,
+      "video",
+    );
+    expect(kindless.a11y.properties["captions"]).toBe("true");
+
+    // The kind attribute is ASCII case-insensitive: "Captions" is valid.
+    const mixedCase = mediaNode(
+      `<video src="x.mp4"><track kind="Captions" src="c.vtt"></video>`,
+      "video",
+    );
+    expect(mixedCase.a11y.properties["captions"]).toBe("true");
+
+    // The INVALID value default is "metadata" (unlike the missing value
+    // default) — a bogus kind is not a caption alternative.
+    const bogusKind = mediaNode(
+      `<video src="x.mp4"><track kind="bogus" src="b.vtt"></video>`,
+      "video",
+    );
+    expect(bogusKind.a11y.properties["captions"]).toBe("false");
+  });
+
   it("non-media nodes do not carry a captions property", () => {
     const node = mediaNode(`<div>plain</div>`, "div");
     expect("captions" in node.a11y.properties).toBe(false);
