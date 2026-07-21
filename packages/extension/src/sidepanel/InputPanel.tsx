@@ -167,11 +167,17 @@ function SelectPicker({
         class="sn-select-options"
         role="listbox"
         tabIndex={0}
+        // Container-focus composite — announce the active option (see the tree
+        // and FilteredList for the same pattern).
+        aria-activedescendant={
+          options.length > 0 ? `sn-select-opt-${selectedIndex}` : undefined
+        }
         onKeyDown={handleKeyDown}
       >
         {options.map((opt, i) => (
           <div
             key={opt.value}
+            id={`sn-select-opt-${i}`}
             class={`sn-select-option ${i === selectedIndex ? "sn-select-option--selected" : ""}`}
             role="option"
             aria-selected={i === selectedIndex}

@@ -236,6 +236,10 @@ export function TreeNode({
 
   return (
     <div
+      // id is the aria-activedescendant target set on the role="tree" container.
+      // Node ids are selector-/id-safe (`sn-<n>` / `f<n>-sn-<n>`), so
+      // `snrow-<id>` is a valid, unique element id.
+      id={`snrow-${node.id}`}
       class={classNames}
       role="treeitem"
       aria-expanded={hasChildren ? node.ui.expanded : undefined}

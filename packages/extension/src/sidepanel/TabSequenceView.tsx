@@ -117,6 +117,11 @@ export function TabSequenceView({
         role="listbox"
         aria-label="Tab sequence"
         tabIndex={0}
+        // Container-focus composite — announce the active option (see the tree
+        // and FilteredList for the same pattern).
+        aria-activedescendant={
+          items.length > 0 ? `sn-tabseq-opt-${selectedIndex}` : undefined
+        }
         onKeyDown={handleKeyDown}
       >
         {items.map((node, index) => {
@@ -132,6 +137,7 @@ export function TabSequenceView({
           return (
             <div
               key={node.id}
+              id={`sn-tabseq-opt-${index}`}
               class={`sn-filtered-item sn-tab-item${isSelected ? " sn-filtered-item--selected" : ""}`}
               role="option"
               aria-selected={isSelected}

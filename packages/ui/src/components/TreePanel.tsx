@@ -249,6 +249,15 @@ export function TreePanel({
     scrollToIndex,
   } = useVirtualTree(visibleNodeIds.length);
 
+  // aria-activedescendant may only point at a DOM-present row. Offscreen
+  // virtualized rows are unmounted, so require the selection to sit in the
+  // current window (keyboard selection scrolls it in via scrollToIndex).
+  const activeDescendantId = (() => {
+    if (selectedId === null) return undefined;
+    const i = visibleNodeIds.indexOf(selectedId);
+    return i >= startIndex && i < endIndex ? `snrow-${selectedId}` : undefined;
+  })();
+
   // Scroll selected node into view whenever the selection changes. Keyed on
   // `selectedId` only — depending on `visibleNodeIds` would re-fire on every
   // expand/collapse and yank the viewport back to an off-screen selection. The
@@ -484,6 +493,12 @@ export function TreePanel({
               paddingTop: offset,
               boxSizing: "border-box",
             }}
+            // Focus stays on this container (rows are non-focusable divs), so
+            // the active row must be announced via aria-activedescendant — else
+            // arrowing only flips aria-selected on rows the screen reader isn't
+            // looking at. Point it at the selected row only while that row is
+            // in the virtualized window (offscreen rows are not in the DOM).
+            aria-activedescendant={activeDescendantId}
             onKeyDown={(e) => {
               markKeyboard();
               handleKeyDown(e);

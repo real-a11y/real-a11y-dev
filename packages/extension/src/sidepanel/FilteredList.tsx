@@ -137,6 +137,12 @@ export function FilteredList({
         role="listbox"
         aria-label={`${ROLE_FILTER_GROUPS[roleFilter] ? roleFilter : ""} elements`}
         tabIndex={0}
+        // Container-focus composite: announce the active option to screen
+        // readers, which otherwise hear nothing as aria-selected flips on rows
+        // that never hold DOM focus.
+        aria-activedescendant={
+          matches.length > 0 ? `sn-filtered-opt-${selectedIndex}` : undefined
+        }
         onKeyDown={handleKeyDown}
       >
         {matches.map((node, index) => {
@@ -159,6 +165,7 @@ export function FilteredList({
           return (
             <div
               key={node.id}
+              id={`sn-filtered-opt-${index}`}
               class={`sn-filtered-item ${isSelected ? "sn-filtered-item--selected" : ""}`}
               role="option"
               aria-selected={isSelected}

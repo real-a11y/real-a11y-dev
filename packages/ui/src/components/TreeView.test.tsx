@@ -117,6 +117,34 @@ describe("TreeView (smoke)", () => {
     }
   });
 
+  it("links the role=tree container to the selected row via aria-activedescendant", async () => {
+    // The container holds focus (rows are non-focusable divs), so a screen
+    // reader only learns which row is active from aria-activedescendant. This
+    // must reference a rendered row's id, not just flip aria-selected.
+    const root = makeRoot();
+    try {
+      render(<TreeView root={root} />, container);
+      const tree = (await waitFor(container, '[role="tree"]')) as HTMLElement;
+
+      // No selection yet → nothing to point at.
+      expect(tree.getAttribute("aria-activedescendant")).toBeNull();
+
+      // Select a row (click sets selectedId).
+      const row = tree.querySelector<HTMLElement>('[role="treeitem"]')!;
+      row.click();
+      await waitFor(container, '[role="tree"][aria-activedescendant]');
+
+      const active = tree.getAttribute("aria-activedescendant")!;
+      expect(active).toBe(row.id); // points at the row we selected
+      expect(active).toMatch(/^snrow-/);
+      // …and that id resolves to exactly one element inside the container
+      // (attribute selector avoids CSS.escape, absent in jsdom).
+      expect(container.querySelectorAll(`[id="${active}"]`)).toHaveLength(1);
+    } finally {
+      root.remove();
+    }
+  });
+
   it("drops the diff baseline when the view mode changes", async () => {
     const root = makeRoot();
     try {
