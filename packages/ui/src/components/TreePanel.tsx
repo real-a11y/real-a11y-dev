@@ -254,7 +254,8 @@ export function TreePanel({
   // expand/collapse and yank the viewport back to an off-screen selection. The
   // list is read from a ref so the index resolves against the post-expansion
   // list without adding it as a dependency. (Re-selecting the same off-screen
-  // node from the picker is handled explicitly in the picker effect below.)
+  // node is handled explicitly where it can happen: the picker effect below
+  // and `handleJumpToNode`.)
   useEffect(() => {
     if (!selectedId) return;
     const index = visibleNodeIdsRef.current.indexOf(selectedId);
@@ -366,8 +367,16 @@ export function TreePanel({
       setSelectedId(targetId);
       setFlashingId(targetId);
       setTimeout(() => setFlashingId(null), 700);
+      // Scroll the target into view even when it is already the selection (a
+      // chip can point back at the current node); the selectedId-keyed effect
+      // won't re-run in that case. The rAF lets any ancestor-expansion
+      // re-render commit (refreshing `visibleNodeIdsRef`) first.
+      requestAnimationFrame(() => {
+        const index = visibleNodeIdsRef.current.indexOf(targetId);
+        if (index !== -1) scrollToIndex(index, "nearest");
+      });
     },
-    [treeData, forceRender],
+    [treeData, forceRender, scrollToIndex],
   );
 
   const { isMouseModality, markKeyboard } = useInputModality();
@@ -416,6 +425,12 @@ export function TreePanel({
         ? "sn-theme-light"
         : "sn-theme-auto";
 
+  // Only the tree branch below renders virtualized rows. Attaching the
+  // measurement ref / scroll handler while the tab or filtered views own the
+  // container would just re-render scroll state nobody reads (the hook
+  // re-measures when the ref re-attaches on the way back).
+  const isTreeBranch = viewMode !== "tab" && !roleFilter;
+
   return (
     <div class={`sn-root ${themeClass}`}>
       <TreeToolbar
@@ -435,7 +450,11 @@ export function TreePanel({
         diffActive={diffActive}
         onToggleDiff={onToggleDiff}
       />
-      <div ref={containerRef} class="sn-tree-container" onScroll={onScroll}>
+      <div
+        ref={isTreeBranch ? containerRef : undefined}
+        class="sn-tree-container"
+        onScroll={isTreeBranch ? onScroll : undefined}
+      >
         {viewMode === "tab" ? (
           <TabSequenceView
             nodes={treeData.nodes}
