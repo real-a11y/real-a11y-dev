@@ -407,6 +407,11 @@ export function App() {
   // set (driven by mutated `ui.expanded`/`ui.matchesFilter`) can change.
   // Without this, effects keyed on `visibleNodeIds` would re-run every render.
   //
+  // INVARIANT: node visibility is mutated in place, so the memo only stays
+  // fresh if every site that touches `ui.expanded`/`ui.matchesFilter` calls
+  // `forceRender()` afterwards — a mutation without the bump silently renders
+  // a stale window.
+  //
   // `visiblePositions` records each row's `aria-posinset`/`aria-setsize` within
   // its visible sibling group: virtualization keeps only the windowed rows in
   // the DOM, so screen readers need those explicit set markers to perceive the
