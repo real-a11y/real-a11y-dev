@@ -256,14 +256,13 @@
   cursor: default;
   user-select: none;
   white-space: nowrap;
+  /* Rows must be exactly --sn-line-height (24px) so useVirtualTree's fixed-row
+     windowing stays accurate. `.sn-indent` already forces the content box to
+     24px, so a real 1px border would push rows to ~26px and drift the
+     virtualized offsets on large trees — the selected state instead uses an
+     inset box-shadow (below), which paints inside the box without adding
+     height. */
   min-height: var(--sn-line-height);
-  /* Pin the row to exactly --sn-line-height even when a consumer lacks a
-     global border-box reset (inspector Shadow DOM, storybook-addon, react
-     wrapper). The 1px border must collapse into the min-height, otherwise
-     content-box rows render ~2px taller than useVirtualTree assumes and the
-     virtualized offsets drift on large trees. */
-  box-sizing: border-box;
-  border: 1px solid transparent;
   position: relative;
 }
 
@@ -273,7 +272,7 @@
 
 .sn-node--selected {
   background: var(--sn-bg-selected);
-  border-color: var(--sn-accent);
+  box-shadow: inset 0 0 0 1px var(--sn-accent);
 }
 
 .sn-node--hidden {
