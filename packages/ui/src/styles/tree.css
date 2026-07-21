@@ -301,6 +301,23 @@
   box-shadow: inset 3px 0 0 var(--sn-diff-changed-edge);
 }
 
+/* A row can be selected AND diff-marked. Both indicators paint via inset
+   box-shadow (a real border would break the exact-24px row height), so the
+   later diff rule would clobber the selection ring — compose the two shadows
+   instead. The diff background still wins, as it did when selection used a
+   border. */
+.sn-node--selected.sn-node--added {
+  box-shadow:
+    inset 0 0 0 1px var(--sn-accent),
+    inset 3px 0 0 var(--sn-diff-added-edge);
+}
+
+.sn-node--selected.sn-node--changed {
+  box-shadow:
+    inset 0 0 0 1px var(--sn-accent),
+    inset 3px 0 0 var(--sn-diff-changed-edge);
+}
+
 .sn-diff-marker {
   flex: none;
   width: 1ch;
