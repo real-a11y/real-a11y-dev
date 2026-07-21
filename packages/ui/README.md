@@ -79,7 +79,12 @@ const { containerRef, startIndex, endIndex, totalHeight, offset, onScroll } =
 
 return (
   <div ref={containerRef} class="sn-tree-container" onScroll={onScroll}>
-    <div style={{ minHeight: totalHeight, paddingTop: offset }}>
+    {/* boxSizing: border-box keeps the spacer exactly `totalHeight` tall —
+        paddingTop is absorbed inside it. Without it the element grows to
+        offset + totalHeight as you scroll, leaving trailing blank space. */}
+    <div
+      style={{ minHeight: totalHeight, paddingTop: offset, boxSizing: "border-box" }}
+    >
       {visibleNodeIds.slice(startIndex, endIndex).map((id) => (
         <Row key={id} id={id} />
       ))}
