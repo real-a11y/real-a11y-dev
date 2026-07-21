@@ -417,6 +417,12 @@ export function App() {
     // renderCount changes on every forceRender() call — intentional invalidation.
   }, [nodes, effectiveRootId, renderCount]);
 
+  // Latest visible list, read by the selection-scroll effect below so it can
+  // resolve the selected row's index without listing `visibleNodeIds` as a
+  // dependency (which would re-fire the scroll on every expand/collapse).
+  const visibleNodeIdsRef = useRef(visibleNodeIds);
+  visibleNodeIdsRef.current = visibleNodeIds;
+
   const {
     containerRef,
     startIndex,
@@ -839,13 +845,18 @@ export function App() {
     onActivate: handleActivate,
   });
 
-  // Scroll the selected tree item into view whenever selection changes
-  // (covers both keyboard navigation and focus-sync from page)
+  // Scroll the selected tree item into view whenever the selection changes
+  // (covers keyboard navigation, focus-sync from the page, jump/pick/go-to-tree
+  // flows that call setSelectedId). Keyed on `selectedId` only — depending on
+  // `visibleNodeIds` would re-fire on every expand/collapse and yank the
+  // viewport back to an off-screen selection. The list is read from a ref so
+  // the index resolves against the post-expansion list without adding it as a
+  // dependency.
   useEffect(() => {
-    if (!selectedId || visibleNodeIds.length === 0) return;
-    const index = visibleNodeIds.indexOf(selectedId);
+    if (!selectedId) return;
+    const index = visibleNodeIdsRef.current.indexOf(selectedId);
     if (index !== -1) scrollToIndex(index, "nearest");
-  }, [selectedId, visibleNodeIds, scrollToIndex]);
+  }, [selectedId, scrollToIndex]);
 
   const prefersDark =
     typeof window !== "undefined" &&

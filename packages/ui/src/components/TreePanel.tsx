@@ -249,12 +249,17 @@ export function TreePanel({
     scrollToIndex,
   } = useVirtualTree(visibleNodeIds.length);
 
-  // Scroll selected node into view
+  // Scroll selected node into view whenever the selection changes. Keyed on
+  // `selectedId` only — depending on `visibleNodeIds` would re-fire on every
+  // expand/collapse and yank the viewport back to an off-screen selection. The
+  // list is read from a ref so the index resolves against the post-expansion
+  // list without adding it as a dependency. (Re-selecting the same off-screen
+  // node from the picker is handled explicitly in the picker effect below.)
   useEffect(() => {
-    if (!selectedId || visibleNodeIds.length === 0) return;
-    const index = visibleNodeIds.indexOf(selectedId);
+    if (!selectedId) return;
+    const index = visibleNodeIdsRef.current.indexOf(selectedId);
     if (index !== -1) scrollToIndex(index, "nearest");
-  }, [selectedId, visibleNodeIds, scrollToIndex]);
+  }, [selectedId, scrollToIndex]);
 
   // When the picker reports a picked element, surface it as a tree
   // selection: expand ancestors so the row is visible, set selectedId,
@@ -285,12 +290,17 @@ export function TreePanel({
     // so the selection effect above never re-runs; with virtualization the row
     // may also be unmounted, so we scroll by index explicitly. The rAF lets any
     // ancestor-expansion re-render commit (refreshing `visibleNodeIdsRef`) first.
-    const raf = requestAnimationFrame(() => {
+    //
+    // Deliberately NOT cancelled on cleanup: acknowledging the pick clears
+    // `pickedNodeId`, which re-runs this effect, and a cleanup-based
+    // cancelAnimationFrame would then race the scroll (and often cancel it). The
+    // one-shot frame is harmless after unmount because scrollToIndex no-ops when
+    // the container ref is null.
+    requestAnimationFrame(() => {
       const index = visibleNodeIdsRef.current.indexOf(pickedNodeId);
       if (index !== -1) scrollToIndex(index, "nearest");
     });
     onPickedNodeHandled?.();
-    return () => cancelAnimationFrame(raf);
   }, [pickedNodeId, treeData, forceRender, onPickedNodeHandled, scrollToIndex]);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
