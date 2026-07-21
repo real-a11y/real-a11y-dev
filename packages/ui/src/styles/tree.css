@@ -257,6 +257,12 @@
   user-select: none;
   white-space: nowrap;
   min-height: var(--sn-line-height);
+  /* Pin the row to exactly --sn-line-height even when a consumer lacks a
+     global border-box reset (inspector Shadow DOM, storybook-addon, react
+     wrapper). The 1px border must collapse into the min-height, otherwise
+     content-box rows render ~2px taller than useVirtualTree assumes and the
+     virtualized offsets drift on large trees. */
+  box-sizing: border-box;
   border: 1px solid transparent;
   position: relative;
 }

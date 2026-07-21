@@ -45,21 +45,41 @@ import { TreeToolbar } from "./TreeToolbar.js";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
+/** `aria-posinset`/`aria-setsize` for a row within its visible sibling group. */
+interface VisiblePosition {
+  posinset: number;
+  setsize: number;
+}
+
+/**
+ * Flatten the tree to the rows that should render, and record each row's
+ * position within its visible sibling group. Because the list is virtualized
+ * (offscreen rows leave the DOM), screen readers rely on `aria-posinset`/
+ * `aria-setsize` to perceive the full tree size and position — the plain
+ * sibling inference of a fully-rendered `role="tree"` no longer holds.
+ */
 function getVisibleNodeIds(
   nodes: Map<string, SemanticNode>,
   rootId: string,
-): string[] {
-  const result: string[] = [];
-  function walk(id: string) {
+): { ids: string[]; positions: Map<string, VisiblePosition> } {
+  const ids: string[] = [];
+  const positions = new Map<string, VisiblePosition>();
+  function walk(id: string, posinset: number, setsize: number) {
     const node = nodes.get(id);
     if (!node || !node.ui.matchesFilter) return;
-    result.push(id);
+    ids.push(id);
+    positions.set(id, { posinset, setsize });
     if (node.ui.expanded) {
-      for (const childId of node.childIds) walk(childId);
+      const visibleChildren = node.childIds.filter(
+        (childId) => nodes.get(childId)?.ui.matchesFilter,
+      );
+      visibleChildren.forEach((childId, i) => {
+        walk(childId, i + 1, visibleChildren.length);
+      });
     }
   }
-  walk(rootId);
-  return result;
+  walk(rootId, 1, 1);
+  return { ids, positions };
 }
 
 /**
@@ -207,7 +227,7 @@ export function TreePanel({
   }, [query, treeData, viewMode, roleFilter, updateMatchCount, forceRender]);
 
   // Recompute visible IDs after node mutations (expand/collapse) or data change
-  const visibleNodeIds = useMemo(
+  const { ids: visibleNodeIds, positions: visiblePositions } = useMemo(
     () => getVisibleNodeIds(treeData.nodes, treeData.rootId),
     // renderCount changes on every forceRender() call — intentional invalidation.
     [treeData, renderCount],
@@ -457,6 +477,7 @@ export function TreePanel({
                       })
                       .filter(Boolean) as ControlsLink[])
                   : undefined;
+              const position = visiblePositions.get(id);
               return (
                 <TreeNode
                   key={id}
@@ -466,6 +487,8 @@ export function TreePanel({
                   isFlashing={id === flashingId}
                   diffStatus={diff?.status.get(id)}
                   diffColumn={diff !== undefined}
+                  posinset={position?.posinset}
+                  setsize={position?.setsize}
                   onSelect={handleSelect}
                   onToggle={handleToggle}
                   onActivate={handleActivate}

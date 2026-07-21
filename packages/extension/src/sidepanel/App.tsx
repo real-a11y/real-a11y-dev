@@ -390,20 +390,30 @@ export function App() {
   // filter application, incoming messages — which is exactly when the visible
   // set (driven by mutated `ui.expanded`/`ui.matchesFilter`) can change.
   // Without this, effects keyed on `visibleNodeIds` would re-run every render.
-  const visibleNodeIds = useMemo(() => {
+  //
+  // `visiblePositions` records each row's `aria-posinset`/`aria-setsize` within
+  // its visible sibling group: virtualization keeps only the windowed rows in
+  // the DOM, so screen readers need those explicit set markers to perceive the
+  // full tree size and position (WAI-ARIA TreeView).
+  const { visibleNodeIds, visiblePositions } = useMemo(() => {
     const ids: string[] = [];
-    function walkVisible(nodeId: string) {
+    const positions = new Map<string, { posinset: number; setsize: number }>();
+    function walkVisible(nodeId: string, posinset: number, setsize: number) {
       const node = nodes.get(nodeId);
       if (!node || !node.ui.matchesFilter) return;
       ids.push(nodeId);
+      positions.set(nodeId, { posinset, setsize });
       if (node.ui.expanded) {
-        for (const childId of node.childIds) {
-          walkVisible(childId);
-        }
+        const visibleChildren = node.childIds.filter(
+          (childId) => nodes.get(childId)?.ui.matchesFilter,
+        );
+        visibleChildren.forEach((childId, i) => {
+          walkVisible(childId, i + 1, visibleChildren.length);
+        });
       }
     }
-    if (effectiveRootId) walkVisible(effectiveRootId);
-    return ids;
+    if (effectiveRootId) walkVisible(effectiveRootId, 1, 1);
+    return { visibleNodeIds: ids, visiblePositions: positions };
     // renderCount changes on every forceRender() call — intentional invalidation.
   }, [nodes, effectiveRootId, renderCount]);
 
@@ -1271,6 +1281,7 @@ export function App() {
                   ? null
                   : getPrimaryAction(actions);
                 const isSelected = id === selectedId;
+                const position = visiblePositions.get(id);
                 const displayDepth = scopedRootId
                   ? node.depth - scopedDepthOffset
                   : node.depth;
@@ -1291,6 +1302,8 @@ export function App() {
                     aria-expanded={hasChildren ? node.ui.expanded : undefined}
                     aria-selected={isSelected}
                     aria-level={displayDepth + 1}
+                    aria-posinset={position?.posinset}
+                    aria-setsize={position?.setsize}
                     data-node-id={id}
                     onClick={(e) => {
                       e.stopPropagation();
