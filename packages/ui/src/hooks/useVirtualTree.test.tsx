@@ -214,6 +214,55 @@ describe("useVirtualTree", () => {
     ).toBe(895);
   });
 
+  it("accounts for the container's top padding when scrolling a row into view", async () => {
+    // Regression: `.sn-tree-container` has `padding: 4px 0`, so row i really
+    // occupies [padTop + i*rh, padTop + (i+1)*rh] in scroll coordinates. A
+    // downward "nearest" reveal computed from i*rh alone lands short by the
+    // padding and clips the row's bottom edge (the pre-virtualization
+    // scrollIntoView measured the real element, so it never had this bug).
+    const PAD_TOP = 4;
+    let scrollToIndex: UseVirtualTreeResult["scrollToIndex"] | undefined;
+    function PaddedHarness() {
+      const vt = useVirtualTree(ITEM_COUNT, { rowHeight: ROW_HEIGHT });
+      scrollToIndex = vt.scrollToIndex;
+      return (
+        <div
+          ref={vt.containerRef}
+          class="sn-tree-container"
+          style={{ padding: `${PAD_TOP}px 0` }}
+          onScroll={vt.onScroll}
+        >
+          <div style={{ minHeight: vt.totalHeight, paddingTop: vt.offset }}>
+            {Array.from({ length: vt.endIndex - vt.startIndex }, (_, i) => (
+              <div class="sn-row" data-index={vt.startIndex + i}>
+                row {vt.startIndex + i}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    render(<PaddedHarness />, container);
+    await waitFor(() => rowCount() > 10);
+
+    const scroller = container.querySelector(
+      ".sn-tree-container",
+    ) as HTMLDivElement;
+    Object.defineProperty(scroller, "scrollTop", {
+      configurable: true,
+      writable: true,
+      value: 0,
+    });
+
+    // Row 50 sits below the viewport; "nearest" must align its bottom with
+    // the viewport bottom: padTop + (50 + 1) * 24 - 480.
+    scrollToIndex!(50, "nearest");
+    expect(scroller.scrollTop).toBe(
+      PAD_TOP + 51 * ROW_HEIGHT - CONTAINER_HEIGHT,
+    );
+  });
+
   it("re-measures when the container unmounts and remounts", async () => {
     render(<Harness connected={true} />, container);
     await waitFor(() => rowCount() > 10);

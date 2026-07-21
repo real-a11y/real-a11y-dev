@@ -146,7 +146,12 @@ export function useVirtualTree(
       if (!container || count === 0) return;
 
       const clamped = Math.max(0, Math.min(index, count - 1));
-      const rowTop = clamped * rh;
+      // The container's own top padding (`.sn-tree-container` has
+      // `padding: 4px 0`) shifts every row down within the scroll area; fold
+      // it into the row position or downward reveals land short by exactly
+      // that padding, clipping the target row's bottom edge.
+      const padTop = parseFloat(getComputedStyle(container).paddingTop) || 0;
+      const rowTop = padTop + clamped * rh;
 
       let target: number | null = null;
       switch (block) {
