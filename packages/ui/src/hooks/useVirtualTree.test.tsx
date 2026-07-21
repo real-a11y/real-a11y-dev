@@ -188,4 +188,22 @@ describe("useVirtualTree", () => {
     await waitFor(() => refs.length >= 2);
     expect(refs[0]).toBe(refs[refs.length - 1]);
   });
+
+  it("keeps scrollToIndex identity stable when itemCount changes", async () => {
+    // Consumers key their "scroll selection into view" effect on scrollToIndex
+    // so it fires only on selection change. If scrollToIndex changed identity
+    // whenever the visible-row count changed (expand/collapse), that effect
+    // would re-run and yank the viewport back to the selection.
+    const fns: UseVirtualTreeResult["scrollToIndex"][] = [];
+    function Capture({ count }: { count: number }) {
+      const { scrollToIndex } = useVirtualTree(count);
+      fns.push(scrollToIndex);
+      return null;
+    }
+    render(<Capture count={1000} />, container);
+    render(<Capture count={3} />, container);
+    render(<Capture count={5000} />, container);
+    expect(fns.length).toBeGreaterThanOrEqual(3);
+    expect(fns[0]).toBe(fns[fns.length - 1]);
+  });
 });

@@ -59,6 +59,16 @@ export function useVirtualTree(
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(0);
 
+  // Latest itemCount/rowHeight, read inside scrollToIndex so it can keep a
+  // stable identity (deps []). Otherwise every expand/collapse (which changes
+  // itemCount) would give scrollToIndex a new identity, re-firing consumers'
+  // selectedId-keyed scroll effects and yanking the viewport back to the
+  // selection.
+  const itemCountRef = useRef(itemCount);
+  itemCountRef.current = itemCount;
+  const rowHeightRef = useRef(rowHeight);
+  rowHeightRef.current = rowHeight;
+
   const updateViewport = useCallback(() => {
     const container = nodeRef.current;
     if (!container) return;
@@ -131,10 +141,12 @@ export function useVirtualTree(
       block: "start" | "center" | "end" | "nearest" = "nearest",
     ) => {
       const container = nodeRef.current;
-      if (!container || itemCount === 0) return;
+      const count = itemCountRef.current;
+      const rh = rowHeightRef.current;
+      if (!container || count === 0) return;
 
-      const clamped = Math.max(0, Math.min(index, itemCount - 1));
-      const rowTop = clamped * rowHeight;
+      const clamped = Math.max(0, Math.min(index, count - 1));
+      const rowTop = clamped * rh;
 
       switch (block) {
         case "start": {
@@ -144,14 +156,14 @@ export function useVirtualTree(
         case "end": {
           container.scrollTop = Math.max(
             0,
-            rowTop - container.clientHeight + rowHeight,
+            rowTop - container.clientHeight + rh,
           );
           return;
         }
         case "center": {
           container.scrollTop = Math.max(
             0,
-            rowTop - container.clientHeight / 2 + rowHeight / 2,
+            rowTop - container.clientHeight / 2 + rh / 2,
           );
           return;
         }
@@ -160,17 +172,17 @@ export function useVirtualTree(
           const bottom = top + container.clientHeight;
           if (rowTop < top) {
             container.scrollTop = rowTop;
-          } else if (rowTop + rowHeight > bottom) {
+          } else if (rowTop + rh > bottom) {
             container.scrollTop = Math.max(
               0,
-              rowTop - container.clientHeight + rowHeight,
+              rowTop - container.clientHeight + rh,
             );
           }
           return;
         }
       }
     },
-    [itemCount, rowHeight],
+    [],
   );
 
   return {
