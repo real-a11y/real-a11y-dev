@@ -105,12 +105,22 @@ export function useVirtualTree(
   }, []);
 
   const totalHeight = itemCount * rowHeight;
-  const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight) - overscan);
+  // Clamp scrollTop to the valid range: when the list shrinks (collapse-all,
+  // expand/collapse, or a search filter) while the user is scrolled down, the
+  // saved scrollTop still holds the old, larger value for a frame. Without the
+  // clamp, startIndex could exceed itemCount and the slice would render empty
+  // until the browser corrects scrollTop and fires a scroll event.
+  const maxScrollTop = Math.max(0, totalHeight - viewportHeight);
+  const clampedScrollTop = Math.min(scrollTop, maxScrollTop);
+  const startIndex = Math.max(
+    0,
+    Math.floor(clampedScrollTop / rowHeight) - overscan,
+  );
   const endIndex =
     viewportHeight > 0
       ? Math.min(
           itemCount,
-          Math.ceil((scrollTop + viewportHeight) / rowHeight) + overscan,
+          Math.ceil((clampedScrollTop + viewportHeight) / rowHeight) + overscan,
         )
       : Math.min(itemCount, startIndex + overscan * 2);
   const offset = startIndex * rowHeight;

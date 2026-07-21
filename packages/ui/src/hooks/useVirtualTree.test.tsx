@@ -109,6 +109,58 @@ describe("useVirtualTree", () => {
     expect(rowCount()).toBe(25);
   });
 
+  it("does not render an empty window when the list shrinks while scrolled down", async () => {
+    // Regression: after collapse-all / filtering while scrolled down, the saved
+    // scrollTop still holds the old large value for a frame. Without clamping,
+    // startIndex would exceed the shrunken itemCount and the slice would render
+    // empty until the browser corrects the scroll position.
+    function ShrinkHarness({ count }: { count: number }) {
+      const {
+        containerRef,
+        startIndex,
+        endIndex,
+        totalHeight,
+        offset,
+        onScroll,
+      } = useVirtualTree(count, { rowHeight: ROW_HEIGHT });
+      return (
+        <div ref={containerRef} class="sn-tree-container" onScroll={onScroll}>
+          <div style={{ minHeight: totalHeight, paddingTop: offset }}>
+            {Array.from({ length: endIndex - startIndex }, (_, i) => (
+              <div class="sn-row" data-index={startIndex + i}>
+                row {startIndex + i}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    render(<ShrinkHarness count={1000} />, container);
+    await waitFor(() => rowCount() > 10);
+
+    // Scroll far down the large list.
+    const scroller = container.querySelector(
+      ".sn-tree-container",
+    ) as HTMLDivElement;
+    Object.defineProperty(scroller, "scrollTop", {
+      configurable: true,
+      writable: true,
+      value: 900 * ROW_HEIGHT,
+    });
+    scroller.dispatchEvent(new Event("scroll"));
+    await waitFor(
+      () =>
+        Number(container.querySelector(".sn-row")?.getAttribute("data-index")) >
+        100,
+    );
+
+    // Shrink the list drastically while scrollTop still holds the old value.
+    render(<ShrinkHarness count={5} />, container);
+    await waitFor(() => rowCount() > 0 && rowCount() <= 5);
+    expect(rowCount()).toBe(5);
+  });
+
   it("re-measures when the container unmounts and remounts", async () => {
     render(<Harness connected={true} />, container);
     await waitFor(() => rowCount() > 10);
