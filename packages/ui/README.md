@@ -69,11 +69,23 @@ Pass the result as `TreePanel`'s `diff` prop, along with `enableDiff`, `diffActi
 
 Virtualizes a fixed-height flattened tree list. Used internally by `TreePanel` and `TreeView` to render only the rows in the viewport plus overscan; exported for consumers building custom tree views.
 
+`containerRef` is a **callback ref** — attach it to the scrollable element so the hook is measured the moment that element mounts, even when it renders conditionally (e.g. behind a loading screen):
+
 ```tsx
 import { useVirtualTree } from "@real-a11y-dev/semantic-navigator-ui";
 
 const { containerRef, startIndex, endIndex, totalHeight, offset, onScroll } =
   useVirtualTree(visibleNodeIds.length);
+
+return (
+  <div ref={containerRef} class="sn-tree-container" onScroll={onScroll}>
+    <div style={{ minHeight: totalHeight, paddingTop: offset }}>
+      {visibleNodeIds.slice(startIndex, endIndex).map((id) => (
+        <Row key={id} id={id} />
+      ))}
+    </div>
+  </div>
+);
 ```
 
 ## Keyboard navigation
