@@ -148,39 +148,41 @@ export function useVirtualTree(
       const clamped = Math.max(0, Math.min(index, count - 1));
       const rowTop = clamped * rh;
 
+      let target: number | null = null;
       switch (block) {
         case "start": {
-          container.scrollTop = rowTop;
-          return;
+          target = rowTop;
+          break;
         }
         case "end": {
-          container.scrollTop = Math.max(
-            0,
-            rowTop - container.clientHeight + rh,
-          );
-          return;
+          target = Math.max(0, rowTop - container.clientHeight + rh);
+          break;
         }
         case "center": {
-          container.scrollTop = Math.max(
-            0,
-            rowTop - container.clientHeight / 2 + rh / 2,
-          );
-          return;
+          target = Math.max(0, rowTop - container.clientHeight / 2 + rh / 2);
+          break;
         }
         case "nearest": {
           const top = container.scrollTop;
           const bottom = top + container.clientHeight;
           if (rowTop < top) {
-            container.scrollTop = rowTop;
+            target = rowTop;
           } else if (rowTop + rh > bottom) {
-            container.scrollTop = Math.max(
-              0,
-              rowTop - container.clientHeight + rh,
-            );
+            target = Math.max(0, rowTop - container.clientHeight + rh);
           }
-          return;
+          break;
         }
       }
+      if (target === null) return;
+
+      container.scrollTop = target;
+      // Sync the window state now rather than waiting for the async `scroll`
+      // event: on a large jump the browser repositions the viewport before the
+      // event-driven re-render, which would flash blank space for a frame while
+      // the target row is still outside the rendered slice. Read scrollTop back
+      // so the browser's own clamping is respected.
+      setScrollTop(container.scrollTop);
+      setViewportHeight(container.clientHeight);
     },
     [],
   );
