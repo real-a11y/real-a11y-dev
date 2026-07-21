@@ -97,6 +97,48 @@ describe("TreePanel diff mode", () => {
     );
   });
 
+  it("reserves the marker gutter on unmarked rows so labels stay aligned", () => {
+    const baseline = extractA11yTree(host);
+
+    const added = document.createElement("button");
+    added.textContent = "Save";
+    host.querySelector("main")?.appendChild(added);
+
+    const current = extractA11yTree(host);
+    panel(current, {
+      enableDiff: true,
+      diffActive: true,
+      diff: buildTreeDiffView(baseline, current),
+    });
+
+    // Every rendered row carries a marker slot while a diff is active — the
+    // fixed-width column would otherwise push marked labels right of their
+    // unmarked neighbours (WCAG-adjacent, but really just visual raggedness).
+    const rows = container.querySelectorAll(".sn-node");
+    expect(rows.length).toBeGreaterThan(1);
+    for (const row of rows) {
+      expect(row.querySelector(".sn-diff-marker")).not.toBeNull();
+    }
+
+    // The unmarked rows reserve the slot but paint no glyph and announce
+    // nothing — the gutter is empty, not a phantom "added"/"changed".
+    const unmarked = container.querySelector(
+      ".sn-node:not(.sn-node--added):not(.sn-node--changed)",
+    );
+    expect(unmarked).not.toBeNull();
+    const emptySlot = unmarked?.querySelector(".sn-diff-marker");
+    expect(emptySlot?.textContent).toBe("");
+    expect(emptySlot?.className).toBe("sn-diff-marker");
+  });
+
+  it("renders no marker slot at all when no diff is active", () => {
+    // With no baseline the gutter must not exist, so the tree looks exactly
+    // as it did before the feature — no permanent rightward shift.
+    panel(extractA11yTree(host), { enableDiff: true });
+
+    expect(container.querySelector(".sn-diff-marker")).toBeNull();
+  });
+
   it("summarizes removed nodes instead of rendering them as rows", () => {
     const baseline = extractA11yTree(host);
     host.querySelector("#open")?.remove();
@@ -118,14 +160,24 @@ describe("TreePanel diff mode", () => {
     expect(removed?.querySelector("[tabindex]")).toBeNull();
   });
 
-  it("treats an empty view as no diff at all", () => {
+  it("reserves the gutter but highlights nothing for a present-but-empty diff", () => {
+    // A live checkpoint that has seen no changes yet is a present, empty diff
+    // (structurally identical to EMPTY_DIFF_VIEW). It reserves the gutter — so
+    // the layout is stable the moment the first change lands — but paints no
+    // glyph and shows no removed section. `undefined` is the dormant signal,
+    // not an empty view.
     panel(extractA11yTree(host), {
       enableDiff: true,
       diffActive: true,
       diff: EMPTY_DIFF_VIEW,
     });
 
-    expect(container.querySelector(".sn-diff-marker")).toBeNull();
+    const slots = container.querySelectorAll(".sn-diff-marker");
+    expect(slots.length).toBeGreaterThan(0);
+    for (const slot of slots) {
+      expect(slot.textContent).toBe(""); // reserved, nothing painted
+      expect(slot.className).toBe("sn-diff-marker"); // no --added/--changed
+    }
     expect(container.querySelector(".sn-removed")).toBeNull();
   });
 });

@@ -470,6 +470,7 @@ export function TreePanel({
                   isSelected={id === selectedId}
                   isFlashing={id === flashingId}
                   diffStatus={diff?.status.get(id)}
+                  diffColumn={diff !== undefined}
                   onSelect={handleSelect}
                   onToggle={handleToggle}
                   onActivate={handleActivate}

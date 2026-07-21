@@ -8,7 +8,7 @@ The toolbar gains a checkpoint button (`⎌`). Pressing it captures the current 
 
 Nodes that were **removed** are summarized in a `<details>` below the tree instead of being rendered as rows. Their elements are gone from the DOM, so they have no host element to highlight and no action to dispatch — showing them as tree rows would promise interactivity that cannot exist.
 
-The indication is not color-only (WCAG 1.4.1): added rows carry a `+` glyph and changed rows a `~`, each paired with visually-hidden text so the status is announced rather than merely seen, and a `forced-colors` fallback trades the tint for a border.
+The indication is not color-only (WCAG 1.4.1): added rows carry a `+` glyph and changed rows a `~`, each paired with visually-hidden text so the status is announced rather than merely seen, and a `forced-colors` fallback trades the tint for a border. While a checkpoint is active the fixed-width marker column is reserved on every row — marked and unmarked alike — so a highlighted label stays aligned with its neighbours instead of being nudged right; the column vanishes when no checkpoint is active, leaving the default view untouched.
 
 A baseline records the view mode and root it was captured from, and the diff only runs while both still match — dropping it otherwise. An a11y baseline compared against a DOM tree, or a baseline compared against a different root, shares almost no node ids and would report nearly every row as churn.
 

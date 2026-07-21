@@ -45,7 +45,7 @@ Single tree node with expand/collapse toggle, label rendering (DOM or A11Y mode)
 
 The toolbar's checkpoint button (`⎌`) captures the tree as it is right now. Interact with the page, and rows that appeared or changed since are marked in place — useful for answering "what did opening this menu actually do to the accessibility tree?". Click it again to clear.
 
-The marking is not color-only: added rows carry a `+` and changed rows a `~`, each paired with visually-hidden text so the status is announced, and a forced-colors fallback swaps the tint for a border. Nodes that were **removed** are listed in a `<details>` below the tree rather than as rows — their elements are gone from the DOM, so there is nothing to highlight, focus, or act on.
+The marking is not color-only: added rows carry a `+` and changed rows a `~`, each paired with visually-hidden text so the status is announced, and a forced-colors fallback swaps the tint for a border. While a checkpoint is active the marker column is reserved on every row, so a marked label lines up with its unmarked neighbours instead of being nudged right; the column disappears entirely when no checkpoint is active. Nodes that were **removed** are listed in a `<details>` below the tree rather than as rows — their elements are gone from the DOM, so there is nothing to highlight, focus, or act on.
 
 A baseline is only comparable against the same kind of extraction of the same subtree, so it is dropped when either the view mode or the `root` changes — a checkpoint taken in the A11Y view, or against a different root, would diff into noise.
 

@@ -28,7 +28,12 @@ export interface TreeDiffView {
   removed: SemanticNode[];
 }
 
-/** An empty view — nothing captured, nothing to highlight. */
+/**
+ * A present-but-empty view: a comparison is active and has found no changes
+ * yet. A consumer that renders it still reserves the marker gutter (so the
+ * layout is stable once a change lands) but highlights nothing. To signal that
+ * the feature is *dormant* — no gutter at all — pass `undefined`, not this.
+ */
 export const EMPTY_DIFF_VIEW: TreeDiffView = {
   status: new Map(),
   removed: [],

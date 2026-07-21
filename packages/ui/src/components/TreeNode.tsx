@@ -25,6 +25,13 @@ interface TreeNodeProps {
    * unchanged rows and whenever no baseline is active.
    */
   diffStatus?: NodeDiffStatus;
+  /**
+   * Reserve the marker gutter on this row. Set for EVERY row while a diff is
+   * active — not just marked ones — so the fixed-width marker column does not
+   * push marked labels right of their unmarked neighbours. The +/~ glyph
+   * paints only when `diffStatus` is set; an unmarked row keeps an empty slot.
+   */
+  diffColumn?: boolean;
   onSelect: (id: string) => void;
   onToggle: (id: string) => void;
   /**
@@ -182,6 +189,7 @@ export function TreeNode({
   isSelected,
   isFlashing,
   diffStatus,
+  diffColumn,
   onSelect,
   onToggle,
   onActivate,
@@ -255,15 +263,26 @@ export function TreeNode({
         {hasChildren ? (node.ui.expanded ? "\u25BE" : "\u25B8") : ""}
       </button>
 
-      {/* Diff marker. A shape carries the meaning, not colour alone (WCAG
-          1.4.1) — and the visible glyph is hidden from AT in favour of a word,
-          so the row announces "added link Docs", not "plus link Docs". */}
-      {diffStatus && (
-        <span class={`sn-diff-marker sn-diff-marker--${diffStatus}`}>
-          <span aria-hidden="true">{diffStatus === "added" ? "+" : "~"}</span>
-          <span class="sn-sr-only">
-            {diffStatus === "added" ? "added " : "changed "}
-          </span>
+      {/* Diff marker gutter. Reserved on every row while a diff is active (not
+          just marked ones) so the fixed-width column keeps all labels aligned
+          instead of nudging marked rows right. A shape carries the meaning,
+          not colour alone (WCAG 1.4.1) — and the visible glyph is hidden from
+          AT in favour of a word, so the row announces "added link Docs", not
+          "plus link Docs". An unmarked row keeps the slot but paints nothing. */}
+      {diffColumn && (
+        <span
+          class={`sn-diff-marker${diffStatus ? ` sn-diff-marker--${diffStatus}` : ""}`}
+        >
+          {diffStatus && (
+            <>
+              <span aria-hidden="true">
+                {diffStatus === "added" ? "+" : "~"}
+              </span>
+              <span class="sn-sr-only">
+                {diffStatus === "added" ? "added " : "changed "}
+              </span>
+            </>
+          )}
         </span>
       )}
 
