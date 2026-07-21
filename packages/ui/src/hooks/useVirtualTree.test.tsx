@@ -161,6 +161,59 @@ describe("useVirtualTree", () => {
     expect(rowCount()).toBe(5);
   });
 
+  it("re-windows synchronously on scrollToIndex without waiting for a scroll event", async () => {
+    // Regression: scrollToIndex used to only set container.scrollTop and rely
+    // on the async `scroll` event to refresh startIndex/endIndex, so a large
+    // jump (cross-link, focus sync, go-to-tree) flashed blank space for a
+    // frame while the viewport had already moved. The hook must re-window from
+    // its own state update — no scroll event is dispatched here.
+    let scrollToIndex: UseVirtualTreeResult["scrollToIndex"] | undefined;
+    function JumpHarness() {
+      const vt = useVirtualTree(ITEM_COUNT, { rowHeight: ROW_HEIGHT });
+      scrollToIndex = vt.scrollToIndex;
+      return (
+        <div
+          ref={vt.containerRef}
+          class="sn-tree-container"
+          onScroll={vt.onScroll}
+        >
+          <div style={{ minHeight: vt.totalHeight, paddingTop: vt.offset }}>
+            {Array.from({ length: vt.endIndex - vt.startIndex }, (_, i) => (
+              <div class="sn-row" data-index={vt.startIndex + i}>
+                row {vt.startIndex + i}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    render(<JumpHarness />, container);
+    await waitFor(() => rowCount() > 10);
+
+    // jsdom's scrollTop setter is inert; make it hold assigned values the way
+    // a real scroll box does.
+    const scroller = container.querySelector(
+      ".sn-tree-container",
+    ) as HTMLDivElement;
+    Object.defineProperty(scroller, "scrollTop", {
+      configurable: true,
+      writable: true,
+      value: 0,
+    });
+
+    scrollToIndex!(900, "start");
+    await waitFor(
+      () =>
+        Number(container.querySelector(".sn-row")?.getAttribute("data-index")) >
+        800,
+    );
+    // scrollTop = 900 rows × 24px → startIndex = 900 − overscan(5).
+    expect(
+      Number(container.querySelector(".sn-row")?.getAttribute("data-index")),
+    ).toBe(895);
+  });
+
   it("re-measures when the container unmounts and remounts", async () => {
     render(<Harness connected={true} />, container);
     await waitFor(() => rowCount() > 10);
