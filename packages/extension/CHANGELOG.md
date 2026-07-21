@@ -61,7 +61,7 @@
   non-focusable rows — but without `aria-activedescendant` a screen reader
   never learns which row is active, so arrowing announced nothing. Each row
   now has a stable id and its container points `aria-activedescendant` at it.
-  ([#193])
+  ([#194])
 
 ## 0.1.7
 
@@ -116,4 +116,4 @@ Earlier releases predate this changelog.
 [#178]: https://github.com/real-a11y/real-a11y-dev/pull/178
 [#182]: https://github.com/real-a11y/real-a11y-dev/pull/182
 [#192]: https://github.com/real-a11y/real-a11y-dev/pull/192
-[#193]: https://github.com/real-a11y/real-a11y-dev/pull/193
+[#194]: https://github.com/real-a11y/real-a11y-dev/pull/194
