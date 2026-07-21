@@ -34,6 +34,14 @@ isHiddenFromAT(element);     // true if aria-hidden, role=presentation, etc.
 getHeadingLevel(element);    // 1-6 for headings, null otherwise
 ```
 
+Media elements follow the browser's native tree rather than the (silent)
+HTML-AAM mapping: `<video>` → `"video"` and `<audio>` → `"audio"`, matching
+the internal roles Chromium exposes in DevTools. Media nodes are leaves —
+fallback content and `<track>`/`<source>` metadata never become tree nodes —
+and each carries a `properties.captions` flag (`"true"`/`"false"`) reflecting
+whether a captions or subtitles track is present (the WCAG 1.2.2 signal).
+With native `controls` the media element is reported focusable.
+
 ### Interaction dispatching
 
 ```ts

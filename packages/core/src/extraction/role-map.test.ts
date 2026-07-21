@@ -143,6 +143,22 @@ describe("getImplicitRole", () => {
   it("returns search for <search>", () => {
     expect(getImplicitRole(el("<search>Form</search>"))).toBe("search");
   });
+
+  // ARIA has no media roles, but Chromium's native accessibility tree
+  // exposes internal Video/Audio roles (what DevTools shows). Mirroring
+  // that beats "generic", which made a captioned player indistinguishable
+  // from a <div>.
+  it("returns video for <video> and audio for <audio>", () => {
+    expect(getImplicitRole(el("<video></video>"))).toBe("video");
+    expect(getImplicitRole(el("<video controls></video>"))).toBe("video");
+    expect(getImplicitRole(el("<audio></audio>"))).toBe("audio");
+  });
+
+  it("explicit role still wins on media elements", () => {
+    expect(getImplicitRole(el('<video role="application"></video>'))).toBe(
+      "application",
+    );
+  });
 });
 
 describe("isHiddenFromAT", () => {

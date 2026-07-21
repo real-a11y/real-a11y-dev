@@ -1231,3 +1231,192 @@ describe("input accessible name (HTML-AAM)", () => {
     }
   });
 });
+
+// Media elements (<video>/<audio>) mirror Chromium's native tree: real
+// "video"/"audio" roles, leaf nodes (fallback children + <track>/<source>
+// metadata are never exposed), a hoisted `captions` property carrying the
+// WCAG 1.2.2 signal from the skipped <track> children, and focusability
+// when native controls are present.
+describe("media elements (video/audio)", () => {
+  function mediaNode(html: string, tagName: string) {
+    const root = createPage(html);
+    return [...extractDomTree(root).nodes.values()].find(
+      (n) => n.dom.tagName === tagName,
+    )!;
+  }
+
+  it("exposes role=video with the aria-label as accessible name", () => {
+    const node = mediaNode(
+      `<video controls aria-label="Product tour" src="x.mp4"></video>`,
+      "video",
+    );
+    expect(node.a11y.role).toBe("video");
+    expect(node.a11y.name).toBe("Product tour");
+  });
+
+  it("exposes role=audio", () => {
+    const node = mediaNode(
+      `<audio controls aria-label="Podcast episode" src="x.mp3"></audio>`,
+      "audio",
+    );
+    expect(node.a11y.role).toBe("audio");
+    expect(node.a11y.name).toBe("Podcast episode");
+  });
+
+  it("is a leaf: track/source/fallback children never become nodes", () => {
+    const root = createPage(`
+      <video controls src="x.mp4">
+        <track kind="captions" src="c.vtt" srclang="en" label="EN" default>
+        <source src="x.webm" type="video/webm">
+        <a href="/download">Download the video instead</a>
+      </video>
+    `);
+    const { nodes } = extractDomTree(root);
+    const tags = [...nodes.values()].map((n) => n.dom.tagName);
+    expect(tags).toContain("video");
+    expect(tags).not.toContain("track");
+    expect(tags).not.toContain("source");
+    // Fallback link is unrendered content — must not leak into the tree.
+    expect(tags).not.toContain("a");
+
+    const video = [...nodes.values()].find((n) => n.dom.tagName === "video")!;
+    expect(video.childIds).toEqual([]);
+  });
+
+  it("does not take its accessible name or text preview from fallback content", () => {
+    const node = mediaNode(
+      `<video src="x.mp4">Sorry, your browser doesn't support embedded video.</video>`,
+      "video",
+    );
+    // Chromium exposes an unlabeled <video> with an empty name.
+    expect(node.a11y.name).toBe("");
+    expect(node.dom.textContent).toBe("");
+    expect(node.dom.descendantText).toBe("");
+  });
+
+  it("hoists the captions signal onto the media node (WCAG 1.2.2)", () => {
+    const withCaptions = mediaNode(
+      `<video src="x.mp4"><track kind="captions" src="c.vtt"></video>`,
+      "video",
+    );
+    expect(withCaptions.a11y.properties["captions"]).toBe("true");
+
+    const withSubtitles = mediaNode(
+      `<video src="x.mp4"><track kind="subtitles" src="s.vtt"></video>`,
+      "video",
+    );
+    expect(withSubtitles.a11y.properties["captions"]).toBe("true");
+
+    const without = mediaNode(`<video src="x.mp4"></video>`, "video");
+    expect(without.a11y.properties["captions"]).toBe("false");
+
+    // A chapters/metadata track is NOT a caption alternative.
+    const chaptersOnly = mediaNode(
+      `<video src="x.mp4"><track kind="chapters" src="ch.vtt"></video>`,
+      "video",
+    );
+    expect(chaptersOnly.a11y.properties["captions"]).toBe("false");
+  });
+
+  it("normalizes track kind the way browsers do (missing → subtitles, case-insensitive, invalid → metadata)", () => {
+    // Verified against Chromium's HTMLTrackElement.kind normalization.
+    // A kind-less track defaults to the subtitles state — it IS a text
+    // alternative and must count.
+    const kindless = mediaNode(
+      `<video src="x.mp4"><track src="en.vtt" srclang="en" label="English"></video>`,
+      "video",
+    );
+    expect(kindless.a11y.properties["captions"]).toBe("true");
+
+    // The kind attribute is ASCII case-insensitive: "Captions" is valid.
+    const mixedCase = mediaNode(
+      `<video src="x.mp4"><track kind="Captions" src="c.vtt"></video>`,
+      "video",
+    );
+    expect(mixedCase.a11y.properties["captions"]).toBe("true");
+
+    // The INVALID value default is "metadata" (unlike the missing value
+    // default) — a bogus kind is not a caption alternative.
+    const bogusKind = mediaNode(
+      `<video src="x.mp4"><track kind="bogus" src="b.vtt"></video>`,
+      "video",
+    );
+    expect(bogusKind.a11y.properties["captions"]).toBe("false");
+  });
+
+  it("non-media nodes do not carry a captions property", () => {
+    const node = mediaNode(`<div>plain</div>`, "div");
+    expect("captions" in node.a11y.properties).toBe(false);
+  });
+
+  it("is focusable (with a focus action) only when native controls are present", () => {
+    const withControls = mediaNode(
+      `<video controls src="x.mp4"></video>`,
+      "video",
+    );
+    expect(withControls.interaction.isFocusable).toBe(true);
+    expect(withControls.interaction.actions).toContain("focus");
+
+    const withoutControls = mediaNode(`<video src="x.mp4"></video>`, "video");
+    expect(withoutControls.interaction.isFocusable).toBe(false);
+    expect(withoutControls.interaction.actions).toEqual([]);
+  });
+
+  it("surfaces media attributes (controls/autoplay/muted/loop) for the panel", () => {
+    const node = mediaNode(
+      `<video controls autoplay muted loop src="x.mp4"></video>`,
+      "video",
+    );
+    expect(node.dom.attributes["controls"]).toBe("");
+    expect(node.dom.attributes["autoplay"]).toBe("");
+    expect(node.dom.attributes["muted"]).toBe("");
+    expect(node.dom.attributes["loop"]).toBe("");
+  });
+
+  it("does not leak media fallback text into a wrapping container's preview", () => {
+    // Devin regression: the media node itself is a clean leaf, but an
+    // ancestor kept for a role/name (here <figure>) computed its
+    // descendantText from raw textContent, which recursively included the
+    // unrendered <video> fallback string.
+    const root = createPage(`
+      <figure>
+        <video src="x.mp4">Sorry, your browser doesn't support embedded video.</video>
+        <figcaption>Product tour</figcaption>
+      </figure>
+    `);
+    const figure = [...extractDomTree(root).nodes.values()].find(
+      (n) => n.dom.tagName === "figure",
+    )!;
+    expect(figure.dom.descendantText).toBe("Product tour");
+    expect(figure.dom.descendantText).not.toContain("Sorry");
+  });
+
+  it("still collects non-media descendant text around a pruned media element", () => {
+    const root = createPage(`
+      <div>
+        Before
+        <audio src="a.mp3">audio fallback noise</audio>
+        After
+      </div>
+    `);
+    const div = [...extractDomTree(root).nodes.values()].find(
+      (n) => n.dom.tagName === "div" && n.parentId !== null,
+    )!;
+    expect(div.dom.descendantText).toBe("Before After");
+    expect(div.dom.descendantText).not.toContain("fallback");
+  });
+
+  it("skips <source> inside <picture> too, keeping the <img>", () => {
+    const root = createPage(`
+      <picture>
+        <source srcset="a.webp" type="image/webp">
+        <img src="a.jpg" alt="A flower">
+      </picture>
+    `);
+    const tags = [...extractDomTree(root).nodes.values()].map(
+      (n) => n.dom.tagName,
+    );
+    expect(tags).not.toContain("source");
+    expect(tags).toContain("img");
+  });
+});

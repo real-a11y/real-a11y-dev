@@ -544,4 +544,63 @@ describe("ActionDispatcher", () => {
       }
     });
   });
+
+  // `requiresInput` tells the consumer to open a text-entry affordance
+  // after focusing. That's only honest for elements that accept text —
+  // focus is also the sole action for media-with-controls and file
+  // inputs, where a text prompt would be meaningless.
+  describe("focus action — requiresInput honesty", () => {
+    it("advertises text entry for a text input", () => {
+      const el = document.createElement("input");
+      el.type = "text";
+      document.body.appendChild(el);
+      refs.set("n1", el);
+
+      const result = dispatcher.dispatch({ nodeId: "n1", action: "focus" });
+      expect(result.success).toBe(true);
+      expect(result.requiresInput).toBe(true);
+      expect(result.inputType).toBe("text");
+    });
+
+    it("advertises text entry for contenteditable and role=textbox widgets", () => {
+      const ce = document.createElement("div");
+      ce.setAttribute("contenteditable", "true");
+      document.body.appendChild(ce);
+      refs.set("ce", ce);
+      expect(
+        dispatcher.dispatch({ nodeId: "ce", action: "focus" }).requiresInput,
+      ).toBe(true);
+
+      const tb = document.createElement("div");
+      tb.setAttribute("role", "textbox");
+      tb.tabIndex = 0;
+      document.body.appendChild(tb);
+      refs.set("tb", tb);
+      expect(
+        dispatcher.dispatch({ nodeId: "tb", action: "focus" }).requiresInput,
+      ).toBe(true);
+    });
+
+    it("focuses a <video controls> WITHOUT advertising text entry", () => {
+      const video = document.createElement("video");
+      video.setAttribute("controls", "");
+      document.body.appendChild(video);
+      refs.set("v", video);
+
+      const result = dispatcher.dispatch({ nodeId: "v", action: "focus" });
+      expect(result.success).toBe(true);
+      expect(result.requiresInput).toBeUndefined();
+    });
+
+    it("focuses an <input type=file> WITHOUT advertising text entry", () => {
+      const file = document.createElement("input");
+      file.type = "file";
+      document.body.appendChild(file);
+      refs.set("f", file);
+
+      const result = dispatcher.dispatch({ nodeId: "f", action: "focus" });
+      expect(result.success).toBe(true);
+      expect(result.requiresInput).toBeUndefined();
+    });
+  });
 });

@@ -46,6 +46,8 @@ const tree = extractA11yTree(document.getElementById("app"));
 
 Resolves ARIA roles, computes accessible names via the full ANDC algorithm, detects hidden subtrees, and maps interaction capabilities.
 
+Media elements mirror the browser's native accessibility tree: `<video>` and `<audio>` get the `video` / `audio` roles Chromium shows in DevTools (ARIA defines no media roles, so a strict HTML-AAM mapping would hide them as `generic`). Media nodes are leaves — unrendered fallback content and `<track>`/`<source>` metadata never become tree nodes — and each carries a `properties.captions` flag (`"true"` / `"false"`) telling you whether the element ships a captions or subtitles track (the WCAG 1.2.2 signal). A media element with native `controls` is reported focusable; its play/seek/volume buttons live in a closed user-agent shadow root that no in-page extractor can reach.
+
 `focusedId` is the id of the element that held focus at extraction time, when it's inside the extracted subtree — absent when focus rested on `<body>`/`<html>` (nothing meaningfully focused) or fell outside the tree. The serializers in [`@real-a11y-dev/testing`](/packages/testing/snapshots#focus-marker) render it as a `[focused]` marker.
 
 ### `extractDomTree(root)`
