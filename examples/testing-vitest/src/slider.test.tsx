@@ -17,6 +17,7 @@ import { extractA11yTree } from "@real-a11y-dev/core";
 beforeAll(() => {
   if (typeof globalThis.ResizeObserver === "undefined") {
     globalThis.ResizeObserver = class {
+      constructor(_callback: ResizeObserverCallback) {}
       observe() {}
       unobserve() {}
       disconnect() {}
