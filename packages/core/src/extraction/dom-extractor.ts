@@ -740,13 +740,39 @@ function getDirectTextContent(element: Element): string {
 const DESCENDANT_TEXT_MAX = 240;
 
 /**
+ * Concatenate descendant text the way a browser renders it, pruning the
+ * light-DOM subtrees of `<video>`/`<audio>`. Their contents are unrendered
+ * fallback ("Sorry, your browser doesn't support…") plus `<track>`/`<source>`
+ * metadata — the media node itself is already treated as a leaf with empty
+ * text, and this keeps that fallback from resurfacing as a *wrapping*
+ * container's preview too. Clobber-immune throughout (safeChildNodes /
+ * safeTextContent, defensive tagName read).
+ */
+function collectTextPruningMedia(node: Node): string {
+  if (node.nodeType === Node.TEXT_NODE) return safeTextContent(node);
+  if (node.nodeType !== Node.ELEMENT_NODE) return "";
+  const rawTag = (node as Element).tagName;
+  const tag = typeof rawTag === "string" ? rawTag.toLowerCase() : "";
+  if (MEDIA_TAGS.has(tag)) return "";
+  let out = "";
+  for (const child of safeChildNodes(node)) {
+    out += collectTextPruningMedia(child);
+  }
+  return out;
+}
+
+/**
  * Recursive text content with whitespace collapsed and a hard length cap.
  * Used as a panel preview for elements whose accessible name is empty per
  * spec but which carry meaningful descendant text (`<code>`, `<pre>`,
  * `<svg>` with `<text>`, decorative wrappers around copy, etc.).
  */
 export function getDescendantText(element: Element): string {
-  const raw = safeTextContent(element);
+  // Only pay for the pruning walk when a media descendant is actually
+  // present; otherwise the fast native textContent read is identical.
+  const raw = element.querySelector("video, audio")
+    ? collectTextPruningMedia(element)
+    : safeTextContent(element);
   const collapsed = raw.replace(/\s+/g, " ").trim();
   if (collapsed.length <= DESCENDANT_TEXT_MAX) return collapsed;
   return collapsed.slice(0, DESCENDANT_TEXT_MAX - 1) + "…";

@@ -1373,6 +1373,39 @@ describe("media elements (video/audio)", () => {
     expect(node.dom.attributes["loop"]).toBe("");
   });
 
+  it("does not leak media fallback text into a wrapping container's preview", () => {
+    // Devin regression: the media node itself is a clean leaf, but an
+    // ancestor kept for a role/name (here <figure>) computed its
+    // descendantText from raw textContent, which recursively included the
+    // unrendered <video> fallback string.
+    const root = createPage(`
+      <figure>
+        <video src="x.mp4">Sorry, your browser doesn't support embedded video.</video>
+        <figcaption>Product tour</figcaption>
+      </figure>
+    `);
+    const figure = [...extractDomTree(root).nodes.values()].find(
+      (n) => n.dom.tagName === "figure",
+    )!;
+    expect(figure.dom.descendantText).toBe("Product tour");
+    expect(figure.dom.descendantText).not.toContain("Sorry");
+  });
+
+  it("still collects non-media descendant text around a pruned media element", () => {
+    const root = createPage(`
+      <div>
+        Before
+        <audio src="a.mp3">audio fallback noise</audio>
+        After
+      </div>
+    `);
+    const div = [...extractDomTree(root).nodes.values()].find(
+      (n) => n.dom.tagName === "div" && n.parentId !== null,
+    )!;
+    expect(div.dom.descendantText).toBe("Before After");
+    expect(div.dom.descendantText).not.toContain("fallback");
+  });
+
   it("skips <source> inside <picture> too, keeping the <img>", () => {
     const root = createPage(`
       <picture>
