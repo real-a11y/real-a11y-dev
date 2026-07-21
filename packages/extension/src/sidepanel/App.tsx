@@ -17,6 +17,7 @@ import {
 import {
   useTreeKeyboard,
   useInputModality,
+  useVirtualTree,
 } from "@real-a11y-dev/semantic-navigator-ui";
 import { useSearch } from "@real-a11y-dev/semantic-navigator-ui";
 import {
@@ -150,22 +151,8 @@ export function App() {
       setSelectedId(targetId);
       setFlashingId(targetId);
       setTimeout(() => setFlashingId(null), 700);
-
-      // The selection effect at the bottom of this component already calls
-      // `scrollIntoView({ block: "nearest" })` on the new selection, but
-      // when ancestors expanded in the same tick that scroll runs against
-      // a layout that just changed and "nearest" frequently no-ops — the
-      // target stays offscreen. Schedule an explicit center-scroll after
-      // two RAFs (Preact has rendered + browser has done layout) so the
-      // row always lands in the viewport.
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          const el = treeRef.current?.querySelector(
-            `[data-node-id="${CSS.escape(targetId)}"]`,
-          );
-          el?.scrollIntoView({ block: "center" });
-        });
-      });
+      // The `selectedId` effect below scrolls the row into view once
+      // `visibleNodeIds` has been recomputed with the expanded ancestors.
     },
     [nodes],
   );
@@ -332,14 +319,8 @@ export function App() {
           return prev;
         });
         forceRender((n) => n + 1);
-
-        // Scroll the tree item into view after render
-        requestAnimationFrame(() => {
-          const el = treeRef.current?.querySelector(
-            `[data-node-id="${nodeId}"]`,
-          );
-          el?.scrollIntoView({ block: "nearest" });
-        });
+        // The `selectedId` effect below scrolls the row into view once the
+        // ancestors have been expanded and `visibleNodeIds` recomputed.
       }
 
       if (message.type === "NODE_PICKED") {
@@ -362,12 +343,8 @@ export function App() {
           return prev;
         });
         forceRender((n) => n + 1);
-        requestAnimationFrame(() => {
-          const el = treeRef.current?.querySelector(
-            `[data-node-id="${CSS.escape(nodeId)}"]`,
-          );
-          el?.scrollIntoView({ block: "center" });
-        });
+        // The `selectedId` effect below scrolls the row into view once the
+        // ancestors have been expanded and `visibleNodeIds` recomputed.
       }
 
       if (message.type === "PICK_MODE_CHANGED") {
@@ -421,6 +398,16 @@ export function App() {
   const scopedDepthOffset = scopedRootNode ? scopedRootNode.depth : 0;
   if (effectiveRootId) walkVisible(effectiveRootId);
 
+  const {
+    containerRef,
+    startIndex,
+    endIndex,
+    totalHeight,
+    offset,
+    onScroll,
+    scrollToIndex,
+  } = useVirtualTree(visibleNodeIds.length);
+
   const handleSelect = useCallback((id: string) => {
     setSelectedId(id);
     chrome.runtime.sendMessage({
@@ -463,15 +450,12 @@ export function App() {
         type: "HIGHLIGHT_NODE",
         payload: { nodeId: id },
       });
-      // Wait for the tree to render (filter → tree transition needs an extra frame)
+      // The `selectedId` effect below scrolls the row into view. Wait an
+      // extra frame after the filter → tree transition so focus lands on a
+      // rendered tree.
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          const el = treeRef.current?.querySelector(`[data-node-id="${id}"]`);
-          if (el) {
-            el.scrollIntoView({ block: "center" });
-            // Focus the tree so keyboard navigation works immediately
-            treeRef.current?.focus();
-          }
+          treeRef.current?.focus();
         });
       });
     },
@@ -839,14 +823,10 @@ export function App() {
   // Scroll the selected tree item into view whenever selection changes
   // (covers both keyboard navigation and focus-sync from page)
   useEffect(() => {
-    if (!selectedId) return;
-    requestAnimationFrame(() => {
-      const el = treeRef.current?.querySelector(
-        `[data-node-id="${selectedId}"]`,
-      );
-      el?.scrollIntoView({ block: "nearest" });
-    });
-  }, [selectedId]);
+    if (!selectedId || visibleNodeIds.length === 0) return;
+    const index = visibleNodeIds.indexOf(selectedId);
+    if (index !== -1) scrollToIndex(index, "nearest");
+  }, [selectedId, visibleNodeIds, scrollToIndex]);
 
   const prefersDark =
     typeof window !== "undefined" &&
@@ -1242,7 +1222,9 @@ export function App() {
         /* ---- Tree view ---- */
         <>
           <div
+            ref={containerRef}
             class={`sn-tree-container${isDialogScoped ? " sn-tree-container--dialog" : ""}${scopedRootId ? " sn-tree-container--scoped" : ""}`}
+            onScroll={onScroll}
           >
             <div
               ref={treeRef}
@@ -1250,12 +1232,17 @@ export function App() {
               role="tree"
               aria-label="Semantic tree — press Enter to activate interactive elements"
               tabIndex={0}
+              style={{
+                minHeight: totalHeight,
+                paddingTop: offset,
+                boxSizing: "border-box",
+              }}
               onKeyDown={(e) => {
                 markKeyboard();
                 handleKeyDown(e);
               }}
             >
-              {visibleNodeIds.map((id) => {
+              {visibleNodeIds.slice(startIndex, endIndex).map((id) => {
                 const node = nodes.get(id);
                 if (!node) return null;
 

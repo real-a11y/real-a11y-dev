@@ -63,6 +63,19 @@ Pass the result as `TreePanel`'s `diff` prop, along with `enableDiff`, `diffActi
 
 > This is the in-page, interaction-scoped diff. It is keyed on live node identity, so it dies on navigation. For a diff that survives navigation and gates CI, use the snapshot fingerprint diff in [`@real-a11y-dev/snapshot`](../snapshot) / the MCP checkpoint tools.
 
+## Hooks
+
+### useVirtualTree
+
+Virtualizes a fixed-height flattened tree list. Used internally by `TreePanel` and `TreeView` to render only the rows in the viewport plus overscan; exported for consumers building custom tree views.
+
+```tsx
+import { useVirtualTree } from "@real-a11y-dev/semantic-navigator-ui";
+
+const { containerRef, startIndex, endIndex, totalHeight, offset, onScroll } =
+  useVirtualTree(visibleNodeIds.length);
+```
+
 ## Keyboard navigation
 
 Follows the [WAI-ARIA TreeView pattern](https://www.w3.org/WAI/ARIA/apg/patterns/treeview/):
