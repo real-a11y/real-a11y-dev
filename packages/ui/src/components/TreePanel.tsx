@@ -233,6 +233,11 @@ export function TreePanel({
     [treeData, renderCount],
   );
 
+  // Latest visible list, readable from a rAF callback that runs after an
+  // ancestor-expansion re-render has committed (see the picker effect below).
+  const visibleNodeIdsRef = useRef(visibleNodeIds);
+  visibleNodeIdsRef.current = visibleNodeIds;
+
   // Virtualize the tree list: render only the rows in the viewport plus overscan.
   const {
     containerRef,
@@ -274,8 +279,19 @@ export function TreePanel({
     }
     if (mutated) forceRender();
     setSelectedId(pickedNodeId);
+    // Scroll the picked row into view on every pick — including a re-pick of an
+    // already-selected, already-expanded node that the user has since scrolled
+    // away from. In that case neither `selectedId` nor `visibleNodeIds` change,
+    // so the selection effect above never re-runs; with virtualization the row
+    // may also be unmounted, so we scroll by index explicitly. The rAF lets any
+    // ancestor-expansion re-render commit (refreshing `visibleNodeIdsRef`) first.
+    const raf = requestAnimationFrame(() => {
+      const index = visibleNodeIdsRef.current.indexOf(pickedNodeId);
+      if (index !== -1) scrollToIndex(index, "nearest");
+    });
     onPickedNodeHandled?.();
-  }, [pickedNodeId, treeData, forceRender, onPickedNodeHandled]);
+    return () => cancelAnimationFrame(raf);
+  }, [pickedNodeId, treeData, forceRender, onPickedNodeHandled, scrollToIndex]);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
