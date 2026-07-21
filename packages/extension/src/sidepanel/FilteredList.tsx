@@ -139,9 +139,14 @@ export function FilteredList({
         tabIndex={0}
         // Container-focus composite: announce the active option to screen
         // readers, which otherwise hear nothing as aria-selected flips on rows
-        // that never hold DOM focus.
+        // that never hold DOM focus. Bounds-check selectedIndex, not just
+        // non-emptiness: it's reset only on filter/query change, so when the
+        // page mutates and the result set shrinks it can point past the end,
+        // leaving aria-activedescendant dangling at a row that isn't rendered.
         aria-activedescendant={
-          matches.length > 0 ? `sn-filtered-opt-${selectedIndex}` : undefined
+          selectedIndex >= 0 && selectedIndex < matches.length
+            ? `sn-filtered-opt-${selectedIndex}`
+            : undefined
         }
         onKeyDown={handleKeyDown}
       >

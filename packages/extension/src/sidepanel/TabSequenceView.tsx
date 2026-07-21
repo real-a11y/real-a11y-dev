@@ -118,9 +118,12 @@ export function TabSequenceView({
         aria-label="Tab sequence"
         tabIndex={0}
         // Container-focus composite — announce the active option (see the tree
-        // and FilteredList for the same pattern).
+        // and FilteredList). Bounds-check selectedIndex so a shrunk list can't
+        // leave the reference dangling past the end.
         aria-activedescendant={
-          items.length > 0 ? `sn-tabseq-opt-${selectedIndex}` : undefined
+          selectedIndex >= 0 && selectedIndex < items.length
+            ? `sn-tabseq-opt-${selectedIndex}`
+            : undefined
         }
         onKeyDown={handleKeyDown}
       >

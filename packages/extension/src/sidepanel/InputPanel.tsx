@@ -168,9 +168,12 @@ function SelectPicker({
         role="listbox"
         tabIndex={0}
         // Container-focus composite — announce the active option (see the tree
-        // and FilteredList for the same pattern).
+        // and FilteredList). Bounds-check selectedIndex so a shrunk option set
+        // can't leave the reference dangling past the end.
         aria-activedescendant={
-          options.length > 0 ? `sn-select-opt-${selectedIndex}` : undefined
+          selectedIndex >= 0 && selectedIndex < options.length
+            ? `sn-select-opt-${selectedIndex}`
+            : undefined
         }
         onKeyDown={handleKeyDown}
       >

@@ -1,5 +1,6 @@
 import type { SemanticNode } from "@real-a11y-dev/core";
 import { render } from "preact";
+import { act } from "preact/test-utils";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
 import { FilteredList } from "./FilteredList.js";
@@ -152,5 +153,63 @@ describe("FilteredList (smoke)", () => {
     );
     const empty = container.querySelector(".sn-empty");
     expect(empty?.textContent).toContain('matching "zzz"');
+  });
+
+  it("points aria-activedescendant at the active option, and drops it when the list shrinks past the selection", () => {
+    const buttons = (n: number) => {
+      const m = new Map<string, SemanticNode>();
+      for (let i = 1; i <= n; i++) {
+        m.set(
+          `n${i}`,
+          makeNode({
+            id: `n${i}`,
+            role: "button",
+            name: `B${i}`,
+            tagName: "button",
+          }),
+        );
+      }
+      return m;
+    };
+
+    const list = (n: number) => (
+      <FilteredList
+        nodes={buttons(n)}
+        roleFilter="button"
+        query=""
+        onSelect={noop}
+        onActivate={noop}
+      />
+    );
+
+    act(() => render(list(3), container));
+
+    const listbox = container.querySelector<HTMLElement>('[role="listbox"]')!;
+    // Container-focus composite: the active option is announced by id, and that
+    // id must resolve to a rendered row.
+    expect(listbox.getAttribute("aria-activedescendant")).toBe(
+      "sn-ui-filtered-opt-0",
+    );
+    expect(
+      container.querySelectorAll('[id="sn-ui-filtered-opt-0"]'),
+    ).toHaveLength(1);
+
+    // Arrow off the first row — the keyboard path this feature exists for.
+    act(() => {
+      listbox.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+      );
+    });
+    expect(listbox.getAttribute("aria-activedescendant")).toBe(
+      "sn-ui-filtered-opt-1",
+    );
+
+    // The page mutates: the filter still matches, but only one element remains.
+    // selectedIndex (1) is NOT reset (filter/query unchanged), so a guard that
+    // only tested non-emptiness would keep pointing at the now-missing opt-1 —
+    // leaving a screen reader with nothing to announce.
+    act(() => render(list(1), container));
+    expect(container.querySelectorAll('[role="option"]')).toHaveLength(1);
+    expect(listbox.getAttribute("aria-activedescendant")).toBeNull();
   });
 });

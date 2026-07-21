@@ -41,15 +41,23 @@ async function waitFor(
  */
 describe("TreeView (smoke)", () => {
   let container: HTMLDivElement;
+  let originalScrollIntoView: typeof Element.prototype.scrollIntoView;
 
   beforeEach(() => {
     container = document.createElement("div");
     document.body.appendChild(container);
+    // jsdom doesn't implement scrollIntoView, but selecting a row schedules an
+    // effect that calls it (TreePanel scrolls the selected row into view). That
+    // effect fires asynchronously, so without a stub it throws an *unhandled*
+    // error after the test body finishes — which fails the run non-locally.
+    originalScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function () {};
   });
 
   afterEach(() => {
     render(null, container);
     container.remove();
+    Element.prototype.scrollIntoView = originalScrollIntoView;
   });
 
   function makeRoot(): HTMLElement {

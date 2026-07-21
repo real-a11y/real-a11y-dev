@@ -122,6 +122,13 @@ export function TabSequenceView({
         role="listbox"
         aria-label="Tab sequence"
         tabIndex={0}
+        // Container-focus composite — announce the active option (see the
+        // shared tree). Bounds-check so a shrunk list can't dangle past the end.
+        aria-activedescendant={
+          selectedIndex >= 0 && selectedIndex < items.length
+            ? `sn-ui-tabseq-opt-${selectedIndex}`
+            : undefined
+        }
         onKeyDown={handleKeyDown}
         onMouseLeave={() => onHover(null)}
       >
@@ -139,6 +146,7 @@ export function TabSequenceView({
           return (
             <div
               key={node.id}
+              id={`sn-ui-tabseq-opt-${index}`}
               class={`sn-filtered-item sn-tab-item${isSelected ? " sn-filtered-item--selected" : ""}`}
               role="option"
               aria-selected={isSelected}
