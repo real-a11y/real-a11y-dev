@@ -35,6 +35,7 @@ const OBSERVED_ATTRIBUTES = [
   "open", // <details open>
   "style", // CSS visibility/display changes (e.g., captcha showing/hiding content)
   "controls", // media players toggling native controls changes focusability
+  "kind", // <track kind> drives the media node's hoisted captions property
 ];
 
 /**

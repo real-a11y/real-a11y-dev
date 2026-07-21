@@ -805,6 +805,23 @@ describe("DomObserver", () => {
       expect(onTreeChange).toHaveBeenCalled();
     });
 
+    it("fires when a <track>'s kind changes (drives the hoisted captions property)", async () => {
+      // captions → metadata flips the media node's captions flag from
+      // "true" to "false"; the mutation target is the <track>, which is
+      // never a tree node, so LiveTreeExtractor falls back to a full
+      // re-extract — but only if the attribute change is observed at all.
+      appRoot.innerHTML =
+        '<video controls src="x.mp4"><track kind="captions" src="c.vtt"></video>';
+      observer = new DomObserver(appRoot, onTreeChange, 100);
+      observer.start();
+
+      appRoot.querySelector("track")!.setAttribute("kind", "metadata");
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
     it("still ignores plain body-level mutations with no overlay role", async () => {
       observer = new DomObserver(appRoot, onTreeChange, 100);
       observer.start();

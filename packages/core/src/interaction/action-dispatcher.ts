@@ -46,6 +46,42 @@ export function resolveClickTarget(element: Element): Element {
   return candidate ?? element;
 }
 
+/** Input types that accept typed text (mirrors the extractor's "type" action pairing). */
+const TEXT_ENTRY_INPUT_TYPES = new Set([
+  "text",
+  "email",
+  "password",
+  "tel",
+  "url",
+  "search",
+  "number",
+  "date",
+  "time",
+  "datetime-local",
+  "month",
+  "week",
+  "color",
+]);
+
+/**
+ * True when the focused element actually accepts text entry — the only
+ * case where a `focus` dispatch should advertise `requiresInput`.
+ * Focus is also the sole action for `<video controls>`/`<audio controls>`
+ * and `<input type="file">`, none of which are typeable.
+ */
+function acceptsTextEntry(element: Element): boolean {
+  const tag = element.tagName.toLowerCase();
+  if (tag === "textarea") return true;
+  if (tag === "input") {
+    const type = (element as HTMLInputElement).type || "text";
+    return TEXT_ENTRY_INPUT_TYPES.has(type);
+  }
+  const ce = element.getAttribute("contenteditable");
+  if (ce === "" || ce === "true" || ce === "plaintext-only") return true;
+  const role = element.getAttribute("role");
+  return role === "textbox" || role === "searchbox" || role === "spinbutton";
+}
+
 /**
  * Maps tree actions to real DOM operations.
  * This is the bridge between the tree UI and the actual page.
@@ -127,7 +163,14 @@ export class ActionDispatcher {
     const htmlEl = element as HTMLElement;
     if (htmlEl.focus) {
       htmlEl.focus();
-      return { success: true, requiresInput: true, inputType: "text" };
+      // Only advertise a text-entry affordance when the element actually
+      // accepts text. Focus is also the sole action for media elements
+      // with native controls and <input type="file"> — prompting for
+      // text there would be a lie the consumer acts on.
+      if (acceptsTextEntry(element)) {
+        return { success: true, requiresInput: true, inputType: "text" };
+      }
+      return { success: true };
     }
     return { success: false, error: "Element is not focusable" };
   }
