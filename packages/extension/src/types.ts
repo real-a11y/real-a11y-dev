@@ -106,7 +106,16 @@ export type PanelToContent =
       payload: { viewMode: TreeViewMode };
     }
   | { type: "DISPATCH_ACTION"; payload: ActionRequest }
-  | { type: "HIGHLIGHT_NODE"; payload: { nodeId: string } }
+  | {
+      type: "HIGHLIGHT_NODE";
+      /**
+       * `hover: true` marks a *preview* highlight (mousing over a row) rather
+       * than a selection. Previews draw the overlay only — they must not
+       * scroll the host page or move real focus, since a pointer sweeping the
+       * tree would otherwise scroll-jump and fire focus handlers once per row.
+       */
+      payload: { nodeId: string; hover?: boolean };
+    }
   | { type: "CLEAR_HIGHLIGHT" }
   | { type: "SET_VIEW_MODE"; payload: { viewMode: TreeViewMode } }
   | { type: "TOGGLE_CURTAIN"; payload: { visible: boolean } }

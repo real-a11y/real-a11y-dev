@@ -1,0 +1,10 @@
+/* Disconnected empty state.
+ *
+ * The shared `.sn-empty` is a centred flex ROW, so its children would sit
+ * side by side. Stack the message and the load affordance instead. */
+.sn-empty-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
