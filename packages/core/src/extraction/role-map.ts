@@ -61,6 +61,12 @@ const ROLE_MAP: Record<string, RoleResolver> = {
   // the ground truth this engine mirrors. "generic" hid media elements
   // behind the same role as a <div>, so the panel couldn't distinguish
   // a named, captioned player from a decorative background loop.
+  //
+  // NOTE for a future core → @real-a11y-dev/validate adapter: these are
+  // COMPUTED engine roles, not authored ARIA. An author writing
+  // role="video" must still be flagged by isValidRole; an adapter mapping
+  // SemanticNode → ValidatedNode has to exempt engine vocabulary instead
+  // of loosening the ARIA schema.
   audio: "audio",
   b: "generic",
   blockquote: "blockquote",
