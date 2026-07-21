@@ -54,6 +54,14 @@ const ROLE_MAP: Record<string, RoleResolver> = {
   area: (el) => (el.hasAttribute("href") ? "link" : "generic"),
   article: "article",
   aside: "complementary",
+  // <audio>/<video>: ARIA has no media roles and HTML-AAM says "no
+  // corresponding role", but real browser accessibility trees disagree
+  // with that framing — Chromium exposes internal Audio/Video roles
+  // (what DevTools' a11y panel shows and what CDP returns), and that is
+  // the ground truth this engine mirrors. "generic" hid media elements
+  // behind the same role as a <div>, so the panel couldn't distinguish
+  // a named, captioned player from a decorative background loop.
+  audio: "audio",
   b: "generic",
   blockquote: "blockquote",
   body: "generic",
@@ -142,7 +150,7 @@ const ROLE_MAP: Record<string, RoleResolver> = {
   u: "generic",
   ul: "list",
   var: "generic",
-  video: "generic",
+  video: "video", // see the audio entry — mirrors Chromium's native tree
 };
 
 /** Elements that are hidden from the accessibility tree by default */

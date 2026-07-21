@@ -15,7 +15,28 @@ import {
 } from "./role-map.js";
 
 /** Tags to skip entirely during extraction */
-const SKIP_TAGS = new Set(["script", "style", "noscript", "template", "head"]);
+// track/source are media/picture metadata: HTML-AAM gives them no role and
+// no browser emits accessibility nodes for them. Their a11y-relevant signal
+// (does this video ship captions?) is hoisted onto the media element itself
+// as the `captions` property instead.
+const SKIP_TAGS = new Set([
+  "script",
+  "style",
+  "noscript",
+  "template",
+  "head",
+  "track",
+  "source",
+]);
+
+/**
+ * Media elements. Their light-DOM children are fallback content that modern
+ * browsers never render (and <track>/<source> metadata), so the walk does
+ * not descend into them — mirroring Chromium's tree, where a media element's
+ * only children are its user-agent shadow-DOM controls, which live in a
+ * closed shadow root no light-DOM extractor can reach.
+ */
+const MEDIA_TAGS = new Set(["video", "audio"]);
 
 /** Tags/roles that are focusable by default */
 const NATIVELY_FOCUSABLE = new Set([
@@ -101,6 +122,13 @@ function getActions(element: Element): ActionType[] {
   // Details / Summary — toggle
   else if (tag === "details" || tag === "summary") {
     actions.push("toggle");
+  }
+  // Media with native controls — the element itself is a tab stop (the
+  // play/seek/volume UI lives in a closed UA shadow root we can't reach).
+  // Only "focus" is honest here: a synthetic click doesn't count as a user
+  // gesture for playback, so a CLICK badge would no-op.
+  else if (MEDIA_TAGS.has(tag) && element.hasAttribute("controls")) {
+    actions.push("focus");
   }
   // ARIA role-based actions
   else if (role === "button" || element.hasAttribute("onclick")) {
@@ -633,6 +661,13 @@ function computeRawAccessibleName(
     if (placeholder) return placeholder;
   }
 
+  // Media elements never name from content: their light-DOM children are
+  // unrendered fallback ("Sorry, your browser doesn't support…") plus
+  // <track>/<source> metadata. Without this guard the fallback text leaked
+  // in as the accessible name via the direct-text step below. Chromium
+  // exposes an unlabeled <video> with an empty name — mirror that.
+  if (MEDIA_TAGS.has(tag)) return "";
+
   // 8. Recursive text content — ONLY for elements whose ARIA role supports
   //    "name from content" (headings, links, buttons, table cells, options).
   //    NOT for generic containers (div, span, p) which would grab huge text blobs.
@@ -753,6 +788,12 @@ function getKeyAttributes(element: Element): Record<string, string> {
     "method",
     "placeholder",
     "tabindex",
+    // Media a11y signals (boolean attributes render as "")
+    "controls",
+    "autoplay",
+    "muted",
+    "loop",
+    "poster",
   ];
 
   for (const name of attrNames) {
@@ -1104,8 +1145,14 @@ function buildNode(
     const id = getNodeId(element);
     const role = getImplicitRole(element);
     const actions = getActions(element);
+    const isMedia = MEDIA_TAGS.has(tag);
     const isFocusable =
-      NATIVELY_FOCUSABLE.has(tag) || element.getAttribute("tabindex") !== null;
+      NATIVELY_FOCUSABLE.has(tag) ||
+      element.getAttribute("tabindex") !== null ||
+      // <video controls> / <audio controls> are tab stops — Chromium
+      // exposes them focusable even though the actual buttons/sliders
+      // live in a closed UA shadow root.
+      (isMedia && element.hasAttribute("controls"));
 
     const node: SemanticNode = {
       id,
@@ -1115,8 +1162,11 @@ function buildNode(
       dom: {
         tagName: tag,
         attributes: getKeyAttributes(element),
-        textContent: getDirectTextContent(element),
-        descendantText: getDescendantText(element),
+        // Media children are unrendered fallback + <track>/<source>
+        // metadata — surfacing "Sorry, your browser doesn't support…"
+        // as the node's text preview misrepresents what AT renders.
+        textContent: isMedia ? "" : getDirectTextContent(element),
+        descendantText: isMedia ? "" : getDescendantText(element),
         isHidden: isVisuallyHidden(element),
       },
       a11y: {
@@ -1127,6 +1177,19 @@ function buildNode(
         properties: {
           ...(getHeadingLevel(element) !== null
             ? { level: String(getHeadingLevel(element)) }
+            : {}),
+          // The walk doesn't descend into media children, so the one
+          // a11y-critical signal that lives there — does this media ship
+          // a captions/subtitles track? (WCAG 1.2.2) — is hoisted onto
+          // the media node itself.
+          ...(isMedia
+            ? {
+                captions: element.querySelector(
+                  'track[kind="captions"], track[kind="subtitles"]',
+                )
+                  ? "true"
+                  : "false",
+              }
             : {}),
         },
         isExposedToAT: !isHiddenFromAT(element),
@@ -1175,6 +1238,13 @@ function walk(
   // built successfully is never orphaned by a later failure.
   elementRefs.set(id, element);
   nodes.set(id, node);
+
+  // Media elements are leaves: their light-DOM children are unrendered
+  // fallback content plus <track>/<source> metadata, none of which appear
+  // in a real browser tree (Chromium's Video/Audio children are closed
+  // UA-shadow controls we cannot reach). The captions signal from <track>
+  // is hoisted onto the media node's `captions` property in buildNode.
+  if (MEDIA_TAGS.has(node.dom.tagName)) return id;
 
   // Walk children. Each child is isolated by buildNode's own boundary, so a
   // single pathological descendant can't take out its siblings or ancestors.
