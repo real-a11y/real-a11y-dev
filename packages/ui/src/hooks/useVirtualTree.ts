@@ -13,8 +13,15 @@ export interface UseVirtualTreeOptions {
 }
 
 export interface UseVirtualTreeResult {
-  /** Attach this to the scrollable `.sn-tree-container` element. */
-  containerRef: { current: HTMLDivElement | null };
+  /**
+   * Attach this to the scrollable `.sn-tree-container` element.
+   *
+   * It is a callback ref rather than an object ref so the hook is notified
+   * the moment the container mounts, remounts, or unmounts — the container
+   * may render conditionally (e.g. behind a "Connecting…" screen), so the
+   * viewport can only be measured once the node is actually in the DOM.
+   */
+  containerRef: (node: HTMLDivElement | null) => void;
   /** Total scrollable height for the inner tree list. */
   totalHeight: number;
   /** Index of the first rendered row (includes overscan). */
@@ -47,37 +54,49 @@ export function useVirtualTree(
   const rowHeight = options.rowHeight ?? DEFAULT_ROW_HEIGHT;
   const overscan = options.overscan ?? DEFAULT_OVERSCAN;
 
-  const containerRef = useRef<HTMLDivElement>(null);
+  const nodeRef = useRef<HTMLDivElement | null>(null);
+  const teardownRef = useRef<(() => void) | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(0);
 
   const updateViewport = useCallback(() => {
-    const container = containerRef.current;
+    const container = nodeRef.current;
     if (!container) return;
     setViewportHeight(container.clientHeight);
     setScrollTop(container.scrollTop);
   }, []);
 
-  useEffect(() => {
-    updateViewport();
+  // Callback ref: fires whenever the scrollable container mounts (`node`) or
+  // unmounts (`null`). Measuring here — instead of in a one-shot mount effect —
+  // guarantees the viewport is read once the node is really in the DOM, even
+  // when it renders conditionally after first paint.
+  const containerRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      teardownRef.current?.();
+      teardownRef.current = null;
+      nodeRef.current = node;
+      if (!node) return;
 
-    const container = containerRef.current;
-    if (!container) return;
+      updateViewport();
 
-    let ro: ResizeObserver | undefined;
-    if (typeof ResizeObserver !== "undefined") {
-      ro = new ResizeObserver(updateViewport);
-      ro.observe(container);
-    }
+      let ro: ResizeObserver | undefined;
+      if (typeof ResizeObserver !== "undefined") {
+        ro = new ResizeObserver(updateViewport);
+        ro.observe(node);
+      }
 
-    const onWindowResize = () => updateViewport();
-    window.addEventListener("resize", onWindowResize);
+      const onWindowResize = () => updateViewport();
+      window.addEventListener("resize", onWindowResize);
 
-    return () => {
-      ro?.disconnect();
-      window.removeEventListener("resize", onWindowResize);
-    };
-  }, [updateViewport]);
+      teardownRef.current = () => {
+        ro?.disconnect();
+        window.removeEventListener("resize", onWindowResize);
+      };
+    },
+    [updateViewport],
+  );
+
+  useEffect(() => () => teardownRef.current?.(), []);
 
   const handleScroll = useCallback((e: Event) => {
     const container = e.currentTarget as HTMLDivElement;
@@ -101,7 +120,7 @@ export function useVirtualTree(
       index: number,
       block: "start" | "center" | "end" | "nearest" = "nearest",
     ) => {
-      const container = containerRef.current;
+      const container = nodeRef.current;
       if (!container || itemCount === 0) return;
 
       const clamped = Math.max(0, Math.min(index, itemCount - 1));

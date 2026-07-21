@@ -98,7 +98,7 @@ export function App() {
   const [nodes, setNodes] = useState<Map<string, SemanticNode>>(new Map());
   const [rootId, setRootId] = useState<string>("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [, forceRender] = useState(0);
+  const [renderCount, forceRender] = useState(0);
   const [connected, setConnected] = useState(false);
   const [lastAction, setLastAction] = useState<string | null>(null);
   const [roleFilter, setRoleFilter] = useState<RoleFilter>(null);
@@ -382,21 +382,30 @@ export function App() {
   }, [query, nodes, viewMode, roleFilter, updateMatchCount]);
 
   // Compute visible nodes
-  const visibleNodeIds: string[] = [];
-  function walkVisible(nodeId: string) {
-    const node = nodes.get(nodeId);
-    if (!node || !node.ui.matchesFilter) return;
-    visibleNodeIds.push(nodeId);
-    if (node.ui.expanded) {
-      for (const childId of node.childIds) {
-        walkVisible(childId);
-      }
-    }
-  }
   const effectiveRootId = scopedRootId || rootId;
   const scopedRootNode = scopedRootId ? nodes.get(scopedRootId) : null;
   const scopedDepthOffset = scopedRootNode ? scopedRootNode.depth : 0;
-  if (effectiveRootId) walkVisible(effectiveRootId);
+  // Memoized so the flattened list keeps a stable identity across unrelated
+  // re-renders. `renderCount` bumps on every forceRender() — expand/collapse,
+  // filter application, incoming messages — which is exactly when the visible
+  // set (driven by mutated `ui.expanded`/`ui.matchesFilter`) can change.
+  // Without this, effects keyed on `visibleNodeIds` would re-run every render.
+  const visibleNodeIds = useMemo(() => {
+    const ids: string[] = [];
+    function walkVisible(nodeId: string) {
+      const node = nodes.get(nodeId);
+      if (!node || !node.ui.matchesFilter) return;
+      ids.push(nodeId);
+      if (node.ui.expanded) {
+        for (const childId of node.childIds) {
+          walkVisible(childId);
+        }
+      }
+    }
+    if (effectiveRootId) walkVisible(effectiveRootId);
+    return ids;
+    // renderCount changes on every forceRender() call — intentional invalidation.
+  }, [nodes, effectiveRootId, renderCount]);
 
   const {
     containerRef,
