@@ -116,4 +116,108 @@ describe("TreeView (smoke)", () => {
       root.remove();
     }
   });
+
+  it("drops the diff baseline when the view mode changes", async () => {
+    const root = makeRoot();
+    try {
+      render(<TreeView root={root} />, container);
+      await waitFor(container, '[aria-label="Checkpoint tree for diff"]');
+
+      const checkpoint = container.querySelector(
+        '[aria-label="Checkpoint tree for diff"]',
+      ) as HTMLButtonElement;
+      checkpoint.click();
+      await waitFor(
+        container,
+        '[aria-label="Checkpoint tree for diff"][aria-pressed="true"]',
+      );
+
+      // Switching view re-extracts with a different extractor, so the captured
+      // baseline is no longer comparable — it must be dropped rather than
+      // diffed against a tree it shares no nodes with.
+      const domBtn = Array.from(
+        container.querySelectorAll(".sn-toggle-btn"),
+      ).find((b) => b.textContent === "DOM") as HTMLButtonElement;
+      domBtn.click();
+
+      await waitFor(
+        container,
+        '[aria-label="Checkpoint tree for diff"][aria-pressed="false"]',
+      );
+      expect(container.querySelector(".sn-diff-marker")).toBeNull();
+    } finally {
+      root.remove();
+    }
+  });
+
+  it("drops the diff baseline when the mode changes via the prop", async () => {
+    // The host can switch views without touching the toolbar —
+    // `InspectorInstance.setViewMode()` and the React wrapper's `mode` prop
+    // both arrive as a changed `initialViewMode`. That path must honor the
+    // same rule: a baseline captured in one view is not comparable against
+    // the other, so it has to go.
+    const root = makeRoot();
+    try {
+      render(<TreeView root={root} initialViewMode="a11y" />, container);
+      await waitFor(container, '[aria-label="Checkpoint tree for diff"]');
+
+      (
+        container.querySelector(
+          '[aria-label="Checkpoint tree for diff"]',
+        ) as HTMLButtonElement
+      ).click();
+      await waitFor(
+        container,
+        '[aria-label="Checkpoint tree for diff"][aria-pressed="true"]',
+      );
+
+      render(<TreeView root={root} initialViewMode="dom" />, container);
+
+      await waitFor(
+        container,
+        '[aria-label="Checkpoint tree for diff"][aria-pressed="false"]',
+      );
+      expect(container.querySelector(".sn-diff-marker")).toBeNull();
+      expect(container.querySelector(".sn-removed")).toBeNull();
+    } finally {
+      root.remove();
+    }
+  });
+
+  it("drops the diff baseline when the root is swapped in place", async () => {
+    // `createInspector` re-keys TreeView on setRoot(), so it remounts and
+    // never reaches this — but TreeView is a public export, and a consumer
+    // rendering it directly with a changing `root` and no key gets no such
+    // help. Node ids are per-element, so the old root's baseline shares no
+    // ids with the new root's tree: every row would read as added.
+    const rootA = makeRoot();
+    const rootB = makeRoot();
+    try {
+      render(<TreeView root={rootA} />, container);
+      await waitFor(container, '[aria-label="Checkpoint tree for diff"]');
+
+      (
+        container.querySelector(
+          '[aria-label="Checkpoint tree for diff"]',
+        ) as HTMLButtonElement
+      ).click();
+      await waitFor(
+        container,
+        '[aria-label="Checkpoint tree for diff"][aria-pressed="true"]',
+      );
+
+      // Same component instance, no key change — only the prop moves.
+      render(<TreeView root={rootB} />, container);
+
+      await waitFor(
+        container,
+        '[aria-label="Checkpoint tree for diff"][aria-pressed="false"]',
+      );
+      expect(container.querySelector(".sn-diff-marker")).toBeNull();
+      expect(container.querySelector(".sn-removed")).toBeNull();
+    } finally {
+      rootA.remove();
+      rootB.remove();
+    }
+  });
 });

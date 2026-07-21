@@ -17,6 +17,12 @@ interface TreeToolbarProps {
   pickModeOn?: boolean;
   /** Called when the user clicks the picker button. */
   onTogglePickMode?: () => void;
+  /** When true, render the checkpoint button that drives diff highlighting. */
+  enableDiff?: boolean;
+  /** True while a baseline is captured — drives aria-pressed. */
+  diffActive?: boolean;
+  /** Called when the user clicks the checkpoint button (capture / clear). */
+  onToggleDiff?: () => void;
 }
 
 export function TreeToolbar({
@@ -32,6 +38,9 @@ export function TreeToolbar({
   enablePicker = false,
   pickModeOn = false,
   onTogglePickMode,
+  enableDiff = false,
+  diffActive = false,
+  onToggleDiff,
 }: TreeToolbarProps) {
   return (
     <>
@@ -53,6 +62,27 @@ export function TreeToolbar({
             aria-label="Pick element in page"
           >
             {"⦿"}
+          </button>
+        )}
+
+        {/* Checkpoint the tree, then interact: rows that appeared or changed
+            since are marked in place. Toggling off clears the baseline.
+            Its own class, not .sn-pick-btn — that selector is how the
+            extension and tests reach the *picker* specifically; the two
+            only share a look, which tree.css grants by grouping them. */}
+        {enableDiff && (
+          <button
+            class="sn-checkpoint-btn"
+            aria-pressed={diffActive}
+            onClick={() => onToggleDiff?.()}
+            title={
+              diffActive
+                ? "Checkpoint active — added and changed nodes are marked. Click to clear."
+                : "Checkpoint the tree, then interact to see what changed"
+            }
+            aria-label="Checkpoint tree for diff"
+          >
+            {"⎌"}
           </button>
         )}
 

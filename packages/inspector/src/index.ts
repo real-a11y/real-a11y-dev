@@ -13,6 +13,19 @@ import { render, h } from "preact";
 
 declare const __SN_STYLES__: string;
 
+/**
+ * The bundled stylesheet, referenced exactly once.
+ *
+ * `__SN_STYLES__` is an esbuild `define`, so every occurrence of the
+ * identifier is replaced with the **entire stylesheet literal** at build
+ * time. Reading it directly from both injection sites (shadow root and light
+ * DOM) shipped two full copies — ~33 kB of duplicated CSS in the bundle, and
+ * gzip could not fold them together because the copies sit further apart than
+ * its window. Binding it here keeps the define at one site; the two injection
+ * paths read this constant instead.
+ */
+const SN_STYLES: string = __SN_STYLES__;
+
 // Re-export core types for convenience
 export type {
   SemanticNode,
@@ -109,7 +122,7 @@ export function createInspector(
           // Fresh shadow root — inject styles once.
           const style = document.createElement("style");
           if (styleNonce) style.setAttribute("nonce", styleNonce);
-          style.textContent = __SN_STYLES__;
+          style.textContent = SN_STYLES;
           shadow.appendChild(style);
         }
 
@@ -136,7 +149,7 @@ export function createInspector(
         const style = document.createElement("style");
         style.id = "sn-styles";
         if (styleNonce) style.setAttribute("nonce", styleNonce);
-        style.textContent = __SN_STYLES__;
+        style.textContent = SN_STYLES;
         document.head.appendChild(style);
       }
       renderTarget = container;

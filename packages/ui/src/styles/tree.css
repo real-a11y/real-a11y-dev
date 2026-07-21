@@ -282,6 +282,89 @@
   cursor: pointer;
 }
 
+/* ── Diff highlighting ─────────────────────────────────────────────────────
+   Colour is deliberately not load-bearing: every marked row also renders a
+   +/~ glyph and a screen-reader word, and carries a solid left edge that
+   survives forced-colours mode. */
+.sn-node--added {
+  background: var(--sn-diff-added-bg);
+  box-shadow: inset 3px 0 0 var(--sn-diff-added-edge);
+}
+
+.sn-node--changed {
+  background: var(--sn-diff-changed-bg);
+  box-shadow: inset 3px 0 0 var(--sn-diff-changed-edge);
+}
+
+.sn-diff-marker {
+  flex: none;
+  width: 1ch;
+  margin-right: 4px;
+  font-family: var(--sn-font-mono);
+  font-weight: 700;
+  text-align: center;
+}
+
+.sn-diff-marker--added {
+  color: var(--sn-diff-added-text);
+}
+
+.sn-diff-marker--changed {
+  color: var(--sn-diff-changed-text);
+}
+
+/* Forced colours strips background/box-shadow; keep the rows distinguishable. */
+@media (forced-colors: active) {
+  .sn-node--added,
+  .sn-node--changed {
+    border-left: 3px solid CanvasText;
+  }
+}
+
+/* Removed nodes — no row exists for them, so they are summarized below. */
+.sn-removed {
+  border-top: 1px solid var(--sn-border);
+  padding: 4px 8px;
+  font-size: var(--sn-font-size);
+}
+
+.sn-removed-summary {
+  cursor: pointer;
+  color: var(--sn-text-muted);
+}
+
+.sn-removed-list {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.sn-removed-item {
+  color: var(--sn-text-muted);
+  font-family: var(--sn-font-mono);
+  line-height: 1.6;
+}
+
+.sn-removed-item--more {
+  font-style: italic;
+  list-style: none;
+}
+
+/* Visually hidden, still announced. */
+.sn-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* Indent guide lines */
 .sn-indent {
   display: inline-flex;
@@ -854,8 +937,9 @@
   flex-shrink: 0;
 }
 
-/* ---- Element picker toggle (DevTools-style "select an element in the page") ---- */
-.sn-pick-btn {
+/* ---- Square toolbar toggles: element picker, diff checkpoint ---- */
+.sn-pick-btn,
+.sn-checkpoint-btn {
   padding: 4px 8px;
   border: 1px solid var(--sn-border);
   border-radius: 4px;
@@ -872,18 +956,21 @@
     color 0.15s;
 }
 
-.sn-pick-btn:hover {
+.sn-pick-btn:hover,
+.sn-checkpoint-btn:hover {
   background: var(--sn-bg-hover);
   color: var(--sn-text);
   border-color: var(--sn-accent);
 }
 
-.sn-pick-btn:focus-visible {
+.sn-pick-btn:focus-visible,
+.sn-checkpoint-btn:focus-visible {
   outline: 2px solid var(--sn-border-focus);
   outline-offset: 1px;
 }
 
-.sn-pick-btn[aria-pressed="true"] {
+.sn-pick-btn[aria-pressed="true"],
+.sn-checkpoint-btn[aria-pressed="true"] {
   background: var(--sn-accent);
   color: #fff;
   border-color: var(--sn-accent);

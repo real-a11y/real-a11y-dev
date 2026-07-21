@@ -32,6 +32,14 @@
   --sn-search-bg: #ffffff;
   --sn-search-border: #d1d5db;
   --sn-guide-line: #e5e7eb;
+  /* Diff highlighting. Colour is a reinforcement here, never the only cue —
+     each row also carries a +/~ glyph and a screen-reader word. */
+  --sn-diff-added-bg: hsl(142 76% 94%);
+  --sn-diff-added-edge: hsl(142 60% 38%);
+  --sn-diff-added-text: hsl(142 72% 22%);
+  --sn-diff-changed-bg: hsl(38 92% 93%);
+  --sn-diff-changed-edge: hsl(32 85% 42%);
+  --sn-diff-changed-text: hsl(25 85% 28%);
   --sn-font: system-ui, -apple-system, sans-serif;
   --sn-font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
   --sn-font-size: 13px;
@@ -63,6 +71,12 @@
   --sn-search-bg: #1e293b;
   --sn-search-border: #475569;
   --sn-guide-line: #334155;
+  --sn-diff-added-bg: hsl(142 55% 15%);
+  --sn-diff-added-edge: hsl(142 55% 45%);
+  --sn-diff-added-text: hsl(142 60% 76%);
+  --sn-diff-changed-bg: hsl(30 55% 17%);
+  --sn-diff-changed-edge: hsl(35 85% 52%);
+  --sn-diff-changed-text: hsl(38 90% 74%);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -90,5 +104,11 @@
     --sn-search-bg: #1e293b;
     --sn-search-border: #475569;
     --sn-guide-line: #334155;
+    --sn-diff-added-bg: hsl(142 55% 15%);
+    --sn-diff-added-edge: hsl(142 55% 45%);
+    --sn-diff-added-text: hsl(142 60% 76%);
+    --sn-diff-changed-bg: hsl(30 55% 17%);
+    --sn-diff-changed-edge: hsl(35 85% 52%);
+    --sn-diff-changed-text: hsl(38 90% 74%);
   }
 }

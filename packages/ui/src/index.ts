@@ -6,5 +6,7 @@ export { TreeNode } from "./components/TreeNode.js";
 export { TreeToolbar } from "./components/TreeToolbar.js";
 export { useTreeKeyboard } from "./hooks/useTreeKeyboard.js";
 export { useSearch } from "./hooks/useSearch.js";
+export { buildTreeDiffView, EMPTY_DIFF_VIEW } from "./diff.js";
+export type { TreeDiffView, NodeDiffStatus } from "./diff.js";
 export { useInputModality } from "./hooks/useInputModality.js";
 export type { InputModality } from "./hooks/useInputModality.js";
