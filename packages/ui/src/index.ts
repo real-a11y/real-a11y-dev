@@ -10,3 +10,4 @@ export { buildTreeDiffView, EMPTY_DIFF_VIEW } from "./diff.js";
 export type { TreeDiffView, NodeDiffStatus } from "./diff.js";
 export { useInputModality } from "./hooks/useInputModality.js";
 export type { InputModality } from "./hooks/useInputModality.js";
+export { useVirtualTree } from "./hooks/useVirtualTree.js";

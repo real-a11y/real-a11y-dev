@@ -36,6 +36,7 @@ import type { TreeDiffView } from "../diff.js";
 import { useInputModality } from "../hooks/useInputModality.js";
 import { useSearch } from "../hooks/useSearch.js";
 import { useTreeKeyboard } from "../hooks/useTreeKeyboard.js";
+import { useVirtualTree } from "../hooks/useVirtualTree.js";
 
 import { FilteredList } from "./FilteredList.js";
 import { TabSequenceView } from "./TabSequenceView.js";
@@ -212,12 +213,23 @@ export function TreePanel({
     [treeData, renderCount],
   );
 
+  // Virtualize the tree list: render only the rows in the viewport plus overscan.
+  const {
+    containerRef,
+    startIndex,
+    endIndex,
+    totalHeight,
+    offset,
+    onScroll,
+    scrollToIndex,
+  } = useVirtualTree(visibleNodeIds.length);
+
   // Scroll selected node into view
   useEffect(() => {
-    if (!selectedId || !treeRef.current) return;
-    const el = treeRef.current.querySelector(`[data-node-id="${selectedId}"]`);
-    el?.scrollIntoView({ block: "nearest" });
-  }, [selectedId]);
+    if (!selectedId || visibleNodeIds.length === 0) return;
+    const index = visibleNodeIds.indexOf(selectedId);
+    if (index !== -1) scrollToIndex(index, "nearest");
+  }, [selectedId, visibleNodeIds, scrollToIndex]);
 
   // When the picker reports a picked element, surface it as a tree
   // selection: expand ancestors so the row is visible, set selectedId,
@@ -242,14 +254,6 @@ export function TreePanel({
     }
     if (mutated) forceRender();
     setSelectedId(pickedNodeId);
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const el = treeRef.current?.querySelector(
-          `[data-node-id="${CSS.escape(pickedNodeId)}"]`,
-        );
-        el?.scrollIntoView({ block: "center" });
-      });
-    });
     onPickedNodeHandled?.();
   }, [pickedNodeId, treeData, forceRender, onPickedNodeHandled]);
 
@@ -316,20 +320,6 @@ export function TreePanel({
       setSelectedId(targetId);
       setFlashingId(targetId);
       setTimeout(() => setFlashingId(null), 700);
-
-      // Two RAFs ensure Preact has rendered AND the browser has done layout
-      // accounting for the newly-expanded ancestors before we measure. The
-      // selection effect below uses `block: "nearest"`, which can no-op
-      // when the row was JUST inserted via ancestor expansion — explicit
-      // center-scroll guarantees the target lands in the viewport.
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          const el = treeRef.current?.querySelector(
-            `[data-node-id="${CSS.escape(targetId)}"]`,
-          );
-          el?.scrollIntoView({ block: "center" });
-        });
-      });
     },
     [treeData, forceRender],
   );
@@ -399,7 +389,7 @@ export function TreePanel({
         diffActive={diffActive}
         onToggleDiff={onToggleDiff}
       />
-      <div class="sn-tree-container">
+      <div ref={containerRef} class="sn-tree-container" onScroll={onScroll}>
         {viewMode === "tab" ? (
           <TabSequenceView
             nodes={treeData.nodes}
@@ -424,12 +414,17 @@ export function TreePanel({
             role="tree"
             aria-label="Semantic tree"
             tabIndex={0}
+            style={{
+              minHeight: totalHeight,
+              paddingTop: offset,
+              boxSizing: "border-box",
+            }}
             onKeyDown={(e) => {
               markKeyboard();
               handleKeyDown(e);
             }}
           >
-            {visibleNodeIds.map((id) => {
+            {visibleNodeIds.slice(startIndex, endIndex).map((id) => {
               const node = treeData.nodes.get(id);
               if (!node) return null;
               const forwardIds = controlsIndex.forward.get(id);
