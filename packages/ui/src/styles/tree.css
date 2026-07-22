@@ -335,8 +335,17 @@
   color: var(--sn-diff-changed-text);
 }
 
-/* Forced colours strips background/box-shadow; keep the rows distinguishable. */
+/* Forced colours strips background/box-shadow; keep the rows distinguishable.
+   Selection used to rely on border-color (which survives forced-colours); the
+   exact-24px virtualization constraint moved it to an inset box-shadow, so
+   restore a Highlight outline here. Negative outline-offset paints inside the
+   box and does not grow the row past --sn-line-height. */
 @media (forced-colors: active) {
+  .sn-node--selected {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+
   .sn-node--added,
   .sn-node--changed {
     border-left: 3px solid CanvasText;
