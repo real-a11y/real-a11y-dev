@@ -122,6 +122,52 @@ Originally deferred: CDP **action dispatch**, root scoping, Chrome milestone dri
 
 ---
 
+## Spike 4 — real-app HTML/ARIA corpus (not just media)
+
+**Code:** `packages/browser/spike/native-tree/corpus/`  
+**Run:** `pnpm --filter @real-a11y-dev/browser run test:spike`
+
+Media proved *why* CDP exists. This spike asks whether native mode is credible on an **app-shell-shaped page**: landmarks, forms (text/email/password/radio/checkbox/select/textarea/number/range/file), lists, tables, images, `<details>`, `<dialog>`, ARIA tabs/switch/progressbar/alert, author open shadow DOM — plus video as one section among many.
+
+### Method
+
+1. Load `corpus/app-shell.html` in Chromium.
+2. Serialize **native** (`nativeTreeFromPage`) and **DOM** (page-bundle `auditSnapshot`) with the dialog closed.
+3. Diff role+name **multisets** (order-insensitive) — `parity.ts`.
+4. Separately open `<dialog>` and confirm both producers scope to the modal (inert background).
+
+### Results (Chrome 147, representative)
+
+| Metric | Value |
+|---|---|
+| DOM pairs | 71 |
+| Native pairs | 76 |
+| Shared | 63 |
+| **Overlap vs DOM** | **~89%** |
+
+Native still uniquely adds media UA controls (`button "play"`, scrubber, …) — forcing function intact. Author shadow button `"Shadow action"` appears on the native side.
+
+### Real asymmetries the corpus surfaces (normalizer work, not blockers)
+
+| Pattern | DOM producer | Native (after spike normalizer) | Takeaway |
+|---|---|---|---|
+| List item names | `listitem "Alpha"` | Needs StaticText→parent name promotion (now in spike) | Dropping `StaticText` without promoting names loses content |
+| List markers | (folded into name) | `ListMarker` noise | Drop in normalizer |
+| `<form>` | `form` | Often absent as a role | Vocabulary — don't require byte-identical structure |
+| `<input type=file>` | `textbox "Attach"` | `button "Attach"` | Map/canonicalize |
+| `<details>` | `group "Advanced"` | `DisclosureTriangle "Advanced"` | Map to disclosure/group |
+| Table caption | `table` + `caption "…"` | `table "Team roster"` | Name placement differs |
+| Open `<dialog>` | Tree collapses to dialog | Same | **Both** honor modality — capture corpus with dialog closed |
+
+### Opinion for the RFC
+
+- **Yes — native must be validated on a real-app corpus, not only media.** Spike 4 is that gate; ~89% role+name overlap on a dense app shell is strong evidence the producer is generally usable.
+- **Do not expect 100% pair equality.** Chromium vocabulary (`DisclosureTriangle`, `menulistpopup`, file-as-button) and name placement differ. Production success = aggressive normalization + mode-stamped baselines + parity CI on this corpus (and more fixtures), not identical trees.
+- **Live sites (GitHub, etc.)** are useful smoke tests later; fixtures are the CI contract (stable, offline, intentional coverage).
+- Remaining gaps to grow the corpus: iframes, portals/React modals, virtualized lists, canvas, SVG icons, contenteditable surfaces.
+
+---
+
 ## Playwright adapter consumer spike
 
 **Code:** `packages/testing/spike/playwright-native/` · **Run:** `pnpm --filter @real-a11y-dev/testing run test:spike`
@@ -143,13 +189,16 @@ Same handle shape (`auditSnapshot()`); different producer. Product API target: `
 packages/browser/spike/native-tree/
   fixture.html
   normalize.ts
-  from-page.ts                 # Page → ExtractionResult (future nativeTree shape)
-  dispatch.ts                  # CDP click/type (Phase 2 ActionBackend spike)
-  dispatch.spike.test.ts
+  from-page.ts
+  dispatch.ts / dispatch.spike.test.ts
   native-tree.spike.test.ts
   probe.mts
+  corpus/
+    app-shell.html             # real-app HTML/ARIA patterns
+    parity.ts                  # role+name multiset diff
+    corpus.spike.test.ts       # DOM↔native overlap + modality
 packages/testing/spike/playwright-native/
-  attach-native.ts             # attach({ tree }) spike
+  attach-native.ts
   playwright-native.spike.test.ts
 ```
 
@@ -164,7 +213,8 @@ packages/testing/spike/playwright-native/
 3. **Treat redaction as a Phase-1 ship gate**, including AX `value` and DOM enrich.
 4. **Wire `testing/playwright` as a consumer** of `browser.nativeTree` (`attach({ tree })`) — not a second producer, not a new package.
 5. **Phase 2 ActionBackend is feasible** via CDP resolve + `Runtime.callFunctionOn` for author-DOM; UA media controls are also reachable over CDP (privileged), unlike in-page.
-6. **Fix** `serialize`'s `instanceof Element` guard so Node consumers can serialize an `ExtractionResult` without jsdom (small follow-up).
+6. **Require a real-app corpus parity harness** (Spike 4) before defaulting cli/mcp/testing/playwright to native — media-only spikes are necessary but not sufficient. ~89% role+name overlap on an app shell is the bar to beat and improve via normalization.
+7. **Fix** `serialize`'s `instanceof Element` guard so Node consumers can serialize an `ExtractionResult` without jsdom (small follow-up).
 
 ---
 

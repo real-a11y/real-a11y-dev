@@ -52,6 +52,8 @@ const DROP_ROLES = new Set([
   "InlineTextBox",
   "LineBreak",
   "LabelText",
+  "ListMarker",
+  "listmarker",
   "generic",
   "none",
   "presentation",
@@ -208,6 +210,30 @@ export function normalizeNativeTree(
       states.editable === "plaintext" ||
       states.settable === true;
 
+    // Chromium often puts the accessible name on a StaticText child while the
+    // parent listitem/button name is empty. Dropping StaticText without
+    // promoting the name loses "Alpha"/"Beta" etc. — a real-app corpus gap.
+    let name = (ax.name?.value ?? "").replace(/\s+/g, " ").trim();
+    if (!name) {
+      for (const cid of ax.childIds ?? []) {
+        const child = byId.get(cid);
+        const childRole = child?.role?.value ?? "";
+        if (
+          child &&
+          !child.ignored &&
+          (childRole === "StaticText" || childRole === "LabelText")
+        ) {
+          const childName = (child.name?.value ?? "")
+            .replace(/\s+/g, " ")
+            .trim();
+          if (childName) {
+            name = childName;
+            break;
+          }
+        }
+      }
+    }
+
     const node: SemanticNode = {
       // Prefer a stable-looking id when we have a backend DOM id; else ax-*.
       id:
@@ -220,7 +246,7 @@ export function normalizeNativeTree(
       dom,
       a11y: {
         role,
-        name: (ax.name?.value ?? "").replace(/\s+/g, " ").trim(),
+        name,
         description: (ax.description?.value ?? "").trim(),
         states,
         properties,

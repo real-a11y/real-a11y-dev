@@ -241,7 +241,9 @@ Drop Chromium noise before it becomes `AccNode`: `InlineTextBox`, ignored nodes,
 
 ### 5.5 Parity harness
 
-Promote `compare_trees` into a fixture-corpus CI job. Disagreements are a mutual signal: DOM-producer gaps (how media roles were found) *and* native-normalizer bugs. This harness gates the cli/mcp default flip — then remains as a permanent fidelity guard. The job of the harness is **not** "two equal product modes forever"; it is "prove native is safe to default, then keep DOM honest."
+Promote `compare_trees` into a fixture-corpus CI job. Disagreements are a mutual signal: DOM-producer gaps (how media roles were found) *and* native-normalizer bugs. This harness gates the cli/mcp/**testing/playwright** default flip — then remains as a permanent fidelity guard. The job of the harness is **not** "two equal product modes forever"; it is "prove native is safe to default, then keep DOM honest."
+
+**Spike 4** (`packages/browser/spike/native-tree/corpus/`) is the first cut of that harness: an app-shell HTML/ARIA page (landmarks, forms, tables, ARIA widgets, author shadow, dialog modality, media). Media alone is not enough — see [`native-tree-spike.md`](./native-tree-spike.md) § Spike 4 (~89% role+name overlap vs DOM on that corpus).
 
 ---
 
