@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Semantic Navigator — desktop spike</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0e0f12;
+        --panel: #16181d;
+        --line: #2a2e37;
+        --text: #e8eaed;
+        --muted: #9aa0a6;
+        --accent: #8ab4f8;
+        --ok: #81c995;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font:
+          14px/1.45 ui-sans-serif,
+          system-ui,
+          sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+      }
+      header {
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid var(--line);
+        background: var(--panel);
+      }
+      header h1 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 600;
+      }
+      header p {
+        margin: 0.35rem 0 0;
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+      main {
+        display: grid;
+        grid-template-columns: 1fr 280px;
+        min-height: calc(100vh - 72px);
+      }
+      #tree {
+        padding: 0.75rem 0;
+        overflow: auto;
+      }
+      .node {
+        display: flex;
+        gap: 0.5rem;
+        align-items: baseline;
+        width: 100%;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        text-align: left;
+        padding: 0.25rem 1rem;
+        cursor: pointer;
+        font: inherit;
+      }
+      .node:hover,
+      .node:focus-visible {
+        background: #1e2128;
+        outline: none;
+      }
+      .node[aria-pressed="true"] {
+        background: #243044;
+      }
+      .role {
+        color: var(--accent);
+        font-family: ui-monospace, monospace;
+        font-size: 0.8rem;
+      }
+      .name {
+        color: var(--text);
+      }
+      aside {
+        border-left: 1px solid var(--line);
+        padding: 1rem;
+        background: var(--panel);
+      }
+      aside h2 {
+        margin: 0 0 0.5rem;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+      }
+      #log {
+        white-space: pre-wrap;
+        font-family: ui-monospace, monospace;
+        font-size: 0.75rem;
+        color: var(--ok);
+        min-height: 4rem;
+      }
+      .curtain-note {
+        display: inline-block;
+        margin-top: 0.5rem;
+        padding: 0.15rem 0.45rem;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Semantic Navigator</h1>
+      <p>
+        Tree is the interface. Visual page is hidden (headless + curtain).
+        Activate nodes to audit structure the way AT consumes it.
+      </p>
+      <span class="curtain-note">Curtain ON — no visual content</span>
+    </header>
+    <main>
+      <div
+        id="tree"
+        role="tree"
+        aria-label="Accessibility tree"
+        tabindex="0"
+      ></div>
+      <aside>
+        <h2>Session log</h2>
+        <div id="log" aria-live="polite">Loading tree…</div>
+      </aside>
+    </main>
+    <script>
+      const treeEl = document.getElementById("tree");
+      const logEl = document.getElementById("log");
+      let nodes = [];
+      let selected = null;
+
+      function log(msg) {
+        logEl.textContent = msg;
+      }
+
+      function render() {
+        treeEl.innerHTML = "";
+        for (const n of nodes) {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "node";
+          btn.role = "treeitem";
+          btn.style.paddingLeft = `${12 + n.depth * 14}px`;
+          btn.setAttribute("aria-pressed", String(selected === n.id));
+          btn.disabled = n.backendDOMNodeId == null;
+          const role = document.createElement("span");
+          role.className = "role";
+          role.textContent = n.role;
+          const name = document.createElement("span");
+          name.className = "name";
+          name.textContent = n.name ? ` "${n.name}"` : "";
+          btn.append(role, name);
+          btn.addEventListener("click", () => activate(n));
+          treeEl.appendChild(btn);
+        }
+      }
+
+      async function refresh() {
+        const res = await fetch("/api/tree");
+        const data = await res.json();
+        nodes = data.nodes;
+        render();
+        log(
+          `Tree loaded — ${nodes.length} nodes.\nClick a control to activate.`,
+        );
+      }
+
+      async function activate(n) {
+        if (n.backendDOMNodeId == null) return;
+        selected = n.id;
+        render();
+        log(`Activating ${n.role}${n.name ? ` "${n.name}"` : ""}…`);
+        const res = await fetch("/api/click", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ backendDOMNodeId: n.backendDOMNodeId }),
+        });
+        const data = await res.json();
+        nodes = data.nodes;
+        render();
+        if (!data.ok) {
+          log(`Failed: ${data.error}`);
+          return;
+        }
+        log(
+          `Activated ${n.role}${n.name ? ` "${n.name}"` : ""}.\n` +
+            `Page status (hidden): ${data.status || "(empty)"}\n` +
+            `Tree refreshed — ${nodes.length} nodes.`,
+        );
+      }
+
+      refresh().catch((err) => log(String(err)));
+    </script>
+  </body>
+</html>

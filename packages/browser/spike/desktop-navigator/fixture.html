@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Checkout — desktop navigator spike fixture</title>
+  </head>
+  <body>
+    <header>
+      <a href="#main">Skip to content</a>
+      <nav aria-label="Primary">
+        <a href="/">Shop</a>
+        <a href="/cart">Cart</a>
+      </nav>
+    </header>
+    <main id="main">
+      <h1>Checkout</h1>
+      <p>Complete your order.</p>
+      <form id="checkout">
+        <label>
+          Email
+          <input
+            id="email"
+            name="email"
+            type="email"
+            value="buyer@example.com"
+          />
+        </label>
+        <label>
+          <input id="gift" type="checkbox" name="gift" />
+          This is a gift
+        </label>
+        <button type="button" id="pay">Pay now</button>
+      </form>
+      <p id="status" role="status" aria-live="polite"></p>
+    </main>
+    <script>
+      document.getElementById("pay").addEventListener("click", () => {
+        const gift = document.getElementById("gift").checked;
+        const email = document.getElementById("email").value;
+        document.getElementById("status").textContent = gift
+          ? `Gift order placed for ${email}`
+          : `Order placed for ${email}`;
+      });
+      document.getElementById("gift").addEventListener("change", () => {
+        /* tree should reflect checked state after CDP click */
+      });
+    </script>
+  </body>
+</html>
