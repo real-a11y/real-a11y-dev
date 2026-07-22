@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import {
   getImplicitRole,
   isHiddenFromAT,
+  isSubtreeHidden,
   getHeadingLevel,
 } from "./role-map.js";
 
@@ -197,6 +198,33 @@ describe("isHiddenFromAT", () => {
     expect(isHiddenFromAT(el('<div aria-hidden="false">Shown</div>'))).toBe(
       false,
     );
+  });
+
+  it("shares subtree-hidden checks with isSubtreeHidden (display:none)", () => {
+    // Drift guard: isHiddenFromAT must keep calling isSubtreeHidden for the
+    // overlapping conditions rather than re-implementing them. display:none
+    // is the shared CSS path both predicates must agree on.
+    const node = el('<div style="display:none">Gone</div>');
+    document.body.appendChild(node);
+    try {
+      expect(isSubtreeHidden(node)).toBe(true);
+      expect(isHiddenFromAT(node)).toBe(true);
+    } finally {
+      node.remove();
+    }
+  });
+
+  it("treats visibility:hidden as AT-hidden but not subtree-hidden", () => {
+    // visibility:hidden is NOT subtree-hiding (a child can override to
+    // visible), so the walk still descends — but AT must not see the node.
+    const node = el('<div style="visibility:hidden">Ghost</div>');
+    document.body.appendChild(node);
+    try {
+      expect(isSubtreeHidden(node)).toBe(false);
+      expect(isHiddenFromAT(node)).toBe(true);
+    } finally {
+      node.remove();
+    }
   });
 });
 

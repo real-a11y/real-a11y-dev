@@ -1420,3 +1420,47 @@ describe("media elements (video/audio)", () => {
     expect(tags).toContain("img");
   });
 });
+
+describe("computed-style cache during extraction", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("calls getComputedStyle at most once per element during extractDomTree", () => {
+    // Regression: buildNode used to hit getComputedStyle up to 5 times per
+    // kept element (subtree-hidden, visually-hidden, visibility, sr-only,
+    // isHiddenFromAT). A per-extraction WeakMap shares one CSSStyleDeclaration.
+    const root = createPage(`
+      <main>
+        <h1>Title</h1>
+        <p>Hello <strong>world</strong></p>
+        <button type="button">Go</button>
+        <div style="display:none"><span>Hidden</span></div>
+      </main>
+    `);
+    document.body.appendChild(root);
+
+    const counts = new Map<Element, number>();
+    const original = window.getComputedStyle.bind(window);
+    const spy = vi
+      .spyOn(window, "getComputedStyle")
+      .mockImplementation((elt: Element, pseudoElt?: string | null) => {
+        const el = elt as Element;
+        counts.set(el, (counts.get(el) ?? 0) + 1);
+        return original(el, pseudoElt);
+      });
+
+    try {
+      extractDomTree(root);
+      // Every element that had style resolved must have been resolved once.
+      for (const [, n] of counts) {
+        expect(n).toBeLessThanOrEqual(1);
+      }
+      // Sanity: we did resolve style for real (not a no-op spy).
+      expect(counts.size).toBeGreaterThan(0);
+    } finally {
+      spy.mockRestore();
+      root.remove();
+    }
+  });
+});

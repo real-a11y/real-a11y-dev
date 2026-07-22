@@ -8,6 +8,71 @@ import { safeHidden } from "./clobber-safe.js";
 
 type RoleResolver = string | ((el: Element) => string);
 
+/**
+ * Per-extraction cache of `getComputedStyle` results. Created once at the
+ * start of `extractDomTree` and threaded through the walk so each element
+ * resolves style at most once (display / visibility / sr-only / AT-hidden
+ * all share the same declaration).
+ */
+export type StyleCache = WeakMap<Element, CSSStyleDeclaration>;
+
+/**
+ * Resolve computed style, optionally via a per-extraction WeakMap so repeat
+ * callers on the same element don't re-enter `getComputedStyle`.
+ */
+export function getCachedComputedStyle(
+  element: Element,
+  cache?: StyleCache | null,
+): CSSStyleDeclaration | null {
+  if (typeof window === "undefined" || !window.getComputedStyle) return null;
+  if (cache) {
+    const hit = cache.get(element);
+    if (hit) return hit;
+    const style = window.getComputedStyle(element as HTMLElement);
+    cache.set(element, style);
+    return style;
+  }
+  return window.getComputedStyle(element as HTMLElement);
+}
+
+/**
+ * True when the element's entire subtree should be skipped during extraction
+ * (`hidden` attr, `inert`, `display:none`, `content-visibility:hidden`).
+ *
+ * Does NOT check `visibility:hidden` — that property is not subtree-hiding
+ * (a child can set `visibility:visible` and become visible again), so the
+ * walk must still descend.
+ *
+ * Pass a pre-resolved `style` (from {@link getCachedComputedStyle}) to avoid
+ * a second `getComputedStyle` when the caller already has one.
+ */
+export function isSubtreeHidden(
+  element: Element,
+  style?: CSSStyleDeclaration | null,
+): boolean {
+  // Clobber-immune read: a `<form>` with `<input name="hidden">` makes
+  // `htmlEl.hidden` return that input (truthy), which would drop the whole
+  // form subtree. safeHidden() reads the real state via the prototype getter.
+  if (safeHidden(element)) return true;
+
+  // The HTML `inert` attribute hides the element AND its entire subtree
+  // from both AT and keyboard navigation.
+  if ((element as HTMLElement).hasAttribute("inert")) return true;
+
+  const computed =
+    style !== undefined ? style : getCachedComputedStyle(element);
+  if (computed) {
+    if (computed.display === "none") return true;
+    // content-visibility:hidden skips rendering AND hides from AT
+    // (used by frameworks like Yahoo Atomizer as Cntv(h))
+    if (computed.contentVisibility === "hidden") return true;
+  } else if ((element as HTMLElement).style?.display === "none") {
+    return true;
+  }
+
+  return false;
+}
+
 function hasAccessibleName(el: Element): boolean {
   return !!(
     el.getAttribute("aria-label") ||
@@ -192,7 +257,10 @@ export function getImplicitRole(element: Element): string {
 }
 
 /** Check if an element should be excluded from the accessibility tree */
-export function isHiddenFromAT(element: Element): boolean {
+export function isHiddenFromAT(
+  element: Element,
+  style?: CSSStyleDeclaration | null,
+): boolean {
   const tag = element.tagName.toLowerCase();
   if (HIDDEN_FROM_AT.has(tag)) return true;
 
@@ -203,23 +271,16 @@ export function isHiddenFromAT(element: Element): boolean {
   // role in getImplicitRole and the a11y extractor flattens them (the
   // element drops out, children are promoted to the parent).
 
-  const htmlEl = element as HTMLElement;
-  // Clobber-immune read: on a `<form>` with `<input name="hidden">` the plain
-  // `.hidden` property returns that input (truthy), which would wrongly hide the
-  // whole form. safeHidden() reads the real state via the prototype getter.
-  if (safeHidden(element)) return true;
+  // Resolve style once and share it with isSubtreeHidden (display / content-
+  // visibility / hidden / inert) plus the visibility check below. Previously
+  // this re-implemented the subtree checks line-for-line — a drift hazard.
+  const computed =
+    style !== undefined ? style : getCachedComputedStyle(element);
 
-  // The HTML `inert` attribute makes an element and its entire subtree
-  // inaccessible to AT (and non-focusable). Treated the same as aria-hidden.
-  if (htmlEl.hasAttribute("inert")) return true;
+  if (isSubtreeHidden(element, computed)) return true;
 
-  // CSS display:none, visibility:hidden, and content-visibility:hidden hide from AT
-  if (typeof window !== "undefined" && window.getComputedStyle) {
-    const computed = window.getComputedStyle(htmlEl);
-    if (computed.display === "none" || computed.visibility === "hidden") {
-      return true;
-    }
-    if (computed.contentVisibility === "hidden") return true;
+  if (computed) {
+    if (computed.visibility === "hidden") return true;
   }
 
   return false;
