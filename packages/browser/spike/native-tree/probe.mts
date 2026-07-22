@@ -44,7 +44,13 @@ const sample = nodes
     properties: n.properties,
   }));
 
-console.log(JSON.stringify({ nodeCount: nodes.length, keys: [...keys].sort(), sample }, null, 2));
+console.log(
+  JSON.stringify(
+    { nodeCount: nodes.length, keys: [...keys].sort(), sample },
+    null,
+    2,
+  ),
+);
 
 // Also try DOM.resolve for first node with backendDOMNodeId
 const withBackend = nodes.find((n) => typeof n.backendDOMNodeId === "number");
@@ -56,10 +62,7 @@ if (withBackend) {
     const pushed = await client.send("DOM.pushNodesByBackendIdsToFrontend", {
       backendNodeIds: [backendId],
     });
-    console.error(
-      "\npushNodesByBackendIdsToFrontend:",
-      JSON.stringify(pushed),
-    );
+    console.error("\npushNodesByBackendIdsToFrontend:", JSON.stringify(pushed));
     const resolved = await client.send("DOM.resolveNode", {
       backendNodeId: backendId,
     });
