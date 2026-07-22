@@ -2,6 +2,8 @@
 
 **Status:** Draft for discussion · **Scope:** `core`, `browser`, `serialize`, `audit`, `validate`, `cli`, `mcp`, extension, `testing` · **Stage:** Beta (breaking changes acceptable)
 
+> **Also in this PR:** [`native-tree-v2.md`](./native-tree-v2.md) — a companion that ratifies this RFC’s spine (one model, two producers; native in `browser`) and proposes beta-friendly refinements: accessibility-first `AccNode` (optional `dom` / `interaction`), native defaults for `cli`/`mcp`, and a read-vs-act split. Read both.
+
 ## TL;DR — recommendation
 
 Don't frame this as "native tree **vs** custom engine." Frame it as **one canonical node model (`SemanticNode`), two producers:**
