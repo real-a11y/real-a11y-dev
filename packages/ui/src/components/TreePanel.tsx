@@ -36,6 +36,7 @@ import type { TreeDiffView } from "../diff.js";
 import { useInputModality } from "../hooks/useInputModality.js";
 import { useSearch } from "../hooks/useSearch.js";
 import { useTreeKeyboard } from "../hooks/useTreeKeyboard.js";
+import { useVirtualTree } from "../hooks/useVirtualTree.js";
 
 import { FilteredList } from "./FilteredList.js";
 import { TabSequenceView } from "./TabSequenceView.js";
@@ -44,21 +45,41 @@ import { TreeToolbar } from "./TreeToolbar.js";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
+/** `aria-posinset`/`aria-setsize` for a row within its visible sibling group. */
+interface VisiblePosition {
+  posinset: number;
+  setsize: number;
+}
+
+/**
+ * Flatten the tree to the rows that should render, and record each row's
+ * position within its visible sibling group. Because the list is virtualized
+ * (offscreen rows leave the DOM), screen readers rely on `aria-posinset`/
+ * `aria-setsize` to perceive the full tree size and position — the plain
+ * sibling inference of a fully-rendered `role="tree"` no longer holds.
+ */
 function getVisibleNodeIds(
   nodes: Map<string, SemanticNode>,
   rootId: string,
-): string[] {
-  const result: string[] = [];
-  function walk(id: string) {
+): { ids: string[]; positions: Map<string, VisiblePosition> } {
+  const ids: string[] = [];
+  const positions = new Map<string, VisiblePosition>();
+  function walk(id: string, posinset: number, setsize: number) {
     const node = nodes.get(id);
     if (!node || !node.ui.matchesFilter) return;
-    result.push(id);
+    ids.push(id);
+    positions.set(id, { posinset, setsize });
     if (node.ui.expanded) {
-      for (const childId of node.childIds) walk(childId);
+      const visibleChildren = node.childIds.filter(
+        (childId) => nodes.get(childId)?.ui.matchesFilter,
+      );
+      visibleChildren.forEach((childId, i) => {
+        walk(childId, i + 1, visibleChildren.length);
+      });
     }
   }
-  walk(rootId);
-  return result;
+  walk(rootId, 1, 1);
+  return { ids, positions };
 }
 
 /**
@@ -206,18 +227,40 @@ export function TreePanel({
   }, [query, treeData, viewMode, roleFilter, updateMatchCount, forceRender]);
 
   // Recompute visible IDs after node mutations (expand/collapse) or data change
-  const visibleNodeIds = useMemo(
+  const { ids: visibleNodeIds, positions: visiblePositions } = useMemo(
     () => getVisibleNodeIds(treeData.nodes, treeData.rootId),
     // renderCount changes on every forceRender() call — intentional invalidation.
     [treeData, renderCount],
   );
 
-  // Scroll selected node into view
+  // Latest visible list, readable from a rAF callback that runs after an
+  // ancestor-expansion re-render has committed (see the picker effect below).
+  const visibleNodeIdsRef = useRef(visibleNodeIds);
+  visibleNodeIdsRef.current = visibleNodeIds;
+
+  // Virtualize the tree list: render only the rows in the viewport plus overscan.
+  const {
+    containerRef,
+    startIndex,
+    endIndex,
+    totalHeight,
+    offset,
+    onScroll,
+    scrollToIndex,
+  } = useVirtualTree(visibleNodeIds.length);
+
+  // Scroll selected node into view whenever the selection changes. Keyed on
+  // `selectedId` only — depending on `visibleNodeIds` would re-fire on every
+  // expand/collapse and yank the viewport back to an off-screen selection. The
+  // list is read from a ref so the index resolves against the post-expansion
+  // list without adding it as a dependency. (Re-selecting the same off-screen
+  // node is handled explicitly where it can happen: the picker effect below
+  // and `handleJumpToNode`.)
   useEffect(() => {
-    if (!selectedId || !treeRef.current) return;
-    const el = treeRef.current.querySelector(`[data-node-id="${selectedId}"]`);
-    el?.scrollIntoView({ block: "nearest" });
-  }, [selectedId]);
+    if (!selectedId) return;
+    const index = visibleNodeIdsRef.current.indexOf(selectedId);
+    if (index !== -1) scrollToIndex(index, "nearest");
+  }, [selectedId, scrollToIndex]);
 
   // When the picker reports a picked element, surface it as a tree
   // selection: expand ancestors so the row is visible, set selectedId,
@@ -242,16 +285,24 @@ export function TreePanel({
     }
     if (mutated) forceRender();
     setSelectedId(pickedNodeId);
+    // Scroll the picked row into view on every pick — including a re-pick of an
+    // already-selected, already-expanded node that the user has since scrolled
+    // away from. In that case neither `selectedId` nor `visibleNodeIds` change,
+    // so the selection effect above never re-runs; with virtualization the row
+    // may also be unmounted, so we scroll by index explicitly. The rAF lets any
+    // ancestor-expansion re-render commit (refreshing `visibleNodeIdsRef`) first.
+    //
+    // Deliberately NOT cancelled on cleanup: acknowledging the pick clears
+    // `pickedNodeId`, which re-runs this effect, and a cleanup-based
+    // cancelAnimationFrame would then race the scroll (and often cancel it). The
+    // one-shot frame is harmless after unmount because scrollToIndex no-ops when
+    // the container ref is null.
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const el = treeRef.current?.querySelector(
-          `[data-node-id="${CSS.escape(pickedNodeId)}"]`,
-        );
-        el?.scrollIntoView({ block: "center" });
-      });
+      const index = visibleNodeIdsRef.current.indexOf(pickedNodeId);
+      if (index !== -1) scrollToIndex(index, "nearest");
     });
     onPickedNodeHandled?.();
-  }, [pickedNodeId, treeData, forceRender, onPickedNodeHandled]);
+  }, [pickedNodeId, treeData, forceRender, onPickedNodeHandled, scrollToIndex]);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
@@ -316,22 +367,16 @@ export function TreePanel({
       setSelectedId(targetId);
       setFlashingId(targetId);
       setTimeout(() => setFlashingId(null), 700);
-
-      // Two RAFs ensure Preact has rendered AND the browser has done layout
-      // accounting for the newly-expanded ancestors before we measure. The
-      // selection effect below uses `block: "nearest"`, which can no-op
-      // when the row was JUST inserted via ancestor expansion — explicit
-      // center-scroll guarantees the target lands in the viewport.
+      // Scroll the target into view even when it is already the selection (a
+      // chip can point back at the current node); the selectedId-keyed effect
+      // won't re-run in that case. The rAF lets any ancestor-expansion
+      // re-render commit (refreshing `visibleNodeIdsRef`) first.
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          const el = treeRef.current?.querySelector(
-            `[data-node-id="${CSS.escape(targetId)}"]`,
-          );
-          el?.scrollIntoView({ block: "center" });
-        });
+        const index = visibleNodeIdsRef.current.indexOf(targetId);
+        if (index !== -1) scrollToIndex(index, "nearest");
       });
     },
-    [treeData, forceRender],
+    [treeData, forceRender, scrollToIndex],
   );
 
   const { isMouseModality, markKeyboard } = useInputModality();
@@ -380,6 +425,12 @@ export function TreePanel({
         ? "sn-theme-light"
         : "sn-theme-auto";
 
+  // Only the tree branch below renders virtualized rows. Attaching the
+  // measurement ref / scroll handler while the tab or filtered views own the
+  // container would just re-render scroll state nobody reads (the hook
+  // re-measures when the ref re-attaches on the way back).
+  const isTreeBranch = viewMode !== "tab" && !roleFilter;
+
   return (
     <div class={`sn-root ${themeClass}`}>
       <TreeToolbar
@@ -399,7 +450,11 @@ export function TreePanel({
         diffActive={diffActive}
         onToggleDiff={onToggleDiff}
       />
-      <div class="sn-tree-container">
+      <div
+        ref={isTreeBranch ? containerRef : undefined}
+        class="sn-tree-container"
+        onScroll={isTreeBranch ? onScroll : undefined}
+      >
         {viewMode === "tab" ? (
           <TabSequenceView
             nodes={treeData.nodes}
@@ -424,12 +479,17 @@ export function TreePanel({
             role="tree"
             aria-label="Semantic tree"
             tabIndex={0}
+            style={{
+              minHeight: totalHeight,
+              paddingTop: offset,
+              boxSizing: "border-box",
+            }}
             onKeyDown={(e) => {
               markKeyboard();
               handleKeyDown(e);
             }}
           >
-            {visibleNodeIds.map((id) => {
+            {visibleNodeIds.slice(startIndex, endIndex).map((id) => {
               const node = treeData.nodes.get(id);
               if (!node) return null;
               const forwardIds = controlsIndex.forward.get(id);
@@ -462,6 +522,7 @@ export function TreePanel({
                       })
                       .filter(Boolean) as ControlsLink[])
                   : undefined;
+              const position = visiblePositions.get(id);
               return (
                 <TreeNode
                   key={id}
@@ -471,6 +532,8 @@ export function TreePanel({
                   isFlashing={id === flashingId}
                   diffStatus={diff?.status.get(id)}
                   diffColumn={diff !== undefined}
+                  posinset={position?.posinset}
+                  setsize={position?.setsize}
                   onSelect={handleSelect}
                   onToggle={handleToggle}
                   onActivate={handleActivate}

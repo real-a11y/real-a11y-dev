@@ -150,6 +150,34 @@ describe("TreeView (smoke)", () => {
     }
   });
 
+  it("gives every virtualized treeitem aria-posinset/aria-setsize", async () => {
+    // The list is virtualized, so offscreen sibling rows are absent from the
+    // DOM. Screen readers need explicit set markers on each rendered row to
+    // perceive the full tree — assert they are present and internally
+    // consistent (posinset within 1..setsize).
+    const root = makeRoot();
+    try {
+      render(<TreeView root={root} />, container);
+      await waitFor(container, '[role="treeitem"]');
+
+      const items = Array.from(container.querySelectorAll('[role="treeitem"]'));
+      expect(items.length).toBeGreaterThan(0);
+
+      for (const item of items) {
+        const posinset = item.getAttribute("aria-posinset");
+        const setsize = item.getAttribute("aria-setsize");
+        expect(posinset).not.toBeNull();
+        expect(setsize).not.toBeNull();
+        const pos = Number(posinset);
+        const size = Number(setsize);
+        expect(pos).toBeGreaterThanOrEqual(1);
+        expect(pos).toBeLessThanOrEqual(size);
+      }
+    } finally {
+      root.remove();
+    }
+  });
+
   it("drops the diff baseline when the mode changes via the prop", async () => {
     // The host can switch views without touching the toolbar —
     // `InspectorInstance.setViewMode()` and the React wrapper's `mode` prop

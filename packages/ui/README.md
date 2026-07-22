@@ -63,6 +63,36 @@ Pass the result as `TreePanel`'s `diff` prop, along with `enableDiff`, `diffActi
 
 > This is the in-page, interaction-scoped diff. It is keyed on live node identity, so it dies on navigation. For a diff that survives navigation and gates CI, use the snapshot fingerprint diff in [`@real-a11y-dev/snapshot`](../snapshot) / the MCP checkpoint tools.
 
+## Hooks
+
+### useVirtualTree
+
+Virtualizes a fixed-height flattened tree list. Used internally by `TreePanel` and `TreeView` to render only the rows in the viewport plus overscan; exported for consumers building custom tree views.
+
+`containerRef` is a **callback ref** — attach it to the scrollable element so the hook is measured the moment that element mounts, even when it renders conditionally (e.g. behind a loading screen):
+
+```tsx
+import { useVirtualTree } from "@real-a11y-dev/semantic-navigator-ui";
+
+const { containerRef, startIndex, endIndex, totalHeight, offset, onScroll } =
+  useVirtualTree(visibleNodeIds.length);
+
+return (
+  <div ref={containerRef} class="sn-tree-container" onScroll={onScroll}>
+    {/* boxSizing: border-box keeps the spacer exactly `totalHeight` tall —
+        paddingTop is absorbed inside it. Without it the element grows to
+        offset + totalHeight as you scroll, leaving trailing blank space. */}
+    <div
+      style={{ minHeight: totalHeight, paddingTop: offset, boxSizing: "border-box" }}
+    >
+      {visibleNodeIds.slice(startIndex, endIndex).map((id) => (
+        <Row key={id} id={id} />
+      ))}
+    </div>
+  </div>
+);
+```
+
 ## Keyboard navigation
 
 Follows the [WAI-ARIA TreeView pattern](https://www.w3.org/WAI/ARIA/apg/patterns/treeview/):

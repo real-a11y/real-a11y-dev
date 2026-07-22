@@ -17,6 +17,7 @@ import {
 import {
   useTreeKeyboard,
   useInputModality,
+  useVirtualTree,
 } from "@real-a11y-dev/semantic-navigator-ui";
 import { useSearch } from "@real-a11y-dev/semantic-navigator-ui";
 import {
@@ -97,7 +98,7 @@ export function App() {
   const [nodes, setNodes] = useState<Map<string, SemanticNode>>(new Map());
   const [rootId, setRootId] = useState<string>("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [, forceRender] = useState(0);
+  const [renderCount, forceRender] = useState(0);
   const [connected, setConnected] = useState(false);
   const [lastAction, setLastAction] = useState<string | null>(null);
   const [roleFilter, setRoleFilter] = useState<RoleFilter>(null);
@@ -132,6 +133,19 @@ export function App() {
   // timeout so the flash plays once.
   const [flashingId, setFlashingId] = useState<string | null>(null);
 
+  // Explicit "reveal this row" requests from jump / pick / focus / go-to-tree
+  // flows. These must scroll the target into view even when it is already the
+  // selection (so the selectedId-keyed effect wouldn't re-run). Bumping the
+  // nonce triggers the reveal effect below; the target is stashed in a ref and
+  // resolved against the post-expansion visible list. `requestReveal` keeps a
+  // stable identity so callbacks defined here can depend on it safely.
+  const [revealNonce, setRevealNonce] = useState(0);
+  const revealTargetRef = useRef<string | null>(null);
+  const requestReveal = useCallback((id: string) => {
+    revealTargetRef.current = id;
+    setRevealNonce((n) => n + 1);
+  }, []);
+
   const handleJumpToNode = useCallback(
     (targetId: string) => {
       // Expand every collapsed ancestor so the target is in `visibleNodeIds`
@@ -150,24 +164,12 @@ export function App() {
       setSelectedId(targetId);
       setFlashingId(targetId);
       setTimeout(() => setFlashingId(null), 700);
-
-      // The selection effect at the bottom of this component already calls
-      // `scrollIntoView({ block: "nearest" })` on the new selection, but
-      // when ancestors expanded in the same tick that scroll runs against
-      // a layout that just changed and "nearest" frequently no-ops — the
-      // target stays offscreen. Schedule an explicit center-scroll after
-      // two RAFs (Preact has rendered + browser has done layout) so the
-      // row always lands in the viewport.
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          const el = treeRef.current?.querySelector(
-            `[data-node-id="${CSS.escape(targetId)}"]`,
-          );
-          el?.scrollIntoView({ block: "center" });
-        });
-      });
+      // Reveal the row even if it is already the selection (jump chips can
+      // target the current node); the reveal effect scrolls once ancestors
+      // are expanded and `visibleNodeIds` recomputed.
+      requestReveal(targetId);
     },
-    [nodes],
+    [nodes, requestReveal],
   );
 
   // The tab this side-panel instance is bound to. Source of truth lives in
@@ -332,14 +334,9 @@ export function App() {
           return prev;
         });
         forceRender((n) => n + 1);
-
-        // Scroll the tree item into view after render
-        requestAnimationFrame(() => {
-          const el = treeRef.current?.querySelector(
-            `[data-node-id="${nodeId}"]`,
-          );
-          el?.scrollIntoView({ block: "nearest" });
-        });
+        // Reveal even if the focused node is already the selection (re-focusing
+        // the current node after scrolling away should still bring it back).
+        requestReveal(nodeId);
       }
 
       if (message.type === "NODE_PICKED") {
@@ -362,12 +359,8 @@ export function App() {
           return prev;
         });
         forceRender((n) => n + 1);
-        requestAnimationFrame(() => {
-          const el = treeRef.current?.querySelector(
-            `[data-node-id="${CSS.escape(nodeId)}"]`,
-          );
-          el?.scrollIntoView({ block: "center" });
-        });
+        // Reveal even if the picked node is already the selection.
+        requestReveal(nodeId);
       }
 
       if (message.type === "PICK_MODE_CHANGED") {
@@ -405,21 +398,61 @@ export function App() {
   }, [query, nodes, viewMode, roleFilter, updateMatchCount]);
 
   // Compute visible nodes
-  const visibleNodeIds: string[] = [];
-  function walkVisible(nodeId: string) {
-    const node = nodes.get(nodeId);
-    if (!node || !node.ui.matchesFilter) return;
-    visibleNodeIds.push(nodeId);
-    if (node.ui.expanded) {
-      for (const childId of node.childIds) {
-        walkVisible(childId);
-      }
-    }
-  }
   const effectiveRootId = scopedRootId || rootId;
   const scopedRootNode = scopedRootId ? nodes.get(scopedRootId) : null;
   const scopedDepthOffset = scopedRootNode ? scopedRootNode.depth : 0;
-  if (effectiveRootId) walkVisible(effectiveRootId);
+  // Memoized so the flattened list keeps a stable identity across unrelated
+  // re-renders. `renderCount` bumps on every forceRender() — expand/collapse,
+  // filter application, incoming messages — which is exactly when the visible
+  // set (driven by mutated `ui.expanded`/`ui.matchesFilter`) can change.
+  // Without this, effects keyed on `visibleNodeIds` would re-run every render.
+  //
+  // INVARIANT: node visibility is mutated in place, so the memo only stays
+  // fresh if every site that touches `ui.expanded`/`ui.matchesFilter` calls
+  // `forceRender()` afterwards — a mutation without the bump silently renders
+  // a stale window.
+  //
+  // `visiblePositions` records each row's `aria-posinset`/`aria-setsize` within
+  // its visible sibling group: virtualization keeps only the windowed rows in
+  // the DOM, so screen readers need those explicit set markers to perceive the
+  // full tree size and position (WAI-ARIA TreeView).
+  const { visibleNodeIds, visiblePositions } = useMemo(() => {
+    const ids: string[] = [];
+    const positions = new Map<string, { posinset: number; setsize: number }>();
+    function walkVisible(nodeId: string, posinset: number, setsize: number) {
+      const node = nodes.get(nodeId);
+      if (!node || !node.ui.matchesFilter) return;
+      ids.push(nodeId);
+      positions.set(nodeId, { posinset, setsize });
+      if (node.ui.expanded) {
+        const visibleChildren = node.childIds.filter(
+          (childId) => nodes.get(childId)?.ui.matchesFilter,
+        );
+        visibleChildren.forEach((childId, i) => {
+          walkVisible(childId, i + 1, visibleChildren.length);
+        });
+      }
+    }
+    if (effectiveRootId) walkVisible(effectiveRootId, 1, 1);
+    return { visibleNodeIds: ids, visiblePositions: positions };
+    // renderCount changes on every forceRender() call — intentional invalidation.
+  }, [nodes, effectiveRootId, renderCount]);
+
+  // Latest visible list, read by the selection-scroll effect below so it can
+  // resolve the selected row's index without listing `visibleNodeIds` as a
+  // dependency (which would re-fire the scroll on every expand/collapse).
+  const visibleNodeIdsRef = useRef(visibleNodeIds);
+  visibleNodeIdsRef.current = visibleNodeIds;
+
+  const {
+    containerRef,
+    startIndex,
+    endIndex,
+    totalHeight,
+    offset,
+    onScroll,
+    scrollToIndex,
+  } = useVirtualTree(visibleNodeIds.length);
 
   const handleSelect = useCallback((id: string) => {
     setSelectedId(id);
@@ -463,19 +496,16 @@ export function App() {
         type: "HIGHLIGHT_NODE",
         payload: { nodeId: id },
       });
-      // Wait for the tree to render (filter → tree transition needs an extra frame)
+      // Reveal the row (even if already selected). Wait an extra frame after
+      // the filter → tree transition so focus lands on a rendered tree.
+      requestReveal(id);
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          const el = treeRef.current?.querySelector(`[data-node-id="${id}"]`);
-          if (el) {
-            el.scrollIntoView({ block: "center" });
-            // Focus the tree so keyboard navigation works immediately
-            treeRef.current?.focus();
-          }
+          treeRef.current?.focus();
         });
       });
     },
-    [nodes],
+    [nodes, requestReveal],
   );
 
   const handleActivate = useCallback(
@@ -836,17 +866,30 @@ export function App() {
     onActivate: handleActivate,
   });
 
-  // Scroll the selected tree item into view whenever selection changes
-  // (covers both keyboard navigation and focus-sync from page)
+  // Scroll the selected tree item into view whenever the selection changes
+  // (covers keyboard navigation, focus-sync from the page, jump/pick/go-to-tree
+  // flows that call setSelectedId). Keyed on `selectedId` only — depending on
+  // `visibleNodeIds` would re-fire on every expand/collapse and yank the
+  // viewport back to an off-screen selection. The list is read from a ref so
+  // the index resolves against the post-expansion list without adding it as a
+  // dependency.
   useEffect(() => {
     if (!selectedId) return;
-    requestAnimationFrame(() => {
-      const el = treeRef.current?.querySelector(
-        `[data-node-id="${selectedId}"]`,
-      );
-      el?.scrollIntoView({ block: "nearest" });
-    });
-  }, [selectedId]);
+    const index = visibleNodeIdsRef.current.indexOf(selectedId);
+    if (index !== -1) scrollToIndex(index, "nearest");
+  }, [selectedId, scrollToIndex]);
+
+  // Reveal a row on explicit request (jump/pick/focus/go-to-tree), even when it
+  // is already the selection. Keyed on the reveal nonce, not visibleNodeIds, so
+  // ordinary expand/collapse never scrolls; the target is resolved against the
+  // post-expansion list via the ref.
+  useEffect(() => {
+    if (revealNonce === 0) return;
+    const target = revealTargetRef.current;
+    if (!target) return;
+    const index = visibleNodeIdsRef.current.indexOf(target);
+    if (index !== -1) scrollToIndex(index, "nearest");
+  }, [revealNonce, scrollToIndex]);
 
   const prefersDark =
     typeof window !== "undefined" &&
@@ -1242,7 +1285,9 @@ export function App() {
         /* ---- Tree view ---- */
         <>
           <div
+            ref={containerRef}
             class={`sn-tree-container${isDialogScoped ? " sn-tree-container--dialog" : ""}${scopedRootId ? " sn-tree-container--scoped" : ""}`}
+            onScroll={onScroll}
           >
             <div
               ref={treeRef}
@@ -1250,12 +1295,17 @@ export function App() {
               role="tree"
               aria-label="Semantic tree — press Enter to activate interactive elements"
               tabIndex={0}
+              style={{
+                minHeight: totalHeight,
+                paddingTop: offset,
+                boxSizing: "border-box",
+              }}
               onKeyDown={(e) => {
                 markKeyboard();
                 handleKeyDown(e);
               }}
             >
-              {visibleNodeIds.map((id) => {
+              {visibleNodeIds.slice(startIndex, endIndex).map((id) => {
                 const node = nodes.get(id);
                 if (!node) return null;
 
@@ -1275,6 +1325,7 @@ export function App() {
                   ? null
                   : getPrimaryAction(actions);
                 const isSelected = id === selectedId;
+                const position = visiblePositions.get(id);
                 const displayDepth = scopedRootId
                   ? node.depth - scopedDepthOffset
                   : node.depth;
@@ -1295,6 +1346,8 @@ export function App() {
                     aria-expanded={hasChildren ? node.ui.expanded : undefined}
                     aria-selected={isSelected}
                     aria-level={displayDepth + 1}
+                    aria-posinset={position?.posinset}
+                    aria-setsize={position?.setsize}
                     data-node-id={id}
                     onClick={(e) => {
                       e.stopPropagation();

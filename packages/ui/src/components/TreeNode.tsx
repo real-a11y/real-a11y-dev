@@ -32,6 +32,14 @@ interface TreeNodeProps {
    * paints only when `diffStatus` is set; an unmarked row keeps an empty slot.
    */
   diffColumn?: boolean;
+  /**
+   * 1-based position of this row within its visible sibling group, and the
+   * group's total size. Rendered as `aria-posinset`/`aria-setsize` so screen
+   * readers can perceive the full set even though the list is virtualized and
+   * offscreen sibling rows are absent from the DOM.
+   */
+  posinset?: number;
+  setsize?: number;
   onSelect: (id: string) => void;
   onToggle: (id: string) => void;
   /**
@@ -190,6 +198,8 @@ export function TreeNode({
   isFlashing,
   diffStatus,
   diffColumn,
+  posinset,
+  setsize,
   onSelect,
   onToggle,
   onActivate,
@@ -231,6 +241,8 @@ export function TreeNode({
       aria-expanded={hasChildren ? node.ui.expanded : undefined}
       aria-selected={isSelected}
       aria-level={node.depth + 1}
+      aria-posinset={posinset}
+      aria-setsize={setsize}
       data-node-id={node.id}
       onClick={(e) => {
         e.stopPropagation();
