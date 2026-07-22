@@ -6,6 +6,7 @@ Companion to [`native-tree.md`](./native-tree.md) and [`native-tree-v2.md`](./na
 
 ```bash
 pnpm --filter @real-a11y-dev/browser run test:spike
+pnpm --filter @real-a11y-dev/testing run test:spike
 # optional raw CDP dump:
 node --experimental-strip-types packages/browser/spike/native-tree/probe.mts
 ```
@@ -22,7 +23,7 @@ node --experimental-strip-types packages/browser/spike/native-tree/probe.mts
 | Native path needs redaction beyond “trust AX” | **Confirmed** — password AX value is masked; email AX `value` is plaintext; DOM enrich returns password plaintext |
 | Today's required `dom` / `interaction` on `SemanticNode` is the wrong long-term shape | **Confirmed** — spike had to invent empty facets |
 
-**Recommendation:** proceed with the v2 plan (AccNode + native producer in `@real-a11y-dev/browser`). No second spike needed for *read* feasibility. Action-dispatch (Phase 2) is still unproven and should be its own spike later.
+**Recommendation:** proceed with the v2 plan (AccNode + native producer in `@real-a11y-dev/browser`; `testing/playwright` consumes it). Read-path feasibility is confirmed for both producer and Playwright-adapter consumer. Action-dispatch (Phase 2) is still unproven and should be its own spike later. No separate `@real-a11y-dev/playwright` package is required.
 
 ---
 
@@ -103,15 +104,33 @@ Roles seen: `Video`, `Audio`, `StaticText`, `InlineTextBox`, `none`, `generic`, 
 
 ---
 
+## Playwright adapter consumer spike
+
+**Code:** `packages/testing/spike/playwright-native/` · **Run:** `pnpm --filter @real-a11y-dev/testing run test:spike`
+
+v2 clarifies that `#197`'s "testing stays DOM" means **jsdom**, not `testing/playwright`. This spike proves the adapter can consume native without a new package:
+
+| `attachSpike({ tree })` | Result on the media fixture |
+|---|---|
+| `"native"` (CDP via `nativeTreeFromPage`) | `video` with `button "play"`, scrubber, mute, … |
+| `"dom"` (today's page-bundle `attach()`) | `video` / `audio` as **leaves** — no UA controls |
+
+Same handle shape (`auditSnapshot()`); different producer. Product API target: `attach(page, { tree: "native" | "dom" })` calling `browser.nativeTree(page)` — **not** `@real-a11y-dev/playwright`.
+
+---
+
 ## Code layout (throwaway-friendly)
 
 ```
 packages/browser/spike/native-tree/
-  fixture.html                 # media + sensitive fields
-  normalize.ts                 # AX → ExtractionResult (spike-quality)
-  native-tree.spike.test.ts    # feasibility assertions + report dump
-  probe.mts                    # raw CDP dump helper
-packages/browser/spike/vitest.config.ts
+  fixture.html
+  normalize.ts
+  from-page.ts                 # Page → ExtractionResult (future nativeTree shape)
+  native-tree.spike.test.ts
+  probe.mts
+packages/testing/spike/playwright-native/
+  attach-native.ts             # attach({ tree }) spike
+  playwright-native.spike.test.ts
 ```
 
 `pnpm test:spike` is **opt-in** — not part of default `vitest` / `pnpm verify`. Keep it that way until the producer graduates out of `spike/`.
@@ -123,8 +142,9 @@ packages/browser/spike/vitest.config.ts
 1. **Proceed** with native producer in `@real-a11y-dev/browser` (read path is feasible).
 2. **Break** `SemanticNode` toward optional `dom` / `interaction` (v2) — spike had to fake them.
 3. **Treat redaction as a Phase-1 ship gate**, including AX `value` and DOM enrich.
-4. **Defer** action-dispatch spike until after a real `nativeTree(): ExtractionResult` lands behind a flag.
-5. **Fix** `serialize`'s `instanceof Element` guard so Node consumers can serialize an `ExtractionResult` without jsdom (small follow-up).
+4. **Wire `testing/playwright` as a consumer** of `browser.nativeTree` (`attach({ tree })`) — not a second producer, not a new package.
+5. **Defer** action-dispatch spike until after a real `nativeTree(): ExtractionResult` lands behind a flag.
+6. **Fix** `serialize`'s `instanceof Element` guard so Node consumers can serialize an `ExtractionResult` without jsdom (small follow-up).
 
 ---
 
