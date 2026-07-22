@@ -54,6 +54,15 @@
   Hover is now a preview: overlay only, no scroll, no focus change. Click and
   arrow-key selection still scroll to and focus the element. ([#192])
 
+- Make the panel's four keyboard-navigable lists announce their active row
+  to screen readers. The tree, the filtered-role list, the tab-sequence view,
+  and the select picker all keep DOM focus on the `role="tree"`/`"listbox"`
+  container while arrow keys move an `aria-selected` highlight between
+  non-focusable rows — but without `aria-activedescendant` a screen reader
+  never learns which row is active, so arrowing announced nothing. Each row
+  now has a stable id and its container points `aria-activedescendant` at it.
+  ([#194])
+
 ## 0.1.7
 
 ### Patch Changes
@@ -107,3 +116,4 @@ Earlier releases predate this changelog.
 [#178]: https://github.com/real-a11y/real-a11y-dev/pull/178
 [#182]: https://github.com/real-a11y/real-a11y-dev/pull/182
 [#192]: https://github.com/real-a11y/real-a11y-dev/pull/192
+[#194]: https://github.com/real-a11y/real-a11y-dev/pull/194

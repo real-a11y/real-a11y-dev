@@ -34,6 +34,7 @@ import {
 
 import type { TreeDiffView } from "../diff.js";
 import { useInputModality } from "../hooks/useInputModality.js";
+import { treeRowDomId, useInstanceId } from "../hooks/useInstanceId.js";
 import { useSearch } from "../hooks/useSearch.js";
 import { useTreeKeyboard } from "../hooks/useTreeKeyboard.js";
 import { useVirtualTree } from "../hooks/useVirtualTree.js";
@@ -187,6 +188,10 @@ export function TreePanel({
   pickedNodeId = null,
   onPickedNodeHandled,
 }: TreePanelProps) {
+  // Keeps row/option DOM ids unique when two panels share a light-DOM document
+  // — aria-activedescendant is a document-wide IDREF.
+  const instanceId = useInstanceId();
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [roleFilter, setRoleFilter] = useState<RoleFilter>(null);
   // Monotonic counter used to invalidate useMemo after in-place node mutations.
@@ -248,6 +253,18 @@ export function TreePanel({
     onScroll,
     scrollToIndex,
   } = useVirtualTree(visibleNodeIds.length);
+
+  // aria-activedescendant may only point at a DOM-present row. Offscreen
+  // virtualized rows are unmounted, so require the selection to sit in the
+  // current window (keyboard selection scrolls it in via scrollToIndex).
+  // Prefixed with instanceId so a second panel's reference can't resolve here.
+  const activeDescendantId = (() => {
+    if (selectedId === null) return undefined;
+    const i = visibleNodeIds.indexOf(selectedId);
+    return i >= startIndex && i < endIndex
+      ? treeRowDomId(instanceId, selectedId)
+      : undefined;
+  })();
 
   // Scroll selected node into view whenever the selection changes. Keyed on
   // `selectedId` only — depending on `visibleNodeIds` would re-fire on every
@@ -484,6 +501,12 @@ export function TreePanel({
               paddingTop: offset,
               boxSizing: "border-box",
             }}
+            // Focus stays on this container (rows are non-focusable divs), so
+            // the active row must be announced via aria-activedescendant — else
+            // arrowing only flips aria-selected on rows the screen reader isn't
+            // looking at. Point it at the selected row only while that row is
+            // in the virtualized window (offscreen rows are not in the DOM).
+            aria-activedescendant={activeDescendantId}
             onKeyDown={(e) => {
               markKeyboard();
               handleKeyDown(e);
@@ -541,6 +564,7 @@ export function TreePanel({
                   controlsLinks={controlsLinks}
                   controlledByLinks={controlledByLinks}
                   onJumpToNode={handleJumpToNode}
+                  idPrefix={instanceId}
                 />
               );
             })}

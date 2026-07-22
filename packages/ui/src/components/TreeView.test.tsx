@@ -41,15 +41,23 @@ async function waitFor(
  */
 describe("TreeView (smoke)", () => {
   let container: HTMLDivElement;
+  let originalScrollIntoView: typeof Element.prototype.scrollIntoView;
 
   beforeEach(() => {
     container = document.createElement("div");
     document.body.appendChild(container);
+    // jsdom doesn't implement scrollIntoView, but selecting a row schedules an
+    // effect that calls it (TreePanel scrolls the selected row into view). That
+    // effect fires asynchronously, so without a stub it throws an *unhandled*
+    // error after the test body finishes — which fails the run non-locally.
+    originalScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function () {};
   });
 
   afterEach(() => {
     render(null, container);
     container.remove();
+    Element.prototype.scrollIntoView = originalScrollIntoView;
   });
 
   function makeRoot(): HTMLElement {
@@ -114,6 +122,65 @@ describe("TreeView (smoke)", () => {
       expect(scrolled).toBe(0);
     } finally {
       root.remove();
+    }
+  });
+
+  it("links the role=tree container to the selected row via aria-activedescendant", async () => {
+    // The container holds focus (rows are non-focusable divs), so a screen
+    // reader only learns which row is active from aria-activedescendant. This
+    // must reference a rendered row's id, not just flip aria-selected.
+    const root = makeRoot();
+    try {
+      render(<TreeView root={root} />, container);
+      const tree = (await waitFor(container, '[role="tree"]')) as HTMLElement;
+
+      // No selection yet → nothing to point at.
+      expect(tree.getAttribute("aria-activedescendant")).toBeNull();
+
+      // Select a row (click sets selectedId).
+      const row = tree.querySelector<HTMLElement>('[role="treeitem"]')!;
+      row.click();
+      await waitFor(container, '[role="tree"][aria-activedescendant]');
+
+      const active = tree.getAttribute("aria-activedescendant")!;
+      expect(active).toBe(row.id); // points at the row we selected
+      expect(active).toMatch(/^snrow-/);
+      // …and that id resolves to exactly one element inside the container
+      // (attribute selector avoids CSS.escape, absent in jsdom).
+      expect(container.querySelectorAll(`[id="${active}"]`)).toHaveLength(1);
+    } finally {
+      root.remove();
+    }
+  });
+
+  it("keeps aria-activedescendant ids unique across concurrent light-DOM panels", async () => {
+    // Two TreeViews on the same document (inspector light-DOM mounts) must not
+    // share row ids — aria-activedescendant is a document-wide IDREF, so a
+    // collision would announce the other panel's row.
+    const rootA = makeRoot();
+    const rootB = makeRoot();
+    const containerB = document.createElement("div");
+    document.body.appendChild(containerB);
+    try {
+      render(<TreeView root={rootA} />, container);
+      render(<TreeView root={rootB} />, containerB);
+      const treeA = (await waitFor(container, '[role="tree"]')) as HTMLElement;
+      const treeB = (await waitFor(containerB, '[role="tree"]')) as HTMLElement;
+
+      const rowA = treeA.querySelector<HTMLElement>('[role="treeitem"]')!;
+      const rowB = treeB.querySelector<HTMLElement>('[role="treeitem"]')!;
+      expect(rowA.id).not.toBe(rowB.id);
+
+      rowA.click();
+      await waitFor(container, '[role="tree"][aria-activedescendant]');
+      const activeA = treeA.getAttribute("aria-activedescendant")!;
+      expect(activeA).toBe(rowA.id);
+      expect(document.querySelectorAll(`[id="${activeA}"]`)).toHaveLength(1);
+      expect(treeB.getAttribute("aria-activedescendant")).toBeNull();
+    } finally {
+      rootA.remove();
+      rootB.remove();
+      containerB.remove();
     }
   });
 

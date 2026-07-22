@@ -454,6 +454,15 @@ export function App() {
     scrollToIndex,
   } = useVirtualTree(visibleNodeIds.length);
 
+  // aria-activedescendant may only point at a DOM-present row. Offscreen
+  // virtualized rows are unmounted, so require the selection to sit in the
+  // current window (keyboard selection scrolls it in via scrollToIndex).
+  const activeDescendantId = (() => {
+    if (selectedId === null) return undefined;
+    const i = visibleNodeIds.indexOf(selectedId);
+    return i >= startIndex && i < endIndex ? `snrow-${selectedId}` : undefined;
+  })();
+
   const handleSelect = useCallback((id: string) => {
     setSelectedId(id);
     chrome.runtime.sendMessage({
@@ -1300,6 +1309,13 @@ export function App() {
                 paddingTop: offset,
                 boxSizing: "border-box",
               }}
+              // Focus stays on this container (rows are non-focusable divs), so
+              // the active row must be announced via aria-activedescendant —
+              // otherwise arrowing through the tree just flips aria-selected on
+              // rows the screen reader isn't looking at, and the user hears
+              // nothing. Point it at the selected row only while that row is
+              // in the virtualized window (offscreen rows are not in the DOM).
+              aria-activedescendant={activeDescendantId}
               onKeyDown={(e) => {
                 markKeyboard();
                 handleKeyDown(e);
@@ -1333,6 +1349,10 @@ export function App() {
                 return (
                   <div
                     key={id}
+                    // id is the aria-activedescendant target for this row. Node
+                    // ids are `sn-<n>` / `f<n>-sn-<n>` — already selector- and
+                    // id-safe — so `snrow-<id>` is a valid, unique element id.
+                    id={`snrow-${id}`}
                     class={[
                       "sn-node",
                       isSelected && "sn-node--selected",

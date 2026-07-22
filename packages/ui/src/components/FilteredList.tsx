@@ -8,6 +8,8 @@ import {
   useEffect,
 } from "preact/hooks";
 
+import { listOptionDomId, useInstanceId } from "../hooks/useInstanceId.js";
+
 // Filters whose items have meaningful activate actions
 const INTERACTIVE_FILTERS = new Set(["link", "button", "form"]);
 
@@ -26,6 +28,7 @@ export function FilteredList({
   onSelect,
   onActivate,
 }: FilteredListProps) {
+  const instanceId = useInstanceId("fl");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -122,6 +125,15 @@ export function FilteredList({
         role="listbox"
         aria-label={`${roleFilter} elements`}
         tabIndex={0}
+        // Container-focus composite: focus stays here while arrow keys move an
+        // aria-selected highlight across non-focusable rows, so the active row
+        // must be announced via aria-activedescendant. Bounds-check
+        // selectedIndex so a shrunk result set can't dangle past the end.
+        aria-activedescendant={
+          selectedIndex >= 0 && selectedIndex < matches.length
+            ? listOptionDomId("filtered", instanceId, selectedIndex)
+            : undefined
+        }
         onKeyDown={handleKeyDown}
       >
         {matches.map((node, index) => {
@@ -142,6 +154,7 @@ export function FilteredList({
           return (
             <div
               key={node.id}
+              id={listOptionDomId("filtered", instanceId, index)}
               class={`sn-filtered-item${isSelected ? " sn-filtered-item--selected" : ""}`}
               role="option"
               aria-selected={isSelected}
