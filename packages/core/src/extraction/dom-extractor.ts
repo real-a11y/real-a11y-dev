@@ -6,12 +6,14 @@ import {
   safeChildren,
   safeChildNodes,
   safeTextContent,
-  safeHidden,
 } from "./clobber-safe.js";
 import {
+  getCachedComputedStyle,
   getImplicitRole,
-  isHiddenFromAT,
   getHeadingLevel,
+  isHiddenFromAT,
+  isSubtreeHidden,
+  type StyleCache,
 } from "./role-map.js";
 
 /** Tags to skip entirely during extraction */
@@ -240,31 +242,6 @@ function getActions(element: Element): ActionType[] {
   return actions;
 }
 
-/** Check if an element's subtree is completely hidden (display:none, hidden attr, content-visibility:hidden, inert) */
-function isSubtreeHidden(element: Element): boolean {
-  const htmlEl = element as HTMLElement;
-  // Clobber-immune read: a `<form>` with `<input name="hidden">` makes
-  // `htmlEl.hidden` return that input (truthy), which would drop the whole
-  // form subtree. safeHidden() reads the real state via the prototype getter.
-  if (safeHidden(element)) return true;
-
-  // The HTML `inert` attribute hides the element AND its entire subtree
-  // from both AT and keyboard navigation.
-  if (htmlEl.hasAttribute("inert")) return true;
-
-  if (typeof window !== "undefined" && window.getComputedStyle) {
-    const computed = window.getComputedStyle(htmlEl);
-    if (computed.display === "none") return true;
-    // content-visibility:hidden skips rendering AND hides from AT
-    // (used by frameworks like Yahoo Atomizer as Cntv(h))
-    if (computed.contentVisibility === "hidden") return true;
-  } else if (htmlEl.style?.display === "none") {
-    return true;
-  }
-
-  return false;
-}
-
 /** Tags that are natively interactive — never treated as visually hidden */
 const INTERACTIVE_TAGS = new Set([
   "input",
@@ -284,15 +261,18 @@ const INTERACTIVE_TAGS = new Set([
  * Interactive elements (inputs, buttons, links) are EXCLUDED — they commonly use
  * opacity:0 / position:absolute behind custom-styled visuals and remain fully usable.
  */
-function isSrOnly(element: Element): boolean {
-  if (typeof window === "undefined" || !window.getComputedStyle) return false;
-
+function isSrOnly(
+  element: Element,
+  style?: CSSStyleDeclaration | null,
+): boolean {
   // Custom form controls hide the native input behind a visual — not sr-only
   const tag = element.tagName.toLowerCase();
   if (INTERACTIVE_TAGS.has(tag)) return false;
   if (element.hasAttribute("tabindex")) return false;
 
-  const computed = window.getComputedStyle(element as HTMLElement);
+  const computed =
+    style !== undefined ? style : getCachedComputedStyle(element);
+  if (!computed) return false;
   if (computed.position !== "absolute" && computed.position !== "fixed")
     return false;
 
@@ -317,11 +297,16 @@ function isSrOnly(element: Element): boolean {
 }
 
 /** Check if an element is visually hidden (computed styles) */
-function isVisuallyHidden(element: Element): boolean {
-  if (isSubtreeHidden(element)) return true;
+function isVisuallyHidden(
+  element: Element,
+  style?: CSSStyleDeclaration | null,
+): boolean {
+  const computed =
+    style !== undefined ? style : getCachedComputedStyle(element);
 
-  if (typeof window !== "undefined" && window.getComputedStyle) {
-    const computed = window.getComputedStyle(element as HTMLElement);
+  if (isSubtreeHidden(element, computed)) return true;
+
+  if (computed) {
     if (computed.visibility === "hidden") return true;
     // NOTE: opacity:0 is intentionally NOT checked here.
     // Custom form controls (radio, checkbox, file inputs) routinely use
@@ -333,7 +318,7 @@ function isVisuallyHidden(element: Element): boolean {
   }
 
   // sr-only pattern: visually hidden but intentionally accessible to AT
-  if (isSrOnly(element)) return true;
+  if (isSrOnly(element, computed)) return true;
 
   return false;
 }
@@ -342,7 +327,10 @@ function isVisuallyHidden(element: Element): boolean {
  * Compute the accessible description for an element.
  * Resolves aria-describedby IDs to text and falls back to aria-description.
  */
-function computeAccessibleDescription(element: Element): string {
+function computeAccessibleDescription(
+  element: Element,
+  styleCache?: StyleCache | null,
+): string {
   // 1. aria-describedby — resolve referenced element text
   const describedBy = element.getAttribute("aria-describedby");
   if (describedBy) {
@@ -353,7 +341,7 @@ function computeAccessibleDescription(element: Element): string {
       .map((id) => {
         const target = doc.getElementById(id);
         return target
-          ? getAccessibleTextContent(target, new Set()).trim()
+          ? getAccessibleTextContent(target, new Set(), styleCache).trim()
           : undefined;
       })
       .filter((t): t is string => !!t);
@@ -543,6 +531,7 @@ const NAMED_WIDGET_ROLES = new Set<string>([
 function getAccessibleTextContent(
   element: Element,
   visited: Set<Element>,
+  styleCache?: StyleCache | null,
 ): string {
   let text = "";
   for (const child of safeChildNodes(element)) {
@@ -551,17 +540,21 @@ function getAccessibleTextContent(
     } else if (child.nodeType === Node.ELEMENT_NODE) {
       const childEl = child as Element;
       if (childEl.getAttribute("aria-hidden") === "true") continue;
-      if (isSubtreeHidden(childEl)) continue;
+      if (
+        isSubtreeHidden(childEl, getCachedComputedStyle(childEl, styleCache))
+      ) {
+        continue;
+      }
       const role = getImplicitRole(childEl);
       // Named widgets contribute their computed name (accname §2F.iii) —
       // padded with spaces so adjacent text doesn't glue; the final
       // whitespace normalization collapses any doubles.
       if (NAMED_WIDGET_ROLES.has(role)) {
-        text += ` ${computeAccessibleName(childEl, visited)} `;
+        text += ` ${computeAccessibleName(childEl, visited, styleCache)} `;
         continue;
       }
       if (NAME_BARRIER_ROLES.has(role)) continue;
-      text += getAccessibleTextContent(childEl, visited);
+      text += getAccessibleTextContent(childEl, visited, styleCache);
     }
   }
   return text;
@@ -578,13 +571,17 @@ function getAccessibleTextContent(
 function computeAccessibleName(
   element: Element,
   visited: Set<Element> = new Set(),
+  styleCache?: StyleCache | null,
 ): string {
-  return computeRawAccessibleName(element, visited).replace(/\s+/g, " ").trim();
+  return computeRawAccessibleName(element, visited, styleCache)
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function computeRawAccessibleName(
   element: Element,
   visited: Set<Element>,
+  styleCache?: StyleCache | null,
 ): string {
   // accname visit-once guard (§4.3.2): an element already on the current
   // name-computation path contributes the empty string when reached again.
@@ -604,7 +601,9 @@ function computeRawAccessibleName(
       .split(/\s+/)
       .map((id) => {
         const target = doc.getElementById(id);
-        return target ? getAccessibleTextContent(target, visited).trim() : "";
+        return target
+          ? getAccessibleTextContent(target, visited, styleCache).trim()
+          : "";
       })
       .filter(Boolean);
     if (names.length) return names.join(" ");
@@ -627,7 +626,8 @@ function computeRawAccessibleName(
     const id = element.getAttribute("id");
     if (id) {
       const label = element.ownerDocument.querySelector(`label[for="${id}"]`);
-      if (label) return getAccessibleTextContent(label, visited).trim();
+      if (label)
+        return getAccessibleTextContent(label, visited, styleCache).trim();
     }
     // Wrapping label pattern: <label>Full name<input /></label>
     // Walk the label's child nodes and collect text from everything that is
@@ -646,8 +646,19 @@ function computeRawAccessibleName(
           const childTag = childEl.tagName.toLowerCase();
           if (FORM_CONTROL_TAGS.has(childTag)) continue;
           if (childEl.getAttribute("aria-hidden") === "true") continue;
-          if (isSubtreeHidden(childEl)) continue;
-          const text = getAccessibleTextContent(childEl, visited).trim();
+          if (
+            isSubtreeHidden(
+              childEl,
+              getCachedComputedStyle(childEl, styleCache),
+            )
+          ) {
+            continue;
+          }
+          const text = getAccessibleTextContent(
+            childEl,
+            visited,
+            styleCache,
+          ).trim();
           if (text) parts.push(text);
         }
       }
@@ -659,13 +670,15 @@ function computeRawAccessibleName(
   // 4a. Fieldset — accessible name comes from its direct <legend> child
   if (tag === "fieldset") {
     const legend = element.querySelector(":scope > legend");
-    if (legend) return getAccessibleTextContent(legend, visited).trim();
+    if (legend)
+      return getAccessibleTextContent(legend, visited, styleCache).trim();
   }
 
   // 4b. Details — accessible name comes from its direct <summary> child
   if (tag === "details") {
     const summary = element.querySelector(":scope > summary");
-    if (summary) return getAccessibleTextContent(summary, visited).trim();
+    if (summary)
+      return getAccessibleTextContent(summary, visited, styleCache).trim();
   }
 
   // 5. Button-like inputs (submit/reset/button) take their name from the
@@ -714,7 +727,11 @@ function computeRawAccessibleName(
     !!explicitRole && NAMES_FROM_CONTENT_ROLES.has(explicitRole);
 
   if (NAMES_FROM_CONTENT_TAGS.has(tag) || namesFromContentRole) {
-    const fullText = getAccessibleTextContent(element, visited).trim();
+    const fullText = getAccessibleTextContent(
+      element,
+      visited,
+      styleCache,
+    ).trim();
     if (fullText) return fullText;
   }
 
@@ -986,7 +1003,10 @@ function focusedNodeId(
  * Uses `checkVisibility()` (Chrome 105+) when available; falls back to walking
  * ancestors manually.
  */
-function isActuallyVisible(element: Element): boolean {
+function isActuallyVisible(
+  element: Element,
+  styleCache?: StyleCache | null,
+): boolean {
   // checkVisibility() considers the full ancestor chain for display, visibility,
   // and content-visibility — exactly what we need here.
   if (typeof element.checkVisibility === "function") {
@@ -998,7 +1018,8 @@ function isActuallyVisible(element: Element): boolean {
   // Fallback: walk the ancestor chain and apply our own isSubtreeHidden check
   let el: Element | null = element;
   while (el) {
-    if (isSubtreeHidden(el)) return false;
+    if (isSubtreeHidden(el, getCachedComputedStyle(el, styleCache)))
+      return false;
     el = el.parentElement;
   }
   return true;
@@ -1186,6 +1207,7 @@ function buildNode(
   parentId: string | null,
   depth: number,
   descriptionTargetIds: ReadonlySet<string>,
+  styleCache: StyleCache,
 ): { id: string; node: SemanticNode } | null {
   try {
     const tag = element.tagName.toLowerCase();
@@ -1198,8 +1220,12 @@ function buildNode(
     // and crash the whole extraction. getAttribute always yields a string|null.
     if (element.getAttribute("id")?.startsWith("__sn-")) return null;
 
+    // Resolve style once for this element — subtree-hidden / visually-hidden /
+    // AT-hidden / sr-only all share the declaration via the per-extraction cache.
+    const style = getCachedComputedStyle(element, styleCache);
+
     // Skip entire subtrees of display:none / hidden elements
-    if (isSubtreeHidden(element)) return null;
+    if (isSubtreeHidden(element, style)) return null;
 
     // Skip elements that serve solely as aria-describedby text providers.
     // Their content is shown inline on the referencing element as a description.
@@ -1231,12 +1257,12 @@ function buildNode(
         // as the node's text preview misrepresents what AT renders.
         textContent: isMedia ? "" : getDirectTextContent(element),
         descendantText: isMedia ? "" : getDescendantText(element),
-        isHidden: isVisuallyHidden(element),
+        isHidden: isVisuallyHidden(element, style),
       },
       a11y: {
         role,
-        name: computeAccessibleName(element),
-        description: computeAccessibleDescription(element),
+        name: computeAccessibleName(element, new Set(), styleCache),
+        description: computeAccessibleDescription(element, styleCache),
         states: getAriaStates(element),
         properties: {
           ...(getHeadingLevel(element) !== null
@@ -1250,7 +1276,7 @@ function buildNode(
             ? { captions: hasCaptionsTrack(element) ? "true" : "false" }
             : {}),
         },
-        isExposedToAT: !isHiddenFromAT(element),
+        isExposedToAT: !isHiddenFromAT(element, style),
       },
       interaction: {
         isInteractive: actions.length > 0,
@@ -1287,8 +1313,15 @@ function walk(
   depth: number,
   nodes: Map<string, SemanticNode>,
   descriptionTargetIds: ReadonlySet<string>,
+  styleCache: StyleCache,
 ): string | null {
-  const built = buildNode(element, parentId, depth, descriptionTargetIds);
+  const built = buildNode(
+    element,
+    parentId,
+    depth,
+    descriptionTargetIds,
+    styleCache,
+  );
   if (!built) return null;
   const { id, node } = built;
 
@@ -1307,7 +1340,14 @@ function walk(
   // Walk children. Each child is isolated by buildNode's own boundary, so a
   // single pathological descendant can't take out its siblings or ancestors.
   for (const child of safeChildren(element)) {
-    const childId = walk(child, id, depth + 1, nodes, descriptionTargetIds);
+    const childId = walk(
+      child,
+      id,
+      depth + 1,
+      nodes,
+      descriptionTargetIds,
+      styleCache,
+    );
     if (childId) {
       node.childIds.push(childId);
     }
@@ -1363,12 +1403,16 @@ export function extractDomTree(
   }
 
   const startRoot = isPartial ? root : effectiveRoot;
+  // Fresh cache per extraction — styles may have changed since the last
+  // mutation-triggered run; never reuse across extractDomTree calls.
+  const styleCache: StyleCache = new WeakMap();
   const rootId = walk(
     startRoot,
     parentId,
     baseDepth,
     nodes,
     descriptionTargetIds,
+    styleCache,
   );
 
   const includeFocused = options.includeFocused ?? !isPartial;
