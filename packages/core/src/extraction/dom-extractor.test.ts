@@ -3,7 +3,12 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { resetIdCounter } from "../utils/id-generator.js";
 
 import { extractA11yTree } from "./a11y-extractor.js";
-import { extractDomTree, isSensitiveField } from "./dom-extractor.js";
+import * as clobberSafe from "./clobber-safe.js";
+import {
+  extractDomTree,
+  getDescendantText,
+  isSensitiveField,
+} from "./dom-extractor.js";
 
 beforeEach(() => {
   resetIdCounter();
@@ -555,6 +560,10 @@ describe("extractDomTree", () => {
   // the accessible name is empty by spec — e.g. a Shiki-highlighted
   // <code> block whose tokens all live inside spans.
   describe("descendantText preview", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
     it("captures recursive text content from nested spans", () => {
       const root = createPage(`
         <pre>
@@ -612,6 +621,32 @@ describe("extractDomTree", () => {
         (n) => n.dom.tagName === "div" && n.parentId !== null,
       )!;
       expect(div.dom.descendantText).toBe("");
+    });
+
+    it("does not read the full subtree when the preview is capped", () => {
+      // Regression: getDescendantText used element.textContent (entire subtree)
+      // then regex-scanned it for every node — O(total text × depth). A bounded
+      // walk should stop after ~240 chars and skip unread later siblings.
+      const paragraph = `${"word ".repeat(400)}`.trim(); // ~2k chars each
+      const body = Array.from({ length: 20 }, () => `<p>${paragraph}</p>`).join(
+        "",
+      );
+      const root = createPage(`<div id="root">${body}</div>`);
+      const div = root.querySelector("#root")!;
+
+      let totalCharsRead = 0;
+      const orig = clobberSafe.safeTextContent;
+      vi.spyOn(clobberSafe, "safeTextContent").mockImplementation((node) => {
+        const text = orig(node);
+        totalCharsRead += text.length;
+        return text;
+      });
+
+      const preview = getDescendantText(div);
+      expect(preview.length).toBeLessThanOrEqual(240);
+      expect(preview.endsWith("…")).toBe(true);
+      // Full subtree is ~40k chars; a bounded walk must not pull all of it.
+      expect(totalCharsRead).toBeLessThan(5000);
     });
   });
 

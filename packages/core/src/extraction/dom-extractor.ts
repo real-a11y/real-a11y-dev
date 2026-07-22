@@ -756,26 +756,82 @@ function getDirectTextContent(element: Element): string {
 /** Hard cap so we don't store huge text blobs on every node. */
 const DESCENDANT_TEXT_MAX = 240;
 
+type CollapsedTextState = {
+  /** Collapsed text accumulated so far. */
+  text: string;
+  /** Whitespace-collapse phase for the next character. */
+  phase: "start" | "text" | "space";
+};
+
 /**
- * Concatenate descendant text the way a browser renders it, pruning the
- * light-DOM subtrees of `<video>`/`<audio>`. Their contents are unrendered
- * fallback ("Sorry, your browser doesn't support…") plus `<track>`/`<source>`
- * metadata — the media node itself is already treated as a leaf with empty
- * text, and this keeps that fallback from resurfacing as a *wrapping*
- * container's preview too. Clobber-immune throughout (safeChildNodes /
- * safeTextContent, defensive tagName read).
+ * Append one text chunk into `state`, collapsing whitespace the way
+ * `textContent` + `/\s+/g` would. Returns true when the preview cap is
+ * reached and more input remains (caller should stop the walk).
  */
-function collectTextPruningMedia(node: Node): string {
-  if (node.nodeType === Node.TEXT_NODE) return safeTextContent(node);
-  if (node.nodeType !== Node.ELEMENT_NODE) return "";
+function appendCollapsedTextChunk(
+  state: CollapsedTextState,
+  raw: string,
+  moreInputPending: () => boolean,
+): boolean {
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i]!;
+    if (/\s/.test(ch)) {
+      if (state.phase === "text") {
+        state.text += " ";
+        state.phase = "space";
+        if (
+          state.text.length >= DESCENDANT_TEXT_MAX &&
+          (i < raw.length - 1 || moreInputPending())
+        ) {
+          return true;
+        }
+      }
+      continue;
+    }
+
+    state.text += ch;
+    state.phase = "text";
+    if (
+      state.text.length > DESCENDANT_TEXT_MAX ||
+      (state.text.length === DESCENDANT_TEXT_MAX &&
+        (i < raw.length - 1 || moreInputPending()))
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Depth-first walk that collects descendant text with whitespace collapsed,
+ * skipping `<video>`/`<audio>` subtrees (unrendered fallback + metadata).
+ * Stops once enough characters for the capped preview are accumulated.
+ * Clobber-immune throughout (safeChildNodes / safeTextContent).
+ */
+function collectDescendantTextBounded(
+  node: Node,
+  state: CollapsedTextState,
+  moreNodesAfter: () => boolean,
+): boolean {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return appendCollapsedTextChunk(state, safeTextContent(node), () =>
+      moreNodesAfter(),
+    );
+  }
+  if (node.nodeType !== Node.ELEMENT_NODE) return false;
   const rawTag = (node as Element).tagName;
   const tag = typeof rawTag === "string" ? rawTag.toLowerCase() : "";
-  if (MEDIA_TAGS.has(tag)) return "";
-  let out = "";
-  for (const child of safeChildNodes(node)) {
-    out += collectTextPruningMedia(child);
+  if (MEDIA_TAGS.has(tag)) return false;
+
+  const children = safeChildNodes(node);
+  for (let i = 0; i < children.length; i++) {
+    const child = children[i]!;
+    const moreAfter = () =>
+      i < children.length - 1 ||
+      (moreNodesAfter() && i === children.length - 1);
+    if (collectDescendantTextBounded(child, state, moreAfter)) return true;
   }
-  return out;
+  return false;
 }
 
 /**
@@ -783,16 +839,32 @@ function collectTextPruningMedia(node: Node): string {
  * Used as a panel preview for elements whose accessible name is empty per
  * spec but which carry meaningful descendant text (`<code>`, `<pre>`,
  * `<svg>` with `<text>`, decorative wrappers around copy, etc.).
+ *
+ * Uses a bounded walk (O(min(subtree text, cap))) instead of materializing
+ * the full subtree via `textContent`, which is O(subtree) per node.
  */
 export function getDescendantText(element: Element): string {
-  // Only pay for the pruning walk when a media descendant is actually
-  // present; otherwise the fast native textContent read is identical.
-  const raw = element.querySelector("video, audio")
-    ? collectTextPruningMedia(element)
-    : safeTextContent(element);
-  const collapsed = raw.replace(/\s+/g, " ").trim();
-  if (collapsed.length <= DESCENDANT_TEXT_MAX) return collapsed;
-  return collapsed.slice(0, DESCENDANT_TEXT_MAX - 1) + "…";
+  const state: CollapsedTextState = { text: "", phase: "start" };
+  const children = safeChildNodes(element);
+  let truncated = false;
+
+  for (let i = 0; i < children.length; i++) {
+    const child = children[i]!;
+    const moreAfter = () => i < children.length - 1;
+    if (collectDescendantTextBounded(child, state, moreAfter)) {
+      truncated = true;
+      break;
+    }
+  }
+
+  if (state.phase === "space" && state.text.endsWith(" ")) {
+    state.text = state.text.slice(0, -1);
+  }
+
+  if (!truncated && state.text.length <= DESCENDANT_TEXT_MAX) {
+    return state.text;
+  }
+  return state.text.slice(0, DESCENDANT_TEXT_MAX - 1) + "…";
 }
 
 /**
