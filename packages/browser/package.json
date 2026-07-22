@@ -47,7 +47,8 @@
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:spike": "vitest run --config spike/vitest.config.ts"
   },
   "dependencies": {
     "@real-a11y-dev/audit": "workspace:*",

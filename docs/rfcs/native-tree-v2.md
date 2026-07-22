@@ -17,7 +17,7 @@ This v2 **ratifies that spine** and proposes three changes that beta makes cheap
 2. **Default `cli` / `mcp` to native** after a short parity gate — treat `--tree` as a migration escape hatch, not a permanent dual-mode product surface.
 3. **Split read-tree from action-dispatch** so native can ship read-only first without inventing fake `ElementRefMap` entries.
 
-Grounding: current `SemanticNode` in `packages/core/src/types.ts`, existing CDP oracle `BrowserSession.nativeAX()` + MCP `get_native_tree` / `compare_trees`, and the #197 RFC.
+Grounding: current `SemanticNode` in `packages/core/src/types.ts`, existing CDP oracle `BrowserSession.nativeAX()` + MCP `get_native_tree` / `compare_trees`, the #197 RFC, and the feasibility spike in [`native-tree-spike.md`](./native-tree-spike.md).
 
 ---
 

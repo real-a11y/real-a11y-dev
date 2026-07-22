@@ -2,7 +2,7 @@
 
 **Status:** Draft for discussion · **Scope:** `core`, `browser`, `serialize`, `audit`, `validate`, `cli`, `mcp`, extension, `testing` · **Stage:** Beta (breaking changes acceptable)
 
-> **Also in this PR:** [`native-tree-v2.md`](./native-tree-v2.md) — a companion that ratifies this RFC’s spine (one model, two producers; native in `browser`) and proposes beta-friendly refinements: accessibility-first `AccNode` (optional `dom` / `interaction`), native defaults for `cli`/`mcp`, and a read-vs-act split. Read both.
+> **Also in this PR:** [`native-tree-v2.md`](./native-tree-v2.md) — companion refinements (AccNode, native defaults, read-vs-act). **Spike:** [`native-tree-spike.md`](./native-tree-spike.md) + `packages/browser/spike/native-tree/` — CDP feasibility run (`pnpm --filter @real-a11y-dev/browser run test:spike`).
 
 ## TL;DR — recommendation
 
