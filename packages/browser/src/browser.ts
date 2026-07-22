@@ -408,8 +408,7 @@ export class BrowserSession implements A11ySession {
       return page.evaluate(
         ({ selector, rules, includeGeneric }) => {
           const ra = (globalThis as Record<string, unknown>).__realA11y__ as
-            | Record<string, (...a: unknown[]) => unknown>
-            | undefined;
+            Record<string, (...a: unknown[]) => unknown> | undefined;
           if (!ra || typeof ra.extractA11yTree !== "function") {
             throw new Error(
               "Real A11y bundle missing/too old — upgrade @real-a11y-dev/browser.",

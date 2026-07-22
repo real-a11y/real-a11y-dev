@@ -146,6 +146,4 @@ export type PanelToContent =
   | { type: "SET_PICK_MODE"; payload: { enabled: boolean } };
 
 export type ExtensionMessage =
-  | ContentToPanel
-  | PanelToContent
-  | FrameToBackground;
+  ContentToPanel | PanelToContent | FrameToBackground;
