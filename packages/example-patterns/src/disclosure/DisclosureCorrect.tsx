@@ -7,7 +7,9 @@ import type { DisclosureExampleProps } from "./types.js";
 //
 // Radix provides:
 //   - aria-expanded on the trigger (toggles with open state)
-//   - aria-controls on the trigger pointing at the content's id
+//   - aria-controls on the trigger pointing at the content's id when
+//     the panel is open (omitted while collapsed — Radix ≥1.1.13 drops
+//     the idref once the content leaves the DOM)
 //   - The content is hidden via `hidden` attribute when collapsed,
 //     not just `display: none` — keeps it out of the AT tree.
 //

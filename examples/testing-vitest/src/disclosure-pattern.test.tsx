@@ -1,7 +1,7 @@
 import * as React from "react";
 
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import {
   DisclosureCorrect,
   DisclosureBroken,
@@ -13,7 +13,10 @@ afterEach(cleanup);
 // component from this example app. This file covers the APG-pattern
 // Disclosure shipped by @real-a11y-dev/example-patterns.
 describe("APG Disclosure — correct vs broken", () => {
-  it("Radix disclosure trigger has aria-expanded + aria-controls", () => {
+  it("Radix disclosure trigger has aria-expanded; aria-controls only when open", () => {
+    // Radix ≥1.1.13 omits aria-controls while collapsed because the
+    // content node is removed from the DOM — referencing a missing id is
+    // worse than omitting the attribute.
     const { getByRole } = render(
       <DisclosureCorrect trigger="Details" defaultOpen={false}>
         <p>Body</p>
@@ -21,6 +24,10 @@ describe("APG Disclosure — correct vs broken", () => {
     );
     const trigger = getByRole("button", { name: "Details" });
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(trigger.getAttribute("aria-controls")).toBeNull();
+
+    fireEvent.click(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
     expect(trigger.getAttribute("aria-controls")).not.toBeNull();
   });
 
