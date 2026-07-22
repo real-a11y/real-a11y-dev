@@ -6,10 +6,14 @@ on:
   pull_request:
     branches: [main]
 
+# Default to read-only. The build job runs on every pull_request (including
+# forks) and executes untrusted PR code — it only needs to check out, build,
+# and upload a Pages artifact. pages: write + id-token: write are escalated
+# on the deploy job alone (gated to main). Matches the least-privilege
+# posture in publish.yml / test.yml (OpenSSF Scorecard Token-Permissions /
+# CodeQL missing-workflow-permissions).
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 # Per-ref concurrency: each branch / PR gets its own group, so PR runs and
 # main runs no longer cancel each other. Within a single ref the lock still
@@ -50,6 +54,9 @@ jobs:
     if: github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
