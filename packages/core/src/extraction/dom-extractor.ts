@@ -771,33 +771,25 @@ type CollapsedTextState = {
 function appendCollapsedTextChunk(
   state: CollapsedTextState,
   raw: string,
-  moreInputPending: () => boolean,
 ): boolean {
   for (let i = 0; i < raw.length; i++) {
     const ch = raw[i]!;
     if (/\s/.test(ch)) {
       if (state.phase === "text") {
+        // At cap, trailing whitespace is discarded by the final trim — keep
+        // scanning without treating it as "more content".
+        if (state.text.length >= DESCENDANT_TEXT_MAX) continue;
         state.text += " ";
         state.phase = "space";
-        if (
-          state.text.length >= DESCENDANT_TEXT_MAX &&
-          (i < raw.length - 1 || moreInputPending())
-        ) {
-          return true;
-        }
       }
       continue;
     }
 
+    // Non-whitespace beyond the cap means genuinely more visible content.
+    if (state.text.length >= DESCENDANT_TEXT_MAX) return true;
+
     state.text += ch;
     state.phase = "text";
-    if (
-      state.text.length > DESCENDANT_TEXT_MAX ||
-      (state.text.length === DESCENDANT_TEXT_MAX &&
-        (i < raw.length - 1 || moreInputPending()))
-    ) {
-      return true;
-    }
   }
   return false;
 }
@@ -814,9 +806,7 @@ function collectDescendantTextBounded(
   moreNodesAfter: () => boolean,
 ): boolean {
   if (node.nodeType === Node.TEXT_NODE) {
-    return appendCollapsedTextChunk(state, safeTextContent(node), () =>
-      moreNodesAfter(),
-    );
+    return appendCollapsedTextChunk(state, safeTextContent(node));
   }
   if (node.nodeType !== Node.ELEMENT_NODE) return false;
   const rawTag = (node as Element).tagName;

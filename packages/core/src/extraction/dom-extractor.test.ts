@@ -623,6 +623,18 @@ describe("extractDomTree", () => {
       expect(div.dom.descendantText).toBe("");
     });
 
+    it("does not add a false ellipsis when collapsed text is exactly 240 chars", () => {
+      // Regression (Devin): trailing whitespace after the 240th visible char
+      // must not imply hidden content — old code trimmed before the cap check.
+      const exact = "x".repeat(240);
+      const root = createPage(`<div id="root"><span>${exact}</span>\n</div>`);
+      const div = root.querySelector("#root")!;
+
+      expect(getDescendantText(div)).toBe(exact);
+      expect(getDescendantText(div).length).toBe(240);
+      expect(getDescendantText(div).endsWith("…")).toBe(false);
+    });
+
     it("does not read the full subtree when the preview is capped", () => {
       // Regression: getDescendantText used element.textContent (entire subtree)
       // then regex-scanned it for every node — O(total text × depth). A bounded
