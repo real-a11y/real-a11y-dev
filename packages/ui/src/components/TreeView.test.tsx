@@ -153,6 +153,37 @@ describe("TreeView (smoke)", () => {
     }
   });
 
+  it("keeps aria-activedescendant ids unique across concurrent light-DOM panels", async () => {
+    // Two TreeViews on the same document (inspector light-DOM mounts) must not
+    // share row ids — aria-activedescendant is a document-wide IDREF, so a
+    // collision would announce the other panel's row.
+    const rootA = makeRoot();
+    const rootB = makeRoot();
+    const containerB = document.createElement("div");
+    document.body.appendChild(containerB);
+    try {
+      render(<TreeView root={rootA} />, container);
+      render(<TreeView root={rootB} />, containerB);
+      const treeA = (await waitFor(container, '[role="tree"]')) as HTMLElement;
+      const treeB = (await waitFor(containerB, '[role="tree"]')) as HTMLElement;
+
+      const rowA = treeA.querySelector<HTMLElement>('[role="treeitem"]')!;
+      const rowB = treeB.querySelector<HTMLElement>('[role="treeitem"]')!;
+      expect(rowA.id).not.toBe(rowB.id);
+
+      rowA.click();
+      await waitFor(container, '[role="tree"][aria-activedescendant]');
+      const activeA = treeA.getAttribute("aria-activedescendant")!;
+      expect(activeA).toBe(rowA.id);
+      expect(document.querySelectorAll(`[id="${activeA}"]`)).toHaveLength(1);
+      expect(treeB.getAttribute("aria-activedescendant")).toBeNull();
+    } finally {
+      rootA.remove();
+      rootB.remove();
+      containerB.remove();
+    }
+  });
+
   it("drops the diff baseline when the view mode changes", async () => {
     const root = makeRoot();
     try {

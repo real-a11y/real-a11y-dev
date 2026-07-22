@@ -8,6 +8,8 @@ import {
   useEffect,
 } from "preact/hooks";
 
+import { listOptionDomId, useInstanceId } from "../hooks/useInstanceId.js";
+
 // Filters whose items have meaningful activate actions
 const INTERACTIVE_FILTERS = new Set(["link", "button", "form"]);
 
@@ -26,6 +28,7 @@ export function FilteredList({
   onSelect,
   onActivate,
 }: FilteredListProps) {
+  const instanceId = useInstanceId("fl");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -128,7 +131,7 @@ export function FilteredList({
         // selectedIndex so a shrunk result set can't dangle past the end.
         aria-activedescendant={
           selectedIndex >= 0 && selectedIndex < matches.length
-            ? `sn-ui-filtered-opt-${selectedIndex}`
+            ? listOptionDomId("filtered", instanceId, selectedIndex)
             : undefined
         }
         onKeyDown={handleKeyDown}
@@ -151,7 +154,7 @@ export function FilteredList({
           return (
             <div
               key={node.id}
-              id={`sn-ui-filtered-opt-${index}`}
+              id={listOptionDomId("filtered", instanceId, index)}
               class={`sn-filtered-item${isSelected ? " sn-filtered-item--selected" : ""}`}
               role="option"
               aria-selected={isSelected}

@@ -8,6 +8,8 @@ import {
   useEffect,
 } from "preact/hooks";
 
+import { listOptionDomId, useInstanceId } from "../hooks/useInstanceId.js";
+
 interface TabSequenceViewProps {
   nodes: Map<string, SemanticNode>;
   rootId: string;
@@ -32,6 +34,7 @@ export function TabSequenceView({
   onActivate,
   onHover,
 }: TabSequenceViewProps) {
+  const instanceId = useInstanceId("ts");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -126,7 +129,7 @@ export function TabSequenceView({
         // shared tree). Bounds-check so a shrunk list can't dangle past the end.
         aria-activedescendant={
           selectedIndex >= 0 && selectedIndex < items.length
-            ? `sn-ui-tabseq-opt-${selectedIndex}`
+            ? listOptionDomId("tabseq", instanceId, selectedIndex)
             : undefined
         }
         onKeyDown={handleKeyDown}
@@ -146,7 +149,7 @@ export function TabSequenceView({
           return (
             <div
               key={node.id}
-              id={`sn-ui-tabseq-opt-${index}`}
+              id={listOptionDomId("tabseq", instanceId, index)}
               class={`sn-filtered-item sn-tab-item${isSelected ? " sn-filtered-item--selected" : ""}`}
               role="option"
               aria-selected={isSelected}

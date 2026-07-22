@@ -7,6 +7,8 @@ import { getPrimaryAction, ACTION_LABELS } from "@real-a11y-dev/core";
 
 import type { NodeDiffStatus } from "../diff.js";
 
+import { treeRowDomId } from "../hooks/useInstanceId.js";
+
 import type { ControlsLink } from "./TreePanel.js";
 
 interface TreeNodeProps {
@@ -62,6 +64,12 @@ interface TreeNodeProps {
   controlledByLinks?: ControlsLink[];
   /** Called when the user clicks a cross-link chip. */
   onJumpToNode?: (id: string) => void;
+  /**
+   * Per-panel instance token. Prefixed onto the row's DOM id so two panels
+   * mounted in the same document never collide — `aria-activedescendant` is a
+   * document-wide IDREF.
+   */
+  idPrefix: string;
 }
 
 function renderDomLabel(node: SemanticNode) {
@@ -207,6 +215,7 @@ export function TreeNode({
   controlsLinks,
   controlledByLinks,
   onJumpToNode,
+  idPrefix,
 }: TreeNodeProps) {
   const hasChildren = node.childIds.length > 0;
   const actions = node.interaction.actions;
@@ -237,9 +246,9 @@ export function TreeNode({
   return (
     <div
       // id is the aria-activedescendant target set on the role="tree" container.
-      // Node ids are selector-/id-safe (`sn-<n>` / `f<n>-sn-<n>`), so
-      // `snrow-<id>` is a valid, unique element id.
-      id={`snrow-${node.id}`}
+      // Node ids are selector-/id-safe (`sn-<n>` / `f<n>-sn-<n>`); the per-panel
+      // prefix keeps the id unique when two panels share a document.
+      id={treeRowDomId(idPrefix, node.id)}
       class={classNames}
       role="treeitem"
       aria-expanded={hasChildren ? node.ui.expanded : undefined}

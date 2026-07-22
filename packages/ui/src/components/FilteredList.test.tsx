@@ -185,13 +185,17 @@ describe("FilteredList (smoke)", () => {
     act(() => render(list(3), container));
 
     const listbox = container.querySelector<HTMLElement>('[role="listbox"]')!;
+    const options = () =>
+      Array.from(container.querySelectorAll<HTMLElement>('[role="option"]'));
     // Container-focus composite: the active option is announced by id, and that
-    // id must resolve to a rendered row.
+    // id must resolve to a rendered row (prefixed per mount so concurrent
+    // panels don't collide).
     expect(listbox.getAttribute("aria-activedescendant")).toBe(
-      "sn-ui-filtered-opt-0",
+      options()[0]!.id,
     );
+    expect(options()[0]!.id).toMatch(/^sn-ui-filtered-opt-/);
     expect(
-      container.querySelectorAll('[id="sn-ui-filtered-opt-0"]'),
+      container.querySelectorAll(`[id="${options()[0]!.id}"]`),
     ).toHaveLength(1);
 
     // Arrow off the first row — the keyboard path this feature exists for.
@@ -201,7 +205,7 @@ describe("FilteredList (smoke)", () => {
       );
     });
     expect(listbox.getAttribute("aria-activedescendant")).toBe(
-      "sn-ui-filtered-opt-1",
+      options()[1]!.id,
     );
 
     // The page mutates: the filter still matches, but only one element remains.
