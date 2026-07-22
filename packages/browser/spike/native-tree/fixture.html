@@ -7,7 +7,8 @@
   <body>
     <h1>Spike fixture</h1>
     <p>A short description.</p>
-    <button type="button">Save</button>
+    <button type="button" id="save">Save</button>
+    <output id="clicks">0</output>
     <label>
       Password
       <input
@@ -35,5 +36,11 @@
       controls
       src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA="
     ></audio>
+    <script>
+      document.getElementById("save").addEventListener("click", () => {
+        const out = document.getElementById("clicks");
+        out.textContent = String(Number(out.textContent || "0") + 1);
+      });
+    </script>
   </body>
 </html>

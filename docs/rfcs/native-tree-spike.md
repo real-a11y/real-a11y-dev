@@ -94,13 +94,31 @@ So: **you cannot “just serialize AX” and assume secrets are safe.** Chromium
 
 Roles seen: `Video`, `Audio`, `StaticText`, `InlineTextBox`, `none`, `generic`, plus normal ARIA roles. Spike maps `Video`→`video`, `Audio`→`audio`, drops `StaticText` / `InlineTextBox` / ignored / `none` / `RootWebArea`. This matches the RFC normalizer sketch and keeps output close to the DOM producer's printed vocabulary (#193 already moved DOM toward `video`/`audio`).
 
-### 6. What this spike did **not** cover
+### 6. What this spike did **not** cover (at first)
 
-- CDP **action dispatch** (click/type via `Input` / `Runtime.callFunctionOn`) — Phase 2; separate spike.
-- Root scoping (`rootSelector`) / iframes / cross-origin.
-- Baseline stability across Chrome milestones (pin + corpus still required).
-- Extension `chrome.debugger` path.
-- Parity harness CI corpus (only one fixture here).
+Originally deferred: CDP **action dispatch**, root scoping, Chrome milestone drift, extension debugger, parity corpus.
+
+**Spike 3 (below) closed the action-dispatch question.** Remaining: rootSelector / iframes, baseline pinning corpus, extension `chrome.debugger`.
+
+---
+
+## Spike 3 — CDP action dispatch (Phase 2)
+
+**Code:** `packages/browser/spike/native-tree/dispatch.ts` + `dispatch.spike.test.ts`  
+**Run:** `pnpm --filter @real-a11y-dev/browser run test:spike`
+
+| Action | Target | Result |
+|---|---|---|
+| Click | Author-DOM `button "Save"` via `backendDOMNodeId` → `DOM.resolveNode` → `Runtime.callFunctionOn` → `element.click()` | **Works** — fixture click counter increments |
+| Type | Author-DOM `textbox "Email"` — prototype `value` setter + `input`/`change` | **Works** — `#email` value updates |
+| Click | UA-shadow `button "play"` (media control) | **Resolves and click() succeeds** — element is an `INPUT` inside `#document-fragment` (`inShadow: true`). CDP is privileged where page JS (`video.shadowRoot === null`) is not |
+
+### Implications for the RFC
+
+1. **Phase 2 ActionBackend is feasible** for author-DOM nodes with the same id-resolution path as enrichment (`backendDOMNodeId` → resolve → Runtime). No need for a wholly separate targeting scheme for the common case.
+2. **Media UA controls are interactable over CDP**, not only readable — stronger than the original “read fidelity only” framing. Product priority can still be structure-first; dispatch to scrubber/play is optional polish, not a blocker.
+3. Prefer `Runtime.callFunctionOn` for the first ActionBackend (mirrors today’s in-page dispatcher semantics). Keep `Input.dispatchMouseEvent` as a follow-up for pages that ignore programmatic `click()`.
+4. Redaction still applies on any path that reads `.value` during enrich/type.
 
 ---
 
@@ -126,6 +144,8 @@ packages/browser/spike/native-tree/
   fixture.html
   normalize.ts
   from-page.ts                 # Page → ExtractionResult (future nativeTree shape)
+  dispatch.ts                  # CDP click/type (Phase 2 ActionBackend spike)
+  dispatch.spike.test.ts
   native-tree.spike.test.ts
   probe.mts
 packages/testing/spike/playwright-native/
@@ -143,7 +163,7 @@ packages/testing/spike/playwright-native/
 2. **Break** `SemanticNode` toward optional `dom` / `interaction` (v2) — spike had to fake them.
 3. **Treat redaction as a Phase-1 ship gate**, including AX `value` and DOM enrich.
 4. **Wire `testing/playwright` as a consumer** of `browser.nativeTree` (`attach({ tree })`) — not a second producer, not a new package.
-5. **Defer** action-dispatch spike until after a real `nativeTree(): ExtractionResult` lands behind a flag.
+5. **Phase 2 ActionBackend is feasible** via CDP resolve + `Runtime.callFunctionOn` for author-DOM; UA media controls are also reachable over CDP (privileged), unlike in-page.
 6. **Fix** `serialize`'s `instanceof Element` guard so Node consumers can serialize an `ExtractionResult` without jsdom (small follow-up).
 
 ---

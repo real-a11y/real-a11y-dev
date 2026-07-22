@@ -15,7 +15,7 @@ This v2 **ratifies that spine** and proposes changes that beta makes cheap, and 
 
 1. **Break today's `SemanticNode`** so the canonical model is accessibility-first (`dom` / `interaction` become optional facets), instead of forcing CDP to fake a DOM-shaped contract.
 2. **Default browser-backed surfaces to native** after a short parity gate — `cli`, `mcp`, **and `@real-a11y-dev/testing/playwright`** — treat `--tree` / `attach({ tree })` as migration escape hatches, not a permanent dual-mode product surface.
-3. **Split read-tree from action-dispatch** so native can ship read-only first without inventing fake `ElementRefMap` entries.
+3. **Split read-tree from action-dispatch** so native can ship read-only first without inventing fake `ElementRefMap` entries. *(Spike 3 later showed CDP dispatch is feasible for author-DOM and even UA media controls — still fine to ship read-only first; Phase 2 is unblocked, not speculative.)*
 4. **Clarify `testing`:** jsdom stays DOM forever; the Playwright adapter is a real-browser surface and **should consume** the same `browser.nativeTree()` producer — no separate `@real-a11y-dev/playwright` package required.
 
 Grounding: current `SemanticNode` in `packages/core/src/types.ts`, existing CDP oracle `BrowserSession.nativeAX()` + MCP `get_native_tree` / `compare_trees`, today's `testing/playwright` `attach()` (page-bundle / DOM producer), the #197 RFC, and the spikes in [`native-tree-spike.md`](./native-tree-spike.md).
