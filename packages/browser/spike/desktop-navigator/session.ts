@@ -184,10 +184,11 @@ export class DesktopNavigatorSession {
       });
       return { ok: true };
     } catch (err) {
-      return {
-        ok: false,
-        error: err instanceof Error ? err.message : String(err),
-      };
+      // Log details server-side only — never echo exception text to the
+      // panel client (information-exposure hardening; the product protocol
+      // must keep this rule too).
+      console.error("[desktop-navigator] cdp click failed:", err);
+      return { ok: false, error: "action failed" };
     }
   }
 
@@ -248,11 +249,10 @@ export async function startPanelServer(
       res.writeHead(404);
       res.end("not found");
     } catch (err) {
-      json(
-        res,
-        { ok: false, error: err instanceof Error ? err.message : String(err) },
-        500,
-      );
+      // CodeQL js/stack-trace-exposure: exception text can carry stack frames
+      // and internal paths. Log server-side; return a generic error only.
+      console.error("[desktop-navigator] panel request failed:", err);
+      json(res, { ok: false, error: "internal error" }, 500);
     }
   });
 

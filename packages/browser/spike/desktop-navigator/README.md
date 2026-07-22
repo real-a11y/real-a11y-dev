@@ -38,6 +38,8 @@ Checkout fixture flow exercised through `/api/click` only — the test never loo
 - Not live region / focus announcement emulation (structure + action only)
 - Not a replacement for the Chrome extension (extension still wins “any tab I’m already on”)
 
+> **Architecture:** the product design for this app — one engine (`A11ySession`), panel protocol v0, packaging ladder — is [`docs/rfcs/native-tree-v3.md`](../../../../docs/rfcs/native-tree-v3.md) §4.
+
 ## Recommended product split
 
 | Surface | Role |

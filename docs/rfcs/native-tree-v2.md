@@ -1,6 +1,6 @@
 # RFC v2: Native accessibility tree as a first-class producer
 
-**Status:** Draft for discussion · **Companion to:** [#197](https://github.com/real-a11y/real-a11y-dev/pull/197) (`docs/rfcs/native-tree.md`) · **Stage:** Beta (breaking changes acceptable)
+**Status:** Draft for discussion · **Companion to:** [#197](https://github.com/real-a11y/real-a11y-dev/pull/197) (`docs/rfcs/native-tree.md`) · **Completed by:** [`native-tree-v3.md`](./native-tree-v3.md) (spike verification, review findings R1–R6, full per-tool architecture, Desktop Navigator) · **Stage:** Beta (breaking changes acceptable)
 
 ## Relationship to #197
 

@@ -2,7 +2,7 @@
 
 **Status:** Draft for discussion · **Scope:** `core`, `browser`, `serialize`, `audit`, `validate`, `cli`, `mcp`, extension, `testing` · **Stage:** Beta (breaking changes acceptable)
 
-> **Also in this PR:** [`native-tree-v2.md`](./native-tree-v2.md) — companion refinements (AccNode, native defaults for cli/mcp/**testing/playwright**, read-vs-act). **Spikes:** [`native-tree-spike.md`](./native-tree-spike.md) — read path, playwright consumer, CDP dispatch, **and real-app corpus parity**.
+> **Also in this PR:** [`native-tree-v2.md`](./native-tree-v2.md) — companion refinements (AccNode, native defaults for cli/mcp/**testing/playwright**, read-vs-act). **Spikes:** [`native-tree-spike.md`](./native-tree-spike.md) — read path, playwright consumer, CDP dispatch, **and real-app corpus parity**. **v3:** [`native-tree-v3.md`](./native-tree-v3.md) — spike verification + review findings (R1–R6), the full per-tool architecture, and the **Desktop Semantic Navigator** designed in as a first-class surface.
 
 ## TL;DR — recommendation
 
