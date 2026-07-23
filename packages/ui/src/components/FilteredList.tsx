@@ -12,6 +12,11 @@ import {
   useEffect,
 } from "preact/hooks";
 
+import {
+  createTypeAheadBuffer,
+  findTypeAheadIndex,
+  isTypeAheadKey,
+} from "../hooks/typeAhead.js";
 import { listOptionDomId, useInstanceId } from "../hooks/useInstanceId.js";
 
 // Filters whose items have meaningful activate actions
@@ -35,6 +40,7 @@ export function FilteredList({
   const instanceId = useInstanceId("fl");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
+  const typeAhead = useRef(createTypeAheadBuffer());
 
   // The panel only renders DOM-produced trees, so every node carries all
   // facets. Narrow once here so the list logic reads dom/interaction freely.
@@ -79,36 +85,39 @@ export function FilteredList({
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
+      const selectAt = (index: number) => {
+        setSelectedIndex(index);
+        if (matches[index]) onSelect(matches[index].id);
+      };
+
       switch (e.key) {
         case "ArrowDown": {
           e.preventDefault();
-          const next = Math.min(selectedIndex + 1, matches.length - 1);
-          setSelectedIndex(next);
-          if (matches[next]) onSelect(matches[next].id);
+          typeAhead.current.clear();
+          selectAt(Math.min(selectedIndex + 1, matches.length - 1));
           break;
         }
         case "ArrowUp": {
           e.preventDefault();
-          const prev = Math.max(selectedIndex - 1, 0);
-          setSelectedIndex(prev);
-          if (matches[prev]) onSelect(matches[prev].id);
+          typeAhead.current.clear();
+          selectAt(Math.max(selectedIndex - 1, 0));
           break;
         }
         case "Home": {
           e.preventDefault();
-          setSelectedIndex(0);
-          if (matches[0]) onSelect(matches[0].id);
+          typeAhead.current.clear();
+          selectAt(0);
           break;
         }
         case "End": {
           e.preventDefault();
-          const last = matches.length - 1;
-          setSelectedIndex(last);
-          if (matches[last]) onSelect(matches[last].id);
+          typeAhead.current.clear();
+          selectAt(matches.length - 1);
           break;
         }
         case "Enter": {
           e.preventDefault();
+          typeAhead.current.clear();
           if (selectedNode) {
             if (INTERACTIVE_FILTERS.has(roleFilter)) {
               const action = getPrimaryAction(selectedNode.interaction.actions);
@@ -118,6 +127,18 @@ export function FilteredList({
               onSelect(selectedNode.id);
             }
           }
+          break;
+        }
+        default: {
+          if (!isTypeAheadKey(e) || matches.length === 0) break;
+          e.preventDefault();
+          const buffer = typeAhead.current.push(e.key);
+          const labels = matches.map(
+            (n) =>
+              n.a11y.name || n.dom.textContent?.trim() || n.a11y.role || "",
+          );
+          const next = findTypeAheadIndex(labels, buffer, selectedIndex);
+          if (next >= 0) selectAt(next);
           break;
         }
       }

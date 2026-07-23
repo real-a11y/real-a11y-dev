@@ -5,6 +5,11 @@ import type {
 } from "@real-a11y-dev/core";
 import { ROLE_FILTER_GROUPS, getPrimaryAction } from "@real-a11y-dev/core";
 import {
+  createTypeAheadBuffer,
+  findTypeAheadIndex,
+  isTypeAheadKey,
+} from "@real-a11y-dev/semantic-navigator-ui";
+import {
   useMemo,
   useState,
   useRef,
@@ -34,6 +39,7 @@ export function FilteredList({
 }: FilteredListProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
+  const typeAhead = useRef(createTypeAheadBuffer());
 
   const isHeading = roleFilter === "heading";
 
@@ -77,36 +83,39 @@ export function FilteredList({
   // Keyboard navigation
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
+      const selectAt = (index: number) => {
+        setSelectedIndex(index);
+        if (matches[index]) onHighlight(matches[index].id);
+      };
+
       switch (e.key) {
         case "ArrowDown": {
           e.preventDefault();
-          const next = Math.min(selectedIndex + 1, matches.length - 1);
-          setSelectedIndex(next);
-          if (matches[next]) onHighlight(matches[next].id);
+          typeAhead.current.clear();
+          selectAt(Math.min(selectedIndex + 1, matches.length - 1));
           break;
         }
         case "ArrowUp": {
           e.preventDefault();
-          const prev = Math.max(selectedIndex - 1, 0);
-          setSelectedIndex(prev);
-          if (matches[prev]) onHighlight(matches[prev].id);
+          typeAhead.current.clear();
+          selectAt(Math.max(selectedIndex - 1, 0));
           break;
         }
         case "Home": {
           e.preventDefault();
-          setSelectedIndex(0);
-          if (matches[0]) onHighlight(matches[0].id);
+          typeAhead.current.clear();
+          selectAt(0);
           break;
         }
         case "End": {
           e.preventDefault();
-          const last = matches.length - 1;
-          setSelectedIndex(last);
-          if (matches[last]) onHighlight(matches[last].id);
+          typeAhead.current.clear();
+          selectAt(matches.length - 1);
           break;
         }
         case "Enter": {
           e.preventDefault();
+          typeAhead.current.clear();
           if (selectedNode) {
             if (INTERACTIVE_FILTERS.has(roleFilter)) {
               const action = getPrimaryAction(selectedNode.interaction.actions);
@@ -119,6 +128,18 @@ export function FilteredList({
               onGoToTree(selectedNode.id);
             }
           }
+          break;
+        }
+        default: {
+          if (!isTypeAheadKey(e) || matches.length === 0) break;
+          e.preventDefault();
+          const buffer = typeAhead.current.push(e.key);
+          const labels = matches.map(
+            (n) =>
+              n.a11y.name || n.dom.textContent?.trim() || n.a11y.role || "",
+          );
+          const next = findTypeAheadIndex(labels, buffer, selectedIndex);
+          if (next >= 0) selectAt(next);
           break;
         }
       }

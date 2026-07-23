@@ -1,6 +1,11 @@
 import type { SemanticNode, DomSemanticNode } from "@real-a11y-dev/core";
 import { getTabSequence, getPrimaryAction } from "@real-a11y-dev/core";
 import {
+  createTypeAheadBuffer,
+  findTypeAheadIndex,
+  isTypeAheadKey,
+} from "@real-a11y-dev/semantic-navigator-ui";
+import {
   useMemo,
   useState,
   useRef,
@@ -32,6 +37,7 @@ export function TabSequenceView({
 }: TabSequenceViewProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
+  const typeAhead = useRef(createTypeAheadBuffer());
 
   const items = useMemo(() => {
     // The panel only renders DOM-produced trees, so every node has all facets.
@@ -68,41 +74,56 @@ export function TabSequenceView({
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
+      const selectAt = (index: number) => {
+        setSelectedIndex(index);
+        if (items[index]) onHighlight(items[index].id);
+      };
+
       switch (e.key) {
         case "ArrowDown": {
           e.preventDefault();
-          const next = Math.min(selectedIndex + 1, items.length - 1);
-          setSelectedIndex(next);
-          if (items[next]) onHighlight(items[next].id);
+          typeAhead.current.clear();
+          selectAt(Math.min(selectedIndex + 1, items.length - 1));
           break;
         }
         case "ArrowUp": {
           e.preventDefault();
-          const prev = Math.max(selectedIndex - 1, 0);
-          setSelectedIndex(prev);
-          if (items[prev]) onHighlight(items[prev].id);
+          typeAhead.current.clear();
+          selectAt(Math.max(selectedIndex - 1, 0));
           break;
         }
         case "Home": {
           e.preventDefault();
-          setSelectedIndex(0);
-          if (items[0]) onHighlight(items[0].id);
+          typeAhead.current.clear();
+          selectAt(0);
           break;
         }
         case "End": {
           e.preventDefault();
-          const last = items.length - 1;
-          setSelectedIndex(last);
-          if (items[last]) onHighlight(items[last].id);
+          typeAhead.current.clear();
+          selectAt(items.length - 1);
           break;
         }
         case "Enter": {
           e.preventDefault();
+          typeAhead.current.clear();
           if (selectedNode) {
             const action = getPrimaryAction(selectedNode.interaction.actions);
             if (action) onActivate(selectedNode.id);
             else onHighlight(selectedNode.id);
           }
+          break;
+        }
+        default: {
+          if (!isTypeAheadKey(e) || items.length === 0) break;
+          e.preventDefault();
+          const buffer = typeAhead.current.push(e.key);
+          const labels = items.map(
+            (n) =>
+              n.a11y.name || n.dom.textContent?.trim() || n.a11y.role || "",
+          );
+          const next = findTypeAheadIndex(labels, buffer, selectedIndex);
+          if (next >= 0) selectAt(next);
           break;
         }
       }

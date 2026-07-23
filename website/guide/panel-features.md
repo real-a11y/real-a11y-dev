@@ -130,9 +130,10 @@ The panel itself is fully keyboard-operable.
 | `Space` | Same as Enter for most elements; toggles checkboxes/radios |
 | `/` | Focus the search input |
 | `Home` / `End` | Jump to the first / last visible row |
+| Printable characters | Type-ahead — jump to the next row whose accessible name starts with the typed characters (multi-character within ~500ms; repeating the same letter cycles matches) |
 | `Esc` | Clear scope, then clear search, then close the panel |
 
-Implemented in `@real-a11y-dev/semantic-navigator-ui` via `useTreeKeyboard` — every package that mounts the tree gets the same keymap.
+Implemented in `@real-a11y-dev/semantic-navigator-ui` via `useTreeKeyboard` (and the same type-ahead helper on filtered / tab-sequence listboxes) — every package that mounts the tree gets the same keymap.
 
 ---
 

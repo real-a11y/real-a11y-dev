@@ -1,5 +1,11 @@
 import type { SemanticNode } from "@real-a11y-dev/core";
-import { useCallback } from "preact/hooks";
+import { useCallback, useRef } from "preact/hooks";
+
+import {
+  createTypeAheadBuffer,
+  findTypeAheadIndex,
+  isTypeAheadKey,
+} from "./typeAhead.js";
 
 interface UseTreeKeyboardOptions {
   nodes: Map<string, SemanticNode>;
@@ -8,6 +14,15 @@ interface UseTreeKeyboardOptions {
   onSelect: (id: string) => void;
   onToggle: (id: string) => void;
   onActivate: (id: string) => void;
+}
+
+/** Label used for type-ahead — accessible name, else text, else role. */
+export function treeNodeTypeAheadLabel(node: SemanticNode): string {
+  const name = node.a11y.name?.trim();
+  if (name) return name;
+  const text = node.dom?.textContent?.trim();
+  if (text) return text;
+  return node.a11y.role || "";
 }
 
 /**
@@ -22,17 +37,33 @@ export function useTreeKeyboard({
   onToggle,
   onActivate,
 }: UseTreeKeyboardOptions) {
+  const typeAhead = useRef(createTypeAheadBuffer());
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (!selectedId || visibleNodeIds.length === 0) {
-        // Select first node if nothing selected
-        if (
-          visibleNodeIds.length > 0 &&
-          (e.key === "ArrowDown" || e.key === "Home")
-        ) {
+      if (visibleNodeIds.length === 0) return;
+
+      const tryTypeAhead = (currentIndex: number) => {
+        if (!isTypeAheadKey(e)) return false;
+        e.preventDefault();
+        const buffer = typeAhead.current.push(e.key);
+        const labels = visibleNodeIds.map((id) => {
+          const n = nodes.get(id);
+          return n ? treeNodeTypeAheadLabel(n) : "";
+        });
+        const next = findTypeAheadIndex(labels, buffer, currentIndex);
+        if (next >= 0) onSelect(visibleNodeIds[next]);
+        return true;
+      };
+
+      if (!selectedId) {
+        if (e.key === "ArrowDown" || e.key === "Home") {
           e.preventDefault();
+          typeAhead.current.clear();
           onSelect(visibleNodeIds[0]);
+          return;
         }
+        tryTypeAhead(-1);
         return;
       }
 
@@ -45,6 +76,7 @@ export function useTreeKeyboard({
       switch (e.key) {
         case "ArrowDown": {
           e.preventDefault();
+          typeAhead.current.clear();
           const nextIndex = currentIndex + 1;
           if (nextIndex < visibleNodeIds.length) {
             onSelect(visibleNodeIds[nextIndex]);
@@ -54,6 +86,7 @@ export function useTreeKeyboard({
 
         case "ArrowUp": {
           e.preventDefault();
+          typeAhead.current.clear();
           const prevIndex = currentIndex - 1;
           if (prevIndex >= 0) {
             onSelect(visibleNodeIds[prevIndex]);
@@ -63,6 +96,7 @@ export function useTreeKeyboard({
 
         case "ArrowRight": {
           e.preventDefault();
+          typeAhead.current.clear();
           if (node.childIds.length > 0) {
             if (!node.ui?.expanded) {
               onToggle(selectedId);
@@ -81,6 +115,7 @@ export function useTreeKeyboard({
 
         case "ArrowLeft": {
           e.preventDefault();
+          typeAhead.current.clear();
           if (node.ui?.expanded && node.childIds.length > 0) {
             onToggle(selectedId);
           } else if (node.parentId) {
@@ -91,12 +126,14 @@ export function useTreeKeyboard({
 
         case "Enter": {
           e.preventDefault();
+          typeAhead.current.clear();
           onActivate(selectedId);
           break;
         }
 
         case " ": {
           e.preventDefault();
+          typeAhead.current.clear();
           if (node.childIds.length > 0) {
             onToggle(selectedId);
           }
@@ -105,23 +142,22 @@ export function useTreeKeyboard({
 
         case "Home": {
           e.preventDefault();
-          if (visibleNodeIds.length > 0) {
-            onSelect(visibleNodeIds[0]);
-          }
+          typeAhead.current.clear();
+          onSelect(visibleNodeIds[0]);
           break;
         }
 
         case "End": {
           e.preventDefault();
-          if (visibleNodeIds.length > 0) {
-            onSelect(visibleNodeIds[visibleNodeIds.length - 1]);
-          }
+          typeAhead.current.clear();
+          onSelect(visibleNodeIds[visibleNodeIds.length - 1]);
           break;
         }
 
         case "*": {
           // Expand all siblings
           e.preventDefault();
+          typeAhead.current.clear();
           if (node.parentId) {
             const parent = nodes.get(node.parentId);
             if (parent) {
@@ -137,6 +173,11 @@ export function useTreeKeyboard({
               }
             }
           }
+          break;
+        }
+
+        default: {
+          tryTypeAhead(currentIndex);
           break;
         }
       }

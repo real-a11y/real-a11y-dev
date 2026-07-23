@@ -5,6 +5,13 @@ export type { TreePanelProps } from "./components/TreePanel.js";
 export { TreeNode } from "./components/TreeNode.js";
 export { TreeToolbar } from "./components/TreeToolbar.js";
 export { useTreeKeyboard } from "./hooks/useTreeKeyboard.js";
+export {
+  createTypeAheadBuffer,
+  findTypeAheadIndex,
+  isTypeAheadKey,
+  TYPE_AHEAD_TIMEOUT_MS,
+} from "./hooks/typeAhead.js";
+export type { TypeAheadBuffer } from "./hooks/typeAhead.js";
 export { useSearch } from "./hooks/useSearch.js";
 export { buildTreeDiffView, EMPTY_DIFF_VIEW } from "./diff.js";
 export type { TreeDiffView, NodeDiffStatus } from "./diff.js";
