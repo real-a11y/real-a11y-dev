@@ -1,0 +1,255 @@
+name: Docs preview
+
+# On-demand docs preview for pull requests. A trusted collaborator comments
+# `/preview` on a PR; this workflow builds the PR head and uploads it to the
+# Cloudflare Pages project `real-a11y-docs-preview` (Direct Upload). Production
+# docs stay on GitHub Pages via docs.yml — this never touches real-a11y.dev.
+#
+# Manual trigger: Actions → "Docs preview" → Run workflow → enter a PR number
+# (only available after this workflow exists on the default branch).
+#
+# Security posture (CodeQL Actions / Untrusted Checkout TOCTOU):
+# - Workflow defaults to contents:read only. The build job that checks out and
+#   runs PR code never gets write scopes or Cloudflare secrets.
+# - Deploy runs on a fresh runner, downloads only the static dist artifact,
+#   then escalates write scopes (to comment / react) + injects Cloudflare
+#   credentials. Secrets never share a workspace with PR install/build.
+# - `/preview` path loads this file from the default branch (issue_comment).
+# - Only OWNER / MEMBER / COLLABORATOR comments trigger a deploy.
+#
+# Feedback: a parallel `ack` job reacts 👀 immediately (no checkout/secrets).
+# `notify-failure` comments if build fails. Deploy reacts 👍 on success.
+#
+# Concurrency is on the `build` and `deploy` jobs (not the workflow) so
+# unrelated PR comments — which still trigger a run that then skips every
+# job — do not cancel an in-progress /preview. Both jobs share one group so
+# a newer /preview cancels an older deploy still uploading to Cloudflare.
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to build and preview
+        required: true
+        type: string
+
+# Least privilege at the workflow level — escalate only on jobs that comment.
+permissions:
+  contents: read
+
+jobs:
+  # Immediate 👀 so the requester knows /preview was accepted, while build
+  # (minutes) runs in parallel. No checkout, no secrets — write scopes only.
+  ack:
+    if: |
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request &&
+      github.event.comment.user.type != 'Bot' &&
+      startsWith(github.event.comment.body, '/preview') &&
+      (github.event.comment.author_association == 'OWNER' ||
+       github.event.comment.author_association == 'MEMBER' ||
+       github.event.comment.author_association == 'COLLABORATOR')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Acknowledge /preview
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.reactions.createForIssueComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: context.payload.comment.id,
+              content: 'eyes',
+            });
+
+  build:
+    # `/preview` must be at the start of the comment so the bot reply
+    # ("Comment `/preview` again…") cannot re-trigger. Bots are ignored.
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.issue.pull_request &&
+       github.event.comment.user.type != 'Bot' &&
+       startsWith(github.event.comment.body, '/preview') &&
+       (github.event.comment.author_association == 'OWNER' ||
+        github.event.comment.author_association == 'MEMBER' ||
+        github.event.comment.author_association == 'COLLABORATOR'))
+    runs-on: ubuntu-latest
+    # Job-level: skipped runs (non-/preview comments) never take the lock.
+    concurrency:
+      group: docs-preview-pr-${{ github.event.issue.number || inputs.pr_number }}
+      cancel-in-progress: true
+    # Read-only: may checkout and execute PR head, but cannot write to the
+    # PR or touch secrets. Satisfies CodeQL's privileged-workflow gate.
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      number: ${{ steps.pr.outputs.number }}
+      sha: ${{ steps.pr.outputs.sha }}
+    steps:
+      - name: Resolve PR head
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.issue.number || inputs.pr_number }}
+        run: |
+          set -euo pipefail
+          pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          echo "number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "sha=$(jq -r .head.sha <<<"$pr")" >> "$GITHUB_OUTPUT"
+          echo "repo=$(jq -r .head.repo.full_name <<<"$pr")" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.pr.outputs.repo }}
+          ref: ${{ steps.pr.outputs.sha }}
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm -r --filter='./packages/*' build
+
+      - run: pnpm --filter @real-a11y-dev/website build
+
+      - name: Upload site artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-preview-dist
+          path: website/.vitepress/dist
+          retention-days: 1
+
+  # Surface build failures — without this, a failed build is silent after 👀.
+  notify-failure:
+    needs: build
+    if: |
+      failure() &&
+      github.event_name == 'issue_comment'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Comment that the preview build failed
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ github.event.issue.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: Number(process.env.PR_NUMBER),
+              body: [
+                `### Docs preview failed`,
+                ``,
+                `The site build failed, so nothing was deployed.`,
+                `Logs: ${process.env.RUN_URL}`,
+              ].join('\n'),
+            });
+            await github.rest.reactions.createForIssueComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: context.payload.comment.id,
+              content: 'confused',
+            });
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    # Same group as build: only real preview runs reach this job (needs:build
+    # + build's if), so skipped comment runs never take the lock — but a
+    # second /preview can cancel an older deploy still talking to Cloudflare.
+    concurrency:
+      group: docs-preview-pr-${{ github.event.issue.number || inputs.pr_number }}
+      cancel-in-progress: true
+    # Fresh runner: no PR checkout. Write scopes only here (PR comment +
+    # reactions on the triggering issue comment — reactions need issues:write).
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Download site artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docs-preview-dist
+          path: dist
+
+      - name: Deploy to Cloudflare Pages
+        id: deploy
+        # Outputs used below: deployment-url, pages-deployment-alias-url
+        # (documented on cloudflare/wrangler-action@v3; alias needs wrangler
+        # >= 3.78). Fallback URL is constructed if either is empty.
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Short branch name → stable alias https://pr-N.<project>.pages.dev
+          # (Cloudflare truncates long branch aliases).
+          # Commit message has no spaces so wrangler-action / @actions/exec
+          # never need to honor shell quotes when tokenizing the command.
+          command: >-
+            pages deploy dist
+            --project-name=real-a11y-docs-preview
+            --branch=pr-${{ needs.build.outputs.number }}
+            --commit-hash=${{ needs.build.outputs.sha }}
+            --commit-message=docs-preview-pr-${{ needs.build.outputs.number }}
+
+      - name: Comment preview URL
+        uses: actions/github-script@v7
+        env:
+          ALIAS_URL: ${{ steps.deploy.outputs.pages-deployment-alias-url }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment-url }}
+          PR_SHA: ${{ needs.build.outputs.sha }}
+          PR_NUMBER: ${{ needs.build.outputs.number }}
+        with:
+          script: |
+            const alias = process.env.ALIAS_URL;
+            const deployment = process.env.DEPLOYMENT_URL;
+            // Stable Pages branch alias for --branch=pr-N (same project name
+            // as the wrangler deploy). Used if wrangler-action omits outputs.
+            const constructed = `https://pr-${process.env.PR_NUMBER}.real-a11y-docs-preview.pages.dev`;
+            const preview = alias || deployment || constructed;
+            const sha = process.env.PR_SHA.slice(0, 7);
+            const body = [
+              `### Docs preview`,
+              ``,
+              `Preview: ${preview}`,
+              deployment && deployment !== preview
+                ? `This deploy: ${deployment}`
+                : null,
+              ``,
+              `Built from \`${sha}\`. Comment \`/preview\` again to refresh.`,
+            ]
+              .filter((line) => line !== null)
+              .join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: Number(process.env.PR_NUMBER),
+              body,
+            });
+
+            if (context.eventName === 'issue_comment') {
+              await github.rest.reactions.createForIssueComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: context.payload.comment.id,
+                content: '+1',
+              });
+            }

@@ -137,6 +137,18 @@ This is an accessibility tool — the tool itself must be fully accessible:
 5. Write a clear PR description explaining what changed and why
 6. Link any related issues
 
+### Docs preview (`/preview`)
+
+Production docs deploy from `main` to [real-a11y.dev](https://real-a11y.dev) (GitHub Pages). To browse a PR's docs site before merge, a repo collaborator can comment **`/preview`** at the start of a PR comment (alone or followed by more text).
+
+That triggers `.github/workflows/docs-preview.yml`, which builds the PR head and uploads it to the Cloudflare Pages project `real-a11y-docs-preview`. The bot replies with a stable URL of the form:
+
+```text
+https://pr-<number>.real-a11y-docs-preview.pages.dev
+```
+
+Comment `/preview` again after new commits to refresh. Only `OWNER` / `MEMBER` / `COLLABORATOR` comments run the deploy (fork authors without write access cannot trigger it). You can also run **Actions → Docs preview → Run workflow** and pass a PR number.
+
 ### Changesets
 
 Versioning and per-package CHANGELOGs are managed by [Changesets](https://github.com/changesets/changesets). If your PR changes a publishable package, run:
