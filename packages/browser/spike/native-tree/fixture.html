@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Native tree spike fixture</title>
+  </head>
+  <body>
+    <h1>Spike fixture</h1>
+    <p>A short description.</p>
+    <button type="button" id="save">Save</button>
+    <output id="clicks">0</output>
+    <label>
+      Password
+      <input
+        id="pw"
+        type="password"
+        name="password"
+        autocomplete="current-password"
+        value="s3cret-value"
+      />
+    </label>
+    <label>
+      Email
+      <input id="email" type="email" name="email" value="user@example.com" />
+    </label>
+    <!-- controls=true: forcing function from the RFC — UA-shadow media chrome -->
+    <video
+      id="tour"
+      controls
+      width="320"
+      height="180"
+      src="data:video/mp4;base64,AAAA"
+    ></video>
+    <audio
+      id="clip"
+      controls
+      src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA="
+    ></audio>
+    <script>
+      document.getElementById("save").addEventListener("click", () => {
+        const out = document.getElementById("clicks");
+        out.textContent = String(Number(out.textContent || "0") + 1);
+      });
+    </script>
+  </body>
+</html>

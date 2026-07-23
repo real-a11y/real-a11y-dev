@@ -79,7 +79,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test --config=playwright.config.ts"
+    "test:e2e": "playwright test --config=playwright.config.ts",
+    "test:spike": "vitest run --config spike/vitest.config.ts"
   },
   "dependencies": {
     "@real-a11y-dev/audit": "workspace:*",

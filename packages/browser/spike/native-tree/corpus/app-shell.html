@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Corpus — real-app HTML/ARIA patterns</title>
+  </head>
+  <body>
+    <!-- Landmarks / document chrome (typical app shell) -->
+    <header>
+      <a href="/">Home</a>
+      <nav aria-label="Primary">
+        <ul>
+          <li><a href="/dashboard">Dashboard</a></li>
+          <li><a href="/settings">Settings</a></li>
+        </ul>
+      </nav>
+    </header>
+
+    <main>
+      <h1>Projects</h1>
+      <p>Manage your team’s work.</p>
+
+      <h2>Quick actions</h2>
+      <button type="button" id="new-project">New project</button>
+      <a href="/help">Help center</a>
+
+      <!-- Forms — common field types -->
+      <h2>Create project</h2>
+      <form id="create" action="#" method="get">
+        <label>
+          Name
+          <input id="name" name="name" type="text" required />
+        </label>
+        <label>
+          Owner email
+          <input
+            id="owner"
+            name="owner"
+            type="email"
+            value="owner@example.com"
+          />
+        </label>
+        <label>
+          Password
+          <input
+            id="pw"
+            name="pw"
+            type="password"
+            autocomplete="new-password"
+            value="temp-secret"
+          />
+        </label>
+        <fieldset>
+          <legend>Visibility</legend>
+          <label
+            ><input type="radio" name="vis" value="private" checked />
+            Private</label
+          >
+          <label><input type="radio" name="vis" value="public" /> Public</label>
+        </fieldset>
+        <label>
+          <input type="checkbox" id="notify" name="notify" checked />
+          Email notifications
+        </label>
+        <label>
+          Region
+          <select id="region" name="region">
+            <option value="us">United States</option>
+            <option value="eu" selected>Europe</option>
+          </select>
+        </label>
+        <label>
+          Notes
+          <textarea id="notes" name="notes" rows="2">Kickoff Friday</textarea>
+        </label>
+        <label>
+          Priority
+          <input
+            id="priority"
+            name="priority"
+            type="number"
+            min="1"
+            max="5"
+            value="3"
+          />
+        </label>
+        <label>
+          Progress
+          <input
+            id="progress"
+            name="progress"
+            type="range"
+            min="0"
+            max="100"
+            value="40"
+          />
+        </label>
+        <label>
+          Attach
+          <input id="attach" name="attach" type="file" />
+        </label>
+        <button type="submit">Create</button>
+      </form>
+
+      <!-- Lists -->
+      <h2>Recent</h2>
+      <ul>
+        <li>Alpha</li>
+        <li>Beta</li>
+      </ul>
+      <ol>
+        <li>Design</li>
+        <li>Build</li>
+      </ol>
+
+      <!-- Table -->
+      <h2>Members</h2>
+      <table>
+        <caption>
+          Team roster
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">Name</th>
+            <th scope="col">Role</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Ada</td>
+            <td>Admin</td>
+          </tr>
+          <tr>
+            <td>Lin</td>
+            <td>Editor</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Media + image -->
+      <h2>Media</h2>
+      <img
+        src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+        alt="Logo"
+        width="16"
+        height="16"
+      />
+      <img
+        src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+        alt=""
+        width="16"
+        height="16"
+      />
+      <video
+        id="tour"
+        controls
+        width="160"
+        height="90"
+        src="data:video/mp4;base64,AAAA"
+      ></video>
+
+      <!-- Native disclosure + dialog -->
+      <details>
+        <summary>Advanced</summary>
+        <p>Feature flags live here.</p>
+      </details>
+
+      <button type="button" id="open-dialog">Open dialog</button>
+      <dialog id="confirm">
+        <form method="dialog">
+          <p>Delete project?</p>
+          <button value="cancel">Cancel</button>
+          <button value="ok">OK</button>
+        </form>
+      </dialog>
+
+      <!-- ARIA widgets (authored roles — typical design-system shapes) -->
+      <h2>ARIA widgets</h2>
+      <div role="tablist" aria-label="Views">
+        <button type="button" role="tab" aria-selected="true" id="tab-list">
+          List
+        </button>
+        <button type="button" role="tab" aria-selected="false" id="tab-board">
+          Board
+        </button>
+      </div>
+      <div role="tabpanel" aria-labelledby="tab-list">List panel</div>
+
+      <div
+        role="switch"
+        aria-checked="true"
+        tabindex="0"
+        aria-label="Dark mode"
+      ></div>
+      <div
+        role="progressbar"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow="40"
+        aria-label="Upload"
+      ></div>
+      <div role="alert">Saved</div>
+
+      <!-- Author open shadow DOM (page can see; not UA-closed) -->
+      <div id="shadow-host"></div>
+    </main>
+
+    <aside aria-label="Tips">
+      <h2>Tip</h2>
+      <p>Use keyboard shortcuts.</p>
+    </aside>
+
+    <footer>
+      <p><small>© Real A11y spike</small></p>
+    </footer>
+
+    <script>
+      document.getElementById("open-dialog").addEventListener("click", () => {
+        document.getElementById("confirm").showModal();
+      });
+      // Author shadow root with a labeled button — contrasts with UA-closed video shadow.
+      const host = document.getElementById("shadow-host");
+      const root = host.attachShadow({ mode: "open" });
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = "Shadow action";
+      root.appendChild(btn);
+    </script>
+  </body>
+</html>
