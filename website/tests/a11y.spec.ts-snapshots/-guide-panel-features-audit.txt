@@ -389,10 +389,14 @@ main
           code "End"
         cell "Jump to the first / last visible row"
       row
+        cell "Printable characters"
+        cell "Type-ahead — jump to a row whose accessible name starts with the typed characters (multi-character within ~500ms keeps a still-matching selection; repeating the same letter cycles matches). / is reserved for search."
+          code "/"
+      row
         cell "Esc"
           code "Esc"
         cell "Clear scope, then clear search, then close the panel"
-  paragraph "Implemented in via — every package that mounts the tree gets the same keymap."
+  paragraph "Implemented in via (and the same type-ahead helper on filtered / tab-sequence listboxes) — every package that mounts the tree gets the same keymap."
     code "@real-a11y-dev/semantic-navigator-ui"
     code "useTreeKeyboard"
   separator

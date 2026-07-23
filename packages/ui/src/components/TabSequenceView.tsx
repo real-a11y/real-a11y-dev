@@ -8,6 +8,11 @@ import {
   useEffect,
 } from "preact/hooks";
 
+import {
+  createTypeAheadBuffer,
+  findTypeAheadIndex,
+  isTypeAheadKey,
+} from "../hooks/typeAhead.js";
 import { listOptionDomId, useInstanceId } from "../hooks/useInstanceId.js";
 
 interface TabSequenceViewProps {
@@ -17,6 +22,8 @@ interface TabSequenceViewProps {
   onSelect: (nodeId: string) => void;
   onActivate: (nodeId: string) => void;
   onHover: (nodeId: string | null) => void;
+  /** Focus the panel search input when `/` is pressed. */
+  onFocusSearch?: () => void;
 }
 
 function tabindexOf(node: DomSemanticNode): number | null {
@@ -33,10 +40,12 @@ export function TabSequenceView({
   onSelect,
   onActivate,
   onHover,
+  onFocusSearch,
 }: TabSequenceViewProps) {
   const instanceId = useInstanceId("ts");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
+  const typeAhead = useRef(createTypeAheadBuffer());
 
   // Full tab sequence, then optionally filtered by search query. The panel
   // only renders DOM-produced trees, so every sequenced node has all facets.
@@ -58,9 +67,10 @@ export function TabSequenceView({
     });
   }, [nodes, rootId, query]);
 
-  // Reset selection when query changes
+  // Reset selection and type-ahead when query changes
   useEffect(() => {
     setSelectedIndex(0);
+    typeAhead.current.clear();
   }, [query]);
 
   const selectedNode = items[selectedIndex] ?? null;
@@ -76,36 +86,39 @@ export function TabSequenceView({
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
+      const selectAt = (index: number) => {
+        setSelectedIndex(index);
+        if (items[index]) onSelect(items[index].id);
+      };
+
       switch (e.key) {
         case "ArrowDown": {
           e.preventDefault();
-          const next = Math.min(selectedIndex + 1, items.length - 1);
-          setSelectedIndex(next);
-          if (items[next]) onSelect(items[next].id);
+          typeAhead.current.clear();
+          selectAt(Math.min(selectedIndex + 1, items.length - 1));
           break;
         }
         case "ArrowUp": {
           e.preventDefault();
-          const prev = Math.max(selectedIndex - 1, 0);
-          setSelectedIndex(prev);
-          if (items[prev]) onSelect(items[prev].id);
+          typeAhead.current.clear();
+          selectAt(Math.max(selectedIndex - 1, 0));
           break;
         }
         case "Home": {
           e.preventDefault();
-          setSelectedIndex(0);
-          if (items[0]) onSelect(items[0].id);
+          typeAhead.current.clear();
+          selectAt(0);
           break;
         }
         case "End": {
           e.preventDefault();
-          const last = items.length - 1;
-          setSelectedIndex(last);
-          if (items[last]) onSelect(items[last].id);
+          typeAhead.current.clear();
+          selectAt(items.length - 1);
           break;
         }
         case "Enter": {
           e.preventDefault();
+          typeAhead.current.clear();
           if (selectedNode) {
             const action = getPrimaryAction(selectedNode.interaction.actions);
             if (action) onActivate(selectedNode.id);
@@ -113,9 +126,28 @@ export function TabSequenceView({
           }
           break;
         }
+        case "/": {
+          if (!onFocusSearch || e.ctrlKey || e.altKey || e.metaKey) break;
+          e.preventDefault();
+          typeAhead.current.clear();
+          onFocusSearch();
+          break;
+        }
+        default: {
+          if (!isTypeAheadKey(e) || items.length === 0) break;
+          e.preventDefault();
+          const buffer = typeAhead.current.push(e.key);
+          const labels = items.map(
+            (n) =>
+              n.a11y.name || n.dom.textContent?.trim() || n.a11y.role || "",
+          );
+          const next = findTypeAheadIndex(labels, buffer, selectedIndex);
+          if (next >= 0) selectAt(next);
+          break;
+        }
       }
     },
-    [items, selectedIndex, selectedNode, onSelect, onActivate],
+    [items, selectedIndex, selectedNode, onSelect, onActivate, onFocusSearch],
   );
 
   return (

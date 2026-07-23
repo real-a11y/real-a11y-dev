@@ -1,7 +1,7 @@
 import type { SemanticNode } from "@real-a11y-dev/core";
 import { render } from "preact";
 import { act } from "preact/test-utils";
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 import { FilteredList } from "./FilteredList.js";
 
@@ -215,5 +215,61 @@ describe("FilteredList (smoke)", () => {
     act(() => render(list(1), container));
     expect(container.querySelectorAll('[role="option"]')).toHaveLength(1);
     expect(listbox.getAttribute("aria-activedescendant")).toBeNull();
+  });
+
+  it("moves selection via type-ahead and focuses search on `/`", () => {
+    const nodes = new Map<string, SemanticNode>();
+    nodes.set(
+      "n1",
+      makeNode({ id: "n1", role: "button", name: "Alpha", tagName: "button" }),
+    );
+    nodes.set(
+      "n2",
+      makeNode({ id: "n2", role: "button", name: "Beta", tagName: "button" }),
+    );
+    nodes.set(
+      "n3",
+      makeNode({
+        id: "n3",
+        role: "button",
+        name: "Blueberry",
+        tagName: "button",
+      }),
+    );
+
+    const selected: string[] = [];
+    const focusSearch = vi.fn();
+    act(() => {
+      render(
+        <FilteredList
+          nodes={nodes}
+          roleFilter="button"
+          query=""
+          onSelect={(id) => selected.push(id)}
+          onActivate={noop}
+          onFocusSearch={focusSearch}
+        />,
+        container,
+      );
+    });
+
+    const listbox = container.querySelector<HTMLElement>('[role="listbox"]')!;
+    act(() => {
+      listbox.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "b", bubbles: true }),
+      );
+    });
+    expect(listbox.getAttribute("aria-activedescendant")).toBe(
+      container.querySelectorAll<HTMLElement>('[role="option"]')[1]!.id,
+    );
+    expect(selected.at(-1)).toBe("n2");
+
+    act(() => {
+      listbox.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "/", bubbles: true }),
+      );
+    });
+    expect(focusSearch).toHaveBeenCalledTimes(1);
+    expect(selected.at(-1)).toBe("n2");
   });
 });

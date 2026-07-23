@@ -9,14 +9,14 @@
     "name": "@real-a11y-dev/semantic-navigator-ui (esm)",
     "path": "packages/ui/dist/index.js",
     "import": "{ TreeView }",
-    "limit": "7.8 KB",
+    "limit": "8.4 KB",
     "gzip": true,
     "ignore": ["preact", "preact/hooks", "@real-a11y-dev/core"]
   },
   {
     "name": "@real-a11y-dev/inspector (esm)",
     "path": "packages/inspector/dist/index.js",
-    "limit": "30.4 KB",
+    "limit": "31.0 KB",
     "gzip": true
   },
   {
