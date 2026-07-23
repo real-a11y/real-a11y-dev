@@ -157,6 +157,8 @@ Live updates strategy: **MVP = re-extract after every dispatched action + on `Pa
 
 ## 5. Roadmap (v2's phases, desktop threaded in)
 
+> **Execution:** the phase list below is the *what*; the PR-by-PR breakdown with dependency graph and living checkbox tracker is [`native-tree-execution.md`](./native-tree-execution.md).
+
 - **Phase 0 — ratify:** v2 model break + this doc's R1–R6 + desktop-as-frontend principle.
 - **Phase 1 — model + native read:** AccNode reshape; `browser.nativeTree()` with **one** normalizer (R4), batched enrich (R3), in-page redaction (R1), tree-level provenance (R5); parity harness in CI on the corpus (gate = current 88.7%, must not regress; grow corpus: iframes, portals, virtualized lists, contenteditable).
 - **Phase 2 — act:** CdpActionBackend graduating the dispatch spike; `A11ySession.act()`; stable-id scheme (R2).
