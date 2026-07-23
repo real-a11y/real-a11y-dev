@@ -133,3 +133,56 @@ describe("normalizeNativeAX (recorded Chromium 141 tree)", () => {
     expect(save?.id).toBe(`ax-dom-${save?.backendDOMNodeId}`);
   });
 });
+
+describe("name promotion depth and guard", () => {
+  const raw = (
+    nodeId: string,
+    role: string,
+    opts: { parentId?: string; childIds?: string[]; name?: string } = {},
+  ): RawNativeAXNode => ({
+    nodeId,
+    role: { value: role },
+    ...(opts.name !== undefined ? { name: { value: opts.name } } : {}),
+    ...(opts.parentId !== undefined ? { parentId: opts.parentId } : {}),
+    ...(opts.childIds !== undefined ? { childIds: opts.childIds } : {}),
+  });
+
+  it("promotes through nested dropped wrappers (LabelText → StaticText)", () => {
+    // Chromium's common label shape: the LabelText carries NO name itself;
+    // its text lives on a StaticText child — sometimes under a generic too.
+    const nodes = normalizeNativeAX([
+      raw("1", "checkbox", { childIds: ["2"] }),
+      raw("2", "LabelText", { parentId: "1", childIds: ["3"] }),
+      raw("3", "generic", { parentId: "2", childIds: ["4"] }),
+      raw("4", "StaticText", { parentId: "3", name: "Accept terms" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe('checkbox "Accept terms"');
+  });
+
+  it("never promotes onto a node with kept descendants (leaf guard)", () => {
+    // A container whose dropped subtree contains label text must NOT steal
+    // it — only normalized leaves promote. (In the recorded fixture: main's
+    // dropped LabelText holds "Email"; main must stay unnamed.)
+    const container = normalizeNativeAX([
+      raw("1", "main", { childIds: ["2", "5"] }),
+      raw("2", "LabelText", { parentId: "1", childIds: ["3"] }),
+      raw("3", "StaticText", { parentId: "2", name: "Email" }),
+      raw("5", "button", { parentId: "1", name: "Save" }),
+    ]);
+    expect(serializeNativeAX(container)).toBe(
+      ["main", '  button "Save"'].join("\n"),
+    );
+
+    const fixture = normalizeNativeAX(rawNodes);
+    expect(fixture[0]).toMatchObject({ role: "main", name: "" });
+  });
+
+  it("does not promote list markers (not a name-source role)", () => {
+    const nodes = normalizeNativeAX([
+      raw("1", "listitem", { childIds: ["2", "3"] }),
+      raw("2", "ListMarker", { parentId: "1", name: "• " }),
+      raw("3", "StaticText", { parentId: "1", name: "Alpha" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe('listitem "Alpha"');
+  });
+});

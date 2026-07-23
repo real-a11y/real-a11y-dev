@@ -67,21 +67,33 @@ function idOf(node: RawNativeAXNode): string {
 
 /**
  * Chromium often leaves a node's visible text on a `StaticText`/`LabelText`
- * child while the node's own name is empty. Those children are dropped by
- * the vocabulary, so an empty name is promoted from the first named one.
- * Never overrides a non-empty name (a `textbox` whose *value* lives in a
- * StaticText child keeps its label as the name).
+ * descendant while the node's own name is empty — and the text is not always
+ * a DIRECT child (`LabelText` usually carries no name itself; its text sits
+ * on its own `StaticText` child, sometimes under a dropped `generic` too).
+ * So promotion searches depth-first through the node's DROPPED descendants,
+ * in document order, for the first named `StaticText`/`LabelText`. Kept
+ * descendants are never entered: their text belongs to them.
+ *
+ * Callers only invoke this for normalized LEAVES (no kept descendants) with
+ * an empty name. That guard is what keeps deep search safe — without it a
+ * container like `main` would steal the text of a dropped form label deep in
+ * its subtree. It also means a `textbox` whose *value* lives in a StaticText
+ * child keeps its authored label: the name is only promoted when Chromium
+ * left it empty.
  */
-function promoteNameFromChildren(
+function promoteNameFromDroppedDescendants(
   node: RawNativeAXNode,
   byId: Map<string, RawNativeAXNode>,
 ): string {
   for (const childId of node.childIds ?? []) {
     const child = byId.get(childId);
-    if (!child || child.ignored) continue;
-    if (!NATIVE_AX_NAME_SOURCE_ROLES.has(child.role?.value ?? "")) continue;
-    const text = collapseWhitespace(child.name?.value ?? "");
-    if (text) return text;
+    if (!child || isKept(child)) continue;
+    if (NATIVE_AX_NAME_SOURCE_ROLES.has(child.role?.value ?? "")) {
+      const text = collapseWhitespace(child.name?.value ?? "");
+      if (text) return text;
+    }
+    const fromDescendants = promoteNameFromDroppedDescendants(child, byId);
+    if (fromDescendants) return fromDescendants;
   }
   return "";
 }
@@ -96,6 +108,7 @@ function promoteNameFromChildren(
 export function normalizeNativeAX(rawNodes: RawNativeAXNode[]): NativeAXNode[] {
   const byId = new Map(rawNodes.map((n) => [n.nodeId, n]));
   const out: NativeAXNode[] = [];
+  const rawOf = new Map<NativeAXNode, RawNativeAXNode>();
 
   const visit = (
     nodeId: string,
@@ -110,26 +123,40 @@ export function normalizeNativeAX(rawNodes: RawNativeAXNode[]): NativeAXNode[] {
       for (const childId of raw.childIds ?? []) visit(childId, depth, parent);
       return;
     }
-    const name =
-      collapseWhitespace(raw.name?.value ?? "") ||
-      promoteNameFromChildren(raw, byId);
     const node: NativeAXNode = {
       id: idOf(raw),
       role: mapNativeAXRole(raw.role?.value ?? ""),
-      name,
+      name: collapseWhitespace(raw.name?.value ?? ""),
       depth,
       backendDOMNodeId:
         typeof raw.backendDOMNodeId === "number" ? raw.backendDOMNodeId : null,
       childIds: [],
     };
     out.push(node);
+    rawOf.set(node, raw);
     parent?.childIds.push(node.id);
     for (const childId of raw.childIds ?? []) visit(childId, depth + 1, node);
   };
 
+  // Multi-frame note: every raw node without a parentId is treated as a
+  // top-level root, so a cross-frame payload (multiple RootWebAreas)
+  // serializes child documents as separate top-level subtrees. Nesting them
+  // at their <iframe> location needs frame metadata only a transport-aware
+  // producer has (frameId → DOM.getFrameOwner) — that's
+  // @real-a11y-dev/browser's job, not this pure module's.
   for (const root of rawNodes.filter((n) => !n.parentId)) {
     visit(root.nodeId, 0, null);
   }
+
+  // Name promotion is a post-pass so the leaf guard can see the normalized
+  // shape: only leaves (no kept descendants) may pull text from their
+  // dropped subtree — see promoteNameFromDroppedDescendants.
+  for (const node of out) {
+    if (node.name || node.childIds.length > 0) continue;
+    const raw = rawOf.get(node);
+    if (raw) node.name = promoteNameFromDroppedDescendants(raw, byId);
+  }
+
   return out;
 }
 
