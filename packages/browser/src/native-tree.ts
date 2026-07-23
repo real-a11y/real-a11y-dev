@@ -83,7 +83,17 @@ const DOM_ATTR_ALLOWLIST = new Set([
   "autocomplete",
 ]);
 
-/** AX property names that map to boolean/stateful `a11y.states`. */
+/**
+ * AX property names that map to boolean/stateful `a11y.states`.
+ *
+ * The shared ARIA-derived keys (`checked`, `expanded`, `pressed`, `selected`,
+ * `disabled`, `required`, `invalid`) match what the DOM producer writes, so
+ * those compare cleanly across producers. Native additionally exposes
+ * Blink-computed state Chromium has but the in-page walk doesn't (`focusable`,
+ * `focused`, `editable`, `settable`, `readonly`, `multiline`, `modal`, `busy`)
+ * — a superset, not a conflict. Cross-producer state comparison is normalized
+ * by the parity harness (RFC PR E), not relied on raw.
+ */
 const STATE_PROPS = new Set([
   "focusable",
   "focused",
@@ -100,6 +110,23 @@ const STATE_PROPS = new Set([
   "invalid",
   "modal",
   "busy",
+]);
+
+/**
+ * Roles whose accessible name, when not authored (no label / aria-label /
+ * placeholder / title), Chromium derives from the control's **current value**
+ * — which it emits as a `StaticText` descendant. Core's name-promotion would
+ * otherwise copy that value into `a11y.name`, leaking a user's typed input
+ * past the R1 gate. For these roles a *promoted* name is redacted (see
+ * `buildNativeTree`); an authored name is always kept.
+ */
+const VALUE_BEARING_ROLES = new Set([
+  "textbox",
+  "searchbox",
+  "spinbutton",
+  "combobox",
+  "slider",
+  "scrollbar",
 ]);
 
 /** AX property names that map to descriptive `a11y.properties` (strings). */
@@ -266,9 +293,27 @@ export function buildNativeTree(
       ? axFacets(raw)
       : { states: {}, properties: {} };
 
+    // R1 (redaction): core's name-promotion pulls text from dropped
+    // `StaticText` descendants when a node has no name of its own. For a
+    // value-bearing control with no AUTHORED name, that descendant is the
+    // field's *typed value* (Chromium represents an unlabeled input's value as
+    // a StaticText child), so a promoted name would leak the value into
+    // `a11y.name`. Detect the promotion (own AX name empty) for those roles and
+    // drop the name. An authored name (own AX name present) is never promoted,
+    // so it is kept untouched.
+    const authoredName = raw ? cleanText(String(raw.name?.value ?? "")) : "";
+    const hasAxValue =
+      raw?.value?.value !== undefined &&
+      raw?.value?.value !== null &&
+      String(raw.value.value) !== "";
+    const nameWasPromoted = !authoredName && nn.name !== "";
+    const redactPromotedValue =
+      nameWasPromoted && (VALUE_BEARING_ROLES.has(nn.role) || hasAxValue);
+    const name = redactPromotedValue ? "" : nn.name;
+
     const a11y: A11yInfo = {
       role: nn.role,
-      name: nn.name,
+      name,
       description: raw?.description?.value
         ? cleanText(String(raw.description.value))
         : "",
@@ -312,6 +357,13 @@ export function buildNativeTree(
     }
   }
 
+  // Single-frame: one root. A cross-frame `getFullAXTree` payload yields
+  // multiple top-level subtrees (core's `normalizeNativeAX` drops every
+  // `RootWebArea` and treats each parent-less node as a root), and only the
+  // subtree under `rootId` serializes. Multi-frame native trees are out of
+  // scope for Phase 1 — iframes are on the parity-corpus backlog (RFC PR E),
+  // where frame nesting needs frame metadata a transport-aware producer must
+  // add (`frameId` → `DOM.getFrameOwner`).
   const rootId =
     skeleton.find((n) => nodes.get(n.id)?.parentId === null)?.id ??
     skeleton[0]?.id ??

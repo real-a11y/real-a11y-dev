@@ -5,6 +5,7 @@
 // with UA-shadow controls and email/password fields with real secret values.
 // No browser needed at test time; the recording IS the browser's output.
 
+import { normalizeNativeAX } from "@real-a11y-dev/core";
 import { serializeTree } from "@real-a11y-dev/serialize";
 import { describe, expect, it } from "vitest";
 
@@ -122,5 +123,71 @@ describe("buildNativeTree — R1: no field value ever reaches the tree", () => {
     // If the fixture ever stops carrying real secrets, the test above is
     // vacuous — pin that the redaction is doing real work.
     expect(JSON.stringify(payload)).toContain(EMAIL_SECRET);
+  });
+});
+
+describe("buildNativeTree — R1: unlabeled field value must not leak via the name", () => {
+  // The fixture's inputs are all labeled, so the redaction path for an
+  // UNLABELED control (where Chromium emits the typed value as a StaticText
+  // descendant that core's name-promotion would pull into a11y.name) is not
+  // exercised there. This builds that exact shape explicitly.
+  const TYPED_SECRET = "typed-SECRET-value";
+  const raw = [
+    { nodeId: "1", childIds: ["2"], role: { value: "RootWebArea" } },
+    {
+      nodeId: "2",
+      parentId: "1",
+      childIds: ["3", "6"],
+      role: { value: "main" },
+    },
+    // Unlabeled textbox: no own name, has a value, value surfaced as a
+    // StaticText descendant — the leak vector.
+    {
+      nodeId: "3",
+      parentId: "2",
+      childIds: ["4"],
+      role: { value: "textbox" },
+      name: { value: "" },
+      value: { value: TYPED_SECRET },
+      backendDOMNodeId: 100,
+    },
+    { nodeId: "4", parentId: "3", childIds: ["5"], role: { value: "generic" } },
+    {
+      nodeId: "5",
+      parentId: "4",
+      role: { value: "StaticText" },
+      name: { value: TYPED_SECRET },
+    },
+    // Labeled textbox: own name present → promotion never fires, name kept.
+    {
+      nodeId: "6",
+      parentId: "2",
+      role: { value: "textbox" },
+      name: { value: "Email" },
+      value: { value: "someone@example.com" },
+      backendDOMNodeId: 200,
+    },
+  ] as Parameters<typeof buildNativeTree>[0];
+
+  it("sanity: core's name-promotion DOES pull the value into the name (the leak)", () => {
+    // Guards the fix below: prove the vector is real, so the redaction test
+    // can never pass vacuously if promotion behaviour changes.
+    const promoted = normalizeNativeAX(raw).find((n) => n.id === "ax-dom-100");
+    expect(promoted?.name).toBe(TYPED_SECRET);
+  });
+
+  it("redacts the promoted value from an unlabeled control's name", () => {
+    const tree = buildNativeTree(raw);
+    const unlabeled = tree.nodes.get("ax-dom-100");
+    expect(unlabeled?.a11y.role).toBe("textbox");
+    expect(unlabeled?.a11y.name).toBe(""); // value dropped, not promoted
+    expect(serializeTree(tree, { includeGeneric: true })).not.toContain(
+      TYPED_SECRET,
+    );
+  });
+
+  it("keeps an authored (labeled) control's name", () => {
+    const labeled = buildNativeTree(raw).nodes.get("ax-dom-200");
+    expect(labeled?.a11y.name).toBe("Email");
   });
 });
