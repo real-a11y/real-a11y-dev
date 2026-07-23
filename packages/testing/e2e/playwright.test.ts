@@ -175,6 +175,20 @@ test.describe("native tree", () => {
     await expect(sn.assertLandmarkStructure()).resolves.toBeUndefined();
   });
 
+  test("assertNoUnlabeledInteractive passes over the UA-shadow media controls", async ({
+    page,
+  }) => {
+    // The native tree surfaces the <video controls> UA-shadow controls (play,
+    // scrubber, "show more"), which the DOM producer never sees — so this
+    // assertion runs over interactive nodes DOM-mode audits can't reach. Chromium
+    // names its media controls (a UA accessibility guarantee), so a fully labeled
+    // page still passes in native mode. This locks that in: a future Chromium that
+    // shipped an unnamed control would trip here rather than silently in a
+    // consumer's suite.
+    const sn = await attach(page, { tree: "native" });
+    await expect(sn.assertNoUnlabeledInteractive()).resolves.toBeUndefined();
+  });
+
   test("tabSequenceSnapshot throws — a native tree carries no interaction data", async ({
     page,
   }) => {
