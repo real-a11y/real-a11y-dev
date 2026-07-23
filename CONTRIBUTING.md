@@ -147,7 +147,7 @@ That triggers `.github/workflows/docs-preview.yml`, which builds the PR head and
 https://pr-<number>.real-a11y-docs-preview.pages.dev
 ```
 
-Comment `/preview` again after new commits to refresh. Only works while the PR is **open** (a `/preview` on a closed PR is ignored so cleanup is not undone). Only `OWNER` / `MEMBER` / `COLLABORATOR` comments run the deploy (fork authors without write access cannot trigger it). You can also run **Actions → Docs preview → Run workflow** and pass a PR number.
+Comment `/preview` again after new commits to refresh. Only works while the PR is **open** (a `/preview` on a closed PR is ignored so cleanup is not undone, and does not cancel an in-flight cleanup). Only `OWNER` / `MEMBER` / `COLLABORATOR` comments run the deploy (fork authors without write access cannot trigger it). You can also run **Actions → Docs preview → Run workflow** and pass a PR number.
 
 When the PR is **merged or closed**, the same workflow deletes every Cloudflare Pages deployment on the `pr-<number>` branch (including the stable alias), so preview URLs stop serving. Cleanup runs with `pull_request_target` so it still works for fork PRs (secrets are unavailable on plain `pull_request` from forks); it never checks out PR code. A second delete pass covers the rare race where an in-flight deploy finishes after cancel.
 

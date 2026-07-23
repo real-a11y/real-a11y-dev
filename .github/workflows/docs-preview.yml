@@ -20,8 +20,9 @@ name: Docs preview
 # Feedback: a parallel `ack` job reacts 👀 immediately (no checkout/secrets).
 # `notify-failure` comments if build fails. Deploy reacts 👍 on success.
 # `/preview` and workflow_dispatch only proceed when the PR is still open
-# (checked at resolve and again immediately before Cloudflare upload) so a
-# comment on a closed PR cannot recreate a preview after cleanup.
+# (`resolve` checks first, with no concurrency lock; `build`/`deploy` only
+# run when open so a closed-PR `/preview` cannot cancel in-flight cleanup).
+# Deploy re-checks open immediately before the Cloudflare upload.
 #
 # Cleanup: when a PR is closed (merged or not), `cleanup` deletes every
 # Cloudflare Pages deployment on branch `pr-<number>` (including the stable
@@ -57,8 +58,8 @@ permissions:
   contents: read
 
 jobs:
-  # Immediate 👀 so the requester knows /preview was accepted, while build
-  # (minutes) runs in parallel. No checkout, no secrets — write scopes only.
+  # Immediate 👀 so the requester knows /preview was accepted, while resolve
+  # + build run in parallel. No checkout, no secrets — write scopes only.
   ack:
     if: |
       github.event_name == 'issue_comment' &&
@@ -100,7 +101,9 @@ jobs:
               content: 'eyes',
             });
 
-  build:
+  # Cheap open-state check with NO concurrency group. Closed-PR /preview must
+  # not take the docs-preview-pr-N lock (that would cancel in-flight cleanup).
+  resolve:
     # `/preview` must be at the start of the comment so the bot reply
     # ("Comment `/preview` again…") cannot re-trigger. Bots are ignored.
     if: |
@@ -112,18 +115,13 @@ jobs:
         github.event.comment.author_association == 'MEMBER' ||
         github.event.comment.author_association == 'COLLABORATOR'))
     runs-on: ubuntu-latest
-    # Job-level: skipped runs (non-/preview comments) never take the lock.
-    concurrency:
-      group: docs-preview-pr-${{ github.event.issue.number || inputs.pr_number }}
-      cancel-in-progress: true
-    # Read-only: may checkout and execute PR head, but cannot write to the
-    # PR or touch secrets. Satisfies CodeQL's privileged-workflow gate.
     permissions:
       contents: read
       pull-requests: read
     outputs:
       number: ${{ steps.pr.outputs.number }}
       sha: ${{ steps.pr.outputs.sha }}
+      repo: ${{ steps.pr.outputs.repo }}
       open: ${{ steps.pr.outputs.open }}
     steps:
       - name: Resolve PR head
@@ -145,34 +143,45 @@ jobs:
           echo "sha=$(jq -r .head.sha <<<"$pr")" >> "$GITHUB_OUTPUT"
           echo "repo=$(jq -r .head.repo.full_name <<<"$pr")" >> "$GITHUB_OUTPUT"
 
+  build:
+    needs: resolve
+    if: needs.resolve.outputs.open == 'true'
+    runs-on: ubuntu-latest
+    # Only open-PR builds take this lock (resolve has none). Cancels an older
+    # /preview for the same PR; cleanup on close also joins this group.
+    concurrency:
+      group: docs-preview-pr-${{ needs.resolve.outputs.number }}
+      cancel-in-progress: true
+    # Read-only: may checkout and execute PR head, but cannot write to the
+    # PR or touch secrets. Satisfies CodeQL's privileged-workflow gate.
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      number: ${{ needs.resolve.outputs.number }}
+      sha: ${{ needs.resolve.outputs.sha }}
+    steps:
       - name: Checkout PR head
-        if: steps.pr.outputs.open == 'true'
         uses: actions/checkout@v4
         with:
-          repository: ${{ steps.pr.outputs.repo }}
-          ref: ${{ steps.pr.outputs.sha }}
+          repository: ${{ needs.resolve.outputs.repo }}
+          ref: ${{ needs.resolve.outputs.sha }}
           persist-credentials: false
 
-      - if: steps.pr.outputs.open == 'true'
-        uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v4
 
-      - if: steps.pr.outputs.open == 'true'
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
 
-      - if: steps.pr.outputs.open == 'true'
-        run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile
 
-      - if: steps.pr.outputs.open == 'true'
-        run: pnpm -r --filter='./packages/*' build
+      - run: pnpm -r --filter='./packages/*' build
 
-      - if: steps.pr.outputs.open == 'true'
-        run: pnpm --filter @real-a11y-dev/website build
+      - run: pnpm --filter @real-a11y-dev/website build
 
       - name: Upload site artifact
-        if: steps.pr.outputs.open == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: docs-preview-dist
@@ -181,11 +190,11 @@ jobs:
 
   # Surface build failures — without this, a failed build is silent after 👀.
   notify-failure:
-    needs: build
+    needs: [resolve, build]
     if: |
       failure() &&
       github.event_name == 'issue_comment' &&
-      needs.build.outputs.open != 'false'
+      needs.resolve.outputs.open == 'true'
     runs-on: ubuntu-latest
     permissions:
       issues: write
@@ -194,7 +203,7 @@ jobs:
       - name: Comment that the preview build failed
         uses: actions/github-script@v7
         env:
-          PR_NUMBER: ${{ github.event.issue.number }}
+          PR_NUMBER: ${{ needs.resolve.outputs.number }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           script: |
@@ -217,15 +226,12 @@ jobs:
             });
 
   deploy:
-    needs: build
-    # Skip when the PR was already closed at resolve time (no artifact).
-    if: needs.build.outputs.open == 'true'
+    needs: [resolve, build]
     runs-on: ubuntu-latest
-    # Same group as build: only real preview runs reach this job (needs:build
-    # + build's if), so skipped comment runs never take the lock — but a
-    # second /preview can cancel an older deploy still talking to Cloudflare.
+    # Same group as build: a second /preview can cancel an older deploy still
+    # talking to Cloudflare; cleanup on close cancels here too.
     concurrency:
-      group: docs-preview-pr-${{ github.event.issue.number || inputs.pr_number }}
+      group: docs-preview-pr-${{ needs.resolve.outputs.number }}
       cancel-in-progress: true
     # Fresh runner: no PR checkout. Write scopes only here (PR comment +
     # reactions on the triggering issue comment — reactions need issues:write).
@@ -238,7 +244,7 @@ jobs:
         id: gate
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ needs.build.outputs.number }}
+          PR_NUMBER: ${{ needs.resolve.outputs.number }}
         run: |
           set -euo pipefail
           state="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq .state)"
@@ -273,9 +279,9 @@ jobs:
           command: >-
             pages deploy dist
             --project-name=real-a11y-docs-preview
-            --branch=pr-${{ needs.build.outputs.number }}
-            --commit-hash=${{ needs.build.outputs.sha }}
-            --commit-message=docs-preview-pr-${{ needs.build.outputs.number }}
+            --branch=pr-${{ needs.resolve.outputs.number }}
+            --commit-hash=${{ needs.resolve.outputs.sha }}
+            --commit-message=docs-preview-pr-${{ needs.resolve.outputs.number }}
 
       - name: Comment preview URL
         if: steps.gate.outputs.open == 'true'
@@ -283,8 +289,8 @@ jobs:
         env:
           ALIAS_URL: ${{ steps.deploy.outputs.pages-deployment-alias-url }}
           DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment-url }}
-          PR_SHA: ${{ needs.build.outputs.sha }}
-          PR_NUMBER: ${{ needs.build.outputs.number }}
+          PR_SHA: ${{ needs.resolve.outputs.sha }}
+          PR_NUMBER: ${{ needs.resolve.outputs.number }}
         with:
           script: |
             const alias = process.env.ALIAS_URL;
@@ -412,13 +418,18 @@ jobs:
 
           # Pass 1: delete what is already registered. Pass 2 (after a wait):
           # catch a deploy that finished after cancel but before list ran.
+          # Write list output to a temp file (not process substitution) so a
+          # Cloudflare API failure propagates under set -e.
           total_deleted=0
           for pass in 1 2; do
             if [ "$pass" -eq 2 ]; then
               echo "Waiting 30s for any in-flight deploy to register…"
               sleep 30
             fi
-            mapfile -t ids < <(list_matching_ids)
+            list_file="$(mktemp)"
+            list_matching_ids > "$list_file"
+            mapfile -t ids < "$list_file"
+            rm -f "$list_file"
             filtered=()
             for id in "${ids[@]+"${ids[@]}"}"; do
               [ -n "$id" ] && filtered+=("$id")
