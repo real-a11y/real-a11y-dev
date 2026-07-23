@@ -12,10 +12,11 @@ name: Docs preview
 # - The `/preview` path loads this workflow from the default branch
 #   (issue_comment). workflow_dispatch uses whichever branch you select.
 # - Only OWNER / MEMBER / COLLABORATOR comments trigger a deploy.
-# - Cloudflare credentials are injected only into the deploy step, not into
-#   install/build (which run untrusted PR code).
-# - Fork PRs are allowed when a trusted collaborator asks — that is the
-#   review use case — but secrets never reach the build steps.
+# - Two jobs: `build` checks out and compiles the PR head with **no secrets**;
+#   `deploy` runs on a fresh runner, downloads only the static dist artifact,
+#   then injects Cloudflare credentials. That split closes the CodeQL
+#   untrusted-checkout / TOCTOU finding (secrets never share a workspace with
+#   PR install/build scripts, even on fork PRs a collaborator asked to preview).
 
 on:
   issue_comment:
@@ -36,7 +37,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  preview:
+  build:
     # `/preview` must be at the start of the comment so the bot reply
     # ("Comment `/preview` again…") cannot re-trigger. Bots are ignored.
     if: |
@@ -48,6 +49,9 @@ jobs:
         github.event.comment.author_association == 'MEMBER' ||
         github.event.comment.author_association == 'COLLABORATOR'))
     runs-on: ubuntu-latest
+    outputs:
+      number: ${{ steps.pr.outputs.number }}
+      sha: ${{ steps.pr.outputs.sha }}
     steps:
       - name: Acknowledge /preview
         if: github.event_name == 'issue_comment'
@@ -71,7 +75,6 @@ jobs:
           pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
           echo "number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
           echo "sha=$(jq -r .head.sha <<<"$pr")" >> "$GITHUB_OUTPUT"
-          echo "ref=$(jq -r .head.ref <<<"$pr")" >> "$GITHUB_OUTPUT"
           echo "repo=$(jq -r .head.repo.full_name <<<"$pr")" >> "$GITHUB_OUTPUT"
 
       - name: Checkout PR head
@@ -93,6 +96,24 @@ jobs:
 
       - run: pnpm --filter @real-a11y-dev/website build
 
+      - name: Upload site artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-preview-dist
+          path: website/.vitepress/dist
+          retention-days: 1
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    # Fresh runner: no PR checkout, only the static dist from `build`.
+    steps:
+      - name: Download site artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docs-preview-dist
+          path: dist
+
       - name: Deploy to Cloudflare Pages
         id: deploy
         uses: cloudflare/wrangler-action@v3
@@ -100,21 +121,23 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           # Short branch name → stable alias https://pr-N.<project>.pages.dev
-          # (Cloudflare truncates long branch aliases).
+          # (Cloudflare truncates long branch aliases). Quote the commit
+          # message so spaces are one argv token (wrangler-action splits on
+          # whitespace); avoid `#` so shells never treat it as a comment.
           command: >-
-            pages deploy website/.vitepress/dist
+            pages deploy dist
             --project-name=real-a11y-docs-preview
-            --branch=pr-${{ steps.pr.outputs.number }}
-            --commit-hash=${{ steps.pr.outputs.sha }}
-            --commit-message=docs-preview PR #${{ steps.pr.outputs.number }}
+            --branch=pr-${{ needs.build.outputs.number }}
+            --commit-hash=${{ needs.build.outputs.sha }}
+            --commit-message="docs-preview pr-${{ needs.build.outputs.number }}"
 
       - name: Comment preview URL
         uses: actions/github-script@v7
         env:
           ALIAS_URL: ${{ steps.deploy.outputs.pages-deployment-alias-url }}
           DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment-url }}
-          PR_SHA: ${{ steps.pr.outputs.sha }}
-          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          PR_SHA: ${{ needs.build.outputs.sha }}
+          PR_NUMBER: ${{ needs.build.outputs.number }}
         with:
           script: |
             const alias = process.env.ALIAS_URL;
