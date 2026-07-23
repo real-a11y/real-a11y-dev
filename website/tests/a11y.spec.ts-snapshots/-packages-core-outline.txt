@@ -30,4 +30,5 @@ h1 @real-a11y-dev/core
     h3 DomObserver
   h2 Live tree extraction
     h3 LiveTreeExtractor
+  h2 Native AX vocabulary
   h2 Types

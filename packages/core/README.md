@@ -104,6 +104,34 @@ const matchedIds = searchTree(nodes, "button", "dom");
 const count = applySearchFilter(nodes, "navigation", "a11y");
 ```
 
+### Native AX vocabulary
+
+Normalize a Chromium CDP `Accessibility.getFullAXTree` payload into the
+engine's vocabulary — pure functions (no CDP, no DOM globals), so they run in
+Node, jsdom, browsers, and extension service workers alike. This is the single
+shared normalization every native-tree consumer imports (the drop-list, the
+Blink→engine role map, and name promotion off dropped `StaticText` children),
+versioned via `NATIVE_AX_VOCABULARY_VERSION` because Chromium's tree shifts
+across milestones.
+
+```ts
+import { normalizeNativeAX, serializeNativeAX } from "@real-a11y-dev/core";
+
+// nodes: the raw `nodes` array returned by Accessibility.getFullAXTree
+const tree = normalizeNativeAX(nodes);
+serializeNativeAX(tree);
+// main
+//   heading "Native AX fixture"
+//   video "Product tour"
+//     button "play"
+//     slider "video time scrubber"
+```
+
+Sibling order follows each parent's `childIds` (Chromium's own document
+order), ignored/`generic`/`none` wrappers are flattened with descendants
+re-parented to the nearest kept ancestor, and each kept node carries its
+`backendDOMNodeId` for CDP enrichment or action dispatch.
+
 ## Data model
 
 Every node in both the DOM and accessibility trees uses the `SemanticNode` interface:

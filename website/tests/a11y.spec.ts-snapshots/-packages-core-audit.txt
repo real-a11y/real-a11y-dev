@@ -102,6 +102,8 @@ navigation "On this page"
     listitem
       link "Live tree extraction"
     listitem
+      link "Native AX vocabulary"
+    listitem
       link "Types"
 main
   heading "@real-a11y-dev/core" (level 1)
@@ -374,6 +376,50 @@ main
     code ""dom""
     code "extractor.extract()"
     code "extractor.setMode(mode)"
+  separator
+  heading "Native AX vocabulary" (level 2)
+  paragraph "The single shared normalization of Chromium's native accessibility tree (a CDP payload) into the engine's vocabulary. Pure — no CDP session, no DOM globals — so the same module runs in Node, jsdom, a page, or an extension service worker; fetching the tree is the caller's job (Playwright , , …)."
+    code "Accessibility.getFullAXTree"
+    code "CDPSession"
+    code "chrome.debugger.sendCommand"
+  button "Copy Code"
+  code
+  paragraph "What normalization does:"
+  list
+    listitem "(): text runs (/), wrappers (//), and internals (, , …). Kept descendants re-parent to the nearest kept ancestor."
+      strong "Drops Blink noise"
+      code "NATIVE_AX_DROP_ROLES"
+      code "StaticText"
+      code "InlineTextBox"
+      code "generic"
+      code "none"
+      code "presentation"
+      code "RootWebArea"
+      code "ListMarker"
+    listitem "(): → , → , → — the same computed roles the DOM extractor assigns media elements."
+      strong "Maps Blink roles to engine roles"
+      code "mapNativeAXRole"
+      code "Video"
+      code "video"
+      code "Audio"
+      code "audio"
+      code "image"
+      code "img"
+    listitem "a node left on a dropped / child ( keeps its text), without ever overriding an authored name."
+      strong "Promotes names"
+      code "StaticText"
+      code "LabelText"
+      code "listitem "Alpha""
+    listitem "— siblings follow each parent's , not the interleaved flat-list order of the raw payload."
+      strong "Preserves Chromium's document order"
+      code "childIds"
+    listitem "Each carries (when Chromium exposes one) for CDP enrichment or action dispatch, plus a session-scoped / id."
+      code "NativeAXNode"
+      code "backendDOMNodeId"
+      code "ax-dom-*"
+      code "ax-*"
+  paragraph "names the table revision; stamp it next to snapshots of native trees so output changes across Chromium milestones (or vocabulary updates) are attributable."
+    code "NATIVE_AX_VOCABULARY_VERSION"
   separator
   heading "Types" (level 2)
   button "Copy Code"

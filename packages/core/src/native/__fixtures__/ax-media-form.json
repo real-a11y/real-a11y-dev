@@ -1,0 +1,783 @@
+{
+  "chrome": "141.0.7390.37",
+  "nodes": [
+    {
+      "nodeId": "1",
+      "childIds": ["8"],
+      "backendDOMNodeId": 1,
+      "role": {
+        "value": "RootWebArea"
+      },
+      "name": {
+        "value": "ax fixture"
+      }
+    },
+    {
+      "nodeId": "8",
+      "parentId": "1",
+      "childIds": ["12"],
+      "backendDOMNodeId": 8,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "12",
+      "parentId": "8",
+      "childIds": ["13"],
+      "backendDOMNodeId": 12,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "13",
+      "parentId": "12",
+      "childIds": ["14", "15", "18", "21", "22", "113"],
+      "backendDOMNodeId": 13,
+      "role": {
+        "value": "main"
+      }
+    },
+    {
+      "nodeId": "14",
+      "parentId": "13",
+      "childIds": ["114"],
+      "backendDOMNodeId": 14,
+      "role": {
+        "value": "heading"
+      },
+      "name": {
+        "value": "Native AX fixture"
+      }
+    },
+    {
+      "nodeId": "15",
+      "parentId": "13",
+      "childIds": ["16", "17"],
+      "backendDOMNodeId": 15,
+      "role": {
+        "value": "list"
+      }
+    },
+    {
+      "nodeId": "18",
+      "parentId": "13",
+      "childIds": ["119", "19"],
+      "backendDOMNodeId": 18,
+      "role": {
+        "value": "LabelText"
+      }
+    },
+    {
+      "nodeId": "21",
+      "parentId": "13",
+      "childIds": ["121"],
+      "backendDOMNodeId": 21,
+      "role": {
+        "value": "button"
+      },
+      "name": {
+        "value": "Save"
+      }
+    },
+    {
+      "nodeId": "22",
+      "parentId": "13",
+      "childIds": ["23"],
+      "backendDOMNodeId": 22,
+      "role": {
+        "value": "Video"
+      },
+      "name": {
+        "value": "Unable to play media."
+      }
+    },
+    {
+      "nodeId": "113",
+      "parentId": "13",
+      "childIds": ["123"],
+      "backendDOMNodeId": 113,
+      "role": {
+        "value": "link"
+      },
+      "name": {
+        "value": "Deep link"
+      }
+    },
+    {
+      "nodeId": "114",
+      "parentId": "14",
+      "childIds": ["-1000000002"],
+      "backendDOMNodeId": 114,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Native AX fixture"
+      }
+    },
+    {
+      "nodeId": "16",
+      "parentId": "15",
+      "childIds": ["115", "116"],
+      "backendDOMNodeId": 16,
+      "role": {
+        "value": "listitem"
+      }
+    },
+    {
+      "nodeId": "17",
+      "parentId": "15",
+      "childIds": ["117", "118"],
+      "backendDOMNodeId": 17,
+      "role": {
+        "value": "listitem"
+      }
+    },
+    {
+      "nodeId": "119",
+      "parentId": "18",
+      "childIds": ["-1000000007"],
+      "backendDOMNodeId": 119,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Email "
+      }
+    },
+    {
+      "nodeId": "19",
+      "parentId": "18",
+      "childIds": ["20"],
+      "backendDOMNodeId": 19,
+      "role": {
+        "value": "textbox"
+      },
+      "name": {
+        "value": "Email "
+      }
+    },
+    {
+      "nodeId": "121",
+      "parentId": "21",
+      "childIds": ["-1000000009"],
+      "backendDOMNodeId": 121,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Save"
+      }
+    },
+    {
+      "nodeId": "23",
+      "parentId": "22",
+      "childIds": ["24", "33", "35", "65", "66", "67", "68", "69"],
+      "backendDOMNodeId": 23,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "24",
+      "parentId": "23",
+      "childIds": ["26"],
+      "backendDOMNodeId": 24,
+      "role": {
+        "value": "group"
+      },
+      "name": {
+        "value": "buffering"
+      }
+    },
+    {
+      "nodeId": "33",
+      "parentId": "23",
+      "childIds": ["34"],
+      "backendDOMNodeId": 33,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "35",
+      "parentId": "23",
+      "childIds": ["36"],
+      "backendDOMNodeId": 35,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "36",
+      "parentId": "35",
+      "childIds": ["37", "38", "58"],
+      "backendDOMNodeId": 36,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "37",
+      "parentId": "36",
+      "childIds": [],
+      "backendDOMNodeId": 37,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "38",
+      "parentId": "36",
+      "childIds": ["39", "43", "44", "54", "56"],
+      "backendDOMNodeId": 38,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "58",
+      "parentId": "36",
+      "childIds": [],
+      "backendDOMNodeId": 58,
+      "role": {
+        "value": "slider"
+      },
+      "name": {
+        "value": "video time scrubber"
+      }
+    },
+    {
+      "nodeId": "65",
+      "parentId": "23",
+      "childIds": [],
+      "backendDOMNodeId": 65,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "66",
+      "parentId": "23",
+      "childIds": [],
+      "backendDOMNodeId": 66,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "67",
+      "parentId": "23",
+      "childIds": [],
+      "backendDOMNodeId": 67,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "68",
+      "parentId": "23",
+      "childIds": [],
+      "backendDOMNodeId": 68,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "69",
+      "parentId": "23",
+      "childIds": [
+        "70",
+        "74",
+        "78",
+        "82",
+        "86",
+        "90",
+        "94",
+        "98",
+        "102",
+        "106"
+      ],
+      "backendDOMNodeId": 69,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "70",
+      "parentId": "69",
+      "childIds": [],
+      "backendDOMNodeId": 70,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "74",
+      "parentId": "69",
+      "childIds": [],
+      "backendDOMNodeId": 74,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "78",
+      "parentId": "69",
+      "childIds": [],
+      "backendDOMNodeId": 78,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "82",
+      "parentId": "69",
+      "childIds": [],
+      "backendDOMNodeId": 82,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "86",
+      "parentId": "69",
+      "childIds": [],
+      "backendDOMNodeId": 86,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "90",
+      "parentId": "69",
+      "childIds": [],
+      "backendDOMNodeId": 90,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "94",
+      "parentId": "69",
+      "childIds": [],
+      "backendDOMNodeId": 94,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "98",
+      "parentId": "69",
+      "childIds": [],
+      "backendDOMNodeId": 98,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "102",
+      "parentId": "69",
+      "childIds": [],
+      "backendDOMNodeId": 102,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "106",
+      "parentId": "69",
+      "childIds": [],
+      "backendDOMNodeId": 106,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "123",
+      "parentId": "113",
+      "childIds": ["-1000000010"],
+      "backendDOMNodeId": 123,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Deep link"
+      }
+    },
+    {
+      "nodeId": "-1000000002",
+      "parentId": "114",
+      "childIds": [],
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Native AX fixture"
+      }
+    },
+    {
+      "nodeId": "115",
+      "parentId": "16",
+      "childIds": ["-1000000003"],
+      "backendDOMNodeId": 115,
+      "role": {
+        "value": "ListMarker"
+      },
+      "name": {
+        "value": "• "
+      }
+    },
+    {
+      "nodeId": "116",
+      "parentId": "16",
+      "childIds": ["-1000000004"],
+      "backendDOMNodeId": 116,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Alpha"
+      }
+    },
+    {
+      "nodeId": "117",
+      "parentId": "17",
+      "childIds": ["-1000000005"],
+      "backendDOMNodeId": 117,
+      "role": {
+        "value": "ListMarker"
+      },
+      "name": {
+        "value": "• "
+      }
+    },
+    {
+      "nodeId": "118",
+      "parentId": "17",
+      "childIds": ["-1000000006"],
+      "backendDOMNodeId": 118,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Beta"
+      }
+    },
+    {
+      "nodeId": "-1000000007",
+      "parentId": "119",
+      "childIds": [],
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Email "
+      }
+    },
+    {
+      "nodeId": "20",
+      "parentId": "19",
+      "childIds": ["120"],
+      "backendDOMNodeId": 20,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "-1000000009",
+      "parentId": "121",
+      "childIds": [],
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Save"
+      }
+    },
+    {
+      "nodeId": "26",
+      "parentId": "24",
+      "childIds": ["27"],
+      "backendDOMNodeId": 26,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "34",
+      "parentId": "33",
+      "childIds": [],
+      "backendDOMNodeId": 34,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "39",
+      "parentId": "38",
+      "childIds": ["40"],
+      "backendDOMNodeId": 39,
+      "role": {
+        "value": "button"
+      },
+      "name": {
+        "value": "play"
+      }
+    },
+    {
+      "nodeId": "43",
+      "parentId": "38",
+      "childIds": [],
+      "backendDOMNodeId": 43,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "44",
+      "parentId": "38",
+      "childIds": ["45", "46", "53"],
+      "backendDOMNodeId": 44,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "54",
+      "parentId": "38",
+      "childIds": ["55"],
+      "backendDOMNodeId": 54,
+      "role": {
+        "value": "button"
+      },
+      "name": {
+        "value": "enter full screen"
+      }
+    },
+    {
+      "nodeId": "56",
+      "parentId": "38",
+      "childIds": ["57"],
+      "backendDOMNodeId": 56,
+      "role": {
+        "value": "button"
+      },
+      "name": {
+        "value": "show more media controls"
+      }
+    },
+    {
+      "nodeId": "-1000000010",
+      "parentId": "123",
+      "childIds": [],
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Deep link"
+      }
+    },
+    {
+      "nodeId": "-1000000003",
+      "parentId": "115",
+      "childIds": [],
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "-1000000004",
+      "parentId": "116",
+      "childIds": [],
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Alpha"
+      }
+    },
+    {
+      "nodeId": "-1000000005",
+      "parentId": "117",
+      "childIds": [],
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "-1000000006",
+      "parentId": "118",
+      "childIds": [],
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Beta"
+      }
+    },
+    {
+      "nodeId": "120",
+      "parentId": "20",
+      "childIds": ["-1000000008"],
+      "backendDOMNodeId": 120,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "user@example.com"
+      }
+    },
+    {
+      "nodeId": "27",
+      "parentId": "26",
+      "childIds": ["28"],
+      "backendDOMNodeId": 27,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "28",
+      "parentId": "27",
+      "childIds": ["29", "31"],
+      "backendDOMNodeId": 28,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "40",
+      "parentId": "39",
+      "childIds": [],
+      "backendDOMNodeId": 40,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "45",
+      "parentId": "44",
+      "childIds": [],
+      "backendDOMNodeId": 45,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "46",
+      "parentId": "44",
+      "childIds": [],
+      "backendDOMNodeId": 46,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "53",
+      "parentId": "44",
+      "childIds": [],
+      "backendDOMNodeId": 53,
+      "role": {
+        "value": "button"
+      },
+      "name": {
+        "value": "mute"
+      }
+    },
+    {
+      "nodeId": "55",
+      "parentId": "54",
+      "childIds": [],
+      "backendDOMNodeId": 55,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "57",
+      "parentId": "56",
+      "childIds": [],
+      "backendDOMNodeId": 57,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "-1000000008",
+      "parentId": "120",
+      "childIds": [],
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "user@example.com"
+      }
+    },
+    {
+      "nodeId": "29",
+      "parentId": "28",
+      "childIds": ["30"],
+      "backendDOMNodeId": 29,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "31",
+      "parentId": "28",
+      "childIds": ["32"],
+      "backendDOMNodeId": 31,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "30",
+      "parentId": "29",
+      "childIds": [],
+      "backendDOMNodeId": 30,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "32",
+      "parentId": "31",
+      "childIds": [],
+      "backendDOMNodeId": 32,
+      "role": {
+        "value": "generic"
+      }
+    }
+  ]
+}

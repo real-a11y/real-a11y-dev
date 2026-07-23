@@ -293,6 +293,51 @@ unconditional full re-extract, or `extractor.setMode(mode)` to switch views.
 
 ---
 
+## Native AX vocabulary
+
+The single shared normalization of Chromium's native accessibility tree (a
+CDP `Accessibility.getFullAXTree` payload) into the engine's vocabulary.
+Pure — no CDP session, no DOM globals — so the same module runs in Node,
+jsdom, a page, or an extension service worker; fetching the tree is the
+caller's job (Playwright `CDPSession`, `chrome.debugger.sendCommand`, …).
+
+```ts
+import {
+  normalizeNativeAX,
+  serializeNativeAX,
+  mapNativeAXRole,
+  NATIVE_AX_VOCABULARY_VERSION,
+} from "@real-a11y-dev/core";
+
+const full = await cdp.send("Accessibility.getFullAXTree");
+const tree = normalizeNativeAX(full.nodes); // NativeAXNode[], document order
+serializeNativeAX(tree); // indented `role "name"` lines, serializeTree-shaped
+```
+
+What normalization does:
+
+- **Drops Blink noise** (`NATIVE_AX_DROP_ROLES`): text runs
+  (`StaticText`/`InlineTextBox`), wrappers (`generic`/`none`/`presentation`),
+  and internals (`RootWebArea`, `ListMarker`, …). Kept descendants re-parent
+  to the nearest kept ancestor.
+- **Maps Blink roles to engine roles** (`mapNativeAXRole`): `Video` → `video`,
+  `Audio` → `audio`, `image` → `img` — the same computed roles the DOM
+  extractor assigns media elements.
+- **Promotes names** a node left on a dropped `StaticText`/`LabelText` child
+  (`listitem "Alpha"` keeps its text), without ever overriding an authored
+  name.
+- **Preserves Chromium's document order** — siblings follow each parent's
+  `childIds`, not the interleaved flat-list order of the raw payload.
+- Each `NativeAXNode` carries `backendDOMNodeId` (when Chromium exposes one)
+  for CDP enrichment or action dispatch, plus a session-scoped `ax-dom-*` /
+  `ax-*` id.
+
+`NATIVE_AX_VOCABULARY_VERSION` names the table revision; stamp it next to
+snapshots of native trees so output changes across Chromium milestones (or
+vocabulary updates) are attributable.
+
+---
+
 ## Types
 
 ```ts
