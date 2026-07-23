@@ -191,3 +191,90 @@ describe("buildNativeTree — R1: unlabeled field value must not leak via the na
     expect(labeled?.a11y.name).toBe("Email");
   });
 });
+
+describe("buildNativeTree — multiple top-level roots (normal single-frame page)", () => {
+  // Core drops the RootWebArea, so a page whose body has several structural
+  // children (header/main/footer) yields multiple parent-less roots. Without a
+  // synthesized root, serializeTree would traverse only the first and silently
+  // truncate the rest.
+  const raw = [
+    { nodeId: "1", childIds: ["2", "3", "4"], role: { value: "RootWebArea" } },
+    {
+      nodeId: "2",
+      parentId: "1",
+      role: { value: "banner" },
+      name: { value: "Site header" },
+      backendDOMNodeId: 10,
+    },
+    {
+      nodeId: "3",
+      parentId: "1",
+      role: { value: "main" },
+      name: { value: "Content" },
+      backendDOMNodeId: 11,
+    },
+    {
+      nodeId: "4",
+      parentId: "1",
+      role: { value: "contentinfo" },
+      name: { value: "Site footer" },
+      backendDOMNodeId: 12,
+    },
+  ] as Parameters<typeof buildNativeTree>[0];
+
+  it("synthesizes one root that adopts every top-level section", () => {
+    const tree = buildNativeTree(raw);
+    const root = tree.nodes.get(tree.rootId);
+    expect(root?.a11y.role).toBe("document");
+    expect(root?.parentId).toBeNull();
+    // all three landmarks are children of the synthesized root
+    for (const id of ["ax-dom-10", "ax-dom-11", "ax-dom-12"]) {
+      expect(tree.nodes.get(id)?.parentId).toBe(tree.rootId);
+    }
+    // and none are silently dropped from serialized output
+    const printed = serializeTree(tree, { includeGeneric: true });
+    expect(printed).toContain('banner "Site header"');
+    expect(printed).toContain('main "Content"');
+    expect(printed).toContain('contentinfo "Site footer"');
+  });
+
+  it("recomputes depth from the synthesized root", () => {
+    const tree = buildNativeTree(raw);
+    expect(tree.nodes.get(tree.rootId)?.depth).toBe(0);
+    expect(tree.nodes.get("ax-dom-11")?.depth).toBe(1);
+  });
+});
+
+describe("buildNativeTree — R1: valuenow/valuetext of value controls must not leak", () => {
+  const QTY_SECRET = "42 SECRET-QUANTITY";
+  const raw = [
+    { nodeId: "1", childIds: ["2"], role: { value: "RootWebArea" } },
+    {
+      nodeId: "2",
+      parentId: "1",
+      role: { value: "spinbutton" },
+      name: { value: "Quantity" },
+      backendDOMNodeId: 20,
+      properties: [
+        { name: "valuenow", value: { value: 42 } },
+        { name: "valuetext", value: { value: QTY_SECRET } },
+        { name: "valuemin", value: { value: 0 } },
+      ],
+    },
+  ] as Parameters<typeof buildNativeTree>[0];
+
+  it("drops valuenow/valuetext but keeps authored bounds", () => {
+    const tree = buildNativeTree(raw);
+    const spin = tree.nodes.get("ax-dom-20");
+    expect(spin?.a11y.role).toBe("spinbutton");
+    expect(spin?.a11y.name).toBe("Quantity");
+    expect(spin?.a11y.properties.valuenow).toBeUndefined();
+    expect(spin?.a11y.properties.valuetext).toBeUndefined();
+    expect(spin?.a11y.properties.valuemin).toBe("0"); // authored bound kept
+    // the value never reaches the serialized model or any node facet
+    expect(serializeTree(tree, { includeGeneric: true })).not.toContain(
+      QTY_SECRET,
+    );
+    expect(JSON.stringify([...tree.nodes.values()])).not.toContain(QTY_SECRET);
+  });
+});

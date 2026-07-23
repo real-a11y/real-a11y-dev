@@ -22,10 +22,13 @@
  *
  * ## Redaction (RFC finding R1 — the ship gate)
  * A native tree must never carry a user's field values. This producer enforces
- * that by construction: it **never reads any element's live `.value`**, it
- * drops the AX `value` field entirely, and the `dom` facet copies only an
- * allowlist of structural / a11y attributes (never `value`). An allowlist is
- * strictly safer than redacting after the fact. (Caveat, documented not
+ * that by construction: it **never reads any element's live `.value`**, drops
+ * the AX `value` field, excludes the value-carrying AX properties
+ * (`valuenow` / `valuetext`, which for a spinbutton/slider *are* the input),
+ * redacts a value that would otherwise be promoted into the accessible name of
+ * an unlabeled control, and the `dom` facet copies only an allowlist of
+ * structural / a11y attributes (never `value`). An allowlist is strictly safer
+ * than redacting after the fact. (Caveat, documented not
  * hand-waved: `getFullAXTree` / `getDocument` responses may themselves contain
  * field values in their CDP payload — Chromium masks passwords but not, e.g.,
  * an email field. That is Chromium's wire content, outside this code's control;
@@ -129,13 +132,19 @@ const VALUE_BEARING_ROLES = new Set([
   "scrollbar",
 ]);
 
-/** AX property names that map to descriptive `a11y.properties` (strings). */
+/**
+ * AX property names that map to descriptive `a11y.properties` (strings).
+ *
+ * R1: `valuenow` / `valuetext` are deliberately EXCLUDED. For a value-bearing
+ * control (`spinbutton`, `slider`, a numeric `<input>`) those ARE the user's
+ * current input — surfacing them would carry a field value into the model, the
+ * exact thing the redaction gate forbids. `valuemin` / `valuemax` are authored
+ * bounds (min/max attributes), not user data, so they stay.
+ */
 const DETAIL_PROPS = new Set([
   "level",
   "valuemin",
   "valuemax",
-  "valuenow",
-  "valuetext",
   "hasPopup",
   "keyshortcuts",
   "roledescription",
@@ -357,17 +366,50 @@ export function buildNativeTree(
     }
   }
 
-  // Single-frame: one root. A cross-frame `getFullAXTree` payload yields
-  // multiple top-level subtrees (core's `normalizeNativeAX` drops every
-  // `RootWebArea` and treats each parent-less node as a root), and only the
-  // subtree under `rootId` serializes. Multi-frame native trees are out of
-  // scope for Phase 1 — iframes are on the parity-corpus backlog (RFC PR E),
-  // where frame nesting needs frame metadata a transport-aware producer must
-  // add (`frameId` → `DOM.getFrameOwner`).
-  const rootId =
-    skeleton.find((n) => nodes.get(n.id)?.parentId === null)?.id ??
-    skeleton[0]?.id ??
-    "";
+  // Core's `normalizeNativeAX` drops the `RootWebArea` and generic/ignored
+  // html/body wrappers, so ANY page whose body has more than one kept child —
+  // a normal `<header>`/`<main>`/`<footer>` layout, not just cross-frame
+  // payloads — yields multiple parent-less roots. `linearize`/`serializeTree`
+  // only traverse `rootId`'s subtree, so picking the first root would silently
+  // truncate every sibling. Synthesize a single `document` root that adopts
+  // all parent-less nodes, matching the DOM producer (always exactly one root).
+  const roots = [...nodes.values()].filter((n) => n.parentId === null);
+  let rootId: string;
+  if (roots.length === 1) {
+    rootId = roots[0].id;
+  } else if (roots.length > 1) {
+    rootId = "ax-root";
+    const synthetic: SemanticNode = {
+      id: rootId,
+      parentId: null,
+      childIds: roots.map((r) => r.id),
+      depth: 0,
+      a11y: {
+        role: "document",
+        name: "",
+        description: "",
+        states: {},
+        properties: {},
+        isExposedToAT: true,
+      },
+    };
+    for (const r of roots) r.parentId = rootId;
+    nodes.set(rootId, synthetic);
+  } else {
+    rootId = "";
+  }
+
+  // Recompute depths from the real root so `node.depth` is always the
+  // distance from `rootId` (wrapping shifted the former roots down a level).
+  if (rootId) {
+    const setDepth = (id: string, depth: number) => {
+      const node = nodes.get(id);
+      if (!node) return;
+      node.depth = depth;
+      for (const childId of node.childIds) setDepth(childId, depth + 1);
+    };
+    setDepth(rootId, 0);
+  }
 
   return {
     nodes,
