@@ -1,0 +1,8 @@
+{
+  "manifest_version": 3,
+  "name": "Real A11y — debugger-native spike",
+  "version": "0.0.1",
+  "description": "Spike: consume Chromium's native accessibility tree from an extension via chrome.debugger. Not a product.",
+  "permissions": ["debugger", "tabs"],
+  "background": { "service_worker": "sw.js", "type": "module" }
+}

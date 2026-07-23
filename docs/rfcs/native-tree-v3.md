@@ -10,6 +10,8 @@
 
 v1 answered *"native vs custom?"* (neither — one model, two producers). v2 answered *"what shape must the model be?"* (accessibility-first, optional facets). v3 answers *"how does the whole product line sit on top?"*
 
+> **Revision 1 (Spike 5).** The first draft parked extension-native at "Phase 6, only with demand," weighting the debugger banner heavily. Challenged in review ("why a desktop app — why not the extension with native tree?"), we spiked it: `packages/extension/spike/debugger-native/` proves an MV3 service worker reads the full native tree (UA-shadow controls included) **and dispatches through it** over `chrome.debugger`, and that the same transport-agnostic module runs byte-identically over `chrome.debugger.sendCommand` and Playwright's `CDPSession` — killing the "third transport" cost by construction. Feasibility is settled; what remains are dogfood questions (banner tolerance in deliberate sessions, MV3 suspension across long sessions, real DevTools-conflict frequency). **Consequence:** extension-native is promoted to a Phase-1-adjacent product decision, and the Electron shell (§4.5 step 2) is *gated on its outcome* — if extension-native dogfoods well and users don't need owned/recordable sessions, Electron never gets built; `real-a11y navigate` (§4.5 step 1) remains the thin bet either way. Sections below are annotated where this changes them.
+
 ---
 
 ## 1. Spike review — verified, with findings
@@ -88,7 +90,7 @@ The load-bearing rule, unchanged since v1: **producers are plural, the model is 
 | `testing` (jsdom) | 4 | DOM | DomActionBackend | Nothing | **DOM forever** — no browser exists |
 | `testing/playwright` | 4 | native (default after gates) | n/a (assertions) | `attach(page, { tree })` consuming `browser.nativeTree()` | Not a second producer; no new package |
 | `inspector` / `react` / `storybook-addon` / `ui` | 4 | DOM | DomActionBackend | Nothing (model reshape only) | **In-page forever** — no CDP channel to self |
-| `extension` | 4 | DOM | DomActionBackend | Nothing | Curtain + any-tab; `chrome.debugger` native mode stays Phase-6 opt-in |
+| `extension` | 4 | DOM (default) | DomActionBackend | *(Rev 1)* debugger-native mode feasibility proven by Spike 5; opt-in promotion decided on dogfood gates after Phase 1 (imports the shared vocabulary module — R4) | Curtain + any-tab; DOM producer stays the zero-setup default |
 | **`desktop`** (new, private) | 4 | **native** | **CdpActionBackend** | §4 — daemon + panel; Electron shell later | Never re-implements extraction/normalize/dispatch |
 
 ---
@@ -142,7 +144,7 @@ Live updates strategy: **MVP = re-extract after every dispatched action + on `Pa
 ### 4.5 Packaging ladder (ship value early, brand later)
 
 1. **Phase 4a — `real-a11y navigate <url>`**: the CLI starts the daemon, prints the tokened panel URL, opens the default browser. The "desktop app" MVP is a command — zero install friction, reuses the CLI's distribution. (The spike's `run.mts` note, productionized.)
-2. **Phase 4b — `packages/desktop` (private)**: Electron shell = daemon in main process + panel in renderer over IPC. Adds: session persistence, audit-session recording/export (checkpoint timeline → shareable report), tray/dock presence.
+2. **Phase 4b — `packages/desktop` (private)**: Electron shell = daemon in main process + panel in renderer over IPC. Adds: session persistence, audit-session recording/export (checkpoint timeline → shareable report), tray/dock presence. *(Rev 1: gated on the extension-native dogfood — build only if users need owned/recordable sessions beyond what 4a + extension-native cover.)*
 3. **Not chosen:** Tauri (system webview) — lighter, but the team's stack, the `ui` package, and the IPC/debug story all favor Electron; revisit only if bundle size becomes a real objection.
 
 ### 4.6 What the desktop app is *not*
@@ -161,7 +163,7 @@ Live updates strategy: **MVP = re-extract after every dispatched action + on `Pa
 - **Phase 3 — defaults flip:** cli / mcp / testing-playwright → native when Phase-1 gates green; mode-stamped baselines regen; `--tree` demoted to escape hatch.
 - **Phase 4 — Navigator:** 4a `real-a11y navigate` (daemon + panel protocol v0 + `ui` renderer); 4b Electron shell + session recording.
 - **Phase 5 — parity as permanent CI** + corpus growth; retire `nativeAX()` oracle in favor of producer + harness.
-- **Phase 6 (optional) — extension `chrome.debugger` native mode** — only with demonstrated demand.
+- ~~**Phase 6 (optional) — extension `chrome.debugger` native mode** — only with demonstrated demand.~~ *(Rev 1: superseded — Spike 5 settled feasibility. Extension-native becomes a **Phase-1-adjacent decision**: after the shared vocabulary module (R4) lands, ship it behind a dev flag and dogfood the three open gates — banner tolerance, MV3 suspension handling, DevTools-conflict frequency. Its outcome gates Phase 4b.)*
 
 ---
 
@@ -175,12 +177,12 @@ Live updates strategy: **MVP = re-extract after every dispatched action + on `Pa
 2. **Rename** (v2 Q2): **keep `SemanticNode`** as the public name with the reshaped contract; 14 packages + examples + docs reference it, and the churn buys nothing (`AccNode` remains the internal design name).
 3. **Default timing** (v2 Q3): flip immediately when gates pass.
 4. **Normalization strictness** (v2 Q4): aggressive, via the versioned vocabulary table (R4) — the cross-build reproduction in §1 says this works.
-5. **Extension native** (v2 Q5): defer (Phase 6).
+5. **Extension native** (v2 Q5): *(Rev 1)* no longer "defer" — Spike 5 proved read + dispatch + shared transport module. Ship behind a dev flag after Phase 1; promote on dogfood evidence (banner / MV3 lifecycle / DevTools conflicts), not demand speculation.
 6. **Playwright package** (v2 Q6): never for native.
 
 **New open questions for v3:**
 
-7. **Desktop shell**: ratify the packaging ladder (CLI-served panel → Electron) vs Electron-first?
+7. **Desktop shell**: ratify the packaging ladder (CLI-served panel → Electron) vs Electron-first? *(Rev 1: ladder step 2 is now additionally gated on the extension-native dogfood — see Revision 1 note.)*
 8. **Protocol transport**: WS JSON-RPC as specified, or align with an existing protocol (e.g. MCP itself) so agent tooling can drive the Navigator daemon too? *(Tempting: the MCP server already exposes session tools; the daemon could be an MCP host with a push channel — decide before Phase 4a.)*
 9. **Session recording format**: reuse `snapshot`'s checkpoint artifacts as the timeline unit (recommended — one diff engine), or a new event-log format?
 10. **`connectOverCDP` UX**: how much hand-holding for `--remote-debugging-port` (launch-helper? deep link?) before it's a real "audit my Chrome" story?
