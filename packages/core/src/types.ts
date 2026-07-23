@@ -16,13 +16,7 @@ export type TreeViewMode = "dom" | "a11y" | "tab";
 
 /** Quick filter for node roles */
 export type RoleFilter =
-  | "heading"
-  | "link"
-  | "button"
-  | "form"
-  | "landmark"
-  | "image"
-  | null;
+  "heading" | "link" | "button" | "form" | "landmark" | "image" | null;
 
 /** DOM-specific properties of a node */
 export interface DomInfo {
