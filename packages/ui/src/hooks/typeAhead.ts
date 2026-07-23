@@ -7,10 +7,15 @@
  * append to the buffer; after the timeout the buffer resets. Repeating the
  * same character cycles through matches for that character (so `b` `b` visits
  * every item starting with "b", not items starting with "bb").
+ *
+ * @internal Shared with the Chrome extension's forked listboxes. Not part of
+ * the versioned public API — see docs/STABILITY.md.
  */
 
+/** @internal */
 export const TYPE_AHEAD_TIMEOUT_MS = 500;
 
+/** @internal */
 export interface TypeAheadBuffer {
   /** Append a character, reset the idle timer, return the current buffer. */
   push(char: string): string;
@@ -20,6 +25,7 @@ export interface TypeAheadBuffer {
   get(): string;
 }
 
+/** @internal */
 export function createTypeAheadBuffer(
   timeoutMs: number = TYPE_AHEAD_TIMEOUT_MS,
 ): TypeAheadBuffer {
@@ -46,7 +52,7 @@ export function createTypeAheadBuffer(
   };
 }
 
-/** True for a single printable key with no ctrl/alt/meta modifier. */
+/** @internal True for a single printable key with no ctrl/alt/meta modifier. */
 export function isTypeAheadKey(e: KeyboardEvent): boolean {
   return (
     e.key.length === 1 &&
@@ -68,6 +74,8 @@ export function isTypeAheadKey(e: KeyboardEvent): boolean {
  * - Multi-character prefix (`ap`, `blu`): start at `currentIndex` inclusive
  *   so refining a prefix keeps a still-matching selection instead of
  *   flickering through other matches (and re-highlighting the host page).
+ *
+ * @internal
  */
 export function findTypeAheadIndex(
   labels: readonly string[],

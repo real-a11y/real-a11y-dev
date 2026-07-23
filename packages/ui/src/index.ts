@@ -5,6 +5,7 @@ export type { TreePanelProps } from "./components/TreePanel.js";
 export { TreeNode } from "./components/TreeNode.js";
 export { TreeToolbar } from "./components/TreeToolbar.js";
 export { useTreeKeyboard } from "./hooks/useTreeKeyboard.js";
+// @internal — shared with the extension's forked listboxes; not a stability promise.
 export {
   createTypeAheadBuffer,
   findTypeAheadIndex,
