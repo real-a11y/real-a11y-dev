@@ -188,22 +188,24 @@ jobs:
           path: website/.vitepress/dist
           retention-days: 1
 
-  # Surface build failures — without this, a failed build is silent after 👀.
+  # Surface preview failures — without this, a failed resolve/build is silent
+  # after 👀. Skip only the deliberate closed-PR case (open == 'false'); an
+  # empty open (resolve itself failed) must still notify.
   notify-failure:
     needs: [resolve, build]
     if: |
       failure() &&
       github.event_name == 'issue_comment' &&
-      needs.resolve.outputs.open == 'true'
+      needs.resolve.outputs.open != 'false'
     runs-on: ubuntu-latest
     permissions:
       issues: write
       pull-requests: write
     steps:
-      - name: Comment that the preview build failed
+      - name: Comment that the preview failed
         uses: actions/github-script@v7
         env:
-          PR_NUMBER: ${{ needs.resolve.outputs.number }}
+          PR_NUMBER: ${{ needs.resolve.outputs.number || github.event.issue.number }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           script: |
@@ -214,7 +216,7 @@ jobs:
               body: [
                 `### Docs preview failed`,
                 ``,
-                `The site build failed, so nothing was deployed.`,
+                `The preview request failed, so nothing was deployed.`,
                 `Logs: ${process.env.RUN_URL}`,
               ].join('\n'),
             });
