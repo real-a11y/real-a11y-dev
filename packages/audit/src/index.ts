@@ -81,6 +81,23 @@ export interface Finding {
 const LANDMARK_SELECTOR =
   "main, nav, header, footer, aside, [role=main], [role=navigation], [role=banner], [role=contentinfo], [role=complementary], [role=region]";
 
+/**
+ * Resolve `root` to an a11y tree. Accepts a live `Element` (extracted in-page)
+ * or an already-extracted `ExtractionResult`.
+ *
+ * `Element` is a browser-only global, so we can't write `root instanceof
+ * Element` unguarded: the native producer runs the audit rules in **Node** over
+ * an `ExtractionResult`, where referencing `Element` throws `ReferenceError`.
+ * Guard on `typeof Element` first — in Node the global is absent and the only
+ * possible input is an already-extracted tree.
+ */
+function toTree(root: Element | ExtractionResult): ExtractionResult {
+  const isElement = typeof Element !== "undefined" && root instanceof Element;
+  return isElement
+    ? extractA11yTree(root as Element)
+    : (root as ExtractionResult);
+}
+
 const validId = (v: string | null): string | null =>
   v && /^[A-Za-z][\w-]*$/.test(v) ? v : null;
 
@@ -164,7 +181,7 @@ export function collectFindings(
   root: Element | ExtractionResult,
   rules: readonly A11yRule[] = ALL_RULES,
 ): Finding[] {
-  const tree = root instanceof Element ? extractA11yTree(root) : root;
+  const tree = toTree(root);
   const want = new Set(rules);
   const findings: Finding[] = [];
 
@@ -313,7 +330,7 @@ export function listByRole(
 ): string {
   const roles = ROLE_FILTER_GROUPS[filter];
   if (!roles) return `(unknown filter "${filter}")`;
-  const tree = root instanceof Element ? extractA11yTree(root) : root;
+  const tree = toTree(root);
   const lines: string[] = [];
   for (const node of linearize(tree)) {
     if (!roles.includes(node.a11y.role)) continue;
@@ -331,7 +348,7 @@ export function listByRole(
 }
 
 /** Format findings into the multi-line message the `assert*` helpers throw. */
-function formatFindings(findings: Finding[]): string {
+export function formatFindings(findings: Finding[]): string {
   const noun = findings.length === 1 ? "issue" : "issues";
   const lines = findings.map((f) => {
     const where = f.locator
@@ -344,9 +361,14 @@ function formatFindings(findings: Finding[]): string {
 
 /**
  * Throw an {@link A11yAssertionError} if any of `rules` produced a finding.
- * Shared body for the single-rule `assert*` helpers below.
+ * Shared body for the single-rule `assert*` helpers below, and exported so
+ * callers can assert an arbitrary rule subset — over a DOM `Element` or a
+ * pre-extracted tree (e.g. a native `ExtractionResult` from a real browser).
  */
-function assertRules(root: Element, rules: readonly A11yRule[]): void {
+export function assertRules(
+  root: Element | ExtractionResult,
+  rules: readonly A11yRule[],
+): void {
   const findings = collectFindings(root, rules);
   if (findings.length) {
     throw new A11yAssertionError(formatFindings(findings));

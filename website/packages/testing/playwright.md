@@ -45,6 +45,7 @@ test("page heading structure", async ({ page }) => {
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `rootSelector` | `string` | `"body"` | CSS selector for the audit root element. |
+| `tree` | `"dom" \| "native"` | `"dom"` | Which producer builds the tree. See [Auditing the native tree](#auditing-the-native-tree). |
 
 ## Narrowing the root
 
@@ -53,6 +54,31 @@ test("page heading structure", async ({ page }) => {
 const sn = await attach(page, { rootSelector: "main" });
 await sn.assertNoUnlabeledInteractive();
 ```
+
+## Auditing the native tree
+
+By default `attach()` uses the **DOM producer**: it injects the page-bundle and walks the light DOM in the page. Pass `{ tree: "native" }` to use the **native producer** instead — it reads Chromium's own accessibility tree over CDP (via `@real-a11y-dev/browser`'s `nativeTree`) and runs the same serialize/audit helpers in Node:
+
+```ts
+test("native tree sees the media controls", async ({ page }) => {
+  await page.goto("/player");
+  const sn = await attach(page, { tree: "native" });
+
+  // Same handle, same assertions — over Chromium's a11y tree.
+  await sn.assertHeadingOrder();
+  await sn.assertLandmarkStructure();
+  expect(await sn.auditSnapshot()).toMatchSnapshot();
+});
+```
+
+Why a second producer: Chromium exposes structure no in-page walk can reach — most visibly a `<video controls>`'s play/scrubber/mute controls, which live in a closed user-agent shadow root. An audit run over the native tree sees them; the DOM producer stops at the `<video>` element.
+
+Native mode is **read-only and whole-document** for now:
+
+- `tabSequenceSnapshot()` **throws** — a native tree carries no focus/interaction data, so tab order can't be computed. Use `{ tree: "dom" }` for tab-sequence snapshots.
+- `rootSelector` scoping is **not supported** — omit it (the default `"body"` audits the whole document); passing any other selector throws up front rather than silently ignoring it.
+
+Everything else — `auditSnapshot()`, `outlineSnapshot()`, and every `assert*` method — works identically. Both producers normalize to the *same* tree model, so a snapshot's `role "name"` grammar is the same and the two trees are directly comparable.
 
 ## Testing that assertions fail on broken pages
 

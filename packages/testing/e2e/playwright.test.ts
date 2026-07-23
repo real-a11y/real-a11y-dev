@@ -118,6 +118,77 @@ test.describe("good fixture", () => {
   });
 });
 
+// ─── Native producer (attach with { tree: "native" }) ───────────────────────
+// `attach(page, { tree: "native" })` skips page-bundle injection and reads
+// Chromium's own accessibility tree over CDP, then runs the same serialize/
+// audit helpers in Node. Same handle shape, one telling difference: the native
+// tree reaches a <video controls>'s play/scrubber/mute controls, which live in
+// a CLOSED user-agent shadow root the DOM producer's in-page walk can't see.
+
+test.describe("native tree", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto(fixtureUrl("fixture-native.html"));
+  });
+
+  test("auditSnapshot returns the document tree with landmarks and headings", async ({
+    page,
+  }) => {
+    const sn = await attach(page, { tree: "native" });
+    const snapshot = await sn.auditSnapshot();
+    expect(snapshot.length).toBeGreaterThan(0);
+    // Whole-document native trees synthesize a `document` root.
+    expect(snapshot).toContain("document");
+    expect(snapshot).toContain('heading "Native tree fixture" (level 1)');
+    expect(snapshot).toContain('button "Send message"');
+    expect(snapshot).toContain('navigation "Main navigation"');
+  });
+
+  test("native tree reaches UA-shadow media controls the DOM producer can't", async ({
+    page,
+  }) => {
+    const nativeSnap = await (
+      await attach(page, { tree: "native" })
+    ).auditSnapshot();
+    const domSnap = await (await attach(page)).auditSnapshot();
+
+    // The <video controls>' scrubber lives in a closed UA shadow root. Native
+    // sees it; the DOM walk stops at the <video> element.
+    expect(nativeSnap).toContain("slider");
+    expect(nativeSnap).toContain("video time scrubber");
+    expect(domSnap).not.toContain("slider");
+  });
+
+  test("outlineSnapshot captures heading structure", async ({ page }) => {
+    const sn = await attach(page, { tree: "native" });
+    const outline = await sn.outlineSnapshot();
+    expect(outline).toContain("Native tree fixture"); // h1
+    expect(outline).toContain("Contact form"); // h2
+  });
+
+  test("assertHeadingOrder passes for correct structure", async ({ page }) => {
+    const sn = await attach(page, { tree: "native" });
+    await expect(sn.assertHeadingOrder()).resolves.toBeUndefined();
+  });
+
+  test("assertLandmarkStructure passes", async ({ page }) => {
+    const sn = await attach(page, { tree: "native" });
+    await expect(sn.assertLandmarkStructure()).resolves.toBeUndefined();
+  });
+
+  test("tabSequenceSnapshot throws — a native tree carries no interaction data", async ({
+    page,
+  }) => {
+    const sn = await attach(page, { tree: "native" });
+    await expect(sn.tabSequenceSnapshot()).rejects.toThrow(/read-only/);
+  });
+
+  test("rootSelector scoping is rejected up front", async ({ page }) => {
+    await expect(
+      attach(page, { tree: "native", rootSelector: "main" }),
+    ).rejects.toThrow(/rootSelector/);
+  });
+});
+
 // ─── Bad fixture (assertions must fail) ──────────────────────────────────────
 
 test.describe("bad fixture — assertions should throw", () => {

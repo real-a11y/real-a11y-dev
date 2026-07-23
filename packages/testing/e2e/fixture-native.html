@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Real A11y — native-tree E2E fixture</title>
+  </head>
+  <body>
+    <header>
+      <nav aria-label="Main navigation">
+        <a href="/">Home</a>
+        <a href="/about">About</a>
+      </nav>
+    </header>
+
+    <main>
+      <h1>Native tree fixture</h1>
+
+      <section aria-labelledby="form-heading">
+        <h2 id="form-heading">Contact form</h2>
+        <form aria-label="Contact form">
+          <label>
+            Full name
+            <input type="text" id="name" />
+          </label>
+          <button type="submit">Send message</button>
+        </form>
+      </section>
+
+      <!--
+        A <video controls> builds its play/scrubber/mute controls inside a
+        CLOSED user-agent shadow root. The DOM producer's in-page walk can't
+        reach them; Chromium's own accessibility tree — which the native
+        producer reads over CDP — does. This element is what proves the handle
+        returned a genuine native tree, not a DOM tree in disguise.
+      -->
+      <video
+        id="tour"
+        controls
+        width="160"
+        height="90"
+        src="data:video/mp4;base64,AAAA"
+      ></video>
+    </main>
+
+    <footer>
+      <p>© 2024 Real A11y</p>
+    </footer>
+  </body>
+</html>
