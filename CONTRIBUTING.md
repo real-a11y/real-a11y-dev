@@ -149,7 +149,7 @@ https://pr-<number>.real-a11y-docs-preview.pages.dev
 
 Comment `/preview` again after new commits to refresh. Only `OWNER` / `MEMBER` / `COLLABORATOR` comments run the deploy (fork authors without write access cannot trigger it). You can also run **Actions → Docs preview → Run workflow** and pass a PR number.
 
-When the PR is **merged or closed**, the same workflow deletes every Cloudflare Pages deployment on the `pr-<number>` branch (including the stable alias), so preview URLs stop serving.
+When the PR is **merged or closed**, the same workflow deletes every Cloudflare Pages deployment on the `pr-<number>` branch (including the stable alias), so preview URLs stop serving. Cleanup runs with `pull_request_target` so it still works for fork PRs (secrets are unavailable on plain `pull_request` from forks); it never checks out PR code.
 
 ### Changesets
 

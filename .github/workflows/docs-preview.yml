@@ -22,8 +22,12 @@ name: Docs preview
 #
 # Cleanup: when a PR is closed (merged or not), `cleanup` deletes every
 # Cloudflare Pages deployment on branch `pr-<number>` (including the stable
-# alias). Shares the per-PR concurrency group so an in-flight /preview is
-# cancelled rather than redeploying after the PR is gone.
+# alias). Triggered via `pull_request_target` so fork PRs still receive
+# Cloudflare secrets (plain `pull_request` from forks does not). Safe: the
+# job never checks out PR code — only calls the Cloudflare API with
+# `github.event.pull_request.number` from the webhook payload. Shares the
+# per-PR concurrency group so an in-flight /preview is cancelled rather
+# than redeploying after the PR is gone.
 #
 # Concurrency is on the `build` and `deploy` jobs (not the workflow) so
 # unrelated PR comments — which still trigger a run that then skips every
@@ -39,7 +43,8 @@ on:
         description: Pull request number to build and preview
         required: true
         type: string
-  pull_request:
+  # secrets available for fork PRs; cleanup never checks out PR code.
+  pull_request_target:
     types: [closed]
 
 # Least privilege at the workflow level — escalate only on jobs that comment.
@@ -262,10 +267,11 @@ jobs:
             }
 
   # Drop preview deployments when the PR is merged or otherwise closed.
-  # No checkout — only Cloudflare API via wrangler. Idempotent if nothing
-  # was ever deployed for this PR.
+  # No checkout — Cloudflare REST API only. Paginate the list endpoint
+  # (wrangler `pages deployment list` returns a single page). Idempotent
+  # if nothing was ever deployed for this PR.
   cleanup:
-    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    if: github.event_name == 'pull_request_target' && github.event.action == 'closed'
     runs-on: ubuntu-latest
     concurrency:
       group: docs-preview-pr-${{ github.event.pull_request.number }}
@@ -284,17 +290,38 @@ jobs:
         run: |
           set -euo pipefail
           branch="pr-${PR_NUMBER}"
-          # Pin wrangler so list/delete flags stay stable.
-          npx --yes wrangler@4.113.0 pages deployment list \
-            --project-name="$PROJECT" \
-            --environment=preview \
-            --json > /tmp/pages-deps.json
+          base="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PROJECT}/deployments"
 
-          mapfile -t ids < <(
-            jq -r --arg b "$branch" '
-              .[] | select(.Branch == $b) | .Id
-            ' /tmp/pages-deps.json
-          )
+          # Collect every preview deployment id for this PR branch across
+          # all pages (API max per_page is 25). wrangler list returns one page.
+          ids=()
+          page=1
+          while true; do
+            resp="$(curl -fsS \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              -H "Content-Type: application/json" \
+              "${base}?env=preview&page=${page}&per_page=25")"
+            if ! jq -e '.success == true' <<<"$resp" >/dev/null; then
+              echo "Cloudflare list failed:" >&2
+              jq . <<<"$resp" >&2
+              exit 1
+            fi
+            mapfile -t page_ids < <(
+              jq -r --arg b "$branch" '
+                .result[]
+                | select(.deployment_trigger.metadata.branch == $b)
+                | .id
+              ' <<<"$resp"
+            )
+            for id in "${page_ids[@]}"; do
+              [ -n "$id" ] && ids+=("$id")
+            done
+            total_pages="$(jq -r '.result_info.total_pages // 1' <<<"$resp")"
+            if [ "$page" -ge "$total_pages" ]; then
+              break
+            fi
+            page=$((page + 1))
+          done
 
           if [ "${#ids[@]}" -eq 0 ]; then
             echo "No preview deployments for branch ${branch}"
@@ -304,10 +331,17 @@ jobs:
 
           echo "Deleting ${#ids[@]} deployment(s) on ${branch}"
           for id in "${ids[@]}"; do
-            # --force: required when the deployment still holds the pr-N alias.
-            npx --yes wrangler@4.113.0 pages deployment delete "$id" \
-              --project-name="$PROJECT" \
-              --force
+            # force=true: required when the deployment still holds the pr-N alias.
+            del="$(curl -fsS -X DELETE \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              -H "Content-Type: application/json" \
+              "${base}/${id}?force=true")"
+            if ! jq -e '.success == true' <<<"$del" >/dev/null; then
+              echo "Failed to delete deployment ${id}:" >&2
+              jq . <<<"$del" >&2
+              exit 1
+            fi
+            echo "Deleted ${id}"
           done
           echo "deleted=${#ids[@]}" >> "$GITHUB_OUTPUT"
 
