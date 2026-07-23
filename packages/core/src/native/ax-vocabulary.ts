@@ -64,8 +64,8 @@ export function mapNativeAXRole(role: string): string {
  * Roles whose accessible name Chromium often leaves on a `StaticText` /
  * `LabelText` child instead of the node itself. Dropping those children
  * without promoting the text loses real content (`listitem "Alpha"` became a
- * bare `listitem` in the spikes) — see `promoteNameFromChildren` in the
- * normalizer.
+ * bare `listitem` in the spikes) — see `promoteNameFromDroppedDescendants`
+ * in the normalizer.
  */
 export const NATIVE_AX_NAME_SOURCE_ROLES: ReadonlySet<string> = new Set([
   "StaticText",
