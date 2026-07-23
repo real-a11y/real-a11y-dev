@@ -21,10 +21,12 @@ description tracks the same list at a glance.
       consumers can serialize an `ExtractionResult` (spike §2 found
       `instanceof Element` throws when the global is undefined). Size S,
       no dependencies. **Merged: [#204](https://github.com/real-a11y/real-a11y-dev/pull/204).**
-- [ ] **PR B — `feat(core)`: shared native-AX vocabulary module (R4).**
-      **In review: [#205](https://github.com/real-a11y/real-a11y-dev/pull/205)**
+- [x] **PR B — `feat(core)`: shared native-AX vocabulary module (R4).**
+      **Merged: [#205](https://github.com/real-a11y/real-a11y-dev/pull/205)**
       — consolidation surfaced a real drift bug (spike normalizers ordered
-      siblings by flat-list position; document order lives in `childIds`).
+      siblings by flat-list position; document order lives in `childIds`),
+      and review deepened name promotion (dropped-descendant search, guarded
+      to normalized leaves). Unblocks PR D and PR H.
       Consolidates the four drifting normalizer copies (browser `nativeAX()`,
       native-tree spike, desktop spike, extension spike). Pure — tested
       against recorded `getFullAXTree` JSON fixtures, no browser in the loop.
