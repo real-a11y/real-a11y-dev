@@ -184,9 +184,17 @@ describe("extension chrome.debugger native-tree spike", () => {
     console.log(`second attach → ${result.secondAttach}`);
   });
 
-  it("smoke: extension bundle contains no playwright/node imports", () => {
+  it("smoke: bundle is self-contained — no node/playwright imports, core inlined", () => {
     const bundled = readFileSync(join(extDir, "sw.js"), "utf8");
     expect(existsSync(join(extDir, "manifest.json"))).toBe(true);
     expect(bundled).not.toMatch(/require\(|from "playwright"|node:/);
+    // The workspace core module must be INLINED, not externalized: an MV3
+    // module worker cannot resolve bare specifiers, so a leftover
+    // `from "@real-a11y-dev/core"` would break the worker at load time.
+    // (Vite lib mode bundles workspace deps unless rollupOptions.external
+    // says otherwise — this pins that assumption.)
+    expect(bundled).not.toContain("@real-a11y-dev/core");
+    // …and the inlined vocabulary is actually present.
+    expect(bundled).toContain("RootWebArea");
   });
 });
