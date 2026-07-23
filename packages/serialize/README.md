@@ -29,7 +29,10 @@ serializeTabSequence(document.body);
 
 Each function accepts a DOM root **or** a pre-extracted tree from
 [`@real-a11y-dev/core`](https://real-a11y.dev/packages/core), so it works in
-jsdom, a real browser, and the extension panel without re-extracting.
+jsdom, a real browser, and the extension panel without re-extracting. With a
+pre-extracted tree it also runs in **plain Node** — no DOM globals needed — so
+trees produced outside a DOM runtime (a deserialized snapshot, a browser tree
+read over CDP) serialize the same way.
 
 `serializeTree` takes `{ mode, redact, includeGeneric, markFocus }` options —
 see the [testing docs](https://real-a11y.dev/packages/testing/snapshots) for the
