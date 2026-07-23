@@ -1,0 +1,156 @@
+name: Docs preview
+
+# On-demand docs preview for pull requests. A trusted collaborator comments
+# `/preview` on a PR; this workflow builds the PR head and uploads it to the
+# Cloudflare Pages project `real-a11y-docs-preview` (Direct Upload). Production
+# docs stay on GitHub Pages via docs.yml — this never touches real-a11y.dev.
+#
+# Manual trigger: Actions → "Docs preview" → Run workflow → enter a PR number
+# (useful before `/preview` exists on main, or to redeploy without a comment).
+#
+# Security posture:
+# - The `/preview` path loads this workflow from the default branch
+#   (issue_comment). workflow_dispatch uses whichever branch you select.
+# - Only OWNER / MEMBER / COLLABORATOR comments trigger a deploy.
+# - Cloudflare credentials are injected only into the deploy step, not into
+#   install/build (which run untrusted PR code).
+# - Fork PRs are allowed when a trusted collaborator asks — that is the
+#   review use case — but secrets never reach the build steps.
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to build and preview
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: docs-preview-pr-${{ github.event.issue.number || inputs.pr_number }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    # `/preview` must be at the start of the comment so the bot reply
+    # ("Comment `/preview` again…") cannot re-trigger. Bots are ignored.
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.issue.pull_request &&
+       github.event.comment.user.type != 'Bot' &&
+       startsWith(github.event.comment.body, '/preview') &&
+       (github.event.comment.author_association == 'OWNER' ||
+        github.event.comment.author_association == 'MEMBER' ||
+        github.event.comment.author_association == 'COLLABORATOR'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Acknowledge /preview
+        if: github.event_name == 'issue_comment'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.reactions.createForIssueComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: context.payload.comment.id,
+              content: 'eyes',
+            });
+
+      - name: Resolve PR head
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.issue.number || inputs.pr_number }}
+        run: |
+          set -euo pipefail
+          pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          echo "number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "sha=$(jq -r .head.sha <<<"$pr")" >> "$GITHUB_OUTPUT"
+          echo "ref=$(jq -r .head.ref <<<"$pr")" >> "$GITHUB_OUTPUT"
+          echo "repo=$(jq -r .head.repo.full_name <<<"$pr")" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.pr.outputs.repo }}
+          ref: ${{ steps.pr.outputs.sha }}
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm -r --filter='./packages/*' build
+
+      - run: pnpm --filter @real-a11y-dev/website build
+
+      - name: Deploy to Cloudflare Pages
+        id: deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Short branch name → stable alias https://pr-N.<project>.pages.dev
+          # (Cloudflare truncates long branch aliases).
+          command: >-
+            pages deploy website/.vitepress/dist
+            --project-name=real-a11y-docs-preview
+            --branch=pr-${{ steps.pr.outputs.number }}
+            --commit-hash=${{ steps.pr.outputs.sha }}
+            --commit-message=docs-preview PR #${{ steps.pr.outputs.number }}
+
+      - name: Comment preview URL
+        uses: actions/github-script@v7
+        env:
+          ALIAS_URL: ${{ steps.deploy.outputs.pages-deployment-alias-url }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment-url }}
+          PR_SHA: ${{ steps.pr.outputs.sha }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        with:
+          script: |
+            const alias = process.env.ALIAS_URL;
+            const deployment = process.env.DEPLOYMENT_URL;
+            const preview = alias || deployment;
+            if (!preview) {
+              throw new Error(
+                'wrangler-action did not emit pages-deployment-alias-url or deployment-url',
+              );
+            }
+            const sha = process.env.PR_SHA.slice(0, 7);
+            const body = [
+              `### Docs preview`,
+              ``,
+              `Preview: ${preview}`,
+              deployment && deployment !== preview
+                ? `This deploy: ${deployment}`
+                : null,
+              ``,
+              `Built from \`${sha}\`. Comment \`/preview\` again to refresh.`,
+            ]
+              .filter(Boolean)
+              .join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: Number(process.env.PR_NUMBER),
+              body,
+            });
+
+            if (context.eventName === 'issue_comment') {
+              await github.rest.reactions.createForIssueComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: context.payload.comment.id,
+                content: '+1',
+              });
+            }
