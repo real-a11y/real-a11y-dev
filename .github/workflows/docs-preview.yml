@@ -235,7 +235,7 @@ jobs:
               ``,
               `Built from \`${sha}\`. Comment \`/preview\` again to refresh.`,
             ]
-              .filter(Boolean)
+              .filter((line) => line !== null)
               .join('\n');
 
             await github.rest.issues.createComment({
