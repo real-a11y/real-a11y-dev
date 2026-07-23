@@ -1,0 +1,2333 @@
+{
+  "chrome": "141.0.7390.37",
+  "nodes": [
+    {
+      "nodeId": "1",
+      "childIds": ["8"],
+      "backendDOMNodeId": 1,
+      "role": {
+        "value": "RootWebArea"
+      },
+      "name": {
+        "value": "native fixture"
+      },
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "value": true
+          }
+        },
+        {
+          "name": "focused",
+          "value": {
+            "value": true
+          }
+        },
+        {
+          "name": "url",
+          "value": {
+            "value": "about:blank"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "8",
+      "parentId": "1",
+      "childIds": ["12"],
+      "backendDOMNodeId": 8,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "12",
+      "parentId": "8",
+      "childIds": ["13"],
+      "backendDOMNodeId": 12,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "13",
+      "parentId": "12",
+      "childIds": ["14", "15", "16", "19", "22", "23", "112"],
+      "backendDOMNodeId": 13,
+      "role": {
+        "value": "main"
+      }
+    },
+    {
+      "nodeId": "14",
+      "parentId": "13",
+      "childIds": ["115"],
+      "backendDOMNodeId": 14,
+      "role": {
+        "value": "heading"
+      },
+      "name": {
+        "value": "Native producer fixture"
+      },
+      "properties": [
+        {
+          "name": "level",
+          "value": {
+            "value": 1
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "15",
+      "parentId": "13",
+      "childIds": ["116"],
+      "backendDOMNodeId": 15,
+      "role": {
+        "value": "paragraph"
+      }
+    },
+    {
+      "nodeId": "16",
+      "parentId": "13",
+      "childIds": ["117", "17"],
+      "backendDOMNodeId": 16,
+      "role": {
+        "value": "LabelText"
+      }
+    },
+    {
+      "nodeId": "19",
+      "parentId": "13",
+      "childIds": ["119", "20"],
+      "backendDOMNodeId": 19,
+      "role": {
+        "value": "LabelText"
+      }
+    },
+    {
+      "nodeId": "22",
+      "parentId": "13",
+      "childIds": ["121"],
+      "backendDOMNodeId": 22,
+      "role": {
+        "value": "button"
+      },
+      "name": {
+        "value": "Toggle"
+      },
+      "properties": [
+        {
+          "name": "invalid",
+          "value": {
+            "value": "false"
+          }
+        },
+        {
+          "name": "focusable",
+          "value": {
+            "value": true
+          }
+        },
+        {
+          "name": "pressed",
+          "value": {
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "23",
+      "parentId": "13",
+      "childIds": ["24"],
+      "backendDOMNodeId": 23,
+      "role": {
+        "value": "Video"
+      },
+      "name": {
+        "value": "Unable to play media."
+      },
+      "properties": [
+        {
+          "name": "disabled",
+          "value": {
+            "value": true
+          }
+        },
+        {
+          "name": "focusable",
+          "value": {
+            "value": true
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "112",
+      "parentId": "13",
+      "childIds": ["113", "114"],
+      "backendDOMNodeId": 112,
+      "role": {
+        "value": "list"
+      }
+    },
+    {
+      "nodeId": "115",
+      "parentId": "14",
+      "childIds": ["-1000000002"],
+      "backendDOMNodeId": 115,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Native producer fixture"
+      }
+    },
+    {
+      "nodeId": "116",
+      "parentId": "15",
+      "childIds": ["-1000000003"],
+      "backendDOMNodeId": 116,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Intro text."
+      }
+    },
+    {
+      "nodeId": "117",
+      "parentId": "16",
+      "childIds": ["-1000000004"],
+      "backendDOMNodeId": 117,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Email "
+      }
+    },
+    {
+      "nodeId": "17",
+      "parentId": "16",
+      "childIds": ["18"],
+      "backendDOMNodeId": 17,
+      "role": {
+        "value": "textbox"
+      },
+      "name": {
+        "value": "Email "
+      },
+      "value": {
+        "value": "secret-user@example.com"
+      },
+      "properties": [
+        {
+          "name": "invalid",
+          "value": {
+            "value": "false"
+          }
+        },
+        {
+          "name": "focusable",
+          "value": {
+            "value": true
+          }
+        },
+        {
+          "name": "editable",
+          "value": {
+            "value": "plaintext"
+          }
+        },
+        {
+          "name": "settable",
+          "value": {
+            "value": true
+          }
+        },
+        {
+          "name": "multiline",
+          "value": {
+            "value": false
+          }
+        },
+        {
+          "name": "readonly",
+          "value": {
+            "value": false
+          }
+        },
+        {
+          "name": "required",
+          "value": {
+            "value": false
+          }
+        },
+        {
+          "name": "labelledby",
+          "value": {}
+        }
+      ]
+    },
+    {
+      "nodeId": "119",
+      "parentId": "19",
+      "childIds": ["-1000000006"],
+      "backendDOMNodeId": 119,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Password "
+      }
+    },
+    {
+      "nodeId": "20",
+      "parentId": "19",
+      "childIds": ["21"],
+      "backendDOMNodeId": 20,
+      "role": {
+        "value": "textbox"
+      },
+      "name": {
+        "value": "Password "
+      },
+      "value": {
+        "value": "••••••••••••••"
+      },
+      "properties": [
+        {
+          "name": "invalid",
+          "value": {
+            "value": "false"
+          }
+        },
+        {
+          "name": "focusable",
+          "value": {
+            "value": true
+          }
+        },
+        {
+          "name": "editable",
+          "value": {
+            "value": "plaintext"
+          }
+        },
+        {
+          "name": "settable",
+          "value": {
+            "value": true
+          }
+        },
+        {
+          "name": "multiline",
+          "value": {
+            "value": false
+          }
+        },
+        {
+          "name": "readonly",
+          "value": {
+            "value": false
+          }
+        },
+        {
+          "name": "required",
+          "value": {
+            "value": false
+          }
+        },
+        {
+          "name": "labelledby",
+          "value": {}
+        }
+      ]
+    },
+    {
+      "nodeId": "121",
+      "parentId": "22",
+      "childIds": ["-1000000008"],
+      "backendDOMNodeId": 121,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Toggle"
+      }
+    },
+    {
+      "nodeId": "24",
+      "parentId": "23",
+      "childIds": ["25", "34", "36", "66", "67", "68", "69", "70"],
+      "backendDOMNodeId": 24,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "25",
+      "parentId": "24",
+      "childIds": ["27"],
+      "backendDOMNodeId": 25,
+      "role": {
+        "value": "group"
+      },
+      "name": {
+        "value": "buffering"
+      },
+      "properties": [
+        {
+          "name": "live",
+          "value": {
+            "value": "polite"
+          }
+        },
+        {
+          "name": "atomic",
+          "value": {
+            "value": false
+          }
+        },
+        {
+          "name": "relevant",
+          "value": {
+            "value": "additions text"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "34",
+      "parentId": "24",
+      "childIds": ["35"],
+      "backendDOMNodeId": 34,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "36",
+      "parentId": "24",
+      "childIds": ["37"],
+      "backendDOMNodeId": 36,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "37",
+      "parentId": "36",
+      "childIds": ["38", "39", "59"],
+      "backendDOMNodeId": 37,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "38",
+      "parentId": "37",
+      "childIds": [],
+      "backendDOMNodeId": 38,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "39",
+      "parentId": "37",
+      "childIds": ["40", "44", "45", "55", "57"],
+      "backendDOMNodeId": 39,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "59",
+      "parentId": "37",
+      "childIds": [],
+      "backendDOMNodeId": 59,
+      "role": {
+        "value": "slider"
+      },
+      "name": {
+        "value": "video time scrubber"
+      },
+      "description": {
+        "value": "total time: 0:00"
+      },
+      "value": {
+        "value": 0
+      },
+      "properties": [
+        {
+          "name": "disabled",
+          "value": {
+            "value": true
+          }
+        },
+        {
+          "name": "invalid",
+          "value": {
+            "value": "false"
+          }
+        },
+        {
+          "name": "orientation",
+          "value": {
+            "value": "horizontal"
+          }
+        },
+        {
+          "name": "valuemin",
+          "value": {
+            "value": 0
+          }
+        },
+        {
+          "name": "valuemax",
+          "value": {
+            "value": 100
+          }
+        },
+        {
+          "name": "valuetext",
+          "value": {
+            "value": "elapsed time: 0:00"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "66",
+      "parentId": "24",
+      "childIds": [],
+      "backendDOMNodeId": 66,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "67",
+      "parentId": "24",
+      "childIds": [],
+      "backendDOMNodeId": 67,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "68",
+      "parentId": "24",
+      "childIds": [],
+      "backendDOMNodeId": 68,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "69",
+      "parentId": "24",
+      "childIds": [],
+      "backendDOMNodeId": 69,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "70",
+      "parentId": "24",
+      "childIds": [
+        "71",
+        "75",
+        "79",
+        "83",
+        "87",
+        "91",
+        "95",
+        "99",
+        "103",
+        "107"
+      ],
+      "backendDOMNodeId": 70,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "71",
+      "parentId": "70",
+      "childIds": [],
+      "backendDOMNodeId": 71,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "75",
+      "parentId": "70",
+      "childIds": [],
+      "backendDOMNodeId": 75,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "79",
+      "parentId": "70",
+      "childIds": [],
+      "backendDOMNodeId": 79,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "83",
+      "parentId": "70",
+      "childIds": [],
+      "backendDOMNodeId": 83,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "87",
+      "parentId": "70",
+      "childIds": [],
+      "backendDOMNodeId": 87,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "91",
+      "parentId": "70",
+      "childIds": [],
+      "backendDOMNodeId": 91,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "95",
+      "parentId": "70",
+      "childIds": [],
+      "backendDOMNodeId": 95,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "99",
+      "parentId": "70",
+      "childIds": [],
+      "backendDOMNodeId": 99,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "103",
+      "parentId": "70",
+      "childIds": [],
+      "backendDOMNodeId": 103,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "107",
+      "parentId": "70",
+      "childIds": [],
+      "backendDOMNodeId": 107,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "113",
+      "parentId": "112",
+      "childIds": ["122", "123"],
+      "backendDOMNodeId": 113,
+      "role": {
+        "value": "listitem"
+      },
+      "properties": [
+        {
+          "name": "level",
+          "value": {
+            "value": 1
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "114",
+      "parentId": "112",
+      "childIds": ["124", "125"],
+      "backendDOMNodeId": 114,
+      "role": {
+        "value": "listitem"
+      },
+      "properties": [
+        {
+          "name": "level",
+          "value": {
+            "value": 1
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "-1000000002",
+      "parentId": "115",
+      "childIds": [],
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Native producer fixture"
+      }
+    },
+    {
+      "nodeId": "-1000000003",
+      "parentId": "116",
+      "childIds": [],
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Intro text."
+      }
+    },
+    {
+      "nodeId": "-1000000004",
+      "parentId": "117",
+      "childIds": [],
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Email "
+      }
+    },
+    {
+      "nodeId": "18",
+      "parentId": "17",
+      "childIds": ["118"],
+      "backendDOMNodeId": 18,
+      "role": {
+        "value": "generic"
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "plaintext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "-1000000006",
+      "parentId": "119",
+      "childIds": [],
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Password "
+      }
+    },
+    {
+      "nodeId": "21",
+      "parentId": "20",
+      "childIds": ["120"],
+      "backendDOMNodeId": 21,
+      "role": {
+        "value": "generic"
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "plaintext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "-1000000008",
+      "parentId": "121",
+      "childIds": [],
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Toggle"
+      }
+    },
+    {
+      "nodeId": "27",
+      "parentId": "25",
+      "childIds": ["28"],
+      "backendDOMNodeId": 27,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "35",
+      "parentId": "34",
+      "childIds": [],
+      "backendDOMNodeId": 35,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "40",
+      "parentId": "39",
+      "childIds": ["41"],
+      "backendDOMNodeId": 40,
+      "role": {
+        "value": "button"
+      },
+      "name": {
+        "value": "play"
+      },
+      "properties": [
+        {
+          "name": "disabled",
+          "value": {
+            "value": true
+          }
+        },
+        {
+          "name": "invalid",
+          "value": {
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "44",
+      "parentId": "39",
+      "childIds": [],
+      "backendDOMNodeId": 44,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "45",
+      "parentId": "39",
+      "childIds": ["46", "47", "54"],
+      "backendDOMNodeId": 45,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "55",
+      "parentId": "39",
+      "childIds": ["56"],
+      "backendDOMNodeId": 55,
+      "role": {
+        "value": "button"
+      },
+      "name": {
+        "value": "enter full screen"
+      },
+      "properties": [
+        {
+          "name": "disabled",
+          "value": {
+            "value": true
+          }
+        },
+        {
+          "name": "invalid",
+          "value": {
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "57",
+      "parentId": "39",
+      "childIds": ["58"],
+      "backendDOMNodeId": 57,
+      "role": {
+        "value": "button"
+      },
+      "name": {
+        "value": "show more media controls"
+      },
+      "description": {
+        "value": "more options"
+      },
+      "properties": [
+        {
+          "name": "disabled",
+          "value": {
+            "value": true
+          }
+        },
+        {
+          "name": "invalid",
+          "value": {
+            "value": "false"
+          }
+        },
+        {
+          "name": "hasPopup",
+          "value": {
+            "value": "menu"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "122",
+      "parentId": "113",
+      "childIds": ["-1000000009"],
+      "backendDOMNodeId": 122,
+      "role": {
+        "value": "ListMarker"
+      },
+      "name": {
+        "value": "• "
+      }
+    },
+    {
+      "nodeId": "123",
+      "parentId": "113",
+      "childIds": ["-1000000010"],
+      "backendDOMNodeId": 123,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Alpha"
+      }
+    },
+    {
+      "nodeId": "124",
+      "parentId": "114",
+      "childIds": ["-1000000011"],
+      "backendDOMNodeId": 124,
+      "role": {
+        "value": "ListMarker"
+      },
+      "name": {
+        "value": "• "
+      }
+    },
+    {
+      "nodeId": "125",
+      "parentId": "114",
+      "childIds": ["-1000000012"],
+      "backendDOMNodeId": 125,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Beta"
+      }
+    },
+    {
+      "nodeId": "118",
+      "parentId": "18",
+      "childIds": ["-1000000005"],
+      "backendDOMNodeId": 118,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "secret-user@example.com"
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "plaintext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "120",
+      "parentId": "21",
+      "childIds": ["-1000000007"],
+      "backendDOMNodeId": 120,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "••••••••••••••"
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "plaintext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "28",
+      "parentId": "27",
+      "childIds": ["29"],
+      "backendDOMNodeId": 28,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "29",
+      "parentId": "28",
+      "childIds": ["30", "32"],
+      "backendDOMNodeId": 29,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "41",
+      "parentId": "40",
+      "childIds": [],
+      "backendDOMNodeId": 41,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "46",
+      "parentId": "45",
+      "childIds": [],
+      "backendDOMNodeId": 46,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "47",
+      "parentId": "45",
+      "childIds": [],
+      "backendDOMNodeId": 47,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "54",
+      "parentId": "45",
+      "childIds": [],
+      "backendDOMNodeId": 54,
+      "role": {
+        "value": "button"
+      },
+      "name": {
+        "value": "mute"
+      },
+      "properties": [
+        {
+          "name": "disabled",
+          "value": {
+            "value": true
+          }
+        },
+        {
+          "name": "invalid",
+          "value": {
+            "value": "false"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "56",
+      "parentId": "55",
+      "childIds": [],
+      "backendDOMNodeId": 56,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "58",
+      "parentId": "57",
+      "childIds": [],
+      "backendDOMNodeId": 58,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "-1000000009",
+      "parentId": "122",
+      "childIds": [],
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "-1000000010",
+      "parentId": "123",
+      "childIds": [],
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Alpha"
+      }
+    },
+    {
+      "nodeId": "-1000000011",
+      "parentId": "124",
+      "childIds": [],
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "-1000000012",
+      "parentId": "125",
+      "childIds": [],
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Beta"
+      }
+    },
+    {
+      "nodeId": "-1000000005",
+      "parentId": "118",
+      "childIds": [],
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "secret-user@example.com"
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "plaintext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "-1000000007",
+      "parentId": "120",
+      "childIds": [],
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "••••••••••••••"
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "plaintext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "30",
+      "parentId": "29",
+      "childIds": ["31"],
+      "backendDOMNodeId": 30,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "32",
+      "parentId": "29",
+      "childIds": ["33"],
+      "backendDOMNodeId": 32,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "31",
+      "parentId": "30",
+      "childIds": [],
+      "backendDOMNodeId": 31,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "33",
+      "parentId": "32",
+      "childIds": [],
+      "backendDOMNodeId": 33,
+      "role": {
+        "value": "generic"
+      }
+    }
+  ],
+  "enrich": {
+    "1": {
+      "tagName": "#document",
+      "attributes": []
+    },
+    "8": {
+      "tagName": "HTML",
+      "attributes": ["lang", "en"]
+    },
+    "9": {
+      "tagName": "HEAD",
+      "attributes": []
+    },
+    "10": {
+      "tagName": "META",
+      "attributes": ["charset", "utf-8"]
+    },
+    "11": {
+      "tagName": "TITLE",
+      "attributes": []
+    },
+    "12": {
+      "tagName": "BODY",
+      "attributes": []
+    },
+    "13": {
+      "tagName": "MAIN",
+      "attributes": []
+    },
+    "14": {
+      "tagName": "H1",
+      "attributes": []
+    },
+    "15": {
+      "tagName": "P",
+      "attributes": []
+    },
+    "16": {
+      "tagName": "LABEL",
+      "attributes": []
+    },
+    "17": {
+      "tagName": "INPUT",
+      "attributes": ["type", "email", "value", "secret-user@example.com"]
+    },
+    "18": {
+      "tagName": "DIV",
+      "attributes": []
+    },
+    "19": {
+      "tagName": "LABEL",
+      "attributes": []
+    },
+    "20": {
+      "tagName": "INPUT",
+      "attributes": ["type", "password", "value", "hunter2-SECRET"]
+    },
+    "21": {
+      "tagName": "DIV",
+      "attributes": []
+    },
+    "22": {
+      "tagName": "BUTTON",
+      "attributes": ["type", "button", "aria-pressed", "true"]
+    },
+    "23": {
+      "tagName": "VIDEO",
+      "attributes": [
+        "controls",
+        "",
+        "aria-label",
+        "Product tour",
+        "width",
+        "320"
+      ]
+    },
+    "24": {
+      "tagName": "DIV",
+      "attributes": [
+        "pseudo",
+        "-webkit-media-controls",
+        "class",
+        "use-default-poster sizing-small phase-pre-ready state-no-source"
+      ]
+    },
+    "25": {
+      "tagName": "DIV",
+      "attributes": [
+        "pseudo",
+        "-internal-media-controls-loading-panel",
+        "role",
+        "group",
+        "aria-label",
+        "buffering",
+        "aria-live",
+        "polite",
+        "style",
+        ""
+      ]
+    },
+    "26": {
+      "tagName": "STYLE",
+      "attributes": []
+    },
+    "27": {
+      "tagName": "DIV",
+      "attributes": [
+        "id",
+        "spinner-frame",
+        "pseudo",
+        "-internal-media-controls-loading-panel-spinner-frame"
+      ]
+    },
+    "28": {
+      "tagName": "DIV",
+      "attributes": ["id", "spinner"]
+    },
+    "29": {
+      "tagName": "DIV",
+      "attributes": ["id", "layer"]
+    },
+    "30": {
+      "tagName": "DIV",
+      "attributes": ["id", "spinner-mask-1"]
+    },
+    "31": {
+      "tagName": "DIV",
+      "attributes": [
+        "pseudo",
+        "-internal-media-controls-loading-panel-spinner-mask-1-background",
+        "style",
+        "animation-iteration-count: 1;"
+      ]
+    },
+    "32": {
+      "tagName": "DIV",
+      "attributes": ["id", "spinner-mask-2"]
+    },
+    "33": {
+      "tagName": "DIV",
+      "attributes": [
+        "pseudo",
+        "-internal-media-controls-loading-panel-spinner-mask-2-background",
+        "style",
+        "animation-iteration-count: 1;"
+      ]
+    },
+    "34": {
+      "tagName": "DIV",
+      "attributes": ["pseudo", "-webkit-media-controls-overlay-enclosure"]
+    },
+    "35": {
+      "tagName": "INPUT",
+      "attributes": [
+        "pseudo",
+        "-internal-media-controls-overlay-cast-button",
+        "type",
+        "button",
+        "aria-label",
+        "play on remote device",
+        "style",
+        "display: none;"
+      ]
+    },
+    "36": {
+      "tagName": "DIV",
+      "attributes": ["pseudo", "-webkit-media-controls-enclosure"]
+    },
+    "37": {
+      "tagName": "DIV",
+      "attributes": ["pseudo", "-webkit-media-controls-panel"]
+    },
+    "38": {
+      "tagName": "DIV",
+      "attributes": [
+        "pseudo",
+        "-internal-media-controls-scrubbing-message",
+        "style",
+        "display: none;"
+      ]
+    },
+    "39": {
+      "tagName": "DIV",
+      "attributes": ["pseudo", "-internal-media-controls-button-panel"]
+    },
+    "40": {
+      "tagName": "INPUT",
+      "attributes": [
+        "type",
+        "button",
+        "pseudo",
+        "-webkit-media-controls-play-button",
+        "aria-label",
+        "play",
+        "class",
+        "pause",
+        "disabled",
+        "",
+        "style",
+        ""
+      ]
+    },
+    "41": {
+      "tagName": "DIV",
+      "attributes": [
+        "pseudo",
+        "-internal-media-controls-button-hover-background"
+      ]
+    },
+    "42": {
+      "tagName": "DIV",
+      "attributes": [
+        "aria-hidden",
+        "true",
+        "pseudo",
+        "-webkit-media-controls-current-time-display",
+        "style",
+        ""
+      ]
+    },
+    "43": {
+      "tagName": "DIV",
+      "attributes": [
+        "aria-hidden",
+        "true",
+        "pseudo",
+        "-webkit-media-controls-time-remaining-display",
+        "style",
+        "display: none;"
+      ]
+    },
+    "44": {
+      "tagName": "DIV",
+      "attributes": ["pseudo", "-internal-media-controls-button-spacer"]
+    },
+    "45": {
+      "tagName": "DIV",
+      "attributes": [
+        "pseudo",
+        "-webkit-media-controls-volume-control-container",
+        "class",
+        "closed",
+        "style",
+        ""
+      ]
+    },
+    "46": {
+      "tagName": "DIV",
+      "attributes": [
+        "pseudo",
+        "-webkit-media-controls-volume-control-hover-background"
+      ]
+    },
+    "47": {
+      "tagName": "INPUT",
+      "attributes": [
+        "type",
+        "range",
+        "step",
+        "any",
+        "max",
+        "1",
+        "aria-valuemax",
+        "100",
+        "aria-valuemin",
+        "0",
+        "aria-label",
+        "volume",
+        "pseudo",
+        "-webkit-media-controls-volume-slider",
+        "aria-valuenow",
+        "100",
+        "class",
+        "closed",
+        "style",
+        "display: none;"
+      ]
+    },
+    "48": {
+      "tagName": "DIV",
+      "attributes": []
+    },
+    "49": {
+      "tagName": "DIV",
+      "attributes": [
+        "pseudo",
+        "-internal-media-controls-segmented-track",
+        "id",
+        "track"
+      ]
+    },
+    "50": {
+      "tagName": "DIV",
+      "attributes": ["id", "thumb"]
+    },
+    "51": {
+      "tagName": "DIV",
+      "attributes": ["pseudo", "-internal-track-segment-background"]
+    },
+    "52": {
+      "tagName": "DIV",
+      "attributes": ["pseudo", "-internal-track-segment-highlight-before"]
+    },
+    "53": {
+      "tagName": "DIV",
+      "attributes": ["pseudo", "-internal-track-segment-highlight-after"]
+    },
+    "54": {
+      "tagName": "INPUT",
+      "attributes": [
+        "type",
+        "button",
+        "pseudo",
+        "-webkit-media-controls-mute-button",
+        "aria-label",
+        "mute",
+        "disabled",
+        "",
+        "style",
+        ""
+      ]
+    },
+    "55": {
+      "tagName": "INPUT",
+      "attributes": [
+        "type",
+        "button",
+        "pseudo",
+        "-webkit-media-controls-fullscreen-button",
+        "aria-label",
+        "enter full screen",
+        "disabled",
+        "",
+        "style",
+        ""
+      ]
+    },
+    "56": {
+      "tagName": "DIV",
+      "attributes": [
+        "pseudo",
+        "-internal-media-controls-button-hover-background"
+      ]
+    },
+    "57": {
+      "tagName": "INPUT",
+      "attributes": [
+        "type",
+        "button",
+        "aria-label",
+        "show more media controls",
+        "title",
+        "more options",
+        "aria-haspopup",
+        "menu",
+        "pseudo",
+        "-internal-media-controls-overflow-button",
+        "disabled",
+        "",
+        "style",
+        ""
+      ]
+    },
+    "58": {
+      "tagName": "DIV",
+      "attributes": [
+        "pseudo",
+        "-internal-media-controls-button-hover-background"
+      ]
+    },
+    "59": {
+      "tagName": "INPUT",
+      "attributes": [
+        "type",
+        "range",
+        "step",
+        "any",
+        "pseudo",
+        "-webkit-media-controls-timeline",
+        "max",
+        "NaN",
+        "min",
+        "0",
+        "aria-label",
+        "video time scrubber",
+        "aria-valuetext",
+        "elapsed time: 0:00",
+        "aria-description",
+        "total time: 0:00",
+        "disabled",
+        ""
+      ]
+    },
+    "60": {
+      "tagName": "DIV",
+      "attributes": []
+    },
+    "61": {
+      "tagName": "DIV",
+      "attributes": [
+        "pseudo",
+        "-internal-media-controls-segmented-track",
+        "id",
+        "track"
+      ]
+    },
+    "62": {
+      "tagName": "DIV",
+      "attributes": ["id", "thumb"]
+    },
+    "63": {
+      "tagName": "DIV",
+      "attributes": ["pseudo", "-internal-track-segment-background"]
+    },
+    "64": {
+      "tagName": "DIV",
+      "attributes": ["pseudo", "-internal-track-segment-highlight-before"]
+    },
+    "65": {
+      "tagName": "DIV",
+      "attributes": ["pseudo", "-internal-track-segment-highlight-after"]
+    },
+    "66": {
+      "tagName": "DIV",
+      "attributes": [
+        "tabindex",
+        "0",
+        "popover",
+        "auto",
+        "role",
+        "menu",
+        "aria-label",
+        "Options",
+        "pseudo",
+        "-internal-media-controls-text-track-list",
+        "style",
+        "display: none;"
+      ]
+    },
+    "67": {
+      "tagName": "DIV",
+      "attributes": [
+        "tabindex",
+        "0",
+        "popover",
+        "auto",
+        "role",
+        "menu",
+        "aria-label",
+        "Options",
+        "pseudo",
+        "-internal-media-controls-playback-speed-list",
+        "style",
+        "display: none;"
+      ]
+    },
+    "68": {
+      "tagName": "DIV",
+      "attributes": [
+        "tabindex",
+        "0",
+        "popover",
+        "auto",
+        "role",
+        "menu",
+        "aria-label",
+        "Options",
+        "pseudo",
+        "-internal-media-controls-video-track-selection-list",
+        "style",
+        "display: none;"
+      ]
+    },
+    "69": {
+      "tagName": "DIV",
+      "attributes": [
+        "tabindex",
+        "0",
+        "popover",
+        "auto",
+        "role",
+        "menu",
+        "aria-label",
+        "Options",
+        "pseudo",
+        "-internal-media-controls-audio-track-selection-list",
+        "style",
+        "display: none;"
+      ]
+    },
+    "70": {
+      "tagName": "DIV",
+      "attributes": [
+        "tabindex",
+        "0",
+        "popover",
+        "auto",
+        "pseudo",
+        "-internal-media-controls-overflow-menu-list",
+        "role",
+        "menu",
+        "class",
+        "closed",
+        "style",
+        "display: none;"
+      ]
+    },
+    "71": {
+      "tagName": "LABEL",
+      "attributes": [
+        "pseudo",
+        "-internal-media-controls-overflow-menu-list-item",
+        "role",
+        "menuitem",
+        "tabindex",
+        "0",
+        "aria-label",
+        "Play",
+        "style",
+        "display: none;"
+      ]
+    },
+    "72": {
+      "tagName": "INPUT",
+      "attributes": [
+        "type",
+        "button",
+        "pseudo",
+        "-webkit-media-controls-play-button",
+        "tabindex",
+        "-1",
+        "aria-hidden",
+        "true",
+        "aria-label",
+        "play",
+        "class",
+        "pause",
+        "style",
+        "display: none;"
+      ]
+    },
+    "73": {
+      "tagName": "DIV",
+      "attributes": ["aria-hidden", "true"]
+    },
+    "74": {
+      "tagName": "SPAN",
+      "attributes": []
+    },
+    "75": {
+      "tagName": "LABEL",
+      "attributes": [
+        "pseudo",
+        "-internal-media-controls-overflow-menu-list-item",
+        "role",
+        "menuitem",
+        "tabindex",
+        "0",
+        "aria-label",
+        "enter full screen",
+        "style",
+        "display: none;"
+      ]
+    },
+    "76": {
+      "tagName": "INPUT",
+      "attributes": [
+        "type",
+        "button",
+        "pseudo",
+        "-webkit-media-controls-fullscreen-button",
+        "aria-label",
+        "enter full screen",
+        "tabindex",
+        "-1",
+        "aria-hidden",
+        "true",
+        "style",
+        "display: none;"
+      ]
+    },
+    "77": {
+      "tagName": "DIV",
+      "attributes": ["aria-hidden", "true"]
+    },
+    "78": {
+      "tagName": "SPAN",
+      "attributes": []
+    },
+    "79": {
+      "tagName": "LABEL",
+      "attributes": [
+        "pseudo",
+        "-internal-media-controls-overflow-menu-list-item",
+        "role",
+        "menuitem",
+        "tabindex",
+        "0",
+        "aria-label",
+        "download media",
+        "style",
+        "display: none;"
+      ]
+    },
+    "80": {
+      "tagName": "INPUT",
+      "attributes": [
+        "type",
+        "button",
+        "aria-label",
+        "download media",
+        "pseudo",
+        "-internal-media-controls-download-button",
+        "tabindex",
+        "-1",
+        "aria-hidden",
+        "true",
+        "style",
+        "display: none;"
+      ]
+    },
+    "81": {
+      "tagName": "DIV",
+      "attributes": ["aria-hidden", "true"]
+    },
+    "82": {
+      "tagName": "SPAN",
+      "attributes": []
+    },
+    "83": {
+      "tagName": "LABEL",
+      "attributes": [
+        "pseudo",
+        "-internal-media-controls-overflow-menu-list-item",
+        "role",
+        "menuitem",
+        "tabindex",
+        "0",
+        "aria-label",
+        "Mute",
+        "class",
+        "animated-3",
+        "style",
+        "display: none;"
+      ]
+    },
+    "84": {
+      "tagName": "INPUT",
+      "attributes": [
+        "type",
+        "button",
+        "pseudo",
+        "-webkit-media-controls-mute-button",
+        "tabindex",
+        "-1",
+        "aria-hidden",
+        "true",
+        "aria-label",
+        "mute",
+        "style",
+        "display: none;"
+      ]
+    },
+    "85": {
+      "tagName": "DIV",
+      "attributes": ["aria-hidden", "true"]
+    },
+    "86": {
+      "tagName": "SPAN",
+      "attributes": []
+    },
+    "87": {
+      "tagName": "LABEL",
+      "attributes": [
+        "pseudo",
+        "-internal-media-controls-overflow-menu-list-item",
+        "role",
+        "menuitem",
+        "tabindex",
+        "0",
+        "aria-label",
+        "play on remote device",
+        "class",
+        "animated-2",
+        "style",
+        "display: none;"
+      ]
+    },
+    "88": {
+      "tagName": "INPUT",
+      "attributes": [
+        "pseudo",
+        "-internal-media-controls-cast-button",
+        "type",
+        "button",
+        "aria-label",
+        "play on remote device",
+        "tabindex",
+        "-1",
+        "aria-hidden",
+        "true",
+        "style",
+        "display: none;"
+      ]
+    },
+    "89": {
+      "tagName": "DIV",
+      "attributes": ["aria-hidden", "true"]
+    },
+    "90": {
+      "tagName": "SPAN",
+      "attributes": []
+    },
+    "91": {
+      "tagName": "LABEL",
+      "attributes": [
+        "pseudo",
+        "-internal-media-controls-overflow-menu-list-item",
+        "role",
+        "menuitem",
+        "tabindex",
+        "0",
+        "aria-label",
+        "show closed captions menu",
+        "class",
+        "animated-1",
+        "style",
+        "display: none;"
+      ]
+    },
+    "92": {
+      "tagName": "INPUT",
+      "attributes": [
+        "aria-label",
+        "show closed captions menu",
+        "type",
+        "button",
+        "pseudo",
+        "-webkit-media-controls-toggle-closed-captions-button",
+        "tabindex",
+        "-1",
+        "aria-hidden",
+        "true",
+        "style",
+        "display: none;"
+      ]
+    },
+    "93": {
+      "tagName": "DIV",
+      "attributes": ["aria-hidden", "true"]
+    },
+    "94": {
+      "tagName": "SPAN",
+      "attributes": []
+    },
+    "95": {
+      "tagName": "LABEL",
+      "attributes": [
+        "pseudo",
+        "-internal-media-controls-overflow-menu-list-item",
+        "role",
+        "menuitem",
+        "tabindex",
+        "0",
+        "aria-label",
+        "show playback speed menu",
+        "class",
+        "animated-0",
+        "style",
+        ""
+      ]
+    },
+    "96": {
+      "tagName": "INPUT",
+      "attributes": [
+        "aria-label",
+        "show playback speed menu",
+        "type",
+        "button",
+        "pseudo",
+        "-internal-media-controls-playback-speed-button",
+        "tabindex",
+        "-1",
+        "aria-hidden",
+        "true",
+        "style",
+        ""
+      ]
+    },
+    "97": {
+      "tagName": "DIV",
+      "attributes": ["aria-hidden", "true"]
+    },
+    "98": {
+      "tagName": "SPAN",
+      "attributes": []
+    },
+    "99": {
+      "tagName": "LABEL",
+      "attributes": [
+        "pseudo",
+        "-internal-media-controls-overflow-menu-list-item",
+        "role",
+        "menuitem",
+        "tabindex",
+        "0",
+        "aria-label",
+        "show video track selection menu",
+        "style",
+        "display: none;"
+      ]
+    },
+    "100": {
+      "tagName": "INPUT",
+      "attributes": [
+        "type",
+        "button",
+        "aria-label",
+        "show video track selection menu",
+        "pseudo",
+        "-internal-media-controls-video-track-selection-button",
+        "tabindex",
+        "-1",
+        "aria-hidden",
+        "true",
+        "style",
+        "display: none;"
+      ]
+    },
+    "101": {
+      "tagName": "DIV",
+      "attributes": ["aria-hidden", "true"]
+    },
+    "102": {
+      "tagName": "SPAN",
+      "attributes": []
+    },
+    "103": {
+      "tagName": "LABEL",
+      "attributes": [
+        "pseudo",
+        "-internal-media-controls-overflow-menu-list-item",
+        "role",
+        "menuitem",
+        "tabindex",
+        "0",
+        "aria-label",
+        "show audio track selection menu",
+        "style",
+        "display: none;"
+      ]
+    },
+    "104": {
+      "tagName": "INPUT",
+      "attributes": [
+        "type",
+        "button",
+        "aria-label",
+        "show audio track selection menu",
+        "pseudo",
+        "-internal-media-controls-audio-track-selection-button",
+        "tabindex",
+        "-1",
+        "aria-hidden",
+        "true",
+        "style",
+        "display: none;"
+      ]
+    },
+    "105": {
+      "tagName": "DIV",
+      "attributes": ["aria-hidden", "true"]
+    },
+    "106": {
+      "tagName": "SPAN",
+      "attributes": []
+    },
+    "107": {
+      "tagName": "LABEL",
+      "attributes": [
+        "pseudo",
+        "-internal-media-controls-overflow-menu-list-item",
+        "role",
+        "menuitem",
+        "tabindex",
+        "0",
+        "aria-label",
+        "enter picture-in-picture",
+        "style",
+        "display: none;"
+      ]
+    },
+    "108": {
+      "tagName": "INPUT",
+      "attributes": [
+        "type",
+        "button",
+        "role",
+        "button",
+        "aria-label",
+        "enter picture-in-picture",
+        "pseudo",
+        "-internal-media-controls-picture-in-picture-button",
+        "tabindex",
+        "-1",
+        "aria-hidden",
+        "true",
+        "style",
+        "display: none;"
+      ]
+    },
+    "109": {
+      "tagName": "DIV",
+      "attributes": ["aria-hidden", "true"]
+    },
+    "110": {
+      "tagName": "SPAN",
+      "attributes": []
+    },
+    "111": {
+      "tagName": "SOURCE",
+      "attributes": ["src", "missing.mp4", "type", "video/mp4"]
+    },
+    "112": {
+      "tagName": "UL",
+      "attributes": []
+    },
+    "113": {
+      "tagName": "LI",
+      "attributes": []
+    },
+    "114": {
+      "tagName": "LI",
+      "attributes": []
+    },
+    "115": {
+      "tagName": "#text",
+      "attributes": []
+    },
+    "116": {
+      "tagName": "#text",
+      "attributes": []
+    },
+    "117": {
+      "tagName": "#text",
+      "attributes": []
+    },
+    "118": {
+      "tagName": "#text",
+      "attributes": []
+    },
+    "119": {
+      "tagName": "#text",
+      "attributes": []
+    },
+    "120": {
+      "tagName": "#text",
+      "attributes": []
+    },
+    "121": {
+      "tagName": "#text",
+      "attributes": []
+    },
+    "123": {
+      "tagName": "#text",
+      "attributes": []
+    },
+    "125": {
+      "tagName": "#text",
+      "attributes": []
+    },
+    "126": {
+      "tagName": "html",
+      "attributes": []
+    },
+    "127": {
+      "tagName": "#text",
+      "attributes": []
+    },
+    "128": {
+      "tagName": "#document-fragment",
+      "attributes": []
+    },
+    "129": {
+      "tagName": "#document-fragment",
+      "attributes": []
+    },
+    "130": {
+      "tagName": "#document-fragment",
+      "attributes": []
+    },
+    "131": {
+      "tagName": "#document-fragment",
+      "attributes": []
+    },
+    "132": {
+      "tagName": "#text",
+      "attributes": []
+    },
+    "135": {
+      "tagName": "#document-fragment",
+      "attributes": []
+    },
+    "136": {
+      "tagName": "#document-fragment",
+      "attributes": []
+    },
+    "137": {
+      "tagName": "#document-fragment",
+      "attributes": []
+    },
+    "138": {
+      "tagName": "#text",
+      "attributes": []
+    },
+    "139": {
+      "tagName": "#text",
+      "attributes": []
+    },
+    "140": {
+      "tagName": "#document-fragment",
+      "attributes": []
+    },
+    "141": {
+      "tagName": "#document-fragment",
+      "attributes": []
+    },
+    "142": {
+      "tagName": "#document-fragment",
+      "attributes": []
+    },
+    "143": {
+      "tagName": "#document-fragment",
+      "attributes": []
+    },
+    "144": {
+      "tagName": "#document-fragment",
+      "attributes": []
+    },
+    "145": {
+      "tagName": "#document-fragment",
+      "attributes": []
+    },
+    "146": {
+      "tagName": "#text",
+      "attributes": []
+    },
+    "147": {
+      "tagName": "#document-fragment",
+      "attributes": []
+    },
+    "148": {
+      "tagName": "#text",
+      "attributes": []
+    },
+    "149": {
+      "tagName": "#document-fragment",
+      "attributes": []
+    },
+    "150": {
+      "tagName": "#text",
+      "attributes": []
+    },
+    "151": {
+      "tagName": "#document-fragment",
+      "attributes": []
+    },
+    "152": {
+      "tagName": "#text",
+      "attributes": []
+    },
+    "153": {
+      "tagName": "#document-fragment",
+      "attributes": []
+    },
+    "154": {
+      "tagName": "#text",
+      "attributes": []
+    },
+    "155": {
+      "tagName": "#document-fragment",
+      "attributes": []
+    },
+    "156": {
+      "tagName": "#text",
+      "attributes": []
+    },
+    "157": {
+      "tagName": "#document-fragment",
+      "attributes": []
+    },
+    "158": {
+      "tagName": "#text",
+      "attributes": []
+    },
+    "159": {
+      "tagName": "#document-fragment",
+      "attributes": []
+    },
+    "160": {
+      "tagName": "#text",
+      "attributes": []
+    },
+    "161": {
+      "tagName": "#document-fragment",
+      "attributes": []
+    },
+    "162": {
+      "tagName": "#text",
+      "attributes": []
+    },
+    "163": {
+      "tagName": "#document-fragment",
+      "attributes": []
+    },
+    "164": {
+      "tagName": "#text",
+      "attributes": []
+    }
+  }
+}

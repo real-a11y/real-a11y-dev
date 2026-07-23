@@ -16,12 +16,16 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import type { Finding } from "@real-a11y-dev/audit";
+import type { ExtractionResult } from "@real-a11y-dev/core";
+
 import type {
   Browser,
   BrowserContext,
   BrowserContextOptions,
   Page,
 } from "playwright";
+
+import { nativeTree as computeNativeTree } from "./native-tree.js";
 
 /**
  * Absolute path to the injected IIFE page-bundle shipped in this package's
@@ -262,6 +266,13 @@ export interface A11ySession {
   ): Promise<PageSnapshot>;
   /** The browser's own (native) accessibility tree via CDP — Chromium only. */
   nativeAX(): Promise<{ tree: string; pairs: string[] }>;
+  /**
+   * The browser's own accessibility tree via CDP, normalized into the same
+   * `ExtractionResult` model the DOM producer emits (`source.producer ===
+   * "native"`). Read-only — nodes carry `a11y` and, where a DOM node backs
+   * them, `dom`; never `interaction`. Chromium only.
+   */
+  nativeTree(): Promise<ExtractionResult>;
   close(): Promise<void>;
 }
 
@@ -467,6 +478,15 @@ export class BrowserSession implements A11ySession {
         await client.detach().catch(() => {});
       }
     });
+  }
+
+  /**
+   * Chromium's native accessibility tree as an {@link ExtractionResult} —
+   * the same model the DOM producer emits, so `serialize` / `audit` / diff
+   * treat it identically (`source.producer === "native"`). Read-only.
+   */
+  async nativeTree(): Promise<ExtractionResult> {
+    return this.run(() => computeNativeTree(this.requirePage()));
   }
 
   /**

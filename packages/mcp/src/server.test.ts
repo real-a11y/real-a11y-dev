@@ -59,6 +59,17 @@ class FakeSession implements A11ySession {
     return this.nativeResponse;
   }
 
+  // Typed off the interface itself so this fake needs no extra dependency.
+  nativeTreeResponse: Awaited<ReturnType<A11ySession["nativeTree"]>> = {
+    nodes: new Map(),
+    rootId: "",
+    source: { producer: "native" },
+  };
+  async nativeTree() {
+    this.calls.push({ fn: "nativeTree", rootSelector: "", args: [] });
+    return this.nativeTreeResponse;
+  }
+
   async close() {
     this.closed += 1;
   }
