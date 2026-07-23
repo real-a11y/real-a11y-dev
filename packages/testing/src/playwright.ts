@@ -320,14 +320,17 @@ async function attachNative(
     async outlineSnapshot() {
       return serializeOutline(await getTree());
     },
-    async tabSequenceSnapshot() {
+    tabSequenceSnapshot(): Promise<string> {
       // A native tree carries no interaction facet, so tab order can't be
-      // computed. Throw rather than return a misleading "(nothing focusable)".
-      void (await getTree());
-      throw new Error(
-        "@real-a11y-dev/testing/playwright: tabSequenceSnapshot() is not " +
-          'available with { tree: "native" } — a native tree is read-only and ' +
-          'carries no focusability/interaction data. Use { tree: "dom" }.',
+      // computed. Reject rather than return a misleading "(nothing focusable)".
+      // Don't read the tree first — the rejection is unconditional, so an
+      // unrelated CDP read failure must not mask this read-only explanation.
+      return Promise.reject(
+        new Error(
+          "@real-a11y-dev/testing/playwright: tabSequenceSnapshot() is not " +
+            'available with { tree: "native" } — a native tree is read-only and ' +
+            'carries no focusability/interaction data. Use { tree: "dom" }.',
+        ),
       );
     },
     async assertNoUnlabeledInteractive() {
