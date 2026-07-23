@@ -32,18 +32,18 @@ description tracks the same list at a glance.
       against recorded `getFullAXTree` JSON fixtures, no browser in the loop.
       Lives in `core` per the §"one refinement" note below. Size S–M,
       no dependencies.
-- [ ] **PR C — `feat(core)!`: model reshape (v2 §2, v3 R5).** Optional
+- [x] **PR C — `feat(core)!`: model reshape (v2 §2, v3 R5).** Optional
       `dom` / `interaction` / `ui` facets; `ExtractionResult.source` provenance;
       new `DomSemanticNode` boundary type. The DOM producer still fills every
-      facet, so zero behavior change. **In review: [#208](https://github.com/real-a11y/real-a11y-dev/pull/208)**
+      facet, so zero behavior change. **Merged: [#208](https://github.com/real-a11y/real-a11y-dev/pull/208)**
       — audit degrades gracefully (R5), generic helpers guard, panel/extension
       narrow once to `DomSemanticNode`; serialize/validate/snapshot/react/
-      inspector/cli/mcp untouched. Land before D so the native producer is
-      born on the honest contract.
-- [ ] **PR D — `feat(browser)`: `nativeTree()` producer.** Graduates the
-      spike: batched enrichment (R3, ≤3 round-trips), **in-page redaction
-      (R1 — ship gate)**, stable ids (R2, shared id-generator + transient
-      `axRef`), `source` stamp. Depends on B + C.
+      inspector/cli/mcp untouched. The native producer is now born on the
+      honest contract. Unblocks PR D.
+- [ ] **PR D — `feat(browser)`: `nativeTree()` producer.** *(in progress)*
+      Graduates the spike: batched enrichment (R3, ≤3 round-trips), **in-page
+      redaction (R1 — ship gate)**, stable ids (R2, shared id-generator +
+      transient `axRef`), `source` stamp. Depends on B + C (both merged).
       *Review checklist must include: grep the CDP wire capture for the
       fixture password — R1 is the only gate that can slip silently.*
 - [ ] **PR E — `ci`: parity harness.** Corpus job on pinned Chromium;
