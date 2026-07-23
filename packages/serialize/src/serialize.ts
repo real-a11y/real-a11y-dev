@@ -71,9 +71,21 @@ function nodeLabel(node: SemanticNode, redact?: RegExp[]): string {
   return `${node.a11y.role}${nameSuffix}${levelSuffix}`;
 }
 
+/**
+ * Is this input a live DOM root (vs an already-extracted tree)? Feature-detects
+ * the `Element` global first: in plain Node — no jsdom, no browser — a bare
+ * `instanceof Element` throws (`Element` is undefined), which used to make
+ * every serializer here unusable on a perfectly good `ExtractionResult`, e.g.
+ * one produced over CDP or deserialized from a snapshot. No `Element` global
+ * means no way the caller holds a DOM root, so the answer is simply false.
+ */
+function isDomRoot(input: SerializeInput): input is Element {
+  return typeof Element !== "undefined" && input instanceof Element;
+}
+
 /** Resolve an input to a tree, extracting from the DOM only when needed. */
 function toTree(input: SerializeInput, mode: "a11y" | "dom" = "a11y") {
-  return input instanceof Element ? extract(input, mode) : input;
+  return isDomRoot(input) ? extract(input, mode) : input;
 }
 
 /**
