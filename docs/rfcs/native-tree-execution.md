@@ -33,11 +33,13 @@ description tracks the same list at a glance.
       Lives in `core` per the §"one refinement" note below. Size S–M,
       no dependencies.
 - [ ] **PR C — `feat(core)!`: model reshape (v2 §2, v3 R5).** Optional
-      `dom` / `interaction` facets; `ExtractionResult.source` provenance.
-      Mechanical migration of serialize / audit / validate / snapshot / ui;
-      the DOM producer still fills every facet, so zero behavior change.
-      Size M–L. **The churn PR — land before D so the native producer is
-      born on the honest contract.**
+      `dom` / `interaction` / `ui` facets; `ExtractionResult.source` provenance;
+      new `DomSemanticNode` boundary type. The DOM producer still fills every
+      facet, so zero behavior change. **In review: [#208](https://github.com/real-a11y/real-a11y-dev/pull/208)**
+      — audit degrades gracefully (R5), generic helpers guard, panel/extension
+      narrow once to `DomSemanticNode`; serialize/validate/snapshot/react/
+      inspector/cli/mcp untouched. Land before D so the native producer is
+      born on the honest contract.
 - [ ] **PR D — `feat(browser)`: `nativeTree()` producer.** Graduates the
       spike: batched enrichment (R3, ≤3 round-trips), **in-page redaction
       (R1 — ship gate)**, stable ids (R2, shared id-generator + transient
