@@ -40,6 +40,10 @@ Why a second producer: Chromium exposes structure no in-page walk can reach — 
 
 It is **read-only** for now: nodes carry `a11y`, and a `dom` facet when a DOM node backs them, but no `interaction` facet (CDP action dispatch is a later phase). Redaction is enforced by construction — the producer never reads any element's live `.value`, drops the AX `value` field, and the `dom` facet copies only an allowlist of structural / accessibility attributes, so a user's field values never enter the tree. `buildNativeTree(rawNodes, enrichment?, chrome?)` is exported as the pure, browserless core of the producer.
 
+### Parity harness
+
+`pnpm --filter @real-a11y-dev/browser test:e2e` runs the two producers against a corpus of fixture pages in real Chromium and measures how much of the DOM tree the native tree covers (role+name overlap). Because the two are never byte-identical — Chromium vocabulary differences, plus the UA-shadow media controls only native sees — the harness asserts an overlap **floor** and logs the actual watermark, rather than equality. It runs as an **advisory** CI step for now (see `e2e/native-parity.e2e.test.ts`); divergences are a two-way signal that catch DOM-producer gaps *and* native-normalizer regressions.
+
 ## The page-bundle
 
 The injected bundle is built here (`dist/page-bundle.iife.global.js`) from the serializers (`@real-a11y-dev/serialize`), the findings engine (`@real-a11y-dev/audit`), and the query helpers (`@real-a11y-dev/core`). It's an IIFE that installs `window.__realA11y__` with the snapshot/assertion helpers so any caller can invoke them by name inside the page.

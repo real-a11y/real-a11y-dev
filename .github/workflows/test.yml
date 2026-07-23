@@ -121,6 +121,15 @@ jobs:
       - name: Run CLI e2e tests
         run: pnpm --filter @real-a11y-dev/cli test:e2e
 
+      # DOM↔native parity harness (RFC PR E). Non-blocking FIRST: it logs the
+      # overlap watermark and fails only below a conservative floor, but does
+      # not gate merges while the corpus + native normalizer stabilize. Drop
+      # `continue-on-error` to make parity a required gate once the corpus has
+      # grown (iframes, portals, virtualized lists) and the floor is tightened.
+      - name: Run native-vs-DOM parity harness (advisory)
+        continue-on-error: true
+        run: pnpm --filter @real-a11y-dev/browser test:e2e
+
       - name: Upload Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@v4
