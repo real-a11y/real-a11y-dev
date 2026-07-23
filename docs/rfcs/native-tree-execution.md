@@ -40,12 +40,15 @@ description tracks the same list at a glance.
       narrow once to `DomSemanticNode`; serialize/validate/snapshot/react/
       inspector/cli/mcp untouched. The native producer is now born on the
       honest contract. Unblocks PR D.
-- [ ] **PR D — `feat(browser)`: `nativeTree()` producer.** *(in progress)*
-      Graduates the spike: batched enrichment (R3, ≤3 round-trips), **in-page
-      redaction (R1 — ship gate)**, stable ids (R2, shared id-generator +
-      transient `axRef`), `source` stamp. Depends on B + C (both merged).
-      *Review checklist must include: grep the CDP wire capture for the
-      fixture password — R1 is the only gate that can slip silently.*
+- [ ] **PR D — `feat(browser)`: `nativeTree()` producer.** **In review: [#210](https://github.com/real-a11y/real-a11y-dev/pull/210)**
+      Graduates the spike: batched enrichment (R3, one `DOM.getDocument` walk),
+      **in-page-safe redaction (R1 — ship gate): allowlist attributes, never
+      read `.value`, drop AX `value`**, `source` stamp. Read-only (no
+      `interaction` — that's PR G). R2 stable ids via core's `normalizeNativeAX`
+      (session-scoped; DOM-id alignment threaded when PR G needs it). R1 proven
+      by a test that builds the tree from a real recorded payload with real
+      email/password secrets and asserts they appear nowhere in the output.
+      Depends on B + C (both merged).
 - [ ] **PR E — `ci`: parity harness.** Corpus job on pinned Chromium;
       non-blocking first, required once stable. Gate metric: role+name
       overlap ≥ 88.7% and never regresses. Corpus growth backlog: iframes,
