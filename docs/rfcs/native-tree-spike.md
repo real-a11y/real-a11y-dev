@@ -61,7 +61,7 @@ Light DOM on the same page: `video.shadowRoot === null`, `childElementCount === 
 
 ### 1. Forcing function — media controls
 
-`getFullAXTree` returns `Video` / `Audio` with descendants `button "play"`, `button "mute"`, `slider "video time scrubber"`, etc., nested under ignored/`none`/`generic` wrappers. Normalization that **drops ignored noise and re-parents** surviving children yields a usable tree. Child order after re-parenting is not guaranteed to match DevTools visual order — acceptable for audits; document if we ever assert order under media.
+`getFullAXTree` returns `Video` / `Audio` with descendants `button "play"`, `button "mute"`, `slider "video time scrubber"`, etc., nested under ignored/`none`/`generic` wrappers. Normalization that **drops ignored noise and re-parents** surviving children yields a usable tree. *(Updated after #205: the spike originally ordered siblings by flat-list position, which is NOT document order — CDP's flat payload interleaves subtrees; the authoritative order is each parent's `childIds`. The consolidated core module `normalizeNativeAX` fixed this, and the spikes now either import it — extension, desktop — or use the same childIds-driven walk.)*
 
 Load-state name `"Unable to play media."` appears when the media source is not playable — exactly the version/load drift called out in #197 §5.4. Normalization should canonicalize or strip load-state media names for baselines.
 

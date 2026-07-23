@@ -162,25 +162,32 @@ export function normalizeNativeTree(
     keep.add(n.nodeId);
   }
 
-  /** Nearest kept ancestor (or null for a kept root). */
-  const keptParent = (nodeId: string): string | null => {
-    let cur = byId.get(nodeId)?.parentId;
-    while (cur) {
-      if (keep.has(cur)) return cur;
-      cur = byId.get(cur)?.parentId;
-    }
-    return null;
-  };
-
   const nodes = new Map<string, SemanticNode>();
+
+  // Sibling order must follow each parent's childIds (document order) — the
+  // flat getFullAXTree payload interleaves subtrees, so grouping survivors by
+  // flat-list position scrambles siblings. Same childIds-driven walk as
+  // core's normalizeNativeAX (#205), which this spike predates and graduates
+  // into (execution plan PR D).
   const childrenOf = new Map<string | null, string[]>();
+  const collectChildren = (axId: string, keptAncestor: string | null) => {
+    const ax = byId.get(axId);
+    if (!ax) return;
+    if (keep.has(axId)) {
+      const list = childrenOf.get(keptAncestor) ?? [];
+      list.push(axId);
+      childrenOf.set(keptAncestor, list);
+      for (const c of ax.childIds ?? []) collectChildren(c, axId);
+    } else {
+      for (const c of ax.childIds ?? []) collectChildren(c, keptAncestor);
+    }
+  };
+  for (const root of axNodes.filter((n) => !n.parentId)) {
+    collectChildren(root.nodeId, null);
+  }
 
   for (const id of keep) {
     const ax = byId.get(id)!;
-    const parentId = keptParent(id);
-    const list = childrenOf.get(parentId) ?? [];
-    list.push(id);
-    childrenOf.set(parentId, list);
 
     const rawRole = ax.role?.value ?? "generic";
     const role = ROLE_MAP[rawRole] ?? rawRole;

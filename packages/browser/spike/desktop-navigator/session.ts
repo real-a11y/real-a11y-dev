@@ -25,117 +25,22 @@ import {
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  normalizeNativeAX,
+  type NativeAXNode,
+  type RawNativeAXNode,
+} from "@real-a11y-dev/core";
 import { chromium, type Browser, type CDPSession, type Page } from "playwright";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixtureHtml = readFileSync(join(here, "fixture.html"), "utf8");
 const panelHtml = readFileSync(join(here, "panel.html"), "utf8");
 
-export interface AxNode {
-  nodeId: string;
-  parentId?: string;
-  childIds?: string[];
-  backendDOMNodeId?: number;
-  ignored?: boolean;
-  role?: { value?: string };
-  name?: { value?: string };
-}
-
-export interface PanelNode {
-  id: string;
-  role: string;
-  name: string;
-  depth: number;
-  backendDOMNodeId: number | null;
-  childIds: string[];
-}
-
-const DROP = new Set([
-  "StaticText",
-  "InlineTextBox",
-  "LineBreak",
-  "LabelText",
-  "ListMarker",
-  "generic",
-  "none",
-  "presentation",
-  "RootWebArea",
-]);
-
-const ROLE_MAP: Record<string, string> = {
-  Video: "video",
-  Audio: "audio",
-  image: "img",
-};
-
-function normalize(axNodes: AxNode[]): PanelNode[] {
-  const byId = new Map(axNodes.map((n) => [n.nodeId, n]));
-  const keep = new Set<string>();
-  for (const n of axNodes) {
-    const role = n.role?.value ?? "";
-    if (n.ignored || !role || DROP.has(role)) continue;
-    keep.add(n.nodeId);
-  }
-
-  const keptParent = (id: string): string | null => {
-    let cur = byId.get(id)?.parentId;
-    while (cur) {
-      if (keep.has(cur)) return cur;
-      cur = byId.get(cur)?.parentId;
-    }
-    return null;
-  };
-
-  const childrenOf = new Map<string | null, string[]>();
-  for (const id of keep) {
-    const p = keptParent(id);
-    const list = childrenOf.get(p) ?? [];
-    list.push(id);
-    childrenOf.set(p, list);
-  }
-
-  const out: PanelNode[] = [];
-  const walk = (axId: string, depth: number) => {
-    const ax = byId.get(axId)!;
-    const raw = ax.role?.value ?? "generic";
-    let name = (ax.name?.value ?? "").replace(/\s+/g, " ").trim();
-    if (!name) {
-      for (const cid of ax.childIds ?? []) {
-        const c = byId.get(cid);
-        if (c?.role?.value === "StaticText") {
-          const n = (c.name?.value ?? "").trim();
-          if (n) {
-            name = n;
-            break;
-          }
-        }
-      }
-    }
-    const childAx = childrenOf.get(axId) ?? [];
-    const id =
-      typeof ax.backendDOMNodeId === "number"
-        ? `ax-dom-${ax.backendDOMNodeId}`
-        : `ax-${ax.nodeId}`;
-    out.push({
-      id,
-      role: ROLE_MAP[raw] ?? raw,
-      name,
-      depth,
-      backendDOMNodeId:
-        typeof ax.backendDOMNodeId === "number" ? ax.backendDOMNodeId : null,
-      childIds: childAx.map((c) => {
-        const child = byId.get(c)!;
-        return typeof child.backendDOMNodeId === "number"
-          ? `ax-dom-${child.backendDOMNodeId}`
-          : `ax-${child.nodeId}`;
-      }),
-    });
-    for (const c of childAx) walk(c, depth + 1);
-  };
-
-  for (const root of childrenOf.get(null) ?? []) walk(root, 0);
-  return out;
-}
+// Normalization comes from core's shared vocabulary module (R4, merged in
+// #205) — the private copy this spike used to carry had the flat-list
+// sibling-ordering bug the consolidation fixed.
+export type AxNode = RawNativeAXNode;
+export type PanelNode = NativeAXNode;
 
 export class DesktopNavigatorSession {
   private browser?: Browser;
@@ -166,7 +71,7 @@ export class DesktopNavigatorSession {
     const full = (await this.client!.send("Accessibility.getFullAXTree")) as {
       nodes: AxNode[];
     };
-    return normalize(full.nodes);
+    return normalizeNativeAX(full.nodes);
   }
 
   async click(
