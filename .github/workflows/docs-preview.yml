@@ -8,15 +8,14 @@ name: Docs preview
 # Manual trigger: Actions → "Docs preview" → Run workflow → enter a PR number
 # (useful before `/preview` exists on main, or to redeploy without a comment).
 #
-# Security posture:
-# - The `/preview` path loads this workflow from the default branch
-#   (issue_comment). workflow_dispatch uses whichever branch you select.
+# Security posture (CodeQL Actions / Untrusted Checkout TOCTOU):
+# - Workflow defaults to contents:read only. The build job that checks out and
+#   runs PR code never gets write scopes or Cloudflare secrets.
+# - Deploy runs on a fresh runner, downloads only the static dist artifact,
+#   then escalates pull-requests:write (to comment) + injects Cloudflare
+#   credentials. Secrets never share a workspace with PR install/build.
+# - `/preview` path loads this file from the default branch (issue_comment).
 # - Only OWNER / MEMBER / COLLABORATOR comments trigger a deploy.
-# - Two jobs: `build` checks out and compiles the PR head with **no secrets**;
-#   `deploy` runs on a fresh runner, downloads only the static dist artifact,
-#   then injects Cloudflare credentials. That split closes the CodeQL
-#   untrusted-checkout / TOCTOU finding (secrets never share a workspace with
-#   PR install/build scripts, even on fork PRs a collaborator asked to preview).
 
 on:
   issue_comment:
@@ -28,9 +27,9 @@ on:
         required: true
         type: string
 
+# Least privilege at the workflow level — escalate only on `deploy`.
 permissions:
   contents: read
-  pull-requests: write
 
 concurrency:
   group: docs-preview-pr-${{ github.event.issue.number || inputs.pr_number }}
@@ -49,22 +48,15 @@ jobs:
         github.event.comment.author_association == 'MEMBER' ||
         github.event.comment.author_association == 'COLLABORATOR'))
     runs-on: ubuntu-latest
+    # Read-only: may checkout and execute PR head, but cannot write to the
+    # PR or touch secrets. Satisfies CodeQL's privileged-workflow gate.
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       number: ${{ steps.pr.outputs.number }}
       sha: ${{ steps.pr.outputs.sha }}
     steps:
-      - name: Acknowledge /preview
-        if: github.event_name == 'issue_comment'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await github.rest.reactions.createForIssueComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              comment_id: context.payload.comment.id,
-              content: 'eyes',
-            });
-
       - name: Resolve PR head
         id: pr
         env:
@@ -82,6 +74,7 @@ jobs:
         with:
           repository: ${{ steps.pr.outputs.repo }}
           ref: ${{ steps.pr.outputs.sha }}
+          persist-credentials: false
 
       - uses: pnpm/action-setup@v4
 
@@ -106,8 +99,23 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    # Fresh runner: no PR checkout, only the static dist from `build`.
+    # Fresh runner: no PR checkout. Write scope only here (PR comment).
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
+      - name: Acknowledge /preview
+        if: github.event_name == 'issue_comment'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.reactions.createForIssueComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: context.payload.comment.id,
+              content: 'eyes',
+            });
+
       - name: Download site artifact
         uses: actions/download-artifact@v4
         with:
