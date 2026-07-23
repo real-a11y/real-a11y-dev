@@ -149,6 +149,8 @@ https://pr-<number>.real-a11y-docs-preview.pages.dev
 
 Comment `/preview` again after new commits to refresh. Only `OWNER` / `MEMBER` / `COLLABORATOR` comments run the deploy (fork authors without write access cannot trigger it). You can also run **Actions → Docs preview → Run workflow** and pass a PR number.
 
+When the PR is **merged or closed**, the same workflow deletes every Cloudflare Pages deployment on the `pr-<number>` branch (including the stable alias), so preview URLs stop serving.
+
 ### Changesets
 
 Versioning and per-package CHANGELOGs are managed by [Changesets](https://github.com/changesets/changesets). If your PR changes a publishable package, run:
