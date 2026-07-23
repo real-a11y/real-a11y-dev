@@ -17,6 +17,9 @@ name: Docs preview
 # - `/preview` path loads this file from the default branch (issue_comment).
 # - Only OWNER / MEMBER / COLLABORATOR comments trigger a deploy.
 #
+# Feedback: a parallel `ack` job reacts 👀 immediately (no checkout/secrets).
+# `notify-failure` comments if build fails. Deploy reacts 👍 on success.
+#
 # Concurrency is on the `build` and `deploy` jobs (not the workflow) so
 # unrelated PR comments — which still trigger a run that then skips every
 # job — do not cancel an in-progress /preview. Both jobs share one group so
@@ -32,11 +35,38 @@ on:
         required: true
         type: string
 
-# Least privilege at the workflow level — escalate only on `deploy`.
+# Least privilege at the workflow level — escalate only on jobs that comment.
 permissions:
   contents: read
 
 jobs:
+  # Immediate 👀 so the requester knows /preview was accepted, while build
+  # (minutes) runs in parallel. No checkout, no secrets — write scopes only.
+  ack:
+    if: |
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request &&
+      github.event.comment.user.type != 'Bot' &&
+      startsWith(github.event.comment.body, '/preview') &&
+      (github.event.comment.author_association == 'OWNER' ||
+       github.event.comment.author_association == 'MEMBER' ||
+       github.event.comment.author_association == 'COLLABORATOR')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Acknowledge /preview
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.reactions.createForIssueComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: context.payload.comment.id,
+              content: 'eyes',
+            });
+
   build:
     # `/preview` must be at the start of the comment so the bot reply
     # ("Comment `/preview` again…") cannot re-trigger. Bots are ignored.
@@ -101,6 +131,42 @@ jobs:
           path: website/.vitepress/dist
           retention-days: 1
 
+  # Surface build failures — without this, a failed build is silent after 👀.
+  notify-failure:
+    needs: build
+    if: |
+      failure() &&
+      github.event_name == 'issue_comment'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Comment that the preview build failed
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ github.event.issue.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: Number(process.env.PR_NUMBER),
+              body: [
+                `### Docs preview failed`,
+                ``,
+                `The site build failed, so nothing was deployed.`,
+                `Logs: ${process.env.RUN_URL}`,
+              ].join('\n'),
+            });
+            await github.rest.reactions.createForIssueComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: context.payload.comment.id,
+              content: 'confused',
+            });
+
   deploy:
     needs: build
     runs-on: ubuntu-latest
@@ -117,18 +183,6 @@ jobs:
       pull-requests: write
       issues: write
     steps:
-      - name: Acknowledge /preview
-        if: github.event_name == 'issue_comment'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await github.rest.reactions.createForIssueComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              comment_id: context.payload.comment.id,
-              content: 'eyes',
-            });
-
       - name: Download site artifact
         uses: actions/download-artifact@v4
         with:
@@ -145,15 +199,15 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           # Short branch name → stable alias https://pr-N.<project>.pages.dev
-          # (Cloudflare truncates long branch aliases). Quote the commit
-          # message so spaces are one argv token (wrangler-action splits on
-          # whitespace); avoid `#` so shells never treat it as a comment.
+          # (Cloudflare truncates long branch aliases).
+          # Commit message has no spaces so wrangler-action / @actions/exec
+          # never need to honor shell quotes when tokenizing the command.
           command: >-
             pages deploy dist
             --project-name=real-a11y-docs-preview
             --branch=pr-${{ needs.build.outputs.number }}
             --commit-hash=${{ needs.build.outputs.sha }}
-            --commit-message="docs-preview pr-${{ needs.build.outputs.number }}"
+            --commit-message=docs-preview-pr-${{ needs.build.outputs.number }}
 
       - name: Comment preview URL
         uses: actions/github-script@v7
