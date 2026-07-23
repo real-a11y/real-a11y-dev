@@ -59,8 +59,15 @@ export function isTypeAheadKey(e: KeyboardEvent): boolean {
 }
 
 /**
- * Index of the next label matching `buffer`, searching forward from
- * `currentIndex + 1` and wrapping. Returns `-1` when nothing matches.
+ * Index of the next label matching `buffer`, wrapping around the list.
+ * Returns `-1` when nothing matches.
+ *
+ * Search start follows APG type-ahead:
+ * - First character, or a same-letter cycle (`bbb` → treat as `b`): start
+ *   after `currentIndex` so repeated keys visit successive matches.
+ * - Multi-character prefix (`ap`, `blu`): start at `currentIndex` inclusive
+ *   so refining a prefix keeps a still-matching selection instead of
+ *   flickering through other matches (and re-highlighting the host page).
  */
 export function findTypeAheadIndex(
   labels: readonly string[],
@@ -69,12 +76,17 @@ export function findTypeAheadIndex(
 ): number {
   if (!buffer || labels.length === 0) return -1;
 
-  const needle =
-    buffer.length > 1 && [...buffer].every((c) => c === buffer[0])
-      ? buffer[0]
-      : buffer;
+  const sameLetterCycle =
+    buffer.length > 1 && [...buffer].every((c) => c === buffer[0]);
+  const needle = sameLetterCycle ? buffer[0] : buffer;
+  const advancePastCurrent = buffer.length === 1 || sameLetterCycle;
 
-  const start = currentIndex < 0 ? 0 : (currentIndex + 1) % labels.length;
+  const start =
+    currentIndex < 0
+      ? 0
+      : advancePastCurrent
+        ? (currentIndex + 1) % labels.length
+        : currentIndex;
   for (let i = 0; i < labels.length; i++) {
     const idx = (start + i) % labels.length;
     if (labels[idx].toLowerCase().startsWith(needle)) return idx;

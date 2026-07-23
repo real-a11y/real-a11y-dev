@@ -20,9 +20,14 @@ describe("findTypeAheadIndex", () => {
     expect(findTypeAheadIndex(labels, "a", 4)).toBe(0);
   });
 
-  it("matches a multi-character buffer", () => {
-    // From Apple (0), "ap" → Apricot (1) (next after current)
-    expect(findTypeAheadIndex(labels, "ap", 0)).toBe(1);
+  it("keeps the current item when a multi-character prefix still matches", () => {
+    // From Apple (0), "ap" stays on Apple (inclusive search) — not Apricot
+    expect(findTypeAheadIndex(labels, "ap", 0)).toBe(0);
+  });
+
+  it("finds the next multi-character match when the current item no longer matches", () => {
+    // From Banana (2), "ap" → Apple (0) via wrap
+    expect(findTypeAheadIndex(labels, "ap", 2)).toBe(0);
   });
 
   it("cycles on repeated same character instead of looking for 'bb'", () => {
