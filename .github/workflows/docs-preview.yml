@@ -19,6 +19,9 @@ name: Docs preview
 #
 # Feedback: a parallel `ack` job reacts 👀 immediately (no checkout/secrets).
 # `notify-failure` comments if build fails. Deploy reacts 👍 on success.
+# `/preview` and workflow_dispatch only proceed when the PR is still open
+# (checked at resolve and again immediately before Cloudflare upload) so a
+# comment on a closed PR cannot recreate a preview after cleanup.
 #
 # Cleanup: when a PR is closed (merged or not), `cleanup` deletes every
 # Cloudflare Pages deployment on branch `pr-<number>` (including the stable
@@ -27,7 +30,9 @@ name: Docs preview
 # job never checks out PR code — only calls the Cloudflare API with
 # `github.event.pull_request.number` from the webhook payload. Shares the
 # per-PR concurrency group so an in-flight /preview is cancelled rather
-# than redeploying after the PR is gone.
+# than redeploying after the PR is gone. A second list/delete pass after a
+# short wait covers the race where cancel lands after wrangler already
+# created a deployment.
 #
 # Concurrency is on the `build` and `deploy` jobs (not the workflow) so
 # unrelated PR comments — which still trigger a run that then skips every
@@ -72,6 +77,22 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            if (pr.state !== 'open') {
+              // Closed PRs must not get a preview (cleanup already ran / would
+              // leave an orphan). Confused reaction instead of 👀.
+              await github.rest.reactions.createForIssueComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: context.payload.comment.id,
+                content: 'confused',
+              });
+              return;
+            }
             await github.rest.reactions.createForIssueComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -103,6 +124,7 @@ jobs:
     outputs:
       number: ${{ steps.pr.outputs.number }}
       sha: ${{ steps.pr.outputs.sha }}
+      open: ${{ steps.pr.outputs.open }}
     steps:
       - name: Resolve PR head
         id: pr
@@ -113,30 +135,44 @@ jobs:
           set -euo pipefail
           pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
           echo "number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
+          state="$(jq -r .state <<<"$pr")"
+          if [ "$state" != "open" ]; then
+            echo "PR #${PR_NUMBER} is ${state}; skipping preview"
+            echo "open=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "open=true" >> "$GITHUB_OUTPUT"
           echo "sha=$(jq -r .head.sha <<<"$pr")" >> "$GITHUB_OUTPUT"
           echo "repo=$(jq -r .head.repo.full_name <<<"$pr")" >> "$GITHUB_OUTPUT"
 
       - name: Checkout PR head
+        if: steps.pr.outputs.open == 'true'
         uses: actions/checkout@v4
         with:
           repository: ${{ steps.pr.outputs.repo }}
           ref: ${{ steps.pr.outputs.sha }}
           persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - if: steps.pr.outputs.open == 'true'
+        uses: pnpm/action-setup@v4
 
-      - uses: actions/setup-node@v4
+      - if: steps.pr.outputs.open == 'true'
+        uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      - if: steps.pr.outputs.open == 'true'
+        run: pnpm install --frozen-lockfile
 
-      - run: pnpm -r --filter='./packages/*' build
+      - if: steps.pr.outputs.open == 'true'
+        run: pnpm -r --filter='./packages/*' build
 
-      - run: pnpm --filter @real-a11y-dev/website build
+      - if: steps.pr.outputs.open == 'true'
+        run: pnpm --filter @real-a11y-dev/website build
 
       - name: Upload site artifact
+        if: steps.pr.outputs.open == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: docs-preview-dist
@@ -148,7 +184,8 @@ jobs:
     needs: build
     if: |
       failure() &&
-      github.event_name == 'issue_comment'
+      github.event_name == 'issue_comment' &&
+      needs.build.outputs.open != 'false'
     runs-on: ubuntu-latest
     permissions:
       issues: write
@@ -181,6 +218,8 @@ jobs:
 
   deploy:
     needs: build
+    # Skip when the PR was already closed at resolve time (no artifact).
+    if: needs.build.outputs.open == 'true'
     runs-on: ubuntu-latest
     # Same group as build: only real preview runs reach this job (needs:build
     # + build's if), so skipped comment runs never take the lock — but a
@@ -195,7 +234,23 @@ jobs:
       pull-requests: write
       issues: write
     steps:
+      - name: Ensure PR is still open
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.build.outputs.number }}
+        run: |
+          set -euo pipefail
+          state="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq .state)"
+          if [ "$state" != "open" ]; then
+            echo "PR #${PR_NUMBER} is ${state}; skipping deploy so cleanup can own previews"
+            echo "open=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "open=true" >> "$GITHUB_OUTPUT"
+
       - name: Download site artifact
+        if: steps.gate.outputs.open == 'true'
         uses: actions/download-artifact@v4
         with:
           name: docs-preview-dist
@@ -203,6 +258,7 @@ jobs:
 
       - name: Deploy to Cloudflare Pages
         id: deploy
+        if: steps.gate.outputs.open == 'true'
         # Outputs used below: deployment-url, pages-deployment-alias-url
         # (documented on cloudflare/wrangler-action@v3; alias needs wrangler
         # >= 3.78). Fallback URL is constructed if either is empty.
@@ -222,6 +278,7 @@ jobs:
             --commit-message=docs-preview-pr-${{ needs.build.outputs.number }}
 
       - name: Comment preview URL
+        if: steps.gate.outputs.open == 'true'
         uses: actions/github-script@v7
         env:
           ALIAS_URL: ${{ steps.deploy.outputs.pages-deployment-alias-url }}
@@ -268,8 +325,9 @@ jobs:
 
   # Drop preview deployments when the PR is merged or otherwise closed.
   # No checkout — Cloudflare REST API only. Paginate the list endpoint
-  # (wrangler `pages deployment list` returns a single page). Idempotent
-  # if nothing was ever deployed for this PR.
+  # (wrangler `pages deployment list` returns a single page). Two passes
+  # (with a short wait) so a deploy that finishes just after cancel still
+  # gets deleted. Idempotent if nothing was ever deployed for this PR.
   cleanup:
     if: github.event_name == 'pull_request_target' && github.event.action == 'closed'
     runs-on: ubuntu-latest
@@ -291,67 +349,93 @@ jobs:
           set -euo pipefail
           branch="pr-${PR_NUMBER}"
           base="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PROJECT}/deployments"
+          msg="docs-preview-pr-${PR_NUMBER}"
+          alias="https://${branch}.${PROJECT}.pages.dev"
 
-          # Collect every preview deployment id for this PR branch across
-          # all pages (API max per_page is 25). wrangler list returns one page.
-          ids=()
-          page=1
-          while true; do
-            resp="$(curl -fsS \
-              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-              -H "Content-Type: application/json" \
-              "${base}?env=preview&page=${page}&per_page=25")"
-            if ! jq -e '.success == true' <<<"$resp" >/dev/null; then
-              echo "Cloudflare list failed:" >&2
-              jq . <<<"$resp" >&2
-              exit 1
-            fi
-            # Match by branch (set via wrangler --branch=pr-N), our
-            # commit-message, or the stable branch alias URL. Direct Upload
-            # populates deployment_trigger.metadata.branch (type ad_hoc);
-            # the extras cover an empty/missing branch field.
-            mapfile -t page_ids < <(
-              jq -r --arg b "$branch" --arg msg "docs-preview-pr-${PR_NUMBER}" --arg alias "https://${branch}.${PROJECT}.pages.dev" '
-                .result[]
-                | select(
-                    (.deployment_trigger.metadata.branch // "") == $b
-                    or (.deployment_trigger.metadata.commit_message // "") == $msg
-                    or ((.aliases // []) | index($alias) != null)
-                  )
-                | .id
-              ' <<<"$resp"
-            )
-            for id in "${page_ids[@]}"; do
-              [ -n "$id" ] && ids+=("$id")
+          list_matching_ids() {
+            local ids=()
+            local page=1
+            local resp total_pages page_ids id
+            while true; do
+              resp="$(curl -fsS \
+                -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+                -H "Content-Type: application/json" \
+                "${base}?env=preview&page=${page}&per_page=25")"
+              if ! jq -e '.success == true' <<<"$resp" >/dev/null; then
+                echo "Cloudflare list failed:" >&2
+                jq . <<<"$resp" >&2
+                return 1
+              fi
+              # Match by branch (wrangler --branch=pr-N), our commit-message,
+              # or the stable branch alias URL.
+              mapfile -t page_ids < <(
+                jq -r --arg b "$branch" --arg msg "$msg" --arg alias "$alias" '
+                  .result[]
+                  | select(
+                      (.deployment_trigger.metadata.branch // "") == $b
+                      or (.deployment_trigger.metadata.commit_message // "") == $msg
+                      or ((.aliases // []) | index($alias) != null)
+                    )
+                  | .id
+                ' <<<"$resp"
+              )
+              for id in "${page_ids[@]}"; do
+                [ -n "$id" ] && ids+=("$id")
+              done
+              total_pages="$(jq -r '.result_info.total_pages // 1' <<<"$resp")"
+              if [ "$page" -ge "$total_pages" ]; then
+                break
+              fi
+              page=$((page + 1))
             done
-            total_pages="$(jq -r '.result_info.total_pages // 1' <<<"$resp")"
-            if [ "$page" -ge "$total_pages" ]; then
-              break
+            printf '%s\n' "${ids[@]+"${ids[@]}"}"
+          }
+
+          delete_ids() {
+            local id del
+            local -a ids=("$@")
+            for id in "${ids[@]}"; do
+              [ -n "$id" ] || continue
+              # force=true: required when the deployment still holds the pr-N alias.
+              del="$(curl -fsS -X DELETE \
+                -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+                -H "Content-Type: application/json" \
+                "${base}/${id}?force=true")"
+              if ! jq -e '.success == true' <<<"$del" >/dev/null; then
+                echo "Failed to delete deployment ${id}:" >&2
+                jq . <<<"$del" >&2
+                return 1
+              fi
+              echo "Deleted ${id}"
+            done
+          }
+
+          # Pass 1: delete what is already registered. Pass 2 (after a wait):
+          # catch a deploy that finished after cancel but before list ran.
+          total_deleted=0
+          for pass in 1 2; do
+            if [ "$pass" -eq 2 ]; then
+              echo "Waiting 30s for any in-flight deploy to register…"
+              sleep 30
             fi
-            page=$((page + 1))
+            mapfile -t ids < <(list_matching_ids)
+            filtered=()
+            for id in "${ids[@]+"${ids[@]}"}"; do
+              [ -n "$id" ] && filtered+=("$id")
+            done
+            if [ "${#filtered[@]}" -eq 0 ]; then
+              echo "Pass ${pass}: no preview deployments for branch ${branch}"
+              continue
+            fi
+            echo "Pass ${pass}: deleting ${#filtered[@]} deployment(s) on ${branch}"
+            delete_ids "${filtered[@]}"
+            total_deleted=$((total_deleted + ${#filtered[@]}))
           done
 
-          if [ "${#ids[@]}" -eq 0 ]; then
+          if [ "$total_deleted" -eq 0 ]; then
             echo "No preview deployments for branch ${branch}"
-            echo "deleted=0" >> "$GITHUB_OUTPUT"
-            exit 0
           fi
-
-          echo "Deleting ${#ids[@]} deployment(s) on ${branch}"
-          for id in "${ids[@]}"; do
-            # force=true: required when the deployment still holds the pr-N alias.
-            del="$(curl -fsS -X DELETE \
-              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-              -H "Content-Type: application/json" \
-              "${base}/${id}?force=true")"
-            if ! jq -e '.success == true' <<<"$del" >/dev/null; then
-              echo "Failed to delete deployment ${id}:" >&2
-              jq . <<<"$del" >&2
-              exit 1
-            fi
-            echo "Deleted ${id}"
-          done
-          echo "deleted=${#ids[@]}" >> "$GITHUB_OUTPUT"
+          echo "deleted=${total_deleted}" >> "$GITHUB_OUTPUT"
 
       - name: Comment that the preview was removed
         if: steps.delete.outputs.deleted != '0'
