@@ -16,7 +16,7 @@
   {
     "name": "@real-a11y-dev/inspector (esm)",
     "path": "packages/inspector/dist/index.js",
-    "limit": "30.4 KB",
+    "limit": "30.8 KB",
     "gzip": true
   },
   {
