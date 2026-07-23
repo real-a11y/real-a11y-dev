@@ -40,7 +40,7 @@ description tracks the same list at a glance.
       narrow once to `DomSemanticNode`; serialize/validate/snapshot/react/
       inspector/cli/mcp untouched. The native producer is now born on the
       honest contract. Unblocks PR D.
-- [ ] **PR D — `feat(browser)`: `nativeTree()` producer.** **In review: [#210](https://github.com/real-a11y/real-a11y-dev/pull/210)**
+- [x] **PR D — `feat(browser)`: `nativeTree()` producer.** **Merged: [#210](https://github.com/real-a11y/real-a11y-dev/pull/210)**
       Graduates the spike: batched enrichment (R3, one `DOM.getDocument` walk),
       **in-page-safe redaction (R1 — ship gate): allowlist attributes, never
       read `.value`, drop AX `value`**, `source` stamp. Read-only (no
