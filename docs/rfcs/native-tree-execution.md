@@ -17,11 +17,14 @@ description tracks the same list at a glance.
 
 ### Phase 1 — foundations (critical path: C → D → E/F)
 
-- [ ] **PR A — `fix(serialize)`: feature-detect `Element`.** Plain-Node
+- [x] **PR A — `fix(serialize)`: feature-detect `Element`.** Plain-Node
       consumers can serialize an `ExtractionResult` (spike §2 found
       `instanceof Element` throws when the global is undefined). Size S,
-      no dependencies.
+      no dependencies. **Merged: [#204](https://github.com/real-a11y/real-a11y-dev/pull/204).**
 - [ ] **PR B — `feat(core)`: shared native-AX vocabulary module (R4).**
+      **In review: [#205](https://github.com/real-a11y/real-a11y-dev/pull/205)**
+      — consolidation surfaced a real drift bug (spike normalizers ordered
+      siblings by flat-list position; document order lives in `childIds`).
       Consolidates the four drifting normalizer copies (browser `nativeAX()`,
       native-tree spike, desktop spike, extension spike). Pure — tested
       against recorded `getFullAXTree` JSON fixtures, no browser in the loop.
