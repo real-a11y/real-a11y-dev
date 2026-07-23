@@ -10,14 +10,16 @@ import { DesktopNavigatorSession, startPanelServer } from "./session.js";
 
 describe("desktop navigator spike", () => {
   let session: DesktopNavigatorSession;
-  let server: { port: number; close: () => Promise<void> };
+  let server: { port: number; token: string; close: () => Promise<void> };
   let base: string;
+  let auth: { authorization: string };
 
   beforeAll(async () => {
     session = new DesktopNavigatorSession();
     await session.start();
     server = await startPanelServer(session);
     base = `http://127.0.0.1:${server.port}`;
+    auth = { authorization: `Bearer ${server.token}` };
   }, 60_000);
 
   afterAll(async () => {
@@ -26,14 +28,29 @@ describe("desktop navigator spike", () => {
   });
 
   it("exposes a tree-only panel (no page preview) over HTTP", async () => {
-    const html = await (await fetch(`${base}/`)).text();
+    const html = await (await fetch(`${base}/?token=${server.token}`)).text();
     expect(html).toMatch(/Semantic Navigator/);
     expect(html).toMatch(/Curtain ON/);
     expect(html).not.toMatch(/iframe|webview|page preview/i);
   });
 
+  it("refuses unauthenticated access (R6: loopback bind alone is not auth)", async () => {
+    expect((await fetch(`${base}/`)).status).toBe(403);
+    expect((await fetch(`${base}/api/tree`)).status).toBe(401);
+    const click = await fetch(`${base}/api/click`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ backendDOMNodeId: 1 }),
+    });
+    expect(click.status).toBe(401);
+    // …and the tab is provably undriven: the checkout state is untouched.
+    expect(await session.giftChecked()).toBe(false);
+  });
+
   it("native CDP tree includes checkout controls", async () => {
-    const { nodes } = (await (await fetch(`${base}/api/tree`)).json()) as {
+    const { nodes } = (await (
+      await fetch(`${base}/api/tree`, { headers: auth })
+    ).json()) as {
       nodes: Array<{ role: string; name: string }>;
     };
     const label = (n: { role: string; name: string }) =>
@@ -45,7 +62,9 @@ describe("desktop navigator spike", () => {
   });
 
   it("auditor completes checkout through the tree without seeing the page", async () => {
-    const { nodes } = (await (await fetch(`${base}/api/tree`)).json()) as {
+    const { nodes } = (await (
+      await fetch(`${base}/api/tree`, { headers: auth })
+    ).json()) as {
       nodes: Array<{
         role: string;
         name: string;
@@ -67,7 +86,7 @@ describe("desktop navigator spike", () => {
     const afterGift = await (
       await fetch(`${base}/api/click`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...auth },
         body: JSON.stringify({ backendDOMNodeId: gift!.backendDOMNodeId }),
       })
     ).json();
@@ -77,7 +96,7 @@ describe("desktop navigator spike", () => {
     const afterPay = await (
       await fetch(`${base}/api/click`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...auth },
         body: JSON.stringify({ backendDOMNodeId: pay!.backendDOMNodeId }),
       })
     ).json();

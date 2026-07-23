@@ -15,6 +15,7 @@
  *   pnpm --filter @real-a11y-dev/browser run test:spike:desktop
  */
 
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import {
   createServer,
@@ -215,17 +216,36 @@ function readBody(req: IncomingMessage): Promise<string> {
   });
 }
 
-/** Local panel server — the only UI the auditor sees. */
+/**
+ * Local panel server — the only UI the auditor sees.
+ *
+ * Auth (R6 / panel protocol v0 invariant): loopback bind is NOT enough —
+ * any local process, or a page doing DNS-rebinding-style requests to
+ * localhost, could otherwise drive the audited (possibly authenticated)
+ * browser through /api/click. A per-session bearer token is minted at start:
+ * the panel page is served only with `?token=…` (the URL the operator is
+ * handed), and every /api call must carry `authorization: Bearer …`.
+ */
 export async function startPanelServer(
   session: DesktopNavigatorSession,
   port = 0,
-): Promise<{ port: number; close: () => Promise<void> }> {
+): Promise<{ port: number; token: string; close: () => Promise<void> }> {
+  const token = randomUUID();
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
     try {
       if (url.pathname === "/" || url.pathname === "/panel") {
+        if (url.searchParams.get("token") !== token) {
+          res.writeHead(403);
+          res.end("forbidden");
+          return;
+        }
         res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
         res.end(panelHtml);
+        return;
+      }
+      if (req.headers.authorization !== `Bearer ${token}`) {
+        json(res, { ok: false, error: "unauthorized" }, 401);
         return;
       }
       if (url.pathname === "/api/tree" && req.method === "GET") {
@@ -265,6 +285,7 @@ export async function startPanelServer(
   }
   return {
     port: address.port,
+    token,
     close: () =>
       new Promise((resolve, reject) =>
         server.close((err) => (err ? reject(err) : resolve())),

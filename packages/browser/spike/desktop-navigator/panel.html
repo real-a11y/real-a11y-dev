@@ -163,8 +163,13 @@
         }
       }
 
+      // Per-session bearer token, delivered in the panel URL the operator
+      // was handed (the panel page itself is served only with a valid token).
+      const TOKEN = new URLSearchParams(location.search).get("token");
+      const AUTH = { authorization: `Bearer ${TOKEN}` };
+
       async function refresh() {
-        const res = await fetch("/api/tree");
+        const res = await fetch("/api/tree", { headers: AUTH });
         const data = await res.json();
         nodes = data.nodes;
         render();
@@ -180,7 +185,7 @@
         log(`Activating ${n.role}${n.name ? ` "${n.name}"` : ""}…`);
         const res = await fetch("/api/click", {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: { "content-type": "application/json", ...AUTH },
           body: JSON.stringify({ backendDOMNodeId: n.backendDOMNodeId }),
         });
         const data = await res.json();

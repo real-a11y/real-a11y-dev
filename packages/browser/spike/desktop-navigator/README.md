@@ -55,4 +55,4 @@ pnpm --filter @real-a11y-dev/browser build   # if needed
 pnpm --filter @real-a11y-dev/browser run test:spike:desktop
 ```
 
-To open the panel in a real browser while the hidden page runs, add a tiny `run.mts` later that prints `http://127.0.0.1:<port>/` after `startPanelServer`.
+To open the panel in a real browser while the hidden page runs, add a tiny `run.mts` later that prints `http://127.0.0.1:<port>/?token=<token>` after `startPanelServer` — the server mints a per-session bearer token (R6): the panel page requires it in the URL, `/api/*` requires it as an `authorization` header, and unauthenticated requests get 403/401.
