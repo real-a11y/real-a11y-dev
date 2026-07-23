@@ -1,4 +1,4 @@
-import type { SemanticNode, DomSemanticNode } from "@real-a11y-dev/core";
+import type { SemanticNode } from "@real-a11y-dev/core";
 import { useCallback } from "preact/hooks";
 
 interface UseTreeKeyboardOptions {
@@ -39,8 +39,7 @@ export function useTreeKeyboard({
       const currentIndex = visibleNodeIds.indexOf(selectedId);
       if (currentIndex === -1) return;
 
-      // Panel-only: every node has all facets.
-      const node = nodes.get(selectedId) as DomSemanticNode | undefined;
+      const node = nodes.get(selectedId);
       if (!node) return;
 
       switch (e.key) {
@@ -65,7 +64,7 @@ export function useTreeKeyboard({
         case "ArrowRight": {
           e.preventDefault();
           if (node.childIds.length > 0) {
-            if (!node.ui.expanded) {
+            if (!node.ui?.expanded) {
               onToggle(selectedId);
             } else {
               // Move to first child
@@ -82,7 +81,7 @@ export function useTreeKeyboard({
 
         case "ArrowLeft": {
           e.preventDefault();
-          if (node.ui.expanded && node.childIds.length > 0) {
+          if (node.ui?.expanded && node.childIds.length > 0) {
             onToggle(selectedId);
           } else if (node.parentId) {
             onSelect(node.parentId);
@@ -127,13 +126,11 @@ export function useTreeKeyboard({
             const parent = nodes.get(node.parentId);
             if (parent) {
               for (const siblingId of parent.childIds) {
-                const sibling = nodes.get(siblingId) as
-                  | DomSemanticNode
-                  | undefined;
+                const sibling = nodes.get(siblingId);
                 if (
                   sibling &&
                   sibling.childIds.length > 0 &&
-                  !sibling.ui.expanded
+                  !sibling.ui?.expanded
                 ) {
                   onToggle(siblingId);
                 }
