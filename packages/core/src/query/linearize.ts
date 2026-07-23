@@ -35,7 +35,7 @@ export function linearize(
   const visit = (id: string) => {
     const node = nodes.get(id);
     if (!node) return;
-    const skipHidden = !includeHidden && node.dom.isHidden;
+    const skipHidden = !includeHidden && node.dom?.isHidden === true;
     const skipAT = !includeNotExposed && !node.a11y.isExposedToAT;
     if (!skipHidden && !skipAT) out.push(node);
     for (const childId of node.childIds) visit(childId);

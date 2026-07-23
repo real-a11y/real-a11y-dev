@@ -62,14 +62,54 @@ export interface NodeUIState {
   selected: boolean;
 }
 
-/** The fundamental node in both tree views */
+/** Which producer built a tree — DOM walk (core) or native CDP tree (browser). */
+export type TreeProducerKind = "dom" | "native";
+
+/**
+ * Provenance of an extracted tree, stamped once per {@link ExtractionResult}
+ * (not per node). Serializers/snapshots render it into their header so a
+ * DOM-produced baseline and a native-produced one are never silently compared.
+ */
+export interface TreeSource {
+  producer: TreeProducerKind;
+  /** Chromium milestone the tree was read from, when `producer === "native"`. */
+  chrome?: string;
+}
+
+/**
+ * The fundamental node in both tree views.
+ *
+ * `a11y` is the product and is always present. `dom`, `interaction`, and `ui`
+ * are **optional facets**: the DOM producer (this package's extractors) fills
+ * all of them, but a native producer (`@real-a11y-dev/browser`, over CDP) has
+ * no light-DOM element to attach `dom`/`interaction` to for UA-internal nodes,
+ * and `ui` is panel-only. Consumers that only ever run the DOM producer
+ * (jsdom tests, the in-page panel, the extension content script) may treat
+ * these as present; anything that could receive a native tree must guard.
+ */
 export interface SemanticNode {
   id: string;
   parentId: string | null;
   childIds: string[];
   depth: number;
-  dom: DomInfo;
   a11y: A11yInfo;
+  /** Present for the DOM producer; absent for native nodes with no backing DOM. */
+  dom?: DomInfo;
+  /** Present when a backend can target this node; absent for read-only native nodes. */
+  interaction?: InteractionInfo;
+  /** Panel-only view state; never serialized, absent outside the tree UI. */
+  ui?: NodeUIState;
+}
+
+/**
+ * A {@link SemanticNode} with every facet guaranteed present — what the DOM
+ * producer always emits. Surfaces that only ever render DOM-produced trees
+ * (the in-page tree panel, the extension content script) can narrow to this
+ * once at their boundary and then read `dom` / `interaction` / `ui` without
+ * per-site guards. A native (CDP) producer never yields these.
+ */
+export interface DomSemanticNode extends SemanticNode {
+  dom: DomInfo;
   interaction: InteractionInfo;
   ui: NodeUIState;
 }
@@ -85,6 +125,8 @@ export interface ExtractionResult {
    * extracted subtree. Serializers render it as a trailing `[focused]` marker.
    */
   focusedId?: string;
+  /** Which producer built this tree — stamped into snapshot/baseline headers. */
+  source: TreeSource;
 }
 
 /** Request to perform an action on a node */

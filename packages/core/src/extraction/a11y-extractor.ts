@@ -21,7 +21,7 @@ function keepNode(node: SemanticNode, rootId: string): boolean {
   // implicit role per spec (presenting it as decorative would lose
   // keyboard access), so we keep interactive presentational elements.
   if (node.a11y.role === "presentation") {
-    return node.interaction.isInteractive;
+    return node.interaction!.isInteractive;
   }
 
   // Keep nodes with meaningful roles (not generic)
@@ -31,7 +31,7 @@ function keepNode(node: SemanticNode, rootId: string): boolean {
   if (node.a11y.name) return true;
 
   // Keep generic nodes that are interactive
-  if (node.interaction.isInteractive) return true;
+  if (node.interaction!.isInteractive) return true;
 
   // Keep the root
   if (node.id === rootId) return true;
@@ -51,7 +51,7 @@ function hasInteractiveDescendant(
 ): boolean {
   const n = domNodes.get(nodeId);
   if (!n) return false;
-  if (n.interaction.isInteractive) return true;
+  if (n.interaction!.isInteractive) return true;
   for (const childId of n.childIds) {
     if (hasInteractiveDescendant(childId, domNodes)) return true;
   }
@@ -74,7 +74,7 @@ function processNode(
 
   // legend/summary: drop element AND all children — text is captured as the
   // fieldset/details accessible name.
-  if (SUPPRESS_WITH_CHILDREN.has(node.dom.tagName)) return [];
+  if (SUPPRESS_WITH_CHILDREN.has(node.dom!.tagName)) return [];
 
   // label: suppress the label node itself but promote its children.
   // For wrapping labels (<label>Text<input /></label>), the form control
@@ -86,7 +86,7 @@ function processNode(
   // would otherwise surface as a standalone `generic "Email"` node —
   // redundant with the control's computed accessible name, and not what
   // a screen reader announces.
-  if (node.dom.tagName === "label") {
+  if (node.dom!.tagName === "label") {
     const promotedIds: string[] = [];
     for (const childId of node.childIds) {
       if (!hasInteractiveDescendant(childId, domNodes)) continue;
@@ -111,7 +111,7 @@ function processNode(
       childIds: [],
       depth,
       ui: {
-        ...node.ui,
+        ...node.ui!,
         expanded: depth < 3,
       },
     };
@@ -174,6 +174,7 @@ export function buildA11yTree(
     nodes: a11yNodes,
     rootId,
     ...(a11yFocusedId ? { focusedId: a11yFocusedId } : {}),
+    source: { producer: "dom" },
   };
 }
 

@@ -1,4 +1,4 @@
-import type { SemanticNode } from "@real-a11y-dev/core";
+import type { SemanticNode, DomSemanticNode } from "@real-a11y-dev/core";
 import { getTabSequence, getPrimaryAction } from "@real-a11y-dev/core";
 import {
   useMemo,
@@ -8,7 +8,7 @@ import {
   useEffect,
 } from "preact/hooks";
 
-function tabindexOf(node: SemanticNode): number | null {
+function tabindexOf(node: DomSemanticNode): number | null {
   const raw = node.dom.attributes?.tabindex;
   if (raw === undefined) return null;
   const n = Number(raw);
@@ -34,7 +34,8 @@ export function TabSequenceView({
   const listRef = useRef<HTMLDivElement>(null);
 
   const items = useMemo(() => {
-    const seq = getTabSequence({ nodes, rootId });
+    // The panel only renders DOM-produced trees, so every node has all facets.
+    const seq = getTabSequence({ nodes, rootId }) as DomSemanticNode[];
     if (!query.trim()) return seq;
     const lq = query.toLowerCase();
     return seq.filter((node) => {

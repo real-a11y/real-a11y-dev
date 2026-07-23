@@ -172,12 +172,17 @@ export function collectFindings(
     for (const node of linearize(tree)) {
       if (!INTERACTIVE_ROLES.has(node.a11y.role)) continue;
       if (node.a11y.name.trim().length > 0) continue;
+      // `dom` is absent on native-produced trees; the finding degrades to
+      // role-only wording rather than printing `<undefined>` (RFC v3 R5).
+      const tag = node.dom?.tagName;
       findings.push({
         rule: "no-unlabeled-interactive",
         severity: "error",
         role: node.a11y.role,
-        tagName: node.dom.tagName,
-        message: `Unlabeled interactive element: ${node.a11y.role} <${node.dom.tagName}>`,
+        ...(tag ? { tagName: tag } : {}),
+        message: tag
+          ? `Unlabeled interactive element: ${node.a11y.role} <${tag}>`
+          : `Unlabeled interactive element: ${node.a11y.role}`,
         ...locate(node.id),
       });
     }
@@ -189,12 +194,15 @@ export function collectFindings(
       if (node.a11y.name.trim().length > 0) continue;
       // Decorative images (alt="") map to role presentation and never reach the
       // a11y tree, so an img-role node with no name is a genuine missing name.
+      const tag = node.dom?.tagName;
       findings.push({
         rule: "image-alt",
         severity: "warning",
         role: "img",
-        tagName: node.dom.tagName,
-        message: `Image has no accessible name: <${node.dom.tagName}> — add alt text, or mark it decorative with alt="".`,
+        ...(tag ? { tagName: tag } : {}),
+        message: tag
+          ? `Image has no accessible name: <${tag}> — add alt text, or mark it decorative with alt="".`
+          : `Image has no accessible name — add alt text, or mark it decorative with alt="".`,
         ...locate(node.id),
       });
     }
@@ -245,7 +253,7 @@ export function collectFindings(
         rule: "dialog-labeled",
         severity: "error",
         role: d.a11y.role,
-        tagName: d.dom.tagName,
+        ...(d.dom?.tagName ? { tagName: d.dom.tagName } : {}),
         message: `Dialog (role ${d.a11y.role}) has no accessible name.`,
         ...locate(d.id),
       });

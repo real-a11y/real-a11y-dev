@@ -18,7 +18,7 @@ function makeNode(overrides: {
   tagName?: string;
   textContent?: string;
   level?: string;
-  actions?: SemanticNode["interaction"]["actions"];
+  actions?: NonNullable<SemanticNode["interaction"]>["actions"];
 }): SemanticNode {
   return {
     id: overrides.id,

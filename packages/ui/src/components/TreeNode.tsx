@@ -1,6 +1,6 @@
 import type {
   ActionType,
-  SemanticNode,
+  DomSemanticNode,
   TreeViewMode,
 } from "@real-a11y-dev/core";
 import { getPrimaryAction, ACTION_LABELS } from "@real-a11y-dev/core";
@@ -12,7 +12,7 @@ import { treeRowDomId, useInstanceId } from "../hooks/useInstanceId.js";
 import type { ControlsLink } from "./TreePanel.js";
 
 interface TreeNodeProps {
-  node: SemanticNode;
+  node: DomSemanticNode;
   viewMode: TreeViewMode;
   isSelected: boolean;
   /**
@@ -74,7 +74,7 @@ interface TreeNodeProps {
   idPrefix?: string;
 }
 
-function renderDomLabel(node: SemanticNode) {
+function renderDomLabel(node: DomSemanticNode) {
   const { tagName, attributes, textContent } = node.dom;
   const displayAttrs: Array<{ key: string; val: string }> = [];
 
@@ -110,7 +110,7 @@ function renderDomLabel(node: SemanticNode) {
   );
 }
 
-function renderA11yLabel(node: SemanticNode) {
+function renderA11yLabel(node: DomSemanticNode) {
   const { role, name } = node.a11y;
   const level = node.a11y.properties["level"];
   // Show a muted preview of descendant text only when the element is a
@@ -138,7 +138,7 @@ function renderA11yLabel(node: SemanticNode) {
   );
 }
 
-function renderBadges(node: SemanticNode) {
+function renderBadges(node: DomSemanticNode) {
   const badges: Array<{ label: string; className: string }> = [];
 
   if (node.interaction.isInteractive) {

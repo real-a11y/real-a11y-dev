@@ -1,4 +1,4 @@
-import type { SemanticNode } from "@real-a11y-dev/core";
+import type { SemanticNode, DomSemanticNode } from "@real-a11y-dev/core";
 import { getTabSequence, getPrimaryAction } from "@real-a11y-dev/core";
 import {
   useMemo,
@@ -19,7 +19,7 @@ interface TabSequenceViewProps {
   onHover: (nodeId: string | null) => void;
 }
 
-function tabindexOf(node: SemanticNode): number | null {
+function tabindexOf(node: DomSemanticNode): number | null {
   const raw = node.dom.attributes?.tabindex;
   if (raw === undefined) return null;
   const n = Number(raw);
@@ -38,9 +38,10 @@ export function TabSequenceView({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
-  // Full tab sequence, then optionally filtered by search query
+  // Full tab sequence, then optionally filtered by search query. The panel
+  // only renders DOM-produced trees, so every sequenced node has all facets.
   const items = useMemo(() => {
-    const seq = getTabSequence({ nodes, rootId });
+    const seq = getTabSequence({ nodes, rootId }) as DomSemanticNode[];
     if (!query.trim()) return seq;
     const lq = query.toLowerCase();
     return seq.filter((node) => {

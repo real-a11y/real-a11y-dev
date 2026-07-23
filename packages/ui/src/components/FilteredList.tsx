@@ -1,4 +1,8 @@
-import type { SemanticNode, RoleFilter } from "@real-a11y-dev/core";
+import type {
+  SemanticNode,
+  DomSemanticNode,
+  RoleFilter,
+} from "@real-a11y-dev/core";
 import { ROLE_FILTER_GROUPS, getPrimaryAction } from "@real-a11y-dev/core";
 import {
   useMemo,
@@ -32,6 +36,10 @@ export function FilteredList({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
+  // The panel only renders DOM-produced trees, so every node carries all
+  // facets. Narrow once here so the list logic reads dom/interaction freely.
+  const domNodes = nodes as Map<string, DomSemanticNode>;
+
   const isHeading = roleFilter === "heading";
 
   // Direct matches only — no ancestor walking
@@ -39,10 +47,10 @@ export function FilteredList({
     const roles = ROLE_FILTER_GROUPS[roleFilter];
     if (!roles) return [];
 
-    const result: SemanticNode[] = [];
+    const result: DomSemanticNode[] = [];
     const lowerQuery = query.toLowerCase();
 
-    for (const node of nodes.values()) {
+    for (const node of domNodes.values()) {
       if (!roles.includes(node.a11y.role)) continue;
       if (lowerQuery) {
         const name = (node.a11y.name || "").toLowerCase();

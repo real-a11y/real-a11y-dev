@@ -9,6 +9,7 @@
  */
 import type {
   SemanticNode,
+  ExtractionResult,
   TreeViewMode,
   ActionType,
 } from "@real-a11y-dev/core";
@@ -30,13 +31,12 @@ declare const __SN_STYLES__: string;
 
 // ── Deserialization ───────────────────────────────────────────────────────────
 
-function deserializeTree(serializable: SerializableTree): {
-  nodes: Map<string, SemanticNode>;
-  rootId: string;
-} {
+function deserializeTree(serializable: SerializableTree): ExtractionResult {
   return {
     nodes: new Map(serializable.nodes),
     rootId: serializable.rootId,
+    // The addon only ever shows DOM-produced trees.
+    source: { producer: "dom" },
   };
 }
 

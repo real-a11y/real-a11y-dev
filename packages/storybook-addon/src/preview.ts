@@ -15,7 +15,7 @@ import {
   ActionDispatcher,
   getElementRefs,
 } from "@real-a11y-dev/core";
-import type { TreeChange } from "@real-a11y-dev/core";
+import type { TreeChange, DomSemanticNode } from "@real-a11y-dev/core";
 import { addons } from "@storybook/preview-api";
 
 import {
@@ -85,8 +85,9 @@ function liveExtractorMode(mode: TreeMode): "dom" | "a11y" {
 function buildSerializableTree(change?: TreeChange): SerializableTree {
   const result = liveExtractor!.refresh(change);
 
-  // Reset ui state so the manager always starts fresh (expanded, visible, etc.)
-  for (const node of result.nodes.values()) {
+  // Reset ui state so the manager always starts fresh (expanded, visible, etc.).
+  // LiveTreeExtractor is the DOM producer, so every node has a `ui` facet.
+  for (const node of result.nodes.values() as IterableIterator<DomSemanticNode>) {
     node.ui.expanded = true;
     node.ui.highlighted = false;
     node.ui.matchesFilter = true;

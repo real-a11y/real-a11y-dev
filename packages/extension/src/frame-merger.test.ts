@@ -341,9 +341,9 @@ describe("mergeFrameTrees", () => {
     });
 
     // c-root sits at merged depth 2 → expanded.
-    expect(result!.nodes.get("f5-c-root")!.ui.expanded).toBe(true);
+    expect(result!.nodes.get("f5-c-root")!.ui!.expanded).toBe(true);
     // c-deep sits at merged depth 4 → collapsed.
-    expect(result!.nodes.get("f5-c-deep")!.ui.expanded).toBe(false);
+    expect(result!.nodes.get("f5-c-deep")!.ui!.expanded).toBe(false);
   });
 });
 

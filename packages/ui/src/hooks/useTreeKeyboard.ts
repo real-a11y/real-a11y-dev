@@ -1,4 +1,4 @@
-import type { SemanticNode } from "@real-a11y-dev/core";
+import type { SemanticNode, DomSemanticNode } from "@real-a11y-dev/core";
 import { useCallback } from "preact/hooks";
 
 interface UseTreeKeyboardOptions {
@@ -39,7 +39,8 @@ export function useTreeKeyboard({
       const currentIndex = visibleNodeIds.indexOf(selectedId);
       if (currentIndex === -1) return;
 
-      const node = nodes.get(selectedId);
+      // Panel-only: every node has all facets.
+      const node = nodes.get(selectedId) as DomSemanticNode | undefined;
       if (!node) return;
 
       switch (e.key) {
@@ -126,7 +127,9 @@ export function useTreeKeyboard({
             const parent = nodes.get(node.parentId);
             if (parent) {
               for (const siblingId of parent.childIds) {
-                const sibling = nodes.get(siblingId);
+                const sibling = nodes.get(siblingId) as
+                  | DomSemanticNode
+                  | undefined;
                 if (
                   sibling &&
                   sibling.childIds.length > 0 &&
