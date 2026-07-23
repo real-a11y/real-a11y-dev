@@ -189,12 +189,15 @@
           body: JSON.stringify({ backendDOMNodeId: n.backendDOMNodeId }),
         });
         const data = await res.json();
-        nodes = data.nodes;
-        render();
+        // Check for failure BEFORE touching `nodes` — an error response carries
+        // no node list, so reassigning + rendering first would make render()
+        // iterate `undefined` and throw, wedging the panel.
         if (!data.ok) {
           log(`Failed: ${data.error}`);
           return;
         }
+        nodes = data.nodes;
+        render();
         log(
           `Activated ${n.role}${n.name ? ` "${n.name}"` : ""}.\n` +
             `Page status (hidden): ${data.status || "(empty)"}\n` +
