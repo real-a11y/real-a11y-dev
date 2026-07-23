@@ -101,7 +101,7 @@ Follows the [WAI-ARIA TreeView pattern](https://www.w3.org/WAI/ARIA/apg/patterns
 - Enter to activate
 - Space to toggle expand/collapse
 - Home/End to jump
-- Type-ahead — printable characters move selection to a visible row whose accessible name starts with the typed buffer (multi-character within 500ms keeps a still-matching selection; repeating the same letter cycles matches). The same type-ahead applies to the filtered-role and tab-sequence listboxes.
+- Type-ahead — printable characters move selection to a visible row whose accessible name starts with the typed buffer (multi-character within 500ms keeps a still-matching selection; repeating the same letter cycles matches). `/` focuses the search input instead. The same type-ahead applies to the filtered-role and tab-sequence listboxes.
 
 ## Styling
 

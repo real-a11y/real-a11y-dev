@@ -38,10 +38,12 @@ function Harness({
   nodes,
   visibleNodeIds,
   onSelect,
+  onFocusSearch,
 }: {
   nodes: Map<string, SemanticNode>;
   visibleNodeIds: string[];
   onSelect: (id: string) => void;
+  onFocusSearch?: () => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(
     visibleNodeIds[0] ?? null,
@@ -56,6 +58,7 @@ function Harness({
     },
     onToggle: () => {},
     onActivate: () => {},
+    onFocusSearch,
   });
   return (
     <div
@@ -123,7 +126,7 @@ describe("useTreeKeyboard type-ahead", () => {
     vi.useRealTimers();
   });
 
-  function mount() {
+  function mount(onFocusSearch?: () => void) {
     const nodes = new Map<string, SemanticNode>([
       ["a", makeNode("a", "Apple")],
       ["b", makeNode("b", "Banana")],
@@ -137,6 +140,7 @@ describe("useTreeKeyboard type-ahead", () => {
           nodes={nodes}
           visibleNodeIds={visibleNodeIds}
           onSelect={(id) => selected.push(id)}
+          onFocusSearch={onFocusSearch}
         />,
         container,
       );
@@ -196,5 +200,14 @@ describe("useTreeKeyboard type-ahead", () => {
     // (not continuing a prior multi-char buffer).
     press(tree, "b");
     expect(tree.getAttribute("data-selected")).toBe("d");
+  });
+
+  it("focuses search on `/` instead of type-ahead", () => {
+    const focusSearch = vi.fn();
+    const tree = mount(focusSearch);
+    press(tree, "/");
+    expect(focusSearch).toHaveBeenCalledTimes(1);
+    expect(tree.getAttribute("data-selected")).toBe("a");
+    expect(selected).toEqual([]);
   });
 });

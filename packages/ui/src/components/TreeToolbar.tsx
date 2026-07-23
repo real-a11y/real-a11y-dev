@@ -1,5 +1,6 @@
 import type { TreeViewMode, RoleFilter } from "@real-a11y-dev/core";
 import { ROLE_FILTER_LABELS } from "@real-a11y-dev/core";
+import type { Ref } from "preact";
 
 interface TreeToolbarProps {
   viewMode: TreeViewMode;
@@ -23,6 +24,8 @@ interface TreeToolbarProps {
   diffActive?: boolean;
   /** Called when the user clicks the checkpoint button (capture / clear). */
   onToggleDiff?: () => void;
+  /** Ref to the search input — used by the `/` keyboard shortcut. */
+  searchInputRef?: Ref<HTMLInputElement>;
 }
 
 export function TreeToolbar({
@@ -41,6 +44,7 @@ export function TreeToolbar({
   enableDiff = false,
   diffActive = false,
   onToggleDiff,
+  searchInputRef,
 }: TreeToolbarProps) {
   return (
     <>
@@ -88,6 +92,7 @@ export function TreeToolbar({
 
         {/* Search */}
         <input
+          ref={searchInputRef}
           class="sn-search"
           type="search"
           placeholder="Search nodes..."

@@ -27,6 +27,8 @@ interface FilteredListProps {
   onHighlight: (nodeId: string) => void;
   onActivate: (nodeId: string) => void;
   onGoToTree: (nodeId: string) => void;
+  /** Focus the panel search input when `/` is pressed. */
+  onFocusSearch?: () => void;
 }
 
 export function FilteredList({
@@ -36,6 +38,7 @@ export function FilteredList({
   onHighlight,
   onActivate,
   onGoToTree,
+  onFocusSearch,
 }: FilteredListProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
@@ -66,9 +69,10 @@ export function FilteredList({
     return result;
   }, [nodes, roleFilter, query]);
 
-  // Reset selection when the filter criteria change (not when nodes refresh)
+  // Reset selection and type-ahead when the filter criteria change (not when nodes refresh)
   useEffect(() => {
     setSelectedIndex(0);
+    typeAhead.current.clear();
   }, [roleFilter, query]);
 
   const selectedNode = matches[selectedIndex] ?? null;
@@ -130,6 +134,13 @@ export function FilteredList({
           }
           break;
         }
+        case "/": {
+          if (!onFocusSearch || e.ctrlKey || e.altKey || e.metaKey) break;
+          e.preventDefault();
+          typeAhead.current.clear();
+          onFocusSearch();
+          break;
+        }
         default: {
           if (!isTypeAheadKey(e) || matches.length === 0) break;
           e.preventDefault();
@@ -152,6 +163,7 @@ export function FilteredList({
       onHighlight,
       onActivate,
       onGoToTree,
+      onFocusSearch,
     ],
   );
 

@@ -209,7 +209,12 @@ export function TreePanel({
   const forceRender = useCallback(() => setRenderCount((c) => c + 1), []);
 
   const treeRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const { query, matchCount, updateQuery, updateMatchCount } = useSearch();
+
+  const focusSearch = useCallback(() => {
+    searchInputRef.current?.focus();
+  }, []);
 
   // aria-controls cross-link index (trigger ↔ controlled element). Used to
   // render clickable jump chips on disclosure pairs (button ↔ menu, tab ↔
@@ -443,6 +448,7 @@ export function TreePanel({
     onSelect: handleSelect,
     onToggle: handleToggle,
     onActivate: handleActivate,
+    onFocusSearch: focusSearch,
   });
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -478,6 +484,7 @@ export function TreePanel({
         enableDiff={enableDiff}
         diffActive={diffActive}
         onToggleDiff={onToggleDiff}
+        searchInputRef={searchInputRef}
       />
       <div
         ref={isTreeBranch ? containerRef : undefined}
@@ -492,6 +499,7 @@ export function TreePanel({
             onSelect={handleSelect}
             onActivate={handleActivate}
             onHover={handleHover}
+            onFocusSearch={focusSearch}
           />
         ) : roleFilter ? (
           <FilteredList
@@ -500,6 +508,7 @@ export function TreePanel({
             query={query}
             onSelect={handleSelect}
             onActivate={handleActivate}
+            onFocusSearch={focusSearch}
           />
         ) : (
           <div

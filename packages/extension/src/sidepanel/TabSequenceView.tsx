@@ -26,6 +26,8 @@ interface TabSequenceViewProps {
   query: string;
   onHighlight: (nodeId: string) => void;
   onActivate: (nodeId: string) => void;
+  /** Focus the panel search input when `/` is pressed. */
+  onFocusSearch?: () => void;
 }
 
 export function TabSequenceView({
@@ -34,6 +36,7 @@ export function TabSequenceView({
   query,
   onHighlight,
   onActivate,
+  onFocusSearch,
 }: TabSequenceViewProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
@@ -60,6 +63,7 @@ export function TabSequenceView({
 
   useEffect(() => {
     setSelectedIndex(0);
+    typeAhead.current.clear();
   }, [query]);
 
   const selectedNode = items[selectedIndex] ?? null;
@@ -114,6 +118,13 @@ export function TabSequenceView({
           }
           break;
         }
+        case "/": {
+          if (!onFocusSearch || e.ctrlKey || e.altKey || e.metaKey) break;
+          e.preventDefault();
+          typeAhead.current.clear();
+          onFocusSearch();
+          break;
+        }
         default: {
           if (!isTypeAheadKey(e) || items.length === 0) break;
           e.preventDefault();
@@ -128,7 +139,14 @@ export function TabSequenceView({
         }
       }
     },
-    [items, selectedIndex, selectedNode, onHighlight, onActivate],
+    [
+      items,
+      selectedIndex,
+      selectedNode,
+      onHighlight,
+      onActivate,
+      onFocusSearch,
+    ],
   );
 
   return (

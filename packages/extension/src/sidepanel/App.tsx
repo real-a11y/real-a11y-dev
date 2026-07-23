@@ -132,8 +132,13 @@ export function App() {
   const announcementId = useRef(0);
 
   const treeRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const exportRef = useRef<HTMLDivElement>(null);
   const { query, matchCount, updateQuery, updateMatchCount } = useSearch();
+
+  const focusSearch = useCallback(() => {
+    searchInputRef.current?.focus();
+  }, []);
 
   // aria-controls cross-link index (trigger ↔ controlled element). Used to
   // render clickable jump chips on disclosure pairs (button ↔ menu, tab ↔
@@ -893,6 +898,7 @@ export function App() {
     onSelect: handleSelect,
     onToggle: handleToggle,
     onActivate: handleActivate,
+    onFocusSearch: focusSearch,
   });
 
   // Scroll the selected tree item into view whenever the selection changes
@@ -1053,6 +1059,7 @@ export function App() {
       {/* Toolbar */}
       <div class="sn-toolbar" role="toolbar" aria-label="Tree controls">
         <input
+          ref={searchInputRef}
           class="sn-search"
           type="search"
           placeholder="Search nodes..."
@@ -1301,6 +1308,7 @@ export function App() {
           query={query}
           onHighlight={handleSelect}
           onActivate={handleActivate}
+          onFocusSearch={focusSearch}
         />
       ) : roleFilter ? (
         /* ---- Filtered list view ---- */
@@ -1311,6 +1319,7 @@ export function App() {
           onHighlight={handleSelect}
           onActivate={handleActivate}
           onGoToTree={handleGoToTree}
+          onFocusSearch={focusSearch}
         />
       ) : (
         /* ---- Tree view ---- */

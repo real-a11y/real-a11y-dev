@@ -22,6 +22,8 @@ interface TabSequenceViewProps {
   onSelect: (nodeId: string) => void;
   onActivate: (nodeId: string) => void;
   onHover: (nodeId: string | null) => void;
+  /** Focus the panel search input when `/` is pressed. */
+  onFocusSearch?: () => void;
 }
 
 function tabindexOf(node: DomSemanticNode): number | null {
@@ -38,6 +40,7 @@ export function TabSequenceView({
   onSelect,
   onActivate,
   onHover,
+  onFocusSearch,
 }: TabSequenceViewProps) {
   const instanceId = useInstanceId("ts");
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -64,9 +67,10 @@ export function TabSequenceView({
     });
   }, [nodes, rootId, query]);
 
-  // Reset selection when query changes
+  // Reset selection and type-ahead when query changes
   useEffect(() => {
     setSelectedIndex(0);
+    typeAhead.current.clear();
   }, [query]);
 
   const selectedNode = items[selectedIndex] ?? null;
@@ -122,6 +126,13 @@ export function TabSequenceView({
           }
           break;
         }
+        case "/": {
+          if (!onFocusSearch || e.ctrlKey || e.altKey || e.metaKey) break;
+          e.preventDefault();
+          typeAhead.current.clear();
+          onFocusSearch();
+          break;
+        }
         default: {
           if (!isTypeAheadKey(e) || items.length === 0) break;
           e.preventDefault();
@@ -136,7 +147,7 @@ export function TabSequenceView({
         }
       }
     },
-    [items, selectedIndex, selectedNode, onSelect, onActivate],
+    [items, selectedIndex, selectedNode, onSelect, onActivate, onFocusSearch],
   );
 
   return (

@@ -14,6 +14,8 @@ interface UseTreeKeyboardOptions {
   onSelect: (id: string) => void;
   onToggle: (id: string) => void;
   onActivate: (id: string) => void;
+  /** Focus the panel search input when `/` is pressed (panel-features keymap). */
+  onFocusSearch?: () => void;
 }
 
 /** Label used for type-ahead — accessible name, else text, else role. */
@@ -36,11 +38,25 @@ export function useTreeKeyboard({
   onSelect,
   onToggle,
   onActivate,
+  onFocusSearch,
 }: UseTreeKeyboardOptions) {
   const typeAhead = useRef(createTypeAheadBuffer());
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
+      if (
+        e.key === "/" &&
+        onFocusSearch &&
+        !e.ctrlKey &&
+        !e.altKey &&
+        !e.metaKey
+      ) {
+        e.preventDefault();
+        typeAhead.current.clear();
+        onFocusSearch();
+        return;
+      }
+
       if (visibleNodeIds.length === 0) return;
 
       const tryTypeAhead = (currentIndex: number) => {
@@ -182,7 +198,15 @@ export function useTreeKeyboard({
         }
       }
     },
-    [nodes, visibleNodeIds, selectedId, onSelect, onToggle, onActivate],
+    [
+      nodes,
+      visibleNodeIds,
+      selectedId,
+      onSelect,
+      onToggle,
+      onActivate,
+      onFocusSearch,
+    ],
   );
 
   return { handleKeyDown };

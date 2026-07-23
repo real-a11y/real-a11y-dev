@@ -79,8 +79,9 @@ describe("isTypeAheadKey", () => {
     expect(isTypeAheadKey(key({ key: "a" }))).toBe(true);
   });
 
-  it("rejects Space, modifiers, and multi-char keys", () => {
+  it("rejects Space, slash, modifiers, and multi-char keys", () => {
     expect(isTypeAheadKey(key({ key: " " }))).toBe(false);
+    expect(isTypeAheadKey(key({ key: "/" }))).toBe(false);
     expect(isTypeAheadKey(key({ key: "a", ctrlKey: true }))).toBe(false);
     expect(isTypeAheadKey(key({ key: "ArrowDown" }))).toBe(false);
   });

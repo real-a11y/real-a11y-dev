@@ -2,11 +2,14 @@
  * APG-style first-character / multi-character type-ahead for composite widgets
  * (tree, listbox). See https://www.w3.org/WAI/ARIA/apg/patterns/treeview/
  *
- * Typing printable characters moves selection to the next item whose label
- * starts with the typed buffer. Keys pressed within {@link TYPE_AHEAD_TIMEOUT_MS}
- * append to the buffer; after the timeout the buffer resets. Repeating the
- * same character cycles through matches for that character (so `b` `b` visits
- * every item starting with "b", not items starting with "bb").
+ * Typing printable characters moves selection to an item whose label starts
+ * with the typed buffer (multi-character prefixes keep a still-matching
+ * selection). Keys pressed within {@link TYPE_AHEAD_TIMEOUT_MS} append to the
+ * buffer; after the timeout the buffer resets. Repeating the same character
+ * cycles through matches for that character (so `b` `b` visits every item
+ * starting with "b", not items starting with "bb").
+ *
+ * `/` is reserved for focusing the panel search input and is never type-ahead.
  *
  * @internal Shared with the Chrome extension's forked listboxes. Not part of
  * the versioned public API — see docs/STABILITY.md.
@@ -60,7 +63,9 @@ export function isTypeAheadKey(e: KeyboardEvent): boolean {
     !e.altKey &&
     !e.metaKey &&
     // Space is reserved for toggle/activate in tree/listbox patterns.
-    e.key !== " "
+    e.key !== " " &&
+    // `/` focuses the panel search input (see panel-features keyboard table).
+    e.key !== "/"
   );
 }
 
