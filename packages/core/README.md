@@ -134,7 +134,7 @@ re-parented to the nearest kept ancestor, and each kept node carries its
 
 ## Data model
 
-Every node in both the DOM and accessibility trees uses the `SemanticNode` interface:
+Every node in both the DOM and accessibility trees uses the `SemanticNode` interface. It is **accessibility-first**: `a11y` is always present, while `dom`, `interaction`, and `ui` are **optional facets**.
 
 ```ts
 interface SemanticNode {
@@ -142,12 +142,23 @@ interface SemanticNode {
   parentId: string | null;
   childIds: string[];
   depth: number;
-  dom: { tagName, attributes, textContent, descendantText, isHidden };
   a11y: { role, name, description, states, properties, isExposedToAT };
-  interaction: { isInteractive, actions, isFocusable, isEditable };
-  ui: { expanded, highlighted, matchesFilter, selected };
+  dom?: { tagName, attributes, textContent, descendantText, isHidden };
+  interaction?: { isInteractive, actions, isFocusable, isEditable };
+  ui?: { expanded, highlighted, matchesFilter, selected };
 }
 ```
+
+The DOM producer (`extractDomTree` / `extractA11yTree` / `LiveTreeExtractor`) fills **every** facet, so trees you get from this package have them all. The facets are optional because a future native (CDP) producer yields nodes with no backing light-DOM element — `dom` / `interaction` are absent there, and `ui` is panel-only. If you only ever handle DOM-produced trees, narrow once to `DomSemanticNode` (all facets required) at your boundary instead of guarding each read:
+
+```ts
+import type { DomSemanticNode } from "@real-a11y-dev/core";
+
+const node = tree.nodes.get(id) as DomSemanticNode | undefined;
+node?.dom.tagName; // no per-field guard needed
+```
+
+Each `ExtractionResult` also carries a `source: { producer: "dom" | "native"; chrome? }` provenance stamp, so serializers and snapshots can label their output and never silently compare a DOM baseline against a native one.
 
 ## License
 

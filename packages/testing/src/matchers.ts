@@ -25,7 +25,7 @@ import {
   assertLandmarkStructure,
   A11yAssertionError,
 } from "@real-a11y-dev/audit";
-import type { SemanticNode } from "@real-a11y-dev/core";
+import type { ExtractionResult } from "@real-a11y-dev/core";
 import { getTabSequence } from "@real-a11y-dev/core";
 import {
   extract,
@@ -46,7 +46,8 @@ import {
   type A11ySnapshotBox,
 } from "./snapshot-box.js";
 
-type Tree = { nodes: Map<string, SemanticNode>; rootId: string };
+// A pre-extracted tree carries its producer provenance (`source`).
+type Tree = ExtractionResult;
 
 // Both Jest and Vitest accept this shape back from a matcher.
 interface MatcherResult {

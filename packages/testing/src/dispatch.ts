@@ -25,7 +25,7 @@ export async function dispatch(
   const refs = getElementRefs();
   const dispatcher = new ActionDispatcher(refs);
 
-  const chosen = action ?? getPrimaryAction(node.interaction.actions);
+  const chosen = action ?? getPrimaryAction(node.interaction?.actions ?? []);
   if (!chosen) {
     return {
       success: false,

@@ -3,6 +3,8 @@
 import type {
   ActionType,
   SemanticNode,
+  DomSemanticNode,
+  ExtractionResult,
   TreeViewMode,
   RoleFilter,
   ActionRequest,
@@ -86,8 +88,17 @@ const TAG_DISPLAY_OVERRIDES: Record<string, string> = {
   picture: "picture",
 };
 
+/**
+ * The panel only ever renders DOM-produced trees, so every node carries all
+ * facets. Narrow a looked-up node to {@link DomSemanticNode} at read sites that
+ * need `dom` / `interaction` / `ui` (the `nodes` Map itself stays
+ * `SemanticNode`-typed so it can still be passed to core helpers).
+ */
+const asDom = (n: SemanticNode | undefined): DomSemanticNode | undefined =>
+  n as DomSemanticNode | undefined;
+
 /** Return the role label to display for a node in A11Y view */
-function getDisplayRole(node: SemanticNode): string {
+function getDisplayRole(node: DomSemanticNode): string {
   const override = TAG_DISPLAY_OVERRIDES[node.dom.tagName];
   if (override) return override;
   return node.a11y.role;
@@ -150,10 +161,10 @@ export function App() {
     (targetId: string) => {
       // Expand every collapsed ancestor so the target is in `visibleNodeIds`
       // before we try to scroll to it.
-      let cur: SemanticNode | undefined = nodes.get(targetId);
+      let cur: DomSemanticNode | undefined = asDom(nodes.get(targetId));
       let mutated = false;
       while (cur && cur.parentId) {
-        const parent = nodes.get(cur.parentId);
+        const parent = asDom(nodes.get(cur.parentId));
         if (parent && !parent.ui.expanded) {
           parent.ui.expanded = true;
           mutated = true;
@@ -287,8 +298,10 @@ export function App() {
 
         // Preserve user's expand/collapse state from previous tree
         setNodes((prev) => {
-          for (const [id, node] of nodeMap) {
-            const prevNode = prev.get(id);
+          for (const [id, node] of nodeMap.entries() as IterableIterator<
+            [string, DomSemanticNode]
+          >) {
+            const prevNode = asDom(prev.get(id));
             if (prevNode) {
               node.ui.expanded = prevNode.ui.expanded;
               node.ui.selected = prevNode.ui.selected;
@@ -323,9 +336,9 @@ export function App() {
 
         // Expand ancestors so the node is visible
         setNodes((prev) => {
-          let current = prev.get(nodeId);
+          let current = asDom(prev.get(nodeId));
           while (current?.parentId) {
-            const parent = prev.get(current.parentId);
+            const parent = asDom(prev.get(current.parentId));
             if (parent && !parent.ui.expanded) {
               parent.ui.expanded = true;
             }
@@ -348,9 +361,9 @@ export function App() {
         setSelectedId(nodeId);
         setPickModeOn(false);
         setNodes((prev) => {
-          let current = prev.get(nodeId);
+          let current = asDom(prev.get(nodeId));
           while (current?.parentId) {
-            const parent = prev.get(current.parentId);
+            const parent = asDom(prev.get(current.parentId));
             if (parent && !parent.ui.expanded) {
               parent.ui.expanded = true;
             }
@@ -420,13 +433,13 @@ export function App() {
     const ids: string[] = [];
     const positions = new Map<string, { posinset: number; setsize: number }>();
     function walkVisible(nodeId: string, posinset: number, setsize: number) {
-      const node = nodes.get(nodeId);
+      const node = asDom(nodes.get(nodeId));
       if (!node || !node.ui.matchesFilter) return;
       ids.push(nodeId);
       positions.set(nodeId, { posinset, setsize });
       if (node.ui.expanded) {
         const visibleChildren = node.childIds.filter(
-          (childId) => nodes.get(childId)?.ui.matchesFilter,
+          (childId) => asDom(nodes.get(childId))?.ui.matchesFilter,
         );
         visibleChildren.forEach((childId, i) => {
           walkVisible(childId, i + 1, visibleChildren.length);
@@ -473,7 +486,7 @@ export function App() {
 
   const handleToggle = useCallback(
     (id: string) => {
-      const node = nodes.get(id);
+      const node = asDom(nodes.get(id));
       if (node) {
         node.ui.expanded = !node.ui.expanded;
         forceRender((n) => n + 1);
@@ -489,9 +502,9 @@ export function App() {
       setSelectedId(id);
       // Expand ancestors so the node is visible in the tree
       setNodes((prev) => {
-        let current = prev.get(id);
+        let current = asDom(prev.get(id));
         while (current?.parentId) {
-          const parent = prev.get(current.parentId);
+          const parent = asDom(prev.get(current.parentId));
           if (parent && !parent.ui.expanded) {
             parent.ui.expanded = true;
           }
@@ -519,7 +532,7 @@ export function App() {
 
   const handleActivate = useCallback(
     (id: string, explicitAction?: ActionType) => {
-      const node = nodes.get(id);
+      const node = asDom(nodes.get(id));
       if (!node) return;
 
       // The slider/spinbutton ▼/▲ pair passes its own action so each
@@ -737,14 +750,14 @@ export function App() {
   );
 
   const handleExpandAll = useCallback(() => {
-    for (const node of nodes.values()) {
+    for (const node of nodes.values() as IterableIterator<DomSemanticNode>) {
       if (node.childIds.length > 0) node.ui.expanded = true;
     }
     forceRender((n) => n + 1);
   }, [nodes]);
 
   const handleCollapseAll = useCallback(() => {
-    for (const node of nodes.values()) {
+    for (const node of nodes.values() as IterableIterator<DomSemanticNode>) {
       if (node.depth > 0) node.ui.expanded = false;
     }
     forceRender((n) => n + 1);
@@ -753,7 +766,7 @@ export function App() {
   const handleScopeToNode = useCallback(
     (id: string | null) => {
       if (id) {
-        const node = nodes.get(id);
+        const node = asDom(nodes.get(id));
         if (node) node.ui.expanded = true;
       }
       setScopedRootId(id);
@@ -804,7 +817,14 @@ export function App() {
         setTimeout(() => setLastAction(null), 2000);
         return;
       }
-      const tree = { nodes, rootId: exportRootId };
+      // The panel renders the extension's own DOM-producer tree, so stamp the
+      // export with that provenance (the panel keeps nodes in a bare Map rather
+      // than a full ExtractionResult).
+      const tree: ExtractionResult = {
+        nodes,
+        rootId: exportRootId,
+        source: { producer: "dom" },
+      };
 
       // A scoped subtree serializes at its absolute depth; de-indent so the
       // scope root sits at column 0 in the report.
@@ -984,14 +1004,16 @@ export function App() {
   // Build scope breadcrumb path
   const scopeBreadcrumb: Array<{ id: string; label: string }> = [];
   if (scopedRootId) {
-    let current: SemanticNode | undefined = nodes.get(scopedRootId);
+    let current: DomSemanticNode | undefined = asDom(nodes.get(scopedRootId));
     while (current) {
       const lbl =
         viewMode === "a11y"
           ? `${getDisplayRole(current)}${current.a11y.name ? ` "${current.a11y.name}"` : ""}`
           : `<${current.dom.tagName}>`;
       scopeBreadcrumb.unshift({ id: current.id, label: lbl });
-      current = current.parentId ? nodes.get(current.parentId) : undefined;
+      current = current.parentId
+        ? asDom(nodes.get(current.parentId))
+        : undefined;
     }
   }
 
@@ -1322,7 +1344,7 @@ export function App() {
               }}
             >
               {visibleNodeIds.slice(startIndex, endIndex).map((id) => {
-                const node = nodes.get(id);
+                const node = asDom(nodes.get(id));
                 if (!node) return null;
 
                 const hasChildren = node.childIds.length > 0;
@@ -1560,7 +1582,7 @@ export function App() {
                           })()}
                           {/* Forward cross-links (aria-controls or heuristic): jump to controlled element(s) */}
                           {controlsIndex.forward.get(id)?.map((targetId) => {
-                            const target = nodes.get(targetId);
+                            const target = asDom(nodes.get(targetId));
                             if (!target) return null;
                             const role = getDisplayRole(target);
                             const name = target.a11y.name;
@@ -1589,7 +1611,7 @@ export function App() {
                           })}
                           {/* Reverse cross-links: jump back to the trigger(s) controlling this element */}
                           {controlsIndex.reverse.get(id)?.map((triggerId) => {
-                            const trigger = nodes.get(triggerId);
+                            const trigger = asDom(nodes.get(triggerId));
                             if (!trigger) return null;
                             const role = getDisplayRole(trigger);
                             const name = trigger.a11y.name;

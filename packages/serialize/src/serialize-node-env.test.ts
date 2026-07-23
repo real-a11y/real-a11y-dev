@@ -87,7 +87,11 @@ function tree(): ExtractionResult {
       focusable: true,
     }),
   ];
-  return { nodes: new Map(nodes.map((n) => [n.id, n])), rootId: "root" };
+  return {
+    nodes: new Map(nodes.map((n) => [n.id, n])),
+    rootId: "root",
+    source: { producer: "dom" },
+  };
 }
 
 describe("serializers in a DOM-less runtime (no Element global)", () => {

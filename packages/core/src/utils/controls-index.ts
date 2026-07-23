@@ -55,7 +55,7 @@ export function buildControlsIndex(
 ): ControlsIndex {
   const domIdToTreeId = new Map<string, string>();
   for (const [treeId, node] of nodes) {
-    const domId = node.dom.attributes["id"];
+    const domId = node.dom?.attributes["id"];
     if (domId) domIdToTreeId.set(domId, treeId);
   }
 
@@ -63,7 +63,7 @@ export function buildControlsIndex(
   const reverse = new Map<string, string[]>();
 
   for (const [triggerTreeId, node] of nodes) {
-    const raw = node.dom.attributes["aria-controls"];
+    const raw = node.dom?.attributes["aria-controls"];
     if (!raw) continue;
 
     const controlledTreeIds: string[] = [];
@@ -121,8 +121,8 @@ function applyHaspopupHeuristic(
   const triggers: Array<{ treeId: string; targetRole: string }> = [];
   for (const [treeId, node] of nodes) {
     if (forward.has(treeId)) continue; // aria-controls already linked it
-    if (node.dom.attributes["aria-expanded"] !== "true") continue;
-    const haspopup = node.dom.attributes["aria-haspopup"];
+    if (node.dom?.attributes["aria-expanded"] !== "true") continue;
+    const haspopup = node.dom?.attributes["aria-haspopup"];
     if (!haspopup) continue;
     const targetRole = HASPOPUP_TO_ROLE[haspopup];
     if (!targetRole) continue;
@@ -135,7 +135,7 @@ function applyHaspopupHeuristic(
   const candidatesByRole = new Map<string, string[]>();
   for (const [treeId, node] of nodes) {
     if (reverse.has(treeId)) continue;
-    if (node.dom.isHidden) continue;
+    if (node.dom?.isHidden) continue;
     const arr = candidatesByRole.get(node.a11y.role) ?? [];
     arr.push(treeId);
     candidatesByRole.set(node.a11y.role, arr);

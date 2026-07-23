@@ -80,7 +80,7 @@ function matchesNode(
   // Always search role
   if (node.a11y.role.toLowerCase().includes(query)) return true;
 
-  if (viewMode === "dom") {
+  if (viewMode === "dom" && node.dom) {
     // Search tag name
     if (node.dom.tagName.toLowerCase().includes(query)) return true;
 
@@ -132,9 +132,10 @@ export function applySearchFilter(
   const hasRoleFilter = roleFilter !== null;
 
   if (!hasQuery && !hasRoleFilter) {
-    // No filters active — all nodes match
+    // No filters active — all nodes match. `ui` is panel-only; a tree without
+    // it (native, off-panel) simply has nothing to flag.
     for (const node of nodes.values()) {
-      node.ui.matchesFilter = true;
+      if (node.ui) node.ui.matchesFilter = true;
     }
     return 0;
   }
@@ -164,7 +165,7 @@ export function applySearchFilter(
   for (const [id, node] of nodes) {
     const matchesSearch = searchMatchedIds ? searchMatchedIds.has(id) : true;
     const matchesRole = hasRoleFilter ? roleMatchedIds.has(id) : true;
-    node.ui.matchesFilter = matchesSearch && matchesRole;
+    if (node.ui) node.ui.matchesFilter = matchesSearch && matchesRole;
   }
 
   // Count direct matches (nodes that match both filters directly, not ancestors)

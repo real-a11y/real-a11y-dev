@@ -1397,7 +1397,7 @@ function walk(
   // in a real browser tree (Chromium's Video/Audio children are closed
   // UA-shadow controls we cannot reach). The captions signal from <track>
   // is hoisted onto the media node's `captions` property in buildNode.
-  if (MEDIA_TAGS.has(node.dom.tagName)) return id;
+  if (MEDIA_TAGS.has(node.dom!.tagName)) return id;
 
   // Walk children. Each child is isolated by buildNode's own boundary, so a
   // single pathological descendant can't take out its siblings or ancestors.
@@ -1481,5 +1481,10 @@ export function extractDomTree(
   const focusedId = includeFocused
     ? focusedNodeId(effectiveRoot, nodes)
     : undefined;
-  return { nodes, rootId: rootId || "", ...(focusedId ? { focusedId } : {}) };
+  return {
+    nodes,
+    rootId: rootId || "",
+    ...(focusedId ? { focusedId } : {}),
+    source: { producer: "dom" },
+  };
 }

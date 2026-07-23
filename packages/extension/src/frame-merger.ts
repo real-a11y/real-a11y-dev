@@ -122,8 +122,8 @@ export function mergeFrameTrees(opts: {
     let iframeDepth = 0;
 
     for (const [nodeId, node] of parentTree.nodes) {
-      if (node.dom.tagName === "iframe") {
-        const src = node.dom.attributes.src || "";
+      if (node.dom!.tagName === "iframe") {
+        const src = node.dom!.attributes.src || "";
         if (urlsMatch(src, childTree.frameUrl, parentFrameUrl)) {
           iframeNodeId = prefixNodeId(parentFrameId, nodeId);
           const parentNode = nodes.get(iframeNodeId);
@@ -137,7 +137,7 @@ export function mergeFrameTrees(opts: {
     // <iframe> in the parent. Beats dropping the subframe entirely.
     if (!iframeNodeId && frameInfo) {
       for (const [nodeId, node] of parentTree.nodes) {
-        if (node.dom.tagName === "iframe") {
+        if (node.dom!.tagName === "iframe") {
           const prefId = prefixNodeId(parentFrameId, nodeId);
           const parentNode = nodes.get(prefId);
           if (parentNode && parentNode.childIds.length === 0) {
@@ -166,7 +166,7 @@ export function mergeFrameTrees(opts: {
             : null,
         childIds: node.childIds.map((cid) => prefixNodeId(prefix, cid)),
         depth: node.depth + depthOffset,
-        ui: { ...node.ui, expanded: node.depth + depthOffset < 3 },
+        ui: { ...node.ui!, expanded: node.depth + depthOffset < 3 },
       };
 
       nodes.set(prefId, adjustedNode);

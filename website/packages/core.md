@@ -41,10 +41,13 @@ Extracts the accessibility tree from a DOM element.
 import { extractA11yTree } from "@real-a11y-dev/core";
 
 const tree = extractA11yTree(document.getElementById("app"));
-// tree: { nodes: Map<string, SemanticNode>; rootId: string; focusedId?: string }
+// tree: { nodes: Map<string, SemanticNode>; rootId: string;
+//         focusedId?: string; source: { producer: "dom" } }
 ```
 
 Resolves ARIA roles, computes accessible names via the full ANDC algorithm, detects hidden subtrees, and maps interaction capabilities.
+
+Each node is **accessibility-first**: `a11y` is always present, while `dom`, `interaction`, and `ui` are **optional facets**. The DOM producer here fills all of them, so trees from this package have every facet — but the type is optional because a future native (CDP) producer yields nodes with no backing light-DOM element. If you only handle DOM-produced trees, narrow once to `DomSemanticNode` (all facets required) at your boundary rather than guarding each `node.dom.*` / `node.interaction.*` / `node.ui.*` read. The `source` on every `ExtractionResult` records which producer built it (`"dom"` here), so serializers and snapshots never silently compare a DOM tree against a native one.
 
 Media elements mirror the browser's native accessibility tree: `<video>` and `<audio>` get the `video` / `audio` roles Chromium shows in DevTools (ARIA defines no media roles, so a strict HTML-AAM mapping would hide them as `generic`). Media nodes are leaves — unrendered fallback content and `<track>`/`<source>` metadata never become tree nodes — and each carries a `properties.captions` flag (`"true"` / `"false"`) telling you whether the element ships a captions or subtitles track (the WCAG 1.2.2 signal). A media element with native `controls` is reported focusable; its play/seek/volume buttons live in a closed user-agent shadow root that no in-page extractor can reach.
 
@@ -343,6 +346,9 @@ vocabulary updates) are attributable.
 ```ts
 import type {
   SemanticNode,
+  DomSemanticNode,
+  TreeSource,
+  TreeProducerKind,
   ExtractionResult,
   SemanticNavigatorConfig,
   FindByRoleOptions,

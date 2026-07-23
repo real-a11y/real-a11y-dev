@@ -331,6 +331,7 @@ export class LiveTreeExtractor {
       nodes,
       rootId: this.rootId,
       ...(this.focusedId ? { focusedId: this.focusedId } : {}),
+      source: { producer: "dom" },
     };
   }
 
@@ -545,7 +546,7 @@ export class LiveTreeExtractor {
     while (el) {
       const id = getNodeId(el);
       const node = this.domNodes.get(id);
-      if (node) {
+      if (node?.dom) {
         node.dom.descendantText = getDescendantText(el);
       }
       if (el === this.root || el === this.effectiveRoot) break;

@@ -14,6 +14,7 @@
  */
 import type {
   SemanticNode,
+  DomSemanticNode,
   TreeViewMode,
   RoleFilter,
   ActionType,
@@ -59,6 +60,15 @@ interface VisiblePosition {
  * `aria-setsize` to perceive the full tree size and position — the plain
  * sibling inference of a fully-rendered `role="tree"` no longer holds.
  */
+/**
+ * The panel only ever renders DOM-produced trees, so every node carries all
+ * facets. Narrow a looked-up node to {@link DomSemanticNode} at read sites
+ * that need `dom` / `interaction` / `ui` (the `nodes` Map itself stays
+ * `SemanticNode`-typed so it can still be passed to core helpers).
+ */
+const asDom = (n: SemanticNode | undefined): DomSemanticNode | undefined =>
+  n as DomSemanticNode | undefined;
+
 function getVisibleNodeIds(
   nodes: Map<string, SemanticNode>,
   rootId: string,
@@ -66,13 +76,13 @@ function getVisibleNodeIds(
   const ids: string[] = [];
   const positions = new Map<string, VisiblePosition>();
   function walk(id: string, posinset: number, setsize: number) {
-    const node = nodes.get(id);
+    const node = asDom(nodes.get(id));
     if (!node || !node.ui.matchesFilter) return;
     ids.push(id);
     positions.set(id, { posinset, setsize });
     if (node.ui.expanded) {
       const visibleChildren = node.childIds.filter(
-        (childId) => nodes.get(childId)?.ui.matchesFilter,
+        (childId) => asDom(nodes.get(childId))?.ui.matchesFilter,
       );
       visibleChildren.forEach((childId, i) => {
         walk(childId, i + 1, visibleChildren.length);
@@ -290,10 +300,10 @@ export function TreePanel({
       onPickedNodeHandled?.();
       return;
     }
-    let cur: SemanticNode | undefined = node;
+    let cur: DomSemanticNode | undefined = asDom(node);
     let mutated = false;
     while (cur?.parentId) {
-      const parent = treeData.nodes.get(cur.parentId);
+      const parent = asDom(treeData.nodes.get(cur.parentId));
       if (parent && !parent.ui.expanded) {
         parent.ui.expanded = true;
         mutated = true;
@@ -337,7 +347,7 @@ export function TreePanel({
 
   const handleToggle = useCallback(
     (id: string) => {
-      const node = treeData.nodes.get(id);
+      const node = asDom(treeData.nodes.get(id));
       if (node) {
         node.ui.expanded = !node.ui.expanded;
         forceRender();
@@ -355,7 +365,7 @@ export function TreePanel({
       // pick the primary so the existing single-action ergonomics
       // continue to work.
       const action =
-        explicitAction ?? getPrimaryAction(node.interaction.actions);
+        explicitAction ?? getPrimaryAction(node.interaction!.actions);
       if (!action) {
         // No action available — toggle expand/collapse instead.
         if (node.childIds.length > 0) handleToggle(id);
@@ -370,10 +380,12 @@ export function TreePanel({
     (targetId: string) => {
       // Expand every collapsed ancestor so the target is in `visibleNodeIds`
       // before we try to scroll to it.
-      let cur: SemanticNode | undefined = treeData.nodes.get(targetId);
+      let cur: DomSemanticNode | undefined = asDom(
+        treeData.nodes.get(targetId),
+      );
       let mutated = false;
       while (cur && cur.parentId) {
-        const parent = treeData.nodes.get(cur.parentId);
+        const parent = asDom(treeData.nodes.get(cur.parentId));
         if (parent && !parent.ui.expanded) {
           parent.ui.expanded = true;
           mutated = true;
@@ -411,14 +423,14 @@ export function TreePanel({
   );
 
   const handleExpandAll = useCallback(() => {
-    for (const node of treeData.nodes.values()) {
+    for (const node of treeData.nodes.values() as IterableIterator<DomSemanticNode>) {
       if (node.childIds.length > 0) node.ui.expanded = true;
     }
     forceRender();
   }, [treeData, forceRender]);
 
   const handleCollapseAll = useCallback(() => {
-    for (const node of treeData.nodes.values()) {
+    for (const node of treeData.nodes.values() as IterableIterator<DomSemanticNode>) {
       if (node.depth > 0) node.ui.expanded = false;
     }
     forceRender();
@@ -513,7 +525,7 @@ export function TreePanel({
             }}
           >
             {visibleNodeIds.slice(startIndex, endIndex).map((id) => {
-              const node = treeData.nodes.get(id);
+              const node = asDom(treeData.nodes.get(id));
               if (!node) return null;
               const forwardIds = controlsIndex.forward.get(id);
               const reverseIds = controlsIndex.reverse.get(id);

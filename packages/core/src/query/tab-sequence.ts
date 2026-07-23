@@ -8,7 +8,7 @@ import type { QueryInput } from "./types.js";
  * Returns `null` if unset / unparseable.
  */
 function tabindexOf(node: SemanticNode): number | null {
-  const raw = node.dom.attributes?.tabindex;
+  const raw = node.dom?.attributes?.tabindex;
   if (raw === undefined) return null;
   const n = Number(raw);
   return Number.isFinite(n) ? n : null;
@@ -37,7 +37,9 @@ export function getTabSequence(input: QueryInput): SemanticNode[] {
   let order = 0;
 
   for (const node of linearize(input)) {
-    if (!node.interaction.isFocusable) {
+    // A node with no `interaction` facet (native read-only) is not known
+    // focusable, so it doesn't enter the tab sequence.
+    if (!node.interaction?.isFocusable) {
       order++;
       continue;
     }

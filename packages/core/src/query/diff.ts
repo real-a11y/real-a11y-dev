@@ -30,14 +30,19 @@ function collectChanges(before: SemanticNode, after: SemanticNode): string[] {
   if (before.a11y.description !== after.a11y.description) {
     changes.push("a11y.description");
   }
-  if (before.dom.textContent !== after.dom.textContent) {
+  // Optional facets: two native nodes both lack `dom`/`interaction` (undefined
+  // on both sides → no change reported); a facet appearing/disappearing across
+  // producers reads as a change, which is the honest signal.
+  if (before.dom?.textContent !== after.dom?.textContent) {
     changes.push("dom.textContent");
   }
-  if (before.dom.isHidden !== after.dom.isHidden) changes.push("dom.isHidden");
+  if (before.dom?.isHidden !== after.dom?.isHidden) {
+    changes.push("dom.isHidden");
+  }
   if (before.a11y.isExposedToAT !== after.a11y.isExposedToAT) {
     changes.push("a11y.isExposedToAT");
   }
-  if (before.interaction.isFocusable !== after.interaction.isFocusable) {
+  if (before.interaction?.isFocusable !== after.interaction?.isFocusable) {
     changes.push("interaction.isFocusable");
   }
 

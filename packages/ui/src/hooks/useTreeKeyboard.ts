@@ -64,7 +64,7 @@ export function useTreeKeyboard({
         case "ArrowRight": {
           e.preventDefault();
           if (node.childIds.length > 0) {
-            if (!node.ui.expanded) {
+            if (!node.ui?.expanded) {
               onToggle(selectedId);
             } else {
               // Move to first child
@@ -81,7 +81,7 @@ export function useTreeKeyboard({
 
         case "ArrowLeft": {
           e.preventDefault();
-          if (node.ui.expanded && node.childIds.length > 0) {
+          if (node.ui?.expanded && node.childIds.length > 0) {
             onToggle(selectedId);
           } else if (node.parentId) {
             onSelect(node.parentId);
@@ -130,7 +130,7 @@ export function useTreeKeyboard({
                 if (
                   sibling &&
                   sibling.childIds.length > 0 &&
-                  !sibling.ui.expanded
+                  !sibling.ui?.expanded
                 ) {
                   onToggle(siblingId);
                 }
