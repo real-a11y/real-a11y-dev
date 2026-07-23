@@ -17,9 +17,10 @@ name: Docs preview
 # - `/preview` path loads this file from the default branch (issue_comment).
 # - Only OWNER / MEMBER / COLLABORATOR comments trigger a deploy.
 #
-# Concurrency is on the `build` job (not the workflow) so unrelated PR
-# comments — which still trigger a run that then skips every job — do not
-# cancel an in-progress /preview.
+# Concurrency is on the `build` and `deploy` jobs (not the workflow) so
+# unrelated PR comments — which still trigger a run that then skips every
+# job — do not cancel an in-progress /preview. Both jobs share one group so
+# a newer /preview cancels an older deploy still uploading to Cloudflare.
 
 on:
   issue_comment:
@@ -103,6 +104,12 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    # Same group as build: only real preview runs reach this job (needs:build
+    # + build's if), so skipped comment runs never take the lock — but a
+    # second /preview can cancel an older deploy still talking to Cloudflare.
+    concurrency:
+      group: docs-preview-pr-${{ github.event.issue.number || inputs.pr_number }}
+      cancel-in-progress: true
     # Fresh runner: no PR checkout. Write scopes only here (PR comment +
     # reactions on the triggering issue comment — reactions need issues:write).
     permissions:
