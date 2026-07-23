@@ -306,10 +306,18 @@ jobs:
               jq . <<<"$resp" >&2
               exit 1
             fi
+            # Match by branch (set via wrangler --branch=pr-N), our
+            # commit-message, or the stable branch alias URL. Direct Upload
+            # populates deployment_trigger.metadata.branch (type ad_hoc);
+            # the extras cover an empty/missing branch field.
             mapfile -t page_ids < <(
-              jq -r --arg b "$branch" '
+              jq -r --arg b "$branch" --arg msg "docs-preview-pr-${PR_NUMBER}" --arg alias "https://${branch}.${PROJECT}.pages.dev" '
                 .result[]
-                | select(.deployment_trigger.metadata.branch == $b)
+                | select(
+                    (.deployment_trigger.metadata.branch // "") == $b
+                    or (.deployment_trigger.metadata.commit_message // "") == $msg
+                    or ((.aliases // []) | index($alias) != null)
+                  )
                 | .id
               ' <<<"$resp"
             )
