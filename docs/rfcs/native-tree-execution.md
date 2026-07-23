@@ -49,7 +49,7 @@ description tracks the same list at a glance.
       by a test that builds the tree from a real recorded payload with real
       email/password secrets and asserts they appear nowhere in the output.
       Depends on B + C (both merged).
-- [ ] **PR E — `ci`: parity harness.** **In review: [#212](https://github.com/real-a11y/real-a11y-dev/pull/212)** — reproduces the spike's 88.7% overlap with the product producers; advisory CI step, 80% floor. Corpus job on pinned Chromium;
+- [x] **PR E — `ci`: parity harness.** **Merged: [#212](https://github.com/real-a11y/real-a11y-dev/pull/212)** — reproduces the spike's 88.7% overlap with the product producers; advisory CI step, 80% floor. Corpus job on pinned Chromium;
       non-blocking first, required once stable. Gate metric: role+name
       overlap ≥ 88.7% and never regresses. Corpus growth backlog: iframes,
       portals, virtualized lists, contenteditable. Depends on D.
