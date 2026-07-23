@@ -19,6 +19,21 @@ name: Docs preview
 #
 # Feedback: a parallel `ack` job reacts 👀 immediately (no checkout/secrets).
 # `notify-failure` comments if build fails. Deploy reacts 👍 on success.
+# `/preview` and workflow_dispatch only proceed when the PR is still open
+# (`resolve` checks first, with no concurrency lock; `build`/`deploy` only
+# run when open so a closed-PR `/preview` cannot cancel in-flight cleanup).
+# Deploy re-checks open immediately before the Cloudflare upload.
+#
+# Cleanup: when a PR is closed (merged or not), `cleanup` deletes every
+# Cloudflare Pages deployment on branch `pr-<number>` (including the stable
+# alias). Triggered via `pull_request_target` so fork PRs still receive
+# Cloudflare secrets (plain `pull_request` from forks does not). Safe: the
+# job never checks out PR code — only calls the Cloudflare API with
+# `github.event.pull_request.number` from the webhook payload. Shares the
+# per-PR concurrency group so an in-flight /preview is cancelled rather
+# than redeploying after the PR is gone. A second list/delete pass after a
+# short wait covers the race where cancel lands after wrangler already
+# created a deployment.
 #
 # Concurrency is on the `build` and `deploy` jobs (not the workflow) so
 # unrelated PR comments — which still trigger a run that then skips every
@@ -34,14 +49,17 @@ on:
         description: Pull request number to build and preview
         required: true
         type: string
+  # secrets available for fork PRs; cleanup never checks out PR code.
+  pull_request_target:
+    types: [closed]
 
 # Least privilege at the workflow level — escalate only on jobs that comment.
 permissions:
   contents: read
 
 jobs:
-  # Immediate 👀 so the requester knows /preview was accepted, while build
-  # (minutes) runs in parallel. No checkout, no secrets — write scopes only.
+  # Immediate 👀 so the requester knows /preview was accepted, while resolve
+  # + build run in parallel. No checkout, no secrets — write scopes only.
   ack:
     if: |
       github.event_name == 'issue_comment' &&
@@ -60,6 +78,22 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            if (pr.state !== 'open') {
+              // Closed PRs must not get a preview (cleanup already ran / would
+              // leave an orphan). Confused reaction instead of 👀.
+              await github.rest.reactions.createForIssueComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: context.payload.comment.id,
+                content: 'confused',
+              });
+              return;
+            }
             await github.rest.reactions.createForIssueComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -67,7 +101,9 @@ jobs:
               content: 'eyes',
             });
 
-  build:
+  # Cheap open-state check with NO concurrency group. Closed-PR /preview must
+  # not take the docs-preview-pr-N lock (that would cancel in-flight cleanup).
+  resolve:
     # `/preview` must be at the start of the comment so the bot reply
     # ("Comment `/preview` again…") cannot re-trigger. Bots are ignored.
     if: |
@@ -79,18 +115,14 @@ jobs:
         github.event.comment.author_association == 'MEMBER' ||
         github.event.comment.author_association == 'COLLABORATOR'))
     runs-on: ubuntu-latest
-    # Job-level: skipped runs (non-/preview comments) never take the lock.
-    concurrency:
-      group: docs-preview-pr-${{ github.event.issue.number || inputs.pr_number }}
-      cancel-in-progress: true
-    # Read-only: may checkout and execute PR head, but cannot write to the
-    # PR or touch secrets. Satisfies CodeQL's privileged-workflow gate.
     permissions:
       contents: read
       pull-requests: read
     outputs:
       number: ${{ steps.pr.outputs.number }}
       sha: ${{ steps.pr.outputs.sha }}
+      repo: ${{ steps.pr.outputs.repo }}
+      open: ${{ steps.pr.outputs.open }}
     steps:
       - name: Resolve PR head
         id: pr
@@ -101,14 +133,39 @@ jobs:
           set -euo pipefail
           pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
           echo "number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
+          state="$(jq -r .state <<<"$pr")"
+          if [ "$state" != "open" ]; then
+            echo "PR #${PR_NUMBER} is ${state}; skipping preview"
+            echo "open=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "open=true" >> "$GITHUB_OUTPUT"
           echo "sha=$(jq -r .head.sha <<<"$pr")" >> "$GITHUB_OUTPUT"
           echo "repo=$(jq -r .head.repo.full_name <<<"$pr")" >> "$GITHUB_OUTPUT"
 
+  build:
+    needs: resolve
+    if: needs.resolve.outputs.open == 'true'
+    runs-on: ubuntu-latest
+    # Only open-PR builds take this lock (resolve has none). Cancels an older
+    # /preview for the same PR; cleanup on close also joins this group.
+    concurrency:
+      group: docs-preview-pr-${{ needs.resolve.outputs.number }}
+      cancel-in-progress: true
+    # Read-only: may checkout and execute PR head, but cannot write to the
+    # PR or touch secrets. Satisfies CodeQL's privileged-workflow gate.
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      number: ${{ needs.resolve.outputs.number }}
+      sha: ${{ needs.resolve.outputs.sha }}
+    steps:
       - name: Checkout PR head
         uses: actions/checkout@v4
         with:
-          repository: ${{ steps.pr.outputs.repo }}
-          ref: ${{ steps.pr.outputs.sha }}
+          repository: ${{ needs.resolve.outputs.repo }}
+          ref: ${{ needs.resolve.outputs.sha }}
           persist-credentials: false
 
       - uses: pnpm/action-setup@v4
@@ -131,21 +188,24 @@ jobs:
           path: website/.vitepress/dist
           retention-days: 1
 
-  # Surface build failures — without this, a failed build is silent after 👀.
+  # Surface preview failures — without this, a failed resolve/build is silent
+  # after 👀. Skip only the deliberate closed-PR case (open == 'false'); an
+  # empty open (resolve itself failed) must still notify.
   notify-failure:
-    needs: build
+    needs: [resolve, build]
     if: |
       failure() &&
-      github.event_name == 'issue_comment'
+      github.event_name == 'issue_comment' &&
+      needs.resolve.outputs.open != 'false'
     runs-on: ubuntu-latest
     permissions:
       issues: write
       pull-requests: write
     steps:
-      - name: Comment that the preview build failed
+      - name: Comment that the preview failed
         uses: actions/github-script@v7
         env:
-          PR_NUMBER: ${{ github.event.issue.number }}
+          PR_NUMBER: ${{ needs.resolve.outputs.number || github.event.issue.number }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           script: |
@@ -156,7 +216,7 @@ jobs:
               body: [
                 `### Docs preview failed`,
                 ``,
-                `The site build failed, so nothing was deployed.`,
+                `The preview request failed, so nothing was deployed.`,
                 `Logs: ${process.env.RUN_URL}`,
               ].join('\n'),
             });
@@ -168,13 +228,12 @@ jobs:
             });
 
   deploy:
-    needs: build
+    needs: [resolve, build]
     runs-on: ubuntu-latest
-    # Same group as build: only real preview runs reach this job (needs:build
-    # + build's if), so skipped comment runs never take the lock — but a
-    # second /preview can cancel an older deploy still talking to Cloudflare.
+    # Same group as build: a second /preview can cancel an older deploy still
+    # talking to Cloudflare; cleanup on close cancels here too.
     concurrency:
-      group: docs-preview-pr-${{ github.event.issue.number || inputs.pr_number }}
+      group: docs-preview-pr-${{ needs.resolve.outputs.number }}
       cancel-in-progress: true
     # Fresh runner: no PR checkout. Write scopes only here (PR comment +
     # reactions on the triggering issue comment — reactions need issues:write).
@@ -183,7 +242,23 @@ jobs:
       pull-requests: write
       issues: write
     steps:
+      - name: Ensure PR is still open
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.resolve.outputs.number }}
+        run: |
+          set -euo pipefail
+          state="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq .state)"
+          if [ "$state" != "open" ]; then
+            echo "PR #${PR_NUMBER} is ${state}; skipping deploy so cleanup can own previews"
+            echo "open=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "open=true" >> "$GITHUB_OUTPUT"
+
       - name: Download site artifact
+        if: steps.gate.outputs.open == 'true'
         uses: actions/download-artifact@v4
         with:
           name: docs-preview-dist
@@ -191,6 +266,7 @@ jobs:
 
       - name: Deploy to Cloudflare Pages
         id: deploy
+        if: steps.gate.outputs.open == 'true'
         # Outputs used below: deployment-url, pages-deployment-alias-url
         # (documented on cloudflare/wrangler-action@v3; alias needs wrangler
         # >= 3.78). Fallback URL is constructed if either is empty.
@@ -205,17 +281,18 @@ jobs:
           command: >-
             pages deploy dist
             --project-name=real-a11y-docs-preview
-            --branch=pr-${{ needs.build.outputs.number }}
-            --commit-hash=${{ needs.build.outputs.sha }}
-            --commit-message=docs-preview-pr-${{ needs.build.outputs.number }}
+            --branch=pr-${{ needs.resolve.outputs.number }}
+            --commit-hash=${{ needs.resolve.outputs.sha }}
+            --commit-message=docs-preview-pr-${{ needs.resolve.outputs.number }}
 
       - name: Comment preview URL
+        if: steps.gate.outputs.open == 'true'
         uses: actions/github-script@v7
         env:
           ALIAS_URL: ${{ steps.deploy.outputs.pages-deployment-alias-url }}
           DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment-url }}
-          PR_SHA: ${{ needs.build.outputs.sha }}
-          PR_NUMBER: ${{ needs.build.outputs.number }}
+          PR_SHA: ${{ needs.resolve.outputs.sha }}
+          PR_NUMBER: ${{ needs.resolve.outputs.number }}
         with:
           script: |
             const alias = process.env.ALIAS_URL;
@@ -253,3 +330,151 @@ jobs:
                 content: '+1',
               });
             }
+
+  # Drop preview deployments when the PR is merged or otherwise closed.
+  # No checkout — Cloudflare REST API only. Paginate the list endpoint
+  # (wrangler `pages deployment list` returns a single page). Two passes
+  # (with a short wait) so a deploy that finishes just after cancel still
+  # gets deleted. Idempotent if nothing was ever deployed for this PR.
+  cleanup:
+    if: github.event_name == 'pull_request_target' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: docs-preview-pr-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Delete Cloudflare Pages deployments for this PR
+        id: delete
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PROJECT: real-a11y-docs-preview
+        run: |
+          set -euo pipefail
+          branch="pr-${PR_NUMBER}"
+          base="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PROJECT}/deployments"
+          msg="docs-preview-pr-${PR_NUMBER}"
+          alias="https://${branch}.${PROJECT}.pages.dev"
+
+          list_matching_ids() {
+            local ids=()
+            local page=1
+            local resp page_ids id count
+            # Paginate until a short/empty page. Do not rely on
+            # result_info.total_pages — some Cloudflare list responses omit it.
+            while true; do
+              resp="$(curl -fsS \
+                -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+                -H "Content-Type: application/json" \
+                "${base}?env=preview&page=${page}&per_page=25")"
+              if ! jq -e '.success == true' <<<"$resp" >/dev/null; then
+                echo "Cloudflare list failed:" >&2
+                jq . <<<"$resp" >&2
+                return 1
+              fi
+              count="$(jq '.result | length' <<<"$resp")"
+              # Match by branch (wrangler --branch=pr-N), our commit-message,
+              # or the stable branch alias URL.
+              mapfile -t page_ids < <(
+                jq -r --arg b "$branch" --arg msg "$msg" --arg alias "$alias" '
+                  .result[]
+                  | select(
+                      (.deployment_trigger.metadata.branch // "") == $b
+                      or (.deployment_trigger.metadata.commit_message // "") == $msg
+                      or ((.aliases // []) | index($alias) != null)
+                    )
+                  | .id
+                ' <<<"$resp"
+              )
+              for id in "${page_ids[@]}"; do
+                [ -n "$id" ] && ids+=("$id")
+              done
+              if [ "$count" -lt 25 ]; then
+                break
+              fi
+              page=$((page + 1))
+              if [ "$page" -gt 200 ]; then
+                echo "Refusing to paginate past 200 pages" >&2
+                return 1
+              fi
+            done
+            printf '%s\n' "${ids[@]+"${ids[@]}"}"
+          }
+
+          delete_ids() {
+            local id del
+            local -a ids=("$@")
+            for id in "${ids[@]}"; do
+              [ -n "$id" ] || continue
+              # force=true: required when the deployment still holds the pr-N alias.
+              del="$(curl -fsS -X DELETE \
+                -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+                -H "Content-Type: application/json" \
+                "${base}/${id}?force=true")"
+              if ! jq -e '.success == true' <<<"$del" >/dev/null; then
+                echo "Failed to delete deployment ${id}:" >&2
+                jq . <<<"$del" >&2
+                return 1
+              fi
+              echo "Deleted ${id}"
+            done
+          }
+
+          # Pass 1: delete what is already registered. Pass 2 (after a wait):
+          # catch a deploy that finished after cancel but before list ran.
+          # Write list output to a temp file (not process substitution) so a
+          # Cloudflare API failure propagates under set -e.
+          total_deleted=0
+          for pass in 1 2; do
+            if [ "$pass" -eq 2 ]; then
+              echo "Waiting 30s for any in-flight deploy to register…"
+              sleep 30
+            fi
+            list_file="$(mktemp)"
+            list_matching_ids > "$list_file"
+            mapfile -t ids < "$list_file"
+            rm -f "$list_file"
+            filtered=()
+            for id in "${ids[@]+"${ids[@]}"}"; do
+              [ -n "$id" ] && filtered+=("$id")
+            done
+            if [ "${#filtered[@]}" -eq 0 ]; then
+              echo "Pass ${pass}: no preview deployments for branch ${branch}"
+              continue
+            fi
+            echo "Pass ${pass}: deleting ${#filtered[@]} deployment(s) on ${branch}"
+            delete_ids "${filtered[@]}"
+            total_deleted=$((total_deleted + ${#filtered[@]}))
+          done
+
+          if [ "$total_deleted" -eq 0 ]; then
+            echo "No preview deployments for branch ${branch}"
+          fi
+          echo "deleted=${total_deleted}" >> "$GITHUB_OUTPUT"
+
+      - name: Comment that the preview was removed
+        if: steps.delete.outputs.deleted != '0'
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          DELETED: ${{ steps.delete.outputs.deleted }}
+          MERGED: ${{ github.event.pull_request.merged }}
+        with:
+          script: |
+            const n = process.env.DELETED;
+            const why = process.env.MERGED === 'true' ? 'merged' : 'closed';
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: Number(process.env.PR_NUMBER),
+              body: [
+                `### Docs preview removed`,
+                ``,
+                `Deleted ${n} Cloudflare Pages deployment(s) for \`pr-${process.env.PR_NUMBER}\` because this PR was ${why}.`,
+                `https://pr-${process.env.PR_NUMBER}.real-a11y-docs-preview.pages.dev is no longer served.`,
+              ].join('\n'),
+            });
