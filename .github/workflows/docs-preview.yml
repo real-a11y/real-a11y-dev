@@ -6,16 +6,20 @@ name: Docs preview
 # docs stay on GitHub Pages via docs.yml — this never touches real-a11y.dev.
 #
 # Manual trigger: Actions → "Docs preview" → Run workflow → enter a PR number
-# (useful before `/preview` exists on main, or to redeploy without a comment).
+# (only available after this workflow exists on the default branch).
 #
 # Security posture (CodeQL Actions / Untrusted Checkout TOCTOU):
 # - Workflow defaults to contents:read only. The build job that checks out and
 #   runs PR code never gets write scopes or Cloudflare secrets.
 # - Deploy runs on a fresh runner, downloads only the static dist artifact,
-#   then escalates pull-requests:write (to comment) + injects Cloudflare
+#   then escalates write scopes (to comment / react) + injects Cloudflare
 #   credentials. Secrets never share a workspace with PR install/build.
 # - `/preview` path loads this file from the default branch (issue_comment).
 # - Only OWNER / MEMBER / COLLABORATOR comments trigger a deploy.
+#
+# Concurrency is on the `build` job (not the workflow) so unrelated PR
+# comments — which still trigger a run that then skips every job — do not
+# cancel an in-progress /preview.
 
 on:
   issue_comment:
@@ -31,10 +35,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: docs-preview-pr-${{ github.event.issue.number || inputs.pr_number }}
-  cancel-in-progress: true
-
 jobs:
   build:
     # `/preview` must be at the start of the comment so the bot reply
@@ -48,6 +48,10 @@ jobs:
         github.event.comment.author_association == 'MEMBER' ||
         github.event.comment.author_association == 'COLLABORATOR'))
     runs-on: ubuntu-latest
+    # Job-level: skipped runs (non-/preview comments) never take the lock.
+    concurrency:
+      group: docs-preview-pr-${{ github.event.issue.number || inputs.pr_number }}
+      cancel-in-progress: true
     # Read-only: may checkout and execute PR head, but cannot write to the
     # PR or touch secrets. Satisfies CodeQL's privileged-workflow gate.
     permissions:
@@ -99,10 +103,12 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    # Fresh runner: no PR checkout. Write scope only here (PR comment).
+    # Fresh runner: no PR checkout. Write scopes only here (PR comment +
+    # reactions on the triggering issue comment — reactions need issues:write).
     permissions:
       contents: read
       pull-requests: write
+      issues: write
     steps:
       - name: Acknowledge /preview
         if: github.event_name == 'issue_comment'
@@ -124,6 +130,9 @@ jobs:
 
       - name: Deploy to Cloudflare Pages
         id: deploy
+        # Outputs used below: deployment-url, pages-deployment-alias-url
+        # (documented on cloudflare/wrangler-action@v3; alias needs wrangler
+        # >= 3.78). Fallback URL is constructed if either is empty.
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -150,12 +159,10 @@ jobs:
           script: |
             const alias = process.env.ALIAS_URL;
             const deployment = process.env.DEPLOYMENT_URL;
-            const preview = alias || deployment;
-            if (!preview) {
-              throw new Error(
-                'wrangler-action did not emit pages-deployment-alias-url or deployment-url',
-              );
-            }
+            // Stable Pages branch alias for --branch=pr-N (same project name
+            // as the wrangler deploy). Used if wrangler-action omits outputs.
+            const constructed = `https://pr-${process.env.PR_NUMBER}.real-a11y-docs-preview.pages.dev`;
+            const preview = alias || deployment || constructed;
             const sha = process.env.PR_SHA.slice(0, 7);
             const body = [
               `### Docs preview`,
