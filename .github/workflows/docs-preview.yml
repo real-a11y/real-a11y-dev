@@ -363,7 +363,9 @@ jobs:
           list_matching_ids() {
             local ids=()
             local page=1
-            local resp total_pages page_ids id
+            local resp page_ids id count
+            # Paginate until a short/empty page. Do not rely on
+            # result_info.total_pages — some Cloudflare list responses omit it.
             while true; do
               resp="$(curl -fsS \
                 -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
@@ -374,6 +376,7 @@ jobs:
                 jq . <<<"$resp" >&2
                 return 1
               fi
+              count="$(jq '.result | length' <<<"$resp")"
               # Match by branch (wrangler --branch=pr-N), our commit-message,
               # or the stable branch alias URL.
               mapfile -t page_ids < <(
@@ -390,11 +393,14 @@ jobs:
               for id in "${page_ids[@]}"; do
                 [ -n "$id" ] && ids+=("$id")
               done
-              total_pages="$(jq -r '.result_info.total_pages // 1' <<<"$resp")"
-              if [ "$page" -ge "$total_pages" ]; then
+              if [ "$count" -lt 25 ]; then
                 break
               fi
               page=$((page + 1))
+              if [ "$page" -gt 200 ]; then
+                echo "Refusing to paginate past 200 pages" >&2
+                return 1
+              fi
             done
             printf '%s\n' "${ids[@]+"${ids[@]}"}"
           }
