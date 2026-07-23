@@ -55,44 +55,47 @@
 55. link "Tree diffing"
 56. link "DOM observation"
 57. link "Live tree extraction"
-58. link "Types"
-59. link "@real-a11y-dev/cli"
-60. link "@real-a11y-dev/mcp"
-61. button "Copy Code"
-62. generic
-63. link "Keep it out of production"
-64. button "Copy Code"
-65. generic
-66. link "@real-a11y-dev/testing"
-67. button "Copy Code"
-68. generic
-69. button "Copy Code"
-70. generic
-71. table
-72. button "Copy Code"
-73. generic
-74. button "Copy Code"
-75. generic
-76. table
-77. button "Copy Code"
-78. generic
-79. button "Copy Code"
-80. generic
-81. button "Copy Code"
-82. generic
-83. button "Copy Code"
-84. generic
-85. button "Copy Code"
-86. generic
-87. link "CLI's"
-88. button "Copy Code"
-89. generic
-90. button "Copy Code"
-91. generic
-92. button "Copy Code"
-93. generic
-94. button "Copy Code"
-95. generic
-96. link "Edit this page on GitHub"
-97. link "Previous pageOverview & Install"
-98. link "Next page@real-a11y-dev/inspector"
+58. link "Native AX vocabulary"
+59. link "Types"
+60. link "@real-a11y-dev/cli"
+61. link "@real-a11y-dev/mcp"
+62. button "Copy Code"
+63. generic
+64. link "Keep it out of production"
+65. button "Copy Code"
+66. generic
+67. link "@real-a11y-dev/testing"
+68. button "Copy Code"
+69. generic
+70. button "Copy Code"
+71. generic
+72. table
+73. button "Copy Code"
+74. generic
+75. button "Copy Code"
+76. generic
+77. table
+78. button "Copy Code"
+79. generic
+80. button "Copy Code"
+81. generic
+82. button "Copy Code"
+83. generic
+84. button "Copy Code"
+85. generic
+86. button "Copy Code"
+87. generic
+88. link "CLI's"
+89. button "Copy Code"
+90. generic
+91. button "Copy Code"
+92. generic
+93. button "Copy Code"
+94. generic
+95. button "Copy Code"
+96. generic
+97. button "Copy Code"
+98. generic
+99. link "Edit this page on GitHub"
+100. link "Previous pageOverview & Install"
+101. link "Next page@real-a11y-dev/inspector"

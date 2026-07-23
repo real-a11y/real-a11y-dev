@@ -69,6 +69,20 @@ export { getNodeId, resetIdCounter } from "./utils/id-generator.js";
 export { buildControlsIndex } from "./utils/controls-index.js";
 export type { ControlsIndex } from "./utils/controls-index.js";
 
+// Native AX vocabulary — the ONE normalization of Chromium's CDP
+// `Accessibility.getFullAXTree` payload into engine vocabulary. Pure (no
+// CDP, no DOM globals): consumed by @real-a11y-dev/browser's native
+// producer, the extension's debugger mode, and parity harnesses.
+export {
+  NATIVE_AX_VOCABULARY_VERSION,
+  NATIVE_AX_DROP_ROLES,
+  NATIVE_AX_ROLE_MAP,
+  NATIVE_AX_NAME_SOURCE_ROLES,
+  mapNativeAXRole,
+} from "./native/ax-vocabulary.js";
+export { normalizeNativeAX, serializeNativeAX } from "./native/ax-normalize.js";
+export type { NativeAXNode, RawNativeAXNode } from "./native/ax-normalize.js";
+
 // Query helpers (for testing / audits / Storybook)
 export {
   findByRole,
