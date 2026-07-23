@@ -26,6 +26,20 @@ await session.close();
 
 `BrowserSession` launches Chromium with Playwright, injects the page-bundle (which sets `window.__realA11y__`), and routes every query through `page.evaluate()`. `playwright` is an **optional peer dependency**, imported lazily — importing this package never forces playwright to load, so browser-free code paths stay light.
 
+## The native producer — `nativeTree()`
+
+Everything above uses the **DOM producer**: the page-bundle walks the light DOM in-page. This package also hosts the **native producer**, which reads Chromium's own accessibility tree over CDP and normalizes it into the *same* `ExtractionResult` model — one canonical model, two producers.
+
+```ts
+const tree = await session.nativeTree();
+// ExtractionResult with source.producer === "native"
+// — feed it to serialize / audit / diff exactly like a DOM tree
+```
+
+Why a second producer: Chromium exposes structure no in-page walk can reach — most visibly a `<video controls>`'s play/scrubber/mute controls, which live in a closed user-agent shadow root. The vocabulary (which nodes survive, sibling order, role map, name promotion) comes from core's shared `normalizeNativeAX`, so native and DOM trees are directly comparable.
+
+It is **read-only** for now: nodes carry `a11y`, and a `dom` facet when a DOM node backs them, but no `interaction` facet (CDP action dispatch is a later phase). Redaction is enforced by construction — the producer never reads any element's live `.value`, drops the AX `value` field, and the `dom` facet copies only an allowlist of structural / accessibility attributes, so a user's field values never enter the tree. `buildNativeTree(rawNodes, enrichment?, chrome?)` is exported as the pure, browserless core of the producer.
+
 ## The page-bundle
 
 The injected bundle is built here (`dist/page-bundle.iife.global.js`) from the serializers (`@real-a11y-dev/serialize`), the findings engine (`@real-a11y-dev/audit`), and the query helpers (`@real-a11y-dev/core`). It's an IIFE that installs `window.__realA11y__` with the snapshot/assertion helpers so any caller can invoke them by name inside the page.
