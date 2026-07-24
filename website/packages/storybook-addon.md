@@ -1,13 +1,13 @@
 ---
 title: "@real-a11y-dev/storybook-addon — A11y panel for every story"
-description: One line in .storybook/main.ts adds a live accessibility tree panel next to every story. Tree, outline, and tab sequence — updated as the story re-renders.
+description: One line in .storybook/main.ts adds a live accessibility tree panel next to every story. Tree, outline, and tab sequence — updated while the panel is open.
 ---
 
 # @real-a11y-dev/storybook-addon
 
-> **TL;DR** — One line in `.storybook/main.ts` and every story gets a Semantic Navigator panel next to Controls / A11y — showing the tree, heading outline, and tab sequence, updating live as the story re-renders. Reach for this when you **develop components in Storybook** and want per-story a11y insight without writing tests.
+> **TL;DR** — One line in `.storybook/main.ts` and every story gets a Semantic Navigator panel next to Controls / A11y — showing the tree, heading outline, and tab sequence, updating live while the panel is open (idle when another tab is active). Reach for this when you **develop components in Storybook** and want per-story a11y insight without writing tests.
 
-A Storybook 8 panel that shows the semantic tree, heading outline, and tab sequence for every story — updated live as the story renders.
+A Storybook 8 panel that shows the semantic tree, heading outline, and tab sequence for every story — updated live while the panel is open.
 
 ## Install
 
@@ -60,18 +60,21 @@ Switching between **A11y** and **DOM** re-extracts the story via the channel; **
 
 The addon follows Storybook 8's manager/preview split:
 
-- **Preview** (`@real-a11y-dev/storybook-addon/preview`) runs inside the story iframe. It observes `#storybook-root` with a `DomObserver` (200ms debounce) and emits `TREE_UPDATED` events over the Storybook channel whenever the story DOM changes.
+- **Preview** (`@real-a11y-dev/storybook-addon/preview`) runs inside the story iframe. Extraction is **lazy**: it only stands up a `DomObserver` (200ms debounce) after the manager emits `REQUEST_TREE` (panel open), and tears it down on `STOP_TREE` (panel hidden). While active it emits `TREE_UPDATED` over the Storybook channel whenever the story DOM changes — so animating or Controls-driven stories don't pay extract + `postMessage` cost while you're on another addon tab.
 
-- **Manager** (`@real-a11y-dev/storybook-addon/manager`) runs in the Storybook UI shell (React). It subscribes to `TREE_UPDATED` events, deserializes the tree (the `[id, node][]` array back into a `Map`), and renders the interactive `TreePanel` from `@real-a11y-dev/semantic-navigator-ui` inside a shadow root.
+- **Manager** (`@real-a11y-dev/storybook-addon/manager`) runs in the Storybook UI shell (React). It mounts only when the Semantic Navigator tab is active, subscribes to `TREE_UPDATED` events, deserializes the tree (the `[id, node][]` array back into a `Map`), and renders the interactive `TreePanel` from `@real-a11y-dev/semantic-navigator-ui` inside a shadow root.
 
 ```
 Preview iframe                              Manager (Storybook UI)
 ────────────────                            ──────────────────────
-story renders                               Panel subscribes to TREE_UPDATED
-DomObserver fires (200ms)
-→ extractA11yTree / extractDomTree
+(idle until panel opens)                    Panel mounts → REQUEST_TREE
+←──────────────────────────────────────────
+start DomObserver + extract
 → TREE_UPDATED ───────── channel ─────────▶ deserialize tree (array → Map)
    { tree, mode, extractedAt }              → render <TreePanel/> in a shadow root
+Panel unmounts → STOP_TREE
+←──────────────────────────────────────────
+stop DomObserver (no further extracts)
 ```
 
 ---
@@ -106,9 +109,10 @@ If you need to integrate with the addon from your own tooling:
 import { EVENTS, type TreeUpdatePayload } from "@real-a11y-dev/storybook-addon";
 
 // Preview → manager:
-//   EVENTS.TREE_UPDATED    — a fresh extraction (on every debounced DOM change)
+//   EVENTS.TREE_UPDATED    — a fresh extraction (on every debounced DOM change while the panel is open)
 // Manager → preview:
-//   EVENTS.REQUEST_TREE    — ask for the current tree immediately (panel mount)
+//   EVENTS.REQUEST_TREE    — start observing (if needed) and send the current tree (panel mount)
+//   EVENTS.STOP_TREE       — tear down the observer (panel unmount / hidden)
 //   EVENTS.SET_MODE        — re-extract with a new view mode
 //   EVENTS.HIGHLIGHT_NODE  — highlight a node in the story by id
 //   EVENTS.CLEAR_HIGHLIGHT — clear the highlight overlay
@@ -137,7 +141,7 @@ This means the preview hasn't emitted a `TREE_UPDATED` event yet. Check:
 
 **Panel content is out of date after a story change**
 
-The addon listens to `storyRendered` and `storyChanged` events. If your framework delays rendering past the `storyRendered` event, the first snapshot may capture an empty state. A second extraction fires automatically on the next DOM mutation, so the panel catches up within 200ms.
+The addon listens to `storyRendered` and `storyChanged` events **while the panel is open**. If your framework delays rendering past the `storyRendered` event, the first snapshot may capture an empty state. A second extraction fires automatically on the next DOM mutation, so the panel catches up within 200ms. With the panel closed, the preview stays idle — open the Semantic Navigator tab to resume.
 
 ---
 

@@ -1,12 +1,16 @@
 /**
  * Preview-side entry for the Semantic Navigator Storybook addon.
  *
- * Runs inside the story iframe: observes DOM mutations on the story root,
- * re-extracts the tree on each debounced change, and broadcasts the result
- * as structured JSON over the Storybook channel.
+ * Runs inside the story iframe. Extraction is **lazy**: the DomObserver and
+ * LiveTreeExtractor only run while the manager panel is open (from the first
+ * `REQUEST_TREE` until `STOP_TREE`). That keeps animating / Controls-driven
+ * stories from paying extract + postMessage cost when the developer is on
+ * another tab.
  *
- * Also listens for highlight / activate requests from the manager panel and
- * applies them to the real story DOM via FocusManager / ActionDispatcher.
+ * While active, re-extracts on debounced DOM mutations and broadcasts the
+ * result as structured JSON over the Storybook channel. Also listens for
+ * highlight / activate requests and applies them via FocusManager /
+ * ActionDispatcher.
  */
 import {
   LiveTreeExtractor,
@@ -77,6 +81,8 @@ let focusManager: FocusManager | null = null;
 let dispatcher: ActionDispatcher | null = null;
 let liveExtractor: LiveTreeExtractor | null = null;
 let currentMode: TreeMode = "a11y";
+/** True while the manager panel wants a live tree (REQUEST_TREE … STOP_TREE). */
+let panelWantsTree = false;
 
 function liveExtractorMode(mode: TreeMode): "dom" | "a11y" {
   return mode === "dom" ? "dom" : "a11y";
@@ -102,8 +108,8 @@ function buildSerializableTree(change?: TreeChange): SerializableTree {
 }
 
 function publish(change?: TreeChange) {
-  // The extractor only exists once a story has rendered (start()). A channel
-  // event such as SET_MODE can arrive before that, so publishing must be a
+  // The extractor only exists while the panel is open (start()). Channel
+  // events such as SET_MODE can arrive before that, so publishing must be a
   // no-op until then rather than dereferencing a null extractor.
   if (!liveExtractor) return;
   const channel = addons.getChannel();
@@ -155,9 +161,21 @@ function stop() {
 if (typeof document !== "undefined") {
   const channel = addons.getChannel();
 
-  // Manager mounted / became visible → send the current tree immediately.
+  // Manager mounted / became visible → start observing and send the tree.
   channel.on(EVENTS.REQUEST_TREE, () => {
-    if (observer) publish();
+    panelWantsTree = true;
+    if (observer) {
+      // Already running (e.g. StrictMode remount) — just refresh the panel.
+      publish();
+    } else {
+      start();
+    }
+  });
+
+  // Manager unmounted / switched away → stop paying extract + channel cost.
+  channel.on(EVENTS.STOP_TREE, () => {
+    panelWantsTree = false;
+    stop();
   });
 
   // Manager requests a mode change → re-extract with the new mode.
@@ -187,10 +205,15 @@ if (typeof document !== "undefined") {
 
   channel.on("storyRendered", () => {
     stop();
-    start();
+    if (panelWantsTree) start();
   });
   channel.on("storyChanged", () => {
     stop();
-    setTimeout(start, 50);
+    if (panelWantsTree) {
+      setTimeout(() => {
+        // Panel may have closed during the delay.
+        if (panelWantsTree) start();
+      }, 50);
+    }
   });
 }

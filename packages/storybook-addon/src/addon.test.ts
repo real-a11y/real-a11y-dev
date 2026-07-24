@@ -11,6 +11,8 @@ describe("addon constants", () => {
   it("defines distinct channel events", () => {
     expect(EVENTS.TREE_UPDATED).not.toBe(EVENTS.SET_MODE);
     expect(EVENTS.TREE_UPDATED).toMatch(/tree-updated$/);
+    expect(EVENTS.REQUEST_TREE).toMatch(/request-tree$/);
+    expect(EVENTS.STOP_TREE).toMatch(/stop-tree$/);
     expect(EVENTS.SET_MODE).toMatch(/set-mode$/);
   });
 });

@@ -149,11 +149,15 @@ function Panel() {
     channel.on(EVENTS.TREE_UPDATED, handler);
 
     // Ask the preview for the current tree immediately — otherwise the panel
-    // shows "Waiting…" until the next DOM mutation in the story.
+    // shows "Waiting…" until the next DOM mutation in the story. Also starts
+    // the preview-side DomObserver (extraction is lazy until this request).
     channel.emit(EVENTS.REQUEST_TREE);
 
     return () => {
       channel.off(EVENTS.TREE_UPDATED, handler);
+      // Tear down the preview observer so hidden-panel stories don't keep
+      // extracting and postMessage-ing full trees across the iframe boundary.
+      channel.emit(EVENTS.STOP_TREE);
     };
   }, []);
 
