@@ -31,9 +31,24 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "npm dist-tag to publish under (e.g. `beta`, `latest`)"
+        # Leave blank to derive from the version (prerelease → `beta`, otherwise
+        # → `latest`). Set it only to force a channel. Default is intentionally
+        # empty, not `beta`: `release-tag.yml` dispatches without this input, so
+        # a `beta` default would publish a stable graduation under `beta`.
+        description: "npm dist-tag to publish under — blank = derive from version"
         required: false
-        default: "beta"
+        default: ""
+      sha:
+        # release-tag.yml passes the release PR's merge commit so the publish
+        # runs against exactly what was merged, even if another PR raced onto
+        # main in between. Blank falls back to the triggering ref (a pushed `v*`
+        # tag, or main for a bare manual run).
+        description: "Commit SHA to publish — blank = the triggering ref"
+        required: false
+        default: ""
+  # Manual break-glass: pushing a `v*` tag by hand still publishes. The
+  # automation uses per-package tags + an explicit dispatch instead, so this
+  # path is only for recovering a release by hand.
   push:
     tags:
       - "v*"
@@ -59,6 +74,10 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          # A dispatched `sha` pins the exact merge commit; otherwise check out
+          # the triggering ref (the pushed `v*` tag, or main for a manual run).
+          ref: ${{ github.event.inputs.sha || github.ref }}
 
       # pnpm version is read from `packageManager` in package.json.
       - uses: pnpm/action-setup@v4
@@ -91,11 +110,23 @@ jobs:
       - name: Test
         run: pnpm test
 
+      # `release-tag.yml` always dispatches with an explicit tag. A tag-push run
+      # carries no input, so derive one from the version rather than assuming
+      # `beta`: a stable `0.1.0` has to publish under `latest` itself, because
+      # advance-latest.mjs deliberately no-ops once pre-mode has exited. Without
+      # this, graduating to stable would ship under `beta` and leave `latest`
+      # pinned to the last prerelease.
       - name: Resolve dist-tag
         id: tag
         run: |
           TAG="${{ github.event.inputs.tag }}"
-          if [ -z "$TAG" ]; then TAG="beta"; fi
+          if [ -z "$TAG" ]; then
+            VERSION="$(node -p "require('./packages/core/package.json').version")"
+            case "$VERSION" in
+              *-*) TAG="beta" ;;
+              *)   TAG="latest" ;;
+            esac
+          fi
           echo "value=$TAG" >> "$GITHUB_OUTPUT"
 
       # pnpm's `publish -r` publishes every package whose version/tag is new,

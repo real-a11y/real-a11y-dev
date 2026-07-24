@@ -27,5 +27,11 @@
 
 ## After merge
 
-- [ ] Tag `vX.Y.Z-beta.N` at the squash commit → the Publish workflow publishes and advances `latest`
-- [ ] Extension changed? also tag `extension-vX.Y.Z`
+Tagging is automatic: merging this PR runs
+[`release-tag.yml`](../workflows/release-tag.yml), which tags the squash commit
+once per published package (`@real-a11y-dev/<pkg>@<version>`, plus
+`extension-v<version>` if the extension changed) and starts the publish
+workflows. Nothing to push by hand — just confirm:
+
+- [ ] **Publish to npm** green — check the **Publish** and **Advance latest dist-tag** steps
+- [ ] Extension changed? Download the zip from the draft Release and upload it to the Chrome Web Store

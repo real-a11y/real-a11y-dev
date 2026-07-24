@@ -1,0 +1,143 @@
+name: Tag release after merge
+
+# Merging a `release/*` PR is the sign-off. This tags the merge commit and
+# starts the publish workflows, so the "After merge" checklist on the release PR
+# can't be forgotten or fat-fingered.
+#
+# One tag per published package — `@real-a11y-dev/core@0.1.0-beta.10` — matching
+# the changesets convention. A release that bumps only some packages (the
+# versions genuinely drift: cli/mcp at beta.0 while the core cohort is at
+# beta.10) tags exactly those, with no "which package anchors the release" tag
+# to invent and no failure mode when the anchor didn't move.
+#
+# Why it dispatches the publish instead of relying on the tag push: a tag pushed
+# with the automatic GITHUB_TOKEN does NOT fire `on: push` workflows — GitHub
+# suppresses events raised by that token so a workflow can't trigger itself
+# recursively. `workflow_dispatch` and `repository_dispatch` are the documented
+# exceptions. So tags are pushed for the git record, then `publish.yml` is
+# dispatched explicitly against the merge commit. That keeps the whole chain on
+# GITHUB_TOKEN — no PAT, no GitHub App, no new long-lived secret — and means the
+# tag is a record, not a trigger.
+#
+# Both publish workflows remain independently runnable from the Actions tab, so
+# this is an accelerator, never the only path to a release.
+
+on:
+  pull_request:
+    types: [closed]
+
+# Least-privilege default; the job below escalates to exactly what it needs.
+permissions: read-all
+
+# Serializes against itself only — `publish.yml` keeps its own `publish` group.
+concurrency:
+  group: release-tag
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    # Merged, not merely closed, and from a release branch. Both halves matter:
+    # a release PR that is closed without merging must never publish, and no
+    # other branch prefix should be able to reach this job at all.
+    if: >-
+      github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.head.ref, 'release/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push tags
+      actions: write # dispatch publish.yml / extension-release.yml
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The squash commit on main, not the PR head — that is what the tags
+          # have to point at. fetch-depth: 0 brings the existing tags along so
+          # the "already tagged?" checks below can see them.
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          fetch-depth: 0
+
+      # One tag per publishable package, read out of the merged tree — never the
+      # branch name or PR title. `pnpm publish -r` skips versions already on npm,
+      # so tagging only the versions that aren't already tagged keeps the two in
+      # lockstep: a new tag here maps 1:1 to a package this release will publish.
+      - name: Tag each published package version
+        id: tag
+        run: |
+          # `$(...)` under `set -e` fails the step if the enumerator errors,
+          # rather than silently tagging nothing.
+          list="$(node scripts/list-publishable-packages.mjs)"
+          mapfile -t all <<< "$list"
+
+          to_push=()
+          for tag in "${all[@]}"; do
+            [ -z "$tag" ] && continue
+            if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+              echo "· $tag already exists — already released, skipping"
+              continue
+            fi
+            git tag "$tag"
+            to_push+=("$tag")
+          done
+
+          if [ ${#to_push[@]} -gt 0 ]; then
+            git push origin "${to_push[@]}"
+            printf '✓ tagged %s\n' "${to_push[@]}"
+          fi
+          echo "created=${#to_push[@]}" >> "$GITHUB_OUTPUT"
+
+      # Dispatch only when this release actually introduced a new version. If
+      # every publishable version was already tagged, nothing here is new
+      # (`changeset version` always bumps what it touches), so there is nothing
+      # to publish and a dispatch would be a no-op run that reads like a real
+      # one. `--ref main` picks the workflow definition; `sha` pins the checkout
+      # to the exact merge commit, so a feature PR that raced in right after this
+      # one can't get published under these version numbers.
+      - name: Publish to npm
+        if: steps.tag.outputs.created != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run publish.yml \
+            --ref main \
+            -f sha="${{ github.event.pull_request.merge_commit_sha }}"
+
+      # The extension is changesets-ignored and ships on its own cadence, so most
+      # releases leave its version alone. An existing tag just means "not
+      # shipping the extension this time" — normal, not an error.
+      - name: Tag and release the extension
+        id: ext
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="$(node -p "require('./packages/extension/package.json').version")"
+          TAG="extension-v${VERSION}"
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "$TAG already exists — extension version unchanged, nothing to ship."
+            echo "shipped=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git tag "$TAG"
+          git push origin "$TAG"
+          # extension-release.yml only drafts the GitHub Release on a tag push or
+          # when `tag_name` is set, so pass it explicitly when dispatching.
+          gh workflow run extension-release.yml --ref "$TAG" -f tag_name="$TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "shipped=true" >> "$GITHUB_OUTPUT"
+
+      - name: Summary
+        run: |
+          {
+            echo "### Release tagged"
+            echo
+            if [ "${{ steps.tag.outputs.created }}" != "0" ]; then
+              echo "- **npm** — tagged and dispatched **${{ steps.tag.outputs.created }}** package(s); \`publish.yml\` derives \`beta\` vs \`latest\` from the version"
+            else
+              echo "- **npm** — every publishable version was already tagged; nothing new to publish"
+            fi
+            if [ "${{ steps.ext.outputs.shipped }}" = "true" ]; then
+              echo "- **extension** \`${{ steps.ext.outputs.tag }}\` → drafting a GitHub Release; the Chrome Web Store upload is still manual"
+            else
+              echo "- **extension** unchanged — not shipping this release"
+            fi
+            echo
+            echo "Follow the runs in the [Actions tab](${{ github.server_url }}/${{ github.repository }}/actions)."
+          } >> "$GITHUB_STEP_SUMMARY"

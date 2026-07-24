@@ -18,6 +18,8 @@ There are two ways to produce the upload zip. Use the automated flow for any rel
 
 ### A. Automated (recommended)
 
+**Usually you don't tag by hand.** When the extension version is bumped as part of a release PR (see the `release` skill), merging that PR runs `release-tag.yml`, which pushes the `extension-v<version>` tag and dispatches the release workflow for you. The steps below are for an extension-only ship — a Chrome Web Store fix with no accompanying npm release.
+
 Push a tag matching `extension-v*` from `main`. The `extension-release.yml` workflow runs `pnpm install`, builds every workspace dep, packages the extension, and attaches the zip to a **draft** GitHub Release.
 
 ```bash
