@@ -13,8 +13,8 @@ _broken_. The tree-inspection tools are perception primitives layered on top.
 | Tool | Purpose |
 | --- | --- |
 | `open_page` | Navigate to a URL and prepare it for queries (call first). `waitUntil` / `settleMs` settle dynamic pages; `device` (e.g. `"iPhone 13"`) audits the **mobile/tablet** layout. |
-| `audit_page` | **Flagship.** Return every accessibility violation — unlabeled controls, images missing alt, heading gaps, unlabeled dialogs, broken landmarks — as structured findings (grouped, each with a CSS locator + severity). |
-| `inspect_page` | Findings **plus** semantic tree, heading outline, and tab order — all from **one** extraction, so they can't disagree. Prefer on dynamic pages. |
+| `audit_page` | **Flagship.** Return every accessibility violation — unlabeled controls, images missing alt, heading gaps, unlabeled dialogs, broken landmarks — as structured findings (grouped, each with a CSS locator + severity). Pass `producer: "native"` to audit Chromium's own tree (see below). |
+| `inspect_page` | Findings **plus** semantic tree, heading outline, and tab order — all from **one** extraction, so they can't disagree. Prefer on dynamic pages. Accepts `producer: "native"` (findings + tree + outline; tab order is N/A). |
 | `get_semantic_tree` | Deterministic role + accessible-name outline of the page. |
 | `get_heading_outline` | Heading structure (h1..h6) in document order. |
 | `get_tab_order` | Focusable elements in keyboard Tab order. |
@@ -22,6 +22,20 @@ _broken_. The tree-inspection tools are perception primitives layered on top.
 | `get_native_tree` | Chromium's own accessibility tree (Blink, via CDP) — the authoritative browser tree. |
 | `compare_trees` | Diff custom vs. native and report role/name divergences — a fidelity oracle. |
 | `close_browser` | Tear down the session. |
+
+### Auditing the native tree — `producer: "native"`
+
+By default the audit tools walk the page's light DOM (the **DOM producer**). Pass
+`producer: "native"` to `audit_page` or `inspect_page` to run the same audit over
+**Chromium's own accessibility tree** (read over CDP) instead — it reaches
+structure no in-page walk can, most visibly a `<video controls>`'s
+play/scrubber/mute controls, which live in a closed user-agent shadow root. This
+is the difference between *viewing* the native tree (`get_native_tree`) and
+*auditing* it.
+
+Native is whole-document and read-only: `rootSelector` must stay `"body"`
+(passing another selector is refused — native can't scope), and it carries no tab
+order, so `inspect_page`'s tab-order section reports N/A. Chromium only.
 
 ### Consistency & determinism
 

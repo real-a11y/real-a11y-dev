@@ -219,7 +219,21 @@ main
       code ""heading-order""
       code ""dialog-labeled""
       code ""landmark-structure""
+    listitem "— | — optional (default ) — which producer builds the tree. audits (read over CDP) instead of the in-page DOM walk, reaching structure no in-page walk can — most visibly a 's user-agent-shadow media controls. Native is whole-document, so must stay (any other value is refused). Chromium only."
+      strong
+        code "producer"
+      code ""dom""
+      code ""native""
+      code ""dom""
+      code ""native""
+      strong "Chromium's own accessibility tree"
+      code "<video controls>"
+      code "rootSelector"
+      code ""body""
   paragraph "An agent calls this to get the full defect list, or narrows it — e.g. audit only the cookie-consent dialog for labeling:"
+  button "Copy Code"
+  code
+  paragraph "Or audits the native tree to catch what the DOM walk can't reach (e.g. a media player's controls):"
   button "Copy Code"
   code
   heading "inspect_page" (level 3)
@@ -248,6 +262,14 @@ main
         code "includeGeneric"
       code "false"
       code "role=generic"
+    listitem "— | — optional (default ) — build the snapshot from Chromium's own accessibility tree (findings + tree + outline). A native tree carries no tab order, so that section reports N/A; must stay . Chromium only."
+      strong
+        code "producer"
+      code ""dom""
+      code ""native""
+      code ""dom""
+      code "rootSelector"
+      code ""body""
   paragraph "An agent calls this for a consistent whole-page picture in a single round-trip:"
   button "Copy Code"
   code

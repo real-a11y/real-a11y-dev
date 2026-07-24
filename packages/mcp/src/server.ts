@@ -16,13 +16,14 @@ import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ALL_RULES } from "@real-a11y-dev/audit";
 import type { A11yRule, Finding } from "@real-a11y-dev/audit";
-import type { A11ySession, PageSnapshot } from "@real-a11y-dev/browser";
+import type { A11ySession } from "@real-a11y-dev/browser";
 import {
   assertFullArtifact,
   buildArtifact,
   buildSnapshotPage,
   fingerprintFindings,
   parseSnapshotArtifact,
+  projectNativeTree,
   projectSnapshot,
   serializeArtifact,
   SnapshotFormatError,
@@ -79,6 +80,44 @@ function bounded(body: string): string {
 
 function text(body: string) {
   return { content: [{ type: "text" as const, text: bounded(body) }] };
+}
+
+/** A tool result marked as an error (MCP `isError`), for guard rejections. */
+function errorText(body: string) {
+  return {
+    content: [{ type: "text" as const, text: bounded(body) }],
+    isError: true as const,
+  };
+}
+
+/**
+ * The producer that builds the tree. `dom` (default) walks the light DOM in the
+ * page; `native` reads Chromium's own accessibility tree over CDP — reaching
+ * structure no in-page walk can (a `<video controls>`'s user-agent-shadow media
+ * controls). Native is whole-document (so `rootSelector` must be `body`) and
+ * carries no tab order. Only the audit tools take it. Chromium only.
+ */
+const producer = z
+  .enum(["dom", "native"])
+  .default("dom")
+  .describe(
+    "Which producer builds the tree: 'dom' (default, in-page walk) or 'native' " +
+      "(Chromium's own a11y tree over CDP — reaches user-agent-shadow media " +
+      "controls a `<video controls>` exposes). Native is whole-document " +
+      "(rootSelector must be 'body') and carries no tab order. Chromium only.",
+  );
+
+/**
+ * Native audits the whole document, so it can't honor a narrowed `rootSelector`.
+ * Return a guard error rather than silently ignoring the selector — mirrors the
+ * CLI's `--producer native` + `--root` rejection.
+ */
+function nativeScopeError(rootSelector: string) {
+  return errorText(
+    `The native producer audits the whole document — it can't be scoped to ` +
+      `rootSelector "${rootSelector}". Omit rootSelector (or set it to "body") ` +
+      `to use { producer: "native" }, or use the dom producer to scope.`,
+  );
 }
 
 const SEVERITY_ORDER: Record<Finding["severity"], number> = {
@@ -164,14 +203,34 @@ export function renderAudit(findings: Finding[]): string {
   return `${header}\n${lines.join("\n")}\n\n\`\`\`json\n${json}\n\`\`\``;
 }
 
-/** Render a single-extraction snapshot: audit + all three views, consistent. */
-export function renderSnapshot(snap: PageSnapshot): string {
+/**
+ * Render a single-extraction snapshot: audit + all three views, consistent.
+ *
+ * Accepts the common `{ findings, tree, outline, tabOrder }` shape both the DOM
+ * `PageSnapshot` and the native `CleanSnapshot` satisfy. Under the native
+ * producer there is no tab order, so that section states so rather than showing
+ * an empty block that reads like "nothing is focusable".
+ */
+type ViewSnapshot = {
+  findings: Finding[];
+  tree: string;
+  outline: string;
+  tabOrder: string;
+};
+export function renderSnapshot(
+  snap: ViewSnapshot,
+  options: { producer?: "dom" | "native" } = {},
+): string {
+  const native = options.producer === "native";
   const treeNodes = snap.tree.split("\n").filter(Boolean).length;
   const tabStops = snap.tabOrder
     .split("\n")
     .filter((l) => /^\d/.test(l)).length;
+  const tabInfo = native
+    ? "tab order N/A (native producer)"
+    : `${tabStops} tab stops`;
   return [
-    `Single-extraction snapshot — ${treeNodes} tree nodes, ${tabStops} tab stops. All sections below describe the same instant.`,
+    `Single-extraction snapshot — ${treeNodes} tree nodes, ${tabInfo}. All sections below describe the same instant.`,
     "",
     renderAudit(snap.findings),
     "",
@@ -187,7 +246,9 @@ export function renderSnapshot(snap: PageSnapshot): string {
     "",
     "## Tab order",
     "```",
-    snap.tabOrder,
+    native
+      ? "(the native producer carries no tab order — use the dom producer for tab sequence)"
+      : snap.tabOrder,
     "```",
   ].join("\n");
 }
@@ -450,16 +511,23 @@ export function buildServer(
       title: "Audit accessibility",
       annotations: READ_ONLY,
       description:
-        "Run accessibility audits against the current page and return every violation — unlabeled interactive controls, skipped heading levels or missing/duplicate h1, unlabeled dialogs, and broken landmark structure. Reports what real assistive tech would announce as broken. This is the primary tool.",
+        "Run accessibility audits against the current page and return every violation — unlabeled interactive controls, skipped heading levels or missing/duplicate h1, unlabeled dialogs, and broken landmark structure. Reports what real assistive tech would announce as broken. This is the primary tool. Set producer='native' to audit Chromium's own accessibility tree instead of the in-page DOM walk — it reaches structure no in-page walk can (a `<video controls>`'s media controls) but is whole-document (no rootSelector).",
       inputSchema: {
         rootSelector,
         rules: z
           .array(z.enum(RULES))
           .optional()
           .describe("Subset of rules to run. Omit to run all rules."),
+        producer,
       },
     },
-    async ({ rootSelector, rules }) => {
+    async ({ rootSelector, rules, producer }) => {
+      if (producer === "native") {
+        if (rootSelector !== "body") return nativeScopeError(rootSelector);
+        // Native findings are computed in Node over Chromium's own tree.
+        const snap = projectNativeTree(await session.nativeTree(), { rules });
+        return text(renderAudit(snap.findings));
+      }
       const findings = await session.call<Finding[]>(
         "collectFindings",
         rootSelector,
@@ -475,7 +543,7 @@ export function buildServer(
       title: "Inspect page (single snapshot)",
       annotations: READ_ONLY,
       description:
-        "Return the audit findings AND the semantic tree, heading outline, and tab order — all derived from ONE extraction, so they are guaranteed internally consistent. The element focused at capture time is marked `[focused]` in each view. Prefer this over separate audit_page + get_* calls on dynamic pages (SPAs, pages with consent dialogs) where separate calls could catch different states.",
+        "Return the audit findings AND the semantic tree, heading outline, and tab order — all derived from ONE extraction, so they are guaranteed internally consistent. The element focused at capture time is marked `[focused]` in each view. Prefer this over separate audit_page + get_* calls on dynamic pages (SPAs, pages with consent dialogs) where separate calls could catch different states. Set producer='native' to build the snapshot from Chromium's own accessibility tree (findings + tree + outline); a native tree carries no tab order, so that section reports N/A.",
       inputSchema: {
         rootSelector,
         rules: z
@@ -486,9 +554,18 @@ export function buildServer(
           .boolean()
           .default(false)
           .describe("Include generic container nodes in the tree."),
+        producer,
       },
     },
-    async ({ rootSelector, rules, includeGeneric }) => {
+    async ({ rootSelector, rules, includeGeneric, producer }) => {
+      if (producer === "native") {
+        if (rootSelector !== "body") return nativeScopeError(rootSelector);
+        const snap = projectNativeTree(await session.nativeTree(), {
+          rules,
+          includeGeneric,
+        });
+        return text(renderSnapshot(snap, { producer: "native" }));
+      }
       const snap = await session.snapshot(rootSelector, {
         rules,
         includeGeneric,

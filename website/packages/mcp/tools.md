@@ -60,11 +60,18 @@ Parameters:
 
 - **`rootSelector`** — string — optional (default `"body"`) — CSS selector for the audit root.
 - **`rules`** — array of `"no-unlabeled-interactive"` \| `"image-alt"` \| `"heading-order"` \| `"dialog-labeled"` \| `"landmark-structure"` — optional — a subset of rules to run. Omit to run all.
+- **`producer`** — `"dom"` \| `"native"` — optional (default `"dom"`) — which producer builds the tree. `"native"` audits **Chromium's own accessibility tree** (read over CDP) instead of the in-page DOM walk, reaching structure no in-page walk can — most visibly a `<video controls>`'s user-agent-shadow media controls. Native is whole-document, so `rootSelector` must stay `"body"` (any other value is refused). Chromium only.
 
 An agent calls this to get the full defect list, or narrows it — e.g. audit only the cookie-consent dialog for labeling:
 
 ```json
 { "rootSelector": "[role=dialog]", "rules": ["dialog-labeled", "no-unlabeled-interactive"] }
+```
+
+Or audits the native tree to catch what the DOM walk can't reach (e.g. a media player's controls):
+
+```json
+{ "producer": "native" }
 ```
 
 ### `inspect_page`
@@ -78,6 +85,7 @@ Parameters:
 - **`rootSelector`** — string — optional (default `"body"`) — CSS selector for the extraction root.
 - **`rules`** — array of the five rule ids above — optional — subset for the findings section. Omit to run all.
 - **`includeGeneric`** — boolean — optional (default `false`) — include generic container nodes (`role=generic`) in the tree.
+- **`producer`** — `"dom"` \| `"native"` — optional (default `"dom"`) — build the snapshot from Chromium's own accessibility tree (findings + tree + outline). A native tree carries no tab order, so that section reports N/A; `rootSelector` must stay `"body"`. Chromium only.
 
 An agent calls this for a consistent whole-page picture in a single round-trip:
 
