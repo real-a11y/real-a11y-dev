@@ -53,14 +53,21 @@ description tracks the same list at a glance.
       non-blocking first, required once stable. Gate metric: role+name
       overlap ≥ 88.7% and never regresses. Corpus growth backlog: iframes,
       portals, virtualized lists, contenteditable. Depends on D.
-- [ ] **PR F — `feat(cli,mcp,testing)`: opt-in native.** `--tree native`
-      (cli/mcp) and `attach(page, { tree })` (testing/playwright), all
-      flag-gated, no default change. Depends on D.
+- [x] **PR F — `feat(cli,mcp,testing)`: opt-in native.** **Merged** — testing
+      `attach({ tree: "native" })` ([#214](https://github.com/real-a11y/real-a11y-dev/pull/214)),
+      cli `--producer native` ([#216](https://github.com/real-a11y/real-a11y-dev/pull/216)),
+      mcp `producer: "native"` ([#219](https://github.com/real-a11y/real-a11y-dev/pull/219)).
+      Flag named `--producer` (not `--tree`, which collided with the `tree`
+      command — [#218](https://github.com/real-a11y/real-a11y-dev/pull/218)); mcp
+      producer/tool consistency in [#221](https://github.com/real-a11y/real-a11y-dev/pull/221).
+      No default change (see Phase 3, retired).
 
 ### Phase 2 — act
 
-- [ ] **PR G — `feat(browser)`: `CdpActionBackend` + `A11ySession.act()`.**
-      Graduates the dispatch spike. Depends on D (id scheme).
+- [x] **PR G — `feat(browser)`: `CdpActionBackend` + `A11ySession.act()`.**
+      **Merged: [#223](https://github.com/real-a11y/real-a11y-dev/pull/223)** —
+      graduated the dispatch spike (click/type/focus over CDP, targeting
+      `ax-dom-<n>` ids; no typed value ever returned). Depends on D (id scheme).
 
 ### Phase 1-adjacent — extension-native dogfood (v3 Revision 1)
 
@@ -70,19 +77,36 @@ description tracks the same list at a glance.
       handling, DevTools-conflict frequency. Verdict written back into v3 —
       this closes the desktop-vs-extension question with evidence.
 
-### Phase 3 — default flips (each gated on E green + R1 done)
+### Phase 3 — default flips — **RETIRED (v3 Revision 2)**
 
-- [ ] **PR I₁ — cli default → native** (baseline regen isolated)
-- [ ] **PR I₂ — mcp default → native**
-- [ ] **PR I₃ — testing/playwright default → native**
+The blanket "flip defaults to native + demote `--producer dom` to an escape
+hatch" plan is **retired**. The two producers are co-equal tools, not
+better/worse: DOM keeps `rootSelector` scoping, tab order, and the jsdom/in-page
+path; native adds UA-shadow fidelity but is whole-document, tab-order-less, and
+Chromium-only. Default stays `dom`; `native` is an explicit opt-in.
 
-### Phase 4 — Navigator
+- [ ] ~~PR I₁ — cli default → native~~ **won't do** (keep both)
+- [ ] ~~PR I₂ — mcp default → native~~ **won't do** (keep both)
+- [ ] ~~PR I₃ — testing/playwright default → native~~ **won't do** (keep both)
+- [ ] **(maybe, later) native default for the `audit` command only** — where
+      fidelity = correctness. Per-command, gated on the parity harness; never a
+      blanket flip. Not scheduled.
 
-- [ ] **PR J — `feat(cli)`: `real-a11y navigate <url>`.** Daemon + panel
+### Phase 4 — Navigator — **DEFERRED (v3 Revision 2)**
+
+The desktop track closes: Spike 5 showed the *extension* reads + dispatches the
+native tree, so extension-native (PR H) is expected to own the "tree is the
+interface" product (any tab, zero install, full fidelity). The Electron shell
+is **dropped**; `navigate` is **deferred** until the "watch/record an agent
+complete a task through the tree" use case shows real demand.
+
+- [ ] **(deferred) PR J — `feat(cli)`: `real-a11y navigate <url>`.** Daemon + panel
       protocol v0 + `ui` renderer. Depends on D + G.
-- [ ] **Phase 4b decision point — Electron shell.** Only after PR H's
-      dogfood verdict; build only if users need owned/recordable sessions
-      beyond what 4a + extension-native cover.
+- [ ] ~~**Phase 4b — Electron shell.**~~ **DROPPED (v3 Revision 2)** — the
+      extension (going native, PR H) covers the interactive product; Electron's
+      only edge (owned/recordable sessions) is speculative and not worth the
+      shell. Revisit only if that need is proven *and* `navigate` (4a) is
+      insufficient.
 
 ## Dependency sketch
 
