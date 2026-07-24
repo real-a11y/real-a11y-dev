@@ -7,6 +7,7 @@
   "scripts": {
     "prebuild": "node scripts/sync-manifest-version.mjs",
     "build": "vite build && cross-env BUILD_TARGET=content vite build",
+    "build:dogfood": "node scripts/sync-manifest-version.mjs && cross-env DOGFOOD=1 vite build && cross-env DOGFOOD=1 BUILD_TARGET=content vite build && node scripts/dogfood-manifest.mjs",
     "dev": "vite build --watch",
     "package": "pnpm build && node scripts/zip-for-cws.mjs",
     "typecheck": "node scripts/sync-manifest-version.mjs --check && tsc --noEmit",

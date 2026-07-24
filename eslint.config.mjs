@@ -24,6 +24,7 @@ export default [
   {
     ignores: [
       "**/dist/**",
+      "**/dist-dogfood/**",
       "**/node_modules/**",
       "**/.vitepress/cache/**",
       "**/.vitepress/dist/**",
