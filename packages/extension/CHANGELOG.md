@@ -8,10 +8,18 @@
   landed the change; versions match `package.json`/`public/manifest.json`.
 -->
 
-## Unreleased
+## 0.1.8
 
 ### Patch Changes
 
+- Add **type-ahead** to the tree and the role-filtered lists: start typing a
+  role or accessible name and the selection jumps to the next matching row,
+  the way a screen reader's list navigation lets you skip ahead. Typing is
+  buffered briefly so multi-character prefixes match, and it never steals the
+  inline text-entry box open for a focused field. ([#213])
+- Virtualize the tree panel's rendering so only the rows in view mount to the
+  DOM. Large pages (thousands of nodes) now scroll and update smoothly instead
+  of janking as the whole tree re-rendered on every change. ([#195])
 - Fix nested iframes disappearing from the tree when a nested frame's
   content script announced before its parent's. Child frames are now
   merged parent-first, so a grandchild frame's subtree is always attached
@@ -117,3 +125,5 @@ Earlier releases predate this changelog.
 [#182]: https://github.com/real-a11y/real-a11y-dev/pull/182
 [#192]: https://github.com/real-a11y/real-a11y-dev/pull/192
 [#194]: https://github.com/real-a11y/real-a11y-dev/pull/194
+[#195]: https://github.com/real-a11y/real-a11y-dev/pull/195
+[#213]: https://github.com/real-a11y/real-a11y-dev/pull/213

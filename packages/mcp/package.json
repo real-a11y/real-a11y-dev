@@ -1,6 +1,6 @@
 {
   "name": "@real-a11y-dev/mcp",
-  "version": "0.1.0-beta.0",
+  "version": "0.1.0-beta.1",
   "description": "Model Context Protocol server that exposes the Real A11y semantic tree and accessibility audits to AI agents",
   "license": "MIT",
   "author": "Juan Crisostomo (Real A11y)",

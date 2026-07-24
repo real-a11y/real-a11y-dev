@@ -1,6 +1,6 @@
 {
   "name": "@real-a11y-dev/snapshot",
-  "version": "0.1.0-beta.0",
+  "version": "0.1.0-beta.11",
   "description": "The Real A11y snapshot engine — deterministic finding fingerprints, the diffable a11y-snapshot.json artifact, the findings/views/unified diff, and baselines. Node-only; the single home for what the CLI and MCP both capture and compare.",
   "license": "MIT",
   "author": "Juan Crisostomo (Real A11y)",

@@ -1,5 +1,63 @@
 # @real-a11y-dev/storybook-addon
 
+## 0.1.0-beta.11
+
+### Minor Changes
+
+- 907c68e: Add `LiveTreeExtractor` for incremental DOM and accessibility tree updates.
+
+  `@real-a11y-dev/core` now exposes a `LiveTreeExtractor` class that keeps the
+  previous extraction in memory and re-extracts only the dirty subtrees reported
+  by `DomObserver`. It falls back to a full extraction when a mutation can affect
+  non-local accessibility state (modal/portal scope, `id`, `aria-labelledby`,
+  `aria-describedby`, `for`, etc.). The result is the same `ExtractionResult`
+  shape as `extractA11yTree` / `extractDomTree`.
+
+  `DomObserver` callbacks now receive an optional `TreeChange` payload containing
+  the accumulated `MutationRecord`s and synthetic dirty roots from `input`/`change`
+  events, which `LiveTreeExtractor.refresh(change)` consumes.
+
+  The Chrome extension, React `useSemanticTree` hook, and Storybook addon preview
+  have been wired to use `LiveTreeExtractor` so live updates avoid a full page
+  re-extraction when only a small region changed.
+
+- f9e35c2: Make Storybook preview extraction lazy: the DomObserver / LiveTreeExtractor only run while the Semantic Navigator panel is open. The manager emits `REQUEST_TREE` on mount and `STOP_TREE` on unmount. After a canvas/iframe reload the preview emits `PREVIEW_READY` so an already-open panel can re-request without listening to every `storyRendered` (which would double-extract). `storyRendered` / `storyChanged` in the preview no longer start the pipeline unconditionally — registering the addon no longer means every Controls-driven or animated story pays full-tree extract + channel `postMessage` cost while you're on another tab. Custom channel listeners that assumed always-on `TREE_UPDATED` should open the panel (or emit `REQUEST_TREE`) to start receiving updates.
+
+### Patch Changes
+
+- Updated dependencies [1d0eef0]
+- Updated dependencies [7f93f92]
+- Updated dependencies [6a658fe]
+- Updated dependencies [cafe048]
+- Updated dependencies [725fcc0]
+- Updated dependencies [e2eca34]
+- Updated dependencies [96cb0ee]
+- Updated dependencies [7a9b870]
+- Updated dependencies [f2532e5]
+- Updated dependencies [ad8edc1]
+- Updated dependencies [d657f66]
+- Updated dependencies [1c8a523]
+- Updated dependencies [acb8931]
+- Updated dependencies [17f8df4]
+- Updated dependencies [d693a00]
+- Updated dependencies [35e99e6]
+- Updated dependencies [907c68e]
+- Updated dependencies [7d8324d]
+- Updated dependencies [1a3d813]
+- Updated dependencies [19e9fc2]
+- Updated dependencies [a32632a]
+- Updated dependencies [a12e7f2]
+- Updated dependencies [e2df9ec]
+- Updated dependencies [beae032]
+- Updated dependencies [0a7a821]
+- Updated dependencies [13bacb2]
+- Updated dependencies [bfec7a0]
+- Updated dependencies [c9c5076]
+- Updated dependencies [0e7ffc4]
+  - @real-a11y-dev/testing@0.1.0-beta.11
+  - @real-a11y-dev/core@0.1.0-beta.11
+  - @real-a11y-dev/semantic-navigator-ui@0.1.0-beta.11
+
 ## 0.1.0-beta.10
 
 ### Patch Changes

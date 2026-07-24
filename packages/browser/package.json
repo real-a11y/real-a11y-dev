@@ -1,7 +1,7 @@
 {
   "name": "@real-a11y-dev/browser",
-  "version": "0.1.0-beta.0",
-  "description": "Drive a real browser for Real A11y \u2014 the Playwright-based BrowserSession plus the injected page-bundle. The one way to extract a live accessibility tree from a real Chromium.",
+  "version": "0.1.0-beta.11",
+  "description": "Drive a real browser for Real A11y — the Playwright-based BrowserSession plus the injected page-bundle. The one way to extract a live accessibility tree from a real Chromium.",
   "license": "MIT",
   "author": "Juan Crisostomo (Real A11y)",
   "repository": {
