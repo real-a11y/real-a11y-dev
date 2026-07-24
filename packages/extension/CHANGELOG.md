@@ -63,6 +63,11 @@
   now has a stable id and its container points `aria-activedescendant` at it.
   ([#194])
 
+- Drop the `NN.` sequence-number prefix from the **Tab order** section of the
+  Markdown export (`01. link "Home"` → `link "Home"`). Line order already
+  conveys the sequence, and the numbers made a re-exported diff churn every
+  line when one focusable element was added near the top. ([#225])
+
 ## 0.1.7
 
 ### Patch Changes
@@ -117,3 +122,4 @@ Earlier releases predate this changelog.
 [#182]: https://github.com/real-a11y/real-a11y-dev/pull/182
 [#192]: https://github.com/real-a11y/real-a11y-dev/pull/192
 [#194]: https://github.com/real-a11y/real-a11y-dev/pull/194
+[#225]: https://github.com/real-a11y/real-a11y-dev/pull/225

@@ -180,9 +180,14 @@ export function serializeOutline(
 }
 
 /**
- * Serialize the computed tab order — role + accessible name, in the order a
- * user encounters while pressing Tab. Accepts a DOM root or a pre-extracted
- * tree.
+ * Serialize the computed tab order — role + accessible name, one stop per line,
+ * in the order a user encounters while pressing Tab. Accepts a DOM root or a
+ * pre-extracted tree.
+ *
+ * Lines are NOT prefixed with a sequence number. Line order already conveys the
+ * sequence, and a hard-coded `NN.` prefix renumbered every following line the
+ * moment one focusable element was inserted near the top — turning a committed
+ * snapshot's diff into whole-file churn for a single real change.
  */
 export function serializeTabSequence(
   input: SerializeInput,
@@ -195,11 +200,11 @@ export function serializeTabSequence(
   const seq = getTabSequence(tree);
   if (seq.length === 0) return "(nothing focusable)";
   return seq
-    .map((n, i) => {
+    .map((n) => {
       const redacted = redactText(n.a11y.name, redact);
       const name = redacted ? ` "${redacted}"` : "";
       const marker = n.id === focusedId ? " [focused]" : "";
-      return `${String(i + 1).padStart(2, "0")}. ${n.a11y.role}${name}${marker}`;
+      return `${n.a11y.role}${name}${marker}`;
     })
     .join("\n");
 }

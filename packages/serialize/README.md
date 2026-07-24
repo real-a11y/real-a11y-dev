@@ -23,8 +23,8 @@ serializeOutline(document.body);
 // h1 Sign in
 
 serializeTabSequence(document.body);
-// 01. textbox "Email"
-// 02. button "Sign in"
+// textbox "Email"
+// button "Sign in"
 ```
 
 Each function accepts a DOM root **or** a pre-extracted tree from
