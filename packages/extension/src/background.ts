@@ -1,6 +1,7 @@
 /// <reference types="chrome" />
 
 import { buildFrameInfoMap, mergeFrameTrees } from "./frame-merger.js";
+import { registerNativeMode } from "./native/index.js";
 import {
   type PlannedTabMessage,
   describeBroadcastDelivery,
@@ -20,6 +21,15 @@ import {
   recordFrameTree,
   removeFrame,
 } from "./tab-state.js";
+
+// `chrome.debugger` native mode (RFC PR H) is a DEV-ONLY dogfood. `__DOGFOOD__`
+// is a build-time constant — false in the store build, so this branch (and the
+// entire native/ module + its `debugger` use) is dead-code-eliminated; the
+// shipped extension never carries the capability. See BUILD_TARGET=dogfood.
+declare const __DOGFOOD__: boolean;
+if (typeof __DOGFOOD__ !== "undefined" && __DOGFOOD__) {
+  registerNativeMode();
+}
 
 // ---- Per-tab frame state ----
 // Pure state-machine helpers live in ./tab-state, the merge algorithm in
