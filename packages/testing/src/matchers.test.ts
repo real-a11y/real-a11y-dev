@@ -47,6 +47,37 @@ describe("assertion matchers", () => {
       expect("nope").toHaveValidLandmarks(),
     ).toThrow(/expected a DOM Element/);
   });
+
+  it("still fails under .not when given a non-Element", () => {
+    // The guard must THROW, not return `{ pass: false }` — `.not` inverts a
+    // returned failure, so a wrong-typed value would report success while
+    // running no audit at all. The canonical trap: `container.firstChild` is
+    // null, and the negated expectation "passes".
+    expect(() =>
+      // @ts-expect-error — exercising the runtime guard
+      expect(null).not.toHaveNoUnlabeledInteractive(),
+    ).toThrow(/expected a DOM Element/);
+
+    expect(() =>
+      // @ts-expect-error — exercising the runtime guard
+      expect(undefined).not.toHaveValidHeadingOrder(),
+    ).toThrow(/expected a DOM Element/);
+
+    expect(() =>
+      // @ts-expect-error — exercising the runtime guard
+      expect(null).not.toHaveTabSequence([]),
+    ).toThrow(/expected a DOM Element/);
+
+    expect(() =>
+      // @ts-expect-error — exercising the runtime guard
+      expect(null).not.toBeValidA11yTree(),
+    ).toThrow(/expected a DOM Element/);
+
+    expect(() =>
+      // @ts-expect-error — exercising the runtime guard
+      expect(42).not.toMatchA11yContract("main"),
+    ).toThrow(/expected a DOM Element or a serialized tree string/);
+  });
 });
 
 describe("toBeValidA11yTree", () => {

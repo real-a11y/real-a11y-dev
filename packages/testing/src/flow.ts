@@ -49,6 +49,8 @@ type Step = () => Promise<void>;
 
 export class FlowChain implements PromiseLike<void> {
   private readonly steps: Step[] = [];
+  /** Set the first time the chain is awaited — see `addStep` and `then`. */
+  private runPromise: Promise<void> | null = null;
   private current: SemanticNode | null = null;
   /**
    * The tree captured just before the FIRST action of the current diff window.
@@ -64,7 +66,7 @@ export class FlowChain implements PromiseLike<void> {
 
   /** Select a node by role. Subsequent actions target this node until another find. */
   findByRole(role: string, options: FindByRoleOptions = {}): this {
-    this.steps.push(async () => {
+    this.addStep(async () => {
       const tree = extract(this.root, "a11y");
       const node = findByRole(tree, role, options);
       if (!node) {
@@ -80,7 +82,7 @@ export class FlowChain implements PromiseLike<void> {
   }
 
   private action(action: ActionType, payload?: Record<string, unknown>): this {
-    this.steps.push(async () => {
+    this.addStep(async () => {
       if (!this.current) {
         throw new Error(
           `flow: cannot ${action}() — call findByRole() first to select a node.`,
@@ -145,7 +147,7 @@ export class FlowChain implements PromiseLike<void> {
 
   /** Assert the tree serialization equals the expected snapshot. */
   expectTree(expected: string): this {
-    this.steps.push(async () => {
+    this.addStep(async () => {
       const actual = serializeTree(this.root);
       if (actual.trim() !== expected.trim()) {
         throw new Error(
@@ -181,7 +183,7 @@ export class FlowChain implements PromiseLike<void> {
   expectChanges(
     expected: string | ChangeSpec | ((diff: TreeDiff) => void),
   ): this {
-    this.steps.push(async () => {
+    this.addStep(async () => {
       if (!this.baseline) {
         throw new Error(
           "flow.expectChanges: no action has run — nothing to diff.",
@@ -223,7 +225,7 @@ export class FlowChain implements PromiseLike<void> {
    * tree matches the predicate (pass `null` to assert none is open).
    */
   expectActiveModal(predicate: null | ((name: string) => boolean)): this {
-    this.steps.push(async () => {
+    this.addStep(async () => {
       const tree = extract(this.root, "a11y");
       const dialog =
         findByRole(tree, "dialog") ?? findByRole(tree, "alertdialog");
@@ -248,11 +250,28 @@ export class FlowChain implements PromiseLike<void> {
   expect(
     predicate: (tree: ReturnType<typeof extract>) => void | Promise<void>,
   ): this {
-    this.steps.push(async () => {
+    this.addStep(async () => {
       const tree = extract(this.root, "a11y");
       await predicate(tree);
     });
     return this;
+  }
+
+  /**
+   * Queue a step. Steps run once, in order, when the chain is first awaited.
+   *
+   * Adding one after that is rejected rather than silently ignored: the chain
+   * has already run, so a late step would never execute and the assertion it
+   * carries would quietly vanish.
+   */
+  private addStep(step: Step): void {
+    if (this.runPromise) {
+      throw new Error(
+        "flow: cannot add steps after the chain has been awaited — a chain " +
+          "runs once. Start a new flow() for further interactions.",
+      );
+    }
+    this.steps.push(step);
   }
 
   private async run(): Promise<void> {
@@ -263,6 +282,13 @@ export class FlowChain implements PromiseLike<void> {
     onfulfilled?: ((value: void) => TResult1 | PromiseLike<TResult1>) | null,
     onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
   ): PromiseLike<TResult1 | TResult2> {
-    return this.run().then(onfulfilled, onrejected);
+    // Memoize: the chain executes exactly once, however many times it is
+    // resolved. `then` previously called `run()` on every invocation and `run`
+    // replays the whole steps array, so `await f; … await f;`,
+    // `Promise.all([f, f])`, or a stray double-await re-dispatched every prior
+    // action — a second click on "Delete", a second form submit — corrupting
+    // the state under test in a way that's very hard to trace back here.
+    this.runPromise ??= this.run();
+    return this.runPromise.then(onfulfilled, onrejected);
   }
 }
