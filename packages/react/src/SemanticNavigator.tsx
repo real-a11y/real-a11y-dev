@@ -508,10 +508,14 @@ export function SemanticNavigator({
       instance.unmount();
       instanceRef.current = null;
     };
-    // `mode` is applied via setViewMode (no remount). `styleNonce` is mount-only:
-    // createInspector injects <style nonce> once into a reused shadow root, so a
-    // remount on the same host cannot change it. `root.current` is read after
-    // commit (same pattern as before — the ref object identity is stable).
+    // `mode` / `styleNonce` are intentionally omitted from deps (no react-hooks
+    // exhaustive-deps rule in this repo). `mode` is applied via setViewMode (no
+    // remount); on remount from other deps the effect still closes over the
+    // current `mode`. `styleNonce` is mount-only: createInspector injects
+    // <style nonce> once into a reused shadow root (or once into #sn-styles in
+    // light mount), so a remount on the same host cannot change it.
+    // `root.current` is read after commit (same pattern as before — the ref
+    // object identity is stable).
   }, [
     root.current,
     mount,

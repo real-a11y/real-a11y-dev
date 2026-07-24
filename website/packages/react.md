@@ -61,7 +61,7 @@ function App() {
 | `scrollHostOnSelect` | `boolean` | `false` | Scroll host element into view on selection. |
 | `focusHostOnActivate` | `boolean` | `false` | Focus host element on action activation. |
 | `enablePicker` | `boolean` | `false` | Surface a DevTools-style element picker (⦿ button + Ctrl/Cmd+Shift+C). |
-| `styleNonce` | `string` | — | CSP nonce for injected styles. |
+| `styleNonce` | `string` | — | CSP nonce for injected styles (mount-only — not updated on later prop changes). |
 | `onNodeSelect` | `(node: SemanticNode) => void` | — | Called when a tree node is selected. |
 | `onAction` | `(request: ActionRequest, result: ActionResult) => void` | — | Called after an interactive action is dispatched. |
 | `className` | `string` | — | Class name applied to the host `<div>` (inline mode only). |
@@ -72,7 +72,7 @@ function App() {
 | `panelHeight` | `number` | `420` | Initial floating panel height in px. |
 | `panelGap` | `number` | `16` | Gap between the floating panel and the viewport edges in px. |
 
-The component creates its own internal `<div>` host and passes it to `createInspector`. Changing `root`, `mount`, `theme`, `interactive`, `highlightOnHover`, `scrollHostOnSelect`, `focusHostOnActivate`, or `enablePicker` remounts the navigator; changing `mode` uses the imperative `setViewMode()` API without remounting. `styleNonce` is applied when the shadow stylesheet is first injected and is not updated on later prop changes (the shadow root is reused across remounts on the same host). `onNodeSelect` / `onAction` always invoke the latest callback the parent passed (stable wrappers over refs — recreating the prop each render does not leave a stale closure).
+The component creates its own internal `<div>` host and passes it to `createInspector`. Changing `root`, `mount`, `theme`, `interactive`, `highlightOnHover`, `scrollHostOnSelect`, `focusHostOnActivate`, or `enablePicker` remounts the navigator (selection, expansion, and other in-panel UI state reset); changing `mode` uses the imperative `setViewMode()` API without remounting. `styleNonce` is applied when the stylesheet is first injected and is not updated on later prop changes (shadow mount reuses the host shadow root; light mount injects `#sn-styles` into `document.head` once). `onNodeSelect` / `onAction` always invoke the latest callback the parent passed (stable wrappers over refs — recreating the prop each render does not leave a stale closure).
 
 ::: tip Why `highlightOnHover` / `scrollHostOnSelect` / `focusHostOnActivate` default to false
 `<SemanticNavigator />` renders into the same document as your app, so activating a tree row could steal focus from the panel or scroll the page underneath you. The panel itself stays fully interactive either way — row selection, cross-link chip navigation, keyboard movement — what's gated is the side effect on the *real* DOM element. See [Panel interaction vs. host side effects](/guide/panel-features#panel-interaction-vs-host-side-effects) for the full rationale and when to flip them on.
