@@ -102,7 +102,7 @@ navigation "On this page"
 main
   heading "MCP tools reference" (level 1)
   paragraph "The Real A11y MCP server exposes to an MCP client (Claude Code, Claude Desktop, Cursor, and any other MCP-capable assistant). Each tool drives a real Chromium page and reports what a screen reader would actually perceive — computed roles, accessible names, and the defects assistive tech announces as broken — not what the HTML source claims."
-    strong "eighteen tools"
+    strong "seventeen tools"
   paragraph "The tools share browser page. A typical run is → an audit or view tool (, , or a view) → . Because every tool reads the same mutable page, calls must run — a second call mid-flight would race the first's navigation."
     strong "one"
     link "open_page"
