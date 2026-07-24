@@ -12,8 +12,8 @@
     "@real-a11y-dev/core": "workspace:*",
     "@real-a11y-dev/example-patterns": "workspace:*",
     "@real-a11y-dev/react": "workspace:*",
-    "react": "^19.2.6",
-    "react-dom": "^19.2.6"
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
     "@types/react": "^19.2.0",
