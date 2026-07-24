@@ -86,6 +86,94 @@ describe("<SemanticNavigator />", () => {
     expect(pickBtn?.getAttribute("aria-label")).toBe("Pick element in page");
   });
 
+  it("picks up enablePicker toggled after mount", async () => {
+    // Regression: config flags used to be frozen in the createInspector effect
+    // (deps were only root/mount/host), so flipping enablePicker at runtime
+    // silently did nothing.
+    function App() {
+      const rootRef = useRef<HTMLDivElement>(null);
+      const [enablePicker, setEnablePicker] = useState(false);
+      return (
+        <>
+          <div ref={rootRef}>
+            <button>Go</button>
+          </div>
+          <button type="button" onClick={() => setEnablePicker(true)}>
+            enable picker
+          </button>
+          <SemanticNavigator root={rootRef} enablePicker={enablePicker} />
+        </>
+      );
+    }
+
+    const { container, getByText } = render(<App />);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    const host = () => container.querySelectorAll("div")[1];
+    expect(host().shadowRoot?.querySelector(".sn-pick-btn")).toBeNull();
+
+    await act(async () => {
+      getByText("enable picker").click();
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    expect(host().shadowRoot?.querySelector(".sn-pick-btn")).not.toBeNull();
+  });
+
+  it("invokes the latest onNodeSelect after the parent recreates the callback", async () => {
+    // Regression: onNodeSelect was closed over at mount, so a parent that
+    // recreates the callback to capture new state kept invoking the stale one.
+    const seen: string[] = [];
+    function App() {
+      const rootRef = useRef<HTMLDivElement>(null);
+      const [tag, setTag] = useState("v1");
+      return (
+        <>
+          <div ref={rootRef}>
+            <button>Go</button>
+          </div>
+          <button type="button" onClick={() => setTag("v2")}>
+            bump
+          </button>
+          <SemanticNavigator
+            root={rootRef}
+            onNodeSelect={() => {
+              seen.push(tag);
+            }}
+          />
+        </>
+      );
+    }
+
+    const { container, getByText } = render(<App />);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    const host = container.querySelectorAll("div")[1];
+    const clickFirstRow = () => {
+      const row =
+        host.shadowRoot?.querySelector<HTMLElement>('[role="treeitem"]');
+      expect(row).not.toBeNull();
+      row!.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+    };
+
+    await act(async () => {
+      clickFirstRow();
+    });
+    expect(seen).toEqual(["v1"]);
+
+    await act(async () => {
+      getByText("bump").click();
+    });
+    await act(async () => {
+      clickFirstRow();
+    });
+    expect(seen).toEqual(["v1", "v2"]);
+  });
+
   it("attaches the inspector in floating mode when the root is already set on first render", async () => {
     // The common `{open && <SemanticNavigator floating />}` pattern: by the time
     // the navigator first renders, `root.current` is ALREADY populated, and the

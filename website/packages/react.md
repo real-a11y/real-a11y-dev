@@ -72,7 +72,7 @@ function App() {
 | `panelHeight` | `number` | `420` | Initial floating panel height in px. |
 | `panelGap` | `number` | `16` | Gap between the floating panel and the viewport edges in px. |
 
-The component creates its own internal `<div>` host and passes it to `createInspector`. Changing `root` or `mount` remounts the navigator; changing `mode` uses the imperative `setViewMode()` API without remounting.
+The component creates its own internal `<div>` host and passes it to `createInspector`. Changing `root`, `mount`, `theme`, `interactive`, `highlightOnHover`, `scrollHostOnSelect`, `focusHostOnActivate`, or `enablePicker` remounts the navigator; changing `mode` uses the imperative `setViewMode()` API without remounting. `styleNonce` is applied when the shadow stylesheet is first injected and is not updated on later prop changes (the shadow root is reused across remounts on the same host). `onNodeSelect` / `onAction` always invoke the latest callback the parent passed (stable wrappers over refs — recreating the prop each render does not leave a stale closure).
 
 ::: tip Why `highlightOnHover` / `scrollHostOnSelect` / `focusHostOnActivate` default to false
 `<SemanticNavigator />` renders into the same document as your app, so activating a tree row could steal focus from the panel or scroll the page underneath you. The panel itself stays fully interactive either way — row selection, cross-link chip navigation, keyboard movement — what's gated is the side effect on the *real* DOM element. See [Panel interaction vs. host side effects](/guide/panel-features#panel-interaction-vs-host-side-effects) for the full rationale and when to flip them on.
