@@ -313,4 +313,56 @@ describe("MCP end-to-end against a real browser", () => {
     expect(res.isError).toBe(true);
     expect(textOf(res)).toMatch(/No tree checkpoint/);
   });
+
+  // ── producer: "native" (Chromium's own tree over CDP) ────────────────────
+  // A <video controls> builds its play/scrubber/mute controls in a CLOSED
+  // user-agent shadow root the in-page DOM walk can't reach; the native
+  // producer, reading Chromium's own tree, does.
+  it("audit_page producer=native audits the whole native tree", async () => {
+    const html = `<!doctype html><html><head><title>Player</title></head><body>
+      <main>
+        <h1>Player</h1>
+        <video controls width="160" height="90" src="data:video/mp4;base64,AAAA"></video>
+        <button></button>
+      </main>
+    </body></html>`;
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: dataUrl(html) },
+    });
+
+    const out = textOf(
+      await client.callTool({
+        name: "audit_page",
+        arguments: { producer: "native" },
+      }),
+    );
+    // The unlabeled <button> is flagged over the native tree, in Node.
+    expect(out).toMatch(/no-unlabeled-interactive/);
+  });
+
+  it("inspect_page producer=native shows the media controls and N/A tab order", async () => {
+    // Same page is still open from the previous test.
+    const out = textOf(
+      await client.callTool({
+        name: "inspect_page",
+        arguments: { producer: "native" },
+      }),
+    );
+    // Native reaches the UA-shadow media controls the DOM walk can't.
+    expect(out).toMatch(/slider/);
+    expect(out).toMatch(/video time scrubber/);
+    // Tab order is legitimately unavailable on a native tree.
+    expect(out).toMatch(/tab order N\/A \(native producer\)/);
+    expect(out).toMatch(/native producer carries no tab order/);
+  });
+
+  it("audit_page producer=native rejects a narrowed rootSelector", async () => {
+    const res = await client.callTool({
+      name: "audit_page",
+      arguments: { producer: "native", rootSelector: "main" },
+    });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toMatch(/whole document/);
+  });
 });

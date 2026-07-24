@@ -206,6 +206,106 @@ describe("MCP server wiring", () => {
     expect(textOf(res)).toContain('button "Go"');
   });
 
+  // ── producer: "native" on the audit tools ────────────────────────────────
+  // A native ExtractionResult with an unlabeled button — enough for the Node-
+  // side audit (via projectNativeTree) to flag it.
+  const nativeTreeWithUnlabeledButton: FakeSession["nativeTreeResponse"] = {
+    nodes: new Map([
+      [
+        "root",
+        {
+          id: "root",
+          parentId: null,
+          childIds: ["h", "b"],
+          depth: 0,
+          a11y: {
+            role: "main",
+            name: "",
+            description: "",
+            states: {},
+            properties: {},
+            isExposedToAT: true,
+          },
+        },
+      ],
+      [
+        "h",
+        {
+          id: "h",
+          parentId: "root",
+          childIds: [],
+          depth: 1,
+          a11y: {
+            role: "heading",
+            name: "Player",
+            description: "",
+            states: {},
+            properties: { level: "1" },
+            isExposedToAT: true,
+          },
+        },
+      ],
+      [
+        "b",
+        {
+          id: "b",
+          parentId: "root",
+          childIds: [],
+          depth: 1,
+          a11y: {
+            role: "button",
+            name: "",
+            description: "",
+            states: {},
+            properties: {},
+            isExposedToAT: true,
+          },
+        },
+      ],
+    ]),
+    rootId: "root",
+    source: { producer: "native" },
+  };
+
+  it("audit_page producer=native audits the native tree, not the DOM path", async () => {
+    session.nativeTreeResponse = nativeTreeWithUnlabeledButton;
+    const client = await connect(session);
+    const res = await client.callTool({
+      name: "audit_page",
+      arguments: { producer: "native" },
+    });
+    expect(textOf(res)).toContain("no-unlabeled-interactive");
+    // It read the native tree — not the in-page collectFindings DOM path.
+    expect(session.calls.some((c) => c.fn === "nativeTree")).toBe(true);
+    expect(session.calls.some((c) => c.fn === "collectFindings")).toBe(false);
+  });
+
+  it("audit_page producer=native rejects a narrowed rootSelector", async () => {
+    const client = await connect(session);
+    const res = await client.callTool({
+      name: "audit_page",
+      arguments: { producer: "native", rootSelector: "nav" },
+    });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toMatch(/whole document/);
+    // Guard fires before any extraction.
+    expect(session.calls.some((c) => c.fn === "nativeTree")).toBe(false);
+  });
+
+  it("inspect_page producer=native reports tab order as N/A", async () => {
+    session.nativeTreeResponse = nativeTreeWithUnlabeledButton;
+    const client = await connect(session);
+    const res = await client.callTool({
+      name: "inspect_page",
+      arguments: { producer: "native" },
+    });
+    const out = textOf(res);
+    expect(out).toContain("tab order N/A (native producer)");
+    expect(out).toMatch(/native producer carries no tab order/);
+    expect(out).toContain("Player"); // the tree/outline still render
+    expect(session.calls.some((c) => c.fn === "nativeTree")).toBe(true);
+  });
+
   it("open_page reports the resolved title and url, defaulting the wait", async () => {
     const client = await connect(session);
     const res = await client.callTool({
