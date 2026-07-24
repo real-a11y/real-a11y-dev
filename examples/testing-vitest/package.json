@@ -11,8 +11,8 @@
     "@real-a11y-dev/core": "workspace:*",
     "@real-a11y-dev/example-patterns": "workspace:*",
     "@real-a11y-dev/testing": "workspace:*",
-    "react": "^19.2.6",
-    "react-dom": "^19.2.6"
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
     "@testing-library/react": "^16.0.0",
