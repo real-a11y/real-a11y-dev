@@ -110,12 +110,23 @@ jobs:
       - name: Test
         run: pnpm test
 
-      # `release-tag.yml` always dispatches with an explicit tag. A tag-push run
-      # carries no input, so derive one from the version rather than assuming
-      # `beta`: a stable `0.1.0` has to publish under `latest` itself, because
-      # advance-latest.mjs deliberately no-ops once pre-mode has exited. Without
-      # this, graduating to stable would ship under `beta` and leave `latest`
-      # pinned to the last prerelease.
+      # Derive the channel from the version instead of hardcoding `beta`.
+      # `release-tag.yml` dispatches *without* a `tag` input and a `v*` tag-push
+      # carries none either, so an empty input means "decide from the version":
+      # a prerelease → `beta` (advance-latest.mjs then moves `latest` per
+      # package), a plain `0.1.0` → `latest`. Without this a stable graduation
+      # would ship under `beta` and strand `latest` on the last prerelease, since
+      # advance-latest.mjs no-ops once pre-mode has exited.
+      #
+      # One derived tag is applied to every package by `pnpm publish -r --tag`,
+      # yet it reads only core's version. That is safe because changesets
+      # pre-mode is repo-global: in pre-mode every freshly-bumped package is a
+      # prerelease, out of it every one is stable, so core's state matches
+      # whatever is actually being published this run. A package left unbumped
+      # keeps its old version, is already on npm, and is skipped — never
+      # re-tagged. The only way to mix a stable core with a *new* prerelease of
+      # an independent package (cli/mcp/validate) is to hand-edit versions
+      # outside changesets; pass the `tag` input explicitly to override for that.
       - name: Resolve dist-tag
         id: tag
         run: |
