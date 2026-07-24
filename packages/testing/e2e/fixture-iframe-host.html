@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Host page with an embedded frame</title>
+  </head>
+  <body>
+    <header><h1>Store</h1></header>
+    <main>
+      <p>Everything here is well-labeled.</p>
+      <button>View cart</button>
+      <!-- The unlabeled control lives inside the frame, invisible to a host audit. -->
+      <iframe
+        name="checkout"
+        title="Checkout"
+        src="./fixture-iframe-inner.html"
+      ></iframe>
+    </main>
+  </body>
+</html>

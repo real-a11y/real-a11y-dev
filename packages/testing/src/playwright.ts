@@ -51,7 +51,11 @@ function readBundle(): string {
 // @playwright/test to get correct types for the handle.
 // ---------------------------------------------------------------------------
 
-/** Minimal structural type for a Playwright `Page`. Accepts the real type. */
+/**
+ * Minimal structural type for a Playwright audit target. Accepts a real `Page`
+ * — and also a `Frame`, which is how you audit iframe content (extraction never
+ * descends into iframes; see `attach`).
+ */
 export type PlaywrightPage = {
   /**
    * Playwright accepts either a function (with an optional serialisable
@@ -62,7 +66,12 @@ export type PlaywrightPage = {
     pageFunction: ((arg: unknown) => R) | string,
     arg?: unknown,
   ): Promise<R>;
-  addScriptTag(options: { content?: string; url?: string }): Promise<unknown>;
+  /**
+   * Present on `Page`, absent on `Frame` — hence optional. When available,
+   * `attach` uses it to re-inject the bundle into every future document, so the
+   * handle survives navigation.
+   */
+  addInitScript?(script: { content: string }): Promise<unknown>;
 };
 
 export interface AttachOptions {
@@ -140,6 +149,28 @@ export interface SemanticNavigatorPageHandle {
  * const sn = await attach(page, { rootSelector: "main" });
  * await sn.assertNoUnlabeledInteractive();
  * ```
+ *
+ * ## iframes are not traversed
+ *
+ * Extraction walks one document. It never descends into an `<iframe>` — the
+ * frame is a single `group` node and its contents are absent from every
+ * snapshot and assertion. So a page embedding a checkout or payment iframe
+ * audits **clean while that content is never checked**. Audit a frame by
+ * attaching to it directly:
+ *
+ * ```ts
+ * const outer = await attach(page);                  // host document only
+ * const frame = page.frame({ name: "checkout" })!;   // or page.frames()[1]
+ * const inner = await attach(frame);                 // the iframe's document
+ * await inner.assertNoUnlabeledInteractive();
+ * ```
+ *
+ * ## Navigation
+ *
+ * The bundle lives on `window`, so a navigation wipes it. When the target is a
+ * `Page`, `attach` registers an init script so every subsequent document
+ * re-injects it automatically and the handle keeps working across `goto()`.
+ * A `Frame` has no `addInitScript`; re-`attach` after it navigates.
  */
 export async function attach(
   page: PlaywrightPage,
@@ -163,7 +194,24 @@ export async function attach(
   // completes with `undefined` — nothing non-serialisable crosses back.
   // Calling this repeatedly on one page stays harmless: the IIFE just
   // overwrites the same global.
-  await page.evaluate(readBundle());
+  const bundle = readBundle();
+
+  // Survive navigation. The global lives on `window`, so `page.goto()` (or any
+  // hard navigation) wipes it and every later handle call would explode inside
+  // the page. An init script re-injects the bundle into each new document, so
+  // the handle stays usable across a multi-page test. `Frame` has no
+  // `addInitScript` — those callers re-attach after navigating, and the guard
+  // in the page functions tells them so.
+  //
+  // `addInitScript` runs its content inside a function wrapper, so the bundle's
+  // top-level `var __realA11y__` would be function-scoped rather than global.
+  // Promote it explicitly. (Plain `page.evaluate(source)` runs at global scope,
+  // so the `var` already lands on `window` there — no promotion needed.)
+  await page.addInitScript?.({
+    content: `${bundle}\n;globalThis.__realA11y__ = __realA11y__;`,
+  });
+
+  await page.evaluate(bundle);
 
   // Verify the injection succeeded before returning the handle.
   const ready = await page.evaluate(
@@ -191,6 +239,15 @@ export async function attach(
           string,
           (root: Element, ...a: unknown[]) => unknown
         >;
+        // The global is gone when the document changed under us. Say so —
+        // dereferencing it gave "Cannot read properties of undefined", which
+        // names neither the cause nor the fix.
+        if (!ra) {
+          throw new Error(
+            "@real-a11y-dev/testing/playwright: the page bundle is missing — " +
+              "this document navigated since attach(). Call attach() again.",
+          );
+        }
         // Fail loudly on a selector that matches nothing. Falling back to
         // <body> would silently audit the whole page — a typo'd or since-
         // refactored `rootSelector` would then pass assertions and snapshot
@@ -235,6 +292,14 @@ export async function attach(
             string,
             (root: Element, options?: unknown) => unknown
           >;
+          // Same contract as evalFn — name the cause instead of letting an
+          // undefined global surface as "Cannot read properties of undefined".
+          if (!ra) {
+            throw new Error(
+              "@real-a11y-dev/testing/playwright: the page bundle is missing — " +
+                "this document navigated since attach(). Call attach() again.",
+            );
+          }
           // Same contract as evalFn: a non-matching rootSelector is an error,
           // not a silent widening of the audit to the whole document.
           const root = document.querySelector(a.selector);
