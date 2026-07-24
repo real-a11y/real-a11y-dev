@@ -363,4 +363,54 @@ describe("flow", () => {
     // a generous margin that still fails loudly if the observer starts late.
     expect(mutating).toBeLessThan(inert / 2);
   });
+
+  describe("a chain runs exactly once", () => {
+    /** Mount a button that counts its own clicks. */
+    const counter = () => {
+      const root = mount(`<main><button>Go</button></main>`);
+      const seen = { clicks: 0 };
+      root
+        .querySelector("button")!
+        .addEventListener("click", () => seen.clicks++);
+      return { root, seen };
+    };
+
+    it("does not re-dispatch actions when awaited twice", async () => {
+      // `then()` used to call run() on every resolution, and run() replays the
+      // whole steps array — so a second await re-clicked "Go". In real suites
+      // that's a second Delete or a duplicate form submit.
+      const { root, seen } = counter();
+      const chain = flow(root, { waitTimeout: 50 })
+        .findByRole("button", { name: "Go" })
+        .click();
+
+      await chain;
+      await chain;
+
+      expect(seen.clicks).toBe(1);
+    });
+
+    it("does not re-dispatch when resolved concurrently via Promise.all", async () => {
+      const { root, seen } = counter();
+      const chain = flow(root, { waitTimeout: 50 })
+        .findByRole("button", { name: "Go" })
+        .click();
+
+      await Promise.all([chain, chain]);
+
+      expect(seen.clicks).toBe(1);
+    });
+
+    it("rejects steps added after the chain has been awaited", async () => {
+      // Silently ignoring the late step would drop whatever assertion it
+      // carries — fail loudly instead.
+      const { root } = counter();
+      const chain = flow(root, { waitTimeout: 50 })
+        .findByRole("button", { name: "Go" })
+        .click();
+      await chain;
+
+      expect(() => chain.click()).toThrow(/after the chain has been awaited/);
+    });
+  });
 });

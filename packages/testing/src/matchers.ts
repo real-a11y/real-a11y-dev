@@ -67,6 +67,29 @@ function describe(value: unknown): string {
   return typeof value;
 }
 
+/**
+ * Guard a matcher's received value.
+ *
+ * THROWS rather than returning `{ pass: false }`. A returned failure is exactly
+ * what `.not` inverts, so a wrong-typed value made the negated form succeed
+ * *without running the audit at all*: when `container.firstChild` is actually
+ * `null`, `expect(container.firstChild).not.toHaveNoUnlabeledInteractive()`
+ * reported success while asserting nothing. That's the worst possible outcome
+ * for a matcher whose job is catching mistakes. A throw fails in both
+ * directions, because `.not` can invert a result but cannot swallow an
+ * exception — the same approach jest-dom takes for wrong-typed inputs.
+ */
+function requireElement(
+  received: unknown,
+  name: string,
+): asserts received is Element {
+  if (!(received instanceof Element)) {
+    throw new TypeError(
+      `${name}: expected a DOM Element, received ${describe(received)}`,
+    );
+  }
+}
+
 // ─── assertion matchers ──────────────────────────────────────────────────────
 
 function runAssertion(
@@ -74,13 +97,7 @@ function runAssertion(
   assert: (root: Element) => void,
   name: string,
 ): MatcherResult {
-  if (!(received instanceof Element)) {
-    return {
-      pass: false,
-      message: () =>
-        `${name}: expected a DOM Element, received ${describe(received)}`,
-    };
-  }
+  requireElement(received, name);
 
   let failure: A11yAssertionError | null = null;
   try {
@@ -116,13 +133,7 @@ function toHaveTabSequence(
   received: unknown,
   expected: string[],
 ): MatcherResult {
-  if (!(received instanceof Element)) {
-    return {
-      pass: false,
-      message: () =>
-        `toHaveTabSequence: expected a DOM Element, received ${describe(received)}`,
-    };
-  }
+  requireElement(received, "toHaveTabSequence");
   const actual = tabTokens(received);
   // Compare with typography folded so a hand-typed straight quote matches a
   // rendered curly one (a name like `link "Don't save"`). The message still
@@ -173,13 +184,7 @@ function toValidatedNodes(tree: Tree): Map<string, ValidatedNode> {
  * misuse). Advisory warnings don't fail the matcher.
  */
 function toBeValidA11yTree(received: unknown): MatcherResult {
-  if (!(received instanceof Element)) {
-    return {
-      pass: false,
-      message: () =>
-        `toBeValidA11yTree: expected a DOM Element, received ${describe(received)}`,
-    };
-  }
+  requireElement(received, "toBeValidA11yTree");
   const nodes = toValidatedNodes(extract(received, "a11y"));
   const label = (n: ValidatedNode) =>
     n.name ? `${n.role} "${n.name}"` : n.role;
@@ -230,11 +235,11 @@ function toMatchA11yContract(
   } else if (typeof received === "string") {
     targetText = received;
   } else {
-    return {
-      pass: false,
-      message: () =>
-        `toMatchA11yContract: expected a DOM Element or a serialized tree string, received ${describe(received)}`,
-    };
+    // Throw, don't return `pass: false` — see `requireElement`. This matcher
+    // takes either shape, so it can't use that helper directly.
+    throw new TypeError(
+      `toMatchA11yContract: expected a DOM Element or a serialized tree string, received ${describe(received)}`,
+    );
   }
 
   const result = verifyContract(contractText, targetText, options);
