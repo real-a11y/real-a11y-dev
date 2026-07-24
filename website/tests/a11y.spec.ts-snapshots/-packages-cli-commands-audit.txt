@@ -219,8 +219,8 @@ main
     code "error"
     link "--no-annotate"
       code "--no-annotate"
-    link "--tree"
-      code "--tree"
+    link "--producer"
+      code "--producer"
     code "dom | native"
   heading "inspect <url>" (level 3)
     code "inspect <url>"
@@ -257,8 +257,8 @@ main
     link "Config"
     link "--include-generic"
       code "--include-generic"
-    link "--tree"
-      code "--tree"
+    link "--producer"
+      code "--producer"
     code "dom | native"
   heading "outline <url>" (level 3)
     code "outline <url>"
@@ -272,8 +272,8 @@ main
     link "Output"
     code "pretty | json"
     link "Config"
-    link "--tree"
-      code "--tree"
+    link "--producer"
+      code "--producer"
     code "dom | native"
   heading "tabs <url>" (level 3)
     code "tabs <url>"
@@ -476,8 +476,8 @@ main
     code "rootSelector"
   button "Copy Code"
   code
-  heading "--tree <producer>" (level 3)
-    code "--tree <producer>"
+  heading "--producer <kind>" (level 3)
+    code "--producer <kind>"
   list
     listitem "· · audit, tree, outline"
       strong "Type:"
@@ -504,7 +504,7 @@ main
       code "snapshot"
     link "list"
       code "list"
-    code "--tree native"
+    code "--producer native"
     link "--root"
       code "--root"
   heading "--device <name>" (level 3)

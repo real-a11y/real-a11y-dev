@@ -25,7 +25,7 @@ import {
   type NativeSnapshotOptions,
 } from "@real-a11y-dev/snapshot";
 
-import type { TreeMode } from "./args.js";
+import type { Producer } from "./args.js";
 
 import { registerCleanup } from "./cleanup.js";
 import { CliError } from "./exit.js";
@@ -170,7 +170,7 @@ export async function snapshotPage(
   session: BrowserSession,
   root: string,
   options: SnapshotOptions,
-  producer: TreeMode = "dom",
+  producer: Producer = "dom",
 ): Promise<CleanSnapshot> {
   try {
     if (producer === "native") {

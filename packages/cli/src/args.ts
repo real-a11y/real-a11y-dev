@@ -24,7 +24,7 @@ type Options = NonNullable<ParseArgsConfig["options"]>;
 
 const BROWSER_FLAGS: Options = {
   root: { type: "string" },
-  tree: { type: "string" },
+  producer: { type: "string" },
   device: { type: "string" },
   viewport: { type: "string" },
   "wait-until": { type: "string" },
@@ -179,7 +179,7 @@ Flags:
   --rules <ids>          Comma-separated subset of: ${ALL_RULES.join(", ")}
   --fail-on <level>      error | warning | never          (default: error)
   --no-annotate          Skip GitHub Actions annotations
-  --tree <producer>      dom | native                     (default: dom)
+  --producer <kind>      dom | native                     (default: dom)
                          native audits Chromium's own a11y tree (whole page;
                          reaches UA-shadow media controls; rejects --root)
 ${SHARED_FLAG_HELP}
@@ -213,7 +213,7 @@ Print the semantic tree — what a screen reader perceives, role by role.
 
 Flags:
   --include-generic      Include generic container nodes
-  --tree <producer>      dom | native                     (default: dom)
+  --producer <kind>      dom | native                     (default: dom)
                          native reads Chromium's own a11y tree (whole page;
                          reaches UA-shadow media controls; rejects --root)
 ${SHARED_FLAG_HELP}
@@ -228,7 +228,7 @@ ${SHARED_FLAG_HELP}
 Print the heading outline.
 
 Flags:
-  --tree <producer>      dom | native                     (default: dom)
+  --producer <kind>      dom | native                     (default: dom)
                          native reads Chromium's own a11y tree (whole page;
                          rejects --root)
 ${SHARED_FLAG_HELP}
@@ -450,13 +450,15 @@ export function parseFormat<T extends string>(
  * walks the light DOM; `native` reads Chromium's own accessibility tree over
  * CDP. Native is whole-document, read-only, and carries no tab order — so only
  * the commands that need neither `--root` scoping nor a tab sequence accept it
- * (see `treeModeOf`). */
-export type TreeMode = "dom" | "native";
+ * (see `producerOf`). */
+export type Producer = "dom" | "native";
 
-export function parseTree(value: string | boolean | undefined): TreeMode {
+export function parseProducer(value: string | boolean | undefined): Producer {
   if (value === undefined) return "dom";
   if (value === "dom" || value === "native") return value;
-  throw new CliError(`--tree expects dom | native — got "${String(value)}"`);
+  throw new CliError(
+    `--producer expects dom | native — got "${String(value)}"`,
+  );
 }
 
 /** The report axis for `--only`; undefined = the full two-axis report. An enum

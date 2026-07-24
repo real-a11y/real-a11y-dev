@@ -9,7 +9,7 @@ import { CliError } from "../exit.js";
 import {
   isAuthenticated,
   sessionFlags,
-  treeModeOf,
+  producerOf,
   type Target,
 } from "./common.js";
 
@@ -91,40 +91,40 @@ describe("isAuthenticated", () => {
   });
 });
 
-describe("treeModeOf", () => {
+describe("producerOf", () => {
   it("defaults to dom and passes dom through on any command", () => {
-    expect(treeModeOf({}, "tabs", false)).toBe("dom");
-    expect(treeModeOf({ tree: "dom" }, "audit", true)).toBe("dom");
+    expect(producerOf({}, "tabs", false)).toBe("dom");
+    expect(producerOf({ producer: "dom" }, "audit", true)).toBe("dom");
   });
 
   it("returns native for a supporting command", () => {
-    expect(treeModeOf({ tree: "native" }, "audit", true)).toBe("native");
-    expect(treeModeOf({ tree: "native" }, "tree", true)).toBe("native");
+    expect(producerOf({ producer: "native" }, "audit", true)).toBe("native");
+    expect(producerOf({ producer: "native" }, "tree", true)).toBe("native");
   });
 
   it("rejects native on a command that can't support it", () => {
-    expect(() => treeModeOf({ tree: "native" }, "tabs", false)).toThrow(
+    expect(() => producerOf({ producer: "native" }, "tabs", false)).toThrow(
       /not supported by `tabs`/,
     );
-    expect(() => treeModeOf({ tree: "native" }, "inspect", false)).toThrow(
+    expect(() => producerOf({ producer: "native" }, "inspect", false)).toThrow(
       CliError,
     );
   });
 
   it("rejects native combined with a non-body --root", () => {
     expect(() =>
-      treeModeOf({ tree: "native", root: "main" }, "tree", true),
+      producerOf({ producer: "native", root: "main" }, "tree", true),
     ).toThrow(/whole document/);
   });
 
   it("allows native with an explicit --root body (the implicit default)", () => {
-    expect(treeModeOf({ tree: "native", root: "body" }, "tree", true)).toBe(
+    expect(producerOf({ producer: "native", root: "body" }, "tree", true)).toBe(
       "native",
     );
   });
 
-  it("rejects an invalid --tree value regardless of support", () => {
-    expect(() => treeModeOf({ tree: "webkit" }, "audit", true)).toThrow(
+  it("rejects an invalid --producer value regardless of support", () => {
+    expect(() => producerOf({ producer: "webkit" }, "audit", true)).toThrow(
       /dom \| native/,
     );
   });

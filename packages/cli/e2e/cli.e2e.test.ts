@@ -176,7 +176,7 @@ describe("real-a11y (built bin)", () => {
   });
 });
 
-// ── --tree native (Chromium's own a11y tree over CDP) ─────────────────────────
+// ── --producer native (Chromium's own a11y tree over CDP) ─────────────────────────
 // A <video controls> builds its play/scrubber/mute controls in a CLOSED
 // user-agent shadow root the DOM producer's in-page walk can't reach; the native
 // producer, reading Chromium's own tree, does. These prove the flag threads
@@ -190,12 +190,12 @@ const ICON_BTN_PAGE = dataUrl(
   "<main><h1>Hi</h1><button><svg width='10' height='10'></svg></button></main>",
 );
 
-describe("real-a11y --tree native (built bin)", () => {
-  it("tree --tree native surfaces UA-shadow media controls the DOM walk misses", async () => {
+describe("real-a11y --producer native (built bin)", () => {
+  it("tree --producer native surfaces UA-shadow media controls the DOM walk misses", async () => {
     const { code, stdout } = await runCli([
       "tree",
       VIDEO_PAGE,
-      "--tree",
+      "--producer",
       "native",
     ]);
     expect(code).toBe(0);
@@ -209,44 +209,44 @@ describe("real-a11y --tree native (built bin)", () => {
     expect(dom.stdout).not.toContain("slider");
   });
 
-  it("outline --tree native prints the heading outline", async () => {
+  it("outline --producer native prints the heading outline", async () => {
     const { code, stdout } = await runCli([
       "outline",
       VIDEO_PAGE,
-      "--tree",
+      "--producer",
       "native",
     ]);
     expect(code).toBe(0);
     expect(stdout).toContain("h1 Player");
   });
 
-  it("audit --tree native audits the native tree (flags an unlabeled control)", async () => {
+  it("audit --producer native audits the native tree (flags an unlabeled control)", async () => {
     const { code, stdout } = await runCli([
       "audit",
       ICON_BTN_PAGE,
-      "--tree",
+      "--producer",
       "native",
     ]);
     expect(code).toBe(1);
     expect(stdout).toContain("no-unlabeled-interactive");
   });
 
-  it("rejects --tree native on tabs (no tab order in a native tree)", async () => {
+  it("rejects --producer native on tabs (no tab order in a native tree)", async () => {
     const { code, stderr } = await runCli([
       "tabs",
       VIDEO_PAGE,
-      "--tree",
+      "--producer",
       "native",
     ]);
     expect(code).toBe(2);
     expect(stderr).toContain("not supported by `tabs`");
   });
 
-  it("rejects --tree native combined with --root", async () => {
+  it("rejects --producer native combined with --root", async () => {
     const { code, stderr } = await runCli([
       "tree",
       VIDEO_PAGE,
-      "--tree",
+      "--producer",
       "native",
       "--root",
       "main",
@@ -255,11 +255,11 @@ describe("real-a11y --tree native (built bin)", () => {
     expect(stderr).toContain("whole document");
   });
 
-  it("rejects an unknown --tree value", async () => {
+  it("rejects an unknown --producer value", async () => {
     const { code, stderr } = await runCli([
       "tree",
       VIDEO_PAGE,
-      "--tree",
+      "--producer",
       "webkit",
     ]);
     expect(code).toBe(2);

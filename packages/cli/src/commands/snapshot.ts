@@ -53,7 +53,7 @@ import { assertAllowedUrl, normalizeTarget } from "../url-gate.js";
 import {
   resolvePageList,
   sessionFlags,
-  treeModeOf,
+  producerOf,
   type Target,
 } from "./common.js";
 
@@ -84,7 +84,7 @@ export const snapshotCommand: CommandFn = async (positionals, flags) => {
   // `defaults` — run.ts merged them into `flags` before dispatch.
   const rules = parseRules(flags.rules);
   // The artifact carries tab-order per page for `diff`; a native tree has none.
-  treeModeOf(flags, "snapshot", false);
+  producerOf(flags, "snapshot", false);
   const openOptions = parseOpenOptions(flags);
   // `--md` predates `--format` here and stays as an alias for `--format md`.
   const format = parseFormat(flags.format, SNAPSHOT_FORMATS);
