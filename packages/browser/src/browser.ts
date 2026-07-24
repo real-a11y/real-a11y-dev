@@ -16,7 +16,11 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import type { Finding } from "@real-a11y-dev/audit";
-import type { ExtractionResult } from "@real-a11y-dev/core";
+import type {
+  ActionRequest,
+  ActionResult,
+  ExtractionResult,
+} from "@real-a11y-dev/core";
 
 import type {
   Browser,
@@ -25,6 +29,7 @@ import type {
   Page,
 } from "playwright";
 
+import { CdpActionBackend } from "./cdp-action-backend.js";
 import { nativeTree as computeNativeTree } from "./native-tree.js";
 
 /**
@@ -273,6 +278,14 @@ export interface A11ySession {
    * them, `dom`; never `interaction`. Chromium only.
    */
   nativeTree(): Promise<ExtractionResult>;
+  /**
+   * Dispatch an action (click / type / focus) against a node from the native
+   * tree, over CDP — the write side of the native producer. The `nodeId` is a
+   * native node id (`ax-dom-<n>`); a node with no backing DOM element (e.g. a
+   * synthesized document root) is refused. The result never carries typed
+   * values or field content. Chromium only.
+   */
+  act(request: ActionRequest): Promise<ActionResult>;
   close(): Promise<void>;
 }
 
@@ -487,6 +500,24 @@ export class BrowserSession implements A11ySession {
    */
   async nativeTree(): Promise<ExtractionResult> {
     return this.run(() => computeNativeTree(this.requirePage()));
+  }
+
+  /**
+   * Dispatch a click / type / focus against a node from the native tree, over
+   * CDP (see {@link CdpActionBackend}). The write side of the native producer:
+   * pass an `ActionRequest` whose `nodeId` is a native id (`ax-dom-<n>`).
+   * Read-only nodes are refused and no field content is returned. Chromium only.
+   */
+  async act(request: ActionRequest): Promise<ActionResult> {
+    return this.run(async () => {
+      const page = this.requirePage();
+      const client = await page.context().newCDPSession(page);
+      try {
+        return await new CdpActionBackend(client).dispatch(request);
+      } finally {
+        await client.detach().catch(() => {});
+      }
+    });
   }
 
   /**
