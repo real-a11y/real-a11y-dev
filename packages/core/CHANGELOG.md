@@ -1,5 +1,72 @@
 # @real-a11y-dev/core
 
+## 0.1.0-beta.11
+
+### Minor Changes
+
+- 7f93f92: **Breaking (beta):** reshape `SemanticNode` to be accessibility-first — `dom`, `interaction`, and `ui` are now **optional** facets; `a11y` stays required. `ExtractionResult` gains a required `source: { producer: "dom" | "native"; chrome? }` provenance stamp.
+
+  This is the model break from the native-tree RFC (#197, v2 §2 / v3 R5): one canonical model, two producers. The DOM producer (this package's extractors) still populates every facet, so **runtime behaviour is unchanged** — the change is the type contract. A future native (CDP) producer in `@real-a11y-dev/browser` yields nodes whose `dom`/`interaction` may be absent (UA-internal nodes with no backing light-DOM element), and `ui` is panel-only.
+
+  - New exports: `TreeProducerKind`, `TreeSource`, and `DomSemanticNode` — a `SemanticNode` with all facets guaranteed present, for surfaces that only ever render DOM-produced trees (the in-page tree panel, the extension) so they can narrow once at their boundary instead of guarding every read.
+  - Generic tree helpers (`linearize`, `diffTrees`, `getTabSequence`, `searchTree`, `buildControlsIndex`) now tolerate absent facets and degrade rather than assume presence, so they stay correct on native trees.
+  - `@real-a11y-dev/audit` findings degrade gracefully when `dom` is absent: an unlabeled-interactive / image-alt finding drops the `<tag>` from its message (and omits `tagName`) instead of printing `<undefined>`.
+
+  Migration: if you read `node.dom.*`, `node.interaction.*`, or `node.ui.*`, either narrow to `DomSemanticNode` (when you know the tree came from the DOM producer) or guard with optional chaining. Every `ExtractionResult` you construct by hand now needs a `source` (use `{ producer: "dom" }` for a DOM-produced tree).
+
+- f2532e5: New native-AX vocabulary module: the single shared normalization of Chromium's native accessibility tree (CDP `Accessibility.getFullAXTree`) into engine vocabulary.
+
+  Exports `normalizeNativeAX` / `serializeNativeAX` (plus the tables: `NATIVE_AX_DROP_ROLES`, `NATIVE_AX_ROLE_MAP`, `NATIVE_AX_NAME_SOURCE_ROLES`, `mapNativeAXRole`, and `NATIVE_AX_VOCABULARY_VERSION`). Pure functions — no CDP, no DOM globals — so the same module serves every native-tree consumer: the browser package's upcoming `nativeTree()` producer, the extension's `chrome.debugger` mode, desktop/panel surfaces, and parity harnesses. Consolidates the four private copies that grew during the native-tree RFC spikes (#197) and had already drifted.
+
+  Normalization: drops Blink noise (`StaticText`/`InlineTextBox`/`generic`/`none`/`RootWebArea`/…) re-parenting kept descendants to the nearest kept ancestor; maps internal roles (`Video`→`video`, `Audio`→`audio`, `image`→`img`); promotes names off dropped text children without overriding authored names; and — fixing a latent bug in the spike copies — orders siblings by each parent's `childIds` (Chromium's document order), not the interleaved flat-list order of the raw payload. Tested against a recorded Chromium payload, offline.
+
+- d693a00: Track the focused element at extraction time. `ExtractionResult` gains an optional `focusedId` — the node id of the element that held focus when the tree was extracted, if that element is inside the extracted subtree.
+
+  Both `extractA11yTree` and `extractDomTree` now resolve `document.activeElement` (piercing shadow roots to the real target) and record it. Focus resting on `<body>`/`<html>` — the absence of focus — is treated as none, so a freshly-rendered page reports no `focusedId` and downstream snapshots don't change. A focused node that's flattened out of the a11y view (e.g. a decorative generic wrapper) is not inherited into that view.
+
+  This is the capture point for the `[focused]` marker rendered by the `@real-a11y-dev/serialize` / `@real-a11y-dev/testing` serializers.
+
+- 907c68e: Add `LiveTreeExtractor` for incremental DOM and accessibility tree updates.
+
+  `@real-a11y-dev/core` now exposes a `LiveTreeExtractor` class that keeps the
+  previous extraction in memory and re-extracts only the dirty subtrees reported
+  by `DomObserver`. It falls back to a full extraction when a mutation can affect
+  non-local accessibility state (modal/portal scope, `id`, `aria-labelledby`,
+  `aria-describedby`, `for`, etc.). The result is the same `ExtractionResult`
+  shape as `extractA11yTree` / `extractDomTree`.
+
+  `DomObserver` callbacks now receive an optional `TreeChange` payload containing
+  the accumulated `MutationRecord`s and synthetic dirty roots from `input`/`change`
+  events, which `LiveTreeExtractor.refresh(change)` consumes.
+
+  The Chrome extension, React `useSemanticTree` hook, and Storybook addon preview
+  have been wired to use `LiveTreeExtractor` so live updates avoid a full page
+  re-extraction when only a small region changed.
+
+- 19e9fc2: Expose `<video>` / `<audio>` with real `video` / `audio` roles, mirroring Chromium's native accessibility tree.
+
+  ARIA defines no media roles and HTML-AAM says "no corresponding role", but that framing hid media elements behind `generic` — in the panel a named, captioned player was indistinguishable from a `<div>`, while Chrome DevTools shows a `Video "Product tour"` node. The extractor now sides with the browser's ground truth:
+
+  - `<video>` → role `video`, `<audio>` → role `audio` (explicit `role="…"` still wins).
+  - Media nodes are leaves: unrendered fallback content ("Sorry, your browser doesn't support…") and `<track>` / `<source>` metadata never become tree nodes, never leak into the accessible name, and never pollute the media node's own `textContent` / `descendantText`. (Ancestor nodes' `descendantText` previews still reflect raw DOM `textContent` — the same pre-existing behavior hidden subtrees have.) `<source>` inside `<picture>` is skipped too.
+  - The one a11y-critical signal that lived in the skipped children — does this media ship a captions or subtitles track? (WCAG 1.2.2) — is hoisted onto the media node as `properties.captions` (`"true"` / `"false"`).
+  - `<video controls>` / `<audio controls>` are reported focusable with a `focus` action, matching Chromium (the actual play/seek/volume controls live in a closed user-agent shadow root no in-page extractor can reach). `controls` / `autoplay` / `muted` / `loop` / `poster` now surface in the node's key attributes, and `DomObserver` watches the `controls` attribute so toggling native controls re-extracts.
+
+  Note: Playwright's `ariaSnapshot` omits media elements entirely (they have no ARIA role), so aria-snapshot output is unchanged; this aligns the DevTools-style full tree that the panel, extension, and serializers render.
+
+### Patch Changes
+
+- 6a658fe: ActionDispatcher: fix an uncaught `TypeError` when the `type` action targets a custom ARIA textbox/searchbox/spinbutton. The extractor assigns `type` to those roles, which in real apps are usually contenteditable `<div>`/`<span>`s (ProseMirror, Lexical, the Slack composer, custom date steppers) — but `handleType` unconditionally called the native `HTMLInputElement` value setter, whose brand check throws `"Illegal invocation"` on a non-input, and `dispatch()` had no try/catch so it escaped the caller (in the extension it blew out of the content-script message handler and hung the panel's action).
+
+  Now `handleType` guards the native-setter path with `instanceof`, drives contenteditable custom textboxes via the platform insertion sequence (a cancelable `beforeinput` so model-driven editors like ProseMirror/Lexical insert into their own document model, falling back to writing `textContent` + `input` only when nothing handles it), returns a failed result for elements that accept no text input, and `dispatch()` wraps every handler so any synchronous throw becomes `{ success: false, error }` instead of propagating.
+
+- 725fcc0: Bound `getDescendantText` to a capped walk instead of materializing each element's full `textContent` subtree. Previews stop after 240 collapsed characters, avoiding O(total text × depth) string work on text-heavy pages during extraction.
+- 96cb0ee: Cache `getComputedStyle` once per element during extraction and share it across the subtree-hidden / visually-hidden / sr-only / AT-hidden checks. Previously a kept non-interactive node could call `getComputedStyle` up to five times, and name computation repeated `isSubtreeHidden` (another style resolve) for every descendant. Also fold the overlapping hidden-attr / CSS checks so `isHiddenFromAT` builds on `isSubtreeHidden` instead of re-implementing them — a drift hazard when a future condition was added to only one of the two.
+- ad8edc1: Harden the extraction walk against two more DOM-clobbering surfaces. A `<form>` with `<input name="hidden">` (or `id="hidden"`) made `element.hidden` return that input — a truthy value — so `isSubtreeHidden` and `isHiddenFromAT` silently dropped the whole form subtree (quiet data loss, not a crash); both now read the real state through the captured `HTMLElement.prototype` `hidden` getter, which no named control can shadow. And the walk now processes each element inside a per-element `try/catch`, so a single pathological node — e.g. a clobbered `tagName` on a `<form>` making `.toLowerCase()` throw, or any future unknown clobbering — degrades to "skip this node and its subtree" instead of aborting the entire extraction and hanging the panel on "Connecting to page…". A caught element commits nothing, so it never leaves a half-built node behind. The clobber-safe reads are consolidated in a new internal `clobber-safe` module shared by the extractor and the role map.
+- d657f66: Fix a `TypeError: ...startsWith is not a function` crash that aborted the **entire** extraction on pages that trip DOM clobbering. `<form>` is the one HTML element with `[LegacyOverrideBuiltIns]`: a listed control whose `name`/`id` matches a DOM property shadows that property, so reading it returns the child **element** instead of the real value. The walk read `element.id` to skip Semantic Navigator's own overlay nodes, so a `<form>` with `<input name="id">` (ubiquitous hidden record-id fields) made `.id` an element and `.startsWith("__sn-")` threw — the panel then hung on "Connecting to page…" forever, because the walk has no per-element error boundary. The id is now read via `getAttribute("id")`, and the structural reads in the walk (`children`, `childNodes`, `textContent` — e.g. a `<input name="children">` "number of children" field) go through the native prototype accessors, which a named getter cannot override. Extraction now survives clobbered forms with the subtree intact instead of failing wholesale.
+- 1c8a523: Classify an editable combobox as a typeable text field. `getActions` treated every `role="combobox"` as click-only, so a custom **editable** combobox — a `contenteditable` `<div role="combobox">`, the ARIA 1.2 editable-combobox pattern used by rich search boxes — surfaced only a `click` action and couldn't be filled. Editable comboboxes (detected by `contenteditable`) now get `focus` + `type` like a textbox, so tooling and the extension panel treat them as text entry; **select-only** comboboxes keep `click` to open their popup natively. Native `<input role="combobox">` was already handled by the input branch and is unchanged.
+- a32632a: DomObserver: observe mutations _inside_ open portal overlays, not just their mount/unmount. When `root` is a subtree — the `@real-a11y-dev/react` hook and the inspector pass a user root; the extension passes `documentElement` and was unaffected — a Radix/Headless-UI/Teleport modal, menu, or listbox mounts _outside_ `root`, so the primary observer can't see into it. The extractor pivots onto the overlay, but the panel would show its initial state and then go stale on typing, `aria-*` flips, or content/submenu swaps. Now each open portal gets its own deep observer (childList + subtree + attributes + characterData) plus `input`/`change` listeners, torn down when the overlay unmounts or on `stop()`.
+
 ## 0.1.0-beta.10
 
 ### Patch Changes
