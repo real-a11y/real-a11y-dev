@@ -47,6 +47,48 @@ export function flow(root: Element, options: FlowOptions = {}): FlowChain {
 
 type Step = () => Promise<void>;
 
+/**
+ * Point at the first line where two serialized blocks diverge, with up to two
+ * lines of shared leading context and a `- expected` / `+ actual` marker — so a
+ * snapshot mismatch is triaged from the offending line instead of an eyeball
+ * diff of two 60-line dumps. Returns "" when the blocks are line-for-line
+ * identical; the callers only reach it once the trimmed strings already differ,
+ * so in practice a differing line is always found.
+ */
+function describeFirstDiff(expected: string, actual: string): string {
+  const e = expected.trim().split("\n");
+  const a = actual.trim().split("\n");
+  const n = Math.max(e.length, a.length);
+  for (let i = 0; i < n; i++) {
+    if (e[i] === a[i]) continue;
+    const lines: string[] = [];
+    for (let j = Math.max(0, i - 2); j < i; j++) lines.push(`    ${e[j]}`);
+    lines.push(`  - ${e[i] ?? "(expected ends here)"}`);
+    lines.push(`  + ${a[i] ?? "(actual ends here)"}`);
+    return `First difference at line ${i + 1}:\n${lines.join("\n")}`;
+  }
+  return "";
+}
+
+/**
+ * Build the Error for a serialized-snapshot mismatch: the caller's heading, the
+ * first-difference pointer, then the full expected/actual blocks for copy-paste
+ * snapshot updates. Shared by `expectTree` and `expectChanges` so the two read
+ * identically.
+ */
+function mismatchError(
+  heading: string,
+  expected: string,
+  actual: string,
+): Error {
+  const pointer = describeFirstDiff(expected, actual);
+  return new Error(
+    heading +
+      (pointer ? `\n\n${pointer}` : "") +
+      `\n\n--- expected\n${expected}\n--- actual\n${actual}`,
+  );
+}
+
 export class FlowChain implements PromiseLike<void> {
   private readonly steps: Step[] = [];
   /** Set the first time the chain is awaited — see `addStep` and `then`. */
@@ -73,7 +115,7 @@ export class FlowChain implements PromiseLike<void> {
         throw new Error(
           `flow.findByRole: no node with role "${role}"${
             options.name ? ` and name ${String(options.name)}` : ""
-          } found in document.`,
+          } found in document.\n\nCurrent tree:\n${serializeTree(this.root)}`,
         );
       }
       this.current = node;
@@ -150,8 +192,10 @@ export class FlowChain implements PromiseLike<void> {
     this.addStep(async () => {
       const actual = serializeTree(this.root);
       if (actual.trim() !== expected.trim()) {
-        throw new Error(
-          `flow.expectTree: tree does not match expected snapshot.\n--- expected\n${expected}\n--- actual\n${actual}`,
+        throw mismatchError(
+          "flow.expectTree: tree does not match expected snapshot.",
+          expected,
+          actual,
         );
       }
     });
@@ -200,8 +244,10 @@ export class FlowChain implements PromiseLike<void> {
       if (typeof expected === "string") {
         const actual = render();
         if (actual.trim() !== expected.trim()) {
-          throw new Error(
-            `flow.expectChanges: diff does not match expected.\n--- expected\n${expected}\n--- actual\n${actual}`,
+          throw mismatchError(
+            "flow.expectChanges: diff does not match expected.",
+            expected,
+            actual,
           );
         }
       } else if (typeof expected === "function") {

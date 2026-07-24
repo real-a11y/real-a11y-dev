@@ -20,6 +20,16 @@ function mount(html: string): HTMLElement {
   return root;
 }
 
+/** Await a thenable expected to reject and return the Error it rejects with. */
+async function captureError(p: PromiseLike<unknown>): Promise<Error> {
+  try {
+    await p;
+  } catch (e) {
+    return e as Error;
+  }
+  throw new Error("expected the flow to reject, but it resolved");
+}
+
 describe("auditSnapshot", () => {
   it("serializes a small tree deterministically", () => {
     const root = mount(`
@@ -134,6 +144,20 @@ describe("flow", () => {
     await expect(
       flow(root).findByRole("button", { name: "Missing" }),
     ).rejects.toThrow(/no node with role "button"/);
+  });
+
+  it("a findByRole miss dumps the current tree so you can see what IS there", async () => {
+    const root = mount(
+      `<main><a href="/">Home</a><a href="/a">About</a></main>`,
+    );
+    const err = await captureError(
+      flow(root).findByRole("button", { name: "Missing" }),
+    );
+    expect(err.message).toContain("Current tree:");
+    // The dump is the real serialized tree, so the links that ARE present show
+    // up — the whole point over a bare "not found".
+    expect(err.message).toContain('link "Home"');
+    expect(err.message).toContain('link "About"');
   });
 
   it("click() actually dispatches a click on the resolved element", async () => {
@@ -253,6 +277,22 @@ describe("flow", () => {
       await expect(
         flow(root).expectTree(`main\n  heading "Bye"`),
       ).rejects.toThrow(/tree does not match expected snapshot/);
+    });
+
+    it("points at the first differing line instead of forcing an eyeball diff", async () => {
+      const root = mount(`<main><h1>Hi</h1><button>Go</button></main>`);
+      // Lines 1-2 match; the button label on line 3 is the first divergence.
+      const err = await captureError(
+        flow(root).expectTree(
+          `main\n  heading "Hi" (level 1)\n  button "Nope"`,
+        ),
+      );
+      expect(err.message).toContain("First difference at line 3:");
+      expect(err.message).toMatch(/- .*button "Nope"/); // expected
+      expect(err.message).toMatch(/\+ .*button "Go"/); // actual
+      // The full blocks are still there for copy-paste snapshot updates.
+      expect(err.message).toContain("--- expected");
+      expect(err.message).toContain("--- actual");
     });
   });
 
