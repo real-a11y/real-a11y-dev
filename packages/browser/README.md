@@ -38,7 +38,22 @@ const tree = await session.nativeTree();
 
 Why a second producer: Chromium exposes structure no in-page walk can reach — most visibly a `<video controls>`'s play/scrubber/mute controls, which live in a closed user-agent shadow root. The vocabulary (which nodes survive, sibling order, role map, name promotion) comes from core's shared `normalizeNativeAX`, so native and DOM trees are directly comparable.
 
-It is **read-only** for now: nodes carry `a11y`, and a `dom` facet when a DOM node backs them, but no `interaction` facet (CDP action dispatch is a later phase). Redaction is enforced by construction — the producer never reads any element's live `.value`, drops the AX `value` field, and the `dom` facet copies only an allowlist of structural / accessibility attributes, so a user's field values never enter the tree. `buildNativeTree(rawNodes, enrichment?, chrome?)` is exported as the pure, browserless core of the producer.
+The **read** side is redaction-safe by construction — the producer never reads any element's live `.value`, drops the AX `value` field, and the `dom` facet copies only an allowlist of structural / accessibility attributes, so a user's field values never enter the tree. Nodes carry `a11y`, and a `dom` facet when a DOM node backs them. `buildNativeTree(rawNodes, enrichment?, chrome?)` is exported as the pure, browserless core of the producer.
+
+### Acting on the native tree — `session.act()`
+
+The native tree is no longer read-only: `session.act(request)` dispatches a **click**, **type**, or **focus** against a node, over CDP. It works because every native node id encodes its Chromium `backendDOMNodeId` (`ax-dom-<n>`): `act` parses the id, resolves it back to the live DOM element (`DOM.resolveNode`), and dispatches (`Runtime.callFunctionOn`) — the same value-setter + `input`/`change` sequence the DOM engine uses, so framework-controlled inputs see it.
+
+```ts
+const tree = await session.nativeTree();
+const button = [...tree.nodes.values()].find(
+  (n) => n.a11y.role === "button" && n.a11y.name === "Save",
+);
+await session.act({ nodeId: button.id, action: "click" });
+// → { success: true }
+```
+
+The write path holds the same redaction discipline as the read path: an `ActionResult` **never** carries the value typed into a field or any of the field's content — the in-page function returns only a structural marker, and errors are content-free. A node with no backing DOM element (`ax-<n>` — a synthesized document root) is refused rather than guessed at. `CdpActionBackend` and `backendNodeIdFrom` are exported for callers that hold their own CDP session.
 
 ### Parity harness
 

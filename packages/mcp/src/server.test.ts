@@ -70,6 +70,14 @@ class FakeSession implements A11ySession {
     return this.nativeTreeResponse;
   }
 
+  // Typed off the interface — no MCP tool drives `act()` yet, so this is a
+  // no-op stub that keeps the fake a structural A11ySession.
+  actResponse: Awaited<ReturnType<A11ySession["act"]>> = { success: true };
+  async act(request: Parameters<A11ySession["act"]>[0]) {
+    this.calls.push({ fn: "act", rootSelector: "", args: [request] });
+    return this.actResponse;
+  }
+
   async close() {
     this.closed += 1;
   }
