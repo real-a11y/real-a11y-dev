@@ -63,7 +63,8 @@ real-a11y audit ./dist/index.html --format json -o report.json
 
 **Flags:** [Browser & page](#browser-page) · [Output](#output) ·
 [Config](#config) · [`--rules`](#rules-ids) · [`--fail-on`](#fail-on-level)
-(default `error`) · [`--no-annotate`](#no-annotate).
+(default `error`) · [`--no-annotate`](#no-annotate) ·
+[`--tree`](#tree-producer) (`dom | native`).
 
 ### `inspect <url>`
 
@@ -87,10 +88,12 @@ URL; always exits `0`.
 
 ```sh
 real-a11y tree https://example.com
+real-a11y tree https://example.com/player --tree native   # reaches media controls
 ```
 
 **Flags:** [Browser & page](#browser-page) · [Output](#output) (`pretty | json`)
-· [Config](#config) · [`--include-generic`](#include-generic).
+· [Config](#config) · [`--include-generic`](#include-generic) ·
+[`--tree`](#tree-producer) (`dom | native`).
 
 ### `outline <url>`
 
@@ -102,7 +105,7 @@ real-a11y outline https://example.com
 ```
 
 **Flags:** [Browser & page](#browser-page) · [Output](#output) (`pretty | json`)
-· [Config](#config).
+· [Config](#config) · [`--tree`](#tree-producer) (`dom | native`).
 
 ### `tabs <url>`
 
@@ -242,6 +245,28 @@ Scope extraction to a region or component instead of the whole page.
 ```sh
 real-a11y tree http://localhost:3000 --root "#app main"
 ```
+
+### `--tree <producer>`
+
+- **Type:** `dom | native` · **Default:** `dom` · **Commands:** audit, tree,
+  outline
+
+Which producer builds the tree. `dom` (default) injects the page-bundle and
+walks the light DOM in the page. `native` reads **Chromium's own accessibility
+tree** over CDP and serializes + audits it in Node — so it reaches structure no
+in-page walk can, most visibly a `<video controls>`'s play/scrubber/mute
+controls, which live in a closed user-agent shadow root.
+
+```sh
+real-a11y tree  http://localhost:3000/player --tree native   # media controls appear
+real-a11y audit http://localhost:3000/player --tree native   # and get audited
+```
+
+Native mode is whole-document and read-only, so it's accepted only where that
+fits — `audit`, `tree`, `outline`. Commands that carry a tab sequence
+([`tabs`](#tabs-url), [`inspect`](#inspect-url), [`snapshot`](#snapshot-url)) or
+list one category ([`list`](#list-category-url)) reject `--tree native`, and it
+can't be combined with [`--root`](#root-selector) (it audits the whole document).
 
 ### `--device <name>`
 

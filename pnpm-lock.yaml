@@ -536,6 +536,9 @@ importers:
       '@real-a11y-dev/core':
         specifier: workspace:*
         version: link:../core
+      '@real-a11y-dev/serialize':
+        specifier: workspace:*
+        version: link:../serialize
     devDependencies:
       '@types/node':
         specifier: ^22.0.0

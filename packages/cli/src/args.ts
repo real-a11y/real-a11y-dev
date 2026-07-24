@@ -24,6 +24,7 @@ type Options = NonNullable<ParseArgsConfig["options"]>;
 
 const BROWSER_FLAGS: Options = {
   root: { type: "string" },
+  tree: { type: "string" },
   device: { type: "string" },
   viewport: { type: "string" },
   "wait-until": { type: "string" },
@@ -178,6 +179,9 @@ Flags:
   --rules <ids>          Comma-separated subset of: ${ALL_RULES.join(", ")}
   --fail-on <level>      error | warning | never          (default: error)
   --no-annotate          Skip GitHub Actions annotations
+  --tree <producer>      dom | native                     (default: dom)
+                         native audits Chromium's own a11y tree (whole page;
+                         reaches UA-shadow media controls; rejects --root)
 ${SHARED_FLAG_HELP}
 
 Findings go to stdout; progress and errors go to stderr.
@@ -209,6 +213,9 @@ Print the semantic tree — what a screen reader perceives, role by role.
 
 Flags:
   --include-generic      Include generic container nodes
+  --tree <producer>      dom | native                     (default: dom)
+                         native reads Chromium's own a11y tree (whole page;
+                         reaches UA-shadow media controls; rejects --root)
 ${SHARED_FLAG_HELP}
 `,
     load: async () => (await import("./commands/views.js")).treeCommand,
@@ -221,6 +228,9 @@ ${SHARED_FLAG_HELP}
 Print the heading outline.
 
 Flags:
+  --tree <producer>      dom | native                     (default: dom)
+                         native reads Chromium's own a11y tree (whole page;
+                         rejects --root)
 ${SHARED_FLAG_HELP}
 `,
     load: async () => (await import("./commands/views.js")).outlineCommand,
@@ -434,6 +444,19 @@ export function parseFormat<T extends string>(
   throw new CliError(
     `--format expects ${allowed.join(" | ")} — got "${String(value)}"`,
   );
+}
+
+/** Which producer builds the tree. `dom` (default) injects the page-bundle and
+ * walks the light DOM; `native` reads Chromium's own accessibility tree over
+ * CDP. Native is whole-document, read-only, and carries no tab order — so only
+ * the commands that need neither `--root` scoping nor a tab sequence accept it
+ * (see `treeModeOf`). */
+export type TreeMode = "dom" | "native";
+
+export function parseTree(value: string | boolean | undefined): TreeMode {
+  if (value === undefined) return "dom";
+  if (value === "dom" || value === "native") return value;
+  throw new CliError(`--tree expects dom | native — got "${String(value)}"`);
 }
 
 /** The report axis for `--only`; undefined = the full two-axis report. An enum

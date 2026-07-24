@@ -6,7 +6,12 @@ import { describe, expect, it } from "vitest";
 
 import { CliError } from "../exit.js";
 
-import { isAuthenticated, sessionFlags, type Target } from "./common.js";
+import {
+  isAuthenticated,
+  sessionFlags,
+  treeModeOf,
+  type Target,
+} from "./common.js";
 
 function stateFile(): string {
   const dir = mkdtempSync(join(tmpdir(), "real-a11y-cf-"));
@@ -83,5 +88,44 @@ describe("isAuthenticated", () => {
   it("is true exactly when --storage-state is present", () => {
     expect(isAuthenticated({ "storage-state": "auth.json" })).toBe(true);
     expect(isAuthenticated({})).toBe(false);
+  });
+});
+
+describe("treeModeOf", () => {
+  it("defaults to dom and passes dom through on any command", () => {
+    expect(treeModeOf({}, "tabs", false)).toBe("dom");
+    expect(treeModeOf({ tree: "dom" }, "audit", true)).toBe("dom");
+  });
+
+  it("returns native for a supporting command", () => {
+    expect(treeModeOf({ tree: "native" }, "audit", true)).toBe("native");
+    expect(treeModeOf({ tree: "native" }, "tree", true)).toBe("native");
+  });
+
+  it("rejects native on a command that can't support it", () => {
+    expect(() => treeModeOf({ tree: "native" }, "tabs", false)).toThrow(
+      /not supported by `tabs`/,
+    );
+    expect(() => treeModeOf({ tree: "native" }, "inspect", false)).toThrow(
+      CliError,
+    );
+  });
+
+  it("rejects native combined with a non-body --root", () => {
+    expect(() =>
+      treeModeOf({ tree: "native", root: "main" }, "tree", true),
+    ).toThrow(/whole document/);
+  });
+
+  it("allows native with an explicit --root body (the implicit default)", () => {
+    expect(treeModeOf({ tree: "native", root: "body" }, "tree", true)).toBe(
+      "native",
+    );
+  });
+
+  it("rejects an invalid --tree value regardless of support", () => {
+    expect(() => treeModeOf({ tree: "webkit" }, "audit", true)).toThrow(
+      /dom \| native/,
+    );
   });
 });

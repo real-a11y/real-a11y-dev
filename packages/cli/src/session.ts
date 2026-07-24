@@ -16,12 +16,16 @@ import type {
 } from "@real-a11y-dev/browser";
 
 import {
+  projectNativeTree,
   projectSnapshot,
   redactUrl,
   redactUrlsIn,
   sanitizeText,
   type CleanSnapshot,
+  type NativeSnapshotOptions,
 } from "@real-a11y-dev/snapshot";
+
+import type { TreeMode } from "./args.js";
 
 import { registerCleanup } from "./cleanup.js";
 import { CliError } from "./exit.js";
@@ -156,13 +160,27 @@ export async function openPage(
   }
 }
 
-/** Extract all four views (one extraction) and project them to clean data. */
+/**
+ * Extract and project to clean data. The DOM producer (default) serializes and
+ * audits in the page and returns all four views. The native producer reads
+ * Chromium's own a11y tree over CDP and is serialized + audited in Node — it is
+ * whole-document (so `root` is ignored) and carries no tab order.
+ */
 export async function snapshotPage(
   session: BrowserSession,
   root: string,
   options: SnapshotOptions,
+  producer: TreeMode = "dom",
 ): Promise<CleanSnapshot> {
   try {
+    if (producer === "native") {
+      return projectNativeTree(await session.nativeTree(), {
+        // `parseRules` already validated these against the rule set; the engine
+        // types them loosely as `string[]` across the browser boundary.
+        rules: options.rules as NativeSnapshotOptions["rules"],
+        includeGeneric: options.includeGeneric,
+      });
+    }
     return projectSnapshot(await session.snapshot(root, options));
   } catch (err) {
     throw mapPageError(err, root);

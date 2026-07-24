@@ -2,7 +2,7 @@
 
 import { redactUrl } from "@real-a11y-dev/snapshot";
 
-import type { FlagValues } from "../args.js";
+import { parseTree, type FlagValues, type TreeMode } from "../args.js";
 import { resolveConfig, type ConfigPage } from "../config.js";
 import { CliError } from "../exit.js";
 import { assertWritableTarget } from "../output.js";
@@ -201,6 +201,38 @@ export function sessionFlags(
 
 export function rootOf(flags: FlagValues): string {
   return typeof flags.root === "string" ? flags.root : "body";
+}
+
+/**
+ * Resolve the `--tree` producer for a command, enforcing what native can't do.
+ *
+ * Native (Chromium's own a11y tree over CDP) is whole-document, read-only, and
+ * carries no tab order. So a command opts into native only when it needs
+ * neither a tab sequence nor the page-bundle's `listByRole` (`supportsNative`),
+ * and `--root` scoping is refused under native regardless. Commands that don't
+ * support it still call this so `--tree native` fails loudly with guidance,
+ * rather than being silently ignored.
+ */
+export function treeModeOf(
+  flags: FlagValues,
+  command: string,
+  supportsNative: boolean,
+): TreeMode {
+  const mode = parseTree(flags.tree);
+  if (mode === "dom") return "dom";
+  if (!supportsNative) {
+    throw new CliError(
+      `--tree native is not supported by \`${command}\` — a native tree has no tab order and can't be scoped.`,
+      "native works with: audit, tree, outline. Use --tree dom (the default) here.",
+    );
+  }
+  if (typeof flags.root === "string" && flags.root !== "body") {
+    throw new CliError(
+      "--tree native audits the whole document — it can't be combined with --root.",
+      "drop --root, or use --tree dom to scope to a selector.",
+    );
+  }
+  return "native";
 }
 
 export function outputOf(flags: FlagValues): string | undefined {

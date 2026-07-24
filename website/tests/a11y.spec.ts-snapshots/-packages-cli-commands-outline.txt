@@ -22,6 +22,7 @@ h1 Commands & flags
   h2 Flags
   h2 Browser & page
     h3 --root <selector>
+    h3 --tree <producer>
     h3 --device <name>
     h3 --viewport <WxH>
     h3 --wait-until <state>

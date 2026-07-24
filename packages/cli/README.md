@@ -72,6 +72,24 @@ see `real-a11y <command> --help`.
 Local builds audit directly: `real-a11y audit ./dist/index.html` (paths you
 type need no ceremony).
 
+### `--tree native`
+
+By default the CLI walks the light DOM in the page (the **DOM producer**). Pass
+`--tree native` to `audit`, `tree`, or `outline` to read **Chromium's own
+accessibility tree** over CDP instead — it reaches structure no in-page walk
+can, most visibly a `<video controls>`'s play/scrubber/mute controls, which live
+in a closed user-agent shadow root:
+
+```sh
+real-a11y tree  https://example.com/player --tree native   # media controls appear
+real-a11y audit https://example.com/player --tree native   # and get audited
+```
+
+Native mode is whole-document and read-only, so it's accepted only where that
+fits (`audit`, `tree`, `outline`). Commands that carry a tab sequence (`tabs`,
+`inspect`, `snapshot`) or list one category from the page (`list`) reject it, and
+it can't be combined with `--root`.
+
 ## Configure once
 
 Set your project's flags once in an `a11y.config.json` and every command picks
