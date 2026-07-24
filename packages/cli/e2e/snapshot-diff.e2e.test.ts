@@ -223,8 +223,9 @@ describe("diff", () => {
   });
 
   it("--ignore-view-line drops matching lines from views and statements", async () => {
-    // Repeatable; the predicate sees the TRIMMED line, so the tabs pattern
-    // must account for the `NN. ` counter still being present.
+    // The predicate sees the TRIMMED line. Tab-order lines are unnumbered now,
+    // so a single `^button$` pattern covers the button in BOTH the tree and tabs
+    // views (it used to need a second `^\d+\. button$` for the numbered tabs).
     const { stdout } = await runCli([
       "diff",
       base,
@@ -233,8 +234,6 @@ describe("diff", () => {
       "json",
       "--ignore-view-line",
       "^button$",
-      "--ignore-view-line",
-      String.raw`^\d+\. button$`,
     ]);
     const parsed = JSON.parse(stdout) as {
       pages: {

@@ -70,8 +70,9 @@ function pageViews(base: SnapshotPage, pr: SnapshotPage, ignore: Ignore) {
   return {
     tree: diffViews(base.tree, pr.tree, undefined, ignore),
     outline: diffViews(base.outline, pr.outline, undefined, ignore),
-    // Tabs are numbered — compare by stop content so one insert isn't a
-    // renumber cascade.
+    // Tabs are unnumbered now, but a legacy base (or third-party producer) may
+    // still carry `NN.` numbers — strip them so the multiset compares stop
+    // content, never the sequence counter.
     tabs: diffViews(base.tabs, pr.tabs, stripTabIndex, ignore),
   };
 }
@@ -88,9 +89,11 @@ function stripIgnored(text: string, ignore: Ignore): string {
     .join("\n");
 }
 
-/** Unified diff per view — tabs keep their `NN.` numbers (position context),
- * unlike the multiset which strips them; a pure insert cascades here but
- * `--explain` reports it as one line. */
+/** Unified diff per view. Tabs are unnumbered now (the canonical form), so an
+ * inserted stop is a single `+` line here — the renumber cascade that used to
+ * make this hunk unreadable is gone. A legacy numbered base still diffs cleanly
+ * in the multiset (stripTabIndex), but its tabs HUNK shows a one-time rewrite
+ * until it is re-captured; advisory output only, never gates. */
 function pageHunks(
   base: SnapshotPage,
   pr: SnapshotPage,

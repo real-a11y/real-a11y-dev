@@ -1,3 +1,4 @@
+import { numberTabStops } from "@real-a11y-dev/serialize";
 import { describe, expect, it } from "vitest";
 
 import { diffViews, stripTabIndex, viewDiffEmpty } from "./views-diff.js";
@@ -81,6 +82,21 @@ describe("diffViews", () => {
         'button "Copy Code"',
       );
       expect(stripTabIndex('link "3. steps"')).toBe('link "3. steps"');
+    });
+
+    it("inverts numberTabStops line-for-line (render/normalize round-trip)", () => {
+      // The render-time decorator (`numberTabStops`) and this normalizer are a
+      // pair: numbering a canonical tab view and stripping it again is identity,
+      // so a numbered legacy artifact and a fresh unnumbered one compare equal.
+      const canonical = 'link "Home"\nbutton "Go"\nlink "Docs"';
+      for (const line of numberTabStops(canonical).split("\n")) {
+        expect(stripTabIndex(line)).toBe(line.replace(/^\d+\.\s/, ""));
+      }
+      const stripped = numberTabStops(canonical)
+        .split("\n")
+        .map(stripTabIndex)
+        .join("\n");
+      expect(stripped).toBe(canonical);
     });
   });
 });

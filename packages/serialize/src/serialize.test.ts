@@ -4,6 +4,7 @@ import {
   serializeTree,
   serializeOutline,
   serializeTabSequence,
+  numberTabStops,
 } from "./index.js";
 
 describe("serializeTree", () => {
@@ -130,11 +131,14 @@ describe("serializeOutline", () => {
 });
 
 describe("serializeTabSequence", () => {
-  it("numbers focusable nodes in tab order", () => {
+  it("lists focusable nodes in tab order, one per line, unnumbered", () => {
     document.body.innerHTML = `<a href="#a">Home</a><button>Go</button>`;
     const out = serializeTabSequence(document.body);
-    expect(out).toContain('01. link "Home"');
-    expect(out).toContain('02. button "Go"');
+    // Exact match locks BOTH the order (link before button) and the format.
+    expect(out).toBe('link "Home"\nbutton "Go"');
+    // No `NN.` prefix — that renumbered every line on one insertion (the churn
+    // this format change removes). Guard against reintroduction.
+    expect(out).not.toMatch(/^\d+\.\s/m);
   });
 
   it("redacts EVERY occurrence in an accessible name, not just the first", () => {
@@ -144,9 +148,48 @@ describe("serializeTabSequence", () => {
     // first.
     document.body.innerHTML = `<button aria-label="Paid $28.50 then $2.00">x</button>`;
     const out = serializeTabSequence(document.body, { redact: [/\$[\d.]+/] });
-    expect(out).toContain('01. button "Paid [REDACTED] then [REDACTED]"');
+    expect(out).toBe('button "Paid [REDACTED] then [REDACTED]"');
     expect(out).not.toContain("$28.50");
     expect(out).not.toContain("$2.00");
+  });
+
+  it("inserting one stop at the top changes exactly one line (no renumber churn)", () => {
+    // The finding, encoded: with numbers, prepending a stop renumbered every
+    // following line. Unnumbered, the old output is preserved verbatim and only
+    // the new line appears — a naive line diff shows one insertion, nothing else.
+    document.body.innerHTML = `<a href="#h">Home</a><button>Go</button>`;
+    const before = serializeTabSequence(document.body);
+    document.body.innerHTML = `<a href="#s">Skip</a><a href="#h">Home</a><button>Go</button>`;
+    const after = serializeTabSequence(document.body);
+    expect(after).toBe(`link "Skip"\n${before}`);
+  });
+});
+
+describe("numberTabStops", () => {
+  it("prefixes each line with a zero-padded NN. ordinal", () => {
+    expect(numberTabStops('link "Home"\nbutton "Go"')).toBe(
+      '01. link "Home"\n02. button "Go"',
+    );
+  });
+
+  it("preserves a trailing [focused] marker on the numbered line", () => {
+    expect(numberTabStops('link "Home"\nbutton "Go" [focused]')).toBe(
+      '01. link "Home"\n02. button "Go" [focused]',
+    );
+  });
+
+  it("passes the empty string and the (nothing focusable) sentinel through", () => {
+    expect(numberTabStops("")).toBe("");
+    expect(numberTabStops("(nothing focusable)")).toBe("(nothing focusable)");
+  });
+
+  it("keeps aligning past nine stops (width grows, never truncates)", () => {
+    const lines = Array.from({ length: 100 }, (_, i) => `button "b${i}"`);
+    const out = numberTabStops(lines.join("\n")).split("\n");
+    expect(out[0]).toBe('01. button "b0"');
+    expect(out[8]).toBe('09. button "b8"');
+    expect(out[9]).toBe('10. button "b9"');
+    expect(out[99]).toBe('100. button "b99"');
   });
 });
 

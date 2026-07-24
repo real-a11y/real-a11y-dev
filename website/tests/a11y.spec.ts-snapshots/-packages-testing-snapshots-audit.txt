@@ -254,12 +254,18 @@ main
     link "Focus marker"
   heading "tabSequenceSnapshot(root, options?)" (level 2)
     code "tabSequenceSnapshot(root, options?)"
-  paragraph "Returns the tab sequence as a numbered list."
+  paragraph "Returns the tab sequence, one stop per line in Tab order."
   button "Copy Code"
   code
   paragraph "Example output:"
   button "Copy Code"
   code
+  paragraph "Lines carry position number: line order already conveys the sequence, and a hard-coded number renumbers every following line the moment one stop is inserted near the top — churning the whole snapshot's diff for one real change. For a human-read listing where an explicit "stop 7" helps, add the numbers at render time with from (); never store the numbered form."
+    strong "no"
+    code "NN."
+    code "numberTabStops"
+    code "@real-a11y-dev/serialize"
+    code "numberTabStops(tabSequenceSnapshot(root))"
   paragraph "Honors (default ) — the currently-focused stop is shown with a trailing . See ."
     code "markFocus"
     code "true"

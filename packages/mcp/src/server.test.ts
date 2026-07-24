@@ -168,6 +168,18 @@ describe("MCP server wiring", () => {
     expect(textOf(res)).toContain('link "Home"');
   });
 
+  it("get_tab_order numbers the page bundle's canonical (unnumbered) output", async () => {
+    // The page bundle returns the canonical unnumbered form; the tool adds the
+    // ordinals at render so an agent can reference "stop 2".
+    session.responses.tabSequenceSnapshot = 'link "Home"\nbutton "Go"';
+    const client = await connect(session);
+    const res = await client.callTool({
+      name: "get_tab_order",
+      arguments: { rootSelector: "body" },
+    });
+    expect(textOf(res)).toBe('01. link "Home"\n02. button "Go"');
+  });
+
   // A native ExtractionResult whose only interactive node is an UNLABELED
   // textbox — serializes to `main` + `textbox`. The DOM producer, below, names
   // that same textbox by its typed value (a DOM-engine fidelity gap).
@@ -589,7 +601,7 @@ describe("MCP server wiring", () => {
       ],
       tree: 'main\n  button "Go"',
       outline: "(no headings)",
-      tabOrder: '01. button "Go"',
+      tabOrder: 'button "Go"',
     };
     const client = await connect(session);
     const res = await client.callTool({
@@ -696,12 +708,30 @@ describe("renderSnapshot", () => {
       findings: [],
       tree: "main\n  button\n  link",
       outline: "h1 Title",
-      tabOrder: "01. button\n02. link",
+      // Canonical (unnumbered) tab order — what session.snapshot() now returns.
+      tabOrder: "button\nlink",
     });
     expect(out).toMatch(/3 tree nodes/);
+    // Regression: the count came from a `/^\d/` filter that silently returned 0
+    // once the `NN.` prefix was dropped. It now counts non-empty stop lines.
     expect(out).toMatch(/2 tab stops/);
+    // The "## Tab order" section is numbered at render (numberTabStops), so an
+    // agent can reference "stop 2" even though the stored form is unnumbered.
+    expect(out).toContain("01. button");
+    expect(out).toContain("02. link");
     expect(out).toMatch(/No accessibility issues found/);
     expect(out).toContain("h1 Title");
+  });
+
+  it("reports 0 tab stops for the (nothing focusable) sentinel", () => {
+    const out = renderSnapshot({
+      findings: [],
+      tree: "main",
+      outline: "(no headings)",
+      tabOrder: "(nothing focusable)",
+    });
+    expect(out).toMatch(/0 tab stops/);
+    expect(out).toContain("(nothing focusable)");
   });
 });
 

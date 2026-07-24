@@ -5,7 +5,7 @@ description: How to read the tab-sequence view — a flat numbered list of every
 
 # Reading the TAB View
 
-> The TAB view matches the output of [`tabSequenceSnapshot()`](/packages/testing/snapshots#tabsequencesnapshot-root) in the testing package — same ordering, same formatting. Whether you're reading it in the Chrome extension, the Storybook addon, a committed Playwright snapshot fixture, the [`real-a11y tabs`](/packages/cli) command, or the [`get_tab_order`](/packages/mcp) MCP tool, this page applies.
+> The TAB view shows the same focusable elements, in the same order, as [`tabSequenceSnapshot()`](/packages/testing/snapshots#tabsequencesnapshot-root) in the testing package. Whether you're reading it in the Chrome extension, the Storybook addon, the [`real-a11y tabs`](/packages/cli) command, or the [`get_tab_order`](/packages/mcp) MCP tool, this page applies. The position numbers shown in those views are a display convenience; a committed `tabSequenceSnapshot()` fixture is **unnumbered** (line order carries the sequence) so inserting one stop shows up as a single added line instead of renumbering the whole diff.
 
 The TAB view answers one question: **can a keyboard user reach everything they need to, in the right order?**
 

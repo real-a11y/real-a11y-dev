@@ -17,6 +17,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ALL_RULES, listByRole } from "@real-a11y-dev/audit";
 import type { A11yRule, Finding, RoleFilter } from "@real-a11y-dev/audit";
 import type { A11ySession } from "@real-a11y-dev/browser";
+import { numberTabStops } from "@real-a11y-dev/serialize";
 import {
   assertFullArtifact,
   buildArtifact,
@@ -224,9 +225,13 @@ export function renderSnapshot(
 ): string {
   const native = options.producer === "native";
   const treeNodes = snap.tree.split("\n").filter(Boolean).length;
-  const tabStops = snap.tabOrder
-    .split("\n")
-    .filter((l) => /^\d/.test(l)).length;
+  // Count stops from the canonical (unnumbered) tab view: every non-empty line
+  // is one stop, except the `(nothing focusable)` sentinel. (This used to test
+  // `/^\d/`, which silently counted 0 once the `NN.` prefix was removed.)
+  const tabStops =
+    snap.tabOrder === "(nothing focusable)"
+      ? 0
+      : snap.tabOrder.split("\n").filter((l) => l.trim() !== "").length;
   const tabInfo = native
     ? "tab order N/A (native producer)"
     : `${tabStops} tab stops`;
@@ -249,7 +254,7 @@ export function renderSnapshot(
     "```",
     native
       ? "(the native producer carries no tab order — use the dom producer for tab sequence)"
-      : snap.tabOrder,
+      : numberTabStops(snap.tabOrder),
     "```",
   ].join("\n");
 }
@@ -641,7 +646,9 @@ export function buildServer(
         "tabSequenceSnapshot",
         rootSelector,
       );
-      return text(seq);
+      // Number at render — the page bundle produces the canonical unnumbered
+      // form; the ordinals help an agent reference "stop 7" and are never stored.
+      return text(numberTabStops(seq));
     },
   );
 
