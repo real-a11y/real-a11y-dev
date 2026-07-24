@@ -190,13 +190,12 @@ describe("preview channel bootstrap", () => {
 
   it("restarts after a simulated preview reload when REQUEST_TREE is re-sent", () => {
     // Manager stays mounted across an iframe reload; the reloaded preview
-    // module has panelWantsTree === false until REQUEST_TREE arrives again.
+    // module has panelWantsTree === false until REQUEST_TREE arrives again
+    // (manager listens for PREVIEW_READY and re-emits REQUEST_TREE).
     channel.emit(EVENTS.REQUEST_TREE);
     expect(observerState.started).toBe(1);
 
     // Simulate iframe teardown without manager STOP_TREE (module state lost).
-    // Closest in-module stand-in: STOP then a bare storyRendered (idle),
-    // followed by the manager's storyRendered → REQUEST_TREE.
     channel.emit(EVENTS.STOP_TREE);
     observerState.reset();
     extractorState.reset();
@@ -207,5 +206,17 @@ describe("preview channel bootstrap", () => {
     channel.emit(EVENTS.REQUEST_TREE);
     expect(observerState.started).toBe(1);
     expect(extractorState.constructed).toBe(1);
+  });
+
+  it("does not double-publish when REQUEST_TREE arrives while already running", () => {
+    const updates: unknown[] = [];
+    channel.on(EVENTS.TREE_UPDATED, (payload) => updates.push(payload));
+
+    channel.emit(EVENTS.REQUEST_TREE);
+    expect(updates).toHaveLength(1);
+
+    channel.emit(EVENTS.REQUEST_TREE);
+    expect(updates).toHaveLength(1);
+    expect(observerState.started).toBe(1);
   });
 });

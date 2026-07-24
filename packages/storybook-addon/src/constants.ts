@@ -8,6 +8,8 @@ export const PANEL_ID = `${ADDON_ID}/panel`;
 export const EVENTS = {
   /** Preview → manager: structured extraction result (on every DOM change while the panel is open). */
   TREE_UPDATED: `${ADDON_ID}/tree-updated`,
+  /** Preview → manager: preview iframe (re)booted — re-send REQUEST_TREE if the panel is still open. */
+  PREVIEW_READY: `${ADDON_ID}/preview-ready`,
   /** Manager → preview: start observing (if needed) and send the current tree (panel mount). */
   REQUEST_TREE: `${ADDON_ID}/request-tree`,
   /** Manager → preview: tear down the observer — panel unmounted / hidden. */

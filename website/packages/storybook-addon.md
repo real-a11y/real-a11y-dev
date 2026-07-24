@@ -72,7 +72,7 @@ Preview iframe                              Manager (Storybook UI)
 start DomObserver + extract
 → TREE_UPDATED ───────── channel ─────────▶ deserialize tree (array → Map)
    { tree, mode, extractedAt }              → render <TreePanel/> in a shadow root
-storyRendered (incl. after canvas reload)   Panel still open → REQUEST_TREE again
+canvas reload → PREVIEW_READY ────────────▶ Panel still open → REQUEST_TREE
 ←──────────────────────────────────────────
 Panel unmounts → STOP_TREE
 ←──────────────────────────────────────────
@@ -112,6 +112,7 @@ import { EVENTS, type TreeUpdatePayload } from "@real-a11y-dev/storybook-addon";
 
 // Preview → manager:
 //   EVENTS.TREE_UPDATED    — a fresh extraction (on every debounced DOM change while the panel is open)
+//   EVENTS.PREVIEW_READY   — preview iframe (re)booted; manager re-sends REQUEST_TREE if still open
 // Manager → preview:
 //   EVENTS.REQUEST_TREE    — start observing (if needed) and send the current tree (panel mount)
 //   EVENTS.STOP_TREE       — tear down the observer (panel unmount / hidden)

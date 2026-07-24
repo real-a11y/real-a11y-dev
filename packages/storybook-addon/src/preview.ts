@@ -164,12 +164,11 @@ if (typeof document !== "undefined") {
   // Manager mounted / became visible → start observing and send the tree.
   channel.on(EVENTS.REQUEST_TREE, () => {
     panelWantsTree = true;
-    if (observer) {
-      // Already running (e.g. StrictMode remount) — just refresh the panel.
-      publish();
-    } else {
+    if (!observer) {
       start();
     }
+    // Already running: skip a second publish — storyRendered/start already
+    // sent TREE_UPDATED. Re-REQUEST while idle is what resumes after reload.
   });
 
   // Manager unmounted / switched away → stop paying extract + channel cost.
@@ -216,4 +215,8 @@ if (typeof document !== "undefined") {
       }, 50);
     }
   });
+
+  // Tell an already-open manager panel that this preview iframe is ready so it
+  // can re-send REQUEST_TREE after a canvas reload (module state was reset).
+  channel.emit(EVENTS.PREVIEW_READY);
 }
