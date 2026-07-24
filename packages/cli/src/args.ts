@@ -181,7 +181,7 @@ Flags:
   --no-annotate          Skip GitHub Actions annotations
   --tree <producer>      dom | native                     (default: dom)
                          native audits Chromium's own a11y tree (whole page;
-                         reaches UA-shadow media controls; ignores --root)
+                         reaches UA-shadow media controls; rejects --root)
 ${SHARED_FLAG_HELP}
 
 Findings go to stdout; progress and errors go to stderr.
@@ -215,7 +215,7 @@ Flags:
   --include-generic      Include generic container nodes
   --tree <producer>      dom | native                     (default: dom)
                          native reads Chromium's own a11y tree (whole page;
-                         reaches UA-shadow media controls; ignores --root)
+                         reaches UA-shadow media controls; rejects --root)
 ${SHARED_FLAG_HELP}
 `,
     load: async () => (await import("./commands/views.js")).treeCommand,
@@ -230,7 +230,7 @@ Print the heading outline.
 Flags:
   --tree <producer>      dom | native                     (default: dom)
                          native reads Chromium's own a11y tree (whole page;
-                         ignores --root)
+                         rejects --root)
 ${SHARED_FLAG_HELP}
 `,
     load: async () => (await import("./commands/views.js")).outlineCommand,
