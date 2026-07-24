@@ -41,9 +41,14 @@ export function projectNativeTree(
   options: NativeSnapshotOptions = {},
 ): CleanSnapshot {
   const includeGeneric = options.includeGeneric === true;
+  // An *empty* rule array means "no filter given" — normalize it to undefined so
+  // `collectFindings` runs every rule. Its default only fires for `undefined`, so
+  // passing `[]` straight through would audit nothing. This matches the DOM
+  // producer's guard (browser.ts) and keeps the two producers in parity: a
+  // native audit must never silently pass a page the DOM audit would flag.
+  const rules = options.rules?.length ? options.rules : undefined;
   return projectSnapshot({
-    // `collectFindings` defaults to every rule when `rules` is undefined.
-    findings: collectFindings(tree, options.rules),
+    findings: collectFindings(tree, rules),
     tree: serializeTree(tree, { includeGeneric }),
     outline: serializeOutline(tree),
     tabOrder: "",

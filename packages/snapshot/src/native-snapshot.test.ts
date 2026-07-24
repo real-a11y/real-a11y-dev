@@ -85,4 +85,14 @@ describe("projectNativeTree", () => {
     const snap = projectNativeTree(ext, { rules: ["image-alt"] });
     expect(snap.findings).toHaveLength(0);
   });
+
+  it("treats an empty rule array as 'all rules', matching the DOM producer", () => {
+    // `parseRules(",")` yields `[]`, not undefined. An empty array must mean
+    // "no filter" — running zero rules would silently pass a page the DOM audit
+    // flags, so a `--tree native` CI gate could go green when it shouldn't.
+    const snap = projectNativeTree(ext, { rules: [] });
+    expect(
+      snap.findings.some((f) => f.rule === "no-unlabeled-interactive"),
+    ).toBe(true);
+  });
 });
