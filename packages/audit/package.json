@@ -1,6 +1,6 @@
 {
   "name": "@real-a11y-dev/audit",
-  "version": "0.1.0-beta.0",
+  "version": "0.1.0-beta.11",
   "description": "The accessibility audit engine for the Semantic Navigator tree — the Finding type, the rule set, collectFindings, and the throwing assert* helpers. What every Real A11y surface reports as \"broken\", in one place.",
   "license": "MIT",
   "author": "Juan Crisostomo (Real A11y)",
