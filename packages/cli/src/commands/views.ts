@@ -29,7 +29,7 @@ import {
   rootOf,
   sessionFlags,
   singleTarget,
-  treeModeOf,
+  producerOf,
   type Target,
 } from "./common.js";
 
@@ -63,7 +63,7 @@ function makeSnapshotView(
     const format = parseFormat(flags.format, ["pretty", "json"] as const);
     // tabs is a tab-order view; a native tree carries none, so only tree/outline
     // opt into native.
-    const producer = treeModeOf(flags, command, command !== "tabs");
+    const producer = producerOf(flags, command, command !== "tabs");
     const target = singleTarget(positionals, flags, command);
     const { value: text, finalUrl } = await withPage(
       target,
@@ -102,7 +102,7 @@ export const tabsCommand = makeSnapshotView("tabs", (s) => s.tabOrder);
 export const listCommand: CommandFn = async (positionals, flags) => {
   const category = parseListCategory(positionals[0]);
   // list runs the page-bundle's listByRole in the page; there's no native path.
-  treeModeOf(flags, "list", false);
+  producerOf(flags, "list", false);
   const format = parseFormat(flags.format, ["pretty", "json"] as const);
   const target = singleTarget(positionals.slice(1), flags, "list");
   const { value: raw, finalUrl } = await withPage(target, flags, (session) =>

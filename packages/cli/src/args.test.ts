@@ -7,7 +7,7 @@ import {
   parseOnly,
   parseOpenOptions,
   parseRules,
-  parseTree,
+  parseProducer,
 } from "./args.js";
 import { CliError } from "./exit.js";
 
@@ -43,19 +43,19 @@ describe("parseFailOn / parseFormat", () => {
   });
 });
 
-describe("parseTree", () => {
+describe("parseProducer", () => {
   it("defaults to dom when omitted", () => {
-    expect(parseTree(undefined)).toBe("dom");
+    expect(parseProducer(undefined)).toBe("dom");
   });
 
   it("accepts dom and native", () => {
-    expect(parseTree("dom")).toBe("dom");
-    expect(parseTree("native")).toBe("native");
+    expect(parseProducer("dom")).toBe("dom");
+    expect(parseProducer("native")).toBe("native");
   });
 
   it("rejects anything else", () => {
-    expect(() => parseTree("chromium")).toThrow(/dom \| native/);
-    expect(() => parseTree("chromium")).toThrow(CliError);
+    expect(() => parseProducer("chromium")).toThrow(/dom \| native/);
+    expect(() => parseProducer("chromium")).toThrow(CliError);
   });
 });
 

@@ -32,7 +32,7 @@ import {
   rootOf,
   sessionFlags,
   singleTarget,
-  treeModeOf,
+  producerOf,
 } from "./common.js";
 
 function section(title: string, body: string): string {
@@ -44,7 +44,7 @@ export const inspectCommand: CommandFn = async (positionals, flags) => {
   const failOn = parseFailOn(flags["fail-on"], "error");
   const format = parseFormat(flags.format, ["pretty", "json"] as const);
   // inspect includes the tab-order view, which a native tree can't produce.
-  treeModeOf(flags, "inspect", false);
+  producerOf(flags, "inspect", false);
   const openOptions = parseOpenOptions(flags);
   const target = singleTarget(positionals, flags, "inspect");
   const output = outputOf(flags);
