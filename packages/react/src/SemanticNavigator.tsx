@@ -453,6 +453,25 @@ export function SemanticNavigator({
   const [hostEl, setHostEl] = useState<HTMLDivElement | null>(null);
   const instanceRef = useRef<InspectorInstance | null>(null);
 
+  // Keep the latest callbacks in refs and pass stable wrappers into
+  // createInspector. Otherwise a parent that recreates onNodeSelect/onAction
+  // each render leaves the inspector calling a stale closure forever — the
+  // create effect intentionally does not depend on the callback identities.
+  const onNodeSelectRef = useRef(onNodeSelect);
+  const onActionRef = useRef(onAction);
+  onNodeSelectRef.current = onNodeSelect;
+  onActionRef.current = onAction;
+
+  const handleNodeSelect = useCallback((node: SemanticNode) => {
+    onNodeSelectRef.current?.(node);
+  }, []);
+  const handleAction = useCallback(
+    (request: ActionRequest, result: ActionResult) => {
+      onActionRef.current?.(request, result);
+    },
+    [],
+  );
+
   // `floating` mode portals into `document.body`, which isn't available during
   // SSR. Delay the portal render until after the first client commit.
   const [portalReady, setPortalReady] = useState(false);
@@ -460,7 +479,9 @@ export function SemanticNavigator({
     if (floating) setPortalReady(true);
   }, [floating]);
 
-  // Build / tear down the instance when root element or mount mode changes.
+  // Build / tear down when the observed root, mount mode, host, or inspector
+  // config flags change. `mode` is intentionally omitted — setViewMode below
+  // swaps it without remounting. Callbacks use the stable wrappers above.
   useEffect(() => {
     const el = root.current;
     if (!el || !hostEl) return;
@@ -477,8 +498,8 @@ export function SemanticNavigator({
       focusHostOnActivate,
       enablePicker,
       styleNonce,
-      onNodeSelect,
-      onAction,
+      onNodeSelect: handleNodeSelect,
+      onAction: handleAction,
     });
     instance.mount();
     instanceRef.current = instance;
@@ -487,10 +508,27 @@ export function SemanticNavigator({
       instance.unmount();
       instanceRef.current = null;
     };
-    // Callbacks and flags are updated imperatively below — not a remount trigger.
-    // `hostEl` is a dep so the inspector is created as soon as the host attaches
-    // (floating mode portals it in on a later commit).
-  }, [root.current, mount, hostEl]);
+    // `mode` / `styleNonce` are intentionally omitted from deps (no react-hooks
+    // exhaustive-deps rule in this repo). `mode` is applied via setViewMode (no
+    // remount); on remount from other deps the effect still closes over the
+    // current `mode`. `styleNonce` is mount-only: createInspector injects
+    // <style nonce> once into a reused shadow root (or once into #sn-styles in
+    // light mount), so a remount on the same host cannot change it.
+    // `root.current` is read after commit (same pattern as before — the ref
+    // object identity is stable).
+  }, [
+    root.current,
+    mount,
+    hostEl,
+    theme,
+    interactive,
+    highlightOnHover,
+    scrollHostOnSelect,
+    focusHostOnActivate,
+    enablePicker,
+    handleNodeSelect,
+    handleAction,
+  ]);
 
   // Cheap prop update — swap view mode without remounting.
   useEffect(() => {
