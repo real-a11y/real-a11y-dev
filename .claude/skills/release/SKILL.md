@@ -123,20 +123,34 @@ version-bumps table, changesets consumed, mechanical notes, `verify` +
 `packaging:check` boxes, and the after-merge tags. Fill it in — don't replace it
 with a freeform body.
 
-### 6. Publish — after the PR merges, and only on explicit sign-off
+### 6. Publish — merging the PR is the sign-off
 
-Publishing is **public and irreversible**. Stop here and get the user's explicit
-"go" before pushing any `v*` tag. Then:
+Publishing is **public and irreversible**, and **merging the release PR starts
+it**. `release-tag.yml` fires on any merged `release/*` PR: from the merge commit
+it creates one tag per publishable package (`@real-a11y-dev/core@0.1.0-beta.10`,
+matching the changesets convention) for every version not already tagged, then
+dispatches `publish.yml` against that commit — plus `extension-v<version>` →
+`extension-release.yml` when the extension version changed. So get the user's
+explicit "go" **before merging**, not after; there is no second gate behind it.
+
+The dist-tag is derived from the version, not chosen: `0.1.0-beta.N` publishes
+under `beta` (then `advance-latest.mjs` moves `latest`), a plain `0.1.0` under
+`latest`. Nothing to pass, nothing to remember.
+
+A release that bumps only some packages (versions do drift — `cli`/`mcp` at
+`beta.0` while the core cohort is at `beta.10`) just tags those; there is no
+"which package anchors this" tag to invent. The one manual step the automation
+will **not** do is touch the Chrome Web Store — `extension-release.yml` only
+builds the zip and drafts the GitHub Release.
+
+Both workflows stay runnable by hand from the Actions tab, so a merge that didn't
+publish (automation bypassed, or you're recovering a failed run) is always
+recoverable — either re-run **Publish to npm** from the Actions tab, or push the
+break-glass aggregate tag:
 
 ```bash
-# npm — from the squash commit on main:
+# break-glass only — the automation uses per-package tags, not this:
 git tag v0.1.0-beta.N && git push origin v0.1.0-beta.N
-#   → publish.yml: pnpm publish -r --tag beta, then advance-latest.mjs moves latest.
-#   (Or run the "Publish to npm" workflow via workflow_dispatch with tag=beta.)
-
-# extension — if it was bumped:
-git tag extension-v0.1.7 && git push origin extension-v0.1.7
-#   → extension-release.yml builds the zip + a DRAFT GitHub Release.
 ```
 
 Then the **only** manual step: download the zip from the draft release and
