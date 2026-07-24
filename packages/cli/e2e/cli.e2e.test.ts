@@ -175,3 +175,94 @@ describe("real-a11y (built bin)", () => {
     expect(annotations[0]).toContain("title=no-unlabeled-interactive");
   });
 });
+
+// ── --tree native (Chromium's own a11y tree over CDP) ─────────────────────────
+// A <video controls> builds its play/scrubber/mute controls in a CLOSED
+// user-agent shadow root the DOM producer's in-page walk can't reach; the native
+// producer, reading Chromium's own tree, does. These prove the flag threads
+// through to the native producer and that the incompatibility guards fire.
+
+const VIDEO_PAGE = dataUrl(
+  '<main><h1>Player</h1><video controls width="160" height="90" ' +
+    'src="data:video/mp4;base64,AAAA"></video><button>Save</button></main>',
+);
+const ICON_BTN_PAGE = dataUrl(
+  "<main><h1>Hi</h1><button><svg width='10' height='10'></svg></button></main>",
+);
+
+describe("real-a11y --tree native (built bin)", () => {
+  it("tree --tree native surfaces UA-shadow media controls the DOM walk misses", async () => {
+    const { code, stdout } = await runCli([
+      "tree",
+      VIDEO_PAGE,
+      "--tree",
+      "native",
+    ]);
+    expect(code).toBe(0);
+    expect(stdout).toContain('heading "Player"');
+    // Native-only: the scrubber lives in the closed UA shadow root.
+    expect(stdout).toContain("slider");
+    expect(stdout).toContain("video time scrubber");
+
+    // The DOM producer, on the same page, stops at the <video> element.
+    const dom = await runCli(["tree", VIDEO_PAGE]);
+    expect(dom.stdout).not.toContain("slider");
+  });
+
+  it("outline --tree native prints the heading outline", async () => {
+    const { code, stdout } = await runCli([
+      "outline",
+      VIDEO_PAGE,
+      "--tree",
+      "native",
+    ]);
+    expect(code).toBe(0);
+    expect(stdout).toContain("h1 Player");
+  });
+
+  it("audit --tree native audits the native tree (flags an unlabeled control)", async () => {
+    const { code, stdout } = await runCli([
+      "audit",
+      ICON_BTN_PAGE,
+      "--tree",
+      "native",
+    ]);
+    expect(code).toBe(1);
+    expect(stdout).toContain("no-unlabeled-interactive");
+  });
+
+  it("rejects --tree native on tabs (no tab order in a native tree)", async () => {
+    const { code, stderr } = await runCli([
+      "tabs",
+      VIDEO_PAGE,
+      "--tree",
+      "native",
+    ]);
+    expect(code).toBe(2);
+    expect(stderr).toContain("not supported by `tabs`");
+  });
+
+  it("rejects --tree native combined with --root", async () => {
+    const { code, stderr } = await runCli([
+      "tree",
+      VIDEO_PAGE,
+      "--tree",
+      "native",
+      "--root",
+      "main",
+    ]);
+    expect(code).toBe(2);
+    expect(stderr).toContain("whole document");
+  });
+
+  it("rejects an unknown --tree value", async () => {
+    const { code, stderr } = await runCli([
+      "tree",
+      VIDEO_PAGE,
+      "--tree",
+      "webkit",
+    ]);
+    expect(code).toBe(2);
+    expect(stderr).toContain("dom | native");
+  });
+});

@@ -56,7 +56,8 @@
   },
   "dependencies": {
     "@real-a11y-dev/audit": "workspace:*",
-    "@real-a11y-dev/core": "workspace:*"
+    "@real-a11y-dev/core": "workspace:*",
+    "@real-a11y-dev/serialize": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

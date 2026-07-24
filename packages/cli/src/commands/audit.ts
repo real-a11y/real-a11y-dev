@@ -32,6 +32,7 @@ import {
   resolveAuditTargets,
   rootOf,
   sessionFlags,
+  treeModeOf,
 } from "./common.js";
 
 export const auditCommand: CommandFn = async (positionals, flags) => {
@@ -39,6 +40,7 @@ export const auditCommand: CommandFn = async (positionals, flags) => {
   const rules = parseRules(flags.rules);
   const failOn = parseFailOn(flags["fail-on"], "error");
   const format = parseFormat(flags.format, ["pretty", "json"] as const);
+  const producer = treeModeOf(flags, "audit", true);
   const openOptions = parseOpenOptions(flags);
   const targets = resolveAuditTargets(positionals, flags);
   const output = outputOf(flags);
@@ -59,9 +61,12 @@ export const auditCommand: CommandFn = async (positionals, flags) => {
           target.fileApproved,
           authed,
         );
-        const snapshot = await snapshotPage(session, rootOf(flags), {
-          ...(rules ? { rules } : {}),
-        });
+        const snapshot = await snapshotPage(
+          session,
+          rootOf(flags),
+          { ...(rules ? { rules } : {}) },
+          producer,
+        );
         pages.push({
           name: target.name,
           url: redactUrl(opened.url),

@@ -29,6 +29,7 @@ import {
   rootOf,
   sessionFlags,
   singleTarget,
+  treeModeOf,
   type Target,
 } from "./common.js";
 
@@ -60,14 +61,20 @@ function makeSnapshotView(
 ): CommandFn {
   return async (positionals, flags) => {
     const format = parseFormat(flags.format, ["pretty", "json"] as const);
+    // tabs is a tab-order view; a native tree carries none, so only tree/outline
+    // opt into native.
+    const producer = treeModeOf(flags, command, command !== "tabs");
     const target = singleTarget(positionals, flags, command);
     const { value: text, finalUrl } = await withPage(
       target,
       flags,
       async (session) => {
-        const snapshot = await snapshotPage(session, rootOf(flags), {
-          includeGeneric: flags["include-generic"] === true,
-        });
+        const snapshot = await snapshotPage(
+          session,
+          rootOf(flags),
+          { includeGeneric: flags["include-generic"] === true },
+          producer,
+        );
         return pick(snapshot);
       },
     );
@@ -94,6 +101,8 @@ export const tabsCommand = makeSnapshotView("tabs", (s) => s.tabOrder);
 
 export const listCommand: CommandFn = async (positionals, flags) => {
   const category = parseListCategory(positionals[0]);
+  // list runs the page-bundle's listByRole in the page; there's no native path.
+  treeModeOf(flags, "list", false);
   const format = parseFormat(flags.format, ["pretty", "json"] as const);
   const target = singleTarget(positionals.slice(1), flags, "list");
   const { value: raw, finalUrl } = await withPage(target, flags, (session) =>

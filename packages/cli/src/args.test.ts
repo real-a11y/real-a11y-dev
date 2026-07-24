@@ -7,6 +7,7 @@ import {
   parseOnly,
   parseOpenOptions,
   parseRules,
+  parseTree,
 } from "./args.js";
 import { CliError } from "./exit.js";
 
@@ -39,6 +40,22 @@ describe("parseFailOn / parseFormat", () => {
     expect(() => parseFormat("sarif", ["pretty", "json"])).toThrow(
       /pretty \| json/,
     );
+  });
+});
+
+describe("parseTree", () => {
+  it("defaults to dom when omitted", () => {
+    expect(parseTree(undefined)).toBe("dom");
+  });
+
+  it("accepts dom and native", () => {
+    expect(parseTree("dom")).toBe("dom");
+    expect(parseTree("native")).toBe("native");
+  });
+
+  it("rejects anything else", () => {
+    expect(() => parseTree("chromium")).toThrow(/dom \| native/);
+    expect(() => parseTree("chromium")).toThrow(CliError);
   });
 });
 

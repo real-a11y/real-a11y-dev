@@ -77,5 +77,10 @@ export {
 } from "./sanitize.js";
 export type { CleanSnapshot } from "./sanitize.js";
 
+// Native producer projection — turn a CDP-read `ExtractionResult` into the same
+// CleanSnapshot the DOM producer yields (serialize + audit in Node).
+export { projectNativeTree } from "./native-snapshot.js";
+export type { NativeSnapshotOptions } from "./native-snapshot.js";
+
 // Errors — a malformed artifact/baseline the reader can't accept.
 export { SnapshotFormatError } from "./errors.js";
