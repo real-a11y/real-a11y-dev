@@ -1,8 +1,10 @@
+import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { fileURLToPath } from "node:url";
 
 import { test, expect } from "@playwright/test";
+import { PAGE_BUNDLE_PATH } from "@real-a11y-dev/browser";
 
 import { attach } from "../src/playwright.js";
 
@@ -306,5 +308,70 @@ test.describe("rootSelector that matches nothing", () => {
     // through — a typo'd selector must not quietly pass by auditing everything.
     const sn = await attach(page, { rootSelector: "#does-not-exist" });
     await expect(sn.assertHeadingOrder()).rejects.toThrow(/matched no element/);
+  });
+});
+
+// ─── iframe content ──────────────────────────────────────────────────────────
+
+test.describe("iframe content", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto(fixtureUrl("fixture-iframe-host.html"));
+  });
+
+  test("a host-page audit does NOT see inside the iframe", async ({ page }) => {
+    // The frame's unlabeled button would fail assertNoUnlabeledInteractive if it
+    // were traversed — it isn't, so the host audit passes and the snapshot omits
+    // the frame's content. This is the documented false-pass risk.
+    const sn = await attach(page);
+    await sn.assertNoUnlabeledInteractive(); // clean at the host level
+    const snapshot = await sn.auditSnapshot();
+    expect(snapshot).toContain("View cart");
+    // The iframe itself appears (named by its title), but its *contents* don't.
+    expect(snapshot).not.toContain("Payment details"); // the frame's <h1>
+  });
+
+  test("attaching to the Frame audits the iframe's own document", async ({
+    page,
+  }) => {
+    const frame = page.frame({ name: "checkout" });
+    expect(frame).not.toBeNull();
+    const inner = await attach(frame!);
+    // Now the frame's unlabeled button is in scope and gets caught.
+    await expect(inner.assertNoUnlabeledInteractive()).rejects.toThrow(
+      /unlabeled/i,
+    );
+    expect(await inner.auditSnapshot()).toContain("Payment details");
+  });
+});
+
+// ─── navigation ──────────────────────────────────────────────────────────────
+
+test.describe("navigation", () => {
+  test("the handle keeps working after the page navigates", async ({
+    page,
+  }) => {
+    await page.goto(fixtureUrl("fixture.html"));
+    const sn = await attach(page);
+    expect(await sn.auditSnapshot()).toContain("Test fixture");
+
+    // The bundle lives on window and a navigation wipes it. attach() registered
+    // an init script, so the new document re-injects it — no re-attach needed.
+    await page.goto(fixtureUrl("fixture-iframe-host.html"));
+    const after = await sn.auditSnapshot();
+    expect(after).toContain("Store");
+    expect(after).not.toContain("Test fixture");
+  });
+});
+
+// ─── injected bundle hygiene ─────────────────────────────────────────────────
+
+test.describe("injected bundle", () => {
+  test("ships no sourceMappingURL (would 404 against the target page)", () => {
+    // The bundle is injected as inline source, so a trailing
+    // `//# sourceMappingURL=…` resolves relative to the page under test and
+    // 404s. Assert on the built file itself — deterministic, and pretest:e2e
+    // just rebuilt it.
+    const bundle = readFileSync(PAGE_BUNDLE_PATH, "utf8");
+    expect(bundle).not.toContain("sourceMappingURL");
   });
 });

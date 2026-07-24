@@ -23,7 +23,11 @@ export default defineConfig([
     entry: { "page-bundle.iife": "src/page-bundle.ts" },
     format: ["iife"],
     globalName: "__realA11y__",
-    sourcemap: true,
+    // No sourcemap: this bundle is injected as inline source into someone
+    // else's page, so the appended `//# sourceMappingURL=…` resolves relative
+    // to the page under test and 404s. Nobody debugs the injected bundle from
+    // the target page, and the emitted .map has no other consumer.
+    sourcemap: false,
     treeshake: true,
     dts: false,
     clean: false, // the main config above already cleaned dist/

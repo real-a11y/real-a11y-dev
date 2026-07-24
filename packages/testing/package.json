@@ -79,6 +79,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "pretest:e2e": "pnpm --filter \"@real-a11y-dev/testing...\" build",
     "test:e2e": "playwright test --config=playwright.config.ts"
   },
   "dependencies": {

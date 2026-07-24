@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Embedded checkout</title>
+  </head>
+  <body>
+    <main>
+      <!-- "Payment details" appears ONLY inside the frame — the iframe element
+           on the host is titled "Checkout", so this string proves traversal. -->
+      <h1>Payment details</h1>
+      <!-- Deliberately unlabeled: an audit of the HOST page never sees this. -->
+      <button aria-label=""></button>
+    </main>
+  </body>
+</html>
