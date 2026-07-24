@@ -72,6 +72,8 @@ Preview iframe                              Manager (Storybook UI)
 start DomObserver + extract
 → TREE_UPDATED ───────── channel ─────────▶ deserialize tree (array → Map)
    { tree, mode, extractedAt }              → render <TreePanel/> in a shadow root
+storyRendered (incl. after canvas reload)   Panel still open → REQUEST_TREE again
+←──────────────────────────────────────────
 Panel unmounts → STOP_TREE
 ←──────────────────────────────────────────
 stop DomObserver (no further extracts)

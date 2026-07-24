@@ -151,10 +151,20 @@ function Panel() {
     // Ask the preview for the current tree immediately — otherwise the panel
     // shows "Waiting…" until the next DOM mutation in the story. Also starts
     // the preview-side DomObserver (extraction is lazy until this request).
-    channel.emit(EVENTS.REQUEST_TREE);
+    const requestTree = () => channel.emit(EVENTS.REQUEST_TREE);
+    requestTree();
+
+    // The preview module holds `panelWantsTree` in iframe memory. A canvas
+    // reload (HMR / full preview refresh) re-executes that module and resets
+    // the flag to false, but this Panel stays mounted in the manager shell and
+    // would never re-emit REQUEST_TREE on its own — leaving the panel stuck on
+    // stale/"Waiting…" content. Re-request whenever a story finishes rendering
+    // while we're still open.
+    channel.on("storyRendered", requestTree);
 
     return () => {
       channel.off(EVENTS.TREE_UPDATED, handler);
+      channel.off("storyRendered", requestTree);
       // Tear down the preview observer so hidden-panel stories don't keep
       // extracting and postMessage-ing full trees across the iframe boundary.
       channel.emit(EVENTS.STOP_TREE);
