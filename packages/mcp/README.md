@@ -10,17 +10,56 @@ _broken_. The tree-inspection tools are perception primitives layered on top.
 
 ## Tools
 
-| Tool | Purpose |
-| --- | --- |
-| `open_page` | Navigate to a URL and prepare it for queries (call first). `waitUntil` / `settleMs` settle dynamic pages; `device` (e.g. `"iPhone 13"`) audits the **mobile/tablet** layout. |
-| `audit_page` | **Flagship.** Return every accessibility violation — unlabeled controls, images missing alt, heading gaps, unlabeled dialogs, broken landmarks — as structured findings (grouped, each with a CSS locator + severity). Pass `producer: "native"` to audit Chromium's own tree (see below). |
-| `inspect_page` | Findings **plus** semantic tree, heading outline, and tab order — all from **one** extraction, so they can't disagree. Prefer on dynamic pages. Accepts `producer: "native"` (findings + tree + outline; tab order is N/A). |
-| `get_semantic_tree` | Deterministic role + accessible-name outline of the page. Accepts `producer: "native"`. |
-| `get_heading_outline` | Heading structure (h1..h6) in document order. Accepts `producer: "native"`. |
-| `get_tab_order` | Focusable elements in keyboard Tab order. DOM-only (a native tree has no tab order). |
-| `list_elements` | Every element of one category (`link`/`button`/`form`/`landmark`/`image`/`heading`) as role + name + locator. Accepts `producer: "native"` (no locators). |
-| `compare_producers` | Diff the DOM producer against the native producer and report role/name divergences — a fidelity oracle. Not to be confused with `diff_checkpoints` (two checkpoints over time). |
-| `close_browser` | Tear down the session. |
+Seventeen tools, grouped. The **Producer** column shows which accept
+`producer: "native"` (Chromium's own tree over CDP, whole-document) vs. the DOM
+walk. Full parameter reference: **[real-a11y.dev/packages/mcp/tools](https://real-a11y.dev/packages/mcp/tools)**.
+
+**Session**
+
+| Tool | Purpose | Producer |
+| --- | --- | --- |
+| `open_page` | Navigate to a URL and ready it for queries (call first). `waitUntil` / `settleMs` settle dynamic pages; `device` audits the **mobile/tablet** layout. | — |
+| `close_browser` | Tear down the session. | — |
+
+**Audit**
+
+| Tool | Purpose | Producer |
+| --- | --- | --- |
+| `audit_page` | **Flagship.** Every accessibility violation — unlabeled controls, missing alt, heading gaps, unlabeled dialogs, broken landmarks — grouped, each with a CSS locator + severity. | `dom` · `native` |
+| `inspect_page` | Findings **plus** semantic tree, heading outline, and tab order — all from **one** extraction, so they can't disagree. Prefer on dynamic pages. | `dom` · `native` (tab order N/A) |
+
+**Views**
+
+| Tool | Purpose | Producer |
+| --- | --- | --- |
+| `get_semantic_tree` | Deterministic role + accessible-name outline of the page. | `dom` · `native` |
+| `get_heading_outline` | Heading structure (h1..h6) in document order. | `dom` · `native` |
+| `get_tab_order` | Focusable elements in keyboard Tab order. | `dom` only |
+| `list_elements` | Every element of one category (`link`/`button`/`form`/`landmark`/`image`/`heading`) as role + name + locator. | `dom` · `native` (no locators) |
+
+**Producer parity**
+
+| Tool | Purpose | Producer |
+| --- | --- | --- |
+| `compare_producers` | Diff the DOM producer against the native producer and report role/name divergences — a fidelity oracle. Distinct from `diff_checkpoints` (two checkpoints over time). | reads both |
+
+**Findings checkpoints** — capture the page's findings under a name, then diff what's **new / changed / fixed** with the same `v1:` fingerprints the CI a11y-diff uses. Survive navigation, so you can checkpoint one deploy and diff another.
+
+| Tool | Purpose | Producer |
+| --- | --- | --- |
+| `checkpoint_findings` | Snapshot the current page's findings under a name. | — |
+| `diff_findings` | Re-snapshot the page and diff against a checkpoint. | — |
+| `diff_checkpoints` | Diff two already-stored checkpoints (no re-snapshot). | — |
+| `list_checkpoints` | List stored checkpoint labels with finding counts. | — |
+| `export_checkpoint` | Export a checkpoint as a snapshot JSON artifact (CLI-compatible). | — |
+| `import_checkpoint` | Load an external snapshot artifact as a checkpoint. | — |
+
+**Tree checkpoints** — capture the tree, interact, then see exactly what an interaction changed for a screen reader. Bound to the page instance (do not survive navigation).
+
+| Tool | Purpose | Producer |
+| --- | --- | --- |
+| `checkpoint_tree` | Capture the current tree as an interaction-diff baseline. | — |
+| `diff_tree` | Diff the tree since `checkpoint_tree` — nodes added / removed / changed, plus focus move. | — |
 
 ### The native producer — `producer: "native"`
 

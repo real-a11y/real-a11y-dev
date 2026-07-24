@@ -86,6 +86,8 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
+      link "All tools at a glance"
+    listitem
       link "Session"
     listitem
       link "Audit"
@@ -135,6 +137,179 @@ main
     code "file://"
     strong "refuses to start"
     link "Environment"
+  heading "All tools at a glance" (level 2)
+  paragraph "The column shows which tools accept (Chromium's own tree over CDP, whole-document) versus the DOM walk. Click a tool for its parameters."
+    strong "Producer"
+    code "producer: "native""
+  paragraph
+    strong "Session"
+  table
+    rowgroup
+      row
+        rowheader "Tool"
+        rowheader "Purpose"
+        rowheader "Producer"
+    rowgroup
+      row
+        cell "open_page"
+          link "open_page"
+            code "open_page"
+        cell "Navigate to a URL and ready it for queries — call first."
+        cell "—"
+      row
+        cell "close_browser"
+          link "close_browser"
+            code "close_browser"
+        cell "Tear down the browser session."
+        cell "—"
+  paragraph
+    strong "Audit"
+  table
+    rowgroup
+      row
+        rowheader "Tool"
+        rowheader "Purpose"
+        rowheader "Producer"
+    rowgroup
+      row
+        cell "audit_page"
+          link "audit_page"
+            code "audit_page"
+        cell "Every accessibility violation, grouped with CSS locators + severity — the flagship."
+        cell "dom · native"
+          code "dom"
+          code "native"
+      row
+        cell "inspect_page"
+          link "inspect_page"
+            code "inspect_page"
+        cell "Findings plus tree + outline + tab order from one extraction."
+          strong "plus"
+        cell "dom · native (tab order N/A)"
+          code "dom"
+          code "native"
+  paragraph
+    strong "Views"
+  table
+    rowgroup
+      row
+        rowheader "Tool"
+        rowheader "Purpose"
+        rowheader "Producer"
+    rowgroup
+      row
+        cell "get_semantic_tree"
+          link "get_semantic_tree"
+            code "get_semantic_tree"
+        cell "Role + accessible-name tree — what a screen reader traverses."
+        cell "dom · native"
+          code "dom"
+          code "native"
+      row
+        cell "get_heading_outline"
+          link "get_heading_outline"
+            code "get_heading_outline"
+        cell "Heading outline (h1–h6) in document order."
+        cell "dom · native"
+          code "dom"
+          code "native"
+      row
+        cell "get_tab_order"
+          link "get_tab_order"
+            code "get_tab_order"
+        cell "Focusable elements in keyboard Tab order."
+        cell "dom only"
+          code "dom"
+      row
+        cell "list_elements"
+          link "list_elements"
+            code "list_elements"
+        cell "Every element of one category (link / button / form / landmark / image / heading)."
+        cell "dom · native (no locators)"
+          code "dom"
+          code "native"
+  paragraph
+    strong "Producer parity"
+  table
+    rowgroup
+      row
+        rowheader "Tool"
+        rowheader "Purpose"
+        rowheader "Producer"
+    rowgroup
+      row
+        cell "compare_producers"
+          link "compare_producers"
+            code "compare_producers"
+        cell "Diff the DOM producer against the native producer — a fidelity oracle."
+        cell "reads both"
+  paragraph
+    strong "Findings checkpoints"
+  table
+    rowgroup
+      row
+        rowheader "Tool"
+        rowheader "Purpose"
+        rowheader "Producer"
+    rowgroup
+      row
+        cell "checkpoint_findings"
+          link "checkpoint_findings"
+            code "checkpoint_findings"
+        cell "Snapshot the page's findings under a name (survives navigation)."
+        cell "—"
+      row
+        cell "diff_findings"
+          link "diff_findings"
+            code "diff_findings"
+        cell "Re-snapshot the page and diff it against a checkpoint: new / changed / fixed."
+        cell "—"
+      row
+        cell "diff_checkpoints"
+          link "diff_checkpoints"
+            code "diff_checkpoints"
+        cell "Diff two already-stored checkpoints (no re-snapshot)."
+        cell "—"
+      row
+        cell "list_checkpoints"
+          link "list_checkpoints"
+            code "list_checkpoints"
+        cell "List stored checkpoint labels with finding counts."
+        cell "—"
+      row
+        cell "export_checkpoint"
+          link "export_checkpoint"
+            code "export_checkpoint"
+        cell "Export a checkpoint as a snapshot JSON artifact (CLI-compatible)."
+        cell "—"
+      row
+        cell "import_checkpoint"
+          link "import_checkpoint"
+            code "import_checkpoint"
+        cell "Load an external snapshot artifact as a checkpoint."
+        cell "—"
+  paragraph
+    strong "Tree checkpoints"
+  table
+    rowgroup
+      row
+        rowheader "Tool"
+        rowheader "Purpose"
+        rowheader "Producer"
+    rowgroup
+      row
+        cell "checkpoint_tree"
+          link "checkpoint_tree"
+            code "checkpoint_tree"
+        cell "Capture the current tree as an interaction-diff baseline (page-bound)."
+        cell "—"
+      row
+        cell "diff_tree"
+          link "diff_tree"
+            code "diff_tree"
+        cell "Diff the tree since checkpoint_tree — what an interaction changed."
+          code "checkpoint_tree"
+        cell "—"
   heading "Session" (level 2)
   paragraph "Bracket every audit with these two. navigates and readies the page; tears the browser down."
     code "open_page"

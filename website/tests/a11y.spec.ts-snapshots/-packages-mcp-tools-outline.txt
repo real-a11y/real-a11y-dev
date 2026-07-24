@@ -9,6 +9,7 @@
   h2 Reference
   h2 On this page
 h1 MCP tools reference
+  h2 All tools at a glance
   h2 Session
     h3 open_page
     h3 close_browser

@@ -13,6 +13,57 @@ Every audit and extraction tool takes an optional `rootSelector` (default `"body
 
 Server behavior is configured entirely through [environment variables](#environment) — saved-login sessions, origin pinning, `file://` access, CDP attach. Credentials are never tool parameters, so session tokens stay out of the agent's context. On startup the server validates that configuration and **refuses to start** on a malformed storage-state file or an invalid origin (see [Environment](#environment)).
 
+## All tools at a glance
+
+The **Producer** column shows which tools accept `producer: "native"` (Chromium's own tree over CDP, whole-document) versus the DOM walk. Click a tool for its parameters.
+
+**Session**
+
+| Tool | Purpose | Producer |
+| --- | --- | --- |
+| [`open_page`](#open_page) | Navigate to a URL and ready it for queries — call first. | — |
+| [`close_browser`](#close_browser) | Tear down the browser session. | — |
+
+**Audit**
+
+| Tool | Purpose | Producer |
+| --- | --- | --- |
+| [`audit_page`](#audit_page) | Every accessibility violation, grouped with CSS locators + severity — the flagship. | `dom` · `native` |
+| [`inspect_page`](#inspect_page) | Findings **plus** tree + outline + tab order from one extraction. | `dom` · `native` (tab order N/A) |
+
+**Views**
+
+| Tool | Purpose | Producer |
+| --- | --- | --- |
+| [`get_semantic_tree`](#get_semantic_tree) | Role + accessible-name tree — what a screen reader traverses. | `dom` · `native` |
+| [`get_heading_outline`](#get_heading_outline) | Heading outline (h1–h6) in document order. | `dom` · `native` |
+| [`get_tab_order`](#get_tab_order) | Focusable elements in keyboard Tab order. | `dom` only |
+| [`list_elements`](#list_elements) | Every element of one category (link / button / form / landmark / image / heading). | `dom` · `native` (no locators) |
+
+**Producer parity**
+
+| Tool | Purpose | Producer |
+| --- | --- | --- |
+| [`compare_producers`](#compare_producers) | Diff the DOM producer against the native producer — a fidelity oracle. | reads both |
+
+**Findings checkpoints**
+
+| Tool | Purpose | Producer |
+| --- | --- | --- |
+| [`checkpoint_findings`](#checkpoint_findings) | Snapshot the page's findings under a name (survives navigation). | — |
+| [`diff_findings`](#diff_findings) | Re-snapshot the page and diff it against a checkpoint: new / changed / fixed. | — |
+| [`diff_checkpoints`](#diff_checkpoints) | Diff two already-stored checkpoints (no re-snapshot). | — |
+| [`list_checkpoints`](#list_checkpoints) | List stored checkpoint labels with finding counts. | — |
+| [`export_checkpoint`](#export_checkpoint) | Export a checkpoint as a snapshot JSON artifact (CLI-compatible). | — |
+| [`import_checkpoint`](#import_checkpoint) | Load an external snapshot artifact as a checkpoint. | — |
+
+**Tree checkpoints**
+
+| Tool | Purpose | Producer |
+| --- | --- | --- |
+| [`checkpoint_tree`](#checkpoint_tree) | Capture the current tree as an interaction-diff baseline (page-bound). | — |
+| [`diff_tree`](#diff_tree) | Diff the tree since `checkpoint_tree` — what an interaction changed. | — |
+
 ## Session
 
 Bracket every audit with these two. `open_page` navigates and readies the page; `close_browser` tears the browser down.
