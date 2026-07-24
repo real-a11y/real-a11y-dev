@@ -54,38 +54,42 @@
 54. link "Install"
 55. link "attach(page, options?)"
 56. link "Narrowing the root"
-57. link "Testing that assertions fail on broken pages"
-58. link "Determinism"
-59. link "Redacting variable content"
-60. link "How it works"
-61. link "Error propagation"
-62. link "SemanticNavigatorPageHandle type"
-63. link "See also"
-64. link "@real-a11y-dev/testing"
-65. button "Copy Code"
-66. generic
-67. button "Copy Code"
-68. generic
-69. table
-70. button "Copy Code"
-71. generic
+57. link "Auditing the native tree"
+58. link "Testing that assertions fail on broken pages"
+59. link "Determinism"
+60. link "Redacting variable content"
+61. link "How it works"
+62. link "Error propagation"
+63. link "SemanticNavigatorPageHandle type"
+64. link "See also"
+65. link "@real-a11y-dev/testing"
+66. button "Copy Code"
+67. generic
+68. button "Copy Code"
+69. generic
+70. table
+71. link "Auditing the native tree"
 72. button "Copy Code"
 73. generic
 74. button "Copy Code"
 75. generic
-76. link "redact"
-77. button "Copy Code"
-78. generic
-79. link "g-flag gotcha"
-80. button "Copy Code"
-81. generic
-82. button "Copy Code"
-83. generic
+76. button "Copy Code"
+77. generic
+78. button "Copy Code"
+79. generic
+80. link "redact"
+81. button "Copy Code"
+82. generic
+83. link "g-flag gotcha"
 84. button "Copy Code"
 85. generic
-86. link "Snapshots"
-87. link "Assertions"
-88. link "CI Diff Bot recipe"
-89. link "Edit this page on GitHub"
-90. link "Previous pageFlow API"
-91. link "Next page@real-a11y-dev/react"
+86. button "Copy Code"
+87. generic
+88. button "Copy Code"
+89. generic
+90. link "Snapshots"
+91. link "Assertions"
+92. link "CI Diff Bot recipe"
+93. link "Edit this page on GitHub"
+94. link "Previous pageFlow API"
+95. link "Next page@real-a11y-dev/react"

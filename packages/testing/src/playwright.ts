@@ -20,7 +20,9 @@
 
 import { readFileSync } from "node:fs";
 
-import { PAGE_BUNDLE_PATH } from "@real-a11y-dev/browser";
+import { assertRules } from "@real-a11y-dev/audit";
+import { PAGE_BUNDLE_PATH, nativeTree } from "@real-a11y-dev/browser";
+import { serializeTree, serializeOutline } from "@real-a11y-dev/serialize";
 
 // ---------------------------------------------------------------------------
 // Bundle path — the injected IIFE page-bundle lives in @real-a11y-dev/browser,
@@ -69,6 +71,16 @@ export interface AttachOptions {
    * Defaults to `"body"`.
    */
   rootSelector?: string;
+  /**
+   * Which producer builds the tree:
+   * - `"dom"` (default) — the injected page-bundle walks the light DOM.
+   * - `"native"` — Chromium's own accessibility tree over CDP
+   *   (`@real-a11y-dev/browser`'s `nativeTree`). Read-only and whole-document:
+   *   snapshot + assertion methods work, but `tabSequenceSnapshot()` throws
+   *   (tab order needs interaction data a native tree doesn't carry), and
+   *   `rootSelector` scoping is not yet supported.
+   */
+  tree?: "dom" | "native";
 }
 
 export interface AuditSnapshotOptions {
@@ -134,6 +146,12 @@ export async function attach(
   options: AttachOptions = {},
 ): Promise<SemanticNavigatorPageHandle> {
   const rootSelector = options.rootSelector ?? "body";
+
+  // Native producer: no page-bundle injection — read Chromium's own tree over
+  // CDP and run the same serialize/audit helpers in Node. Same handle shape.
+  if (options.tree === "native") {
+    return attachNative(page, rootSelector);
+  }
 
   // Inject the bundle by EVALUATING its source rather than appending a
   // <script> element. `addScriptTag` inserts a real inline <script>, which a
@@ -258,6 +276,74 @@ export async function attach(
     },
     assertLandmarkStructure() {
       return evalFn<void>("assertLandmarkStructure");
+    },
+  };
+}
+
+/**
+ * Native-producer variant of {@link attach}: reads Chromium's own accessibility
+ * tree over CDP (`nativeTree`) and runs the same serialize/audit helpers in
+ * Node, so `attach(page, { tree: "native" })` returns the same handle shape.
+ *
+ * The native tree is read-only and whole-document: snapshot + assertion methods
+ * work; `tabSequenceSnapshot()` throws (tab order needs interaction data the
+ * native tree doesn't carry), and `rootSelector` scoping isn't supported yet.
+ * Each call re-reads the tree so the handle reflects the live page, matching the
+ * DOM handle's per-call re-extraction.
+ */
+async function attachNative(
+  page: PlaywrightPage,
+  rootSelector: string,
+): Promise<SemanticNavigatorPageHandle> {
+  if (rootSelector !== "body") {
+    throw new Error(
+      '@real-a11y-dev/testing/playwright: { tree: "native" } does not support ' +
+        "rootSelector scoping yet — omit rootSelector to audit the whole document.",
+    );
+  }
+
+  // `nativeTree` needs a full Playwright `Page` (it opens a CDP session). Derive
+  // its exact parameter type from the function so this file needs no direct
+  // `playwright` import (keeping the DOM path's structural-typing contract).
+  const nativePage = page as unknown as Parameters<typeof nativeTree>[0];
+  const getTree = () => nativeTree(nativePage);
+
+  return {
+    async auditSnapshot(opts: AuditSnapshotOptions = {}) {
+      // `mode` is a DOM-producer concept (a11y vs raw-tag view); the native tree
+      // is Chromium's own a11y tree, so it is ignored here.
+      return serializeTree(await getTree(), {
+        redact: opts.redact,
+        includeGeneric: opts.includeGeneric,
+      });
+    },
+    async outlineSnapshot() {
+      return serializeOutline(await getTree());
+    },
+    tabSequenceSnapshot(): Promise<string> {
+      // A native tree carries no interaction facet, so tab order can't be
+      // computed. Reject rather than return a misleading "(nothing focusable)".
+      // Don't read the tree first — the rejection is unconditional, so an
+      // unrelated CDP read failure must not mask this read-only explanation.
+      return Promise.reject(
+        new Error(
+          "@real-a11y-dev/testing/playwright: tabSequenceSnapshot() is not " +
+            'available with { tree: "native" } — a native tree is read-only and ' +
+            'carries no focusability/interaction data. Use { tree: "dom" }.',
+        ),
+      );
+    },
+    async assertNoUnlabeledInteractive() {
+      assertRules(await getTree(), ["no-unlabeled-interactive"]);
+    },
+    async assertHeadingOrder() {
+      assertRules(await getTree(), ["heading-order"]);
+    },
+    async assertDialogsLabeled() {
+      assertRules(await getTree(), ["dialog-labeled"]);
+    },
+    async assertLandmarkStructure() {
+      assertRules(await getTree(), ["landmark-structure"]);
     },
   };
 }

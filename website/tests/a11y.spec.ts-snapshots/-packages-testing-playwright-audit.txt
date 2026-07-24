@@ -100,6 +100,8 @@ navigation "On this page"
     listitem
       link "Narrowing the root"
     listitem
+      link "Auditing the native tree"
+    listitem
       link "Testing that assertions fail on broken pages"
     listitem
       link "Determinism"
@@ -150,9 +152,48 @@ main
         cell ""body""
           code ""body""
         cell "CSS selector for the audit root element."
+      row
+        cell "tree"
+          code "tree"
+        cell ""dom" | "native""
+          code ""dom" | "native""
+        cell ""dom""
+          code ""dom""
+        cell "Which producer builds the tree. See Auditing the native tree ."
+          link "Auditing the native tree"
   heading "Narrowing the root" (level 2)
   button "Copy Code"
   code
+  heading "Auditing the native tree" (level 2)
+  paragraph "By default uses the : it injects the page-bundle and walks the light DOM in the page. Pass to use the instead — it reads Chromium's own accessibility tree over CDP (via 's ) and runs the same serialize/audit helpers in Node:"
+    code "attach()"
+    strong "DOM producer"
+    code "{ tree: "native" }"
+    strong "native producer"
+    code "@real-a11y-dev/browser"
+    code "nativeTree"
+  button "Copy Code"
+  code
+  paragraph "Why a second producer: Chromium exposes structure no in-page walk can reach — most visibly a 's play/scrubber/mute controls, which live in a closed user-agent shadow root. An audit run over the native tree sees them; the DOM producer stops at the element."
+    code "<video controls>"
+    code "<video>"
+  paragraph "Native mode is for now:"
+    strong "read-only and whole-document"
+  list
+    listitem "— a native tree carries no focus/interaction data, so tab order can't be computed. Use for tab-sequence snapshots."
+      code "tabSequenceSnapshot()"
+      strong "throws"
+      code "{ tree: "dom" }"
+    listitem "scoping is — omit it (the default audits the whole document); passing any other selector throws up front rather than silently ignoring it."
+      code "rootSelector"
+      strong "not supported"
+      code ""body""
+  paragraph "Everything else — , , and every method — works identically. Both producers normalize to the tree model, so a snapshot's grammar is the same and the two trees are directly comparable."
+    code "auditSnapshot()"
+    code "outlineSnapshot()"
+    code "assert*"
+    emphasis "same"
+    code "role "name""
   heading "Testing that assertions fail on broken pages" (level 2)
   paragraph "Lock in the failure mode too — not just the happy path. When a new assertion lands or you refactor a page, you want confirmation that broken structure still throws:"
   button "Copy Code"

@@ -75,6 +75,8 @@ test("home page a11y", async ({ page }) => {
 });
 ```
 
+Pass `{ tree: "native" }` to audit Chromium's own accessibility tree (read over CDP) instead of the in-page DOM walk — it reaches structure no in-page walk can, such as a `<video controls>`'s play/scrubber/mute controls in its closed user-agent shadow root. Native mode is read-only and whole-document (`tabSequenceSnapshot()` throws and `rootSelector` isn't supported); see the [Playwright adapter docs](https://real-a11y.dev/packages/testing/playwright#auditing-the-native-tree).
+
 ## Docs
 
 Snapshot helpers, assertion reference, `flow()` chain API, and `redact` patterns at **[real-a11y.dev/packages/testing](https://real-a11y.dev/packages/testing)**.
