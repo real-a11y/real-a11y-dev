@@ -130,11 +130,14 @@ describe("serializeOutline", () => {
 });
 
 describe("serializeTabSequence", () => {
-  it("numbers focusable nodes in tab order", () => {
+  it("lists focusable nodes in tab order, one per line, unnumbered", () => {
     document.body.innerHTML = `<a href="#a">Home</a><button>Go</button>`;
     const out = serializeTabSequence(document.body);
-    expect(out).toContain('01. link "Home"');
-    expect(out).toContain('02. button "Go"');
+    // Exact match locks BOTH the order (link before button) and the format.
+    expect(out).toBe('link "Home"\nbutton "Go"');
+    // No `NN.` prefix — that renumbered every line on one insertion (the churn
+    // this format change removes). Guard against reintroduction.
+    expect(out).not.toMatch(/^\d+\.\s/m);
   });
 
   it("redacts EVERY occurrence in an accessible name, not just the first", () => {
@@ -144,7 +147,7 @@ describe("serializeTabSequence", () => {
     // first.
     document.body.innerHTML = `<button aria-label="Paid $28.50 then $2.00">x</button>`;
     const out = serializeTabSequence(document.body, { redact: [/\$[\d.]+/] });
-    expect(out).toContain('01. button "Paid [REDACTED] then [REDACTED]"');
+    expect(out).toBe('button "Paid [REDACTED] then [REDACTED]"');
     expect(out).not.toContain("$28.50");
     expect(out).not.toContain("$2.00");
   });

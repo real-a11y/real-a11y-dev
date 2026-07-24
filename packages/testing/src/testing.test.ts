@@ -70,8 +70,9 @@ describe("tabSequenceSnapshot", () => {
       <button tabindex="1">First</button>
     `);
     const out = tabSequenceSnapshot(root);
-    expect(out).toMatch(/01\. button "First"/);
-    expect(out).toMatch(/02\. button "Zero"/);
+    // Positive tabindex ("First") sorts ahead of the DOM-order "Zero". Exact
+    // match locks that order; lines carry no `NN.` sequence prefix.
+    expect(out).toBe('button "First"\nbutton "Zero"');
   });
 });
 
