@@ -1,17 +1,68 @@
 ---
 title: "@real-a11y-dev/mcp — tools reference"
-description: Every tool the Real A11y MCP server exposes — open_page, audit_page, the view tools, compare_trees — with parameters and examples.
+description: Every tool the Real A11y MCP server exposes — open_page, audit_page, the view tools, compare_producers — with parameters and examples.
 ---
 
 # MCP tools reference
 
-The Real A11y MCP server exposes **eighteen tools** to an MCP client (Claude Code, Claude Desktop, Cursor, and any other MCP-capable assistant). Each tool drives a real Chromium page and reports what a screen reader would actually perceive — computed roles, accessible names, and the defects assistive tech announces as broken — not what the HTML source claims.
+The Real A11y MCP server exposes **seventeen tools** to an MCP client (Claude Code, Claude Desktop, Cursor, and any other MCP-capable assistant). Each tool drives a real Chromium page and reports what a screen reader would actually perceive — computed roles, accessible names, and the defects assistive tech announces as broken — not what the HTML source claims.
 
 The tools share **one** browser page. A typical run is [`open_page`](#open_page) → an audit or view tool ([`audit_page`](#audit_page), [`inspect_page`](#inspect_page), or a `get_*` view) → [`close_browser`](#close_browser). Because every tool reads the same mutable page, calls must run **sequentially, never in parallel** — a second call mid-flight would race the first's navigation.
 
-Every audit and extraction tool takes an optional `rootSelector` (default `"body"`) that scopes the work to one region or component. The two native-tree tools ([`get_native_tree`](#get_native_tree), [`compare_trees`](#compare_trees)) read the whole document and take no arguments. Tool output is capped at **40,000 characters** — a larger page is truncated with a note to narrow with `rootSelector`.
+Every audit and extraction tool takes an optional `rootSelector` (default `"body"`) that scopes the work to one region or component, and — except [`get_tab_order`](#get_tab_order) — a `producer` (`"dom"` default, or `"native"` for Chromium's own accessibility tree read over CDP). [`compare_producers`](#compare_producers) and any tool called with `producer: "native"` read the whole document (`rootSelector` must stay `"body"`). Tool output is capped at **40,000 characters** — a larger page is truncated with a note to narrow with `rootSelector`.
 
 Server behavior is configured entirely through [environment variables](#environment) — saved-login sessions, origin pinning, `file://` access, CDP attach. Credentials are never tool parameters, so session tokens stay out of the agent's context. On startup the server validates that configuration and **refuses to start** on a malformed storage-state file or an invalid origin (see [Environment](#environment)).
+
+## All tools at a glance
+
+The **Producer** column shows which tools accept `producer: "native"` (Chromium's own tree over CDP, whole-document) versus the DOM walk. Click a tool for its parameters.
+
+**Session**
+
+| Tool | Purpose | Producer |
+| --- | --- | --- |
+| [`open_page`](#open_page) | Navigate to a URL and ready it for queries — call first. | — |
+| [`close_browser`](#close_browser) | Tear down the browser session. | — |
+
+**Audit**
+
+| Tool | Purpose | Producer |
+| --- | --- | --- |
+| [`audit_page`](#audit_page) | Every accessibility violation, grouped with CSS locators + severity — the flagship. | `dom` · `native` |
+| [`inspect_page`](#inspect_page) | Findings **plus** tree + outline + tab order from one extraction. | `dom` · `native` (tab order N/A) |
+
+**Views**
+
+| Tool | Purpose | Producer |
+| --- | --- | --- |
+| [`get_semantic_tree`](#get_semantic_tree) | Role + accessible-name tree — what a screen reader traverses. | `dom` · `native` |
+| [`get_heading_outline`](#get_heading_outline) | Heading outline (h1–h6) in document order. | `dom` · `native` |
+| [`get_tab_order`](#get_tab_order) | Focusable elements in keyboard Tab order. | `dom` only |
+| [`list_elements`](#list_elements) | Every element of one category (link / button / form / landmark / image / heading). | `dom` · `native` (no locators) |
+
+**Producer parity**
+
+| Tool | Purpose | Producer |
+| --- | --- | --- |
+| [`compare_producers`](#compare_producers) | Diff the DOM producer against the native producer — a fidelity oracle. | reads both |
+
+**Findings checkpoints**
+
+| Tool | Purpose | Producer |
+| --- | --- | --- |
+| [`checkpoint_findings`](#checkpoint_findings) | Snapshot the page's findings under a name (survives navigation). | — |
+| [`diff_findings`](#diff_findings) | Re-snapshot the page and diff it against a checkpoint: new / changed / fixed. | — |
+| [`diff_checkpoints`](#diff_checkpoints) | Diff two already-stored checkpoints (no re-snapshot). | — |
+| [`list_checkpoints`](#list_checkpoints) | List stored checkpoint labels with finding counts. | — |
+| [`export_checkpoint`](#export_checkpoint) | Export a checkpoint as a snapshot JSON artifact (CLI-compatible). | — |
+| [`import_checkpoint`](#import_checkpoint) | Load an external snapshot artifact as a checkpoint. | — |
+
+**Tree checkpoints**
+
+| Tool | Purpose | Producer |
+| --- | --- | --- |
+| [`checkpoint_tree`](#checkpoint_tree) | Capture the current tree as an interaction-diff baseline (page-bound). | — |
+| [`diff_tree`](#diff_tree) | Diff the tree since `checkpoint_tree` — what an interaction changed. | — |
 
 ## Session
 
@@ -107,6 +158,7 @@ Parameters:
 
 - **`rootSelector`** — string — optional (default `"body"`).
 - **`includeGeneric`** — boolean — optional (default `false`) — include generic container nodes (`role=generic`).
+- **`producer`** — `"dom"` \| `"native"` — optional (default `"dom"`) — `"native"` returns Chromium's own accessibility tree (read over CDP), whole-document (`rootSelector` must stay `"body"`). This is how you *view* the native tree.
 
 An agent calls this to reason about page structure or diff it against another rendering.
 
@@ -119,6 +171,7 @@ Return the heading outline (`h1`–`h6` in document order) as an indented list �
 Parameters:
 
 - **`rootSelector`** — string — optional (default `"body"`).
+- **`producer`** — `"dom"` \| `"native"` — optional (default `"dom"`) — `"native"` derives the outline from Chromium's own accessibility tree, whole-document (`rootSelector` must stay `"body"`).
 
 An agent calls this to flag skipped levels or a missing/duplicate `h1`.
 
@@ -132,7 +185,7 @@ Parameters:
 
 - **`rootSelector`** — string — optional (default `"body"`).
 
-An agent calls this to check keyboard operability of a form or menu.
+**DOM-only** — a native tree carries no tab order, so this tool takes no `producer`. An agent calls this to check keyboard operability of a form or menu.
 
 ### `list_elements`
 
@@ -144,6 +197,7 @@ Parameters:
 
 - **`filter`** — `"heading"` \| `"link"` \| `"button"` \| `"form"` \| `"landmark"` \| `"image"` — **required** — the category to list.
 - **`rootSelector`** — string — optional (default `"body"`).
+- **`producer`** — `"dom"` \| `"native"` — optional (default `"dom"`) — `"native"` lists from Chromium's own accessibility tree, whole-document (`rootSelector` must stay `"body"`; native nodes carry no CSS locator).
 
 An agent calls this to review one element type without pulling the whole tree:
 
@@ -253,29 +307,21 @@ Parameters:
 
 Errors if no checkpoint exists on the current page — including after a navigation, which discards it.
 
-## Native cross-check
+## Producer parity
 
-Chromium-only fidelity oracles. Both read the whole document, take no arguments, and compare Real A11y's custom engine against the browser's own computation.
+A Chromium-only fidelity oracle that compares the two producers. To *view* the native tree, use [`get_semantic_tree`](#get_semantic_tree) with `producer: "native"`; to *audit* it, [`audit_page`](#audit_page) with `producer: "native"`.
 
-### `get_native_tree`
-
-*Read-only · whole document · Chromium only.*
-
-Return Chromium's **own** accessibility tree — computed by Blink, read via CDP — as role + accessible name. This is the browser's authoritative tree, not Real A11y's custom extraction.
-
-Parameters: none.
-
-An agent calls this to see what the browser itself exposes, independent of the custom engine.
-
-### `compare_trees`
+### `compare_producers`
 
 *Read-only · whole document · Chromium only.*
 
-Diff Real A11y's custom tree against Chromium's native tree and report where they disagree on role or accessible name — a fidelity oracle that surfaces custom-engine bugs (e.g. an unlabeled input the custom engine names by its typed value). Compares only name-bearing roles, order- and indent-insensitively; matching nodes are omitted. Some "only in native" entries are iframe/shadow-DOM content the custom engine doesn't traverse, not name bugs.
+Diff the **DOM producer's** tree against the **native producer's** (Chromium's own tree over CDP) and report where they disagree on role or accessible name — a fidelity oracle that surfaces DOM-engine gaps (e.g. an unlabeled input the DOM engine names by its typed value) and structure only the native tree reaches (media controls). Compares only name-bearing roles, order- and indent-insensitively; matching nodes are omitted. Some "only in native" entries are iframe / shadow-DOM / user-agent-shadow content the DOM walk doesn't traverse, not name bugs.
+
+This is a **producer** diff (dom vs native at one instant) — distinct from [`diff_checkpoints`](#diff_checkpoints), which diffs two checkpoints **over time**.
 
 Parameters: none.
 
-An agent calls this to sanity-check the engine before trusting a surprising finding.
+An agent calls this to sanity-check the DOM producer before trusting a surprising finding, or to decide whether a page needs the native producer.
 
 ## Environment
 

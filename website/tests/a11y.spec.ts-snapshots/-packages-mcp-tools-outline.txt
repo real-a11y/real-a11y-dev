@@ -9,6 +9,7 @@
   h2 Reference
   h2 On this page
 h1 MCP tools reference
+  h2 All tools at a glance
   h2 Session
     h3 open_page
     h3 close_browser
@@ -30,9 +31,8 @@ h1 MCP tools reference
   h2 Tree checkpoints
     h3 checkpoint_tree
     h3 diff_tree
-  h2 Native cross-check
-    h3 get_native_tree
-    h3 compare_trees
+  h2 Producer parity
+    h3 compare_producers
   h2 Environment
     h3 REAL_A11Y_MCP_CDP
     h3 REAL_A11Y_MCP_HEADFUL
