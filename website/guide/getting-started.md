@@ -221,7 +221,7 @@ export default {
 };
 ```
 
-That's it. A **Semantic Navigator** panel appears next to Controls and A11y for every story, showing the tree, heading outline, and tab sequence — updated live as the story re-renders.
+That's it. A **Semantic Navigator** panel appears next to Controls and A11y for every story, showing the tree, heading outline, and tab sequence — updated live while the panel is open.
 
 ---
 

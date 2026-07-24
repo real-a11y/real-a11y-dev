@@ -243,7 +243,7 @@ main
     code ".storybook/main.ts"
   button "Copy Code"
   code
-  paragraph "That's it. A panel appears next to Controls and A11y for every story, showing the tree, heading outline, and tab sequence — updated live as the story re-renders."
+  paragraph "That's it. A panel appears next to Controls and A11y for every story, showing the tree, heading outline, and tab sequence — updated live while the panel is open."
     strong "Semantic Navigator"
   separator
   heading "Requirements" (level 2)

@@ -1,6 +1,6 @@
 # @real-a11y-dev/storybook-addon
 
-A Storybook 8 panel that shows the semantic tree, heading outline, and tab sequence for every story — updated live as the story re-renders.
+A Storybook 8 panel that shows the semantic tree, heading outline, and tab sequence for every story — updated live while the panel is open (extraction stays idle when another addon tab is active).
 
 ```sh
 npm install -D @real-a11y-dev/storybook-addon
