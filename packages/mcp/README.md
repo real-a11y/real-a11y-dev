@@ -15,27 +15,29 @@ _broken_. The tree-inspection tools are perception primitives layered on top.
 | `open_page` | Navigate to a URL and prepare it for queries (call first). `waitUntil` / `settleMs` settle dynamic pages; `device` (e.g. `"iPhone 13"`) audits the **mobile/tablet** layout. |
 | `audit_page` | **Flagship.** Return every accessibility violation — unlabeled controls, images missing alt, heading gaps, unlabeled dialogs, broken landmarks — as structured findings (grouped, each with a CSS locator + severity). Pass `producer: "native"` to audit Chromium's own tree (see below). |
 | `inspect_page` | Findings **plus** semantic tree, heading outline, and tab order — all from **one** extraction, so they can't disagree. Prefer on dynamic pages. Accepts `producer: "native"` (findings + tree + outline; tab order is N/A). |
-| `get_semantic_tree` | Deterministic role + accessible-name outline of the page. |
-| `get_heading_outline` | Heading structure (h1..h6) in document order. |
-| `get_tab_order` | Focusable elements in keyboard Tab order. |
-| `list_elements` | Every element of one category (`link`/`button`/`form`/`landmark`/`image`/`heading`) as role + name + locator. |
-| `get_native_tree` | Chromium's own accessibility tree (Blink, via CDP) — the authoritative browser tree. |
-| `compare_trees` | Diff custom vs. native and report role/name divergences — a fidelity oracle. |
+| `get_semantic_tree` | Deterministic role + accessible-name outline of the page. Accepts `producer: "native"`. |
+| `get_heading_outline` | Heading structure (h1..h6) in document order. Accepts `producer: "native"`. |
+| `get_tab_order` | Focusable elements in keyboard Tab order. DOM-only (a native tree has no tab order). |
+| `list_elements` | Every element of one category (`link`/`button`/`form`/`landmark`/`image`/`heading`) as role + name + locator. Accepts `producer: "native"` (no locators). |
+| `compare_producers` | Diff the DOM producer against the native producer and report role/name divergences — a fidelity oracle. Not to be confused with `diff_checkpoints` (two checkpoints over time). |
 | `close_browser` | Tear down the session. |
 
-### Auditing the native tree — `producer: "native"`
+### The native producer — `producer: "native"`
 
-By default the audit tools walk the page's light DOM (the **DOM producer**). Pass
-`producer: "native"` to `audit_page` or `inspect_page` to run the same audit over
+By default every tree/findings/outline/list tool walks the page's light DOM (the
+**DOM producer**). Pass `producer: "native"` to `audit_page`, `inspect_page`,
+`get_semantic_tree`, `get_heading_outline`, or `list_elements` to work over
 **Chromium's own accessibility tree** (read over CDP) instead — it reaches
 structure no in-page walk can, most visibly a `<video controls>`'s
-play/scrubber/mute controls, which live in a closed user-agent shadow root. This
-is the difference between *viewing* the native tree (`get_native_tree`) and
-*auditing* it.
+play/scrubber/mute controls, which live in a closed user-agent shadow root. To
+*view* the native tree, call `get_semantic_tree` with `producer: "native"`; to
+*audit* it, `audit_page`; to *compare* it against the DOM producer,
+`compare_producers`.
 
 Native is whole-document and read-only: `rootSelector` must stay `"body"`
 (passing another selector is refused — native can't scope), and it carries no tab
-order, so `inspect_page`'s tab-order section reports N/A. Chromium only.
+order — so `get_tab_order` is DOM-only and `inspect_page`'s tab-order section
+reports N/A. Chromium only.
 
 ### Consistency & determinism
 
@@ -90,8 +92,8 @@ To pin the version instead, add it to your project (`pnpm add -D
 > **Scoping.** Every audit/inspection tool takes an optional `rootSelector`
 > (default `body`) to confine extraction to one region — e.g. audit just a
 > `<main>` or a specific component — which also keeps output within the agent's
-> context budget. The two native-tree tools (`get_native_tree`, `compare_trees`)
-> always read the whole document.
+> context budget. `compare_producers` and any tool called with
+> `producer: "native"` always read the whole document (native can't scope).
 
 ### Environment
 

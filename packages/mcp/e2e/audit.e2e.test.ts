@@ -214,9 +214,9 @@ describe("MCP end-to-end against a real browser", () => {
     expect(textOf(res)).toMatch(/REAL_A11Y_MCP_ALLOW_FILE|Refusing/);
   });
 
-  it("reads the native tree and agrees with custom (post value-as-name fix)", async () => {
+  it("reads the native tree and agrees with the dom producer (post value-as-name fix)", async () => {
     // Unlabeled input WITH a value. Chromium never names it by value; since the
-    // #119 core fix, the custom engine doesn't either — so the oracle agrees.
+    // #119 core fix, the dom producer doesn't either — so the oracle agrees.
     const html = `<!doctype html><html><head><title>x</title></head><body><main>
       <h1>Sign in</h1>
       <input value="john@example.com" />
@@ -226,8 +226,12 @@ describe("MCP end-to-end against a real browser", () => {
       arguments: { url: dataUrl(html) },
     });
 
+    // View the native tree via get_semantic_tree { producer: "native" }.
     const native = textOf(
-      await client.callTool({ name: "get_native_tree", arguments: {} }),
+      await client.callTool({
+        name: "get_semantic_tree",
+        arguments: { producer: "native" },
+      }),
     );
     expect(native).toMatch(/textbox/); // Chromium's own tree, via CDP
     expect(native).not.toMatch(/john@example\.com/); // never named by value
@@ -236,12 +240,12 @@ describe("MCP end-to-end against a real browser", () => {
       await client.callTool({ name: "get_semantic_tree", arguments: {} }),
     );
     expect(tree).toMatch(/textbox/);
-    expect(tree).not.toMatch(/john@example\.com/); // custom no longer either
+    expect(tree).not.toMatch(/john@example\.com/); // dom producer no longer either
 
     const cmp = textOf(
-      await client.callTool({ name: "compare_trees", arguments: {} }),
+      await client.callTool({ name: "compare_producers", arguments: {} }),
     );
-    expect(cmp).toMatch(/agree/); // custom and native match — the fix + oracle
+    expect(cmp).toMatch(/agree/); // dom and native match — the fix + oracle
   });
 
   it("keeps a tree checkpoint in-page and diffs a later DOM change", async () => {

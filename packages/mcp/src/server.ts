@@ -14,8 +14,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { ALL_RULES } from "@real-a11y-dev/audit";
-import type { A11yRule, Finding } from "@real-a11y-dev/audit";
+import { ALL_RULES, listByRole } from "@real-a11y-dev/audit";
+import type { A11yRule, Finding, RoleFilter } from "@real-a11y-dev/audit";
 import type { A11ySession } from "@real-a11y-dev/browser";
 import {
   assertFullArtifact,
@@ -95,7 +95,8 @@ function errorText(body: string) {
  * page; `native` reads Chromium's own accessibility tree over CDP — reaching
  * structure no in-page walk can (a `<video controls>`'s user-agent-shadow media
  * controls). Native is whole-document (so `rootSelector` must be `body`) and
- * carries no tab order. Only the audit tools take it. Chromium only.
+ * carries no tab order — so the tab-order tool stays dom-only. Every tool that
+ * projects a tree/findings/outline/element-list takes it. Chromium only.
  */
 const producer = z
   .enum(["dom", "native"])
@@ -293,33 +294,30 @@ const COMPARE_ROLES = new Set([
 const roleOf = (line: string): string => line.trim().split(/[\s"]/)[0];
 
 /**
- * Diff the custom tree against the native (Chromium) tree and report where they
- * disagree on role or accessible name — a fidelity oracle. Compares only
- * name-bearing roles ({@link COMPARE_ROLES}), order- and indent-insensitively,
- * so structural/text representation differences don't drown out real signal.
+ * Diff the DOM producer's tree against the native producer's (Chromium) tree and
+ * report where they disagree on role or accessible name — a fidelity oracle.
+ * Both inputs are serialized trees in the same `role "name"` grammar; compares
+ * only name-bearing roles ({@link COMPARE_ROLES}), order- and indent-
+ * insensitively, so structural/text representation differences don't drown out
+ * real signal.
  */
-export function renderCompare(
-  customTree: string,
-  native: { tree: string; pairs: string[] },
-): string {
+export function renderCompare(domTree: string, nativeTree: string): string {
   // Single literal space (not `\s+`) — the tree serializer always emits exactly
   // one space before "(level N)", and an unbounded `\s+` on audited-page text is
   // a polynomial-ReDoS surface (CodeQL js/polynomial-redos).
   const norm = (l: string) => l.trim().replace(/ \(level \d+\)$/, "");
   const keep = (l: string) => COMPARE_ROLES.has(roleOf(l));
-  const customPairs = customTree
-    .split("\n")
-    .filter(Boolean)
-    .map(norm)
-    .filter(keep);
-  const nativePairs = native.pairs.filter(keep);
+  const pairsOf = (tree: string) =>
+    tree.split("\n").filter(Boolean).map(norm).filter(keep);
+  const domPairs = pairsOf(domTree);
+  const nativePairs = pairsOf(nativeTree);
 
   const count = (arr: string[]) => {
     const m = new Map<string, number>();
     for (const s of arr) m.set(s, (m.get(s) ?? 0) + 1);
     return m;
   };
-  const cc = count(customPairs);
+  const cc = count(domPairs);
   const nc = count(nativePairs);
   const onlyIn = (a: Map<string, number>, b: Map<string, number>) => {
     const out: string[] = [];
@@ -328,20 +326,20 @@ export function renderCompare(
     }
     return out.sort();
   };
-  const onlyCustom = onlyIn(cc, nc);
+  const onlyDom = onlyIn(cc, nc);
   const onlyNative = onlyIn(nc, cc);
-  const total = onlyCustom.length + onlyNative.length;
+  const total = onlyDom.length + onlyNative.length;
 
   if (total === 0) {
-    return "Custom and native accessibility trees agree — no role/name divergences.";
+    return "The DOM and native producers agree — no role/name divergences.";
   }
   return [
-    `Custom vs. native (Chromium) accessibility tree — ${total} divergence(s). These are role/name pairs the two disagree on — a signal of an engine fidelity gap (though some "only in native" entries are iframe / shadow-DOM content the custom engine doesn't traverse, not name bugs). Matching nodes are omitted.`,
+    `DOM vs. native (Chromium) producer — ${total} divergence(s). These are role/name pairs the two producers disagree on — a signal of a DOM-engine fidelity gap (though some "only in native" entries are iframe / shadow-DOM / user-agent-shadow content the DOM walk doesn't traverse, not name bugs). Matching nodes are omitted.`,
     "",
-    "Only in the CUSTOM tree (Real A11y engine):",
-    ...(onlyCustom.length ? onlyCustom.map((l) => `  ${l}`) : ["  (none)"]),
+    "Only in the DOM producer (Real A11y in-page walk):",
+    ...(onlyDom.length ? onlyDom.map((l) => `  ${l}`) : ["  (none)"]),
     "",
-    "Only in the NATIVE tree (Chromium):",
+    "Only in the NATIVE producer (Chromium):",
     ...(onlyNative.length ? onlyNative.map((l) => `  ${l}`) : ["  (none)"]),
   ].join("\n");
 }
@@ -581,16 +579,24 @@ export function buildServer(
       title: "Get semantic tree",
       annotations: READ_ONLY,
       description:
-        "Return the page's accessibility tree as a deterministic, indented role + accessible-name outline (what a screen reader would traverse). The element focused at capture time is marked `[focused]`. Token-efficient and stable across runs.",
+        "Return the page's accessibility tree as a deterministic, indented role + accessible-name outline (what a screen reader would traverse). The element focused at capture time is marked `[focused]`. Token-efficient and stable across runs. Set producer='native' to read Chromium's own accessibility tree over CDP instead (whole-document, reaches user-agent-shadow media controls; no rootSelector).",
       inputSchema: {
         rootSelector,
         includeGeneric: z
           .boolean()
           .default(false)
           .describe("Include generic container nodes (role=generic)."),
+        producer,
       },
     },
-    async ({ rootSelector, includeGeneric }) => {
+    async ({ rootSelector, includeGeneric, producer }) => {
+      if (producer === "native") {
+        if (rootSelector !== "body") return nativeScopeError(rootSelector);
+        const snap = projectNativeTree(await session.nativeTree(), {
+          includeGeneric,
+        });
+        return text(snap.tree || "(empty tree)");
+      }
       const tree = await session.call<string>("auditSnapshot", rootSelector, [
         { includeGeneric },
       ]);
@@ -604,10 +610,15 @@ export function buildServer(
       title: "Get heading outline",
       annotations: READ_ONLY,
       description:
-        "Return the page's heading outline (h1..h6 in document order) as an indented list.",
-      inputSchema: { rootSelector },
+        "Return the page's heading outline (h1..h6 in document order) as an indented list. Set producer='native' to derive it from Chromium's own accessibility tree (whole-document; no rootSelector).",
+      inputSchema: { rootSelector, producer },
     },
-    async ({ rootSelector }) => {
+    async ({ rootSelector, producer }) => {
+      if (producer === "native") {
+        if (rootSelector !== "body") return nativeScopeError(rootSelector);
+        const snap = projectNativeTree(await session.nativeTree());
+        return text(snap.outline);
+      }
       const outline = await session.call<string>(
         "outlineSnapshot",
         rootSelector,
@@ -640,15 +651,26 @@ export function buildServer(
       title: "List elements by category",
       annotations: READ_ONLY,
       description:
-        "List every element of one category — links, buttons, form controls, landmarks, images, or headings — as role + accessible name + a CSS locator. A token-efficient way to review one kind of element (e.g. 'images' pairs with the image-alt rule, 'form' with labeling). Scope with rootSelector.",
+        "List every element of one category — links, buttons, form controls, landmarks, images, or headings — as role + accessible name + a CSS locator. A token-efficient way to review one kind of element (e.g. 'images' pairs with the image-alt rule, 'form' with labeling). Scope with rootSelector. Set producer='native' to list from Chromium's own accessibility tree (whole-document; no rootSelector; native nodes carry no CSS locator).",
       inputSchema: {
         filter: z
           .enum(["heading", "link", "button", "form", "landmark", "image"])
           .describe("Which category of element to list."),
         rootSelector,
+        producer,
       },
     },
-    async ({ filter, rootSelector }) => {
+    async ({ filter, rootSelector, producer }) => {
+      if (producer === "native") {
+        if (rootSelector !== "body") return nativeScopeError(rootSelector);
+        // Node-side listing over the native tree — the same category engine the
+        // page bundle runs, minus locators (no element refs outside the page).
+        const list = listByRole(
+          await session.nativeTree(),
+          filter as RoleFilter,
+        );
+        return text(list || "(none)");
+      }
       const list = await session.call<string>("listByRole", rootSelector, [
         filter,
       ]);
@@ -656,39 +678,30 @@ export function buildServer(
     },
   );
 
-  // ── Native cross-check (Chromium only) ───────────────────────────────────
+  // ── Producer parity (Chromium only) ──────────────────────────────────────
+  // To VIEW the native tree, call get_semantic_tree with producer:"native".
+  // This tool is the two-producer *diff* — kept distinct from diff_checkpoints
+  // (which diffs two checkpoints over time; this diffs two producers at once).
   server.registerTool(
-    "get_native_tree",
+    "compare_producers",
     {
-      title: "Get native accessibility tree",
+      title: "Compare the DOM and native producers",
       annotations: READ_ONLY,
       description:
-        "Return Chromium's OWN accessibility tree (computed by Blink, read via CDP) as role + accessible name. This is the browser's authoritative tree, not Real A11y's custom extraction. Whole document. Chromium only.",
+        "Diff the DOM producer's accessibility tree against the native producer's (Chromium's own tree over CDP) and report where they disagree on role or accessible name — a fidelity oracle that surfaces DOM-engine gaps (e.g. an unlabeled input the DOM engine names by its typed value) and structure only the native tree reaches (media controls). This is a producer diff (dom vs native at one instant); for a before/after diff over time use diff_checkpoints. Whole document. Chromium only.",
       inputSchema: {},
     },
     async () => {
-      const native = await session.nativeAX();
-      return text(native.tree || "(empty)");
-    },
-  );
-
-  server.registerTool(
-    "compare_trees",
-    {
-      title: "Compare custom vs. native tree",
-      annotations: READ_ONLY,
-      description:
-        "Diff Real A11y's custom accessibility tree against Chromium's native tree and report where they disagree on role or accessible name — a fidelity oracle that surfaces custom-engine bugs (e.g. an unlabeled input the custom engine names by its typed value). Whole document. Chromium only.",
-      inputSchema: {},
-    },
-    async () => {
-      const [customTree, native] = await Promise.all([
+      const [domTree, nativeExtraction] = await Promise.all([
         // markFocus:false — the native tree has no focus marker, so a `[focused]`
-        // suffix would register as a spurious custom-vs-native divergence.
+        // suffix would register as a spurious dom-vs-native divergence.
         session.call<string>("auditSnapshot", "body", [{ markFocus: false }]),
-        session.nativeAX(),
+        session.nativeTree(),
       ]);
-      return text(renderCompare(customTree, native));
+      // The native side is the same canonical producer get_semantic_tree exposes
+      // (normalized), so a divergence here matches what { producer: "native" } shows.
+      const nativeTree = projectNativeTree(nativeExtraction).tree;
+      return text(renderCompare(domTree, nativeTree));
     },
   );
 

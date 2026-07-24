@@ -129,13 +129,12 @@ describe("MCP server wiring", () => {
         "audit_page",
         "checkpoint_tree",
         "close_browser",
-        "compare_trees",
+        "compare_producers",
         "diff_findings",
         "diff_checkpoints",
         "diff_tree",
         "export_checkpoint",
         "get_heading_outline",
-        "get_native_tree",
         "get_semantic_tree",
         "get_tab_order",
         "import_checkpoint",
@@ -161,28 +160,76 @@ describe("MCP server wiring", () => {
     expect(textOf(res)).toContain('link "Home"');
   });
 
-  it("compare_trees reports role/name divergences between custom and native", async () => {
-    // Custom named an unlabeled input by its value; native (Chromium) did not.
+  // A native ExtractionResult whose only interactive node is an UNLABELED
+  // textbox — serializes to `main` + `textbox`. The DOM producer, below, names
+  // that same textbox by its typed value (a DOM-engine fidelity gap).
+  const nativeTreeUnlabeledTextbox: FakeSession["nativeTreeResponse"] = {
+    nodes: new Map([
+      [
+        "root",
+        {
+          id: "root",
+          parentId: null,
+          childIds: ["t"],
+          depth: 0,
+          a11y: {
+            role: "main",
+            name: "",
+            description: "",
+            states: {},
+            properties: {},
+            isExposedToAT: true,
+          },
+        },
+      ],
+      [
+        "t",
+        {
+          id: "t",
+          parentId: "root",
+          childIds: [],
+          depth: 1,
+          a11y: {
+            role: "textbox",
+            name: "",
+            description: "",
+            states: {},
+            properties: {},
+            isExposedToAT: true,
+          },
+        },
+      ],
+    ]),
+    rootId: "root",
+    source: { producer: "native" },
+  };
+
+  it("compare_producers reports role/name divergences between the dom and native producers", async () => {
+    // The DOM producer named an unlabeled input by its value; the native
+    // (Chromium) producer did not.
     session.responses.auditSnapshot = 'main\n  textbox "john@example.com"';
-    session.nativeResponse = {
-      tree: "main\n  textbox",
-      pairs: ["main", "textbox"],
-    };
+    session.nativeTreeResponse = nativeTreeUnlabeledTextbox;
     const client = await connect(session);
-    const res = await client.callTool({ name: "compare_trees", arguments: {} });
+    const res = await client.callTool({
+      name: "compare_producers",
+      arguments: {},
+    });
     const out = textOf(res);
-    expect(out).toMatch(/CUSTOM tree/);
-    expect(out).toContain('textbox "john@example.com"'); // only in custom
-    expect(out).toMatch(/NATIVE tree/);
+    expect(out).toMatch(/DOM producer/);
+    expect(out).toContain('textbox "john@example.com"'); // only in the dom producer
+    expect(out).toMatch(/NATIVE producer/);
+    // It diffed against the canonical native producer, not raw nativeAX.
+    expect(session.calls.some((c) => c.fn === "nativeTree")).toBe(true);
+    expect(session.calls.some((c) => c.fn === "nativeAX")).toBe(false);
   });
 
-  it("compare_trees requests the custom tree WITHOUT the focus marker", async () => {
+  it("compare_producers requests the dom tree WITHOUT the focus marker", async () => {
     session.responses.auditSnapshot = 'main\n  button "Go"';
     const client = await connect(session);
-    await client.callTool({ name: "compare_trees", arguments: {} });
+    await client.callTool({ name: "compare_producers", arguments: {} });
     const call = session.calls.find((c) => c.fn === "auditSnapshot");
-    // The native tree carries no [focused] marker; a marker on the custom side
-    // would register as a spurious custom-vs-native divergence.
+    // The native tree carries no [focused] marker; a marker on the dom side
+    // would register as a spurious dom-vs-native divergence.
     expect(call?.args).toEqual([{ markFocus: false }]);
   });
 
@@ -196,14 +243,68 @@ describe("MCP server wiring", () => {
     expect(desc("inspect_page")).toMatch(/\[focused\]/);
   });
 
-  it("get_native_tree returns the browser's tree", async () => {
-    session.nativeResponse = { tree: 'main\n  button "Go"', pairs: [] };
+  // ── producer: "native" on the view tools ─────────────────────────────────
+
+  it("get_semantic_tree producer=native serializes the native tree", async () => {
+    session.nativeTreeResponse = nativeTreeWithUnlabeledButton;
     const client = await connect(session);
     const res = await client.callTool({
-      name: "get_native_tree",
-      arguments: {},
+      name: "get_semantic_tree",
+      arguments: { producer: "native" },
     });
-    expect(textOf(res)).toContain('button "Go"');
+    const out = textOf(res);
+    expect(out).toContain('heading "Player"');
+    expect(out).toContain("button"); // the unlabeled button node
+    expect(session.calls.some((c) => c.fn === "nativeTree")).toBe(true);
+    // Not the in-page auditSnapshot DOM path.
+    expect(session.calls.some((c) => c.fn === "auditSnapshot")).toBe(false);
+  });
+
+  it("get_semantic_tree producer=native rejects a narrowed rootSelector", async () => {
+    const client = await connect(session);
+    const res = await client.callTool({
+      name: "get_semantic_tree",
+      arguments: { producer: "native", rootSelector: "nav" },
+    });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toMatch(/whole document/);
+    expect(session.calls.some((c) => c.fn === "nativeTree")).toBe(false);
+  });
+
+  it("get_heading_outline producer=native derives the outline from the native tree", async () => {
+    session.nativeTreeResponse = nativeTreeWithUnlabeledButton;
+    const client = await connect(session);
+    const res = await client.callTool({
+      name: "get_heading_outline",
+      arguments: { producer: "native" },
+    });
+    expect(textOf(res)).toContain("Player");
+    expect(session.calls.some((c) => c.fn === "nativeTree")).toBe(true);
+    expect(session.calls.some((c) => c.fn === "outlineSnapshot")).toBe(false);
+  });
+
+  it("list_elements producer=native lists from the native tree", async () => {
+    session.nativeTreeResponse = nativeTreeWithUnlabeledButton;
+    const client = await connect(session);
+    const res = await client.callTool({
+      name: "list_elements",
+      arguments: { filter: "heading", producer: "native" },
+    });
+    expect(textOf(res)).toContain('heading "Player"');
+    expect(session.calls.some((c) => c.fn === "nativeTree")).toBe(true);
+    // Native lists in Node — never the in-page listByRole call.
+    expect(session.calls.some((c) => c.fn === "listByRole")).toBe(false);
+  });
+
+  it("list_elements producer=native rejects a narrowed rootSelector", async () => {
+    const client = await connect(session);
+    const res = await client.callTool({
+      name: "list_elements",
+      arguments: { filter: "heading", producer: "native", rootSelector: "nav" },
+    });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toMatch(/whole document/);
+    expect(session.calls.some((c) => c.fn === "nativeTree")).toBe(false);
   });
 
   // ── producer: "native" on the audit tools ────────────────────────────────
@@ -563,18 +664,20 @@ describe("renderAudit grouping", () => {
 
 describe("renderCompare", () => {
   it("reports 'agree' when trees match (ignoring level suffix + indent)", () => {
-    const custom = 'main\n  heading "Hi" (level 1)\n  button "Go"';
-    const native = { tree: "", pairs: ["main", 'heading "Hi"', 'button "Go"'] };
-    expect(renderCompare(custom, native)).toMatch(/agree/);
+    // Both sides are serialized trees now — indent + level suffix differ but the
+    // role/name pairs match, so no divergence.
+    const dom = 'main\n  heading "Hi" (level 1)\n  button "Go"';
+    const native = 'main\n  heading "Hi"\n  button "Go"';
+    expect(renderCompare(dom, native)).toMatch(/agree/);
   });
 
   it("surfaces a name divergence (the .value-as-name bug)", () => {
-    const custom = 'main\n  textbox "secret@x.com"';
-    const native = { tree: "", pairs: ["main", "textbox"] };
-    const out = renderCompare(custom, native);
-    // custom-only `textbox "…"` + native-only bare `textbox` = 2 divergences.
+    const dom = 'main\n  textbox "secret@x.com"';
+    const native = "main\n  textbox";
+    const out = renderCompare(dom, native);
+    // dom-only `textbox "…"` + native-only bare `textbox` = 2 divergences.
     expect(out).toMatch(/2 divergence/);
-    expect(out).toContain('textbox "secret@x.com"'); // custom-only
+    expect(out).toContain('textbox "secret@x.com"'); // dom-only
     expect(out.split("\n")).toContain("  textbox"); // native-only (empty name)
   });
 });
