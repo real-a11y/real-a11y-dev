@@ -100,22 +100,45 @@ const COUNTER_FIELD: Record<DogfoodEventKind, keyof DogfoodCounters> = {
 export class DogfoodLog {
   constructor(private storage: StorageArea) {}
 
+  /**
+   * Serializes the read-modify-write in record()/clear(). Both read a base
+   * snapshot then write it back, and they run concurrently: the onDetach
+   * listener records `detach-unsolicited` independently of the attach→read→
+   * detach records an operation drives. Without serialization two callers read
+   * the same snapshot and the later set() clobbers the earlier — dropping
+   * exactly the MV3-lifecycle events this dogfood measures. Chaining every
+   * mutation through one tail promise makes each atomic w.r.t. the others.
+   */
+  private tail: Promise<unknown> = Promise.resolve();
+
+  private enqueue<T>(task: () => Promise<T>): Promise<T> {
+    const run = this.tail.then(task, task);
+    // Keep the chain alive after a rejection, and don't leak an unhandled one.
+    this.tail = run.then(
+      () => {},
+      () => {},
+    );
+    return run;
+  }
+
   async record(event: DogfoodEvent): Promise<void> {
-    const events = await this.all();
-    events.push(event);
-    // Keep the most recent CAP raw events; the summary rides on the counters.
-    const trimmed = events.slice(-CAP);
+    await this.enqueue(async () => {
+      const events = await this.all();
+      events.push(event);
+      // Keep the most recent CAP raw events; the summary rides on the counters.
+      const trimmed = events.slice(-CAP);
 
-    const counters = await this.counters();
-    counters[COUNTER_FIELD[event.kind]] += 1;
-    if (
-      (event.kind === "detach" || event.kind === "detach-unsolicited") &&
-      event.attachedMs !== undefined
-    ) {
-      counters.attachedMs += event.attachedMs;
-    }
+      const counters = await this.counters();
+      counters[COUNTER_FIELD[event.kind]] += 1;
+      if (
+        (event.kind === "detach" || event.kind === "detach-unsolicited") &&
+        event.attachedMs !== undefined
+      ) {
+        counters.attachedMs += event.attachedMs;
+      }
 
-    await this.storage.set({ [KEY]: trimmed, [COUNTERS_KEY]: counters });
+      await this.storage.set({ [KEY]: trimmed, [COUNTERS_KEY]: counters });
+    });
   }
 
   async all(): Promise<DogfoodEvent[]> {
@@ -134,7 +157,12 @@ export class DogfoodLog {
   }
 
   async clear(): Promise<void> {
-    await this.storage.set({ [KEY]: [], [COUNTERS_KEY]: { ...ZERO_COUNTERS } });
+    await this.enqueue(async () => {
+      await this.storage.set({
+        [KEY]: [],
+        [COUNTERS_KEY]: { ...ZERO_COUNTERS },
+      });
+    });
   }
 
   /** A shareable summary + raw log — the artifact a dogfooder reports back. */

@@ -13,6 +13,21 @@ class FakeStorage {
   }
 }
 
+// Like FakeStorage but yields a microtask on every op, so concurrent
+// read-modify-write callers interleave — surfacing a lost-update race unless
+// DogfoodLog serializes its writes.
+class YieldingStorage {
+  private data: Record<string, unknown> = {};
+  async get(key: string) {
+    await Promise.resolve();
+    return key in this.data ? { [key]: this.data[key] } : {};
+  }
+  async set(items: Record<string, unknown>) {
+    await Promise.resolve();
+    Object.assign(this.data, items);
+  }
+}
+
 describe("DogfoodLog", () => {
   it("records events and rolls at the cap", async () => {
     const log = new DogfoodLog(new FakeStorage());
@@ -54,6 +69,21 @@ describe("DogfoodLog", () => {
     expect(report).toContain("attach sessions: 30");
     expect(report).toContain("total time attached: 30.0s");
     expect(report).toContain("events: 660");
+  });
+
+  it("serializes concurrent writers so no event or count is lost", async () => {
+    // The onDetach listener records independently of an in-flight operation's
+    // attach/read/detach records; without serialization the two read the same
+    // snapshot and one set() clobbers the other. Fire 50 records at once over a
+    // storage that yields between get and set to force the interleaving.
+    const log = new DogfoodLog(new YieldingStorage());
+    await Promise.all(
+      Array.from({ length: 50 }, (_, i) =>
+        log.record({ kind: "attach", at: i }),
+      ),
+    );
+    expect(await log.all()).toHaveLength(50);
+    expect(await log.report(0)).toContain("attach sessions: 50");
   });
 
   it("report summarizes the three dogfood questions and never carries page text", async () => {
