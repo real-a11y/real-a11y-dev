@@ -66,6 +66,7 @@ link "Legacy shorthands"
 link "name"
 link "defaults"
 link "root"
+link "defaults.root"
 link "SARIF"
 button "Copy Code"
 generic

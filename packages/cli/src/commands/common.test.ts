@@ -4,12 +4,15 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { mergeDefaults, resolveConfig } from "../config.js";
 import { CliError } from "../exit.js";
 
 import {
   isAuthenticated,
   sessionFlags,
   producerOf,
+  resolveAuditTargets,
+  resolvePageList,
   type Target,
 } from "./common.js";
 
@@ -127,5 +130,163 @@ describe("producerOf", () => {
     expect(() => producerOf({ producer: "webkit" }, "audit", true)).toThrow(
       /dom \| native/,
     );
+  });
+
+  it("names the config default, not --root, when the scope came from config", () => {
+    // Same refusal — native can't honor a scope either way — but telling a user
+    // to "drop --root" when they never typed it sends them looking for a flag
+    // that isn't there. The value came from `defaults.root`.
+    expect(() =>
+      producerOf(
+        { producer: "native", root: "main" },
+        "audit",
+        true,
+        new Set(["root"]),
+      ),
+    ).toThrow(/a11y\.config\.json/);
+    // …and a typed --root still names the flag.
+    expect(() =>
+      producerOf(
+        { producer: "native", root: "main" },
+        "audit",
+        true,
+        new Set(),
+      ),
+    ).toThrow(/can't be combined with --root/);
+  });
+});
+
+describe("resolveAuditTargets", () => {
+  /** Write an a11y.config.json into a temp dir and return its path. */
+  function configFile(config: unknown): string {
+    const dir = mkdtempSync(join(tmpdir(), "real-a11y-cfg-"));
+    const file = join(dir, "a11y.config.json");
+    writeFileSync(file, JSON.stringify(config));
+    return file;
+  }
+
+  it("carries the per-URL rootSelector through to the target", () => {
+    // Regression: audit collapsed config pages to {url, name, fileApproved},
+    // so `rootSelector` never reached snapshotPage and every page was audited
+    // at `body` — contradicting the documented "rootSelector scopes the audit".
+    const config = configFile({
+      urls: [
+        { name: "example", url: "https://example.com/" },
+        {
+          name: "iana-learn",
+          url: "https://www.iana.org/domains/reserved",
+          rootSelector: "main",
+        },
+      ],
+    });
+    const targets = resolveAuditTargets([], { config });
+    expect(targets).toHaveLength(2);
+    expect(targets[0].page.rootSelector).toBeUndefined();
+    expect(targets[1].page.rootSelector).toBe("main");
+  });
+
+  it("keeps the config name so audit and snapshot fingerprint alike", () => {
+    // The page name is part of the v1 fingerprint tuple. Overwriting it with
+    // the redacted URL made audit's fingerprints unable to match snapshot's
+    // (or the MCP's) for the very same config entry.
+    const config = configFile({
+      urls: [{ name: "example", url: "https://example.com/" }],
+    });
+    const targets = resolveAuditTargets([], { config });
+    expect(targets[0].name).toBe("example");
+    expect(targets[0].url).toBe("https://example.com/");
+  });
+
+  it("redacts a name that defaulted to the URL", () => {
+    // A bare string entry defaults `name` to the URL, so the name still has to
+    // go through redaction — otherwise userinfo and secret query params would
+    // ride into the artifact and the baseline under `name`, right beside a
+    // carefully redacted `url`.
+    const config = configFile({
+      urls: ["https://user:pw@example.com/?token=abc123"],
+    });
+    const targets = resolveAuditTargets([], { config });
+    expect(targets[0].name).not.toContain("pw");
+    expect(targets[0].name).not.toContain("abc123");
+    // URLSearchParams percent-encodes the brackets on the way out.
+    expect(targets[0].name).toContain("REDACTED");
+  });
+
+  it("settles the name identically for audit and snapshot", () => {
+    // The name is the v1 fingerprint's page component and diff's join key, so
+    // the two commands must derive it from the same value. `snapshot` builds
+    // its targets straight off `resolvePageList`'s `page.name`, so comparing
+    // that to audit's `target.name` is the real parity check.
+    //
+    // Regression: audit re-derived the name with `redactUrl` while snapshot
+    // used it raw, so a bare entry like "http://localhost:3000" became
+    // ".../" in audit and "..." in snapshot — divergent fingerprints for one
+    // configured route.
+    const config = configFile({
+      urls: [
+        "http://localhost:3000",
+        { name: "dashboard", url: "http://localhost:3000/app" },
+      ],
+    });
+    const { pages } = resolvePageList([], { config });
+    const targets = resolveAuditTargets([], { config });
+    expect(targets.map((t) => t.name)).toEqual(pages.map((p) => p.name));
+    // …and the bare entry is canonicalized exactly once, on both sides.
+    expect(pages[0].name).toBe("http://localhost:3000/");
+    expect(pages[1].name).toBe("dashboard");
+  });
+
+  it("settles positional names too, so a secret can't reach an artifact", () => {
+    const { pages } = resolvePageList(
+      ["https://user:pw@example.com/?token=abc123"],
+      {},
+    );
+    expect(pages[0].name).not.toContain("pw");
+    expect(pages[0].name).not.toContain("abc123");
+  });
+
+  it("throws with guidance when nothing supplies a URL", () => {
+    expect(() => resolveAuditTargets([], { "no-config": true })).toThrow(
+      CliError,
+    );
+  });
+});
+
+describe("mergeDefaults seeded-flag reporting", () => {
+  function configAt(config: unknown): { dir: string; file: string } {
+    const dir = mkdtempSync(join(tmpdir(), "real-a11y-seed-"));
+    const file = join(dir, "a11y.config.json");
+    writeFileSync(file, JSON.stringify(config));
+    return { dir, file };
+  }
+
+  it("reports which flags came from config defaults, not the command line", () => {
+    // Regression: `audit` treats a typed `--root` as "override this route's
+    // rootSelector for this run". A config `defaults.root` also lands in
+    // `flags.root`, so without this signal a project-wide default silently beat
+    // every per-URL `rootSelector` — and skipped the native guard, which keys
+    // on the same test.
+    const { file } = configAt({
+      defaults: { root: "#app" },
+      urls: ["https://example.com/"],
+    });
+    const resolved = resolveConfig({ config: file })!;
+    const values: Record<string, unknown> = {};
+    const seeded = mergeDefaults(values, resolved.config, new Set(["root"]));
+    expect(values.root).toBe("#app");
+    expect(seeded.has("root")).toBe(true);
+  });
+
+  it("does not report a flag the user typed", () => {
+    const { file } = configAt({
+      defaults: { root: "#app" },
+      urls: ["https://example.com/"],
+    });
+    const resolved = resolveConfig({ config: file })!;
+    // A value already present is user-typed; `mergeDefaults` must leave it be.
+    const values: Record<string, unknown> = { root: "main" };
+    const seeded = mergeDefaults(values, resolved.config, new Set(["root"]));
+    expect(values.root).toBe("main");
+    expect(seeded.has("root")).toBe(false);
   });
 });

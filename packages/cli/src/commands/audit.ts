@@ -35,14 +35,41 @@ import {
   producerOf,
 } from "./common.js";
 
-export const auditCommand: CommandFn = async (positionals, flags) => {
+export const auditCommand: CommandFn = async (
+  positionals,
+  flags,
+  seededFromConfig,
+) => {
   // Everything user-typed validates before a browser launches.
   const rules = parseRules(flags.rules);
   const failOn = parseFailOn(flags["fail-on"], "error");
   const format = parseFormat(flags.format, ["pretty", "json"] as const);
-  const producer = producerOf(flags, "audit", true);
+  const producer = producerOf(flags, "audit", true, seededFromConfig);
   const openOptions = parseOpenOptions(flags);
   const targets = resolveAuditTargets(positionals, flags);
+  // A `--root` the user actually typed. A config `defaults.root` also lands in
+  // `flags.root` (run.ts seeds unset flags from `defaults`), and the two are
+  // indistinguishable there — but only the typed one means "override whatever
+  // this route configured, just for this run". Treating a project-wide default
+  // as an override would let it silently beat every per-URL `rootSelector`.
+  const typedRoot =
+    typeof flags.root === "string" && !seededFromConfig?.has("root")
+      ? flags.root
+      : undefined;
+  // `producerOf` already refuses `--producer native` alongside `--root`, but it
+  // only sees flags. Now that a config `rootSelector` scopes the audit too, the
+  // same combination has to fail here rather than silently auditing the whole
+  // document and reporting findings from outside the configured subtree.
+  // Keyed on `typedRoot`, so a `defaults.root` can't skip the check either.
+  if (producer === "native" && typedRoot === undefined) {
+    const scoped = targets.find((t) => t.page.rootSelector !== undefined);
+    if (scoped) {
+      throw new CliError(
+        `--producer native audits the whole document — it can't be combined with the rootSelector on "${scoped.name}".`,
+        "drop rootSelector from that URL entry, or use --producer dom (the default) to scope to a selector.",
+      );
+    }
+  }
   const output = outputOf(flags);
   const quiet = flags.quiet === true;
   const authed = isAuthenticated(flags);
@@ -61,9 +88,14 @@ export const auditCommand: CommandFn = async (positionals, flags) => {
           target.fileApproved,
           authed,
         );
+        // Precedence: a typed `--root` (a deliberate override for this run) >
+        // the route's own `rootSelector` > a project-wide `defaults.root` >
+        // `body`. `rootOf` supplies the last two, since a seeded `flags.root`
+        // is exactly the project-wide default.
+        const root = typedRoot ?? target.page.rootSelector ?? rootOf(flags);
         const snapshot = await snapshotPage(
           session,
-          rootOf(flags),
+          root,
           { ...(rules ? { rules } : {}) },
           producer,
         );
@@ -82,7 +114,11 @@ export const auditCommand: CommandFn = async (positionals, flags) => {
         process.stderr.write(`${formatCliError(err)}\n`);
         pages.push({
           name: target.name,
-          url: target.name,
+          // The target we tried to open — the success path reports the URL the
+          // browser landed on, which doesn't exist here. Not `target.name`:
+          // that's a display label for a named config entry, so this field
+          // would stop being a URL for exactly the routes that have one.
+          url: redactUrl(target.url),
           findings: [],
           error: err.hint ? `${err.message} (${err.hint})` : err.message,
         });
@@ -104,7 +140,9 @@ export const auditCommand: CommandFn = async (positionals, flags) => {
   }
   if (format === "pretty" && !quiet && process.stdout.isTTY) {
     process.stderr.write(
-      `tip: run 'real-a11y inspect ${targets[0].name}' to see the semantic tree\n`,
+      // The URL, not `name` — `inspect` is positional-URL-only, and a config
+      // entry's name is a label ("Login"), which `normalizeTarget` rejects.
+      `tip: run 'real-a11y inspect ${redactUrl(targets[0].url)}' to see the semantic tree\n`,
     );
   }
 

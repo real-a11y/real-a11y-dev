@@ -18,6 +18,13 @@ export type FlagValues = Record<string, string | boolean | undefined>;
 export type CommandFn = (
   positionals: string[],
   flags: FlagValues,
+  /**
+   * Flags whose value was seeded from `a11y.config.json`'s `defaults` rather
+   * than typed on the command line. Once merged the two are indistinguishable
+   * in `flags`, so a command that treats a flag as "the user deliberately
+   * overrode this for one run" must consult this to tell them apart.
+   */
+  seededFromConfig?: ReadonlySet<string>,
 ) => Promise<number>;
 
 type Options = NonNullable<ParseArgsConfig["options"]>;

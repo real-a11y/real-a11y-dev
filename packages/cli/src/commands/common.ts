@@ -13,7 +13,12 @@ import { assertAllowedUrl, normalizeTarget } from "../url-gate.js";
 export interface Target {
   /** Normalized absolute URL (paths become file: URLs). */
   url: string;
-  /** Display identity: the redacted URL. Also the fingerprint page component. */
+  /**
+   * Display identity, and the fingerprint page component. Settled once by
+   * {@link resolvePageList}, so `audit` and `snapshot` always agree on it for
+   * the same page — their fingerprints diverge otherwise (see
+   * `buildSnapshotPage`). Never re-derive it here.
+   */
   name: string;
   /** True when this is a file: target the gate approved. */
   fileApproved: boolean;
@@ -82,6 +87,26 @@ function parseEnvPages(env: string): ConfigPage[] {
 }
 
 /**
+ * Settle a page's display/fingerprint name once, at the single point both
+ * `audit` and `snapshot` read their pages from.
+ *
+ * The name is the `v1` fingerprint's page component and `diff`'s join key, so
+ * the two commands MUST derive it identically or the same route fingerprints
+ * differently depending on which command produced the artifact. Normalizing
+ * here — rather than in each command's target construction — makes that true
+ * by construction.
+ *
+ * `redactUrl` is the right normalizer for both jobs: a real config `name` isn't
+ * a URL, so it passes through with only control characters sanitized, while a
+ * name that defaulted to the URL is canonicalized *and* stripped of userinfo
+ * and secret-looking query params — which otherwise rode into artifacts and
+ * baselines under `name`, beside a carefully redacted `url`.
+ */
+function withSettledName(page: ConfigPage): ConfigPage {
+  return { ...page, name: redactUrl(page.name) };
+}
+
+/**
  * The audit list in precedence order: positional URLs → `A11Y_PAGES` env → the
  * config `urls`. `source` is the url-gate source ("arg" for positionals, the
  * stricter "config" for env/config). `configPath` (absolute) is set only on the
@@ -94,16 +119,18 @@ export function resolvePageList(
 ): { pages: ConfigPage[]; source: "arg" | "config"; configPath?: string } {
   if (positionals.length > 0) {
     return {
-      pages: positionals.map((url) => ({ name: url, url })),
+      pages: positionals.map((url) => withSettledName({ name: url, url })),
       source: "arg",
     };
   }
   const env = process.env.A11Y_PAGES;
-  if (env) return { pages: parseEnvPages(env), source: "config" };
+  if (env) {
+    return { pages: parseEnvPages(env).map(withSettledName), source: "config" };
+  }
   const resolved = resolveConfig(flags);
   if (resolved) {
     return {
-      pages: resolved.config.urls,
+      pages: resolved.config.urls.map(withSettledName),
       source: "config",
       configPath: resolved.path,
     };
@@ -113,11 +140,15 @@ export function resolvePageList(
 
 /** `audit`'s targets: positional URLs, else the project's `urls` list (env or
  *  config) — so a bare `real-a11y audit` in a configured repo audits every
- *  route without re-typing a URL. Single-view commands stay positional-only. */
+ *  route without re-typing a URL. Single-view commands stay positional-only.
+ *
+ *  The originating {@link ConfigPage} rides along on each target so `audit` can
+ *  honor the per-URL `rootSelector` the config documents, exactly as `snapshot`
+ *  does. */
 export function resolveAuditTargets(
   positionals: readonly string[],
   flags: FlagValues,
-): Target[] {
+): (Target & { page: ConfigPage })[] {
   const { pages, source } = resolvePageList(positionals, flags);
   if (pages.length === 0) {
     throw new CliError(
@@ -125,13 +156,15 @@ export function resolveAuditTargets(
       "pass a URL (real-a11y audit <url>) or add `urls` to a11y.config.json",
     );
   }
-  const targets = pages.map((p) => {
-    const url = normalizeTarget(p.url);
+  const targets = pages.map((page) => {
+    const url = normalizeTarget(page.url);
     const fileApproved = assertAllowedUrl(url, {
       source,
       allowFile: flags["allow-file"] === true,
     });
-    return { url, name: redactUrl(url), fileApproved };
+    // `page.name` is already settled by `resolvePageList`, so this is the exact
+    // value `snapshot` uses for the same entry.
+    return { url, name: page.name, fileApproved, page };
   });
   if (targets.some((t) => t.fileApproved)) {
     process.env.REAL_A11Y_MCP_ALLOW_FILE = "1";
@@ -217,6 +250,7 @@ export function producerOf(
   flags: FlagValues,
   command: string,
   supportsNative: boolean,
+  seededFromConfig?: ReadonlySet<string>,
 ): Producer {
   const producer = parseProducer(flags.producer);
   if (producer === "dom") return "dom";
@@ -227,9 +261,18 @@ export function producerOf(
     );
   }
   if (typeof flags.root === "string" && flags.root !== "body") {
+    // The refusal is the same either way — native is whole-document, so it
+    // can't honor a scope that was asked for. Only the guidance differs:
+    // "drop --root" is useless advice to someone who never typed it, and a
+    // seeded value comes from `defaults.root` in the config instead.
+    const fromConfig = seededFromConfig?.has("root") === true;
     throw new CliError(
-      "--producer native audits the whole document — it can't be combined with --root.",
-      "drop --root, or use --producer dom to scope to a selector.",
+      fromConfig
+        ? `--producer native audits the whole document — it can't be combined with the \`root\` default in a11y.config.json ("${flags.root}").`
+        : "--producer native audits the whole document — it can't be combined with --root.",
+      fromConfig
+        ? "drop `root` from the config's `defaults`, pass --root body for this run, or use --producer dom to scope to a selector."
+        : "drop --root, or use --producer dom to scope to a selector.",
     );
   }
   return "native";
