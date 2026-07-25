@@ -70,6 +70,14 @@
   never learns which row is active, so arrowing announced nothing. Each row
   now has a stable id and its container points `aria-activedescendant` at it.
   ([#194])
+- Make the keyboard bar's **Tab** / **Shift+Tab** / **Esc** perform native
+  browser defaults. Synthetic `KeyboardEvent`s are untrusted, so Chrome
+  skipped moving focus and closing `<dialog>` — the panel reported success
+  while nothing happened on the page. After dispatching the events for page
+  listeners, the content script now moves focus along the tab sequence
+  (scoped to an open dialog when focus is inside one) and closes open
+  dialogs on Escape, unless a page handler called `preventDefault()`.
+  ([#PR])
 
 ## 0.1.7
 
