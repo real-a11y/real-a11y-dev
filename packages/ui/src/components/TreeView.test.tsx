@@ -1,5 +1,6 @@
+import { LiveTreeExtractor } from "@real-a11y-dev/core";
 import { render } from "preact";
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 import { TreeView } from "./TreeView.js";
 
@@ -275,6 +276,44 @@ describe("TreeView (smoke)", () => {
       expect(container.querySelector(".sn-diff-marker")).toBeNull();
       expect(container.querySelector(".sn-removed")).toBeNull();
     } finally {
+      root.remove();
+    }
+  });
+
+  it("forwards DomObserver flushes to LiveTreeExtractor.refresh (incremental)", async () => {
+    // Regression for audit finding #50 residual: TreeView used to ignore the
+    // TreeChange payload and call extractA11yTree/extractDomTree on every
+    // flush — O(page) per keystroke. It must wire DomObserver →
+    // LiveTreeExtractor.refresh(change) like the extension / useSemanticTree /
+    // storybook-addon paths already do.
+    const refreshSpy = vi.spyOn(LiveTreeExtractor.prototype, "refresh");
+    const extractSpy = vi.spyOn(LiveTreeExtractor.prototype, "extract");
+    const root = makeRoot();
+    try {
+      render(<TreeView root={root} />, container);
+      await waitFor(container, '[role="toolbar"][aria-label="Tree controls"]');
+
+      refreshSpy.mockClear();
+      extractSpy.mockClear();
+
+      root.querySelector("button")!.textContent = "Updated label";
+      // DomObserver's default debounce is 300ms.
+      await new Promise((r) => setTimeout(r, 400));
+
+      expect(refreshSpy).toHaveBeenCalled();
+      const change = refreshSpy.mock.calls[0]?.[0];
+      expect(change).toBeDefined();
+      expect(change?.full).not.toBe(true);
+      expect(
+        Boolean(change?.mutations?.length) ||
+          Boolean(change?.dirtyRoots?.length),
+      ).toBe(true);
+      // A simple label edit must stay on the incremental path — falling back
+      // to extract() would reintroduce the O(page) cost this wiring removes.
+      expect(extractSpy).not.toHaveBeenCalled();
+    } finally {
+      refreshSpy.mockRestore();
+      extractSpy.mockRestore();
       root.remove();
     }
   });

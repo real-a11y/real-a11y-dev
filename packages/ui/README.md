@@ -14,7 +14,7 @@ npm install @real-a11y-dev/semantic-navigator-ui
 
 ### TreeView
 
-Main tree container. Extracts the tree from a root DOM element and renders it with full keyboard navigation, search, and interaction support.
+Main tree container. Extracts the tree from a root DOM element and renders it with full keyboard navigation, search, and interaction support. Live updates go through core's `LiveTreeExtractor` — `DomObserver` flushes feed `refresh(change)` so steady-state mutations re-extract only the dirty subtree (with a full-extract fallback when scope or cross-tree ARIA deps move), matching the extension / `useSemanticTree` / Storybook preview path.
 
 ```tsx
 import { TreeView } from "@real-a11y-dev/semantic-navigator-ui";
