@@ -94,11 +94,13 @@ Two path-valued keys — [`storageState`](#storagestate) and [`baseline`](#basel
 
 ### `root`
 
-**`root: string`** — flag `--root` · default `body` · applies to `audit`, `inspect`, the view commands, `snapshot`
+**`root: string`** — flag `--root` · default `body` · applies to `audit`, `inspect`, the view commands · **not** `snapshot`
 
 Scope extraction to a CSS selector — audit a single region or component instead of the whole page. For per-route scoping, prefer [`urls[].rootSelector`](#urls).
 
-On `audit` the order is: a `--root` you type, then the route's own `rootSelector`, then this key as the project-wide default, then `body`. Setting `root` here is a fallback for routes that don't scope themselves — it never overrides one that does. `snapshot` accepts the flag but always uses the per-route selector.
+On `audit` the order is: a `--root` you type, then the route's own `rootSelector`, then this key as the project-wide default, then `body`. Setting `root` here is a fallback for routes that don't scope themselves — it never overrides one that does.
+
+`snapshot` honors neither the flag nor this key: it scopes every page by `urls[].rootSelector`, falling back to `body`. So a route with no `rootSelector` is snapshotted at `body` even when `root` is set here, while `audit` would scope it to `root` — if you need the two commands to agree on a route, give that route its own `rootSelector`.
 
 ### `device`
 
