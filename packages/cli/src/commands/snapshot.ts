@@ -69,7 +69,27 @@ function toolVersion(): string {
 const SNAPSHOT_FORMATS = ["json", "md", "sarif", "junit", "jsonl"] as const;
 type SnapshotFormat = (typeof SNAPSHOT_FORMATS)[number];
 
-export const snapshotCommand: CommandFn = async (positionals, flags) => {
+export const snapshotCommand: CommandFn = async (
+  positionals,
+  flags,
+  seededFromConfig,
+) => {
+  // A snapshot is a faithful record of the config: each page is scoped by its
+  // own `urls[].rootSelector`, so one global `--root` would either be silently
+  // dropped (what used to happen) or quietly re-scope every page and change the
+  // `v1:` fingerprints a committed baseline was built from. Refuse instead —
+  // per-route scoping is the only scoping this command can honor. A seeded
+  // `defaults.root` is NOT a refusal: it's config the user set for `audit`'s
+  // benefit, and failing every `snapshot` run over it would be absurd.
+  if (
+    typeof flags.root === "string" &&
+    seededFromConfig?.has("root") !== true
+  ) {
+    throw new CliError(
+      "snapshot scopes each page by its own `urls[].rootSelector` — it can't apply a single --root across the set.",
+      'set `"rootSelector"` on the entries in `urls` that need scoping, or use `real-a11y audit --root` for a one-off scoped run',
+    );
+  }
   const { pages: configPages, configPath } = resolvePageList(
     positionals,
     flags,

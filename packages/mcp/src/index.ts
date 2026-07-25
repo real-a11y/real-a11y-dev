@@ -46,6 +46,7 @@ async function main(): Promise<void> {
   );
 
   const cdpEndpoint = process.env.REAL_A11Y_MCP_CDP;
+  const headful = process.env.REAL_A11Y_MCP_HEADFUL === "1";
   // CDP mode reuses a running browser — there's no binary for us to pick. A
   // bad REAL_A11Y_CHROME_PATH throws here and refuses to start (below), same
   // philosophy as an invalid REAL_A11Y_MCP_STORAGE_STATE above: silently
@@ -55,7 +56,10 @@ async function main(): Promise<void> {
 
   const session = new BrowserSession({
     cdpEndpoint,
-    headless: process.env.REAL_A11Y_MCP_HEADFUL !== "1",
+    // Ignored when `cdpEndpoint` is set: `connectOverCDP` reuses the running
+    // browser, window state and all. `open_page` reports that case separately
+    // rather than repeating a launch flag that had no say in it.
+    headless: !headful,
     // Auth material is env-configured, never a tool parameter — session tokens
     // never enter the agent's context. The constructor rejects storageState +
     // cdpEndpoint together (a CDP connection carries its own session).
@@ -63,7 +67,11 @@ async function main(): Promise<void> {
     ...(allowedOrigins.length ? { allowedOrigins } : {}),
     ...(chrome ? { executablePath: chrome.executablePath } : {}),
   });
-  const server = buildServer(session, { authenticated: Boolean(storageState) });
+  const server = buildServer(session, {
+    authenticated: Boolean(storageState),
+    headful,
+    cdpAttached: Boolean(cdpEndpoint),
+  });
 
   // Tear down the browser exactly once on any shutdown signal. The SDK's stdio
   // transport doesn't reliably fire onclose on stdin EOF, so wire every path.

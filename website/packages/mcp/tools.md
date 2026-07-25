@@ -89,11 +89,27 @@ An agent calls this before any other tool, e.g. to open a signup flow's mobile l
 { "url": "https://example.com/signup", "waitUntil": "networkidle", "settleMs": 500, "device": "iPhone 13" }
 ```
 
+The reply reports the resolved URL, the page title, any device/viewport emulation, and the **browser mode** — headless is the default, so without that line a human watching for a window concludes the browser never opened; over a CDP attach it reports the attach instead, since the window belongs to the browser it joined.
+
+The tool description also states the **session** state, because an agent that can't tell whether it's looking at a logged-out page will either try to log in or misreport what it audited. Three cases:
+
+| Server started with | What the agent is told |
+| --- | --- |
+| [`REAL_A11Y_MCP_STORAGE_STATE`](#real-a11y-mcp-storage-state) | Pages open **already authenticated** — don't visit a login page. |
+| [`REAL_A11Y_MCP_CDP`](#real-a11y-mcp-cdp) | Pages inherit whatever sessions **that** browser holds — check what you got. If it's logged out, only the human at that window can sign in; no variable changes it. |
+| neither | Pages behind auth open **logged out** — here are the two variables that fix it. |
+
+The CDP row is its own case rather than a flavour of "unauthenticated": an attach never carries a storage state (the two are mutually exclusive), yet it reuses the attached browser's own context, so its pages usually *are* signed in. Telling that agent to restart with `REAL_A11Y_MCP_CDP` would prescribe the setup already in force.
+
+In all three, there is deliberately **no credential parameter** — auth is operator-configured so session tokens never enter the agent's context.
+
 ### `close_browser`
 
 *Session · tears down the browser · takes no arguments.*
 
 Close the browser session and free resources. Over a CDP attach it closes only the tab the server created and disconnects — it never closes the user's own Chrome or their other tabs.
+
+It also **discards every saved findings checkpoint** — [`export_checkpoint`](#export-checkpoint) anything that needs to outlive the session first.
 
 Parameters: none.
 
@@ -341,7 +357,9 @@ chrome --remote-debugging-port=9222 --user-data-dir=/tmp/a11y-cdp
 
 *`"1"` · optional.*
 
-Set to `1` to launch a visible browser instead of headless. Ignored when [`REAL_A11Y_MCP_CDP`](#real-a11y-mcp-cdp) is set.
+Set to `1` to launch a visible browser instead of headless. Ignored when [`REAL_A11Y_MCP_CDP`](#real-a11y-mcp-cdp) is set — a CDP attach reuses the running browser, window state and all.
+
+[`open_page`](#open_page)'s reply names the mode it's actually in, so a human watching for a window knows whether to expect one. Over CDP it reports the attach rather than a launch mode, and doesn't offer this variable as a fix — it has no say there.
 
 ### `REAL_A11Y_MCP_ALLOW_FILE`
 

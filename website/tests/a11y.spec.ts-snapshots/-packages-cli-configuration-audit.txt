@@ -181,7 +181,7 @@ main
       code "http://localhost:3000/"
       code "audit"
       code "snapshot"
-    listitem "— scope extraction to a region for this route (per-page ); the semantic tree is taken from the matching element down. Honored by both and . On , a you type overrides it for that run — but a project-wide does , so a route's own selector always beats the project default. always uses this selector, so its artifact matches the config that produced it."
+    listitem "— scope extraction to a region for this route (per-page ); the semantic tree is taken from the matching element down. Honored by both and . On , a you type overrides it for that run — but a project-wide does , so a route's own selector always beats the project default. On this is the way to scope a page: it always uses this selector, so its artifact matches the config that produced it, and it rejects rather than accept a scope it won't apply."
       strong
         code "rootSelector"
       link "root"
@@ -194,6 +194,8 @@ main
         code "defaults.root"
       strong "not"
       code "snapshot"
+      strong "only"
+      code "--root"
     listitem "— repo-relative file the route's findings anchor to in . GitHub code scanning only displays results tied to a file path; without it, results anchor to the config file."
       strong
         code "sourcePath"
@@ -282,6 +284,13 @@ main
     code "audit"
     code "root"
     code "rootSelector"
+  paragraph "The two are ignored differently, though. Setting here is fine — it's a project default aimed at , and passes over it. Typing at is an (exit 2): a flag you typed for this run is an instruction, and silently dropping it would leave the artifact's fingerprints looking like they came from a scope that was never applied."
+    code "root"
+    code "audit"
+    code "snapshot"
+    code "--root"
+    code "snapshot"
+    strong "error"
   heading "device" (level 3)
     code "device"
   paragraph "— flag · default: unset · applies to , , the view commands,"

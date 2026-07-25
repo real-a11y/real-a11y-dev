@@ -370,11 +370,46 @@ main
   paragraph "An agent calls this before any other tool, e.g. to open a signup flow's mobile layout before auditing it:"
   button "Copy Code"
   code
+  paragraph "The reply reports the resolved URL, the page title, any device/viewport emulation, and the — headless is the default, so without that line a human watching for a window concludes the browser never opened; over a CDP attach it reports the attach instead, since the window belongs to the browser it joined."
+    strong "browser mode"
+  paragraph "The tool description also states the state, because an agent that can't tell whether it's looking at a logged-out page will either try to log in or misreport what it audited. Three cases:"
+    strong "session"
+  table
+    rowgroup
+      row
+        rowheader "Server started with"
+        rowheader "What the agent is told"
+    rowgroup
+      row
+        cell "REAL_A11Y_MCP_STORAGE_STATE"
+          link "REAL_A11Y_MCP_STORAGE_STATE"
+            code "REAL_A11Y_MCP_STORAGE_STATE"
+        cell "Pages open already authenticated — don't visit a login page."
+          strong "already authenticated"
+      row
+        cell "REAL_A11Y_MCP_CDP"
+          link "REAL_A11Y_MCP_CDP"
+            code "REAL_A11Y_MCP_CDP"
+        cell "Pages inherit whatever sessions that browser holds — check what you got. If it's logged out, only the human at that window can sign in; no variable changes it."
+          strong "that"
+      row
+        cell "neither"
+        cell "Pages behind auth open logged out — here are the two variables that fix it."
+          strong "logged out"
+  paragraph "The CDP row is its own case rather than a flavour of "unauthenticated": an attach never carries a storage state (the two are mutually exclusive), yet it reuses the attached browser's own context, so its pages usually signed in. Telling that agent to restart with would prescribe the setup already in force."
+    emphasis "are"
+    code "REAL_A11Y_MCP_CDP"
+  paragraph "In all three, there is deliberately — auth is operator-configured so session tokens never enter the agent's context."
+    strong "no credential parameter"
   heading "close_browser" (level 3)
     code "close_browser"
   paragraph
     emphasis "Session · tears down the browser · takes no arguments."
   paragraph "Close the browser session and free resources. Over a CDP attach it closes only the tab the server created and disconnects — it never closes the user's own Chrome or their other tabs."
+  paragraph "It also — anything that needs to outlive the session first."
+    strong "discards every saved findings checkpoint"
+    link "export_checkpoint"
+      code "export_checkpoint"
   paragraph "Parameters: none."
   heading "Audit" (level 2)
   paragraph "The reason the server exists. Both tools report violations a screen reader would announce; adds the three views from the same extraction."
@@ -747,10 +782,13 @@ main
   paragraph
     emphasis "· optional."
       code ""1""
-  paragraph "Set to to launch a visible browser instead of headless. Ignored when is set."
+  paragraph "Set to to launch a visible browser instead of headless. Ignored when is set — a CDP attach reuses the running browser, window state and all."
     code "1"
     link "REAL_A11Y_MCP_CDP"
       code "REAL_A11Y_MCP_CDP"
+  paragraph "'s reply names the mode it's actually in, so a human watching for a window knows whether to expect one. Over CDP it reports the attach rather than a launch mode, and doesn't offer this variable as a fix — it has no say there."
+    link "open_page"
+      code "open_page"
   heading "REAL_A11Y_MCP_ALLOW_FILE" (level 3)
     code "REAL_A11Y_MCP_ALLOW_FILE"
   paragraph

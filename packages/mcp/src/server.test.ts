@@ -129,6 +129,139 @@ describe("MCP server wiring", () => {
     session = new FakeSession();
   });
 
+  it("tells the agent the checkpoint store dies with the browser", async () => {
+    // The store is deliberately cleared by close_browser, and the website docs
+    // say so — but an agent only ever reads tool descriptions, so the promise
+    // that checkpoints "survive navigation" read as "survive everything".
+    const client = await connect(session);
+    const tools = (await client.listTools()).tools;
+    const byName = (n: string) => tools.find((t) => t.name === n)!;
+    expect(byName("checkpoint_findings").description).toMatch(
+      /do NOT survive close_browser/,
+    );
+    expect(byName("close_browser").description).toMatch(/DISCARDS/);
+    // …and both point at the escape hatch rather than just stating the loss.
+    expect(byName("checkpoint_findings").description).toMatch(
+      /export_checkpoint/,
+    );
+    expect(byName("close_browser").description).toMatch(/export_checkpoint/);
+  });
+
+  it("reports headless vs headful so a missing window isn't a mystery", async () => {
+    // buildServer can't infer this — the bin owns the decision — so an unset
+    // `headful` must still say "headless" rather than stay silent.
+    const headlessClient = await connect(session);
+    const headless = textOf(
+      (await headlessClient.callTool({
+        name: "open_page",
+        arguments: { url: "https://example.com/" },
+      })) as never,
+    );
+    expect(headless).toMatch(/headless/);
+    expect(headless).toMatch(/REAL_A11Y_MCP_HEADFUL/);
+
+    const headfulClient = await connect(new FakeSession(), { headful: true });
+    const visible = textOf(
+      (await headfulClient.callTool({
+        name: "open_page",
+        arguments: { url: "https://example.com/" },
+      })) as never,
+    );
+    expect(visible).toMatch(/headful/);
+    expect(visible).not.toMatch(/REAL_A11Y_MCP_HEADFUL/);
+  });
+
+  it("doesn't claim headless over a CDP attach, where the flag is inert", async () => {
+    // `BrowserSession` ignores `headless` entirely when `cdpEndpoint` is set —
+    // it reuses the running browser. So the launch flag describes a launch that
+    // never happened: the attached Chrome usually HAS a window, and setting
+    // REAL_A11Y_MCP_HEADFUL wouldn't open one. Offering it as the fix is the
+    // exact confusion this reply set out to remove.
+    const cdpClient = await connect(new FakeSession(), { cdpAttached: true });
+    const attached = textOf(
+      (await cdpClient.callTool({
+        name: "open_page",
+        arguments: { url: "https://example.com/" },
+      })) as never,
+    );
+    expect(attached).toMatch(/attached to your running Chrome/);
+    expect(attached).not.toMatch(/no window/);
+    // The variable may be NAMED — to say it does nothing — but never as a fix.
+    expect(attached).toMatch(/has no effect over CDP/);
+    expect(attached).not.toMatch(/set REAL_A11Y_MCP_HEADFUL=1/);
+  });
+
+  it("CDP wins over headful — an attach never launched anything", async () => {
+    // Both env vars can be set at once; `headful` is the one that's meaningless.
+    const cdpClient = await connect(new FakeSession(), {
+      cdpAttached: true,
+      headful: true,
+    });
+    const attached = textOf(
+      (await cdpClient.callTool({
+        name: "open_page",
+        arguments: { url: "https://example.com/" },
+      })) as never,
+    );
+    expect(attached).toMatch(/attached to your running Chrome/);
+    expect(attached).not.toMatch(/a window is open/);
+  });
+
+  it("points an unauthenticated server at the auth options it does have", async () => {
+    // The capability exists but is env-only by design (a token must never be a
+    // tool parameter). Env-only shouldn't mean invisible: an agent that hits a
+    // logged-out page should be able to tell the user what to do.
+    const anon = (await (await connect(session)).listTools()).tools.find(
+      (t) => t.name === "open_page",
+    )!;
+    expect(anon.description).toMatch(/REAL_A11Y_MCP_STORAGE_STATE/);
+    expect(anon.description).toMatch(/REAL_A11Y_MCP_CDP/);
+
+    // An authenticated server says the opposite — don't try to log in.
+    const authed = (
+      await (
+        await connect(new FakeSession(), { authenticated: true })
+      ).listTools()
+    ).tools.find((t) => t.name === "open_page")!;
+    expect(authed.description).toMatch(/ALREADY AUTHENTICATED/);
+    expect(authed.description).not.toMatch(/REAL_A11Y_MCP_STORAGE_STATE/);
+  });
+
+  it("doesn't call a CDP attach logged-out, or prescribe the attach it's using", async () => {
+    // A CDP attach never carries a storage state — they're mutually exclusive —
+    // so `authenticated` is false, and the anon branch used to fire: "NO saved
+    // login, expect a logged-out view … restart with REAL_A11Y_MCP_CDP". Over
+    // CDP that's wrong twice: `ensurePage` reuses the attached browser's own
+    // context, so pages inherit whatever it's signed into, and the prescribed
+    // fix is the setup already in force.
+    const cdp = (
+      await (
+        await connect(new FakeSession(), { cdpAttached: true })
+      ).listTools()
+    ).tools.find((t) => t.name === "open_page")!;
+    expect(cdp.description).not.toMatch(/will open as a logged-out view/);
+    expect(cdp.description).not.toMatch(/restart the server with/);
+    expect(cdp.description).toMatch(/sessions THAT browser holds/);
+    // Still not a promise of auth — that Chrome may be signed into nothing,
+    // and the honest instruction is to check what you actually got.
+    expect(cdp.description).not.toMatch(/ALREADY AUTHENTICATED/);
+    expect(cdp.description).toMatch(/sign in in that Chrome window/);
+    // The one thing that stays true in every state: no credential parameter.
+    expect(cdp.description).toMatch(/no credential parameter/);
+  });
+
+  it("a CDP open_page reply doesn't imply a known session either", async () => {
+    const client = await connect(new FakeSession(), { cdpAttached: true });
+    const reply = textOf(
+      (await client.callTool({
+        name: "open_page",
+        arguments: { url: "https://example.com/" },
+      })) as never,
+    );
+    expect(reply).toMatch(/whatever the attached Chrome holds/);
+    expect(reply).not.toMatch(/storage state loaded/);
+  });
+
   it("registers the audit-first tool surface", async () => {
     const client = await connect(session);
     const names = (await client.listTools()).tools.map((t) => t.name).sort();

@@ -370,6 +370,25 @@ export interface BuildServerOptions {
    * exposed through any tool.
    */
   authenticated?: boolean;
+  /**
+   * True when the browser was launched visibly (`REAL_A11Y_MCP_HEADFUL=1`).
+   * The decision is made in the bin, so the server can only report it if it's
+   * told — and it must report it, because "headless" is the default and a
+   * human watching for a window otherwise concludes the browser never opened.
+   *
+   * Meaningless when `cdpAttached` is set — see below.
+   */
+  headful?: boolean;
+  /**
+   * True when the server attaches to an already-running Chrome
+   * (`REAL_A11Y_MCP_CDP`) instead of launching one. Then `headful` describes a
+   * launch that never happened: `BrowserSession` ignores `headless` entirely
+   * over CDP, so the window state is whatever the user's browser already is.
+   * Reporting "headless — set REAL_A11Y_MCP_HEADFUL=1 to see a window" there
+   * is doubly wrong: there usually *is* a window, and that variable can't make
+   * one. Say so instead of guessing.
+   */
+  cdpAttached?: boolean;
 }
 
 export function buildServer(
@@ -377,6 +396,27 @@ export function buildServer(
   options: BuildServerOptions = {},
 ): McpServer {
   const authenticated = options.authenticated === true;
+  const cdpAttached = options.cdpAttached === true;
+  const headful = options.headful === true;
+  // Over CDP the window state belongs to the browser we attached to, and
+  // REAL_A11Y_MCP_HEADFUL is inert — never offer it as a fix there.
+  const browserMode = cdpAttached
+    ? "attached to your running Chrome (its own window state; REAL_A11Y_MCP_HEADFUL has no effect over CDP)"
+    : headful
+      ? "headful (a window is open)"
+      : "headless (no window — set REAL_A11Y_MCP_HEADFUL=1 to see one)";
+  // Three auth states, not two. A CDP attach never carries a storage state
+  // (they're mutually exclusive), but `ensurePage` reuses the attached
+  // browser's own context — so its pages inherit whatever that profile is
+  // signed into. "NO saved login, expect a logged-out view" is wrong there,
+  // and "restart with REAL_A11Y_MCP_CDP" prescribes the setup already in use.
+  // It's still not a promise of auth: that browser may be signed into nothing,
+  // and only the human at that window can change it.
+  const authNote = authenticated
+    ? " This server was started with a saved login session, so pages open ALREADY AUTHENTICATED — do not try to log in or navigate to a login page; open the destination directly."
+    : cdpAttached
+      ? " This server is attached to a Chrome the user is already running, so pages open with whatever sessions THAT browser holds — a page behind auth may well open already authenticated; check what you actually got rather than assuming either way. Don't try to log in through the tools — there is no credential parameter, deliberately. If a page does come up logged out, the user has to sign in in that Chrome window; the server cannot do it for them, and no environment variable changes it."
+      : " This server has NO saved login, so a page behind auth will open as a logged-out view. Don't try to log in through the tools — there is no credential parameter, deliberately. Tell the user to restart the server with REAL_A11Y_MCP_STORAGE_STATE (a saved session from `real-a11y login`) or REAL_A11Y_MCP_CDP (attach to a Chrome they're already signed into).";
   const server = new McpServer(
     {
       name: "real-a11y",
@@ -410,9 +450,7 @@ export function buildServer(
       title: "Open page",
       description:
         "Navigate the browser to a URL and prepare it for accessibility queries. Call this before any audit/get_* tool. For dynamic sites (SPAs, consent dialogs) set waitUntil='networkidle' and/or settleMs so the page settles first. To audit the MOBILE or TABLET layout — which can differ substantially from desktop (hamburger nav, hidden content, touch-only controls) — pass a `device`." +
-        (authenticated
-          ? " This server was started with a saved login session, so pages open ALREADY AUTHENTICATED — do not try to log in or navigate to a login page; open the destination directly."
-          : ""),
+        authNote,
       inputSchema: {
         url: z.string().url().describe("Absolute URL to open."),
         waitUntil: z
@@ -479,9 +517,12 @@ export function buildServer(
           : "";
       return text(
         `Opened ${info.url}${emu}\nTitle: ${info.title || "(untitled)"}` +
+          `\nBrowser: ${browserMode}` +
           (authenticated
             ? "\n(authenticated session: storage state loaded)"
-            : ""),
+            : cdpAttached
+              ? "\n(session: whatever the attached Chrome holds — verify rather than assume)"
+              : ""),
       );
     },
   );
@@ -490,7 +531,8 @@ export function buildServer(
     "close_browser",
     {
       title: "Close browser",
-      description: "Close the browser session and free resources.",
+      description:
+        "Close the browser session and free resources. This also DISCARDS every saved findings checkpoint — export_checkpoint anything you still need first. Only call it when you're done; the other tools reopen nothing on their own.",
       inputSchema: {},
       annotations: {
         readOnlyHint: false,
@@ -728,7 +770,7 @@ export function buildServer(
     {
       title: "Save a11y checkpoint",
       description:
-        "Snapshot the CURRENT page's accessibility findings and store them under `name`. Later call diff_findings to see which findings are new / changed / fixed — the same identity semantics (fingerprints) the CI a11y-diff uses. Checkpoints survive navigation, so you can checkpoint one deploy and diff another: save 'prod', open the preview URL, then diff_findings('prod').",
+        "Snapshot the CURRENT page's accessibility findings and store them under `name`. Later call diff_findings to see which findings are new / changed / fixed — the same identity semantics (fingerprints) the CI a11y-diff uses. Checkpoints survive navigation, so you can checkpoint one deploy and diff another: save 'prod', open the preview URL, then diff_findings('prod'). They are held in memory and do NOT survive close_browser — call export_checkpoint first if you need one to outlive the session.",
       inputSchema: {
         name: checkpointName,
         rootSelector,
