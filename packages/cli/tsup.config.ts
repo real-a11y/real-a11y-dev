@@ -11,6 +11,8 @@ export default defineConfig({
   clean: true,
   treeshake: true,
   // playwright is an (optional) peer dep, resolved by the host — never bundle.
-  external: ["playwright"],
+  // @puppeteer/browsers is a regular dep but a large one (proxy-agent,
+  // extract-zip, ...) — resolved from node_modules at runtime, never bundled.
+  external: ["playwright", "@puppeteer/browsers"],
   banner: { js: "" },
 });

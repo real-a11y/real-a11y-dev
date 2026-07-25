@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  COMMANDS,
+  parseChannel,
   parseFailOn,
   parseFormat,
   parseListCategory,
@@ -8,6 +10,7 @@ import {
   parseOpenOptions,
   parseRules,
   parseProducer,
+  rootHelp,
 } from "./args.js";
 import { CliError } from "./exit.js";
 
@@ -111,6 +114,21 @@ describe("parseOpenOptions", () => {
       parseOpenOptions({ cdp: "http://localhost:9222", device: "iPhone 13" }),
     ).toThrow(/--cdp/);
   });
+
+  it("rejects --chrome-path combined with --cdp", () => {
+    expect(() =>
+      parseOpenOptions({
+        cdp: "http://localhost:9222",
+        "chrome-path": "/usr/bin/chrome",
+      }),
+    ).toThrow(/--chrome-path/);
+  });
+
+  it("allows --chrome-path without --cdp", () => {
+    expect(() =>
+      parseOpenOptions({ "chrome-path": "/usr/bin/chrome" }),
+    ).not.toThrow();
+  });
 });
 
 describe("parseListCategory", () => {
@@ -118,5 +136,34 @@ describe("parseListCategory", () => {
     expect(parseListCategory("landmark")).toBe("landmark");
     expect(() => parseListCategory("widgets")).toThrow(/heading, link/);
     expect(() => parseListCategory(undefined)).toThrow(CliError);
+  });
+});
+
+describe("parseChannel", () => {
+  it("returns undefined when --channel wasn't passed at all", () => {
+    expect(parseChannel(undefined)).toBeUndefined();
+  });
+
+  it("accepts the four Chrome for Testing channels", () => {
+    expect(parseChannel("stable")).toBe("stable");
+    expect(parseChannel("beta")).toBe("beta");
+    expect(parseChannel("dev")).toBe("dev");
+    expect(parseChannel("canary")).toBe("canary");
+  });
+
+  it("rejects anything else", () => {
+    expect(() => parseChannel("nightly")).toThrow(CliError);
+    expect(() => parseChannel("nightly")).toThrow(
+      /stable \| beta \| dev \| canary/,
+    );
+  });
+});
+
+describe("COMMANDS.install", () => {
+  it("is registered with no positional usage and shows up in root help", () => {
+    expect(COMMANDS.install).toBeDefined();
+    expect(COMMANDS.install.summary).toMatch(/Chrome for Testing/);
+    expect(rootHelp()).toContain("install");
+    expect(rootHelp()).not.toMatch(/install <url>/);
   });
 });

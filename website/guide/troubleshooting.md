@@ -127,17 +127,31 @@ Both `@real-a11y-dev/cli` and `@real-a11y-dev/mcp` list Playwright as an **optio
 
 ```
 Playwright is required to drive a browser, but it isn't installed.
-  npm i -D playwright && npx playwright install chromium
+  npm i -D playwright && npx real-a11y install
 ```
 
-Install the peer and its browser binary:
+Install the peer and a browser:
 
 ```sh
 npm i -D playwright
-npx playwright install chromium   # CI: add --with-deps
+npx real-a11y install   # downloads Chrome for Testing, first time only
 ```
 
-A separate "Chromium isn't downloaded yet" error means the package is installed but the browser binary isn't — run just the `playwright install chromium` step.
+A separate "No browser is downloaded yet." error means Playwright itself is installed but no browser binary is — run just the `real-a11y install` step (or `npx playwright install chromium`, which works too).
+
+## Chrome fails to launch with a shared-library error
+
+`real-a11y install` downloads a plain Chrome binary — unlike `playwright install --with-deps`, it doesn't install any OS-level packages. On a bare Linux container you may see something like `error while loading shared libraries: libnss3.so: cannot open shared object file`. Install just the system dependencies, without downloading another browser:
+
+```sh
+npx playwright install-deps chromium   # Debian/Ubuntu; needs root
+```
+
+If a previously-working installed Chrome starts failing to launch (a corrupted or partially-written binary), reinstall it:
+
+```sh
+real-a11y install --force
+```
 
 ---
 

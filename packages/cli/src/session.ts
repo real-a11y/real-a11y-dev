@@ -72,6 +72,10 @@ export interface SessionFlags {
   storageState?: string;
   /** Origins allowed for extraction when a session is loaded (origin pinning). */
   allowedOrigins?: string[];
+  /** `--chrome-path` — a specific browser binary to launch. Ignored with `cdp`. */
+  chromePath?: string;
+  /** Note which Chrome binary was chosen, and why, on stderr. */
+  verbose?: boolean;
 }
 
 export async function createSession(
@@ -85,13 +89,35 @@ export async function createSession(
     if (isPlaywrightNotInstalled(err)) {
       throw new CliError(
         "Playwright is required to drive a browser, but it isn't installed.",
-        "npm i -D playwright && npx playwright install chromium",
+        "npm i -D playwright && npx real-a11y install",
       );
     }
     throw err;
   }
-  const { BrowserSession } = await import("@real-a11y-dev/browser");
+  const { BrowserSession, resolveChromeExecutable } =
+    await import("@real-a11y-dev/browser");
   const proxy = proxyFromEnv();
+  // CDP mode reuses a running browser — there's no binary for us to choose.
+  // Otherwise: --chrome-path (hard error if missing) > REAL_A11Y_CHROME_PATH
+  // (hard error if missing) > the `real-a11y install` manifest (soft, if any)
+  // > Playwright's own bundled Chromium.
+  let chrome: ReturnType<typeof resolveChromeExecutable>;
+  if (!flags.cdp) {
+    try {
+      chrome = resolveChromeExecutable({ explicitPath: flags.chromePath });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new CliError(
+        message,
+        "re-run: real-a11y install — or fix/unset --chrome-path / REAL_A11Y_CHROME_PATH.",
+      );
+    }
+    if (chrome && flags.verbose) {
+      process.stderr.write(
+        `using Chrome for Testing at ${chrome.executablePath} (source: ${chrome.source})\n`,
+      );
+    }
+  }
   const session = new BrowserSession({
     headless: !flags.headful,
     ...(flags.cdp ? { cdpEndpoint: flags.cdp } : {}),
@@ -100,6 +126,7 @@ export async function createSession(
     ...(flags.allowedOrigins && flags.allowedOrigins.length
       ? { allowedOrigins: flags.allowedOrigins }
       : {}),
+    ...(chrome ? { executablePath: chrome.executablePath } : {}),
   });
   registerCleanup(() => session.close());
   return session;
@@ -126,8 +153,20 @@ export async function openPage(
     const message = sanitizeText(redactUrlsIn(raw), { singleLine: true });
     if (/Executable doesn't exist/i.test(raw)) {
       throw new CliError(
-        "Chromium isn't downloaded yet.",
-        "npx playwright install chromium  (CI: add --with-deps)",
+        "No browser is downloaded yet.",
+        "npx real-a11y install  (or: npx playwright install chromium — CI on Linux may also need: npx playwright install-deps chromium)",
+      );
+    }
+    if (/error while loading shared libraries/i.test(raw)) {
+      throw new CliError(
+        message,
+        "Chrome needs system libraries this machine lacks — run: npx playwright install-deps chromium (Debian/Ubuntu), or install your distro's Chrome dependencies.",
+      );
+    }
+    if (/spawn .*EACCES|ENOEXEC|Failed to launch/i.test(raw)) {
+      throw new CliError(
+        message,
+        "the configured Chrome binary looks broken — re-run: real-a11y install --force (or check --chrome-path / REAL_A11Y_CHROME_PATH).",
       );
     }
     if (/Unknown device/.test(raw)) {

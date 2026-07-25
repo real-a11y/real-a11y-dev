@@ -96,23 +96,23 @@ The comment is **updated in place** — not spammed. If the PR is fixed and re-p
 
 ### 1. Install
 
-The CLI drives a real browser through Playwright, which ships as an **optional peer** — install it alongside the CLI and fetch the Chromium binary once:
+The CLI drives a real browser through Playwright, which ships as an **optional peer** — install it alongside the CLI and fetch a browser once:
 
 ```sh
 # npm
 npm i -D @real-a11y-dev/cli playwright
-npx playwright install chromium
+npx real-a11y install
 
 # pnpm
 pnpm add -D @real-a11y-dev/cli playwright
-pnpm exec playwright install chromium
+pnpm exec real-a11y install
 
 # yarn
 yarn add -D @real-a11y-dev/cli playwright
-yarn playwright install chromium
+yarn real-a11y install
 ```
 
-`diff` is pure — it reads two JSON files and never launches a browser — so only the snapshot jobs need Chromium.
+`real-a11y install` downloads [Chrome for Testing](/packages/cli#prerequisites) into its own cache — `npx playwright install chromium` still works too. `diff` is pure — it reads two JSON files and never launches a browser — so only the snapshot jobs need a browser. On bare Linux CI, `playwright install chromium --with-deps` remains the simplest single command (it installs the OS-level libraries Chrome needs too, which `real-a11y install` doesn't) — see the workflow example below.
 
 ### 2. Describe your pages in `a11y.config.json`
 
@@ -235,6 +235,10 @@ jobs:
 
       - run: npm ci
 
+      # --with-deps installs both the browser and the OS libraries Chrome
+      # needs — the single-command option on Linux CI. (`real-a11y install`
+      # downloads only the browser; add `playwright install-deps chromium`
+      # alongside it if you use that instead.)
       - run: npx playwright install chromium --with-deps
 
       - name: Start Next.js dev server

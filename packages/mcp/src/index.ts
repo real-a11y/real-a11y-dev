@@ -21,11 +21,19 @@
  *   REAL_A11Y_MCP_ALLOWED_ORIGINS  Comma-separated origins extraction is restricted to when a
  *                                storage state is loaded (origin pinning). Strongly recommended
  *                                with STORAGE_STATE so a redirect can't audit an unintended site.
+ *   REAL_A11Y_CHROME_PATH        Launch this Chrome binary instead of Playwright's bundled
+ *                                Chromium (e.g. a system Chrome). Ignored under CDP. A bad path
+ *                                refuses to start rather than silently falling back.
+ *   REAL_A11Y_BROWSERS_DIR       Cache directory `real-a11y install` downloaded Chrome for
+ *                                Testing into, if not the platform default (~/.cache/real-a11y).
  */
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
-import { BrowserSession } from "@real-a11y-dev/browser";
+import {
+  BrowserSession,
+  resolveChromeExecutable,
+} from "@real-a11y-dev/browser";
 
 import { assertValidStorageState, parseAllowedOrigins } from "./config.js";
 import { buildServer } from "./server.js";
@@ -37,14 +45,23 @@ async function main(): Promise<void> {
     process.env.REAL_A11Y_MCP_ALLOWED_ORIGINS,
   );
 
+  const cdpEndpoint = process.env.REAL_A11Y_MCP_CDP;
+  // CDP mode reuses a running browser — there's no binary for us to pick. A
+  // bad REAL_A11Y_CHROME_PATH throws here and refuses to start (below), same
+  // philosophy as an invalid REAL_A11Y_MCP_STORAGE_STATE above: silently
+  // falling back to a different browser than the operator configured would
+  // be worse than refusing to start.
+  const chrome = cdpEndpoint ? undefined : resolveChromeExecutable();
+
   const session = new BrowserSession({
-    cdpEndpoint: process.env.REAL_A11Y_MCP_CDP,
+    cdpEndpoint,
     headless: process.env.REAL_A11Y_MCP_HEADFUL !== "1",
     // Auth material is env-configured, never a tool parameter — session tokens
     // never enter the agent's context. The constructor rejects storageState +
     // cdpEndpoint together (a CDP connection carries its own session).
     ...(storageState ? { storageState } : {}),
     ...(allowedOrigins.length ? { allowedOrigins } : {}),
+    ...(chrome ? { executablePath: chrome.executablePath } : {}),
   });
   const server = buildServer(session, { authenticated: Boolean(storageState) });
 
@@ -69,6 +86,11 @@ async function main(): Promise<void> {
 
   // stdout is the protocol channel — log to stderr only.
   process.stderr.write("real-a11y MCP server running on stdio\n");
+  if (chrome) {
+    process.stderr.write(
+      `  browser: ${chrome.executablePath} (${chrome.source})\n`,
+    );
+  }
   if (storageState) {
     // Operator-facing: confirm the session is armed. The path is fine to log;
     // the file's contents (tokens) never are.

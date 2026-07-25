@@ -26,6 +26,16 @@ await session.close();
 
 `BrowserSession` launches Chromium with Playwright, injects the page-bundle (which sets `window.__realA11y__`), and routes every query through `page.evaluate()`. `playwright` is an **optional peer dependency**, imported lazily — importing this package never forces playwright to load, so browser-free code paths stay light.
 
+### Launching a specific Chrome binary
+
+`BrowserSessionOptions.executablePath` launches a given browser binary instead of Playwright's bundled Chromium (ignored when `cdpEndpoint` is set — an already-running browser is the browser):
+
+```ts
+const session = new BrowserSession({ executablePath: "/path/to/chrome" });
+```
+
+This package also exports the read side of the contract the CLI's `real-a11y install` writes to (see `@real-a11y-dev/cli`): `resolveChromeExecutable({ explicitPath?, env? })` returns `{ executablePath, source }` by checking, in order, an explicit path, the `REAL_A11Y_CHROME_PATH` env var, then the `install` cache manifest (`chromeCacheDir()` / `readChromeManifest()`) — or `undefined` if nothing is configured, so the caller falls back to Playwright's own Chromium. Never throws for the soft (manifest) case; throws for an explicit path or env var that doesn't exist on disk.
+
 ## The native producer — `nativeTree()`
 
 Everything above uses the **DOM producer**: the page-bundle walks the light DOM in-page. This package also hosts the **native producer**, which reads Chromium's own accessibility tree over CDP and normalizes it into the *same* `ExtractionResult` model — one canonical model, two producers.

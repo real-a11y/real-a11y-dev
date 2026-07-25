@@ -77,11 +77,11 @@ yarn add -D @real-a11y-dev/storybook-addon
 
 ### CLI (no code)
 
-The fastest first result: audit or inspect any URL straight from the shell. The CLI drives a real browser via Playwright, so install it alongside a Chromium binary:
+The fastest first result: audit or inspect any URL straight from the shell. The CLI drives a real browser via Playwright, so install it alongside a Chrome binary:
 
 ```sh
 npm i -D @real-a11y-dev/cli playwright
-npx playwright install chromium
+npx real-a11y install   # downloads Chrome for Testing, first time only
 ```
 
 ```sh

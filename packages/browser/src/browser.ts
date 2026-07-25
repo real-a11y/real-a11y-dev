@@ -192,6 +192,13 @@ export interface BrowserSessionOptions {
    */
   storageState?: string;
   /**
+   * Launch this browser binary (e.g. a Chrome for Testing build set up by
+   * `real-a11y install`) instead of Playwright's bundled Chromium. Ignored
+   * when `cdpEndpoint` is set (same contract as `headless`) — an already
+   * running browser is the browser.
+   */
+  executablePath?: string;
+  /**
    * When set (non-empty), extraction is refused unless the page's **final**
    * origin (after redirects) is in this allowlist. This is the control that
    * stops a redirect from an intended target to a different origin from
@@ -627,6 +634,9 @@ export class BrowserSession implements A11ySession {
     if (!this.browser || !this.browser.isConnected()) {
       this.browser = await chromium.launch({
         headless: this.opts.headless ?? true,
+        ...(this.opts.executablePath
+          ? { executablePath: this.opts.executablePath }
+          : {}),
         ...(this.opts.proxy ? { proxy: this.opts.proxy } : {}),
       });
     }

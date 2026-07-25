@@ -209,7 +209,11 @@ export function sessionFlags(
 ): SessionFlags {
   const base: SessionFlags = {
     headful: flags.headful === true,
+    verbose: flags.verbose === true,
     ...(typeof flags.cdp === "string" ? { cdp: flags.cdp } : {}),
+    ...(typeof flags["chrome-path"] === "string"
+      ? { chromePath: flags["chrome-path"] }
+      : {}),
   };
   const stateFlag = flags["storage-state"];
   if (typeof stateFlag !== "string") return base;
