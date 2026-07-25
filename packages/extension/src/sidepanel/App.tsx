@@ -26,6 +26,7 @@ import {
   serializeTree,
   serializeOutline,
   serializeTabSequence,
+  numberTabStops,
 } from "@real-a11y-dev/serialize";
 import {
   useState,
@@ -850,7 +851,9 @@ export function App() {
         {
           tree: treeStr,
           outline: serializeOutline(tree),
-          tabSequence: serializeTabSequence(tree),
+          // Number the export's tab-order section at render — it mirrors the
+          // numbered on-screen panel; the numbers are display-only, never stored.
+          tabSequence: numberTabStops(serializeTabSequence(tree)),
         },
         {
           pageTitle,

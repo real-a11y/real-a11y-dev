@@ -3,6 +3,7 @@ export {
   serializeTree,
   serializeOutline,
   serializeTabSequence,
+  numberTabStops,
   serializeTreeDiff,
 } from "./serialize.js";
 export type {

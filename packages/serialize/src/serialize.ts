@@ -180,9 +180,20 @@ export function serializeOutline(
 }
 
 /**
- * Serialize the computed tab order — role + accessible name, in the order a
- * user encounters while pressing Tab. Accepts a DOM root or a pre-extracted
- * tree.
+ * Serialize the computed tab order — role + accessible name, one stop per line,
+ * in the order a user encounters while pressing Tab. Accepts a DOM root or a
+ * pre-extracted tree.
+ *
+ * Lines are NOT prefixed with a sequence number. Line order already conveys the
+ * sequence, and a hard-coded `NN.` prefix renumbered every following line the
+ * moment one focusable element was inserted near the top — turning a committed
+ * snapshot's diff into whole-file churn for a single real change. This is the
+ * canonical, diff-stable form: store and diff it as-is.
+ *
+ * For a human- or agent-read listing where an explicit "stop 7" helps — a
+ * terminal print, an MCP response, an exported report — wrap the result with
+ * {@link numberTabStops} at render time. Keep numbering a presentation step;
+ * never store the numbered form.
  */
 export function serializeTabSequence(
   input: SerializeInput,
@@ -195,12 +206,33 @@ export function serializeTabSequence(
   const seq = getTabSequence(tree);
   if (seq.length === 0) return "(nothing focusable)";
   return seq
-    .map((n, i) => {
+    .map((n) => {
       const redacted = redactText(n.a11y.name, redact);
       const name = redacted ? ` "${redacted}"` : "";
       const marker = n.id === focusedId ? " [focused]" : "";
-      return `${String(i + 1).padStart(2, "0")}. ${n.a11y.role}${name}${marker}`;
+      return `${n.a11y.role}${name}${marker}`;
     })
+    .join("\n");
+}
+
+/**
+ * Add a `NN. ` sequence number to each line of {@link serializeTabSequence}
+ * output — `link "Home"` → `01. link "Home"` — for a human- or agent-read
+ * listing where an explicit ordinal helps.
+ *
+ * This is a PRESENTATION step: apply it at render time (a terminal print, an MCP
+ * response, an exported report) and never store or diff the result — the numbers
+ * renumber on every insertion, which is exactly the churn the unnumbered
+ * canonical form avoids. It is the inverse of the diff engine's `stripTabIndex`
+ * (`@real-a11y-dev/snapshot`): `stripTabIndex(numberTabStops(line)) === line`.
+ *
+ * The `(nothing focusable)` sentinel and empty input pass through unchanged.
+ */
+export function numberTabStops(tabs: string): string {
+  if (tabs === "" || tabs === "(nothing focusable)") return tabs;
+  return tabs
+    .split("\n")
+    .map((line, i) => `${String(i + 1).padStart(2, "0")}. ${line}`)
     .join("\n");
 }
 

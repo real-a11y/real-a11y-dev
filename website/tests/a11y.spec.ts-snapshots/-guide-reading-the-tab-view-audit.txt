@@ -96,13 +96,15 @@ navigation "On this page"
 main
   heading "Reading the TAB View" (level 1)
   blockquote
-    paragraph "The TAB view matches the output of in the testing package — same ordering, same formatting. Whether you're reading it in the Chrome extension, the Storybook addon, a committed Playwright snapshot fixture, the command, or the MCP tool, this page applies."
+    paragraph "The TAB view shows the same focusable elements, in the same order, as in the testing package. Whether you're reading it in the Chrome extension, the Storybook addon, the command, or the MCP tool, this page applies. The position numbers shown in those views are a display convenience; a committed fixture is (line order carries the sequence) so inserting one stop shows up as a single added line instead of renumbering the whole diff."
       link "tabSequenceSnapshot()"
         code "tabSequenceSnapshot()"
       link "real-a11y tabs"
         code "real-a11y tabs"
       link "get_tab_order"
         code "get_tab_order"
+      code "tabSequenceSnapshot()"
+      strong "unnumbered"
   paragraph "The TAB view answers one question:"
     strong "can a keyboard user reach everything they need to, in the right order?"
   paragraph "It shows every focusable element on the page as a flat, numbered list — the exact sequence a user would encounter them by pressing Tab, from first to last. No nesting, no hierarchy. Just the order of keyboard focus."

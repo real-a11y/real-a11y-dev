@@ -9,12 +9,16 @@
  * `(level N)` suffix — that normalization is for custom-vs-native comparison;
  * here both sides carry it, and stripping would hide a real h2→h3 change.
  *
- * The `tabs` view is a NUMBERED list, so an inserted stop renumbers every stop
- * after it — 40 "changed" lines for one real insertion. `stripTabIndex` drops
- * the `NN.` prefix before comparison so the diff is the stop that actually
- * appeared/vanished. (This makes a pure REORDER invisible to the multiset — a
- * later order-aware pass surfaces "X now precedes Y"; here, unreadable churn was
- * no more actionable than nothing.)
+ * The `tabs` view is one stop per line, in Tab order. Historically each line
+ * carried an `NN.` sequence-number prefix, so inserting one stop renumbered
+ * every line after it — 40 "changed" lines for one real insertion.
+ * `serializeTabSequence` no longer numbers its lines, but `stripTabIndex` is
+ * kept so a BASE artifact captured by an older (numbered) tool version still
+ * diffs cleanly against a current number-free PR artifact — without it every
+ * line would mismatch on its prefix and the whole view would churn as
+ * add/remove. Pure REORDERs stay invisible to this multiset (it is
+ * order-agnostic by nature); a later order-aware pass surfaces "X now precedes
+ * Y".
  */
 
 export interface ViewDiff {
@@ -22,7 +26,12 @@ export interface ViewDiff {
   removed: string[];
 }
 
-/** Drop the leading `NN. ` sequence number from a serialized tab-order line. */
+/**
+ * Drop a leading `NN. ` sequence number from a serialized tab-order line.
+ * Current `serializeTabSequence` output is unnumbered, so this is a no-op there;
+ * it stays to normalize LEGACY numbered artifacts (an older tool version, or a
+ * third-party producer) so they diff cleanly against number-free output.
+ */
 export function stripTabIndex(line: string): string {
   return line.replace(/^\d+\.\s*/, "");
 }

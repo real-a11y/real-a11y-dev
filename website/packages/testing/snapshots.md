@@ -156,7 +156,7 @@ Honors `markFocus` (default `true`) — a focused heading is shown with a traili
 
 ## `tabSequenceSnapshot(root, options?)`
 
-Returns the tab sequence as a numbered list.
+Returns the tab sequence, one stop per line in Tab order.
 
 ```ts
 expect(tabSequenceSnapshot(document.body)).toMatchSnapshot();
@@ -165,12 +165,14 @@ expect(tabSequenceSnapshot(document.body)).toMatchSnapshot();
 Example output:
 
 ```
-1. link "Skip to content"
-2. link "Home" (navigation)
-3. link "About" (navigation)
-4. textbox "Search"
-5. button "Submit search"
+link "Skip to content"
+link "Home"
+link "About"
+textbox "Search"
+button "Submit search"
 ```
+
+Lines carry **no** `NN.` position number: line order already conveys the sequence, and a hard-coded number renumbers every following line the moment one stop is inserted near the top — churning the whole snapshot's diff for one real change. For a human-read listing where an explicit "stop 7" helps, add the numbers at render time with `numberTabStops` from `@real-a11y-dev/serialize` (`numberTabStops(tabSequenceSnapshot(root))`); never store the numbered form.
 
 Honors `markFocus` (default `true`) — the currently-focused stop is shown with a trailing `[focused]`. See [Focus marker](#focus-marker).
 

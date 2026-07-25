@@ -23,6 +23,19 @@ serializeOutline(document.body);
 // h1 Sign in
 
 serializeTabSequence(document.body);
+// textbox "Email"
+// button "Sign in"
+```
+
+Tab-order lines carry no `NN.` sequence number — line order conveys the
+sequence, and numbering renumbers every following line on one insertion, churning
+a committed snapshot's diff. For a human- or agent-read listing where an explicit
+"stop 7" helps, add ordinals at **render** time (never store them):
+
+```ts
+import { serializeTabSequence, numberTabStops } from "@real-a11y-dev/serialize";
+
+numberTabStops(serializeTabSequence(document.body));
 // 01. textbox "Email"
 // 02. button "Sign in"
 ```

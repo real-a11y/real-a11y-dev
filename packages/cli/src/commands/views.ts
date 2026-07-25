@@ -5,6 +5,7 @@
  * bundle's listByRole directly.
  */
 
+import { numberTabStops } from "@real-a11y-dev/serialize";
 import {
   redactUrl,
   sanitizeText,
@@ -89,7 +90,14 @@ function makeSnapshotView(
       else page.tabs = text;
       writeReport(outputOf(flags), renderJson(command, [page]));
     } else {
-      writeReport(outputOf(flags), text.endsWith("\n") ? text : `${text}\n`);
+      // Number the tab-order view at print time — a terminal listing reads
+      // better with an explicit ordinal. The stored `json` form above and the
+      // shared snapshot stay canonical (unnumbered) so nothing committed churns.
+      const pretty = command === "tabs" ? numberTabStops(text) : text;
+      writeReport(
+        outputOf(flags),
+        pretty.endsWith("\n") ? pretty : `${pretty}\n`,
+      );
     }
     return EXIT.OK;
   };

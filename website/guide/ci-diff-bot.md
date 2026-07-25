@@ -425,7 +425,7 @@ one-line findings summary explains why).
       ],
       "tree": "main\n  heading \"Welcome\" (level 1)\n  …",
       "outline": "h1 Welcome\n  h2 Featured\n  …",
-      "tabs": "01. link \"Skip to content\"\n02. …"
+      "tabs": "link \"Skip to content\"\nlink …"
     }
   ]
 }
@@ -449,10 +449,10 @@ h1 Welcome
   h2 Latest
 
 ### Tab sequence
-01. link "Skip to content"
-02. link "Home"
-03. textbox "Email"
-04. button "Subscribe"
+link "Skip to content"
+link "Home"
+textbox "Email"
+button "Subscribe"
 ```
 
 The JSON — not the Markdown — is what you feed into `diff`. Reach for `--md` when a human wants to read a single snapshot.
