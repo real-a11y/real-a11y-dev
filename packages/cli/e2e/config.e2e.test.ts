@@ -150,4 +150,56 @@ describe("a11y.config.json defaults (built bin)", () => {
     expect(code).toBe(2);
     expect(stderr).toMatch(/no URL given/);
   });
+
+  it("a config defaults.root doesn't make snapshot refuse to run", async () => {
+    // The counterpart to the rejection below: `defaults.root` is set for
+    // `audit`'s benefit, and snapshot scopes per route instead. Erroring out
+    // of every snapshot run over a default the user set for another command
+    // would be absurd — it's ignored, exactly as before.
+    config({ defaults: { root: "main" } });
+    const out = join(dir, "out.json");
+    const { code, stderr } = await runCli(
+      ["snapshot", CLEAN, "-o", out, "-q"],
+      dir,
+    );
+    expect(stderr).not.toMatch(/can't apply a single --root/);
+    expect(code).toBe(0);
+  });
+});
+
+describe("snapshot rejects --root (built bin)", () => {
+  it("refuses a typed --root instead of silently ignoring it", async () => {
+    // It used to accept the flag and drop it on the floor: every page still
+    // scoped by its own `rootSelector`, exit 0, no word about it. A silently
+    // ignored scope is worse than a rejected one — the artifact's `v1:`
+    // fingerprints look like they came from the scope you asked for.
+    const out = join(dir, "out.json");
+    const { code, stderr } = await runCli(
+      ["snapshot", CLEAN, "--root", "main", "-o", out, "-q"],
+      dir,
+    );
+    expect(code).toBe(2);
+    expect(stderr).toMatch(/scopes each page by its own/);
+    expect(stderr).toMatch(/rootSelector/);
+  });
+
+  it("a typed --root still loses to nothing — even when config also sets it", async () => {
+    // `defaults.root` seeds `flags.root`, so the rejection can't key on the
+    // value's presence alone. Typed-on-top-of-seeded is still typed.
+    config({ defaults: { root: "#app" } });
+    const { code, stderr } = await runCli(
+      ["snapshot", CLEAN, "--root", "main", "-q"],
+      dir,
+    );
+    expect(code).toBe(2);
+    expect(stderr).toMatch(/can't apply a single --root/);
+  });
+
+  it("does not advertise --root in `snapshot --help`", async () => {
+    const { stdout } = await runCli(["snapshot", "--help"], dir);
+    expect(stdout).not.toMatch(/--root/);
+    // …while a command that honors it still lists it.
+    const audit = await runCli(["audit", "--help"], dir);
+    expect(audit.stdout).toMatch(/--root <selector>/);
+  });
 });

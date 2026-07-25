@@ -465,11 +465,12 @@ main
   heading "--root <selector>" (level 3)
     code "--root <selector>"
   list
-    listitem "CSS selector · · audit, inspect, tree, outline, tabs, list"
+    listitem "CSS selector · · audit, inspect, tree, outline, tabs, list · snapshot"
       strong "Type:"
       strong "Default:"
       code "body"
       strong "Commands:"
+      strong "rejected by:"
   paragraph "Scope extraction to a region or component instead of the whole page."
   paragraph "also scopes each page via its config . There, a you type is a deliberate override for that run, so it wins over the config for every page; omit it to let each route use its own selector. A project-wide is only a fallback for routes that don't scope themselves — it never overrides one that does."
     link "audit"
@@ -479,11 +480,16 @@ main
     code "--root"
     link "defaults.root"
       code "defaults.root"
-  paragraph "accepts the flag but always scopes each page via its config , so the recorded in the artifact is the one the config asked for — a flag can't make two snapshots of the same route incomparable."
+  paragraph "the flag. It scopes each page via that page's config , so the recorded in the artifact is always the one the config asked for — a flag can't make two snapshots of the same route incomparable. Scope a route by giving it its own ; for a one-off scoped run, use . (A project-wide is not a typed flag, so it doesn't trip the rejection — ignores it, as before.)"
     link "snapshot"
       code "snapshot"
+    strong "rejects"
     code "rootSelector"
     code "root"
+    code "rootSelector"
+    code "audit --root"
+    code "defaults.root"
+    code "snapshot"
   button "Copy Code"
   code
   heading "--producer <kind>" (level 3)

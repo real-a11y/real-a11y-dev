@@ -140,8 +140,10 @@ export const LIST_CATEGORIES = [
 ] as const;
 export type ListCategory = (typeof LIST_CATEGORIES)[number];
 
-const SHARED_FLAG_HELP = `  --root <selector>      Scope extraction                 (default: body)
-  --device <name>        Emulate a device, e.g. "iPhone 13"
+// Everything except `--root`. `snapshot` splices this variant, because it
+// scopes per route via `urls[].rootSelector` and REFUSES `--root` outright —
+// listing a flag it rejects would promise scoping it never applies.
+const SHARED_FLAG_HELP_NO_ROOT = `  --device <name>        Emulate a device, e.g. "iPhone 13"
   --viewport <WxH>       e.g. 1280x800
   --wait-until <state>   load|domcontentloaded|networkidle|commit (default: load)
   --settle <ms>          Extra wait after load            (default: 0)
@@ -160,6 +162,12 @@ const SHARED_FLAG_HELP = `  --root <selector>      Scope extraction             
   --no-config            Ignore an auto-discovered config
   -q, --quiet            Suppress progress
   --verbose              Extra diagnostics on stderr`;
+
+/** The full set, for every command that actually honors `--root`. */
+const SHARED_FLAG_HELP = `  --root <selector>      Scope extraction                 (default: body)
+                         Beats a route's urls[].rootSelector; a config
+                         defaults.root does not. snapshot rejects it
+${SHARED_FLAG_HELP_NO_ROOT}`;
 
 export interface CommandSpec {
   summary: string;
@@ -333,7 +341,7 @@ Flags:
   --fail-on <level>      Gate on unsuppressed findings: error | warning | never
                          (default: never — snapshot just writes the artifact)
   -o, --output <file>    Where to write (default: A11Y_SNAPSHOT_OUT or stdout)
-${SHARED_FLAG_HELP}
+${SHARED_FLAG_HELP_NO_ROOT}
 `,
     load: async () => (await import("./commands/snapshot.js")).snapshotCommand,
   },
