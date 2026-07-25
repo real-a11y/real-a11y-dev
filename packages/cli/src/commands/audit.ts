@@ -114,7 +114,11 @@ export const auditCommand: CommandFn = async (
         process.stderr.write(`${formatCliError(err)}\n`);
         pages.push({
           name: target.name,
-          url: target.name,
+          // The target we tried to open — the success path reports the URL the
+          // browser landed on, which doesn't exist here. Not `target.name`:
+          // that's a display label for a named config entry, so this field
+          // would stop being a URL for exactly the routes that have one.
+          url: redactUrl(target.url),
           findings: [],
           error: err.hint ? `${err.message} (${err.hint})` : err.message,
         });
