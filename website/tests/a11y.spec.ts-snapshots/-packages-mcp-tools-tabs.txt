@@ -90,6 +90,10 @@ link "REAL_A11Y_MCP_ALLOW_FILE=1"
 link "REAL_A11Y_MCP_CDP"
 button "Copy Code"
 generic
+table
+link "REAL_A11Y_MCP_STORAGE_STATE"
+link "REAL_A11Y_MCP_CDP"
+link "export_checkpoint"
 link "inspect_page"
 button "Copy Code"
 generic
@@ -111,6 +115,7 @@ link "diff_checkpoints"
 button "Copy Code"
 generic
 link "REAL_A11Y_MCP_CDP"
+link "open_page"
 link "open_page"
 link "REAL_A11Y_MCP_CDP"
 link "REAL_A11Y_MCP_STORAGE_STATE"
