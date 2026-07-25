@@ -375,8 +375,20 @@ export interface BuildServerOptions {
    * The decision is made in the bin, so the server can only report it if it's
    * told — and it must report it, because "headless" is the default and a
    * human watching for a window otherwise concludes the browser never opened.
+   *
+   * Meaningless when `cdpAttached` is set — see below.
    */
   headful?: boolean;
+  /**
+   * True when the server attaches to an already-running Chrome
+   * (`REAL_A11Y_MCP_CDP`) instead of launching one. Then `headful` describes a
+   * launch that never happened: `BrowserSession` ignores `headless` entirely
+   * over CDP, so the window state is whatever the user's browser already is.
+   * Reporting "headless — set REAL_A11Y_MCP_HEADFUL=1 to see a window" there
+   * is doubly wrong: there usually *is* a window, and that variable can't make
+   * one. Say so instead of guessing.
+   */
+  cdpAttached?: boolean;
 }
 
 export function buildServer(
@@ -384,7 +396,15 @@ export function buildServer(
   options: BuildServerOptions = {},
 ): McpServer {
   const authenticated = options.authenticated === true;
+  const cdpAttached = options.cdpAttached === true;
   const headful = options.headful === true;
+  // Over CDP the window state belongs to the browser we attached to, and
+  // REAL_A11Y_MCP_HEADFUL is inert — never offer it as a fix there.
+  const browserMode = cdpAttached
+    ? "attached to your running Chrome (its own window state; REAL_A11Y_MCP_HEADFUL has no effect over CDP)"
+    : headful
+      ? "headful (a window is open)"
+      : "headless (no window — set REAL_A11Y_MCP_HEADFUL=1 to see one)";
   const server = new McpServer(
     {
       name: "real-a11y",
@@ -487,7 +507,7 @@ export function buildServer(
           : "";
       return text(
         `Opened ${info.url}${emu}\nTitle: ${info.title || "(untitled)"}` +
-          `\nBrowser: ${headful ? "headful (a window is open)" : "headless (no window — set REAL_A11Y_MCP_HEADFUL=1 to see one)"}` +
+          `\nBrowser: ${browserMode}` +
           (authenticated
             ? "\n(authenticated session: storage state loaded)"
             : ""),

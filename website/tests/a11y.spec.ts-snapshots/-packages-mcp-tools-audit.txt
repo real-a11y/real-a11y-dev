@@ -757,10 +757,13 @@ main
   paragraph
     emphasis "· optional."
       code ""1""
-  paragraph "Set to to launch a visible browser instead of headless. Ignored when is set."
+  paragraph "Set to to launch a visible browser instead of headless. Ignored when is set — a CDP attach reuses the running browser, window state and all."
     code "1"
     link "REAL_A11Y_MCP_CDP"
       code "REAL_A11Y_MCP_CDP"
+  paragraph "'s reply names the mode it's actually in, so a human watching for a window knows whether to expect one. Over CDP it reports the attach rather than a launch mode, and doesn't offer this variable as a fix — it has no say there."
+    link "open_page"
+      code "open_page"
   heading "REAL_A11Y_MCP_ALLOW_FILE" (level 3)
     code "REAL_A11Y_MCP_ALLOW_FILE"
   paragraph

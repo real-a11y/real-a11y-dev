@@ -345,7 +345,9 @@ chrome --remote-debugging-port=9222 --user-data-dir=/tmp/a11y-cdp
 
 *`"1"` · optional.*
 
-Set to `1` to launch a visible browser instead of headless. Ignored when [`REAL_A11Y_MCP_CDP`](#real-a11y-mcp-cdp) is set.
+Set to `1` to launch a visible browser instead of headless. Ignored when [`REAL_A11Y_MCP_CDP`](#real-a11y-mcp-cdp) is set — a CDP attach reuses the running browser, window state and all.
+
+[`open_page`](#open_page)'s reply names the mode it's actually in, so a human watching for a window knows whether to expect one. Over CDP it reports the attach rather than a launch mode, and doesn't offer this variable as a fix — it has no say there.
 
 ### `REAL_A11Y_MCP_ALLOW_FILE`
 

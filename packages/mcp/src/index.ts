@@ -37,9 +37,13 @@ async function main(): Promise<void> {
     process.env.REAL_A11Y_MCP_ALLOWED_ORIGINS,
   );
 
+  const cdpEndpoint = process.env.REAL_A11Y_MCP_CDP;
   const headful = process.env.REAL_A11Y_MCP_HEADFUL === "1";
   const session = new BrowserSession({
-    cdpEndpoint: process.env.REAL_A11Y_MCP_CDP,
+    cdpEndpoint,
+    // Ignored when `cdpEndpoint` is set: `connectOverCDP` reuses the running
+    // browser, window state and all. `open_page` reports that case separately
+    // rather than repeating a launch flag that had no say in it.
     headless: !headful,
     // Auth material is env-configured, never a tool parameter — session tokens
     // never enter the agent's context. The constructor rejects storageState +
@@ -50,6 +54,7 @@ async function main(): Promise<void> {
   const server = buildServer(session, {
     authenticated: Boolean(storageState),
     headful,
+    cdpAttached: Boolean(cdpEndpoint),
   });
 
   // Tear down the browser exactly once on any shutdown signal. The SDK's stdio

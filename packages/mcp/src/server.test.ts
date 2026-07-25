@@ -171,6 +171,42 @@ describe("MCP server wiring", () => {
     expect(visible).not.toMatch(/REAL_A11Y_MCP_HEADFUL/);
   });
 
+  it("doesn't claim headless over a CDP attach, where the flag is inert", async () => {
+    // `BrowserSession` ignores `headless` entirely when `cdpEndpoint` is set —
+    // it reuses the running browser. So the launch flag describes a launch that
+    // never happened: the attached Chrome usually HAS a window, and setting
+    // REAL_A11Y_MCP_HEADFUL wouldn't open one. Offering it as the fix is the
+    // exact confusion this reply set out to remove.
+    const cdpClient = await connect(new FakeSession(), { cdpAttached: true });
+    const attached = textOf(
+      (await cdpClient.callTool({
+        name: "open_page",
+        arguments: { url: "https://example.com/" },
+      })) as never,
+    );
+    expect(attached).toMatch(/attached to your running Chrome/);
+    expect(attached).not.toMatch(/no window/);
+    // The variable may be NAMED — to say it does nothing — but never as a fix.
+    expect(attached).toMatch(/has no effect over CDP/);
+    expect(attached).not.toMatch(/set REAL_A11Y_MCP_HEADFUL=1/);
+  });
+
+  it("CDP wins over headful — an attach never launched anything", async () => {
+    // Both env vars can be set at once; `headful` is the one that's meaningless.
+    const cdpClient = await connect(new FakeSession(), {
+      cdpAttached: true,
+      headful: true,
+    });
+    const attached = textOf(
+      (await cdpClient.callTool({
+        name: "open_page",
+        arguments: { url: "https://example.com/" },
+      })) as never,
+    );
+    expect(attached).toMatch(/attached to your running Chrome/);
+    expect(attached).not.toMatch(/a window is open/);
+  });
+
   it("points an unauthenticated server at the auth options it does have", async () => {
     // The capability exists but is env-only by design (a token must never be a
     // tool parameter). Env-only shouldn't mean invisible: an agent that hits a
