@@ -480,6 +480,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // tab, so the trust boundary is worth asserting explicitly here.
   if (!isTrustedSender(sender, chrome.runtime.id)) return false;
 
+  // Native-mode (dogfood) messages have their own dedicated onMessage listener
+  // (native/index.ts, registered only in the DOGFOOD build). They carry no
+  // `sender.tab`, so without this guard they fall through to the catch-all
+  // fallback below — which would forward a meaningless message to the active
+  // tab or, with no active tab, race a synchronous `{ success:false }` error
+  // reply against the native handler's slower async response. Leave them to
+  // the native listener. No-op in the store build (no NATIVE_* is ever sent).
+  if (typeof message?.type === "string" && message.type.startsWith("NATIVE_")) {
+    return false;
+  }
+
   // ---- Messages from content script frames ----
   if (sender.tab?.id) {
     const tabId = sender.tab.id;
