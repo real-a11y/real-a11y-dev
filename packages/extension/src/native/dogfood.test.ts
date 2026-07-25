@@ -25,11 +25,35 @@ describe("DogfoodLog", () => {
     expect(all.at(-1)?.rawCount).toBe(599);
   });
 
-  it("clear empties the log", async () => {
+  it("clear empties the log and resets the counters", async () => {
     const log = new DogfoodLog(new FakeStorage());
     await log.record({ kind: "attach", at: 1 });
     await log.clear();
     expect(await log.all()).toHaveLength(0);
+    expect(await log.report(9999)).toContain("attach sessions: 0");
+  });
+
+  it("summary totals survive the raw-log cap", async () => {
+    // The whole point of the dogfood is the summary counts; a >CAP session must
+    // not undercount them just because the rolling raw log dropped old events.
+    const log = new DogfoodLog(new FakeStorage());
+    for (let i = 0; i < 600; i++) {
+      await log.record({ kind: "read", at: i });
+    }
+    for (let i = 0; i < 30; i++) {
+      await log.record({ kind: "attach", at: 10_000 + i });
+      await log.record({ kind: "detach", at: 20_000 + i, attachedMs: 1000 });
+    }
+
+    // Raw log is still capped…
+    expect(await log.all()).toHaveLength(500);
+
+    // …but the summary reflects the true totals across all 660 events.
+    const report = await log.report(99_999);
+    expect(report).toContain("tree reads: 600");
+    expect(report).toContain("attach sessions: 30");
+    expect(report).toContain("total time attached: 30.0s");
+    expect(report).toContain("events: 660");
   });
 
   it("report summarizes the three dogfood questions and never carries page text", async () => {

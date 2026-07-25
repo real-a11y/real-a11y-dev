@@ -46,6 +46,7 @@ export interface DogfoodEvent {
 }
 
 const KEY = "dogfood.nativeLog";
+const COUNTERS_KEY = "dogfood.nativeCounters";
 const CAP = 500; // rolling — a long session can't blow storage
 
 interface StorageArea {
@@ -53,17 +54,68 @@ interface StorageArea {
   set(items: Record<string, unknown>): Promise<void>;
 }
 
+/** Monotonic per-kind totals + accumulated attach time. Unlike the raw log,
+ *  these are never trimmed, so a >CAP dogfood still reports true totals — the
+ *  summary numbers are the whole point of the exercise. */
+interface DogfoodCounters {
+  attach: number;
+  detach: number;
+  detachUnsolicited: number;
+  reattachOk: number;
+  reattachFailed: number;
+  conflict: number;
+  read: number;
+  act: number;
+  /** Total time attached across all detach events, ms. */
+  attachedMs: number;
+}
+
+const ZERO_COUNTERS: DogfoodCounters = {
+  attach: 0,
+  detach: 0,
+  detachUnsolicited: 0,
+  reattachOk: 0,
+  reattachFailed: 0,
+  conflict: 0,
+  read: 0,
+  act: 0,
+  attachedMs: 0,
+};
+
+// Map an event kind to its counter field (camelCased; the kebab kinds differ).
+const COUNTER_FIELD: Record<DogfoodEventKind, keyof DogfoodCounters> = {
+  attach: "attach",
+  detach: "detach",
+  "detach-unsolicited": "detachUnsolicited",
+  "reattach-ok": "reattachOk",
+  "reattach-failed": "reattachFailed",
+  conflict: "conflict",
+  read: "read",
+  act: "act",
+};
+
 /** The dogfood log over any storage area (chrome.storage.local in production,
- *  a fake in tests). Append-only with a rolling cap; export flattens to text. */
+ *  a fake in tests). Append-only with a rolling cap on the raw log, plus
+ *  uncapped monotonic counters that back the summary; export flattens to text. */
 export class DogfoodLog {
   constructor(private storage: StorageArea) {}
 
   async record(event: DogfoodEvent): Promise<void> {
     const events = await this.all();
     events.push(event);
-    // Keep the most recent CAP events.
+    // Keep the most recent CAP raw events; the summary rides on the counters.
     const trimmed = events.slice(-CAP);
-    await this.storage.set({ [KEY]: trimmed });
+
+    const counters = await this.counters();
+    counters[COUNTER_FIELD[event.kind]] += 1;
+    if (
+      (event.kind === "detach" || event.kind === "detach-unsolicited") &&
+      event.attachedMs !== undefined
+    ) {
+      counters.attachedMs += event.attachedMs;
+    }
+
+    await this.storage.set({ [KEY]: trimmed, [COUNTERS_KEY]: counters });
   }
 
   async all(): Promise<DogfoodEvent[]> {
@@ -72,37 +124,43 @@ export class DogfoodLog {
     return Array.isArray(raw) ? (raw as DogfoodEvent[]) : [];
   }
 
+  async counters(): Promise<DogfoodCounters> {
+    const got = await this.storage.get(COUNTERS_KEY);
+    const raw = got[COUNTERS_KEY];
+    return {
+      ...ZERO_COUNTERS,
+      ...(raw as Partial<DogfoodCounters> | undefined),
+    };
+  }
+
   async clear(): Promise<void> {
-    await this.storage.set({ [KEY]: [] });
+    await this.storage.set({ [KEY]: [], [COUNTERS_KEY]: { ...ZERO_COUNTERS } });
   }
 
   /** A shareable summary + raw log — the artifact a dogfooder reports back. */
   async report(now: number): Promise<string> {
     const events = await this.all();
-    const count = (k: DogfoodEventKind) =>
-      events.filter((e) => e.kind === k).length;
-    const attachedMs = events
-      .filter((e) => e.kind === "detach" || e.kind === "detach-unsolicited")
-      .reduce((sum, e) => sum + (e.attachedMs ?? 0), 0);
+    const c = await this.counters();
 
     const lines = [
       "Real A11y — extension native (chrome.debugger) dogfood report",
       `generated: ${new Date(now).toISOString()}`,
-      `events: ${events.length}`,
+      `events: ${c.attach + c.detach + c.detachUnsolicited + c.reattachOk + c.reattachFailed + c.conflict + c.read + c.act}` +
+        ` (raw log shows most recent ${Math.min(events.length, CAP)})`,
       "",
       "— Banner tolerance —",
-      `  attach sessions: ${count("attach")}`,
-      `  total time attached: ${(attachedMs / 1000).toFixed(1)}s`,
+      `  attach sessions: ${c.attach}`,
+      `  total time attached: ${(c.attachedMs / 1000).toFixed(1)}s`,
       "",
       "— MV3 service-worker lifecycle —",
-      `  unsolicited detaches (SW suspended / target gone): ${count("detach-unsolicited")}`,
-      `  reattach recovered: ${count("reattach-ok")}   failed: ${count("reattach-failed")}`,
+      `  unsolicited detaches (SW suspended / target gone): ${c.detachUnsolicited}`,
+      `  reattach recovered: ${c.reattachOk}   failed: ${c.reattachFailed}`,
       "",
       "— DevTools conflict —",
-      `  attach refused (another debugger attached): ${count("conflict")}`,
+      `  attach refused (another debugger attached): ${c.conflict}`,
       "",
       "— Usage —",
-      `  tree reads: ${count("read")}   actions dispatched: ${count("act")}`,
+      `  tree reads: ${c.read}   actions dispatched: ${c.act}`,
       "",
       "— Raw log (most recent last) —",
       ...events.map(
