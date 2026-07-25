@@ -11,13 +11,13 @@ import type {
   ActionRequest,
   ExtractionResult,
   Picker,
+  TreeChange,
 } from "@real-a11y-dev/core";
 import {
-  extractDomTree,
-  extractA11yTree,
   ActionDispatcher,
   FocusManager,
   DomObserver,
+  LiveTreeExtractor,
   createPicker,
   getElementRefs,
 } from "@real-a11y-dev/core";
@@ -32,6 +32,21 @@ import {
 import { buildTreeDiffView } from "../diff.js";
 
 import { TreePanel } from "./TreePanel.js";
+
+/**
+ * Copy the result's node Map so a later incremental splice cannot rewrite
+ * baseline *membership* (delete/re-add entries on the live Map).
+ * `LiveTreeExtractor.currentResult()` returns its internal Map; without this
+ * copy a DOM-mode checkpoint would share that Map and see every splice.
+ * Node objects may still be shared — a11y mode rebuilds wrappers each refresh;
+ * DOM-mode in-place field tweaks are out of scope for the checkpoint diff.
+ */
+function snapshotResult(result: ExtractionResult): ExtractionResult {
+  return {
+    ...result,
+    nodes: new Map(result.nodes),
+  };
+}
 
 export interface TreeViewProps {
   /** The root DOM element to extract the tree from */
@@ -117,9 +132,9 @@ export function TreeView({
   const [treeData, setTreeData] = useState<ExtractionResult | null>(null);
 
   // Diff baseline. Capturing keeps a reference to the extraction as it was;
-  // every re-extraction produces a fresh result object, so the baseline is not
-  // mutated out from under us and the highlight updates live as the user
-  // interacts with the page.
+  // each flush goes through `snapshotResult` so the baseline's node Map is not
+  // the live extractor Map (incremental splices must not rewrite membership).
+  // The highlight then updates live as the user interacts with the page.
   //
   // What the baseline was captured FROM — the view mode and the root — is
   // stored alongside the extraction, and the diff only runs when both still
@@ -191,22 +206,26 @@ export function TreeView({
   const observerRef = useRef<DomObserver | null>(null);
   const pickerRef = useRef<Picker | null>(null);
 
-  // Extract tree on mount and when view mode changes.
-  // Tab mode reuses the a11y tree — no re-extraction needed.
+  // Extract on mount / root / view-mode change, then patch incrementally on
+  // DomObserver flushes. Tab mode shares the a11y extraction (same as before).
+  // Without LiveTreeExtractor every keystroke paid a full-page walk — the
+  // residual of audit finding #50 after the extension / useSemanticTree /
+  // storybook-addon wiring landed in #182.
   useEffect(() => {
-    const extract = () => {
-      const result =
-        viewMode === "dom" ? extractDomTree(root) : extractA11yTree(root);
-      setTreeData(result);
+    const liveMode = viewMode === "dom" ? "dom" : "a11y";
+    const live = new LiveTreeExtractor(root, { mode: liveMode });
+
+    const flush = (change?: TreeChange) => {
+      setTreeData(snapshotResult(live.refresh(change)));
     };
 
-    extract();
+    flush();
 
     const refs = getElementRefs();
     dispatcherRef.current = new ActionDispatcher(refs);
     focusManagerRef.current = new FocusManager(refs);
 
-    observerRef.current = new DomObserver(root, extract);
+    observerRef.current = new DomObserver(root, flush);
     observerRef.current.start();
 
     // Picker lifecycle is tied to the same effect so the same refs +
