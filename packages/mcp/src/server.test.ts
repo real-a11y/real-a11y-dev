@@ -129,6 +129,68 @@ describe("MCP server wiring", () => {
     session = new FakeSession();
   });
 
+  it("tells the agent the checkpoint store dies with the browser", async () => {
+    // The store is deliberately cleared by close_browser, and the website docs
+    // say so — but an agent only ever reads tool descriptions, so the promise
+    // that checkpoints "survive navigation" read as "survive everything".
+    const client = await connect(session);
+    const tools = (await client.listTools()).tools;
+    const byName = (n: string) => tools.find((t) => t.name === n)!;
+    expect(byName("checkpoint_findings").description).toMatch(
+      /do NOT survive close_browser/,
+    );
+    expect(byName("close_browser").description).toMatch(/DISCARDS/);
+    // …and both point at the escape hatch rather than just stating the loss.
+    expect(byName("checkpoint_findings").description).toMatch(
+      /export_checkpoint/,
+    );
+    expect(byName("close_browser").description).toMatch(/export_checkpoint/);
+  });
+
+  it("reports headless vs headful so a missing window isn't a mystery", async () => {
+    // buildServer can't infer this — the bin owns the decision — so an unset
+    // `headful` must still say "headless" rather than stay silent.
+    const headlessClient = await connect(session);
+    const headless = textOf(
+      (await headlessClient.callTool({
+        name: "open_page",
+        arguments: { url: "https://example.com/" },
+      })) as never,
+    );
+    expect(headless).toMatch(/headless/);
+    expect(headless).toMatch(/REAL_A11Y_MCP_HEADFUL/);
+
+    const headfulClient = await connect(new FakeSession(), { headful: true });
+    const visible = textOf(
+      (await headfulClient.callTool({
+        name: "open_page",
+        arguments: { url: "https://example.com/" },
+      })) as never,
+    );
+    expect(visible).toMatch(/headful/);
+    expect(visible).not.toMatch(/REAL_A11Y_MCP_HEADFUL/);
+  });
+
+  it("points an unauthenticated server at the auth options it does have", async () => {
+    // The capability exists but is env-only by design (a token must never be a
+    // tool parameter). Env-only shouldn't mean invisible: an agent that hits a
+    // logged-out page should be able to tell the user what to do.
+    const anon = (await (await connect(session)).listTools()).tools.find(
+      (t) => t.name === "open_page",
+    )!;
+    expect(anon.description).toMatch(/REAL_A11Y_MCP_STORAGE_STATE/);
+    expect(anon.description).toMatch(/REAL_A11Y_MCP_CDP/);
+
+    // An authenticated server says the opposite — don't try to log in.
+    const authed = (
+      await (
+        await connect(new FakeSession(), { authenticated: true })
+      ).listTools()
+    ).tools.find((t) => t.name === "open_page")!;
+    expect(authed.description).toMatch(/ALREADY AUTHENTICATED/);
+    expect(authed.description).not.toMatch(/REAL_A11Y_MCP_STORAGE_STATE/);
+  });
+
   it("registers the audit-first tool surface", async () => {
     const client = await connect(session);
     const names = (await client.listTools()).tools.map((t) => t.name).sort();

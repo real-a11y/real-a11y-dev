@@ -370,11 +370,21 @@ main
   paragraph "An agent calls this before any other tool, e.g. to open a signup flow's mobile layout before auditing it:"
   button "Copy Code"
   code
+  paragraph "The reply reports the resolved URL, the page title, any device/viewport emulation, and whether the browser is — headless is the default, so without that line a human watching for a window concludes the browser never opened. When no saved session is loaded, the tool description also names and , so an agent that lands on a logged-out page can tell the user how to fix it rather than trying to log in through the tools. There is deliberately no credential parameter."
+    strong "headless or headful"
+    link "REAL_A11Y_MCP_STORAGE_STATE"
+      code "REAL_A11Y_MCP_STORAGE_STATE"
+    link "REAL_A11Y_MCP_CDP"
+      code "REAL_A11Y_MCP_CDP"
   heading "close_browser" (level 3)
     code "close_browser"
   paragraph
     emphasis "Session · tears down the browser · takes no arguments."
   paragraph "Close the browser session and free resources. Over a CDP attach it closes only the tab the server created and disconnects — it never closes the user's own Chrome or their other tabs."
+  paragraph "It also — anything that needs to outlive the session first."
+    strong "discards every saved findings checkpoint"
+    link "export_checkpoint"
+      code "export_checkpoint"
   paragraph "Parameters: none."
   heading "Audit" (level 2)
   paragraph "The reason the server exists. Both tools report violations a screen reader would announce; adds the three views from the same extraction."

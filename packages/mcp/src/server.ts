@@ -370,6 +370,13 @@ export interface BuildServerOptions {
    * exposed through any tool.
    */
   authenticated?: boolean;
+  /**
+   * True when the browser was launched visibly (`REAL_A11Y_MCP_HEADFUL=1`).
+   * The decision is made in the bin, so the server can only report it if it's
+   * told — and it must report it, because "headless" is the default and a
+   * human watching for a window otherwise concludes the browser never opened.
+   */
+  headful?: boolean;
 }
 
 export function buildServer(
@@ -377,6 +384,7 @@ export function buildServer(
   options: BuildServerOptions = {},
 ): McpServer {
   const authenticated = options.authenticated === true;
+  const headful = options.headful === true;
   const server = new McpServer(
     {
       name: "real-a11y",
@@ -412,7 +420,7 @@ export function buildServer(
         "Navigate the browser to a URL and prepare it for accessibility queries. Call this before any audit/get_* tool. For dynamic sites (SPAs, consent dialogs) set waitUntil='networkidle' and/or settleMs so the page settles first. To audit the MOBILE or TABLET layout — which can differ substantially from desktop (hamburger nav, hidden content, touch-only controls) — pass a `device`." +
         (authenticated
           ? " This server was started with a saved login session, so pages open ALREADY AUTHENTICATED — do not try to log in or navigate to a login page; open the destination directly."
-          : ""),
+          : " This server has NO saved login, so a page behind auth will open as a logged-out view. Don't try to log in through the tools — there is no credential parameter, deliberately. Tell the user to restart the server with REAL_A11Y_MCP_STORAGE_STATE (a saved session from `real-a11y login`) or REAL_A11Y_MCP_CDP (attach to a Chrome they're already signed into)."),
       inputSchema: {
         url: z.string().url().describe("Absolute URL to open."),
         waitUntil: z
@@ -479,6 +487,7 @@ export function buildServer(
           : "";
       return text(
         `Opened ${info.url}${emu}\nTitle: ${info.title || "(untitled)"}` +
+          `\nBrowser: ${headful ? "headful (a window is open)" : "headless (no window — set REAL_A11Y_MCP_HEADFUL=1 to see one)"}` +
           (authenticated
             ? "\n(authenticated session: storage state loaded)"
             : ""),
@@ -490,7 +499,8 @@ export function buildServer(
     "close_browser",
     {
       title: "Close browser",
-      description: "Close the browser session and free resources.",
+      description:
+        "Close the browser session and free resources. This also DISCARDS every saved findings checkpoint — export_checkpoint anything you still need first. Only call it when you're done; the other tools reopen nothing on their own.",
       inputSchema: {},
       annotations: {
         readOnlyHint: false,
@@ -728,7 +738,7 @@ export function buildServer(
     {
       title: "Save a11y checkpoint",
       description:
-        "Snapshot the CURRENT page's accessibility findings and store them under `name`. Later call diff_findings to see which findings are new / changed / fixed — the same identity semantics (fingerprints) the CI a11y-diff uses. Checkpoints survive navigation, so you can checkpoint one deploy and diff another: save 'prod', open the preview URL, then diff_findings('prod').",
+        "Snapshot the CURRENT page's accessibility findings and store them under `name`. Later call diff_findings to see which findings are new / changed / fixed — the same identity semantics (fingerprints) the CI a11y-diff uses. Checkpoints survive navigation, so you can checkpoint one deploy and diff another: save 'prod', open the preview URL, then diff_findings('prod'). They are held in memory and do NOT survive close_browser — call export_checkpoint first if you need one to outlive the session.",
       inputSchema: {
         name: checkpointName,
         rootSelector,

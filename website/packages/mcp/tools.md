@@ -89,11 +89,15 @@ An agent calls this before any other tool, e.g. to open a signup flow's mobile l
 { "url": "https://example.com/signup", "waitUntil": "networkidle", "settleMs": 500, "device": "iPhone 13" }
 ```
 
+The reply reports the resolved URL, the page title, any device/viewport emulation, and whether the browser is **headless or headful** — headless is the default, so without that line a human watching for a window concludes the browser never opened. When no saved session is loaded, the tool description also names [`REAL_A11Y_MCP_STORAGE_STATE`](#real-a11y-mcp-storage-state) and [`REAL_A11Y_MCP_CDP`](#real-a11y-mcp-cdp), so an agent that lands on a logged-out page can tell the user how to fix it rather than trying to log in through the tools. There is deliberately no credential parameter.
+
 ### `close_browser`
 
 *Session · tears down the browser · takes no arguments.*
 
 Close the browser session and free resources. Over a CDP attach it closes only the tab the server created and disconnects — it never closes the user's own Chrome or their other tabs.
+
+It also **discards every saved findings checkpoint** — [`export_checkpoint`](#export-checkpoint) anything that needs to outlive the session first.
 
 Parameters: none.
 

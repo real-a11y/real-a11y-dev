@@ -19,7 +19,7 @@ walk. Full parameter reference: **[real-a11y.dev/packages/mcp/tools](https://rea
 | Tool | Purpose | Producer |
 | --- | --- | --- |
 | `open_page` | Navigate to a URL and ready it for queries (call first). `waitUntil` / `settleMs` settle dynamic pages; `device` audits the **mobile/tablet** layout. | — |
-| `close_browser` | Tear down the session. | — |
+| `close_browser` | Tear down the session. Also discards every saved findings checkpoint — `export_checkpoint` first if one needs to outlive the session. | — |
 
 **Audit**
 
