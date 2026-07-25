@@ -250,6 +250,7 @@ export function producerOf(
   flags: FlagValues,
   command: string,
   supportsNative: boolean,
+  seededFromConfig?: ReadonlySet<string>,
 ): Producer {
   const producer = parseProducer(flags.producer);
   if (producer === "dom") return "dom";
@@ -260,9 +261,18 @@ export function producerOf(
     );
   }
   if (typeof flags.root === "string" && flags.root !== "body") {
+    // The refusal is the same either way — native is whole-document, so it
+    // can't honor a scope that was asked for. Only the guidance differs:
+    // "drop --root" is useless advice to someone who never typed it, and a
+    // seeded value comes from `defaults.root` in the config instead.
+    const fromConfig = seededFromConfig?.has("root") === true;
     throw new CliError(
-      "--producer native audits the whole document — it can't be combined with --root.",
-      "drop --root, or use --producer dom to scope to a selector.",
+      fromConfig
+        ? `--producer native audits the whole document — it can't be combined with the \`root\` default in a11y.config.json ("${flags.root}").`
+        : "--producer native audits the whole document — it can't be combined with --root.",
+      fromConfig
+        ? "drop `root` from the config's `defaults`, pass --root body for this run, or use --producer dom to scope to a selector."
+        : "drop --root, or use --producer dom to scope to a selector.",
     );
   }
   return "native";

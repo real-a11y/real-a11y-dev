@@ -44,7 +44,7 @@ export const auditCommand: CommandFn = async (
   const rules = parseRules(flags.rules);
   const failOn = parseFailOn(flags["fail-on"], "error");
   const format = parseFormat(flags.format, ["pretty", "json"] as const);
-  const producer = producerOf(flags, "audit", true);
+  const producer = producerOf(flags, "audit", true, seededFromConfig);
   const openOptions = parseOpenOptions(flags);
   const targets = resolveAuditTargets(positionals, flags);
   // A `--root` the user actually typed. A config `defaults.root` also lands in

@@ -131,6 +131,29 @@ describe("producerOf", () => {
       /dom \| native/,
     );
   });
+
+  it("names the config default, not --root, when the scope came from config", () => {
+    // Same refusal — native can't honor a scope either way — but telling a user
+    // to "drop --root" when they never typed it sends them looking for a flag
+    // that isn't there. The value came from `defaults.root`.
+    expect(() =>
+      producerOf(
+        { producer: "native", root: "main" },
+        "audit",
+        true,
+        new Set(["root"]),
+      ),
+    ).toThrow(/a11y\.config\.json/);
+    // …and a typed --root still names the flag.
+    expect(() =>
+      producerOf(
+        { producer: "native", root: "main" },
+        "audit",
+        true,
+        new Set(),
+      ),
+    ).toThrow(/can't be combined with --root/);
+  });
 });
 
 describe("resolveAuditTargets", () => {
