@@ -14,11 +14,10 @@ export interface Target {
   /** Normalized absolute URL (paths become file: URLs). */
   url: string;
   /**
-   * Display identity, and the fingerprint page component. Config-supplied
-   * `name`s pass through as-is; a name that defaulted to the URL is redacted,
-   * so a positional target carrying userinfo or a `?token=` never reaches a
-   * report. Keep this the same value `snapshot` uses for the same page, or the
-   * two commands' fingerprints diverge (see `buildSnapshotPage`).
+   * Display identity, and the fingerprint page component. Settled once by
+   * {@link resolvePageList}, so `audit` and `snapshot` always agree on it for
+   * the same page — their fingerprints diverge otherwise (see
+   * `buildSnapshotPage`). Never re-derive it here.
    */
   name: string;
   /** True when this is a file: target the gate approved. */
@@ -88,6 +87,26 @@ function parseEnvPages(env: string): ConfigPage[] {
 }
 
 /**
+ * Settle a page's display/fingerprint name once, at the single point both
+ * `audit` and `snapshot` read their pages from.
+ *
+ * The name is the `v1` fingerprint's page component and `diff`'s join key, so
+ * the two commands MUST derive it identically or the same route fingerprints
+ * differently depending on which command produced the artifact. Normalizing
+ * here — rather than in each command's target construction — makes that true
+ * by construction.
+ *
+ * `redactUrl` is the right normalizer for both jobs: a real config `name` isn't
+ * a URL, so it passes through with only control characters sanitized, while a
+ * name that defaulted to the URL is canonicalized *and* stripped of userinfo
+ * and secret-looking query params — which otherwise rode into artifacts and
+ * baselines under `name`, beside a carefully redacted `url`.
+ */
+function withSettledName(page: ConfigPage): ConfigPage {
+  return { ...page, name: redactUrl(page.name) };
+}
+
+/**
  * The audit list in precedence order: positional URLs → `A11Y_PAGES` env → the
  * config `urls`. `source` is the url-gate source ("arg" for positionals, the
  * stricter "config" for env/config). `configPath` (absolute) is set only on the
@@ -100,16 +119,18 @@ export function resolvePageList(
 ): { pages: ConfigPage[]; source: "arg" | "config"; configPath?: string } {
   if (positionals.length > 0) {
     return {
-      pages: positionals.map((url) => ({ name: url, url })),
+      pages: positionals.map((url) => withSettledName({ name: url, url })),
       source: "arg",
     };
   }
   const env = process.env.A11Y_PAGES;
-  if (env) return { pages: parseEnvPages(env), source: "config" };
+  if (env) {
+    return { pages: parseEnvPages(env).map(withSettledName), source: "config" };
+  }
   const resolved = resolveConfig(flags);
   if (resolved) {
     return {
-      pages: resolved.config.urls,
+      pages: resolved.config.urls.map(withSettledName),
       source: "config",
       configPath: resolved.path,
     };
@@ -141,10 +162,9 @@ export function resolveAuditTargets(
       source,
       allowFile: flags["allow-file"] === true,
     });
-    // `redactUrl` passes a non-URL through untouched (only sanitizing control
-    // characters), so a real config `name` survives verbatim while a name that
-    // defaulted to the URL still gets userinfo and secret params stripped.
-    return { url, name: redactUrl(page.name), fileApproved, page };
+    // `page.name` is already settled by `resolvePageList`, so this is the exact
+    // value `snapshot` uses for the same entry.
+    return { url, name: page.name, fileApproved, page };
   });
   if (targets.some((t) => t.fileApproved)) {
     process.env.REAL_A11Y_MCP_ALLOW_FILE = "1";

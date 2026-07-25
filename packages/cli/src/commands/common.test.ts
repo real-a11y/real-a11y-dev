@@ -11,6 +11,7 @@ import {
   sessionFlags,
   producerOf,
   resolveAuditTargets,
+  resolvePageList,
   type Target,
 } from "./common.js";
 
@@ -175,7 +176,8 @@ describe("resolveAuditTargets", () => {
   it("redacts a name that defaulted to the URL", () => {
     // A bare string entry defaults `name` to the URL, so the name still has to
     // go through redaction — otherwise userinfo and secret query params would
-    // ride into the report under `name`.
+    // ride into the artifact and the baseline under `name`, right beside a
+    // carefully redacted `url`.
     const config = configFile({
       urls: ["https://user:pw@example.com/?token=abc123"],
     });
@@ -184,6 +186,39 @@ describe("resolveAuditTargets", () => {
     expect(targets[0].name).not.toContain("abc123");
     // URLSearchParams percent-encodes the brackets on the way out.
     expect(targets[0].name).toContain("REDACTED");
+  });
+
+  it("settles the name identically for audit and snapshot", () => {
+    // The name is the v1 fingerprint's page component and diff's join key, so
+    // the two commands must derive it from the same value. `snapshot` builds
+    // its targets straight off `resolvePageList`'s `page.name`, so comparing
+    // that to audit's `target.name` is the real parity check.
+    //
+    // Regression: audit re-derived the name with `redactUrl` while snapshot
+    // used it raw, so a bare entry like "http://localhost:3000" became
+    // ".../" in audit and "..." in snapshot — divergent fingerprints for one
+    // configured route.
+    const config = configFile({
+      urls: [
+        "http://localhost:3000",
+        { name: "dashboard", url: "http://localhost:3000/app" },
+      ],
+    });
+    const { pages } = resolvePageList([], { config });
+    const targets = resolveAuditTargets([], { config });
+    expect(targets.map((t) => t.name)).toEqual(pages.map((p) => p.name));
+    // …and the bare entry is canonicalized exactly once, on both sides.
+    expect(pages[0].name).toBe("http://localhost:3000/");
+    expect(pages[1].name).toBe("dashboard");
+  });
+
+  it("settles positional names too, so a secret can't reach an artifact", () => {
+    const { pages } = resolvePageList(
+      ["https://user:pw@example.com/?token=abc123"],
+      {},
+    );
+    expect(pages[0].name).not.toContain("pw");
+    expect(pages[0].name).not.toContain("abc123");
   });
 
   it("throws with guidance when nothing supplies a URL", () => {
