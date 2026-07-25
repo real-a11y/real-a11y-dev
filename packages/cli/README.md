@@ -109,8 +109,8 @@ real-a11y audit http://localhost:3000 --no-config   # ignore the config for this
 Add a **`urls`** list — bare URL strings, or `{ url, name?, rootSelector? }`
 objects — to name your project's routes once; then a bare `real-a11y audit` (or
 `snapshot`) audits them all, no URL to re-type. Each route's `name` is the diff
-join key and its `rootSelector` scopes that route's audit, unless `--root`
-overrides it for the run:
+join key and its `rootSelector` scopes that route — on `audit` an explicit
+`--root` overrides it for the run; `snapshot` always uses the route's own:
 
 ```json
 {

@@ -240,10 +240,15 @@ takes only the settling flags ([`--wait-until`](#wait-until-state),
 
 Scope extraction to a region or component instead of the whole page.
 
-[`audit`](#audit-url) and [`snapshot`](#snapshot-url) also scope each page via
-its config [`rootSelector`](/packages/cli/configuration#urls). An explicit
-`--root` is a deliberate override for that run, so it wins over the config for
-every page; omit it to let each route use its own selector.
+[`audit`](#audit-url) also scopes each page via its config
+[`rootSelector`](/packages/cli/configuration#urls). There, an explicit `--root`
+is a deliberate override for that run, so it wins over the config for every
+page; omit it to let each route use its own selector.
+
+[`snapshot`](#snapshot-url) accepts the flag but always scopes each page via its
+config `rootSelector`, so the `root` recorded in the artifact is the one the
+config asked for — a flag can't make two snapshots of the same route
+incomparable.
 
 ```sh
 real-a11y tree http://localhost:3000 --root "#app main"
