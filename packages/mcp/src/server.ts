@@ -405,6 +405,18 @@ export function buildServer(
     : headful
       ? "headful (a window is open)"
       : "headless (no window — set REAL_A11Y_MCP_HEADFUL=1 to see one)";
+  // Three auth states, not two. A CDP attach never carries a storage state
+  // (they're mutually exclusive), but `ensurePage` reuses the attached
+  // browser's own context — so its pages inherit whatever that profile is
+  // signed into. "NO saved login, expect a logged-out view" is wrong there,
+  // and "restart with REAL_A11Y_MCP_CDP" prescribes the setup already in use.
+  // It's still not a promise of auth: that browser may be signed into nothing,
+  // and only the human at that window can change it.
+  const authNote = authenticated
+    ? " This server was started with a saved login session, so pages open ALREADY AUTHENTICATED — do not try to log in or navigate to a login page; open the destination directly."
+    : cdpAttached
+      ? " This server is attached to a Chrome the user is already running, so pages open with whatever sessions THAT browser holds — a page behind auth may well open already authenticated; check what you actually got rather than assuming either way. Don't try to log in through the tools — there is no credential parameter, deliberately. If a page does come up logged out, the user has to sign in in that Chrome window; the server cannot do it for them, and no environment variable changes it."
+      : " This server has NO saved login, so a page behind auth will open as a logged-out view. Don't try to log in through the tools — there is no credential parameter, deliberately. Tell the user to restart the server with REAL_A11Y_MCP_STORAGE_STATE (a saved session from `real-a11y login`) or REAL_A11Y_MCP_CDP (attach to a Chrome they're already signed into).";
   const server = new McpServer(
     {
       name: "real-a11y",
@@ -438,9 +450,7 @@ export function buildServer(
       title: "Open page",
       description:
         "Navigate the browser to a URL and prepare it for accessibility queries. Call this before any audit/get_* tool. For dynamic sites (SPAs, consent dialogs) set waitUntil='networkidle' and/or settleMs so the page settles first. To audit the MOBILE or TABLET layout — which can differ substantially from desktop (hamburger nav, hidden content, touch-only controls) — pass a `device`." +
-        (authenticated
-          ? " This server was started with a saved login session, so pages open ALREADY AUTHENTICATED — do not try to log in or navigate to a login page; open the destination directly."
-          : " This server has NO saved login, so a page behind auth will open as a logged-out view. Don't try to log in through the tools — there is no credential parameter, deliberately. Tell the user to restart the server with REAL_A11Y_MCP_STORAGE_STATE (a saved session from `real-a11y login`) or REAL_A11Y_MCP_CDP (attach to a Chrome they're already signed into)."),
+        authNote,
       inputSchema: {
         url: z.string().url().describe("Absolute URL to open."),
         waitUntil: z
@@ -510,7 +520,9 @@ export function buildServer(
           `\nBrowser: ${browserMode}` +
           (authenticated
             ? "\n(authenticated session: storage state loaded)"
-            : ""),
+            : cdpAttached
+              ? "\n(session: whatever the attached Chrome holds — verify rather than assume)"
+              : ""),
       );
     },
   );

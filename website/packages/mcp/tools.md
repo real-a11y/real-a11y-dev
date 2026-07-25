@@ -89,7 +89,19 @@ An agent calls this before any other tool, e.g. to open a signup flow's mobile l
 { "url": "https://example.com/signup", "waitUntil": "networkidle", "settleMs": 500, "device": "iPhone 13" }
 ```
 
-The reply reports the resolved URL, the page title, any device/viewport emulation, and whether the browser is **headless or headful** — headless is the default, so without that line a human watching for a window concludes the browser never opened. When no saved session is loaded, the tool description also names [`REAL_A11Y_MCP_STORAGE_STATE`](#real-a11y-mcp-storage-state) and [`REAL_A11Y_MCP_CDP`](#real-a11y-mcp-cdp), so an agent that lands on a logged-out page can tell the user how to fix it rather than trying to log in through the tools. There is deliberately no credential parameter.
+The reply reports the resolved URL, the page title, any device/viewport emulation, and the **browser mode** — headless is the default, so without that line a human watching for a window concludes the browser never opened; over a CDP attach it reports the attach instead, since the window belongs to the browser it joined.
+
+The tool description also states the **session** state, because an agent that can't tell whether it's looking at a logged-out page will either try to log in or misreport what it audited. Three cases:
+
+| Server started with | What the agent is told |
+| --- | --- |
+| [`REAL_A11Y_MCP_STORAGE_STATE`](#real-a11y-mcp-storage-state) | Pages open **already authenticated** — don't visit a login page. |
+| [`REAL_A11Y_MCP_CDP`](#real-a11y-mcp-cdp) | Pages inherit whatever sessions **that** browser holds — check what you got. If it's logged out, only the human at that window can sign in; no variable changes it. |
+| neither | Pages behind auth open **logged out** — here are the two variables that fix it. |
+
+The CDP row is its own case rather than a flavour of "unauthenticated": an attach never carries a storage state (the two are mutually exclusive), yet it reuses the attached browser's own context, so its pages usually *are* signed in. Telling that agent to restart with `REAL_A11Y_MCP_CDP` would prescribe the setup already in force.
+
+In all three, there is deliberately **no credential parameter** — auth is operator-configured so session tokens never enter the agent's context.
 
 ### `close_browser`
 

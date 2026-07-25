@@ -227,6 +227,41 @@ describe("MCP server wiring", () => {
     expect(authed.description).not.toMatch(/REAL_A11Y_MCP_STORAGE_STATE/);
   });
 
+  it("doesn't call a CDP attach logged-out, or prescribe the attach it's using", async () => {
+    // A CDP attach never carries a storage state — they're mutually exclusive —
+    // so `authenticated` is false, and the anon branch used to fire: "NO saved
+    // login, expect a logged-out view … restart with REAL_A11Y_MCP_CDP". Over
+    // CDP that's wrong twice: `ensurePage` reuses the attached browser's own
+    // context, so pages inherit whatever it's signed into, and the prescribed
+    // fix is the setup already in force.
+    const cdp = (
+      await (
+        await connect(new FakeSession(), { cdpAttached: true })
+      ).listTools()
+    ).tools.find((t) => t.name === "open_page")!;
+    expect(cdp.description).not.toMatch(/will open as a logged-out view/);
+    expect(cdp.description).not.toMatch(/restart the server with/);
+    expect(cdp.description).toMatch(/sessions THAT browser holds/);
+    // Still not a promise of auth — that Chrome may be signed into nothing,
+    // and the honest instruction is to check what you actually got.
+    expect(cdp.description).not.toMatch(/ALREADY AUTHENTICATED/);
+    expect(cdp.description).toMatch(/sign in in that Chrome window/);
+    // The one thing that stays true in every state: no credential parameter.
+    expect(cdp.description).toMatch(/no credential parameter/);
+  });
+
+  it("a CDP open_page reply doesn't imply a known session either", async () => {
+    const client = await connect(new FakeSession(), { cdpAttached: true });
+    const reply = textOf(
+      (await client.callTool({
+        name: "open_page",
+        arguments: { url: "https://example.com/" },
+      })) as never,
+    );
+    expect(reply).toMatch(/whatever the attached Chrome holds/);
+    expect(reply).not.toMatch(/storage state loaded/);
+  });
+
   it("registers the audit-first tool surface", async () => {
     const client = await connect(session);
     const names = (await client.listTools()).tools.map((t) => t.name).sort();
