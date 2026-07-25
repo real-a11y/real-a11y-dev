@@ -149,7 +149,7 @@ Buttons that send a key to whatever element currently has focus on the host page
 Synthetic `KeyboardEvent`s are untrusted (`isTrusted: false`), so Chrome skips their default actions. The content script therefore:
 
 1. Dispatches `keydown` / `keyup` so page listeners still see the key.
-2. Applies the missing defaults itself for **Tab** / **Shift+Tab** (move focus along the document — or open-dialog — tab sequence via `.focus()`) and **Escape** (call `HTMLDialogElement.close()` on the open dialog). If a page handler calls `preventDefault()` on `keydown`, that native fallback is skipped.
+2. Applies the missing defaults itself for **Tab** / **Shift+Tab** (move focus along the same `getTabSequence` order as the panel's Tab Sequence view, scoped to an open dialog when focus is inside one) and **Escape** (call `HTMLDialogElement.close()` on the open dialog). If a page handler calls `preventDefault()` on `keydown`, that native fallback is skipped.
 
 **Common flow:** navigate to a combobox in the tree → press Enter (in the tree) to activate it → the combobox opens on the page → use the keyboard bar's `↓`/`↑` to move through options → `Enter` to select → `Esc` to dismiss.
 

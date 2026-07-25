@@ -7,7 +7,16 @@
  * behaviors, so after dispatching the synthetic events for page listeners
  * we apply the missing defaults ourselves — unless a page handler called
  * `preventDefault()` on keydown.
+ *
+ * Tab order comes from core's `getTabSequence` (same policy as the panel's
+ * Tab Sequence view), resolved to live elements via the shared ElementRefMap.
  */
+
+import {
+  getTabSequence,
+  type ElementRefMap,
+  type ExtractionResult,
+} from "@real-a11y-dev/core";
 
 /** Payload shape mirrored from `PanelToContent` `SEND_KEY`. */
 export type SendKeyPayload = {
@@ -22,19 +31,26 @@ export type SendKeyPayload = {
   };
 };
 
-const TABBABLE_SELECTOR = [
-  "a[href]",
-  "area[href]",
-  "button:not([disabled])",
-  'input:not([disabled]):not([type="hidden"])',
-  "select:not([disabled])",
-  "textarea:not([disabled])",
-  "summary",
-  '[contenteditable=""]',
-  '[contenteditable="true"]',
-  '[contenteditable="plaintext-only"]',
-  "[tabindex]",
-].join(",");
+export type SendKeyOptions = {
+  /**
+   * Resolve the page's current tab sequence as live focusable elements.
+   * Required for Tab / Shift+Tab; ignored for other keys.
+   */
+  resolveTabSequence: () => HTMLElement[];
+};
+
+/**
+ * Map a core tab sequence onto live HTMLElements via the extractor's refs.
+ * Shared by the content script and tests so Tab uses one ordering policy.
+ */
+export function elementsFromTabSequence(
+  result: ExtractionResult,
+  refs: ElementRefMap,
+): HTMLElement[] {
+  return getTabSequence(result)
+    .map((n) => refs.get(n.id))
+    .filter((el): el is HTMLElement => el instanceof HTMLElement);
+}
 
 function eventInit(payload: SendKeyPayload): KeyboardEventInit {
   return {
@@ -57,74 +73,7 @@ function ownerDocument(target: EventTarget): Document {
 }
 
 /**
- * Is `el` (or an ancestor) hidden from sequential focus navigation?
- * Attribute / inline-style checks only — jsdom has no layout, and the
- * content script's tab walk does not need computed styles for the common
- * `hidden` / `aria-hidden` / `display:none` cases.
- */
-function isHiddenFromTab(el: Element): boolean {
-  let node: Element | null = el;
-  while (node && node !== node.ownerDocument?.documentElement) {
-    if (node.hasAttribute("hidden")) return true;
-    if (node.getAttribute("aria-hidden") === "true") return true;
-    if (node instanceof HTMLElement && "inert" in node && node.inert) {
-      return true;
-    }
-    if (node instanceof HTMLElement) {
-      const { display, visibility } = node.style;
-      if (display === "none" || visibility === "hidden") return true;
-    }
-    node = node.parentElement;
-  }
-  return false;
-}
-
-/**
- * Document (or dialog) tab sequence: positive `tabindex` ascending, then
- * naturally focusable / `tabindex=0` in DOM order. Excludes `tabindex=-1`,
- * disabled controls, and hidden subtrees. Approximation of sequential focus
- * navigation — good enough for the panel keyboard bar.
- */
-export function collectTabSequence(root: ParentNode): HTMLElement[] {
-  const candidates = Array.from(
-    root.querySelectorAll(TABBABLE_SELECTOR),
-  ) as HTMLElement[];
-
-  const entries: Array<{ el: HTMLElement; tabindex: number; order: number }> =
-    [];
-  let order = 0;
-
-  for (const el of candidates) {
-    const i = order++;
-    if (isHiddenFromTab(el)) continue;
-    if ((el as HTMLInputElement).disabled) continue;
-
-    const raw = el.getAttribute("tabindex");
-    let tabindex = 0;
-    if (raw !== null) {
-      const n = Number(raw);
-      if (!Number.isFinite(n)) continue;
-      tabindex = n;
-    }
-    if (tabindex < 0) continue;
-
-    entries.push({ el, tabindex, order: i });
-  }
-
-  const positives = entries
-    .filter((e) => e.tabindex > 0)
-    .sort((a, b) =>
-      a.tabindex === b.tabindex ? a.order - b.order : a.tabindex - b.tabindex,
-    );
-  const zeros = entries
-    .filter((e) => e.tabindex === 0)
-    .sort((a, b) => a.order - b.order);
-
-  return [...positives, ...zeros].map((e) => e.el);
-}
-
-/**
- * Move focus to the next (or previous) tabbable in `doc`. When focus is
+ * Move focus to the next (or previous) element in `seq`. When focus is
  * inside an open `<dialog>`, the sequence is scoped to that dialog (focus
  * trap). Wraps at the ends so the keyboard bar stays useful on a single
  * page without leaving for browser chrome.
@@ -132,18 +81,18 @@ export function collectTabSequence(root: ParentNode): HTMLElement[] {
 export function moveFocusAlongTabSequence(
   doc: Document,
   direction: 1 | -1,
+  seq: HTMLElement[],
 ): void {
   const active = doc.activeElement;
   const dialog =
     active instanceof Element ? active.closest("dialog[open]") : null;
-  const root: ParentNode = dialog ?? doc;
-  const seq = collectTabSequence(root);
-  if (seq.length === 0) return;
+  const scoped = dialog ? seq.filter((el) => dialog.contains(el)) : seq;
+  if (scoped.length === 0) return;
 
-  let idx = active instanceof HTMLElement ? seq.indexOf(active) : -1;
+  let idx = active instanceof HTMLElement ? scoped.indexOf(active) : -1;
   if (idx === -1 && active instanceof Element) {
-    for (let i = 0; i < seq.length; i++) {
-      if (seq[i].contains(active)) {
+    for (let i = 0; i < scoped.length; i++) {
+      if (scoped[i].contains(active)) {
         idx = i;
         break;
       }
@@ -154,10 +103,10 @@ export function moveFocusAlongTabSequence(
     idx === -1
       ? direction === 1
         ? 0
-        : seq.length - 1
-      : (idx + direction + seq.length) % seq.length;
+        : scoped.length - 1
+      : (idx + direction + scoped.length) % scoped.length;
 
-  seq[nextIdx].focus();
+  scoped[nextIdx].focus();
 }
 
 /**
@@ -189,9 +138,17 @@ export function closeOpenDialog(doc: Document): void {
   if (last) closeDialog(last);
 }
 
-function applyNativeDefault(payload: SendKeyPayload, doc: Document): void {
+function applyNativeDefault(
+  payload: SendKeyPayload,
+  doc: Document,
+  resolveTabSequence: () => HTMLElement[],
+): void {
   if (payload.key === "Tab") {
-    moveFocusAlongTabSequence(doc, payload.modifiers?.shift ? -1 : 1);
+    moveFocusAlongTabSequence(
+      doc,
+      payload.modifiers?.shift ? -1 : 1,
+      resolveTabSequence(),
+    );
     return;
   }
   if (payload.key === "Escape") {
@@ -204,11 +161,19 @@ function applyNativeDefault(payload: SendKeyPayload, doc: Document): void {
  * Escape defaults Chrome skips for untrusted events. If a page listener
  * calls `preventDefault()` on keydown, the native fallback is skipped.
  */
-export function sendKey(target: EventTarget, payload: SendKeyPayload): void {
+export function sendKey(
+  target: EventTarget,
+  payload: SendKeyPayload,
+  options: SendKeyOptions,
+): void {
   const init = eventInit(payload);
   const allowed = target.dispatchEvent(new KeyboardEvent("keydown", init));
   if (allowed) {
-    applyNativeDefault(payload, ownerDocument(target));
+    applyNativeDefault(
+      payload,
+      ownerDocument(target),
+      options.resolveTabSequence,
+    );
   }
   target.dispatchEvent(new KeyboardEvent("keyup", init));
 }

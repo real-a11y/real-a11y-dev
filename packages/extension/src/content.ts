@@ -12,7 +12,7 @@ import type { TreeViewMode, TreeChange } from "@real-a11y-dev/core";
 
 import { computeFieldState } from "./field-state.js";
 import { isTrustedSender, planHighlight } from "./routing.js";
-import { sendKey } from "./send-key.js";
+import { elementsFromTabSequence, sendKey } from "./send-key.js";
 import type { PanelToContent } from "./types.js";
 
 const isSubFrame = window !== window.top;
@@ -292,9 +292,14 @@ chrome.runtime.onMessage.addListener(
         // Synthetic KeyboardEvents are untrusted — Chrome skips their
         // default actions (Tab does not move focus; Escape does not close
         // <dialog>). sendKey dispatches the events for page listeners and
-        // applies those defaults itself unless preventDefault ran.
+        // applies those defaults itself unless preventDefault ran. Tab
+        // order reuses core getTabSequence via the live extractor — same
+        // policy as the panel's Tab Sequence view.
         const target = document.activeElement || document.body;
-        sendKey(target, message.payload);
+        sendKey(target, message.payload, {
+          resolveTabSequence: () =>
+            elementsFromTabSequence(getLiveExtractor().extract(), elementRefs),
+        });
         sendResponse({ success: true });
         setTimeout(() => sendTree(), 200);
         break;
