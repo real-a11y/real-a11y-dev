@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { mergeDefaults, resolveConfig } from "../config.js";
 import { CliError } from "../exit.js";
 
 import {
@@ -225,5 +226,44 @@ describe("resolveAuditTargets", () => {
     expect(() => resolveAuditTargets([], { "no-config": true })).toThrow(
       CliError,
     );
+  });
+});
+
+describe("mergeDefaults seeded-flag reporting", () => {
+  function configAt(config: unknown): { dir: string; file: string } {
+    const dir = mkdtempSync(join(tmpdir(), "real-a11y-seed-"));
+    const file = join(dir, "a11y.config.json");
+    writeFileSync(file, JSON.stringify(config));
+    return { dir, file };
+  }
+
+  it("reports which flags came from config defaults, not the command line", () => {
+    // Regression: `audit` treats a typed `--root` as "override this route's
+    // rootSelector for this run". A config `defaults.root` also lands in
+    // `flags.root`, so without this signal a project-wide default silently beat
+    // every per-URL `rootSelector` — and skipped the native guard, which keys
+    // on the same test.
+    const { file } = configAt({
+      defaults: { root: "#app" },
+      urls: ["https://example.com/"],
+    });
+    const resolved = resolveConfig({ config: file })!;
+    const values: Record<string, unknown> = {};
+    const seeded = mergeDefaults(values, resolved.config, new Set(["root"]));
+    expect(values.root).toBe("#app");
+    expect(seeded.has("root")).toBe(true);
+  });
+
+  it("does not report a flag the user typed", () => {
+    const { file } = configAt({
+      defaults: { root: "#app" },
+      urls: ["https://example.com/"],
+    });
+    const resolved = resolveConfig({ config: file })!;
+    // A value already present is user-typed; `mergeDefaults` must leave it be.
+    const values: Record<string, unknown> = { root: "main" };
+    const seeded = mergeDefaults(values, resolved.config, new Set(["root"]));
+    expect(values.root).toBe("main");
+    expect(seeded.has("root")).toBe(false);
   });
 });

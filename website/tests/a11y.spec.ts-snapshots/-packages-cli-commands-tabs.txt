@@ -178,6 +178,7 @@ link "--settle"
 link "--timeout"
 link "audit"
 link "rootSelector"
+link "defaults.root"
 link "snapshot"
 button "Copy Code"
 generic

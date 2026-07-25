@@ -241,9 +241,11 @@ takes only the settling flags ([`--wait-until`](#wait-until-state),
 Scope extraction to a region or component instead of the whole page.
 
 [`audit`](#audit-url) also scopes each page via its config
-[`rootSelector`](/packages/cli/configuration#urls). There, an explicit `--root`
+[`rootSelector`](/packages/cli/configuration#urls). There, a `--root` you type
 is a deliberate override for that run, so it wins over the config for every
-page; omit it to let each route use its own selector.
+page; omit it to let each route use its own selector. A project-wide
+[`defaults.root`](/packages/cli/configuration#defaults) is only a fallback for
+routes that don't scope themselves — it never overrides one that does.
 
 [`snapshot`](#snapshot-url) accepts the flag but always scopes each page via its
 config `rootSelector`, so the `root` recorded in the artifact is the one the

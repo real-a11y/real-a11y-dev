@@ -35,7 +35,11 @@ import {
   producerOf,
 } from "./common.js";
 
-export const auditCommand: CommandFn = async (positionals, flags) => {
+export const auditCommand: CommandFn = async (
+  positionals,
+  flags,
+  seededFromConfig,
+) => {
   // Everything user-typed validates before a browser launches.
   const rules = parseRules(flags.rules);
   const failOn = parseFailOn(flags["fail-on"], "error");
@@ -43,11 +47,21 @@ export const auditCommand: CommandFn = async (positionals, flags) => {
   const producer = producerOf(flags, "audit", true);
   const openOptions = parseOpenOptions(flags);
   const targets = resolveAuditTargets(positionals, flags);
+  // A `--root` the user actually typed. A config `defaults.root` also lands in
+  // `flags.root` (run.ts seeds unset flags from `defaults`), and the two are
+  // indistinguishable there — but only the typed one means "override whatever
+  // this route configured, just for this run". Treating a project-wide default
+  // as an override would let it silently beat every per-URL `rootSelector`.
+  const typedRoot =
+    typeof flags.root === "string" && !seededFromConfig?.has("root")
+      ? flags.root
+      : undefined;
   // `producerOf` already refuses `--producer native` alongside `--root`, but it
   // only sees flags. Now that a config `rootSelector` scopes the audit too, the
   // same combination has to fail here rather than silently auditing the whole
   // document and reporting findings from outside the configured subtree.
-  if (producer === "native" && typeof flags.root !== "string") {
+  // Keyed on `typedRoot`, so a `defaults.root` can't skip the check either.
+  if (producer === "native" && typedRoot === undefined) {
     const scoped = targets.find((t) => t.page.rootSelector !== undefined);
     if (scoped) {
       throw new CliError(
@@ -74,14 +88,11 @@ export const auditCommand: CommandFn = async (positionals, flags) => {
           target.fileApproved,
           authed,
         );
-        // An explicit `--root` is a deliberate override for this run, so it
-        // wins over the config's per-URL `rootSelector`; otherwise the config
-        // scopes the audit the way the docs promise. `rootOf` can't make this
-        // call for us — it can't tell an omitted flag from `--root body`.
-        const root =
-          typeof flags.root === "string"
-            ? flags.root
-            : (target.page.rootSelector ?? rootOf(flags));
+        // Precedence: a typed `--root` (a deliberate override for this run) >
+        // the route's own `rootSelector` > a project-wide `defaults.root` >
+        // `body`. `rootOf` supplies the last two, since a seeded `flags.root`
+        // is exactly the project-wide default.
+        const root = typedRoot ?? target.page.rootSelector ?? rootOf(flags);
         const snapshot = await snapshotPage(
           session,
           root,
@@ -125,7 +136,9 @@ export const auditCommand: CommandFn = async (positionals, flags) => {
   }
   if (format === "pretty" && !quiet && process.stdout.isTTY) {
     process.stderr.write(
-      `tip: run 'real-a11y inspect ${targets[0].name}' to see the semantic tree\n`,
+      // The URL, not `name` — `inspect` is positional-URL-only, and a config
+      // entry's name is a label ("Login"), which `normalizeTarget` rejects.
+      `tip: run 'real-a11y inspect ${redactUrl(targets[0].url)}' to see the semantic tree\n`,
     );
   }
 

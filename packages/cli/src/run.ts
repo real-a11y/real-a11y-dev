@@ -89,15 +89,16 @@ export async function run(argv: string[]): Promise<number> {
     // validated by the command's own parser downstream. Scoped to this
     // command's declared flags so a default can't reach a flag it would reject.
     const resolved = resolveConfig(values);
+    let seededFromConfig: ReadonlySet<string> = new Set();
     if (resolved) {
-      mergeDefaults(
+      seededFromConfig = mergeDefaults(
         values,
         resolved.config,
         new Set(Object.keys(command.options)),
       );
     }
     const fn = await command.load();
-    return await fn(positionals, values as FlagValues);
+    return await fn(positionals, values as FlagValues, seededFromConfig);
   } catch (err) {
     if (err instanceof CliError || err instanceof SnapshotFormatError) {
       process.stderr.write(`${formatCliError(err)}\n`);

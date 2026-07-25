@@ -397,7 +397,7 @@ export function mergeDefaults(
   values: Record<string, unknown>,
   config: A11yConfig,
   declared: ReadonlySet<string>,
-): void {
+): ReadonlySet<string> {
   // Flags the user explicitly passed suppress the config defaults they exclude.
   const suppressed = new Set<string>();
   for (const [trigger, excluded] of Object.entries(EXCLUDED_BY)) {
@@ -408,14 +408,21 @@ export function mergeDefaults(
   const seedable = (flag: string): boolean =>
     declared.has(flag) && !suppressed.has(flag) && values[flag] === undefined;
 
+  // Which flags this call filled in. A seeded value is indistinguishable from a
+  // typed one once it lands in `values`, but the difference matters wherever a
+  // flag means "the user deliberately overrode something for this run" — see
+  // `audit`'s `--root` vs. a per-URL `rootSelector`.
+  const seeded = new Set<string>();
   const d = config.defaults as Record<string, unknown>;
   for (const key of Object.keys(d)) {
     const val = d[key];
     if (val === undefined) continue;
     // `annotate` is the positive form of the negated flag `--no-annotate`.
     if (key === "annotate") {
-      if (val === false && seedable("no-annotate"))
+      if (val === false && seedable("no-annotate")) {
         values["no-annotate"] = true;
+        seeded.add("no-annotate");
+      }
       continue;
     }
     const flag = KEY_TO_FLAG[key] ?? key;
@@ -426,5 +433,7 @@ export function mergeDefaults(
     else if (PATH_KEYS.has(key) && typeof val === "string") {
       values[flag] = resolve(config.dir, val);
     } else values[flag] = val as string | boolean;
+    seeded.add(flag);
   }
+  return seeded;
 }
