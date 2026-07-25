@@ -1,4 +1,10 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -189,6 +195,40 @@ describe("runInstall — idempotence", () => {
     );
     expect(code).toBe(EXIT.OK);
     expect(deps.install).toHaveBeenCalledTimes(1);
+  });
+
+  it("--force actually replaces an existing build rather than silently reusing it", async () => {
+    // @puppeteer/browsers' real install() returns an existing, executable-
+    // containing build directory unchanged — even if that binary is
+    // corrupted — so this fake mirrors that: it short-circuits whenever the
+    // buildId is still tracked as installed, and only writes a fresh binary
+    // once it isn't (i.e. after a real uninstall cleared it).
+    const { deps, binFor, installedIds } = makeFakeDeps();
+    await runInstall(
+      { force: false, quiet: true, verbose: false },
+      { deps, env: envFor(dir), os: LINUX_OS },
+    );
+
+    writeFileSync(binFor(DEFAULT_BUILD_ID), "CORRUPTED");
+    const realInstall = deps.install;
+    deps.install = vi.fn(async (opts) => {
+      if (installedIds.has(opts.buildId)) {
+        return { executablePath: binFor(opts.buildId) };
+      }
+      return realInstall(opts);
+    });
+
+    const code = await runInstall(
+      { force: true, quiet: true, verbose: false },
+      { deps, env: envFor(dir), os: LINUX_OS },
+    );
+    expect(code).toBe(EXIT.OK);
+    expect(deps.uninstall).toHaveBeenCalledWith(
+      expect.objectContaining({ buildId: DEFAULT_BUILD_ID }),
+    );
+    expect(readFileSync(binFor(DEFAULT_BUILD_ID), "utf8")).not.toBe(
+      "CORRUPTED",
+    );
   });
 });
 

@@ -293,6 +293,16 @@ export async function runInstall(
     return reportAlreadyInstalled(existing, req.quiet);
   }
 
+  if (req.force) {
+    // Make --force a genuine overwrite. @puppeteer/browsers' install() treats
+    // an existing, executable-containing build directory as already done and
+    // returns it unchanged — even if that binary is corrupted — so calling
+    // install() alone would silently no-op on exactly the case --force is
+    // documented to fix. Clear the target build first so a forced reinstall
+    // always re-downloads. Safe on a directory that doesn't exist yet.
+    await deps.uninstall({ buildId, cacheDir, platform }).catch(() => {});
+  }
+
   progress(`downloading Chrome ${buildId} (${platform})…`, {
     quiet: req.quiet,
   });
