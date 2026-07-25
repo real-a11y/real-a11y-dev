@@ -177,11 +177,14 @@ main
       strong
         code "name"
       code "url"
-    listitem "— scope extraction to a region for this route (per-page ); the semantic tree is taken from the matching element down."
+    listitem "— scope extraction to a region for this route (per-page ); the semantic tree is taken from the matching element down. Honored by both and ; an explicit overrides it for the whole run."
       strong
         code "rootSelector"
       link "root"
         code "root"
+      code "audit"
+      code "snapshot"
+      code "--root"
     listitem "— repo-relative file the route's findings anchor to in . GitHub code scanning only displays results tied to a file path; without it, results anchor to the config file."
       strong
         code "sourcePath"
@@ -250,9 +253,10 @@ main
     code "audit"
     code "inspect"
     code "snapshot"
-  paragraph "Scope extraction to a CSS selector — audit a single region or component instead of the whole page. For per-route scoping, prefer ."
+  paragraph "Scope extraction to a CSS selector — audit a single region or component instead of the whole page. For per-route scoping, prefer ; passing explicitly overrides every route's own selector for that run."
     link "urls[].rootSelector"
       code "urls[].rootSelector"
+    code "--root"
   heading "device" (level 3)
     code "device"
   paragraph "— flag · default: unset · applies to , , the view commands,"

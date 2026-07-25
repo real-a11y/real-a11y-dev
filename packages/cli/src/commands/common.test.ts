@@ -10,6 +10,7 @@ import {
   isAuthenticated,
   sessionFlags,
   producerOf,
+  resolveAuditTargets,
   type Target,
 } from "./common.js";
 
@@ -126,6 +127,68 @@ describe("producerOf", () => {
   it("rejects an invalid --producer value regardless of support", () => {
     expect(() => producerOf({ producer: "webkit" }, "audit", true)).toThrow(
       /dom \| native/,
+    );
+  });
+});
+
+describe("resolveAuditTargets", () => {
+  /** Write an a11y.config.json into a temp dir and return its path. */
+  function configFile(config: unknown): string {
+    const dir = mkdtempSync(join(tmpdir(), "real-a11y-cfg-"));
+    const file = join(dir, "a11y.config.json");
+    writeFileSync(file, JSON.stringify(config));
+    return file;
+  }
+
+  it("carries the per-URL rootSelector through to the target", () => {
+    // Regression: audit collapsed config pages to {url, name, fileApproved},
+    // so `rootSelector` never reached snapshotPage and every page was audited
+    // at `body` — contradicting the documented "rootSelector scopes the audit".
+    const config = configFile({
+      urls: [
+        { name: "example", url: "https://example.com/" },
+        {
+          name: "iana-learn",
+          url: "https://www.iana.org/domains/reserved",
+          rootSelector: "main",
+        },
+      ],
+    });
+    const targets = resolveAuditTargets([], { config });
+    expect(targets).toHaveLength(2);
+    expect(targets[0].page.rootSelector).toBeUndefined();
+    expect(targets[1].page.rootSelector).toBe("main");
+  });
+
+  it("keeps the config name so audit and snapshot fingerprint alike", () => {
+    // The page name is part of the v1 fingerprint tuple. Overwriting it with
+    // the redacted URL made audit's fingerprints unable to match snapshot's
+    // (or the MCP's) for the very same config entry.
+    const config = configFile({
+      urls: [{ name: "example", url: "https://example.com/" }],
+    });
+    const targets = resolveAuditTargets([], { config });
+    expect(targets[0].name).toBe("example");
+    expect(targets[0].url).toBe("https://example.com/");
+  });
+
+  it("redacts a name that defaulted to the URL", () => {
+    // A bare string entry defaults `name` to the URL, so the name still has to
+    // go through redaction — otherwise userinfo and secret query params would
+    // ride into the report under `name`.
+    const config = configFile({
+      urls: ["https://user:pw@example.com/?token=abc123"],
+    });
+    const targets = resolveAuditTargets([], { config });
+    expect(targets[0].name).not.toContain("pw");
+    expect(targets[0].name).not.toContain("abc123");
+    // URLSearchParams percent-encodes the brackets on the way out.
+    expect(targets[0].name).toContain("REDACTED");
+  });
+
+  it("throws with guidance when nothing supplies a URL", () => {
+    expect(() => resolveAuditTargets([], { "no-config": true })).toThrow(
+      CliError,
     );
   });
 });

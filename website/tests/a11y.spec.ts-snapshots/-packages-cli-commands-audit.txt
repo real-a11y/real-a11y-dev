@@ -470,10 +470,15 @@ main
       strong "Default:"
       code "body"
       strong "Commands:"
-  paragraph "Scope extraction to a region or component instead of the whole page. accepts the flag but scopes each page via its config instead."
+  paragraph "Scope extraction to a region or component instead of the whole page."
+  paragraph "and also scope each page via its config . An explicit is a deliberate override for that run, so it wins over the config for every page; omit it to let each route use its own selector."
+    link "audit"
+      code "audit"
     link "snapshot"
       code "snapshot"
-    code "rootSelector"
+    link "rootSelector"
+      code "rootSelector"
+    code "--root"
   button "Copy Code"
   code
   heading "--producer <kind>" (level 3)

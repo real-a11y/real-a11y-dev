@@ -239,8 +239,11 @@ takes only the settling flags ([`--wait-until`](#wait-until-state),
   tree, outline, tabs, list
 
 Scope extraction to a region or component instead of the whole page.
-[`snapshot`](#snapshot-url) accepts the flag but scopes each page via its config
-`rootSelector` instead.
+
+[`audit`](#audit-url) and [`snapshot`](#snapshot-url) also scope each page via
+its config [`rootSelector`](/packages/cli/configuration#urls). An explicit
+`--root` is a deliberate override for that run, so it wins over the config for
+every page; omit it to let each route use its own selector.
 
 ```sh
 real-a11y tree http://localhost:3000 --root "#app main"

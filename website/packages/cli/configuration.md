@@ -49,7 +49,7 @@ Entry fields:
 
 - **`url`** — the target. Any URL the browser can reach: a public site, a local dev server, staging, or a built file path.
 - **`name`** — the diff join key and display label. This is what pairs a route across two snapshots, so keep it stable when a URL changes. Defaults to `url`.
-- **`rootSelector`** — scope extraction to a region for this route (per-page [`root`](#root)); the semantic tree is taken from the matching element down.
+- **`rootSelector`** — scope extraction to a region for this route (per-page [`root`](#root)); the semantic tree is taken from the matching element down. Honored by both `audit` and `snapshot`; an explicit `--root` overrides it for the whole run.
 - **`sourcePath`** — repo-relative file the route's findings anchor to in [SARIF](/packages/cli#sarif-junit-jsonl). GitHub code scanning only displays results tied to a file path; without it, results anchor to the config file.
 
 ```json
@@ -96,7 +96,7 @@ Two path-valued keys — [`storageState`](#storagestate) and [`baseline`](#basel
 
 **`root: string`** — flag `--root` · default `body` · applies to `audit`, `inspect`, the view commands, `snapshot`
 
-Scope extraction to a CSS selector — audit a single region or component instead of the whole page. For per-route scoping, prefer [`urls[].rootSelector`](#urls).
+Scope extraction to a CSS selector — audit a single region or component instead of the whole page. For per-route scoping, prefer [`urls[].rootSelector`](#urls); passing `--root` explicitly overrides every route's own selector for that run.
 
 ### `device`
 

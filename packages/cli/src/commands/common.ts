@@ -13,7 +13,13 @@ import { assertAllowedUrl, normalizeTarget } from "../url-gate.js";
 export interface Target {
   /** Normalized absolute URL (paths become file: URLs). */
   url: string;
-  /** Display identity: the redacted URL. Also the fingerprint page component. */
+  /**
+   * Display identity, and the fingerprint page component. Config-supplied
+   * `name`s pass through as-is; a name that defaulted to the URL is redacted,
+   * so a positional target carrying userinfo or a `?token=` never reaches a
+   * report. Keep this the same value `snapshot` uses for the same page, or the
+   * two commands' fingerprints diverge (see `buildSnapshotPage`).
+   */
   name: string;
   /** True when this is a file: target the gate approved. */
   fileApproved: boolean;
@@ -113,11 +119,15 @@ export function resolvePageList(
 
 /** `audit`'s targets: positional URLs, else the project's `urls` list (env or
  *  config) — so a bare `real-a11y audit` in a configured repo audits every
- *  route without re-typing a URL. Single-view commands stay positional-only. */
+ *  route without re-typing a URL. Single-view commands stay positional-only.
+ *
+ *  The originating {@link ConfigPage} rides along on each target so `audit` can
+ *  honor the per-URL `rootSelector` the config documents, exactly as `snapshot`
+ *  does. */
 export function resolveAuditTargets(
   positionals: readonly string[],
   flags: FlagValues,
-): Target[] {
+): (Target & { page: ConfigPage })[] {
   const { pages, source } = resolvePageList(positionals, flags);
   if (pages.length === 0) {
     throw new CliError(
@@ -125,13 +135,16 @@ export function resolveAuditTargets(
       "pass a URL (real-a11y audit <url>) or add `urls` to a11y.config.json",
     );
   }
-  const targets = pages.map((p) => {
-    const url = normalizeTarget(p.url);
+  const targets = pages.map((page) => {
+    const url = normalizeTarget(page.url);
     const fileApproved = assertAllowedUrl(url, {
       source,
       allowFile: flags["allow-file"] === true,
     });
-    return { url, name: redactUrl(url), fileApproved };
+    // `redactUrl` passes a non-URL through untouched (only sanitizing control
+    // characters), so a real config `name` survives verbatim while a name that
+    // defaulted to the URL still gets userinfo and secret params stripped.
+    return { url, name: redactUrl(page.name), fileApproved, page };
   });
   if (targets.some((t) => t.fileApproved)) {
     process.env.REAL_A11Y_MCP_ALLOW_FILE = "1";

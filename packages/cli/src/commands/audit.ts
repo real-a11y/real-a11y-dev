@@ -43,6 +43,19 @@ export const auditCommand: CommandFn = async (positionals, flags) => {
   const producer = producerOf(flags, "audit", true);
   const openOptions = parseOpenOptions(flags);
   const targets = resolveAuditTargets(positionals, flags);
+  // `producerOf` already refuses `--producer native` alongside `--root`, but it
+  // only sees flags. Now that a config `rootSelector` scopes the audit too, the
+  // same combination has to fail here rather than silently auditing the whole
+  // document and reporting findings from outside the configured subtree.
+  if (producer === "native" && typeof flags.root !== "string") {
+    const scoped = targets.find((t) => t.page.rootSelector !== undefined);
+    if (scoped) {
+      throw new CliError(
+        `--producer native audits the whole document — it can't be combined with the rootSelector on "${scoped.name}".`,
+        "drop rootSelector from that URL entry, or use --producer dom (the default) to scope to a selector.",
+      );
+    }
+  }
   const output = outputOf(flags);
   const quiet = flags.quiet === true;
   const authed = isAuthenticated(flags);
@@ -61,9 +74,17 @@ export const auditCommand: CommandFn = async (positionals, flags) => {
           target.fileApproved,
           authed,
         );
+        // An explicit `--root` is a deliberate override for this run, so it
+        // wins over the config's per-URL `rootSelector`; otherwise the config
+        // scopes the audit the way the docs promise. `rootOf` can't make this
+        // call for us — it can't tell an omitted flag from `--root body`.
+        const root =
+          typeof flags.root === "string"
+            ? flags.root
+            : (target.page.rootSelector ?? rootOf(flags));
         const snapshot = await snapshotPage(
           session,
-          rootOf(flags),
+          root,
           { ...(rules ? { rules } : {}) },
           producer,
         );
