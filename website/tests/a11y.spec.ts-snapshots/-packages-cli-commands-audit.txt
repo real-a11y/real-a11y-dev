@@ -103,8 +103,10 @@ navigation "On this page"
       link "Command-specific"
 main
   heading "Commands & flags" (level 1)
-  paragraph "Every invocation is . Nine commands ship — , , , , , , , , and . Run for a command's own flags."
+  paragraph "Every invocation is . Ten commands ship — , , , , , , , , , and . Run for a command's own flags."
     code "real-a11y <command> [url...] [flags]"
+    link "install"
+      code "install"
     link "audit"
       code "audit"
     link "inspect"
@@ -193,6 +195,35 @@ main
   paragraph "Each command below lists the flag it accepts. Shared flags are documented once, in — the per-command list only links to them, plus any command-specific flags."
     strong "groups"
     link "Flags"
+  heading "install" (level 3)
+    code "install"
+  paragraph "Download — Google's versioned, non-auto-updating Chrome build — into Real A11y's own cache and use it for every launched session from then on. A setup command: it takes no URL and doesn't drive a browser itself. Idempotent — a bare re-run does zero network work and exits instantly when the cached build is still present. Prints the resolved executable path on ; progress goes to stderr."
+    link "Chrome for Testing"
+    code "0"
+    strong "stdout"
+  button "Copy Code"
+  code
+  paragraph "Playwright (the npm package) is still the driver — this replaces only the browser download. Every browser-driving command then picks it up automatically; see for the full resolution order. Sessions launched with attach to your own Chrome and never use this binary."
+    code "npx playwright install chromium"
+    link "--chrome-path"
+      code "--chrome-path"
+    link "--cdp"
+      code "--cdp"
+  paragraph "· · · · · · ."
+    strong "Flags:"
+    link "--channel"
+      code "--channel"
+    link "--version"
+      code "--version"
+    link "--force"
+      code "--force"
+    link "Config"
+    link "-q, --quiet"
+      code "-q, --quiet"
+    link "--verbose"
+      code "--verbose"
+    link "-h, --help"
+      code "-h, --help"
   heading "audit <url...>" (level 3)
     code "audit <url...>"
   paragraph "The flagship gate. Audits one or more pages against the semantic-tree rules and prints violations grouped by rule — each with a CSS and . Exits on errors with no extra flags. A failed page becomes an entry (exit ) while the others still report. Under GitHub Actions it also emits grouped annotations and a job summary."
@@ -610,7 +641,7 @@ main
       strong "Type:"
       strong "Default:"
       strong "Commands:"
-  paragraph "Attach to a running Chrome instead of launching one — the interactive way to audit a login. No emulation over CDP: can't be combined with , , , or ."
+  paragraph "Attach to a running Chrome instead of launching one — the interactive way to audit a login. No emulation over CDP: can't be combined with , , , , or ."
     link "--headful"
       code "--headful"
     link "--device"
@@ -619,6 +650,25 @@ main
       code "--viewport"
     link "--storage-state"
       code "--storage-state"
+    link "--chrome-path"
+      code "--chrome-path"
+  heading "--chrome-path <file>" (level 3)
+    code "--chrome-path <file>"
+  list
+    listitem "path to a browser executable · none · audit, inspect, tree, outline, tabs, list, snapshot"
+      strong "Type:"
+      strong "Default:"
+      strong "Commands:"
+  paragraph "Launch this specific browser binary instead of Playwright's bundled Chromium. Can't be combined with — an already-running browser is the browser. Resolution order (shared with the MCP server's ): (error if missing) > env (error if missing) > the cache (silently skipped if absent) > Playwright's own bundled Chromium."
+    link "--cdp"
+      code "--cdp"
+    code "REAL_A11Y_CHROME_PATH"
+    code "--chrome-path"
+    code "REAL_A11Y_CHROME_PATH"
+    link "install"
+      code "install"
+  button "Copy Code"
+  code
   heading "--allow-file" (level 3)
     code "--allow-file"
   list
@@ -721,12 +771,14 @@ main
   heading "-q, --quiet" (level 3)
     code "-q, --quiet"
   list
-    listitem "boolean · · audit, inspect, tree, outline, tabs, list, snapshot, diff"
+    listitem "boolean · · install, audit, inspect, tree, outline, tabs, list, snapshot, diff"
       strong "Type:"
       strong "Default:"
       code "false"
       strong "Commands:"
-  paragraph "Suppress progress lines on stderr."
+  paragraph "Suppress progress lines on stderr. still prints the resolved executable path on stdout."
+    link "install"
+      code "install"
   heading "--verbose" (level 3)
     code "--verbose"
   list
@@ -826,6 +878,38 @@ main
       code "inspect"
   heading "Command-specific" (level 2)
   paragraph "Flags that belong to a single command (or a small set)."
+  heading "--channel <name>" (level 3)
+    code "--channel <name>"
+  list
+    listitem "· · install"
+      strong "Type:"
+      code "stable | beta | dev | canary"
+      strong "Default:"
+      code "stable"
+      strong "Commands:"
+  paragraph "Which Chrome for Testing release channel to track. Re-resolves the channel's current build over the network; skips the download if it's unchanged from what's already installed. Mutually exclusive with ."
+    link "--version"
+      code "--version"
+  heading "--version <buildId>" (level 3)
+    code "--version <buildId>"
+  list
+    listitem "an exact Chrome build, e.g. · none · install"
+      strong "Type:"
+      code "131.0.6778.87"
+      strong "Default:"
+      strong "Commands:"
+  paragraph "Pin an exact Chrome for Testing build instead of tracking a channel. Skips the version-resolution network call entirely — the download URL is deterministic — so this is the escape hatch when the Chrome for Testing version endpoint is unreachable. Mutually exclusive with ."
+    link "--channel"
+      code "--channel"
+  heading "--force" (level 3)
+    code "--force"
+  list
+    listitem "boolean · · install"
+      strong "Type:"
+      strong "Default:"
+      code "false"
+      strong "Commands:"
+  paragraph "Reinstall even if the target build is already cached."
   heading "--include-generic" (level 3)
     code "--include-generic"
   list

@@ -65,6 +65,7 @@ link "/packages/cli/commands"
 link "/packages/cli/configuration"
 button "Copy Code"
 generic
+link "Chrome for Testing"
 button "Copy Code"
 generic
 button "Copy Code"

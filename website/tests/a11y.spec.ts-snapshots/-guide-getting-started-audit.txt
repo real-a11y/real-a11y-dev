@@ -189,7 +189,7 @@ main
   separator
   heading "Your first tree in 30 seconds" (level 2)
   heading "CLI (no code)" (level 3)
-  paragraph "The fastest first result: audit or inspect any URL straight from the shell. The CLI drives a real browser via Playwright, so install it alongside a Chromium binary:"
+  paragraph "The fastest first result: audit or inspect any URL straight from the shell. The CLI drives a real browser via Playwright, so install it alongside a Chrome binary:"
   button "Copy Code"
   code
   button "Copy Code"
