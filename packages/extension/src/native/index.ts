@@ -160,23 +160,46 @@ export function registerNativeMode(): void {
 }
 
 /**
- * Run an operation, retrying once on a transient attach failure — which is how
- * an MV3 suspend/wake presents. Records whether the reattach recovered, the
- * lifecycle signal PR H is here to measure. A `conflict` (DevTools attached) is
- * not retried — it won't clear on its own.
+ * Run an operation, retrying once on a transient failure — which is how an MV3
+ * suspend/wake presents. Records whether the reattach recovered, the lifecycle
+ * signal PR H is here to measure. A `conflict` (DevTools attached) is not
+ * retried — it won't clear on its own.
+ *
+ * A connection lost *mid-operation* (the classic MV3 detach) does not surface
+ * as an attach failure — it surfaces as a THROW from the CDP call inside
+ * `withDebugger` (only the transport throws here: `dispatchNative` swallows its
+ * own errors into structured results, so a throw is always a dropped
+ * connection). `runGuarded` converts that throw into a transient outcome so the
+ * retry-and-record path below actually fires for it, instead of the error
+ * escaping to the handler's outer catch unmeasured.
  */
 async function withRecovery<T>(
   session: NativeDebuggerSession,
   tabId: number,
   fn: (t: import("./native-core.js").CdpTransport) => Promise<T>,
 ): Promise<{ outcome: { ok: boolean; error?: string }; value?: T }> {
-  const first = await session.withDebugger(tabId, fn);
+  const first = await runGuarded(session, tabId, fn);
   if (first.outcome.ok || first.outcome.error === "conflict") return first;
 
-  const retry = await session.withDebugger(tabId, fn);
+  const retry = await runGuarded(session, tabId, fn);
   await session.dogfoodLog().record({
     kind: retry.outcome.ok ? "reattach-ok" : "reattach-failed",
     at: Date.now(),
   });
   return retry;
+}
+
+/** withDebugger, but a mid-operation throw (a dropped connection) becomes a
+ *  transient `attach-failed` outcome rather than propagating — so withRecovery
+ *  can retry it and record the reattach result. */
+async function runGuarded<T>(
+  session: NativeDebuggerSession,
+  tabId: number,
+  fn: (t: import("./native-core.js").CdpTransport) => Promise<T>,
+): Promise<{ outcome: { ok: boolean; error?: string }; value?: T }> {
+  try {
+    return await session.withDebugger(tabId, fn);
+  } catch {
+    return { outcome: { ok: false, error: "attach-failed" } };
+  }
 }
