@@ -11,6 +11,8 @@
  * AX logic lives in native-core; the debugger plumbing in debugger-session.
  */
 
+import { isTrustedSender } from "../routing.js";
+
 import { NativeDebuggerSession } from "./debugger-session.js";
 import {
   dispatchNative,
@@ -55,8 +57,15 @@ export function registerNativeMode(): void {
   const session = new NativeDebuggerSession(chrome.storage.local);
   const log = session.dogfoodLog();
 
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!isNativeMessage(message)) return; // not ours — let other handlers run
+    // These messages route the most powerful capability the extension has —
+    // reading/dispatching over chrome.debugger and toggling the runtime flag.
+    // onMessage is same-extension only, so this never rejects in practice, but
+    // the rest of the codebase asserts the trust boundary on privileged
+    // handlers (background.ts, content.ts); native mode holds itself to the
+    // same bar as defence in depth.
+    if (!isTrustedSender(sender, chrome.runtime.id)) return false;
 
     void (async () => {
       try {

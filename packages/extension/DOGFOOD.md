@@ -1,6 +1,6 @@
 # Extension native mode — `chrome.debugger` dogfood
 
-**Status:** dev-only · **RFC:** [`docs/rfcs/native-tree-v3.md`](../../docs/rfcs/native-tree.md) (Revision 1 + PR H) · not for the Chrome Web Store.
+**Status:** dev-only · **RFC:** [native-tree RFC (#197)](https://github.com/real-a11y/real-a11y-dev/pull/197) (Revision 2 + PR H) · not for the Chrome Web Store.
 
 This is the time-boxed dogfood the native-tree RFC gates the desktop decision on.
 Spike 5 already proved the mechanism works (an MV3 service worker reads **and**
