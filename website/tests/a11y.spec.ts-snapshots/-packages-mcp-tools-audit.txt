@@ -98,14 +98,16 @@ navigation "On this page"
     listitem
       link "Tree checkpoints"
     listitem
+      link "Act"
+    listitem
       link "Producer parity"
     listitem
       link "Environment"
 main
   heading "MCP tools reference" (level 1)
   paragraph "The Real A11y MCP server exposes to an MCP client (Claude Code, Claude Desktop, Cursor, and any other MCP-capable assistant). Each tool drives a real Chromium page and reports what a screen reader would actually perceive — computed roles, accessible names, and the defects assistive tech announces as broken — not what the HTML source claims."
-    strong "seventeen tools"
-  paragraph "The tools share browser page. A typical run is → an audit or view tool (, , or a view) → . Because every tool reads the same mutable page, calls must run — a second call mid-flight would race the first's navigation."
+    strong "twenty tools"
+  paragraph "The tools share browser page. A typical run is → an audit or view tool (, , or a view) → . To interact, the loop is → an (, , ) → . Because every tool reads the same mutable page, calls must run — a second call mid-flight would race the first's navigation."
     strong "one"
     link "open_page"
       code "open_page"
@@ -116,6 +118,17 @@ main
     code "get_*"
     link "close_browser"
       code "close_browser"
+    link "checkpoint_tree"
+      code "checkpoint_tree"
+    link "act tool"
+    link "click_element"
+      code "click_element"
+    link "type_text"
+      code "type_text"
+    link "focus_element"
+      code "focus_element"
+    link "diff_tree"
+      code "diff_tree"
     strong "sequentially, never in parallel"
   paragraph "Every audit and extraction tool takes an optional (default ) that scopes the work to one region or component, and — except — a ( default, or for Chromium's own accessibility tree read over CDP). and any tool called with read the whole document ( must stay ). Tool output is capped at — a larger page is truncated with a note to narrow with ."
     code "rootSelector"
@@ -310,6 +323,37 @@ main
         cell "Diff the tree since checkpoint_tree — what an interaction changed."
           code "checkpoint_tree"
         cell "—"
+  paragraph
+    strong "Act"
+  table
+    rowgroup
+      row
+        rowheader "Tool"
+        rowheader "Purpose"
+        rowheader "Producer"
+    rowgroup
+      row
+        cell "click_element"
+          link "click_element"
+            code "click_element"
+        cell "Real click at the node matched by role + accessible name."
+        cell "native"
+          code "native"
+      row
+        cell "type_text"
+          link "type_text"
+            code "type_text"
+        cell "Replace a text field's value; the result never echoes the text."
+        cell "native"
+          code "native"
+      row
+        cell "focus_element"
+          link "focus_element"
+            code "focus_element"
+        cell "Move real keyboard focus; flags text fields for a follow-up type_text."
+          code "type_text"
+        cell "native"
+          code "native"
   heading "Session" (level 2)
   paragraph "Bracket every audit with these two. navigates and readies the page; tears the browser down."
     code "open_page"
@@ -738,6 +782,92 @@ main
       strong "Defaults to the root the checkpoint was captured with"
       code "body"
   paragraph "Errors if no checkpoint exists on the current page — including after a navigation, which discards it."
+  heading "Act" (level 2)
+  paragraph "The write side of the native producer: dispatch a real click, replace a text field's value, or move real keyboard focus — over CDP, against the node matched in . Chromium only."
+    strong "Chromium's own accessibility tree"
+  paragraph "Targeting is deliberately , never a CSS selector or a node id. The tools resolve the target against a fresh native tree immediately before every dispatch — the same view with prints — so if role and name can't reach a control, assistive technology can't reach it either, and that is an accessibility finding rather than a targeting inconvenience."
+    strong "role + accessible name"
+    link "get_semantic_tree"
+      code "get_semantic_tree"
+    code "producer: "native""
+  paragraph "All three tools share the targeting parameters:"
+  list
+    listitem "— string — required — ARIA role exactly as the tree prints it (, , , , , …)."
+      strong
+        code "role"
+      code "button"
+      code "link"
+      code "textbox"
+      code "checkbox"
+      code "menuitem"
+    listitem "— string — optional — accessible name; case-insensitive, whitespace-normalized match against the tree (names can differ from the DOM producer's — shows where). Pass to target an unlabeled control; omit to match any name."
+      strong
+        code "name"
+      strong "exact"
+      strong "native"
+      link "compare_producers"
+        code "compare_producers"
+      code """"
+    listitem "— integer ≥ 1 — optional — 1-based pick among the role+name-filtered matches, in document order."
+      strong
+        code "nth"
+  paragraph "When several nodes match and no was given, the tool errors and — the remedy is copy-paste. A target is refused with the cause (the page would silently ignore the action, and the empty diff that followed would mislead). A match with no backing DOM element (a synthesized node such as the document root) is refused before any CDP traffic."
+    code "nth"
+    strong "lists the candidates as lines"
+      code "nth=1 · role "name""
+    strong "disabled"
+  paragraph "The payoff is the loop: first, act, then — the diff is the answer to ."
+    link "checkpoint_tree"
+      code "checkpoint_tree"
+    link "diff_tree"
+      code "diff_tree"
+    emphasis ""what did that action change for a screen reader?""
+  heading "click_element" (level 3)
+    code "click_element"
+  paragraph
+    emphasis "Acts on the page · targets by role + accessible name in the native tree · Chromium only."
+  paragraph "Dispatch a click against the matched element. It can submit forms, toggle state, and — and navigation discards the page's tree checkpoint, so re-checkpoint after any click that changes the page instance."
+    strong "real"
+    strong "navigate"
+  paragraph "An agent calls this to open the dialog it is about to audit, expand a disclosure, or demonstrate that an unlabeled-but-reachable button actually does something:"
+  button "Copy Code"
+  code
+  heading "type_text" (level 3)
+    code "type_text"
+  paragraph
+    emphasis "Acts on the page · replaces the field's value · the result never echoes the text."
+  paragraph "Set the value of the matched text field (role is usually , , or ). The value is applied through the prototype value setter with / events, so framework-controlled inputs (React et al.) register it — and it the field's current value rather than appending."
+    code "textbox"
+    code "searchbox"
+    code "combobox"
+    code "input"
+    code "change"
+    strong "replaces"
+  paragraph "Additional parameter:"
+  list
+    listitem "— string — required — the text to enter. (the same R1 redaction discipline the native producer applies to reading)."
+      strong
+        code "text"
+      strong "Never echoed back in the result"
+  paragraph "There is deliberately , and this tool must not be used to log in — a password typed here would enter the agent's context. For pages behind auth, start the server with or instead."
+    strong "no credential parameter"
+    link "REAL_A11Y_MCP_STORAGE_STATE"
+      code "REAL_A11Y_MCP_STORAGE_STATE"
+    link "REAL_A11Y_MCP_CDP"
+      code "REAL_A11Y_MCP_CDP"
+  button "Copy Code"
+  code
+  heading "focus_element" (level 3)
+    code "focus_element"
+  paragraph
+    emphasis "Acts on the page · moves real keyboard focus."
+  paragraph "Move keyboard focus to the matched element — what a keyboard user's journey would land on, teleported. The result says whether the target is a text field (and its input type), so the agent knows a should follow. Pairs with for focus-order work."
+    link "type_text"
+      code "type_text"
+    link "get_tab_order"
+      code "get_tab_order"
+  button "Copy Code"
+  code
   heading "Producer parity" (level 2)
   paragraph "A Chromium-only fidelity oracle that compares the two producers. To the native tree, use with ; to it, with ."
     emphasis "view"

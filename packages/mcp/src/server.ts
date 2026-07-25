@@ -16,7 +16,8 @@ import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ALL_RULES, listByRole } from "@real-a11y-dev/audit";
 import type { A11yRule, Finding, RoleFilter } from "@real-a11y-dev/audit";
-import type { A11ySession } from "@real-a11y-dev/browser";
+import { resolveTarget } from "@real-a11y-dev/browser";
+import type { A11ySession, TargetCandidate } from "@real-a11y-dev/browser";
 import { numberTabStops } from "@real-a11y-dev/serialize";
 import {
   assertFullArtifact,
@@ -107,6 +108,38 @@ const producer = z
       "(Chromium's own a11y tree over CDP — reaches user-agent-shadow media " +
       "controls a `<video controls>` exposes). Native is whole-document " +
       "(rootSelector must be 'body') and carries no tab order. Chromium only.",
+  );
+
+// ── Act-tool targeting fragments ─────────────────────────────────────────
+// Targets are described in the tree's own vocabulary — role + accessible
+// name — never a node id. Ids are internal and realm-bound; resolution runs
+// against a fresh native tree immediately before each dispatch.
+const actRole = z
+  .string()
+  .min(1)
+  .describe(
+    "ARIA role of the target, exactly as the tree prints it — e.g. 'button', " +
+      "'link', 'textbox', 'checkbox', 'menuitem'.",
+  );
+const actName = z
+  .string()
+  .optional()
+  .describe(
+    "Accessible name of the target — case-insensitive, whitespace-normalized " +
+      "EXACT match against the NATIVE tree (names can differ from the dom " +
+      "producer's; compare_producers shows where). Pass '' to target an " +
+      "unlabeled control. Omit to match any name; if several nodes match, the " +
+      "error lists them so you can pass nth.",
+  );
+const actNth = z
+  .number()
+  .int()
+  .min(1)
+  .optional()
+  .describe(
+    "1-based pick among the matching nodes in document order, evaluated among " +
+      "the role+name-filtered matches. Use after an ambiguity error lists the " +
+      "candidates.",
   );
 
 /**
@@ -425,7 +458,7 @@ export function buildServer(
     },
     {
       instructions:
-        "Audit any web page's accessibility for AI agents. Call open_page(url) FIRST, then use audit_page (violations), inspect_page (findings + tree + outline + tab order from one consistent snapshot — prefer on dynamic pages), or the get_* / list_elements views. All tools share ONE browser page — issue calls sequentially, never in parallel.",
+        "Audit any web page's accessibility for AI agents. Call open_page(url) FIRST, then use audit_page (violations), inspect_page (findings + tree + outline + tab order from one consistent snapshot — prefer on dynamic pages), or the get_* / list_elements views. To interact: checkpoint_tree, then click_element / type_text / focus_element (target by role + accessible name), then diff_tree to see exactly what changed. All tools share ONE browser page — issue calls sequentially, never in parallel.",
     },
   );
 
@@ -1012,6 +1045,222 @@ export function buildServer(
       } catch (err) {
         return errText(err instanceof Error ? err.message : String(err));
       }
+    },
+  );
+
+  // ── Act (the write side of the native producer) ──────────────────────────
+  // Targets resolve against a FRESH native tree per dispatch, so node ids
+  // never cross the tool boundary and staleness shrinks to the instant
+  // between resolution and dispatch.
+  const describeTarget = (c: TargetCandidate) => `${c.role} "${c.name}"`;
+  const MAX_CANDIDATES = 10;
+
+  async function resolveActTarget(
+    role: string,
+    name: string | undefined,
+    nth: number | undefined,
+  ): Promise<
+    | { ok: true; nodeId: string; candidate: TargetCandidate }
+    | { ok: false; res: ReturnType<typeof errText> }
+  > {
+    const tree = await session.nativeTree();
+    const resolved = resolveTarget(tree, { role, name, nth });
+    switch (resolved.kind) {
+      case "resolved":
+        return {
+          ok: true,
+          nodeId: resolved.nodeId,
+          candidate: resolved.candidate,
+        };
+      case "not-found": {
+        const label = name !== undefined ? `${role} named "${name}"` : role;
+        if (resolved.matchesForRole > 0) {
+          return {
+            ok: false,
+            res: errText(
+              `No ${label} in the native tree — but ${resolved.matchesForRole} ${role}(s) with other names exist. ` +
+                `Check the name with get_semantic_tree { producer: "native" } (names can differ from the dom ` +
+                `producer's — compare_producers shows where), or omit name to list the candidates.`,
+            ),
+          };
+        }
+        return {
+          ok: false,
+          res: errText(
+            `No ${label} in the native tree. Re-read it with get_semantic_tree { producer: "native" } — ` +
+              `the page may have changed, or the element may not be exposed to assistive tech at all ` +
+              `(which is itself an accessibility finding).`,
+          ),
+        };
+      }
+      case "ambiguous": {
+        const shown = resolved.candidates.slice(0, MAX_CANDIDATES);
+        const lines = shown.map(
+          (c) =>
+            `  nth=${c.nth} · ${describeTarget(c)}${c.disabled ? " (disabled)" : ""}`,
+        );
+        const more = resolved.candidates.length - shown.length;
+        if (more > 0) lines.push(`  … +${more} more`);
+        return {
+          ok: false,
+          res: errText(
+            `${resolved.candidates.length} ${role}(s) match — pass nth (1-based, document order) to pick one:\n` +
+              lines.join("\n"),
+          ),
+        };
+      }
+      case "nth-out-of-range":
+        return {
+          ok: false,
+          res: errText(
+            `nth=${resolved.nth}, but only ${resolved.matchCount} node(s) match.`,
+          ),
+        };
+      case "no-dom-node":
+        return {
+          ok: false,
+          res: errText(
+            `Matched ${describeTarget(resolved.candidate)}, but it has no backing DOM element ` +
+              `(a synthesized node) — it can't be acted on.`,
+          ),
+        };
+    }
+  }
+
+  // A disabled control swallows the action silently — el.click() "succeeds"
+  // and fires nothing, so the agent would see success plus an empty diff and
+  // draw the wrong conclusion. Refuse with the cause instead.
+  function disabledRefusal(candidate: TargetCandidate, verb: string) {
+    return errText(
+      `${describeTarget(candidate)} is disabled — the page would ignore the ${verb}. ` +
+        `If enabling it is the point of the flow, act on whatever enables it first ` +
+        `(diff_tree after that action will show the state change).`,
+    );
+  }
+
+  // The diff loop is the payoff of acting at all — steer every success to it.
+  const diffSteer = () =>
+    treeCheckpointRoot !== undefined
+      ? " Call diff_tree to see what this changed."
+      : " Tip: call checkpoint_tree before acting, then diff_tree after, to see exactly what an action changed for a screen reader.";
+
+  function actFailure(toolName: string, error: string | undefined) {
+    // The backend's "re-read the tree and retry" remedy presumes a caller
+    // holding node ids. Here the target resolved from a fresh tree
+    // microseconds ago, so a resolution miss means the page mutated mid-action
+    // — and the re-read IS a retry of this tool.
+    if (error !== undefined && /could not resolve node/.test(error)) {
+      return errText(
+        `The target changed or disappeared mid-action — the page mutated. Retry ${toolName}.`,
+      );
+    }
+    return errText(error ?? "the action failed");
+  }
+
+  server.registerTool(
+    "click_element",
+    {
+      title: "Click an element (by role + name)",
+      description:
+        "Dispatch a REAL click against the element matched by role + accessible name in Chromium's native accessibility tree — the same view get_semantic_tree { producer: \"native\" } prints. Targeting is deliberately role+name only: if a control can't be reached that way, assistive technology can't reach it either, and that is itself an accessibility finding. For the full story call checkpoint_tree FIRST, then this, then diff_tree — the diff answers 'what did that click change for a screen reader?'. THE CLICK IS REAL: it can submit forms, toggle state, and NAVIGATE — navigation discards the page's tree checkpoint. If several nodes match, the error lists them; pass nth to pick one. Chromium only. See also type_text and focus_element.",
+      inputSchema: { role: actRole, name: actName, nth: actNth },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
+    async ({ role, name, nth }) => {
+      const target = await resolveActTarget(role, name, nth);
+      if (!target.ok) return target.res;
+      if (target.candidate.disabled) {
+        return disabledRefusal(target.candidate, "click");
+      }
+      const result = await session.act({
+        nodeId: target.nodeId,
+        action: "click",
+      });
+      if (!result.success) return actFailure("click_element", result.error);
+      return text(`Clicked ${describeTarget(target.candidate)}.` + diffSteer());
+    },
+  );
+
+  server.registerTool(
+    "type_text",
+    {
+      title: "Type into a text field (by role + name)",
+      description:
+        "Set the value of the text field matched by role + accessible name in the native accessibility tree (role is usually 'textbox', 'searchbox', or 'combobox'). REPLACES the field's current value — via the prototype value setter plus input/change events, so framework-controlled inputs (React et al.) register it. The result NEVER echoes the typed text or any field content. There is deliberately NO credential parameter and this tool must NOT be used to log in — a password or token typed here would enter the agent's context; for pages behind auth the user starts the server with REAL_A11Y_MCP_STORAGE_STATE or REAL_A11Y_MCP_CDP instead. Pair with checkpoint_tree / diff_tree to see what the input changed (a combobox popping options, an inline error appearing). Chromium only.",
+      inputSchema: {
+        role: actRole,
+        name: actName,
+        nth: actNth,
+        text: z
+          .string()
+          .describe(
+            "The text to enter. Replaces the field's current value. Never echoed back in the result.",
+          ),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ role, name, nth, text: value }) => {
+      const target = await resolveActTarget(role, name, nth);
+      if (!target.ok) return target.res;
+      if (target.candidate.disabled) {
+        return disabledRefusal(target.candidate, "input");
+      }
+      const result = await session.act({
+        nodeId: target.nodeId,
+        action: "type",
+        payload: { value },
+      });
+      if (!result.success) return actFailure("type_text", result.error);
+      return text(
+        `Typed into ${describeTarget(target.candidate)} — the field's previous value was replaced.` +
+          diffSteer(),
+      );
+    },
+  );
+
+  server.registerTool(
+    "focus_element",
+    {
+      title: "Focus an element (by role + name)",
+      description:
+        "Move REAL keyboard focus to the element matched by role + accessible name in the native accessibility tree. The result says whether the target is a text field, so a type_text can follow. Useful alongside get_tab_order for focus-order work, and for checking what a keyboard user would land on. Chromium only. See also click_element and type_text.",
+      inputSchema: { role: actRole, name: actName, nth: actNth },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ role, name, nth }) => {
+      const target = await resolveActTarget(role, name, nth);
+      if (!target.ok) return target.res;
+      if (target.candidate.disabled) {
+        return disabledRefusal(target.candidate, "focus");
+      }
+      const result = await session.act({
+        nodeId: target.nodeId,
+        action: "focus",
+      });
+      if (!result.success) return actFailure("focus_element", result.error);
+      const inputNote = result.requiresInput
+        ? ` It is a text field (${result.inputType ?? "text"}) — follow with type_text to enter a value.`
+        : "";
+      return text(
+        `Focused ${describeTarget(target.candidate)}.` +
+          inputNote +
+          diffSteer(),
+      );
     },
   );
 

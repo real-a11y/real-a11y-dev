@@ -171,17 +171,21 @@ for scripting audits directly in Node.
 
 This **complements** a browser-automation MCP such as
 [Playwright MCP](https://github.com/microsoft/playwright-mcp) — it doesn't try to
-replace it. They solve different halves of the problem:
+replace it. Both can act on a page now, but they act for different reasons:
 
-- **Playwright MCP** lets an agent _drive_ a page — click, type, navigate — using
-  the accessibility snapshot as a means to _act_.
-- **Real A11y** lets an agent _judge_ a page — it reports what assistive
-  technology would announce as _broken_, with a semantic tree tuned to what a
-  screen reader actually perceives.
+- **Playwright MCP** drives a page for _automation breadth_ — arbitrary
+  selectors, hover, drag, file uploads, multiple tabs — using the accessibility
+  snapshot as a means to act.
+- **Real A11y** acts **through the accessibility tree and judges what changed**.
+  Its [act tools](/packages/mcp/tools#act) target **role + accessible name
+  only** — a control the tools can't reach is itself an accessibility smell —
+  and every action pairs with [`diff_tree`](/packages/mcp/tools#diff_tree)'s
+  answer to _"what did that change for a screen reader?"_. Its audit reports
+  what assistive technology would announce as _broken_.
 
-Use Playwright MCP to act; use Real A11y to audit. They pair naturally: drive a
-flow to a given state with one, then check that state's accessibility with the
-other.
+For an accessibility flow — open the dialog, judge the dialog — Real A11y now
+stands alone. For automation verbs it doesn't ship (hover, drag, uploads,
+multi-tab), pair the two: drive with Playwright MCP, judge with Real A11y.
 
 ::: tip Two different "Playwrights"
 This package is _built on_ **Playwright the library** — the browser driver you

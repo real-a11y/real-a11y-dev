@@ -4,13 +4,17 @@
 > accessibility tree — and its audits — to AI agents.
 
 Unlike a general browser-automation MCP (which hands an agent the browser's raw
-accessibility snapshot so it can _click things_), this server is **audit-first**:
-its flagship tool tells an agent what a real screen reader would announce as
-_broken_. The tree-inspection tools are perception primitives layered on top.
+accessibility snapshot and a selector engine), this server is **audit-first,
+act-capable**: its flagship tool tells an agent what a real screen reader would
+announce as _broken_, and its action tools drive the page **through that same
+tree** — click, type, and focus target role + accessible name, so anything the
+agent can operate is something assistive tech can reach, and `diff_tree`
+reports what each action changed. The tree-inspection tools are perception
+primitives layered underneath.
 
 ## Tools
 
-Seventeen tools, grouped. The **Producer** column shows which accept
+Twenty tools, grouped. The **Producer** column shows which accept
 `producer: "native"` (Chromium's own tree over CDP, whole-document) vs. the DOM
 walk. Full parameter reference: **[real-a11y.dev/packages/mcp/tools](https://real-a11y.dev/packages/mcp/tools)**.
 
@@ -61,6 +65,18 @@ walk. Full parameter reference: **[real-a11y.dev/packages/mcp/tools](https://rea
 | `checkpoint_tree` | Capture the current tree as an interaction-diff baseline. | — |
 | `diff_tree` | Diff the tree since `checkpoint_tree` — nodes added / removed / changed, plus focus move. | — |
 
+**Act** — the write side of the native producer. Targets are described the way
+the tree prints them — **role + accessible name** (plus a 1-based `nth` when
+several match), never a CSS selector or node id. If role and name can't reach a
+control, assistive technology can't reach it either — that's a finding, not a
+targeting gap. The loop: `checkpoint_tree` → act → `diff_tree`. Chromium only.
+
+| Tool | Purpose | Producer |
+| --- | --- | --- |
+| `click_element` | Dispatch a real click at the matched node. Can submit and navigate — navigation discards the tree checkpoint. | `native` |
+| `type_text` | Replace a text field's value (input/change events fire, so framework-controlled inputs register it). The result never echoes the typed text. | `native` |
+| `focus_element` | Move real keyboard focus; reports whether the target is a text field so a `type_text` can follow. | `native` |
+
 ### The native producer — `producer: "native"`
 
 By default every tree/findings/outline/list tool walks the page's light DOM (the
@@ -73,10 +89,11 @@ play/scrubber/mute controls, which live in a closed user-agent shadow root. To
 *audit* it, `audit_page`; to *compare* it against the DOM producer,
 `compare_producers`.
 
-Native is whole-document and read-only: `rootSelector` must stay `"body"`
-(passing another selector is refused — native can't scope), and it carries no tab
+Native reads are whole-document: `rootSelector` must stay `"body"` (passing
+another selector is refused — native can't scope), and the tree carries no tab
 order — so `get_tab_order` is DOM-only and `inspect_page`'s tab-order section
-reports N/A. Chromium only.
+reports N/A. The act tools (`click_element` / `type_text` / `focus_element`) are
+the native producer's write side. Chromium only.
 
 ### Consistency & determinism
 

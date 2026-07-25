@@ -70,8 +70,8 @@ class FakeSession implements A11ySession {
     return this.nativeTreeResponse;
   }
 
-  // Typed off the interface — no MCP tool drives `act()` yet, so this is a
-  // no-op stub that keeps the fake a structural A11ySession.
+  // Typed off the interface. The act tools resolve their target from
+  // `nativeTreeResponse` first, then dispatch here.
   actResponse: Awaited<ReturnType<A11ySession["act"]>> = { success: true };
   async act(request: Parameters<A11ySession["act"]>[0]) {
     this.calls.push({ fn: "act", rootSelector: "", args: [request] });
@@ -269,12 +269,14 @@ describe("MCP server wiring", () => {
       [
         "audit_page",
         "checkpoint_tree",
+        "click_element",
         "close_browser",
         "compare_producers",
         "diff_findings",
         "diff_checkpoints",
         "diff_tree",
         "export_checkpoint",
+        "focus_element",
         "get_heading_outline",
         "get_semantic_tree",
         "get_tab_order",
@@ -284,6 +286,7 @@ describe("MCP server wiring", () => {
         "list_elements",
         "open_page",
         "checkpoint_findings",
+        "type_text",
       ].sort(),
     );
   });
@@ -1168,5 +1171,287 @@ describe("checkpoints", () => {
     });
     expect(res.isError).toBe(true);
     expect(textOf(res)).toMatch(/partial snapshot/);
+  });
+});
+
+describe("act tools (click_element / type_text / focus_element)", () => {
+  let session: FakeSession;
+
+  /**
+   * A native-shaped tree with the shapes the targeting policy branches on: a
+   * synthesized root (no backing DOM element), a duplicate-named button pair,
+   * a plain button, a text field, and a disabled button.
+   */
+  function actableTree(): FakeSession["nativeTreeResponse"] {
+    const node = (
+      id: string,
+      role: string,
+      name: string,
+      states: Record<string, string | boolean> = {},
+    ) => ({
+      id,
+      parentId: id === "ax-1" ? null : "ax-1",
+      childIds: [] as string[],
+      depth: id === "ax-1" ? 0 : 1,
+      a11y: {
+        role,
+        name,
+        description: "",
+        states,
+        properties: {},
+        isExposedToAT: true,
+      },
+    });
+    const nodes = [
+      node("ax-1", "RootWebArea", "Fixture"),
+      node("ax-dom-10", "button", "Save"),
+      node("ax-dom-11", "button", "Save"),
+      node("ax-dom-12", "button", "Go"),
+      node("ax-dom-13", "textbox", "Email"),
+      node("ax-dom-14", "button", "Delete", { disabled: true }),
+    ];
+    nodes[0].childIds = nodes.slice(1).map((n) => n.id);
+    return {
+      nodes: new Map(nodes.map((n) => [n.id, n])),
+      rootId: "ax-1",
+      source: { producer: "native" },
+    };
+  }
+
+  beforeEach(() => {
+    session = new FakeSession();
+    session.nativeTreeResponse = actableTree();
+  });
+
+  it("click_element resolves against a FRESH native tree, then dispatches", async () => {
+    const client = await connect(session);
+    const res = await client.callTool({
+      name: "click_element",
+      arguments: { role: "button", name: "Go" },
+    });
+    // Resolution precedes dispatch — and no node id was ever sent by the agent.
+    expect(session.calls.map((c) => c.fn)).toEqual(["nativeTree", "act"]);
+    expect(session.calls[1].args[0]).toEqual({
+      nodeId: "ax-dom-12",
+      action: "click",
+    });
+    expect(textOf(res)).toMatch(/Clicked button "Go"/);
+  });
+
+  it("matches names case-insensitively and whitespace-normalized", async () => {
+    const client = await connect(session);
+    const res = await client.callTool({
+      name: "click_element",
+      arguments: { role: "button", name: "  gO \n" },
+    });
+    expect(textOf(res)).toMatch(/Clicked button "Go"/);
+  });
+
+  it("ambiguous matches list nth candidates and dispatch nothing", async () => {
+    const client = await connect(session);
+    const res = await client.callTool({
+      name: "click_element",
+      arguments: { role: "button", name: "Save" },
+    });
+    expect(res.isError).toBe(true);
+    const out = textOf(res);
+    expect(out).toMatch(/2 button\(s\) match/);
+    expect(out).toMatch(/nth=1 · button "Save"/);
+    expect(out).toMatch(/nth=2 · button "Save"/);
+    expect(session.calls.some((c) => c.fn === "act")).toBe(false);
+  });
+
+  it("nth picks among the filtered matches (1-based, document order)", async () => {
+    const client = await connect(session);
+    await client.callTool({
+      name: "click_element",
+      arguments: { role: "button", name: "Save", nth: 2 },
+    });
+    const act = session.calls.find((c) => c.fn === "act");
+    expect(act?.args[0]).toMatchObject({ nodeId: "ax-dom-11" });
+  });
+
+  it("an absent role is not-found with a remedy, before any dispatch", async () => {
+    const client = await connect(session);
+    const res = await client.callTool({
+      name: "click_element",
+      arguments: { role: "slider", name: "Volume" },
+    });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toMatch(/No slider named "Volume" in the native tree/);
+    expect(textOf(res)).toMatch(/get_semantic_tree/);
+    expect(textOf(res)).toMatch(/accessibility finding/);
+    expect(session.calls.some((c) => c.fn === "act")).toBe(false);
+  });
+
+  it("a name miss on a present role counts the role-only matches", async () => {
+    const client = await connect(session);
+    const res = await client.callTool({
+      name: "click_element",
+      arguments: { role: "button", name: "Nope" },
+    });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toMatch(/4 button\(s\) with other names exist/);
+  });
+
+  it("a synthesized node (no backing DOM element) is refused", async () => {
+    const client = await connect(session);
+    const res = await client.callTool({
+      name: "click_element",
+      arguments: { role: "RootWebArea" },
+    });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toMatch(/no backing DOM element/);
+    expect(session.calls.some((c) => c.fn === "act")).toBe(false);
+  });
+
+  it("a disabled target is refused with the cause, not clicked into a void", async () => {
+    const client = await connect(session);
+    const res = await client.callTool({
+      name: "click_element",
+      arguments: { role: "button", name: "Delete" },
+    });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toMatch(
+      /is disabled — the page would ignore the click/,
+    );
+    expect(session.calls.some((c) => c.fn === "act")).toBe(false);
+  });
+
+  it("rewrites the backend's stale-node remedy to 'retry the tool'", async () => {
+    // "re-read the tree and retry" presumes a caller holding node ids; the
+    // agent never had one, so the retry IS the re-read.
+    session.actResponse = {
+      success: false,
+      error:
+        'could not resolve node "ax-dom-12" to a live DOM element — re-read the tree and retry',
+    };
+    const client = await connect(session);
+    const res = await client.callTool({
+      name: "click_element",
+      arguments: { role: "button", name: "Go" },
+    });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toMatch(/Retry click_element/);
+    expect(textOf(res)).not.toMatch(/re-read the tree/);
+  });
+
+  it("passes other backend refusals through verbatim", async () => {
+    session.actResponse = { success: false, error: "not-clickable" };
+    const client = await connect(session);
+    const res = await client.callTool({
+      name: "click_element",
+      arguments: { role: "button", name: "Go" },
+    });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toBe("not-clickable");
+  });
+
+  it("type_text forwards the value as payload and NEVER echoes it (R1)", async () => {
+    const client = await connect(session);
+    const res = await client.callTool({
+      name: "type_text",
+      arguments: { role: "textbox", name: "Email", text: "hunter2-SECRET" },
+    });
+    const act = session.calls.find((c) => c.fn === "act");
+    expect(act?.args[0]).toEqual({
+      nodeId: "ax-dom-13",
+      action: "type",
+      payload: { value: "hunter2-SECRET" },
+    });
+    expect(textOf(res)).toMatch(/Typed into textbox "Email"/);
+    expect(textOf(res)).not.toContain("hunter2");
+  });
+
+  it("type_text keeps the value out of failure results too (R1)", async () => {
+    session.actResponse = { success: false, error: "not-a-text-field" };
+    const client = await connect(session);
+    const res = await client.callTool({
+      name: "type_text",
+      arguments: { role: "textbox", name: "Email", text: "hunter2-SECRET" },
+    });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).not.toContain("hunter2");
+  });
+
+  it("focus_element surfaces the follow-with-type_text hint for text fields", async () => {
+    session.actResponse = {
+      success: true,
+      requiresInput: true,
+      inputType: "email",
+    };
+    const client = await connect(session);
+    const res = await client.callTool({
+      name: "focus_element",
+      arguments: { role: "textbox", name: "Email" },
+    });
+    const out = textOf(res);
+    expect(out).toMatch(/Focused textbox "Email"/);
+    expect(out).toMatch(/text field \(email\)/);
+    expect(out).toMatch(/type_text/);
+  });
+
+  it("steers to checkpoint_tree when no tree checkpoint exists, to diff_tree when one does", async () => {
+    session.responses.checkpointTree = "Tree checkpoint captured — 6 node(s).";
+    const client = await connect(session);
+
+    const before = await client.callTool({
+      name: "click_element",
+      arguments: { role: "button", name: "Go" },
+    });
+    expect(textOf(before)).toMatch(/checkpoint_tree before acting/);
+
+    await client.callTool({
+      name: "checkpoint_tree",
+      arguments: { rootSelector: "body" },
+    });
+    const after = await client.callTool({
+      name: "click_element",
+      arguments: { role: "button", name: "Go" },
+    });
+    expect(textOf(after)).toMatch(/Call diff_tree to see what this changed/);
+  });
+
+  it("rejects a missing text and a zero nth at the schema", async () => {
+    const client = await connect(session);
+    const noText = await client.callTool({
+      name: "type_text",
+      arguments: { role: "textbox", name: "Email" },
+    });
+    expect(noText.isError).toBe(true);
+    expect(textOf(noText)).toMatch(/Input validation error/);
+
+    const zeroNth = await client.callTool({
+      name: "click_element",
+      arguments: { role: "button", name: "Go", nth: 0 },
+    });
+    expect(zeroNth.isError).toBe(true);
+    expect(textOf(zeroNth)).toMatch(/Input validation error/);
+    // Neither invalid call reached the session at all.
+    expect(session.calls).toHaveLength(0);
+  });
+
+  it("carries the load-bearing caveats in the descriptions", async () => {
+    const client = await connect(session);
+    const tools = (await client.listTools()).tools;
+    const byName = (n: string) => tools.find((t) => t.name === n)!;
+
+    // type_text must never read as a login path.
+    const type = byName("type_text");
+    expect(type.description).toMatch(/NO credential parameter/);
+    expect(type.description).toMatch(/REAL_A11Y_MCP_STORAGE_STATE/);
+    expect(type.description).toMatch(/NEVER echoes the typed text/);
+
+    // click_element names the loop and the navigation hazard.
+    const click = byName("click_element");
+    expect(click.description).toMatch(/checkpoint_tree/);
+    expect(click.description).toMatch(/diff_tree/);
+    expect(click.description).toMatch(/NAVIGATE/);
+    expect(click.annotations?.idempotentHint).toBe(false);
+    expect(click.annotations?.openWorldHint).toBe(true);
+
+    // A repeated type replaces the same value — honestly idempotent.
+    expect(type.annotations?.idempotentHint).toBe(true);
+    expect(byName("focus_element").annotations?.readOnlyHint).toBe(false);
   });
 });
