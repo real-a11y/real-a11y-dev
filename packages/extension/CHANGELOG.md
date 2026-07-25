@@ -77,7 +77,7 @@
   listeners, the content script now moves focus along the tab sequence
   (scoped to an open dialog when focus is inside one) and closes open
   dialogs on Escape, unless a page handler called `preventDefault()`.
-  ([#PR])
+  ([#235])
 
 ## 0.1.7
 
@@ -135,3 +135,4 @@ Earlier releases predate this changelog.
 [#194]: https://github.com/real-a11y/real-a11y-dev/pull/194
 [#195]: https://github.com/real-a11y/real-a11y-dev/pull/195
 [#213]: https://github.com/real-a11y/real-a11y-dev/pull/213
+[#235]: https://github.com/real-a11y/real-a11y-dev/pull/235
