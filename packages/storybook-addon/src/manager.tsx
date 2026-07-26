@@ -13,7 +13,10 @@ import type {
   TreeViewMode,
   ActionType,
 } from "@real-a11y-dev/core";
-import { TreePanel } from "@real-a11y-dev/semantic-navigator-ui";
+import {
+  TreePanel,
+  preserveExpandedState,
+} from "@real-a11y-dev/semantic-navigator-ui";
 import { addons, types } from "@storybook/manager-api";
 import { render, h } from "preact";
 import * as React from "react";
@@ -45,6 +48,10 @@ function deserializeTree(serializable: SerializableTree): ExtractionResult {
 function Panel() {
   const containerRef = useRef<HTMLDivElement>(null);
   const preactHostRef = useRef<HTMLElement | null>(null);
+  // The Map TreePanel mutates on expand/collapse. Payload state is the
+  // serializable channel message (always reset to the preview's heuristic),
+  // so we must re-apply expansion from this ref on every TREE_UPDATED.
+  const liveTreeRef = useRef<ExtractionResult | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [payload, setPayload] = useState<TreeUpdatePayload | null>(null);
   const [viewMode, setViewMode] = useState<TreeViewMode>("a11y");
@@ -118,6 +125,10 @@ function Panel() {
     }
 
     const treeData = deserializeTree(payload.tree);
+    if (liveTreeRef.current) {
+      preserveExpandedState(liveTreeRef.current, treeData);
+    }
+    liveTreeRef.current = treeData;
 
     render(
       h(TreePanel, {

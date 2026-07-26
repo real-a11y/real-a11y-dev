@@ -62,7 +62,7 @@ The addon follows Storybook 8's manager/preview split:
 
 - **Preview** (`@real-a11y-dev/storybook-addon/preview`) runs inside the story iframe. Extraction is **lazy**: it only stands up a `DomObserver` (200ms debounce) after the manager emits `REQUEST_TREE` (panel open), and tears it down on `STOP_TREE` (panel hidden). While active it emits `TREE_UPDATED` over the Storybook channel whenever the story DOM changes — so animating or Controls-driven stories don't pay extract + `postMessage` cost while you're on another addon tab.
 
-- **Manager** (`@real-a11y-dev/storybook-addon/manager`) runs in the Storybook UI shell (React). It mounts only when the Semantic Navigator tab is active, subscribes to `TREE_UPDATED` events, deserializes the tree (the `[id, node][]` array back into a `Map`), and renders the interactive `TreePanel` from `@real-a11y-dev/semantic-navigator-ui` inside a shadow root.
+- **Manager** (`@real-a11y-dev/storybook-addon/manager`) runs in the Storybook UI shell (React). It mounts only when the Semantic Navigator tab is active, subscribes to `TREE_UPDATED` events, deserializes the tree (the `[id, node][]` array back into a `Map`), re-applies the user's expand/collapse via `preserveExpandedState` (so a Controls tweak or animation does not snap open every row), and renders the interactive `TreePanel` from `@real-a11y-dev/semantic-navigator-ui` inside a shadow root.
 
 ```
 Preview iframe                              Manager (Storybook UI)

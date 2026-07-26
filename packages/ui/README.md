@@ -14,7 +14,7 @@ npm install @real-a11y-dev/semantic-navigator-ui
 
 ### TreeView
 
-Main tree container. Extracts the tree from a root DOM element and renders it with full keyboard navigation, search, and interaction support. Live updates go through core's `LiveTreeExtractor` — `DomObserver` flushes feed `refresh(change)` so steady-state mutations re-extract only the dirty subtree (with a full-extract fallback when scope or cross-tree ARIA deps move), matching the extension / `useSemanticTree` / Storybook preview path.
+Main tree container. Extracts the tree from a root DOM element and renders it with full keyboard navigation, search, and interaction support. Live updates go through core's `LiveTreeExtractor` — `DomObserver` flushes feed `refresh(change)` so steady-state mutations re-extract only the dirty subtree (with a full-extract fallback when scope or cross-tree ARIA deps move), matching the extension / `useSemanticTree` / Storybook preview path. Each flush also runs `preserveExpandedState` so the user's expand/collapse choices survive re-extraction (a11y mode otherwise rebuilds every node with a depth heuristic).
 
 ```tsx
 import { TreeView } from "@real-a11y-dev/semantic-navigator-ui";
@@ -31,7 +31,7 @@ import { TreeView } from "@real-a11y-dev/semantic-navigator-ui";
 
 ### TreePanel
 
-Controlled counterpart to `TreeView`. Renders a pre-extracted `ExtractionResult` with full interactivity (search, filter, expand/collapse, tab sequence) but does **not** observe or extract from the DOM itself — all DOM side-effects are proxied back to the caller via callbacks. Used by the Storybook addon manager panel, where the tree data crosses the iframe boundary as serialized JSON and there is no live DOM root to observe.
+Controlled counterpart to `TreeView`. Renders a pre-extracted `ExtractionResult` with full interactivity (search, filter, expand/collapse, tab sequence) but does **not** observe or extract from the DOM itself — all DOM side-effects are proxied back to the caller via callbacks. Used by the Storybook addon manager panel, where the tree data crosses the iframe boundary as serialized JSON and there is no live DOM root to observe. Hosts that replace `treeData` on every live update should call `preserveExpandedState(prev, next)` (same helper `TreeView` uses) so expand/collapse is not reset.
 
 ### TreeToolbar
 
