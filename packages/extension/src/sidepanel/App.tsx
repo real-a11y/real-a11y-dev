@@ -36,8 +36,9 @@ import {
   useMemo,
 } from "preact/hooks";
 
+import type { FieldState } from "../field-state.js";
 import { isTrustedSender } from "../routing.js";
-import type { ContentToPanel } from "../types.js";
+import type { ContentToPanel, PanelToContent } from "../types.js";
 
 import { buildExportMarkdown, ALL_VIEWS } from "./export.js";
 import type { ExportView } from "./export.js";
@@ -103,6 +104,28 @@ function getDisplayRole(node: DomSemanticNode): string {
   const override = TAG_DISPLAY_OVERRIDES[node.dom.tagName];
   if (override) return override;
   return node.a11y.role;
+}
+
+/**
+ * Narrow a chrome.runtime.sendMessage reply that reports `{ success: true }`.
+ * The callback can receive `undefined` when chrome.runtime.lastError is set
+ * (e.g. the MV3 service worker was torn down before responding) — never
+ * dereference the reply without this (or equivalent) guard.
+ */
+function isSuccessResponse(response: unknown): response is { success: true } {
+  return (
+    typeof response === "object" &&
+    response !== null &&
+    "success" in response &&
+    (response as { success: unknown }).success === true
+  );
+}
+
+/** GET_FIELD_STATE success reply — same undefined-safe gate as isSuccessResponse. */
+function isFieldStateSuccess(
+  response: unknown,
+): response is Extract<FieldState, { success: true }> {
+  return isSuccessResponse(response);
 }
 
 export function App() {
@@ -204,6 +227,30 @@ export function App() {
     myTabIdRef.current = myTabId;
   }, [myTabId]);
 
+  // Stamp every panel→content command with the tab this panel instance is
+  // bound to. The background prefers that over its global `activeTabId`,
+  // which races `chrome.tabs.onActivated` after a tab switch — without the
+  // stamp, DISPATCH_ACTION / SEND_KEY / HIGHLIGHT_NODE can hit the newly
+  // active tab while this panel still shows (or is clearing) the previous
+  // tab's tree.
+  const sendToBoundTab = useCallback(
+    (
+      message: PanelToContent,
+      responseCallback?: (response: unknown) => void,
+    ) => {
+      const stamped: PanelToContent = {
+        ...message,
+        tabId: myTabIdRef.current ?? undefined,
+      };
+      if (responseCallback) {
+        chrome.runtime.sendMessage(stamped, responseCallback);
+      } else {
+        chrome.runtime.sendMessage(stamped);
+      }
+    },
+    [],
+  );
+
   // First time we learn our tab: auto-fetch the tree so the panel
   // populates on open. On subsequent tab changes we deliberately do NOT
   // auto-fetch — too many edge cases made it unreliable (restricted
@@ -217,9 +264,8 @@ export function App() {
     if (myTabId === null) return;
     if (!hasRequestedInitial.current) {
       hasRequestedInitial.current = true;
-      chrome.runtime.sendMessage({
+      sendToBoundTab({
         type: "REQUEST_TREE",
-        tabId: myTabId,
         payload: { viewMode },
       });
       return;
@@ -231,7 +277,7 @@ export function App() {
     setConnected(false);
     setPageTitle("");
     setPageUrl("");
-  }, [myTabId, viewMode]);
+  }, [myTabId, viewMode, sendToBoundTab]);
 
   // Keep a port alive so the background knows when the side panel closes.
   // On disconnect the background clears the highlight overlay AND disables
@@ -244,7 +290,7 @@ export function App() {
       port = chrome.runtime.connect({ name: "sidepanel" });
       // Push the panel's focus-tracker state on (re)connect — the tracker
       // starts OFF in content.ts, so this is what turns it on.
-      chrome.runtime.sendMessage({
+      sendToBoundTab({
         type: "SET_FOCUS_TRACKER",
         payload: { enabled: focusTrackerOn },
       });
@@ -260,6 +306,7 @@ export function App() {
     return () => port?.disconnect();
     // Intentionally empty deps: toggleFocusTracker handles subsequent changes;
     // this effect owns the port lifecycle + the service-worker-death reconnect.
+    // sendToBoundTab is stable (empty deps); focusTrackerOn is the mount value.
   }, []);
 
   // Listen for tree data and focus changes from content script
@@ -400,13 +447,16 @@ export function App() {
     };
   }, []);
 
-  const handleViewModeChange = useCallback((mode: TreeViewMode) => {
-    setViewMode(mode);
-    chrome.runtime.sendMessage({
-      type: "SET_VIEW_MODE",
-      payload: { viewMode: mode },
-    });
-  }, []);
+  const handleViewModeChange = useCallback(
+    (mode: TreeViewMode) => {
+      setViewMode(mode);
+      sendToBoundTab({
+        type: "SET_VIEW_MODE",
+        payload: { viewMode: mode },
+      });
+    },
+    [sendToBoundTab],
+  );
 
   // Apply search + role filter
   useEffect(() => {
@@ -482,13 +532,16 @@ export function App() {
     return i >= startIndex && i < endIndex ? `snrow-${selectedId}` : undefined;
   })();
 
-  const handleSelect = useCallback((id: string) => {
-    setSelectedId(id);
-    chrome.runtime.sendMessage({
-      type: "HIGHLIGHT_NODE",
-      payload: { nodeId: id },
-    });
-  }, []);
+  const handleSelect = useCallback(
+    (id: string) => {
+      setSelectedId(id);
+      sendToBoundTab({
+        type: "HIGHLIGHT_NODE",
+        payload: { nodeId: id },
+      });
+    },
+    [sendToBoundTab],
+  );
 
   const handleToggle = useCallback(
     (id: string) => {
@@ -520,7 +573,7 @@ export function App() {
       });
       forceRender((n) => n + 1);
       // Highlight on the page
-      chrome.runtime.sendMessage({
+      sendToBoundTab({
         type: "HIGHLIGHT_NODE",
         payload: { nodeId: id },
       });
@@ -533,7 +586,7 @@ export function App() {
         });
       });
     },
-    [nodes, requestReveal],
+    [nodes, requestReveal, sendToBoundTab],
   );
 
   const handleActivate = useCallback(
@@ -559,19 +612,18 @@ export function App() {
         primaryAction === "type" ||
         (primaryAction === "focus" && node.interaction.isEditable)
       ) {
-        chrome.runtime.sendMessage(
+        sendToBoundTab(
           { type: "GET_FIELD_STATE", payload: { nodeId: id } },
-          (response) => {
-            if (response?.success) {
-              setInputState({
-                type: "text",
-                nodeId: id,
-                label: node.a11y.name || node.dom.tagName,
-                value: response.value || "",
-                inputType: response.type,
-                placeholder: response.placeholder,
-              });
-            }
+          (response: unknown) => {
+            if (!isFieldStateSuccess(response)) return;
+            setInputState({
+              type: "text",
+              nodeId: id,
+              label: node.a11y.name || node.dom.tagName,
+              value: response.value || "",
+              inputType: response.type,
+              placeholder: response.placeholder,
+            });
           },
         );
         return;
@@ -579,18 +631,17 @@ export function App() {
 
       // Select — open option picker
       if (primaryAction === "select") {
-        chrome.runtime.sendMessage(
+        sendToBoundTab(
           { type: "GET_FIELD_STATE", payload: { nodeId: id } },
-          (response) => {
-            if (response?.success && response.options) {
-              setInputState({
-                type: "select",
-                nodeId: id,
-                label: node.a11y.name || node.dom.tagName,
-                value: response.value || "",
-                options: response.options,
-              });
-            }
+          (response: unknown) => {
+            if (!isFieldStateSuccess(response) || !response.options) return;
+            setInputState({
+              type: "select",
+              nodeId: id,
+              label: node.a11y.name || node.dom.tagName,
+              value: response.value || "",
+              options: response.options,
+            });
           },
         );
         return;
@@ -630,24 +681,21 @@ export function App() {
         setTimeout(() => setLastAction(null), 2000);
       }
 
-      chrome.runtime.sendMessage(
-        { type: "DISPATCH_ACTION", payload: request },
-        (_response) => {
-          if (chrome.runtime.lastError) {
-            setLastAction(`Failed: ${chrome.runtime.lastError.message}`);
-            setTimeout(() => setLastAction(null), 3000);
-          }
-          // Re-extract to reflect state change (checked, expanded, etc.)
-          setTimeout(() => {
-            chrome.runtime.sendMessage({
-              type: "REQUEST_TREE",
-              payload: { viewMode },
-            });
-          }, 100);
-        },
-      );
+      sendToBoundTab({ type: "DISPATCH_ACTION", payload: request }, () => {
+        if (chrome.runtime.lastError) {
+          setLastAction(`Failed: ${chrome.runtime.lastError.message}`);
+          setTimeout(() => setLastAction(null), 3000);
+        }
+        // Re-extract to reflect state change (checked, expanded, etc.)
+        setTimeout(() => {
+          sendToBoundTab({
+            type: "REQUEST_TREE",
+            payload: { viewMode },
+          });
+        }, 100);
+      });
     },
-    [nodes, handleToggle],
+    [nodes, handleToggle, sendToBoundTab, viewMode],
   );
 
   const handleInputSubmit = useCallback(
@@ -655,7 +703,7 @@ export function App() {
       const node = nodes.get(nodeId);
       const actionType = inputState?.type === "select" ? "select" : "type";
 
-      chrome.runtime.sendMessage(
+      sendToBoundTab(
         {
           type: "DISPATCH_ACTION",
           payload: { nodeId, action: actionType, payload: { value } },
@@ -668,7 +716,7 @@ export function App() {
           setTimeout(() => setLastAction(null), 2000);
           // Re-extract tree to reflect new values
           setTimeout(() => {
-            chrome.runtime.sendMessage({
+            sendToBoundTab({
               type: "REQUEST_TREE",
               payload: { viewMode },
             });
@@ -677,7 +725,7 @@ export function App() {
       );
       setInputState(null);
     },
-    [nodes, inputState, viewMode],
+    [nodes, inputState, viewMode, sendToBoundTab],
   );
 
   const handleInputCancel = useCallback(() => {
@@ -687,20 +735,20 @@ export function App() {
   const toggleCurtain = useCallback(() => {
     const next = !curtainOn;
     setCurtainOn(next);
-    chrome.runtime.sendMessage({
+    sendToBoundTab({
       type: "TOGGLE_CURTAIN",
       payload: { visible: next },
     });
-  }, [curtainOn]);
+  }, [curtainOn, sendToBoundTab]);
 
   const toggleFocusTracker = useCallback(() => {
     const next = !focusTrackerOn;
     setFocusTrackerOn(next);
-    chrome.runtime.sendMessage({
+    sendToBoundTab({
       type: "SET_FOCUS_TRACKER",
       payload: { enabled: next },
     });
-  }, [focusTrackerOn]);
+  }, [focusTrackerOn, sendToBoundTab]);
 
   // Picker mode toggle — tells the content script to install / remove
   // its capture-phase click handler. PICK_MODE_CHANGED comes back when
@@ -709,11 +757,11 @@ export function App() {
   const togglePickMode = useCallback(() => {
     const next = !pickModeOn;
     setPickModeOn(next);
-    chrome.runtime.sendMessage({
+    sendToBoundTab({
       type: "SET_PICK_MODE",
       payload: { enabled: next },
     });
-  }, [pickModeOn]);
+  }, [pickModeOn, sendToBoundTab]);
 
   // Ctrl/Cmd+Shift+C: toggle pick mode, mirroring DevTools' inspector
   // shortcut. Bound to the panel document so it fires whenever the panel
@@ -744,15 +792,15 @@ export function App() {
         // real focus change. Without it, sweeping the pointer down the tree
         // scroll-jumped the page and fired a focus event on the host page for
         // every row it passed over.
-        chrome.runtime.sendMessage({
+        sendToBoundTab({
           type: "HIGHLIGHT_NODE",
           payload: { nodeId: id, hover: true },
         });
       } else {
-        chrome.runtime.sendMessage({ type: "CLEAR_HIGHLIGHT" });
+        sendToBoundTab({ type: "CLEAR_HIGHLIGHT" });
       }
     },
-    [isMouseModality],
+    [isMouseModality, sendToBoundTab],
   );
 
   const handleExpandAll = useCallback(() => {
@@ -788,10 +836,10 @@ export function App() {
       keyCode: number,
       modifiers?: { shift?: boolean },
     ) => {
-      chrome.runtime.sendMessage(
+      sendToBoundTab(
         { type: "SEND_KEY", payload: { key, code, keyCode, modifiers } },
-        (response) => {
-          if (response?.success) {
+        (response: unknown) => {
+          if (isSuccessResponse(response)) {
             const label = modifiers?.shift
               ? `Shift+${key === "Tab" ? "Tab" : key}`
               : key;
@@ -801,13 +849,13 @@ export function App() {
         },
       );
       setTimeout(() => {
-        chrome.runtime.sendMessage({
+        sendToBoundTab({
           type: "REQUEST_TREE",
           payload: { viewMode },
         });
       }, 300);
     },
-    [viewMode],
+    [viewMode, sendToBoundTab],
   );
 
   // Export the selected view(s) as a Markdown report and copy to clipboard.
@@ -972,9 +1020,8 @@ export function App() {
             <button
               class="sn-input-panel-btn sn-input-panel-btn--primary"
               onClick={() => {
-                chrome.runtime.sendMessage({
+                sendToBoundTab({
                   type: "REQUEST_TREE",
-                  tabId: myTabId ?? undefined,
                   payload: { viewMode },
                 });
               }}
@@ -988,13 +1035,13 @@ export function App() {
   }
 
   const handleCloseTab = useCallback(() => {
-    chrome.runtime.sendMessage({ type: "CLOSE_TAB" }, (response) => {
-      if (response?.success) {
+    sendToBoundTab({ type: "CLOSE_TAB" }, (response: unknown) => {
+      if (isSuccessResponse(response)) {
         setLastAction("Tab closed");
         setTimeout(() => setLastAction(null), 2000);
       }
     });
-  }, []);
+  }, [sendToBoundTab]);
 
   // Extract hostname for display
   const pageHost = (() => {
@@ -1140,12 +1187,11 @@ export function App() {
         <button
           class="sn-toolbar-btn"
           onClick={() => {
-            // Tag with myTabId so this doesn't race the background's
-            // activeTabId update — without that, hitting refresh right
-            // after a tab switch would route to the previous tab.
-            chrome.runtime.sendMessage({
+            // sendToBoundTab stamps myTabId so this doesn't race the
+            // background's activeTabId update — without that, hitting
+            // refresh right after a tab switch would route to the wrong tab.
+            sendToBoundTab({
               type: "REQUEST_TREE",
-              tabId: myTabId ?? undefined,
               payload: { viewMode },
             });
             setLastAction("Tree refreshed");

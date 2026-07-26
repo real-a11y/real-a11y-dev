@@ -92,21 +92,28 @@ export interface SelectOption {
 }
 
 /**
+ * Optional tab the side panel is bound to. Panel→content commands stamp this
+ * so the background prefers it over its global `activeTabId` (which races
+ * `chrome.tabs.onActivated` after a tab switch).
+ */
+type BoundTab = { tabId?: number };
+
+/**
  * Messages from side panel → background → content script.
  *
- * `REQUEST_TREE` carries an optional `tabId` so the background routes to
- * exactly the tab the panel intends — without it, the request races
- * `chrome.tabs.onActivated`'s update of the background's `activeTabId`,
- * and a tab-switch-triggered REQUEST_TREE may target the previous tab.
+ * Every variant may carry `tabId`: the tab the panel is bound to. The
+ * background prefers it over its global `activeTabId`, which races
+ * `chrome.tabs.onActivated` after a tab switch — without it, DISPATCH_ACTION
+ * / SEND_KEY / CLOSE_TAB can hit the newly activated tab while the panel
+ * still shows (or is clearing) the previous tab's tree.
  */
 export type PanelToContent =
-  | {
+  | (BoundTab & {
       type: "REQUEST_TREE";
-      tabId?: number;
       payload: { viewMode: TreeViewMode };
-    }
-  | { type: "DISPATCH_ACTION"; payload: ActionRequest }
-  | {
+    })
+  | (BoundTab & { type: "DISPATCH_ACTION"; payload: ActionRequest })
+  | (BoundTab & {
       type: "HIGHLIGHT_NODE";
       /**
        * `hover: true` marks a *preview* highlight (mousing over a row) rather
@@ -115,12 +122,12 @@ export type PanelToContent =
        * tree would otherwise scroll-jump and fire focus handlers once per row.
        */
       payload: { nodeId: string; hover?: boolean };
-    }
-  | { type: "CLEAR_HIGHLIGHT" }
-  | { type: "SET_VIEW_MODE"; payload: { viewMode: TreeViewMode } }
-  | { type: "TOGGLE_CURTAIN"; payload: { visible: boolean } }
-  | { type: "GET_FIELD_STATE"; payload: { nodeId: string } }
-  | {
+    })
+  | (BoundTab & { type: "CLEAR_HIGHLIGHT" })
+  | (BoundTab & { type: "SET_VIEW_MODE"; payload: { viewMode: TreeViewMode } })
+  | (BoundTab & { type: "TOGGLE_CURTAIN"; payload: { visible: boolean } })
+  | (BoundTab & { type: "GET_FIELD_STATE"; payload: { nodeId: string } })
+  | (BoundTab & {
       type: "SEND_KEY";
       payload: {
         key: string;
@@ -133,17 +140,17 @@ export type PanelToContent =
           meta?: boolean;
         };
       };
-    }
-  | { type: "SET_FOCUS_TRACKER"; payload: { enabled: boolean } }
+    })
+  | (BoundTab & { type: "SET_FOCUS_TRACKER"; payload: { enabled: boolean } })
   // Start/stop the (expensive) live tree observation in the content script.
   // Driven by the panel's connect/disconnect the same way SET_FOCUS_TRACKER
   // is, so a page whose panel was never opened does no observing at all.
-  | { type: "SET_OBSERVING"; payload: { enabled: boolean } }
-  | { type: "CLOSE_TAB" }
+  | (BoundTab & { type: "SET_OBSERVING"; payload: { enabled: boolean } })
+  | (BoundTab & { type: "CLOSE_TAB" })
   // Picker: toggle DevTools-style "select an element in the page" mode.
   // Content swaps in the capture-phase click handler + cursor styling
   // when enabled, removes them when disabled.
-  | { type: "SET_PICK_MODE"; payload: { enabled: boolean } };
+  | (BoundTab & { type: "SET_PICK_MODE"; payload: { enabled: boolean } });
 
 export type ExtensionMessage =
   ContentToPanel | PanelToContent | FrameToBackground;

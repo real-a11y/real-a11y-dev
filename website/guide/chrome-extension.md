@@ -155,7 +155,9 @@ Synthetic `KeyboardEvent`s are untrusted (`isTrusted: false`), so Chrome skips t
 
 ### Close tab — `×` next to the page title
 
-Closes the current browser tab. Handy for dismissing popups, login windows, or test tabs without reaching for the mouse. Extension-only because it uses `chrome.tabs.remove`.
+Closes the **panel-bound** browser tab (the tab whose tree the panel is showing), not whichever tab Chrome has just activated. Handy for dismissing popups, login windows, or test tabs without reaching for the mouse. Extension-only because it uses `chrome.tabs.remove`.
+
+Every panel→content command stamps that bound `tabId` the same way — so activate, keyboard-bar keys, highlight, curtain, and pick mode all stay on the page the panel is inspecting even if you flip browser tabs mid-click.
 
 ### Cross-link chips on disclosure pairs
 
@@ -175,7 +177,7 @@ Click either chip and the panel expands every collapsed ancestor of the target, 
 
 ### Manual refresh on tab switch — `↻` toolbar button
 
-When you switch browser tabs, the panel **clears its tree** and shows the empty "Connecting…" state instead of stale content from the previous tab. Hit the `↻` refresh button to load the new tab's tree.
+When you switch browser tabs, the panel **clears its tree** and shows the empty "Connecting…" state instead of stale content from the previous tab. Hit the `↻` refresh button (or **Load tree** in the empty state) to load the new tab's tree. Both requests are tagged with the panel's bound tab so they cannot race the background's `activeTabId` update and land on the wrong page.
 
 This is intentional: auto-refresh on tab switch was unreliable across the long tail of pages (restricted URLs with no content script, lazy-injected content scripts that aren't ready yet, races between the panel and the content script becoming reachable). The manual refresh trades one extra click for predictability — you always know what you're seeing.
 
