@@ -24,8 +24,9 @@ feature that's off by default. So the store build never carries it:
   **dead-code-eliminated** from the store build (verified: the production
   `background.js` contains no `chrome.debugger` reference).
 - The dogfood build is a **separate, unpacked** artifact (`dist-dogfood/`) with
-  its own manifest that adds `debugger` + `tabs`. Unpacked extensions need no
-  store review. It is never submitted.
+  its own manifest that adds `debugger` + `tabs` + `storage` (the last for the
+  content-free instrumentation log). Unpacked extensions need no store review.
+  It is never submitted.
 
 ## Build & load
 
