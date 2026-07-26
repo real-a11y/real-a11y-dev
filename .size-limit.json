@@ -37,5 +37,25 @@
     "limit": "5.4 KB",
     "gzip": true,
     "ignore": ["@real-a11y-dev/core"]
+  },
+  {
+    "name": "@real-a11y-dev/storybook-addon (manager)",
+    "path": "packages/storybook-addon/dist/manager.js",
+    "limit": "24 KB",
+    "gzip": true,
+    "ignore": [
+      "react",
+      "react-dom",
+      "@storybook/manager-api",
+      "@storybook/preview-api",
+      "@storybook/theming",
+      "storybook"
+    ]
+  },
+  {
+    "name": "@real-a11y-dev/browser (page-bundle IIFE)",
+    "path": "packages/browser/dist/page-bundle.iife.global.js",
+    "limit": "10 KB",
+    "gzip": true
   }
 ]
