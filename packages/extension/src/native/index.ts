@@ -160,20 +160,22 @@ export function registerNativeMode(): void {
 }
 
 /**
- * Run an operation, retrying once on a transient failure — which is how an MV3
- * suspend/wake presents. Records whether the reattach recovered, the lifecycle
- * signal PR H is here to measure. A `conflict` (DevTools attached) is not
- * retried — it won't clear on its own.
+ * Run an operation, retrying once, and record a reattach ONLY when the
+ * connection dropped mid-operation — the classic MV3 suspend/wake, which is the
+ * lifecycle signal PR H measures.
  *
- * A connection lost *mid-operation* (the classic MV3 detach) does not surface
- * as an attach failure — it surfaces as a THROW from the CDP call inside
- * `withDebugger` (only the transport throws here: `dispatchNative` swallows its
- * own errors into structured results, so a throw is always a dropped
- * connection). `runGuarded` converts that throw into a transient outcome so the
- * retry-and-record path below actually fires for it, instead of the error
- * escaping to the handler's outer catch unmeasured.
+ * That drop does not surface as an attach failure: it surfaces as a THROW from
+ * the CDP call inside `withDebugger` (only the transport throws — `dispatchNative`
+ * swallows its own errors into structured results), which `runGuarded` tags
+ * `connection-lost`. Only that case records `reattach-ok`/`reattach-failed`.
+ *
+ * A plain `attach-failed` (attach never succeeded — a `chrome://`/Web-Store page
+ * or a debugger-forbidden tab) is retried best-effort but NOT recorded: it is a
+ * permanent/page failure, not a service-worker lifecycle recovery, and counting
+ * it would inflate the "reattach failed" number the ship/no-ship decision rests
+ * on. A `conflict` (DevTools attached) is not retried — it won't clear on its own.
  */
-async function withRecovery<T>(
+export async function withRecovery<T>(
   session: NativeDebuggerSession,
   tabId: number,
   fn: (t: import("./native-core.js").CdpTransport) => Promise<T>,
@@ -182,17 +184,27 @@ async function withRecovery<T>(
   if (first.outcome.ok || first.outcome.error === "conflict") return first;
 
   const retry = await runGuarded(session, tabId, fn);
-  await session.dogfoodLog().record({
-    kind: retry.outcome.ok ? "reattach-ok" : "reattach-failed",
-    at: Date.now(),
-  });
+  // Only a mid-operation drop (we WERE attached, then lost it) is a lifecycle
+  // recovery worth measuring. A fresh attach failure is a page/permission
+  // problem, not an MV3 suspend/wake, so it must not touch the reattach metric.
+  if (first.outcome.error === "connection-lost") {
+    await session.dogfoodLog().record({
+      kind: retry.outcome.ok ? "reattach-ok" : "reattach-failed",
+      at: Date.now(),
+    });
+  }
   return retry;
 }
 
-/** withDebugger, but a mid-operation throw (a dropped connection) becomes a
- *  transient `attach-failed` outcome rather than propagating — so withRecovery
- *  can retry it and record the reattach result. */
-async function runGuarded<T>(
+/**
+ * withDebugger, but a mid-operation throw — the CDP call failing AFTER a
+ * successful attach, i.e. a dropped connection — becomes a `connection-lost`
+ * outcome instead of propagating. A failed *attach* returns its own
+ * `attach-failed`/`conflict` outcome and never throws, so a throw here always
+ * means we were attached and lost it. The distinct tag lets `withRecovery`
+ * count only genuine lifecycle recoveries.
+ */
+export async function runGuarded<T>(
   session: NativeDebuggerSession,
   tabId: number,
   fn: (t: import("./native-core.js").CdpTransport) => Promise<T>,
@@ -200,6 +212,6 @@ async function runGuarded<T>(
   try {
     return await session.withDebugger(tabId, fn);
   } catch {
-    return { outcome: { ok: false, error: "attach-failed" } };
+    return { outcome: { ok: false, error: "connection-lost" } };
   }
 }
