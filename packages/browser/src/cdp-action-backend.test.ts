@@ -144,6 +144,41 @@ describe("CdpActionBackend.dispatch", () => {
     });
   });
 
+  it("ships the real page-action source, not a bare element.click()", async () => {
+    // Regression guard on the wiring: this backend used to send a hand-written
+    // `this.click()` one-liner, which no-ops on handlers that gate on a pointer
+    // sequence. If the serialization ever silently reverts to something that
+    // doesn't dispatch the sequence, catch it here rather than on a real page.
+    const { backend, cdp } = makeBackend(resolving("obj-9", { ok: true }));
+    await backend.dispatch({ nodeId: "ax-dom-1", action: "click" });
+
+    const call = cdp.calls.find((c) => c.method === "Runtime.callFunctionOn");
+    const source = String(call?.params?.functionDeclaration);
+    for (const marker of ["pointerdown", "mousedown", "pointerup", "mouseup"]) {
+      expect(source).toContain(marker);
+    }
+    expect(source).toContain("treeitem"); // composite retargeting travelled too
+  });
+
+  it("reports a content-free failure when the in-page function throws", async () => {
+    // The page functions deliberately don't catch: a throw becomes CDP
+    // exceptionDetails, and whatever `result.value` holds must not reach the
+    // caller as page text.
+    const { backend } = makeBackend((method) => {
+      if (method === "DOM.resolveNode") return { object: { objectId: "o" } };
+      if (method === "Runtime.callFunctionOn")
+        return {
+          result: { value: "TypeError: cannot read secret@example.com" },
+          exceptionDetails: { text: "Uncaught" },
+        };
+      return {};
+    });
+    const res = await backend.dispatch({ nodeId: "ax-dom-8", action: "click" });
+    expect(res.success).toBe(false);
+    expect(res.error).toBe("action failed");
+    expect(JSON.stringify(res)).not.toContain("secret@example.com");
+  });
+
   it("never surfaces a raw CDP error message", async () => {
     const { backend } = makeBackend((method) => {
       if (method === "DOM.resolveNode") return { object: { objectId: "o" } };
