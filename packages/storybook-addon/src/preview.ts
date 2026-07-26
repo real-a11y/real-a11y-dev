@@ -91,7 +91,11 @@ function liveExtractorMode(mode: TreeMode): "dom" | "a11y" {
 function buildSerializableTree(change?: TreeChange): SerializableTree {
   const result = liveExtractor!.refresh(change);
 
-  // Reset ui state so the manager always starts fresh (expanded, visible, etc.).
+  // Default new / rebuilt nodes to expanded for the Storybook panel's first
+  // paint. The manager re-applies the user's expand/collapse from its live
+  // tree ref on every TREE_UPDATED (see preserveExpandedState), so this does
+  // not wipe collapses the user already made — it only seeds ids the manager
+  // has not seen yet.
   // LiveTreeExtractor is the DOM producer, so every node has a `ui` facet.
   for (const node of result.nodes.values() as IterableIterator<DomSemanticNode>) {
     node.ui.expanded = true;

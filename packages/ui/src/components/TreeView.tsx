@@ -30,6 +30,7 @@ import {
 } from "preact/hooks";
 
 import { buildTreeDiffView } from "../diff.js";
+import { preserveExpandedState } from "../preserve-expanded.js";
 
 import { TreePanel } from "./TreePanel.js";
 
@@ -216,7 +217,15 @@ export function TreeView({
     const live = new LiveTreeExtractor(root, { mode: liveMode });
 
     const flush = (change?: TreeChange) => {
-      setTreeData(snapshotResult(live.refresh(change)));
+      // a11y mode rebuilds node wrappers on every refresh with
+      // `expanded: depth < 3`, so without carrying the previous
+      // ui.expanded forward a user's expand/collapse snaps back on any
+      // host-page mutation the DomObserver sees (audit finding #103).
+      setTreeData((prev) => {
+        const next = snapshotResult(live.refresh(change));
+        if (prev) preserveExpandedState(prev, next);
+        return next;
+      });
     };
 
     flush();

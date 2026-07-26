@@ -318,6 +318,67 @@ describe("TreeView (smoke)", () => {
     }
   });
 
+  it("preserves expand/collapse across DomObserver flushes", async () => {
+    // Regression for audit finding #103: a11y refresh rebuilds nodes with
+    // `expanded: depth < 3`, so without preserveExpandedState a manually
+    // expanded row snaps shut on any host-page mutation.
+    const root = document.createElement("div");
+    root.innerHTML = `
+      <nav>
+        <ul>
+          <li><a href="#1">One</a>
+            <ul>
+              <li><a href="#1a">One-A</a>
+                <ul>
+                  <li><a href="#1a1">Deep</a></li>
+                </ul>
+              </li>
+            </ul>
+          </li>
+        </ul>
+      </nav>
+      <button type="button" id="tick">tick</button>
+    `;
+    document.body.appendChild(root);
+    try {
+      render(<TreeView root={root} initialViewMode="a11y" />, container);
+      const tree = await waitFor(container, '[role="tree"]');
+
+      // Collapse-all is a user-driven state that the depth heuristic would
+      // undo (shallow nodes default to expanded: depth < 3). After a host
+      // mutation those rows must stay collapsed — without preserveExpandedState
+      // they snap back open.
+      (
+        container.querySelector(
+          '[aria-label="Collapse all nodes"]',
+        ) as HTMLButtonElement
+      ).click();
+      await new Promise((r) => setTimeout(r, 30));
+
+      const collapsedCount = tree.querySelectorAll(
+        '[role="treeitem"][aria-expanded="false"]',
+      ).length;
+      const expandedCount = tree.querySelectorAll(
+        '[role="treeitem"][aria-expanded="true"]',
+      ).length;
+      expect(collapsedCount).toBeGreaterThan(0);
+
+      root.querySelector("#tick")!.textContent = `tick ${Date.now()}`;
+      // DomObserver default debounce is 300ms.
+      await new Promise((r) => setTimeout(r, 450));
+
+      expect(
+        tree.querySelectorAll('[role="treeitem"][aria-expanded="false"]')
+          .length,
+      ).toBe(collapsedCount);
+      expect(
+        tree.querySelectorAll('[role="treeitem"][aria-expanded="true"]').length,
+      ).toBe(expandedCount);
+    } finally {
+      root.remove();
+    }
+  });
+
   it("drops the diff baseline when the root is swapped in place", async () => {
     // `createInspector` re-keys TreeView on setRoot(), so it remounts and
     // never reaches this — but TreeView is a public export, and a consumer
