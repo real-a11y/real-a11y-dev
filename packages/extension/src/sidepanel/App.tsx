@@ -595,10 +595,11 @@ export function App() {
       if (!node) return;
 
       // The slider/spinbutton ▼/▲ pair passes its own action so each
-      // button dispatches its own step. All other paths (Enter key,
-      // single-action button click, FilteredList Activate) let us pick
-      // the primary so the existing single-action ergonomics keep
-      // working unchanged.
+      // button dispatches its own step. Stepper keys (+/−/Shift+Enter)
+      // from the tree, FilteredList, and TabSequenceView do the same.
+      // All other paths (plain Enter, single-action button click,
+      // Activate) let us pick the primary so existing single-action
+      // ergonomics keep working unchanged.
       const primaryAction =
         explicitAction ?? getPrimaryAction(node.interaction.actions);
       if (!primaryAction) {
