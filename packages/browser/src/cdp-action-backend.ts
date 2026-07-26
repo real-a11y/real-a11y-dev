@@ -14,6 +14,10 @@
  * It acts only on nodes with a backing DOM element (`ax-dom-<n>`). A node with
  * none can't be resolved, so it's rejected rather than guessed at.
  *
+ * The code that actually runs in the page lives in `./page-actions.ts` and is
+ * sent as `String(fn)` — see that module for why those functions are written
+ * self-contained, and for how they stay in step with core's `ActionDispatcher`.
+ *
  * ## Safety
  *
  * This writes to a live page, so it holds to the producer's redaction
@@ -29,6 +33,9 @@ import type {
   ActionType,
 } from "@real-a11y-dev/core";
 import type { CDPSession } from "playwright";
+
+import { pageClick, pageFocus, pageType } from "./page-actions.js";
+import type { PageActionMarker } from "./page-actions.js";
 
 /** Actions this backend can dispatch today. Others are rejected, not guessed. */
 const SUPPORTED_ACTIONS: ReadonlySet<ActionType> = new Set<ActionType>([
@@ -112,13 +119,9 @@ export class CdpActionBackend {
       const res = (await this.client.send("Runtime.callFunctionOn", {
         objectId,
         // Returns only a structural marker — never page text.
-        functionDeclaration: `function () {
-          if (typeof this.click !== "function") return { ok: false, reason: "not-clickable" };
-          this.click();
-          return { ok: true };
-        }`,
+        functionDeclaration: String(pageClick),
         returnByValue: true,
-      })) as { result?: { value?: { ok?: boolean; reason?: string } } };
+      })) as { result?: { value?: PageActionMarker } };
       return toResult(res.result?.value);
     } catch (err) {
       return { success: false, error: cdpError(err) };
@@ -132,31 +135,9 @@ export class CdpActionBackend {
         // `inputType` (a field's `type` attribute, e.g. "email") is structural,
         // not the field's value — safe to return. `requiresInput` mirrors core's
         // ActionDispatcher so a caller knows a `type` should follow.
-        functionDeclaration: `function () {
-          if (typeof this.focus !== "function") return { ok: false, reason: "not-focusable" };
-          this.focus();
-          const tag = (this.tagName || "").toLowerCase();
-          const isText =
-            tag === "textarea" ||
-            (tag === "input" &&
-              !["button", "submit", "reset", "checkbox", "radio", "file", "range", "hidden"].includes(
-                (this.getAttribute("type") || "text").toLowerCase(),
-              )) ||
-            this.isContentEditable === true;
-          const inputType = tag === "input" ? (this.getAttribute("type") || "text").toLowerCase() : tag;
-          return isText ? { ok: true, requiresInput: true, inputType } : { ok: true };
-        }`,
+        functionDeclaration: String(pageFocus),
         returnByValue: true,
-      })) as {
-        result?: {
-          value?: {
-            ok?: boolean;
-            reason?: string;
-            requiresInput?: boolean;
-            inputType?: string;
-          };
-        };
-      };
+      })) as { result?: { value?: PageActionMarker } };
       return toResult(res.result?.value);
     } catch (err) {
       return { success: false, error: cdpError(err) };
@@ -182,30 +163,10 @@ export class CdpActionBackend {
         // change events, so framework-controlled inputs (React et al.) see it.
         // Crucially, the return value is structural only — the typed text and
         // the resulting `.value` NEVER cross back to Node.
-        functionDeclaration: `function (text) {
-          const el = this;
-          if (!el || !el.tagName) return { ok: false, reason: "not-element" };
-          const tag = el.tagName.toLowerCase();
-          if (tag === "input" || tag === "textarea") {
-            const proto =
-              tag === "textarea"
-                ? window.HTMLTextAreaElement.prototype
-                : window.HTMLInputElement.prototype;
-            const desc = Object.getOwnPropertyDescriptor(proto, "value");
-            if (desc && desc.set) desc.set.call(el, text);
-            else el.value = text;
-          } else if (el.isContentEditable) {
-            el.textContent = text;
-          } else {
-            return { ok: false, reason: "not-a-text-field" };
-          }
-          el.dispatchEvent(new Event("input", { bubbles: true }));
-          el.dispatchEvent(new Event("change", { bubbles: true }));
-          return { ok: true };
-        }`,
+        functionDeclaration: String(pageType),
         arguments: [{ value }],
         returnByValue: true,
-      })) as { result?: { value?: { ok?: boolean; reason?: string } } };
+      })) as { result?: { value?: PageActionMarker } };
       return toResult(res.result?.value);
     } catch (err) {
       return { success: false, error: cdpError(err) };
@@ -214,16 +175,7 @@ export class CdpActionBackend {
 }
 
 /** Map the in-page `{ ok, reason?, ... }` marker to an {@link ActionResult}. */
-function toResult(
-  marker:
-    | {
-        ok?: boolean;
-        reason?: string;
-        requiresInput?: boolean;
-        inputType?: string;
-      }
-    | undefined,
-): ActionResult {
+function toResult(marker: PageActionMarker | undefined): ActionResult {
   if (marker?.ok) {
     return {
       success: true,

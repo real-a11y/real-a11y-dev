@@ -45,6 +45,30 @@ const PAGE = dataUrl(`<!doctype html><html><head><title>act</title></head><body>
   </main>
 </body></html>`);
 
+// The three shapes the CDP backend used to no-op on, each reporting its
+// outcome into a heading so a native-tree read can see it:
+//   1. a control whose handler gates on the pointer sequence (jsaction shape),
+//   2. a composite wrapper whose real handler is delegated via closest(),
+//   3. an editor that consumes `beforeinput` and owns its own content.
+const FIDELITY_PAGE =
+  dataUrl(`<!doctype html><html><head><title>fidelity</title></head><body>
+  <main>
+    <button onpointerdown="document.getElementById('p-out').textContent='pointer fired'">Pointer gated</button>
+    <h2 id="p-out">pointer idle</h2>
+
+    <div onclick="if (event.target.closest('a[href]')) document.getElementById('m-out').textContent='menu chose'">
+      <div role="menuitem"><a href="#pick">Pick me</a></div>
+    </div>
+    <h3 id="m-out">menu idle</h3>
+
+    <div id="editor" role="textbox" aria-label="Editor" contenteditable="true"
+         onbeforeinput="event.preventDefault(); document.getElementById('e-out').textContent='editor handled'"
+         oninput="document.getElementById('e-clobber').textContent='clobbered'">model-owned</div>
+    <h4 id="e-out">editor idle</h4>
+    <h4 id="e-clobber">not clobbered</h4>
+  </main>
+</body></html>`);
+
 const session = new BrowserSession({ headless: true });
 
 afterAll(async () => {
@@ -99,6 +123,67 @@ describe("BrowserSession.act (native producer, write side)", () => {
     const result = await session.act({ nodeId: "ax-424242", action: "click" });
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/no backing DOM element/);
+  });
+
+  // Each of these fails against a bare `element.click()` / unconditional
+  // `textContent` write — the shapes that silently no-op'd through CDP while
+  // core's in-page dispatcher handled them.
+  describe("dispatch fidelity", () => {
+    it("fires the pointer sequence, not a bare click", async () => {
+      await session.open(FIDELITY_PAGE);
+      const before = await session.nativeTree();
+      const buttonId = findId(before, "button", "Pointer gated");
+      expect(buttonId).toBeDefined();
+
+      const result = await session.act({
+        nodeId: buttonId!,
+        action: "click",
+      });
+      expect(result).toEqual({ success: true });
+
+      const after = await session.nativeTree();
+      expect(findId(after, "heading", "pointer fired")).toBeDefined();
+    });
+
+    it("retargets a composite wrapper to the descendant that owns the handler", async () => {
+      await session.open(FIDELITY_PAGE);
+      const before = await session.nativeTree();
+      // Target the menuitem WRAPPER — the delegated handler only matches when
+      // the click lands on the inner <a href>.
+      const wrapperId = findId(before, "menuitem", "Pick me");
+      expect(wrapperId).toBeDefined();
+
+      const result = await session.act({
+        nodeId: wrapperId!,
+        action: "click",
+      });
+      expect(result).toEqual({ success: true });
+
+      const after = await session.nativeTree();
+      expect(findId(after, "heading", "menu chose")).toBeDefined();
+    });
+
+    it("lets an editor that consumes beforeinput keep its own content", async () => {
+      await session.open(FIDELITY_PAGE);
+      const before = await session.nativeTree();
+      const editorId = findId(before, "textbox", "Editor");
+      expect(editorId).toBeDefined();
+
+      const result = await session.act({
+        nodeId: editorId!,
+        action: "type",
+        payload: { value: "typed by the agent" },
+      });
+      expect(result).toEqual({ success: true });
+
+      const after = await session.nativeTree();
+      // The editor saw its beforeinput…
+      expect(findId(after, "heading", "editor handled")).toBeDefined();
+      // …and we did NOT write over its model-owned content (the write path
+      // would have fired `input`, flipping this heading).
+      expect(findId(after, "heading", "not clobbered")).toBeDefined();
+      expect(findId(after, "heading", "clobbered")).toBeUndefined();
+    });
   });
 
   it("reports a stale id when a backend node no longer resolves", async () => {

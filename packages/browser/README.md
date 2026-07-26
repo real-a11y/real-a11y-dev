@@ -52,7 +52,15 @@ The **read** side is redaction-safe by construction — the producer never reads
 
 ### Acting on the native tree — `session.act()`
 
-The native tree is no longer read-only: `session.act(request)` dispatches a **click**, **type**, or **focus** against a node, over CDP. It works because every native node id encodes its Chromium `backendDOMNodeId` (`ax-dom-<n>`): `act` parses the id, resolves it back to the live DOM element (`DOM.resolveNode`), and dispatches (`Runtime.callFunctionOn`) — the same value-setter + `input`/`change` sequence the DOM engine uses, so framework-controlled inputs see it.
+The native tree is no longer read-only: `session.act(request)` dispatches a **click**, **type**, or **focus** against a node, over CDP. It works because every native node id encodes its Chromium `backendDOMNodeId` (`ax-dom-<n>`): `act` parses the id, resolves it back to the live DOM element (`DOM.resolveNode`), and dispatches (`Runtime.callFunctionOn`).
+
+What gets dispatched matters as much as where. The in-page functions (`src/page-actions.ts`) mirror the dispatcher `@real-a11y-dev/core` uses in the extension and Storybook panel, because real pages need all of it:
+
+- **click** fires the full `pointerdown → mousedown → pointerup → mouseup → click` sequence, not `element.click()` — jsaction / Material-ripple handlers gate on the sequence and ignore a bare click. A click on a composite-widget wrapper (`treeitem`, `menuitem`, `option`, `tab`, `row`, …) is redirected to the interactive descendant that owns the handler, since a delegated `event.target.closest(…)` walk goes *upward* and would otherwise miss it.
+- **type** writes through the element's own prototype value setter plus `input`/`change`, so framework-controlled inputs (React et al.) see it. On a contenteditable it fires a cancelable `beforeinput` first and only writes `textContent` when nothing handled it — model-driven editors (ProseMirror, Lexical, Draft) insert from `beforeinput` into their own document model and would revert a raw write.
+- **focus** reports whether the target actually accepts text entry (an allow-list of input types), so a caller knows whether a `type` can follow.
+
+These functions are serialized to the page as source text, so each is written self-contained — see the module docstring for that constraint, and `page-actions.test.ts` for the parity tests that hold them level with core.
 
 ```ts
 const tree = await session.nativeTree();
