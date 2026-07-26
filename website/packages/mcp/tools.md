@@ -1,13 +1,13 @@
 ---
 title: "@real-a11y-dev/mcp — tools reference"
-description: Every tool the Real A11y MCP server exposes — open_page, audit_page, the view tools, compare_producers — with parameters and examples.
+description: Every tool the Real A11y MCP server exposes — open_page, audit_page, the view tools, the act tools, compare_producers — with parameters and examples.
 ---
 
 # MCP tools reference
 
-The Real A11y MCP server exposes **seventeen tools** to an MCP client (Claude Code, Claude Desktop, Cursor, and any other MCP-capable assistant). Each tool drives a real Chromium page and reports what a screen reader would actually perceive — computed roles, accessible names, and the defects assistive tech announces as broken — not what the HTML source claims.
+The Real A11y MCP server exposes **twenty tools** to an MCP client (Claude Code, Claude Desktop, Cursor, and any other MCP-capable assistant). Each tool drives a real Chromium page and reports what a screen reader would actually perceive — computed roles, accessible names, and the defects assistive tech announces as broken — not what the HTML source claims.
 
-The tools share **one** browser page. A typical run is [`open_page`](#open_page) → an audit or view tool ([`audit_page`](#audit_page), [`inspect_page`](#inspect_page), or a `get_*` view) → [`close_browser`](#close_browser). Because every tool reads the same mutable page, calls must run **sequentially, never in parallel** — a second call mid-flight would race the first's navigation.
+The tools share **one** browser page. A typical run is [`open_page`](#open_page) → an audit or view tool ([`audit_page`](#audit_page), [`inspect_page`](#inspect_page), or a `get_*` view) → [`close_browser`](#close_browser). To interact, the loop is [`checkpoint_tree`](#checkpoint_tree) → an [act tool](#act) ([`click_element`](#click_element), [`type_text`](#type_text), [`focus_element`](#focus_element)) → [`diff_tree`](#diff_tree). Because every tool reads the same mutable page, calls must run **sequentially, never in parallel** — a second call mid-flight would race the first's navigation.
 
 Every audit and extraction tool takes an optional `rootSelector` (default `"body"`) that scopes the work to one region or component, and — except [`get_tab_order`](#get_tab_order) — a `producer` (`"dom"` default, or `"native"` for Chromium's own accessibility tree read over CDP). [`compare_producers`](#compare_producers) and any tool called with `producer: "native"` read the whole document (`rootSelector` must stay `"body"`). Tool output is capped at **40,000 characters** — a larger page is truncated with a note to narrow with `rootSelector`.
 
@@ -63,6 +63,14 @@ The **Producer** column shows which tools accept `producer: "native"` (Chromium'
 | --- | --- | --- |
 | [`checkpoint_tree`](#checkpoint_tree) | Capture the current tree as an interaction-diff baseline (page-bound). | — |
 | [`diff_tree`](#diff_tree) | Diff the tree since `checkpoint_tree` — what an interaction changed. | — |
+
+**Act**
+
+| Tool | Purpose | Producer |
+| --- | --- | --- |
+| [`click_element`](#click_element) | Real click at the node matched by role + accessible name. | `native` |
+| [`type_text`](#type_text) | Replace a text field's value; the result never echoes the text. | `native` |
+| [`focus_element`](#focus_element) | Move real keyboard focus; flags text fields for a follow-up `type_text`. | `native` |
 
 ## Session
 
@@ -322,6 +330,60 @@ Parameters:
 - **`rootSelector`** — string — optional — CSS root for the re-extraction. **Defaults to the root the checkpoint was captured with**, so the diff stays like-for-like instead of silently widening to `body` and reporting the rest of the page as added.
 
 Errors if no checkpoint exists on the current page — including after a navigation, which discards it.
+
+## Act
+
+The write side of the native producer: dispatch a real click, replace a text field's value, or move real keyboard focus — over CDP, against the node matched in **Chromium's own accessibility tree**. Chromium only.
+
+Targeting is deliberately **role + accessible name**, never a CSS selector or a node id. The tools resolve the target against a fresh native tree immediately before every dispatch — the same view [`get_semantic_tree`](#get_semantic_tree) with `producer: "native"` prints — so if role and name can't reach a control, assistive technology can't reach it either, and that is an accessibility finding rather than a targeting inconvenience.
+
+All three tools share the targeting parameters:
+
+- **`role`** — string — required — ARIA role exactly as the tree prints it (`button`, `link`, `textbox`, `checkbox`, `menuitem`, …).
+- **`name`** — string — optional — accessible name; case-insensitive, whitespace-normalized **exact** match against the **native** tree (names can differ from the DOM producer's — [`compare_producers`](#compare_producers) shows where). Pass `""` to target an unlabeled control; omit to match any name.
+- **`nth`** — integer ≥ 1 — optional — 1-based pick among the role+name-filtered matches, in document order.
+
+When several nodes match and no `nth` was given, the tool errors and **lists the candidates as `nth=1 · role "name"` lines** — the remedy is copy-paste. A **disabled** target is refused with the cause (the page would silently ignore the action, and the empty diff that followed would mislead). A match with no backing DOM element (a synthesized node such as the document root) is refused before any CDP traffic.
+
+The payoff is the loop: [`checkpoint_tree`](#checkpoint_tree) first, act, then [`diff_tree`](#diff_tree) — the diff is the answer to _"what did that action change for a screen reader?"_.
+
+### `click_element`
+
+_Acts on the page · targets by role + accessible name in the native tree · Chromium only._
+
+Dispatch a **real** click against the matched element. It can submit forms, toggle state, and **navigate** — and navigation discards the page's tree checkpoint, so re-checkpoint after any click that changes the page instance.
+
+An agent calls this to open the dialog it is about to audit, expand a disclosure, or demonstrate that an unlabeled-but-reachable button actually does something:
+
+```json
+{ "role": "button", "name": "Save", "nth": 2 }
+```
+
+### `type_text`
+
+_Acts on the page · replaces the field's value · the result never echoes the text._
+
+Set the value of the matched text field (role is usually `textbox`, `searchbox`, or `combobox`). The value is applied through the prototype value setter with `input`/`change` events, so framework-controlled inputs (React et al.) register it — and it **replaces** the field's current value rather than appending.
+
+Additional parameter:
+
+- **`text`** — string — required — the text to enter. **Never echoed back in the result** (the same R1 redaction discipline the native producer applies to reading).
+
+There is deliberately **no credential parameter**, and this tool must not be used to log in — a password typed here would enter the agent's context. For pages behind auth, start the server with [`REAL_A11Y_MCP_STORAGE_STATE`](#real_a11y_mcp_storage_state) or [`REAL_A11Y_MCP_CDP`](#real_a11y_mcp_cdp) instead.
+
+```json
+{ "role": "textbox", "name": "Search", "text": "keyboard traps" }
+```
+
+### `focus_element`
+
+_Acts on the page · moves real keyboard focus._
+
+Move keyboard focus to the matched element — what a keyboard user's <kbd>Tab</kbd> journey would land on, teleported. The result says whether the target is a text field (and its input type), so the agent knows a [`type_text`](#type_text) should follow. Pairs with [`get_tab_order`](#get_tab_order) for focus-order work.
+
+```json
+{ "role": "searchbox", "name": "Search docs" }
+```
 
 ## Producer parity
 

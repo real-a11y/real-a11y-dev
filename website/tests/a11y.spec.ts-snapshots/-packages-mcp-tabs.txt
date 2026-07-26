@@ -75,6 +75,8 @@ link "Environment"
 button "Copy Code"
 generic
 link "Playwright MCP"
+link "act tools"
+link "diff_tree"
 link "axe-core"
 link "Tools reference"
 link "@real-a11y-dev/testing — Assertions"
