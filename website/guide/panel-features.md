@@ -126,7 +126,10 @@ The panel itself is fully keyboard-operable.
 | `↑` / `↓` | Move between tree rows |
 | `→` | Expand the current row |
 | `←` | Collapse the current row, or move to its parent |
-| `Enter` | Activate the current node — clicks links, submits buttons, opens menus |
+| `Enter` | Activate the current node — clicks links, submits buttons, opens menus. On a slider/spinbutton, steps the value **up** |
+| `Shift+Enter` | On a slider/spinbutton, step the value **down** (the ▼/▲ buttons are mouse-only) |
+| `+` / `=` | On a slider/spinbutton, step the value up |
+| `-` / `_` | On a slider/spinbutton, step the value down |
 | `Space` | Same as Enter for most elements; toggles checkboxes/radios |
 | `/` | Focus the search input |
 | `Home` / `End` | Jump to the first / last visible row |

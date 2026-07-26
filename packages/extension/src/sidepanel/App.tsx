@@ -1382,7 +1382,7 @@ export function App() {
               ref={treeRef}
               class="sn-tree"
               role="tree"
-              aria-label="Semantic tree — press Enter to activate interactive elements"
+              aria-label="Semantic tree — press Enter to activate interactive elements; +/− or Shift+Enter to step sliders"
               tabIndex={0}
               style={{
                 minHeight: totalHeight,
@@ -1824,8 +1824,9 @@ export function App() {
           </div>
 
           <div class="sn-hints">
-            <kbd>Enter</kbd> activate &middot; <kbd>Space</kbd> expand &middot;{" "}
-            <kbd>Arrow</kbd> navigate &middot; <kbd>DblClick</kbd> scope
+            <kbd>Enter</kbd> activate &middot; <kbd>+/−</kbd> step &middot;{" "}
+            <kbd>Space</kbd> expand &middot; <kbd>Arrow</kbd> navigate &middot;{" "}
+            <kbd>DblClick</kbd> scope
           </div>
         </>
       )}

@@ -1,4 +1,5 @@
 import type {
+  ActionType,
   SemanticNode,
   DomSemanticNode,
   RoleFilter,
@@ -12,6 +13,7 @@ import {
   useEffect,
 } from "preact/hooks";
 
+import { resolveStepperKeyAction } from "../hooks/stepperKeys.js";
 import {
   createTypeAheadBuffer,
   findTypeAheadIndex,
@@ -27,7 +29,8 @@ interface FilteredListProps {
   roleFilter: Exclude<RoleFilter, null>;
   query: string;
   onSelect: (nodeId: string) => void;
-  onActivate: (nodeId: string) => void;
+  /** Optional action lets stepper keys dispatch increment/decrement. */
+  onActivate: (nodeId: string, action?: ActionType) => void;
   /** Focus the panel search input when `/` is pressed. */
   onFocusSearch?: () => void;
 }
@@ -124,8 +127,13 @@ export function FilteredList({
           typeAhead.current.clear();
           if (selectedNode) {
             if (INTERACTIVE_FILTERS.has(roleFilter)) {
-              const action = getPrimaryAction(selectedNode.interaction.actions);
-              if (action) onActivate(selectedNode.id);
+              const step = resolveStepperKeyAction(
+                e,
+                selectedNode.interaction.actions,
+              );
+              const action =
+                step ?? getPrimaryAction(selectedNode.interaction.actions);
+              if (action) onActivate(selectedNode.id, step ?? undefined);
               else onSelect(selectedNode.id);
             } else {
               onSelect(selectedNode.id);
@@ -141,6 +149,18 @@ export function FilteredList({
           break;
         }
         default: {
+          if (selectedNode && INTERACTIVE_FILTERS.has(roleFilter)) {
+            const step = resolveStepperKeyAction(
+              e,
+              selectedNode.interaction.actions,
+            );
+            if (step) {
+              e.preventDefault();
+              typeAhead.current.clear();
+              onActivate(selectedNode.id, step);
+              break;
+            }
+          }
           if (!isTypeAheadKey(e) || matches.length === 0) break;
           e.preventDefault();
           const buffer = typeAhead.current.push(e.key);
