@@ -89,9 +89,14 @@ export function useVirtualTree(
 
       updateViewport();
 
+      // Defer the observer's re-measure by one frame: updateViewport sets state
+      // and relayouts the observed node, re-firing the observer in the same
+      // frame — the benign "ResizeObserver loop completed with undelivered
+      // notifications" warning that clutters the extension's Errors panel. A rAF
+      // hop breaks the loop; updateViewport already no-ops once the node is gone.
       let ro: ResizeObserver | undefined;
       if (typeof ResizeObserver !== "undefined") {
-        ro = new ResizeObserver(updateViewport);
+        ro = new ResizeObserver(() => requestAnimationFrame(updateViewport));
         ro.observe(node);
       }
 
