@@ -15,6 +15,7 @@ import {
 import {
   mapNativeAXRole,
   NATIVE_AX_DROP_ROLES,
+  NATIVE_AX_DROP_UNLESS_NAMED,
   NATIVE_AX_VOCABULARY_VERSION,
 } from "./ax-vocabulary.js";
 
@@ -45,6 +46,11 @@ describe("native AX vocabulary", () => {
     ]) {
       expect(NATIVE_AX_DROP_ROLES.has(role)).toBe(true);
     }
+  });
+
+  it("treats generic as drop-unless-named, not an unconditional drop", () => {
+    expect(NATIVE_AX_DROP_ROLES.has("generic")).toBe(false);
+    expect(NATIVE_AX_DROP_UNLESS_NAMED.has("generic")).toBe(true);
   });
 });
 
@@ -184,5 +190,59 @@ describe("name promotion depth and guard", () => {
       raw("3", "StaticText", { parentId: "1", name: "Alpha" }),
     ]);
     expect(serializeNativeAX(nodes)).toBe('listitem "Alpha"');
+  });
+});
+
+describe("named container preservation (generic)", () => {
+  const raw = (
+    nodeId: string,
+    role: string,
+    opts: { parentId?: string; childIds?: string[]; name?: string } = {},
+  ): RawNativeAXNode => ({
+    nodeId,
+    role: { value: role },
+    ...(opts.name !== undefined ? { name: { value: opts.name } } : {}),
+    ...(opts.parentId !== undefined ? { parentId: opts.parentId } : {}),
+    ...(opts.childIds !== undefined ? { childIds: opts.childIds } : {}),
+  });
+
+  // Chromium exposes YouTube's player wrapper as `generic "YouTube Video
+  // Player"` with the media controls beneath it. The named container must
+  // survive so the grouping (and native↔DOM parity) is preserved.
+  it("keeps a named generic as a labelled group with its children nested", () => {
+    const nodes = normalizeNativeAX([
+      raw("1", "complementary", { childIds: ["2"] }),
+      raw("2", "generic", {
+        parentId: "1",
+        name: "YouTube Video Player",
+        childIds: ["3", "4"],
+      }),
+      raw("3", "button", { parentId: "2", name: "Pause" }),
+      raw("4", "slider", { parentId: "2", name: "Seek slider" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe(
+      [
+        "complementary",
+        '  generic "YouTube Video Player"',
+        '    button "Pause"',
+        '    slider "Seek slider"',
+      ].join("\n"),
+    );
+  });
+
+  // A bare generic is still noise: dropped, its children flattened up to the
+  // nearest kept ancestor at the same depth (unchanged behavior).
+  it("still drops a bare generic and flattens its children", () => {
+    const nodes = normalizeNativeAX([
+      raw("1", "complementary", { childIds: ["2"] }),
+      raw("2", "generic", { parentId: "1", childIds: ["3", "4"] }),
+      raw("3", "button", { parentId: "2", name: "Pause" }),
+      raw("4", "slider", { parentId: "2", name: "Seek slider" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe(
+      ["complementary", '  button "Pause"', '  slider "Seek slider"'].join(
+        "\n",
+      ),
+    );
   });
 });

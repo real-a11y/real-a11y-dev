@@ -79,6 +79,7 @@ export type { ControlsIndex } from "./utils/controls-index.js";
 export {
   NATIVE_AX_VOCABULARY_VERSION,
   NATIVE_AX_DROP_ROLES,
+  NATIVE_AX_DROP_UNLESS_NAMED,
   NATIVE_AX_ROLE_MAP,
   NATIVE_AX_NAME_SOURCE_ROLES,
   mapNativeAXRole,

@@ -17,6 +17,7 @@
 import {
   mapNativeAXRole,
   NATIVE_AX_DROP_ROLES,
+  NATIVE_AX_DROP_UNLESS_NAMED,
   NATIVE_AX_NAME_SOURCE_ROLES,
 } from "./ax-vocabulary.js";
 
@@ -56,7 +57,15 @@ function collapseWhitespace(text: string): string {
 
 function isKept(node: RawNativeAXNode): boolean {
   const role = node.role?.value ?? "";
-  return !node.ignored && role !== "" && !NATIVE_AX_DROP_ROLES.has(role);
+  if (node.ignored || role === "" || NATIVE_AX_DROP_ROLES.has(role)) {
+    return false;
+  }
+  // A `generic` (and any drop-unless-named role) is noise when bare but a
+  // meaningful labelled container when named — keep it only if it has a name.
+  if (NATIVE_AX_DROP_UNLESS_NAMED.has(role)) {
+    return (node.name?.value ?? "").trim() !== "";
+  }
+  return true;
 }
 
 function idOf(node: RawNativeAXNode): string {

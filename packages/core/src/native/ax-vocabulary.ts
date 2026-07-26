@@ -21,13 +21,18 @@
  */
 
 /** Bump on any table/rule change that alters normalized output. */
-export const NATIVE_AX_VOCABULARY_VERSION = 1;
+export const NATIVE_AX_VOCABULARY_VERSION = 2;
 
 /**
  * Chromium AX roles that are structural noise relative to this engine's
- * tree: text runs the serializer folds into names, generic wrappers, and
- * Blink-internal containers. Dropped nodes are flattened — their kept
+ * tree: text runs the serializer folds into names, presentational wrappers,
+ * and Blink-internal containers. Dropped nodes are flattened — their kept
  * descendants re-parent to the nearest kept ancestor.
+ *
+ * `none`/`presentation` stay here unconditionally: the author explicitly
+ * removed the element's semantics, so we honor that even when Chromium still
+ * computes a name for it. `generic` is the exception — see
+ * `NATIVE_AX_DROP_UNLESS_NAMED`.
  */
 export const NATIVE_AX_DROP_ROLES: ReadonlySet<string> = new Set([
   "StaticText",
@@ -36,11 +41,25 @@ export const NATIVE_AX_DROP_ROLES: ReadonlySet<string> = new Set([
   "LabelText",
   "ListMarker",
   "listmarker",
-  "generic",
   "none",
   "presentation",
   "RootWebArea",
   "Ignored",
+]);
+
+/**
+ * Roles that are structural noise ONLY when unnamed. A bare `generic` (a
+ * div/span with no role) is dropped and flattened like any other wrapper — but
+ * a *named* generic is a meaningful labelled container and must survive. The
+ * motivating case: Chromium exposes YouTube's player wrapper as
+ * `generic "YouTube Video Player"`, grouping the media controls beneath it.
+ * Dropping it flattens the scrubber/play/mute nodes up to the surrounding
+ * region — losing the grouping a screen-reader user relies on, and diverging
+ * from the DOM producer, which keeps the named container. So a `generic` is
+ * kept iff it carries a non-empty accessible name.
+ */
+export const NATIVE_AX_DROP_UNLESS_NAMED: ReadonlySet<string> = new Set([
+  "generic",
 ]);
 
 /**
