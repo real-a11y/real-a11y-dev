@@ -106,7 +106,12 @@ function getDisplayRole(node: DomSemanticNode): string {
   return node.a11y.role;
 }
 
-/** Narrow a chrome.runtime.sendMessage reply that reports `{ success: true }`. */
+/**
+ * Narrow a chrome.runtime.sendMessage reply that reports `{ success: true }`.
+ * The callback can receive `undefined` when chrome.runtime.lastError is set
+ * (e.g. the MV3 service worker was torn down before responding) — never
+ * dereference the reply without this (or equivalent) guard.
+ */
 function isSuccessResponse(response: unknown): response is { success: true } {
   return (
     typeof response === "object" &&
@@ -114,6 +119,13 @@ function isSuccessResponse(response: unknown): response is { success: true } {
     "success" in response &&
     (response as { success: unknown }).success === true
   );
+}
+
+/** GET_FIELD_STATE success reply — same undefined-safe gate as isSuccessResponse. */
+function isFieldStateSuccess(
+  response: unknown,
+): response is Extract<FieldState, { success: true }> {
+  return isSuccessResponse(response);
 }
 
 export function App() {
@@ -603,17 +615,15 @@ export function App() {
         sendToBoundTab(
           { type: "GET_FIELD_STATE", payload: { nodeId: id } },
           (response: unknown) => {
-            const field = response as FieldState;
-            if (field.success) {
-              setInputState({
-                type: "text",
-                nodeId: id,
-                label: node.a11y.name || node.dom.tagName,
-                value: field.value || "",
-                inputType: field.type,
-                placeholder: field.placeholder,
-              });
-            }
+            if (!isFieldStateSuccess(response)) return;
+            setInputState({
+              type: "text",
+              nodeId: id,
+              label: node.a11y.name || node.dom.tagName,
+              value: response.value || "",
+              inputType: response.type,
+              placeholder: response.placeholder,
+            });
           },
         );
         return;
@@ -624,16 +634,14 @@ export function App() {
         sendToBoundTab(
           { type: "GET_FIELD_STATE", payload: { nodeId: id } },
           (response: unknown) => {
-            const field = response as FieldState;
-            if (field.success && field.options) {
-              setInputState({
-                type: "select",
-                nodeId: id,
-                label: node.a11y.name || node.dom.tagName,
-                value: field.value || "",
-                options: field.options,
-              });
-            }
+            if (!isFieldStateSuccess(response) || !response.options) return;
+            setInputState({
+              type: "select",
+              nodeId: id,
+              label: node.a11y.name || node.dom.tagName,
+              value: response.value || "",
+              options: response.options,
+            });
           },
         );
         return;
