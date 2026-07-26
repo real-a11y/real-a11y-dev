@@ -5,12 +5,12 @@ description: Every real-a11y command and flag — audit, inspect, snapshot, diff
 
 # Commands & flags
 
-Every invocation is `real-a11y <command> [url...] [flags]`. Nine commands ship —
-[`audit`](#audit-url), [`inspect`](#inspect-url), [`tree`](#tree-url),
-[`outline`](#outline-url), [`tabs`](#tabs-url), [`list`](#list-category-url),
-[`snapshot`](#snapshot-url), [`diff`](#diff-base-json-pr-json), and
-[`login`](#login-url-save-file). Run `real-a11y <command> --help` for a
-command's own flags.
+Every invocation is `real-a11y <command> [url...] [flags]`. Ten commands ship —
+[`install`](#install), [`audit`](#audit-url), [`inspect`](#inspect-url),
+[`tree`](#tree-url), [`outline`](#outline-url), [`tabs`](#tabs-url),
+[`list`](#list-category-url), [`snapshot`](#snapshot-url),
+[`diff`](#diff-base-json-pr-json), and [`login`](#login-url-save-file). Run
+`real-a11y <command> --help` for a command's own flags.
 
 Findings and reports go to **stdout**; progress, warnings, and errors go to
 **stderr** — so `-o` / a pipe never mixes the two.
@@ -44,6 +44,36 @@ additive-only. Never rely on the wording of a `pretty` line; key on the JSON.
 Each command below lists the flag **groups** it accepts. Shared flags are
 documented once, in [Flags](#browser-page) — the per-command list only links
 to them, plus any command-specific flags.
+
+### `install`
+
+Download [Chrome for Testing](https://developer.chrome.com/blog/chrome-for-testing)
+— Google's versioned, non-auto-updating Chrome build — into Real A11y's own
+cache and use it for every launched session from then on. A setup command: it
+takes no URL and doesn't drive a browser itself. Idempotent — a bare re-run
+does zero network work and exits `0` instantly when the cached build is still
+present. Prints the resolved executable path on **stdout**; progress goes to
+stderr.
+
+```sh
+real-a11y install                           # latest Stable, first time only
+real-a11y install --channel beta            # track a channel
+real-a11y install --version 131.0.6778.87   # exact build — works even if the
+                                             # Chrome for Testing version
+                                             # endpoint is unreachable
+real-a11y install --force                   # reinstall even if already present
+```
+
+Playwright (the npm package) is still the driver — this replaces only the
+`npx playwright install chromium` browser download. Every browser-driving
+command then picks it up automatically; see
+[`--chrome-path`](#chrome-path-file) for the full resolution order. Sessions
+launched with [`--cdp`](#cdp-endpoint) attach to your own Chrome and never use
+this binary.
+
+**Flags:** [`--channel`](#channel-name) · [`--version`](#version-buildid) ·
+[`--force`](#force) · [Config](#config) · [`-q, --quiet`](#q-quiet) ·
+[`--verbose`](#verbose) · [`-h, --help`](#h-help).
 
 ### `audit <url...>`
 
@@ -346,7 +376,24 @@ Show the browser window. Can't be combined with [`--cdp`](#cdp-endpoint).
 Attach to a running Chrome instead of launching one — the interactive way to
 audit a login. No emulation over CDP: can't be combined with
 [`--headful`](#headful), [`--device`](#device-name),
-[`--viewport`](#viewport-wxh), or [`--storage-state`](#storage-state-file).
+[`--viewport`](#viewport-wxh), [`--storage-state`](#storage-state-file), or
+[`--chrome-path`](#chrome-path-file).
+
+### `--chrome-path <file>`
+
+- **Type:** path to a browser executable · **Default:** none · **Commands:**
+  audit, inspect, tree, outline, tabs, list, snapshot
+
+Launch this specific browser binary instead of Playwright's bundled Chromium.
+Can't be combined with [`--cdp`](#cdp-endpoint) — an already-running browser is
+the browser. Resolution order (shared with the MCP server's
+`REAL_A11Y_CHROME_PATH`): `--chrome-path` (error if missing) >
+`REAL_A11Y_CHROME_PATH` env (error if missing) > the [`install`](#install)
+cache (silently skipped if absent) > Playwright's own bundled Chromium.
+
+```sh
+real-a11y audit http://localhost:3000 --chrome-path /usr/bin/google-chrome
+```
 
 ### `--allow-file`
 
@@ -418,10 +465,11 @@ is the fallback when this is omitted.
 
 ### `-q, --quiet`
 
-- **Type:** boolean · **Default:** `false` · **Commands:** audit, inspect, tree,
-  outline, tabs, list, snapshot, diff
+- **Type:** boolean · **Default:** `false` · **Commands:** install, audit,
+  inspect, tree, outline, tabs, list, snapshot, diff
 
-Suppress progress lines on stderr.
+Suppress progress lines on stderr. [`install`](#install) still prints the
+resolved executable path on stdout.
 
 ### `--verbose`
 
@@ -497,6 +545,31 @@ Actions.
 ## Command-specific
 
 Flags that belong to a single command (or a small set).
+
+### `--channel <name>`
+
+- **Type:** `stable | beta | dev | canary` · **Default:** `stable` ·
+  **Commands:** install
+
+Which Chrome for Testing release channel to track. Re-resolves the channel's
+current build over the network; skips the download if it's unchanged from
+what's already installed. Mutually exclusive with [`--version`](#version-buildid).
+
+### `--version <buildId>`
+
+- **Type:** an exact Chrome build, e.g. `131.0.6778.87` · **Default:** none ·
+  **Commands:** install
+
+Pin an exact Chrome for Testing build instead of tracking a channel. Skips the
+version-resolution network call entirely — the download URL is deterministic
+— so this is the escape hatch when the Chrome for Testing version endpoint is
+unreachable. Mutually exclusive with [`--channel`](#channel-name).
+
+### `--force`
+
+- **Type:** boolean · **Default:** `false` · **Commands:** install
+
+Reinstall even if the target build is already cached.
 
 ### `--include-generic`
 

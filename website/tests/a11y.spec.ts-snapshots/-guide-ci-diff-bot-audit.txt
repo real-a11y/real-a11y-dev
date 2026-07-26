@@ -180,12 +180,17 @@ main
   separator
   heading "Setup" (level 2)
   heading "1. Install" (level 3)
-  paragraph "The CLI drives a real browser through Playwright, which ships as an — install it alongside the CLI and fetch the Chromium binary once:"
+  paragraph "The CLI drives a real browser through Playwright, which ships as an — install it alongside the CLI and fetch a browser once:"
     strong "optional peer"
   button "Copy Code"
   code
-  paragraph "is pure — it reads two JSON files and never launches a browser — so only the snapshot jobs need Chromium."
+  paragraph "downloads into its own cache — still works too. is pure — it reads two JSON files and never launches a browser — so only the snapshot jobs need a browser. On bare Linux CI, remains the simplest single command (it installs the OS-level libraries Chrome needs too, which doesn't) — see the workflow example below."
+    code "real-a11y install"
+    link "Chrome for Testing"
+    code "npx playwright install chromium"
     code "diff"
+    code "playwright install chromium --with-deps"
+    code "real-a11y install"
   heading "2. Describe your pages in a11y.config.json" (level 3)
     code "a11y.config.json"
   paragraph "Your snapshot — which pages, which rules, what to fail on — lives in your repo as , not in a copy-pasted script. auto-discovers (or takes ):"

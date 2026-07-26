@@ -24,7 +24,9 @@ server drives a real browser (via Playwright) rather than parsing markup. You
 need:
 
 - **Node.js 20+** — the server runs under Node and is fetched with `npx`.
-- **A Chromium binary** — install one with `npx playwright install chromium`.
+- **A Chrome binary** — install one with `npx real-a11y install` (downloads
+  [Chrome for Testing](https://developer.chrome.com/blog/chrome-for-testing);
+  `npx playwright install chromium` also works).
 - **An MCP client** — Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, or
   any other MCP-capable tool.
 
@@ -67,12 +69,19 @@ For clients configured by file, add the `mcpServers` block above to:
 Then install a browser once:
 
 ```sh
-npx playwright install chromium
+npx real-a11y install
 ```
 
 To pin a version instead of tracking the latest, add it to your project
 (`npm install -D @real-a11y-dev/mcp playwright`) and point `command` / `args` at
 the local install.
+
+The server picks up an installed browser automatically. To point it at a
+specific binary instead (a system Chrome, say), set `REAL_A11Y_CHROME_PATH`;
+`REAL_A11Y_BROWSERS_DIR` overrides where `real-a11y install` caches its
+download if you don't want the platform default (`~/.cache/real-a11y`). A CDP
+connection (`REAL_A11Y_MCP_CDP`) ignores both — it reuses whatever browser is
+already running.
 
 ## Your first audit
 

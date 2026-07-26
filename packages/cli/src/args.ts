@@ -10,7 +10,7 @@
 import type { ParseArgsConfig } from "node:util";
 
 import { ALL_RULES, type A11yRule } from "@real-a11y-dev/audit";
-import type { OpenOptions } from "@real-a11y-dev/browser";
+import type { ChromeChannel, OpenOptions } from "@real-a11y-dev/browser";
 
 import { CliError, type FailOn } from "./exit.js";
 
@@ -39,6 +39,7 @@ const BROWSER_FLAGS: Options = {
   timeout: { type: "string" },
   headful: { type: "boolean" },
   cdp: { type: "string" },
+  "chrome-path": { type: "string" },
   "allow-file": { type: "boolean" },
   "storage-state": { type: "string" },
   "audit-origin": { type: "string", multiple: true },
@@ -81,6 +82,18 @@ const VIEW_FLAGS: Options = {
   ...OUTPUT_FLAGS,
   ...CONFIG_FLAGS,
   "include-generic": { type: "boolean" },
+};
+
+// install is a setup command: no browser/output/emulation flags — it
+// downloads a browser, it doesn't drive one.
+const INSTALL_FLAGS: Options = {
+  ...CONFIG_FLAGS,
+  channel: { type: "string" },
+  version: { type: "string" },
+  force: { type: "boolean" },
+  quiet: { type: "boolean", short: "q" },
+  verbose: { type: "boolean" },
+  help: { type: "boolean", short: "h" },
 };
 
 // login is a narrow, interactive command: no format/output/emulation/auth
@@ -157,6 +170,8 @@ const SHARED_FLAG_HELP_NO_ROOT = `  --device <name>        Emulate a device, e.g
                          (repeatable; defaults to the target's own origin)
   --cdp <endpoint>       Attach to a running Chrome — the interactive way to
                          audit a login (no emulation flags over CDP)
+  --chrome-path <file>   Browser binary to launch (default: the Chrome from
+                         'real-a11y install', else Playwright's Chromium)
   --config <file>        a11y.config.json (auto-discovered in cwd) — its
                          "defaults" seed any flag you don't pass
   --no-config            Ignore an auto-discovered config
@@ -177,6 +192,43 @@ export interface CommandSpec {
 }
 
 export const COMMANDS: Record<string, CommandSpec> = {
+  install: {
+    summary: "Download Chrome from Chrome for Testing (first time only)",
+    options: INSTALL_FLAGS,
+    help: `Usage: real-a11y install [flags]
+
+Download the Chrome for Testing browser into Real A11y's own cache
+(~/.cache/real-a11y, or REAL_A11Y_BROWSERS_DIR) and use it for every launched
+session from then on. Run it once — re-runs are instant no-ops. Prints the
+resolved executable path on stdout.
+
+Playwright (the npm package) is still the driver — this only replaces the
+'npx playwright install chromium' browser download. Sessions launched with
+--cdp attach to your own Chrome and never use this binary.
+
+Examples:
+  real-a11y install                           # latest Stable, first time only
+  real-a11y install --channel beta            # track a channel
+  real-a11y install --version 131.0.6778.87   # exact build (works even when
+                                               # the Chrome for Testing version
+                                               # endpoint is unreachable)
+  CHROME=$(real-a11y install -q)              # CI: idempotent, path on stdout
+
+Flags:
+  --channel <name>       stable | beta | dev | canary     (default: stable)
+  --version <buildId>    Exact Chrome build, e.g. 131.0.6778.87
+                         (mutually exclusive with --channel)
+  --force                Reinstall even if already downloaded
+  --config <file>        a11y.config.json whose "defaults" seed unset flags
+  --no-config            Ignore an auto-discovered config
+  -q, --quiet            Suppress progress (stdout still prints the path)
+  --verbose              Extra diagnostics on stderr
+
+Linux CI note: the download installs no system libraries — if launch fails
+with a shared-library error, run: npx playwright install-deps chromium
+`,
+    load: async () => (await import("./commands/install.js")).installCommand,
+  },
   audit: {
     summary: "Violations (rule · severity · locator); exits 1 on errors",
     options: AUDIT_FLAGS,
@@ -391,6 +443,7 @@ Flags:
 };
 
 const USAGE: Record<string, string> = {
+  install: "install",
   audit: "audit <url...>",
   list: "list <cat> <url>",
   login: "login <url> --save",
@@ -476,6 +529,24 @@ export function parseProducer(value: string | boolean | undefined): Producer {
   );
 }
 
+const CHROME_CHANNELS = ["stable", "beta", "dev", "canary"] as const;
+
+/** `undefined` when `--channel` wasn't passed at all — distinct from the
+ * default "stable", so `install` can tell "bare invocation" (zero network,
+ * trust the cache) apart from "explicitly asked to track stable" (re-checks
+ * for a newer build). */
+export function parseChannel(
+  value: string | boolean | undefined,
+): ChromeChannel | undefined {
+  if (value === undefined) return undefined;
+  if ((CHROME_CHANNELS as readonly string[]).includes(String(value))) {
+    return value as ChromeChannel;
+  }
+  throw new CliError(
+    `--channel expects ${CHROME_CHANNELS.join(" | ")} — got "${String(value)}"`,
+  );
+}
+
 /** The report axis for `--only`; undefined = the full two-axis report. An enum
  * (not a boolean pair) so contradictory states are unrepresentable and a
  * config default is overridable from the command line. */
@@ -558,6 +629,15 @@ export function parseOpenOptions(flags: FlagValues): OpenOptions {
   ) {
     throw new CliError(
       "--cdp reuses a running browser — it can't be combined with --headful, --device, or --viewport.",
+    );
+  }
+
+  if (
+    typeof flags.cdp === "string" &&
+    typeof flags["chrome-path"] === "string"
+  ) {
+    throw new CliError(
+      "--cdp reuses a running browser — it can't be combined with --chrome-path.",
     );
   }
 

@@ -107,11 +107,13 @@ It reuses the exact pieces the testing package already ships:
 
 ## Install & run
 
-Playwright is a peer dependency and a Chromium binary is required:
+Playwright is a peer dependency and a Chrome binary is required:
 
 ```bash
-npx playwright install chromium
+npx real-a11y install   # downloads Chrome for Testing, first time only
 ```
+
+(`npx playwright install chromium` also works — `install` just sidesteps the version-mismatch pitfall that command can hit.) The server also honors `REAL_A11Y_CHROME_PATH` to launch a specific binary directly, and `REAL_A11Y_BROWSERS_DIR` to point at a non-default cache directory.
 
 Wire it into an MCP client — no install step needed, `npx -y` fetches the
 package on first run (use the package name, not the bare `real-a11y-mcp` bin,

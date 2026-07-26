@@ -100,6 +100,8 @@ navigation "On this page"
     listitem
       link "The CLI or MCP says Playwright isn't installed"
     listitem
+      link "Chrome fails to launch with a shared-library error"
+    listitem
       link "An audit of a logged-in page comes back empty (or shows the login screen)"
     listitem
       link "The MCP server refuses to open a file:// URL"
@@ -235,11 +237,22 @@ main
     code "buildServer"
   button "Copy Code"
   code
-  paragraph "Install the peer and its browser binary:"
+  paragraph "Install the peer and a browser:"
   button "Copy Code"
   code
-  paragraph "A separate "Chromium isn't downloaded yet" error means the package is installed but the browser binary isn't — run just the step."
-    code "playwright install chromium"
+  paragraph "A separate "No browser is downloaded yet." error means Playwright itself is installed but no browser binary is — run just the step (or , which works too)."
+    code "real-a11y install"
+    code "npx playwright install chromium"
+  heading "Chrome fails to launch with a shared-library error" (level 2)
+  paragraph "downloads a plain Chrome binary — unlike , it doesn't install any OS-level packages. On a bare Linux container you may see something like . Install just the system dependencies, without downloading another browser:"
+    code "real-a11y install"
+    code "playwright install --with-deps"
+    code "error while loading shared libraries: libnss3.so: cannot open shared object file"
+  button "Copy Code"
+  code
+  paragraph "If a previously-working installed Chrome starts failing to launch (a corrupted or partially-written binary), reinstall it:"
+  button "Copy Code"
+  code
   separator
   heading "An audit of a logged-in page comes back empty (or shows the login screen)" (level 2)
   paragraph "An authenticated audit needs a saved session, and it has to match the origin you're auditing:"

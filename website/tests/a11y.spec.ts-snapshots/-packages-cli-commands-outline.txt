@@ -10,6 +10,7 @@
   h2 On this page
 h1 Commands & flags
   h2 Commands
+    h3 install
     h3 audit <url...>
     h3 inspect <url>
     h3 tree <url>
@@ -30,6 +31,7 @@ h1 Commands & flags
     h3 --timeout <ms>
     h3 --headful
     h3 --cdp <endpoint>
+    h3 --chrome-path <file>
     h3 --allow-file
     h3 --storage-state <file>
     h3 --audit-origin <origin>
@@ -47,6 +49,9 @@ h1 Commands & flags
     h3 --fail-on <level>
     h3 --no-annotate
   h2 Command-specific
+    h3 --channel <name>
+    h3 --version <buildId>
+    h3 --force
     h3 --include-generic
     h3 --md
     h3 --baseline <file>

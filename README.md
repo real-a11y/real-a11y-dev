@@ -63,12 +63,12 @@ Audit a page — and gate CI — from your shell. Playwright is an optional peer
 
 ```bash
 npm i -D @real-a11y-dev/cli@beta   # beta dist-tag while the family is in pre-release
-npx playwright install chromium
+npx real-a11y install              # downloads Chrome for Testing, first time only
 
 npx real-a11y audit https://example.com
 ```
 
-`real-a11y audit` exits non-zero on screen-reader-fidelity findings — a CI gate with no config. The full command set (`tree`, `outline`, `tabs`, `list`, `inspect`, `snapshot`, `diff`, `login`) is documented in [`@real-a11y-dev/cli`](./packages/cli).
+`real-a11y audit` exits non-zero on screen-reader-fidelity findings — a CI gate with no config. The full command set (`install`, `tree`, `outline`, `tabs`, `list`, `inspect`, `snapshot`, `diff`, `login`) is documented in [`@real-a11y-dev/cli`](./packages/cli).
 
 ### MCP server (for AI agents)
 

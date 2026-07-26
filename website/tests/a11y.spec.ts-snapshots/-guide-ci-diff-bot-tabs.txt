@@ -62,6 +62,7 @@ button "Copy Code"
 generic
 button "Copy Code"
 generic
+link "Chrome for Testing"
 button "Copy Code"
 generic
 link "Security tab"

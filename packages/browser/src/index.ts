@@ -11,5 +11,6 @@
  */
 
 export * from "./browser.js";
+export * from "./chrome.js";
 export { nativeTree, buildNativeTree } from "./native-tree.js";
 export { CdpActionBackend, backendNodeIdFrom } from "./cdp-action-backend.js";

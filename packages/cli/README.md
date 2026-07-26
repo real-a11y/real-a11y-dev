@@ -7,7 +7,7 @@ annotations built in.
 
 ```sh
 npm i -D @real-a11y-dev/cli@beta playwright
-npx playwright install chromium
+npx real-a11y install   # downloads Chrome for Testing, first time only
 
 # See a page the way assistive tech does — no test file, no config:
 npx real-a11y tree https://example.com
@@ -54,6 +54,7 @@ opt out.
 
 | Command | What it prints |
 | --- | --- |
+| `install` | Download Chrome from Chrome for Testing (first time only) |
 | `audit <url...>` | Violations grouped by rule (the gate) |
 | `inspect <url>` | Findings **plus** tree + outline + tab order, one extraction |
 | `tree <url>` | The semantic tree (role + accessible name) |
@@ -71,6 +72,18 @@ see `real-a11y <command> --help`.
 
 Local builds audit directly: `real-a11y audit ./dist/index.html` (paths you
 type need no ceremony).
+
+### `real-a11y install` — a browser without the setup friction
+
+```sh
+real-a11y install                           # latest Stable, first time only
+real-a11y install --channel beta            # track a channel
+real-a11y install --version 131.0.6778.87   # pin an exact build
+```
+
+Downloads [Chrome for Testing](https://developer.chrome.com/blog/chrome-for-testing) — Google's versioned, non-auto-updating Chrome build — into Real A11y's own cache (`~/.cache/real-a11y`, or `REAL_A11Y_BROWSERS_DIR`) and every command uses it from then on. A bare re-run is an instant no-op; prints the resolved path on stdout. Playwright is still the driver — this only replaces the `npx playwright install chromium` browser download, so it sidesteps the "Executable doesn't exist" mismatch a local/global Playwright version skew can cause. `npx playwright install chromium` remains fully supported as the alternative.
+
+Every browser-driving command also takes `--chrome-path <file>` to launch a specific binary directly (ignored with `--cdp`, which reuses a running browser). Resolution order: `--chrome-path` > `REAL_A11Y_CHROME_PATH` env > the `install` cache > Playwright's own bundled Chromium.
 
 ### `--producer native`
 
