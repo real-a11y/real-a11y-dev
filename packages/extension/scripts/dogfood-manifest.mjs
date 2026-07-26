@@ -24,6 +24,7 @@ const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
 const permissions = new Set(manifest.permissions ?? []);
 permissions.add("debugger"); // read/dispatch the native AX tree over CDP
 permissions.add("tabs"); // resolve the active tab id to attach to
+permissions.add("storage"); // dogfood instrumentation log (chrome.storage.local)
 manifest.permissions = [...permissions];
 
 // Make it unmistakable in chrome://extensions that this is the dev build.
