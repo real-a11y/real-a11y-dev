@@ -46,6 +46,25 @@ function fail(message: string, hint = USAGE): never {
 }
 
 /**
+ * Mask anything that could be a typed value before echoing step text back.
+ *
+ * Quoting the offending input is what makes these errors actionable — but a
+ * malformed `type` step still carries its value, and the R1 discipline that
+ * {@link describeStep} enforces on the success path has to hold on the failure
+ * path too, or a typo turns a password into a CI log line.
+ *
+ * The parser can't know which token was *meant* to be the value once the step
+ * is malformed, so this deliberately over-redacts: everything from the first
+ * `=` onward goes, whether or not that `=` was the value separator. Masking a
+ * name that happens to contain `=` costs a little precision in an error
+ * message; the opposite mistake leaks a secret.
+ */
+function redactValue(text: string): string {
+  const eq = text.indexOf("=");
+  return eq === -1 ? text : `${text.slice(0, eq + 1)} ‹hidden›`;
+}
+
+/**
  * Read a double-quoted accessible name starting at `input[start]`, honoring
  * `\"` escapes. Returns the value and the index just past the closing quote.
  */
@@ -67,7 +86,7 @@ function readQuoted(
     i += 1;
   }
   return fail(
-    `unterminated quoted name in step: ${JSON.stringify(input)}`,
+    `unterminated quoted name in step: ${JSON.stringify(redactValue(input))}`,
     "quote the accessible name on both sides, e.g. --step 'click button \"Save\"'",
   );
 }
@@ -80,7 +99,9 @@ export function parseStep(raw: string): InteractStep {
   // ── verb ────────────────────────────────────────────────────────────────
   const verbMatch = /^([A-Za-z]+)(\s+|$)/.exec(input);
   if (!verbMatch)
-    fail(`could not read a verb from step: ${JSON.stringify(raw)}`);
+    fail(
+      `could not read a verb from step: ${JSON.stringify(redactValue(raw))}`,
+    );
   const verb = verbMatch[1].toLowerCase();
   if (!isStepVerb(verb)) {
     fail(
@@ -132,7 +153,7 @@ export function parseStep(raw: string): InteractStep {
 
   if (rest !== "") {
     fail(
-      `unexpected trailing input in step: ${JSON.stringify(rest)}`,
+      `unexpected trailing input in step: ${JSON.stringify(redactValue(rest))}`,
       "a name must be quoted — e.g. --step 'click button \"Save & continue\"'",
     );
   }

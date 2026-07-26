@@ -180,6 +180,24 @@ describe("real-a11y interact", () => {
     expect(res.stderr).toContain("--producer native");
   });
 
+  it("masks the value when a type step is malformed (R1 on the failure path)", async () => {
+    // The parse error quotes the offending input to make it fixable, but a
+    // malformed `type` step still carries its value — and this is the stream
+    // CI captures. Unquoted multi-word name: the value must not survive.
+    const res = await runCli([
+      "interact",
+      PAGE,
+      "--step",
+      `type textbox My Field = ${SECRET}`,
+    ]);
+    expect(res.code).toBe(2);
+    expect(res.stderr).not.toContain("hunter2");
+    expect(res.stdout).not.toContain("hunter2");
+    expect(res.stderr).toContain("‹hidden›");
+    // …while still naming what to fix.
+    expect(res.stderr).toContain("My Field");
+  });
+
   it("rejects a malformed step before launching a browser", async () => {
     const res = await runCli(["interact", PAGE, "--step", "poke button"]);
     expect(res.code).toBe(2);

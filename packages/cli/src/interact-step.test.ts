@@ -126,6 +126,57 @@ describe("parseStep", () => {
   });
 });
 
+describe("R1 on the failure path", () => {
+  // A malformed `type` step still carries its value. Every message that quotes
+  // the offending input has to mask it, or a typo turns a password into a CI
+  // log line — the failure path needs the same discipline describeStep applies
+  // to the success path.
+  const SECRET = "hunter2-lives-here";
+
+  const leaky: [string, string][] = [
+    ["unquoted multi-word name", `type textbox My Field = ${SECRET}`],
+    ["unterminated quote", `type textbox "Email = ${SECRET}`],
+    ["no leading verb token", `"type" textbox = ${SECRET}`],
+    ["trailing junk before the value", `type textbox "E" nth=2 x = ${SECRET}`],
+  ];
+
+  for (const [label, step] of leaky) {
+    it(`masks the value when the step is malformed — ${label}`, () => {
+      let caught: CliError | undefined;
+      try {
+        parseStep(step);
+      } catch (err) {
+        caught = err as CliError;
+      }
+      expect(caught, "expected this step to be rejected").toBeInstanceOf(
+        CliError,
+      );
+      expect(caught?.message).not.toContain("hunter2");
+      expect(caught?.hint ?? "").not.toContain("hunter2");
+      expect(caught?.message).toContain("‹hidden›");
+    });
+  }
+
+  it("still names the part the user has to fix", () => {
+    // Redaction must not cost the diagnosis: the unquoted name is the error,
+    // and it stays visible.
+    let caught: CliError | undefined;
+    try {
+      parseStep(`type textbox My Field = ${SECRET}`);
+    } catch (err) {
+      caught = err as CliError;
+    }
+    expect(caught?.message).toContain("My Field");
+    expect(caught?.hint).toMatch(/a name must be quoted/);
+  });
+
+  it("leaves a step with no value untouched", () => {
+    expect(() => parseStep("click button Save now")).toThrow(
+      /"Save now"/, // nothing to redact — the echo is intact
+    );
+  });
+});
+
 describe("describeStep", () => {
   it("renders the tree's own vocabulary", () => {
     expect(describeStep(parseStep('click button "Save"'))).toBe(
