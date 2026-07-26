@@ -61,6 +61,10 @@ opt out.
 | `outline <url>` | Heading outline |
 | `tabs <url>` | Focusable elements in Tab order |
 | `list <cat> <url>` | One category: heading, link, button, form, landmark, image |
+| `interact <url> --step …` | Run steps on a page, then show what they changed |
+| `click <url> --role …` | Click one element by role + accessible name |
+| `type <url> --role … --text …` | Set a text field's value by role + accessible name |
+| `focus <url> --role …` | Move real keyboard focus by role + accessible name |
 | `snapshot [url...]` | Audit a URL (or a config page set) → one diffable JSON artifact (or `--md`) |
 | `diff <base> <pr>` | Findings-aware diff of two snapshots — new / changed / fixed |
 | `login <url> --save <file>` | Save a login session for `--storage-state` audits |
@@ -102,6 +106,48 @@ Native mode is whole-document and read-only, so it's accepted only where that
 fits (`audit`, `tree`, `outline`). Commands that carry a tab sequence (`tabs`,
 `inspect`, `snapshot`) or list one category from the page (`list`) reject it, and
 it can't be combined with `--root`.
+
+## Interact — and see what it changed
+
+Auditing the page as it loads misses everything behind a click. `interact` runs
+steps and then prints the **accessibility-tree diff** they produced:
+
+```sh
+real-a11y interact http://localhost:3000 --step 'click button "Open menu"'
+#  ✓ click button "Open menu"
+# + link "Alpha"
+# + navigation "Main"
+# ~ button "Open menu": a11y.states.expanded false → true
+# ~ main: childIds 1 child → 2 children
+
+real-a11y interact http://localhost:3000 \
+  --step 'type textbox "Email" = someone@example.com' \
+  --step 'click button "Sign in"'
+```
+
+A step reads the way the tree prints a node — `<verb> <role> ["<name>"]
+[nth=<n>] [= <text>]` — so a line of `real-a11y tree` output is nearly a step
+already. Verbs are `click`, `type`, `focus`. Omit the name to match any; pass
+`""` to target the **unlabeled** control an audit just flagged.
+
+The one-step cases have sugar:
+
+```sh
+real-a11y click http://localhost:3000 --role button --name "Save" --nth 2
+real-a11y type  http://localhost:3000 --role textbox --name "Email" --text you@example.com
+real-a11y focus http://localhost:3000 --role link   --name "Skip to content"
+```
+
+Targeting is **role + accessible name only**, resolved against Chromium's own
+accessibility tree — never a CSS selector. If a control can't be reached that
+way, assistive technology can't reach it either, and that's a finding rather
+than a targeting inconvenience. Ambiguous matches list their `nth=` candidates;
+a disabled target is refused rather than clicked into an empty diff.
+
+The actions are real — they submit forms, toggle state, and can navigate (which
+discards the diff checkpoint; the run says so and still exits `0`). A typed
+value is never echoed back in any output format, and `type` is not a login
+mechanism: use `real-a11y login` for that.
 
 ## Configure once
 

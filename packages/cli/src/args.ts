@@ -29,9 +29,12 @@ export type CommandFn = (
 
 type Options = NonNullable<ParseArgsConfig["options"]>;
 
-const BROWSER_FLAGS: Options = {
+// Everything about reaching and framing the page, minus the producer choice.
+// The act commands take exactly this set: acting is native-only (CDP) and the
+// change report is the DOM walk's tree diff, so there is no producer to pick —
+// and a flag that silently did nothing would be worse than not offering it.
+const NAVIGATION_FLAGS: Options = {
   root: { type: "string" },
-  producer: { type: "string" },
   device: { type: "string" },
   viewport: { type: "string" },
   "wait-until": { type: "string" },
@@ -43,6 +46,11 @@ const BROWSER_FLAGS: Options = {
   "allow-file": { type: "boolean" },
   "storage-state": { type: "string" },
   "audit-origin": { type: "string", multiple: true },
+};
+
+const BROWSER_FLAGS: Options = {
+  ...NAVIGATION_FLAGS,
+  producer: { type: "string" },
 };
 
 const OUTPUT_FLAGS: Options = {
@@ -82,6 +90,30 @@ const VIEW_FLAGS: Options = {
   ...OUTPUT_FLAGS,
   ...CONFIG_FLAGS,
   "include-generic": { type: "boolean" },
+};
+
+// The act commands. `interact` takes an ordered, repeatable --step; the sugar
+// verbs take one target apiece and share the same machinery.
+const INTERACT_FLAGS: Options = {
+  ...NAVIGATION_FLAGS,
+  ...OUTPUT_FLAGS,
+  ...CONFIG_FLAGS,
+  step: { type: "string", multiple: true },
+};
+
+// All three sugar verbs parse --text, but only `type` accepts it: click/focus
+// REJECT it by name ("--text applies to `type`") instead of leaving the strict
+// parser to answer a sibling command's flag with a wall of positional-argument
+// advice. Rejecting-with-the-remedy beats both ignoring it and a generic parse
+// error; the help text advertises it only where it works.
+const ACT_FLAGS: Options = {
+  ...NAVIGATION_FLAGS,
+  ...OUTPUT_FLAGS,
+  ...CONFIG_FLAGS,
+  role: { type: "string" },
+  name: { type: "string" },
+  nth: { type: "string" },
+  text: { type: "string" },
 };
 
 // install is a setup command: no browser/output/emulation flags — it
@@ -327,6 +359,133 @@ ${SHARED_FLAG_HELP}
 `,
     load: async () => (await import("./commands/views.js")).listCommand,
   },
+  interact: {
+    summary: "Run steps on a page, then show what they changed",
+    options: INTERACT_FLAGS,
+    help: `Usage: real-a11y interact <url> --step '<step>' [--step '<step>' …]
+
+Drive a page through one or more steps, then print the accessibility-tree
+diff those steps produced — the answer to "what did that actually change for
+a screen reader?". Steps run in order and stop at the first failure.
+
+A step is written the way the tree prints a node:
+
+  <verb> <role> ["<name>"] [nth=<n>] [= <text>]
+
+  verbs                click | type | focus
+  "<name>"             the accessible name; omit to match any name,
+                       "" to target an UNLABELED control
+  nth=<n>              1-based, document order — the spelling the
+                       ambiguity error prints, so the fix is copy-paste
+  = <text>             type only; everything after the first = is the value
+
+Examples:
+  real-a11y interact http://localhost:3000 --step 'click button "Open menu"'
+  real-a11y interact http://localhost:3000 \\
+    --step 'type textbox "Email" = someone@example.com' \\
+    --step 'click button "Sign in"'
+  real-a11y interact https://example.com --step 'click button "Save" nth=2'
+
+Targets resolve against CHROMIUM'S OWN accessibility tree by role + accessible
+name — never a CSS selector. If a control can't be reached that way, assistive
+technology can't reach it either, and that is an accessibility finding rather
+than a targeting inconvenience. Ambiguous matches list their nth= candidates;
+a disabled target is refused (the page would ignore the action, leaving a
+misleading empty diff).
+
+THE ACTIONS ARE REAL: they submit forms, toggle state, and can NAVIGATE. The
+diff comes from an in-page checkpoint bound to the page instance, so a step
+that navigates discards it — the run still succeeds and says so.
+
+--root scopes the DIFF (the in-page tree walk), not the targeting: the native
+tree the steps resolve against is always whole-document.
+
+A typed value is never echoed — not in progress output, not in --format json.
+Don't use this to log in: a password on the command line is visible to other
+processes and lands in your shell history. Use 'real-a11y login' instead.
+
+Chromium only.
+
+Flags:
+  --step '<step>'        A step to run (repeatable, ordered)   (required)
+${SHARED_FLAG_HELP}
+`,
+    load: async () => (await import("./commands/interact.js")).interactCommand,
+  },
+  click: {
+    summary: "Click one element by role + accessible name",
+    options: ACT_FLAGS,
+    help: `Usage: real-a11y click <url> --role <role> [--name "<name>"] [flags]
+
+Dispatch a real click at the element matched by role + accessible name, then
+print the accessibility-tree diff it produced. Shorthand for a one-step
+'real-a11y interact' — see 'real-a11y interact --help' for the full contract.
+
+Examples:
+  real-a11y click http://localhost:3000 --role button --name "Open menu"
+  real-a11y click http://localhost:3000 --role button --name "Save" --nth 2
+  real-a11y click http://localhost:3000 --role button --name ""   # unlabeled
+
+Flags:
+  --role <role>          ARIA role as the tree prints it       (required)
+  --name <name>          Accessible name; omit to match any, "" for unlabeled
+  --nth <n>              1-based pick among matches, document order
+${SHARED_FLAG_HELP}
+`,
+    load: async () => (await import("./commands/interact.js")).clickCommand,
+  },
+  type: {
+    summary: "Set a text field's value by role + accessible name",
+    options: ACT_FLAGS,
+    help: `Usage: real-a11y type <url> --role <role> --name "<name>" --text <value>
+
+Replace a text field's value (role is usually textbox, searchbox, or
+combobox), then print the accessibility-tree diff — a combobox popping its
+options, an inline validation error appearing. Shorthand for a one-step
+'real-a11y interact'.
+
+The value is written through the element's own prototype setter plus
+input/change events, so framework-controlled inputs (React et al.) register
+it. It REPLACES the current value.
+
+Examples:
+  real-a11y type http://localhost:3000 --role textbox --name "Email" --text you@example.com
+  real-a11y type http://localhost:3000 --role searchbox --name "Search" --text shoes
+
+The value is never echoed back — not in progress output, not in --format json.
+Don't use this to log in: a password on the command line is visible to other
+processes and lands in your shell history. Use 'real-a11y login' instead.
+
+Flags:
+  --role <role>          ARIA role as the tree prints it       (required)
+  --name <name>          Accessible name; omit to match any, "" for unlabeled
+  --text <value>         The text to enter                     (required)
+  --nth <n>              1-based pick among matches, document order
+${SHARED_FLAG_HELP}
+`,
+    load: async () => (await import("./commands/interact.js")).typeCommand,
+  },
+  focus: {
+    summary: "Move real keyboard focus by role + accessible name",
+    options: ACT_FLAGS,
+    help: `Usage: real-a11y focus <url> --role <role> [--name "<name>"] [flags]
+
+Move real keyboard focus to the matched element, then print the
+accessibility-tree diff — the focus move shows as a [focused] marker moving.
+Useful for checking what a keyboard user lands on, alongside 'real-a11y tabs'.
+
+Examples:
+  real-a11y focus http://localhost:3000 --role textbox --name "Email"
+  real-a11y focus http://localhost:3000 --role link --name "Skip to content"
+
+Flags:
+  --role <role>          ARIA role as the tree prints it       (required)
+  --name <name>          Accessible name; omit to match any, "" for unlabeled
+  --nth <n>              1-based pick among matches, document order
+${SHARED_FLAG_HELP}
+`,
+    load: async () => (await import("./commands/interact.js")).focusCommand,
+  },
   login: {
     summary: "Save a login session for --storage-state audits",
     options: LOGIN_FLAGS,
@@ -446,6 +605,10 @@ const USAGE: Record<string, string> = {
   install: "install",
   audit: "audit <url...>",
   list: "list <cat> <url>",
+  interact: "interact <url> --step",
+  click: "click <url> --role",
+  type: "type <url> --role",
+  focus: "focus <url> --role",
   login: "login <url> --save",
   snapshot: "snapshot [url...]",
   diff: "diff <base> <pr>",

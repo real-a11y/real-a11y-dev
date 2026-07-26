@@ -84,6 +84,47 @@ ceremony).
 `outline`, `tabs`, `list <category>` — each printing one facet of the same
 extraction. See the [command reference](/packages/cli/commands) for the full set.
 
+## Audit what's behind a click
+
+A page audited as it loads never shows the dialog, the expanded menu, or the
+validation error. `interact` runs steps and prints the **accessibility-tree
+diff** they produced:
+
+```sh
+real-a11y interact http://localhost:3000 --step 'click button "Open menu"'
+```
+
+```
++ link "Alpha"
++ navigation "Main"
+~ button "Open menu": a11y.states.expanded false → true
+~ main: childIds 1 child → 2 children
+```
+
+Steps are written in the tree's own vocabulary — `<verb> <role> ["<name>"]
+[nth=<n>] [= <text>]`, with verbs `click`, `type`, and `focus` — so a line of
+`real-a11y tree` output is nearly a step already. Several steps run in order:
+
+```sh
+real-a11y interact http://localhost:3000 \
+  --step 'type textbox "Email" = someone@example.com' \
+  --step 'click button "Sign in"'
+```
+
+One-step cases have sugar: `real-a11y click <url> --role button --name "Save"`,
+plus `type` and `focus`.
+
+Targeting is **role + accessible name only**, resolved against Chromium's own
+accessibility tree — never a CSS selector. That's the point: if a control can't
+be reached that way, assistive technology can't reach it either, and the refusal
+is a finding rather than a targeting inconvenience.
+
+The actions are real — they submit forms and can navigate. A typed value is
+never echoed back in any output format, and `type` is not a login mechanism;
+use [`login`](/packages/cli/commands#login-url-save-file) for that. Chromium
+only. Full contract in the
+[command reference](/packages/cli/commands#interact-url-step-step).
+
 ## Configure once
 
 Put your project's settings in an **`a11y.config.json`** and every command picks

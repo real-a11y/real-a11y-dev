@@ -92,6 +92,8 @@ navigation "On this page"
     listitem
       link "Your first audit"
     listitem
+      link "Audit what's behind a click"
+    listitem
       link "Configure once"
     listitem
       link "Track regressions across a PR"
@@ -168,6 +170,33 @@ main
     code "outline"
     code "tabs"
     code "list <category>"
+    link "command reference"
+  heading "Audit what's behind a click" (level 2)
+  paragraph "A page audited as it loads never shows the dialog, the expanded menu, or the validation error. runs steps and prints the they produced:"
+    code "interact"
+    strong "accessibility-tree diff"
+  button "Copy Code"
+  code
+  button "Copy Code"
+  code
+  paragraph "Steps are written in the tree's own vocabulary — , with verbs , , and — so a line of output is nearly a step already. Several steps run in order:"
+    code "<verb> <role> ["<name>"] [nth=<n>] [= <text>]"
+    code "click"
+    code "type"
+    code "focus"
+    code "real-a11y tree"
+  button "Copy Code"
+  code
+  paragraph "One-step cases have sugar: , plus and ."
+    code "real-a11y click <url> --role button --name "Save""
+    code "type"
+    code "focus"
+  paragraph "Targeting is , resolved against Chromium's own accessibility tree — never a CSS selector. That's the point: if a control can't be reached that way, assistive technology can't reach it either, and the refusal is a finding rather than a targeting inconvenience."
+    strong "role + accessible name only"
+  paragraph "The actions are real — they submit forms and can navigate. A typed value is never echoed back in any output format, and is not a login mechanism; use for that. Chromium only. Full contract in the ."
+    code "type"
+    link "login"
+      code "login"
     link "command reference"
   heading "Configure once" (level 2)
   paragraph "Put your project's settings in an and every command picks them up — the Jest/ESLint model. A block seeds any flag you don't pass; an optional list names the routes you audit. Both are optional — a -only config is valid."

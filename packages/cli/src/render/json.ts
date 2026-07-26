@@ -31,6 +31,13 @@ export interface PageReport {
   tabs?: string;
   /** `list` lines. */
   items?: string[];
+  /**
+   * `interact` — the steps that ran, in order, rendered in the step language.
+   * A typed value is never included (R1); `type` renders as `= ‹hidden›`.
+   */
+  steps?: string[];
+  /** `interact` — the tree diff the steps produced. */
+  diff?: string;
   /** Page-level failure; other pages still report. */
   error?: string;
 }
@@ -62,6 +69,8 @@ export function renderJson(
       ...(page.outline !== undefined ? { outline: page.outline } : {}),
       ...(page.tabs !== undefined ? { tabs: page.tabs } : {}),
       ...(page.items !== undefined ? { items: page.items } : {}),
+      ...(page.steps !== undefined ? { steps: page.steps } : {}),
+      ...(page.diff !== undefined ? { diff: page.diff } : {}),
       ...(page.error !== undefined ? { error: page.error } : {}),
     })),
   };

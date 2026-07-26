@@ -17,6 +17,10 @@ h1 Commands & flags
     h3 outline <url>
     h3 tabs <url>
     h3 list <category> <url>
+    h3 interact <url> --step '<step>'
+    h3 click <url> --role <role>
+    h3 type <url> --role <role> --text <value>
+    h3 focus <url> --role <role>
     h3 snapshot [url...]
     h3 diff <base.json> <pr.json>
     h3 login <url> --save <file>

@@ -5,10 +5,12 @@ description: Every real-a11y command and flag — audit, inspect, snapshot, diff
 
 # Commands & flags
 
-Every invocation is `real-a11y <command> [url...] [flags]`. Ten commands ship —
-[`install`](#install), [`audit`](#audit-url), [`inspect`](#inspect-url),
+Every invocation is `real-a11y <command> [url...] [flags]`. Fourteen commands
+ship — [`install`](#install), [`audit`](#audit-url), [`inspect`](#inspect-url),
 [`tree`](#tree-url), [`outline`](#outline-url), [`tabs`](#tabs-url),
-[`list`](#list-category-url), [`snapshot`](#snapshot-url),
+[`list`](#list-category-url), [`interact`](#interact-url-step-step),
+[`click`](#click-url-role-role), [`type`](#type-url-role-role-text-value),
+[`focus`](#focus-url-role-role), [`snapshot`](#snapshot-url),
 [`diff`](#diff-base-json-pr-json), and [`login`](#login-url-save-file). Run
 `real-a11y <command> --help` for a command's own flags.
 
@@ -25,7 +27,10 @@ Findings and reports go to **stdout**; progress, warnings, and errors go to
 
 View commands ([`tree`](#tree-url), [`outline`](#outline-url),
 [`tabs`](#tabs-url), [`list`](#list-category-url)) aren't gates — they exit `0`
-unless something actually failed.
+unless something actually failed. Neither are the act commands
+([`interact`](#interact-url-step-step), [`click`](#click-url-role-role),
+[`type`](#type-url-role-role-text-value), [`focus`](#focus-url-role-role)):
+they exit `0` when every step lands, and `2` when one can't be reached.
 
 **Environment variables:**
 
@@ -162,6 +167,114 @@ real-a11y list image https://example.com
 
 **Flags:** [Browser & page](#browser-page) · [Output](#output) (`pretty | json`)
 · [Config](#config).
+
+### `interact <url> --step '<step>'`
+
+Drive a page through one or more steps, then print the **accessibility-tree
+diff** those steps produced — the answer to "what did that actually change for
+a screen reader?". Steps run in order and stop at the first failure. Single
+URL; exits `0` when every step lands, `2` on a usage error or an unreachable
+target. **Chromium only.**
+
+A step is written the way the tree prints a node:
+
+```
+<verb> <role> ["<name>"] [nth=<n>] [= <text>]
+```
+
+- **verbs** — `click`, `type`, `focus`.
+- **`"<name>"`** — the accessible name. Omit it to match any name; pass `""` to
+  target an **unlabeled** control (the one an audit just flagged).
+- **`nth=<n>`** — 1-based, document order. It's the spelling the ambiguity
+  error prints, so the fix is copy-paste.
+- **`= <text>`** — `type` only. Everything after the first `=` is the value, so
+  query strings and base64 need no escaping.
+
+```sh
+real-a11y interact http://localhost:3000 --step 'click button "Open menu"'
+
+real-a11y interact http://localhost:3000 \
+  --step 'type textbox "Email" = someone@example.com' \
+  --step 'click button "Sign in"'
+
+real-a11y interact https://example.com --step 'click button "Save" nth=2'
+```
+
+Targets resolve against **Chromium's own** accessibility tree by role +
+accessible name — never a CSS selector. If a control can't be reached that way,
+assistive technology can't reach it either, and that is an accessibility
+finding rather than a targeting inconvenience. Ambiguous matches list their
+`nth=` candidates; a **disabled** target is refused, because the click would be
+swallowed and the resulting empty diff would read as "that button does
+nothing".
+
+::: warning The actions are real
+They submit forms, toggle state, and can **navigate**. The diff comes from an
+in-page checkpoint bound to the page instance, so a step that navigates
+discards it — the run still succeeds and says so.
+:::
+
+Two producers are in play, deliberately: **acting** is native (CDP,
+whole-document), while the **diff** is the in-page DOM walk — which is what
+[`--root`](#root-selector) scopes. Targeting is never scoped.
+
+A typed value is **never echoed** — not in progress output, not in
+[`--format json`](#f-format-fmt), where the step renders as `= ‹hidden›`. Don't
+use `type` to log in: a password on the command line is visible to other
+processes and lands in your shell history. Use [`login`](#login-url-save-file).
+
+**Flags:** `--step '<step>'` (repeatable, required) ·
+[Browser & page](#browser-page) (no `--producer`) · [Output](#output)
+(`pretty | json`) · [Config](#config).
+
+### `click <url> --role <role>`
+
+Dispatch a real click at the element matched by role + accessible name, then
+print the tree diff. Shorthand for a one-step
+[`interact`](#interact-url-step-step), and bound by the same contract.
+
+```sh
+real-a11y click http://localhost:3000 --role button --name "Open menu"
+real-a11y click http://localhost:3000 --role button --name "Save" --nth 2
+real-a11y click http://localhost:3000 --role button --name ""   # unlabeled
+```
+
+**Flags:** `--role` (required) · `--name` · `--nth` ·
+[Browser & page](#browser-page) (no `--producer`) · [Output](#output)
+(`pretty | json`) · [Config](#config).
+
+### `type <url> --role <role> --text <value>`
+
+Replace a text field's value (role is usually `textbox`, `searchbox`, or
+`combobox`), then print the tree diff — a combobox popping its options, an
+inline validation error appearing. The value is written through the element's
+own prototype setter plus `input`/`change` events, so framework-controlled
+inputs (React et al.) register it.
+
+```sh
+real-a11y type http://localhost:3000 --role textbox --name "Email" --text you@example.com
+```
+
+The value is never echoed back, in any format. Don't use it to log in — see
+[`login`](#login-url-save-file).
+
+**Flags:** `--role` (required) · `--text` (required) · `--name` · `--nth` ·
+[Browser & page](#browser-page) (no `--producer`) · [Output](#output)
+(`pretty | json`) · [Config](#config).
+
+### `focus <url> --role <role>`
+
+Move real keyboard focus to the matched element, then print the tree diff — the
+focus move shows as the `[focused]` marker relocating. Pairs with
+[`tabs`](#tabs-url) for focus-order work.
+
+```sh
+real-a11y focus http://localhost:3000 --role textbox --name "Email"
+```
+
+**Flags:** `--role` (required) · `--name` · `--nth` ·
+[Browser & page](#browser-page) (no `--producer`) · [Output](#output)
+(`pretty | json`) · [Config](#config).
 
 ### `snapshot [url...]`
 
@@ -309,6 +422,13 @@ fits — `audit`, `tree`, `outline`. Commands that carry a tab sequence
 ([`tabs`](#tabs-url), [`inspect`](#inspect-url), [`snapshot`](#snapshot-url)) or
 list one category ([`list`](#list-category-url)) reject `--producer native`, and it
 can't be combined with [`--root`](#root-selector) (it audits the whole document).
+
+The act commands ([`interact`](#interact-url-step-step),
+[`click`](#click-url-role-role), [`type`](#type-url-role-role-text-value),
+[`focus`](#focus-url-role-role)) take **no `--producer` at all**: they always
+resolve targets against the native tree and always report the DOM walk's diff,
+so there is nothing to choose. A flag that silently did nothing would be worse
+than not offering one.
 
 ### `--device <name>`
 
