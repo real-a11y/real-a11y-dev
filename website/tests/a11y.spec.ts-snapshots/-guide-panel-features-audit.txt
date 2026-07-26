@@ -412,7 +412,7 @@ main
         cell "Esc"
           code "Esc"
         cell "Clear scope, then clear search, then close the panel"
-  paragraph "Implemented in via (and the same type-ahead helper on filtered / tab-sequence listboxes) — every package that mounts the tree gets the same keymap."
+  paragraph "Implemented in via (and the same type-ahead + stepper-key helpers on filtered / tab-sequence listboxes) — every package that mounts the tree gets the same keymap."
     code "@real-a11y-dev/semantic-navigator-ui"
     code "useTreeKeyboard"
   separator
