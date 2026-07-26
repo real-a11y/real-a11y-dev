@@ -133,15 +133,25 @@ describe("R1 on the failure path", () => {
   // to the success path.
   const SECRET = "hunter2-lives-here";
 
+  // The invariant is that the value never appears — NOT that every message
+  // carries a mask. Where the parser can't say anything safe it echoes
+  // nothing at all, which satisfies R1 without a ‹hidden› marker.
   const leaky: [string, string][] = [
+    // with the `=` separator present
     ["unquoted multi-word name", `type textbox My Field = ${SECRET}`],
     ["unterminated quote", `type textbox "Email = ${SECRET}`],
     ["no leading verb token", `"type" textbox = ${SECRET}`],
     ["trailing junk before the value", `type textbox "E" nth=2 x = ${SECRET}`],
+    // …and with the separator forgotten, which is the likelier typo: the
+    // value is then just an unparsed token, indistinguishable from a name.
+    ["no separator at all", `type textbox ${SECRET}`],
+    ["quoted name, forgotten separator", `type textbox "Password" ${SECRET}`],
+    ["no verb and no separator", `"type" textbox ${SECRET}`],
+    ["unterminated quote, no separator", `type textbox "Password ${SECRET}`],
   ];
 
   for (const [label, step] of leaky) {
-    it(`masks the value when the step is malformed — ${label}`, () => {
+    it(`never echoes the value — ${label}`, () => {
       let caught: CliError | undefined;
       try {
         parseStep(step);
@@ -153,13 +163,12 @@ describe("R1 on the failure path", () => {
       );
       expect(caught?.message).not.toContain("hunter2");
       expect(caught?.hint ?? "").not.toContain("hunter2");
-      expect(caught?.message).toContain("‹hidden›");
     });
   }
 
-  it("still names the part the user has to fix", () => {
-    // Redaction must not cost the diagnosis: the unquoted name is the error,
-    // and it stays visible.
+  it("still names the part the user has to fix when it can", () => {
+    // Redaction must not cost the diagnosis: with `=` present, the tokens
+    // before it are structural, so the unquoted name stays visible.
     let caught: CliError | undefined;
     try {
       parseStep(`type textbox My Field = ${SECRET}`);
@@ -167,7 +176,21 @@ describe("R1 on the failure path", () => {
       caught = err as CliError;
     }
     expect(caught?.message).toContain("My Field");
+    expect(caught?.message).toContain("‹hidden›");
     expect(caught?.hint).toMatch(/a name must be quoted/);
+  });
+
+  it("points a forgotten separator at the separator, not at quoting", () => {
+    // When the whole remainder is masked the echo can't teach anything, so
+    // the hint has to carry the fix.
+    let caught: CliError | undefined;
+    try {
+      parseStep(`type textbox "Password" ${SECRET}`);
+    } catch (err) {
+      caught = err as CliError;
+    }
+    expect(caught?.message).toContain("‹hidden›");
+    expect(caught?.hint).toMatch(/must be introduced with `=`/);
   });
 
   it("leaves a step with no value untouched", () => {

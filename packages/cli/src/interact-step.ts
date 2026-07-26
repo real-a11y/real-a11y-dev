@@ -53,15 +53,23 @@ function fail(message: string, hint = USAGE): never {
  * {@link describeStep} enforces on the success path has to hold on the failure
  * path too, or a typo turns a password into a CI log line.
  *
- * The parser can't know which token was *meant* to be the value once the step
- * is malformed, so this deliberately over-redacts: everything from the first
- * `=` onward goes, whether or not that `=` was the value separator. Masking a
- * name that happens to contain `=` costs a little precision in an error
- * message; the opposite mistake leaks a secret.
+ * Anchoring on `=` alone is not enough: the separator is exactly what a user
+ * forgets (`type textbox "Password" hunter2`), and then the value IS the
+ * unparsed remainder. So:
+ *
+ * - **`=` present** — mask from it. The tokens before it are structural (an
+ *   unquoted name, a stray word), and keeping them visible is what makes the
+ *   error diagnosable.
+ * - **no `=`, and this is a `type` step** — mask the whole remainder. Nothing
+ *   distinguishes "a name I forgot to quote" from "the value I forgot to
+ *   introduce", so the safe reading wins.
+ * - **no `=`, `click` / `focus`** — echo it. Those verbs have no value in the
+ *   grammar, so there is nothing to protect.
  */
-function redactValue(text: string): string {
+function redactValue(text: string, verb?: StepVerb): string {
   const eq = text.indexOf("=");
-  return eq === -1 ? text : `${text.slice(0, eq + 1)} ‹hidden›`;
+  if (eq !== -1) return `${text.slice(0, eq + 1)} ‹hidden›`;
+  return verb === "type" ? "‹hidden›" : text;
 }
 
 /**
@@ -71,6 +79,7 @@ function redactValue(text: string): string {
 function readQuoted(
   input: string,
   start: number,
+  verb: StepVerb,
 ): { value: string; end: number } {
   let value = "";
   let i = start + 1; // skip the opening quote
@@ -86,7 +95,7 @@ function readQuoted(
     i += 1;
   }
   return fail(
-    `unterminated quoted name in step: ${JSON.stringify(redactValue(input))}`,
+    `unterminated quoted name in step: ${JSON.stringify(redactValue(input, verb))}`,
     "quote the accessible name on both sides, e.g. --step 'click button \"Save\"'",
   );
 }
@@ -98,10 +107,9 @@ export function parseStep(raw: string): InteractStep {
 
   // ── verb ────────────────────────────────────────────────────────────────
   const verbMatch = /^([A-Za-z]+)(\s+|$)/.exec(input);
-  if (!verbMatch)
-    fail(
-      `could not read a verb from step: ${JSON.stringify(redactValue(raw))}`,
-    );
+  // Deliberately echoes nothing: with no verb parsed we can't tell whether
+  // this is a `type` step, so we can't reason about what is safe to print.
+  if (!verbMatch) fail("a step must start with a verb");
   const verb = verbMatch[1].toLowerCase();
   if (!isStepVerb(verb)) {
     fail(
@@ -124,7 +132,7 @@ export function parseStep(raw: string): InteractStep {
   // ── optional "name" ─────────────────────────────────────────────────────
   let name: string | undefined;
   if (rest.startsWith('"')) {
-    const quoted = readQuoted(rest, 0);
+    const quoted = readQuoted(rest, 0, verb);
     name = quoted.value;
     rest = rest.slice(quoted.end).trimStart();
   }
@@ -153,8 +161,10 @@ export function parseStep(raw: string): InteractStep {
 
   if (rest !== "") {
     fail(
-      `unexpected trailing input in step: ${JSON.stringify(redactValue(rest))}`,
-      "a name must be quoted — e.g. --step 'click button \"Save & continue\"'",
+      `unexpected trailing input in step: ${JSON.stringify(redactValue(rest, verb))}`,
+      verb === "type" && !rest.includes("=")
+        ? "a type value must be introduced with `=` — e.g. --step 'type textbox \"Email\" = you@example.com'"
+        : "a name must be quoted — e.g. --step 'click button \"Save & continue\"'",
     );
   }
 

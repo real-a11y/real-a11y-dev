@@ -198,6 +198,23 @@ describe("real-a11y interact", () => {
     expect(res.stderr).toContain("My Field");
   });
 
+  it("masks the value when the `=` separator is forgotten entirely", async () => {
+    // The likelier typo: with no separator the value is just an unparsed
+    // token, indistinguishable from a name the user forgot to quote — so the
+    // whole remainder is masked and the hint carries the fix instead.
+    const res = await runCli([
+      "interact",
+      PAGE,
+      "--step",
+      `type textbox "Password" ${SECRET}`,
+    ]);
+    expect(res.code).toBe(2);
+    expect(res.stderr).not.toContain("hunter2");
+    expect(res.stdout).not.toContain("hunter2");
+    expect(res.stderr).toContain("‹hidden›");
+    expect(res.stderr).toContain("must be introduced with `=`");
+  });
+
   it("rejects a malformed step before launching a browser", async () => {
     const res = await runCli(["interact", PAGE, "--step", "poke button"]);
     expect(res.code).toBe(2);
