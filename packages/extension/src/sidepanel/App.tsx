@@ -36,6 +36,7 @@ import {
   useMemo,
 } from "preact/hooks";
 
+import type { FieldState } from "../field-state.js";
 import { isTrustedSender } from "../routing.js";
 import type { ContentToPanel, PanelToContent } from "../types.js";
 
@@ -103,6 +104,16 @@ function getDisplayRole(node: DomSemanticNode): string {
   const override = TAG_DISPLAY_OVERRIDES[node.dom.tagName];
   if (override) return override;
   return node.a11y.role;
+}
+
+/** Narrow a chrome.runtime.sendMessage reply that reports `{ success: true }`. */
+function isSuccessResponse(response: unknown): response is { success: true } {
+  return (
+    typeof response === "object" &&
+    response !== null &&
+    "success" in response &&
+    (response as { success: unknown }).success === true
+  );
 }
 
 export function App() {
@@ -211,7 +222,10 @@ export function App() {
   // active tab while this panel still shows (or is clearing) the previous
   // tab's tree.
   const sendToBoundTab = useCallback(
-    (message: PanelToContent, responseCallback?: (response: any) => void) => {
+    (
+      message: PanelToContent,
+      responseCallback?: (response: unknown) => void,
+    ) => {
       const stamped: PanelToContent = {
         ...message,
         tabId: myTabIdRef.current ?? undefined,
@@ -588,15 +602,16 @@ export function App() {
       ) {
         sendToBoundTab(
           { type: "GET_FIELD_STATE", payload: { nodeId: id } },
-          (response) => {
-            if (response?.success) {
+          (response: unknown) => {
+            const field = response as FieldState;
+            if (field.success) {
               setInputState({
                 type: "text",
                 nodeId: id,
                 label: node.a11y.name || node.dom.tagName,
-                value: response.value || "",
-                inputType: response.type,
-                placeholder: response.placeholder,
+                value: field.value || "",
+                inputType: field.type,
+                placeholder: field.placeholder,
               });
             }
           },
@@ -608,14 +623,15 @@ export function App() {
       if (primaryAction === "select") {
         sendToBoundTab(
           { type: "GET_FIELD_STATE", payload: { nodeId: id } },
-          (response) => {
-            if (response?.success && response.options) {
+          (response: unknown) => {
+            const field = response as FieldState;
+            if (field.success && field.options) {
               setInputState({
                 type: "select",
                 nodeId: id,
                 label: node.a11y.name || node.dom.tagName,
-                value: response.value || "",
-                options: response.options,
+                value: field.value || "",
+                options: field.options,
               });
             }
           },
@@ -814,8 +830,8 @@ export function App() {
     ) => {
       sendToBoundTab(
         { type: "SEND_KEY", payload: { key, code, keyCode, modifiers } },
-        (response) => {
-          if (response?.success) {
+        (response: unknown) => {
+          if (isSuccessResponse(response)) {
             const label = modifiers?.shift
               ? `Shift+${key === "Tab" ? "Tab" : key}`
               : key;
@@ -1011,8 +1027,8 @@ export function App() {
   }
 
   const handleCloseTab = useCallback(() => {
-    sendToBoundTab({ type: "CLOSE_TAB" }, (response) => {
-      if (response?.success) {
+    sendToBoundTab({ type: "CLOSE_TAB" }, (response: unknown) => {
+      if (isSuccessResponse(response)) {
         setLastAction("Tab closed");
         setTimeout(() => setLastAction(null), 2000);
       }
