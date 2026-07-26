@@ -9,6 +9,7 @@ import {
   planFrameAnnouncementResponse,
   planFrameHello,
   planPanelDisconnectCleanupAllTabs,
+  resolvePanelTargetTab,
 } from "./routing.js";
 import {
   type TabState,
@@ -439,19 +440,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   // ---- Messages from side panel → route to content scripts ----
+  // Prefer the panel-stamped `tabId` (the tab the panel is bound to) over
+  // the global `activeTabId`. After a tab switch, `chrome.tabs.onActivated`
+  // updates `activeTabId` before the panel processes `ACTIVE_TAB_CHANGED`
+  // and clears its tree — so routing by `activeTabId` alone can fire
+  // DISPATCH_ACTION / SEND_KEY / CLOSE_TAB on the newly active tab while
+  // the panel still shows the previous tab's nodes (ids are a per-frame
+  // counter, so `sn-3` resolves to an unrelated element there).
+  // See resolvePanelTargetTab.
 
-  // Broadcast messages: send to ALL frames. Prefer the tabId the panel
-  // explicitly tagged the message with (it knows its own tab) over the
-  // background's `activeTabId` (which races with `chrome.tabs.onActivated`
-  // — REQUEST_TREE fired right after a tab switch can land before
-  // activeTabId has been updated, routing to the previous tab).
+  // Broadcast messages: send to ALL frames.
   if (
     message.type === "REQUEST_TREE" ||
     message.type === "SET_VIEW_MODE" ||
     message.type === "SET_FOCUS_TRACKER"
   ) {
-    const targetTabId =
-      (message as { tabId?: number }).tabId ?? activeTabId ?? null;
+    const targetTabId = resolvePanelTargetTab(
+      (message as { tabId?: number }).tabId,
+      activeTabId,
+    );
     if (targetTabId !== null) {
       // Clear old frame data on fresh request
       if (message.type === "REQUEST_TREE") {
@@ -485,11 +492,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  // Close the active tab (for dismissing popups, login windows, etc.)
-  // After closing, focus back to the previous window (e.g., the original page)
+  // Close the panel-bound tab (for dismissing popups, login windows, etc.).
+  // After closing, focus back to the previous window (e.g., the original page).
+  // The follow-up REQUEST_TREE uses the *newly* active tab — not the closed
+  // tab's stamped id.
   if (message.type === "CLOSE_TAB") {
-    if (activeTabId) {
-      const closingTabId = activeTabId;
+    const closingTabId = resolvePanelTargetTab(
+      (message as { tabId?: number }).tabId,
+      activeTabId,
+    );
+    if (closingTabId != null) {
       chrome.tabs.remove(closingTabId, () => {
         if (chrome.runtime.lastError) {
           sendResponse({
@@ -528,9 +540,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   // Curtain toggle — store state and broadcast
   if (message.type === "TOGGLE_CURTAIN") {
-    if (activeTabId) {
-      tabCurtainOn.set(activeTabId, message.payload.visible);
-      chrome.tabs.sendMessage(activeTabId, message, () => {
+    const targetTabId = resolvePanelTargetTab(
+      (message as { tabId?: number }).tabId,
+      activeTabId,
+    );
+    if (targetTabId != null) {
+      tabCurtainOn.set(targetTabId, message.payload.visible);
+      chrome.tabs.sendMessage(targetTabId, message, () => {
         if (chrome.runtime.lastError) {
           /* ignore */
         }
@@ -544,8 +560,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // also picks an element. NODE_PICKED comes back through the default
   // content→panel forwarder below (with `tabId` stamped on).
   if (message.type === "SET_PICK_MODE") {
-    if (activeTabId) {
-      broadcastToAllFrames(activeTabId, message);
+    const targetTabId = resolvePanelTargetTab(
+      (message as { tabId?: number }).tabId,
+      activeTabId,
+    );
+    if (targetTabId != null) {
+      broadcastToAllFrames(targetTabId, message);
     }
     sendResponse({ success: true });
     return false;
@@ -553,8 +573,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   // Broadcast to all frames
   if (message.type === "CLEAR_HIGHLIGHT") {
-    if (activeTabId) {
-      chrome.tabs.sendMessage(activeTabId, message, () => {
+    const targetTabId = resolvePanelTargetTab(
+      (message as { tabId?: number }).tabId,
+      activeTabId,
+    );
+    if (targetTabId != null) {
+      chrome.tabs.sendMessage(targetTabId, message, () => {
         if (chrome.runtime.lastError) {
           /* ignore */
         }
@@ -566,9 +590,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   // Send keyboard event to top frame
   if (message.type === "SEND_KEY") {
-    if (activeTabId) {
+    const targetTabId = resolvePanelTargetTab(
+      (message as { tabId?: number }).tabId,
+      activeTabId,
+    );
+    if (targetTabId != null) {
       chrome.tabs.sendMessage(
-        activeTabId,
+        targetTabId,
         message,
         { frameId: 0 },
         (response) => {
@@ -594,7 +622,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     message.type === "HIGHLIGHT_NODE" ||
     message.type === "GET_FIELD_STATE"
   ) {
-    if (!activeTabId) {
+    const targetTabId = resolvePanelTargetTab(
+      (message as { tabId?: number }).tabId,
+      activeTabId,
+    );
+    if (targetTabId == null) {
       sendResponse({ success: false, error: "No active tab" });
       return false;
     }
@@ -609,7 +641,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     };
 
     chrome.tabs.sendMessage(
-      activeTabId,
+      targetTabId,
       frameMessage,
       { frameId },
       (response) => {
@@ -623,25 +655,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // Keep channel open for async response
   }
 
-  // Fallback: forward to active tab (top frame)
-  if (activeTabId) {
-    chrome.tabs.sendMessage(
+  // Fallback: forward to the panel-bound tab (top frame)
+  {
+    const targetTabId = resolvePanelTargetTab(
+      (message as { tabId?: number }).tabId,
       activeTabId,
-      message,
-      { frameId: 0 },
-      (response) => {
-        if (chrome.runtime.lastError) {
-          sendResponse({
-            success: false,
-            error: "Content script not available",
-          });
-        } else {
-          sendResponse(response);
-        }
-      },
     );
-  } else {
-    sendResponse({ success: false, error: "No active tab" });
+    if (targetTabId != null) {
+      chrome.tabs.sendMessage(
+        targetTabId,
+        message,
+        { frameId: 0 },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            sendResponse({
+              success: false,
+              error: "Content script not available",
+            });
+          } else {
+            sendResponse(response);
+          }
+        },
+      );
+    } else {
+      sendResponse({ success: false, error: "No active tab" });
+    }
   }
 
   return true;

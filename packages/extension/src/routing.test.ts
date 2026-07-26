@@ -9,6 +9,7 @@ import {
   planHighlight,
   planFrameHello,
   isTrustedSender,
+  resolvePanelTargetTab,
 } from "./routing.js";
 
 describe("prefixNodeId", () => {
@@ -411,6 +412,22 @@ describe("planPanelDisconnectCleanupAllTabs", () => {
     expect(
       planPanelDisconnectCleanupAllTabs({ tabIds: [], curtainTabs: new Set() }),
     ).toEqual([]);
+  });
+});
+
+describe("resolvePanelTargetTab", () => {
+  it("prefers the panel-stamped tabId over activeTabId", () => {
+    // After a tab switch, activeTabId flips before the panel clears —
+    // stamping the bound tab keeps DISPATCH_ACTION on the right page.
+    expect(resolvePanelTargetTab(10, 99)).toBe(10);
+  });
+
+  it("falls back to activeTabId when the message has no tabId", () => {
+    expect(resolvePanelTargetTab(undefined, 42)).toBe(42);
+  });
+
+  it("returns null when neither source has a tab", () => {
+    expect(resolvePanelTargetTab(undefined, null)).toBeNull();
   });
 });
 

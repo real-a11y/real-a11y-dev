@@ -288,3 +288,22 @@ export function planHighlight(opts: { hover?: boolean }): {
     ? { scroll: false, moveFocus: false }
     : { scroll: true, moveFocus: true };
 }
+
+/**
+ * Tab a panel→content command should target.
+ *
+ * Prefer the panel-stamped `messageTabId` (the tab the panel is bound to)
+ * over the background's `activeTabId`. After a tab switch,
+ * `chrome.tabs.onActivated` updates `activeTabId` before the panel processes
+ * `ACTIVE_TAB_CHANGED` and clears its tree — so routing actions by
+ * `activeTabId` alone can fire DISPATCH_ACTION / SEND_KEY / CLOSE_TAB on the
+ * newly active tab while the panel still shows the previous tab's nodes
+ * (node ids are a per-frame counter, so `sn-3` resolves to an unrelated
+ * element there).
+ */
+export function resolvePanelTargetTab(
+  messageTabId: number | undefined,
+  activeTabId: number | null,
+): number | null {
+  return messageTabId ?? activeTabId ?? null;
+}

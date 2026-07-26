@@ -37,7 +37,7 @@ Web Page
 ```
 
 - **Content Script** — Injected into every page. Extracts the DOM/accessibility tree using `@real-a11y-dev/core`, dispatches actions on real DOM elements, manages the highlight overlay, and applies native Tab / Escape defaults for the panel keyboard bar (Tab reuses core `getTabSequence`; synthetic key events alone cannot move focus or close `<dialog>`).
-- **Background Service Worker** — Routes messages between the Side Panel and content scripts. Manages the Side Panel lifecycle.
+- **Background Service Worker** — Routes messages between the Side Panel and content scripts. Manages the Side Panel lifecycle. Panel→content commands carry the panel's bound `tabId`; the background prefers that over its global `activeTabId` so a tab-switch race cannot land `DISPATCH_ACTION` / `SEND_KEY` / `CLOSE_TAB` on the newly active tab while the panel still shows the previous tab's nodes.
 - **Side Panel** — Renders the tree UI. Receives serialized tree data from the content script and sends action commands back. A **Copy ▾** dropdown exports the current view to the clipboard as a paste-ready Markdown accessibility report — Everything, the A11y/DOM tree, the heading outline, or the tab sequence — for dropping into a bug tracker. The keyboard bar (`Esc` · `Tab` · `Shift+Tab` · `Enter` · `Space` · `↑` · `↓`) sends keys to the focused page element.
 
 ### Permissions
