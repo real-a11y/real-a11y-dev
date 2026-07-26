@@ -89,9 +89,11 @@ export default [
         "warn",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
-      // The codebase uses `any` in a few well-justified places (chrome
-      // message payloads, third-party shapes). Warn, don't fail the build.
-      "@typescript-eslint/no-explicit-any": "warn",
+      // Error, not warn: a warning never fails CI or the pre-commit
+      // `eslint --fix` hook, so `any` could land silently. Justified
+      // escapes (e.g. Vitest declaration merges) use eslint-disable with a
+      // reason; tests keep the rule off (see below).
+      "@typescript-eslint/no-explicit-any": "error",
     },
   },
 
