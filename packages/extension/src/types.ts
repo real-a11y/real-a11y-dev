@@ -5,7 +5,86 @@ import type {
   ActionResult,
 } from "@real-a11y-dev/core";
 
-/** One option of a native `<select>`, as returned by GET_FIELD_STATE. */
+/** Messages from content script frame → background (per-frame tree data) */
+export type FrameToBackground =
+  | {
+      type: "FRAME_TREE_DATA";
+      payload: {
+        frameUrl: string;
+        pageTitle: string;
+        nodes: Array<[string, SemanticNode]>;
+        rootId: string;
+      };
+    }
+  // Cheap "I'm here" announce sent at content-script load, carrying no tree.
+  // It lets the background learn a frame is reachable so it can tell the
+  // frame to start observing IFF a panel is connected — without paying a
+  // full extraction on every page whether or not the panel is ever opened.
+  | { type: "FRAME_HELLO"; payload: { frameUrl: string } }
+  | { type: "FOCUS_CHANGED"; payload: { nodeId: string } }
+  | {
+      type: "LIVE_REGION";
+      payload: { text: string; level: "polite" | "assertive"; role: string };
+    };
+
+/**
+ * Messages from background → side panel (merged tree).
+ *
+ * The side panel filters by `tabId` to discard updates that aren't for the
+ * tab it's currently bound to — without that, a background tab's content
+ * script announcing itself broadcasts to every open side panel and a panel
+ * pointed at tab A starts showing tab B's tree. `tabId` is optional only
+ * because LIVE_REGION rides directly from content → panel and the side
+ * panel can read `sender.tab.id` instead.
+ */
+export type ContentToPanel =
+  | {
+      type: "TREE_DATA";
+      tabId?: number;
+      payload: {
+        nodes: Array<[string, SemanticNode]>;
+        rootId: string;
+        pageTitle: string;
+        pageUrl: string;
+      };
+    }
+  | {
+      type: "TREE_UPDATED";
+      tabId?: number;
+      payload: { nodes: Array<[string, SemanticNode]>; rootId: string };
+    }
+  | { type: "ACTION_RESULT"; tabId?: number; payload: ActionResult }
+  | { type: "NAVIGATION"; tabId?: number; payload: { url: string } }
+  | { type: "FOCUS_CHANGED"; tabId?: number; payload: { nodeId: string } }
+  | {
+      type: "LIVE_REGION";
+      tabId?: number;
+      payload: { text: string; level: "polite" | "assertive"; role: string };
+    }
+  | {
+      // Background → panel push: the active tab in the panel's window
+      // has changed. Panel uses this as its source of truth for myTabId
+      // because the background's `chrome.tabs.onActivated` listener is
+      // the canonical writer for activeTabId.
+      type: "ACTIVE_TAB_CHANGED";
+      tabId: number;
+    }
+  // Picker (DevTools-style "select an element in the page"): the user
+  // clicked an element on the page while pick mode was on. Content
+  // resolves the click target up the DOM tree to the nearest tracked
+  // node and sends its id; panel selects it, scrolls it into view, and
+  // turns pick mode back off.
+  | { type: "NODE_PICKED"; tabId?: number; payload: { nodeId: string } }
+  // Picker: content acknowledges that pick mode entered or exited (e.g.
+  // the user pressed Escape on the page). Panel mirrors its toggle so
+  // the UI doesn't drift out of sync.
+  | {
+      type: "PICK_MODE_CHANGED";
+      tabId?: number;
+      payload: { enabled: boolean };
+    };
+
+/** Select option for GET_FIELD_STATE response */
 export interface SelectOption {
   value: string;
   label: string;
@@ -18,55 +97,6 @@ export interface SelectOption {
  * `chrome.tabs.onActivated` after a tab switch).
  */
 type BoundTab = { tabId?: number };
-
-/**
- * Messages from content script / background → side panel.
- *
- * The side panel filters by `tabId` to discard updates that aren't for the
- * tab it is currently bound to. Without that filter, a panel that was
- * pointed at tab A starts showing tab B's tree. `tabId` is optional only
- * for legacy / panel-internal messages.
- */
-export type ContentToPanel =
-  | {
-      type: "TREE_DATA";
-      tabId?: number;
-      payload: {
-        nodes: [string, SemanticNode][];
-        rootId: string;
-        pageTitle?: string;
-        pageUrl?: string;
-      };
-    }
-  | {
-      type: "TREE_UPDATED";
-      tabId?: number;
-      payload: {
-        nodes: [string, SemanticNode][];
-        rootId: string;
-      };
-    }
-  | { type: "ACTION_RESULT"; tabId?: number; payload: ActionResult }
-  | { type: "NAVIGATION"; tabId?: number; payload: { url: string } }
-  | { type: "FOCUS_CHANGED"; tabId?: number; payload: { nodeId: string } }
-  | {
-      type: "LIVE_REGION";
-      tabId?: number;
-      payload: { text: string; politeness: "polite" | "assertive" };
-    }
-  | {
-      // Background notifies the panel which tab is now active. The panel
-      // adopts that as its bound tab. The background is the canonical writer
-      // for activeTabId.
-      type: "ACTIVE_TAB_CHANGED";
-      tabId: number;
-    }
-  | { type: "NODE_PICKED"; tabId?: number; payload: { nodeId: string } }
-  | {
-      type: "PICK_MODE_CHANGED";
-      tabId?: number;
-      payload: { enabled: boolean };
-    };
 
 /**
  * Messages from side panel → background → content script.
@@ -121,20 +151,6 @@ export type PanelToContent =
   // Content swaps in the capture-phase click handler + cursor styling
   // when enabled, removes them when disabled.
   | (BoundTab & { type: "SET_PICK_MODE"; payload: { enabled: boolean } });
-
-/** Per-frame tree payload from a content script to the background. */
-export type FrameToBackground =
-  | {
-      type: "FRAME_TREE_DATA";
-      payload: {
-        frameUrl: string;
-        pageTitle?: string;
-        nodes: [string, SemanticNode][];
-        rootId: string;
-      };
-    }
-  | { type: "FRAME_HELLO" }
-  | { type: "FRAME_GONE" };
 
 export type ExtensionMessage =
   ContentToPanel | PanelToContent | FrameToBackground;
