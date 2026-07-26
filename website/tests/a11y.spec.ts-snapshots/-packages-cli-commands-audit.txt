@@ -88,6 +88,8 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
+      link "All commands at a glance"
+    listitem
       link "Commands"
     listitem
       link "Flags"
@@ -209,6 +211,168 @@ main
     strong "frozen contract"
     code "0.x"
     code "pretty"
+  heading "All commands at a glance" (level 2)
+  paragraph "The column shows which commands honor (Chromium's own tree over CDP, whole-document) versus the in-page DOM walk. Click a command for its flags."
+    strong "Producer"
+    link "--producer native"
+      code "--producer native"
+  paragraph
+    strong "Setup"
+  table
+    rowgroup
+      row
+        rowheader "Command"
+        rowheader "Purpose"
+        rowheader "Producer"
+    rowgroup
+      row
+        cell "install"
+          link "install"
+            code "install"
+        cell "Download Chrome for Testing into Real A11y's own cache — run once."
+        cell "—"
+      row
+        cell "login <url> --save <file>"
+          link "login <url> --save <file>"
+            code "login <url> --save <file>"
+        cell "Log in by hand and save the session for --storage-state."
+          code "--storage-state"
+        cell "—"
+  paragraph "— the gates: these exit on findings at or above ."
+    strong "Audit"
+    code "1"
+    link "--fail-on"
+      code "--fail-on"
+  table
+    rowgroup
+      row
+        rowheader "Command"
+        rowheader "Purpose"
+        rowheader "Producer"
+    rowgroup
+      row
+        cell "audit <url...>"
+          link "audit <url...>"
+            code "audit <url...>"
+        cell "Every violation, grouped by rule with locator + severity — the flagship."
+        cell "dom · native"
+          code "dom"
+          code "native"
+      row
+        cell "inspect <url>"
+          link "inspect <url>"
+            code "inspect <url>"
+        cell "Findings plus tree + outline + tab order from one extraction."
+          strong "plus"
+        cell "dom only"
+          code "dom"
+  paragraph "— never gates; they exit unless something actually failed."
+    strong "Views"
+    code "0"
+  table
+    rowgroup
+      row
+        rowheader "Command"
+        rowheader "Purpose"
+        rowheader "Producer"
+    rowgroup
+      row
+        cell "tree <url>"
+          link "tree <url>"
+            code "tree <url>"
+        cell "The semantic tree — role + accessible name, as a screen reader traverses it."
+        cell "dom · native"
+          code "dom"
+          code "native"
+      row
+        cell "outline <url>"
+          link "outline <url>"
+            code "outline <url>"
+        cell "Heading outline (h1–h6) in document order."
+        cell "dom · native"
+          code "dom"
+          code "native"
+      row
+        cell "tabs <url>"
+          link "tabs <url>"
+            code "tabs <url>"
+        cell "Focusable elements in keyboard Tab order."
+        cell "dom only"
+          code "dom"
+      row
+        cell "list <category> <url>"
+          link "list <category> <url>"
+            code "list <category> <url>"
+        cell "One category — heading, link, button, form, landmark, image."
+        cell "dom only"
+          code "dom"
+  paragraph "— Chromium only. Exit when every step lands, when one can't be reached."
+    strong "Act"
+    code "0"
+    code "2"
+  table
+    rowgroup
+      row
+        rowheader "Command"
+        rowheader "Purpose"
+        rowheader "Producer"
+    rowgroup
+      row
+        cell "interact <url> --step"
+          link "interact <url> --step"
+            code "interact <url> --step"
+        cell "Run ordered steps, then print the tree diff they produced."
+        cell "acts native, diffs dom"
+          code "native"
+          code "dom"
+      row
+        cell "click <url> --role"
+          link "click <url> --role"
+            code "click <url> --role"
+        cell "Real click at the element matched by role + accessible name."
+        cell "acts native, diffs dom"
+          code "native"
+          code "dom"
+      row
+        cell "type <url> --role --text"
+          link "type <url> --role --text"
+            code "type <url> --role --text"
+        cell "Replace a text field's value; the value is never echoed back."
+        cell "acts native, diffs dom"
+          code "native"
+          code "dom"
+      row
+        cell "focus <url> --role"
+          link "focus <url> --role"
+            code "focus <url> --role"
+        cell "Move real keyboard focus; the [focused] marker moves in the diff."
+          code "[focused]"
+        cell "acts native, diffs dom"
+          code "native"
+          code "dom"
+  paragraph
+    strong "Artifacts"
+  table
+    rowgroup
+      row
+        rowheader "Command"
+        rowheader "Purpose"
+        rowheader "Producer"
+    rowgroup
+      row
+        cell "snapshot [url...]"
+          link "snapshot [url...]"
+            code "snapshot [url...]"
+        cell "Audit a page set → one diffable JSON artifact (or --md)."
+          code "--md"
+        cell "dom only"
+          code "dom"
+      row
+        cell "diff <base.json> <pr.json>"
+          link "diff <base.json> <pr.json>"
+            code "diff <base.json> <pr.json>"
+        cell "Findings-aware diff of two artifacts — new / changed / fixed. Pure: no browser."
+        cell "—"
   heading "Commands" (level 2)
   paragraph "Each command below lists the flag it accepts. Shared flags are documented once, in — the per-command list only links to them, plus any command-specific flags."
     strong "groups"
@@ -605,8 +769,9 @@ main
     strong "Commands"
     code "a11y.config.json"
     link "Configure once"
-  heading "Browser & page" (level 2)
-  paragraph "Control the browser that renders the page before extraction. Accepted by every browser-driving command — , , , , , , . takes only the settling flags (, , ) and forces headful."
+  heading "All flags at a glance" (level 3)
+  paragraph "Throughout this table, is the eleven that drive a page: , , , , , , , , , , ."
+    strong "browser commands"
     link "audit"
       code "audit"
     link "inspect"
@@ -619,6 +784,477 @@ main
       code "tabs"
     link "list"
       code "list"
+    link "interact"
+      code "interact"
+    link "click"
+      code "click"
+    link "type"
+      code "type"
+    link "focus"
+      code "focus"
+    link "snapshot"
+      code "snapshot"
+  paragraph
+    strong
+      link "Browser & page"
+  table
+    rowgroup
+      row
+        rowheader "Flag"
+        rowheader "Type / values"
+        rowheader "Default"
+        rowheader "Commands"
+    rowgroup
+      row
+        cell "--root"
+          link "--root"
+            code "--root"
+        cell "CSS selector"
+        cell "body"
+          code "body"
+        cell "browser commands · rejected by snapshot"
+          strong "rejected by"
+          code "snapshot"
+      row
+        cell "--producer"
+          link "--producer"
+            code "--producer"
+        cell "dom | native"
+          code "dom | native"
+        cell "dom"
+          code "dom"
+        cell "audit, tree, outline †"
+          code "audit"
+          code "tree"
+          code "outline"
+          superscript "†"
+      row
+        cell "--device"
+          link "--device"
+            code "--device"
+        cell "Playwright device name"
+        cell "none"
+        cell "browser commands"
+      row
+        cell "--viewport"
+          link "--viewport"
+            code "--viewport"
+        cell "WIDTHxHEIGHT"
+          code "WIDTHxHEIGHT"
+        cell "none"
+        cell "browser commands"
+      row
+        cell "--wait-until"
+          link "--wait-until"
+            code "--wait-until"
+        cell "load | domcontentloaded | networkidle | commit"
+          code "load | domcontentloaded | networkidle | commit"
+        cell "load"
+          code "load"
+        cell "browser commands · login"
+          code "login"
+      row
+        cell "--settle"
+          link "--settle"
+            code "--settle"
+        cell "ms"
+        cell "0"
+          code "0"
+        cell "browser commands · login"
+          code "login"
+      row
+        cell "--timeout"
+          link "--timeout"
+            code "--timeout"
+        cell "ms"
+        cell "30000"
+          code "30000"
+        cell "browser commands · login"
+          code "login"
+      row
+        cell "--headful"
+          link "--headful"
+            code "--headful"
+        cell "boolean"
+        cell "false"
+          code "false"
+        cell "browser commands"
+      row
+        cell "--cdp"
+          link "--cdp"
+            code "--cdp"
+        cell "CDP endpoint URL"
+        cell "none"
+        cell "browser commands"
+      row
+        cell "--chrome-path"
+          link "--chrome-path"
+            code "--chrome-path"
+        cell "path to a browser binary"
+        cell "none"
+        cell "browser commands"
+      row
+        cell "--allow-file"
+          link "--allow-file"
+            code "--allow-file"
+        cell "boolean"
+        cell "false"
+          code "false"
+        cell "browser commands"
+      row
+        cell "--storage-state"
+          link "--storage-state"
+            code "--storage-state"
+        cell "path to a saved session"
+        cell "none"
+        cell "browser commands"
+      row
+        cell "--audit-origin"
+          link "--audit-origin"
+            code "--audit-origin"
+        cell "origin (repeatable)"
+        cell "the target's own"
+        cell "browser commands"
+      row
+        cell "--include-generic"
+          link "--include-generic"
+            code "--include-generic"
+        cell "boolean"
+        cell "false"
+          code "false"
+        cell "inspect, tree, outline, tabs, list, snapshot"
+          code "inspect"
+          code "tree"
+          code "outline"
+          code "tabs"
+          code "list"
+          code "snapshot"
+  paragraph "Only those three . , , , and accept the flag purely so is refused with guidance rather than silently ignored; the act commands ( and the verbs) don't take it at all."
+    superscript "†"
+    strong "honor"
+    code "--producer native"
+    code "inspect"
+    code "tabs"
+    code "list"
+    code "snapshot"
+    code "native"
+    link "interact"
+      code "interact"
+  paragraph
+    strong
+      link "Output"
+  table
+    rowgroup
+      row
+        rowheader "Flag"
+        rowheader "Type / values"
+        rowheader "Default"
+        rowheader "Commands"
+    rowgroup
+      row
+        cell "-f, --format"
+          link "-f, --format"
+            code "-f, --format"
+        cell "enum, per command"
+        cell "first value"
+        cell "browser commands · diff"
+          code "diff"
+      row
+        cell "-o, --output"
+          link "-o, --output"
+            code "-o, --output"
+        cell "path"
+        cell "stdout"
+        cell "browser commands · diff"
+          code "diff"
+      row
+        cell "-q, --quiet"
+          link "-q, --quiet"
+            code "-q, --quiet"
+        cell "boolean"
+        cell "false"
+          code "false"
+        cell "browser commands · diff · install"
+          code "diff"
+          code "install"
+      row
+        cell "--verbose"
+          link "--verbose"
+            code "--verbose"
+        cell "boolean"
+        cell "false"
+          code "false"
+        cell "all"
+      row
+        cell "-h, --help"
+          link "-h, --help"
+            code "-h, --help"
+        cell "boolean"
+        cell "—"
+        cell "all"
+  paragraph
+    strong
+      link "Config"
+  table
+    rowgroup
+      row
+        rowheader "Flag"
+        rowheader "Type / values"
+        rowheader "Default"
+        rowheader "Commands"
+    rowgroup
+      row
+        cell "--config"
+          link "--config"
+            code "--config"
+        cell "path to a11y.config.json"
+          code "a11y.config.json"
+        cell "auto-discovered"
+        cell "all"
+      row
+        cell "--no-config"
+          link "--no-config"
+            code "--no-config"
+        cell "boolean"
+        cell "false"
+          code "false"
+        cell "all"
+  paragraph
+    strong
+      link "Gate"
+  table
+    rowgroup
+      row
+        rowheader "Flag"
+        rowheader "Type / values"
+        rowheader "Default"
+        rowheader "Commands"
+    rowgroup
+      row
+        cell "--rules"
+          link "--rules"
+            code "--rules"
+        cell "comma-separated rule ids"
+        cell "all rules"
+        cell "audit, inspect, snapshot"
+          code "audit"
+          code "inspect"
+          code "snapshot"
+      row
+        cell "--fail-on"
+          link "--fail-on"
+            code "--fail-on"
+        cell "error | warning | never"
+          code "error | warning | never"
+        cell "error (never for snapshot)"
+          code "error"
+          code "never"
+          code "snapshot"
+        cell "audit, inspect, snapshot, diff"
+          code "audit"
+          code "inspect"
+          code "snapshot"
+          code "diff"
+      row
+        cell "--no-annotate"
+          link "--no-annotate"
+            code "--no-annotate"
+        cell "boolean"
+        cell "false"
+          code "false"
+        cell "audit, inspect"
+          code "audit"
+          code "inspect"
+  paragraph
+    strong "Command-specific"
+  table
+    rowgroup
+      row
+        rowheader "Flag"
+        rowheader "Type / values"
+        rowheader "Default"
+        rowheader "Commands"
+    rowgroup
+      row
+        cell "--step"
+          link "--step"
+            code "--step"
+        cell "step string (repeatable, ordered)"
+        cell "—"
+        cell "interact (required)"
+          code "interact"
+          strong "required"
+      row
+        cell "--role"
+          link "--role"
+            code "--role"
+        cell "ARIA role"
+        cell "—"
+        cell "click, type, focus (required)"
+          code "click"
+          code "type"
+          code "focus"
+          strong "required"
+      row
+        cell "--name"
+          link "--name"
+            code "--name"
+        cell "accessible name; "" = unlabeled"
+          code """"
+        cell "any name"
+        cell "click, type, focus"
+          code "click"
+          code "type"
+          code "focus"
+      row
+        cell "--nth"
+          link "--nth"
+            code "--nth"
+        cell "positive integer, 1-based"
+        cell "—"
+        cell "click, type, focus"
+          code "click"
+          code "type"
+          code "focus"
+      row
+        cell "--text"
+          link "--text"
+            code "--text"
+        cell "the value to enter"
+        cell "—"
+        cell "type (required; click / focus reject it)"
+          code "type"
+          strong "required"
+          code "click"
+          code "focus"
+      row
+        cell "--channel"
+          link "--channel"
+            code "--channel"
+        cell "stable | beta | dev | canary"
+          code "stable | beta | dev | canary"
+        cell "stable"
+          code "stable"
+        cell "install"
+          code "install"
+      row
+        cell "--version"
+          link "--version"
+            code "--version"
+        cell "exact Chrome build id"
+        cell "—"
+        cell "install"
+          code "install"
+      row
+        cell "--force"
+          link "--force"
+            code "--force"
+        cell "boolean"
+        cell "false"
+          code "false"
+        cell "install"
+          code "install"
+      row
+        cell "--save"
+          link "--save"
+            code "--save"
+        cell "path"
+        cell "—"
+        cell "login (required)"
+          code "login"
+          strong "required"
+      row
+        cell "--md"
+          link "--md"
+            code "--md"
+        cell "boolean"
+        cell "false"
+          code "false"
+        cell "snapshot"
+          code "snapshot"
+      row
+        cell "--only"
+          link "--only"
+            code "--only"
+        cell "findings | views"
+          code "findings | views"
+        cell "both"
+        cell "snapshot, diff"
+          code "snapshot"
+          code "diff"
+      row
+        cell "--baseline"
+          link "--baseline"
+            code "--baseline"
+        cell "path"
+        cell "none"
+        cell "snapshot, diff"
+          code "snapshot"
+          code "diff"
+      row
+        cell "--update-baseline"
+          link "--update-baseline"
+            code "--update-baseline"
+        cell "boolean"
+        cell "false"
+          code "false"
+        cell "snapshot"
+          code "snapshot"
+      row
+        cell "--explain"
+          link "--explain"
+            code "--explain"
+        cell "boolean"
+        cell "false"
+          code "false"
+        cell "diff"
+          code "diff"
+      row
+        cell "--ignore-view-line"
+          link "--ignore-view-line"
+            code "--ignore-view-line"
+        cell "regex (repeatable)"
+        cell "none"
+        cell "diff"
+          code "diff"
+      row
+        cell "--max-lines"
+          link "--max-lines"
+            code "--max-lines"
+        cell "integer"
+        cell "full"
+        cell "diff"
+          code "diff"
+      row
+        cell "--max-pages"
+          link "--max-pages"
+            code "--max-pages"
+        cell "integer"
+        cell "all"
+        cell "diff"
+          code "diff"
+  heading "Browser & page" (level 2)
+  paragraph "Control the browser that renders the page before extraction. Accepted by every browser-driving command — , , , , , , , , , , . takes only the settling flags (, , ) and forces headful. The act commands ( and the verbs) take no ."
+    link "audit"
+      code "audit"
+    link "inspect"
+      code "inspect"
+    link "tree"
+      code "tree"
+    link "outline"
+      code "outline"
+    link "tabs"
+      code "tabs"
+    link "list"
+      code "list"
+    link "interact"
+      code "interact"
+    link "click"
+      code "click"
+    link "type"
+      code "type"
+    link "focus"
+      code "focus"
     link "snapshot"
       code "snapshot"
     link "login"
@@ -629,10 +1265,14 @@ main
       code "--settle"
     link "--timeout"
       code "--timeout"
+    link "interact"
+      code "interact"
+    link "--producer"
+      code "--producer"
   heading "--root <selector>" (level 3)
     code "--root <selector>"
   list
-    listitem "CSS selector · · audit, inspect, tree, outline, tabs, list · snapshot"
+    listitem "CSS selector · · audit, inspect, tree, outline, tabs, list, interact, click, type, focus · snapshot"
       strong "Type:"
       strong "Default:"
       code "body"
@@ -704,7 +1344,7 @@ main
   heading "--device <name>" (level 3)
     code "--device <name>"
   list
-    listitem "Playwright device name · none · audit, inspect, tree, outline, tabs, list, snapshot"
+    listitem "Playwright device name · none · audit, inspect, tree, outline, tabs, list, interact, click, type, focus, snapshot"
       strong "Type:"
       strong "Default:"
       strong "Commands:"
@@ -716,7 +1356,7 @@ main
   heading "--viewport <WxH>" (level 3)
     code "--viewport <WxH>"
   list
-    listitem "· none · audit, inspect, tree, outline, tabs, list, snapshot"
+    listitem "· none · audit, inspect, tree, outline, tabs, list, interact, click, type, focus, snapshot"
       strong "Type:"
       code "WIDTHxHEIGHT"
       strong "Default:"
@@ -729,7 +1369,7 @@ main
   heading "--wait-until <state>" (level 3)
     code "--wait-until <state>"
   list
-    listitem "· · audit, inspect, tree, outline, tabs, list, snapshot, login"
+    listitem "· · audit, inspect, tree, outline, tabs, list, interact, click, type, focus, snapshot, login"
       strong "Type:"
       code "load | domcontentloaded | networkidle | commit"
       strong "Default:"
@@ -741,7 +1381,7 @@ main
   heading "--settle <ms>" (level 3)
     code "--settle <ms>"
   list
-    listitem "integer ms · · (clamped) · audit, inspect, tree, outline, tabs, list, snapshot, login"
+    listitem "integer ms · · (clamped) · audit, inspect, tree, outline, tabs, list, interact, click, type, focus, snapshot, login"
       strong "Type:"
       strong "Default:"
       code "0"
@@ -756,7 +1396,7 @@ main
   heading "--timeout <ms>" (level 3)
     code "--timeout <ms>"
   list
-    listitem "integer ms · · · (clamped) · audit, inspect, tree, outline, tabs, list, snapshot, login"
+    listitem "integer ms · · · (clamped) · audit, inspect, tree, outline, tabs, list, interact, click, type, focus, snapshot, login"
       strong "Type:"
       strong "Default:"
       code "30000"
@@ -771,7 +1411,7 @@ main
   heading "--headful" (level 3)
     code "--headful"
   list
-    listitem "boolean · (headless) · audit, inspect, tree, outline, tabs, list, snapshot"
+    listitem "boolean · (headless) · audit, inspect, tree, outline, tabs, list, interact, click, type, focus, snapshot"
       strong "Type:"
       strong "Default:"
       code "false"
@@ -784,7 +1424,7 @@ main
   heading "--cdp <endpoint>" (level 3)
     code "--cdp <endpoint>"
   list
-    listitem "CDP endpoint URL · none · audit, inspect, tree, outline, tabs, list, snapshot"
+    listitem "CDP endpoint URL · none · audit, inspect, tree, outline, tabs, list, interact, click, type, focus, snapshot"
       strong "Type:"
       strong "Default:"
       strong "Commands:"
@@ -802,7 +1442,7 @@ main
   heading "--chrome-path <file>" (level 3)
     code "--chrome-path <file>"
   list
-    listitem "path to a browser executable · none · audit, inspect, tree, outline, tabs, list, snapshot"
+    listitem "path to a browser executable · none · audit, inspect, tree, outline, tabs, list, interact, click, type, focus, snapshot"
       strong "Type:"
       strong "Default:"
       strong "Commands:"
@@ -819,7 +1459,7 @@ main
   heading "--allow-file" (level 3)
     code "--allow-file"
   list
-    listitem "boolean · · audit, inspect, tree, outline, tabs, list, snapshot"
+    listitem "boolean · · audit, inspect, tree, outline, tabs, list, interact, click, type, focus, snapshot"
       strong "Type:"
       strong "Default:"
       code "false"
@@ -832,7 +1472,7 @@ main
   heading "--storage-state <file>" (level 3)
     code "--storage-state <file>"
   list
-    listitem "path to a saved session · none · audit, inspect, tree, outline, tabs, list, snapshot"
+    listitem "path to a saved session · none · audit, inspect, tree, outline, tabs, list, interact, click, type, focus, snapshot"
       strong "Type:"
       strong "Default:"
       strong "Commands:"
@@ -847,7 +1487,7 @@ main
   heading "--audit-origin <origin>" (level 3)
     code "--audit-origin <origin>"
   list
-    listitem "origin (repeatable) · the target's own origin · audit, inspect, tree, outline, tabs, list, snapshot"
+    listitem "origin (repeatable) · the target's own origin · audit, inspect, tree, outline, tabs, list, interact, click, type, focus, snapshot"
       strong "Type:"
       strong "Default:"
       strong "Commands:"
@@ -862,7 +1502,7 @@ main
   heading "-f, --format <fmt>" (level 3)
     code "-f, --format <fmt>"
   list
-    listitem "enum (per command) · first value below · audit, inspect, tree, outline, tabs, list, snapshot, diff"
+    listitem "enum (per command) · first value below · audit, inspect, tree, outline, tabs, list, interact, click, type, focus, snapshot, diff"
       strong "Type:"
       strong "Default:"
       strong "Commands:"
@@ -907,7 +1547,7 @@ main
   heading "-o, --output <file>" (level 3)
     code "-o, --output <file>"
   list
-    listitem "path · stdout · audit, inspect, tree, outline, tabs, list, snapshot, diff"
+    listitem "path · stdout · audit, inspect, tree, outline, tabs, list, interact, click, type, focus, snapshot, diff"
       strong "Type:"
       strong "Default:"
       strong "Commands:"
@@ -918,7 +1558,7 @@ main
   heading "-q, --quiet" (level 3)
     code "-q, --quiet"
   list
-    listitem "boolean · · install, audit, inspect, tree, outline, tabs, list, snapshot, diff"
+    listitem "boolean · · install, audit, inspect, tree, outline, tabs, list, interact, click, type, focus, snapshot, diff"
       strong "Type:"
       strong "Default:"
       code "false"
