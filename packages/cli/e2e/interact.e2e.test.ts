@@ -8,7 +8,9 @@
  */
 
 import { execFile } from "node:child_process";
-import { dirname, resolve } from "node:path";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
@@ -240,6 +242,67 @@ describe("real-a11y interact", () => {
     expect(res.stderr).toContain("unknown step verb");
     // Nothing was opened — the parse failure precedes the session.
     expect(res.stderr).not.toContain("opening");
+  });
+
+  it("reports where a navigating step LANDED, and flags the navigation", async () => {
+    // `url` is contracted as the final address. Capturing it before the steps
+    // ran made it the address the run *opened*, which is wrong in exactly the
+    // case the report calls out as a navigation.
+    //
+    // Real files, not data: URLs — Chromium refuses top-level navigation TO a
+    // data: URL, so a link between two of them never navigates and the case
+    // under test would silently not happen.
+    const dir = mkdtempSync(join(tmpdir(), "real-a11y-nav-"));
+    writeFileSync(
+      join(dir, "landing.html"),
+      "<!doctype html><title>landing</title><main><h1>Landed</h1></main>",
+    );
+    writeFileSync(
+      join(dir, "start.html"),
+      '<!doctype html><title>start</title><main><a href="landing.html">Go</a></main>',
+    );
+
+    const res = await runCli([
+      "interact",
+      `file://${join(dir, "start.html")}`,
+      "--allow-file",
+      "-q",
+      "-f",
+      "json",
+      "--step",
+      'click link "Go"',
+    ]);
+    expect(res.code).toBe(0);
+    const page = (
+      JSON.parse(res.stdout) as {
+        pages: { url: string; navigated?: boolean; diff: string }[];
+      }
+    ).pages[0];
+    expect(page.navigated).toBe(true);
+    expect(page.diff).toContain("navigated");
+    // The reported address is where it landed, not where the run opened.
+    expect(page.url).toContain("landing.html");
+    expect(page.url).not.toContain("start.html");
+  });
+
+  it("leaves the reported url alone when nothing navigated", async () => {
+    const res = await runCli([
+      "interact",
+      PAGE,
+      "-q",
+      "-f",
+      "json",
+      "--step",
+      'click button "Open menu"',
+    ]);
+    expect(res.code).toBe(0);
+    const page = (
+      JSON.parse(res.stdout) as {
+        pages: { url: string; navigated?: boolean }[];
+      }
+    ).pages[0];
+    expect(page.navigated).toBe(false);
+    expect(page.url).toBe(PAGE);
   });
 });
 

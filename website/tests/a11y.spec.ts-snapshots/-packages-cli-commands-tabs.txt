@@ -166,6 +166,7 @@ generic
 link "--root"
 link "--format json"
 link "login"
+link "--format json"
 link "Browser & page"
 link "Output"
 link "Config"

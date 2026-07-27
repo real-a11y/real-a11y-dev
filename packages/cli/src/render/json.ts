@@ -38,6 +38,12 @@ export interface PageReport {
   steps?: string[];
   /** `interact` — the tree diff the steps produced. */
   diff?: string;
+  /**
+   * `interact` — true when a step navigated the page, which discards the
+   * in-page tree checkpoint (so `diff` explains that instead of listing
+   * changes) and means `url` is where the page LANDED, not where it opened.
+   */
+  navigated?: boolean;
   /** Page-level failure; other pages still report. */
   error?: string;
 }
@@ -71,6 +77,7 @@ export function renderJson(
       ...(page.items !== undefined ? { items: page.items } : {}),
       ...(page.steps !== undefined ? { steps: page.steps } : {}),
       ...(page.diff !== undefined ? { diff: page.diff } : {}),
+      ...(page.navigated !== undefined ? { navigated: page.navigated } : {}),
       ...(page.error !== undefined ? { error: page.error } : {}),
     })),
   };

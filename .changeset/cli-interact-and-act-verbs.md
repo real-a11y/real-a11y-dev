@@ -22,4 +22,4 @@ Two producers are in play by design: acting is native (CDP, whole-document), whi
 
 A typed value is never echoed — not in progress output, not in `--format json`, where the step renders as `= ‹hidden›`. There is deliberately no credential workflow here: a password on the command line is visible to other processes and lands in shell history, so `real-a11y login` remains the way to authenticate.
 
-The JSON envelope gains two additive optional fields on a page: `steps` (rendered, redacted) and `diff`. Chromium only.
+The JSON envelope gains three additive optional fields on a page: `steps` (rendered, redacted), `diff`, and `navigated` — the last so a consumer can tell that a step navigated (which discards the tree checkpoint) without string-matching the diff prose. `url` is re-read after the steps run, so it reports where the page LANDED rather than where the run opened it. Chromium only.

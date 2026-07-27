@@ -268,6 +268,12 @@ A typed value is **never echoed** — not in progress output, not in
 use `type` to log in: a password on the command line is visible to other
 processes and lands in your shell history. Use [`login`](#login-url-save-file).
 
+Under [`--format json`](#f-format-fmt) the page object carries `steps` (the
+steps that ran, rendered and redacted), `diff`, and `navigated` — the last so a
+script can tell a navigation discarded the checkpoint without matching prose.
+`url` is the address the page **landed** on, which differs from the one you
+passed when a step navigated.
+
 **Flags:** `--step '<step>'` (repeatable, required) ·
 [Browser & page](#browser-page) (no `--producer`) · [Output](#output)
 (`pretty | json`) · [Config](#config).

@@ -236,6 +236,11 @@ async function runInteract(
     );
     finalUrl = redactUrl(opened.url);
     outcome = await interactOnPage(session, root, steps, quiet);
+    // Re-read AFTER the steps: a click can navigate, and `url` is contracted
+    // as the final address. Reading it before acting reports where the run
+    // started, which is wrong in exactly the case the report flags as a
+    // navigation. Falls back to the opened URL if the page is already gone.
+    finalUrl = redactUrl(session.currentUrl() ?? opened.url);
   } finally {
     await session.close();
   }
@@ -248,6 +253,10 @@ async function runInteract(
       // R1: `steps` carries the rendered form, which never includes typed text.
       steps: outcome.steps,
       diff: outcome.diff,
+      // Machine-readable signal that a step navigated, so a consumer doesn't
+      // have to string-match the diff prose to learn the checkpoint was lost
+      // (and that `url` differs from the address the run opened).
+      navigated: outcome.navigated,
     };
     writeReport(output, renderJson(command, [page]));
   } else {
