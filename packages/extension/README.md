@@ -46,6 +46,7 @@ Web Page
 |------------|-----|
 | `activeTab` | Access the current tab's DOM for tree extraction |
 | `sidePanel` | Register and open the Side Panel UI |
+| `storage` | Keep screen-curtain state in `chrome.storage.session` so a curtain is still lifted after Chrome idles the service worker |
 | `webNavigation` | Detect SPA route changes so the tree refreshes when the page does |
 
 The content script is declared in the manifest with `<all_urls>` and `all_frames: true` so the tree is ready the moment the user opens the side panel. No data leaves your browser; the extension makes no network requests.
