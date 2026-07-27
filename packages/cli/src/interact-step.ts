@@ -46,29 +46,27 @@ function fail(message: string, hint = USAGE): never {
 }
 
 /**
- * Mask anything that could be a typed value before echoing step text back.
+ * Mask user-supplied step text before it reaches an error message.
  *
  * Quoting the offending input is what makes these errors actionable — but a
  * malformed `type` step still carries its value, and the R1 discipline that
  * {@link describeStep} enforces on the success path has to hold on the failure
  * path too, or a typo turns a password into a CI log line.
  *
- * Anchoring on `=` alone is not enough: the separator is exactly what a user
- * forgets (`type textbox "Password" hunter2`), and then the value IS the
- * unparsed remainder. So:
+ * For a `type` step the rule is unconditional: **mask all of it.** Two earlier
+ * attempts tried to keep the structural prefix visible by masking only from
+ * the first `=`, and both were wrong — that reasoning assumes the `=` found is
+ * the value separator, but the separator is exactly what users forget, and a
+ * value can contain `=` itself. A `key=value` token then leaks its key, and
+ * base64 padding (`aGVsbG8=`) puts the `=` LAST, so "mask from the first `=`"
+ * echoes the entire secret. There is no way to tell a forgotten separator from
+ * a value's own `=`, so nothing from a `type` step is echoed.
  *
- * - **`=` present** — mask from it. The tokens before it are structural (an
- *   unquoted name, a stray word), and keeping them visible is what makes the
- *   error diagnosable.
- * - **no `=`, and this is a `type` step** — mask the whole remainder. Nothing
- *   distinguishes "a name I forgot to quote" from "the value I forgot to
- *   introduce", so the safe reading wins.
- * - **no `=`, `click` / `focus`** — echo it. Those verbs have no value in the
- *   grammar, so there is nothing to protect.
+ * `click` / `focus` have no value in the grammar, so their text is echoed
+ * unchanged — there is nothing to protect, and the echo is what makes a typo
+ * obvious.
  */
-function redactValue(text: string, verb?: StepVerb): string {
-  const eq = text.indexOf("=");
-  if (eq !== -1) return `${text.slice(0, eq + 1)} ‹hidden›`;
+function redactStepText(text: string, verb?: StepVerb): string {
   return verb === "type" ? "‹hidden›" : text;
 }
 
@@ -95,7 +93,7 @@ function readQuoted(
     i += 1;
   }
   return fail(
-    `unterminated quoted name in step: ${JSON.stringify(redactValue(input, verb))}`,
+    `unterminated quoted name in step: ${JSON.stringify(redactStepText(input, verb))}`,
     "quote the accessible name on both sides, e.g. --step 'click button \"Save\"'",
   );
 }
@@ -143,7 +141,7 @@ export function parseStep(raw: string): InteractStep {
   if (nthMatch) {
     if (!/^[0-9]+$/.test(nthMatch[1]) || Number(nthMatch[1]) < 1) {
       fail(
-        `nth must be a positive whole number (1-based) — got "${nthMatch[1]}"`,
+        `nth must be a positive whole number (1-based) — got "${redactStepText(nthMatch[1], verb)}"`,
       );
     }
     nth = Number(nthMatch[1]);
@@ -161,9 +159,9 @@ export function parseStep(raw: string): InteractStep {
 
   if (rest !== "") {
     fail(
-      `unexpected trailing input in step: ${JSON.stringify(redactValue(rest, verb))}`,
-      verb === "type" && !rest.includes("=")
-        ? "a type value must be introduced with `=` — e.g. --step 'type textbox \"Email\" = you@example.com'"
+      `unexpected trailing input in step: ${JSON.stringify(redactStepText(rest, verb))}`,
+      verb === "type"
+        ? "quote the name and introduce the value with `=` — e.g. --step 'type textbox \"Email\" = you@example.com'"
         : "a name must be quoted — e.g. --step 'click button \"Save & continue\"'",
     );
   }

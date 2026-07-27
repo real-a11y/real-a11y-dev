@@ -194,8 +194,11 @@ describe("real-a11y interact", () => {
     expect(res.stderr).not.toContain("hunter2");
     expect(res.stdout).not.toContain("hunter2");
     expect(res.stderr).toContain("‹hidden›");
-    // …while still naming what to fix.
-    expect(res.stderr).toContain("My Field");
+    // Nothing of the step's text survives — not even the unquoted name, since
+    // the parser can't tell a name from a value once the step is malformed.
+    expect(res.stderr).not.toContain("My Field");
+    // The hint carries the fix instead of the echo.
+    expect(res.stderr).toContain("quote the name and introduce the value");
   });
 
   it("masks the value when the `=` separator is forgotten entirely", async () => {
@@ -212,7 +215,23 @@ describe("real-a11y interact", () => {
     expect(res.stderr).not.toContain("hunter2");
     expect(res.stdout).not.toContain("hunter2");
     expect(res.stderr).toContain("‹hidden›");
-    expect(res.stderr).toContain("must be introduced with `=`");
+    expect(res.stderr).toContain("quote the name and introduce the value");
+  });
+
+  it("masks a base64 value whose own `=` padding defeated the old rule", async () => {
+    // The regression that broke two earlier fixes: masking "from the first `=`"
+    // treats the value's own padding as the separator, so the whole secret
+    // survived into stderr. Nothing of it may appear now.
+    const res = await runCli([
+      "interact",
+      PAGE,
+      "--step",
+      `type textbox "Password" ${SECRET}=`,
+    ]);
+    expect(res.code).toBe(2);
+    expect(res.stderr).not.toContain("hunter2");
+    expect(res.stdout).not.toContain("hunter2");
+    expect(res.stderr).toContain("‹hidden›");
   });
 
   it("rejects a malformed step before launching a browser", async () => {

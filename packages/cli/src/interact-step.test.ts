@@ -148,6 +148,15 @@ describe("R1 on the failure path", () => {
     ["quoted name, forgotten separator", `type textbox "Password" ${SECRET}`],
     ["no verb and no separator", `"type" textbox ${SECRET}`],
     ["unterminated quote, no separator", `type textbox "Password ${SECRET}`],
+    // …and — the case that broke two earlier fixes — a forgotten separator
+    // where the VALUE ITSELF contains `=`. Masking "from the first `=`" reads
+    // the value's own `=` as the separator: a key=value token leaks its key,
+    // and base64 padding puts the `=` last, so the whole secret survives.
+    ["value contains =", `type textbox api_key=${SECRET}`],
+    ["value ends with = (base64 padding)", `type textbox ${SECRET}=`],
+    ["quoted name + base64 value", `type textbox "Password" ${SECRET}=`],
+    ["unterminated quote + base64", `type textbox "Password ${SECRET}=`],
+    ["nth token carrying a value", `type textbox nth=${SECRET}=`],
   ];
 
   for (const [label, step] of leaky) {
@@ -166,37 +175,28 @@ describe("R1 on the failure path", () => {
     });
   }
 
-  it("still names the part the user has to fix when it can", () => {
-    // Redaction must not cost the diagnosis: with `=` present, the tokens
-    // before it are structural, so the unquoted name stays visible.
+  it("masks a type step's text wholesale — the echo can't be made safe", () => {
+    // An earlier attempt kept the prefix before the first `=` visible, on the
+    // theory that it was structural. It isn't, whenever the value carries its
+    // own `=`. Since the parser cannot tell the two apart, a `type` step
+    // echoes nothing and the hint carries the fix instead.
     let caught: CliError | undefined;
     try {
       parseStep(`type textbox My Field = ${SECRET}`);
     } catch (err) {
       caught = err as CliError;
     }
-    expect(caught?.message).toContain("My Field");
     expect(caught?.message).toContain("‹hidden›");
-    expect(caught?.hint).toMatch(/a name must be quoted/);
+    expect(caught?.message).not.toContain("My Field");
+    expect(caught?.hint).toMatch(/quote the name and introduce the value/);
   });
 
-  it("points a forgotten separator at the separator, not at quoting", () => {
-    // When the whole remainder is masked the echo can't teach anything, so
-    // the hint has to carry the fix.
-    let caught: CliError | undefined;
-    try {
-      parseStep(`type textbox "Password" ${SECRET}`);
-    } catch (err) {
-      caught = err as CliError;
-    }
-    expect(caught?.message).toContain("‹hidden›");
-    expect(caught?.hint).toMatch(/must be introduced with `=`/);
-  });
-
-  it("leaves a step with no value untouched", () => {
-    expect(() => parseStep("click button Save now")).toThrow(
-      /"Save now"/, // nothing to redact — the echo is intact
-    );
+  it("still echoes freely for click / focus, which have no value", () => {
+    // The echo is what makes a typo obvious, and these verbs carry nothing
+    // worth protecting — so redaction must not spread to them.
+    expect(() => parseStep("click button Save now")).toThrow(/"Save now"/);
+    expect(() => parseStep("focus button Save now")).toThrow(/"Save now"/);
+    expect(() => parseStep('click button "S" nth=abc')).toThrow(/got "abc"/);
   });
 });
 
