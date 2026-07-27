@@ -5,10 +5,12 @@ description: Every real-a11y command and flag — audit, inspect, snapshot, diff
 
 # Commands & flags
 
-Every invocation is `real-a11y <command> [url...] [flags]`. Ten commands ship —
-[`install`](#install), [`audit`](#audit-url), [`inspect`](#inspect-url),
+Every invocation is `real-a11y <command> [url...] [flags]`. Fourteen commands
+ship — [`install`](#install), [`audit`](#audit-url), [`inspect`](#inspect-url),
 [`tree`](#tree-url), [`outline`](#outline-url), [`tabs`](#tabs-url),
-[`list`](#list-category-url), [`snapshot`](#snapshot-url),
+[`list`](#list-category-url), [`interact`](#interact-url-step-step),
+[`click`](#click-url-role-role), [`type`](#type-url-role-role-text-value),
+[`focus`](#focus-url-role-role), [`snapshot`](#snapshot-url),
 [`diff`](#diff-base-json-pr-json), and [`login`](#login-url-save-file). Run
 `real-a11y <command> --help` for a command's own flags.
 
@@ -25,7 +27,10 @@ Findings and reports go to **stdout**; progress, warnings, and errors go to
 
 View commands ([`tree`](#tree-url), [`outline`](#outline-url),
 [`tabs`](#tabs-url), [`list`](#list-category-url)) aren't gates — they exit `0`
-unless something actually failed.
+unless something actually failed. Neither are the act commands
+([`interact`](#interact-url-step-step), [`click`](#click-url-role-role),
+[`type`](#type-url-role-role-text-value), [`focus`](#focus-url-role-role)):
+they exit `0` when every step lands, and `2` when one can't be reached.
 
 **Environment variables:**
 
@@ -38,6 +43,51 @@ Human (`pretty`) output is **English-only** and may be reworded between
 releases. The machine formats — `json`, `sarif`, `junit`, `jsonl`, and the
 `v1:` fingerprints — are a **frozen contract**: within `0.x`, changes are
 additive-only. Never rely on the wording of a `pretty` line; key on the JSON.
+
+## All commands at a glance
+
+The **Producer** column shows which commands honor
+[`--producer native`](#producer-kind) (Chromium's own tree over CDP,
+whole-document) versus the in-page DOM walk. Click a command for its flags.
+
+**Setup**
+
+| Command | Purpose | Producer |
+| --- | --- | --- |
+| [`install`](#install) | Download Chrome for Testing into Real A11y's own cache — run once. | — |
+| [`login <url> --save <file>`](#login-url-save-file) | Log in by hand and save the session for `--storage-state`. | — |
+
+**Audit** — the gates: these exit `1` on findings at or above [`--fail-on`](#fail-on-level).
+
+| Command | Purpose | Producer |
+| --- | --- | --- |
+| [`audit <url...>`](#audit-url) | Every violation, grouped by rule with locator + severity — the flagship. | `dom` · `native` |
+| [`inspect <url>`](#inspect-url) | Findings **plus** tree + outline + tab order from one extraction. | `dom` only |
+
+**Views** — never gates; they exit `0` unless something actually failed.
+
+| Command | Purpose | Producer |
+| --- | --- | --- |
+| [`tree <url>`](#tree-url) | The semantic tree — role + accessible name, as a screen reader traverses it. | `dom` · `native` |
+| [`outline <url>`](#outline-url) | Heading outline (h1–h6) in document order. | `dom` · `native` |
+| [`tabs <url>`](#tabs-url) | Focusable elements in keyboard Tab order. | `dom` only |
+| [`list <category> <url>`](#list-category-url) | One category — heading, link, button, form, landmark, image. | `dom` only |
+
+**Act** — Chromium only. Exit `0` when every step lands, `2` when one can't be reached.
+
+| Command | Purpose | Producer |
+| --- | --- | --- |
+| [`interact <url> --step`](#interact-url-step-step) | Run ordered steps, then print the tree diff they produced. | acts `native`, diffs `dom` |
+| [`click <url> --role`](#click-url-role-role) | Real click at the element matched by role + accessible name. | acts `native`, diffs `dom` |
+| [`type <url> --role --text`](#type-url-role-role-text-value) | Replace a text field's value; the value is never echoed back. | acts `native`, diffs `dom` |
+| [`focus <url> --role`](#focus-url-role-role) | Move real keyboard focus; the `[focused]` marker moves in the diff. | acts `native`, diffs `dom` |
+
+**Artifacts**
+
+| Command | Purpose | Producer |
+| --- | --- | --- |
+| [`snapshot [url...]`](#snapshot-url) | Audit a page set → one diffable JSON artifact (or `--md`). | `dom` only |
+| [`diff <base.json> <pr.json>`](#diff-base-json-pr-json) | Findings-aware diff of two artifacts — new / changed / fixed. Pure: no browser. | — |
 
 ## Commands
 
@@ -163,6 +213,120 @@ real-a11y list image https://example.com
 **Flags:** [Browser & page](#browser-page) · [Output](#output) (`pretty | json`)
 · [Config](#config).
 
+### `interact <url> --step '<step>'`
+
+Drive a page through one or more steps, then print the **accessibility-tree
+diff** those steps produced — the answer to "what did that actually change for
+a screen reader?". Steps run in order and stop at the first failure. Single
+URL; exits `0` when every step lands, `2` on a usage error or an unreachable
+target. **Chromium only.**
+
+A step is written the way the tree prints a node:
+
+```
+<verb> <role> ["<name>"] [nth=<n>] [= <text>]
+```
+
+- **verbs** — `click`, `type`, `focus`.
+- **`"<name>"`** — the accessible name. Omit it to match any name; pass `""` to
+  target an **unlabeled** control (the one an audit just flagged).
+- **`nth=<n>`** — 1-based, document order. It's the spelling the ambiguity
+  error prints, so the fix is copy-paste.
+- **`= <text>`** — `type` only. Everything after the first `=` is the value, so
+  query strings and base64 need no escaping.
+
+```sh
+real-a11y interact http://localhost:3000 --step 'click button "Open menu"'
+
+real-a11y interact http://localhost:3000 \
+  --step 'type textbox "Email" = someone@example.com' \
+  --step 'click button "Sign in"'
+
+real-a11y interact https://example.com --step 'click button "Save" nth=2'
+```
+
+Targets resolve against **Chromium's own** accessibility tree by role +
+accessible name — never a CSS selector. If a control can't be reached that way,
+assistive technology can't reach it either, and that is an accessibility
+finding rather than a targeting inconvenience. Ambiguous matches list their
+`nth=` candidates; a **disabled** target is refused, because the click would be
+swallowed and the resulting empty diff would read as "that button does
+nothing".
+
+::: warning The actions are real
+They submit forms, toggle state, and can **navigate**. The diff comes from an
+in-page checkpoint bound to the page instance, so a step that navigates
+discards it — the run still succeeds and says so.
+:::
+
+Two producers are in play, deliberately: **acting** is native (CDP,
+whole-document), while the **diff** is the in-page DOM walk — which is what
+[`--root`](#root-selector) scopes. Targeting is never scoped.
+
+A typed value is **never echoed** — not in progress output, not in
+[`--format json`](#f-format-fmt), where the step renders as `= ‹hidden›`. Don't
+use `type` to log in: a password on the command line is visible to other
+processes and lands in your shell history. Use [`login`](#login-url-save-file).
+
+Under [`--format json`](#f-format-fmt) the page object carries `steps` (the
+steps that ran, rendered and redacted), `diff`, and `navigated` — the last so a
+script can tell a navigation discarded the checkpoint without matching prose.
+`url` is the address the page **landed** on, which differs from the one you
+passed when a step navigated.
+
+**Flags:** `--step '<step>'` (repeatable, required) ·
+[Browser & page](#browser-page) (no `--producer`) · [Output](#output)
+(`pretty | json`) · [Config](#config).
+
+### `click <url> --role <role>`
+
+Dispatch a real click at the element matched by role + accessible name, then
+print the tree diff. Shorthand for a one-step
+[`interact`](#interact-url-step-step), and bound by the same contract.
+
+```sh
+real-a11y click http://localhost:3000 --role button --name "Open menu"
+real-a11y click http://localhost:3000 --role button --name "Save" --nth 2
+real-a11y click http://localhost:3000 --role button --name ""   # unlabeled
+```
+
+**Flags:** `--role` (required) · `--name` · `--nth` ·
+[Browser & page](#browser-page) (no `--producer`) · [Output](#output)
+(`pretty | json`) · [Config](#config).
+
+### `type <url> --role <role> --text <value>`
+
+Replace a text field's value (role is usually `textbox`, `searchbox`, or
+`combobox`), then print the tree diff — a combobox popping its options, an
+inline validation error appearing. The value is written through the element's
+own prototype setter plus `input`/`change` events, so framework-controlled
+inputs (React et al.) register it.
+
+```sh
+real-a11y type http://localhost:3000 --role textbox --name "Email" --text you@example.com
+```
+
+The value is never echoed back, in any format. Don't use it to log in — see
+[`login`](#login-url-save-file).
+
+**Flags:** `--role` (required) · `--text` (required) · `--name` · `--nth` ·
+[Browser & page](#browser-page) (no `--producer`) · [Output](#output)
+(`pretty | json`) · [Config](#config).
+
+### `focus <url> --role <role>`
+
+Move real keyboard focus to the matched element, then print the tree diff — the
+focus move shows as the `[focused]` marker relocating. Pairs with
+[`tabs`](#tabs-url) for focus-order work.
+
+```sh
+real-a11y focus http://localhost:3000 --role textbox --name "Email"
+```
+
+**Flags:** `--role` (required) · `--name` · `--nth` ·
+[Browser & page](#browser-page) (no `--producer`) · [Output](#output)
+(`pretty | json`) · [Config](#config).
+
 ### `snapshot [url...]`
 
 Audit a page set and write **one** JSON artifact — fingerprinted findings plus
@@ -254,19 +418,105 @@ Grouped and documented once. The **Commands** line above each entry names which
 commands accept it. An explicit flag always wins over an `a11y.config.json`
 default; see [Configure once](/packages/cli#configure-once).
 
+### All flags at a glance
+
+Throughout this table, **browser commands** is the eleven that drive a page:
+[`audit`](#audit-url), [`inspect`](#inspect-url), [`tree`](#tree-url),
+[`outline`](#outline-url), [`tabs`](#tabs-url), [`list`](#list-category-url),
+[`interact`](#interact-url-step-step), [`click`](#click-url-role-role),
+[`type`](#type-url-role-role-text-value), [`focus`](#focus-url-role-role),
+[`snapshot`](#snapshot-url).
+
+**[Browser & page](#browser-page)**
+
+| Flag | Type / values | Default | Commands |
+| --- | --- | --- | --- |
+| [`--root`](#root-selector) | CSS selector | `body` | browser commands · **rejected by** `snapshot` |
+| [`--producer`](#producer-kind) | `dom \| native` | `dom` | `audit`, `tree`, `outline` <sup>†</sup> |
+| [`--device`](#device-name) | Playwright device name | none | browser commands |
+| [`--viewport`](#viewport-wxh) | `WIDTHxHEIGHT` | none | browser commands |
+| [`--wait-until`](#wait-until-state) | `load \| domcontentloaded \| networkidle \| commit` | `load` | browser commands · `login` |
+| [`--settle`](#settle-ms) | ms | `0` | browser commands · `login` |
+| [`--timeout`](#timeout-ms) | ms | `30000` | browser commands · `login` |
+| [`--headful`](#headful) | boolean | `false` | browser commands |
+| [`--cdp`](#cdp-endpoint) | CDP endpoint URL | none | browser commands |
+| [`--chrome-path`](#chrome-path-file) | path to a browser binary | none | browser commands |
+| [`--allow-file`](#allow-file) | boolean | `false` | browser commands |
+| [`--storage-state`](#storage-state-file) | path to a saved session | none | browser commands |
+| [`--audit-origin`](#audit-origin-origin) | origin (repeatable) | the target's own | browser commands |
+| [`--include-generic`](#include-generic) | boolean | `false` | `inspect`, `tree`, `outline`, `tabs`, `list`, `snapshot` |
+
+<sup>†</sup> Only those three **honor** `--producer native`. `inspect`, `tabs`,
+`list`, and `snapshot` accept the flag purely so `native` is refused with
+guidance rather than silently ignored; the act commands
+([`interact`](#interact-url-step-step) and the verbs) don't take it at all.
+
+**[Output](#output)**
+
+| Flag | Type / values | Default | Commands |
+| --- | --- | --- | --- |
+| [`-f, --format`](#f-format-fmt) | enum, per command | first value | browser commands · `diff` |
+| [`-o, --output`](#o-output-file) | path | stdout | browser commands · `diff` |
+| [`-q, --quiet`](#q-quiet) | boolean | `false` | browser commands · `diff` · `install` |
+| [`--verbose`](#verbose) | boolean | `false` | all |
+| [`-h, --help`](#h-help) | boolean | — | all |
+
+**[Config](#config)**
+
+| Flag | Type / values | Default | Commands |
+| --- | --- | --- | --- |
+| [`--config`](#config-file) | path to `a11y.config.json` | auto-discovered | all |
+| [`--no-config`](#no-config) | boolean | `false` | all |
+
+**[Gate](#gate)**
+
+| Flag | Type / values | Default | Commands |
+| --- | --- | --- | --- |
+| [`--rules`](#rules-ids) | comma-separated rule ids | all rules | `audit`, `inspect`, `snapshot` |
+| [`--fail-on`](#fail-on-level) | `error \| warning \| never` | `error` (`never` for `snapshot`) | `audit`, `inspect`, `snapshot`, `diff` |
+| [`--no-annotate`](#no-annotate) | boolean | `false` | `audit`, `inspect` |
+
+**Command-specific**
+
+| Flag | Type / values | Default | Commands |
+| --- | --- | --- | --- |
+| [`--step`](#interact-url-step-step) | step string (repeatable, ordered) | — | `interact` (**required**) |
+| [`--role`](#click-url-role-role) | ARIA role | — | `click`, `type`, `focus` (**required**) |
+| [`--name`](#click-url-role-role) | accessible name; `""` = unlabeled | any name | `click`, `type`, `focus` |
+| [`--nth`](#click-url-role-role) | positive integer, 1-based | — | `click`, `type`, `focus` |
+| [`--text`](#type-url-role-role-text-value) | the value to enter | — | `type` (**required**; `click` / `focus` reject it) |
+| [`--channel`](#channel-name) | `stable \| beta \| dev \| canary` | `stable` | `install` |
+| [`--version`](#version-buildid) | exact Chrome build id | — | `install` |
+| [`--force`](#force) | boolean | `false` | `install` |
+| [`--save`](#save-file) | path | — | `login` (**required**) |
+| [`--md`](#md) | boolean | `false` | `snapshot` |
+| [`--only`](#only-axis) | `findings \| views` | both | `snapshot`, `diff` |
+| [`--baseline`](#baseline-file) | path | none | `snapshot`, `diff` |
+| [`--update-baseline`](#update-baseline) | boolean | `false` | `snapshot` |
+| [`--explain`](#explain) | boolean | `false` | `diff` |
+| [`--ignore-view-line`](#ignore-view-line-regex) | regex (repeatable) | none | `diff` |
+| [`--max-lines`](#max-lines-n) | integer | full | `diff` |
+| [`--max-pages`](#max-pages-n) | integer | all | `diff` |
+
 ## Browser & page
 
 Control the browser that renders the page before extraction. Accepted by every
 browser-driving command — [`audit`](#audit-url), [`inspect`](#inspect-url),
 [`tree`](#tree-url), [`outline`](#outline-url), [`tabs`](#tabs-url),
-[`list`](#list-category-url), [`snapshot`](#snapshot-url). [`login`](#login-url-save-file)
-takes only the settling flags ([`--wait-until`](#wait-until-state),
-[`--settle`](#settle-ms), [`--timeout`](#timeout-ms)) and forces headful.
+[`list`](#list-category-url), [`interact`](#interact-url-step-step),
+[`click`](#click-url-role-role), [`type`](#type-url-role-role-text-value),
+[`focus`](#focus-url-role-role), [`snapshot`](#snapshot-url).
+[`login`](#login-url-save-file) takes only the settling flags
+([`--wait-until`](#wait-until-state), [`--settle`](#settle-ms),
+[`--timeout`](#timeout-ms)) and forces headful. The act commands
+([`interact`](#interact-url-step-step) and the verbs) take no
+[`--producer`](#producer-kind).
 
 ### `--root <selector>`
 
 - **Type:** CSS selector · **Default:** `body` · **Commands:** audit, inspect,
-  tree, outline, tabs, list · **rejected by:** snapshot
+  tree, outline, tabs, list, interact, click, type, focus · **rejected by:**
+  snapshot
 
 Scope extraction to a region or component instead of the whole page.
 
@@ -310,10 +560,17 @@ fits — `audit`, `tree`, `outline`. Commands that carry a tab sequence
 list one category ([`list`](#list-category-url)) reject `--producer native`, and it
 can't be combined with [`--root`](#root-selector) (it audits the whole document).
 
+The act commands ([`interact`](#interact-url-step-step),
+[`click`](#click-url-role-role), [`type`](#type-url-role-role-text-value),
+[`focus`](#focus-url-role-role)) take **no `--producer` at all**: they always
+resolve targets against the native tree and always report the DOM walk's diff,
+so there is nothing to choose. A flag that silently did nothing would be worse
+than not offering one.
+
 ### `--device <name>`
 
 - **Type:** Playwright device name · **Default:** none · **Commands:** audit,
-  inspect, tree, outline, tabs, list, snapshot
+  inspect, tree, outline, tabs, list, interact, click, type, focus, snapshot
 
 Emulate a device — viewport, user agent, touch — to audit the mobile layout.
 Can't be combined with [`--cdp`](#cdp-endpoint).
@@ -325,7 +582,7 @@ real-a11y audit http://localhost:3000 --device "iPhone 13"
 ### `--viewport <WxH>`
 
 - **Type:** `WIDTHxHEIGHT` · **Default:** none · **Commands:** audit, inspect,
-  tree, outline, tabs, list, snapshot
+  tree, outline, tabs, list, interact, click, type, focus, snapshot
 
 Explicit viewport size. Must match `^\d+x\d+$`, e.g. `1280x800`. Can't be
 combined with [`--cdp`](#cdp-endpoint).
@@ -333,8 +590,8 @@ combined with [`--cdp`](#cdp-endpoint).
 ### `--wait-until <state>`
 
 - **Type:** `load | domcontentloaded | networkidle | commit` · **Default:**
-  `load` · **Commands:** audit, inspect, tree, outline, tabs, list, snapshot,
-  login
+  `load` · **Commands:** audit, inspect, tree, outline, tabs, list, interact, click,
+  type, focus, snapshot, login
 
 The navigation lifecycle event to wait for before extracting. Use `networkidle`
 for JS-heavy pages that keep fetching after `load`.
@@ -342,7 +599,8 @@ for JS-heavy pages that keep fetching after `load`.
 ### `--settle <ms>`
 
 - **Type:** integer ms · **Default:** `0` · **Max:** `30000` (clamped) ·
-  **Commands:** audit, inspect, tree, outline, tabs, list, snapshot, login
+  **Commands:** audit, inspect, tree, outline, tabs, list, interact, click,
+  type, focus, snapshot, login
 
 Extra wait after the [`--wait-until`](#wait-until-state) state, for animations or
 late hydration. Values above the max are clamped; a non-integer is an error.
@@ -354,8 +612,8 @@ real-a11y audit http://localhost:3000 --wait-until networkidle --settle 500
 ### `--timeout <ms>`
 
 - **Type:** integer ms · **Default:** `30000` · **Min:** `1` · **Max:** `120000`
-  (clamped) · **Commands:** audit, inspect, tree, outline, tabs, list, snapshot,
-  login
+  (clamped) · **Commands:** audit, inspect, tree, outline, tabs, list, interact, click,
+  type, focus, snapshot, login
 
 Navigation timeout. Unlike Playwright, `0` is **not** accepted (no "wait
 forever"); values above the max are clamped.
@@ -363,7 +621,7 @@ forever"); values above the max are clamped.
 ### `--headful`
 
 - **Type:** boolean · **Default:** `false` (headless) · **Commands:** audit,
-  inspect, tree, outline, tabs, list, snapshot
+  inspect, tree, outline, tabs, list, interact, click, type, focus, snapshot
 
 Show the browser window. Can't be combined with [`--cdp`](#cdp-endpoint).
 [`login`](#login-url-save-file) is always headful.
@@ -371,7 +629,7 @@ Show the browser window. Can't be combined with [`--cdp`](#cdp-endpoint).
 ### `--cdp <endpoint>`
 
 - **Type:** CDP endpoint URL · **Default:** none · **Commands:** audit, inspect,
-  tree, outline, tabs, list, snapshot
+  tree, outline, tabs, list, interact, click, type, focus, snapshot
 
 Attach to a running Chrome instead of launching one — the interactive way to
 audit a login. No emulation over CDP: can't be combined with
@@ -382,7 +640,8 @@ audit a login. No emulation over CDP: can't be combined with
 ### `--chrome-path <file>`
 
 - **Type:** path to a browser executable · **Default:** none · **Commands:**
-  audit, inspect, tree, outline, tabs, list, snapshot
+  audit, inspect, tree, outline, tabs, list, interact, click, type, focus,
+  snapshot
 
 Launch this specific browser binary instead of Playwright's bundled Chromium.
 Can't be combined with [`--cdp`](#cdp-endpoint) — an already-running browser is
@@ -398,7 +657,7 @@ real-a11y audit http://localhost:3000 --chrome-path /usr/bin/google-chrome
 ### `--allow-file`
 
 - **Type:** boolean · **Default:** `false` · **Commands:** audit, inspect, tree,
-  outline, tabs, list, snapshot
+  outline, tabs, list, interact, click, type, focus, snapshot
 
 Approve `file:` targets, which are blocked by default. Real, but omitted from
 `--help`. A path you type (`./dist/index.html`) is normalized to a `file:` URL,
@@ -407,7 +666,7 @@ so this is what unlocks auditing a built file.
 ### `--storage-state <file>`
 
 - **Type:** path to a saved session · **Default:** none · **Commands:** audit,
-  inspect, tree, outline, tabs, list, snapshot
+  inspect, tree, outline, tabs, list, interact, click, type, focus, snapshot
 
 Audit as a logged-in user, using a session file written by
 [`login`](#login-url-save-file). Can't be combined with [`--cdp`](#cdp-endpoint).
@@ -421,7 +680,8 @@ real-a11y audit https://app.example.com/dashboard --storage-state auth.json
 ### `--audit-origin <origin>`
 
 - **Type:** origin (repeatable) · **Default:** the target's own origin ·
-  **Commands:** audit, inspect, tree, outline, tabs, list, snapshot
+  **Commands:** audit, inspect, tree, outline, tabs, list, interact, click,
+  type, focus, snapshot
 
 An extra origin allowed under [`--storage-state`](#storage-state-file). Origin
 pinning stops a redirect from routing extraction to an unintended,
@@ -440,7 +700,8 @@ stays on stderr.
 ### `-f, --format <fmt>`
 
 - **Type:** enum (per command) · **Default:** first value below · **Commands:**
-  audit, inspect, tree, outline, tabs, list, snapshot, diff
+  audit, inspect, tree, outline, tabs, list, interact, click, type, focus,
+  snapshot, diff
 
 Never auto-switched — piping only drops color. Allowed values depend on the
 command:
@@ -457,7 +718,7 @@ See [SARIF, JUnit, JSONL](/packages/cli#sarif-junit-jsonl).
 ### `-o, --output <file>`
 
 - **Type:** path · **Default:** stdout · **Commands:** audit, inspect, tree,
-  outline, tabs, list, snapshot, diff
+  outline, tabs, list, interact, click, type, focus, snapshot, diff
 
 Write the report to a file (progress stays on stderr). A typo'd path fails before
 the browser launches, not after. For [`snapshot`](#snapshot-url), `A11Y_SNAPSHOT_OUT`
@@ -466,7 +727,8 @@ is the fallback when this is omitted.
 ### `-q, --quiet`
 
 - **Type:** boolean · **Default:** `false` · **Commands:** install, audit,
-  inspect, tree, outline, tabs, list, snapshot, diff
+  inspect, tree, outline, tabs, list, interact, click, type, focus, snapshot,
+  diff
 
 Suppress progress lines on stderr. [`install`](#install) still prints the
 resolved executable path on stdout.

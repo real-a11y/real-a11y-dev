@@ -50,6 +50,7 @@ link "Architecture"
 link "Troubleshooting"
 link "Prerequisites"
 link "Your first audit"
+link "Audit what's behind a click"
 link "Configure once"
 link "Track regressions across a PR"
 link "Adopt the gate on existing debt"
@@ -74,6 +75,14 @@ button "Copy Code"
 generic
 button "Copy Code"
 generic
+link "command reference"
+button "Copy Code"
+generic
+button "Copy Code"
+generic
+button "Copy Code"
+generic
+link "login"
 link "command reference"
 button "Copy Code"
 generic

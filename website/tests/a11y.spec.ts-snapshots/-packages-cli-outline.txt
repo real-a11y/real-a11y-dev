@@ -11,6 +11,7 @@
 h1 @real-a11y-dev/cli
   h2 Prerequisites
   h2 Your first audit
+  h2 Audit what's behind a click
   h2 Configure once
   h2 Track regressions across a PR
     h3 Structural changes

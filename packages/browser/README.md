@@ -71,6 +71,8 @@ await session.act({ nodeId: button.id, action: "click" });
 // → { success: true }
 ```
 
+`session.currentUrl()` returns where the page is **now** — a click can navigate, so the URL `open()` returned goes stale the moment a step follows a link or submits a form. It returns `undefined` when no page is open.
+
 The write path holds the same redaction discipline as the read path: an `ActionResult` **never** carries the value typed into a field or any of the field's content — the in-page function returns only a structural marker, and errors are content-free. A node with no backing DOM element (`ax-<n>` — a synthesized document root) is refused rather than guessed at. `CdpActionBackend` and `backendNodeIdFrom` are exported for callers that hold their own CDP session.
 
 ### Parity harness

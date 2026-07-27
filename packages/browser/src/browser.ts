@@ -569,6 +569,20 @@ export class BrowserSession implements A11ySession {
     return this.page !== undefined;
   }
 
+  /**
+   * Where the page is **now** — which is not necessarily where `open()` put
+   * it. A dispatched action can navigate (a click on a link or a submit
+   * button), so a caller that reports a URL after acting has to re-read it or
+   * it will report the address the run started from.
+   *
+   * Returns `undefined` when no page is open. Not queued: it reads Playwright's
+   * cached location rather than touching the page, so it can't race the
+   * single-flight chain.
+   */
+  currentUrl(): string | undefined {
+    return this.page?.url();
+  }
+
   // ── internals ────────────────────────────────────────────────────────────
 
   private requirePage(): Page {
