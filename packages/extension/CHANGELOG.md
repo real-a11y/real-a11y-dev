@@ -68,6 +68,17 @@
   awaited or explicitly let go, which a new type-aware lint step checks
   ([#555](https://github.com/real-a11y/real-a11y-dev/pull/555)).
 
+- Closing the side panel lifts the **screen curtain** again after Chrome has
+  idled the extension's service worker. Which tabs had the curtain on lived
+  only in the worker's memory, so once Chrome tore the worker down (after
+  about 30 seconds idle, even with the panel open) a revived worker no longer
+  knew of them: closing the panel skipped lifting the curtain and left the
+  page black with no UI to dismiss it. That state is now kept in
+  `chrome.storage.session` too, which outlives the worker and is cleared when
+  the browser closes, and closing the panel reads it back before deciding
+  which curtains to lift
+  ([#250](https://github.com/real-a11y/real-a11y-dev/pull/250)).
+
 ## 0.1.17
 
 ### Patch Changes

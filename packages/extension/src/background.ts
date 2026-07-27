@@ -1,5 +1,6 @@
 /// <reference types="chrome" />
 
+import * as curtains from "./curtain-store.js";
 import {
   asFrameMarks,
   buildFrameInfoMap,
@@ -52,8 +53,13 @@ registerNativeMode();
 // ./frame-merger, and the Chrome side-effects below.
 
 const tabStates = new Map<number, TabState>();
-const tabCurtainOn = new Map<number, boolean>(); // curtain state per tab
 let activeTabId: number | null = null;
+
+// Curtain state lives in ./curtain-store, mirrored into chrome.storage.session
+// so it survives the MV3 idle teardown — the curtain is painted in the page and
+// outlives this worker, so a revived worker must still know to lift it. Start
+// rehydrating as soon as the worker boots; the disconnect teardown awaits it.
+void curtains.hydrateCurtainState();
 
 /**
  * Tabs whose panel has asked for a tree and not yet been given one.
@@ -531,7 +537,7 @@ chrome.runtime.onConnect.addListener((port) => {
     sidepanelPorts.delete(port);
     // Only tear the panel-driven state down when the LAST panel closes.
     // Chrome renders one side panel PER WINDOW (each connects its own port),
-    // but sidepanelConnected / activeTabId / tabCurtainOn are global — so
+    // but sidepanelConnected / activeTabId / the curtain store are global — so
     // closing one window's panel while another window's panel is still open
     // must NOT stop observing or lift the curtain on that other window.
     if (sidepanelPorts.size > 0) return;
@@ -543,20 +549,20 @@ chrome.runtime.onConnect.addListener((port) => {
     // announce while it is connected — background tabs included, and
     // FRAME_HELLO-only tabs that never reach `tabStates`. Left alone, those
     // tabs keep drawing focus overlays after the panel is gone and stay stuck
-    // behind a curtain with no UI to dismiss it (and a stale `tabCurtainOn`
+    // behind a curtain with no UI to dismiss it (and a stale curtain-store
     // entry re-applies the curtain on that tab's next navigation). Broadcasting
     // the teardown to EVERY tab is complete by construction; a tab that was
     // never armed simply no-ops on the idempotent messages. `chrome.tabs.query`
     // returns tab ids without the `tabs` permission.
-    void chrome.tabs
-      .query({})
-      .then((tabs) => {
+    void Promise.all([chrome.tabs.query({}), curtains.hydrateCurtainState()])
+      .then(([tabs]) => {
         // A panel reconnected while we were querying — leave its fresh state be.
         if (sidepanelConnected) return;
 
-        const curtainTabs = new Set<number>();
-        for (const [tabId, on] of tabCurtainOn) if (on) curtainTabs.add(tabId);
-        tabCurtainOn.clear();
+        // Hydration above matters after a service-worker death: the mirror is
+        // empty on a fresh worker, so without it a curtain painted before the
+        // teardown would never be lifted.
+        const curtainTabs = curtains.takeCurtainTabs();
 
         const tabIds = tabs
           .map((t) => t.id)
@@ -802,7 +808,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           frameId,
           isNewTopFrame,
           sidepanelConnected,
-          curtainOn: !!tabCurtainOn.get(tabId),
+          curtainOn: curtains.isCurtainOn(tabId),
           focusTracker: !focusTrackerOffTabs.has(tabId),
         });
         dispatchPlan(plan);
@@ -1019,7 +1025,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       activeTabId,
     );
     if (targetTabId != null) {
-      tabCurtainOn.set(targetTabId, message.payload.visible);
+      curtains.setCurtain(targetTabId, message.payload.visible);
       chrome.tabs.sendMessage(targetTabId, message, () => {
         if (chrome.runtime.lastError) {
           /* ignore */
@@ -1199,7 +1205,7 @@ chrome.webNavigation.onBeforeNavigate.addListener((details) => {
 // Clean up on tab removal
 chrome.tabs.onRemoved.addListener((tabId) => {
   disposeTabState(tabStates, tabId);
-  tabCurtainOn.delete(tabId);
+  curtains.forgetTab(tabId);
   panelTreeRequests.delete(tabId);
   focusTrackerOffTabs.delete(tabId);
   // A panel showing a popup is told nothing else when the popup closes: no
