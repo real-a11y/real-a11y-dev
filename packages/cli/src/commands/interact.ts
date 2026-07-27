@@ -2,21 +2,27 @@
  * `interact` — drive a page, then show what the interaction changed for a
  * screen reader. Plus the one-step sugar verbs `click` / `type` / `focus`.
  *
- * The loop mirrors the MCP server's: checkpoint the tree, act, diff. The two
- * halves deliberately use different producers, and it's worth knowing which:
+ * The loop mirrors the MCP server's: checkpoint the tree, act, diff — all three
+ * against **Chromium's own** accessibility tree, one producer end to end.
  *
- *   • **Acting** resolves role + accessible name against **Chromium's own**
- *     accessibility tree and dispatches over CDP. Targeting is role+name only
- *     — if a control can't be reached that way, assistive tech can't reach it
- *     either, and that's a finding rather than a targeting inconvenience.
- *   • **The diff** is the in-page DOM walk's tree checkpoint, which is what
- *     `--root` scopes. It is bound to the page instance, so a step that
- *     navigates discards it (reported, not thrown).
+ * Targeting is role + accessible name only: if a control can't be reached that
+ * way, assistive tech can't reach it either, and that's a finding rather than a
+ * targeting inconvenience. The diff is written in the same vocabulary the
+ * targeting uses, so a node named one thing when you aim at it can't come back
+ * named another in the report.
+ *
+ * The checkpoint lives here in Node rather than in the page, so a step that
+ * navigates doesn't destroy it — the run detects the replaced document and says
+ * so (reported, not thrown), instead of surfacing a missing-checkpoint error.
  *
  * Chromium only — the action backend is CDP.
  */
 
-import type { TargetCandidate } from "@real-a11y-dev/browser";
+import {
+  captureNativeCheckpoint,
+  diffNativeCheckpoint,
+  type TargetCandidate,
+} from "@real-a11y-dev/browser";
 import { redactUrl } from "@real-a11y-dev/snapshot";
 
 import {
@@ -34,12 +40,11 @@ import {
 } from "../interact-step.js";
 import { progress, writeReport } from "../output.js";
 import { renderJson, type PageReport } from "../render/json.js";
-import { callPage, createSession, openPage } from "../session.js";
+import { createSession, openPage } from "../session.js";
 
 import {
   isAuthenticated,
   outputOf,
-  rootOf,
   sessionFlags,
   singleTarget,
   type Target,
@@ -159,9 +164,6 @@ async function runStep(session: Session, step: InteractStep): Promise<void> {
   }
 }
 
-/** What `diffSinceCheckpoint` renders when the checkpoint didn't survive. */
-const CHECKPOINT_GONE = /No tree checkpoint on this page/;
-
 interface InteractOutcome {
   steps: string[];
   diff: string;
@@ -170,11 +172,13 @@ interface InteractOutcome {
 
 async function interactOnPage(
   session: Session,
-  root: string,
   steps: readonly InteractStep[],
   quiet: boolean,
 ): Promise<InteractOutcome> {
-  await callPage<string>(session, "checkpointTree", root, []);
+  const before = captureNativeCheckpoint(
+    await session.nativeTree(),
+    session.currentUrl() ?? "",
+  );
 
   const done: string[] = [];
   for (const step of steps) {
@@ -184,28 +188,33 @@ async function interactOnPage(
     progress(`  ✓ ${rendered}`, { quiet });
   }
 
-  try {
+  const outcome = diffNativeCheckpoint(
+    before,
+    await session.nativeTree(),
+    session.currentUrl() ?? "",
+  );
+
+  // A step that navigates is an expected outcome of a real click, not a failure
+  // of the run — report it and keep the exit code clean. The checkpoint itself
+  // survived (it lives here, not in the page); what didn't survive is the node
+  // identity it was written in, so there is nothing left to compare against.
+  if (outcome.kind === "replaced") {
     return {
       steps: done,
-      diff: await callPage<string>(session, "diffSinceCheckpoint", root, []),
-      navigated: false,
+      diff:
+        "A step navigated (or reloaded) the page, so the tree captured before the steps describes a document that no longer exists — no diff available.\n" +
+        `Inspect where it landed with: real-a11y tree ${redactUrl(outcome.to)}`,
+      navigated: true,
     };
-  } catch (err) {
-    // A step that navigates replaces the page's bundle instance, taking the
-    // checkpoint with it. That's an expected outcome of a real click, not a
-    // failure of the run — report it and keep the exit code clean.
-    const message = err instanceof Error ? err.message : String(err);
-    if (CHECKPOINT_GONE.test(message)) {
-      return {
-        steps: done,
-        diff:
-          "The page navigated, so the tree checkpoint from before the steps was discarded — no diff available.\n" +
-          "Inspect the page it landed on with: real-a11y tree <url>",
-        navigated: true,
-      };
-    }
-    throw err;
   }
+
+  return {
+    steps: done,
+    diff: outcome.changed
+      ? outcome.rendered
+      : "No tree changes since the steps ran.",
+    navigated: false,
+  };
 }
 
 /** Shared body for `interact` and the one-step sugar verbs. */
@@ -218,7 +227,6 @@ async function runInteract(
   const format = parseFormat(flags.format, ["pretty", "json"] as const);
   const target: Target = singleTarget(positionals, flags, command);
   const output = outputOf(flags);
-  const root = rootOf(flags);
   const quiet = flags.quiet === true;
   const openOptions = parseOpenOptions(flags);
 
@@ -235,7 +243,7 @@ async function runInteract(
       isAuthenticated(flags),
     );
     finalUrl = redactUrl(opened.url);
-    outcome = await interactOnPage(session, root, steps, quiet);
+    outcome = await interactOnPage(session, steps, quiet);
     // Re-read AFTER the steps: a click can navigate, and `url` is contracted
     // as the final address. Reading it before acting reports where the run
     // started, which is wrong in exactly the case the report flags as a

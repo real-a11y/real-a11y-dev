@@ -163,6 +163,7 @@ button "Copy Code"
 generic
 button "Copy Code"
 generic
+link "--producer"
 link "--root"
 link "--format json"
 link "login"

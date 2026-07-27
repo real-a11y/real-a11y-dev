@@ -461,9 +461,21 @@ export function buildNativeTree(
     setDepth(rootId, 0);
   }
 
+  // Chromium marks the focused node with the `focused` AX property, which
+  // lands in `a11y.states`. Promote it to the tree-level pointer the DOM
+  // producer sets, because that is what every focus-aware consumer reads:
+  // `serializeTree`'s `[focused]` marker and `serializeTreeDiff`'s focus-move
+  // line both take nodes looked up by `focusedId`. Without this a native tree
+  // knows where focus is and can't say so — a `focus` action reports a bare
+  // `a11y.states.focused` flip instead of the focus move it actually was.
+  const focused = [...nodes.values()].find(
+    (n) => n.a11y.states.focused === true,
+  );
+
   return {
     nodes,
     rootId,
+    ...(focused ? { focusedId: focused.id } : {}),
     source: { producer: "native", ...(chrome ? { chrome } : {}) },
   };
 }

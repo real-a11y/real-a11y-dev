@@ -29,12 +29,14 @@ export type CommandFn = (
 
 type Options = NonNullable<ParseArgsConfig["options"]>;
 
-// Everything about reaching and framing the page, minus the producer choice.
-// The act commands take exactly this set: acting is native-only (CDP) and the
-// change report is the DOM walk's tree diff, so there is no producer to pick —
-// and a flag that silently did nothing would be worse than not offering it.
-const NAVIGATION_FLAGS: Options = {
-  root: { type: "string" },
+// Everything about reaching and framing the page — no producer, no root. The
+// act commands take exactly this set: they target, act, and diff against
+// Chromium's native tree, which is whole-document, so neither a producer choice
+// nor a scoping selector has anything to mean. A flag that silently did nothing
+// would be worse than not offering it. Leaving `root` out also stops a config
+// `defaults.root` from reaching them, since `mergeDefaults` is keyed on each
+// command's declared flags.
+const PAGE_FLAGS: Options = {
   device: { type: "string" },
   viewport: { type: "string" },
   "wait-until": { type: "string" },
@@ -46,6 +48,11 @@ const NAVIGATION_FLAGS: Options = {
   "allow-file": { type: "boolean" },
   "storage-state": { type: "string" },
   "audit-origin": { type: "string", multiple: true },
+};
+
+const NAVIGATION_FLAGS: Options = {
+  ...PAGE_FLAGS,
+  root: { type: "string" },
 };
 
 const BROWSER_FLAGS: Options = {
@@ -95,7 +102,7 @@ const VIEW_FLAGS: Options = {
 // The act commands. `interact` takes an ordered, repeatable --step; the sugar
 // verbs take one target apiece and share the same machinery.
 const INTERACT_FLAGS: Options = {
-  ...NAVIGATION_FLAGS,
+  ...PAGE_FLAGS,
   ...OUTPUT_FLAGS,
   ...CONFIG_FLAGS,
   step: { type: "string", multiple: true },
@@ -107,7 +114,7 @@ const INTERACT_FLAGS: Options = {
 // advice. Rejecting-with-the-remedy beats both ignoring it and a generic parse
 // error; the help text advertises it only where it works.
 const ACT_FLAGS: Options = {
-  ...NAVIGATION_FLAGS,
+  ...PAGE_FLAGS,
   ...OUTPUT_FLAGS,
   ...CONFIG_FLAGS,
   role: { type: "string" },
@@ -185,9 +192,11 @@ export const LIST_CATEGORIES = [
 ] as const;
 export type ListCategory = (typeof LIST_CATEGORIES)[number];
 
-// Everything except `--root`. `snapshot` splices this variant, because it
-// scopes per route via `urls[].rootSelector` and REFUSES `--root` outright —
-// listing a flag it rejects would promise scoping it never applies.
+// Everything except `--root`, for the commands that don't take one — listing a
+// flag they reject would promise scoping that never applies. Two reasons to be
+// here: `snapshot` scopes per route via `urls[].rootSelector` and REFUSES
+// `--root` outright, and the act commands work against the whole-document
+// native tree, so there is nothing for a selector to scope.
 const SHARED_FLAG_HELP_NO_ROOT = `  --device <name>        Emulate a device, e.g. "iPhone 13"
   --viewport <WxH>       e.g. 1280x800
   --wait-until <state>   load|domcontentloaded|networkidle|commit (default: load)
@@ -393,12 +402,14 @@ than a targeting inconvenience. Ambiguous matches list their nth= candidates;
 a disabled target is refused (the page would ignore the action, leaving a
 misleading empty diff).
 
-THE ACTIONS ARE REAL: they submit forms, toggle state, and can NAVIGATE. The
-diff comes from an in-page checkpoint bound to the page instance, so a step
-that navigates discards it — the run still succeeds and says so.
+THE ACTIONS ARE REAL: they submit forms, toggle state, and can NAVIGATE. A step
+that loads a new document leaves the tree captured before it describing a page
+that no longer exists, so no diff is possible — the run still succeeds and says
+where it landed.
 
---root scopes the DIFF (the in-page tree walk), not the targeting: the native
-tree the steps resolve against is always whole-document.
+Targeting, acting, and the diff all read the same native tree, so a node you
+aim at by one name can't come back in the report under another. That tree is
+whole-document, which is why these commands take neither --producer nor --root.
 
 A typed value is never echoed — not in progress output, not in --format json.
 Don't use this to log in: a password on the command line is visible to other
@@ -408,7 +419,7 @@ Chromium only.
 
 Flags:
   --step '<step>'        A step to run (repeatable, ordered)   (required)
-${SHARED_FLAG_HELP}
+${SHARED_FLAG_HELP_NO_ROOT}
 `,
     load: async () => (await import("./commands/interact.js")).interactCommand,
   },
@@ -430,7 +441,7 @@ Flags:
   --role <role>          ARIA role as the tree prints it       (required)
   --name <name>          Accessible name; omit to match any, "" for unlabeled
   --nth <n>              1-based pick among matches, document order
-${SHARED_FLAG_HELP}
+${SHARED_FLAG_HELP_NO_ROOT}
 `,
     load: async () => (await import("./commands/interact.js")).clickCommand,
   },
@@ -461,7 +472,7 @@ Flags:
   --name <name>          Accessible name; omit to match any, "" for unlabeled
   --text <value>         The text to enter                     (required)
   --nth <n>              1-based pick among matches, document order
-${SHARED_FLAG_HELP}
+${SHARED_FLAG_HELP_NO_ROOT}
 `,
     load: async () => (await import("./commands/interact.js")).typeCommand,
   },
@@ -482,7 +493,7 @@ Flags:
   --role <role>          ARIA role as the tree prints it       (required)
   --name <name>          Accessible name; omit to match any, "" for unlabeled
   --nth <n>              1-based pick among matches, document order
-${SHARED_FLAG_HELP}
+${SHARED_FLAG_HELP_NO_ROOT}
 `,
     load: async () => (await import("./commands/interact.js")).focusCommand,
   },

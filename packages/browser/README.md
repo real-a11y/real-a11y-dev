@@ -77,6 +77,34 @@ await session.act({ nodeId: button.id, action: "click" });
 
 `session.currentUrl()` returns where the page is **now** — a click can navigate, so the URL `open()` returned goes stale the moment a step follows a link or submits a form. It returns `undefined` when no page is open.
 
+### Seeing what an action changed — the native checkpoint
+
+Acting is only half the loop; the other half is *what did that change for a screen reader?* `captureNativeCheckpoint(tree, url)` holds a native tree here in Node, and `diffNativeCheckpoint(checkpoint, after, afterUrl)` renders the difference. Both are pure — trees in, verdict out — so the policy is unit-testable with no browser.
+
+```ts
+const before = captureNativeCheckpoint(await session.nativeTree(), session.currentUrl() ?? "");
+await session.act({ nodeId, action: "click" });
+
+const out = diffNativeCheckpoint(before, await session.nativeTree(), session.currentUrl() ?? "");
+out.kind === "diff" ? out.rendered : `the page loaded a new document: ${out.to}`;
+```
+
+Holding it in Node rather than in the page is the point. The in-page checkpoint (`checkpointTree` / `diffSinceCheckpoint`, still what `@real-a11y-dev/testing` uses) is keyed by realm-bound WeakMap ids, so it dies with the page instance — and it diffs the *DOM* producer's tree while acting targets the *native* one. A user clicks `button "Attach"` and reads a diff where that node is `textbox "Attach"`. One producer end to end removes that seam.
+
+**Detecting that the document was replaced** is the load-bearing part, because a navigation makes both trees' ids incomparable and a diff would report the whole page removed and a new one added. The obvious detector — comparing URLs — is wrong. Measured in real Chromium:
+
+| scenario | shared ids | url changed | correct verdict |
+| --- | --- | --- | --- |
+| same-document mutation | 100% | no | diff |
+| SPA `pushState` | 14% | **yes** | **diff** |
+| hash change | 100% | **yes** | **diff** |
+| reload (same URL) | **0%** | no | **replaced** |
+| real navigation | 0% | yes | replaced |
+
+A URL check calls three of those five wrong: it suppresses the diff for a hash change and an SPA route change — where the document survived and the diff is exactly what was asked for — and it emits a garbage diff for a reload. Shared node ids get all five right, and not as a tuned threshold: a replaced document means Chromium allocates every `backendDOMNodeId` afresh, so the overlap is *exactly* zero, while any same-document change keeps at least the root. So `documentWasReplaced` asks "zero ids in common", and the URL is used only to report where the page ended up. `e2e/native-checkpoint.e2e.test.ts` pins all five against real Chromium.
+
+The native tree also carries `focusedId`, promoted from Chromium's per-node `focused` property, so `serializeTree`'s `[focused]` marker and the diff's focus-move line work against it — without which a `focus` action would report a bare state flip rather than a focus move.
+
 The write path holds the same redaction discipline as the read path: an `ActionResult` **never** carries the value typed into a field or any of the field's content — the in-page function returns only a structural marker, and errors are content-free. A node with no backing DOM element (`ax-<n>` — a synthesized document root) is refused rather than guessed at. `CdpActionBackend` and `backendNodeIdFrom` are exported for callers that hold their own CDP session.
 
 ### Parity harness

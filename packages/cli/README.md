@@ -149,10 +149,16 @@ way, assistive technology can't reach it either, and that's a finding rather
 than a targeting inconvenience. Ambiguous matches list their `nth=` candidates;
 a disabled target is refused rather than clicked into an empty diff.
 
-The actions are real — they submit forms, toggle state, and can navigate (which
-discards the diff checkpoint; the run says so and still exits `0`). A typed
-value is never echoed back in any output format, and `type` is not a login
-mechanism: use `real-a11y login` for that.
+Targeting, acting, and the diff all read that same native tree, so a node you
+aim at by one name can't come back in the report under another. It is
+whole-document, which is why these commands take neither `--producer` nor
+`--root`.
+
+The actions are real — they submit forms, toggle state, and can navigate. A step
+that loads a new document leaves the tree captured before it describing a page
+that's gone, so no diff is possible; the run says where it landed and still
+exits `0`. A typed value is never echoed back in any output format, and `type`
+is not a login mechanism: use `real-a11y login` for that.
 
 ## Configure once
 
