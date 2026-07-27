@@ -34,6 +34,7 @@ h1 Commands & flags
     h3 --viewport <WxH>
     h3 --wait-until <state>
     h3 --settle <ms>
+    h3 --step-settle <ms>
     h3 --timeout <ms>
     h3 --headful
     h3 --cdp <endpoint>

@@ -278,6 +278,7 @@ matching prose.
 passed when a step navigated.
 
 **Flags:** `--step '<step>'` (repeatable, required) ·
+[`--step-settle`](#step-settle-ms) ·
 [Browser & page](#browser-page) (no `--producer`, no `--root`) ·
 [Output](#output)
 (`pretty | json`) · [Config](#config).
@@ -295,6 +296,7 @@ real-a11y click http://localhost:3000 --role button --name ""   # unlabeled
 ```
 
 **Flags:** `--role` (required) · `--name` · `--nth` ·
+[`--step-settle`](#step-settle-ms) ·
 [Browser & page](#browser-page) (no `--producer`, no `--root`) ·
 [Output](#output)
 (`pretty | json`) · [Config](#config).
@@ -315,6 +317,7 @@ The value is never echoed back, in any format. Don't use it to log in — see
 [`login`](#login-url-save-file).
 
 **Flags:** `--role` (required) · `--text` (required) · `--name` · `--nth` ·
+[`--step-settle`](#step-settle-ms) ·
 [Browser & page](#browser-page) (no `--producer`, no `--root`) ·
 [Output](#output)
 (`pretty | json`) · [Config](#config).
@@ -330,6 +333,7 @@ real-a11y focus http://localhost:3000 --role textbox --name "Email"
 ```
 
 **Flags:** `--role` (required) · `--name` · `--nth` ·
+[`--step-settle`](#step-settle-ms) ·
 [Browser & page](#browser-page) (no `--producer`, no `--root`) ·
 [Output](#output)
 (`pretty | json`) · [Config](#config).
@@ -444,6 +448,7 @@ Throughout this table, **browser commands** is the eleven that drive a page:
 | [`--viewport`](#viewport-wxh) | `WIDTHxHEIGHT` | none | browser commands |
 | [`--wait-until`](#wait-until-state) | `load \| domcontentloaded \| networkidle \| commit` | `load` | browser commands · `login` |
 | [`--settle`](#settle-ms) | ms | `0` | browser commands · `login` |
+| [`--step-settle`](#step-settle-ms) | ms | `200` | the act commands |
 | [`--timeout`](#timeout-ms) | ms | `30000` | browser commands · `login` |
 | [`--headful`](#headful) | boolean | `false` | browser commands |
 | [`--cdp`](#cdp-endpoint) | CDP endpoint URL | none | browser commands |
@@ -623,6 +628,32 @@ late hydration. Values above the max are clamped; a non-integer is an error.
 ```sh
 real-a11y audit http://localhost:3000 --wait-until networkidle --settle 500
 ```
+
+### `--step-settle <ms>`
+
+- **Type:** integer ms · **Default:** `200` · **Max:** `30000` (clamped) ·
+  **Commands:** interact, click, type, focus
+
+How long to wait after each step before looking at the page again. A dispatch
+returning is not the same as its effect having landed: a React state update
+flushes on a later tick, a dialog mounts on the next frame. It gates the *next*
+step's targeting as much as the final diff — a step that opens a menu has to
+have opened it before the step that clicks an item can find that item.
+
+```sh
+real-a11y interact http://localhost:3000 --step-settle 600 \
+  --step 'click button "Open menu"' \
+  --step 'click menuitem "Settings"'
+```
+
+`0` opts out and reads immediately. Distinct from [`--settle`](#settle-ms),
+which waits once after the initial page load; this one applies per step.
+
+::: warning A wait, not a guarantee
+Nothing can tell you a page is *about* to navigate. A reaction that lands later
+than this still won't appear in the diff — raise it for a slow app rather than
+reading "no changes" as proof that nothing happened.
+:::
 
 ### `--timeout <ms>`
 

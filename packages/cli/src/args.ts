@@ -106,6 +106,7 @@ const INTERACT_FLAGS: Options = {
   ...OUTPUT_FLAGS,
   ...CONFIG_FLAGS,
   step: { type: "string", multiple: true },
+  "step-settle": { type: "string" },
 };
 
 // All three sugar verbs parse --text, but only `type` accepts it: click/focus
@@ -121,6 +122,7 @@ const ACT_FLAGS: Options = {
   name: { type: "string" },
   nth: { type: "string" },
   text: { type: "string" },
+  "step-settle": { type: "string" },
 };
 
 // install is a setup command: no browser/output/emulation flags — it
@@ -419,6 +421,7 @@ Chromium only.
 
 Flags:
   --step '<step>'        A step to run (repeatable, ordered)   (required)
+  --step-settle <ms>     Wait after each step before looking     (default: 200)
 ${SHARED_FLAG_HELP_NO_ROOT}
 `,
     load: async () => (await import("./commands/interact.js")).interactCommand,
@@ -441,6 +444,7 @@ Flags:
   --role <role>          ARIA role as the tree prints it       (required)
   --name <name>          Accessible name; omit to match any, "" for unlabeled
   --nth <n>              1-based pick among matches, document order
+  --step-settle <ms>     Wait after the action before looking    (default: 200)
 ${SHARED_FLAG_HELP_NO_ROOT}
 `,
     load: async () => (await import("./commands/interact.js")).clickCommand,
@@ -472,6 +476,7 @@ Flags:
   --name <name>          Accessible name; omit to match any, "" for unlabeled
   --text <value>         The text to enter                     (required)
   --nth <n>              1-based pick among matches, document order
+  --step-settle <ms>     Wait after the action before looking    (default: 200)
 ${SHARED_FLAG_HELP_NO_ROOT}
 `,
     load: async () => (await import("./commands/interact.js")).typeCommand,
@@ -493,6 +498,7 @@ Flags:
   --role <role>          ARIA role as the tree prints it       (required)
   --name <name>          Accessible name; omit to match any, "" for unlabeled
   --nth <n>              1-based pick among matches, document order
+  --step-settle <ms>     Wait after the action before looking    (default: 200)
 ${SHARED_FLAG_HELP_NO_ROOT}
 `,
     load: async () => (await import("./commands/interact.js")).focusCommand,
@@ -753,6 +759,33 @@ function parseMs(
   }
   return Math.min(n, max);
 }
+
+/**
+ * How long to wait after each step before looking at the page again.
+ *
+ * A step's effect is not always there when the dispatch returns. A React state
+ * update flushes on a later tick, a dialog mounts on the next frame, and a
+ * navigation kicked off from a `setTimeout` hasn't even started yet — so an
+ * immediate read reports "no changes" for a click that plainly did something.
+ * `@real-a11y-dev/testing`'s `flow()` settles for the same reason and landed on
+ * the same 200ms, which is cheap next to the ~1s a browser launch already costs.
+ *
+ * It also gates the NEXT step's targeting, not just the final diff: a step that
+ * opens a menu has to have opened it before the step that clicks an item can
+ * resolve that item against a fresh tree.
+ *
+ * This is a heuristic wait, not a synchronisation point — nothing can tell you a
+ * page is *about* to navigate. Raise it for a slow app; `0` opts out.
+ */
+export function parseStepSettle(flags: FlagValues): number {
+  return parseMs("--step-settle", flags["step-settle"], {
+    fallback: DEFAULT_STEP_SETTLE_MS,
+    max: 30_000,
+  }) as number;
+}
+
+/** Long enough for a framework flush and a mount; short enough not to be felt. */
+export const DEFAULT_STEP_SETTLE_MS = 200;
 
 const WAIT_STATES = [
   "load",

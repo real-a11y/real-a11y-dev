@@ -37,6 +37,7 @@ export interface A11yDefaults {
   viewport?: string;
   waitUntil?: string;
   settleMs?: number;
+  stepSettleMs?: number;
   timeoutMs?: number;
   headful?: boolean;
   storageState?: string;
@@ -87,6 +88,7 @@ const DEFAULT_TYPES = {
   viewport: "string",
   waitUntil: "string",
   settleMs: "number",
+  stepSettleMs: "number",
   timeoutMs: "number",
   headful: "boolean",
   storageState: "string",
@@ -348,6 +350,7 @@ export function clearConfigCache(): void {
 const KEY_TO_FLAG: Record<string, string> = {
   waitUntil: "wait-until",
   settleMs: "settle",
+  stepSettleMs: "step-settle",
   timeoutMs: "timeout",
   storageState: "storage-state",
   auditOrigins: "audit-origin",

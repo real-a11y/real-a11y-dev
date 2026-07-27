@@ -132,6 +132,14 @@ Navigation settle state before extraction: `load` | `domcontentloaded` | `networ
 
 Extra milliseconds to wait after [`waitUntil`](#waituntil) resolves — for content that animates or hydrates in after the load event.
 
+### `stepSettleMs`
+
+**`stepSettleMs: number`** — flag `--step-settle` · default `200` · max `30000` · applies to `interact`, `click`, `type`, `focus`
+
+How long to wait after each step before looking at the page again. A dispatch returning is not the same as its effect having landed: a React state update flushes on a later tick, a dialog mounts on the next frame. It gates the *next* step's targeting as much as the final diff — a step that opens a menu has to have opened it before the step that clicks an item can find that item.
+
+Raise it for a slow app; `0` opts out and reads immediately. This is a heuristic wait, not a synchronisation point — nothing can tell you a page is *about* to navigate, so a reaction that lands later than this still won't appear.
+
 ### `timeoutMs`
 
 **`timeoutMs: number`** — flag `--timeout` · default `30000` · max `120000` · applies to `audit`, `inspect`, the view commands, `snapshot`, `login`

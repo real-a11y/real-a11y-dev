@@ -8,6 +8,8 @@ import {
   parseListCategory,
   parseOnly,
   parseOpenOptions,
+  parseStepSettle,
+  DEFAULT_STEP_SETTLE_MS,
   parseRules,
   parseProducer,
   rootHelp,
@@ -165,5 +167,33 @@ describe("COMMANDS.install", () => {
     expect(COMMANDS.install.summary).toMatch(/Chrome for Testing/);
     expect(rootHelp()).toContain("install");
     expect(rootHelp()).not.toMatch(/install <url>/);
+  });
+});
+
+describe("parseStepSettle", () => {
+  it("defaults to the shared debounce when the flag is absent", () => {
+    expect(parseStepSettle({})).toBe(DEFAULT_STEP_SETTLE_MS);
+    expect(DEFAULT_STEP_SETTLE_MS).toBe(200);
+  });
+
+  it("takes an explicit value, including 0 to opt out", () => {
+    expect(parseStepSettle({ "step-settle": "750" })).toBe(750);
+    // 0 is meaningful, not "unset" — a caller that wants the old immediate
+    // read must be able to ask for it.
+    expect(parseStepSettle({ "step-settle": "0" })).toBe(0);
+  });
+
+  it("caps a runaway value rather than hanging the run", () => {
+    expect(parseStepSettle({ "step-settle": "99999999" })).toBe(30_000);
+  });
+
+  it("rejects nonsense instead of silently falling back to the default", () => {
+    // Silently defaulting would turn a typo into a run that looks fine and
+    // waits the wrong amount.
+    expect(() => parseStepSettle({ "step-settle": "soon" })).toThrow(CliError);
+    expect(() => parseStepSettle({ "step-settle": "-1" })).toThrow(CliError);
+    expect(() => parseStepSettle({ "step-settle": "1.5" })).toThrow(CliError);
+    // Number("") === 0, so an unset shell var must not read as "no wait".
+    expect(() => parseStepSettle({ "step-settle": "" })).toThrow(CliError);
   });
 });

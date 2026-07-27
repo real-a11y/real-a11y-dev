@@ -154,6 +154,11 @@ aim at by one name can't come back in the report under another. It is
 whole-document, which is why these commands take neither `--producer` nor
 `--root`.
 
+Each step gets a moment to land before the next one targets and before the diff
+is taken — `--step-settle` (default 200ms), because a React state update flushes
+on a later tick and a dialog mounts on the next frame. Raise it for a slow app;
+`0` reads immediately.
+
 The actions are real — they submit forms, toggle state, and can navigate. A step
 that loads a new document leaves the tree captured before it describing a page
 that's gone, so no diff is possible; the run says where it landed and still
