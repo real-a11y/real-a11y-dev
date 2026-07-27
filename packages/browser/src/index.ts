@@ -15,6 +15,15 @@ export * from "./chrome.js";
 export { nativeTree, buildNativeTree } from "./native-tree.js";
 export type { NativeDomInfo } from "./native-tree.js";
 export { CdpActionBackend, backendNodeIdFrom } from "./cdp-action-backend.js";
+export {
+  captureNativeCheckpoint,
+  diffNativeCheckpoint,
+  documentWasReplaced,
+} from "./native-checkpoint.js";
+export type {
+  NativeCheckpoint,
+  NativeCheckpointDiff,
+} from "./native-checkpoint.js";
 export { resolveTarget } from "./resolve-target.js";
 export type {
   ResolveTargetQuery,

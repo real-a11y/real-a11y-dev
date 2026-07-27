@@ -278,3 +278,82 @@ describe("buildNativeTree — R1: valuenow/valuetext of value controls must not 
     expect(JSON.stringify([...tree.nodes.values()])).not.toContain(QTY_SECRET);
   });
 });
+
+describe("buildNativeTree — focusedId", () => {
+  // Chromium reports focus as a per-node `focused` AX property. Every
+  // focus-aware consumer instead reads the tree-level `focusedId`:
+  // `serializeTree`'s `[focused]` marker and `serializeTreeDiff`'s focus-move
+  // line both look the node up by it. Without the promotion a native tree knows
+  // where focus is and can't say so, and a `focus` action diffs to a bare
+  // `a11y.states.focused` flip instead of a focus move.
+  const focusedRaw = (focusedBackendId: number | null) =>
+    [
+      {
+        nodeId: "1",
+        childIds: ["10", "11"],
+        backendDOMNodeId: 1,
+        role: { value: "RootWebArea" },
+        name: { value: "focus fixture" },
+        properties: [
+          // The document is marked focused whenever nothing in the page is —
+          // and this node is dropped by the normalizer, so it must never
+          // become the answer.
+          { name: "focused", value: { value: focusedBackendId === null } },
+        ],
+      },
+      {
+        nodeId: "10",
+        parentId: "1",
+        childIds: [],
+        backendDOMNodeId: 10,
+        role: { value: "button" },
+        name: { value: "Save" },
+        properties:
+          focusedBackendId === 10
+            ? [{ name: "focused", value: { value: true } }]
+            : [],
+      },
+      {
+        nodeId: "11",
+        parentId: "1",
+        childIds: [],
+        backendDOMNodeId: 11,
+        role: { value: "textbox" },
+        name: { value: "Email" },
+        properties:
+          focusedBackendId === 11
+            ? [{ name: "focused", value: { value: true } }]
+            : [],
+      },
+    ] as Parameters<typeof buildNativeTree>[0];
+
+  it("points at the focused node", () => {
+    const tree = buildNativeTree(focusedRaw(11));
+    expect(tree.focusedId).toBe("ax-dom-11");
+    expect(tree.nodes.get(tree.focusedId!)?.a11y.name).toBe("Email");
+    expect(serializeTree(tree)).toContain("[focused]");
+  });
+
+  it("moves with focus", () => {
+    expect(buildNativeTree(focusedRaw(10)).focusedId).toBe("ax-dom-10");
+  });
+
+  it("is unset when only the document is focused — nothing in the page is", () => {
+    // The document node doesn't survive normalization, so pointing at it would
+    // leave `focusedId` naming a node the tree doesn't contain.
+    const tree = buildNativeTree(focusedRaw(null));
+    expect(tree.focusedId).toBeUndefined();
+    expect(serializeTree(tree)).not.toContain("[focused]");
+  });
+
+  it("never names a node outside the tree", () => {
+    // The recorded payload marks only its RootWebArea focused, which is the
+    // real-world shape of "nothing is focused".
+    for (const tree of [build(), buildNativeTree(focusedRaw(11))]) {
+      if (tree.focusedId !== undefined) {
+        expect(tree.nodes.has(tree.focusedId)).toBe(true);
+      }
+    }
+    expect(build().focusedId).toBeUndefined();
+  });
+});

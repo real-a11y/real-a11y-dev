@@ -77,10 +77,10 @@ whole-document) versus the in-page DOM walk. Click a command for its flags.
 
 | Command | Purpose | Producer |
 | --- | --- | --- |
-| [`interact <url> --step`](#interact-url-step-step) | Run ordered steps, then print the tree diff they produced. | acts `native`, diffs `dom` |
-| [`click <url> --role`](#click-url-role-role) | Real click at the element matched by role + accessible name. | acts `native`, diffs `dom` |
-| [`type <url> --role --text`](#type-url-role-role-text-value) | Replace a text field's value; the value is never echoed back. | acts `native`, diffs `dom` |
-| [`focus <url> --role`](#focus-url-role-role) | Move real keyboard focus; the `[focused]` marker moves in the diff. | acts `native`, diffs `dom` |
+| [`interact <url> --step`](#interact-url-step-step) | Run ordered steps, then print the tree diff they produced. | `native` only |
+| [`click <url> --role`](#click-url-role-role) | Real click at the element matched by role + accessible name. | `native` only |
+| [`type <url> --role --text`](#type-url-role-role-text-value) | Replace a text field's value; the value is never echoed back. | `native` only |
+| [`focus <url> --role`](#focus-url-role-role) | Move real keyboard focus; the `[focused]` marker moves in the diff. | `native` only |
 
 **Artifacts**
 
@@ -254,14 +254,16 @@ swallowed and the resulting empty diff would read as "that button does
 nothing".
 
 ::: warning The actions are real
-They submit forms, toggle state, and can **navigate**. The diff comes from an
-in-page checkpoint bound to the page instance, so a step that navigates
-discards it — the run still succeeds and says so.
+They submit forms, toggle state, and can **navigate**. A step that loads a new
+document leaves the tree captured before it describing a page that no longer
+exists, so no diff is possible — the run still succeeds and reports where it
+landed.
 :::
 
-Two producers are in play, deliberately: **acting** is native (CDP,
-whole-document), while the **diff** is the in-page DOM walk — which is what
-[`--root`](#root-selector) scopes. Targeting is never scoped.
+Targeting, acting, and the diff all read the **same** tree — Chromium's own,
+over CDP. A node you aim at by one name therefore can't come back in the report
+under another. That tree is whole-document, which is why these commands take
+neither [`--producer`](#producer-kind) nor [`--root`](#root-selector).
 
 A typed value is **never echoed** — not in progress output, not in
 [`--format json`](#f-format-fmt), where the step renders as `= ‹hidden›`. Don't
@@ -270,12 +272,14 @@ processes and lands in your shell history. Use [`login`](#login-url-save-file).
 
 Under [`--format json`](#f-format-fmt) the page object carries `steps` (the
 steps that ran, rendered and redacted), `diff`, and `navigated` — the last so a
-script can tell a navigation discarded the checkpoint without matching prose.
+script can tell a new document was loaded (so there is no diff) without
+matching prose.
 `url` is the address the page **landed** on, which differs from the one you
 passed when a step navigated.
 
 **Flags:** `--step '<step>'` (repeatable, required) ·
-[Browser & page](#browser-page) (no `--producer`) · [Output](#output)
+[Browser & page](#browser-page) (no `--producer`, no `--root`) ·
+[Output](#output)
 (`pretty | json`) · [Config](#config).
 
 ### `click <url> --role <role>`
@@ -291,7 +295,8 @@ real-a11y click http://localhost:3000 --role button --name ""   # unlabeled
 ```
 
 **Flags:** `--role` (required) · `--name` · `--nth` ·
-[Browser & page](#browser-page) (no `--producer`) · [Output](#output)
+[Browser & page](#browser-page) (no `--producer`, no `--root`) ·
+[Output](#output)
 (`pretty | json`) · [Config](#config).
 
 ### `type <url> --role <role> --text <value>`
@@ -310,7 +315,8 @@ The value is never echoed back, in any format. Don't use it to log in — see
 [`login`](#login-url-save-file).
 
 **Flags:** `--role` (required) · `--text` (required) · `--name` · `--nth` ·
-[Browser & page](#browser-page) (no `--producer`) · [Output](#output)
+[Browser & page](#browser-page) (no `--producer`, no `--root`) ·
+[Output](#output)
 (`pretty | json`) · [Config](#config).
 
 ### `focus <url> --role <role>`
@@ -324,7 +330,8 @@ real-a11y focus http://localhost:3000 --role textbox --name "Email"
 ```
 
 **Flags:** `--role` (required) · `--name` · `--nth` ·
-[Browser & page](#browser-page) (no `--producer`) · [Output](#output)
+[Browser & page](#browser-page) (no `--producer`, no `--root`) ·
+[Output](#output)
 (`pretty | json`) · [Config](#config).
 
 ### `snapshot [url...]`
@@ -431,7 +438,7 @@ Throughout this table, **browser commands** is the eleven that drive a page:
 
 | Flag | Type / values | Default | Commands |
 | --- | --- | --- | --- |
-| [`--root`](#root-selector) | CSS selector | `body` | browser commands · **rejected by** `snapshot` |
+| [`--root`](#root-selector) | CSS selector | `body` | browser commands · **not taken by** the act commands · **rejected by** `snapshot` |
 | [`--producer`](#producer-kind) | `dom \| native` | `dom` | `audit`, `tree`, `outline` <sup>†</sup> |
 | [`--device`](#device-name) | Playwright device name | none | browser commands |
 | [`--viewport`](#viewport-wxh) | `WIDTHxHEIGHT` | none | browser commands |
@@ -449,7 +456,8 @@ Throughout this table, **browser commands** is the eleven that drive a page:
 <sup>†</sup> Only those three **honor** `--producer native`. `inspect`, `tabs`,
 `list`, and `snapshot` accept the flag purely so `native` is refused with
 guidance rather than silently ignored; the act commands
-([`interact`](#interact-url-step-step) and the verbs) don't take it at all.
+([`interact`](#interact-url-step-step) and the verbs) take neither it nor
+`--root`.
 
 **[Output](#output)**
 
@@ -569,10 +577,10 @@ can't be combined with [`--root`](#root-selector) (it audits the whole document)
 
 The act commands ([`interact`](#interact-url-step-step),
 [`click`](#click-url-role-role), [`type`](#type-url-role-role-text-value),
-[`focus`](#focus-url-role-role)) take **no `--producer` at all**: they always
-resolve targets against the native tree and always report the DOM walk's diff,
-so there is nothing to choose. A flag that silently did nothing would be worse
-than not offering one.
+[`focus`](#focus-url-role-role)) take **no `--producer` and no `--root`**: they
+resolve, act, and diff against the native tree throughout, and it is
+whole-document, so neither flag has anything to mean. A flag that silently did
+nothing would be worse than not offering one.
 
 ### `--device <name>`
 
