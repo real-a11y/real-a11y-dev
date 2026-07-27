@@ -1,6 +1,7 @@
-import type { SemanticNode } from "@real-a11y-dev/core";
+import type { ActionType, SemanticNode } from "@real-a11y-dev/core";
 import { useCallback, useRef } from "preact/hooks";
 
+import { resolveStepperKeyAction } from "./stepperKeys.js";
 import {
   createTypeAheadBuffer,
   findTypeAheadIndex,
@@ -13,7 +14,13 @@ interface UseTreeKeyboardOptions {
   selectedId: string | null;
   onSelect: (id: string) => void;
   onToggle: (id: string) => void;
-  onActivate: (id: string) => void;
+  /**
+   * Activate the selected node. Optional `action` lets stepper keys
+   * (`+`/`-`/`Shift+Enter`) dispatch increment/decrement explicitly —
+   * without it, Enter always hits `getPrimaryAction` which prefers
+   * increment, so a keyboard user could never lower a slider.
+   */
+  onActivate: (id: string, action?: ActionType) => void;
   /** Focus the panel search input when `/` is pressed (panel-features keymap). */
   onFocusSearch?: () => void;
 }
@@ -143,7 +150,13 @@ export function useTreeKeyboard({
         case "Enter": {
           e.preventDefault();
           typeAhead.current.clear();
-          onActivate(selectedId);
+          // Shift+Enter decrements a slider/spinbutton; plain Enter keeps
+          // going through getPrimaryAction (increment for steppers).
+          const step = resolveStepperKeyAction(
+            e,
+            node.interaction?.actions ?? [],
+          );
+          onActivate(selectedId, step ?? undefined);
           break;
         }
 
@@ -193,6 +206,17 @@ export function useTreeKeyboard({
         }
 
         default: {
+          // +/- step a slider/spinbutton before type-ahead claims the key.
+          const step = resolveStepperKeyAction(
+            e,
+            node.interaction?.actions ?? [],
+          );
+          if (step) {
+            e.preventDefault();
+            typeAhead.current.clear();
+            onActivate(selectedId, step);
+            break;
+          }
           tryTypeAhead(currentIndex);
           break;
         }

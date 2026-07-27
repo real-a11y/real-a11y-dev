@@ -374,7 +374,23 @@ main
       row
         cell "Enter"
           code "Enter"
-        cell "Activate the current node — clicks links, submits buttons, opens menus"
+        cell "Activate the current node — clicks links, submits buttons, opens menus. On a slider/spinbutton, steps the value up"
+          strong "up"
+      row
+        cell "Shift+Enter"
+          code "Shift+Enter"
+        cell "On a slider/spinbutton, step the value down (the ▼/▲ buttons are mouse-only)"
+          strong "down"
+      row
+        cell "+ / ="
+          code "+"
+          code "="
+        cell "On a slider/spinbutton, step the value up"
+      row
+        cell "- / _"
+          code "-"
+          code "_"
+        cell "On a slider/spinbutton, step the value down"
       row
         cell "Space"
           code "Space"
@@ -396,7 +412,7 @@ main
         cell "Esc"
           code "Esc"
         cell "Clear scope, then clear search, then close the panel"
-  paragraph "Implemented in via (and the same type-ahead helper on filtered / tab-sequence listboxes) — every package that mounts the tree gets the same keymap."
+  paragraph "Implemented in via (and the same type-ahead + stepper-key helpers on filtered / tab-sequence listboxes) — every package that mounts the tree gets the same keymap."
     code "@real-a11y-dev/semantic-navigator-ui"
     code "useTreeKeyboard"
   separator

@@ -1,4 +1,8 @@
-import type { SemanticNode, DomSemanticNode } from "@real-a11y-dev/core";
+import type {
+  ActionType,
+  SemanticNode,
+  DomSemanticNode,
+} from "@real-a11y-dev/core";
 import { getTabSequence, getPrimaryAction } from "@real-a11y-dev/core";
 import {
   useMemo,
@@ -8,6 +12,7 @@ import {
   useEffect,
 } from "preact/hooks";
 
+import { resolveStepperKeyAction } from "../hooks/stepperKeys.js";
 import {
   createTypeAheadBuffer,
   findTypeAheadIndex,
@@ -20,7 +25,8 @@ interface TabSequenceViewProps {
   rootId: string;
   query: string;
   onSelect: (nodeId: string) => void;
-  onActivate: (nodeId: string) => void;
+  /** Optional action lets stepper keys dispatch increment/decrement. */
+  onActivate: (nodeId: string, action?: ActionType) => void;
   onHover: (nodeId: string | null) => void;
   /** Focus the panel search input when `/` is pressed. */
   onFocusSearch?: () => void;
@@ -120,8 +126,15 @@ export function TabSequenceView({
           e.preventDefault();
           typeAhead.current.clear();
           if (selectedNode) {
-            const action = getPrimaryAction(selectedNode.interaction.actions);
-            if (action) onActivate(selectedNode.id);
+            // Shift+Enter decrements a slider/spinbutton; plain Enter keeps
+            // going through getPrimaryAction (increment for steppers).
+            const step = resolveStepperKeyAction(
+              e,
+              selectedNode.interaction.actions,
+            );
+            const action =
+              step ?? getPrimaryAction(selectedNode.interaction.actions);
+            if (action) onActivate(selectedNode.id, step ?? undefined);
             else onSelect(selectedNode.id);
           }
           break;
@@ -134,6 +147,19 @@ export function TabSequenceView({
           break;
         }
         default: {
+          // +/- step a slider/spinbutton before type-ahead claims the key.
+          if (selectedNode) {
+            const step = resolveStepperKeyAction(
+              e,
+              selectedNode.interaction.actions,
+            );
+            if (step) {
+              e.preventDefault();
+              typeAhead.current.clear();
+              onActivate(selectedNode.id, step);
+              break;
+            }
+          }
           if (!isTypeAheadKey(e) || items.length === 0) break;
           e.preventDefault();
           const buffer = typeAhead.current.push(e.key);

@@ -126,14 +126,17 @@ The panel itself is fully keyboard-operable.
 | `↑` / `↓` | Move between tree rows |
 | `→` | Expand the current row |
 | `←` | Collapse the current row, or move to its parent |
-| `Enter` | Activate the current node — clicks links, submits buttons, opens menus |
+| `Enter` | Activate the current node — clicks links, submits buttons, opens menus. On a slider/spinbutton, steps the value **up** |
+| `Shift+Enter` | On a slider/spinbutton, step the value **down** (the ▼/▲ buttons are mouse-only) |
+| `+` / `=` | On a slider/spinbutton, step the value up |
+| `-` / `_` | On a slider/spinbutton, step the value down |
 | `Space` | Same as Enter for most elements; toggles checkboxes/radios |
 | `/` | Focus the search input |
 | `Home` / `End` | Jump to the first / last visible row |
 | Printable characters | Type-ahead — jump to a row whose accessible name starts with the typed characters (multi-character within ~500ms keeps a still-matching selection; repeating the same letter cycles matches). `/` is reserved for search. |
 | `Esc` | Clear scope, then clear search, then close the panel |
 
-Implemented in `@real-a11y-dev/semantic-navigator-ui` via `useTreeKeyboard` (and the same type-ahead helper on filtered / tab-sequence listboxes) — every package that mounts the tree gets the same keymap.
+Implemented in `@real-a11y-dev/semantic-navigator-ui` via `useTreeKeyboard` (and the same type-ahead + stepper-key helpers on filtered / tab-sequence listboxes) — every package that mounts the tree gets the same keymap.
 
 ---
 
