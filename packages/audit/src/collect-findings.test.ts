@@ -1,3 +1,4 @@
+import type { ExtractionResult, SemanticNode } from "@real-a11y-dev/core";
 import { describe, it, expect } from "vitest";
 
 import { collectFindings, listByRole, ALL_RULES } from "./index.js";
@@ -234,5 +235,90 @@ describe("collectFindings — locators, context & severity", () => {
 
     const heading = collectFindings(mount(`<h2>Only</h2>`), ["heading-order"]);
     expect(heading[0].severity).toBe("warning");
+  });
+});
+
+describe("collectFindings — locators on a pre-extracted tree", () => {
+  // A native tree arrives in Node with no live elements behind it, so the
+  // element-ref lookup `locate` normally uses finds nothing. The producer
+  // computed the locator during its own document walk and parked it on the
+  // `dom` facet; these pin that it survives into the finding. Without it a
+  // native audit reports real defects with no address at all.
+  function nativeNode(
+    id: string,
+    role: string,
+    dom?: { tagName: string; locator?: string },
+  ): SemanticNode {
+    return {
+      id,
+      parentId: id === "ax-1" ? null : "ax-1",
+      childIds: [],
+      depth: id === "ax-1" ? 0 : 1,
+      a11y: { role, name: "", states: {}, properties: {} },
+      ...(dom
+        ? {
+            dom: {
+              tagName: dom.tagName,
+              attributes: {},
+              textContent: null,
+              isHidden: false,
+              ...(dom.locator ? { locator: dom.locator } : {}),
+            },
+          }
+        : {}),
+    } as SemanticNode;
+  }
+
+  function nativeTree(nodes: SemanticNode[]): ExtractionResult {
+    const root = nativeNode("ax-1", "document");
+    root.childIds = nodes.map((n) => n.id);
+    const all = new Map<string, SemanticNode>([["ax-1", root]]);
+    for (const n of nodes) all.set(n.id, n);
+    return {
+      rootId: "ax-1",
+      nodes: all,
+      source: { producer: "native" },
+    } as ExtractionResult;
+  }
+
+  it("uses the locator the producer precomputed", () => {
+    const tree = nativeTree([
+      nativeNode("ax-dom-10", "button", {
+        tagName: "button",
+        locator: "#go",
+      }),
+      nativeNode("ax-dom-11", "img", {
+        tagName: "img",
+        locator: "body > main > img:nth-of-type(2)",
+      }),
+    ]);
+    const findings = collectFindings(tree, [
+      "no-unlabeled-interactive",
+      "image-alt",
+    ]);
+    expect(findings.map((f) => f.locator)).toEqual([
+      "#go",
+      "body > main > img:nth-of-type(2)",
+    ]);
+  });
+
+  it("still reports the finding when no locator was computed", () => {
+    const findings = collectFindings(
+      nativeTree([nativeNode("ax-dom-10", "button", { tagName: "button" })]),
+      ["no-unlabeled-interactive"],
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0].locator).toBeUndefined();
+  });
+
+  it("omits context, which needs a live element the native tree never has", () => {
+    const findings = collectFindings(
+      nativeTree([
+        nativeNode("ax-dom-10", "link", { tagName: "a", locator: "#help" }),
+      ]),
+      ["no-unlabeled-interactive"],
+    );
+    expect(findings[0].locator).toBe("#help");
+    expect(findings[0].context).toBeUndefined();
   });
 });

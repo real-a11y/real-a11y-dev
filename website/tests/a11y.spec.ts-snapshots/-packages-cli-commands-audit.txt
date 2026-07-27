@@ -1323,6 +1323,8 @@ main
     code "<video controls>"
   button "Copy Code"
   code
+  paragraph "A native finding carries the same CSS locator a DOM finding does — computed during the one document walk the producer already makes, by the same builder, so reads identically either way. The one exception is an element inside a shadow root, which native reaches and the in-page walk can't: it has no whole-document selector, so its path stops at the boundary rather than pretending to be queryable."
+    code "#panel > div > img:nth-of-type(2)"
   paragraph "Native mode is whole-document and read-only, so it's accepted only where that fits — , , . Commands that carry a tab sequence (, , ) or list one category () reject , and it can't be combined with (it audits the whole document)."
     code "audit"
     code "tree"

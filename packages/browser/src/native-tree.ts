@@ -38,6 +38,8 @@
 
 import {
   normalizeNativeAX,
+  buildCssPath,
+  type CssPathAdapter,
   type RawNativeAXNode,
   type SemanticNode,
   type ExtractionResult,
@@ -209,30 +211,58 @@ function axFacets(raw: RawAXNode): Pick<A11yInfo, "states" | "properties"> {
 
 /**
  * One CDP round-trip: the whole DOM tree (backendNodeId + tagName +
- * attributes) → a `backendDOMNodeId → { tagName, attributes }` map. Attributes
- * are filtered to {@link DOM_ATTR_ALLOWLIST} as they are read, so no field
- * value is ever placed on a node (R1). This is the batched enrichment of RFC
- * finding R3 — no per-node `resolveNode` / `callFunctionOn`.
+ * attributes) → a `backendDOMNodeId → { tagName, attributes, locator }` map.
+ * Attributes are filtered to {@link DOM_ATTR_ALLOWLIST} as they are read, so no
+ * field value is ever placed on a node (R1). This is the batched enrichment of
+ * RFC finding R3 — no per-node `resolveNode` / `callFunctionOn`.
+ *
+ * The locator is computed *here*, during this same walk, because this is the
+ * only place the native path ever sees document structure. Findings run in
+ * Node with no live element, so without this they carry no "where" at all —
+ * and `audit` is documented as rule · severity · locator. Computing it here
+ * costs nothing extra: the parent/child links are already in hand.
  */
 async function enrichFromDom(
   client: CDPSession,
-): Promise<
-  Map<number, { tagName: string; attributes: Record<string, string> }>
-> {
-  const out = new Map<
-    number,
-    { tagName: string; attributes: Record<string, string> }
-  >();
+): Promise<Map<number, NativeDomInfo>> {
+  const out = new Map<number, NativeDomInfo>();
   const { root } = (await client.send("DOM.getDocument", {
     depth: -1,
     pierce: true,
   })) as { root: DomNode };
 
+  // Parent links aren't in the payload — record them on the way down so the
+  // locator walk can go back up.
+  const parents = new Map<DomNode, DomNode>();
+  const ELEMENT_NODE = 1;
+  const elementChildren = (node: DomNode): DomNode[] =>
+    (node.children ?? []).filter((c) => c.nodeType === ELEMENT_NODE);
+
+  const adapter: CssPathAdapter<DomNode> = {
+    tagName: (n) => (n.nodeName ?? "").toLowerCase(),
+    id: (n) => attributeOf(n, "id"),
+    parent: (n) => parents.get(n) ?? null,
+    children: (n) => elementChildren(n),
+    // Two kinds of stop. `<html>` is the document element — the path stops
+    // before including it, matching the DOM producer. Anything that isn't an
+    // element (`#document`, and a `#document-fragment` shadow root) is a
+    // boundary a CSS path cannot cross: this walk pierces shadow roots and the
+    // in-page one does not, so native alone reaches nodes with no whole-document
+    // selector. Those stop too, yielding a partial path anchored inside the
+    // shadow root rather than a `#document-fragment > …` selector that would
+    // look queryable and match nothing.
+    isRoot: (n) =>
+      n.nodeType !== ELEMENT_NODE ||
+      (n.nodeName ?? "").toLowerCase() === "html",
+  };
+
   const walk = (node: DomNode): void => {
+    for (const child of elementChildren(node)) parents.set(child, node);
     if (typeof node.backendNodeId === "number" && node.nodeName) {
       out.set(node.backendNodeId, {
         tagName: node.nodeName.toLowerCase(),
         attributes: allowlistAttributes(node.attributes ?? []),
+        locator: buildCssPath(node, adapter),
       });
     }
     for (const child of node.children ?? []) walk(child);
@@ -243,9 +273,31 @@ async function enrichFromDom(
   return out;
 }
 
+/** Read one attribute out of CDP's flat `[name, value, name, value, …]`. */
+function attributeOf(node: DomNode, want: string): string | null {
+  const attrs = node.attributes ?? [];
+  for (let i = 0; i + 1 < attrs.length; i += 2) {
+    if (attrs[i] === want) return attrs[i + 1];
+  }
+  return null;
+}
+
+/**
+ * What the batched DOM walk records per backend node. `locator` is optional
+ * because {@link buildNativeTree} is a pure function anyone can hand a map to —
+ * a recorded fixture or a hand-built one has no document to walk. The live walk
+ * always fills it.
+ */
+export interface NativeDomInfo {
+  tagName: string;
+  attributes: Record<string, string>;
+  locator?: string;
+}
+
 interface DomNode {
   backendNodeId?: number;
   nodeName?: string;
+  nodeType?: number;
   attributes?: string[];
   children?: DomNode[];
   contentDocument?: DomNode;
@@ -283,10 +335,7 @@ export async function nativeTree(page: Page): Promise<ExtractionResult> {
  */
 export function buildNativeTree(
   rawNodes: RawAXNode[],
-  enrichment: Map<
-    number,
-    { tagName: string; attributes: Record<string, string> }
-  > = new Map(),
+  enrichment: Map<number, NativeDomInfo> = new Map(),
   chrome?: string,
 ): ExtractionResult {
   // Core owns the vocabulary: which nodes survive, sibling order, role map,
@@ -342,6 +391,7 @@ export function buildNativeTree(
           textContent: null,
           descendantText: "",
           isHidden: false,
+          ...(enriched.locator ? { locator: enriched.locator } : {}),
         }
       : undefined;
 

@@ -733,7 +733,7 @@ export function buildServer(
       title: "List elements by category",
       annotations: READ_ONLY,
       description:
-        "List every element of one category — links, buttons, form controls, landmarks, images, or headings — as role + accessible name + a CSS locator. A token-efficient way to review one kind of element (e.g. 'images' pairs with the image-alt rule, 'form' with labeling). Scope with rootSelector. Set producer='native' to list from Chromium's own accessibility tree (whole-document; no rootSelector; native nodes carry no CSS locator).",
+        "List every element of one category — links, buttons, form controls, landmarks, images, or headings — as role + accessible name + a CSS locator. A token-efficient way to review one kind of element (e.g. 'images' pairs with the image-alt rule, 'form' with labeling). Scope with rootSelector. Set producer='native' to list from Chromium's own accessibility tree (whole-document; no rootSelector).",
       inputSchema: {
         filter: z
           .enum(["heading", "link", "button", "form", "landmark", "image"])

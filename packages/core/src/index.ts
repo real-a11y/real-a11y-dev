@@ -68,6 +68,12 @@ export {
 
 // Utils
 export { ElementRefMap } from "./utils/element-ref.js";
+export {
+  buildCssPath,
+  isValidCssId,
+  DOM_ELEMENT_ADAPTER,
+  type CssPathAdapter,
+} from "./utils/css-path.js";
 export { getNodeId, resetIdCounter } from "./utils/id-generator.js";
 export { buildControlsIndex } from "./utils/controls-index.js";
 export type { ControlsIndex } from "./utils/controls-index.js";

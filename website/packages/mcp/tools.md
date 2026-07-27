@@ -38,7 +38,7 @@ The **Producer** column shows which tools accept `producer: "native"` (Chromium'
 | [`get_semantic_tree`](#get_semantic_tree) | Role + accessible-name tree — what a screen reader traverses. | `dom` · `native` |
 | [`get_heading_outline`](#get_heading_outline) | Heading outline (h1–h6) in document order. | `dom` · `native` |
 | [`get_tab_order`](#get_tab_order) | Focusable elements in keyboard Tab order. | `dom` only |
-| [`list_elements`](#list_elements) | Every element of one category (link / button / form / landmark / image / heading). | `dom` · `native` (no locators) |
+| [`list_elements`](#list_elements) | Every element of one category (link / button / form / landmark / image / heading). | `dom` · `native` |
 
 **Producer parity**
 
@@ -221,7 +221,7 @@ Parameters:
 
 - **`filter`** — `"heading"` \| `"link"` \| `"button"` \| `"form"` \| `"landmark"` \| `"image"` — **required** — the category to list.
 - **`rootSelector`** — string — optional (default `"body"`).
-- **`producer`** — `"dom"` \| `"native"` — optional (default `"dom"`) — `"native"` lists from Chromium's own accessibility tree, whole-document (`rootSelector` must stay `"body"`; native nodes carry no CSS locator).
+- **`producer`** — `"dom"` \| `"native"` — optional (default `"dom"`) — `"native"` lists from Chromium's own accessibility tree, whole-document (`rootSelector` must stay `"body"`). Native locators are computed from the same document walk and read identically to DOM ones; an element inside a shadow root has no whole-document selector, so its path stops at the boundary.
 
 An agent calls this to review one element type without pulling the whole tree:
 
