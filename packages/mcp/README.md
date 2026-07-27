@@ -39,7 +39,7 @@ walk. Full parameter reference: **[real-a11y.dev/packages/mcp/tools](https://rea
 | `get_semantic_tree` | Deterministic role + accessible-name outline of the page. | `dom` · `native` |
 | `get_heading_outline` | Heading structure (h1..h6) in document order. | `dom` · `native` |
 | `get_tab_order` | Focusable elements in keyboard Tab order. | `dom` only |
-| `list_elements` | Every element of one category (`link`/`button`/`form`/`landmark`/`image`/`heading`) as role + name + locator. | `dom` · `native` (no locators) |
+| `list_elements` | Every element of one category (`link`/`button`/`form`/`landmark`/`image`/`heading`) as role + name + locator. | `dom` · `native` |
 
 **Producer parity**
 

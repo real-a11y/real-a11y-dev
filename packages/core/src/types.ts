@@ -34,6 +34,15 @@ export interface DomInfo {
    */
   descendantText: string;
   isHidden: boolean;
+  /**
+   * A CSS locator for this element, when the producer computed one ahead of
+   * time. The DOM producer leaves this unset — it derives a locator on demand
+   * from the live element. The native producer has no live element (it runs in
+   * Node), so it computes the path while walking the CDP document snapshot and
+   * carries the result here; without it, native findings have no locator at
+   * all and `audit` loses the "where" half of its output.
+   */
+  locator?: string;
 }
 
 /** Accessibility-specific properties of a node */

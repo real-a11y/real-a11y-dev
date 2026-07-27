@@ -13,6 +13,7 @@
 export * from "./browser.js";
 export * from "./chrome.js";
 export { nativeTree, buildNativeTree } from "./native-tree.js";
+export type { NativeDomInfo } from "./native-tree.js";
 export { CdpActionBackend, backendNodeIdFrom } from "./cdp-action-backend.js";
 export { resolveTarget } from "./resolve-target.js";
 export type {

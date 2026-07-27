@@ -50,6 +50,10 @@ Why a second producer: Chromium exposes structure no in-page walk can reach — 
 
 The **read** side is redaction-safe by construction — the producer never reads any element's live `.value`, drops the AX `value` field, and the `dom` facet copies only an allowlist of structural / accessibility attributes, so a user's field values never enter the tree. Nodes carry `a11y`, and a `dom` facet when a DOM node backs them. `buildNativeTree(rawNodes, enrichment?, chrome?)` is exported as the pure, browserless core of the producer.
 
+The `dom` facet also carries a **CSS locator**, so a native finding says *where*. The DOM producer derives one on demand from the live element it still holds; the native producer runs in Node with nothing but a CDP snapshot, so it computes the path during the single `DOM.getDocument` walk it already makes — the parent and sibling links exist there and nowhere else. Both use the same builder (`buildCssPath` from `@real-a11y-dev/core`) against their own node shape, so `#panel > div > img:nth-of-type(2)` means the same thing whichever producer found the problem. Without it a native `audit` reported real defects with no address at all.
+
+One case has no honest answer, and is treated as one: this walk pierces shadow roots and the in-page walk doesn't, so native alone reaches elements with no whole-document selector. Their path stops at the boundary — `button:nth-of-type(2)`, not a `#document-fragment > button` that would look queryable and match nothing.
+
 ### Acting on the native tree — `session.act()`
 
 The native tree is no longer read-only: `session.act(request)` dispatches a **click**, **type**, or **focus** against a node, over CDP. It works because every native node id encodes its Chromium `backendDOMNodeId` (`ax-dom-<n>`): `act` parses the id, resolves it back to the live DOM element (`DOM.resolveNode`), and dispatches (`Runtime.callFunctionOn`).

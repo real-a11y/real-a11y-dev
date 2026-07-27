@@ -1,4 +1,6 @@
 import {
+  buildCssPath,
+  DOM_ELEMENT_ADAPTER,
   extractA11yTree,
   findAllByRole,
   getElementRefs,
@@ -6,6 +8,7 @@ import {
   linearize,
   ROLE_FILTER_GROUPS,
   type ExtractionResult,
+  type SemanticNode,
 } from "@real-a11y-dev/core";
 
 /** Roles we consider intrinsically interactive for labeling checks. */
@@ -98,42 +101,12 @@ function toTree(root: Element | ExtractionResult): ExtractionResult {
     : (root as ExtractionResult);
 }
 
-const validId = (v: string | null): string | null =>
-  v && /^[A-Za-z][\w-]*$/.test(v) ? v : null;
-
-/** Best-effort unique-ish CSS path: prefer an id, else an nth-of-type chain. */
-function cssPath(el: Element): string {
-  const ownId = validId(el.getAttribute("id"));
-  if (ownId) return `#${ownId}`;
-
-  const parts: string[] = [];
-  let cur: Element | null = el;
-  const rootEl = el.ownerDocument?.documentElement;
-  for (let depth = 0; cur && cur !== rootEl && depth < 6; depth++) {
-    const node: Element = cur;
-    const tag = node.tagName.toLowerCase();
-    const parent = node.parentElement;
-    if (!parent) {
-      parts.unshift(tag);
-      break;
-    }
-    const sameTag = Array.from(parent.children).filter(
-      (c) => c.tagName === node.tagName,
-    );
-    parts.unshift(
-      sameTag.length > 1
-        ? `${tag}:nth-of-type(${sameTag.indexOf(node) + 1})`
-        : tag,
-    );
-    const pid = validId(parent.getAttribute("id"));
-    if (pid) {
-      parts.unshift(`#${pid}`);
-      return parts.join(" > ");
-    }
-    cur = parent;
-  }
-  return parts.join(" > ");
-}
+/**
+ * Best-effort unique-ish CSS path. The traversal itself lives in core
+ * ({@link buildCssPath}) because the native producer has to compute the same
+ * paths from a CDP document snapshot, with no live element to walk.
+ */
+const cssPath = (el: Element): string => buildCssPath(el, DOM_ELEMENT_ADAPTER);
 
 /** `href` + nearest landmark, to tell otherwise-identical findings apart. */
 function elementContext(el: Element): string | undefined {
@@ -151,13 +124,21 @@ function elementContext(el: Element): string | undefined {
 }
 
 /**
- * Resolve a node's live element (via the extraction's element-ref map) and
- * compute a locator + context, so a finding can be acted on without
- * cross-referencing the tree by hand. Returns `{}` if the element is gone.
+ * Where a finding is, so it can be acted on without cross-referencing the tree
+ * by hand. Two paths, because the two producers arrive differently: with a live
+ * element (the in-page walk) the locator and its `href`/landmark context are
+ * computed here; without one, the locator the producer precomputed is used and
+ * there is no context to derive. `{}` only when neither is available.
  */
-function locate(nodeId: string): Pick<Finding, "locator" | "context"> {
-  const el = getElementRefs().get(nodeId);
-  if (!el) return {};
+function locate(node: SemanticNode): Pick<Finding, "locator" | "context"> {
+  const el = getElementRefs().get(node.id);
+  if (!el) {
+    // No live element: this tree came from the native producer, which ran in
+    // Node over a CDP snapshot. It computed the locator during that walk, so
+    // use it — otherwise every native finding would be locator-less.
+    const precomputed = node.dom?.locator;
+    return precomputed ? { locator: precomputed } : {};
+  }
   const context = elementContext(el);
   return context ? { locator: cssPath(el), context } : { locator: cssPath(el) };
 }
@@ -200,7 +181,7 @@ export function collectFindings(
         message: tag
           ? `Unlabeled interactive element: ${node.a11y.role} <${tag}>`
           : `Unlabeled interactive element: ${node.a11y.role}`,
-        ...locate(node.id),
+        ...locate(node),
       });
     }
   }
@@ -220,7 +201,7 @@ export function collectFindings(
         message: tag
           ? `Image has no accessible name: <${tag}> — add alt text, or mark it decorative with alt="".`
           : `Image has no accessible name — add alt text, or mark it decorative with alt="".`,
-        ...locate(node.id),
+        ...locate(node),
       });
     }
   }
@@ -272,7 +253,7 @@ export function collectFindings(
         role: d.a11y.role,
         ...(d.dom?.tagName ? { tagName: d.dom.tagName } : {}),
         message: `Dialog (role ${d.a11y.role}) has no accessible name.`,
-        ...locate(d.id),
+        ...locate(d),
       });
     }
   }
@@ -338,7 +319,7 @@ export function listByRole(
     const nameSuffix = name ? ` "${name}"` : "";
     const level = node.a11y.properties?.level;
     const levelSuffix = level ? ` (level ${level})` : "";
-    const { locator, context } = locate(node.id);
+    const { locator, context } = locate(node);
     const where = locator
       ? `  [${locator}${context ? ` · ${context}` : ""}]`
       : "";

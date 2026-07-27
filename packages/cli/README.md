@@ -102,6 +102,11 @@ real-a11y tree  https://example.com/player --producer native   # media controls 
 real-a11y audit https://example.com/player --producer native   # and get audited
 ```
 
+A native finding carries the same CSS locator a DOM finding does, computed by
+the same builder during the one document walk the producer already makes — with
+one honest exception: an element inside a shadow root has no whole-document
+selector, so its path stops at the boundary.
+
 Native mode is whole-document and read-only, so it's accepted only where that
 fits (`audit`, `tree`, `outline`). Commands that carry a tab sequence (`tabs`,
 `inspect`, `snapshot`) or list one category from the page (`list`) reject it, and

@@ -238,7 +238,7 @@ main
           link "list_elements"
             code "list_elements"
         cell "Every element of one category (link / button / form / landmark / image / heading)."
-        cell "dom · native (no locators)"
+        cell "dom · native"
           code "dom"
           code "native"
   paragraph
@@ -631,7 +631,7 @@ main
       strong
         code "rootSelector"
       code ""body""
-    listitem "— | — optional (default ) — lists from Chromium's own accessibility tree, whole-document ( must stay ; native nodes carry no CSS locator)."
+    listitem "— | — optional (default ) — lists from Chromium's own accessibility tree, whole-document ( must stay ). Native locators are computed from the same document walk and read identically to DOM ones; an element inside a shadow root has no whole-document selector, so its path stops at the boundary."
       strong
         code "producer"
       code ""dom""
