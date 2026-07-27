@@ -15,6 +15,15 @@
  *   - hash change and SPA `pushState` change the URL while the document lives
  *   - `location.reload()` replaces the document while the URL stays put
  *
+ * The fixtures are deliberately `<header>`/`<main>`/`<footer>` — the ordinary
+ * page shape, and the one that makes `buildNativeTree` synthesize its `ax-root`
+ * wrapper. An earlier version wrapped everything in a single `<main>`, was
+ * therefore single-rooted, and never exercised that path; the constant
+ * `ax-root` id is shared by every such document, so a navigation between two
+ * normal pages read as an in-place change. `keeps the synthesized root in play`
+ * below guards the fixture itself, since the bug returns silently the moment
+ * these pages stop being multi-rooted.
+ *
  * Run: `pnpm --filter @real-a11y-dev/browser test:e2e`
  */
 
@@ -39,13 +48,17 @@ beforeAll(() => {
   const dir = mkdtempSync(join(tmpdir(), "real-a11y-checkpoint-"));
   writeFileSync(
     join(dir, "b.html"),
-    "<!doctype html><title>B</title><main><h1>Page B</h1><button>On B</button></main>",
+    "<!doctype html><title>B</title>" +
+      "<header><h1>Page B</h1></header>" +
+      "<main><button>On B</button></main>" +
+      "<footer><p>footer B</p></footer>",
   );
   const start = join(dir, "a.html");
   writeFileSync(
     start,
-    `<!doctype html><title>A</title><main>
-      <h1>Page A</h1>
+    `<!doctype html><title>A</title>
+    <header><h1>Page A</h1></header>
+    <main>
       <button id="toggle">Toggle</button>
       <a id="go" href="./b.html">Go to B</a>
       <button id="spa">SPA route</button>
@@ -64,7 +77,8 @@ beforeAll(() => {
             '<h1>Route 2</h1><button>Other</button>';
         };
       </script>
-    </main>`,
+    </main>
+    <footer><p>footer A</p></footer>`,
   );
   startUrl = pathToFileURL(start).href;
   // The session's URL gate blocks file:// unless this is set; these fixtures
@@ -108,6 +122,16 @@ async function afterClicking(id: string) {
 }
 
 describe("native checkpoint — document replacement in real Chromium", () => {
+  it("keeps the synthesized root in play — the fixture must be multi-rooted", async () => {
+    // Guards the premise of every test below. `ax-root` is minted for any page
+    // with more than one top-level node, and its id is a CONSTANT — so it is
+    // present in two unrelated documents and must never count as a survivor.
+    await session.open(startUrl);
+    const tree = await session.nativeTree();
+    expect(tree.rootId).toBe("ax-root");
+    expect(tree.nodes.has("ax-root")).toBe(true);
+  });
+
   it("diffs a same-document mutation", async () => {
     const { outcome, urlChanged } = await afterClicking("toggle");
     expect(urlChanged).toBe(false);
@@ -150,7 +174,10 @@ describe("native checkpoint — document replacement in real Chromium", () => {
     expect(urlChanged).toBe(true);
     expect(outcome.kind).toBe("diff");
     if (outcome.kind !== "diff") return;
-    expect(outcome.rendered).toContain('heading "Route 2"');
-    expect(outcome.rendered).toContain('- heading "Page A"');
+    expect(outcome.rendered).toContain('+ heading "Route 2"');
+    expect(outcome.rendered).toContain('- button "SPA route"');
+    // The banner is outside <main> and untouched, so it must NOT show as
+    // removed — proof this is a real subtree diff, not a whole-page swap.
+    expect(outcome.rendered).not.toContain('- heading "Page A"');
   });
 });

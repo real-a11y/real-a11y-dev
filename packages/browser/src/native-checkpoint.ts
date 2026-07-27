@@ -38,13 +38,32 @@
  *
  * Shared node ids get all five right, and not as a tuned threshold: a replaced
  * document means Chromium allocates every `backendDOMNodeId` afresh, so the
- * overlap is *exactly* zero, while any same-document change keeps at least the
- * root. So the detector is "zero ids in common", and the URL is used only to
- * report where the page ended up.
+ * overlap is *exactly* zero, while any same-document change keeps at least one
+ * surviving element. The URL is used only to report where the page ended up.
+ *
+ * ## Only backend-derived ids count
+ *
+ * "Every id is reallocated" is true of `ax-dom-<backendDOMNodeId>` and of
+ * nothing else. `buildNativeTree` also mints ids Chromium never issued:
+ * `ax-root` for the synthesized root it adds whenever a page has more than one
+ * top-level node — which is the *ordinary* case, since a
+ * `<header>`/`<main>`/`<footer>` layout produces exactly that. That id is a
+ * constant, so two entirely unrelated documents both contain it, and counting
+ * it would make every navigation between two normal pages look like an
+ * in-place change with a whole-page remove/add diff. `ax-<axNodeId>`, minted
+ * for AX nodes with no backing DOM node, is per-document numbering and can
+ * collide across documents for the same reason.
+ *
+ * So the comparison is restricted to ids that came from a backend DOM node —
+ * the only ones whose freshness Chromium actually guarantees. Verified in real
+ * Chromium that those keep counting up across a navigation rather than
+ * restarting, including a cross-origin one that swaps renderer process.
  */
 
 import { diffTrees, type ExtractionResult } from "@real-a11y-dev/core";
 import { serializeTreeDiff } from "@real-a11y-dev/serialize";
+
+import { backendNodeIdFrom } from "./cdp-action-backend.js";
 
 /** What `serializeTreeDiff` renders when nothing differs. */
 const EMPTY_DIFF = "(no changes)";
@@ -70,29 +89,43 @@ export function captureNativeCheckpoint(
   return { tree, url, nodeCount: tree.nodes.size };
 }
 
-/** How many node ids the two trees have in common. */
-function sharedIdCount(a: ExtractionResult, b: ExtractionResult): number {
-  // Iterate the smaller map; `has` on the larger is the same cost either way.
-  const [small, large] =
-    a.nodes.size <= b.nodes.size ? [a.nodes, b.nodes] : [b.nodes, a.nodes];
-  let shared = 0;
-  for (const id of small.keys()) if (large.has(id)) shared += 1;
-  return shared;
+/** The ids Chromium actually issued — see "Only backend-derived ids count". */
+function backendIds(tree: ExtractionResult): Set<string> {
+  const out = new Set<string>();
+  for (const id of tree.nodes.keys()) {
+    if (backendNodeIdFrom(id) !== null) out.add(id);
+  }
+  return out;
 }
 
 /**
- * True when `after` came from a different document than `before` — every node
- * id reallocated. See the module docstring for why this beats a URL check.
+ * True when `after` came from a different document than `before` — every
+ * backend-derived node id reallocated. See the module docstring for why this
+ * beats a URL check, and why synthesized ids are excluded.
  *
- * An empty checkpoint is excluded: zero shared ids is trivially true when one
- * side has no nodes, and "nothing was captured" is not evidence of navigation.
+ * A side with no backend-derived ids at all can't answer the question, so it
+ * reports `false` rather than guessing. That is the conservative direction:
+ * wrongly claiming a replacement silently swallows the diff the user asked
+ * for, while wrongly diffing shows them something visibly odd they can judge.
+ * It is also right for the case that actually produces it — stepping off
+ * `about:blank`, where "everything was added" IS the honest report.
  */
 export function documentWasReplaced(
   before: ExtractionResult,
   after: ExtractionResult,
 ): boolean {
-  if (before.nodes.size === 0 || after.nodes.size === 0) return false;
-  return sharedIdCount(before, after) === 0;
+  const beforeIds = backendIds(before);
+  if (beforeIds.size === 0) return false;
+  const afterIds = backendIds(after);
+  if (afterIds.size === 0) return false;
+
+  // Iterate the smaller set; membership costs the same either way.
+  const [small, large] =
+    beforeIds.size <= afterIds.size
+      ? [beforeIds, afterIds]
+      : [afterIds, beforeIds];
+  for (const id of small) if (large.has(id)) return false;
+  return true;
 }
 
 /** The node focused in `tree` — the serializer renders the focus move from it. */
