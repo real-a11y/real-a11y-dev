@@ -1147,6 +1147,44 @@ function findActiveModal(doc: Document): Element | null {
 }
 
 /**
+ * "This overlay is displaying something" — a natively focusable control (an
+ * icon-only menu item carries no text but the menu is unmistakably up) or a
+ * graphic. Kept in step with {@link NATIVELY_FOCUSABLE}.
+ *
+ * Deliberately NOT `[tabindex]`: an empty toast viewport is routinely given
+ * `tabindex="-1"` for focus management (Radix Toast and Sonner both render
+ * `<ol tabindex="-1">` while holding zero toasts), so counting it would let
+ * exactly the empty shells this guard exists to catch back through. Custom
+ * widgets that are genuinely showing still qualify — an icon-only one through
+ * its `img`/`svg`, a labelled one through its text.
+ */
+const OVERLAY_CONTENT_SELECTOR = "a, button, input, select, textarea, img, svg";
+
+/**
+ * True if a portal-mounted overlay actually has something in it — collapsed
+ * text, a focusable descendant, or a graphic.
+ *
+ * Component kits mount a PERMANENT, empty live-region announcer or toast
+ * viewport at body level on first render (Sonner, react-hot-toast, Radix
+ * Toast, MUI Snackbar). Those shells are display-visible, so a
+ * visibility-only test reads them as a showing overlay — and because they are
+ * never removed, the body pivot they trigger is never released either. A
+ * caller's `root` would be dead for the rest of the session rather than just
+ * while a toast is up. Requiring content ties the pivot to an overlay that is
+ * genuinely showing something, which is the state the pivot exists to serve.
+ *
+ * Emptiness is deliberately NOT "no text": an icon-only menu or a toast whose
+ * only content is an image is showing just as much as one with a sentence.
+ */
+function hasOverlayContent(element: Element): boolean {
+  // Selector first: it is native, stops at the first hit, and a real overlay
+  // (dialog, menu, listbox) almost always holds a control — so the common
+  // case returns without walking the subtree for text.
+  if (element.querySelector(OVERLAY_CONTENT_SELECTOR) !== null) return true;
+  return safeTextContent(element).trim() !== "";
+}
+
+/**
  * Find portal-mounted *overlay* content sitting outside the configured
  * root. Returns `document.body` (the natural superset of root +
  * portals) when any non-modal overlay role exists outside root — i.e.
@@ -1175,7 +1213,7 @@ function findPortalOverlay(doc: Document, root: Element): Element | null {
       '[role="dialog"], [role="alertdialog"]',
   );
   for (const el of overlays) {
-    if (!root.contains(el) && isActuallyVisible(el)) {
+    if (!root.contains(el) && isActuallyVisible(el) && hasOverlayContent(el)) {
       return body;
     }
   }
