@@ -50,7 +50,7 @@ Entry fields:
 - **`url`** — the target. Any URL the browser can reach: a public site, a local dev server, staging, or a built file path.
 - **`name`** — the diff join key and display label. This is what pairs a route across two snapshots, so keep it stable when a URL changes. Defaults to `url`, canonicalized (`http://localhost:3000` is recorded as `http://localhost:3000/`) and stripped of userinfo and secret-looking query params, so a credential in a URL never lands in an artifact. `audit` and `snapshot` settle it identically, so a route fingerprints the same whichever command produced the artifact.
 - **`rootSelector`** — scope extraction to a region for this route (per-page [`root`](#root)); the semantic tree is taken from the matching element down. Honored by both `audit` and `snapshot`. On `audit`, a `--root` you type overrides it for that run — but a project-wide [`defaults.root`](#defaults) does **not**, so a route's own selector always beats the project default. On `snapshot` this is the **only** way to scope a page: it always uses this selector, so its artifact matches the config that produced it, and it rejects `--root` rather than accept a scope it won't apply.
-- **`sourcePath`** — repo-relative file the route's findings anchor to in [SARIF](/packages/cli#sarif-junit-jsonl). GitHub code scanning only displays results tied to a file path; without it, results anchor to the config file.
+- **`sourcePath`** — repo-relative file the route's findings anchor to in [SARIF](/packages/cli/commands#f-format-fmt). GitHub code scanning only displays results tied to a file path; without it, results anchor to the config file.
 
 ```json
 {

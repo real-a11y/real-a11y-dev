@@ -132,7 +132,7 @@ expect(auditSnapshot(container, { redact: COMMON_REDACTS })).toMatchSnapshot();
 - **Redact the narrowest thing that's actually volatile.** Masking a whole name blinds the snapshot to real regressions in it — remove the clock, not the label.
 :::
 
-> Available everywhere snapshots are: `auditSnapshot` and the [`a11ySnapshot`](/packages/testing/matchers#a11ysnapshot-root-options-snapshot-serializer) matcher in jsdom, and the [Playwright adapter](/packages/testing/playwright#redacting-variable-content) — which marshals each `RegExp` across the browser boundary for you.
+> Available everywhere snapshots are: `auditSnapshot` and the [`a11ySnapshot`](/packages/testing/matchers#a11ysnapshot-root-options-—-snapshot-serializer) matcher in jsdom, and the [Playwright adapter](/packages/testing/playwright#redacting-variable-content) — which marshals each `RegExp` across the browser boundary for you.
 
 ## `outlineSnapshot(root, options?)`
 

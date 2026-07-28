@@ -759,7 +759,6 @@ command:
 | snapshot | `json` \| `md` \| `sarif` \| `junit` \| `jsonl` | `json` |
 
 `sarif` requires [`--config`](#config-file) (results anchor to repo file paths).
-See [SARIF, JUnit, JSONL](/packages/cli#sarif-junit-jsonl).
 
 ### `-o, --output <file>`
 

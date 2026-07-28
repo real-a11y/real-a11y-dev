@@ -120,7 +120,7 @@ expect(container).toHaveTabSequence([
 ]);
 ```
 
-This is the assertion form of [`tabSequenceSnapshot`](/packages/testing/snapshots#tabsequencesnapshot-root). It's especially useful for **focus-trap** checks — when a modal is open, the sequence collapses to just the dialog's controls:
+This is the assertion form of [`tabSequenceSnapshot`](/packages/testing/snapshots#tabsequencesnapshot-root-options). It's especially useful for **focus-trap** checks — when a modal is open, the sequence collapses to just the dialog's controls:
 
 ```ts
 await flow(container).findByRole("button", { name: "Delete account" }).click();

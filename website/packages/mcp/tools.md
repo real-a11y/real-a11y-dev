@@ -7,9 +7,9 @@ description: Every tool the Real A11y MCP server exposes — open_page, audit_pa
 
 The Real A11y MCP server exposes **twenty tools** to an MCP client (Claude Code, Claude Desktop, Cursor, and any other MCP-capable assistant). Each tool drives a real Chromium page and reports what a screen reader would actually perceive — computed roles, accessible names, and the defects assistive tech announces as broken — not what the HTML source claims.
 
-The tools share **one** browser page. A typical run is [`open_page`](#open_page) → an audit or view tool ([`audit_page`](#audit_page), [`inspect_page`](#inspect_page), or a `get_*` view) → [`close_browser`](#close_browser). To interact, the loop is [`checkpoint_tree`](#checkpoint_tree) → an [act tool](#act) ([`click_element`](#click_element), [`type_text`](#type_text), [`focus_element`](#focus_element)) → [`diff_tree`](#diff_tree). Because every tool reads the same mutable page, calls must run **sequentially, never in parallel** — a second call mid-flight would race the first's navigation.
+The tools share **one** browser page. A typical run is [`open_page`](#open-page) → an audit or view tool ([`audit_page`](#audit-page), [`inspect_page`](#inspect-page), or a `get_*` view) → [`close_browser`](#close-browser). To interact, the loop is [`checkpoint_tree`](#checkpoint-tree) → an [act tool](#act) ([`click_element`](#click-element), [`type_text`](#type-text), [`focus_element`](#focus-element)) → [`diff_tree`](#diff-tree). Because every tool reads the same mutable page, calls must run **sequentially, never in parallel** — a second call mid-flight would race the first's navigation.
 
-Every audit and extraction tool takes an optional `rootSelector` (default `"body"`) that scopes the work to one region or component, and — except [`get_tab_order`](#get_tab_order) — a `producer` (`"dom"` default, or `"native"` for Chromium's own accessibility tree read over CDP). [`compare_producers`](#compare_producers) and any tool called with `producer: "native"` read the whole document (`rootSelector` must stay `"body"`). Tool output is capped at **40,000 characters** — a larger page is truncated with a note to narrow with `rootSelector`.
+Every audit and extraction tool takes an optional `rootSelector` (default `"body"`) that scopes the work to one region or component, and — except [`get_tab_order`](#get-tab-order) — a `producer` (`"dom"` default, or `"native"` for Chromium's own accessibility tree read over CDP). [`compare_producers`](#compare-producers) and any tool called with `producer: "native"` read the whole document (`rootSelector` must stay `"body"`). Tool output is capped at **40,000 characters** — a larger page is truncated with a note to narrow with `rootSelector`.
 
 Server behavior is configured entirely through [environment variables](#environment) — saved-login sessions, origin pinning, `file://` access, CDP attach. Credentials are never tool parameters, so session tokens stay out of the agent's context. On startup the server validates that configuration and **refuses to start** on a malformed storage-state file or an invalid origin (see [Environment](#environment)).
 
@@ -21,56 +21,56 @@ The **Producer** column shows which tools accept `producer: "native"` (Chromium'
 
 | Tool | Purpose | Producer |
 | --- | --- | --- |
-| [`open_page`](#open_page) | Navigate to a URL and ready it for queries — call first. | — |
-| [`close_browser`](#close_browser) | Tear down the browser session. | — |
+| [`open_page`](#open-page) | Navigate to a URL and ready it for queries — call first. | — |
+| [`close_browser`](#close-browser) | Tear down the browser session. | — |
 
 **Audit**
 
 | Tool | Purpose | Producer |
 | --- | --- | --- |
-| [`audit_page`](#audit_page) | Every accessibility violation, grouped with CSS locators + severity — the flagship. | `dom` · `native` |
-| [`inspect_page`](#inspect_page) | Findings **plus** tree + outline + tab order from one extraction. | `dom` · `native` (tab order N/A) |
+| [`audit_page`](#audit-page) | Every accessibility violation, grouped with CSS locators + severity — the flagship. | `dom` · `native` |
+| [`inspect_page`](#inspect-page) | Findings **plus** tree + outline + tab order from one extraction. | `dom` · `native` (tab order N/A) |
 
 **Views**
 
 | Tool | Purpose | Producer |
 | --- | --- | --- |
-| [`get_semantic_tree`](#get_semantic_tree) | Role + accessible-name tree — what a screen reader traverses. | `dom` · `native` |
-| [`get_heading_outline`](#get_heading_outline) | Heading outline (h1–h6) in document order. | `dom` · `native` |
-| [`get_tab_order`](#get_tab_order) | Focusable elements in keyboard Tab order. | `dom` only |
-| [`list_elements`](#list_elements) | Every element of one category (link / button / form / landmark / image / heading). | `dom` · `native` |
+| [`get_semantic_tree`](#get-semantic-tree) | Role + accessible-name tree — what a screen reader traverses. | `dom` · `native` |
+| [`get_heading_outline`](#get-heading-outline) | Heading outline (h1–h6) in document order. | `dom` · `native` |
+| [`get_tab_order`](#get-tab-order) | Focusable elements in keyboard Tab order. | `dom` only |
+| [`list_elements`](#list-elements) | Every element of one category (link / button / form / landmark / image / heading). | `dom` · `native` |
 
 **Producer parity**
 
 | Tool | Purpose | Producer |
 | --- | --- | --- |
-| [`compare_producers`](#compare_producers) | Diff the DOM producer against the native producer — a fidelity oracle. | reads both |
+| [`compare_producers`](#compare-producers) | Diff the DOM producer against the native producer — a fidelity oracle. | reads both |
 
 **Findings checkpoints**
 
 | Tool | Purpose | Producer |
 | --- | --- | --- |
-| [`checkpoint_findings`](#checkpoint_findings) | Snapshot the page's findings under a name (survives navigation). | — |
-| [`diff_findings`](#diff_findings) | Re-snapshot the page and diff it against a checkpoint: new / changed / fixed. | — |
-| [`diff_checkpoints`](#diff_checkpoints) | Diff two already-stored checkpoints (no re-snapshot). | — |
-| [`list_checkpoints`](#list_checkpoints) | List stored checkpoint labels with finding counts. | — |
-| [`export_checkpoint`](#export_checkpoint) | Export a checkpoint as a snapshot JSON artifact (CLI-compatible). | — |
-| [`import_checkpoint`](#import_checkpoint) | Load an external snapshot artifact as a checkpoint. | — |
+| [`checkpoint_findings`](#checkpoint-findings) | Snapshot the page's findings under a name (survives navigation). | — |
+| [`diff_findings`](#diff-findings) | Re-snapshot the page and diff it against a checkpoint: new / changed / fixed. | — |
+| [`diff_checkpoints`](#diff-checkpoints) | Diff two already-stored checkpoints (no re-snapshot). | — |
+| [`list_checkpoints`](#list-checkpoints) | List stored checkpoint labels with finding counts. | — |
+| [`export_checkpoint`](#export-checkpoint) | Export a checkpoint as a snapshot JSON artifact (CLI-compatible). | — |
+| [`import_checkpoint`](#import-checkpoint) | Load an external snapshot artifact as a checkpoint. | — |
 
 **Tree checkpoints**
 
 | Tool | Purpose | Producer |
 | --- | --- | --- |
-| [`checkpoint_tree`](#checkpoint_tree) | Capture the current tree as an interaction-diff baseline (page-bound). | — |
-| [`diff_tree`](#diff_tree) | Diff the tree since `checkpoint_tree` — what an interaction changed. | — |
+| [`checkpoint_tree`](#checkpoint-tree) | Capture the current tree as an interaction-diff baseline (page-bound). | — |
+| [`diff_tree`](#diff-tree) | Diff the tree since `checkpoint_tree` — what an interaction changed. | — |
 
 **Act**
 
 | Tool | Purpose | Producer |
 | --- | --- | --- |
-| [`click_element`](#click_element) | Real click at the node matched by role + accessible name. | `native` |
-| [`type_text`](#type_text) | Replace a text field's value; the result never echoes the text. | `native` |
-| [`focus_element`](#focus_element) | Move real keyboard focus; flags text fields for a follow-up `type_text`. | `native` |
+| [`click_element`](#click-element) | Real click at the node matched by role + accessible name. | `native` |
+| [`type_text`](#type-text) | Replace a text field's value; the result never echoes the text. | `native` |
+| [`focus_element`](#focus-element) | Move real keyboard focus; flags text fields for a follow-up `type_text`. | `native` |
 
 ## Session
 
@@ -123,7 +123,7 @@ Parameters: none.
 
 ## Audit
 
-The reason the server exists. Both tools report violations a screen reader would announce; [`inspect_page`](#inspect_page) adds the three views from the same extraction.
+The reason the server exists. Both tools report violations a screen reader would announce; [`inspect_page`](#inspect-page) adds the three views from the same extraction.
 
 ### `audit_page`
 
@@ -153,7 +153,7 @@ Or audits the native tree to catch what the DOM walk can't reach (e.g. a media p
 
 *Read-only · scoped by `rootSelector` · prefer on dynamic pages.*
 
-Return the audit findings **and** the semantic tree, heading outline, and tab order — all derived from **one** extraction, so they are guaranteed to describe the same instant. The element focused at capture time is marked `[focused]` in each view, so the agent can see, e.g., that opening a dialog moved focus into it. Prefer this over separate [`audit_page`](#audit_page) + `get_*` calls on moving pages (SPAs, pages with consent dialogs), where each separate call could catch a different state.
+Return the audit findings **and** the semantic tree, heading outline, and tab order — all derived from **one** extraction, so they are guaranteed to describe the same instant. The element focused at capture time is marked `[focused]` in each view, so the agent can see, e.g., that opening a dialog moved focus into it. Prefer this over separate [`audit_page`](#audit-page) + `get_*` calls on moving pages (SPAs, pages with consent dialogs), where each separate call could catch a different state.
 
 Parameters:
 
@@ -313,7 +313,7 @@ The two are deliberately different in lifetime. A snapshot checkpoint is pure da
 
 _Captures the current tree in the page as a comparison point._
 
-Capture the current accessibility tree as the baseline for an interaction diff. Then interact with the page and call [`diff_tree`](#diff_tree). Re-capturing re-baselines.
+Capture the current accessibility tree as the baseline for an interaction diff. Then interact with the page and call [`diff_tree`](#diff-tree). Re-capturing re-baselines.
 
 Parameters:
 
@@ -335,17 +335,17 @@ Errors if no checkpoint exists on the current page — including after a navigat
 
 The write side of the native producer: dispatch a real click, replace a text field's value, or move real keyboard focus — over CDP, against the node matched in **Chromium's own accessibility tree**. Chromium only.
 
-Targeting is deliberately **role + accessible name**, never a CSS selector or a node id. The tools resolve the target against a fresh native tree immediately before every dispatch — the same view [`get_semantic_tree`](#get_semantic_tree) with `producer: "native"` prints — so if role and name can't reach a control, assistive technology can't reach it either, and that is an accessibility finding rather than a targeting inconvenience.
+Targeting is deliberately **role + accessible name**, never a CSS selector or a node id. The tools resolve the target against a fresh native tree immediately before every dispatch — the same view [`get_semantic_tree`](#get-semantic-tree) with `producer: "native"` prints — so if role and name can't reach a control, assistive technology can't reach it either, and that is an accessibility finding rather than a targeting inconvenience.
 
 All three tools share the targeting parameters:
 
 - **`role`** — string — required — ARIA role exactly as the tree prints it (`button`, `link`, `textbox`, `checkbox`, `menuitem`, …).
-- **`name`** — string — optional — accessible name; case-insensitive, whitespace-normalized **exact** match against the **native** tree (names can differ from the DOM producer's — [`compare_producers`](#compare_producers) shows where). Pass `""` to target an unlabeled control; omit to match any name.
+- **`name`** — string — optional — accessible name; case-insensitive, whitespace-normalized **exact** match against the **native** tree (names can differ from the DOM producer's — [`compare_producers`](#compare-producers) shows where). Pass `""` to target an unlabeled control; omit to match any name.
 - **`nth`** — integer ≥ 1 — optional — 1-based pick among the role+name-filtered matches, in document order.
 
 When several nodes match and no `nth` was given, the tool errors and **lists the candidates as `nth=1 · role "name"` lines** — the remedy is copy-paste. A **disabled** target is refused with the cause (the page would silently ignore the action, and the empty diff that followed would mislead). A match with no backing DOM element (a synthesized node such as the document root) is refused before any CDP traffic.
 
-The payoff is the loop: [`checkpoint_tree`](#checkpoint_tree) first, act, then [`diff_tree`](#diff_tree) — the diff is the answer to _"what did that action change for a screen reader?"_.
+The payoff is the loop: [`checkpoint_tree`](#checkpoint-tree) first, act, then [`diff_tree`](#diff-tree) — the diff is the answer to _"what did that action change for a screen reader?"_.
 
 ### `click_element`
 
@@ -369,7 +369,7 @@ Additional parameter:
 
 - **`text`** — string — required — the text to enter. **Never echoed back in the result** (the same R1 redaction discipline the native producer applies to reading).
 
-There is deliberately **no credential parameter**, and this tool must not be used to log in — a password typed here would enter the agent's context. For pages behind auth, start the server with [`REAL_A11Y_MCP_STORAGE_STATE`](#real_a11y_mcp_storage_state) or [`REAL_A11Y_MCP_CDP`](#real_a11y_mcp_cdp) instead.
+There is deliberately **no credential parameter**, and this tool must not be used to log in — a password typed here would enter the agent's context. For pages behind auth, start the server with [`REAL_A11Y_MCP_STORAGE_STATE`](#real-a11y-mcp-storage-state) or [`REAL_A11Y_MCP_CDP`](#real-a11y-mcp-cdp) instead.
 
 ```json
 { "role": "textbox", "name": "Search", "text": "keyboard traps" }
@@ -379,7 +379,7 @@ There is deliberately **no credential parameter**, and this tool must not be use
 
 _Acts on the page · moves real keyboard focus._
 
-Move keyboard focus to the matched element — what a keyboard user's <kbd>Tab</kbd> journey would land on, teleported. The result says whether the target is a text field (and its input type), so the agent knows a [`type_text`](#type_text) should follow. Pairs with [`get_tab_order`](#get_tab_order) for focus-order work.
+Move keyboard focus to the matched element — what a keyboard user's <kbd>Tab</kbd> journey would land on, teleported. The result says whether the target is a text field (and its input type), so the agent knows a [`type_text`](#type-text) should follow. Pairs with [`get_tab_order`](#get-tab-order) for focus-order work.
 
 ```json
 { "role": "searchbox", "name": "Search docs" }
@@ -387,7 +387,7 @@ Move keyboard focus to the matched element — what a keyboard user's <kbd>Tab</
 
 ## Producer parity
 
-A Chromium-only fidelity oracle that compares the two producers. To *view* the native tree, use [`get_semantic_tree`](#get_semantic_tree) with `producer: "native"`; to *audit* it, [`audit_page`](#audit_page) with `producer: "native"`.
+A Chromium-only fidelity oracle that compares the two producers. To *view* the native tree, use [`get_semantic_tree`](#get-semantic-tree) with `producer: "native"`; to *audit* it, [`audit_page`](#audit-page) with `producer: "native"`.
 
 ### `compare_producers`
 
@@ -395,7 +395,7 @@ A Chromium-only fidelity oracle that compares the two producers. To *view* the n
 
 Diff the **DOM producer's** tree against the **native producer's** (Chromium's own tree over CDP) and report where they disagree on role or accessible name — a fidelity oracle that surfaces DOM-engine gaps (e.g. an unlabeled input the DOM engine names by its typed value) and structure only the native tree reaches (media controls). Compares only name-bearing roles, order- and indent-insensitively; matching nodes are omitted. Some "only in native" entries are iframe / shadow-DOM / user-agent-shadow content the DOM walk doesn't traverse, not name bugs.
 
-This is a **producer** diff (dom vs native at one instant) — distinct from [`diff_checkpoints`](#diff_checkpoints), which diffs two checkpoints **over time**.
+This is a **producer** diff (dom vs native at one instant) — distinct from [`diff_checkpoints`](#diff-checkpoints), which diffs two checkpoints **over time**.
 
 Parameters: none.
 
@@ -421,7 +421,7 @@ chrome --remote-debugging-port=9222 --user-data-dir=/tmp/a11y-cdp
 
 Set to `1` to launch a visible browser instead of headless. Ignored when [`REAL_A11Y_MCP_CDP`](#real-a11y-mcp-cdp) is set — a CDP attach reuses the running browser, window state and all.
 
-[`open_page`](#open_page)'s reply names the mode it's actually in, so a human watching for a window knows whether to expect one. Over CDP it reports the attach rather than a launch mode, and doesn't offer this variable as a fix — it has no say there.
+[`open_page`](#open-page)'s reply names the mode it's actually in, so a human watching for a window knows whether to expect one. Over CDP it reports the attach rather than a launch mode, and doesn't offer this variable as a fix — it has no say there.
 
 ### `REAL_A11Y_MCP_ALLOW_FILE`
 
@@ -433,7 +433,7 @@ Set to `1` to permit auditing `file://` URLs. Off by default — an agent that c
 
 *string (path) · optional.*
 
-Path to a saved login session — a Playwright storage-state JSON (cookies + origin storage) — loaded into every launched context so pages open already authenticated. Create it out-of-band (e.g. the CLI's `login` helper); it is **never** a tool parameter, so session tokens stay out of the agent's context. When set, [`open_page`](#open_page) tells the agent the session is active so it won't try to log in. At startup the server verifies the path is a readable file containing a valid storage-state shape (`"cookies"` / `"origins"`) and refuses to start otherwise; errors quote the path only, never its contents. Cannot be combined with [`REAL_A11Y_MCP_CDP`](#real-a11y-mcp-cdp) (a CDP connection carries its own session).
+Path to a saved login session — a Playwright storage-state JSON (cookies + origin storage) — loaded into every launched context so pages open already authenticated. Create it out-of-band (e.g. the CLI's `login` helper); it is **never** a tool parameter, so session tokens stay out of the agent's context. When set, [`open_page`](#open-page) tells the agent the session is active so it won't try to log in. At startup the server verifies the path is a readable file containing a valid storage-state shape (`"cookies"` / `"origins"`) and refuses to start otherwise; errors quote the path only, never its contents. Cannot be combined with [`REAL_A11Y_MCP_CDP`](#real-a11y-mcp-cdp) (a CDP connection carries its own session).
 
 ### `REAL_A11Y_MCP_ALLOWED_ORIGINS`
 

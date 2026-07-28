@@ -77,9 +77,17 @@ from the source itself, so the docs can be checked against it instead of against
 someone's memory of what shipped.
 
 ```bash
-pnpm surface:check      # part of `pnpm verify` — fails if it's stale or the docs disagree
-pnpm surface:extract    # regenerate it after changing a command, tool, or export
+pnpm surface:check        # part of `pnpm verify` — fails if it's stale or the docs disagree
+pnpm surface:extract      # regenerate it after changing a command, tool, or export
+pnpm surface:check-built  # the slug function vs the built site (needs the website build)
 ```
+
+`surface:check` validates every `#anchor` in the docs against heading ids it
+computes with its own copy of VitePress's `slugify`, so on its own it only proves
+the links and that copy agree. `surface:check-built` closes the loop against the
+site VitePress actually emitted, which is what catches a VitePress bump changing
+a slug rule under us. It needs a build, so it runs at the end of `pnpm verify`
+and in the `website-a11y` CI job.
 
 If you add a command or a tool, `surface:check` will tell you the manifest is
 out of date — run `pnpm surface:extract` and commit the result. Its diff is how

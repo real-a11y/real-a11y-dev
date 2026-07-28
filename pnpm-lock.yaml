@@ -39,6 +39,9 @@ importers:
       '@vitest/browser':
         specifier: ^3.2.7
         version: 3.2.7(playwright@1.61.1)(vite@6.4.3(@types/node@22.19.17)(jiti@2.6.1)(lightningcss@1.32.0)(yaml@2.9.0))(vitest@3.2.7)
+      ajv:
+        specifier: ^8.17.1
+        version: 8.20.0
       esbuild:
         specifier: ^0.25.0
         version: 0.25.12

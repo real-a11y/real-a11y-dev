@@ -1590,11 +1590,10 @@ main
           code "jsonl"
         cell "json"
           code "json"
-  paragraph "requires (results anchor to repo file paths). See ."
+  paragraph "requires (results anchor to repo file paths)."
     code "sarif"
     link "--config"
       code "--config"
-    link "SARIF, JUnit, JSONL"
   heading "-o, --output <file>" (level 3)
     code "-o, --output <file>"
   list
