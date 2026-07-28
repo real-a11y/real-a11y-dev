@@ -1,0 +1,2167 @@
+{
+  "cli": {
+    "bin": "real-a11y",
+    "commands": [
+      {
+        "flags": [
+          {
+            "name": "allow-file",
+            "type": "boolean"
+          },
+          {
+            "multiple": true,
+            "name": "audit-origin",
+            "type": "string"
+          },
+          {
+            "name": "cdp",
+            "type": "string"
+          },
+          {
+            "name": "chrome-path",
+            "type": "string"
+          },
+          {
+            "name": "config",
+            "type": "string"
+          },
+          {
+            "name": "device",
+            "type": "string"
+          },
+          {
+            "name": "fail-on",
+            "type": "string"
+          },
+          {
+            "name": "format",
+            "short": "f",
+            "type": "string"
+          },
+          {
+            "name": "headful",
+            "type": "boolean"
+          },
+          {
+            "name": "help",
+            "short": "h",
+            "type": "boolean"
+          },
+          {
+            "name": "no-annotate",
+            "type": "boolean"
+          },
+          {
+            "name": "no-config",
+            "type": "boolean"
+          },
+          {
+            "name": "output",
+            "short": "o",
+            "type": "string"
+          },
+          {
+            "name": "quiet",
+            "short": "q",
+            "type": "boolean"
+          },
+          {
+            "name": "rules",
+            "type": "string"
+          },
+          {
+            "name": "settle",
+            "type": "string"
+          },
+          {
+            "name": "storage-state",
+            "type": "string"
+          },
+          {
+            "name": "timeout",
+            "type": "string"
+          },
+          {
+            "name": "verbose",
+            "type": "boolean"
+          },
+          {
+            "name": "viewport",
+            "type": "string"
+          },
+          {
+            "name": "wait-until",
+            "type": "string"
+          }
+        ],
+        "group": "audit",
+        "name": "audit",
+        "producers": [
+          "native"
+        ],
+        "summary": "Violations (rule · severity · locator); exits 1 on errors",
+        "usage": "audit <url...> [flags]"
+      },
+      {
+        "flags": [
+          {
+            "name": "allow-file",
+            "type": "boolean"
+          },
+          {
+            "multiple": true,
+            "name": "audit-origin",
+            "type": "string"
+          },
+          {
+            "name": "cdp",
+            "type": "string"
+          },
+          {
+            "name": "chrome-path",
+            "type": "string"
+          },
+          {
+            "name": "config",
+            "type": "string"
+          },
+          {
+            "name": "device",
+            "type": "string"
+          },
+          {
+            "name": "format",
+            "short": "f",
+            "type": "string"
+          },
+          {
+            "name": "headful",
+            "type": "boolean"
+          },
+          {
+            "name": "help",
+            "short": "h",
+            "type": "boolean"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "no-config",
+            "type": "boolean"
+          },
+          {
+            "name": "nth",
+            "type": "string"
+          },
+          {
+            "name": "output",
+            "short": "o",
+            "type": "string"
+          },
+          {
+            "name": "quiet",
+            "short": "q",
+            "type": "boolean"
+          },
+          {
+            "name": "role",
+            "type": "string"
+          },
+          {
+            "name": "settle",
+            "type": "string"
+          },
+          {
+            "name": "step-settle",
+            "type": "string"
+          },
+          {
+            "name": "storage-state",
+            "type": "string"
+          },
+          {
+            "name": "text",
+            "type": "string"
+          },
+          {
+            "name": "timeout",
+            "type": "string"
+          },
+          {
+            "name": "verbose",
+            "type": "boolean"
+          },
+          {
+            "name": "viewport",
+            "type": "string"
+          },
+          {
+            "name": "wait-until",
+            "type": "string"
+          }
+        ],
+        "group": "act",
+        "name": "click",
+        "producers": [
+          "native"
+        ],
+        "summary": "Click one element by role + accessible name",
+        "usage": "click <url> --role <role> [--name \"<name>\"] [flags]"
+      },
+      {
+        "flags": [
+          {
+            "name": "baseline",
+            "type": "string"
+          },
+          {
+            "name": "config",
+            "type": "string"
+          },
+          {
+            "name": "explain",
+            "type": "boolean"
+          },
+          {
+            "name": "fail-on",
+            "type": "string"
+          },
+          {
+            "name": "format",
+            "short": "f",
+            "type": "string"
+          },
+          {
+            "name": "help",
+            "short": "h",
+            "type": "boolean"
+          },
+          {
+            "multiple": true,
+            "name": "ignore-view-line",
+            "type": "string"
+          },
+          {
+            "name": "max-lines",
+            "type": "string"
+          },
+          {
+            "name": "max-pages",
+            "type": "string"
+          },
+          {
+            "name": "no-config",
+            "type": "boolean"
+          },
+          {
+            "name": "only",
+            "type": "string"
+          },
+          {
+            "name": "output",
+            "short": "o",
+            "type": "string"
+          },
+          {
+            "name": "quiet",
+            "short": "q",
+            "type": "boolean"
+          },
+          {
+            "name": "verbose",
+            "type": "boolean"
+          }
+        ],
+        "group": "artifact",
+        "name": "diff",
+        "producers": [],
+        "summary": "Findings-aware diff of two snapshot artifacts",
+        "usage": "diff <base.json> <pr.json> [flags]"
+      },
+      {
+        "flags": [
+          {
+            "name": "allow-file",
+            "type": "boolean"
+          },
+          {
+            "multiple": true,
+            "name": "audit-origin",
+            "type": "string"
+          },
+          {
+            "name": "cdp",
+            "type": "string"
+          },
+          {
+            "name": "chrome-path",
+            "type": "string"
+          },
+          {
+            "name": "config",
+            "type": "string"
+          },
+          {
+            "name": "device",
+            "type": "string"
+          },
+          {
+            "name": "format",
+            "short": "f",
+            "type": "string"
+          },
+          {
+            "name": "headful",
+            "type": "boolean"
+          },
+          {
+            "name": "help",
+            "short": "h",
+            "type": "boolean"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "no-config",
+            "type": "boolean"
+          },
+          {
+            "name": "nth",
+            "type": "string"
+          },
+          {
+            "name": "output",
+            "short": "o",
+            "type": "string"
+          },
+          {
+            "name": "quiet",
+            "short": "q",
+            "type": "boolean"
+          },
+          {
+            "name": "role",
+            "type": "string"
+          },
+          {
+            "name": "settle",
+            "type": "string"
+          },
+          {
+            "name": "step-settle",
+            "type": "string"
+          },
+          {
+            "name": "storage-state",
+            "type": "string"
+          },
+          {
+            "name": "text",
+            "type": "string"
+          },
+          {
+            "name": "timeout",
+            "type": "string"
+          },
+          {
+            "name": "verbose",
+            "type": "boolean"
+          },
+          {
+            "name": "viewport",
+            "type": "string"
+          },
+          {
+            "name": "wait-until",
+            "type": "string"
+          }
+        ],
+        "group": "act",
+        "name": "focus",
+        "producers": [
+          "native"
+        ],
+        "summary": "Move real keyboard focus by role + accessible name",
+        "usage": "focus <url> --role <role> [--name \"<name>\"] [flags]"
+      },
+      {
+        "flags": [
+          {
+            "name": "allow-file",
+            "type": "boolean"
+          },
+          {
+            "multiple": true,
+            "name": "audit-origin",
+            "type": "string"
+          },
+          {
+            "name": "cdp",
+            "type": "string"
+          },
+          {
+            "name": "chrome-path",
+            "type": "string"
+          },
+          {
+            "name": "config",
+            "type": "string"
+          },
+          {
+            "name": "device",
+            "type": "string"
+          },
+          {
+            "name": "fail-on",
+            "type": "string"
+          },
+          {
+            "name": "format",
+            "short": "f",
+            "type": "string"
+          },
+          {
+            "name": "headful",
+            "type": "boolean"
+          },
+          {
+            "name": "help",
+            "short": "h",
+            "type": "boolean"
+          },
+          {
+            "name": "include-generic",
+            "type": "boolean"
+          },
+          {
+            "name": "no-annotate",
+            "type": "boolean"
+          },
+          {
+            "name": "no-config",
+            "type": "boolean"
+          },
+          {
+            "name": "output",
+            "short": "o",
+            "type": "string"
+          },
+          {
+            "name": "quiet",
+            "short": "q",
+            "type": "boolean"
+          },
+          {
+            "name": "rules",
+            "type": "string"
+          },
+          {
+            "name": "settle",
+            "type": "string"
+          },
+          {
+            "name": "storage-state",
+            "type": "string"
+          },
+          {
+            "name": "timeout",
+            "type": "string"
+          },
+          {
+            "name": "verbose",
+            "type": "boolean"
+          },
+          {
+            "name": "viewport",
+            "type": "string"
+          },
+          {
+            "name": "wait-until",
+            "type": "string"
+          }
+        ],
+        "group": "audit",
+        "name": "inspect",
+        "producers": [
+          "native"
+        ],
+        "summary": "Findings + tree + outline in one pass",
+        "usage": "inspect <url> [flags]"
+      },
+      {
+        "flags": [
+          {
+            "name": "channel",
+            "type": "string"
+          },
+          {
+            "name": "config",
+            "type": "string"
+          },
+          {
+            "name": "force",
+            "type": "boolean"
+          },
+          {
+            "name": "help",
+            "short": "h",
+            "type": "boolean"
+          },
+          {
+            "name": "no-config",
+            "type": "boolean"
+          },
+          {
+            "name": "quiet",
+            "short": "q",
+            "type": "boolean"
+          },
+          {
+            "name": "verbose",
+            "type": "boolean"
+          },
+          {
+            "name": "version",
+            "type": "string"
+          }
+        ],
+        "group": "setup",
+        "name": "install",
+        "producers": [],
+        "summary": "Download Chrome from Chrome for Testing (first time only)",
+        "usage": "install [flags]"
+      },
+      {
+        "flags": [
+          {
+            "name": "allow-file",
+            "type": "boolean"
+          },
+          {
+            "multiple": true,
+            "name": "audit-origin",
+            "type": "string"
+          },
+          {
+            "name": "cdp",
+            "type": "string"
+          },
+          {
+            "name": "chrome-path",
+            "type": "string"
+          },
+          {
+            "name": "config",
+            "type": "string"
+          },
+          {
+            "name": "device",
+            "type": "string"
+          },
+          {
+            "name": "format",
+            "short": "f",
+            "type": "string"
+          },
+          {
+            "name": "headful",
+            "type": "boolean"
+          },
+          {
+            "name": "help",
+            "short": "h",
+            "type": "boolean"
+          },
+          {
+            "name": "no-config",
+            "type": "boolean"
+          },
+          {
+            "name": "output",
+            "short": "o",
+            "type": "string"
+          },
+          {
+            "name": "quiet",
+            "short": "q",
+            "type": "boolean"
+          },
+          {
+            "name": "settle",
+            "type": "string"
+          },
+          {
+            "multiple": true,
+            "name": "step",
+            "type": "string"
+          },
+          {
+            "name": "step-settle",
+            "type": "string"
+          },
+          {
+            "name": "storage-state",
+            "type": "string"
+          },
+          {
+            "name": "timeout",
+            "type": "string"
+          },
+          {
+            "name": "verbose",
+            "type": "boolean"
+          },
+          {
+            "name": "viewport",
+            "type": "string"
+          },
+          {
+            "name": "wait-until",
+            "type": "string"
+          }
+        ],
+        "group": "act",
+        "name": "interact",
+        "producers": [
+          "native"
+        ],
+        "summary": "Run steps on a page, then show what they changed",
+        "usage": "interact <url> --step '<step>' [--step '<step>' …]"
+      },
+      {
+        "flags": [
+          {
+            "name": "allow-file",
+            "type": "boolean"
+          },
+          {
+            "multiple": true,
+            "name": "audit-origin",
+            "type": "string"
+          },
+          {
+            "name": "cdp",
+            "type": "string"
+          },
+          {
+            "name": "chrome-path",
+            "type": "string"
+          },
+          {
+            "name": "config",
+            "type": "string"
+          },
+          {
+            "name": "device",
+            "type": "string"
+          },
+          {
+            "name": "format",
+            "short": "f",
+            "type": "string"
+          },
+          {
+            "name": "headful",
+            "type": "boolean"
+          },
+          {
+            "name": "help",
+            "short": "h",
+            "type": "boolean"
+          },
+          {
+            "name": "include-generic",
+            "type": "boolean"
+          },
+          {
+            "name": "no-config",
+            "type": "boolean"
+          },
+          {
+            "name": "output",
+            "short": "o",
+            "type": "string"
+          },
+          {
+            "name": "quiet",
+            "short": "q",
+            "type": "boolean"
+          },
+          {
+            "name": "settle",
+            "type": "string"
+          },
+          {
+            "name": "storage-state",
+            "type": "string"
+          },
+          {
+            "name": "timeout",
+            "type": "string"
+          },
+          {
+            "name": "verbose",
+            "type": "boolean"
+          },
+          {
+            "name": "viewport",
+            "type": "string"
+          },
+          {
+            "name": "wait-until",
+            "type": "string"
+          }
+        ],
+        "group": "view",
+        "name": "list",
+        "producers": [
+          "native"
+        ],
+        "summary": "One category: heading|link|button|form|landmark|image",
+        "usage": "list <category> <url> [flags]"
+      },
+      {
+        "flags": [
+          {
+            "name": "config",
+            "type": "string"
+          },
+          {
+            "name": "help",
+            "short": "h",
+            "type": "boolean"
+          },
+          {
+            "name": "no-config",
+            "type": "boolean"
+          },
+          {
+            "name": "save",
+            "type": "string"
+          },
+          {
+            "name": "settle",
+            "type": "string"
+          },
+          {
+            "name": "timeout",
+            "type": "string"
+          },
+          {
+            "name": "verbose",
+            "type": "boolean"
+          },
+          {
+            "name": "wait-until",
+            "type": "string"
+          }
+        ],
+        "group": "setup",
+        "name": "login",
+        "producers": [],
+        "summary": "Save a login session for --storage-state audits",
+        "usage": "login <url> --save <file>"
+      },
+      {
+        "flags": [
+          {
+            "name": "allow-file",
+            "type": "boolean"
+          },
+          {
+            "multiple": true,
+            "name": "audit-origin",
+            "type": "string"
+          },
+          {
+            "name": "cdp",
+            "type": "string"
+          },
+          {
+            "name": "chrome-path",
+            "type": "string"
+          },
+          {
+            "name": "config",
+            "type": "string"
+          },
+          {
+            "name": "device",
+            "type": "string"
+          },
+          {
+            "name": "format",
+            "short": "f",
+            "type": "string"
+          },
+          {
+            "name": "headful",
+            "type": "boolean"
+          },
+          {
+            "name": "help",
+            "short": "h",
+            "type": "boolean"
+          },
+          {
+            "name": "include-generic",
+            "type": "boolean"
+          },
+          {
+            "name": "no-config",
+            "type": "boolean"
+          },
+          {
+            "name": "output",
+            "short": "o",
+            "type": "string"
+          },
+          {
+            "name": "quiet",
+            "short": "q",
+            "type": "boolean"
+          },
+          {
+            "name": "settle",
+            "type": "string"
+          },
+          {
+            "name": "storage-state",
+            "type": "string"
+          },
+          {
+            "name": "timeout",
+            "type": "string"
+          },
+          {
+            "name": "verbose",
+            "type": "boolean"
+          },
+          {
+            "name": "viewport",
+            "type": "string"
+          },
+          {
+            "name": "wait-until",
+            "type": "string"
+          }
+        ],
+        "group": "view",
+        "name": "outline",
+        "producers": [
+          "native"
+        ],
+        "summary": "Heading outline (h1–h6)",
+        "usage": "outline <url> [flags]"
+      },
+      {
+        "flags": [
+          {
+            "name": "allow-file",
+            "type": "boolean"
+          },
+          {
+            "multiple": true,
+            "name": "audit-origin",
+            "type": "string"
+          },
+          {
+            "name": "baseline",
+            "type": "string"
+          },
+          {
+            "name": "cdp",
+            "type": "string"
+          },
+          {
+            "name": "chrome-path",
+            "type": "string"
+          },
+          {
+            "name": "config",
+            "type": "string"
+          },
+          {
+            "name": "device",
+            "type": "string"
+          },
+          {
+            "name": "fail-on",
+            "type": "string"
+          },
+          {
+            "name": "format",
+            "short": "f",
+            "type": "string"
+          },
+          {
+            "name": "headful",
+            "type": "boolean"
+          },
+          {
+            "name": "help",
+            "short": "h",
+            "type": "boolean"
+          },
+          {
+            "name": "include-generic",
+            "type": "boolean"
+          },
+          {
+            "name": "md",
+            "type": "boolean"
+          },
+          {
+            "name": "no-config",
+            "type": "boolean"
+          },
+          {
+            "name": "only",
+            "type": "string"
+          },
+          {
+            "name": "output",
+            "short": "o",
+            "type": "string"
+          },
+          {
+            "name": "quiet",
+            "short": "q",
+            "type": "boolean"
+          },
+          {
+            "name": "rules",
+            "type": "string"
+          },
+          {
+            "name": "settle",
+            "type": "string"
+          },
+          {
+            "name": "storage-state",
+            "type": "string"
+          },
+          {
+            "name": "timeout",
+            "type": "string"
+          },
+          {
+            "name": "update-baseline",
+            "type": "boolean"
+          },
+          {
+            "name": "verbose",
+            "type": "boolean"
+          },
+          {
+            "name": "viewport",
+            "type": "string"
+          },
+          {
+            "name": "wait-until",
+            "type": "string"
+          }
+        ],
+        "group": "artifact",
+        "name": "snapshot",
+        "producers": [
+          "native"
+        ],
+        "summary": "Audit a page set → a diffable JSON artifact",
+        "usage": "snapshot [url...] [flags]"
+      },
+      {
+        "flags": [
+          {
+            "name": "allow-file",
+            "type": "boolean"
+          },
+          {
+            "multiple": true,
+            "name": "audit-origin",
+            "type": "string"
+          },
+          {
+            "name": "cdp",
+            "type": "string"
+          },
+          {
+            "name": "chrome-path",
+            "type": "string"
+          },
+          {
+            "name": "config",
+            "type": "string"
+          },
+          {
+            "name": "device",
+            "type": "string"
+          },
+          {
+            "name": "format",
+            "short": "f",
+            "type": "string"
+          },
+          {
+            "name": "headful",
+            "type": "boolean"
+          },
+          {
+            "name": "help",
+            "short": "h",
+            "type": "boolean"
+          },
+          {
+            "name": "no-config",
+            "type": "boolean"
+          },
+          {
+            "name": "output",
+            "short": "o",
+            "type": "string"
+          },
+          {
+            "name": "quiet",
+            "short": "q",
+            "type": "boolean"
+          },
+          {
+            "name": "root",
+            "type": "string"
+          },
+          {
+            "name": "settle",
+            "type": "string"
+          },
+          {
+            "name": "storage-state",
+            "type": "string"
+          },
+          {
+            "name": "timeout",
+            "type": "string"
+          },
+          {
+            "name": "verbose",
+            "type": "boolean"
+          },
+          {
+            "name": "viewport",
+            "type": "string"
+          },
+          {
+            "name": "wait-until",
+            "type": "string"
+          }
+        ],
+        "group": "view",
+        "name": "tabs",
+        "producers": [
+          "dom"
+        ],
+        "summary": "Focusable elements in Tab order",
+        "usage": "tabs <url> [flags]"
+      },
+      {
+        "flags": [
+          {
+            "name": "allow-file",
+            "type": "boolean"
+          },
+          {
+            "multiple": true,
+            "name": "audit-origin",
+            "type": "string"
+          },
+          {
+            "name": "cdp",
+            "type": "string"
+          },
+          {
+            "name": "chrome-path",
+            "type": "string"
+          },
+          {
+            "name": "config",
+            "type": "string"
+          },
+          {
+            "name": "device",
+            "type": "string"
+          },
+          {
+            "name": "format",
+            "short": "f",
+            "type": "string"
+          },
+          {
+            "name": "headful",
+            "type": "boolean"
+          },
+          {
+            "name": "help",
+            "short": "h",
+            "type": "boolean"
+          },
+          {
+            "name": "include-generic",
+            "type": "boolean"
+          },
+          {
+            "name": "no-config",
+            "type": "boolean"
+          },
+          {
+            "name": "output",
+            "short": "o",
+            "type": "string"
+          },
+          {
+            "name": "quiet",
+            "short": "q",
+            "type": "boolean"
+          },
+          {
+            "name": "settle",
+            "type": "string"
+          },
+          {
+            "name": "storage-state",
+            "type": "string"
+          },
+          {
+            "name": "timeout",
+            "type": "string"
+          },
+          {
+            "name": "verbose",
+            "type": "boolean"
+          },
+          {
+            "name": "viewport",
+            "type": "string"
+          },
+          {
+            "name": "wait-until",
+            "type": "string"
+          }
+        ],
+        "group": "view",
+        "name": "tree",
+        "producers": [
+          "native"
+        ],
+        "summary": "Semantic tree (role + accessible name)",
+        "usage": "tree <url> [flags]"
+      },
+      {
+        "flags": [
+          {
+            "name": "allow-file",
+            "type": "boolean"
+          },
+          {
+            "multiple": true,
+            "name": "audit-origin",
+            "type": "string"
+          },
+          {
+            "name": "cdp",
+            "type": "string"
+          },
+          {
+            "name": "chrome-path",
+            "type": "string"
+          },
+          {
+            "name": "config",
+            "type": "string"
+          },
+          {
+            "name": "device",
+            "type": "string"
+          },
+          {
+            "name": "format",
+            "short": "f",
+            "type": "string"
+          },
+          {
+            "name": "headful",
+            "type": "boolean"
+          },
+          {
+            "name": "help",
+            "short": "h",
+            "type": "boolean"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "no-config",
+            "type": "boolean"
+          },
+          {
+            "name": "nth",
+            "type": "string"
+          },
+          {
+            "name": "output",
+            "short": "o",
+            "type": "string"
+          },
+          {
+            "name": "quiet",
+            "short": "q",
+            "type": "boolean"
+          },
+          {
+            "name": "role",
+            "type": "string"
+          },
+          {
+            "name": "settle",
+            "type": "string"
+          },
+          {
+            "name": "step-settle",
+            "type": "string"
+          },
+          {
+            "name": "storage-state",
+            "type": "string"
+          },
+          {
+            "name": "text",
+            "type": "string"
+          },
+          {
+            "name": "timeout",
+            "type": "string"
+          },
+          {
+            "name": "verbose",
+            "type": "boolean"
+          },
+          {
+            "name": "viewport",
+            "type": "string"
+          },
+          {
+            "name": "wait-until",
+            "type": "string"
+          }
+        ],
+        "group": "act",
+        "name": "type",
+        "producers": [
+          "native"
+        ],
+        "summary": "Set a text field's value by role + accessible name",
+        "usage": "type <url> --role <role> --name \"<name>\" --text <value>"
+      }
+    ],
+    "exitCodes": [
+      {
+        "code": 0,
+        "name": "OK"
+      },
+      {
+        "code": 1,
+        "name": "FINDINGS"
+      },
+      {
+        "code": 2,
+        "name": "ERROR"
+      }
+    ],
+    "listCategories": [
+      "heading",
+      "link",
+      "button",
+      "form",
+      "landmark",
+      "image"
+    ],
+    "nativeCommands": [
+      "audit",
+      "inspect",
+      "tree",
+      "outline",
+      "list",
+      "interact",
+      "click",
+      "type",
+      "focus",
+      "snapshot"
+    ]
+  },
+  "env": [
+    {
+      "name": "A11Y_PAGES",
+      "packages": [
+        "cli"
+      ]
+    },
+    {
+      "name": "A11Y_SNAPSHOT_OUT",
+      "packages": [
+        "cli"
+      ]
+    },
+    {
+      "name": "REAL_A11Y_BROWSERS_DIR",
+      "packages": [
+        "browser"
+      ]
+    },
+    {
+      "name": "REAL_A11Y_CHROME_PATH",
+      "packages": [
+        "browser"
+      ]
+    },
+    {
+      "name": "REAL_A11Y_MCP_ALLOW_FILE",
+      "packages": [
+        "browser",
+        "cli"
+      ]
+    },
+    {
+      "name": "REAL_A11Y_MCP_ALLOWED_ORIGINS",
+      "packages": [
+        "mcp"
+      ]
+    },
+    {
+      "name": "REAL_A11Y_MCP_CDP",
+      "packages": [
+        "mcp"
+      ]
+    },
+    {
+      "name": "REAL_A11Y_MCP_HEADFUL",
+      "packages": [
+        "mcp"
+      ]
+    },
+    {
+      "name": "REAL_A11Y_MCP_STORAGE_STATE",
+      "packages": [
+        "mcp"
+      ]
+    }
+  ],
+  "manifestVersion": 1,
+  "mcp": {
+    "tools": [
+      {
+        "annotations": {
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": true
+        },
+        "description": "Run accessibility audits against the current page and return every violation — unlabeled interactive controls, skipped heading levels or missing/duplicate h1, unlabeled dialogs, and broken landmark structure. Reports what real assistive tech would announce as broken. This is the primary tool. Audits Chromium's own accessibility tree, so it reaches structure no in-page walk can (a `<video controls>`'s user-agent-shadow media controls); findings carry CSS locators. Whole-document. Chromium only.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "rules": {
+              "description": "Subset of rules to run. Omit to run all rules.",
+              "items": {
+                "enum": [
+                  "no-unlabeled-interactive",
+                  "image-alt",
+                  "heading-order",
+                  "dialog-labeled",
+                  "landmark-structure"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "name": "audit_page",
+        "title": "Audit accessibility"
+      },
+      {
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": false
+        },
+        "description": "Snapshot the CURRENT page's accessibility findings and store them under `name`. Later call diff_findings to see which findings are new / changed / fixed — the same identity semantics (fingerprints) the CI a11y-diff uses. Checkpoints survive navigation, so you can checkpoint one deploy and diff another: save 'prod', open the preview URL, then diff_findings('prod'). They are held in memory and do NOT survive close_browser — call export_checkpoint first if you need one to outlive the session. Whole-document. Chromium only.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "description": "Checkpoint label — the in-memory store key.",
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            "rules": {
+              "description": "Subset of rules for the findings. Omit to run all.",
+              "items": {
+                "enum": [
+                  "no-unlabeled-interactive",
+                  "image-alt",
+                  "heading-order",
+                  "dialog-labeled",
+                  "landmark-structure"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
+        },
+        "name": "checkpoint_findings",
+        "title": "Save a11y checkpoint"
+      },
+      {
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": false
+        },
+        "description": "Capture the CURRENT accessibility tree in the page as a comparison point. Then interact — click, type, open a dialog — and call diff_tree to see exactly which nodes were added, removed, or changed, and where focus moved. Unlike checkpoint_findings (which stores findings and survives navigation), a tree checkpoint is bound to THIS page instance and is discarded when the page navigates.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "rootSelector": {
+              "default": "body",
+              "description": "CSS selector for the extraction root. Defaults to 'body'.",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "name": "checkpoint_tree",
+        "title": "Checkpoint the tree (for an interaction diff)"
+      },
+      {
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": false,
+          "openWorldHint": true,
+          "readOnlyHint": false
+        },
+        "description": "Dispatch a REAL click against the element matched by role + accessible name in Chromium's accessibility tree — the same view get_semantic_tree prints. Targeting is deliberately role+name only: if a control can't be reached that way, assistive technology can't reach it either, and that is itself an accessibility finding. For the full story call checkpoint_tree FIRST, then this, then diff_tree — the diff answers 'what did that click change for a screen reader?'. THE CLICK IS REAL: it can submit forms, toggle state, and NAVIGATE — navigation discards the page's tree checkpoint. If several nodes match, the error lists them; pass nth to pick one. Chromium only. See also type_text and focus_element.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "description": "Accessible name of the target — case-insensitive, whitespace-normalized EXACT match against the tree get_semantic_tree returns. Pass '' to target an unlabeled control. Omit to match any name; if several nodes match, the error lists them so you can pass nth.",
+              "type": "string"
+            },
+            "nth": {
+              "description": "1-based pick among the matching nodes in document order, evaluated among the role+name-filtered matches. Use after an ambiguity error lists the candidates.",
+              "minimum": 1,
+              "type": "integer"
+            },
+            "role": {
+              "description": "ARIA role of the target, exactly as the tree prints it — e.g. 'button', 'link', 'textbox', 'checkbox', 'menuitem'.",
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "role"
+          ],
+          "type": "object"
+        },
+        "name": "click_element",
+        "title": "Click an element (by role + name)"
+      },
+      {
+        "annotations": {
+          "destructiveHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": false
+        },
+        "description": "Close the browser session and free resources. This also DISCARDS every saved findings checkpoint — export_checkpoint anything you still need first. Only call it when you're done; the other tools reopen nothing on their own.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "properties": {},
+          "type": "object"
+        },
+        "name": "close_browser",
+        "title": "Close browser"
+      },
+      {
+        "annotations": {
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": true
+        },
+        "description": "Diff two already-stored checkpoints against each other (no re-snapshot): which findings are new / changed / fixed going from `base` to `head`.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "base": {
+              "description": "Checkpoint label — the in-memory store key.",
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            "head": {
+              "$ref": "#/properties/base"
+            }
+          },
+          "required": [
+            "base",
+            "head"
+          ],
+          "type": "object"
+        },
+        "name": "diff_checkpoints",
+        "title": "Diff two stored checkpoints"
+      },
+      {
+        "annotations": {
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": true
+        },
+        "description": "Re-snapshot the CURRENT page and diff it against the stored checkpoint `name`: which accessibility findings are NEW (these gate CI), CHANGED, or FIXED, plus an advisory structural summary. Use after a change (deploy, feature toggle, DOM edit) or after navigating to a different deploy of the same page.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "description": "Checkpoint label — the in-memory store key.",
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
+        },
+        "name": "diff_findings",
+        "title": "Diff current page vs a checkpoint"
+      },
+      {
+        "annotations": {
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": true
+        },
+        "description": "Diff the CURRENT accessibility tree against the one captured by checkpoint_tree: nodes added, removed, or changed, plus a focus move. This is the interaction diff — the precise answer to 'what did that click actually change for a screen reader?'. Re-extracts with the root the checkpoint used unless you override it.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "rootSelector": {
+              "description": "CSS root for the re-extraction. Defaults to the root the checkpoint was captured with.",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "name": "diff_tree",
+        "title": "Diff the tree since the checkpoint"
+      },
+      {
+        "annotations": {
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": true
+        },
+        "description": "Return a stored checkpoint as a Real A11y snapshot artifact — the same a11y-snapshot.json the CLI writes (same schemaVersion, same fingerprints). Persist it to your own file to diff across sessions, or feed it to the CI a11y-diff. Output is capped, so it is best for small roots.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "description": "Checkpoint label — the in-memory store key.",
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
+        },
+        "name": "export_checkpoint",
+        "title": "Export a checkpoint as JSON"
+      },
+      {
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": false
+        },
+        "description": "Move REAL keyboard focus to the element matched by role + accessible name in the native accessibility tree. The result says whether the target is a text field, so a type_text can follow. Useful alongside get_tab_order for focus-order work, and for checking what a keyboard user would land on. Chromium only. See also click_element and type_text.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "description": "Accessible name of the target — case-insensitive, whitespace-normalized EXACT match against the tree get_semantic_tree returns. Pass '' to target an unlabeled control. Omit to match any name; if several nodes match, the error lists them so you can pass nth.",
+              "type": "string"
+            },
+            "nth": {
+              "description": "1-based pick among the matching nodes in document order, evaluated among the role+name-filtered matches. Use after an ambiguity error lists the candidates.",
+              "minimum": 1,
+              "type": "integer"
+            },
+            "role": {
+              "description": "ARIA role of the target, exactly as the tree prints it — e.g. 'button', 'link', 'textbox', 'checkbox', 'menuitem'.",
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "role"
+          ],
+          "type": "object"
+        },
+        "name": "focus_element",
+        "title": "Focus an element (by role + name)"
+      },
+      {
+        "annotations": {
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": true
+        },
+        "description": "Return the page's heading outline (h1..h6 in document order) as an indented list, derived from Chromium's own accessibility tree. Whole-document. Chromium only.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "properties": {},
+          "type": "object"
+        },
+        "name": "get_heading_outline",
+        "title": "Get heading outline"
+      },
+      {
+        "annotations": {
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": true
+        },
+        "description": "Return the page's accessibility tree as a deterministic, indented role + accessible-name outline (what a screen reader would traverse) — read from Chromium's own accessibility tree over CDP, so it reaches user-agent-shadow media controls an in-page walk never sees. The element focused at capture time is marked `[focused]`. Token-efficient and stable across runs. This is the vocabulary the act tools target in. Whole-document. Chromium only.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "includeGeneric": {
+              "default": false,
+              "description": "Include generic container nodes (role=generic).",
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
+        "name": "get_semantic_tree",
+        "title": "Get semantic tree"
+      },
+      {
+        "annotations": {
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": true
+        },
+        "description": "Return the focusable elements in the order a keyboard user encounters them when pressing Tab, numbered, with role + accessible name. The stop focused at capture time is marked `[focused]`. Built from the in-page DOM walk — Chromium's accessibility tree knows whether a node is focusable but not the SEQUENCE (tabindex never reaches it), so this is the only source for tab order, and the one tool `rootSelector` still scopes.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "rootSelector": {
+              "default": "body",
+              "description": "CSS selector for the extraction root. Defaults to 'body'.",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "name": "get_tab_order",
+        "title": "Get tab order"
+      },
+      {
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": false
+        },
+        "description": "Load an externally-held Real A11y snapshot artifact (e.g. a CLI-generated baseline) into the store under `name`, so a live page can be diffed against it. Input is validated strictly; the artifact's first page is stored.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "artifact": {
+              "description": "A serialized Real A11y snapshot artifact (JSON).",
+              "type": "string"
+            },
+            "name": {
+              "description": "Checkpoint label — the in-memory store key.",
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "artifact"
+          ],
+          "type": "object"
+        },
+        "name": "import_checkpoint",
+        "title": "Import a checkpoint from JSON"
+      },
+      {
+        "annotations": {
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": true
+        },
+        "description": "Return the audit findings AND the semantic tree and heading outline — all derived from ONE read of Chromium's accessibility tree, so they are guaranteed internally consistent. The element focused at capture time is marked `[focused]`. Prefer this over separate audit_page + get_* calls on dynamic pages (SPAs, pages with consent dialogs) where separate calls could catch different states. That tree carries no tab order, so there is no tab-order section here — call get_tab_order for the keyboard sequence. Whole-document. Chromium only.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "includeGeneric": {
+              "default": false,
+              "description": "Include generic container nodes in the tree.",
+              "type": "boolean"
+            },
+            "rules": {
+              "description": "Subset of rules for the findings. Omit to run all.",
+              "items": {
+                "enum": [
+                  "no-unlabeled-interactive",
+                  "image-alt",
+                  "heading-order",
+                  "dialog-labeled",
+                  "landmark-structure"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "name": "inspect_page",
+        "title": "Inspect page (single snapshot)"
+      },
+      {
+        "annotations": {
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": true
+        },
+        "description": "List the stored checkpoint labels with their finding counts and approximate tree sizes.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "properties": {},
+          "type": "object"
+        },
+        "name": "list_checkpoints",
+        "title": "List checkpoints"
+      },
+      {
+        "annotations": {
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": true
+        },
+        "description": "List every element of one category — links, buttons, form controls, landmarks, images, or headings — as role + accessible name + a CSS locator. A token-efficient way to review one kind of element (e.g. 'images' pairs with the image-alt rule, 'form' with labeling). Listed from Chromium's own accessibility tree, so it agrees node for node with get_semantic_tree and audit_page. Whole-document. Chromium only.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "filter": {
+              "description": "Which category of element to list.",
+              "enum": [
+                "heading",
+                "link",
+                "button",
+                "form",
+                "landmark",
+                "image"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "filter"
+          ],
+          "type": "object"
+        },
+        "name": "list_elements",
+        "title": "List elements by category"
+      },
+      {
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": true,
+          "readOnlyHint": false
+        },
+        "description": "Navigate the browser to a URL and prepare it for accessibility queries. Call this before any audit/get_* tool. For dynamic sites (SPAs, consent dialogs) set waitUntil='networkidle' and/or settleMs so the page settles first. To audit the MOBILE or TABLET layout — which can differ substantially from desktop (hamburger nav, hidden content, touch-only controls) — pass a `device`. This server has NO saved login, so a page behind auth will open as a logged-out view. Don't try to log in through the tools — there is no credential parameter, deliberately. Tell the user to restart the server with REAL_A11Y_MCP_STORAGE_STATE (a saved session from `real-a11y login`) or REAL_A11Y_MCP_CDP (attach to a Chrome they're already signed into).",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "device": {
+              "description": "Emulate a device so the tree reflects the mobile/tablet layout. A Playwright device name, e.g. 'iPhone 13', 'Pixel 7', 'iPad Pro 11'. Omit for desktop.",
+              "type": "string"
+            },
+            "settleMs": {
+              "default": 0,
+              "description": "Extra wait (ms) after load for late JS / consent dialogs to settle.",
+              "maximum": 15000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "timeoutMs": {
+              "description": "Navigation timeout in ms (default 30000).",
+              "maximum": 120000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "url": {
+              "description": "Absolute URL to open.",
+              "format": "uri",
+              "type": "string"
+            },
+            "viewport": {
+              "additionalProperties": false,
+              "description": "Explicit viewport override, e.g. { width: 375, height: 812 }. Layered on top of `device`.",
+              "properties": {
+                "height": {
+                  "exclusiveMinimum": 0,
+                  "type": "integer"
+                },
+                "width": {
+                  "exclusiveMinimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "width",
+                "height"
+              ],
+              "type": "object"
+            },
+            "waitUntil": {
+              "default": "load",
+              "description": "Navigation wait state. 'networkidle' is the most reliable 'SPA finished rendering' signal (slower).",
+              "enum": [
+                "load",
+                "domcontentloaded",
+                "networkidle",
+                "commit"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "url"
+          ],
+          "type": "object"
+        },
+        "name": "open_page",
+        "title": "Open page"
+      },
+      {
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": false
+        },
+        "description": "Set the value of the text field matched by role + accessible name in the native accessibility tree (role is usually 'textbox', 'searchbox', or 'combobox'). REPLACES the field's current value — via the prototype value setter plus input/change events, so framework-controlled inputs (React et al.) register it. The result NEVER echoes the typed text or any field content. There is deliberately NO credential parameter and this tool must NOT be used to log in — a password or token typed here would enter the agent's context; for pages behind auth the user starts the server with REAL_A11Y_MCP_STORAGE_STATE or REAL_A11Y_MCP_CDP instead. Pair with checkpoint_tree / diff_tree to see what the input changed (a combobox popping options, an inline error appearing). Chromium only.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "description": "Accessible name of the target — case-insensitive, whitespace-normalized EXACT match against the tree get_semantic_tree returns. Pass '' to target an unlabeled control. Omit to match any name; if several nodes match, the error lists them so you can pass nth.",
+              "type": "string"
+            },
+            "nth": {
+              "description": "1-based pick among the matching nodes in document order, evaluated among the role+name-filtered matches. Use after an ambiguity error lists the candidates.",
+              "minimum": 1,
+              "type": "integer"
+            },
+            "role": {
+              "description": "ARIA role of the target, exactly as the tree prints it — e.g. 'button', 'link', 'textbox', 'checkbox', 'menuitem'.",
+              "minLength": 1,
+              "type": "string"
+            },
+            "text": {
+              "description": "The text to enter. Replaces the field's current value. Never echoed back in the result.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "role",
+            "text"
+          ],
+          "type": "object"
+        },
+        "name": "type_text",
+        "title": "Type into a text field (by role + name)"
+      }
+    ]
+  },
+  "packages": [
+    {
+      "bin": [],
+      "description": "The accessibility audit engine for the Semantic Navigator tree — the Finding type, the rule set, collectFindings, and the throwing assert* helpers. What every Real A11y surface reports as \"broken\", in one place.",
+      "dir": "audit",
+      "exports": [
+        "."
+      ],
+      "name": "@real-a11y-dev/audit",
+      "private": false,
+      "version": "0.1.0-beta.11",
+      "workspaceDeps": [
+        "@real-a11y-dev/core"
+      ]
+    },
+    {
+      "bin": [],
+      "description": "Drive a real browser for Real A11y — the Playwright-based BrowserSession plus the injected page-bundle. The one way to extract a live accessibility tree from a real Chromium.",
+      "dir": "browser",
+      "exports": [
+        "."
+      ],
+      "name": "@real-a11y-dev/browser",
+      "private": false,
+      "version": "0.1.0-beta.11",
+      "workspaceDeps": [
+        "@real-a11y-dev/audit",
+        "@real-a11y-dev/core",
+        "@real-a11y-dev/serialize"
+      ]
+    },
+    {
+      "bin": [
+        "real-a11y"
+      ],
+      "description": "Audit what a screen reader hears, from your shell — semantic-tree accessibility audits with CI-grade exit codes and formats",
+      "dir": "cli",
+      "exports": [],
+      "name": "@real-a11y-dev/cli",
+      "private": false,
+      "version": "0.1.0-beta.1",
+      "workspaceDeps": [
+        "@real-a11y-dev/audit",
+        "@real-a11y-dev/browser",
+        "@real-a11y-dev/serialize",
+        "@real-a11y-dev/snapshot"
+      ]
+    },
+    {
+      "bin": [],
+      "description": "Tree extraction, data model, and interaction engine for Semantic Navigator",
+      "dir": "core",
+      "exports": [
+        "."
+      ],
+      "name": "@real-a11y-dev/core",
+      "private": false,
+      "version": "0.1.0-beta.11",
+      "workspaceDeps": []
+    },
+    {
+      "bin": [],
+      "description": "APG-coverage component library shared across the example apps. Re-exports correct implementations from @radix-ui/* and ships hand-rolled `*Broken` siblings to demo what Real A11y catches.",
+      "dir": "example-patterns",
+      "exports": [
+        "."
+      ],
+      "name": "@real-a11y-dev/example-patterns",
+      "private": true,
+      "version": "0.0.0",
+      "workspaceDeps": []
+    },
+    {
+      "bin": [],
+      "description": "Semantic Navigator — Chrome extension for the Real A11y project. Inspect and interact with the accessibility tree of any page.",
+      "dir": "extension",
+      "exports": [],
+      "name": "@real-a11y-dev/semantic-navigator-extension",
+      "private": true,
+      "version": "0.1.8",
+      "workspaceDeps": [
+        "@real-a11y-dev/core",
+        "@real-a11y-dev/semantic-navigator-ui",
+        "@real-a11y-dev/serialize"
+      ]
+    },
+    {
+      "bin": [],
+      "description": "Framework-agnostic interactive accessibility tree panel — embed into any app with Shadow DOM isolation",
+      "dir": "inspector",
+      "exports": [
+        "."
+      ],
+      "name": "@real-a11y-dev/inspector",
+      "private": false,
+      "version": "0.1.0-beta.11",
+      "workspaceDeps": []
+    },
+    {
+      "bin": [
+        "real-a11y-mcp"
+      ],
+      "description": "Model Context Protocol server that exposes the Real A11y semantic tree and accessibility audits to AI agents",
+      "dir": "mcp",
+      "exports": [
+        "."
+      ],
+      "name": "@real-a11y-dev/mcp",
+      "private": false,
+      "version": "0.1.0-beta.1",
+      "workspaceDeps": [
+        "@real-a11y-dev/audit",
+        "@real-a11y-dev/browser",
+        "@real-a11y-dev/serialize",
+        "@real-a11y-dev/snapshot"
+      ]
+    },
+    {
+      "bin": [],
+      "description": "React wrapper around @real-a11y-dev/inspector — component plus tree/modal hooks",
+      "dir": "react",
+      "exports": [
+        "."
+      ],
+      "name": "@real-a11y-dev/react",
+      "private": false,
+      "version": "0.1.0-beta.11",
+      "workspaceDeps": [
+        "@real-a11y-dev/core",
+        "@real-a11y-dev/inspector"
+      ]
+    },
+    {
+      "bin": [],
+      "description": "Deterministic text serialization of the Semantic Navigator accessibility tree — full tree, heading outline, and tab sequence",
+      "dir": "serialize",
+      "exports": [
+        "."
+      ],
+      "name": "@real-a11y-dev/serialize",
+      "private": false,
+      "version": "0.1.0-beta.11",
+      "workspaceDeps": [
+        "@real-a11y-dev/core"
+      ]
+    },
+    {
+      "bin": [],
+      "description": "The Real A11y snapshot engine — deterministic finding fingerprints, the diffable a11y-snapshot.json artifact, the findings/views/unified diff, and baselines. Node-only; the single home for what the CLI and MCP both capture and compare.",
+      "dir": "snapshot",
+      "exports": [
+        "."
+      ],
+      "name": "@real-a11y-dev/snapshot",
+      "private": false,
+      "version": "0.1.0-beta.11",
+      "workspaceDeps": [
+        "@real-a11y-dev/audit",
+        "@real-a11y-dev/core",
+        "@real-a11y-dev/serialize"
+      ]
+    },
+    {
+      "bin": [],
+      "description": "Storybook addon — Semantic Navigator A11y tree panel for every story",
+      "dir": "storybook-addon",
+      "exports": [
+        ".",
+        "./manager",
+        "./preview"
+      ],
+      "name": "@real-a11y-dev/storybook-addon",
+      "private": false,
+      "version": "0.1.0-beta.11",
+      "workspaceDeps": [
+        "@real-a11y-dev/core",
+        "@real-a11y-dev/semantic-navigator-ui",
+        "@real-a11y-dev/testing"
+      ]
+    },
+    {
+      "bin": [],
+      "description": "Accessibility audit and interaction-flow helpers for the Semantic Navigator tree (Vitest, Jest, Playwright)",
+      "dir": "testing",
+      "exports": [
+        ".",
+        "./matchers",
+        "./matchers/vitest",
+        "./playwright"
+      ],
+      "name": "@real-a11y-dev/testing",
+      "private": false,
+      "version": "0.1.0-beta.11",
+      "workspaceDeps": [
+        "@real-a11y-dev/audit",
+        "@real-a11y-dev/browser",
+        "@real-a11y-dev/core",
+        "@real-a11y-dev/serialize",
+        "@real-a11y-dev/validate"
+      ]
+    },
+    {
+      "bin": [],
+      "description": "Preact tree-view components for Semantic Navigator (used by the inspector, React wrapper, Storybook addon, and Chrome extension)",
+      "dir": "ui",
+      "exports": [
+        ".",
+        "./styles"
+      ],
+      "name": "@real-a11y-dev/semantic-navigator-ui",
+      "private": false,
+      "version": "0.1.0-beta.11",
+      "workspaceDeps": [
+        "@real-a11y-dev/core"
+      ]
+    },
+    {
+      "bin": [],
+      "description": "ARIA semantics validation for the Semantic Navigator accessibility tree — per-node rules plus tree-level relationship checks (interactive nesting, required context / owned). aria-query-backed, so it never drifts from the spec.",
+      "dir": "validate",
+      "exports": [
+        "."
+      ],
+      "name": "@real-a11y-dev/validate",
+      "private": false,
+      "version": "0.1.0-beta.7",
+      "workspaceDeps": []
+    }
+  ]
+}

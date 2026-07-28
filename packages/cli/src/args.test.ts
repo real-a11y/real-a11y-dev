@@ -11,7 +11,8 @@ import {
   parseStepSettle,
   DEFAULT_STEP_SETTLE_MS,
   parseRules,
-  NATIVE_COMMANDS,
+  isNativeCommand,
+  nativeCommands,
   rootHelp,
 } from "./args.js";
 import { CliError } from "./exit.js";
@@ -72,16 +73,37 @@ describe("the producer axis is gone", () => {
     expect(withRoot).toEqual(["tabs"]);
   });
 
-  it("keeps NATIVE_COMMANDS in lockstep with the commands that dropped --root", () => {
-    // NATIVE_COMMANDS is what turns a leftover `--root` into an explanation
-    // rather than "Unknown option" — it goes stale silently otherwise.
-    for (const name of NATIVE_COMMANDS) {
+  it("derives the native set from the table, so it can't drift", () => {
+    // This is what turns a leftover `--root` into an explanation rather than
+    // "Unknown option". A hand-written second copy is exactly the drift the
+    // surface extraction exists to prevent — so it reads `producers`.
+    for (const name of nativeCommands()) {
       expect(COMMANDS, `${name} is not a command`).toHaveProperty(name);
       expect(
         COMMANDS[name].options,
         `${name} declares --root`,
       ).not.toHaveProperty("root");
     }
+    expect(isNativeCommand("tabs")).toBe(false);
+    expect(isNativeCommand("audit")).toBe(true);
+    // An unknown name is not native — the safe direction: it falls through to
+    // the parser rather than claiming a scope refusal for a command that
+    // doesn't exist.
+    expect(isNativeCommand("nope")).toBe(false);
+  });
+
+  it("gives every command exactly one producer, or none", () => {
+    for (const [name, spec] of Object.entries(COMMANDS)) {
+      expect(
+        spec.producers.length,
+        `${name} declares ${spec.producers.length} producers`,
+      ).toBeLessThanOrEqual(1);
+    }
+    // `tabs` is the lone DOM holdout; nothing else reads the in-page walk.
+    const dom = Object.entries(COMMANDS)
+      .filter(([, s]) => s.producers.includes("dom"))
+      .map(([n]) => n);
+    expect(dom).toEqual(["tabs"]);
   });
 });
 

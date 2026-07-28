@@ -68,6 +68,25 @@ pnpm --filter @real-a11y-dev/core test    # Test a specific package
 pnpm --filter @real-a11y-dev/core test:watch  # Watch mode
 ```
 
+### The public-surface manifest
+
+`docs/surface.json` is a generated, committed description of what the packages
+expose — every CLI command and flag, every MCP tool and its schema, each
+package's entry points, and the environment variables they read. It's extracted
+from the source itself, so the docs can be checked against it instead of against
+someone's memory of what shipped.
+
+```bash
+pnpm surface:check      # part of `pnpm verify` — fails if it's stale or the docs disagree
+pnpm surface:extract    # regenerate it after changing a command, tool, or export
+```
+
+If you add a command or a tool, `surface:check` will tell you the manifest is
+out of date — run `pnpm surface:extract` and commit the result. Its diff is how
+a reviewer sees what moved in the public surface, so it belongs in the same PR
+as the change. (Extraction imports the packages' built dependencies, so run
+`pnpm build` first.)
+
 ### Testing the Chrome extension
 
 1. Run `pnpm build`

@@ -12,7 +12,7 @@ import { SnapshotFormatError } from "@real-a11y-dev/snapshot";
 
 import {
   COMMANDS,
-  NATIVE_COMMANDS,
+  isNativeCommand,
   rootHelp,
   type FlagValues,
 } from "./args.js";
@@ -27,7 +27,7 @@ import { CliError, EXIT, formatCliError } from "./exit.js";
  * and point at what still scopes. Pre-parse, so it beats parseArgs to the punch.
  */
 function assertRootApplies(name: string, flagTokens: readonly string[]): void {
-  if (!NATIVE_COMMANDS.has(name)) return;
+  if (!isNativeCommand(name)) return;
   if (!flagTokens.some((t) => t === "--root" || t.startsWith("--root=")))
     return;
   throw new CliError(
