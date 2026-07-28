@@ -1,3 +1,5 @@
+import { fileURLToPath, URL } from "node:url";
+
 import anchor from "markdown-it-anchor";
 import { defineConfig } from "vitepress";
 import type { ShikiTransformer } from "shiki";
@@ -33,6 +35,29 @@ export default defineConfig({
 
   // Drop .html extensions — friendlier URLs, cleaner sitemap.
   cleanUrls: true,
+
+  vite: {
+    resolve: {
+      alias: [
+        {
+          // Give the home page's linked feature cards an accessible name —
+          // Chromium computes none, because the `<a>` wraps an `<article>`.
+          // See `theme/components/LabeledFeature.vue` for why and for what
+          // the name is.
+          //
+          // The exact relative specifier, not VitePress's documented
+          // `/^.*\/VPFeature\.vue$/`: the wide pattern also matches the
+          // package-path import inside the replacement, which would alias
+          // that file to itself. `VPFeatures.vue` is the only importer, and
+          // it writes it exactly this way.
+          find: "./VPFeature.vue",
+          replacement: fileURLToPath(
+            new URL("./theme/components/LabeledFeature.vue", import.meta.url),
+          ),
+        },
+      ],
+    },
+  },
 
   markdown: {
     // Heading permalink anchors, hidden from assistive tech (GitHub's
