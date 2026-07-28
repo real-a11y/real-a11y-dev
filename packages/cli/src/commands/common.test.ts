@@ -10,7 +10,7 @@ import { CliError } from "../exit.js";
 import {
   isAuthenticated,
   sessionFlags,
-  producerOf,
+  warnUnscopable,
   resolveAuditTargets,
   resolvePageList,
   type Target,
@@ -94,65 +94,53 @@ describe("isAuthenticated", () => {
   });
 });
 
-describe("producerOf", () => {
-  it("defaults to dom and passes dom through on any command", () => {
-    expect(producerOf({}, "tabs", false)).toBe("dom");
-    expect(producerOf({ producer: "dom" }, "audit", true)).toBe("dom");
-  });
+describe("warnUnscopable", () => {
+  function captureStderr(fn: () => void): string {
+    let out = "";
+    const original = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: string) => {
+      out += chunk;
+      return true;
+    }) as typeof process.stderr.write;
+    try {
+      fn();
+    } finally {
+      process.stderr.write = original;
+    }
+    return out;
+  }
 
-  it("returns native for a supporting command", () => {
-    expect(producerOf({ producer: "native" }, "audit", true)).toBe("native");
-    expect(producerOf({ producer: "native" }, "tree", true)).toBe("native");
-  });
-
-  it("rejects native on a command that can't support it", () => {
-    expect(() => producerOf({ producer: "native" }, "tabs", false)).toThrow(
-      /not supported by `tabs`/,
-    );
-    expect(() => producerOf({ producer: "native" }, "inspect", false)).toThrow(
-      CliError,
-    );
-  });
-
-  it("rejects native combined with a non-body --root", () => {
-    expect(() =>
-      producerOf({ producer: "native", root: "main" }, "tree", true),
-    ).toThrow(/whole document/);
-  });
-
-  it("allows native with an explicit --root body (the implicit default)", () => {
-    expect(producerOf({ producer: "native", root: "body" }, "tree", true)).toBe(
-      "native",
-    );
-  });
-
-  it("rejects an invalid --producer value regardless of support", () => {
-    expect(() => producerOf({ producer: "webkit" }, "audit", true)).toThrow(
-      /dom \| native/,
-    );
-  });
-
-  it("names the config default, not --root, when the scope came from config", () => {
-    // Same refusal — native can't honor a scope either way — but telling a user
-    // to "drop --root" when they never typed it sends them looking for a flag
-    // that isn't there. The value came from `defaults.root`.
-    expect(() =>
-      producerOf(
-        { producer: "native", root: "main" },
-        "audit",
-        true,
-        new Set(["root"]),
+  it("says nothing when no route is scoped", () => {
+    expect(
+      captureStderr(() =>
+        warnUnscopable("audit", [{ name: "Home" }, { name: "Docs" }]),
       ),
-    ).toThrow(/a11y\.config\.json/);
-    // …and a typed --root still names the flag.
-    expect(() =>
-      producerOf(
-        { producer: "native", root: "main" },
-        "audit",
-        true,
-        new Set(),
-      ),
-    ).toThrow(/can't be combined with --root/);
+    ).toBe("");
+  });
+
+  it("warns — never throws — when a route carries a rootSelector", () => {
+    // Hard-erroring would red every CI that scoped a route, mid-beta, over
+    // config that was correct when it was written.
+    const out = captureStderr(() =>
+      warnUnscopable("audit", [{ name: "Home", rootSelector: "#app" }]),
+    );
+    expect(out).toMatch(/warning/);
+    expect(out).toMatch(/Home/);
+    expect(out).toMatch(/whole document/);
+    // Points at what still scopes, so the advice is actionable.
+    expect(out).toMatch(/tabs --root/);
+  });
+
+  it("names every scoped route, with a count, in one line", () => {
+    const out = captureStderr(() =>
+      warnUnscopable("snapshot", [
+        { name: "Home", rootSelector: "#app" },
+        { name: "Docs" },
+        { name: "Blog", rootSelector: "main" },
+      ]),
+    );
+    expect(out).toMatch(/2 entries: Home, Blog/);
+    expect(out.trimEnd().split("\n")).toHaveLength(1);
   });
 });
 

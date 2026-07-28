@@ -13,6 +13,7 @@ import {
   buildArtifact,
   diffArtifacts,
   fingerprintFindings,
+  SNAPSHOT_VIEWS,
   type DiffClass,
   type DiffEntry,
   type DiffResult,
@@ -80,8 +81,21 @@ export class CheckpointStore<T = Checkpoint> {
 // pages by name and matches findings by fingerprint) — a placeholder is fine.
 const DIFF_META = { toolName: "@real-a11y-dev/mcp", toolVersion: "0" } as const;
 
+/**
+ * Wrap a stored page so `diffArtifacts` can consume it — declaring the views
+ * THIS page actually carries, not a blanket "all three".
+ *
+ * It matters because the two sides can disagree: `import_checkpoint` accepts an
+ * externally-held artifact, so a DOM-era base (with a tabs view) can meet a
+ * native head (without one). Claiming both measured tab order would diff N stops
+ * against nothing and report every one as removed — the loudest possible false
+ * alarm, on a page where nothing changed. The page is the source of truth here.
+ */
 function asArtifact(page: SnapshotPage): SnapshotArtifact {
-  return buildArtifact([page], DIFF_META);
+  return buildArtifact([page], {
+    ...DIFF_META,
+    views: page.tabs !== undefined ? SNAPSHOT_VIEWS : ["tree", "outline"],
+  });
 }
 
 /**

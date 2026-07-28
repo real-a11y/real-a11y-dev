@@ -4,7 +4,13 @@
  * classified result out, no browser.
  */
 
-import type { SnapshotArtifact, SnapshotPage } from "../snapshot-artifact.js";
+import {
+  measuredViews,
+  SNAPSHOT_VIEWS,
+  type SnapshotArtifact,
+  type SnapshotPage,
+  type SnapshotView,
+} from "../snapshot-artifact.js";
 
 import {
   diffFindings,
@@ -53,6 +59,12 @@ export interface DiffOptions {
 export interface DiffResult {
   pages: PageDiff[];
   summary: DiffSummary;
+  /**
+   * Views at least one side never measured, so the diff couldn't compare them
+   * — reported as "not measured", never as "everything on this axis is gone".
+   * The renderers surface it; the exit gate ignores it (views never gate).
+   */
+  skippedViews: SnapshotView[];
 }
 
 const EMPTY_VIEW: ViewDiff = { added: [], removed: [] };
@@ -61,19 +73,43 @@ const EMPTY_HUNKS: ViewHunks = { tree: [], outline: [], tabs: [] };
 
 type Ignore = ((trimmedLine: string) => boolean) | undefined;
 
-function pageViews(base: SnapshotPage, pr: SnapshotPage, ignore: Ignore) {
+/**
+ * A view neither side measured compares as nothing-versus-nothing.
+ *
+ * Not `""` versus the other side's content: that is the whole hazard this
+ * guards. Feeding an unmeasured view into the differ would classify every line
+ * on the measured side as removed — on a producer migration, "Keyboard tab stop
+ * removed" once per focusable element, on every page, with no page having
+ * changed. Blanking BOTH sides is what makes the axis read as unmeasured.
+ */
+function comparable(page: SnapshotPage, compare: ReadonlySet<SnapshotView>) {
+  return {
+    tree: page.tree,
+    outline: page.outline,
+    tabs: (compare.has("tabs") ? page.tabs : undefined) ?? "",
+  };
+}
+
+function pageViews(
+  base: SnapshotPage,
+  pr: SnapshotPage,
+  ignore: Ignore,
+  compare: ReadonlySet<SnapshotView>,
+) {
+  const b = comparable(base, compare);
+  const p = comparable(pr, compare);
   // `diffViews` strips the `[focused]` marker itself (before the ignore test),
   // so a pure focus move (same elements, only the focused one differs) produces
   // no structural churn — the transition is reported as a `focus-changed`
   // statement instead. The unified diff (pageHunks) keeps the marker; it's the
   // literal reviewable view.
   return {
-    tree: diffViews(base.tree, pr.tree, undefined, ignore),
-    outline: diffViews(base.outline, pr.outline, undefined, ignore),
+    tree: diffViews(b.tree, p.tree, undefined, ignore),
+    outline: diffViews(b.outline, p.outline, undefined, ignore),
     // Tabs are unnumbered now, but a legacy base (or third-party producer) may
     // still carry `NN.` numbers — strip them so the multiset compares stop
     // content, never the sequence counter.
-    tabs: diffViews(base.tabs, pr.tabs, stripTabIndex, ignore),
+    tabs: diffViews(b.tabs, p.tabs, stripTabIndex, ignore),
   };
 }
 
@@ -98,19 +134,22 @@ function pageHunks(
   base: SnapshotPage,
   pr: SnapshotPage,
   ignore: Ignore,
+  compare: ReadonlySet<SnapshotView>,
 ): ViewHunks {
+  const b = comparable(base, compare);
+  const p = comparable(pr, compare);
   return {
     tree: unifiedDiff(
-      stripIgnored(base.tree, ignore),
-      stripIgnored(pr.tree, ignore),
+      stripIgnored(b.tree, ignore),
+      stripIgnored(p.tree, ignore),
     ),
     outline: unifiedDiff(
-      stripIgnored(base.outline, ignore),
-      stripIgnored(pr.outline, ignore),
+      stripIgnored(b.outline, ignore),
+      stripIgnored(p.outline, ignore),
     ),
     tabs: unifiedDiff(
-      stripIgnored(base.tabs, ignore),
-      stripIgnored(pr.tabs, ignore),
+      stripIgnored(b.tabs, ignore),
+      stripIgnored(p.tabs, ignore),
     ),
   };
 }
@@ -141,6 +180,16 @@ export function diffArtifacts(
   const ignore: Ignore = patterns.length
     ? (line) => patterns.some((re) => re.test(line))
     : undefined;
+  // An axis is comparable only when BOTH sides measured it. Across a producer
+  // migration the base is the side that still carries tab order — comparing it
+  // against a PR that never measured one is exactly the false "N → 0" this
+  // avoids.
+  const baseViews = measuredViews(base);
+  const prViews = measuredViews(pr);
+  const compare = new Set(
+    SNAPSHOT_VIEWS.filter((v) => baseViews.has(v) && prViews.has(v)),
+  );
+  const skippedViews = SNAPSHOT_VIEWS.filter((v) => !compare.has(v));
   const baseByName = new Map(base.pages.map((p) => [p.name, p]));
   const seen = new Set<string>();
   const pages: PageDiff[] = [];
@@ -175,14 +224,19 @@ export function diffArtifacts(
       });
       continue;
     }
-    const views = pageViews(basePage, prPage, ignore);
+    const views = pageViews(basePage, prPage, ignore, compare);
     pages.push({
       name: prPage.name,
       status: "ok",
       entries: diffFindings(basePage.findings, prPage.findings),
       views,
-      structural: summarizeViews({ views, base: basePage, pr: prPage, ignore }),
-      viewHunks: pageHunks(basePage, prPage, ignore),
+      structural: summarizeViews({
+        views,
+        base: comparable(basePage, compare),
+        pr: comparable(prPage, compare),
+        ignore,
+      }),
+      viewHunks: pageHunks(basePage, prPage, ignore, compare),
     });
   }
 
@@ -199,5 +253,5 @@ export function diffArtifacts(
   }
 
   const summary = summarize(pages.flatMap((p) => p.entries));
-  return { pages, summary };
+  return { pages, summary, skippedViews };
 }

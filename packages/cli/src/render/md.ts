@@ -47,10 +47,13 @@ function pageSection(page: SnapshotPage, only?: SnapshotSection): string {
       "### Heading outline",
       fence(page.outline),
       "",
-      "### Tab order",
-      fence(page.tabs),
-      "",
     );
+    // A view the run never measured is omitted, not rendered empty: an empty
+    // "Tab order" block reads as "nothing on this page is focusable", which is
+    // a very different — and alarming — claim than "not measured".
+    if (page.tabs !== undefined) {
+      parts.push("### Tab order", fence(page.tabs), "");
+    }
   }
   return parts.join("\n");
 }

@@ -1,76 +1,70 @@
 ---
 title: "@real-a11y-dev/mcp — tools reference"
-description: Every tool the Real A11y MCP server exposes — open_page, audit_page, the view tools, the act tools, compare_producers — with parameters and examples.
+description: Every tool the Real A11y MCP server exposes — open_page, audit_page, the view tools, the checkpoint tools, the act tools — with parameters and examples.
 ---
 
 # MCP tools reference
 
-The Real A11y MCP server exposes **twenty tools** to an MCP client (Claude Code, Claude Desktop, Cursor, and any other MCP-capable assistant). Each tool drives a real Chromium page and reports what a screen reader would actually perceive — computed roles, accessible names, and the defects assistive tech announces as broken — not what the HTML source claims.
+The Real A11y MCP server exposes **nineteen tools** to an MCP client (Claude Code, Claude Desktop, Cursor, and any other MCP-capable assistant). Each tool drives a real Chromium page and reports what a screen reader would actually perceive — computed roles, accessible names, and the defects assistive tech announces as broken — not what the HTML source claims.
 
 The tools share **one** browser page. A typical run is [`open_page`](#open_page) → an audit or view tool ([`audit_page`](#audit_page), [`inspect_page`](#inspect_page), or a `get_*` view) → [`close_browser`](#close_browser). To interact, the loop is [`checkpoint_tree`](#checkpoint_tree) → an [act tool](#act) ([`click_element`](#click_element), [`type_text`](#type_text), [`focus_element`](#focus_element)) → [`diff_tree`](#diff_tree). Because every tool reads the same mutable page, calls must run **sequentially, never in parallel** — a second call mid-flight would race the first's navigation.
 
-Every audit and extraction tool takes an optional `rootSelector` (default `"body"`) that scopes the work to one region or component, and — except [`get_tab_order`](#get_tab_order) — a `producer` (`"dom"` default, or `"native"` for Chromium's own accessibility tree read over CDP). [`compare_producers`](#compare_producers) and any tool called with `producer: "native"` read the whole document (`rootSelector` must stay `"body"`). Tool output is capped at **40,000 characters** — a larger page is truncated with a note to narrow with `rootSelector`.
+Every read is built from **Chromium's own accessibility tree**, read over CDP. There is no `producer` parameter: each surface has exactly one correct producer, so there is nothing to choose. That tree is whole-document, so the audit and view tools take no `rootSelector` — the exceptions are [`get_tab_order`](#get_tab_order) and the tree checkpoints, which run in the page, where a selector means something. Tool output is capped at **40,000 characters**; a larger page is truncated with a note.
 
 Server behavior is configured entirely through [environment variables](#environment) — saved-login sessions, origin pinning, `file://` access, CDP attach. Credentials are never tool parameters, so session tokens stay out of the agent's context. On startup the server validates that configuration and **refuses to start** on a malformed storage-state file or an invalid origin (see [Environment](#environment)).
 
 ## All tools at a glance
 
-The **Producer** column shows which tools accept `producer: "native"` (Chromium's own tree over CDP, whole-document) versus the DOM walk. Click a tool for its parameters.
+Click a tool for its parameters.
 
 **Session**
 
-| Tool | Purpose | Producer |
-| --- | --- | --- |
-| [`open_page`](#open_page) | Navigate to a URL and ready it for queries — call first. | — |
-| [`close_browser`](#close_browser) | Tear down the browser session. | — |
+| Tool | Purpose |
+| --- | --- |
+| [`open_page`](#open_page) | Navigate to a URL and ready it for queries — call first. |
+| [`close_browser`](#close_browser) | Tear down the browser session. |
 
 **Audit**
 
-| Tool | Purpose | Producer |
-| --- | --- | --- |
-| [`audit_page`](#audit_page) | Every accessibility violation, grouped with CSS locators + severity — the flagship. | `dom` · `native` |
-| [`inspect_page`](#inspect_page) | Findings **plus** tree + outline + tab order from one extraction. | `dom` · `native` (tab order N/A) |
+| Tool | Purpose |
+| --- | --- |
+| [`audit_page`](#audit_page) | Every accessibility violation, grouped with CSS locators + severity — the flagship. |
+| [`inspect_page`](#inspect_page) | Findings **plus** tree + outline from one read. |
 
 **Views**
 
-| Tool | Purpose | Producer |
-| --- | --- | --- |
-| [`get_semantic_tree`](#get_semantic_tree) | Role + accessible-name tree — what a screen reader traverses. | `dom` · `native` |
-| [`get_heading_outline`](#get_heading_outline) | Heading outline (h1–h6) in document order. | `dom` · `native` |
-| [`get_tab_order`](#get_tab_order) | Focusable elements in keyboard Tab order. | `dom` only |
-| [`list_elements`](#list_elements) | Every element of one category (link / button / form / landmark / image / heading). | `dom` · `native` |
-
-**Producer parity**
-
-| Tool | Purpose | Producer |
-| --- | --- | --- |
-| [`compare_producers`](#compare_producers) | Diff the DOM producer against the native producer — a fidelity oracle. | reads both |
+| Tool | Purpose |
+| --- | --- |
+| [`get_semantic_tree`](#get_semantic_tree) | Role + accessible-name tree — what a screen reader traverses. |
+| [`get_heading_outline`](#get_heading_outline) | Heading outline (h1–h6) in document order. |
+| [`get_tab_order`](#get_tab_order) | Focusable elements in keyboard Tab order — the one in-page read. |
+| [`list_elements`](#list_elements) | Every element of one category (link / button / form / landmark / image / heading). |
 
 **Findings checkpoints**
 
-| Tool | Purpose | Producer |
-| --- | --- | --- |
-| [`checkpoint_findings`](#checkpoint_findings) | Snapshot the page's findings under a name (survives navigation). | — |
-| [`diff_findings`](#diff_findings) | Re-snapshot the page and diff it against a checkpoint: new / changed / fixed. | — |
-| [`diff_checkpoints`](#diff_checkpoints) | Diff two already-stored checkpoints (no re-snapshot). | — |
-| [`list_checkpoints`](#list_checkpoints) | List stored checkpoint labels with finding counts. | — |
-| [`export_checkpoint`](#export_checkpoint) | Export a checkpoint as a snapshot JSON artifact (CLI-compatible). | — |
-| [`import_checkpoint`](#import_checkpoint) | Load an external snapshot artifact as a checkpoint. | — |
+| Tool | Purpose |
+| --- | --- |
+| [`checkpoint_findings`](#checkpoint_findings) | Snapshot the page's findings under a name (survives navigation). |
+| [`diff_findings`](#diff_findings) | Re-snapshot the page and diff it against a checkpoint: new / changed / fixed. |
+| [`diff_checkpoints`](#diff_checkpoints) | Diff two already-stored checkpoints (no re-snapshot). |
+| [`list_checkpoints`](#list_checkpoints) | List stored checkpoint labels with finding counts. |
+| [`export_checkpoint`](#export_checkpoint) | Export a checkpoint as a snapshot JSON artifact (CLI-compatible). |
+| [`import_checkpoint`](#import_checkpoint) | Load an external snapshot artifact as a checkpoint. |
 
 **Tree checkpoints**
 
-| Tool | Purpose | Producer |
-| --- | --- | --- |
-| [`checkpoint_tree`](#checkpoint_tree) | Capture the current tree as an interaction-diff baseline (page-bound). | — |
-| [`diff_tree`](#diff_tree) | Diff the tree since `checkpoint_tree` — what an interaction changed. | — |
+| Tool | Purpose |
+| --- | --- |
+| [`checkpoint_tree`](#checkpoint_tree) | Capture the current tree as an interaction-diff baseline (page-bound). |
+| [`diff_tree`](#diff_tree) | Diff the tree since `checkpoint_tree` — what an interaction changed. |
 
 **Act**
 
-| Tool | Purpose | Producer |
-| --- | --- | --- |
-| [`click_element`](#click_element) | Real click at the node matched by role + accessible name. | `native` |
-| [`type_text`](#type_text) | Replace a text field's value; the result never echoes the text. | `native` |
-| [`focus_element`](#focus_element) | Move real keyboard focus; flags text fields for a follow-up `type_text`. | `native` |
+| Tool | Purpose |
+| --- | --- |
+| [`click_element`](#click_element) | Real click at the node matched by role + accessible name. |
+| [`type_text`](#type_text) | Replace a text field's value; the result never echoes the text. |
+| [`focus_element`](#focus_element) | Move real keyboard focus; flags text fields for a follow-up `type_text`. |
 
 ## Session
 
@@ -127,106 +121,95 @@ The reason the server exists. Both tools report violations a screen reader would
 
 ### `audit_page`
 
-*Read-only · scoped by `rootSelector` · the primary tool.*
+*Read-only · whole-document · the primary tool.*
 
 Run the accessibility rules against the current page and return every violation — unlabeled interactive controls, images missing alt text, skipped/missing/duplicate heading levels, unlabeled dialogs, and broken landmark structure. Findings come back grouped and counted (so "17 unlabeled links" is one row, each with its CSS locator) plus a machine-readable JSON block.
 
 Parameters:
 
-- **`rootSelector`** — string — optional (default `"body"`) — CSS selector for the audit root.
 - **`rules`** — array of `"no-unlabeled-interactive"` \| `"image-alt"` \| `"heading-order"` \| `"dialog-labeled"` \| `"landmark-structure"` — optional — a subset of rules to run. Omit to run all.
-- **`producer`** — `"dom"` \| `"native"` — optional (default `"dom"`) — which producer builds the tree. `"native"` audits **Chromium's own accessibility tree** (read over CDP) instead of the in-page DOM walk, reaching structure no in-page walk can — most visibly a `<video controls>`'s user-agent-shadow media controls. Native is whole-document, so `rootSelector` must stay `"body"` (any other value is refused). Chromium only.
 
-An agent calls this to get the full defect list, or narrows it — e.g. audit only the cookie-consent dialog for labeling:
+Audits **Chromium's own accessibility tree**, read over CDP, so it reaches structure no in-page walk can — most visibly a `<video controls>`'s user-agent-shadow media controls. Findings carry CSS locators, so that reach costs nothing in actionability. Whole-document; Chromium only.
 
-```json
-{ "rootSelector": "[role=dialog]", "rules": ["dialog-labeled", "no-unlabeled-interactive"] }
-```
-
-Or audits the native tree to catch what the DOM walk can't reach (e.g. a media player's controls):
+An agent calls this to get the full defect list, or narrows it to the rules it cares about:
 
 ```json
-{ "producer": "native" }
+{ "rules": ["dialog-labeled", "no-unlabeled-interactive"] }
 ```
 
 ### `inspect_page`
 
-*Read-only · scoped by `rootSelector` · prefer on dynamic pages.*
+*Read-only · whole-document · prefer on dynamic pages.*
 
-Return the audit findings **and** the semantic tree, heading outline, and tab order — all derived from **one** extraction, so they are guaranteed to describe the same instant. The element focused at capture time is marked `[focused]` in each view, so the agent can see, e.g., that opening a dialog moved focus into it. Prefer this over separate [`audit_page`](#audit_page) + `get_*` calls on moving pages (SPAs, pages with consent dialogs), where each separate call could catch a different state.
+Return the audit findings **and** the semantic tree and heading outline — all derived from **one** read, so they are guaranteed to describe the same instant. The element focused at capture time is marked `[focused]`, so the agent can see, e.g., that opening a dialog moved focus into it. Prefer this over separate [`audit_page`](#audit_page) + `get_*` calls on moving pages (SPAs, pages with consent dialogs), where each separate call could catch a different state.
+
+There is **no tab-order section**: the tree this reads carries none, and printing an empty block would read as *nothing on this page is focusable* — a very different claim from *not measured here*. Call [`get_tab_order`](#get_tab_order) for the keyboard sequence.
 
 Parameters:
 
-- **`rootSelector`** — string — optional (default `"body"`) — CSS selector for the extraction root.
 - **`rules`** — array of the five rule ids above — optional — subset for the findings section. Omit to run all.
 - **`includeGeneric`** — boolean — optional (default `false`) — include generic container nodes (`role=generic`) in the tree.
-- **`producer`** — `"dom"` \| `"native"` — optional (default `"dom"`) — build the snapshot from Chromium's own accessibility tree (findings + tree + outline). A native tree carries no tab order, so that section reports N/A; `rootSelector` must stay `"body"`. Chromium only.
 
 An agent calls this for a consistent whole-page picture in a single round-trip:
 
 ```json
-{ "rootSelector": "main", "includeGeneric": false }
+{ "includeGeneric": false }
 ```
 
 ## Views
 
-Token-efficient perception primitives — the individual slices of what a screen reader traverses. All are read-only and scoped by `rootSelector`.
+Token-efficient perception primitives — the individual slices of what a screen reader traverses. All are read-only. All read Chromium's own tree (whole-document) except [`get_tab_order`](#get_tab_order).
 
 ### `get_semantic_tree`
 
-*Read-only · scoped by `rootSelector`.*
+*Read-only · whole-document.*
 
-Return the page's accessibility tree as a deterministic, indented role + accessible-name outline — what a screen reader would traverse. The element focused at capture time is marked `[focused]`. Stable across runs and token-efficient.
+Return the page's accessibility tree as a deterministic, indented role + accessible-name outline — what a screen reader would traverse — read from **Chromium's own accessibility tree** over CDP. The element focused at capture time is marked `[focused]`. Stable across runs and token-efficient.
+
+This is the vocabulary the [act tools](#act) target in, so a node you aim at by role + name here is the same node they dispatch against.
 
 Parameters:
 
-- **`rootSelector`** — string — optional (default `"body"`).
 - **`includeGeneric`** — boolean — optional (default `false`) — include generic container nodes (`role=generic`).
-- **`producer`** — `"dom"` \| `"native"` — optional (default `"dom"`) — `"native"` returns Chromium's own accessibility tree (read over CDP), whole-document (`rootSelector` must stay `"body"`). This is how you *view* the native tree.
 
 An agent calls this to reason about page structure or diff it against another rendering.
 
 ### `get_heading_outline`
 
-*Read-only · scoped by `rootSelector`.*
+*Read-only · whole-document · takes no parameters.*
 
-Return the heading outline (`h1`–`h6` in document order) as an indented list — the structure a screen-reader user navigates by heading.
-
-Parameters:
-
-- **`rootSelector`** — string — optional (default `"body"`).
-- **`producer`** — `"dom"` \| `"native"` — optional (default `"dom"`) — `"native"` derives the outline from Chromium's own accessibility tree, whole-document (`rootSelector` must stay `"body"`).
+Return the heading outline (`h1`–`h6` in document order) as an indented list — the structure a screen-reader user navigates by heading. Derived from Chromium's own accessibility tree.
 
 An agent calls this to flag skipped levels or a missing/duplicate `h1`.
 
 ### `get_tab_order`
 
-*Read-only · scoped by `rootSelector`.*
+*Read-only · the one in-page read · the one tool `rootSelector` scopes.*
 
 Return the focusable elements in the order a keyboard user reaches them with Tab — numbered, each with role + accessible name. The stop focused at capture time is marked `[focused]`. Surfaces focus traps, illogical order, and unreachable controls.
 
 Parameters:
 
-- **`rootSelector`** — string — optional (default `"body"`).
+- **`rootSelector`** — string — optional (default `"body"`) — CSS selector for the walk.
 
-**DOM-only** — a native tree carries no tab order, so this tool takes no `producer`. An agent calls this to check keyboard operability of a form or menu.
+**Built from the in-page DOM walk — the only source there is, not a fallback.** Chromium's accessibility tree knows whether a node is *focusable*, but not the *sequence*: `tabindex` never reaches a native node, and ordering by it is DOM/layout work the AX tree doesn't expose. Because this one runs in the page, a selector means something here — which is why it keeps `rootSelector`.
+
+An agent calls this to check keyboard operability of a form or menu.
 
 ### `list_elements`
 
-*Read-only · scoped by `rootSelector`.*
+*Read-only · whole-document.*
 
-List every element of one category as role + accessible name + CSS locator — a focused view of one kind of element (e.g. `image` pairs with the `image-alt` rule, `form` with labeling).
+List every element of one category as role + accessible name + CSS locator — a focused view of one kind of element (e.g. `image` pairs with the `image-alt` rule, `form` with labeling). Listed from Chromium's own accessibility tree, so it agrees node for node with [`get_semantic_tree`](#get_semantic_tree) and [`audit_page`](#audit_page). An element inside a shadow root has no whole-document selector, so its locator path stops at the boundary.
 
 Parameters:
 
 - **`filter`** — `"heading"` \| `"link"` \| `"button"` \| `"form"` \| `"landmark"` \| `"image"` — **required** — the category to list.
-- **`rootSelector`** — string — optional (default `"body"`).
-- **`producer`** — `"dom"` \| `"native"` — optional (default `"dom"`) — `"native"` lists from Chromium's own accessibility tree, whole-document (`rootSelector` must stay `"body"`). Native locators are computed from the same document walk and read identically to DOM ones; an element inside a shadow root has no whole-document selector, so its path stops at the boundary.
 
 An agent calls this to review one element type without pulling the whole tree:
 
 ```json
-{ "filter": "image", "rootSelector": "main" }
+{ "filter": "image" }
 ```
 
 ## Findings checkpoints
@@ -244,8 +227,9 @@ Snapshot the current page's accessibility findings and store them under `name`; 
 Parameters:
 
 - **`name`** — string — required — the checkpoint label (the store key).
-- **`rootSelector`** — string — optional (default `"body"`) — CSS selector for the snapshot root.
 - **`rules`** — array of the five rule ids — optional — subset for the findings. Omit to run all.
+
+Whole-document, and built from the same producer `real-a11y snapshot` uses — which is what lets a checkpoint captured here be diffed by the CLI, and vice versa. The exported artifact records which views it measured (`meta.views`) and omits the tabs view rather than storing an empty one.
 
 ### `diff_findings`
 
@@ -256,7 +240,8 @@ Re-snapshot the current page and diff it against checkpoint `name`: which findin
 Parameters:
 
 - **`name`** — string — required — the checkpoint to diff against.
-- **`rootSelector`** — string — optional (default `"body"`).
+
+The re-snapshot carries the same rule subset the checkpoint was captured with, so rules the base never ran can't surface as spurious NEW.
 
 The headline cross-deploy workflow — diff prod against a preview in one session:
 
@@ -333,14 +318,14 @@ Errors if no checkpoint exists on the current page — including after a navigat
 
 ## Act
 
-The write side of the native producer: dispatch a real click, replace a text field's value, or move real keyboard focus — over CDP, against the node matched in **Chromium's own accessibility tree**. Chromium only.
+The write side of the same tree every read tool uses: dispatch a real click, replace a text field's value, or move real keyboard focus — over CDP, against the node matched in **Chromium's own accessibility tree**. Chromium only.
 
-Targeting is deliberately **role + accessible name**, never a CSS selector or a node id. The tools resolve the target against a fresh native tree immediately before every dispatch — the same view [`get_semantic_tree`](#get_semantic_tree) with `producer: "native"` prints — so if role and name can't reach a control, assistive technology can't reach it either, and that is an accessibility finding rather than a targeting inconvenience.
+Targeting is deliberately **role + accessible name**, never a CSS selector or a node id. The tools resolve the target against a fresh tree immediately before every dispatch — the same view [`get_semantic_tree`](#get_semantic_tree) prints — so a node you aim at by one name can't come back in a report under another, and if role and name can't reach a control, assistive technology can't reach it either. That is an accessibility finding rather than a targeting inconvenience.
 
 All three tools share the targeting parameters:
 
 - **`role`** — string — required — ARIA role exactly as the tree prints it (`button`, `link`, `textbox`, `checkbox`, `menuitem`, …).
-- **`name`** — string — optional — accessible name; case-insensitive, whitespace-normalized **exact** match against the **native** tree (names can differ from the DOM producer's — [`compare_producers`](#compare_producers) shows where). Pass `""` to target an unlabeled control; omit to match any name.
+- **`name`** — string — optional — accessible name; case-insensitive, whitespace-normalized **exact** match against the tree [`get_semantic_tree`](#get_semantic_tree) returns. Pass `""` to target an unlabeled control; omit to match any name.
 - **`nth`** — integer ≥ 1 — optional — 1-based pick among the role+name-filtered matches, in document order.
 
 When several nodes match and no `nth` was given, the tool errors and **lists the candidates as `nth=1 · role "name"` lines** — the remedy is copy-paste. A **disabled** target is refused with the cause (the page would silently ignore the action, and the empty diff that followed would mislead). A match with no backing DOM element (a synthesized node such as the document root) is refused before any CDP traffic.
@@ -349,7 +334,7 @@ The payoff is the loop: [`checkpoint_tree`](#checkpoint_tree) first, act, then [
 
 ### `click_element`
 
-_Acts on the page · targets by role + accessible name in the native tree · Chromium only._
+_Acts on the page · targets by role + accessible name · Chromium only._
 
 Dispatch a **real** click against the matched element. It can submit forms, toggle state, and **navigate** — and navigation discards the page's tree checkpoint, so re-checkpoint after any click that changes the page instance.
 
@@ -367,7 +352,7 @@ Set the value of the matched text field (role is usually `textbox`, `searchbox`,
 
 Additional parameter:
 
-- **`text`** — string — required — the text to enter. **Never echoed back in the result** (the same R1 redaction discipline the native producer applies to reading).
+- **`text`** — string — required — the text to enter. **Never echoed back in the result** (the same R1 redaction discipline the read path applies).
 
 There is deliberately **no credential parameter**, and this tool must not be used to log in — a password typed here would enter the agent's context. For pages behind auth, start the server with [`REAL_A11Y_MCP_STORAGE_STATE`](#real_a11y_mcp_storage_state) or [`REAL_A11Y_MCP_CDP`](#real_a11y_mcp_cdp) instead.
 
@@ -384,22 +369,6 @@ Move keyboard focus to the matched element — what a keyboard user's <kbd>Tab</
 ```json
 { "role": "searchbox", "name": "Search docs" }
 ```
-
-## Producer parity
-
-A Chromium-only fidelity oracle that compares the two producers. To *view* the native tree, use [`get_semantic_tree`](#get_semantic_tree) with `producer: "native"`; to *audit* it, [`audit_page`](#audit_page) with `producer: "native"`.
-
-### `compare_producers`
-
-*Read-only · whole document · Chromium only.*
-
-Diff the **DOM producer's** tree against the **native producer's** (Chromium's own tree over CDP) and report where they disagree on role or accessible name — a fidelity oracle that surfaces DOM-engine gaps (e.g. an unlabeled input the DOM engine names by its typed value) and structure only the native tree reaches (media controls). Compares only name-bearing roles, order- and indent-insensitively; matching nodes are omitted. Some "only in native" entries are iframe / shadow-DOM / user-agent-shadow content the DOM walk doesn't traverse, not name bugs.
-
-This is a **producer** diff (dom vs native at one instant) — distinct from [`diff_checkpoints`](#diff_checkpoints), which diffs two checkpoints **over time**.
-
-Parameters: none.
-
-An agent calls this to sanity-check the DOM producer before trusting a surprising finding, or to decide whether a page needs the native producer.
 
 ## Environment
 

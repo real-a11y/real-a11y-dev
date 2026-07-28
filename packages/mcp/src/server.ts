@@ -26,7 +26,6 @@ import {
   fingerprintFindings,
   parseSnapshotArtifact,
   projectNativeTree,
-  projectSnapshot,
   serializeArtifact,
   SnapshotFormatError,
 } from "@real-a11y-dev/snapshot";
@@ -65,10 +64,19 @@ function packageVersion(): string {
   }
 }
 
+/**
+ * A CSS scope for the in-page walk.
+ *
+ * Only the tools still built on that walk take it: `get_tab_order` (tab
+ * SEQUENCE is layout work Chromium's AX tree doesn't expose) and the tree
+ * checkpoints. Everything else reads Chromium's own accessibility tree, which
+ * is whole-document — there is nothing for a selector to scope, and a parameter
+ * that silently did nothing would be worse than none at all.
+ */
 const rootSelector = z
   .string()
   .default("body")
-  .describe("CSS selector for the audit/extraction root. Defaults to 'body'.");
+  .describe("CSS selector for the extraction root. Defaults to 'body'.");
 
 /** Cap oversized tool output so a huge page can't blow the agent's context. */
 const MAX_OUTPUT_CHARS = 40_000;
@@ -83,32 +91,6 @@ function bounded(body: string): string {
 function text(body: string) {
   return { content: [{ type: "text" as const, text: bounded(body) }] };
 }
-
-/** A tool result marked as an error (MCP `isError`), for guard rejections. */
-function errorText(body: string) {
-  return {
-    content: [{ type: "text" as const, text: bounded(body) }],
-    isError: true as const,
-  };
-}
-
-/**
- * The producer that builds the tree. `dom` (default) walks the light DOM in the
- * page; `native` reads Chromium's own accessibility tree over CDP — reaching
- * structure no in-page walk can (a `<video controls>`'s user-agent-shadow media
- * controls). Native is whole-document (so `rootSelector` must be `body`) and
- * carries no tab order — so the tab-order tool stays dom-only. Every tool that
- * projects a tree/findings/outline/element-list takes it. Chromium only.
- */
-const producer = z
-  .enum(["dom", "native"])
-  .default("dom")
-  .describe(
-    "Which producer builds the tree: 'dom' (default, in-page walk) or 'native' " +
-      "(Chromium's own a11y tree over CDP — reaches user-agent-shadow media " +
-      "controls a `<video controls>` exposes). Native is whole-document " +
-      "(rootSelector must be 'body') and carries no tab order. Chromium only.",
-  );
 
 // ── Act-tool targeting fragments ─────────────────────────────────────────
 // Targets are described in the tree's own vocabulary — role + accessible
@@ -126,10 +108,9 @@ const actName = z
   .optional()
   .describe(
     "Accessible name of the target — case-insensitive, whitespace-normalized " +
-      "EXACT match against the NATIVE tree (names can differ from the dom " +
-      "producer's; compare_producers shows where). Pass '' to target an " +
-      "unlabeled control. Omit to match any name; if several nodes match, the " +
-      "error lists them so you can pass nth.",
+      "EXACT match against the tree get_semantic_tree returns. Pass '' to " +
+      "target an unlabeled control. Omit to match any name; if several nodes " +
+      "match, the error lists them so you can pass nth.",
   );
 const actNth = z
   .number()
@@ -141,19 +122,6 @@ const actNth = z
       "the role+name-filtered matches. Use after an ambiguity error lists the " +
       "candidates.",
   );
-
-/**
- * Native audits the whole document, so it can't honor a narrowed `rootSelector`.
- * Return a guard error rather than silently ignoring the selector — mirrors the
- * CLI's `--producer native` + `--root` rejection.
- */
-function nativeScopeError(rootSelector: string) {
-  return errorText(
-    `The native producer audits the whole document — it can't be scoped to ` +
-      `rootSelector "${rootSelector}". Omit rootSelector (or set it to "body") ` +
-      `to use { producer: "native" }, or use the dom producer to scope.`,
-  );
-}
 
 const SEVERITY_ORDER: Record<Finding["severity"], number> = {
   error: 0,
@@ -239,37 +207,22 @@ export function renderAudit(findings: Finding[]): string {
 }
 
 /**
- * Render a single-extraction snapshot: audit + all three views, consistent.
+ * Render a single-extraction snapshot: audit + the tree and outline, all from
+ * one read of Chromium's own accessibility tree, so they describe one instant.
  *
- * Accepts the common `{ findings, tree, outline, tabOrder }` shape both the DOM
- * `PageSnapshot` and the native `CleanSnapshot` satisfy. Under the native
- * producer there is no tab order, so that section states so rather than showing
- * an empty block that reads like "nothing is focusable".
+ * No tab-order section: that tree carries none, and printing an empty block
+ * would read as "nothing on this page is focusable" — a very different claim
+ * from "not measured here". `get_tab_order` is the tab sequence.
  */
 type ViewSnapshot = {
   findings: Finding[];
   tree: string;
   outline: string;
-  tabOrder: string;
 };
-export function renderSnapshot(
-  snap: ViewSnapshot,
-  options: { producer?: "dom" | "native" } = {},
-): string {
-  const native = options.producer === "native";
+export function renderSnapshot(snap: ViewSnapshot): string {
   const treeNodes = snap.tree.split("\n").filter(Boolean).length;
-  // Count stops from the canonical (unnumbered) tab view: every non-empty line
-  // is one stop, except the `(nothing focusable)` sentinel. (This used to test
-  // `/^\d/`, which silently counted 0 once the `NN.` prefix was removed.)
-  const tabStops =
-    snap.tabOrder === "(nothing focusable)"
-      ? 0
-      : snap.tabOrder.split("\n").filter((l) => l.trim() !== "").length;
-  const tabInfo = native
-    ? "tab order N/A (native producer)"
-    : `${tabStops} tab stops`;
   return [
-    `Single-extraction snapshot — ${treeNodes} tree nodes, ${tabInfo}. All sections below describe the same instant.`,
+    `Single-extraction snapshot — ${treeNodes} tree nodes. All sections below describe the same instant. (Tab order is not part of this tree — call get_tab_order for the keyboard sequence.)`,
     "",
     renderAudit(snap.findings),
     "",
@@ -282,103 +235,6 @@ export function renderSnapshot(
     "```",
     snap.outline,
     "```",
-    "",
-    "## Tab order",
-    "```",
-    native
-      ? "(the native producer carries no tab order — use the dom producer for tab sequence)"
-      : numberTabStops(snap.tabOrder),
-    "```",
-  ].join("\n");
-}
-
-// Roles where the accessible name is meaningful and well-defined, so a custom
-// vs. native disagreement is a real fidelity signal. Pure text/structure roles
-// (paragraph, list, generic, StaticText…) are excluded — the two engines
-// represent text differently by design, and comparing those is just noise.
-const COMPARE_ROLES = new Set([
-  // interactive controls
-  "button",
-  "link",
-  "textbox",
-  "searchbox",
-  "combobox",
-  "checkbox",
-  "radio",
-  "switch",
-  "slider",
-  "spinbutton",
-  "menuitem",
-  "menuitemcheckbox",
-  "menuitemradio",
-  "option",
-  "tab",
-  // named non-interactive
-  "heading",
-  "img",
-  "dialog",
-  "alertdialog",
-  // landmarks
-  "main",
-  "navigation",
-  "banner",
-  "contentinfo",
-  "complementary",
-  "region",
-  "form",
-  "search",
-]);
-
-const roleOf = (line: string): string => line.trim().split(/[\s"]/)[0];
-
-/**
- * Diff the DOM producer's tree against the native producer's (Chromium) tree and
- * report where they disagree on role or accessible name — a fidelity oracle.
- * Both inputs are serialized trees in the same `role "name"` grammar; compares
- * only name-bearing roles ({@link COMPARE_ROLES}), order- and indent-
- * insensitively, so structural/text representation differences don't drown out
- * real signal.
- */
-export function renderCompare(domTree: string, nativeTree: string): string {
-  // Single literal space (not `\s+`) — the tree serializer always emits exactly
-  // one space before "(level N)", and an unbounded `\s+` on audited-page text is
-  // a polynomial-ReDoS surface (CodeQL js/polynomial-redos).
-  const norm = (l: string) => l.trim().replace(/ \(level \d+\)$/, "");
-  const keep = (l: string) => COMPARE_ROLES.has(roleOf(l));
-  const pairsOf = (tree: string) =>
-    tree.split("\n").filter(Boolean).map(norm).filter(keep);
-  const domPairs = pairsOf(domTree);
-  const nativePairs = pairsOf(nativeTree);
-
-  const count = (arr: string[]) => {
-    const m = new Map<string, number>();
-    for (const s of arr) m.set(s, (m.get(s) ?? 0) + 1);
-    return m;
-  };
-  const cc = count(domPairs);
-  const nc = count(nativePairs);
-  const onlyIn = (a: Map<string, number>, b: Map<string, number>) => {
-    const out: string[] = [];
-    for (const [k, n] of a) {
-      for (let i = 0; i < n - (b.get(k) ?? 0); i++) out.push(k);
-    }
-    return out.sort();
-  };
-  const onlyDom = onlyIn(cc, nc);
-  const onlyNative = onlyIn(nc, cc);
-  const total = onlyDom.length + onlyNative.length;
-
-  if (total === 0) {
-    return "The DOM and native producers agree — no role/name divergences.";
-  }
-  return [
-    `DOM vs. native (Chromium) producer — ${total} divergence(s). These are role/name pairs the two producers disagree on — a signal of a DOM-engine fidelity gap (though some "only in native" entries are iframe / shadow-DOM / user-agent-shadow content the DOM walk doesn't traverse, not name bugs). Matching nodes are omitted.`,
-    "",
-    "Only in the DOM producer (Real A11y in-page walk):",
-    ...(onlyDom.length ? onlyDom.map((l) => `  ${l}`) : ["  (none)"]),
-    "",
-    "Only in the NATIVE producer (Chromium):",
-    ...(onlyNative.length ? onlyNative.map((l) => `  ${l}`) : ["  (none)"]),
   ].join("\n");
 }
 
@@ -589,29 +445,18 @@ export function buildServer(
       title: "Audit accessibility",
       annotations: READ_ONLY,
       description:
-        "Run accessibility audits against the current page and return every violation — unlabeled interactive controls, skipped heading levels or missing/duplicate h1, unlabeled dialogs, and broken landmark structure. Reports what real assistive tech would announce as broken. This is the primary tool. Set producer='native' to audit Chromium's own accessibility tree instead of the in-page DOM walk — it reaches structure no in-page walk can (a `<video controls>`'s media controls) but is whole-document (no rootSelector).",
+        "Run accessibility audits against the current page and return every violation — unlabeled interactive controls, skipped heading levels or missing/duplicate h1, unlabeled dialogs, and broken landmark structure. Reports what real assistive tech would announce as broken. This is the primary tool. Audits Chromium's own accessibility tree, so it reaches structure no in-page walk can (a `<video controls>`'s user-agent-shadow media controls); findings carry CSS locators. Whole-document. Chromium only.",
       inputSchema: {
-        rootSelector,
         rules: z
           .array(z.enum(RULES))
           .optional()
           .describe("Subset of rules to run. Omit to run all rules."),
-        producer,
       },
     },
-    async ({ rootSelector, rules, producer }) => {
-      if (producer === "native") {
-        if (rootSelector !== "body") return nativeScopeError(rootSelector);
-        // Native findings are computed in Node over Chromium's own tree.
-        const snap = projectNativeTree(await session.nativeTree(), { rules });
-        return text(renderAudit(snap.findings));
-      }
-      const findings = await session.call<Finding[]>(
-        "collectFindings",
-        rootSelector,
-        rules && rules.length ? [rules] : [],
-      );
-      return text(renderAudit(findings));
+    async ({ rules }) => {
+      // Findings are computed in Node over Chromium's own tree.
+      const snap = projectNativeTree(await session.nativeTree(), { rules });
+      return text(renderAudit(snap.findings));
     },
   );
 
@@ -621,9 +466,8 @@ export function buildServer(
       title: "Inspect page (single snapshot)",
       annotations: READ_ONLY,
       description:
-        "Return the audit findings AND the semantic tree, heading outline, and tab order — all derived from ONE extraction, so they are guaranteed internally consistent. The element focused at capture time is marked `[focused]` in each view. Prefer this over separate audit_page + get_* calls on dynamic pages (SPAs, pages with consent dialogs) where separate calls could catch different states. Set producer='native' to build the snapshot from Chromium's own accessibility tree (findings + tree + outline); a native tree carries no tab order, so that section reports N/A.",
+        "Return the audit findings AND the semantic tree and heading outline — all derived from ONE read of Chromium's accessibility tree, so they are guaranteed internally consistent. The element focused at capture time is marked `[focused]`. Prefer this over separate audit_page + get_* calls on dynamic pages (SPAs, pages with consent dialogs) where separate calls could catch different states. That tree carries no tab order, so there is no tab-order section here — call get_tab_order for the keyboard sequence. Whole-document. Chromium only.",
       inputSchema: {
-        rootSelector,
         rules: z
           .array(z.enum(RULES))
           .optional()
@@ -632,19 +476,10 @@ export function buildServer(
           .boolean()
           .default(false)
           .describe("Include generic container nodes in the tree."),
-        producer,
       },
     },
-    async ({ rootSelector, rules, includeGeneric, producer }) => {
-      if (producer === "native") {
-        if (rootSelector !== "body") return nativeScopeError(rootSelector);
-        const snap = projectNativeTree(await session.nativeTree(), {
-          rules,
-          includeGeneric,
-        });
-        return text(renderSnapshot(snap, { producer: "native" }));
-      }
-      const snap = await session.snapshot(rootSelector, {
+    async ({ rules, includeGeneric }) => {
+      const snap = projectNativeTree(await session.nativeTree(), {
         rules,
         includeGeneric,
       });
@@ -659,28 +494,19 @@ export function buildServer(
       title: "Get semantic tree",
       annotations: READ_ONLY,
       description:
-        "Return the page's accessibility tree as a deterministic, indented role + accessible-name outline (what a screen reader would traverse). The element focused at capture time is marked `[focused]`. Token-efficient and stable across runs. Set producer='native' to read Chromium's own accessibility tree over CDP instead (whole-document, reaches user-agent-shadow media controls; no rootSelector).",
+        "Return the page's accessibility tree as a deterministic, indented role + accessible-name outline (what a screen reader would traverse) — read from Chromium's own accessibility tree over CDP, so it reaches user-agent-shadow media controls an in-page walk never sees. The element focused at capture time is marked `[focused]`. Token-efficient and stable across runs. This is the vocabulary the act tools target in. Whole-document. Chromium only.",
       inputSchema: {
-        rootSelector,
         includeGeneric: z
           .boolean()
           .default(false)
           .describe("Include generic container nodes (role=generic)."),
-        producer,
       },
     },
-    async ({ rootSelector, includeGeneric, producer }) => {
-      if (producer === "native") {
-        if (rootSelector !== "body") return nativeScopeError(rootSelector);
-        const snap = projectNativeTree(await session.nativeTree(), {
-          includeGeneric,
-        });
-        return text(snap.tree || "(empty tree)");
-      }
-      const tree = await session.call<string>("auditSnapshot", rootSelector, [
-        { includeGeneric },
-      ]);
-      return text(tree || "(empty tree)");
+    async ({ includeGeneric }) => {
+      const snap = projectNativeTree(await session.nativeTree(), {
+        includeGeneric,
+      });
+      return text(snap.tree || "(empty tree)");
     },
   );
 
@@ -690,20 +516,12 @@ export function buildServer(
       title: "Get heading outline",
       annotations: READ_ONLY,
       description:
-        "Return the page's heading outline (h1..h6 in document order) as an indented list. Set producer='native' to derive it from Chromium's own accessibility tree (whole-document; no rootSelector).",
-      inputSchema: { rootSelector, producer },
+        "Return the page's heading outline (h1..h6 in document order) as an indented list, derived from Chromium's own accessibility tree. Whole-document. Chromium only.",
+      inputSchema: {},
     },
-    async ({ rootSelector, producer }) => {
-      if (producer === "native") {
-        if (rootSelector !== "body") return nativeScopeError(rootSelector);
-        const snap = projectNativeTree(await session.nativeTree());
-        return text(snap.outline);
-      }
-      const outline = await session.call<string>(
-        "outlineSnapshot",
-        rootSelector,
-      );
-      return text(outline);
+    async () => {
+      const snap = projectNativeTree(await session.nativeTree());
+      return text(snap.outline);
     },
   );
 
@@ -713,7 +531,7 @@ export function buildServer(
       title: "Get tab order",
       annotations: READ_ONLY,
       description:
-        "Return the focusable elements in the order a keyboard user encounters them when pressing Tab, numbered, with role + accessible name. The stop focused at capture time is marked `[focused]`.",
+        "Return the focusable elements in the order a keyboard user encounters them when pressing Tab, numbered, with role + accessible name. The stop focused at capture time is marked `[focused]`. Built from the in-page DOM walk — Chromium's accessibility tree knows whether a node is focusable but not the SEQUENCE (tabindex never reaches it), so this is the only source for tab order, and the one tool `rootSelector` still scopes.",
       inputSchema: { rootSelector },
     },
     async ({ rootSelector }) => {
@@ -733,57 +551,18 @@ export function buildServer(
       title: "List elements by category",
       annotations: READ_ONLY,
       description:
-        "List every element of one category — links, buttons, form controls, landmarks, images, or headings — as role + accessible name + a CSS locator. A token-efficient way to review one kind of element (e.g. 'images' pairs with the image-alt rule, 'form' with labeling). Scope with rootSelector. Set producer='native' to list from Chromium's own accessibility tree (whole-document; no rootSelector).",
+        "List every element of one category — links, buttons, form controls, landmarks, images, or headings — as role + accessible name + a CSS locator. A token-efficient way to review one kind of element (e.g. 'images' pairs with the image-alt rule, 'form' with labeling). Listed from Chromium's own accessibility tree, so it agrees node for node with get_semantic_tree and audit_page. Whole-document. Chromium only.",
       inputSchema: {
         filter: z
           .enum(["heading", "link", "button", "form", "landmark", "image"])
           .describe("Which category of element to list."),
-        rootSelector,
-        producer,
       },
     },
-    async ({ filter, rootSelector, producer }) => {
-      if (producer === "native") {
-        if (rootSelector !== "body") return nativeScopeError(rootSelector);
-        // Node-side listing over the native tree — the same category engine the
-        // page bundle runs, minus locators (no element refs outside the page).
-        const list = listByRole(
-          await session.nativeTree(),
-          filter as RoleFilter,
-        );
-        return text(list || "(none)");
-      }
-      const list = await session.call<string>("listByRole", rootSelector, [
-        filter,
-      ]);
+    async ({ filter }) => {
+      // Node-side listing over the native tree — the same category engine the
+      // page bundle runs.
+      const list = listByRole(await session.nativeTree(), filter as RoleFilter);
       return text(list || "(none)");
-    },
-  );
-
-  // ── Producer parity (Chromium only) ──────────────────────────────────────
-  // To VIEW the native tree, call get_semantic_tree with producer:"native".
-  // This tool is the two-producer *diff* — kept distinct from diff_checkpoints
-  // (which diffs two checkpoints over time; this diffs two producers at once).
-  server.registerTool(
-    "compare_producers",
-    {
-      title: "Compare the DOM and native producers",
-      annotations: READ_ONLY,
-      description:
-        "Diff the DOM producer's accessibility tree against the native producer's (Chromium's own tree over CDP) and report where they disagree on role or accessible name — a fidelity oracle that surfaces DOM-engine gaps (e.g. an unlabeled input the DOM engine names by its typed value) and structure only the native tree reaches (media controls). This is a producer diff (dom vs native at one instant); for a before/after diff over time use diff_checkpoints. Whole document. Chromium only.",
-      inputSchema: {},
-    },
-    async () => {
-      const [domTree, nativeExtraction] = await Promise.all([
-        // markFocus:false — the native tree has no focus marker, so a `[focused]`
-        // suffix would register as a spurious dom-vs-native divergence.
-        session.call<string>("auditSnapshot", "body", [{ markFocus: false }]),
-        session.nativeTree(),
-      ]);
-      // The native side is the same canonical producer get_semantic_tree exposes
-      // (normalized), so a divergence here matches what { producer: "native" } shows.
-      const nativeTree = projectNativeTree(nativeExtraction).tree;
-      return text(renderCompare(domTree, nativeTree));
     },
   );
 
@@ -803,10 +582,9 @@ export function buildServer(
     {
       title: "Save a11y checkpoint",
       description:
-        "Snapshot the CURRENT page's accessibility findings and store them under `name`. Later call diff_findings to see which findings are new / changed / fixed — the same identity semantics (fingerprints) the CI a11y-diff uses. Checkpoints survive navigation, so you can checkpoint one deploy and diff another: save 'prod', open the preview URL, then diff_findings('prod'). They are held in memory and do NOT survive close_browser — call export_checkpoint first if you need one to outlive the session.",
+        "Snapshot the CURRENT page's accessibility findings and store them under `name`. Later call diff_findings to see which findings are new / changed / fixed — the same identity semantics (fingerprints) the CI a11y-diff uses. Checkpoints survive navigation, so you can checkpoint one deploy and diff another: save 'prod', open the preview URL, then diff_findings('prod'). They are held in memory and do NOT survive close_browser — call export_checkpoint first if you need one to outlive the session. Whole-document. Chromium only.",
       inputSchema: {
         name: checkpointName,
-        rootSelector,
         rules: z
           .array(z.enum(RULES))
           .optional()
@@ -819,10 +597,16 @@ export function buildServer(
         openWorldHint: false,
       },
     },
-    async ({ name, rootSelector, rules }) => {
-      const raw = await session.snapshot(rootSelector, { rules });
-      const page = buildSnapshotPage(name, currentUrl, projectSnapshot(raw), {
-        root: rootSelector,
+    async ({ name, rules }) => {
+      // Native, like `real-a11y snapshot`. These two write the SAME artifact
+      // shape through the same assembler so a checkpoint captured by one can be
+      // diffed by the other — which only holds while both read the same
+      // producer. `tabOrder: false` is the other half: a native page omits the
+      // tabs view rather than storing an empty one.
+      const snap = projectNativeTree(await session.nativeTree(), { rules });
+      const page = buildSnapshotPage(name, currentUrl, snap, {
+        root: "body",
+        tabOrder: false,
       });
       checkpoints.save(name, { page, rules });
       const treeKb = (page.tree.length / 1024).toFixed(1);
@@ -839,30 +623,25 @@ export function buildServer(
       annotations: READ_ONLY,
       description:
         "Re-snapshot the CURRENT page and diff it against the stored checkpoint `name`: which accessibility findings are NEW (these gate CI), CHANGED, or FIXED, plus an advisory structural summary. Use after a change (deploy, feature toggle, DOM edit) or after navigating to a different deploy of the same page.",
-      inputSchema: {
-        name: checkpointName,
-        rootSelector: z
-          .string()
-          .optional()
-          .describe(
-            "CSS root for the re-snapshot. Defaults to the root the checkpoint was saved with.",
-          ),
-      },
+      inputSchema: { name: checkpointName },
     },
-    async ({ name, rootSelector }) => {
+    async ({ name }) => {
       const base = checkpoints.get(name);
       if (!base) {
         return errText(
           `No checkpoint named "${name}". Save one first with checkpoint_findings.`,
         );
       }
-      // Re-snapshot with the SAME root AND rule set the checkpoint was captured
-      // with (unless the caller overrides the root), so findings from a wider
-      // scope or from rules the base never ran don't read as spurious NEW.
-      const root = rootSelector ?? base.page.root;
-      const raw = await session.snapshot(root, { rules: base.rules });
-      const head = buildSnapshotPage(name, currentUrl, projectSnapshot(raw), {
-        root,
+      // Re-snapshot with the SAME rule set the checkpoint was captured with, so
+      // findings from rules the base never ran don't read as spurious NEW.
+      const snap = projectNativeTree(await session.nativeTree(), {
+        // Stored loosely as `string[]`; validated against the rule enum when
+        // the checkpoint was saved.
+        rules: base.rules as A11yRule[] | undefined,
+      });
+      const head = buildSnapshotPage(name, currentUrl, snap, {
+        root: "body",
+        tabOrder: false,
       });
       return text(renderDiff(diffCheckpointPages(base.page, head)));
     },
@@ -926,6 +705,10 @@ export function buildServer(
       const artifact = buildArtifact([cp.page], {
         toolName: "@real-a11y-dev/mcp",
         toolVersion: packageVersion(),
+        // Declare what was measured. A checkpoint is native, so it has no tabs
+        // view — and an artifact that stayed silent about that would be read as
+        // "every tab stop is gone" by whatever diffs it next.
+        views: ["tree", "outline"],
         ...(cp.rules ? { rules: cp.rules } : {}),
       });
       const json = serializeArtifact(artifact);
@@ -1078,16 +861,15 @@ export function buildServer(
           return {
             ok: false,
             res: errText(
-              `No ${label} in the native tree — but ${resolved.matchesForRole} ${role}(s) with other names exist. ` +
-                `Check the name with get_semantic_tree { producer: "native" } (names can differ from the dom ` +
-                `producer's — compare_producers shows where), or omit name to list the candidates.`,
+              `No ${label} in the accessibility tree — but ${resolved.matchesForRole} ${role}(s) with other ` +
+                `names exist. Check the name with get_semantic_tree, or omit name to list the candidates.`,
             ),
           };
         }
         return {
           ok: false,
           res: errText(
-            `No ${label} in the native tree. Re-read it with get_semantic_tree { producer: "native" } — ` +
+            `No ${label} in the accessibility tree. Re-read it with get_semantic_tree — ` +
               `the page may have changed, or the element may not be exposed to assistive tech at all ` +
               `(which is itself an accessibility finding).`,
           ),

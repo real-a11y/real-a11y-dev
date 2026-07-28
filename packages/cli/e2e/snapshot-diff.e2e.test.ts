@@ -166,12 +166,12 @@ describe("diff", () => {
   });
 
   it("is neutral by default (unified diff); --explain adds the summary", async () => {
-    // more.json adds a second unlabeled button vs base — a new tab stop.
+    // more.json adds a second unlabeled button vs base — a new tree node.
     const neutral = await runCli(["diff", base, more, "--format", "md"]);
     // Neutral: a real unified diff (```diff + @@ hunk) + a hint, no statements.
     expect(neutral.stdout).toContain("```diff");
     expect(neutral.stdout).toContain("@@");
-    expect(neutral.stdout).not.toContain("Keyboard tab stop added");
+    expect(neutral.stdout).not.toContain("Interactive element added");
     expect(neutral.stdout).toContain("Run with `--explain`");
 
     const explained = await runCli([
@@ -185,17 +185,21 @@ describe("diff", () => {
     expect(explained.stdout).toContain(
       "**Structure (advisory — never blocks merge):**",
     );
-    expect(explained.stdout).toContain("Keyboard tab stop added: button");
+    expect(explained.stdout).toContain("Interactive element added: button");
     expect(explained.stdout).not.toContain("<details>");
 
     // JSON carries the full data regardless of --explain (machine surface).
     const json = await runCli(["diff", base, more, "--format", "json"]);
     const parsed = JSON.parse(json.stdout) as {
+      skippedViews: string[];
       pages: { structural: { kind: string }[] }[];
     };
     expect(parsed.pages[0].structural.map((s) => s.kind)).toContain(
-      "focus-stop-added",
+      "interactive-added",
     );
+    // Neither artifact measured tab order (native carries none), so the diff
+    // reports that axis as skipped rather than silently comparing "" to "".
+    expect(parsed.skippedViews).toEqual(["tabs"]);
     // LF-only output on every platform (byte-stable report promise).
     expect(json.stdout).not.toContain("\r");
   });

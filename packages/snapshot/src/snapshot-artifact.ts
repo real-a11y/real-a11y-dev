@@ -14,6 +14,10 @@ import type { FingerprintedFinding } from "./fingerprint.js";
 
 export const ARTIFACT_SCHEMA_VERSION = 1;
 
+/** The serialized views a run can measure. */
+export const SNAPSHOT_VIEWS = ["tree", "outline", "tabs"] as const;
+export type SnapshotView = (typeof SNAPSHOT_VIEWS)[number];
+
 export interface SnapshotPage {
   /** Join key across base/PR — never the URL (host/port legitimately differ). */
   name: string;
@@ -28,7 +32,13 @@ export interface SnapshotPage {
   findings: FingerprintedFinding[];
   tree: string;
   outline: string;
-  tabs: string;
+  /**
+   * Absent when the run didn't measure tab order — see `meta.views`. NOT the
+   * same as `""` (measured, nothing focusable): an absent view means "not
+   * measured", and the diff skips that axis instead of reporting every stop as
+   * removed. `parseSnapshotArtifact` keeps the two apart.
+   */
+  tabs?: string;
 }
 
 export interface SnapshotArtifact {
@@ -47,6 +57,21 @@ export interface SnapshotArtifact {
      * Additive: absent/null = full artifact.
      */
     only: "findings" | "views" | null;
+    /**
+     * Which views this run actually measured. The producer decides: the native
+     * a11y tree carries no tab order, so a native run measures tree + outline
+     * and omits `tabs` from every page.
+     *
+     * This exists because omission alone doesn't survive a round trip — a
+     * reader can't tell a missing field from an empty one, and would read
+     * "not measured" as "everything focusable disappeared", firing the tool's
+     * most safety-critical signal at volume on an upgrade where no page
+     * changed. The list is the presence signal; `tabs` is the payload.
+     *
+     * Additive: absent/null = a legacy artifact, captured when every run
+     * measured all three. Read it through {@link measuredViews}.
+     */
+    views?: SnapshotView[] | null;
   };
   pages: SnapshotPage[];
 }
@@ -58,6 +83,8 @@ export interface ArtifactMeta {
   device?: string;
   viewport?: string;
   only?: "findings" | "views";
+  /** Views this run measured. Defaults to all of {@link SNAPSHOT_VIEWS}. */
+  views?: readonly SnapshotView[];
 }
 
 export function buildArtifact(
@@ -72,9 +99,25 @@ export function buildArtifact(
       device: meta.device ?? null,
       viewport: meta.viewport ?? null,
       only: meta.only ?? null,
+      views: [...(meta.views ?? SNAPSHOT_VIEWS)],
     },
     pages,
   };
+}
+
+/**
+ * The views an artifact measured — the authority on whether a view's absence
+ * means "nothing there" or "never looked".
+ *
+ * A legacy artifact (no `meta.views`) predates the native migration, when every
+ * run measured all three; that is what its silence means, so that is what it
+ * reads as.
+ */
+export function measuredViews(
+  artifact: Pick<SnapshotArtifact, "meta">,
+): ReadonlySet<SnapshotView> {
+  const declared = artifact.meta?.views;
+  return new Set(Array.isArray(declared) ? declared : SNAPSHOT_VIEWS);
 }
 
 /**
@@ -129,6 +172,18 @@ export function parseSnapshotArtifact(
   if (!Array.isArray(a.pages)) {
     throw new SnapshotFormatError(`${label} has no "pages" array`);
   }
+  // Normalize the presence signal before the pages, so the two can never
+  // disagree: an unmeasured view is dropped from every page even if a
+  // hand-made artifact carried one, and a measured-but-missing one still
+  // defaults to "" (measured, nothing there) exactly as it always did.
+  const declared = a.meta?.views;
+  const measured: ReadonlySet<SnapshotView> = new Set(
+    Array.isArray(declared)
+      ? declared.filter((v): v is SnapshotView =>
+          (SNAPSHOT_VIEWS as readonly string[]).includes(v),
+        )
+      : SNAPSHOT_VIEWS,
+  );
   for (const page of a.pages) {
     if (
       typeof page !== "object" ||
@@ -141,7 +196,8 @@ export function parseSnapshotArtifact(
     if (!Array.isArray(p.findings)) p.findings = [];
     if (typeof p.tree !== "string") p.tree = "";
     if (typeof p.outline !== "string") p.outline = "";
-    if (typeof p.tabs !== "string") p.tabs = "";
+    if (!measured.has("tabs")) delete p.tabs;
+    else if (typeof p.tabs !== "string") p.tabs = "";
     if (p.status !== "ok" && p.status !== "error") p.status = "ok";
   }
   return a as SnapshotArtifact;

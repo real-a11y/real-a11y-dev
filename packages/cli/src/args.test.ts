@@ -11,7 +11,7 @@ import {
   parseStepSettle,
   DEFAULT_STEP_SETTLE_MS,
   parseRules,
-  parseProducer,
+  NATIVE_COMMANDS,
   rootHelp,
 } from "./args.js";
 import { CliError } from "./exit.js";
@@ -48,19 +48,40 @@ describe("parseFailOn / parseFormat", () => {
   });
 });
 
-describe("parseProducer", () => {
-  it("defaults to dom when omitted", () => {
-    expect(parseProducer(undefined)).toBe("dom");
+describe("the producer axis is gone", () => {
+  it("no command declares --producer", () => {
+    // Each surface has exactly one correct producer now, so there is nothing
+    // to choose — and a flag that silently did nothing would be worse.
+    for (const [name, spec] of Object.entries(COMMANDS)) {
+      expect(
+        spec.options,
+        `${name} still declares --producer`,
+      ).not.toHaveProperty("producer");
+      expect(spec.help, `${name}'s help still mentions --producer`).not.toMatch(
+        /--producer/,
+      );
+    }
   });
 
-  it("accepts dom and native", () => {
-    expect(parseProducer("dom")).toBe("dom");
-    expect(parseProducer("native")).toBe("native");
+  it("declares --root on `tabs` alone", () => {
+    // The one DOM holdout: tab ORDER is layout work the native tree doesn't
+    // expose, and a DOM walk is the only thing a selector can scope.
+    const withRoot = Object.entries(COMMANDS)
+      .filter(([, spec]) => "root" in spec.options)
+      .map(([name]) => name);
+    expect(withRoot).toEqual(["tabs"]);
   });
 
-  it("rejects anything else", () => {
-    expect(() => parseProducer("chromium")).toThrow(/dom \| native/);
-    expect(() => parseProducer("chromium")).toThrow(CliError);
+  it("keeps NATIVE_COMMANDS in lockstep with the commands that dropped --root", () => {
+    // NATIVE_COMMANDS is what turns a leftover `--root` into an explanation
+    // rather than "Unknown option" — it goes stale silently otherwise.
+    for (const name of NATIVE_COMMANDS) {
+      expect(COMMANDS, `${name} is not a command`).toHaveProperty(name);
+      expect(
+        COMMANDS[name].options,
+        `${name} declares --root`,
+      ).not.toHaveProperty("root");
+    }
   });
 });
 

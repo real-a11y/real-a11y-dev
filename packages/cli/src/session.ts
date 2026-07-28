@@ -25,8 +25,6 @@ import {
   type NativeSnapshotOptions,
 } from "@real-a11y-dev/snapshot";
 
-import type { Producer } from "./args.js";
-
 import { registerCleanup } from "./cleanup.js";
 import { CliError } from "./exit.js";
 import { assertFinalUrl } from "./url-gate.js";
@@ -200,26 +198,53 @@ export async function openPage(
 }
 
 /**
- * Extract and project to clean data. The DOM producer (default) serializes and
- * audits in the page and returns all four views. The native producer reads
- * Chromium's own a11y tree over CDP and is serialized + audited in Node — it is
- * whole-document (so `root` is ignored) and carries no tab order.
+ * Read Chromium's own accessibility tree over CDP, serialize + audit it in
+ * Node, and project to clean data. Whole-document by nature — there is no root
+ * to pass — and it carries no tab order: `snapshot.tabOrder` is always `""`,
+ * which callers must record as *unmeasured*, never as an empty view.
+ *
+ * This is the producer for every read except `tabs`.
+ */
+export async function nativeSnapshot(
+  session: BrowserSession,
+  options: SnapshotOptions = {},
+): Promise<CleanSnapshot> {
+  try {
+    return projectNativeTree(await session.nativeTree(), {
+      // `parseRules` already validated these against the rule set; the engine
+      // types them loosely as `string[]` across the browser boundary.
+      rules: options.rules as NativeSnapshotOptions["rules"],
+      includeGeneric: options.includeGeneric,
+    });
+  } catch (err) {
+    throw mapPageError(err, "body");
+  }
+}
+
+/** The raw native extraction, for the Node-side consumers (`list`) that want
+ *  the tree itself rather than a projected snapshot. Same error mapping. */
+export async function nativeTree(
+  session: BrowserSession,
+): Promise<Awaited<ReturnType<BrowserSession["nativeTree"]>>> {
+  try {
+    return await session.nativeTree();
+  } catch (err) {
+    throw mapPageError(err, "body");
+  }
+}
+
+/**
+ * The in-page DOM walk: serializes and audits inside the page and returns all
+ * four views from one `page.evaluate`. Only `tabs` still reads through this —
+ * the tab SEQUENCE is DOM/layout work Chromium's AX tree doesn't expose — and
+ * `root` is the scope that walk honours.
  */
 export async function snapshotPage(
   session: BrowserSession,
   root: string,
   options: SnapshotOptions,
-  producer: Producer = "dom",
 ): Promise<CleanSnapshot> {
   try {
-    if (producer === "native") {
-      return projectNativeTree(await session.nativeTree(), {
-        // `parseRules` already validated these against the rule set; the engine
-        // types them loosely as `string[]` across the browser boundary.
-        rules: options.rules as NativeSnapshotOptions["rules"],
-        includeGeneric: options.includeGeneric,
-      });
-    }
     return projectSnapshot(await session.snapshot(root, options));
   } catch (err) {
     throw mapPageError(err, root);

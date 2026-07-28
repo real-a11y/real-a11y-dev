@@ -1,16 +1,17 @@
 /**
  * The view commands — tree / outline / tabs / list. Views, not gates: they
- * always exit 0 unless something actually failed. All three snapshot views
- * come from the shared single-extraction snapshot; `list` calls the page
- * bundle's listByRole directly.
+ * always exit 0 unless something actually failed.
+ *
+ * `tree`, `outline`, and `list` read Chromium's own accessibility tree, so they
+ * agree with `audit` node for node and reach what an in-page walk can't.
+ * `tabs` is the deliberate holdout: native knows whether a node is focusable
+ * but not the SEQUENCE, so the tab view is built from the in-page DOM walk —
+ * the only source, not a fallback.
  */
 
+import { listByRole, type RoleFilter } from "@real-a11y-dev/audit";
 import { numberTabStops } from "@real-a11y-dev/serialize";
-import {
-  redactUrl,
-  sanitizeText,
-  type CleanSnapshot,
-} from "@real-a11y-dev/snapshot";
+import { redactUrl, sanitizeText } from "@real-a11y-dev/snapshot";
 
 import {
   parseFormat,
@@ -22,7 +23,13 @@ import {
 import { EXIT } from "../exit.js";
 import { progress, writeReport } from "../output.js";
 import { renderJson, type PageReport } from "../render/json.js";
-import { callPage, createSession, openPage, snapshotPage } from "../session.js";
+import {
+  createSession,
+  nativeSnapshot,
+  nativeTree,
+  openPage,
+  snapshotPage,
+} from "../session.js";
 
 import {
   isAuthenticated,
@@ -30,7 +37,6 @@ import {
   rootOf,
   sessionFlags,
   singleTarget,
-  producerOf,
   type Target,
 } from "./common.js";
 
@@ -56,67 +62,77 @@ async function withPage<T>(
   }
 }
 
-function makeSnapshotView(
+/** Emit one view, either as `--format json` or as plain text. */
+function writeView(
   command: "tree" | "outline" | "tabs",
-  pick: (snapshot: CleanSnapshot) => string,
+  target: Target,
+  flags: FlagValues,
+  finalUrl: string,
+  text: string,
+): number {
+  const format = parseFormat(flags.format, ["pretty", "json"] as const);
+  if (format === "json") {
+    const page: PageReport = { name: target.name, url: finalUrl, findings: [] };
+    if (command === "tree") page.tree = text;
+    else if (command === "outline") page.outline = text;
+    else page.tabs = text;
+    writeReport(outputOf(flags), renderJson(command, [page]));
+  } else {
+    // Number the tab-order view at print time — a terminal listing reads
+    // better with an explicit ordinal. The stored `json` form above and the
+    // shared snapshot stay canonical (unnumbered) so nothing committed churns.
+    const pretty = command === "tabs" ? numberTabStops(text) : text;
+    writeReport(
+      outputOf(flags),
+      pretty.endsWith("\n") ? pretty : `${pretty}\n`,
+    );
+  }
+  return EXIT.OK;
+}
+
+function makeNativeView(
+  command: "tree" | "outline",
+  pick: (snapshot: { tree: string; outline: string }) => string,
 ): CommandFn {
   return async (positionals, flags) => {
-    const format = parseFormat(flags.format, ["pretty", "json"] as const);
-    // tabs is a tab-order view; a native tree carries none, so only tree/outline
-    // opt into native.
-    const producer = producerOf(flags, command, command !== "tabs");
+    // Validate the format before a browser launches.
+    parseFormat(flags.format, ["pretty", "json"] as const);
     const target = singleTarget(positionals, flags, command);
-    const { value: text, finalUrl } = await withPage(
-      target,
-      flags,
-      async (session) => {
-        const snapshot = await snapshotPage(
-          session,
-          rootOf(flags),
-          { includeGeneric: flags["include-generic"] === true },
-          producer,
-        );
-        return pick(snapshot);
-      },
+    const { value: text, finalUrl } = await withPage(target, flags, (session) =>
+      nativeSnapshot(session, {
+        includeGeneric: flags["include-generic"] === true,
+      }).then(pick),
     );
-    if (format === "json") {
-      const page: PageReport = {
-        name: target.name,
-        url: finalUrl,
-        findings: [],
-      };
-      if (command === "tree") page.tree = text;
-      else if (command === "outline") page.outline = text;
-      else page.tabs = text;
-      writeReport(outputOf(flags), renderJson(command, [page]));
-    } else {
-      // Number the tab-order view at print time — a terminal listing reads
-      // better with an explicit ordinal. The stored `json` form above and the
-      // shared snapshot stay canonical (unnumbered) so nothing committed churns.
-      const pretty = command === "tabs" ? numberTabStops(text) : text;
-      writeReport(
-        outputOf(flags),
-        pretty.endsWith("\n") ? pretty : `${pretty}\n`,
-      );
-    }
-    return EXIT.OK;
+    return writeView(command, target, flags, finalUrl, text);
   };
 }
 
-export const treeCommand = makeSnapshotView("tree", (s) => s.tree);
-export const outlineCommand = makeSnapshotView("outline", (s) => s.outline);
-export const tabsCommand = makeSnapshotView("tabs", (s) => s.tabOrder);
+export const treeCommand = makeNativeView("tree", (s) => s.tree);
+export const outlineCommand = makeNativeView("outline", (s) => s.outline);
+
+/** The one DOM read left: tab ORDER is layout work Chromium's AX tree doesn't
+ *  expose (`tabindex` never reaches a native node), so this walks the page. */
+export const tabsCommand: CommandFn = async (positionals, flags) => {
+  parseFormat(flags.format, ["pretty", "json"] as const);
+  const target = singleTarget(positionals, flags, "tabs");
+  const { value: text, finalUrl } = await withPage(target, flags, (session) =>
+    snapshotPage(session, rootOf(flags), {}).then((s) => s.tabOrder),
+  );
+  return writeView("tabs", target, flags, finalUrl, text);
+};
 
 export const listCommand: CommandFn = async (positionals, flags) => {
   const category = parseListCategory(positionals[0]);
-  // list runs the page-bundle's listByRole in the page; there's no native path.
-  producerOf(flags, "list", false);
   const format = parseFormat(flags.format, ["pretty", "json"] as const);
   const target = singleTarget(positionals.slice(1), flags, "list");
+  // Listed from the native tree in Node — the same category engine the page
+  // bundle runs, over the tree `audit` and `tree` already agree on.
   const { value: raw, finalUrl } = await withPage(target, flags, (session) =>
-    callPage<string>(session, "listByRole", rootOf(flags), [category]),
+    nativeTree(session).then((tree) =>
+      listByRole(tree, category as RoleFilter),
+    ),
   );
-  const text = sanitizeText(typeof raw === "string" ? raw : String(raw));
+  const text = sanitizeText(raw);
   if (format === "json") {
     const page: PageReport = {
       name: target.name,

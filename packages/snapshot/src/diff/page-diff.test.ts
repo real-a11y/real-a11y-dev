@@ -204,3 +204,75 @@ describe("noPagesMatched", () => {
     expect(noPagesMatched(empty, empty)).toBe(false);
   });
 });
+
+describe("an unmeasured view is skipped, not read as emptied", () => {
+  /** A DOM-era artifact: three tab stops, and no `meta.views` at all. */
+  const domEra = () =>
+    artifact([
+      page("Home", [], { tabs: 'link "Home"\nbutton "Save"\nlink "Docs"' }),
+    ]);
+  /** A native artifact: same page, no tabs view, and it says so. */
+  const native = () =>
+    buildArtifact([page("Home", [], { tabs: undefined })], {
+      toolName: "cli",
+      toolVersion: "0.0.1",
+      views: ["tree", "outline"],
+    });
+
+  it("reports NO tab-stop removals across a producer migration", () => {
+    // The failure this guards: base has N stops, PR measured none, and every
+    // stop reads as removed — "Keyboard tab stop removed" per focusable
+    // element, per page, on an upgrade where nothing about the page changed.
+    const result = diffArtifacts(domEra(), native());
+    const p = result.pages[0];
+    expect(p.views.tabs).toEqual({ added: [], removed: [] });
+    expect(p.viewHunks.tabs).toEqual([]);
+    expect(p.structural.map((s) => s.kind)).not.toContain("focus-stop-removed");
+    expect(p.structural.map((s) => s.kind)).not.toContain("tabs-emptied");
+  });
+
+  it("names the skipped axis, so silence isn't read as 'tab order is fine'", () => {
+    expect(diffArtifacts(domEra(), native()).skippedViews).toEqual(["tabs"]);
+  });
+
+  it("skips it in either direction — an old PR against a new base too", () => {
+    expect(diffArtifacts(native(), domEra()).skippedViews).toEqual(["tabs"]);
+    expect(diffArtifacts(native(), native()).skippedViews).toEqual(["tabs"]);
+  });
+
+  it("compares tab order normally when both sides measured it", () => {
+    const base = domEra();
+    const pr = artifact([
+      page("Home", [], { tabs: 'link "Home"\nlink "Docs"' }),
+    ]);
+    const result = diffArtifacts(base, pr);
+    expect(result.skippedViews).toEqual([]);
+    expect(result.pages[0].views.tabs.removed).toContain('button "Save"');
+    expect(result.pages[0].structural.map((s) => s.kind)).toContain(
+      "focus-stop-removed",
+    );
+  });
+
+  it("still reports the emptied-view sentinel when tab order WAS measured", () => {
+    // The alarm must stay loud for the real case: a page that genuinely lost
+    // every one of its tab stops.
+    const pr = artifact([page("Home", [], { tabs: "(nothing focusable)" })]);
+    const result = diffArtifacts(domEra(), pr);
+    expect(result.skippedViews).toEqual([]);
+    expect(result.pages[0].structural.map((s) => s.kind)).toContain(
+      "tabs-emptied",
+    );
+  });
+
+  it("leaves the tree and outline axes fully compared", () => {
+    // Skipping is per-axis: losing tab order must not blind the other views.
+    const base = native();
+    const pr = buildArtifact(
+      [page("Home", [], { tabs: undefined, tree: "main\n  button" })],
+      { toolName: "cli", toolVersion: "0.0.1", views: ["tree", "outline"] },
+    );
+    const result = diffArtifacts(base, pr);
+    expect(result.pages[0].views.tree.added).toContain("button");
+    expect(result.pages[0].viewHunks.tree.length).toBeGreaterThan(0);
+  });
+});

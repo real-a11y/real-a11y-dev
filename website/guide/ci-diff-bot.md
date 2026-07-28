@@ -84,9 +84,8 @@ order + indentation, color-coded so a PR email keeps the green/red). The
 comment caps at the first 5 routes and 20 diff lines each; the **full diff is
 always in the job log** (the workflow prints it uncapped) and linked from the
 comment footer. Even changes no line diff can see get a statement: a *pure
-reorder* of the tab
-order adds or removes no lines, but reads as
-`Keyboard tab order changed: 4 stops moved (same 14 stops)`.
+reorder* of the heading outline adds or removes no lines, but reads as
+`Heading order changed (same headings, different order)`.
 
 The comment is **updated in place** — not spammed. If the PR is fixed and re-pushed, the comment updates to `0 new`. Only **new** findings can fail the build (`diff` exits `1` at/above `--fail-on`); pre-existing debt and fixes never block a PR — structural statements are always advisory.
 
@@ -473,11 +472,30 @@ The JSON — not the Markdown — is what you feed into `diff`. Reach for `--md`
 | Heading level skipped | ✅ (new `heading-order` finding) |
 | Dialog no longer has accessible name | ✅ (new `dialog-labeled` finding) |
 | Role changed (`button` → `div`) | ✅ (structural tree diff) |
-| Focusable element removed from tab order | ✅ (`Keyboard tab stop removed: … — still on the page but no longer keyboard-focusable`) |
-| Tab order reordered (no lines added/removed) | ✅ (`Keyboard tab order changed: N stops moved`) |
+| Interactive element removed from the tree | ✅ (`Interactive element removed: …`) |
+| Heading order changed (no lines added/removed) | ✅ (`Heading order changed …`) |
 | ARIA state silently cleared | ✅ (structural tree diff) |
+| **Tab order changed** | ❌ **not measured** — see below |
 
-The five rules surface as **findings** (new / changed / fixed); shape-only shifts that don't trip a rule — a landmark or heading change, a new tab stop, a role swap, a reordered tab sequence — surface as advisory **plain-language statements** per page, with the raw tree / outline / tabs line diffs inline beneath them (`--format json` exposes both, as `pages[].structural` and `pages[].views`).
+The five rules surface as **findings** (new / changed / fixed); shape-only shifts that don't trip a rule — a landmark or heading change, a role swap, a reordered outline — surface as advisory **plain-language statements** per page, with the raw tree / outline line diffs inline beneath them (`--format json` exposes both, as `pages[].structural` and `pages[].views`).
+
+### Tab order is not part of this gate
+
+`snapshot` reads Chromium's own accessibility tree, which carries no tab order:
+`tabindex` never reaches a native node, and ordering by it is DOM/layout work
+that tree doesn't expose. So an artifact measures `tree` and `outline` only, and
+records that in `meta.views`.
+
+The diff does **not** silently treat the missing view as empty. When either side
+didn't measure a view it skips that axis and says so — in `--format json`, as
+`skippedViews` — because reading "not measured" as "emptied" would report every
+keyboard tab stop on every page as removed, which is the loudest statement this
+tool makes, fired on an upgrade where nothing about the page changed.
+
+Keyboard order still has a command: `real-a11y tabs <url>`, which runs the
+in-page walk and takes `--root`. To gate on it in CI, run `tabs` for the routes
+you care about and diff its output yourself; a first-class tab-order axis for
+`snapshot`/`diff` is not part of this workflow today.
 
 ---
 

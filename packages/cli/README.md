@@ -56,10 +56,10 @@ opt out.
 | --- | --- |
 | `install` | Download Chrome from Chrome for Testing (first time only) |
 | `audit <url...>` | Violations grouped by rule (the gate) |
-| `inspect <url>` | Findings **plus** tree + outline + tab order, one extraction |
+| `inspect <url>` | Findings **plus** tree + outline, one extraction |
 | `tree <url>` | The semantic tree (role + accessible name) |
 | `outline <url>` | Heading outline |
-| `tabs <url>` | Focusable elements in Tab order |
+| `tabs <url>` | Focusable elements in Tab order (the one in-page read) |
 | `list <cat> <url>` | One category: heading, link, button, form, landmark, image |
 | `interact <url> --step …` | Run steps on a page, then show what they changed |
 | `click <url> --role …` | Click one element by role + accessible name |
@@ -71,8 +71,8 @@ opt out.
 
 Every command takes `--format json` for a stable machine envelope
 (`schemaVersion: 1`, `pages[].findings[]` with stable `v1:` fingerprints),
-`--device "iPhone 13"`, `--root <selector>`, `--output <file>`, and more —
-see `real-a11y <command> --help`.
+`--device "iPhone 13"`, `--output <file>`, and more — see
+`real-a11y <command> --help`.
 
 Local builds audit directly: `real-a11y audit ./dist/index.html` (paths you
 type need no ceremony).
@@ -89,28 +89,42 @@ Downloads [Chrome for Testing](https://developer.chrome.com/blog/chrome-for-test
 
 Every browser-driving command also takes `--chrome-path <file>` to launch a specific binary directly (ignored with `--cdp`, which reuses a running browser). Resolution order: `--chrome-path` > `REAL_A11Y_CHROME_PATH` env > the `install` cache > Playwright's own bundled Chromium.
 
-### `--producer native`
+### One producer per command
 
-By default the CLI walks the light DOM in the page (the **DOM producer**). Pass
-`--producer native` to `audit`, `tree`, or `outline` to read **Chromium's own
-accessibility tree** over CDP instead — it reaches structure no in-page walk
-can, most visibly a `<video controls>`'s play/scrubber/mute controls, which live
-in a closed user-agent shadow root:
+`audit`, `inspect`, `tree`, `outline`, `list`, `snapshot`, and the act commands
+all read **Chromium's own accessibility tree** over CDP. It reaches structure no
+in-page walk can, most visibly a `<video controls>`'s play/scrubber/mute
+controls, which live in a closed user-agent shadow root:
 
 ```sh
-real-a11y tree  https://example.com/player --producer native   # media controls appear
-real-a11y audit https://example.com/player --producer native   # and get audited
+real-a11y tree  https://example.com/player   # media controls appear
+real-a11y audit https://example.com/player   # and get audited
 ```
 
-A native finding carries the same CSS locator a DOM finding does, computed by
-the same builder during the one document walk the producer already makes — with
-one honest exception: an element inside a shadow root has no whole-document
-selector, so its path stops at the boundary.
+Findings carry the same CSS locator they always did, computed during the one
+document walk the read already makes — with one honest exception: an element
+inside a shadow root has no whole-document selector, so its path stops at the
+boundary.
 
-Native mode is whole-document and read-only, so it's accepted only where that
-fits (`audit`, `tree`, `outline`). Commands that carry a tab sequence (`tabs`,
-`inspect`, `snapshot`) or list one category from the page (`list`) reject it, and
-it can't be combined with `--root`.
+There is **no `--producer` flag**: each command has exactly one correct producer,
+so there is nothing to choose. That tree is whole-document, so those commands
+take **no `--root`** either.
+
+**`tabs` is the exception, and not a fallback.** Chromium's tree knows whether a
+node is *focusable*, but not the *sequence*: `tabindex` never reaches a native
+node, and ordering by it is DOM/layout work the AX tree doesn't expose. So
+`real-a11y tabs` still runs the in-page walk — the only source there is — and is
+the one command `--root` still scopes.
+
+Two consequences worth knowing before you upgrade:
+
+- **`inspect` no longer prints a tab-order section.** It won't print an empty
+  one either: an empty block reads as *nothing on this page is focusable*, a
+  very different claim from *not measured*. Run `real-a11y tabs` for the
+  sequence. In exchange, `inspect` and `audit` now agree on findings, which they
+  previously did not.
+- **`snapshot` artifacts no longer carry a `tabs` view**, and record that fact
+  in `meta.views`. See [Track regressions across a PR](#track-regressions-across-a-pr).
 
 ## Interact — and see what it changed
 
@@ -149,10 +163,9 @@ way, assistive technology can't reach it either, and that's a finding rather
 than a targeting inconvenience. Ambiguous matches list their `nth=` candidates;
 a disabled target is refused rather than clicked into an empty diff.
 
-Targeting, acting, and the diff all read that same native tree, so a node you
-aim at by one name can't come back in the report under another. It is
-whole-document, which is why these commands take neither `--producer` nor
-`--root`.
+Targeting, acting, and the diff all read that same tree, so a node you aim at by
+one name can't come back in the report under another. It is whole-document,
+which is why these commands take no `--root`.
 
 Each step gets a moment to land before the next one targets and before the diff
 is taken — `--step-settle` (default 200ms), because a React state update flushes
@@ -184,8 +197,9 @@ real-a11y audit http://localhost:3000 --no-config   # ignore the config for this
 Add a **`urls`** list — bare URL strings, or `{ url, name?, rootSelector? }`
 objects — to name your project's routes once; then a bare `real-a11y audit` (or
 `snapshot`) audits them all, no URL to re-type. Each route's `name` is the diff
-join key and its `rootSelector` scopes that route — on `audit` an explicit
-`--root` overrides it for the run; `snapshot` always uses the route's own:
+join key. Its `rootSelector` no longer scopes `audit` or `snapshot` — those read
+the whole document — so both warn (they do not fail) when a route sets one, and
+it still scopes `real-a11y tabs --root <selector>`:
 
 ```json
 {
@@ -230,6 +244,18 @@ Pages come from positional URLs, else `A11Y_PAGES`, else the `urls` list in
 copy-pasted script. The diff is
 finding-identity-aware: a renumbered `:nth-of-type` locator or a re-indented
 subtree is not a change — only an actual new/changed/fixed violation is.
+
+**Which views an artifact measured.** An artifact records its measured views in
+`meta.views`. Snapshots read the whole-document accessibility tree, which
+carries no tab order, so they measure `tree` and `outline` and omit the `tabs`
+view from every page — *absent*, not empty. The two are not the same claim: an
+empty tabs view means "measured, nothing focusable", and diffing that against a
+populated one would report every keyboard tab stop on every page as removed.
+When either side didn't measure a view, `diff` skips that axis and says so
+(`skippedViews` in `--format json`) rather than reporting it as emptied — so
+upgrading across this change doesn't fire the tool's most safety-critical
+signal on pages where nothing changed. A pre-upgrade artifact stays diffable;
+re-capture both sides to compare tab order again.
 
 Structural drift that doesn't trip a rule shows as a **real unified diff** —
 context lines, order, indentation, like a PR file diff — so you can see *where*
@@ -290,7 +316,7 @@ stays to explain it. Under `--only findings`, view-axis modifiers like
 `--explain` and `--max-lines` are simply inert (nothing left to modify).
 
 The same flag shapes `snapshot`'s **md report** (`--md --only views` exports a
-page set's tree/outline/tabs; `--md --only findings` a findings report) — or
+page set's tree + outline; `--md --only findings` a findings report) — or
 writes a **partial JSON artifact** (`--only views -o views.json`): the filtered
 axis is stripped and `meta.only` records the capture mode. Partial artifacts
 are machine exports, not diff inputs — `diff` rejects them outright, since an

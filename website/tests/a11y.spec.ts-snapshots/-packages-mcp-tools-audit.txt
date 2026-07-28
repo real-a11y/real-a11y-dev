@@ -100,13 +100,11 @@ navigation "On this page"
     listitem
       link "Act"
     listitem
-      link "Producer parity"
-    listitem
       link "Environment"
 main
   heading "MCP tools reference" (level 1)
   paragraph "The Real A11y MCP server exposes to an MCP client (Claude Code, Claude Desktop, Cursor, and any other MCP-capable assistant). Each tool drives a real Chromium page and reports what a screen reader would actually perceive — computed roles, accessible names, and the defects assistive tech announces as broken — not what the HTML source claims."
-    strong "twenty tools"
+    strong "nineteen tools"
   paragraph "The tools share browser page. A typical run is → an audit or view tool (, , or a view) → . To interact, the loop is → an (, , ) → . Because every tool reads the same mutable page, calls must run — a second call mid-flight would race the first's navigation."
     strong "one"
     link "open_page"
@@ -130,30 +128,20 @@ main
     link "diff_tree"
       code "diff_tree"
     strong "sequentially, never in parallel"
-  paragraph "Every audit and extraction tool takes an optional (default ) that scopes the work to one region or component, and — except — a ( default, or for Chromium's own accessibility tree read over CDP). and any tool called with read the whole document ( must stay ). Tool output is capped at — a larger page is truncated with a note to narrow with ."
+  paragraph "Every read is built from , read over CDP. There is no parameter: each surface has exactly one correct producer, so there is nothing to choose. That tree is whole-document, so the audit and view tools take no — the exceptions are and the tree checkpoints, which run in the page, where a selector means something. Tool output is capped at ; a larger page is truncated with a note."
+    strong "Chromium's own accessibility tree"
+    code "producer"
     code "rootSelector"
-    code ""body""
     link "get_tab_order"
       code "get_tab_order"
-    code "producer"
-    code ""dom""
-    code ""native""
-    link "compare_producers"
-      code "compare_producers"
-    code "producer: "native""
-    code "rootSelector"
-    code ""body""
     strong "40,000 characters"
-    code "rootSelector"
   paragraph "Server behavior is configured entirely through — saved-login sessions, origin pinning, access, CDP attach. Credentials are never tool parameters, so session tokens stay out of the agent's context. On startup the server validates that configuration and on a malformed storage-state file or an invalid origin (see )."
     link "environment variables"
     code "file://"
     strong "refuses to start"
     link "Environment"
   heading "All tools at a glance" (level 2)
-  paragraph "The column shows which tools accept (Chromium's own tree over CDP, whole-document) versus the DOM walk. Click a tool for its parameters."
-    strong "Producer"
-    code "producer: "native""
+  paragraph "Click a tool for its parameters."
   paragraph
     strong "Session"
   table
@@ -161,20 +149,17 @@ main
       row
         rowheader "Tool"
         rowheader "Purpose"
-        rowheader "Producer"
     rowgroup
       row
         cell "open_page"
           link "open_page"
             code "open_page"
         cell "Navigate to a URL and ready it for queries — call first."
-        cell "—"
       row
         cell "close_browser"
           link "close_browser"
             code "close_browser"
         cell "Tear down the browser session."
-        cell "—"
   paragraph
     strong "Audit"
   table
@@ -182,25 +167,18 @@ main
       row
         rowheader "Tool"
         rowheader "Purpose"
-        rowheader "Producer"
     rowgroup
       row
         cell "audit_page"
           link "audit_page"
             code "audit_page"
         cell "Every accessibility violation, grouped with CSS locators + severity — the flagship."
-        cell "dom · native"
-          code "dom"
-          code "native"
       row
         cell "inspect_page"
           link "inspect_page"
             code "inspect_page"
-        cell "Findings plus tree + outline + tab order from one extraction."
+        cell "Findings plus tree + outline from one read."
           strong "plus"
-        cell "dom · native (tab order N/A)"
-          code "dom"
-          code "native"
   paragraph
     strong "Views"
   table
@@ -208,54 +186,27 @@ main
       row
         rowheader "Tool"
         rowheader "Purpose"
-        rowheader "Producer"
     rowgroup
       row
         cell "get_semantic_tree"
           link "get_semantic_tree"
             code "get_semantic_tree"
         cell "Role + accessible-name tree — what a screen reader traverses."
-        cell "dom · native"
-          code "dom"
-          code "native"
       row
         cell "get_heading_outline"
           link "get_heading_outline"
             code "get_heading_outline"
         cell "Heading outline (h1–h6) in document order."
-        cell "dom · native"
-          code "dom"
-          code "native"
       row
         cell "get_tab_order"
           link "get_tab_order"
             code "get_tab_order"
-        cell "Focusable elements in keyboard Tab order."
-        cell "dom only"
-          code "dom"
+        cell "Focusable elements in keyboard Tab order — the one in-page read."
       row
         cell "list_elements"
           link "list_elements"
             code "list_elements"
         cell "Every element of one category (link / button / form / landmark / image / heading)."
-        cell "dom · native"
-          code "dom"
-          code "native"
-  paragraph
-    strong "Producer parity"
-  table
-    rowgroup
-      row
-        rowheader "Tool"
-        rowheader "Purpose"
-        rowheader "Producer"
-    rowgroup
-      row
-        cell "compare_producers"
-          link "compare_producers"
-            code "compare_producers"
-        cell "Diff the DOM producer against the native producer — a fidelity oracle."
-        cell "reads both"
   paragraph
     strong "Findings checkpoints"
   table
@@ -263,44 +214,37 @@ main
       row
         rowheader "Tool"
         rowheader "Purpose"
-        rowheader "Producer"
     rowgroup
       row
         cell "checkpoint_findings"
           link "checkpoint_findings"
             code "checkpoint_findings"
         cell "Snapshot the page's findings under a name (survives navigation)."
-        cell "—"
       row
         cell "diff_findings"
           link "diff_findings"
             code "diff_findings"
         cell "Re-snapshot the page and diff it against a checkpoint: new / changed / fixed."
-        cell "—"
       row
         cell "diff_checkpoints"
           link "diff_checkpoints"
             code "diff_checkpoints"
         cell "Diff two already-stored checkpoints (no re-snapshot)."
-        cell "—"
       row
         cell "list_checkpoints"
           link "list_checkpoints"
             code "list_checkpoints"
         cell "List stored checkpoint labels with finding counts."
-        cell "—"
       row
         cell "export_checkpoint"
           link "export_checkpoint"
             code "export_checkpoint"
         cell "Export a checkpoint as a snapshot JSON artifact (CLI-compatible)."
-        cell "—"
       row
         cell "import_checkpoint"
           link "import_checkpoint"
             code "import_checkpoint"
         cell "Load an external snapshot artifact as a checkpoint."
-        cell "—"
   paragraph
     strong "Tree checkpoints"
   table
@@ -308,21 +252,18 @@ main
       row
         rowheader "Tool"
         rowheader "Purpose"
-        rowheader "Producer"
     rowgroup
       row
         cell "checkpoint_tree"
           link "checkpoint_tree"
             code "checkpoint_tree"
         cell "Capture the current tree as an interaction-diff baseline (page-bound)."
-        cell "—"
       row
         cell "diff_tree"
           link "diff_tree"
             code "diff_tree"
         cell "Diff the tree since checkpoint_tree — what an interaction changed."
           code "checkpoint_tree"
-        cell "—"
   paragraph
     strong "Act"
   table
@@ -330,30 +271,23 @@ main
       row
         rowheader "Tool"
         rowheader "Purpose"
-        rowheader "Producer"
     rowgroup
       row
         cell "click_element"
           link "click_element"
             code "click_element"
         cell "Real click at the node matched by role + accessible name."
-        cell "native"
-          code "native"
       row
         cell "type_text"
           link "type_text"
             code "type_text"
         cell "Replace a text field's value; the result never echoes the text."
-        cell "native"
-          code "native"
       row
         cell "focus_element"
           link "focus_element"
             code "focus_element"
         cell "Move real keyboard focus; flags text fields for a follow-up type_text."
           code "type_text"
-        cell "native"
-          code "native"
   heading "Session" (level 2)
   paragraph "Bracket every audit with these two. navigates and readies the page; tears the browser down."
     code "open_page"
@@ -462,15 +396,10 @@ main
   heading "audit_page" (level 3)
     code "audit_page"
   paragraph
-    emphasis "Read-only · scoped by · the primary tool."
-      code "rootSelector"
+    emphasis "Read-only · whole-document · the primary tool."
   paragraph "Run the accessibility rules against the current page and return every violation — unlabeled interactive controls, images missing alt text, skipped/missing/duplicate heading levels, unlabeled dialogs, and broken landmark structure. Findings come back grouped and counted (so "17 unlabeled links" is one row, each with its CSS locator) plus a machine-readable JSON block."
   paragraph "Parameters:"
   list
-    listitem "— string — optional (default ) — CSS selector for the audit root."
-      strong
-        code "rootSelector"
-      code ""body""
     listitem "— array of | | | | — optional — a subset of rules to run. Omit to run all."
       strong
         code "rules"
@@ -479,41 +408,31 @@ main
       code ""heading-order""
       code ""dialog-labeled""
       code ""landmark-structure""
-    listitem "— | — optional (default ) — which producer builds the tree. audits (read over CDP) instead of the in-page DOM walk, reaching structure no in-page walk can — most visibly a 's user-agent-shadow media controls. Native is whole-document, so must stay (any other value is refused). Chromium only."
-      strong
-        code "producer"
-      code ""dom""
-      code ""native""
-      code ""dom""
-      code ""native""
-      strong "Chromium's own accessibility tree"
-      code "<video controls>"
-      code "rootSelector"
-      code ""body""
-  paragraph "An agent calls this to get the full defect list, or narrows it — e.g. audit only the cookie-consent dialog for labeling:"
-  button "Copy Code"
-  code
-  paragraph "Or audits the native tree to catch what the DOM walk can't reach (e.g. a media player's controls):"
+  paragraph "Audits , read over CDP, so it reaches structure no in-page walk can — most visibly a 's user-agent-shadow media controls. Findings carry CSS locators, so that reach costs nothing in actionability. Whole-document; Chromium only."
+    strong "Chromium's own accessibility tree"
+    code "<video controls>"
+  paragraph "An agent calls this to get the full defect list, or narrows it to the rules it cares about:"
   button "Copy Code"
   code
   heading "inspect_page" (level 3)
     code "inspect_page"
   paragraph
-    emphasis "Read-only · scoped by · prefer on dynamic pages."
-      code "rootSelector"
-  paragraph "Return the audit findings the semantic tree, heading outline, and tab order — all derived from extraction, so they are guaranteed to describe the same instant. The element focused at capture time is marked in each view, so the agent can see, e.g., that opening a dialog moved focus into it. Prefer this over separate + calls on moving pages (SPAs, pages with consent dialogs), where each separate call could catch a different state."
+    emphasis "Read-only · whole-document · prefer on dynamic pages."
+  paragraph "Return the audit findings the semantic tree and heading outline — all derived from read, so they are guaranteed to describe the same instant. The element focused at capture time is marked , so the agent can see, e.g., that opening a dialog moved focus into it. Prefer this over separate + calls on moving pages (SPAs, pages with consent dialogs), where each separate call could catch a different state."
     strong "and"
     strong "one"
     code "[focused]"
     link "audit_page"
       code "audit_page"
     code "get_*"
+  paragraph "There is : the tree this reads carries none, and printing an empty block would read as — a very different claim from . Call for the keyboard sequence."
+    strong "no tab-order section"
+    emphasis "nothing on this page is focusable"
+    emphasis "not measured here"
+    link "get_tab_order"
+      code "get_tab_order"
   paragraph "Parameters:"
   list
-    listitem "— string — optional (default ) — CSS selector for the extraction root."
-      strong
-        code "rootSelector"
-      code ""body""
     listitem "— array of the five rule ids above — optional — subset for the findings section. Omit to run all."
       strong
         code "rules"
@@ -522,99 +441,71 @@ main
         code "includeGeneric"
       code "false"
       code "role=generic"
-    listitem "— | — optional (default ) — build the snapshot from Chromium's own accessibility tree (findings + tree + outline). A native tree carries no tab order, so that section reports N/A; must stay . Chromium only."
-      strong
-        code "producer"
-      code ""dom""
-      code ""native""
-      code ""dom""
-      code "rootSelector"
-      code ""body""
   paragraph "An agent calls this for a consistent whole-page picture in a single round-trip:"
   button "Copy Code"
   code
   heading "Views" (level 2)
-  paragraph "Token-efficient perception primitives — the individual slices of what a screen reader traverses. All are read-only and scoped by ."
-    code "rootSelector"
+  paragraph "Token-efficient perception primitives — the individual slices of what a screen reader traverses. All are read-only. All read Chromium's own tree (whole-document) except ."
+    link "get_tab_order"
+      code "get_tab_order"
   heading "get_semantic_tree" (level 3)
     code "get_semantic_tree"
   paragraph
-    emphasis "Read-only · scoped by ."
-      code "rootSelector"
-  paragraph "Return the page's accessibility tree as a deterministic, indented role + accessible-name outline — what a screen reader would traverse. The element focused at capture time is marked . Stable across runs and token-efficient."
+    emphasis "Read-only · whole-document."
+  paragraph "Return the page's accessibility tree as a deterministic, indented role + accessible-name outline — what a screen reader would traverse — read from over CDP. The element focused at capture time is marked . Stable across runs and token-efficient."
+    strong "Chromium's own accessibility tree"
     code "[focused]"
+  paragraph "This is the vocabulary the target in, so a node you aim at by role + name here is the same node they dispatch against."
+    link "act tools"
   paragraph "Parameters:"
   list
-    listitem "— string — optional (default )."
-      strong
-        code "rootSelector"
-      code ""body""
     listitem "— boolean — optional (default ) — include generic container nodes ()."
       strong
         code "includeGeneric"
       code "false"
       code "role=generic"
-    listitem "— | — optional (default ) — returns Chromium's own accessibility tree (read over CDP), whole-document ( must stay ). This is how you the native tree."
-      strong
-        code "producer"
-      code ""dom""
-      code ""native""
-      code ""dom""
-      code ""native""
-      code "rootSelector"
-      code ""body""
-      emphasis "view"
   paragraph "An agent calls this to reason about page structure or diff it against another rendering."
   heading "get_heading_outline" (level 3)
     code "get_heading_outline"
   paragraph
-    emphasis "Read-only · scoped by ."
-      code "rootSelector"
-  paragraph "Return the heading outline (– in document order) as an indented list — the structure a screen-reader user navigates by heading."
+    emphasis "Read-only · whole-document · takes no parameters."
+  paragraph "Return the heading outline (– in document order) as an indented list — the structure a screen-reader user navigates by heading. Derived from Chromium's own accessibility tree."
     code "h1"
     code "h6"
-  paragraph "Parameters:"
-  list
-    listitem "— string — optional (default )."
-      strong
-        code "rootSelector"
-      code ""body""
-    listitem "— | — optional (default ) — derives the outline from Chromium's own accessibility tree, whole-document ( must stay )."
-      strong
-        code "producer"
-      code ""dom""
-      code ""native""
-      code ""dom""
-      code ""native""
-      code "rootSelector"
-      code ""body""
   paragraph "An agent calls this to flag skipped levels or a missing/duplicate ."
     code "h1"
   heading "get_tab_order" (level 3)
     code "get_tab_order"
   paragraph
-    emphasis "Read-only · scoped by ."
+    emphasis "Read-only · the one in-page read · the one tool scopes."
       code "rootSelector"
   paragraph "Return the focusable elements in the order a keyboard user reaches them with Tab — numbered, each with role + accessible name. The stop focused at capture time is marked . Surfaces focus traps, illogical order, and unreachable controls."
     code "[focused]"
   paragraph "Parameters:"
   list
-    listitem "— string — optional (default )."
+    listitem "— string — optional (default ) — CSS selector for the walk."
       strong
         code "rootSelector"
       code ""body""
-  paragraph "— a native tree carries no tab order, so this tool takes no . An agent calls this to check keyboard operability of a form or menu."
-    strong "DOM-only"
-    code "producer"
+  paragraph "Chromium's accessibility tree knows whether a node is , but not the : never reaches a native node, and ordering by it is DOM/layout work the AX tree doesn't expose. Because this one runs in the page, a selector means something here — which is why it keeps ."
+    strong "Built from the in-page DOM walk — the only source there is, not a fallback."
+    emphasis "focusable"
+    emphasis "sequence"
+    code "tabindex"
+    code "rootSelector"
+  paragraph "An agent calls this to check keyboard operability of a form or menu."
   heading "list_elements" (level 3)
     code "list_elements"
   paragraph
-    emphasis "Read-only · scoped by ."
-      code "rootSelector"
-  paragraph "List every element of one category as role + accessible name + CSS locator — a focused view of one kind of element (e.g. pairs with the rule, with labeling)."
+    emphasis "Read-only · whole-document."
+  paragraph "List every element of one category as role + accessible name + CSS locator — a focused view of one kind of element (e.g. pairs with the rule, with labeling). Listed from Chromium's own accessibility tree, so it agrees node for node with and . An element inside a shadow root has no whole-document selector, so its locator path stops at the boundary."
     code "image"
     code "image-alt"
     code "form"
+    link "get_semantic_tree"
+      code "get_semantic_tree"
+    link "audit_page"
+      code "audit_page"
   paragraph "Parameters:"
   list
     listitem "— | | | | | — — the category to list."
@@ -627,19 +518,6 @@ main
       code ""landmark""
       code ""image""
       strong "required"
-    listitem "— string — optional (default )."
-      strong
-        code "rootSelector"
-      code ""body""
-    listitem "— | — optional (default ) — lists from Chromium's own accessibility tree, whole-document ( must stay ). Native locators are computed from the same document walk and read identically to DOM ones; an element inside a shadow root has no whole-document selector, so its path stops at the boundary."
-      strong
-        code "producer"
-      code ""dom""
-      code ""native""
-      code ""dom""
-      code ""native""
-      code "rootSelector"
-      code ""body""
   paragraph "An agent calls this to review one element type without pulling the whole tree:"
   button "Copy Code"
   code
@@ -666,13 +544,12 @@ main
     listitem "— string — required — the checkpoint label (the store key)."
       strong
         code "name"
-    listitem "— string — optional (default ) — CSS selector for the snapshot root."
-      strong
-        code "rootSelector"
-      code ""body""
     listitem "— array of the five rule ids — optional — subset for the findings. Omit to run all."
       strong
         code "rules"
+  paragraph "Whole-document, and built from the same producer uses — which is what lets a checkpoint captured here be diffed by the CLI, and vice versa. The exported artifact records which views it measured () and omits the tabs view rather than storing an empty one."
+    code "real-a11y snapshot"
+    code "meta.views"
   heading "diff_findings" (level 3)
     code "diff_findings"
   paragraph
@@ -687,10 +564,7 @@ main
     listitem "— string — required — the checkpoint to diff against."
       strong
         code "name"
-    listitem "— string — optional (default )."
-      strong
-        code "rootSelector"
-      code ""body""
+  paragraph "The re-snapshot carries the same rule subset the checkpoint was captured with, so rules the base never ran can't surface as spurious NEW."
   paragraph "The headline cross-deploy workflow — diff prod against a preview in one session:"
   button "Copy Code"
   code
@@ -783,13 +657,12 @@ main
       code "body"
   paragraph "Errors if no checkpoint exists on the current page — including after a navigation, which discards it."
   heading "Act" (level 2)
-  paragraph "The write side of the native producer: dispatch a real click, replace a text field's value, or move real keyboard focus — over CDP, against the node matched in . Chromium only."
+  paragraph "The write side of the same tree every read tool uses: dispatch a real click, replace a text field's value, or move real keyboard focus — over CDP, against the node matched in . Chromium only."
     strong "Chromium's own accessibility tree"
-  paragraph "Targeting is deliberately , never a CSS selector or a node id. The tools resolve the target against a fresh native tree immediately before every dispatch — the same view with prints — so if role and name can't reach a control, assistive technology can't reach it either, and that is an accessibility finding rather than a targeting inconvenience."
+  paragraph "Targeting is deliberately , never a CSS selector or a node id. The tools resolve the target against a fresh tree immediately before every dispatch — the same view prints — so a node you aim at by one name can't come back in a report under another, and if role and name can't reach a control, assistive technology can't reach it either. That is an accessibility finding rather than a targeting inconvenience."
     strong "role + accessible name"
     link "get_semantic_tree"
       code "get_semantic_tree"
-    code "producer: "native""
   paragraph "All three tools share the targeting parameters:"
   list
     listitem "— string — required — ARIA role exactly as the tree prints it (, , , , , …)."
@@ -800,13 +673,12 @@ main
       code "textbox"
       code "checkbox"
       code "menuitem"
-    listitem "— string — optional — accessible name; case-insensitive, whitespace-normalized match against the tree (names can differ from the DOM producer's — shows where). Pass to target an unlabeled control; omit to match any name."
+    listitem "— string — optional — accessible name; case-insensitive, whitespace-normalized match against the tree returns. Pass to target an unlabeled control; omit to match any name."
       strong
         code "name"
       strong "exact"
-      strong "native"
-      link "compare_producers"
-        code "compare_producers"
+      link "get_semantic_tree"
+        code "get_semantic_tree"
       code """"
     listitem "— integer ≥ 1 — optional — 1-based pick among the role+name-filtered matches, in document order."
       strong
@@ -825,7 +697,7 @@ main
   heading "click_element" (level 3)
     code "click_element"
   paragraph
-    emphasis "Acts on the page · targets by role + accessible name in the native tree · Chromium only."
+    emphasis "Acts on the page · targets by role + accessible name · Chromium only."
   paragraph "Dispatch a click against the matched element. It can submit forms, toggle state, and — and navigation discards the page's tree checkpoint, so re-checkpoint after any click that changes the page instance."
     strong "real"
     strong "navigate"
@@ -845,7 +717,7 @@ main
     strong "replaces"
   paragraph "Additional parameter:"
   list
-    listitem "— string — required — the text to enter. (the same R1 redaction discipline the native producer applies to reading)."
+    listitem "— string — required — the text to enter. (the same R1 redaction discipline the read path applies)."
       strong
         code "text"
       strong "Never echoed back in the result"
@@ -868,30 +740,6 @@ main
       code "get_tab_order"
   button "Copy Code"
   code
-  heading "Producer parity" (level 2)
-  paragraph "A Chromium-only fidelity oracle that compares the two producers. To the native tree, use with ; to it, with ."
-    emphasis "view"
-    link "get_semantic_tree"
-      code "get_semantic_tree"
-    code "producer: "native""
-    emphasis "audit"
-    link "audit_page"
-      code "audit_page"
-    code "producer: "native""
-  heading "compare_producers" (level 3)
-    code "compare_producers"
-  paragraph
-    emphasis "Read-only · whole document · Chromium only."
-  paragraph "Diff the tree against the (Chromium's own tree over CDP) and report where they disagree on role or accessible name — a fidelity oracle that surfaces DOM-engine gaps (e.g. an unlabeled input the DOM engine names by its typed value) and structure only the native tree reaches (media controls). Compares only name-bearing roles, order- and indent-insensitively; matching nodes are omitted. Some "only in native" entries are iframe / shadow-DOM / user-agent-shadow content the DOM walk doesn't traverse, not name bugs."
-    strong "DOM producer's"
-    strong "native producer's"
-  paragraph "This is a diff (dom vs native at one instant) — distinct from , which diffs two checkpoints ."
-    strong "producer"
-    link "diff_checkpoints"
-      code "diff_checkpoints"
-    strong "over time"
-  paragraph "Parameters: none."
-  paragraph "An agent calls this to sanity-check the DOM producer before trusting a surprising finding, or to decide whether a page needs the native producer."
   heading "Environment" (level 2)
   paragraph "Set these on the server process — most clients accept an object alongside / . All are read by the stdio entry point at startup; the storage-state and origin values are ."
     code ""env""

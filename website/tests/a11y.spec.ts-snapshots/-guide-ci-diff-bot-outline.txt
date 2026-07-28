@@ -28,5 +28,6 @@ h1 CI A11y Diff Bot
     h3 Shared: diff & comment job
   h2 Output format
   h2 What it catches
+    h3 Tab order is not part of this gate
   h2 Findings in the Security tab (SARIF)
   h2 Combine with assertions

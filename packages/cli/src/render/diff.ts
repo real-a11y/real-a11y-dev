@@ -57,6 +57,24 @@ function hasHunks(page: PageDiff): boolean {
 /** Which axis of the report to render; undefined = both. */
 export type DiffSection = "findings" | "views";
 
+/**
+ * State plainly that a view wasn't compared, rather than letting silence imply
+ * it was and found nothing.
+ *
+ * A view one side never measured is skipped by `diffArtifacts` — that is what
+ * keeps a producer change from reporting every tab stop as removed. But a
+ * silently skipped axis is its own hazard in the other direction: a reviewer
+ * who sees no tab-order changes should not read that as "tab order is fine".
+ */
+function skippedNote(result: DiffResult): string | undefined {
+  if (!result.skippedViews.length) return undefined;
+  const views = result.skippedViews.join(", ");
+  return (
+    `Not compared: the ${views} view — at least one snapshot didn't measure it ` +
+    `(re-capture both sides with the same version to compare it again).`
+  );
+}
+
 /** A page worth showing under the active filter: a finding change, a
  * structural diff, or incomparable (an errored side matters to both axes). */
 function isChanged(page: PageDiff, only?: DiffSection): boolean {
@@ -258,6 +276,10 @@ export function renderDiffPretty(
       c.dim("Run with --explain for a plain-language structural summary."),
     );
   }
+  if (only !== "findings") {
+    const skipped = skippedNote(result);
+    if (skipped) lines.push(c.dim(skipped));
+  }
 
   const { new: n, changed: ch, removed } = result.summary;
   if (lines.length) lines.push("");
@@ -309,6 +331,10 @@ export function renderDiffJson(result: DiffResult, only?: DiffSection): string {
       schemaVersion: 1,
       command: "diff",
       summary: result.summary,
+      // Additive: which view axes weren't compared, because at least one
+      // snapshot never measured them. Empty on a like-for-like diff. A
+      // consumer that ignores it sees exactly what it saw before.
+      skippedViews: result.skippedViews,
       pages: result.pages.map(page),
     },
     null,
@@ -486,6 +512,8 @@ export function renderDiffMarkdown(
         "",
       );
     }
+    const skipped = skippedNote(result);
+    if (skipped) out.push(`_${skipped}_`, "");
   }
   return `${out.join("\n")}`;
 }

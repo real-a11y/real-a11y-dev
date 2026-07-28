@@ -10,9 +10,31 @@ import { parseArgs } from "node:util";
 
 import { SnapshotFormatError } from "@real-a11y-dev/snapshot";
 
-import { COMMANDS, rootHelp, type FlagValues } from "./args.js";
+import {
+  COMMANDS,
+  NATIVE_COMMANDS,
+  rootHelp,
+  type FlagValues,
+} from "./args.js";
 import { mergeDefaults, resolveConfig } from "./config.js";
 import { CliError, EXIT, formatCliError } from "./exit.js";
+
+/**
+ * `--root` used to be on nearly every command; now it is on `tabs` alone.
+ *
+ * The strict parser would answer a leftover `--root` with "Unknown option",
+ * which reads like a typo rather than a deliberate removal — so name the reason
+ * and point at what still scopes. Pre-parse, so it beats parseArgs to the punch.
+ */
+function assertRootApplies(name: string, flagTokens: readonly string[]): void {
+  if (!NATIVE_COMMANDS.has(name)) return;
+  if (!flagTokens.some((t) => t === "--root" || t.startsWith("--root=")))
+    return;
+  throw new CliError(
+    `\`${name}\` reads Chromium's whole-document accessibility tree — there is nothing for --root to scope.`,
+    "drop --root. 'real-a11y tabs --root <selector>' still scopes the tab-order walk, and a route's urls[].rootSelector still identifies it.",
+  );
+}
 
 function readVersion(spec: string): string | undefined {
   try {
@@ -73,6 +95,7 @@ export async function run(argv: string[]): Promise<number> {
 
   const verbose = flagTokens.includes("--verbose");
   try {
+    assertRootApplies(name, flagTokens);
     const { values, positionals } = parseArgs({
       args: rest,
       options: command.options,
@@ -96,6 +119,16 @@ export async function run(argv: string[]): Promise<number> {
         resolved.config,
         new Set(Object.keys(command.options)),
       );
+      // `defaults.root` now reaches only `tabs`. Warn rather than hard-error:
+      // the config loader is strict and fail-closed, so erroring here would red
+      // every CI that set this key — mid-beta, over config that was correct
+      // when it was written, for a change the user didn't make.
+      if (resolved.config.defaults.root !== undefined && name !== "tabs") {
+        process.stderr.write(
+          `real-a11y: warning: \`defaults.root\` in a11y.config.json no longer applies to \`${name}\` — ` +
+            `it reads Chromium's whole-document accessibility tree. Only \`tabs\` still scopes.\n`,
+        );
+      }
     }
     const fn = await command.load();
     return await fn(positionals, values as FlagValues, seededFromConfig);
