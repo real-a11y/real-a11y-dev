@@ -106,27 +106,56 @@ async function mcpTools() {
 }
 
 /**
- * Check a documented count word against reality.
+ * Subset claims, which are not the total and must not be checked against it.
+ *
+ * `website/packages/mcp/tools.md` says "All three tools share the targeting
+ * parameters" about the act group — true, and unrelated to how many tools the
+ * server exposes. English marks a reference like that with a determiner, so
+ * that is the discriminator. Kept deliberately tight: a bare "the" is too
+ * common to exempt safely.
+ */
+const SUBSET_DETERMINER = /(?:all|these|those|both|other|remaining)\s+$/i;
+
+/**
+ * Check every documented count against reality.
+ *
+ * Scans ALL "<number> <noun>" phrases rather than the first. Checking only the
+ * first made the result depend on where in the file the sentence sat: a stale
+ * duplicate further down was never examined, and an incidental phrase that
+ * happened to come earlier would have been compared against the total.
  *
  * Matched case-insensitively because the same claim is written "Twenty tools"
  * mid-sentence in one file and "**twenty tools**" in another.
  */
 function checkCount(file, text, noun, actual) {
   const expected = numberWord(actual);
-  const claim = new RegExp(`\\b(${COUNT_ALTERNATION}|\\d+)\\s+${noun}\\b`, "i");
-  const found = claim.exec(text);
-  if (!found) {
+  const claim = new RegExp(
+    `\\b(${COUNT_ALTERNATION}|\\d+)\\s+${noun}\\b`,
+    "gi",
+  );
+
+  const claims = [...text.matchAll(claim)].filter(
+    (m) =>
+      !SUBSET_DETERMINER.test(text.slice(Math.max(0, m.index - 24), m.index)),
+  );
+
+  if (claims.length === 0) {
     fail(
       file,
       `states no "<number> ${noun}" count — expected "${expected} ${noun}"`,
     );
     return;
   }
-  if (found[1].toLowerCase() !== expected) {
-    fail(
-      file,
-      `says "${found[0]}" but the code ships ${actual} — write "${expected} ${noun}"`,
-    );
+
+  // Every total-shaped claim has to agree; one stale copy left behind in a
+  // later paragraph is exactly as wrong as the headline being stale.
+  for (const found of claims) {
+    if (found[1].toLowerCase() !== expected) {
+      fail(
+        file,
+        `says "${found[0]}" but the code ships ${actual} — write "${expected} ${noun}"`,
+      );
+    }
   }
 }
 
