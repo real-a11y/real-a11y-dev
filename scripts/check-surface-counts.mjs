@@ -22,8 +22,15 @@ import { fileURLToPath } from "node:url";
 const repoRoot = resolve(fileURLToPath(import.meta.url), "../..");
 const read = (p) => readFile(resolve(repoRoot, p), "utf8");
 
-/** The docs spell counts as words, so a number has to become one to compare. */
-const NUMBER_WORDS = [
+/**
+ * The docs spell counts as words, so a number has to become one to compare.
+ *
+ * Composed rather than tabulated. A hand-written list is exactly the failure
+ * this whole script exists to prevent — it works until the surface outgrows it,
+ * then reports `write "undefined tools"` and can never pass again. Past ninety-
+ * nine a numeral reads better than prose anyway, so that is what it returns.
+ */
+const ONES = [
   "zero",
   "one",
   "two",
@@ -44,13 +51,36 @@ const NUMBER_WORDS = [
   "seventeen",
   "eighteen",
   "nineteen",
-  "twenty",
-  "twenty-one",
-  "twenty-two",
-  "twenty-three",
-  "twenty-four",
-  "twenty-five",
 ];
+const TENS = [
+  "",
+  "",
+  "twenty",
+  "thirty",
+  "forty",
+  "fifty",
+  "sixty",
+  "seventy",
+  "eighty",
+  "ninety",
+];
+
+function numberWord(n) {
+  if (n < 20) return ONES[n];
+  if (n < 100) {
+    const tens = TENS[Math.floor(n / 10)];
+    const ones = n % 10;
+    return ones ? `${tens}-${ONES[ones]}` : tens;
+  }
+  return String(n);
+}
+
+/** Every spelling a doc could legitimately use, plus bare numerals. */
+const COUNT_ALTERNATION = [
+  ...new Set(Array.from({ length: 100 }, (_, i) => numberWord(i))),
+]
+  .sort((a, b) => b.length - a.length) // longest first: "twenty-one" before "twenty"
+  .join("|");
 
 const problems = [];
 const fail = (where, message) => problems.push({ where, message });
@@ -82,8 +112,8 @@ async function mcpTools() {
  * mid-sentence in one file and "**twenty tools**" in another.
  */
 function checkCount(file, text, noun, actual) {
-  const expected = NUMBER_WORDS[actual];
-  const claim = new RegExp(`\\b(${NUMBER_WORDS.join("|")})\\s+${noun}\\b`, "i");
+  const expected = numberWord(actual);
+  const claim = new RegExp(`\\b(${COUNT_ALTERNATION}|\\d+)\\s+${noun}\\b`, "i");
   const found = claim.exec(text);
   if (!found) {
     fail(
