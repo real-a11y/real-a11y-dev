@@ -1016,6 +1016,10 @@
             "type": "boolean"
           },
           {
+            "name": "include-generic",
+            "type": "boolean"
+          },
+          {
             "name": "no-config",
             "type": "boolean"
           },

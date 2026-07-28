@@ -202,6 +202,15 @@ describe("--root now applies to `tabs` alone (built bin)", () => {
     expect(stdout.length).toBeGreaterThan(0);
   });
 
+  it("stays silent on the commands that never open a page", async () => {
+    // `diff`/`install`/`login` auto-discover the config too, but the warning
+    // explains itself by saying the command reads Chromium's accessibility
+    // tree — which for them is simply false, and noise in every CI log.
+    config({ defaults: { root: "#app" } });
+    const { stderr } = await runCli(["diff", "a.json", "b.json"], dir);
+    expect(stderr).not.toMatch(/defaults\.root/);
+  });
+
   it("warns — and keeps running — when a config `defaults.root` can't apply", async () => {
     // A hard error would red every CI that set this key, mid-beta, over config
     // that was correct when it was written.
@@ -211,6 +220,9 @@ describe("--root now applies to `tabs` alone (built bin)", () => {
     expect(stderr).toMatch(/warning/);
     expect(stderr).toMatch(/`defaults\.root`/);
     expect(stderr).toMatch(/Only `tabs` still scopes/);
+    // …and `tabs` itself, which still honours it, says nothing.
+    const tabs = await runCli(["tabs", CLEAN, "-q"], dir);
+    expect(tabs.stderr).not.toMatch(/defaults\\.root/);
   });
 
   it("advertises --root in `tabs --help` and nowhere else", async () => {

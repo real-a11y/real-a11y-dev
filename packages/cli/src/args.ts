@@ -50,15 +50,6 @@ const PAGE_FLAGS: Options = {
   "audit-origin": { type: "string", multiple: true },
 };
 
-// `--root` survives on exactly one command: `tabs`. Tab order is the one view
-// the native tree cannot produce (it knows per-node `focusable`, but not the
-// SEQUENCE — `tabindex` never reaches a native node), so `tabs` still runs the
-// in-page DOM walk, and a DOM walk is the only thing a selector can scope.
-const SCOPED_FLAGS: Options = {
-  ...PAGE_FLAGS,
-  root: { type: "string" },
-};
-
 const OUTPUT_FLAGS: Options = {
   format: { type: "string", short: "f" },
   output: { type: "string", short: "o" },
@@ -98,11 +89,18 @@ const VIEW_FLAGS: Options = {
   "include-generic": { type: "boolean" },
 };
 
-// `tabs` is the DOM holdout, so it — alone — still takes `--root`.
+// `tabs` is the DOM holdout, so it — alone — still takes `--root`. Tab order is
+// the one view the native tree cannot produce (it knows per-node `focusable`,
+// but not the SEQUENCE — `tabindex` never reaches a native node), so `tabs`
+// still runs the in-page walk, and a walk is the only thing a selector scopes.
+//
+// Otherwise identical to VIEW_FLAGS. `--include-generic` is inert here (a
+// generic container is never a tab stop) but `outline`, `list`, and `snapshot`
+// accept-and-ignore it too — dropping it from this one command would make the
+// surface arbitrary, and is not a change this PR set out to make.
 const TABS_FLAGS: Options = {
-  ...SCOPED_FLAGS,
-  ...OUTPUT_FLAGS,
-  ...CONFIG_FLAGS,
+  ...VIEW_FLAGS,
+  root: { type: "string" },
 };
 
 // The act commands. `interact` takes an ordered, repeatable --step; the sugar
