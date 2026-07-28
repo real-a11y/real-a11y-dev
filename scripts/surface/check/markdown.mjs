@@ -71,6 +71,11 @@ export async function readDoc(repoRoot, relPath) {
  * Fenced code blocks, with the 1-based line number of each body line so a
  * failure can point at the offending line rather than the block.
  *
+ * A fence may be indented up to three spaces and still be a fence — CommonMark
+ * says so, and the docs rely on it: the login sample sits inside a numbered
+ * list, indented three spaces. Reading only column zero left that block, and
+ * every `real-a11y …` line in it, unchecked.
+ *
  * Tracks the opening fence's length and only closes on a fence at least as
  * long — the docs use ````text blocks that contain ``` inside them, and a
  * naive scanner reads the inner fence as the end and the rest of the file as
@@ -82,7 +87,7 @@ export function fencedBlocks(text) {
   let open = null;
 
   for (let i = 0; i < lines.length; i++) {
-    const fence = /^(`{3,})(.*)$/.exec(lines[i]);
+    const fence = /^ {0,3}(`{3,})(.*)$/.exec(lines[i]);
     if (!open) {
       if (fence) {
         open = { ticks: fence[1], info: fence[2].trim(), start: i, body: [] };
@@ -117,7 +122,7 @@ export function headings(text) {
   let fence = null;
 
   for (let i = 0; i < lines.length; i++) {
-    const f = /^(`{3,})/.exec(lines[i]);
+    const f = /^ {0,3}(`{3,})/.exec(lines[i]);
     if (f) {
       if (!fence) fence = f[1];
       else if (f[1].length >= fence.length) fence = null;
@@ -150,7 +155,7 @@ export function withoutFencedBlocks(text) {
   return text
     .split("\n")
     .map((line) => {
-      const f = /^(`{3,})/.exec(line);
+      const f = /^ {0,3}(`{3,})/.exec(line);
       if (f) {
         if (!fence) fence = f[1];
         else if (f[1].length >= fence.length) fence = null;
