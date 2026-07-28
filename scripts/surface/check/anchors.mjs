@@ -128,6 +128,10 @@ export async function checkDuplicateAnchors(repoRoot) {
   for (const file of await docFiles(repoRoot)) {
     const seen = new Map();
     for (const heading of headings(await readDoc(repoRoot, file))) {
+      // A blockquoted heading is part of a quoted example — the diff bot page
+      // shows the same mock PR comment twice on purpose. It gets an id, so
+      // links to it are still validated; it is not a section anyone links to.
+      if (heading.quoted) continue;
       const first = seen.get(heading.anchor);
       if (first !== undefined) {
         problems.push({

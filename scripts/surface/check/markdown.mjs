@@ -115,6 +115,12 @@ export function fencedBlocks(text) {
  * ATX headings outside code fences. Inside a fence a `# comment` in a shell
  * sample is not a heading, and counting it as one invents anchors that don't
  * exist.
+ *
+ * A heading inside a blockquote is still a heading — VitePress gives
+ * `> ### Accessibility diff` an id like any other, and missing it means a link
+ * to that id is reported dead. `quoted` marks them, because a heading in a
+ * mocked-up example (the diff bot's sample PR comment) is illustration rather
+ * than a section of the page.
  */
 export function headings(text) {
   const lines = text.split("\n");
@@ -129,13 +135,14 @@ export function headings(text) {
       continue;
     }
     if (fence) continue;
-    const h = /^(#{1,6})\s+(.*?)\s*$/.exec(lines[i]);
+    const h = /^ {0,3}((?:> ?)*)(#{1,6})\s+(.*?)\s*$/.exec(lines[i]);
     if (h) {
       found.push({
-        depth: h[1].length,
-        text: h[2],
+        depth: h[2].length,
+        text: h[3],
         line: i + 1,
-        anchor: slugify(h[2]),
+        anchor: slugify(h[3]),
+        quoted: h[1] !== "",
       });
     }
   }
@@ -186,7 +193,8 @@ export function withoutFencedBlocks(text) {
  *   it has to be here rather than added the day someone writes one.
  *
  * Every rule here was verified against the ids in `website/.vitepress/dist`
- * rather than from memory: all 561 headings in the site agree.
+ * rather than from memory: all 568 ids VitePress emits across the 44 built
+ * pages agree with what this produces from the source headings.
  */
 export function slugify(headingText) {
   return (
