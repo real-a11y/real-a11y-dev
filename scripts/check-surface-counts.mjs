@@ -130,11 +130,31 @@ function checkCount(file, text, noun, actual) {
   }
 }
 
-/** Every name must appear somewhere in the doc that claims to enumerate them. */
+/**
+ * Every name must be documented — as a *command or tool*, not as a word.
+ *
+ * A bare substring test is exact enough for MCP tools, whose names carry an
+ * underscore, but useless for CLI commands: they are ordinary English words.
+ * With every code span, heading and table stripped from the command reference,
+ * all fourteen of `install audit inspect tree outline tabs list interact click
+ * type focus login snapshot diff` still appear in the running prose — so the
+ * check passed whether or not the command was documented at all.
+ *
+ * So a name counts only where it reads as an invocation: opening a code span
+ * (`` `list` ``, `` `list <category> <url>` ``) or following the binary
+ * (`real-a11y list image <url>`). Incidental prose — "list every element", "the
+ * semantic tree" — no longer satisfies it.
+ */
+function documentedAs(text, name) {
+  // `\bname` would still match prose; requiring a backtick or the binary in
+  // front is what makes this structural rather than lexical.
+  return new RegExp(`(?:\`|real-a11y )${name}(?![\\w-])`).test(text);
+}
+
 function checkNames(file, text, kind, names) {
-  const missing = names.filter((n) => !text.includes(n));
+  const missing = names.filter((n) => !documentedAs(text, n));
   if (missing.length) {
-    fail(file, `never mentions ${kind}: ${missing.join(", ")}`);
+    fail(file, `never documents ${kind}: ${missing.join(", ")}`);
   }
 }
 
