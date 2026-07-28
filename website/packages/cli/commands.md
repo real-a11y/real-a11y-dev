@@ -475,7 +475,8 @@ Throughout this table, **browser commands** is the eleven that drive a page:
 <sup>†</sup> Every other browser command reads Chromium's whole-document
 accessibility tree, so there is nothing for a selector to scope — they reject
 `--root` with that explanation rather than accepting and ignoring it. There is
-no `--producer` flag at all: each command has exactly one correct producer.
+no producer flag either: each command has exactly one correct producer, so
+there is nothing to choose.
 
 **[Output](#output)**
 
@@ -729,14 +730,13 @@ stays on stderr.
 Never auto-switched — piping only drops color. Allowed values depend on the
 command:
 
-| Command | Values |
-| --- | --- |
+| Command | Values | Default |
+| --- | --- | --- |
 | audit, inspect, tree, outline, tabs, list | `pretty` \| `json` | `pretty` |
 | diff | `pretty` \| `json` \| `md` | `pretty` |
 | snapshot | `json` \| `md` \| `sarif` \| `junit` \| `jsonl` | `json` |
 
 `sarif` requires [`--config`](#config-file) (results anchor to repo file paths).
-See [SARIF, JUnit, JSONL](/packages/cli#sarif-junit-jsonl).
 
 ### `-o, --output <file>`
 

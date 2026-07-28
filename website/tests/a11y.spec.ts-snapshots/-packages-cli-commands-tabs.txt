@@ -358,7 +358,6 @@ button "Copy Code"
 generic
 table
 link "--config"
-link "SARIF, JUnit, JSONL"
 link "snapshot"
 link "install"
 link "audit"

@@ -50,7 +50,7 @@ Entry fields:
 - **`url`** — the target. Any URL the browser can reach: a public site, a local dev server, staging, or a built file path.
 - **`name`** — the diff join key and display label. This is what pairs a route across two snapshots, so keep it stable when a URL changes. Defaults to `url`, canonicalized (`http://localhost:3000` is recorded as `http://localhost:3000/`) and stripped of userinfo and secret-looking query params, so a credential in a URL never lands in an artifact. `audit` and `snapshot` settle it identically, so a route fingerprints the same whichever command produced the artifact.
 - **`rootSelector`** — a region for this route (per-page [`root`](#root)). **No longer scopes `audit` or `snapshot`**: both read Chromium's whole-document accessibility tree, which has no subtree to narrow to. They warn once on stderr, naming the routes that set it, and keep running — findings from outside that subtree are now included. The key is still accepted (it identifies a route, and `real-a11y tabs --root <selector>` still scopes the in-page tab-order walk), so a committed config keeps loading.
-- **`sourcePath`** — repo-relative file the route's findings anchor to in [SARIF](/packages/cli#sarif-junit-jsonl). GitHub code scanning only displays results tied to a file path; without it, results anchor to the config file.
+- **`sourcePath`** — repo-relative file the route's findings anchor to in [SARIF](/packages/cli/commands#f-format-fmt). GitHub code scanning only displays results tied to a file path; without it, results anchor to the config file.
 
 ```json
 {
@@ -109,6 +109,8 @@ Typing `--root` at one of those commands *is* an error (exit 2) — a flag you
 typed for this run is an instruction, and silently dropping it would leave the
 output looking like it came from a scope that was never applied. The message
 names the reason and points at `tabs`.
+
+### `device`
 
 **`device: string`** — flag `--device` · default: unset · applies to `audit`, `inspect`, the view commands, `snapshot`
 

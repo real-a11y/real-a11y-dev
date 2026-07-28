@@ -137,7 +137,7 @@ ship with the next release without their own changeset.)
 ## 6. Verify
 
 ```bash
-pnpm verify   # build + typecheck + format:check + lint + surface:check + test + website build
+pnpm verify   # build + typecheck + format:check + lint + surface:check + test + website build + surface:check-built
 ```
 
 **If you touched any `website/*.md`, also regenerate the a11y baselines** — a

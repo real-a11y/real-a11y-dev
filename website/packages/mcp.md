@@ -96,7 +96,7 @@ Because it drives a real browser, JS-heavy SPAs render fully, and any URL the
 browser can reach works — public sites, a **local dev server**, or staging.
 
 ::: tip Every tool + parameters → [/packages/mcp/tools](/packages/mcp/tools)
-This is a guide. For the full tool reference — all eighteen tools, their
+This is a guide. For the full tool reference — all twenty tools, their
 parameters, and when to reach for each — see the
 [tools reference](/packages/mcp/tools).
 :::
@@ -179,7 +179,7 @@ replace it. Both can act on a page now, but they act for different reasons:
 - **Real A11y** acts **through the accessibility tree and judges what changed**.
   Its [act tools](/packages/mcp/tools#act) target **role + accessible name
   only** — a control the tools can't reach is itself an accessibility smell —
-  and every action pairs with [`diff_tree`](/packages/mcp/tools#diff_tree)'s
+  and every action pairs with [`diff_tree`](/packages/mcp/tools#diff-tree)'s
   answer to _"what did that change for a screen reader?"_. Its audit reports
   what assistive technology would announce as _broken_.
 

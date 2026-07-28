@@ -1,7 +1,7 @@
 {
   "name": "real-a11y",
   "private": true,
-  "description": "Real A11y monorepo \u2014 accessibility tooling that works in the real world. Semantic tree extraction, testing utilities, React integration, Storybook panel, and Chrome extension.",
+  "description": "Real A11y monorepo — accessibility tooling that works in the real world. Semantic tree extraction, testing utilities, React integration, Storybook panel, and Chrome extension.",
   "scripts": {
     "build": "pnpm -r --filter \"!@real-a11y-dev/website\" --filter \"!@real-a11y-dev/example-vanilla\" --filter \"!@real-a11y-dev/example-react\" --filter \"!@real-a11y-dev/example-storybook\" --filter \"!@real-a11y-dev/example-testing\" build",
     "dev": "pnpm -r --parallel dev",
@@ -11,7 +11,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "pnpm -r --filter \"!@real-a11y-dev/website\" --filter \"!@real-a11y-dev/example-vanilla\" --filter \"!@real-a11y-dev/example-react\" --filter \"!@real-a11y-dev/example-storybook\" --filter \"!@real-a11y-dev/example-testing\" typecheck",
-    "verify": "pnpm build && pnpm typecheck && pnpm format:check && pnpm lint && pnpm surface:check && pnpm test && pnpm --filter @real-a11y-dev/website build",
+    "verify": "pnpm build && pnpm typecheck && pnpm format:check && pnpm lint && pnpm surface:check && pnpm test && pnpm --filter @real-a11y-dev/website build && pnpm surface:check-built",
     "rasterize-icons": "pnpm --filter @real-a11y-dev/testing exec node scripts/rasterize-extension-icons.mjs",
     "rasterize-og": "pnpm --filter @real-a11y-dev/testing exec node scripts/rasterize-og-image.mjs",
     "prepare": "husky",
@@ -24,6 +24,7 @@
     "packaging:check": "node scripts/check-packaging.mjs",
     "surface:extract": "node scripts/surface/index.mjs extract",
     "surface:check": "node scripts/surface/index.mjs check",
+    "surface:check-built": "node scripts/surface/index.mjs check-built",
     "examples:dev-smoke": "node scripts/check-examples-dev.mjs"
   },
   "devDependencies": {
@@ -35,10 +36,11 @@
     "@size-limit/preset-small-lib": "^11.1.6",
     "@types/chrome": "^0.2.2",
     "@vitest/browser": "^3.2.7",
+    "ajv": "^8.17.1",
+    "esbuild": "^0.25.0",
     "eslint": "^9.0.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-import": "^2.32.0",
-    "esbuild": "^0.25.0",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "globals": "^17.7.0",
     "husky": "^9.1.7",

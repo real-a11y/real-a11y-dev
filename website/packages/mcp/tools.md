@@ -7,9 +7,9 @@ description: Every tool the Real A11y MCP server exposes — open_page, audit_pa
 
 The Real A11y MCP server exposes **nineteen tools** to an MCP client (Claude Code, Claude Desktop, Cursor, and any other MCP-capable assistant). Each tool drives a real Chromium page and reports what a screen reader would actually perceive — computed roles, accessible names, and the defects assistive tech announces as broken — not what the HTML source claims.
 
-The tools share **one** browser page. A typical run is [`open_page`](#open_page) → an audit or view tool ([`audit_page`](#audit_page), [`inspect_page`](#inspect_page), or a `get_*` view) → [`close_browser`](#close_browser). To interact, the loop is [`checkpoint_tree`](#checkpoint_tree) → an [act tool](#act) ([`click_element`](#click_element), [`type_text`](#type_text), [`focus_element`](#focus_element)) → [`diff_tree`](#diff_tree). Because every tool reads the same mutable page, calls must run **sequentially, never in parallel** — a second call mid-flight would race the first's navigation.
+The tools share **one** browser page. A typical run is [`open_page`](#open-page) → an audit or view tool ([`audit_page`](#audit-page), [`inspect_page`](#inspect-page), or a `get_*` view) → [`close_browser`](#close-browser). To interact, the loop is [`checkpoint_tree`](#checkpoint-tree) → an [act tool](#act) ([`click_element`](#click-element), [`type_text`](#type-text), [`focus_element`](#focus-element)) → [`diff_tree`](#diff-tree). Because every tool reads the same mutable page, calls must run **sequentially, never in parallel** — a second call mid-flight would race the first's navigation.
 
-Every read is built from **Chromium's own accessibility tree**, read over CDP. There is no `producer` parameter: each surface has exactly one correct producer, so there is nothing to choose. That tree is whole-document, so the audit and view tools take no `rootSelector` — the exceptions are [`get_tab_order`](#get_tab_order) and the tree checkpoints, which run in the page, where a selector means something. Tool output is capped at **40,000 characters**; a larger page is truncated with a note.
+Every read is built from **Chromium's own accessibility tree**, read over CDP. There is no `producer` parameter: each surface has exactly one correct producer, so there is nothing to choose. That tree is whole-document, so the audit and view tools take no `rootSelector` — the exceptions are [`get_tab_order`](#get-tab-order) and the tree checkpoints, which run in the page, where a selector means something. Tool output is capped at **40,000 characters**; a larger page is truncated with a note.
 
 Server behavior is configured entirely through [environment variables](#environment) — saved-login sessions, origin pinning, `file://` access, CDP attach. Credentials are never tool parameters, so session tokens stay out of the agent's context. On startup the server validates that configuration and **refuses to start** on a malformed storage-state file or an invalid origin (see [Environment](#environment)).
 
@@ -21,50 +21,50 @@ Click a tool for its parameters.
 
 | Tool | Purpose |
 | --- | --- |
-| [`open_page`](#open_page) | Navigate to a URL and ready it for queries — call first. |
-| [`close_browser`](#close_browser) | Tear down the browser session. |
+| [`open_page`](#open-page) | Navigate to a URL and ready it for queries — call first. |
+| [`close_browser`](#close-browser) | Tear down the browser session. |
 
 **Audit**
 
 | Tool | Purpose |
 | --- | --- |
-| [`audit_page`](#audit_page) | Every accessibility violation, grouped with CSS locators + severity — the flagship. |
-| [`inspect_page`](#inspect_page) | Findings **plus** tree + outline from one read. |
+| [`audit_page`](#audit-page) | Every accessibility violation, grouped with CSS locators + severity — the flagship. |
+| [`inspect_page`](#inspect-page) | Findings **plus** tree + outline from one read. |
 
 **Views**
 
 | Tool | Purpose |
 | --- | --- |
-| [`get_semantic_tree`](#get_semantic_tree) | Role + accessible-name tree — what a screen reader traverses. |
-| [`get_heading_outline`](#get_heading_outline) | Heading outline (h1–h6) in document order. |
-| [`get_tab_order`](#get_tab_order) | Focusable elements in keyboard Tab order — the one in-page read. |
-| [`list_elements`](#list_elements) | Every element of one category (link / button / form / landmark / image / heading). |
+| [`get_semantic_tree`](#get-semantic-tree) | Role + accessible-name tree — what a screen reader traverses. |
+| [`get_heading_outline`](#get-heading-outline) | Heading outline (h1–h6) in document order. |
+| [`get_tab_order`](#get-tab-order) | Focusable elements in keyboard Tab order — the one in-page read. |
+| [`list_elements`](#list-elements) | Every element of one category (link / button / form / landmark / image / heading). |
 
 **Findings checkpoints**
 
 | Tool | Purpose |
 | --- | --- |
-| [`checkpoint_findings`](#checkpoint_findings) | Snapshot the page's findings under a name (survives navigation). |
-| [`diff_findings`](#diff_findings) | Re-snapshot the page and diff it against a checkpoint: new / changed / fixed. |
-| [`diff_checkpoints`](#diff_checkpoints) | Diff two already-stored checkpoints (no re-snapshot). |
-| [`list_checkpoints`](#list_checkpoints) | List stored checkpoint labels with finding counts. |
-| [`export_checkpoint`](#export_checkpoint) | Export a checkpoint as a snapshot JSON artifact (CLI-compatible). |
-| [`import_checkpoint`](#import_checkpoint) | Load an external snapshot artifact as a checkpoint. |
+| [`checkpoint_findings`](#checkpoint-findings) | Snapshot the page's findings under a name (survives navigation). |
+| [`diff_findings`](#diff-findings) | Re-snapshot the page and diff it against a checkpoint: new / changed / fixed. |
+| [`diff_checkpoints`](#diff-checkpoints) | Diff two already-stored checkpoints (no re-snapshot). |
+| [`list_checkpoints`](#list-checkpoints) | List stored checkpoint labels with finding counts. |
+| [`export_checkpoint`](#export-checkpoint) | Export a checkpoint as a snapshot JSON artifact (CLI-compatible). |
+| [`import_checkpoint`](#import-checkpoint) | Load an external snapshot artifact as a checkpoint. |
 
 **Tree checkpoints**
 
 | Tool | Purpose |
 | --- | --- |
-| [`checkpoint_tree`](#checkpoint_tree) | Capture the current tree as an interaction-diff baseline (page-bound). |
-| [`diff_tree`](#diff_tree) | Diff the tree since `checkpoint_tree` — what an interaction changed. |
+| [`checkpoint_tree`](#checkpoint-tree) | Capture the current tree as an interaction-diff baseline (page-bound). |
+| [`diff_tree`](#diff-tree) | Diff the tree since `checkpoint_tree` — what an interaction changed. |
 
 **Act**
 
 | Tool | Purpose |
 | --- | --- |
-| [`click_element`](#click_element) | Real click at the node matched by role + accessible name. |
-| [`type_text`](#type_text) | Replace a text field's value; the result never echoes the text. |
-| [`focus_element`](#focus_element) | Move real keyboard focus; flags text fields for a follow-up `type_text`. |
+| [`click_element`](#click-element) | Real click at the node matched by role + accessible name. |
+| [`type_text`](#type-text) | Replace a text field's value; the result never echoes the text. |
+| [`focus_element`](#focus-element) | Move real keyboard focus; flags text fields for a follow-up `type_text`. |
 
 ## Session
 
@@ -117,7 +117,7 @@ Parameters: none.
 
 ## Audit
 
-The reason the server exists. Both tools report violations a screen reader would announce; [`inspect_page`](#inspect_page) adds the three views from the same extraction.
+The reason the server exists. Both tools report violations a screen reader would announce; [`inspect_page`](#inspect-page) adds the three views from the same extraction.
 
 ### `audit_page`
 
@@ -141,9 +141,9 @@ An agent calls this to get the full defect list, or narrows it to the rules it c
 
 *Read-only · whole-document · prefer on dynamic pages.*
 
-Return the audit findings **and** the semantic tree and heading outline — all derived from **one** read, so they are guaranteed to describe the same instant. The element focused at capture time is marked `[focused]`, so the agent can see, e.g., that opening a dialog moved focus into it. Prefer this over separate [`audit_page`](#audit_page) + `get_*` calls on moving pages (SPAs, pages with consent dialogs), where each separate call could catch a different state.
+Return the audit findings **and** the semantic tree and heading outline — all derived from **one** read, so they are guaranteed to describe the same instant. The element focused at capture time is marked `[focused]`, so the agent can see, e.g., that opening a dialog moved focus into it. Prefer this over separate [`audit_page`](#audit-page) + `get_*` calls on moving pages (SPAs, pages with consent dialogs), where each separate call could catch a different state.
 
-There is **no tab-order section**: the tree this reads carries none, and printing an empty block would read as *nothing on this page is focusable* — a very different claim from *not measured here*. Call [`get_tab_order`](#get_tab_order) for the keyboard sequence.
+There is **no tab-order section**: the tree this reads carries none, and printing an empty block would read as *nothing on this page is focusable* — a very different claim from *not measured here*. Call [`get_tab_order`](#get-tab-order) for the keyboard sequence.
 
 Parameters:
 
@@ -158,7 +158,7 @@ An agent calls this for a consistent whole-page picture in a single round-trip:
 
 ## Views
 
-Token-efficient perception primitives — the individual slices of what a screen reader traverses. All are read-only. All read Chromium's own tree (whole-document) except [`get_tab_order`](#get_tab_order).
+Token-efficient perception primitives — the individual slices of what a screen reader traverses. All are read-only. All read Chromium's own tree (whole-document) except [`get_tab_order`](#get-tab-order).
 
 ### `get_semantic_tree`
 
@@ -200,7 +200,7 @@ An agent calls this to check keyboard operability of a form or menu.
 
 *Read-only · whole-document.*
 
-List every element of one category as role + accessible name + CSS locator — a focused view of one kind of element (e.g. `image` pairs with the `image-alt` rule, `form` with labeling). Listed from Chromium's own accessibility tree, so it agrees node for node with [`get_semantic_tree`](#get_semantic_tree) and [`audit_page`](#audit_page). An element inside a shadow root has no whole-document selector, so its locator path stops at the boundary.
+List every element of one category as role + accessible name + CSS locator — a focused view of one kind of element (e.g. `image` pairs with the `image-alt` rule, `form` with labeling). Listed from Chromium's own accessibility tree, so it agrees node for node with [`get_semantic_tree`](#get-semantic-tree) and [`audit_page`](#audit-page). An element inside a shadow root has no whole-document selector, so its locator path stops at the boundary.
 
 Parameters:
 
@@ -298,7 +298,7 @@ The two are deliberately different in lifetime. A snapshot checkpoint is pure da
 
 _Captures the current tree in the page as a comparison point._
 
-Capture the current accessibility tree as the baseline for an interaction diff. Then interact with the page and call [`diff_tree`](#diff_tree). Re-capturing re-baselines.
+Capture the current accessibility tree as the baseline for an interaction diff. Then interact with the page and call [`diff_tree`](#diff-tree). Re-capturing re-baselines.
 
 Parameters:
 
@@ -320,17 +320,17 @@ Errors if no checkpoint exists on the current page — including after a navigat
 
 The write side of the same tree every read tool uses: dispatch a real click, replace a text field's value, or move real keyboard focus — over CDP, against the node matched in **Chromium's own accessibility tree**. Chromium only.
 
-Targeting is deliberately **role + accessible name**, never a CSS selector or a node id. The tools resolve the target against a fresh tree immediately before every dispatch — the same view [`get_semantic_tree`](#get_semantic_tree) prints — so a node you aim at by one name can't come back in a report under another, and if role and name can't reach a control, assistive technology can't reach it either. That is an accessibility finding rather than a targeting inconvenience.
+Targeting is deliberately **role + accessible name**, never a CSS selector or a node id. The tools resolve the target against a fresh tree immediately before every dispatch — the same view [`get_semantic_tree`](#get-semantic-tree) prints — so a node you aim at by one name can't come back in a report under another, and if role and name can't reach a control, assistive technology can't reach it either. That is an accessibility finding rather than a targeting inconvenience.
 
 All three tools share the targeting parameters:
 
 - **`role`** — string — required — ARIA role exactly as the tree prints it (`button`, `link`, `textbox`, `checkbox`, `menuitem`, …).
-- **`name`** — string — optional — accessible name; case-insensitive, whitespace-normalized **exact** match against the tree [`get_semantic_tree`](#get_semantic_tree) returns. Pass `""` to target an unlabeled control; omit to match any name.
+- **`name`** — string — optional — accessible name; case-insensitive, whitespace-normalized **exact** match against the tree [`get_semantic_tree`](#get-semantic-tree) returns. Pass `""` to target an unlabeled control; omit to match any name.
 - **`nth`** — integer ≥ 1 — optional — 1-based pick among the role+name-filtered matches, in document order.
 
 When several nodes match and no `nth` was given, the tool errors and **lists the candidates as `nth=1 · role "name"` lines** — the remedy is copy-paste. A **disabled** target is refused with the cause (the page would silently ignore the action, and the empty diff that followed would mislead). A match with no backing DOM element (a synthesized node such as the document root) is refused before any CDP traffic.
 
-The payoff is the loop: [`checkpoint_tree`](#checkpoint_tree) first, act, then [`diff_tree`](#diff_tree) — the diff is the answer to _"what did that action change for a screen reader?"_.
+The payoff is the loop: [`checkpoint_tree`](#checkpoint-tree) first, act, then [`diff_tree`](#diff-tree) — the diff is the answer to _"what did that action change for a screen reader?"_.
 
 ### `click_element`
 
@@ -354,7 +354,7 @@ Additional parameter:
 
 - **`text`** — string — required — the text to enter. **Never echoed back in the result** (the same R1 redaction discipline the read path applies).
 
-There is deliberately **no credential parameter**, and this tool must not be used to log in — a password typed here would enter the agent's context. For pages behind auth, start the server with [`REAL_A11Y_MCP_STORAGE_STATE`](#real_a11y_mcp_storage_state) or [`REAL_A11Y_MCP_CDP`](#real_a11y_mcp_cdp) instead.
+There is deliberately **no credential parameter**, and this tool must not be used to log in — a password typed here would enter the agent's context. For pages behind auth, start the server with [`REAL_A11Y_MCP_STORAGE_STATE`](#real-a11y-mcp-storage-state) or [`REAL_A11Y_MCP_CDP`](#real-a11y-mcp-cdp) instead.
 
 ```json
 { "role": "textbox", "name": "Search", "text": "keyboard traps" }
@@ -364,7 +364,7 @@ There is deliberately **no credential parameter**, and this tool must not be use
 
 _Acts on the page · moves real keyboard focus._
 
-Move keyboard focus to the matched element — what a keyboard user's <kbd>Tab</kbd> journey would land on, teleported. The result says whether the target is a text field (and its input type), so the agent knows a [`type_text`](#type_text) should follow. Pairs with [`get_tab_order`](#get_tab_order) for focus-order work.
+Move keyboard focus to the matched element — what a keyboard user's <kbd>Tab</kbd> journey would land on, teleported. The result says whether the target is a text field (and its input type), so the agent knows a [`type_text`](#type-text) should follow. Pairs with [`get_tab_order`](#get-tab-order) for focus-order work.
 
 ```json
 { "role": "searchbox", "name": "Search docs" }
@@ -390,7 +390,7 @@ chrome --remote-debugging-port=9222 --user-data-dir=/tmp/a11y-cdp
 
 Set to `1` to launch a visible browser instead of headless. Ignored when [`REAL_A11Y_MCP_CDP`](#real-a11y-mcp-cdp) is set — a CDP attach reuses the running browser, window state and all.
 
-[`open_page`](#open_page)'s reply names the mode it's actually in, so a human watching for a window knows whether to expect one. Over CDP it reports the attach rather than a launch mode, and doesn't offer this variable as a fix — it has no say there.
+[`open_page`](#open-page)'s reply names the mode it's actually in, so a human watching for a window knows whether to expect one. Over CDP it reports the attach rather than a launch mode, and doesn't offer this variable as a fix — it has no say there.
 
 ### `REAL_A11Y_MCP_ALLOW_FILE`
 
@@ -402,7 +402,7 @@ Set to `1` to permit auditing `file://` URLs. Off by default — an agent that c
 
 *string (path) · optional.*
 
-Path to a saved login session — a Playwright storage-state JSON (cookies + origin storage) — loaded into every launched context so pages open already authenticated. Create it out-of-band (e.g. the CLI's `login` helper); it is **never** a tool parameter, so session tokens stay out of the agent's context. When set, [`open_page`](#open_page) tells the agent the session is active so it won't try to log in. At startup the server verifies the path is a readable file containing a valid storage-state shape (`"cookies"` / `"origins"`) and refuses to start otherwise; errors quote the path only, never its contents. Cannot be combined with [`REAL_A11Y_MCP_CDP`](#real-a11y-mcp-cdp) (a CDP connection carries its own session).
+Path to a saved login session — a Playwright storage-state JSON (cookies + origin storage) — loaded into every launched context so pages open already authenticated. Create it out-of-band (e.g. the CLI's `login` helper); it is **never** a tool parameter, so session tokens stay out of the agent's context. When set, [`open_page`](#open-page) tells the agent the session is active so it won't try to log in. At startup the server verifies the path is a readable file containing a valid storage-state shape (`"cookies"` / `"origins"`) and refuses to start otherwise; errors quote the path only, never its contents. Cannot be combined with [`REAL_A11Y_MCP_CDP`](#real-a11y-mcp-cdp) (a CDP connection carries its own session).
 
 ### `REAL_A11Y_MCP_ALLOWED_ORIGINS`
 

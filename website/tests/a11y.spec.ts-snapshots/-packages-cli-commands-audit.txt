@@ -918,10 +918,9 @@ main
           code "tabs"
           code "list"
           code "snapshot"
-  paragraph "Every other browser command reads Chromium's whole-document accessibility tree, so there is nothing for a selector to scope — they reject with that explanation rather than accepting and ignoring it. There is no flag at all: each command has exactly one correct producer."
+  paragraph "Every other browser command reads Chromium's whole-document accessibility tree, so there is nothing for a selector to scope — they reject with that explanation rather than accepting and ignoring it. There is no producer flag either: each command has exactly one correct producer, so there is nothing to choose."
     superscript "†"
     code "--root"
-    code "--producer"
   paragraph
     strong
       link "Output"
@@ -1468,18 +1467,23 @@ main
       row
         rowheader "Command"
         rowheader "Values"
+        rowheader "Default"
     rowgroup
       row
         cell "audit, inspect, tree, outline, tabs, list"
         cell "pretty | json"
           code "pretty"
           code "json"
+        cell "pretty"
+          code "pretty"
       row
         cell "diff"
         cell "pretty | json | md"
           code "pretty"
           code "json"
           code "md"
+        cell "pretty"
+          code "pretty"
       row
         cell "snapshot"
         cell "json | md | sarif | junit | jsonl"
@@ -1488,11 +1492,12 @@ main
           code "sarif"
           code "junit"
           code "jsonl"
-  paragraph "requires (results anchor to repo file paths). See ."
+        cell "json"
+          code "json"
+  paragraph "requires (results anchor to repo file paths)."
     code "sarif"
     link "--config"
       code "--config"
-    link "SARIF, JUnit, JSONL"
   heading "-o, --output <file>" (level 3)
     code "-o, --output <file>"
   list

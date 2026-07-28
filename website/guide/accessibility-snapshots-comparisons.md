@@ -48,7 +48,7 @@ Real A11y takes the same idea somewhere Playwright structurally can't, and frame
 | Runs in | A real browser (reads the browser's own accessibility tree) | **jsdom and a real browser** — no browser needed for unit tests |
 | Test runners | Playwright | Vitest, Jest (jsdom) + a Playwright adapter |
 | Engine | The browser's native AX tree | Real A11y's own extraction — the same tree the [extension](/guide/chrome-extension), [React panel](/packages/react), and [Storybook addon](/packages/storybook-addon) render |
-| Views | Role + name tree | Tree **+** [heading outline](/packages/testing/snapshots#outlinesnapshot-root) **+** [tab order](/packages/testing/snapshots#tabsequencesnapshot-root) |
+| Views | Role + name tree | Tree **+** [heading outline](/packages/testing/snapshots#outlinesnapshot-root-options) **+** [tab order](/packages/testing/snapshots#tabsequencesnapshot-root-options) |
 | Framing | A stable alternative to DOM / visual snapshots | An accessibility audit, paired with [assertions](/packages/testing/assertions) and [matchers](/packages/testing/matchers) |
 
 The practical wedge is jsdom. jsdom has no accessibility tree, so a snapshot built on the browser's AX tree simply can't run in a Vitest or Jest unit test. Because Real A11y computes its own tree, the *same* snapshot runs in a millisecond-fast unit test and in a real-browser E2E run — and matches what you inspect by eye in the panel.

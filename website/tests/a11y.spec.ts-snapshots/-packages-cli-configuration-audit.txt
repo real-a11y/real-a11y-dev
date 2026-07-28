@@ -264,6 +264,8 @@ main
     code "--root"
     emphasis "is"
     code "tabs"
+  heading "device" (level 3)
+    code "device"
   paragraph "— flag · default: unset · applies to , , the view commands,"
     strong
       code "device: string"
