@@ -81,12 +81,21 @@ type Ignore = ((trimmedLine: string) => boolean) | undefined;
  * on the measured side as removed — on a producer migration, "Keyboard tab stop
  * removed" once per focusable element, on every page, with no page having
  * changed. Blanking BOTH sides is what makes the axis read as unmeasured.
+ *
+ * Applied to EVERY view, not just `tabs`. Only `tabs` can go unmeasured today —
+ * every producer emits a tree and an outline — but `meta.views` is a general
+ * list, and a third-party or future artifact may declare a different subset.
+ * Special-casing one view would let `skippedViews` name an axis the differ
+ * quietly compared anyway: a report claiming "not compared" about something it
+ * did compare is the same class of lie this whole mechanism exists to prevent.
  */
 function comparable(page: SnapshotPage, compare: ReadonlySet<SnapshotView>) {
+  const view = (name: SnapshotView, text: string | undefined) =>
+    (compare.has(name) ? text : undefined) ?? "";
   return {
-    tree: page.tree,
-    outline: page.outline,
-    tabs: (compare.has("tabs") ? page.tabs : undefined) ?? "",
+    tree: view("tree", page.tree),
+    outline: view("outline", page.outline),
+    tabs: view("tabs", page.tabs),
   };
 }
 

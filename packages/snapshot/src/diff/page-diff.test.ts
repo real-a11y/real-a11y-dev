@@ -6,6 +6,7 @@ import {
   buildArtifact,
   type SnapshotArtifact,
   type SnapshotPage,
+  type SnapshotView,
 } from "../snapshot-artifact.js";
 
 import { diffArtifacts, noPagesMatched } from "./page-diff.js";
@@ -274,5 +275,39 @@ describe("an unmeasured view is skipped, not read as emptied", () => {
     const result = diffArtifacts(base, pr);
     expect(result.pages[0].views.tree.added).toContain("button");
     expect(result.pages[0].viewHunks.tree.length).toBeGreaterThan(0);
+  });
+});
+
+describe("skippedViews is honest about every axis, not just tabs", () => {
+  /** An artifact declaring an arbitrary measured subset. */
+  const withViews = (views: SnapshotView[], over: Partial<SnapshotPage> = {}) =>
+    buildArtifact(
+      [page("Home", [], { tree: "main", outline: "h1 A", ...over })],
+      {
+        toolName: "cli",
+        toolVersion: "0.0.1",
+        views,
+      },
+    );
+
+  it("skips an unmeasured outline instead of diffing it anyway", () => {
+    // Only `tabs` can go unmeasured today, so this is latent rather than live —
+    // but `meta.views` is a general list. Naming an axis in `skippedViews`
+    // while still comparing it would be the same lie, one view over.
+    const base = withViews(["tree", "outline", "tabs"], { outline: "h1 A" });
+    const pr = withViews(["tree", "tabs"], { outline: "h1 TOTALLY DIFFERENT" });
+    const result = diffArtifacts(base, pr);
+    expect(result.skippedViews).toEqual(["outline"]);
+    // …and it really wasn't compared.
+    expect(result.pages[0].views.outline).toEqual({ added: [], removed: [] });
+    expect(result.pages[0].viewHunks.outline).toEqual([]);
+  });
+
+  it("still compares the axes both sides did measure", () => {
+    const base = withViews(["tree", "tabs"], { tree: "main" });
+    const pr = withViews(["tree", "tabs"], { tree: "main\n  button" });
+    const result = diffArtifacts(base, pr);
+    expect(result.skippedViews).toEqual(["outline"]);
+    expect(result.pages[0].views.tree.added).toContain("button");
   });
 });
