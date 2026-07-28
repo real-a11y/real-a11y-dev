@@ -372,3 +372,68 @@ describe("real-a11y click / type / focus", () => {
     expect(res.stderr).toContain("click needs --role");
   });
 });
+
+describe("real-a11y interact --step-settle", () => {
+  // A step's effect isn't always there when the dispatch returns. This page
+  // defers BOTH kinds of reaction past the click handler, so an immediate read
+  // reports "no changes" for a click that plainly did something — the exact
+  // case the flag exists for.
+  const DEFERRED = dataUrl(`<main>
+    <h1>Deferred</h1>
+    <button id="later">Later</button>
+    <div id="panel"></div>
+    <script>
+      later.onclick = () => setTimeout(() => {
+        panel.innerHTML = '<h2>arrived late</h2>';
+      }, 250);
+    </script>
+  </main>`);
+
+  it("waits long enough to see a reaction that lands after the click", async () => {
+    const res = await runCli([
+      "click",
+      DEFERRED,
+      "--role",
+      "button",
+      "--name",
+      "Later",
+      "--step-settle",
+      "600",
+    ]);
+    expect(res.code).toBe(0);
+    expect(res.stdout).toContain('heading "arrived late"');
+  });
+
+  it("misses it with --step-settle 0 — proof the wait is what does the work", async () => {
+    // Pinning the negative keeps the flag honest: if the default ever stopped
+    // being applied, the test above could pass for the wrong reason.
+    const res = await runCli([
+      "click",
+      DEFERRED,
+      "--role",
+      "button",
+      "--name",
+      "Later",
+      "--step-settle",
+      "0",
+    ]);
+    expect(res.code).toBe(0);
+    expect(res.stdout).not.toContain("arrived late");
+  });
+
+  it("rejects a bad value before launching a browser", async () => {
+    const res = await runCli([
+      "click",
+      DEFERRED,
+      "--role",
+      "button",
+      "--name",
+      "Later",
+      "--step-settle",
+      "soon",
+    ]);
+    expect(res.code).toBe(2);
+    expect(res.stderr).toContain("--step-settle");
+    expect(res.stderr).not.toContain("opening");
+  });
+});

@@ -351,6 +351,23 @@ main
   paragraph "Extra milliseconds to wait after resolves — for content that animates or hydrates in after the load event."
     link "waitUntil"
       code "waitUntil"
+  heading "stepSettleMs" (level 3)
+    code "stepSettleMs"
+  paragraph "— flag · default · max · applies to , , ,"
+    strong
+      code "stepSettleMs: number"
+    code "--step-settle"
+    code "200"
+    code "30000"
+    code "interact"
+    code "click"
+    code "type"
+    code "focus"
+  paragraph "How long to wait after each step before looking at the page again. A dispatch returning is not the same as its effect having landed: a React state update flushes on a later tick, a dialog mounts on the next frame. It gates the step's targeting as much as the final diff — a step that opens a menu has to have opened it before the step that clicks an item can find that item."
+    emphasis "next"
+  paragraph "Raise it for a slow app; opts out and reads immediately. This is a heuristic wait, not a synchronisation point — nothing can tell you a page is to navigate, so a reaction that lands later than this still won't appear."
+    code "0"
+    emphasis "about"
   heading "timeoutMs" (level 3)
     code "timeoutMs"
   paragraph "— flag · default · max · applies to , , the view commands, ,"

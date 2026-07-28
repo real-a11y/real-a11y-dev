@@ -28,6 +28,7 @@ import { redactUrl } from "@real-a11y-dev/snapshot";
 import {
   parseFormat,
   parseOpenOptions,
+  parseStepSettle,
   type CommandFn,
   type FlagValues,
 } from "../args.js";
@@ -170,9 +171,24 @@ interface InteractOutcome {
   navigated: boolean;
 }
 
+/**
+ * Give the page time to react before looking at it again.
+ *
+ * A dispatch returning is not the same as its effect having landed: a React
+ * state update flushes on a later tick, a dialog mounts on the next frame. This
+ * gates the NEXT step's targeting as much as the final diff — a step that opens
+ * a menu has to have opened it before the step that clicks an item can resolve
+ * that item.
+ */
+const settle = (ms: number): Promise<void> =>
+  ms > 0
+    ? new Promise((resolve) => setTimeout(resolve, ms))
+    : Promise.resolve();
+
 async function interactOnPage(
   session: Session,
   steps: readonly InteractStep[],
+  stepSettleMs: number,
   quiet: boolean,
 ): Promise<InteractOutcome> {
   const before = captureNativeCheckpoint(
@@ -183,6 +199,7 @@ async function interactOnPage(
   const done: string[] = [];
   for (const step of steps) {
     await runStep(session, step);
+    await settle(stepSettleMs);
     const rendered = describeStep(step);
     done.push(rendered);
     progress(`  ✓ ${rendered}`, { quiet });
@@ -229,6 +246,7 @@ async function runInteract(
   const output = outputOf(flags);
   const quiet = flags.quiet === true;
   const openOptions = parseOpenOptions(flags);
+  const stepSettleMs = parseStepSettle(flags);
 
   const session = await createSession(sessionFlags(flags, [target]));
   let outcome: InteractOutcome;
@@ -243,7 +261,7 @@ async function runInteract(
       isAuthenticated(flags),
     );
     finalUrl = redactUrl(opened.url);
-    outcome = await interactOnPage(session, steps, quiet);
+    outcome = await interactOnPage(session, steps, stepSettleMs, quiet);
     // Re-read AFTER the steps: a click can navigate, and `url` is contracted
     // as the final address. Reading it before acting reports where the run
     // started, which is wrong in exactly the case the report flags as a
