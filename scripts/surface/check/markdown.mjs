@@ -182,7 +182,25 @@ export function slugify(headingText) {
 function stripHtml(text) {
   return text
     .split(/(`+[^`]*`+)/)
-    .map((part) => (part.startsWith("`") ? part : part.replace(/<[^>]*>/g, "")))
+    .map((part) =>
+      part.startsWith("`")
+        ? part
+        : part
+            // markdown-it's inline-HTML grammar — an open or close tag, or a
+            // comment. Deliberately narrower than "anything between angle
+            // brackets": a stray `<` in prose is text, and markdown-it treats
+            // it as such.
+            .replace(
+              /<\/?[A-Za-z][A-Za-z0-9-]*(?:\s[^<>]*)?\/?>|<!--[\s\S]*?-->/g,
+              "",
+            )
+            // Then drop any angle bracket left over, so this can never hand
+            // back something that still looks like part of a tag. Purely
+            // defensive: `<` and `>` are both in the slug's punctuation class
+            // below, so removing them here or letting them become dashes
+            // produces the same slug either way.
+            .replace(/[<>]/g, ""),
+    )
     .join("");
 }
 
