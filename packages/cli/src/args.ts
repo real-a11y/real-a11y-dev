@@ -227,8 +227,34 @@ const SHARED_FLAG_HELP = `  --root <selector>      Scope extraction             
                          defaults.root does not. snapshot rejects it
 ${SHARED_FLAG_HELP_NO_ROOT}`;
 
+/**
+ * Which section of the command reference a command belongs to. Declared here
+ * rather than in the markdown so the grouping has one source of truth: the
+ * docs' "All commands at a glance" tables are five headed groups, and a new
+ * command that lands in none of them is a table row nobody wrote.
+ */
+export type CommandGroup = "setup" | "audit" | "view" | "act" | "artifact";
+
 export interface CommandSpec {
   summary: string;
+  group: CommandGroup;
+  /**
+   * Which producers can build this command's tree — the single source of truth
+   * for `--producer` support, read by `producerOf`.
+   *
+   * `[]` for the commands that build no tree at all (`install`, `login`,
+   * `diff`). `["native"]` for the act commands: they resolve targets against
+   * Chromium's own whole-document tree and take no `--producer` to choose
+   * otherwise. Native is read-only, whole-document, and carries no tab order,
+   * so a command opts in only when it needs neither a tab sequence nor the
+   * page-bundle's `listByRole`.
+   *
+   * This used to be a `supportsNative` boolean passed in at each of five call
+   * sites, with the list of native-capable commands additionally hand-written
+   * into the refusal message. Both drifted independently of the docs' Producer
+   * column; now all three read from here.
+   */
+  producers: readonly Producer[];
   options: Options;
   help: string;
   load: () => Promise<CommandFn>;
@@ -237,6 +263,8 @@ export interface CommandSpec {
 export const COMMANDS: Record<string, CommandSpec> = {
   install: {
     summary: "Download Chrome from Chrome for Testing (first time only)",
+    group: "setup",
+    producers: [],
     options: INSTALL_FLAGS,
     help: `Usage: real-a11y install [flags]
 
@@ -274,6 +302,8 @@ with a shared-library error, run: npx playwright install-deps chromium
   },
   audit: {
     summary: "Violations (rule · severity · locator); exits 1 on errors",
+    group: "audit",
+    producers: ["dom", "native"],
     options: AUDIT_FLAGS,
     help: `Usage: real-a11y audit <url...> [flags]
 
@@ -300,6 +330,10 @@ Findings go to stdout; progress and errors go to stderr.
   },
   inspect: {
     summary: "Findings + tree + outline + tab order in one pass",
+    group: "audit",
+    // Parses --producer (it shares AUDIT_FLAGS) but refuses native: the
+    // snapshot includes a tab order, which a native tree has none of.
+    producers: ["dom"],
     options: INSPECT_FLAGS,
     help: `Usage: real-a11y inspect <url> [flags]
 
@@ -316,6 +350,8 @@ ${SHARED_FLAG_HELP}
   },
   tree: {
     summary: "Semantic tree (role + accessible name)",
+    group: "view",
+    producers: ["dom", "native"],
     options: VIEW_FLAGS,
     help: `Usage: real-a11y tree <url> [flags]
 
@@ -332,6 +368,8 @@ ${SHARED_FLAG_HELP}
   },
   outline: {
     summary: "Heading outline (h1–h6)",
+    group: "view",
+    producers: ["dom", "native"],
     options: VIEW_FLAGS,
     help: `Usage: real-a11y outline <url> [flags]
 
@@ -347,6 +385,9 @@ ${SHARED_FLAG_HELP}
   },
   tabs: {
     summary: "Focusable elements in Tab order",
+    group: "view",
+    // A tab-order view; a native tree carries no tab order at all.
+    producers: ["dom"],
     options: VIEW_FLAGS,
     help: `Usage: real-a11y tabs <url> [flags]
 
@@ -359,6 +400,10 @@ ${SHARED_FLAG_HELP}
   },
   list: {
     summary: "One category: heading|link|button|form|landmark|image",
+    group: "view",
+    // Needs the page-bundle's listByRole, which the native tree has no
+    // equivalent of.
+    producers: ["dom"],
     options: VIEW_FLAGS,
     help: `Usage: real-a11y list <category> <url> [flags]
 
@@ -372,6 +417,8 @@ ${SHARED_FLAG_HELP}
   },
   interact: {
     summary: "Run steps on a page, then show what they changed",
+    group: "act",
+    producers: ["native"],
     options: INTERACT_FLAGS,
     help: `Usage: real-a11y interact <url> --step '<step>' [--step '<step>' …]
 
@@ -428,6 +475,8 @@ ${SHARED_FLAG_HELP_NO_ROOT}
   },
   click: {
     summary: "Click one element by role + accessible name",
+    group: "act",
+    producers: ["native"],
     options: ACT_FLAGS,
     help: `Usage: real-a11y click <url> --role <role> [--name "<name>"] [flags]
 
@@ -451,6 +500,8 @@ ${SHARED_FLAG_HELP_NO_ROOT}
   },
   type: {
     summary: "Set a text field's value by role + accessible name",
+    group: "act",
+    producers: ["native"],
     options: ACT_FLAGS,
     help: `Usage: real-a11y type <url> --role <role> --name "<name>" --text <value>
 
@@ -483,6 +534,8 @@ ${SHARED_FLAG_HELP_NO_ROOT}
   },
   focus: {
     summary: "Move real keyboard focus by role + accessible name",
+    group: "act",
+    producers: ["native"],
     options: ACT_FLAGS,
     help: `Usage: real-a11y focus <url> --role <role> [--name "<name>"] [flags]
 
@@ -505,6 +558,8 @@ ${SHARED_FLAG_HELP_NO_ROOT}
   },
   login: {
     summary: "Save a login session for --storage-state audits",
+    group: "setup",
+    producers: [],
     options: LOGIN_FLAGS,
     help: `Usage: real-a11y login <url> --save <file>
 
@@ -531,6 +586,9 @@ Flags:
   },
   snapshot: {
     summary: "Audit a page set → a diffable JSON artifact",
+    group: "artifact",
+    // Scopes per route via urls[].rootSelector, which native can't honor.
+    producers: ["dom"],
     options: SNAPSHOT_FLAGS,
     help: `Usage: real-a11y snapshot [url...] [flags]
 
@@ -575,6 +633,9 @@ ${SHARED_FLAG_HELP_NO_ROOT}
   },
   diff: {
     summary: "Findings-aware diff of two snapshot artifacts",
+    group: "artifact",
+    // Pure: two artifacts in, no page, no tree to produce.
+    producers: [],
     options: DIFF_FLAGS,
     help: `Usage: real-a11y diff <base.json> <pr.json> [flags]
 
@@ -700,6 +761,30 @@ export function parseFormat<T extends string>(
  * the commands that need neither `--root` scoping nor a tab sequence accept it
  * (see `producerOf`). */
 export type Producer = "dom" | "native";
+
+/** Whether `command` can build its tree from Chromium's own accessibility
+ * tree. Unknown names are not native-capable — `producerOf` then refuses
+ * `--producer native` for them, which is the safe direction to be wrong in. */
+export function supportsNative(command: string): boolean {
+  return COMMANDS[command]?.producers.includes("native") ?? false;
+}
+
+/**
+ * The commands a user can actually type `--producer native` at, for the
+ * refusal message's "native works with: …" line.
+ *
+ * Both conditions matter. The act commands are native-only but expose no
+ * `--producer`, so offering them as somewhere to pass the flag would send
+ * someone to a strict-parser error.
+ */
+export function nativeCapableCommands(): string[] {
+  return Object.entries(COMMANDS)
+    .filter(
+      ([, spec]) =>
+        spec.producers.includes("native") && "producer" in spec.options,
+    )
+    .map(([name]) => name);
+}
 
 export function parseProducer(value: string | boolean | undefined): Producer {
   if (value === undefined) return "dom";

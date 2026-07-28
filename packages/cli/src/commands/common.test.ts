@@ -96,38 +96,53 @@ describe("isAuthenticated", () => {
 
 describe("producerOf", () => {
   it("defaults to dom and passes dom through on any command", () => {
-    expect(producerOf({}, "tabs", false)).toBe("dom");
-    expect(producerOf({ producer: "dom" }, "audit", true)).toBe("dom");
+    expect(producerOf({}, "tabs")).toBe("dom");
+    expect(producerOf({ producer: "dom" }, "audit")).toBe("dom");
   });
 
   it("returns native for a supporting command", () => {
-    expect(producerOf({ producer: "native" }, "audit", true)).toBe("native");
-    expect(producerOf({ producer: "native" }, "tree", true)).toBe("native");
+    expect(producerOf({ producer: "native" }, "audit")).toBe("native");
+    expect(producerOf({ producer: "native" }, "tree")).toBe("native");
   });
 
   it("rejects native on a command that can't support it", () => {
-    expect(() => producerOf({ producer: "native" }, "tabs", false)).toThrow(
+    expect(() => producerOf({ producer: "native" }, "tabs")).toThrow(
       /not supported by `tabs`/,
     );
-    expect(() => producerOf({ producer: "native" }, "inspect", false)).toThrow(
+    expect(() => producerOf({ producer: "native" }, "inspect")).toThrow(
       CliError,
     );
   });
 
+  it("offers the native-capable commands from the table, not a hand-written list", () => {
+    // The alternatives used to be a literal string in the error and went stale
+    // as commands landed. Only commands that both support native AND expose
+    // --producer belong here: the act commands are native-only but take no
+    // --producer, so naming them would send someone to a parse error. The
+    // remedy is the hint, not the message.
+    let caught: CliError | undefined;
+    try {
+      producerOf({ producer: "native" }, "tabs");
+    } catch (err) {
+      caught = err as CliError;
+    }
+    expect(caught?.hint).toMatch(/native works with: audit, tree, outline\./);
+  });
+
   it("rejects native combined with a non-body --root", () => {
     expect(() =>
-      producerOf({ producer: "native", root: "main" }, "tree", true),
+      producerOf({ producer: "native", root: "main" }, "tree"),
     ).toThrow(/whole document/);
   });
 
   it("allows native with an explicit --root body (the implicit default)", () => {
-    expect(producerOf({ producer: "native", root: "body" }, "tree", true)).toBe(
+    expect(producerOf({ producer: "native", root: "body" }, "tree")).toBe(
       "native",
     );
   });
 
   it("rejects an invalid --producer value regardless of support", () => {
-    expect(() => producerOf({ producer: "webkit" }, "audit", true)).toThrow(
+    expect(() => producerOf({ producer: "webkit" }, "audit")).toThrow(
       /dom \| native/,
     );
   });
@@ -140,18 +155,12 @@ describe("producerOf", () => {
       producerOf(
         { producer: "native", root: "main" },
         "audit",
-        true,
         new Set(["root"]),
       ),
     ).toThrow(/a11y\.config\.json/);
     // …and a typed --root still names the flag.
     expect(() =>
-      producerOf(
-        { producer: "native", root: "main" },
-        "audit",
-        true,
-        new Set(),
-      ),
+      producerOf({ producer: "native", root: "main" }, "audit", new Set()),
     ).toThrow(/can't be combined with --root/);
   });
 });

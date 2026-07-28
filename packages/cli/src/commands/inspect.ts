@@ -44,7 +44,7 @@ export const inspectCommand: CommandFn = async (positionals, flags) => {
   const failOn = parseFailOn(flags["fail-on"], "error");
   const format = parseFormat(flags.format, ["pretty", "json"] as const);
   // inspect includes the tab-order view, which a native tree can't produce.
-  producerOf(flags, "inspect", false);
+  producerOf(flags, "inspect");
   const openOptions = parseOpenOptions(flags);
   const target = singleTarget(positionals, flags, "inspect");
   const output = outputOf(flags);
