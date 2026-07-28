@@ -186,17 +186,23 @@ function stripHtml(text) {
       part.startsWith("`")
         ? part
         : part
-            // markdown-it's inline-HTML grammar — an open or close tag, or a
-            // comment. Deliberately narrower than "anything between angle
-            // brackets": a stray `<` in prose is text, and markdown-it treats
-            // it as such.
-            .replace(
-              /<\/?[A-Za-z][A-Za-z0-9-]*(?:\s[^<>]*)?\/?>|<!--[\s\S]*?-->/g,
-              "",
-            )
-            // Then drop any angle bracket left over, so this can never hand
-            // back something that still looks like part of a tag. Purely
-            // defensive: `<` and `>` are both in the slug's punctuation class
+            // Split on markdown-it's inline-HTML grammar — an open or close
+            // tag, or a comment — and keep only the text between the matches.
+            // Deliberately narrower than "anything between angle brackets": a
+            // stray `<` in prose is text, and markdown-it treats it as such.
+            //
+            // Splitting rather than replacing with "" is the same single pass
+            // over the input, expressed as what it is: extracting the text
+            // markdown-it would render, not sanitizing hostile HTML. A
+            // multi-character `replace` here reads as the latter, and reads
+            // wrong — one pass can stitch a new tag out of the remains of two
+            // (`<scrip<b>t>` → `<script>`), which is a real bug in a sanitizer
+            // and merely markdown-it's behavior in a slug function.
+            .split(/<\/?[A-Za-z][A-Za-z0-9-]*(?:\s[^<>]*)?\/?>|<!--[\s\S]*?-->/)
+            .join("")
+            // Then drop any angle bracket left over, character by character, so
+            // this can never hand back something that still looks like part of
+            // a tag. `<` and `>` are both in the slug's punctuation class
             // below, so removing them here or letting them become dashes
             // produces the same slug either way.
             .replace(/[<>]/g, ""),
