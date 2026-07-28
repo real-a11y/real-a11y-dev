@@ -46,48 +46,48 @@ additive-only. Never rely on the wording of a `pretty` line; key on the JSON.
 
 ## All commands at a glance
 
-The **Producer** column shows which commands honor
-[`--producer native`](#producer-kind) (Chromium's own tree over CDP,
-whole-document) versus the in-page DOM walk. Click a command for its flags.
+Every browser-driving command reads **Chromium's own accessibility tree** over
+CDP, except [`tabs`](#tabs-url) — the one view that tree cannot produce (see
+[`--root`](#root-selector)). Click a command for its flags.
 
 **Setup**
 
-| Command | Purpose | Producer |
-| --- | --- | --- |
-| [`install`](#install) | Download Chrome for Testing into Real A11y's own cache — run once. | — |
-| [`login <url> --save <file>`](#login-url-save-file) | Log in by hand and save the session for `--storage-state`. | — |
+| Command | Purpose |
+| --- | --- |
+| [`install`](#install) | Download Chrome for Testing into Real A11y's own cache — run once. |
+| [`login <url> --save <file>`](#login-url-save-file) | Log in by hand and save the session for `--storage-state`. |
 
 **Audit** — the gates: these exit `1` on findings at or above [`--fail-on`](#fail-on-level).
 
-| Command | Purpose | Producer |
-| --- | --- | --- |
-| [`audit <url...>`](#audit-url) | Every violation, grouped by rule with locator + severity — the flagship. | `dom` · `native` |
-| [`inspect <url>`](#inspect-url) | Findings **plus** tree + outline + tab order from one extraction. | `dom` only |
+| Command | Purpose |
+| --- | --- |
+| [`audit <url...>`](#audit-url) | Every violation, grouped by rule with locator + severity — the flagship. |
+| [`inspect <url>`](#inspect-url) | Findings **plus** tree + outline from one read. |
 
 **Views** — never gates; they exit `0` unless something actually failed.
 
-| Command | Purpose | Producer |
-| --- | --- | --- |
-| [`tree <url>`](#tree-url) | The semantic tree — role + accessible name, as a screen reader traverses it. | `dom` · `native` |
-| [`outline <url>`](#outline-url) | Heading outline (h1–h6) in document order. | `dom` · `native` |
-| [`tabs <url>`](#tabs-url) | Focusable elements in keyboard Tab order. | `dom` only |
-| [`list <category> <url>`](#list-category-url) | One category — heading, link, button, form, landmark, image. | `dom` only |
+| Command | Purpose |
+| --- | --- |
+| [`tree <url>`](#tree-url) | The semantic tree — role + accessible name, as a screen reader traverses it. |
+| [`outline <url>`](#outline-url) | Heading outline (h1–h6) in document order. |
+| [`tabs <url>`](#tabs-url) | Focusable elements in keyboard Tab order — the one in-page read. |
+| [`list <category> <url>`](#list-category-url) | One category — heading, link, button, form, landmark, image. |
 
 **Act** — Chromium only. Exit `0` when every step lands, `2` when one can't be reached.
 
-| Command | Purpose | Producer |
-| --- | --- | --- |
-| [`interact <url> --step`](#interact-url-step-step) | Run ordered steps, then print the tree diff they produced. | `native` only |
-| [`click <url> --role`](#click-url-role-role) | Real click at the element matched by role + accessible name. | `native` only |
-| [`type <url> --role --text`](#type-url-role-role-text-value) | Replace a text field's value; the value is never echoed back. | `native` only |
-| [`focus <url> --role`](#focus-url-role-role) | Move real keyboard focus; the `[focused]` marker moves in the diff. | `native` only |
+| Command | Purpose |
+| --- | --- |
+| [`interact <url> --step`](#interact-url-step-step) | Run ordered steps, then print the tree diff they produced. |
+| [`click <url> --role`](#click-url-role-role) | Real click at the element matched by role + accessible name. |
+| [`type <url> --role --text`](#type-url-role-role-text-value) | Replace a text field's value; the value is never echoed back. |
+| [`focus <url> --role`](#focus-url-role-role) | Move real keyboard focus; the `[focused]` marker moves in the diff. |
 
 **Artifacts**
 
-| Command | Purpose | Producer |
-| --- | --- | --- |
-| [`snapshot [url...]`](#snapshot-url) | Audit a page set → one diffable JSON artifact (or `--md`). | `dom` only |
-| [`diff <base.json> <pr.json>`](#diff-base-json-pr-json) | Findings-aware diff of two artifacts — new / changed / fixed. Pure: no browser. | — |
+| Command | Purpose |
+| --- | --- |
+| [`snapshot [url...]`](#snapshot-url) | Audit a page set → one diffable JSON artifact (or `--md`). |
+| [`diff <base.json> <pr.json>`](#diff-base-json-pr-json) | Findings-aware diff of two artifacts — new / changed / fixed. Pure: no browser. |
 
 ## Commands
 
@@ -144,13 +144,18 @@ real-a11y audit ./dist/index.html --format json -o report.json
 **Flags:** [Browser & page](#browser-page) · [Output](#output) ·
 [Config](#config) · [`--rules`](#rules-ids) · [`--fail-on`](#fail-on-level)
 (default `error`) · [`--no-annotate`](#no-annotate) ·
-[`--producer`](#producer-kind) (`dom | native`).
+no `--root`.
 
 ### `inspect <url>`
 
-Findings **plus** the semantic tree, heading outline, and tab order — all from
-**one** extraction, so the views can never disagree. Views print first; the gate
+Findings **plus** the semantic tree and heading outline — all from **one** read
+of Chromium's own accessibility tree, so the views can never disagree, and the
+findings always agree with [`audit`](#audit-url). Views print first; the gate
 outcome is the last thing on screen. Single URL.
+
+That tree carries no tab order, so this command prints none — and prints no
+empty section either, which would read as *nothing here is focusable*. Run
+[`tabs`](#tabs-url) for the sequence.
 
 ```sh
 real-a11y inspect http://localhost:3000
@@ -168,12 +173,11 @@ URL; always exits `0`.
 
 ```sh
 real-a11y tree https://example.com
-real-a11y tree https://example.com/player --producer native   # reaches media controls
+real-a11y tree https://example.com/player   # reaches user-agent-shadow media controls
 ```
 
 **Flags:** [Browser & page](#browser-page) · [Output](#output) (`pretty | json`)
-· [Config](#config) · [`--include-generic`](#include-generic) ·
-[`--producer`](#producer-kind) (`dom | native`).
+· [Config](#config) · [`--include-generic`](#include-generic) · no `--root`.
 
 ### `outline <url>`
 
@@ -185,19 +189,25 @@ real-a11y outline https://example.com
 ```
 
 **Flags:** [Browser & page](#browser-page) · [Output](#output) (`pretty | json`)
-· [Config](#config) · [`--producer`](#producer-kind) (`dom | native`).
+· [Config](#config) · no `--root`.
 
 ### `tabs <url>`
 
 Print every focusable element in keyboard **Tab** order. Single URL; always
 exits `0`.
 
+The one command still built from the **in-page DOM walk**, and the only one that
+takes [`--root`](#root-selector). Chromium's accessibility tree knows whether a
+node is focusable, but not the *sequence* — `tabindex` never reaches a native
+node — so tab order is DOM work by nature, not a fallback.
+
 ```sh
 real-a11y tabs https://example.com
+real-a11y tabs https://example.com --root "#app main"
 ```
 
 **Flags:** [Browser & page](#browser-page) · [Output](#output) (`pretty | json`)
-· [Config](#config).
+· [Config](#config) · [`--root`](#root-selector).
 
 ### `list <category> <url>`
 
@@ -263,7 +273,7 @@ landed.
 Targeting, acting, and the diff all read the **same** tree — Chromium's own,
 over CDP. A node you aim at by one name therefore can't come back in the report
 under another. That tree is whole-document, which is why these commands take
-neither [`--producer`](#producer-kind) nor [`--root`](#root-selector).
+no [`--root`](#root-selector).
 
 A typed value is **never echoed** — not in progress output, not in
 [`--format json`](#f-format-fmt), where the step renders as `= ‹hidden›`. Don't
@@ -279,7 +289,7 @@ passed when a step navigated.
 
 **Flags:** `--step '<step>'` (repeatable, required) ·
 [`--step-settle`](#step-settle-ms) ·
-[Browser & page](#browser-page) (no `--producer`, no `--root`) ·
+[Browser & page](#browser-page) (no `--root`) ·
 [Output](#output)
 (`pretty | json`) · [Config](#config).
 
@@ -297,7 +307,7 @@ real-a11y click http://localhost:3000 --role button --name ""   # unlabeled
 
 **Flags:** `--role` (required) · `--name` · `--nth` ·
 [`--step-settle`](#step-settle-ms) ·
-[Browser & page](#browser-page) (no `--producer`, no `--root`) ·
+[Browser & page](#browser-page) (no `--root`) ·
 [Output](#output)
 (`pretty | json`) · [Config](#config).
 
@@ -318,7 +328,7 @@ The value is never echoed back, in any format. Don't use it to log in — see
 
 **Flags:** `--role` (required) · `--text` (required) · `--name` · `--nth` ·
 [`--step-settle`](#step-settle-ms) ·
-[Browser & page](#browser-page) (no `--producer`, no `--root`) ·
+[Browser & page](#browser-page) (no `--root`) ·
 [Output](#output)
 (`pretty | json`) · [Config](#config).
 
@@ -334,15 +344,20 @@ real-a11y focus http://localhost:3000 --role textbox --name "Email"
 
 **Flags:** `--role` (required) · `--name` · `--nth` ·
 [`--step-settle`](#step-settle-ms) ·
-[Browser & page](#browser-page) (no `--producer`, no `--root`) ·
+[Browser & page](#browser-page) (no `--root`) ·
 [Output](#output)
 (`pretty | json`) · [Config](#config).
 
 ### `snapshot [url...]`
 
 Audit a page set and write **one** JSON artifact — fingerprinted findings plus
-the tree/outline/tabs views per page. That artifact is the input to
-[`diff`](#diff-base-json-pr-json).
+the tree and outline views per page, with `meta.views` recording which views the
+run measured. That artifact is the input to [`diff`](#diff-base-json-pr-json).
+
+There is no tabs view: this reads Chromium's whole-document accessibility tree,
+which carries no tab order. The artifact omits the view rather than storing an
+empty one, so a diff reads it as *not measured* instead of *every tab stop was
+removed*. `real-a11y tabs` is the keyboard sequence.
 
 Pages, in precedence order: positional URLs, else `A11Y_PAGES`, else the config's
 `urls` ([`--config`](#config-file) or auto-discovered). Output goes to
@@ -442,8 +457,7 @@ Throughout this table, **browser commands** is the eleven that drive a page:
 
 | Flag | Type / values | Default | Commands |
 | --- | --- | --- | --- |
-| [`--root`](#root-selector) | CSS selector | `body` | browser commands · **not taken by** the act commands · **rejected by** `snapshot` |
-| [`--producer`](#producer-kind) | `dom \| native` | `dom` | `audit`, `tree`, `outline` <sup>†</sup> |
+| [`--root`](#root-selector) | CSS selector | `body` | [`tabs`](#tabs-url) only <sup>†</sup> |
 | [`--device`](#device-name) | Playwright device name | none | browser commands |
 | [`--viewport`](#viewport-wxh) | `WIDTHxHEIGHT` | none | browser commands |
 | [`--wait-until`](#wait-until-state) | `load \| domcontentloaded \| networkidle \| commit` | `load` | browser commands · `login` |
@@ -458,11 +472,11 @@ Throughout this table, **browser commands** is the eleven that drive a page:
 | [`--audit-origin`](#audit-origin-origin) | origin (repeatable) | the target's own | browser commands |
 | [`--include-generic`](#include-generic) | boolean | `false` | `inspect`, `tree`, `outline`, `tabs`, `list`, `snapshot` |
 
-<sup>†</sup> Only those three **honor** `--producer native`. `inspect`, `tabs`,
-`list`, and `snapshot` accept the flag purely so `native` is refused with
-guidance rather than silently ignored; the act commands
-([`interact`](#interact-url-step-step) and the verbs) take neither it nor
-`--root`.
+<sup>†</sup> Every other browser command reads Chromium's whole-document
+accessibility tree, so there is nothing for a selector to scope — they reject
+`--root` with that explanation rather than accepting and ignoring it. There is
+no producer flag either: each command has exactly one correct producer, so
+there is nothing to choose.
 
 **[Output](#output)**
 
@@ -521,71 +535,35 @@ browser-driving command — [`audit`](#audit-url), [`inspect`](#inspect-url),
 [`focus`](#focus-url-role-role), [`snapshot`](#snapshot-url).
 [`login`](#login-url-save-file) takes only the settling flags
 ([`--wait-until`](#wait-until-state), [`--settle`](#settle-ms),
-[`--timeout`](#timeout-ms)) and forces headful. The act commands
-([`interact`](#interact-url-step-step) and the verbs) take no
-[`--producer`](#producer-kind).
+[`--timeout`](#timeout-ms)) and forces headful.
 
 ### `--root <selector>`
 
-- **Type:** CSS selector · **Default:** `body` · **Commands:** audit, inspect,
-  tree, outline, tabs, list, interact, click, type, focus · **rejected by:**
-  snapshot
+- **Type:** CSS selector · **Default:** `body` · **Commands:**
+  [`tabs`](#tabs-url) only
 
-Scope extraction to a region or component instead of the whole page.
+Scope the tab-order walk to a region or component instead of the whole page.
 
-[`audit`](#audit-url) also scopes each page via its config
-[`rootSelector`](/packages/cli/configuration#urls). There, a `--root` you type
-is a deliberate override for that run, so it wins over the config for every
-page; omit it to let each route use its own selector. A project-wide
-[`defaults.root`](/packages/cli/configuration#defaults) is only a fallback for
-routes that don't scope themselves — it never overrides one that does.
-
-[`snapshot`](#snapshot-url) **rejects** the flag. It scopes each page via that
-page's config `rootSelector`, so the `root` recorded in the artifact is always
-the one the config asked for — a flag can't make two snapshots of the same route
-incomparable. Scope a route by giving it its own `rootSelector`; for a one-off
-scoped run, use `audit --root`. (A project-wide `defaults.root` is not a typed
-flag, so it doesn't trip the rejection — `snapshot` ignores it, as before.)
+`tabs` is the last command that runs **in the page**, and a selector only means
+something to an in-page walk. Every other browser command reads Chromium's own
+accessibility tree, which is whole-document: there is no subtree to narrow to,
+so they reject `--root` with that explanation rather than accepting it and
+silently doing nothing.
 
 ```sh
-real-a11y tree http://localhost:3000 --root "#app main"
+real-a11y tabs http://localhost:3000 --root "#app main"
 ```
 
-### `--producer <kind>`
+A project-wide [`defaults.root`](/packages/cli/configuration#defaults) now
+reaches only `tabs`. On any other command it is **warned about on stderr, not
+an error** — the config loader is otherwise strict and fail-closed, and
+hard-erroring would red every CI that set the key, over config that was correct
+when it was written.
 
-- **Type:** `dom | native` · **Default:** `dom` · **Commands:** audit, tree,
-  outline
-
-Which producer builds the tree. `dom` (default) injects the page-bundle and
-walks the light DOM in the page. `native` reads **Chromium's own accessibility
-tree** over CDP and serializes + audits it in Node — so it reaches structure no
-in-page walk can, most visibly a `<video controls>`'s play/scrubber/mute
-controls, which live in a closed user-agent shadow root.
-
-```sh
-real-a11y tree  http://localhost:3000/player --producer native   # media controls appear
-real-a11y audit http://localhost:3000/player --producer native   # and get audited
-```
-
-A native finding carries the same CSS locator a DOM finding does — computed
-during the one document walk the producer already makes, by the same builder,
-so `#panel > div > img:nth-of-type(2)` reads identically either way. The one
-exception is an element inside a shadow root, which native reaches and the
-in-page walk can't: it has no whole-document selector, so its path stops at the
-boundary rather than pretending to be queryable.
-
-Native mode is whole-document and read-only, so it's accepted only where that
-fits — `audit`, `tree`, `outline`. Commands that carry a tab sequence
-([`tabs`](#tabs-url), [`inspect`](#inspect-url), [`snapshot`](#snapshot-url)) or
-list one category ([`list`](#list-category-url)) reject `--producer native`, and it
-can't be combined with [`--root`](#root-selector) (it audits the whole document).
-
-The act commands ([`interact`](#interact-url-step-step),
-[`click`](#click-url-role-role), [`type`](#type-url-role-role-text-value),
-[`focus`](#focus-url-role-role)) take **no `--producer` and no `--root`**: they
-resolve, act, and diff against the native tree throughout, and it is
-whole-document, so neither flag has anything to mean. A flag that silently did
-nothing would be worse than not offering one.
+A route's [`urls[].rootSelector`](/packages/cli/configuration#urls) is likewise
+no longer a scope for [`audit`](#audit-url) or [`snapshot`](#snapshot-url).
+Those warn once, naming the routes, and keep running: the entry is still how a
+route is identified, and findings from outside the old subtree are now included.
 
 ### `--device <name>`
 

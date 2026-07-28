@@ -46,16 +46,25 @@ import { renderJUnit } from "../render/junit.js";
 import { renderSnapshotMarkdown } from "../render/md.js";
 import { renderSarif } from "../render/sarif.js";
 
-import { createSession, openPage, snapshotPage } from "../session.js";
+import { createSession, nativeSnapshot, openPage } from "../session.js";
 
 import { assertAllowedUrl, normalizeTarget } from "../url-gate.js";
 
 import {
   resolvePageList,
   sessionFlags,
-  producerOf,
+  warnUnscopable,
   type Target,
 } from "./common.js";
+
+/**
+ * The views a snapshot measures. Native carries no tab order, so `tabs` is
+ * absent from every page AND declared absent here — the artifact says which
+ * views it measured so a reader never mistakes "not measured" for "empty".
+ * Without that, the first diff across this migration would report every
+ * keyboard tab stop on every page as removed.
+ */
+const MEASURED_VIEWS = ["tree", "outline"] as const;
 
 function toolVersion(): string {
   try {
@@ -69,27 +78,7 @@ function toolVersion(): string {
 const SNAPSHOT_FORMATS = ["json", "md", "sarif", "junit", "jsonl"] as const;
 type SnapshotFormat = (typeof SNAPSHOT_FORMATS)[number];
 
-export const snapshotCommand: CommandFn = async (
-  positionals,
-  flags,
-  seededFromConfig,
-) => {
-  // A snapshot is a faithful record of the config: each page is scoped by its
-  // own `urls[].rootSelector`, so one global `--root` would either be silently
-  // dropped (what used to happen) or quietly re-scope every page and change the
-  // `v1:` fingerprints a committed baseline was built from. Refuse instead —
-  // per-route scoping is the only scoping this command can honor. A seeded
-  // `defaults.root` is NOT a refusal: it's config the user set for `audit`'s
-  // benefit, and failing every `snapshot` run over it would be absurd.
-  if (
-    typeof flags.root === "string" &&
-    seededFromConfig?.has("root") !== true
-  ) {
-    throw new CliError(
-      "snapshot scopes each page by its own `urls[].rootSelector` — it can't apply a single --root across the set.",
-      'set `"rootSelector"` on the entries in `urls` that need scoping, or use `real-a11y audit --root` for a one-off scoped run',
-    );
-  }
+export const snapshotCommand: CommandFn = async (positionals, flags) => {
   const { pages: configPages, configPath } = resolvePageList(
     positionals,
     flags,
@@ -103,8 +92,7 @@ export const snapshotCommand: CommandFn = async (
   // rules/device (and every other policy flag) already carry the config
   // `defaults` — run.ts merged them into `flags` before dispatch.
   const rules = parseRules(flags.rules);
-  // The artifact carries tab-order per page for `diff`; a native tree has none.
-  producerOf(flags, "snapshot");
+  warnUnscopable("snapshot", configPages);
   const openOptions = parseOpenOptions(flags);
   // `--md` predates `--format` here and stays as an alias for `--format md`.
   const format = parseFormat(flags.format, SNAPSHOT_FORMATS);
@@ -163,15 +151,18 @@ export const snapshotCommand: CommandFn = async (
   try {
     for (const target of targets) {
       progress(`snapshotting ${target.name} …`, { quiet });
-      const root = target.page.rootSelector ?? "body";
+      // Whole-document now — recorded as "body" so the field keeps meaning what
+      // it says, rather than claiming a scope the run didn't apply.
+      const root = "body";
       try {
         await openPage(session, target.url, openOptions, target.fileApproved);
-        const snap = await snapshotPage(session, root, {
+        const snap = await nativeSnapshot(session, {
           ...(rules ? { rules } : {}),
         });
         snapshotPages.push(
           buildSnapshotPage(target.name, target.url, snap, {
             root,
+            tabOrder: false,
             ...(target.page.sourcePath
               ? { sourcePath: target.page.sourcePath }
               : {}),
@@ -188,7 +179,6 @@ export const snapshotCommand: CommandFn = async (
           findings: [],
           tree: "",
           outline: "",
-          tabs: "",
         });
       }
     }
@@ -239,6 +229,7 @@ export const snapshotCommand: CommandFn = async (
   const artifact = buildArtifact(snapshotPages, {
     toolName: "@real-a11y-dev/cli",
     toolVersion: toolVersion(),
+    views: MEASURED_VIEWS,
     ...(rules ? { rules } : {}),
     ...(openOptions.device ? { device: openOptions.device } : {}),
   });
@@ -252,11 +243,12 @@ export const snapshotCommand: CommandFn = async (
           snapshotPages.map((p) =>
             only === "views"
               ? { ...p, findings: [] }
-              : { ...p, tree: "", outline: "", tabs: "" },
+              : { ...p, tree: "", outline: "" },
           ),
           {
             toolName: "@real-a11y-dev/cli",
             toolVersion: toolVersion(),
+            views: MEASURED_VIEWS,
             ...(rules ? { rules } : {}),
             ...(openOptions.device ? { device: openOptions.device } : {}),
             only,

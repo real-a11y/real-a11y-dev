@@ -11,7 +11,8 @@ import {
   parseStepSettle,
   DEFAULT_STEP_SETTLE_MS,
   parseRules,
-  parseProducer,
+  isNativeCommand,
+  nativeCommands,
   rootHelp,
 } from "./args.js";
 import { CliError } from "./exit.js";
@@ -48,19 +49,61 @@ describe("parseFailOn / parseFormat", () => {
   });
 });
 
-describe("parseProducer", () => {
-  it("defaults to dom when omitted", () => {
-    expect(parseProducer(undefined)).toBe("dom");
+describe("the producer axis is gone", () => {
+  it("no command declares --producer", () => {
+    // Each surface has exactly one correct producer now, so there is nothing
+    // to choose — and a flag that silently did nothing would be worse.
+    for (const [name, spec] of Object.entries(COMMANDS)) {
+      expect(
+        spec.options,
+        `${name} still declares --producer`,
+      ).not.toHaveProperty("producer");
+      expect(spec.help, `${name}'s help still mentions --producer`).not.toMatch(
+        /--producer/,
+      );
+    }
   });
 
-  it("accepts dom and native", () => {
-    expect(parseProducer("dom")).toBe("dom");
-    expect(parseProducer("native")).toBe("native");
+  it("declares --root on `tabs` alone", () => {
+    // The one DOM holdout: tab ORDER is layout work the native tree doesn't
+    // expose, and a DOM walk is the only thing a selector can scope.
+    const withRoot = Object.entries(COMMANDS)
+      .filter(([, spec]) => "root" in spec.options)
+      .map(([name]) => name);
+    expect(withRoot).toEqual(["tabs"]);
   });
 
-  it("rejects anything else", () => {
-    expect(() => parseProducer("chromium")).toThrow(/dom \| native/);
-    expect(() => parseProducer("chromium")).toThrow(CliError);
+  it("derives the native set from the table, so it can't drift", () => {
+    // This is what turns a leftover `--root` into an explanation rather than
+    // "Unknown option". A hand-written second copy is exactly the drift the
+    // surface extraction exists to prevent — so it reads `producers`.
+    for (const name of nativeCommands()) {
+      expect(COMMANDS, `${name} is not a command`).toHaveProperty(name);
+      expect(
+        COMMANDS[name].options,
+        `${name} declares --root`,
+      ).not.toHaveProperty("root");
+    }
+    expect(isNativeCommand("tabs")).toBe(false);
+    expect(isNativeCommand("audit")).toBe(true);
+    // An unknown name is not native — the safe direction: it falls through to
+    // the parser rather than claiming a scope refusal for a command that
+    // doesn't exist.
+    expect(isNativeCommand("nope")).toBe(false);
+  });
+
+  it("gives every command exactly one producer, or none", () => {
+    for (const [name, spec] of Object.entries(COMMANDS)) {
+      expect(
+        spec.producers.length,
+        `${name} declares ${spec.producers.length} producers`,
+      ).toBeLessThanOrEqual(1);
+    }
+    // `tabs` is the lone DOM holdout; nothing else reads the in-page walk.
+    const dom = Object.entries(COMMANDS)
+      .filter(([, s]) => s.producers.includes("dom"))
+      .map(([n]) => n);
+    expect(dom).toEqual(["tabs"]);
   });
 });
 

@@ -57,8 +57,10 @@ export async function extractCli(repoRoot) {
       .sort((a, b) => a.code - b.code),
     commands: commands.sort((a, b) => a.name.localeCompare(b.name)),
     listCategories: [...args.LIST_CATEGORIES],
-    // Which commands a user can actually type `--producer native` at, as the
-    // CLI itself computes it for its refusal message.
-    nativeCapableCommands: args.nativeCapableCommands(),
+    // Which commands read Chromium's own accessibility tree, as the CLI itself
+    // computes it. No longer a `--producer` opt-in — the flag is gone, each
+    // command has exactly one producer — but still the fact that decides
+    // whether `--root` applies, so it stays derived rather than restated.
+    nativeCommands: args.nativeCommands(),
   };
 }

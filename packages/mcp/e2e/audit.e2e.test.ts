@@ -187,22 +187,48 @@ describe("MCP end-to-end against a real browser", () => {
     expect(images).toMatch(/img "Logo"/);
   });
 
-  it("errors clearly when rootSelector matches no element", async () => {
+  it("get_tab_order still errors clearly when rootSelector matches no element", async () => {
     const html = `<!doctype html><html><head><title>x</title></head>
       <body><main><h1>Here</h1></main></body></html>`;
     await client.callTool({
       name: "open_page",
       arguments: { url: dataUrl(html) },
     });
+    // get_tab_order is the one tool that still runs in the page and still takes
+    // a rootSelector — so it is the one that can still miss.
     const res = await client.callTool({
-      name: "get_semantic_tree",
+      name: "get_tab_order",
       arguments: { rootSelector: "#does-not-exist" },
     });
-    // A missing root is an actionable error, not a silently-empty tree.
+    // A missing root is an actionable error, not a silently-empty view.
     expect(res.isError).toBe(true);
     expect(textOf(res)).toMatch(
       /#does-not-exist|matched no element|no element/i,
     );
+  });
+
+  it("the read tools take no rootSelector at all", async () => {
+    const tools = (await client.listTools()).tools;
+    const props = (name: string) =>
+      Object.keys(
+        tools.find((t) => t.name === name)?.inputSchema.properties ?? {},
+      );
+    for (const name of [
+      "audit_page",
+      "inspect_page",
+      "get_semantic_tree",
+      "get_heading_outline",
+      "list_elements",
+    ]) {
+      expect(props(name), `${name} still takes rootSelector`).not.toContain(
+        "rootSelector",
+      );
+      expect(props(name), `${name} still takes producer`).not.toContain(
+        "producer",
+      );
+    }
+    // …and the in-page holdout keeps it.
+    expect(props("get_tab_order")).toContain("rootSelector");
   });
 
   it("refuses to open a file:// URL by default", async () => {
@@ -214,9 +240,10 @@ describe("MCP end-to-end against a real browser", () => {
     expect(textOf(res)).toMatch(/REAL_A11Y_MCP_ALLOW_FILE|Refusing/);
   });
 
-  it("reads the native tree and agrees with the dom producer (post value-as-name fix)", async () => {
-    // Unlabeled input WITH a value. Chromium never names it by value; since the
-    // #119 core fix, the dom producer doesn't either — so the oracle agrees.
+  it("never names an unlabeled input by its value", async () => {
+    // Unlabeled input WITH a value. Chromium's own tree never names it by
+    // value, and since the #119 core fix neither did the in-page walk — this
+    // is the regression guard that outlived the producer comparison itself.
     const html = `<!doctype html><html><head><title>x</title></head><body><main>
       <h1>Sign in</h1>
       <input value="john@example.com" />
@@ -226,26 +253,11 @@ describe("MCP end-to-end against a real browser", () => {
       arguments: { url: dataUrl(html) },
     });
 
-    // View the native tree via get_semantic_tree { producer: "native" }.
-    const native = textOf(
-      await client.callTool({
-        name: "get_semantic_tree",
-        arguments: { producer: "native" },
-      }),
-    );
-    expect(native).toMatch(/textbox/); // Chromium's own tree, via CDP
-    expect(native).not.toMatch(/john@example\.com/); // never named by value
-
     const tree = textOf(
       await client.callTool({ name: "get_semantic_tree", arguments: {} }),
     );
-    expect(tree).toMatch(/textbox/);
-    expect(tree).not.toMatch(/john@example\.com/); // dom producer no longer either
-
-    const cmp = textOf(
-      await client.callTool({ name: "compare_producers", arguments: {} }),
-    );
-    expect(cmp).toMatch(/agree/); // dom and native match — the fix + oracle
+    expect(tree).toMatch(/textbox/); // Chromium's own tree, via CDP
+    expect(tree).not.toMatch(/john@example\.com/);
   });
 
   it("keeps a tree checkpoint in-page and diffs a later DOM change", async () => {
@@ -345,28 +357,39 @@ describe("MCP end-to-end against a real browser", () => {
     expect(out).toMatch(/no-unlabeled-interactive/);
   });
 
-  it("inspect_page producer=native shows the media controls and N/A tab order", async () => {
+  it("inspect_page shows the media controls and no tab-order section", async () => {
     // Same page is still open from the previous test.
     const out = textOf(
-      await client.callTool({
-        name: "inspect_page",
-        arguments: { producer: "native" },
-      }),
+      await client.callTool({ name: "inspect_page", arguments: {} }),
     );
-    // Native reaches the UA-shadow media controls the DOM walk can't.
+    // Reaches the UA-shadow media controls no in-page walk can.
     expect(out).toMatch(/slider/);
     expect(out).toMatch(/video time scrubber/);
-    // Tab order is legitimately unavailable on a native tree.
-    expect(out).toMatch(/tab order N\/A \(native producer\)/);
-    expect(out).toMatch(/native producer carries no tab order/);
+    // No tab-order section, and no EMPTY one either — an empty block would
+    // read as "nothing on this page is focusable".
+    expect(out).not.toMatch(/## Tab order/);
+    expect(out).toMatch(/get_tab_order/);
   });
 
-  it("audit_page producer=native rejects a narrowed rootSelector", async () => {
-    const res = await client.callTool({
-      name: "audit_page",
-      arguments: { producer: "native", rootSelector: "main" },
+  it("audit_page is whole-document — a stray rootSelector cannot narrow it", async () => {
+    // The unlabeled button sits OUTSIDE <main>. Under the old DOM producer,
+    // rootSelector:"main" would have hidden it. The parameter no longer exists,
+    // so the finding is still reported — which is the honest behavior, and why
+    // `audit`/`snapshot` warn about a config rootSelector they can't honor.
+    const html = `<!doctype html><html><head><title>x</title></head><body>
+      <header><button></button></header>
+      <main><h1>Title</h1></main>
+    </body></html>`;
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: dataUrl(html) },
     });
-    expect(res.isError).toBe(true);
-    expect(textOf(res)).toMatch(/whole document/);
+    const out = textOf(
+      await client.callTool({
+        name: "audit_page",
+        arguments: { rootSelector: "main" },
+      }),
+    );
+    expect(out).toMatch(/no-unlabeled-interactive/);
   });
 });

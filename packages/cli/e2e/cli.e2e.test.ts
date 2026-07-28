@@ -190,79 +190,64 @@ const ICON_BTN_PAGE = dataUrl(
   "<main><h1>Hi</h1><button><svg width='10' height='10'></svg></button></main>",
 );
 
-describe("real-a11y --producer native (built bin)", () => {
-  it("tree --producer native surfaces UA-shadow media controls the DOM walk misses", async () => {
-    const { code, stdout } = await runCli([
-      "tree",
-      VIDEO_PAGE,
-      "--producer",
-      "native",
-    ]);
+describe("the native producer is the only producer (built bin)", () => {
+  it("tree surfaces UA-shadow media controls no in-page walk can reach", async () => {
+    const { code, stdout } = await runCli(["tree", VIDEO_PAGE]);
     expect(code).toBe(0);
     expect(stdout).toContain('heading "Player"');
-    // Native-only: the scrubber lives in the closed UA shadow root.
+    // The scrubber lives in the closed user-agent shadow root — this is the
+    // reach the migration was for, and it is now the default.
     expect(stdout).toContain("slider");
     expect(stdout).toContain("video time scrubber");
-
-    // The DOM producer, on the same page, stops at the <video> element.
-    const dom = await runCli(["tree", VIDEO_PAGE]);
-    expect(dom.stdout).not.toContain("slider");
   });
 
-  it("outline --producer native prints the heading outline", async () => {
-    const { code, stdout } = await runCli([
-      "outline",
-      VIDEO_PAGE,
-      "--producer",
-      "native",
-    ]);
+  it("outline prints the heading outline", async () => {
+    const { code, stdout } = await runCli(["outline", VIDEO_PAGE]);
     expect(code).toBe(0);
     expect(stdout).toContain("h1 Player");
   });
 
-  it("audit --producer native audits the native tree (flags an unlabeled control)", async () => {
-    const { code, stdout } = await runCli([
-      "audit",
-      ICON_BTN_PAGE,
-      "--producer",
-      "native",
-    ]);
+  it("audit flags an unlabeled control from the native tree", async () => {
+    const { code, stdout } = await runCli(["audit", ICON_BTN_PAGE]);
     expect(code).toBe(1);
     expect(stdout).toContain("no-unlabeled-interactive");
   });
 
-  it("rejects --producer native on tabs (no tab order in a native tree)", async () => {
-    const { code, stderr } = await runCli([
-      "tabs",
-      VIDEO_PAGE,
-      "--producer",
-      "native",
-    ]);
-    expect(code).toBe(2);
-    expect(stderr).toContain("not supported by `tabs`");
+  it("list reaches the same nodes as tree, with locators", async () => {
+    const { code, stdout } = await runCli(["list", "heading", VIDEO_PAGE]);
+    expect(code).toBe(0);
+    expect(stdout).toContain('heading "Player"');
   });
 
-  it("rejects --producer native combined with --root", async () => {
+  it("inspect agrees with audit on findings, and prints no tab-order section", async () => {
+    // The accepted loss, and the gain that pays for it: `inspect` used to run
+    // the DOM producer while `audit` could run native, so the two could report
+    // different findings for the same page.
+    const inspect = await runCli(["inspect", ICON_BTN_PAGE]);
+    const audit = await runCli(["audit", ICON_BTN_PAGE]);
+    expect(inspect.code).toBe(1);
+    expect(inspect.stdout).toContain("no-unlabeled-interactive");
+    expect(audit.stdout).toContain("no-unlabeled-interactive");
+    // No tab-order section — and no EMPTY one either, which would read as
+    // "nothing on this page is focusable".
+    expect(inspect.stdout).toContain("== Semantic tree ==");
+    expect(inspect.stdout).not.toContain("== Tab order ==");
+  });
+
+  it("tabs still reports the keyboard sequence, from the in-page walk", async () => {
+    const { code, stdout } = await runCli(["tabs", ICON_BTN_PAGE]);
+    expect(code).toBe(0);
+    expect(stdout).toMatch(/01\. /);
+  });
+
+  it("rejects --producer entirely — the axis is gone", async () => {
     const { code, stderr } = await runCli([
       "tree",
       VIDEO_PAGE,
       "--producer",
       "native",
-      "--root",
-      "main",
     ]);
     expect(code).toBe(2);
-    expect(stderr).toContain("whole document");
-  });
-
-  it("rejects an unknown --producer value", async () => {
-    const { code, stderr } = await runCli([
-      "tree",
-      VIDEO_PAGE,
-      "--producer",
-      "webkit",
-    ]);
-    expect(code).toBe(2);
-    expect(stderr).toContain("dom | native");
+    expect(stderr).toMatch(/Unknown option/);
   });
 });

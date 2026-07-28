@@ -29,13 +29,13 @@ export type CommandFn = (
 
 type Options = NonNullable<ParseArgsConfig["options"]>;
 
-// Everything about reaching and framing the page — no producer, no root. The
-// act commands take exactly this set: they target, act, and diff against
-// Chromium's native tree, which is whole-document, so neither a producer choice
-// nor a scoping selector has anything to mean. A flag that silently did nothing
-// would be worse than not offering it. Leaving `root` out also stops a config
-// `defaults.root` from reaching them, since `mergeDefaults` is keyed on each
-// command's declared flags.
+// Everything about reaching and framing the page — no root. Almost every
+// command takes exactly this set: they read (or act on) Chromium's native
+// accessibility tree, which is whole-document, so a scoping selector has
+// nothing to mean. A flag that silently did nothing would be worse than not
+// offering it. Leaving `root` out also stops a config `defaults.root` from
+// reaching them, since `mergeDefaults` is keyed on each command's declared
+// flags.
 const PAGE_FLAGS: Options = {
   device: { type: "string" },
   viewport: { type: "string" },
@@ -48,16 +48,6 @@ const PAGE_FLAGS: Options = {
   "allow-file": { type: "boolean" },
   "storage-state": { type: "string" },
   "audit-origin": { type: "string", multiple: true },
-};
-
-const NAVIGATION_FLAGS: Options = {
-  ...PAGE_FLAGS,
-  root: { type: "string" },
-};
-
-const BROWSER_FLAGS: Options = {
-  ...NAVIGATION_FLAGS,
-  producer: { type: "string" },
 };
 
 const OUTPUT_FLAGS: Options = {
@@ -76,7 +66,7 @@ const CONFIG_FLAGS: Options = {
 };
 
 const AUDIT_FLAGS: Options = {
-  ...BROWSER_FLAGS,
+  ...PAGE_FLAGS,
   ...OUTPUT_FLAGS,
   ...CONFIG_FLAGS,
   rules: { type: "string" },
@@ -93,10 +83,24 @@ const INSPECT_FLAGS: Options = {
 };
 
 const VIEW_FLAGS: Options = {
-  ...BROWSER_FLAGS,
+  ...PAGE_FLAGS,
   ...OUTPUT_FLAGS,
   ...CONFIG_FLAGS,
   "include-generic": { type: "boolean" },
+};
+
+// `tabs` is the DOM holdout, so it — alone — still takes `--root`. Tab order is
+// the one view the native tree cannot produce (it knows per-node `focusable`,
+// but not the SEQUENCE — `tabindex` never reaches a native node), so `tabs`
+// still runs the in-page walk, and a walk is the only thing a selector scopes.
+//
+// Otherwise identical to VIEW_FLAGS. `--include-generic` is inert here (a
+// generic container is never a tab stop) but `outline`, `list`, and `snapshot`
+// accept-and-ignore it too — dropping it from this one command would make the
+// surface arbitrary, and is not a change this PR set out to make.
+const TABS_FLAGS: Options = {
+  ...VIEW_FLAGS,
+  root: { type: "string" },
 };
 
 // The act commands. `interact` takes an ordered, repeatable --step; the sugar
@@ -151,7 +155,7 @@ const LOGIN_FLAGS: Options = {
 
 // snapshot audits a config-/env-supplied page set and writes the JSON artifact.
 const SNAPSHOT_FLAGS: Options = {
-  ...BROWSER_FLAGS,
+  ...PAGE_FLAGS,
   ...CONFIG_FLAGS,
   "include-generic": { type: "boolean" },
   rules: { type: "string" },
@@ -194,11 +198,10 @@ export const LIST_CATEGORIES = [
 ] as const;
 export type ListCategory = (typeof LIST_CATEGORIES)[number];
 
-// Everything except `--root`, for the commands that don't take one — listing a
-// flag they reject would promise scoping that never applies. Two reasons to be
-// here: `snapshot` scopes per route via `urls[].rootSelector` and REFUSES
-// `--root` outright, and the act commands work against the whole-document
-// native tree, so there is nothing for a selector to scope.
+// Everything except `--root` — which is now every command but `tabs`. They all
+// read Chromium's whole-document native tree, so there is nothing for a
+// selector to scope, and listing a flag they reject would promise scoping that
+// never applies.
 const SHARED_FLAG_HELP_NO_ROOT = `  --device <name>        Emulate a device, e.g. "iPhone 13"
   --viewport <WxH>       e.g. 1280x800
   --wait-until <state>   load|domcontentloaded|networkidle|commit (default: load)
@@ -221,10 +224,8 @@ const SHARED_FLAG_HELP_NO_ROOT = `  --device <name>        Emulate a device, e.g
   -q, --quiet            Suppress progress
   --verbose              Extra diagnostics on stderr`;
 
-/** The full set, for every command that actually honors `--root`. */
-const SHARED_FLAG_HELP = `  --root <selector>      Scope extraction                 (default: body)
-                         Beats a route's urls[].rootSelector; a config
-                         defaults.root does not. snapshot rejects it
+/** `tabs` only — the one command still running the in-page DOM walk. */
+const SHARED_FLAG_HELP_ROOT = `  --root <selector>      Scope the tab-order walk         (default: body)
 ${SHARED_FLAG_HELP_NO_ROOT}`;
 
 /**
@@ -239,20 +240,20 @@ export interface CommandSpec {
   summary: string;
   group: CommandGroup;
   /**
-   * Which producers can build this command's tree — the single source of truth
-   * for `--producer` support, read by `producerOf`.
+   * Which producer builds this command's tree — exactly one, or none.
    *
    * `[]` for the commands that build no tree at all (`install`, `login`,
-   * `diff`). `["native"]` for the act commands: they resolve targets against
-   * Chromium's own whole-document tree and take no `--producer` to choose
-   * otherwise. Native is read-only, whole-document, and carries no tab order,
-   * so a command opts in only when it needs neither a tab sequence nor the
-   * page-bundle's `listByRole`.
+   * `diff`). Everything else is `["native"]` except `tabs`, which is `["dom"]`
+   * because a native tree carries no tab SEQUENCE and an in-page walk is the
+   * only source of one.
    *
-   * This used to be a `supportsNative` boolean passed in at each of five call
-   * sites, with the list of native-capable commands additionally hand-written
-   * into the refusal message. Both drifted independently of the docs' Producer
-   * column; now all three read from here.
+   * It was a set because `--producer` let a user pick; now each surface has
+   * exactly one correct producer and the flag is gone. The field stays — and
+   * stays an array — because it is still the fact that explains each command's
+   * shape (whole-document reach and no `--root`, versus a scopable in-page
+   * walk), it is what `isNativeCommand` derives the `--root` refusal from, and
+   * `docs/surface.json` publishes it. A hand-written second copy of that list
+   * is the drift this file exists to prevent.
    */
   producers: readonly Producer[];
   options: Options;
@@ -303,12 +304,16 @@ with a shared-library error, run: npx playwright install-deps chromium
   audit: {
     summary: "Violations (rule · severity · locator); exits 1 on errors",
     group: "audit",
-    producers: ["dom", "native"],
+    producers: ["native"],
     options: AUDIT_FLAGS,
     help: `Usage: real-a11y audit <url...> [flags]
 
 Audit pages against the semantic-tree rules; print violations grouped by
 rule. Exits 1 on errors by default — a CI gate with no extra flags.
+
+Audits Chromium's own accessibility tree, which reaches structure no in-page
+walk can (a <video controls>'s user-agent-shadow media controls). That tree is
+whole-document, so this command takes no --root.
 
 Examples:
   real-a11y audit http://localhost:3000
@@ -319,99 +324,106 @@ Flags:
   --rules <ids>          Comma-separated subset of: ${ALL_RULES.join(", ")}
   --fail-on <level>      error | warning | never          (default: error)
   --no-annotate          Skip GitHub Actions annotations
-  --producer <kind>      dom | native                     (default: dom)
-                         native audits Chromium's own a11y tree (whole page;
-                         reaches UA-shadow media controls; rejects --root)
-${SHARED_FLAG_HELP}
+${SHARED_FLAG_HELP_NO_ROOT}
 
 Findings go to stdout; progress and errors go to stderr.
 `,
     load: async () => (await import("./commands/audit.js")).auditCommand,
   },
   inspect: {
-    summary: "Findings + tree + outline + tab order in one pass",
+    summary: "Findings + tree + outline in one pass",
     group: "audit",
-    // Parses --producer (it shares AUDIT_FLAGS) but refuses native: the
-    // snapshot includes a tab order, which a native tree has none of.
-    producers: ["dom"],
+    // Was dom-only because the snapshot carried a tab order. It no longer
+    // does — that is the accepted loss — so it reads the same tree `audit`
+    // does, and the two finally agree on findings.
+    producers: ["native"],
     options: INSPECT_FLAGS,
     help: `Usage: real-a11y inspect <url> [flags]
 
-Findings plus semantic tree, heading outline, and tab order — all derived
-from one extraction, so the views can never disagree.
+Findings plus semantic tree and heading outline — all derived from one read of
+Chromium's own accessibility tree, so the views can never disagree, and the
+findings always agree with 'real-a11y audit'.
+
+That tree carries no tab order, so this command no longer prints one and takes
+no --root. For the tab sequence run 'real-a11y tabs <url>'.
 
 Flags:
   --rules <ids>          Comma-separated subset of: ${ALL_RULES.join(", ")}
   --fail-on <level>      error | warning | never          (default: error)
   --include-generic      Include generic container nodes in the tree
-${SHARED_FLAG_HELP}
+${SHARED_FLAG_HELP_NO_ROOT}
 `,
     load: async () => (await import("./commands/inspect.js")).inspectCommand,
   },
   tree: {
     summary: "Semantic tree (role + accessible name)",
     group: "view",
-    producers: ["dom", "native"],
+    producers: ["native"],
     options: VIEW_FLAGS,
     help: `Usage: real-a11y tree <url> [flags]
 
-Print the semantic tree — what a screen reader perceives, role by role.
+Print the semantic tree — what a screen reader perceives, role by role. Read
+from Chromium's own accessibility tree (whole document, so no --root; reaches
+user-agent-shadow media controls an in-page walk never sees).
 
 Flags:
   --include-generic      Include generic container nodes
-  --producer <kind>      dom | native                     (default: dom)
-                         native reads Chromium's own a11y tree (whole page;
-                         reaches UA-shadow media controls; rejects --root)
-${SHARED_FLAG_HELP}
+${SHARED_FLAG_HELP_NO_ROOT}
 `,
     load: async () => (await import("./commands/views.js")).treeCommand,
   },
   outline: {
     summary: "Heading outline (h1–h6)",
     group: "view",
-    producers: ["dom", "native"],
+    producers: ["native"],
     options: VIEW_FLAGS,
     help: `Usage: real-a11y outline <url> [flags]
 
-Print the heading outline.
+Print the heading outline, derived from Chromium's own accessibility tree
+(whole document, so no --root).
 
 Flags:
-  --producer <kind>      dom | native                     (default: dom)
-                         native reads Chromium's own a11y tree (whole page;
-                         rejects --root)
-${SHARED_FLAG_HELP}
+${SHARED_FLAG_HELP_NO_ROOT}
 `,
     load: async () => (await import("./commands/views.js")).outlineCommand,
   },
   tabs: {
     summary: "Focusable elements in Tab order",
     group: "view",
-    // A tab-order view; a native tree carries no tab order at all.
+    // The one DOM holdout, and not a fallback: a native tree knows per-node
+    // focusability but not the SEQUENCE, so this is the only source there is.
+    // Being an in-page walk is also why it alone still takes `--root`.
     producers: ["dom"],
-    options: VIEW_FLAGS,
+    options: TABS_FLAGS,
     help: `Usage: real-a11y tabs <url> [flags]
 
 Print every focusable element in Tab order.
 
+The only command still built from the in-page DOM walk, and the only one that
+takes --root. Chromium's accessibility tree knows whether a node is focusable,
+but not the SEQUENCE — tabindex never reaches it — so tab order is DOM work by
+nature, not a fallback.
+
 Flags:
-${SHARED_FLAG_HELP}
+${SHARED_FLAG_HELP_ROOT}
 `,
     load: async () => (await import("./commands/views.js")).tabsCommand,
   },
   list: {
     summary: "One category: heading|link|button|form|landmark|image",
     group: "view",
-    // Needs the page-bundle's listByRole, which the native tree has no
-    // equivalent of.
-    producers: ["dom"],
+    // `listByRole` runs over a native ExtractionResult just as well as over an
+    // Element, so this lists from the same tree `tree` and `audit` read.
+    producers: ["native"],
     options: VIEW_FLAGS,
     help: `Usage: real-a11y list <category> <url> [flags]
 
-List every element in one category with role, accessible name, and locator.
+List every element in one category with role, accessible name, and locator,
+from Chromium's own accessibility tree (whole document, so no --root).
 Categories: ${LIST_CATEGORIES.join(", ")}
 
 Flags:
-${SHARED_FLAG_HELP}
+${SHARED_FLAG_HELP_NO_ROOT}
 `,
     load: async () => (await import("./commands/views.js")).listCommand,
   },
@@ -458,7 +470,7 @@ where it landed.
 
 Targeting, acting, and the diff all read the same native tree, so a node you
 aim at by one name can't come back in the report under another. That tree is
-whole-document, which is why these commands take neither --producer nor --root.
+whole-document, which is why these commands take no --root.
 
 A typed value is never echoed — not in progress output, not in --format json.
 Don't use this to log in: a password on the command line is visible to other
@@ -587,14 +599,21 @@ Flags:
   snapshot: {
     summary: "Audit a page set → a diffable JSON artifact",
     group: "artifact",
-    // Scopes per route via urls[].rootSelector, which native can't honor.
-    producers: ["dom"],
+    // Whole-document now: a route's urls[].rootSelector no longer scopes it
+    // (snapshot warns, it doesn't fail), and the artifact records the views it
+    // measured so the absent tabs view reads as unmeasured, not emptied.
+    producers: ["native"],
     options: SNAPSHOT_FLAGS,
     help: `Usage: real-a11y snapshot [url...] [flags]
 
 Audit one or more pages and write ONE JSON artifact — findings (with stable
-fingerprints) plus the tree/outline/tabs views per page. That artifact is the
+fingerprints) plus the tree and outline views per page. That artifact is the
 input to 'real-a11y diff'.
+
+Built from Chromium's own accessibility tree, which carries no tab order: the
+artifact records which views it measured (meta.views) and omits the tabs view
+rather than storing an empty one, so a diff reads it as "not measured" instead
+of "every tab stop was removed".
 
 Pages, in precedence order: positional URLs, else A11Y_PAGES (JSON
 [{name,url}]), else a11y.config.json (--config <file>, or auto-discovered).
@@ -755,43 +774,37 @@ export function parseFormat<T extends string>(
   );
 }
 
-/** Which producer builds the tree. `dom` (default) injects the page-bundle and
- * walks the light DOM; `native` reads Chromium's own accessibility tree over
- * CDP. Native is whole-document, read-only, and carries no tab order — so only
- * the commands that need neither `--root` scoping nor a tab sequence accept it
- * (see `producerOf`). */
+/**
+ * Which producer builds a command's tree. `dom` injects the page-bundle and
+ * walks the light DOM in the page; `native` reads Chromium's own accessibility
+ * tree over CDP.
+ *
+ * This is no longer a choice a user makes — there is no `--producer` flag,
+ * because each surface has exactly one correct producer. It stays as a
+ * DESCRIPTION, because which producer a command reads is still the fact that
+ * explains its shape: whole-document reach and no `--root` for native, a
+ * scopable in-page walk for `tabs`.
+ */
 export type Producer = "dom" | "native";
 
-/** Whether `command` can build its tree from Chromium's own accessibility
- * tree. Unknown names are not native-capable — `producerOf` then refuses
- * `--producer native` for them, which is the safe direction to be wrong in. */
-export function supportsNative(command: string): boolean {
-  return COMMANDS[command]?.producers.includes("native") ?? false;
-}
-
 /**
- * The commands a user can actually type `--producer native` at, for the
- * refusal message's "native works with: …" line.
+ * Commands that read Chromium's own accessibility tree — everything but
+ * `tabs`, among those that build a tree at all.
  *
- * Both conditions matter. The act commands are native-only but expose no
- * `--producer`, so offering them as somewhere to pass the flag would send
- * someone to a strict-parser error.
+ * DERIVED from the command table, never hand-listed. A second copy of this
+ * list is exactly the drift `docs/surface.json` exists to prevent, and it is
+ * load-bearing: it tells a user who still types `--root` (or ships a config
+ * `defaults.root`) why it no longer applies, instead of leaving the strict
+ * parser to answer with "Unknown option".
  */
-export function nativeCapableCommands(): string[] {
-  return Object.entries(COMMANDS)
-    .filter(
-      ([, spec]) =>
-        spec.producers.includes("native") && "producer" in spec.options,
-    )
-    .map(([name]) => name);
+export function isNativeCommand(command: string): boolean {
+  const producers = COMMANDS[command]?.producers;
+  return producers !== undefined && producers.includes("native");
 }
 
-export function parseProducer(value: string | boolean | undefined): Producer {
-  if (value === undefined) return "dom";
-  if (value === "dom" || value === "native") return value;
-  throw new CliError(
-    `--producer expects dom | native — got "${String(value)}"`,
-  );
+/** Every command that reads the native tree, for docs and error copy. */
+export function nativeCommands(): string[] {
+  return Object.keys(COMMANDS).filter(isNativeCommand);
 }
 
 const CHROME_CHANNELS = ["stable", "beta", "dev", "canary"] as const;

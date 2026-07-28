@@ -20,10 +20,17 @@ export {
   ARTIFACT_SCHEMA_VERSION,
   assertFullArtifact,
   buildArtifact,
+  measuredViews,
   serializeArtifact,
   parseSnapshotArtifact,
+  SNAPSHOT_VIEWS,
+  viewsOfPage,
 } from "./snapshot-artifact.js";
-export type { SnapshotArtifact, SnapshotPage } from "./snapshot-artifact.js";
+export type {
+  SnapshotArtifact,
+  SnapshotPage,
+  SnapshotView,
+} from "./snapshot-artifact.js";
 
 // The shared page assembler — the single home for capture→fingerprint, so the
 // CLI and the MCP server compute identical fingerprints for the same page.

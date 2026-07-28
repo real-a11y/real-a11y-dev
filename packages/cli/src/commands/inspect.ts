@@ -1,7 +1,14 @@
 /**
- * `real-a11y inspect <url>` — findings plus all three views from ONE
- * extraction (they can never disagree). Views print first; findings and the
- * summary line come last, so the gate outcome is the final thing on screen.
+ * `real-a11y inspect <url>` — findings plus the tree and outline from ONE read
+ * of Chromium's own accessibility tree (they can never disagree). Views print
+ * first; findings and the summary line come last, so the gate outcome is the
+ * final thing on screen.
+ *
+ * No tab order any more: a native tree carries none, and this command's whole
+ * promise is that everything it prints describes the same instant — pairing a
+ * native tree with a second, DOM-derived tab-order read would break exactly
+ * that. `real-a11y tabs` is the tab sequence, and it agrees with `audit` on
+ * findings, which it previously did not.
  */
 
 import { fingerprintFindings, redactUrl } from "@real-a11y-dev/snapshot";
@@ -24,15 +31,13 @@ import { colorEnabled } from "../render/color.js";
 import { renderJson, type PageReport } from "../render/json.js";
 import { renderPretty } from "../render/pretty.js";
 
-import { createSession, openPage, snapshotPage } from "../session.js";
+import { createSession, nativeSnapshot, openPage } from "../session.js";
 
 import {
   isAuthenticated,
   outputOf,
-  rootOf,
   sessionFlags,
   singleTarget,
-  producerOf,
 } from "./common.js";
 
 function section(title: string, body: string): string {
@@ -43,8 +48,6 @@ export const inspectCommand: CommandFn = async (positionals, flags) => {
   const rules = parseRules(flags.rules);
   const failOn = parseFailOn(flags["fail-on"], "error");
   const format = parseFormat(flags.format, ["pretty", "json"] as const);
-  // inspect includes the tab-order view, which a native tree can't produce.
-  producerOf(flags, "inspect");
   const openOptions = parseOpenOptions(flags);
   const target = singleTarget(positionals, flags, "inspect");
   const output = outputOf(flags);
@@ -61,7 +64,7 @@ export const inspectCommand: CommandFn = async (positionals, flags) => {
       target.fileApproved,
       isAuthenticated(flags),
     );
-    const snapshot = await snapshotPage(session, rootOf(flags), {
+    const snapshot = await nativeSnapshot(session, {
       ...(rules ? { rules } : {}),
       includeGeneric: flags["include-generic"] === true,
     });
@@ -71,7 +74,6 @@ export const inspectCommand: CommandFn = async (positionals, flags) => {
       findings: fingerprintFindings(target.name, snapshot.findings),
       tree: snapshot.tree,
       outline: snapshot.outline,
-      tabs: snapshot.tabOrder,
     };
   } finally {
     await session.close();
@@ -83,7 +85,6 @@ export const inspectCommand: CommandFn = async (positionals, flags) => {
       : [
           section("Semantic tree", page.tree ?? ""),
           section("Heading outline", page.outline ?? ""),
-          section("Tab order", page.tabs ?? ""),
           renderPretty([page], {
             color: output === undefined && colorEnabled(),
           }),

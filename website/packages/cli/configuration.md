@@ -49,7 +49,7 @@ Entry fields:
 
 - **`url`** — the target. Any URL the browser can reach: a public site, a local dev server, staging, or a built file path.
 - **`name`** — the diff join key and display label. This is what pairs a route across two snapshots, so keep it stable when a URL changes. Defaults to `url`, canonicalized (`http://localhost:3000` is recorded as `http://localhost:3000/`) and stripped of userinfo and secret-looking query params, so a credential in a URL never lands in an artifact. `audit` and `snapshot` settle it identically, so a route fingerprints the same whichever command produced the artifact.
-- **`rootSelector`** — scope extraction to a region for this route (per-page [`root`](#root)); the semantic tree is taken from the matching element down. Honored by both `audit` and `snapshot`. On `audit`, a `--root` you type overrides it for that run — but a project-wide [`defaults.root`](#defaults) does **not**, so a route's own selector always beats the project default. On `snapshot` this is the **only** way to scope a page: it always uses this selector, so its artifact matches the config that produced it, and it rejects `--root` rather than accept a scope it won't apply.
+- **`rootSelector`** — a region for this route (per-page [`root`](#root)). **No longer scopes `audit` or `snapshot`**: both read Chromium's whole-document accessibility tree, which has no subtree to narrow to. They warn once on stderr, naming the routes that set it, and keep running — findings from outside that subtree are now included. The key is still accepted (it identifies a route, and `real-a11y tabs --root <selector>` still scopes the in-page tab-order walk), so a committed config keeps loading.
 - **`sourcePath`** — repo-relative file the route's findings anchor to in [SARIF](/packages/cli/commands#f-format-fmt). GitHub code scanning only displays results tied to a file path; without it, results anchor to the config file.
 
 ```json
@@ -94,15 +94,21 @@ Two path-valued keys — [`storageState`](#storagestate) and [`baseline`](#basel
 
 ### `root`
 
-**`root: string`** — flag `--root` · default `body` · applies to `audit`, `inspect`, the view commands · **not** `snapshot`
+**`root: string`** — flag `--root` · default `body` · applies to `tabs` only
 
-Scope extraction to a CSS selector — audit a single region or component instead of the whole page. For per-route scoping, prefer [`urls[].rootSelector`](#urls).
+Scope the in-page tab-order walk to a CSS selector.
 
-On `audit` the order is: a `--root` you type, then the route's own `rootSelector`, then this key as the project-wide default, then `body`. Setting `root` here is a fallback for routes that don't scope themselves — it never overrides one that does.
+Every other command reads Chromium's own accessibility tree, which is
+whole-document — so this key no longer applies to them. When a config sets it
+and the running command isn't `tabs`, the CLI **warns on stderr and keeps
+going**. That is deliberate: this loader is otherwise strict and fail-closed,
+and hard-erroring here would red every CI that set the key, mid-beta, over
+config that was correct when it was written and that the user didn't change.
 
-`snapshot` honors neither the flag nor this key: it scopes every page by `urls[].rootSelector`, falling back to `body`. So a route with no `rootSelector` is snapshotted at `body` even when `root` is set here, while `audit` would scope it to `root` — if you need the two commands to agree on a route, give that route its own `rootSelector`.
-
-The two are ignored differently, though. Setting `root` here is fine — it's a project default aimed at `audit`, and `snapshot` passes over it. Typing `--root` at `snapshot` is an **error** (exit 2): a flag you typed for this run is an instruction, and silently dropping it would leave the artifact's fingerprints looking like they came from a scope that was never applied.
+Typing `--root` at one of those commands *is* an error (exit 2) — a flag you
+typed for this run is an instruction, and silently dropping it would leave the
+output looking like it came from a scope that was never applied. The message
+names the reason and points at `tabs`.
 
 ### `device`
 

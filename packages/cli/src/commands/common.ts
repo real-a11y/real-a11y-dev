@@ -2,13 +2,7 @@
 
 import { redactUrl } from "@real-a11y-dev/snapshot";
 
-import {
-  nativeCapableCommands,
-  parseProducer,
-  supportsNative,
-  type FlagValues,
-  type Producer,
-} from "../args.js";
+import { type FlagValues } from "../args.js";
 import { resolveConfig, type ConfigPage } from "../config.js";
 import { CliError } from "../exit.js";
 import { assertWritableTarget } from "../output.js";
@@ -247,46 +241,27 @@ export function rootOf(flags: FlagValues): string {
 }
 
 /**
- * Resolve the `--producer` for a command, enforcing what native can't do.
+ * Note, once, that a route's `rootSelector` can't scope this run.
  *
- * Native (Chromium's own a11y tree over CDP) is whole-document, read-only, and
- * carries no tab order. So a command opts into native only when it needs
- * neither a tab sequence nor the page-bundle's `listByRole` — declared once, on
- * the command's `producers` in the COMMANDS table. Commands that don't support
- * it still call this so `--producer native` fails loudly with guidance, rather
- * than being silently ignored.
+ * `audit` and `snapshot` read Chromium's whole-document tree, so a per-URL
+ * `rootSelector` no longer narrows what they look at. Warn rather than fail:
+ * the entry is still how a route is *identified* in a committed config, it is
+ * honoured by `tabs`, and hard-erroring would red every CI that scopes a route
+ * — mid-beta, over config that isn't wrong, for a change the user didn't make.
  */
-export function producerOf(
-  flags: FlagValues,
+export function warnUnscopable(
   command: string,
-  seededFromConfig?: ReadonlySet<string>,
-): Producer {
-  const producer = parseProducer(flags.producer);
-  if (producer === "dom") return "dom";
-  if (!supportsNative(command)) {
-    throw new CliError(
-      `--producer native is not supported by \`${command}\` — a native tree has no tab order and can't be scoped.`,
-      // Built from the table, not written out: this list went stale as
-      // commands landed, and pointed people at flags that don't exist.
-      `native works with: ${nativeCapableCommands().join(", ")}. Use --producer dom (the default) here.`,
-    );
-  }
-  if (typeof flags.root === "string" && flags.root !== "body") {
-    // The refusal is the same either way — native is whole-document, so it
-    // can't honor a scope that was asked for. Only the guidance differs:
-    // "drop --root" is useless advice to someone who never typed it, and a
-    // seeded value comes from `defaults.root` in the config instead.
-    const fromConfig = seededFromConfig?.has("root") === true;
-    throw new CliError(
-      fromConfig
-        ? `--producer native audits the whole document — it can't be combined with the \`root\` default in a11y.config.json ("${flags.root}").`
-        : "--producer native audits the whole document — it can't be combined with --root.",
-      fromConfig
-        ? "drop `root` from the config's `defaults`, pass --root body for this run, or use --producer dom to scope to a selector."
-        : "drop --root, or use --producer dom to scope to a selector.",
-    );
-  }
-  return "native";
+  pages: readonly { name: string; rootSelector?: string }[],
+): void {
+  const scoped = pages.filter((p) => p.rootSelector !== undefined);
+  if (scoped.length === 0) return;
+  const names = scoped.map((p) => p.name).join(", ");
+  process.stderr.write(
+    `real-a11y: warning: ${command} reads the whole document — the rootSelector on ` +
+      `${scoped.length === 1 ? "" : `${scoped.length} entries: `}${names} no longer scopes it. ` +
+      `Findings may now include elements from outside that subtree. ` +
+      `('real-a11y tabs --root <selector>' still scopes.)\n`,
+  );
 }
 
 export function outputOf(flags: FlagValues): string | undefined {

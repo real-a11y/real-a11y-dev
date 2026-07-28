@@ -6,6 +6,7 @@ import {
   ARTIFACT_SCHEMA_VERSION,
   assertFullArtifact,
   buildArtifact,
+  measuredViews,
   parseSnapshotArtifact,
   serializeArtifact,
   type SnapshotPage,
@@ -129,5 +130,102 @@ describe("partial artifacts (--only)", () => {
       JSON.stringify({ schemaVersion: 1, pages: [{ name: "Home" }] }),
     );
     expect(() => assertFullArtifact(bare)).not.toThrow();
+  });
+});
+
+describe("meta.views — which views the run measured", () => {
+  const meta = { toolName: "@real-a11y-dev/cli", toolVersion: "0.0.1" };
+
+  it("defaults to all three, so an artifact that says nothing means the old world", () => {
+    expect(buildArtifact([page()], meta).meta.views).toEqual([
+      "tree",
+      "outline",
+      "tabs",
+    ]);
+  });
+
+  it("records a narrower set and survives the round-trip", () => {
+    const native = buildArtifact([page({ tabs: undefined })], {
+      ...meta,
+      views: ["tree", "outline"],
+    });
+    const parsed = parseSnapshotArtifact(serializeArtifact(native));
+    expect(parsed.meta.views).toEqual(["tree", "outline"]);
+  });
+
+  it('keeps an unmeasured view ABSENT rather than defaulting it to ""', () => {
+    // The whole point. The reader used to coerce a missing `tabs` to "", which
+    // is indistinguishable from "measured, nothing focusable" — so omitting the
+    // view on the producer side was a no-op and the diff still read N → 0.
+    const json = JSON.stringify({
+      schemaVersion: ARTIFACT_SCHEMA_VERSION,
+      tool: { name: "cli", version: "0" },
+      meta: {
+        rules: null,
+        device: null,
+        viewport: null,
+        only: null,
+        views: ["tree", "outline"],
+      },
+      pages: [
+        { name: "Home", status: "ok", findings: [], tree: "main", outline: "" },
+      ],
+    });
+    expect(parseSnapshotArtifact(json).pages[0].tabs).toBeUndefined();
+  });
+
+  it('still defaults a MEASURED-but-missing view to ""', () => {
+    // "We measured tab order and found nothing focusable" is a real state, and
+    // it must keep reading as one.
+    const json = JSON.stringify({
+      schemaVersion: ARTIFACT_SCHEMA_VERSION,
+      tool: { name: "cli", version: "0" },
+      meta: { rules: null, device: null, viewport: null, only: null },
+      pages: [
+        { name: "Home", status: "ok", findings: [], tree: "main", outline: "" },
+      ],
+    });
+    expect(parseSnapshotArtifact(json).pages[0].tabs).toBe("");
+  });
+
+  it("drops a stray view the artifact says it never measured", () => {
+    // One source of truth: if the run declares it didn't measure tab order, a
+    // leftover `tabs` string is meaningless and must not reach the differ.
+    const json = JSON.stringify({
+      schemaVersion: ARTIFACT_SCHEMA_VERSION,
+      tool: { name: "cli", version: "0" },
+      meta: {
+        rules: null,
+        device: null,
+        viewport: null,
+        only: null,
+        views: ["tree", "outline"],
+      },
+      pages: [
+        {
+          name: "Home",
+          status: "ok",
+          findings: [],
+          tree: "main",
+          outline: "",
+          tabs: 'link "Home"',
+        },
+      ],
+    });
+    expect(parseSnapshotArtifact(json).pages[0].tabs).toBeUndefined();
+  });
+
+  it("measuredViews reads a legacy artifact as having measured everything", () => {
+    const legacy = parseSnapshotArtifact(
+      JSON.stringify({
+        schemaVersion: ARTIFACT_SCHEMA_VERSION,
+        pages: [{ name: "Home" }],
+      }),
+    );
+    expect([...measuredViews(legacy)].sort()).toEqual([
+      "outline",
+      "tabs",
+      "tree",
+    ]);
   });
 });

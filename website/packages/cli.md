@@ -81,8 +81,10 @@ built file (`real-a11y audit ./dist/index.html` — paths you type need no
 ceremony).
 
 `audit` is the flagship, but there are read-only view commands too — `inspect`,
-`outline`, `tabs`, `list <category>` — each printing one facet of the same
-extraction. See the [command reference](/packages/cli/commands) for the full set.
+`tree`, `outline`, `list <category>` — each printing one facet of the same read
+of Chromium's own accessibility tree, plus `tabs`, which runs the in-page walk
+because tab *order* is the one thing that tree can't produce. See the
+[command reference](/packages/cli/commands) for the full set.
 
 ## Audit what's behind a click
 
@@ -205,13 +207,13 @@ $ real-a11y diff base.json pr.json
 
 Add **`--explain`** and the shape shifts that don't trip a rule are also
 narrated as **statements any reviewer can act on** — a heading dropping from h2
-to h3, a landmark removed, an element still on the page but no longer
-keyboard-focusable, a pure reorder of the tab order that no line diff would catch:
+to h3, a landmark removed, an interactive element gone from the tree, a pure
+reorder of the outline that no line diff would catch:
 
 ```text
 $ real-a11y diff base.json pr.json --explain
   · Heading level changed: "Setup" h2 → h3
-  · Keyboard tab stop added: link "Skip" (now stop 1 of 2)
+  · Landmark removed: main — skip-to-content and "jump to main" navigation may break
 ```
 
 `--explain` is opt-in because the statements are an interpretive layer; the

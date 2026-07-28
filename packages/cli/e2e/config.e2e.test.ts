@@ -167,39 +167,74 @@ describe("a11y.config.json defaults (built bin)", () => {
   });
 });
 
-describe("snapshot rejects --root (built bin)", () => {
-  it("refuses a typed --root instead of silently ignoring it", async () => {
-    // It used to accept the flag and drop it on the floor: every page still
-    // scoped by its own `rootSelector`, exit 0, no word about it. A silently
-    // ignored scope is worse than a rejected one — the artifact's `v1:`
-    // fingerprints look like they came from the scope you asked for.
+describe("--root now applies to `tabs` alone (built bin)", () => {
+  it("refuses a typed --root, naming the reason rather than 'Unknown option'", async () => {
+    // The strict parser would answer with "Unknown option '--root'", which
+    // reads like a typo rather than a deliberate removal. `--root` was a
+    // documented flag on six commands, so people have it in scripts.
     const out = join(dir, "out.json");
     const { code, stderr } = await runCli(
       ["snapshot", CLEAN, "--root", "main", "-o", out, "-q"],
       dir,
     );
     expect(code).toBe(2);
-    expect(stderr).toMatch(/scopes each page by its own/);
-    expect(stderr).toMatch(/rootSelector/);
+    expect(stderr).toMatch(/whole-document accessibility tree/);
+    expect(stderr).toMatch(/nothing for --root to scope/);
+    // …and points at what still scopes.
+    expect(stderr).toMatch(/tabs --root/);
   });
 
-  it("a typed --root still loses to nothing — even when config also sets it", async () => {
-    // `defaults.root` seeds `flags.root`, so the rejection can't key on the
-    // value's presence alone. Typed-on-top-of-seeded is still typed.
-    config({ defaults: { root: "#app" } });
+  it("refuses it on `audit` too, in the same words", async () => {
     const { code, stderr } = await runCli(
-      ["snapshot", CLEAN, "--root", "main", "-q"],
+      ["audit", CLEAN, "--root", "main", "-q"],
       dir,
     );
     expect(code).toBe(2);
-    expect(stderr).toMatch(/can't apply a single --root/);
+    expect(stderr).toMatch(/nothing for --root to scope/);
   });
 
-  it("does not advertise --root in `snapshot --help`", async () => {
-    const { stdout } = await runCli(["snapshot", "--help"], dir);
-    expect(stdout).not.toMatch(/--root/);
-    // …while a command that honors it still lists it.
-    const audit = await runCli(["audit", "--help"], dir);
-    expect(audit.stdout).toMatch(/--root <selector>/);
+  it("still accepts it on `tabs` — the one in-page read", async () => {
+    const { code, stdout } = await runCli(
+      ["tabs", CLEAN, "--root", "body", "-q"],
+      dir,
+    );
+    expect(code).toBe(0);
+    expect(stdout.length).toBeGreaterThan(0);
+  });
+
+  it("stays silent on the commands that never open a page", async () => {
+    // `diff`/`install`/`login` auto-discover the config too, but the warning
+    // explains itself by saying the command reads Chromium's accessibility
+    // tree — which for them is simply false, and noise in every CI log.
+    config({ defaults: { root: "#app" } });
+    const { stderr } = await runCli(["diff", "a.json", "b.json"], dir);
+    expect(stderr).not.toMatch(/defaults\.root/);
+  });
+
+  it("warns — and keeps running — when a config `defaults.root` can't apply", async () => {
+    // A hard error would red every CI that set this key, mid-beta, over config
+    // that was correct when it was written.
+    config({ defaults: { root: "#app" } });
+    const { code, stderr } = await runCli(["audit", CLEAN, "-q"], dir);
+    expect(code).toBe(0);
+    expect(stderr).toMatch(/warning/);
+    expect(stderr).toMatch(/`defaults\.root`/);
+    expect(stderr).toMatch(/Only `tabs` still scopes/);
+    // …and `tabs` itself, which still honours it, says nothing.
+    const tabs = await runCli(["tabs", CLEAN, "-q"], dir);
+    expect(tabs.stderr).not.toMatch(/defaults\\.root/);
+  });
+
+  it("advertises --root in `tabs --help` and nowhere else", async () => {
+    const tabs = await runCli(["tabs", "--help"], dir);
+    expect(tabs.stdout).toMatch(/--root <selector>/);
+    // The others may MENTION it ("this command takes no --root") — what they
+    // must not do is list it as an accepted flag.
+    for (const command of ["snapshot", "audit", "inspect", "tree", "list"]) {
+      const { stdout } = await runCli([command, "--help"], dir);
+      expect(stdout, `${command} --help still lists --root`).not.toMatch(
+        /--root <selector>/,
+      );
+    }
   });
 });

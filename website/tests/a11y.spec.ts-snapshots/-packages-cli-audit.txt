@@ -164,12 +164,14 @@ main
   paragraph "Because it drives a real browser, JS-heavy SPAs render fully, and any URL the browser can reach works — public sites, a , staging, or a built file ( — paths you type need no ceremony)."
     strong "local dev server"
     code "real-a11y audit ./dist/index.html"
-  paragraph "is the flagship, but there are read-only view commands too — , , , — each printing one facet of the same extraction. See the for the full set."
+  paragraph "is the flagship, but there are read-only view commands too — , , , — each printing one facet of the same read of Chromium's own accessibility tree, plus , which runs the in-page walk because tab is the one thing that tree can't produce. See the for the full set."
     code "audit"
     code "inspect"
+    code "tree"
     code "outline"
-    code "tabs"
     code "list <category>"
+    code "tabs"
+    emphasis "order"
     link "command reference"
   heading "Audit what's behind a click" (level 2)
   paragraph "A page audited as it loads never shows the dialog, the expanded menu, or the validation error. runs steps and prints the they produced:"
@@ -236,7 +238,7 @@ main
     emphasis "where"
   button "Copy Code"
   code
-  paragraph "Add and the shape shifts that don't trip a rule are also narrated as — a heading dropping from h2 to h3, a landmark removed, an element still on the page but no longer keyboard-focusable, a pure reorder of the tab order that no line diff would catch:"
+  paragraph "Add and the shape shifts that don't trip a rule are also narrated as — a heading dropping from h2 to h3, a landmark removed, an interactive element gone from the tree, a pure reorder of the outline that no line diff would catch:"
     strong
       code "--explain"
     strong "statements any reviewer can act on"

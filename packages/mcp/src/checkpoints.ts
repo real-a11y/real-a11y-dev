@@ -13,6 +13,7 @@ import {
   buildArtifact,
   diffArtifacts,
   fingerprintFindings,
+  viewsOfPage,
   type DiffClass,
   type DiffEntry,
   type DiffResult,
@@ -80,8 +81,49 @@ export class CheckpointStore<T = Checkpoint> {
 // pages by name and matches findings by fingerprint) — a placeholder is fine.
 const DIFF_META = { toolName: "@real-a11y-dev/mcp", toolVersion: "0" } as const;
 
+/**
+ * Wrap a stored page so `diffArtifacts` can consume it — declaring the views
+ * THIS page actually carries, not a blanket "all three".
+ *
+ * It matters because the two sides can disagree: `import_checkpoint` accepts an
+ * externally-held artifact, so a DOM-era base (with a tabs view) can meet a
+ * native head (without one). Claiming both measured tab order would diff N stops
+ * against nothing and report every one as removed — the loudest possible false
+ * alarm, on a page where nothing changed. The page is the source of truth here.
+ */
 function asArtifact(page: SnapshotPage): SnapshotArtifact {
-  return buildArtifact([page], DIFF_META);
+  return buildArtifact([page], {
+    ...DIFF_META,
+    views: viewsOfPage(page),
+  });
+}
+
+/**
+ * Warn when the two sides were captured at different scopes.
+ *
+ * A checkpoint records the root it was taken at. Reads are whole-document now,
+ * so a live re-snapshot is always `body` — but `import_checkpoint` accepts
+ * externally-held artifacts, and a DOM-era one may have been captured at
+ * `[role=dialog]`. Diffing that against a whole-page head matches the old
+ * findings by fingerprint (nothing reads as fixed) while every finding OUTSIDE
+ * the old subtree arrives as NEW — the one class that gates CI.
+ *
+ * The comparison is still worth showing; it just isn't like-for-like, and an
+ * agent has no way to notice on its own. The CLI says the same thing about the
+ * same widening (`warnUnscopable`); this is the MCP half of it.
+ */
+export function scopeMismatch(
+  base: SnapshotPage,
+  head: SnapshotPage,
+): string | undefined {
+  const from = base.root || "body";
+  const to = head.root || "body";
+  if (from === to) return undefined;
+  return (
+    `NOTE: scope changed — the base was captured at \`${from}\`, this side at \`${to}\`. ` +
+    `Findings from outside \`${from}\` will appear as NEW even though nothing changed. ` +
+    `Re-capture the base at the same scope for a like-for-like diff.`
+  );
 }
 
 /**

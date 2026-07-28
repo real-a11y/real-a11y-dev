@@ -61,17 +61,9 @@
             "type": "string"
           },
           {
-            "name": "producer",
-            "type": "string"
-          },
-          {
             "name": "quiet",
             "short": "q",
             "type": "boolean"
-          },
-          {
-            "name": "root",
-            "type": "string"
           },
           {
             "name": "rules",
@@ -105,7 +97,6 @@
         "group": "audit",
         "name": "audit",
         "producers": [
-          "dom",
           "native"
         ],
         "summary": "Violations (rule · severity · locator); exits 1 on errors",
@@ -460,17 +451,9 @@
             "type": "string"
           },
           {
-            "name": "producer",
-            "type": "string"
-          },
-          {
             "name": "quiet",
             "short": "q",
             "type": "boolean"
-          },
-          {
-            "name": "root",
-            "type": "string"
           },
           {
             "name": "rules",
@@ -504,9 +487,9 @@
         "group": "audit",
         "name": "inspect",
         "producers": [
-          "dom"
+          "native"
         ],
-        "summary": "Findings + tree + outline + tab order in one pass",
+        "summary": "Findings + tree + outline in one pass",
         "usage": "inspect <url> [flags]"
       },
       {
@@ -704,17 +687,9 @@
             "type": "string"
           },
           {
-            "name": "producer",
-            "type": "string"
-          },
-          {
             "name": "quiet",
             "short": "q",
             "type": "boolean"
-          },
-          {
-            "name": "root",
-            "type": "string"
           },
           {
             "name": "settle",
@@ -744,7 +719,7 @@
         "group": "view",
         "name": "list",
         "producers": [
-          "dom"
+          "native"
         ],
         "summary": "One category: heading|link|button|form|landmark|image",
         "usage": "list <category> <url> [flags]"
@@ -846,17 +821,9 @@
             "type": "string"
           },
           {
-            "name": "producer",
-            "type": "string"
-          },
-          {
             "name": "quiet",
             "short": "q",
             "type": "boolean"
-          },
-          {
-            "name": "root",
-            "type": "string"
           },
           {
             "name": "settle",
@@ -886,7 +853,6 @@
         "group": "view",
         "name": "outline",
         "producers": [
-          "dom",
           "native"
         ],
         "summary": "Heading outline (h1–h6)",
@@ -963,17 +929,9 @@
             "type": "string"
           },
           {
-            "name": "producer",
-            "type": "string"
-          },
-          {
             "name": "quiet",
             "short": "q",
             "type": "boolean"
-          },
-          {
-            "name": "root",
-            "type": "string"
           },
           {
             "name": "rules",
@@ -1011,7 +969,7 @@
         "group": "artifact",
         "name": "snapshot",
         "producers": [
-          "dom"
+          "native"
         ],
         "summary": "Audit a page set → a diffable JSON artifact",
         "usage": "snapshot [url...] [flags]"
@@ -1068,10 +1026,6 @@
           {
             "name": "output",
             "short": "o",
-            "type": "string"
-          },
-          {
-            "name": "producer",
             "type": "string"
           },
           {
@@ -1171,17 +1125,9 @@
             "type": "string"
           },
           {
-            "name": "producer",
-            "type": "string"
-          },
-          {
             "name": "quiet",
             "short": "q",
             "type": "boolean"
-          },
-          {
-            "name": "root",
-            "type": "string"
           },
           {
             "name": "settle",
@@ -1211,7 +1157,6 @@
         "group": "view",
         "name": "tree",
         "producers": [
-          "dom",
           "native"
         ],
         "summary": "Semantic tree (role + accessible name)",
@@ -1348,10 +1293,17 @@
       "landmark",
       "image"
     ],
-    "nativeCapableCommands": [
+    "nativeCommands": [
       "audit",
+      "inspect",
       "tree",
-      "outline"
+      "outline",
+      "list",
+      "interact",
+      "click",
+      "type",
+      "focus",
+      "snapshot"
     ]
   },
   "env": [
@@ -1420,25 +1372,11 @@
           "openWorldHint": false,
           "readOnlyHint": true
         },
-        "description": "Run accessibility audits against the current page and return every violation — unlabeled interactive controls, skipped heading levels or missing/duplicate h1, unlabeled dialogs, and broken landmark structure. Reports what real assistive tech would announce as broken. This is the primary tool. Set producer='native' to audit Chromium's own accessibility tree instead of the in-page DOM walk — it reaches structure no in-page walk can (a `<video controls>`'s media controls) but is whole-document (no rootSelector).",
+        "description": "Run accessibility audits against the current page and return every violation — unlabeled interactive controls, skipped heading levels or missing/duplicate h1, unlabeled dialogs, and broken landmark structure. Reports what real assistive tech would announce as broken. This is the primary tool. Audits Chromium's own accessibility tree, so it reaches structure no in-page walk can (a `<video controls>`'s user-agent-shadow media controls); findings carry CSS locators. Whole-document. Chromium only.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "additionalProperties": false,
           "properties": {
-            "producer": {
-              "default": "dom",
-              "description": "Which producer builds the tree: 'dom' (default, in-page walk) or 'native' (Chromium's own a11y tree over CDP — reaches user-agent-shadow media controls a `<video controls>` exposes). Native is whole-document (rootSelector must be 'body') and carries no tab order. Chromium only.",
-              "enum": [
-                "dom",
-                "native"
-              ],
-              "type": "string"
-            },
-            "rootSelector": {
-              "default": "body",
-              "description": "CSS selector for the audit/extraction root. Defaults to 'body'.",
-              "type": "string"
-            },
             "rules": {
               "description": "Subset of rules to run. Omit to run all rules.",
               "items": {
@@ -1466,7 +1404,7 @@
           "openWorldHint": false,
           "readOnlyHint": false
         },
-        "description": "Snapshot the CURRENT page's accessibility findings and store them under `name`. Later call diff_findings to see which findings are new / changed / fixed — the same identity semantics (fingerprints) the CI a11y-diff uses. Checkpoints survive navigation, so you can checkpoint one deploy and diff another: save 'prod', open the preview URL, then diff_findings('prod'). They are held in memory and do NOT survive close_browser — call export_checkpoint first if you need one to outlive the session.",
+        "description": "Snapshot the CURRENT page's accessibility findings and store them under `name`. Later call diff_findings to see which findings are new / changed / fixed — the same identity semantics (fingerprints) the CI a11y-diff uses. Checkpoints survive navigation, so you can checkpoint one deploy and diff another: save 'prod', open the preview URL, then diff_findings('prod'). They are held in memory and do NOT survive close_browser — call export_checkpoint first if you need one to outlive the session. Whole-document. Chromium only.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "additionalProperties": false,
@@ -1475,11 +1413,6 @@
               "description": "Checkpoint label — the in-memory store key.",
               "maxLength": 64,
               "minLength": 1,
-              "type": "string"
-            },
-            "rootSelector": {
-              "default": "body",
-              "description": "CSS selector for the audit/extraction root. Defaults to 'body'.",
               "type": "string"
             },
             "rules": {
@@ -1519,7 +1452,7 @@
           "properties": {
             "rootSelector": {
               "default": "body",
-              "description": "CSS selector for the audit/extraction root. Defaults to 'body'.",
+              "description": "CSS selector for the extraction root. Defaults to 'body'.",
               "type": "string"
             }
           },
@@ -1535,13 +1468,13 @@
           "openWorldHint": true,
           "readOnlyHint": false
         },
-        "description": "Dispatch a REAL click against the element matched by role + accessible name in Chromium's native accessibility tree — the same view get_semantic_tree { producer: \"native\" } prints. Targeting is deliberately role+name only: if a control can't be reached that way, assistive technology can't reach it either, and that is itself an accessibility finding. For the full story call checkpoint_tree FIRST, then this, then diff_tree — the diff answers 'what did that click change for a screen reader?'. THE CLICK IS REAL: it can submit forms, toggle state, and NAVIGATE — navigation discards the page's tree checkpoint. If several nodes match, the error lists them; pass nth to pick one. Chromium only. See also type_text and focus_element.",
+        "description": "Dispatch a REAL click against the element matched by role + accessible name in Chromium's accessibility tree — the same view get_semantic_tree prints. Targeting is deliberately role+name only: if a control can't be reached that way, assistive technology can't reach it either, and that is itself an accessibility finding. For the full story call checkpoint_tree FIRST, then this, then diff_tree — the diff answers 'what did that click change for a screen reader?'. THE CLICK IS REAL: it can submit forms, toggle state, and NAVIGATE — navigation discards the page's tree checkpoint. If several nodes match, the error lists them; pass nth to pick one. Chromium only. See also type_text and focus_element.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "additionalProperties": false,
           "properties": {
             "name": {
-              "description": "Accessible name of the target — case-insensitive, whitespace-normalized EXACT match against the NATIVE tree (names can differ from the dom producer's; compare_producers shows where). Pass '' to target an unlabeled control. Omit to match any name; if several nodes match, the error lists them so you can pass nth.",
+              "description": "Accessible name of the target — case-insensitive, whitespace-normalized EXACT match against the tree get_semantic_tree returns. Pass '' to target an unlabeled control. Omit to match any name; if several nodes match, the error lists them so you can pass nth.",
               "type": "string"
             },
             "nth": {
@@ -1578,21 +1511,6 @@
         },
         "name": "close_browser",
         "title": "Close browser"
-      },
-      {
-        "annotations": {
-          "idempotentHint": true,
-          "openWorldHint": false,
-          "readOnlyHint": true
-        },
-        "description": "Diff the DOM producer's accessibility tree against the native producer's (Chromium's own tree over CDP) and report where they disagree on role or accessible name — a fidelity oracle that surfaces DOM-engine gaps (e.g. an unlabeled input the DOM engine names by its typed value) and structure only the native tree reaches (media controls). This is a producer diff (dom vs native at one instant); for a before/after diff over time use diff_checkpoints. Whole document. Chromium only.",
-        "inputSchema": {
-          "$schema": "http://json-schema.org/draft-07/schema#",
-          "properties": {},
-          "type": "object"
-        },
-        "name": "compare_producers",
-        "title": "Compare the DOM and native producers"
       },
       {
         "annotations": {
@@ -1640,10 +1558,6 @@
               "maxLength": 64,
               "minLength": 1,
               "type": "string"
-            },
-            "rootSelector": {
-              "description": "CSS root for the re-snapshot. Defaults to the root the checkpoint was saved with.",
-              "type": "string"
             }
           },
           "required": [
@@ -1681,7 +1595,7 @@
           "openWorldHint": false,
           "readOnlyHint": true
         },
-        "description": "Return a stored checkpoint as a Real A11y snapshot artifact — the same a11y-snapshot.json the CLI writes (same schemaVersion, same fingerprints). Persist it to your own file to diff across sessions, or feed it to the CI a11y-diff. Output is capped, so it is best for small roots.",
+        "description": "Return a stored checkpoint as a Real A11y snapshot artifact — the same a11y-snapshot.json the CLI writes (same schemaVersion, same fingerprints). Persist it to your own file to diff across sessions, or feed it to the CI a11y-diff. Checkpoints are whole-document, and the artifact has to come back as one valid JSON string, so a large page can exceed the output cap and fail — use the CLI's `real-a11y snapshot --output` for those.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "additionalProperties": false,
@@ -1714,7 +1628,7 @@
           "additionalProperties": false,
           "properties": {
             "name": {
-              "description": "Accessible name of the target — case-insensitive, whitespace-normalized EXACT match against the NATIVE tree (names can differ from the dom producer's; compare_producers shows where). Pass '' to target an unlabeled control. Omit to match any name; if several nodes match, the error lists them so you can pass nth.",
+              "description": "Accessible name of the target — case-insensitive, whitespace-normalized EXACT match against the tree get_semantic_tree returns. Pass '' to target an unlabeled control. Omit to match any name; if several nodes match, the error lists them so you can pass nth.",
               "type": "string"
             },
             "nth": {
@@ -1742,26 +1656,10 @@
           "openWorldHint": false,
           "readOnlyHint": true
         },
-        "description": "Return the page's heading outline (h1..h6 in document order) as an indented list. Set producer='native' to derive it from Chromium's own accessibility tree (whole-document; no rootSelector).",
+        "description": "Return the page's heading outline (h1..h6 in document order) as an indented list, derived from Chromium's own accessibility tree. Whole-document. Chromium only.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
-          "additionalProperties": false,
-          "properties": {
-            "producer": {
-              "default": "dom",
-              "description": "Which producer builds the tree: 'dom' (default, in-page walk) or 'native' (Chromium's own a11y tree over CDP — reaches user-agent-shadow media controls a `<video controls>` exposes). Native is whole-document (rootSelector must be 'body') and carries no tab order. Chromium only.",
-              "enum": [
-                "dom",
-                "native"
-              ],
-              "type": "string"
-            },
-            "rootSelector": {
-              "default": "body",
-              "description": "CSS selector for the audit/extraction root. Defaults to 'body'.",
-              "type": "string"
-            }
-          },
+          "properties": {},
           "type": "object"
         },
         "name": "get_heading_outline",
@@ -1773,7 +1671,7 @@
           "openWorldHint": false,
           "readOnlyHint": true
         },
-        "description": "Return the page's accessibility tree as a deterministic, indented role + accessible-name outline (what a screen reader would traverse). The element focused at capture time is marked `[focused]`. Token-efficient and stable across runs. Set producer='native' to read Chromium's own accessibility tree over CDP instead (whole-document, reaches user-agent-shadow media controls; no rootSelector).",
+        "description": "Return the page's accessibility tree as a deterministic, indented role + accessible-name outline (what a screen reader would traverse) — read from Chromium's own accessibility tree over CDP, so it reaches user-agent-shadow media controls an in-page walk never sees. The element focused at capture time is marked `[focused]`. Token-efficient and stable across runs. This is the vocabulary the act tools target in. Whole-document. Chromium only.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "additionalProperties": false,
@@ -1782,20 +1680,6 @@
               "default": false,
               "description": "Include generic container nodes (role=generic).",
               "type": "boolean"
-            },
-            "producer": {
-              "default": "dom",
-              "description": "Which producer builds the tree: 'dom' (default, in-page walk) or 'native' (Chromium's own a11y tree over CDP — reaches user-agent-shadow media controls a `<video controls>` exposes). Native is whole-document (rootSelector must be 'body') and carries no tab order. Chromium only.",
-              "enum": [
-                "dom",
-                "native"
-              ],
-              "type": "string"
-            },
-            "rootSelector": {
-              "default": "body",
-              "description": "CSS selector for the audit/extraction root. Defaults to 'body'.",
-              "type": "string"
             }
           },
           "type": "object"
@@ -1809,14 +1693,14 @@
           "openWorldHint": false,
           "readOnlyHint": true
         },
-        "description": "Return the focusable elements in the order a keyboard user encounters them when pressing Tab, numbered, with role + accessible name. The stop focused at capture time is marked `[focused]`.",
+        "description": "Return the focusable elements in the order a keyboard user encounters them when pressing Tab, numbered, with role + accessible name. The stop focused at capture time is marked `[focused]`. Built from the in-page DOM walk — Chromium's accessibility tree knows whether a node is focusable but not the SEQUENCE (tabindex never reaches it), so this is the only source for tab order, and the one tool `rootSelector` still scopes.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "additionalProperties": false,
           "properties": {
             "rootSelector": {
               "default": "body",
-              "description": "CSS selector for the audit/extraction root. Defaults to 'body'.",
+              "description": "CSS selector for the extraction root. Defaults to 'body'.",
               "type": "string"
             }
           },
@@ -1863,7 +1747,7 @@
           "openWorldHint": false,
           "readOnlyHint": true
         },
-        "description": "Return the audit findings AND the semantic tree, heading outline, and tab order — all derived from ONE extraction, so they are guaranteed internally consistent. The element focused at capture time is marked `[focused]` in each view. Prefer this over separate audit_page + get_* calls on dynamic pages (SPAs, pages with consent dialogs) where separate calls could catch different states. Set producer='native' to build the snapshot from Chromium's own accessibility tree (findings + tree + outline); a native tree carries no tab order, so that section reports N/A.",
+        "description": "Return the audit findings AND the semantic tree and heading outline — all derived from ONE read of Chromium's accessibility tree, so they are guaranteed internally consistent. The element focused at capture time is marked `[focused]`. Prefer this over separate audit_page + get_* calls on dynamic pages (SPAs, pages with consent dialogs) where separate calls could catch different states. That tree carries no tab order, so there is no tab-order section here — call get_tab_order for the keyboard sequence. Whole-document. Chromium only.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "additionalProperties": false,
@@ -1872,20 +1756,6 @@
               "default": false,
               "description": "Include generic container nodes in the tree.",
               "type": "boolean"
-            },
-            "producer": {
-              "default": "dom",
-              "description": "Which producer builds the tree: 'dom' (default, in-page walk) or 'native' (Chromium's own a11y tree over CDP — reaches user-agent-shadow media controls a `<video controls>` exposes). Native is whole-document (rootSelector must be 'body') and carries no tab order. Chromium only.",
-              "enum": [
-                "dom",
-                "native"
-              ],
-              "type": "string"
-            },
-            "rootSelector": {
-              "default": "body",
-              "description": "CSS selector for the audit/extraction root. Defaults to 'body'.",
-              "type": "string"
             },
             "rules": {
               "description": "Subset of rules for the findings. Omit to run all.",
@@ -1928,7 +1798,7 @@
           "openWorldHint": false,
           "readOnlyHint": true
         },
-        "description": "List every element of one category — links, buttons, form controls, landmarks, images, or headings — as role + accessible name + a CSS locator. A token-efficient way to review one kind of element (e.g. 'images' pairs with the image-alt rule, 'form' with labeling). Scope with rootSelector. Set producer='native' to list from Chromium's own accessibility tree (whole-document; no rootSelector).",
+        "description": "List every element of one category — links, buttons, form controls, landmarks, images, or headings — as role + accessible name + a CSS locator. A token-efficient way to review one kind of element (e.g. 'images' pairs with the image-alt rule, 'form' with labeling). Listed from Chromium's own accessibility tree, so it agrees node for node with get_semantic_tree and audit_page. Whole-document. Chromium only.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "additionalProperties": false,
@@ -1943,20 +1813,6 @@
                 "landmark",
                 "image"
               ],
-              "type": "string"
-            },
-            "producer": {
-              "default": "dom",
-              "description": "Which producer builds the tree: 'dom' (default, in-page walk) or 'native' (Chromium's own a11y tree over CDP — reaches user-agent-shadow media controls a `<video controls>` exposes). Native is whole-document (rootSelector must be 'body') and carries no tab order. Chromium only.",
-              "enum": [
-                "dom",
-                "native"
-              ],
-              "type": "string"
-            },
-            "rootSelector": {
-              "default": "body",
-              "description": "CSS selector for the audit/extraction root. Defaults to 'body'.",
               "type": "string"
             }
           },
@@ -2054,7 +1910,7 @@
           "additionalProperties": false,
           "properties": {
             "name": {
-              "description": "Accessible name of the target — case-insensitive, whitespace-normalized EXACT match against the NATIVE tree (names can differ from the dom producer's; compare_producers shows where). Pass '' to target an unlabeled control. Omit to match any name; if several nodes match, the error lists them so you can pass nth.",
+              "description": "Accessible name of the target — case-insensitive, whitespace-normalized EXACT match against the tree get_semantic_tree returns. Pass '' to target an unlabeled control. Omit to match any name; if several nodes match, the error lists them so you can pass nth.",
               "type": "string"
             },
             "nth": {

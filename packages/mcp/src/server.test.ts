@@ -11,14 +11,13 @@ import type {
 import {
   buildSnapshotPage,
   parseSnapshotArtifact,
-  projectSnapshot,
+  projectNativeTree,
 } from "@real-a11y-dev/snapshot";
 import { describe, it, expect, beforeEach } from "vitest";
 
 import {
   buildServer,
   renderAudit,
-  renderCompare,
   renderSnapshot,
   type BuildServerOptions,
 } from "./server.js";
@@ -83,6 +82,48 @@ class FakeSession implements A11ySession {
   }
 }
 
+/** Build a flat native ExtractionResult: a `main` root with these children. */
+function nativeTree(
+  children: { role: string; name?: string; level?: string }[],
+): FakeSession["nativeTreeResponse"] {
+  const a11y = (role: string, name = "", level?: string) => ({
+    role,
+    name,
+    description: "",
+    states: {},
+    properties: level ? { level } : {},
+    isExposedToAT: true,
+  });
+  const ids = children.map((_, i) => `c${i}`);
+  const entries = [
+    [
+      "root",
+      {
+        id: "root",
+        parentId: null,
+        childIds: ids,
+        depth: 0,
+        a11y: a11y("main"),
+      },
+    ],
+    ...children.map((c, i) => [
+      ids[i],
+      {
+        id: ids[i],
+        parentId: "root",
+        childIds: [],
+        depth: 1,
+        a11y: a11y(c.role, c.name, c.level),
+      },
+    ]),
+  ];
+  return {
+    nodes: new Map(entries as never),
+    rootId: "root",
+    source: { producer: "native" },
+  } as FakeSession["nativeTreeResponse"];
+}
+
 /** Wire a Client to a server built around `session`, over an in-memory pair. */
 async function connect(session: A11ySession, options?: BuildServerOptions) {
   const server = buildServer(session, options);
@@ -145,6 +186,59 @@ describe("MCP server wiring", () => {
       /export_checkpoint/,
     );
     expect(byName("close_browser").description).toMatch(/export_checkpoint/);
+  });
+
+  it("never offers rootSelector as the remedy for a tool that dropped it", async () => {
+    // The truncation note is appended to the ONE output where the agent has
+    // already lost information and most needs a way forward. Naming a parameter
+    // the tool no longer accepts spends that moment on a schema error. Each
+    // read must advertise only the lever it actually has.
+    const client = await connect(session);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/" },
+    });
+    session.nativeTreeResponse = nativeTree([
+      { role: "heading", name: "x".repeat(45_000), level: "1" },
+    ]);
+
+    const tree = textOf(
+      (await client.callTool({
+        name: "get_semantic_tree",
+        arguments: {},
+      })) as never,
+    );
+    expect(tree).toMatch(/output truncated at 40000 chars/);
+    // Named as ruled OUT, never offered — an agent carrying the old schema in
+    // context is exactly who reads this line, so silence would invite the retry
+    // this is trying to prevent.
+    expect(tree).toMatch(/takes no `rootSelector`/);
+    expect(tree).not.toMatch(/Pass a narrower `rootSelector`/);
+    expect(tree).toMatch(/get_heading_outline/); // a slice it CAN take
+
+    // inspect_page carries both: its findings section takes a `rules` subset,
+    // its tree section takes nothing.
+    const inspect = textOf(
+      (await client.callTool({
+        name: "inspect_page",
+        arguments: {},
+      })) as never,
+    );
+    expect(inspect).toMatch(/output truncated at 40000 chars/);
+    expect(inspect).toMatch(/`rules` subset/);
+    expect(inspect).not.toMatch(/Pass a narrower `rootSelector`/);
+
+    // …while the one tool that KEPT the selector still names it. Without this
+    // half, deleting every mention of rootSelector would pass.
+    session.responses.tabSequenceSnapshot = "y".repeat(45_000);
+    const tabs = textOf(
+      (await client.callTool({
+        name: "get_tab_order",
+        arguments: {},
+      })) as never,
+    );
+    expect(tabs).toMatch(/output truncated at 40000 chars/);
+    expect(tabs).toMatch(/Pass a narrower `rootSelector`/);
   });
 
   it("reports headless vs headful so a missing window isn't a mystery", async () => {
@@ -271,7 +365,6 @@ describe("MCP server wiring", () => {
         "checkpoint_tree",
         "click_element",
         "close_browser",
-        "compare_producers",
         "diff_findings",
         "diff_checkpoints",
         "diff_tree",
@@ -291,17 +384,19 @@ describe("MCP server wiring", () => {
     );
   });
 
-  it("list_elements forwards the filter and rootSelector", async () => {
-    session.responses.listByRole = 'link "Home"  [#home]\nlink "Docs"';
+  it("list_elements takes no rootSelector — the native tree is whole-document", async () => {
     const client = await connect(session);
+    const schema = (await client.listTools()).tools.find(
+      (t) => t.name === "list_elements",
+    )?.inputSchema;
+    expect(Object.keys(schema?.properties ?? {})).toEqual(["filter"]);
+    // A rejected extra property beats one that is silently ignored.
     const res = await client.callTool({
       name: "list_elements",
       arguments: { filter: "link", rootSelector: "nav" },
     });
-    const call = session.calls.find((c) => c.fn === "listByRole");
-    expect(call?.rootSelector).toBe("nav");
-    expect(call?.args).toEqual(["link"]);
-    expect(textOf(res)).toContain('link "Home"');
+    expect(session.calls.some((c) => c.fn === "listByRole")).toBe(false);
+    expect(res).toBeDefined();
   });
 
   it("get_tab_order numbers the page bundle's canonical (unnumbered) output", async () => {
@@ -316,79 +411,6 @@ describe("MCP server wiring", () => {
     expect(textOf(res)).toBe('01. link "Home"\n02. button "Go"');
   });
 
-  // A native ExtractionResult whose only interactive node is an UNLABELED
-  // textbox — serializes to `main` + `textbox`. The DOM producer, below, names
-  // that same textbox by its typed value (a DOM-engine fidelity gap).
-  const nativeTreeUnlabeledTextbox: FakeSession["nativeTreeResponse"] = {
-    nodes: new Map([
-      [
-        "root",
-        {
-          id: "root",
-          parentId: null,
-          childIds: ["t"],
-          depth: 0,
-          a11y: {
-            role: "main",
-            name: "",
-            description: "",
-            states: {},
-            properties: {},
-            isExposedToAT: true,
-          },
-        },
-      ],
-      [
-        "t",
-        {
-          id: "t",
-          parentId: "root",
-          childIds: [],
-          depth: 1,
-          a11y: {
-            role: "textbox",
-            name: "",
-            description: "",
-            states: {},
-            properties: {},
-            isExposedToAT: true,
-          },
-        },
-      ],
-    ]),
-    rootId: "root",
-    source: { producer: "native" },
-  };
-
-  it("compare_producers reports role/name divergences between the dom and native producers", async () => {
-    // The DOM producer named an unlabeled input by its value; the native
-    // (Chromium) producer did not.
-    session.responses.auditSnapshot = 'main\n  textbox "john@example.com"';
-    session.nativeTreeResponse = nativeTreeUnlabeledTextbox;
-    const client = await connect(session);
-    const res = await client.callTool({
-      name: "compare_producers",
-      arguments: {},
-    });
-    const out = textOf(res);
-    expect(out).toMatch(/DOM producer/);
-    expect(out).toContain('textbox "john@example.com"'); // only in the dom producer
-    expect(out).toMatch(/NATIVE producer/);
-    // It diffed against the canonical native producer, not raw nativeAX.
-    expect(session.calls.some((c) => c.fn === "nativeTree")).toBe(true);
-    expect(session.calls.some((c) => c.fn === "nativeAX")).toBe(false);
-  });
-
-  it("compare_producers requests the dom tree WITHOUT the focus marker", async () => {
-    session.responses.auditSnapshot = 'main\n  button "Go"';
-    const client = await connect(session);
-    await client.callTool({ name: "compare_producers", arguments: {} });
-    const call = session.calls.find((c) => c.fn === "auditSnapshot");
-    // The native tree carries no [focused] marker; a marker on the dom side
-    // would register as a spurious dom-vs-native divergence.
-    expect(call?.args).toEqual([{ markFocus: false }]);
-  });
-
   it("advertises the [focused] marker in the get_* / inspect descriptions", async () => {
     const client = await connect(session);
     const tools = (await client.listTools()).tools;
@@ -399,14 +421,30 @@ describe("MCP server wiring", () => {
     expect(desc("inspect_page")).toMatch(/\[focused\]/);
   });
 
-  // ── producer: "native" on the view tools ─────────────────────────────────
+  // ── the view + audit tools read Chromium's own tree ──────────────────────
 
-  it("get_semantic_tree producer=native serializes the native tree", async () => {
+  // A heading plus an UNLABELED button — enough for the Node-side audit (via
+  // projectNativeTree) to flag `no-unlabeled-interactive`.
+  const nativeTreeWithUnlabeledButton = nativeTree([
+    { role: "heading", name: "Player", level: "1" },
+    { role: "button" },
+  ]);
+  // Nothing for the rules to flag: one labeled h1, no controls.
+  const nativeTreeCleanHeading = nativeTree([
+    { role: "heading", name: "Player", level: "1" },
+  ]);
+  // Carries a `generic` container, which only surfaces under includeGeneric.
+  const nativeTreeWithGeneric = nativeTree([
+    { role: "heading", name: "Player", level: "1" },
+    { role: "generic" },
+  ]);
+
+  it("get_semantic_tree serializes the native tree", async () => {
     session.nativeTreeResponse = nativeTreeWithUnlabeledButton;
     const client = await connect(session);
     const res = await client.callTool({
       name: "get_semantic_tree",
-      arguments: { producer: "native" },
+      arguments: {},
     });
     const out = textOf(res);
     expect(out).toContain('heading "Player"');
@@ -416,35 +454,24 @@ describe("MCP server wiring", () => {
     expect(session.calls.some((c) => c.fn === "auditSnapshot")).toBe(false);
   });
 
-  it("get_semantic_tree producer=native rejects a narrowed rootSelector", async () => {
-    const client = await connect(session);
-    const res = await client.callTool({
-      name: "get_semantic_tree",
-      arguments: { producer: "native", rootSelector: "nav" },
-    });
-    expect(res.isError).toBe(true);
-    expect(textOf(res)).toMatch(/whole document/);
-    expect(session.calls.some((c) => c.fn === "nativeTree")).toBe(false);
-  });
-
-  it("get_heading_outline producer=native derives the outline from the native tree", async () => {
+  it("get_heading_outline derives the outline from the native tree", async () => {
     session.nativeTreeResponse = nativeTreeWithUnlabeledButton;
     const client = await connect(session);
     const res = await client.callTool({
       name: "get_heading_outline",
-      arguments: { producer: "native" },
+      arguments: {},
     });
     expect(textOf(res)).toContain("Player");
     expect(session.calls.some((c) => c.fn === "nativeTree")).toBe(true);
     expect(session.calls.some((c) => c.fn === "outlineSnapshot")).toBe(false);
   });
 
-  it("list_elements producer=native lists from the native tree", async () => {
+  it("list_elements lists from the native tree", async () => {
     session.nativeTreeResponse = nativeTreeWithUnlabeledButton;
     const client = await connect(session);
     const res = await client.callTool({
       name: "list_elements",
-      arguments: { filter: "heading", producer: "native" },
+      arguments: { filter: "heading" },
     });
     expect(textOf(res)).toContain('heading "Player"');
     expect(session.calls.some((c) => c.fn === "nativeTree")).toBe(true);
@@ -452,84 +479,12 @@ describe("MCP server wiring", () => {
     expect(session.calls.some((c) => c.fn === "listByRole")).toBe(false);
   });
 
-  it("list_elements producer=native rejects a narrowed rootSelector", async () => {
-    const client = await connect(session);
-    const res = await client.callTool({
-      name: "list_elements",
-      arguments: { filter: "heading", producer: "native", rootSelector: "nav" },
-    });
-    expect(res.isError).toBe(true);
-    expect(textOf(res)).toMatch(/whole document/);
-    expect(session.calls.some((c) => c.fn === "nativeTree")).toBe(false);
-  });
-
-  // ── producer: "native" on the audit tools ────────────────────────────────
-  // A native ExtractionResult with an unlabeled button — enough for the Node-
-  // side audit (via projectNativeTree) to flag it.
-  const nativeTreeWithUnlabeledButton: FakeSession["nativeTreeResponse"] = {
-    nodes: new Map([
-      [
-        "root",
-        {
-          id: "root",
-          parentId: null,
-          childIds: ["h", "b"],
-          depth: 0,
-          a11y: {
-            role: "main",
-            name: "",
-            description: "",
-            states: {},
-            properties: {},
-            isExposedToAT: true,
-          },
-        },
-      ],
-      [
-        "h",
-        {
-          id: "h",
-          parentId: "root",
-          childIds: [],
-          depth: 1,
-          a11y: {
-            role: "heading",
-            name: "Player",
-            description: "",
-            states: {},
-            properties: { level: "1" },
-            isExposedToAT: true,
-          },
-        },
-      ],
-      [
-        "b",
-        {
-          id: "b",
-          parentId: "root",
-          childIds: [],
-          depth: 1,
-          a11y: {
-            role: "button",
-            name: "",
-            description: "",
-            states: {},
-            properties: {},
-            isExposedToAT: true,
-          },
-        },
-      ],
-    ]),
-    rootId: "root",
-    source: { producer: "native" },
-  };
-
-  it("audit_page producer=native audits the native tree, not the DOM path", async () => {
+  it("audit_page audits the native tree, not the DOM path", async () => {
     session.nativeTreeResponse = nativeTreeWithUnlabeledButton;
     const client = await connect(session);
     const res = await client.callTool({
       name: "audit_page",
-      arguments: { producer: "native" },
+      arguments: {},
     });
     expect(textOf(res)).toContain("no-unlabeled-interactive");
     // It read the native tree — not the in-page collectFindings DOM path.
@@ -537,28 +492,18 @@ describe("MCP server wiring", () => {
     expect(session.calls.some((c) => c.fn === "collectFindings")).toBe(false);
   });
 
-  it("audit_page producer=native rejects a narrowed rootSelector", async () => {
-    const client = await connect(session);
-    const res = await client.callTool({
-      name: "audit_page",
-      arguments: { producer: "native", rootSelector: "nav" },
-    });
-    expect(res.isError).toBe(true);
-    expect(textOf(res)).toMatch(/whole document/);
-    // Guard fires before any extraction.
-    expect(session.calls.some((c) => c.fn === "nativeTree")).toBe(false);
-  });
-
-  it("inspect_page producer=native reports tab order as N/A", async () => {
+  it("inspect_page omits the tab-order section rather than showing it empty", async () => {
     session.nativeTreeResponse = nativeTreeWithUnlabeledButton;
     const client = await connect(session);
     const res = await client.callTool({
       name: "inspect_page",
-      arguments: { producer: "native" },
+      arguments: {},
     });
     const out = textOf(res);
-    expect(out).toContain("tab order N/A (native producer)");
-    expect(out).toMatch(/native producer carries no tab order/);
+    // An empty "Tab order" block reads as "nothing here is focusable" — a very
+    // different claim from "this tree doesn't carry tab order". Say neither.
+    expect(out).not.toMatch(/## Tab order/);
+    expect(out).toMatch(/get_tab_order/);
     expect(out).toContain("Player"); // the tree/outline still render
     expect(session.calls.some((c) => c.fn === "nativeTree")).toBe(true);
   });
@@ -632,50 +577,49 @@ describe("MCP server wiring", () => {
     expect(textOf(res)).toMatch(/\[iPhone 13\]/);
   });
 
-  it("audit_page forwards rules and defaults rootSelector to body", async () => {
-    session.responses.collectFindings = [
-      {
-        rule: "heading-order",
-        severity: "error",
-        message: "Missing <h1>: ...",
-      },
-    ] satisfies Finding[];
+  it("audit_page forwards the rule subset to the native audit", async () => {
+    // Violates BOTH rules: h1 → h3 skips a level, and the button is unlabeled.
+    session.nativeTreeResponse = nativeTree([
+      { role: "heading", name: "Home", level: "1" },
+      { role: "heading", name: "Deep", level: "3" },
+      { role: "button" },
+    ]);
     const client = await connect(session);
     const res = await client.callTool({
       name: "audit_page",
       arguments: { rules: ["heading-order"] },
     });
-
-    const call = session.calls.find((c) => c.fn === "collectFindings");
-    expect(call?.rootSelector).toBe("body");
-    // rules array is passed as the first (and only) positional arg.
-    expect(call?.args).toEqual([["heading-order"]]);
-    expect(textOf(res)).toMatch(/heading-order/);
+    // Only the requested rule ran: the unlabeled button is NOT reported.
+    const out = textOf(res);
+    expect(out).toMatch(/heading-order/);
+    expect(out).not.toMatch(/no-unlabeled-interactive/);
+    expect(session.calls.some((c) => c.fn === "collectFindings")).toBe(false);
   });
 
-  it("audit_page reports a clean page when no findings come back", async () => {
-    session.responses.collectFindings = [] satisfies Finding[];
+  it("audit_page reports a clean page when the tree has no violations", async () => {
+    session.nativeTreeResponse = nativeTreeCleanHeading;
     const client = await connect(session);
     const res = await client.callTool({ name: "audit_page", arguments: {} });
     expect(textOf(res)).toMatch(/No accessibility issues found/);
   });
 
-  it("audit_page omits the rules arg entirely when none are given", async () => {
-    session.responses.collectFindings = [] satisfies Finding[];
+  it("audit_page runs every rule when none are given", async () => {
+    session.nativeTreeResponse = nativeTreeWithUnlabeledButton;
     const client = await connect(session);
-    await client.callTool({ name: "audit_page", arguments: {} });
-    const call = session.calls.find((c) => c.fn === "collectFindings");
-    // No positional args → collectFindings applies its own ALL_RULES default,
-    // rather than being handed `[undefined]` (which would run zero rules).
-    expect(call?.args).toEqual([]);
+    const res = await client.callTool({ name: "audit_page", arguments: {} });
+    expect(textOf(res)).toMatch(/no-unlabeled-interactive/);
   });
 
   it("audit_page treats an empty rules array as 'run all rules'", async () => {
-    session.responses.collectFindings = [] satisfies Finding[];
+    // `[]` means "no filter given", not "audit nothing" — a native audit must
+    // never silently pass a page the full rule set would flag.
+    session.nativeTreeResponse = nativeTreeWithUnlabeledButton;
     const client = await connect(session);
-    await client.callTool({ name: "audit_page", arguments: { rules: [] } });
-    const call = session.calls.find((c) => c.fn === "collectFindings");
-    expect(call?.args).toEqual([]);
+    const res = await client.callTool({
+      name: "audit_page",
+      arguments: { rules: [] },
+    });
+    expect(textOf(res)).toMatch(/no-unlabeled-interactive/);
   });
 
   it("audit_page accepts every rule in ALL_RULES (schema can't drift)", async () => {
@@ -702,16 +646,21 @@ describe("MCP server wiring", () => {
     expect(res.isError).toBe(true);
   });
 
-  it("get_semantic_tree returns the tree and forwards includeGeneric", async () => {
-    session.responses.auditSnapshot = 'main\n  button "Go"';
+  it("get_semantic_tree forwards includeGeneric to the native projection", async () => {
+    session.nativeTreeResponse = nativeTreeWithGeneric;
     const client = await connect(session);
-    const res = await client.callTool({
-      name: "get_semantic_tree",
-      arguments: { includeGeneric: true },
-    });
-    const call = session.calls.find((c) => c.fn === "auditSnapshot");
-    expect(call?.args).toEqual([{ includeGeneric: true }]);
-    expect(textOf(res)).toContain('button "Go"');
+    const bare = textOf(
+      await client.callTool({ name: "get_semantic_tree", arguments: {} }),
+    );
+    expect(bare).not.toContain("generic");
+    const withGeneric = textOf(
+      await client.callTool({
+        name: "get_semantic_tree",
+        arguments: { includeGeneric: true },
+      }),
+    );
+    expect(withGeneric).toContain("generic");
+    expect(session.calls.some((c) => c.fn === "auditSnapshot")).toBe(false);
   });
 
   it("get_semantic_tree shows a placeholder for an empty tree", async () => {
@@ -730,37 +679,27 @@ describe("MCP server wiring", () => {
     expect(session.closed).toBe(1);
   });
 
-  it("inspect_page returns all views from ONE snapshot call", async () => {
-    session.snapshotResponse = {
-      findings: [
-        { rule: "heading-order", severity: "error", message: "Missing <h1>" },
-      ],
-      tree: 'main\n  button "Go"',
-      outline: "(no headings)",
-      tabOrder: 'button "Go"',
-    };
+  it("inspect_page derives findings, tree and outline from ONE native read", async () => {
+    session.nativeTreeResponse = nativeTreeWithUnlabeledButton;
     const client = await connect(session);
     const res = await client.callTool({
       name: "inspect_page",
-      arguments: { includeGeneric: true, rules: ["heading-order"] },
+      arguments: { includeGeneric: true, rules: ["no-unlabeled-interactive"] },
     });
 
-    // Exactly one extraction: a single snapshot() call, and no separate
-    // collectFindings/auditSnapshot/etc. calls behind it.
-    const snapCalls = session.calls.filter((c) => c.fn === "snapshot");
-    expect(snapCalls).toHaveLength(1);
-    expect(snapCalls[0].rootSelector).toBe("body");
-    expect(snapCalls[0].args).toEqual([
-      { rules: ["heading-order"], includeGeneric: true },
-    ]);
+    // Exactly one extraction — that is the whole promise of this tool, and it
+    // is why there is no tab-order section: a second, DOM-derived read would
+    // describe a different instant.
+    expect(session.calls.filter((c) => c.fn === "nativeTree")).toHaveLength(1);
+    expect(session.calls.some((c) => c.fn === "snapshot")).toBe(false);
 
-    // All four views are present in the one response.
     const out = textOf(res);
     expect(out).toMatch(/Single-extraction snapshot/);
-    expect(out).toMatch(/heading-order/); // findings
-    expect(out).toContain('button "Go"'); // tree + tab order
+    expect(out).toMatch(/no-unlabeled-interactive/); // findings
     expect(out).toMatch(/## Semantic tree/);
-    expect(out).toMatch(/## Tab order/);
+    expect(out).toMatch(/## Heading outline/);
+    expect(out).toContain("Player");
+    expect(out).not.toMatch(/## Tab order/);
   });
 });
 
@@ -818,56 +757,31 @@ describe("renderAudit grouping", () => {
   });
 });
 
-describe("renderCompare", () => {
-  it("reports 'agree' when trees match (ignoring level suffix + indent)", () => {
-    // Both sides are serialized trees now — indent + level suffix differ but the
-    // role/name pairs match, so no divergence.
-    const dom = 'main\n  heading "Hi" (level 1)\n  button "Go"';
-    const native = 'main\n  heading "Hi"\n  button "Go"';
-    expect(renderCompare(dom, native)).toMatch(/agree/);
-  });
-
-  it("surfaces a name divergence (the .value-as-name bug)", () => {
-    const dom = 'main\n  textbox "secret@x.com"';
-    const native = "main\n  textbox";
-    const out = renderCompare(dom, native);
-    // dom-only `textbox "…"` + native-only bare `textbox` = 2 divergences.
-    expect(out).toMatch(/2 divergence/);
-    expect(out).toContain('textbox "secret@x.com"'); // dom-only
-    expect(out.split("\n")).toContain("  textbox"); // native-only (empty name)
-  });
-});
-
 describe("renderSnapshot", () => {
-  it("counts tree nodes and tab stops and includes every section", () => {
+  it("counts tree nodes and renders the findings, tree and outline", () => {
     const out = renderSnapshot({
       findings: [],
       tree: "main\n  button\n  link",
       outline: "h1 Title",
-      // Canonical (unnumbered) tab order — what session.snapshot() now returns.
-      tabOrder: "button\nlink",
     });
     expect(out).toMatch(/3 tree nodes/);
-    // Regression: the count came from a `/^\d/` filter that silently returned 0
-    // once the `NN.` prefix was dropped. It now counts non-empty stop lines.
-    expect(out).toMatch(/2 tab stops/);
-    // The "## Tab order" section is numbered at render (numberTabStops), so an
-    // agent can reference "stop 2" even though the stored form is unnumbered.
-    expect(out).toContain("01. button");
-    expect(out).toContain("02. link");
     expect(out).toMatch(/No accessibility issues found/);
+    expect(out).toMatch(/## Semantic tree/);
+    expect(out).toMatch(/## Heading outline/);
     expect(out).toContain("h1 Title");
   });
 
-  it("reports 0 tab stops for the (nothing focusable) sentinel", () => {
+  it("has no tab-order section, and says where to get one", () => {
+    // An empty "## Tab order" block would read as "nothing on this page is
+    // focusable" — the alarming reading of a view that simply wasn't measured.
     const out = renderSnapshot({
       findings: [],
       tree: "main",
       outline: "(no headings)",
-      tabOrder: "(nothing focusable)",
     });
-    expect(out).toMatch(/0 tab stops/);
-    expect(out).toContain("(nothing focusable)");
+    expect(out).not.toMatch(/## Tab order/);
+    expect(out).not.toMatch(/tab stops/);
+    expect(out).toMatch(/get_tab_order/);
   });
 });
 
@@ -877,20 +791,13 @@ describe("checkpoints", () => {
     session = new FakeSession();
   });
 
-  const button = (locator: string): Finding => ({
-    rule: "no-unlabeled-interactive",
-    severity: "error",
-    message: "Unlabeled interactive element: button <button>",
-    role: "button",
-    tagName: "BUTTON",
-    locator,
-  });
-  const rawWith = (findings: Finding[]): PageSnapshot => ({
-    findings,
-    tree: "button",
-    outline: "(no headings)",
-    tabOrder: "1. button",
-  });
+  /** A native tree with a valid h1 plus `n` UNLABELED buttons. The h1 keeps
+   *  heading-order quiet, so the finding count is exactly `n`. */
+  const unlabeledButtons = (n: number) =>
+    nativeTree([
+      { role: "heading", name: "Home", level: "1" },
+      ...Array.from({ length: n }, () => ({ role: "button" })),
+    ]);
 
   it("checkpoint_findings then diff_findings surfaces a NEW finding after a change", async () => {
     const client = await connect(session);
@@ -898,7 +805,7 @@ describe("checkpoints", () => {
       name: "open_page",
       arguments: { url: "https://example.com/" },
     });
-    session.snapshotResponse = rawWith([button("#save")]);
+    session.nativeTreeResponse = unlabeledButtons(1);
     const saved = textOf(
       await client.callTool({
         name: "checkpoint_findings",
@@ -908,7 +815,7 @@ describe("checkpoints", () => {
     expect(saved).toMatch(/"before" saved: 1 finding/);
 
     // A change introduces a second unlabeled button.
-    session.snapshotResponse = rawWith([button("#save"), button("#cancel")]);
+    session.nativeTreeResponse = unlabeledButtons(2);
     const diff = textOf(
       await client.callTool({
         name: "diff_findings",
@@ -935,7 +842,7 @@ describe("checkpoints", () => {
       name: "open_page",
       arguments: { url: "https://example.com/" },
     });
-    session.snapshotResponse = rawWith([button("#save")]);
+    session.nativeTreeResponse = unlabeledButtons(1);
     await client.callTool({
       name: "checkpoint_findings",
       arguments: { name: "before" },
@@ -950,17 +857,21 @@ describe("checkpoints", () => {
   // The correctness invariant: an MCP checkpoint's fingerprints are identical to
   // the CLI's for the same page — both flow through the shared buildSnapshotPage.
   it("export_checkpoint fingerprints match the CLI's buildSnapshotPage (golden)", async () => {
-    const raw = rawWith([button("#save"), button("#cancel")]);
+    const tree = unlabeledButtons(2);
     const url = "https://example.com/";
     const name = "home";
 
-    // The CLI path (cli/commands/snapshot.ts): projectSnapshot, then assemble.
-    const cliPage = buildSnapshotPage(name, url, projectSnapshot(raw), {
+    // The CLI path (cli/commands/snapshot.ts): projectNativeTree, then assemble
+    // with tabOrder:false. Both tools MUST read the same producer — a checkpoint
+    // captured by one is diffed by the other, and cross-producer findings would
+    // silently classify as new+fixed.
+    const cliPage = buildSnapshotPage(name, url, projectNativeTree(tree), {
       root: "body",
+      tabOrder: false,
     });
 
     // The MCP path: open → save → export, then parse the artifact back.
-    session.snapshotResponse = raw;
+    session.nativeTreeResponse = tree;
     const client = await connect(session);
     await client.callTool({ name: "open_page", arguments: { url } });
     await client.callTool({ name: "checkpoint_findings", arguments: { name } });
@@ -970,12 +881,17 @@ describe("checkpoints", () => {
         arguments: { name },
       }),
     );
-    const mcpPage = parseSnapshotArtifact(exported).pages[0];
+    const artifact = parseSnapshotArtifact(exported);
+    const mcpPage = artifact.pages[0];
 
     expect(mcpPage.findings.length).toBe(2);
     expect(mcpPage.findings.map((f) => f.fingerprint)).toEqual(
       cliPage.findings.map((f) => f.fingerprint),
     );
+    // …and the artifact declares what it measured, so whatever diffs it next
+    // reads the missing tabs view as "not measured", not "all stops removed".
+    expect(artifact.meta.views).toEqual(["tree", "outline"]);
+    expect(mcpPage.tabs).toBeUndefined();
   });
 
   it("diff_findings re-snapshots with the rules the checkpoint was saved with", async () => {
@@ -984,19 +900,23 @@ describe("checkpoints", () => {
       name: "open_page",
       arguments: { url: "https://example.com/" },
     });
-    session.snapshotResponse = rawWith([]);
+    // Saved under heading-order only, on a page with no headings: 0 findings.
+    session.nativeTreeResponse = unlabeledButtons(0);
     await client.callTool({
       name: "checkpoint_findings",
       arguments: { name: "hp", rules: ["heading-order"] },
     });
-    await client.callTool({
-      name: "diff_findings",
-      arguments: { name: "hp" },
-    });
-    // The diff's re-snapshot must carry the same rule subset, not all rules —
-    // otherwise the omitted rules would surface as spurious NEW.
-    const snaps = session.calls.filter((c) => c.fn === "snapshot");
-    expect(snaps.at(-1)?.args[0]).toEqual({ rules: ["heading-order"] });
+    // The page gains two unlabeled buttons. The re-snapshot must carry the SAME
+    // rule subset — running all rules would surface them as spurious NEW.
+    session.nativeTreeResponse = unlabeledButtons(2);
+    const diff = textOf(
+      await client.callTool({
+        name: "diff_findings",
+        arguments: { name: "hp" },
+      }),
+    );
+    expect(diff).toMatch(/0 new/);
+    expect(diff).not.toMatch(/no-unlabeled-interactive/);
   });
 
   it("export_checkpoint round-trips as valid JSON for a normal page", async () => {
@@ -1005,7 +925,7 @@ describe("checkpoints", () => {
       name: "open_page",
       arguments: { url: "https://example.com/" },
     });
-    session.snapshotResponse = rawWith([button("#save")]);
+    session.nativeTreeResponse = unlabeledButtons(1);
     await client.callTool({
       name: "checkpoint_findings",
       arguments: { name: "ok" },
@@ -1026,12 +946,9 @@ describe("checkpoints", () => {
       arguments: { url: "https://example.com/" },
     });
     // The tree field is not length-capped; make it exceed the 40k output cap.
-    session.snapshotResponse = {
-      findings: [],
-      tree: "x".repeat(45_000),
-      outline: "",
-      tabOrder: "",
-    };
+    session.nativeTreeResponse = nativeTree([
+      { role: "heading", name: "x".repeat(45_000), level: "1" },
+    ]);
     await client.callTool({
       name: "checkpoint_findings",
       arguments: { name: "big" },
@@ -1041,7 +958,16 @@ describe("checkpoints", () => {
       arguments: { name: "big" },
     });
     expect(res.isError).toBe(true);
-    expect(textOf(res)).toMatch(/too large to export inline/);
+    const message = textOf(res);
+    expect(message).toMatch(/too large to export inline/);
+    // And the way out has to be one that still exists. `checkpoint_findings`
+    // lost its rootSelector in this migration, so "re-save it with a narrower
+    // rootSelector" hands the agent a schema error; the tree size is broken out
+    // because `rules` shrinks the findings and never the tree.
+    expect(message).not.toMatch(/narrower rootSelector/);
+    expect(message).toMatch(/the tree alone is \d+ KB/);
+    expect(message).toMatch(/diff_findings \/ diff_checkpoints/);
+    expect(message).toMatch(/real-a11y snapshot <url> --output/);
   });
 
   it("import under a new label then diff_findings of an unchanged page reports no change", async () => {
@@ -1050,7 +976,7 @@ describe("checkpoints", () => {
       name: "open_page",
       arguments: { url: "https://example.com/" },
     });
-    session.snapshotResponse = rawWith([button("#save")]);
+    session.nativeTreeResponse = unlabeledButtons(1);
     // Save as "home" and export — the artifact's page name is "home".
     await client.callTool({
       name: "checkpoint_findings",
@@ -1078,25 +1004,47 @@ describe("checkpoints", () => {
     expect(diff).toMatch(/0 new, 0 fixed/);
   });
 
-  it("diff_findings re-snapshots with the root the checkpoint was saved with", async () => {
+  it("a DOM-era imported base does not report every tab stop as removed", async () => {
+    // The migration hazard, end to end: a base captured when snapshots carried
+    // a tabs view, diffed against a native head that has none. Without the
+    // measured-views signal this reports "Keyboard tab stop removed" once per
+    // focusable element — the tool's most safety-critical statement, fired at
+    // volume, on a page where nothing changed.
     const client = await connect(session);
     await client.callTool({
       name: "open_page",
       arguments: { url: "https://example.com/" },
     });
-    session.snapshotResponse = rawWith([]);
+    session.nativeTreeResponse = unlabeledButtons(1);
     await client.callTool({
       name: "checkpoint_findings",
-      arguments: { name: "modal", rootSelector: "[role=dialog]" },
+      arguments: { name: "head" },
     });
-    // No rootSelector on the diff — it must fall back to the checkpoint's root,
-    // not re-audit the whole "body" and surface the rest of the page as NEW.
+    const legacy = JSON.parse(
+      textOf(
+        await client.callTool({
+          name: "export_checkpoint",
+          arguments: { name: "head" },
+        }),
+      ),
+    );
+    // Rewrite it into a DOM-era artifact: a tabs view, and no meta.views.
+    delete legacy.meta.views;
+    legacy.pages[0].tabs = 'link "Home"\nbutton "Save"\nlink "Docs"';
     await client.callTool({
-      name: "diff_findings",
-      arguments: { name: "modal" },
+      name: "import_checkpoint",
+      arguments: { name: "base", artifact: JSON.stringify(legacy) },
     });
-    const snaps = session.calls.filter((c) => c.fn === "snapshot");
-    expect(snaps.at(-1)?.rootSelector).toBe("[role=dialog]");
+
+    const diff = textOf(
+      await client.callTool({
+        name: "diff_findings",
+        arguments: { name: "base" },
+      }),
+    );
+    expect(diff).not.toMatch(/tab stop removed/i);
+    expect(diff).not.toMatch(/no longer keyboard-focusable/i);
+    expect(diff).toMatch(/0 new, 0 fixed/);
   });
 
   it("diff_tree re-extracts with the root the tree checkpoint used", async () => {
@@ -1143,13 +1091,116 @@ describe("checkpoints", () => {
     expect(call?.rootSelector).toBe("body");
   });
 
+  it("re-exporting an imported DOM-era checkpoint keeps its tabs view", async () => {
+    // export_checkpoint must read the measured views off the PAGE, not assume
+    // "native, so no tabs". A checkpoint loaded from a DOM-era artifact still
+    // carries one; declaring otherwise would drop that data on re-export, and
+    // the next reader would have no way to know it was ever measured.
+    const client = await connect(session);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/" },
+    });
+    session.nativeTreeResponse = unlabeledButtons(1);
+    await client.callTool({
+      name: "checkpoint_findings",
+      arguments: { name: "seed" },
+    });
+    const legacy = JSON.parse(
+      textOf(
+        await client.callTool({
+          name: "export_checkpoint",
+          arguments: { name: "seed" },
+        }),
+      ),
+    );
+    delete legacy.meta.views;
+    legacy.pages[0].tabs = 'link "Home"';
+
+    await client.callTool({
+      name: "import_checkpoint",
+      arguments: { name: "legacy", artifact: JSON.stringify(legacy) },
+    });
+    const round = parseSnapshotArtifact(
+      textOf(
+        await client.callTool({
+          name: "export_checkpoint",
+          arguments: { name: "legacy" },
+        }),
+      ),
+    );
+    expect(round.meta.views).toEqual(["tree", "outline", "tabs"]);
+    expect(round.pages[0].tabs).toBe('link "Home"');
+  });
+
+  it("says so when an imported base was captured at a narrower scope", async () => {
+    // Reads are whole-document now, so a live re-snapshot is always `body`.
+    // An imported DOM-era base may have been taken at `[role=dialog]` — the
+    // old findings still match by fingerprint (nothing reads as fixed) while
+    // everything OUTSIDE that subtree arrives as NEW, the class that gates CI.
+    // The diff is still worth showing; the agent just has to be told.
+    const client = await connect(session);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/" },
+    });
+    session.nativeTreeResponse = unlabeledButtons(1);
+    await client.callTool({
+      name: "checkpoint_findings",
+      arguments: { name: "seed" },
+    });
+    const scoped = JSON.parse(
+      textOf(
+        await client.callTool({
+          name: "export_checkpoint",
+          arguments: { name: "seed" },
+        }),
+      ),
+    );
+    scoped.pages[0].root = "[role=dialog]";
+    await client.callTool({
+      name: "import_checkpoint",
+      arguments: { name: "dialog", artifact: JSON.stringify(scoped) },
+    });
+
+    const out = textOf(
+      await client.callTool({
+        name: "diff_findings",
+        arguments: { name: "dialog" },
+      }),
+    );
+    expect(out).toMatch(/scope changed/);
+    expect(out).toMatch(/\[role=dialog\]/);
+    expect(out).toMatch(/appear as NEW/);
+  });
+
+  it("stays quiet when both sides were captured whole-document", async () => {
+    const client = await connect(session);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/" },
+    });
+    session.nativeTreeResponse = unlabeledButtons(1);
+    await client.callTool({
+      name: "checkpoint_findings",
+      arguments: { name: "same" },
+    });
+    const out = textOf(
+      await client.callTool({
+        name: "diff_findings",
+        arguments: { name: "same" },
+      }),
+    );
+    expect(out).not.toMatch(/scope changed/);
+  });
+
   it("import_checkpoint rejects a partial (--only) artifact", async () => {
     const client = await connect(session);
     await client.callTool({
       name: "open_page",
       arguments: { url: "https://example.com/" },
     });
-    session.snapshotResponse = rawWith([button("#save")]);
+    session.nativeTreeResponse = unlabeledButtons(1);
     await client.callTool({
       name: "checkpoint_findings",
       arguments: { name: "home" },
@@ -1278,7 +1329,9 @@ describe("act tools (click_element / type_text / focus_element)", () => {
       arguments: { role: "slider", name: "Volume" },
     });
     expect(res.isError).toBe(true);
-    expect(textOf(res)).toMatch(/No slider named "Volume" in the native tree/);
+    expect(textOf(res)).toMatch(
+      /No slider named "Volume" in the accessibility tree/,
+    );
     expect(textOf(res)).toMatch(/get_semantic_tree/);
     expect(textOf(res)).toMatch(/accessibility finding/);
     expect(session.calls.some((c) => c.fn === "act")).toBe(false);

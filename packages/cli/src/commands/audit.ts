@@ -2,6 +2,11 @@
  * `real-a11y audit <url...>` — the flagship: findings grouped by rule, exit 1
  * on errors by default. Multi-page runs share one session; a failed page
  * becomes an `error` entry (exit 2) while the others still report.
+ *
+ * Audits Chromium's own accessibility tree: whole-document (so nothing scopes
+ * it), and it reaches structure no in-page walk does — a `<video controls>`'s
+ * user-agent-shadow media controls among it. Findings carry locators, so the
+ * reach costs nothing in actionability.
  */
 
 import { fingerprintFindings, redactUrl } from "@real-a11y-dev/snapshot";
@@ -24,52 +29,29 @@ import { colorEnabled } from "../render/color.js";
 import { renderJson, type PageReport } from "../render/json.js";
 import { renderPretty } from "../render/pretty.js";
 
-import { createSession, openPage, snapshotPage } from "../session.js";
+import { createSession, nativeSnapshot, openPage } from "../session.js";
 
 import {
   isAuthenticated,
   outputOf,
   resolveAuditTargets,
-  rootOf,
   sessionFlags,
-  producerOf,
+  warnUnscopable,
 } from "./common.js";
 
-export const auditCommand: CommandFn = async (
-  positionals,
-  flags,
-  seededFromConfig,
-) => {
+export const auditCommand: CommandFn = async (positionals, flags) => {
   // Everything user-typed validates before a browser launches.
   const rules = parseRules(flags.rules);
   const failOn = parseFailOn(flags["fail-on"], "error");
   const format = parseFormat(flags.format, ["pretty", "json"] as const);
-  const producer = producerOf(flags, "audit", seededFromConfig);
   const openOptions = parseOpenOptions(flags);
   const targets = resolveAuditTargets(positionals, flags);
-  // A `--root` the user actually typed. A config `defaults.root` also lands in
-  // `flags.root` (run.ts seeds unset flags from `defaults`), and the two are
-  // indistinguishable there — but only the typed one means "override whatever
-  // this route configured, just for this run". Treating a project-wide default
-  // as an override would let it silently beat every per-URL `rootSelector`.
-  const typedRoot =
-    typeof flags.root === "string" && !seededFromConfig?.has("root")
-      ? flags.root
-      : undefined;
-  // `producerOf` already refuses `--producer native` alongside `--root`, but it
-  // only sees flags. Now that a config `rootSelector` scopes the audit too, the
-  // same combination has to fail here rather than silently auditing the whole
-  // document and reporting findings from outside the configured subtree.
-  // Keyed on `typedRoot`, so a `defaults.root` can't skip the check either.
-  if (producer === "native" && typedRoot === undefined) {
-    const scoped = targets.find((t) => t.page.rootSelector !== undefined);
-    if (scoped) {
-      throw new CliError(
-        `--producer native audits the whole document — it can't be combined with the rootSelector on "${scoped.name}".`,
-        "drop rootSelector from that URL entry, or use --producer dom (the default) to scope to a selector.",
-      );
-    }
-  }
+  // Whole-document now, so a route's `rootSelector` can't narrow the audit.
+  // Say so once and keep going — see `warnUnscopable`.
+  warnUnscopable(
+    "audit",
+    targets.map((t) => t.page),
+  );
   const output = outputOf(flags);
   const quiet = flags.quiet === true;
   const authed = isAuthenticated(flags);
@@ -88,17 +70,9 @@ export const auditCommand: CommandFn = async (
           target.fileApproved,
           authed,
         );
-        // Precedence: a typed `--root` (a deliberate override for this run) >
-        // the route's own `rootSelector` > a project-wide `defaults.root` >
-        // `body`. `rootOf` supplies the last two, since a seeded `flags.root`
-        // is exactly the project-wide default.
-        const root = typedRoot ?? target.page.rootSelector ?? rootOf(flags);
-        const snapshot = await snapshotPage(
-          session,
-          root,
-          { ...(rules ? { rules } : {}) },
-          producer,
-        );
+        const snapshot = await nativeSnapshot(session, {
+          ...(rules ? { rules } : {}),
+        });
         pages.push({
           name: target.name,
           url: redactUrl(opened.url),

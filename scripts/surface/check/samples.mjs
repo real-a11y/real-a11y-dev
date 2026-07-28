@@ -297,8 +297,16 @@ export async function checkSamples(repoRoot, manifest) {
  * MCP tool examples: a JSON object under a tool's heading is that tool's
  * arguments, so it has to satisfy the tool's own input schema.
  *
- * Association is by position — the nearest preceding `### tool_name` heading —
- * which is how a reader reads it too.
+ * Association is by position — the nearest preceding heading, which is how a
+ * reader reads it too. Nearest preceding *heading*, not nearest preceding TOOL
+ * heading: the page ends with an `## Environment` section whose `### REAL_A11Y_…`
+ * entries carry JSON blocks of their own, and those are MCP **client config**
+ * (`{"env": {…}}`), not any tool's arguments. Scanning back past a section
+ * boundary hands them to whichever tool happens to be documented last, and the
+ * complaint that follows — "omits the required `role`" about a block that never
+ * claimed to be a `focus_element` call — is a false alarm pointing at the wrong
+ * file. Which tool that is depends only on section order, so the check was one
+ * reordering away from failing on docs that were correct.
  */
 export async function checkToolExamples(repoRoot, manifest, validate) {
   const problems = [];
@@ -312,9 +320,10 @@ export async function checkToolExamples(repoRoot, manifest, validate) {
     return problems; // the page moved; the docs check will say so
   }
 
-  const toolHeadings = headings(text)
-    .filter((h) => schemas.has(h.text.replace(/`/g, "").trim()))
-    .map((h) => ({ name: h.text.replace(/`/g, "").trim(), line: h.line }));
+  const sections = headings(text).map((h) => ({
+    name: h.text.replace(/`/g, "").trim(),
+    line: h.line,
+  }));
 
   for (const block of fencedBlocks(text)) {
     if (block.lang !== "json") continue;
@@ -331,10 +340,8 @@ export async function checkToolExamples(repoRoot, manifest, validate) {
     if (args === null || typeof args !== "object" || Array.isArray(args))
       continue;
 
-    const owner = [...toolHeadings]
-      .reverse()
-      .find((h) => h.line < block.startLine);
-    if (!owner) continue;
+    const owner = [...sections].reverse().find((h) => h.line < block.startLine);
+    if (!owner || !schemas.has(owner.name)) continue;
 
     for (const message of validate(schemas.get(owner.name).inputSchema, args)) {
       problems.push({

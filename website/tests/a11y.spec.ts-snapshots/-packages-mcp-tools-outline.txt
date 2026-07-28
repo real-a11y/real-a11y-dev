@@ -35,8 +35,6 @@ h1 MCP tools reference
     h3 click_element
     h3 type_text
     h3 focus_element
-  h2 Producer parity
-    h3 compare_producers
   h2 Environment
     h3 REAL_A11Y_MCP_CDP
     h3 REAL_A11Y_MCP_HEADFUL
