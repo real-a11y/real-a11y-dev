@@ -2,7 +2,13 @@
 
 import { redactUrl } from "@real-a11y-dev/snapshot";
 
-import { parseProducer, type FlagValues, type Producer } from "../args.js";
+import {
+  nativeCapableCommands,
+  parseProducer,
+  supportsNative,
+  type FlagValues,
+  type Producer,
+} from "../args.js";
 import { resolveConfig, type ConfigPage } from "../config.js";
 import { CliError } from "../exit.js";
 import { assertWritableTarget } from "../output.js";
@@ -245,23 +251,24 @@ export function rootOf(flags: FlagValues): string {
  *
  * Native (Chromium's own a11y tree over CDP) is whole-document, read-only, and
  * carries no tab order. So a command opts into native only when it needs
- * neither a tab sequence nor the page-bundle's `listByRole` (`supportsNative`),
- * and `--root` scoping is refused under native regardless. Commands that don't
- * support it still call this so `--producer native` fails loudly with guidance,
- * rather than being silently ignored.
+ * neither a tab sequence nor the page-bundle's `listByRole` — declared once, on
+ * the command's `producers` in the COMMANDS table. Commands that don't support
+ * it still call this so `--producer native` fails loudly with guidance, rather
+ * than being silently ignored.
  */
 export function producerOf(
   flags: FlagValues,
   command: string,
-  supportsNative: boolean,
   seededFromConfig?: ReadonlySet<string>,
 ): Producer {
   const producer = parseProducer(flags.producer);
   if (producer === "dom") return "dom";
-  if (!supportsNative) {
+  if (!supportsNative(command)) {
     throw new CliError(
       `--producer native is not supported by \`${command}\` — a native tree has no tab order and can't be scoped.`,
-      "native works with: audit, tree, outline. Use --producer dom (the default) here.",
+      // Built from the table, not written out: this list went stale as
+      // commands landed, and pointed people at flags that don't exist.
+      `native works with: ${nativeCapableCommands().join(", ")}. Use --producer dom (the default) here.`,
     );
   }
   if (typeof flags.root === "string" && flags.root !== "body") {

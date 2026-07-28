@@ -6,8 +6,8 @@
     "build": "pnpm -r --filter \"!@real-a11y-dev/website\" --filter \"!@real-a11y-dev/example-vanilla\" --filter \"!@real-a11y-dev/example-react\" --filter \"!@real-a11y-dev/example-storybook\" --filter \"!@real-a11y-dev/example-testing\" build",
     "dev": "pnpm -r --parallel dev",
     "test": "pnpm -r --filter \"!@real-a11y-dev/website\" --filter \"!@real-a11y-dev/example-vanilla\" --filter \"!@real-a11y-dev/example-react\" --filter \"!@real-a11y-dev/example-storybook\" --filter \"!@real-a11y-dev/example-testing\" test",
-    "lint": "eslint packages/ website/scripts website/tests",
-    "lint:fix": "eslint packages/ website/scripts website/tests --fix",
+    "lint": "eslint packages/ scripts/surface website/scripts website/tests",
+    "lint:fix": "eslint packages/ scripts/surface website/scripts website/tests --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "pnpm -r --filter \"!@real-a11y-dev/website\" --filter \"!@real-a11y-dev/example-vanilla\" --filter \"!@real-a11y-dev/example-react\" --filter \"!@real-a11y-dev/example-storybook\" --filter \"!@real-a11y-dev/example-testing\" typecheck",
@@ -22,7 +22,8 @@
     "size:why": "pnpm build && size-limit --why",
     "commitlint": "commitlint",
     "packaging:check": "node scripts/check-packaging.mjs",
-    "surface:check": "node scripts/check-surface-counts.mjs",
+    "surface:extract": "node scripts/surface/index.mjs extract",
+    "surface:check": "node scripts/surface/index.mjs check",
     "examples:dev-smoke": "node scripts/check-examples-dev.mjs"
   },
   "devDependencies": {
@@ -37,6 +38,7 @@
     "eslint": "^9.0.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-import": "^2.32.0",
+    "esbuild": "^0.25.0",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "globals": "^17.7.0",
     "husky": "^9.1.7",

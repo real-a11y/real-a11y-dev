@@ -104,7 +104,7 @@ export const snapshotCommand: CommandFn = async (
   // `defaults` — run.ts merged them into `flags` before dispatch.
   const rules = parseRules(flags.rules);
   // The artifact carries tab-order per page for `diff`; a native tree has none.
-  producerOf(flags, "snapshot", false);
+  producerOf(flags, "snapshot");
   const openOptions = parseOpenOptions(flags);
   // `--md` predates `--format` here and stays as an alias for `--format md`.
   const format = parseFormat(flags.format, SNAPSHOT_FORMATS);
