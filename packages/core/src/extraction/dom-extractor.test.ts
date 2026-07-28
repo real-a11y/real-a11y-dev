@@ -1087,6 +1087,71 @@ describe("extractDomTree", () => {
       expect(rootNode.dom.attributes["id"]).toBe("app-root");
     });
 
+    // A tree that pivoted to body swallows every body child, so the honest
+    // probe for "did the scope pivot?" is whether content outside `root`
+    // came along — NOT the root node's id. When body is the effective root,
+    // `walk` returns body's first child as `rootId`, which is the app root
+    // either way.
+    const idsIn = (root: Element) =>
+      [...extractDomTree(root).nodes.values()].map(
+        (n) => n.dom.attributes["id"],
+      );
+
+    it("ignores an empty live-region announcer shell (no pivot)", () => {
+      // Toast libraries (Sonner, react-hot-toast, Radix Toast) and most
+      // component kits mount a PERMANENT, usually-empty announcer at body
+      // level on mount. It is display-visible, so a visibility-only check
+      // treats it as a showing overlay — and because it never goes away, the
+      // pivot never goes away either: the caller's `root` is dead for the
+      // rest of the session rather than just while a toast is up.
+      appendOverlay(`<div id="announcer" aria-live="polite"></div>`);
+
+      expect(idsIn(appRoot)).not.toContain("announcer");
+    });
+
+    it("ignores an empty toast/status container (no pivot)", () => {
+      // Same shell, spelled with role= instead of aria-live, and nested the
+      // way a real toast viewport is (an empty stack inside a wrapper).
+      appendOverlay(
+        `<div id="toaster" role="status"><ol class="toast-viewport"></ol></div>`,
+      );
+
+      expect(idsIn(appRoot)).not.toContain("toaster");
+    });
+
+    it("ignores an empty viewport that carries tabindex for focus management", () => {
+      // The shape Radix Toast and Sonner actually render while holding zero
+      // toasts: the stack gets `tabindex="-1"` so focus can be moved into it
+      // later. Counting a bare tabindex as content would let precisely the
+      // shells this guard exists to catch straight back through.
+      appendOverlay(
+        `<div id="toaster" role="status" aria-live="polite"><ol tabindex="-1"></ol></div>`,
+      );
+
+      expect(idsIn(appRoot)).not.toContain("toaster");
+    });
+
+    it("still pivots once the announcer actually holds a message", () => {
+      // The other half of the contract: an announcer with content IS a
+      // showing overlay, so the pivot must still happen. Guards against
+      // over-correcting the empty-shell case into "never pivot for a live
+      // region".
+      appendOverlay(`<div id="announcer" aria-live="polite">Saved</div>`);
+
+      expect(idsIn(appRoot)).toContain("announcer");
+    });
+
+    it("still pivots for an empty overlay that is interactive", () => {
+      // "Has no text" is not the same as "has nothing". A menu whose items
+      // are icon-only buttons has no collapsed text but is absolutely
+      // showing, so a text-only emptiness test would regress it.
+      appendOverlay(
+        `<div id="menu" role="menu"><button aria-label="Delete"></button></div>`,
+      );
+
+      expect(idsIn(appRoot)).toContain("menu");
+    });
+
     afterEach(() => {
       document.body.innerHTML = "";
     });
