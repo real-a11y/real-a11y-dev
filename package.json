@@ -11,7 +11,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "pnpm -r --filter \"!@real-a11y-dev/website\" --filter \"!@real-a11y-dev/example-vanilla\" --filter \"!@real-a11y-dev/example-react\" --filter \"!@real-a11y-dev/example-storybook\" --filter \"!@real-a11y-dev/example-testing\" typecheck",
-    "verify": "pnpm build && pnpm typecheck && pnpm format:check && pnpm lint && pnpm surface:check && pnpm test && pnpm --filter @real-a11y-dev/website build",
+    "verify": "pnpm build && pnpm typecheck && pnpm format:check && pnpm lint && pnpm surface:check && pnpm test && pnpm --filter @real-a11y-dev/website build && pnpm surface:check-built",
     "rasterize-icons": "pnpm --filter @real-a11y-dev/testing exec node scripts/rasterize-extension-icons.mjs",
     "rasterize-og": "pnpm --filter @real-a11y-dev/testing exec node scripts/rasterize-og-image.mjs",
     "prepare": "husky",
@@ -24,6 +24,7 @@
     "packaging:check": "node scripts/check-packaging.mjs",
     "surface:extract": "node scripts/surface/index.mjs extract",
     "surface:check": "node scripts/surface/index.mjs check",
+    "surface:check-built": "node scripts/surface/index.mjs check-built",
     "examples:dev-smoke": "node scripts/check-examples-dev.mjs"
   },
   "devDependencies": {

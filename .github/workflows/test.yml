@@ -218,6 +218,13 @@ jobs:
       - name: Build website
         run: pnpm --filter @real-a11y-dev/website build
 
+      # The docs' #anchor check computes heading ids with its own copy of
+      # @mdit-vue/shared's slugify, so it can only prove the links and that copy
+      # agree. This is the other half: the ids VitePress actually emitted have to
+      # be the ones it computes. Needs the build, which this job just did.
+      - name: Check the slug function against the built site
+        run: pnpm surface:check-built
+
       - name: Install Playwright browser
         run: pnpm --filter @real-a11y-dev/website exec playwright install chromium --with-deps
 
