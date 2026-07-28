@@ -61,6 +61,20 @@ different thing from a past-tense "here's what I ran" — write the instructions
 
 ## 4. Update the docs — same PR, no exceptions
 
+**Start here — the mapping is computed:**
+
+```bash
+pnpm surface:plan
+```
+
+It diffs `docs/surface.json` against the merge base and prints what moved, which
+documents that obliges you to update, which of them the branch has already
+touched, and what §4b says to do to the scenarios — with the version stamps
+filled in from your pending changesets. The same report lands on the PR as a
+sticky comment. Read the table below to understand _why_ a page is in scope, and
+for the cases the manifest can't see (an error message's wording, a network
+behavior change).
+
 If the change touches the **public surface** (a package, command, flag, export,
 option, MCP tool, env var, exit code, error message, or a whole product), update
 its docs now. Map the change with the table below, then confirm the branch
@@ -122,7 +136,10 @@ a near-miss instead of ticking a box. Ground it in a real defect where there was
 one.
 
 Record the IDs in the PR body (`R23` new, `R8` updated, …) so the release run can
-be traced back to the change that caused it.
+be traced back to the change that caused it. `pnpm surface:plan` prints this
+block ready to paste, with the version stamps already filled in — it leaves the
+IDs as `R??` because the suites live in Notion, so nothing in the repo can say
+which existing rows assert what moved. That is the one part you still look up.
 
 ## 5. Changeset — only if a published package's `src` changed
 

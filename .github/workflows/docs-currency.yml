@@ -1,11 +1,19 @@
 name: Docs currency
 
-# Advisory backstop for the `pr` skill's docs step: when a PR changes package
-# SOURCE but touches no markdown, remind the author to check whether the docs
-# need to move with it. It posts ONE sticky comment (with the doc-map) and
-# clears it once docs are added or the author opts out. It never fails, so it
-# can't block a legitimate internal refactor — escalate to a required check via
-# branch protection only if you want it to gate.
+# Advisory backstop for the `pr` skill's docs step. It posts ONE sticky comment
+# saying what this PR's public-surface changes oblige you to update — the docs
+# from §4, the test scenarios from §4b — and clears it when there's nothing to
+# say. It never fails, so it can't block a legitimate internal refactor;
+# escalate to a required check via branch protection only if you want it to gate.
+#
+# The report is computed from the `docs/surface.json` diff, not from which files
+# the PR touched, so "you renamed a flag" is a fact rather than an inference.
+# That also makes this job cheap: two commits of one JSON file and `git diff
+# --name-only`, so no pnpm install, no build, no browser.
+#
+# It can trust the manifest because `surface:check` (in the verify job) fails
+# when it's stale — so on any PR that passes CI, the manifest describes the
+# branch's real surface.
 
 on:
   pull_request:
@@ -14,6 +22,7 @@ on:
     paths:
       - "packages/*/src/**"
       - "packages/*/package.json"
+      - "docs/surface.json"
 
 permissions:
   contents: read
@@ -24,32 +33,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
+  plan:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          # `plan` needs the merge base, so it needs both sides of history.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Compute the surface plan
+        id: plan
+        run: |
+          git fetch --no-tags origin "$BASE_REF"
+          node scripts/surface/index.mjs plan \
+            --base "origin/$BASE_REF" --format markdown > plan.md
+          # `changeset status` is unavailable without an install, so the version
+          # stamps degrade to "no pending changeset" — the obligations, which
+          # are the point, do not depend on it.
+          cat plan.md
+        env:
+          BASE_REF: ${{ github.base_ref }}
+
       - uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
+            const fs = require('fs');
             const MARKER = '<!-- docs-currency -->';
             const { owner, repo } = context.repo;
             const pr = context.issue.number;
-
-            // Every file this PR changes (head vs base), paginated.
-            const files = await github.paginate(github.rest.pulls.listFiles, {
-              owner,
-              repo,
-              pull_number: pr,
-              per_page: 100,
-            });
-            const paths = files.map((f) => f.filename);
-
-            const touchedSrc = paths.some(
-              (p) =>
-                /^packages\/[^/]+\/src\//.test(p) ||
-                /^packages\/[^/]+\/package\.json$/.test(p),
-            );
-            const touchedDocs = paths.some((p) => p.endsWith('.md'));
 
             // Opt-out: the `no-docs-needed` label, or `docs-check: n/a` in the body.
             const labels = (context.payload.pull_request.labels || []).map((l) => l.name);
@@ -58,7 +74,8 @@ jobs:
               labels.includes('no-docs-needed') ||
               /docs-check:\s*(n\/?a|skip|none)/i.test(body);
 
-            const needsReminder = touchedSrc && !touchedDocs && !optedOut;
+            const report = fs.readFileSync('plan.md', 'utf8').trim();
+            const nothingToSay = report.includes('No public-surface changes');
 
             // Find our existing sticky comment (marker as FIRST line AND our bot).
             const comments = await github.paginate(github.rest.issues.listComments, {
@@ -73,60 +90,46 @@ jobs:
                 c.body?.startsWith(MARKER),
             );
 
-            if (needsReminder) {
-              const reminder = [
-                MARKER,
-                '### 📝 Docs check — did the docs move with this change?',
-                '',
-                'This PR changes package **source** but touches no `.md` files. If the change is user-visible, its docs should move with it **in this PR** (that keeps them from drifting):',
-                '',
-                '| A change to… | Update |',
-                '| --- | --- |',
-                '| A package’s public API (export, option, command, flag, MCP tool, env var, exit code) | `packages/<pkg>/README.md` **and** `website/packages/<pkg>.md` |',
-                '| A new package or product surface | root `README.md`, `website/index.md` (home), `website/guide/architecture.md`, `website/guide/getting-started.md`, a new `website/packages/<pkg>.md` |',
-                '| Network / privacy behavior | `website/privacy.md` |',
-                '| The Chrome extension | `packages/extension/README.md`, `website/guide/chrome-extension.md` |',
-                '',
-                'Full map + the a11y-baseline regen step: the `pr` skill (`.claude/skills/pr/SKILL.md`).',
-                '',
-                '_Internal-only change with nothing to document?_ Put `docs-check: n/a` in the PR description (or add a `no-docs-needed` label) and this note clears.',
-                '',
-                '_Advisory — this check never blocks the merge._',
-              ].join('\n');
+            const cleared = [
+              MARKER,
+              '### ✅ Docs check',
+              '',
+              optedOut
+                ? 'Marked as no docs needed for this change.'
+                : 'No public-surface changes on this PR — nothing for §4 or §4b to ask.',
+            ].join('\n');
 
-              if (mine) {
-                await github.rest.issues.updateComment({
-                  owner,
-                  repo,
-                  comment_id: mine.id,
-                  body: reminder,
-                });
-                console.log('Docs reminder updated.');
-              } else {
-                await github.rest.issues.createComment({
-                  owner,
-                  repo,
-                  issue_number: pr,
-                  body: reminder,
-                });
-                console.log('Docs reminder posted.');
+            const full = [
+              MARKER,
+              report,
+              '',
+              '_Advisory — this check never blocks the merge. Internal-only change with nothing to document? Put `docs-check: n/a` in the description (or add a `no-docs-needed` label) and this note clears._',
+              '',
+              'Full map and the a11y-baseline regen step: the `pr` skill (`.claude/skills/pr/SKILL.md`). Run it yourself with `pnpm surface:plan`.',
+            ].join('\n');
+
+            const desired = nothingToSay || optedOut ? cleared : full;
+
+            if (mine) {
+              if (mine.body?.trim() === desired.trim()) {
+                console.log('Sticky comment already current — no write.');
+                return;
               }
-            } else if (mine) {
-              // Docs were added, or the author opted out — clear the reminder in place.
               await github.rest.issues.updateComment({
                 owner,
                 repo,
                 comment_id: mine.id,
-                body: [
-                  MARKER,
-                  '### ✅ Docs check',
-                  '',
-                  touchedDocs
-                    ? 'Docs were updated in this PR — thanks.'
-                    : 'Marked as no docs needed for this change.',
-                ].join('\n'),
+                body: desired,
               });
-              console.log('Docs reminder cleared.');
+              console.log('Sticky comment updated.');
+            } else if (!nothingToSay && !optedOut) {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: pr,
+                body: desired,
+              });
+              console.log('Sticky comment posted.');
             } else {
-              console.log('Source changed with docs (or nothing to remind) — no action.');
+              console.log('Nothing to say and no existing comment — no action.');
             }

@@ -95,6 +95,25 @@ a reviewer sees what moved in the public surface, so it belongs in the same PR
 as the change. (Extraction imports the packages' built dependencies, so run
 `pnpm build` first.)
 
+### What a change obliges you to update
+
+```bash
+pnpm surface:plan                      # vs origin/main
+pnpm surface:plan -- --base upstream/main
+```
+
+Reads the manifest diff between your branch and its merge base, and prints the
+documents that have to move with it and what happens to the release test
+scenarios — the `pr` skill's §4 and §4b, computed rather than remembered. It
+marks which of those docs your branch already touched, and stamps each scenario
+with the version it applies from (or, for a removal, until), taken from your
+pending changesets.
+
+It needs no build: both manifests come out of git. The same report is posted as
+a sticky PR comment by the `docs-currency` workflow. It only ever reports —
+nothing here fails a build, because whether an obligation applies is a judgement
+call and the answer is sometimes "none, and here's why".
+
 ### Testing the Chrome extension
 
 1. Run `pnpm build`

@@ -3,6 +3,7 @@
 //   node scripts/surface/index.mjs extract      write docs/surface.json
 //   node scripts/surface/index.mjs check        CI gate — read-only
 //   node scripts/surface/index.mjs check-built  the slug function vs the built site
+//   node scripts/surface/index.mjs plan         what this branch obliges you to update
 //
 // One model of what the packages expose, extracted from the code itself, so
 // every claim made about the surface — in the docs today, in the release test
@@ -24,6 +25,10 @@ import { checkDocs } from "./check/docs.mjs";
 import { checkSamples, checkToolExamples } from "./check/samples.mjs";
 import { validateAgainstSchema } from "./check/schema.mjs";
 import { buildManifest, MANIFEST_VERSION, serialize } from "./model.mjs";
+import { diffManifests } from "./plan/diff.mjs";
+import { changedFiles, manifestAt, mergeBase } from "./plan/git.mjs";
+import { buildReport, renderMarkdown, renderText } from "./plan/report.mjs";
+import { nextVersions } from "./plan/versions.mjs";
 
 const repoRoot = resolve(fileURLToPath(import.meta.url), "../../..");
 const manifestPath = resolve(repoRoot, "docs/surface.json");
@@ -181,6 +186,47 @@ async function checkBuilt() {
   );
 }
 
+/**
+ * What this branch obliges you to update — computed, not remembered.
+ *
+ * Reads both manifests out of git, so it needs no install and no build: the
+ * whole point of committing `docs/surface.json` is that its diff is the answer.
+ * Read-only and never fails on findings — it reports obligations, and whether
+ * to act on them is the author's call, not a gate's.
+ */
+async function plan(argv) {
+  const flag = (name, fallback) => {
+    const i = argv.indexOf(`--${name}`);
+    return i === -1 ? fallback : argv[i + 1];
+  };
+  const base = flag("base", "origin/main");
+  const asMarkdown = argv.includes("--format")
+    ? flag("format") === "markdown"
+    : false;
+
+  const mergeBaseRef = await mergeBase(repoRoot, base);
+  const [baseManifest, touched, versions] = await Promise.all([
+    manifestAt(repoRoot, mergeBaseRef),
+    changedFiles(repoRoot, mergeBaseRef),
+    nextVersions(repoRoot),
+  ]);
+
+  let headManifest;
+  try {
+    headManifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  } catch {
+    die([
+      `${MANIFEST_REL} is missing — nothing to plan against.`,
+      ``,
+      `  pnpm surface:extract`,
+    ]);
+  }
+
+  const changes = diffManifests(baseManifest, headManifest);
+  const report = buildReport(changes, touched, versions);
+  console.log(asMarkdown ? renderMarkdown(report, base) : renderText(report));
+}
+
 const verb = process.argv[2];
 if (verb === "extract") {
   await extract();
@@ -188,13 +234,17 @@ if (verb === "extract") {
   await check();
 } else if (verb === "check-built") {
   await checkBuilt();
+} else if (verb === "plan") {
+  await plan(process.argv.slice(3));
 } else {
   die([
-    `usage: node scripts/surface/index.mjs <extract|check|check-built>`,
+    `usage: node scripts/surface/index.mjs <extract|check|check-built|plan>`,
     ``,
     `  extract      rebuild ${MANIFEST_REL} from the packages' source`,
     `  check        fail if the manifest is stale or the docs disagree with it`,
     `  check-built  fail if slugify() disagrees with the built site's heading`,
     `               ids (needs the website build)`,
+    `  plan         report the docs and test scenarios this branch obliges you`,
+    `               to update  [--base <ref>] [--format markdown]`,
   ]);
 }

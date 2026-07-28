@@ -25,6 +25,7 @@
     "surface:extract": "node scripts/surface/index.mjs extract",
     "surface:check": "node scripts/surface/index.mjs check",
     "surface:check-built": "node scripts/surface/index.mjs check-built",
+    "surface:plan": "node scripts/surface/index.mjs plan",
     "examples:dev-smoke": "node scripts/check-examples-dev.mjs"
   },
   "devDependencies": {
