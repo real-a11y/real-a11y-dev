@@ -9,7 +9,7 @@ The Real A11y MCP server exposes **nineteen tools** to an MCP client (Claude Cod
 
 The tools share **one** browser page. A typical run is [`open_page`](#open-page) → an audit or view tool ([`audit_page`](#audit-page), [`inspect_page`](#inspect-page), or a `get_*` view) → [`close_browser`](#close-browser). To interact, the loop is [`checkpoint_tree`](#checkpoint-tree) → an [act tool](#act) ([`click_element`](#click-element), [`type_text`](#type-text), [`focus_element`](#focus-element)) → [`diff_tree`](#diff-tree). Because every tool reads the same mutable page, calls must run **sequentially, never in parallel** — a second call mid-flight would race the first's navigation.
 
-Every read is built from **Chromium's own accessibility tree**, read over CDP. There is no `producer` parameter: each surface has exactly one correct producer, so there is nothing to choose. That tree is whole-document, so the audit and view tools take no `rootSelector` — the exceptions are [`get_tab_order`](#get-tab-order) and the tree checkpoints, which run in the page, where a selector means something. Tool output is capped at **40,000 characters**; a larger page is truncated with a note.
+Every read is built from **Chromium's own accessibility tree**, read over CDP. There is no `producer` parameter: each surface has exactly one correct producer, so there is nothing to choose. That tree is whole-document, so the audit and view tools take no `rootSelector` — the exceptions are [`get_tab_order`](#get-tab-order) and the tree checkpoints, which run in the page, where a selector means something. Tool output is capped at **40,000 characters**; a larger page is truncated with a note naming the lever that tool actually has — a `rules` subset, a narrower `rootSelector` where one applies, or a smaller sibling read such as [`get_heading_outline`](#get-heading-outline). [`export_checkpoint`](#export-checkpoint) is the one exception: a JSON artifact can't be truncated and stay parseable, so it fails instead.
 
 Server behavior is configured entirely through [environment variables](#environment) — saved-login sessions, origin pinning, `file://` access, CDP attach. Credentials are never tool parameters, so session tokens stay out of the agent's context. On startup the server validates that configuration and **refuses to start** on a malformed storage-state file or an invalid origin (see [Environment](#environment)).
 
@@ -271,7 +271,9 @@ List the stored checkpoint labels with their finding counts and approximate tree
 
 _Read-only._
 
-Return a stored checkpoint as a Real A11y snapshot artifact — the same `a11y-snapshot.json` the CLI writes (same `schemaVersion`, same fingerprints). Persist it to your own file to diff across sessions, or feed it to the CI a11y-diff. Output is capped, so it is best for small roots.
+Return a stored checkpoint as a Real A11y snapshot artifact — the same `a11y-snapshot.json` the CLI writes (same `schemaVersion`, same fingerprints). Persist it to your own file to diff across sessions, or feed it to the CI a11y-diff.
+
+The artifact has to come back as **one valid JSON string**, so it is never truncated — a checkpoint over the 40,000-character cap fails instead. Checkpoints are whole-document, so there is no scope to narrow (a `rules` subset shrinks the findings, never the tree); the error reports both sizes so you can tell which. To *compare* an oversized checkpoint, diff it in-session with [`diff_findings`](#diff-findings) / [`diff_checkpoints`](#diff-checkpoints), which need no export. To *keep* one, capture the page with the CLI instead — `real-a11y snapshot <url> --output a11y-snapshot.json` writes the identical artifact to a file, uncapped.
 
 Parameters:
 

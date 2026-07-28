@@ -188,6 +188,59 @@ describe("MCP server wiring", () => {
     expect(byName("close_browser").description).toMatch(/export_checkpoint/);
   });
 
+  it("never offers rootSelector as the remedy for a tool that dropped it", async () => {
+    // The truncation note is appended to the ONE output where the agent has
+    // already lost information and most needs a way forward. Naming a parameter
+    // the tool no longer accepts spends that moment on a schema error. Each
+    // read must advertise only the lever it actually has.
+    const client = await connect(session);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/" },
+    });
+    session.nativeTreeResponse = nativeTree([
+      { role: "heading", name: "x".repeat(45_000), level: "1" },
+    ]);
+
+    const tree = textOf(
+      (await client.callTool({
+        name: "get_semantic_tree",
+        arguments: {},
+      })) as never,
+    );
+    expect(tree).toMatch(/output truncated at 40000 chars/);
+    // Named as ruled OUT, never offered — an agent carrying the old schema in
+    // context is exactly who reads this line, so silence would invite the retry
+    // this is trying to prevent.
+    expect(tree).toMatch(/takes no `rootSelector`/);
+    expect(tree).not.toMatch(/Pass a narrower `rootSelector`/);
+    expect(tree).toMatch(/get_heading_outline/); // a slice it CAN take
+
+    // inspect_page carries both: its findings section takes a `rules` subset,
+    // its tree section takes nothing.
+    const inspect = textOf(
+      (await client.callTool({
+        name: "inspect_page",
+        arguments: {},
+      })) as never,
+    );
+    expect(inspect).toMatch(/output truncated at 40000 chars/);
+    expect(inspect).toMatch(/`rules` subset/);
+    expect(inspect).not.toMatch(/Pass a narrower `rootSelector`/);
+
+    // …while the one tool that KEPT the selector still names it. Without this
+    // half, deleting every mention of rootSelector would pass.
+    session.responses.tabSequenceSnapshot = "y".repeat(45_000);
+    const tabs = textOf(
+      (await client.callTool({
+        name: "get_tab_order",
+        arguments: {},
+      })) as never,
+    );
+    expect(tabs).toMatch(/output truncated at 40000 chars/);
+    expect(tabs).toMatch(/Pass a narrower `rootSelector`/);
+  });
+
   it("reports headless vs headful so a missing window isn't a mystery", async () => {
     // buildServer can't infer this — the bin owns the decision — so an unset
     // `headful` must still say "headless" rather than stay silent.
@@ -905,7 +958,16 @@ describe("checkpoints", () => {
       arguments: { name: "big" },
     });
     expect(res.isError).toBe(true);
-    expect(textOf(res)).toMatch(/too large to export inline/);
+    const message = textOf(res);
+    expect(message).toMatch(/too large to export inline/);
+    // And the way out has to be one that still exists. `checkpoint_findings`
+    // lost its rootSelector in this migration, so "re-save it with a narrower
+    // rootSelector" hands the agent a schema error; the tree size is broken out
+    // because `rules` shrinks the findings and never the tree.
+    expect(message).not.toMatch(/narrower rootSelector/);
+    expect(message).toMatch(/the tree alone is \d+ KB/);
+    expect(message).toMatch(/diff_findings \/ diff_checkpoints/);
+    expect(message).toMatch(/real-a11y snapshot <url> --output/);
   });
 
   it("import under a new label then diff_findings of an unchanged page reports no change", async () => {

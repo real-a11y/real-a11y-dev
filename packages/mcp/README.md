@@ -156,7 +156,9 @@ To pin the version instead, add it to your project (`pnpm add -D
 > accessibility tree, which has no notion of a subtree to narrow to. Only
 > `get_tab_order` and the tree checkpoints take a `rootSelector` — they run in
 > the page, where a selector means something. Output is capped at 40,000
-> characters so a large page can't blow the agent's context budget.
+> characters so a large page can't blow the agent's context budget; the
+> truncation note names the lever that tool actually has — a `rules` subset, a
+> narrower `rootSelector` where one applies, or a smaller sibling read.
 
 ### Environment
 

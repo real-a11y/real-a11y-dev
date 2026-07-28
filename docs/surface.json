@@ -1595,7 +1595,7 @@
           "openWorldHint": false,
           "readOnlyHint": true
         },
-        "description": "Return a stored checkpoint as a Real A11y snapshot artifact — the same a11y-snapshot.json the CLI writes (same schemaVersion, same fingerprints). Persist it to your own file to diff across sessions, or feed it to the CI a11y-diff. Output is capped, so it is best for small roots.",
+        "description": "Return a stored checkpoint as a Real A11y snapshot artifact — the same a11y-snapshot.json the CLI writes (same schemaVersion, same fingerprints). Persist it to your own file to diff across sessions, or feed it to the CI a11y-diff. Checkpoints are whole-document, and the artifact has to come back as one valid JSON string, so a large page can exceed the output cap and fail — use the CLI's `real-a11y snapshot --output` for those.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "additionalProperties": false,

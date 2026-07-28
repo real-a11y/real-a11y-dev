@@ -66,6 +66,8 @@ link "type_text"
 link "focus_element"
 link "diff_tree"
 link "get_tab_order"
+link "get_heading_outline"
+link "export_checkpoint"
 link "environment variables"
 link "Environment"
 table
@@ -117,6 +119,8 @@ generic
 link "tree checkpoints"
 button "Copy Code"
 generic
+link "diff_findings"
+link "diff_checkpoints"
 link "findings checkpoints"
 link "diff_tree"
 link "get_semantic_tree"

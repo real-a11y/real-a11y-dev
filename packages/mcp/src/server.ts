@@ -80,19 +80,39 @@ const rootSelector = z
   .default("body")
   .describe("CSS selector for the extraction root. Defaults to 'body'.");
 
-/** Cap oversized tool output so a huge page can't blow the agent's context. */
+/**
+ * Cap oversized tool output so a huge page can't blow the agent's context.
+ *
+ * The hint carries as much weight as the cap. Every truncation used to end
+ * "narrow with rootSelector" — a parameter four of the five read tools no
+ * longer accept, so the advice arrives attached to the one output where the
+ * agent most needs a way forward and names a door that isn't there. Each caller
+ * passes the lever IT actually has instead, and a tool with none passes nothing:
+ * "this is the whole document" is a worse answer than a fix, and a better one
+ * than a fix that doesn't exist.
+ */
 const MAX_OUTPUT_CHARS = 40_000;
-function bounded(body: string): string {
+function bounded(body: string, hint?: string): string {
   if (body.length <= MAX_OUTPUT_CHARS) return body;
   return (
     body.slice(0, MAX_OUTPUT_CHARS) +
-    `\n\n… output truncated at ${MAX_OUTPUT_CHARS} chars — narrow with rootSelector.`
+    `\n\n… output truncated at ${MAX_OUTPUT_CHARS} chars.${hint ? ` ${hint}` : ""}`
   );
 }
 
-function text(body: string) {
-  return { content: [{ type: "text" as const, text: bounded(body) }] };
+function text(body: string, hint?: string) {
+  return { content: [{ type: "text" as const, text: bounded(body, hint) }] };
 }
+
+// The three levers that survive the migration, named once so a tool can't
+// advertise one it doesn't take.
+/** Tools still built on the in-page walk: `get_tab_order`, the tree checkpoints. */
+const SCOPE_HINT = "Pass a narrower `rootSelector` to scope the walk.";
+/** Anything whose bulk is findings. Narrows the findings, never the tree. */
+const RULES_HINT = "Pass a `rules` subset to report fewer findings.";
+/** The whole-document reads, which have no scope parameter at all. */
+const SLICE_HINT =
+  "This read is whole-document and takes no `rootSelector` — `get_heading_outline` and `list_elements` return smaller slices of the same tree.";
 
 // ── Act-tool targeting fragments ─────────────────────────────────────────
 // Targets are described in the tree's own vocabulary — role + accessible
@@ -458,7 +478,7 @@ export function buildServer(
     async ({ rules }) => {
       // Findings are computed in Node over Chromium's own tree.
       const snap = projectNativeTree(await session.nativeTree(), { rules });
-      return text(renderAudit(snap.findings));
+      return text(renderAudit(snap.findings), RULES_HINT);
     },
   );
 
@@ -485,7 +505,7 @@ export function buildServer(
         rules,
         includeGeneric,
       });
-      return text(renderSnapshot(snap));
+      return text(renderSnapshot(snap), `${RULES_HINT} ${SLICE_HINT}`);
     },
   );
 
@@ -508,7 +528,7 @@ export function buildServer(
       const snap = projectNativeTree(await session.nativeTree(), {
         includeGeneric,
       });
-      return text(snap.tree || "(empty tree)");
+      return text(snap.tree || "(empty tree)", SLICE_HINT);
     },
   );
 
@@ -543,7 +563,7 @@ export function buildServer(
       );
       // Number at render — the page bundle produces the canonical unnumbered
       // form; the ordinals help an agent reference "stop 7" and are never stored.
-      return text(numberTabStops(seq));
+      return text(numberTabStops(seq), SCOPE_HINT);
     },
   );
 
@@ -650,7 +670,7 @@ export function buildServer(
       // outside the old subtree into NEW findings, the class that gates CI.
       const note = scopeMismatch(base.page, head);
       const body = renderDiff(diffCheckpointPages(base.page, head));
-      return text(note ? `${note}\n\n${body}` : body);
+      return text(note ? `${note}\n\n${body}` : body, RULES_HINT);
     },
   );
 
@@ -675,7 +695,7 @@ export function buildServer(
         base,
         head,
       });
-      return text(note ? `${note}\n\n${rendered}` : rendered);
+      return text(note ? `${note}\n\n${rendered}` : rendered, RULES_HINT);
     },
   );
 
@@ -708,7 +728,7 @@ export function buildServer(
       title: "Export a checkpoint as JSON",
       annotations: READ_ONLY,
       description:
-        "Return a stored checkpoint as a Real A11y snapshot artifact — the same a11y-snapshot.json the CLI writes (same schemaVersion, same fingerprints). Persist it to your own file to diff across sessions, or feed it to the CI a11y-diff. Output is capped, so it is best for small roots.",
+        "Return a stored checkpoint as a Real A11y snapshot artifact — the same a11y-snapshot.json the CLI writes (same schemaVersion, same fingerprints). Persist it to your own file to diff across sessions, or feed it to the CI a11y-diff. Checkpoints are whole-document, and the artifact has to come back as one valid JSON string, so a large page can exceed the output cap and fail — use the CLI's `real-a11y snapshot --output` for those.",
       inputSchema: { name: checkpointName },
     },
     async ({ name }) => {
@@ -728,11 +748,25 @@ export function buildServer(
       });
       const json = serializeArtifact(artifact);
       // Never truncate a JSON artifact into invalid JSON — the outer bounded()
-      // cap would corrupt it. Fail cleanly so the agent narrows the root and
-      // re-exports valid JSON instead of importing garbage.
+      // cap would corrupt it. Fail cleanly so the agent gets no artifact rather
+      // than an unparseable one.
+      //
+      // What the failure SAYS is the harder half. Checkpoints are whole-document
+      // now, so the old "re-save it with a narrower rootSelector" names a
+      // parameter `checkpoint_findings` no longer has: an agent that follows it
+      // gets a schema error, and one that doesn't has nothing left to try. The
+      // levers that do exist are worth naming precisely — `rules` shrinks the
+      // findings and NOT the tree, so it only helps when findings are the bulk,
+      // which is why the sizes are broken out rather than summed. And the honest
+      // answer for a genuinely large page is that this tool is the wrong one:
+      // the CLI writes the identical artifact to a file, with no inline cap.
       if (json.length > MAX_OUTPUT_CHARS) {
+        const kb = (n: number) => Math.round(n / 1024);
         return errText(
-          `Checkpoint "${name}" is too large to export inline (${Math.round(json.length / 1024)} KB > ${MAX_OUTPUT_CHARS / 1024} KB cap). Re-save it with a narrower rootSelector.`,
+          `Checkpoint "${name}" is too large to export inline (${kb(json.length)} KB > ${kb(MAX_OUTPUT_CHARS)} KB cap; the tree alone is ${kb(cp.page.tree.length)} KB, ${cp.page.findings.length} finding(s)). ` +
+            `Checkpoints are whole-document, so there is no scope to narrow — a \`rules\` subset shrinks the findings but never the tree. ` +
+            `To compare it, diff in-session (diff_findings / diff_checkpoints need no export). ` +
+            `To keep it, capture the page with the CLI instead: \`real-a11y snapshot <url> --output a11y-snapshot.json\` writes the same artifact to a file, uncapped.`,
         );
       }
       return text(json);
@@ -814,7 +848,7 @@ export function buildServer(
     async ({ rootSelector }) => {
       const out = await session.call<string>("checkpointTree", rootSelector);
       treeCheckpointRoot = rootSelector;
-      return text(out);
+      return text(out, SCOPE_HINT);
     },
   );
 
@@ -839,7 +873,10 @@ export function buildServer(
       // so the diff can't silently widen to <body> and invent added nodes.
       const root = rootSelector ?? treeCheckpointRoot ?? "body";
       try {
-        return text(await session.call<string>("diffSinceCheckpoint", root));
+        return text(
+          await session.call<string>("diffSinceCheckpoint", root),
+          SCOPE_HINT,
+        );
       } catch (err) {
         return errText(err instanceof Error ? err.message : String(err));
       }
