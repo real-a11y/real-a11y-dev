@@ -142,11 +142,21 @@ export function prBodyBlock(report) {
  * vanishes from the comment, so the reader sees `real-a11y wait [flags]`.
  */
 function cell(text) {
-  return String(text)
-    .replace(/\|/g, "\\|")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\n/g, " ");
+  return (
+    String(text)
+      // Order matters, twice over. `&` first, so the entities introduced below
+      // don't get their own ampersand escaped again. And `\` before `|`, or the
+      // backslash added to escape a pipe lands next to one already in the input
+      // (`\|` → `\\|`) and escapes the backslash instead — putting the pipe back
+      // in play as a cell separator, which is the bug this escaping exists to
+      // prevent.
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\\/g, "\\\\")
+      .replace(/\|/g, "\\|")
+      .replace(/\n/g, " ")
+  );
 }
 
 /** The sticky PR comment. */
