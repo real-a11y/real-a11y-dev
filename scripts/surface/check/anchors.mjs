@@ -13,6 +13,7 @@ import {
   headings,
   readDoc,
   slugify,
+  withoutFencedBlocks,
 } from "./markdown.mjs";
 
 /** Inline `](…)` targets, plus `[ref]: …` definitions. */
@@ -31,6 +32,21 @@ function routeToFile(route) {
   return `website${path}.md`;
 }
 
+/**
+ * A percent-encoded fragment, or the raw text when the encoding is malformed.
+ *
+ * `decodeURIComponent` throws on a stray `%` (`#100%-done`), which would abort
+ * the whole check with a stack trace. No VitePress slug contains a `%`, so such
+ * a fragment is a dead anchor — report it as one.
+ */
+function decodeFragment(fragment) {
+  try {
+    return decodeURIComponent(fragment);
+  } catch {
+    return fragment;
+  }
+}
+
 export async function checkAnchors(repoRoot) {
   const problems = [];
   const files = await docFiles(repoRoot);
@@ -46,13 +62,17 @@ export async function checkAnchors(repoRoot) {
       file,
       new Set([
         ...headings(text).map((h) => h.anchor),
-        ...explicitAnchors(text),
+        // Fence-blind for the same reason `headings()` is: an `<a id>` shown
+        // inside a code sample is markup on the page, not an anchor on it.
+        ...explicitAnchors(withoutFencedBlocks(text)),
       ]),
     );
   }
 
   for (const file of files) {
-    const text = texts.get(file);
+    // Prose only: a `[text](#anchor)` inside a fenced block is an example of a
+    // link, not one.
+    const text = withoutFencedBlocks(texts.get(file));
     const targets = [
       ...[...text.matchAll(INLINE_LINK)].map((m) => m[1]),
       ...[...text.matchAll(REF_LINK)].map((m) => m[1]),
@@ -62,7 +82,7 @@ export async function checkAnchors(repoRoot) {
       const hash = target.indexOf("#");
       if (hash === -1) continue;
       const route = target.slice(0, hash);
-      const fragment = decodeURIComponent(target.slice(hash + 1));
+      const fragment = decodeFragment(target.slice(hash + 1));
       if (!fragment) continue;
 
       // Same page.

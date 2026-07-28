@@ -154,11 +154,21 @@ function splitOperators(body) {
       if (body[i + 1] === ch) i++; // && / ||
       continue;
     }
+    // A redirect is not another command, just noise on this one — drop it and
+    // its target. Here rather than over the finished segment, because only this
+    // loop knows whether the `>` is quoted: `--root "main > article"` is a
+    // selector, and cutting the sample there leaves an unbalanced quote that
+    // gets reported as a sample nobody can paste.
+    const redirect = /^[12]?>>?\s*\S+/.exec(body.slice(i));
+    if (redirect) {
+      current = current.replace(/\s+$/, "");
+      i += redirect[0].length - 1;
+      continue;
+    }
     current += ch;
   }
   out.push(current);
-  // A redirect is not another command, just noise on this one.
-  return out.map((part) => part.replace(/\s*[12]?>>?\s*\S+/g, ""));
+  return out;
 }
 
 /** Drop `VAR=value` prefixes; they configure the command, they aren't argv. */

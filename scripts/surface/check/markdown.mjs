@@ -138,6 +138,30 @@ export function headings(text) {
 }
 
 /**
+ * The document with every fenced block's lines blanked, line numbers intact.
+ *
+ * For scanning prose only. `headings()` skips fences because a `# comment` in a
+ * shell sample is not a heading; a link scanner needs the same blindness, or a
+ * sample that demonstrates markdown syntax (`[text](#anchor)`) is read as a link
+ * to an anchor that was never meant to exist.
+ */
+export function withoutFencedBlocks(text) {
+  let fence = null;
+  return text
+    .split("\n")
+    .map((line) => {
+      const f = /^(`{3,})/.exec(line);
+      if (f) {
+        if (!fence) fence = f[1];
+        else if (f[1].length >= fence.length) fence = null;
+        return "";
+      }
+      return fence ? "" : line;
+    })
+    .join("\n");
+}
+
+/**
  * The anchor VitePress gives a heading.
  *
  * This mirrors `@mdit-vue/shared`'s `slugify`, which VitePress hands to
