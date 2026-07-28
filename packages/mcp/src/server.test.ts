@@ -1071,6 +1071,67 @@ describe("checkpoints", () => {
     expect(round.pages[0].tabs).toBe('link "Home"');
   });
 
+  it("says so when an imported base was captured at a narrower scope", async () => {
+    // Reads are whole-document now, so a live re-snapshot is always `body`.
+    // An imported DOM-era base may have been taken at `[role=dialog]` — the
+    // old findings still match by fingerprint (nothing reads as fixed) while
+    // everything OUTSIDE that subtree arrives as NEW, the class that gates CI.
+    // The diff is still worth showing; the agent just has to be told.
+    const client = await connect(session);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/" },
+    });
+    session.nativeTreeResponse = unlabeledButtons(1);
+    await client.callTool({
+      name: "checkpoint_findings",
+      arguments: { name: "seed" },
+    });
+    const scoped = JSON.parse(
+      textOf(
+        await client.callTool({
+          name: "export_checkpoint",
+          arguments: { name: "seed" },
+        }),
+      ),
+    );
+    scoped.pages[0].root = "[role=dialog]";
+    await client.callTool({
+      name: "import_checkpoint",
+      arguments: { name: "dialog", artifact: JSON.stringify(scoped) },
+    });
+
+    const out = textOf(
+      await client.callTool({
+        name: "diff_findings",
+        arguments: { name: "dialog" },
+      }),
+    );
+    expect(out).toMatch(/scope changed/);
+    expect(out).toMatch(/\[role=dialog\]/);
+    expect(out).toMatch(/appear as NEW/);
+  });
+
+  it("stays quiet when both sides were captured whole-document", async () => {
+    const client = await connect(session);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/" },
+    });
+    session.nativeTreeResponse = unlabeledButtons(1);
+    await client.callTool({
+      name: "checkpoint_findings",
+      arguments: { name: "same" },
+    });
+    const out = textOf(
+      await client.callTool({
+        name: "diff_findings",
+        arguments: { name: "same" },
+      }),
+    );
+    expect(out).not.toMatch(/scope changed/);
+  });
+
   it("import_checkpoint rejects a partial (--only) artifact", async () => {
     const client = await connect(session);
     await client.callTool({

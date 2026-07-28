@@ -99,6 +99,34 @@ function asArtifact(page: SnapshotPage): SnapshotArtifact {
 }
 
 /**
+ * Warn when the two sides were captured at different scopes.
+ *
+ * A checkpoint records the root it was taken at. Reads are whole-document now,
+ * so a live re-snapshot is always `body` — but `import_checkpoint` accepts
+ * externally-held artifacts, and a DOM-era one may have been captured at
+ * `[role=dialog]`. Diffing that against a whole-page head matches the old
+ * findings by fingerprint (nothing reads as fixed) while every finding OUTSIDE
+ * the old subtree arrives as NEW — the one class that gates CI.
+ *
+ * The comparison is still worth showing; it just isn't like-for-like, and an
+ * agent has no way to notice on its own. The CLI says the same thing about the
+ * same widening (`warnUnscopable`); this is the MCP half of it.
+ */
+export function scopeMismatch(
+  base: SnapshotPage,
+  head: SnapshotPage,
+): string | undefined {
+  const from = base.root || "body";
+  const to = head.root || "body";
+  if (from === to) return undefined;
+  return (
+    `NOTE: scope changed — the base was captured at \`${from}\`, this side at \`${to}\`. ` +
+    `Findings from outside \`${from}\` will appear as NEW even though nothing changed. ` +
+    `Re-capture the base at the same scope for a like-for-like diff.`
+  );
+}
+
+/**
  * Diff two checkpoint pages that were fingerprinted under the **same** page
  * name (the `checkpoint_findings`/`diff_findings` pair, or a re-snapshot vs its
  * stored base). Their fingerprints are directly comparable.

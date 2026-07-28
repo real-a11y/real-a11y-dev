@@ -351,8 +351,13 @@ real-a11y focus http://localhost:3000 --role textbox --name "Email"
 ### `snapshot [url...]`
 
 Audit a page set and write **one** JSON artifact — fingerprinted findings plus
-the tree/outline/tabs views per page. That artifact is the input to
-[`diff`](#diff-base-json-pr-json).
+the tree and outline views per page, with `meta.views` recording which views the
+run measured. That artifact is the input to [`diff`](#diff-base-json-pr-json).
+
+There is no tabs view: this reads Chromium's whole-document accessibility tree,
+which carries no tab order. The artifact omits the view rather than storing an
+empty one, so a diff reads it as *not measured* instead of *every tab stop was
+removed*. `real-a11y tabs` is the keyboard sequence.
 
 Pages, in precedence order: positional URLs, else `A11Y_PAGES`, else the config's
 `urls` ([`--config`](#config-file) or auto-discovered). Output goes to

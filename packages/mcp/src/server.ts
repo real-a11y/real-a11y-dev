@@ -37,6 +37,7 @@ import {
   diffCheckpointPages,
   diffLabeledCheckpoints,
   renderDiff,
+  scopeMismatch,
 } from "./checkpoints.js";
 
 export { BrowserSession } from "@real-a11y-dev/browser";
@@ -644,7 +645,12 @@ export function buildServer(
         root: "body",
         tabOrder: false,
       });
-      return text(renderDiff(diffCheckpointPages(base.page, head)));
+      // An imported base may have been captured at a narrow root; this side is
+      // always whole-document. Say so — silently widening turns everything
+      // outside the old subtree into NEW findings, the class that gates CI.
+      const note = scopeMismatch(base.page, head);
+      const body = renderDiff(diffCheckpointPages(base.page, head));
+      return text(note ? `${note}\n\n${body}` : body);
     },
   );
 
@@ -662,9 +668,14 @@ export function buildServer(
       if (!b) return errText(`No checkpoint named "${base}".`);
       const h = checkpoints.get(head);
       if (!h) return errText(`No checkpoint named "${head}".`);
-      return text(
-        renderDiff(diffLabeledCheckpoints(b.page, h.page), { base, head }),
-      );
+      // Two stored checkpoints can disagree on scope just as easily — either
+      // side may have been imported from a scoped, DOM-era artifact.
+      const note = scopeMismatch(b.page, h.page);
+      const rendered = renderDiff(diffLabeledCheckpoints(b.page, h.page), {
+        base,
+        head,
+      });
+      return text(note ? `${note}\n\n${rendered}` : rendered);
     },
   );
 
