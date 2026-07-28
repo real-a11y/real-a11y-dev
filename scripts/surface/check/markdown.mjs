@@ -152,6 +152,9 @@ export function headings(text) {
  * - a leading digit gets an `_` prefix: `1. Save the session` is
  *   `#_1-save-the-session`, not `#1-save-the-session`.
  * - lowercasing happens LAST, after the substitutions.
+ * - accents are DECOMPOSED AND DROPPED first, so `Café` is `#cafe`, not
+ *   `#café` — the one rule no current heading exercises, which is exactly why
+ *   it has to be here rather than added the day someone writes one.
  *
  * Every rule here was verified against the ids in `website/.vitepress/dist`
  * rather than from memory: all 561 headings in the site agree.
@@ -159,6 +162,8 @@ export function headings(text) {
 export function slugify(headingText) {
   return (
     stripHtml(headingText)
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
       // eslint-disable-next-line no-control-regex
       .replace(/[\u0000-\u001f]/g, "")
       .replace(/[\s~`!@#$%^&*()\-_+=[\]{}|\\;:"'“”‘’<>,.?/]+/g, "-")
