@@ -121,6 +121,19 @@ export function measuredViews(
 }
 
 /**
+ * The views a single PAGE carries — for re-wrapping a loose page into an
+ * artifact, where there is no `meta` to read and assuming would be a lie.
+ *
+ * Both callers hold pages of mixed provenance: a checkpoint captured natively
+ * has no tabs view, while one loaded from a DOM-era artifact does. Declaring a
+ * fixed set either drops that page's tab data or tells the next reader every
+ * stop vanished. The page itself is the only honest source.
+ */
+export function viewsOfPage(page: SnapshotPage): SnapshotView[] {
+  return page.tabs !== undefined ? [...SNAPSHOT_VIEWS] : ["tree", "outline"];
+}
+
+/**
  * Reject a partial (`--only`) artifact where a FULL one is required — the diff
  * path. Reads defensively: hand-made artifacts may lack `meta` entirely.
  */

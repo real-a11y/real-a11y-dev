@@ -97,13 +97,13 @@ async function runStep(session: Session, step: InteractStep): Promise<void> {
     case "not-found":
       throw new CliError(
         `no ${label} in the page's accessibility tree`,
-        // Always point at the native tree: that is precisely what targeting
-        // resolves against, so it's the one view that can't disagree with the
-        // refusal. (`list` takes categories, not roles, so it can't name an
-        // arbitrary role here without being wrong for most of them.)
+        // Always point at `tree`: it reads the same tree targeting resolves
+        // against, so it's the one view that can't disagree with the refusal.
+        // (`list` takes categories, not roles, so it can't name an arbitrary
+        // role here without being wrong for most of them.)
         resolved.matchesForRole > 0
-          ? `${resolved.matchesForRole} ${step.role}(s) are present under a different name — see them with: real-a11y tree <url> --producer native`
-          : `check what the page actually exposes: real-a11y tree <url> --producer native`,
+          ? `${resolved.matchesForRole} ${step.role}(s) are present under a different name — see them with: real-a11y tree <url>`
+          : `check what the page actually exposes: real-a11y tree <url>`,
       );
     case "nth-out-of-range":
       throw new CliError(

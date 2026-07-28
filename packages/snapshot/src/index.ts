@@ -24,6 +24,7 @@ export {
   serializeArtifact,
   parseSnapshotArtifact,
   SNAPSHOT_VIEWS,
+  viewsOfPage,
 } from "./snapshot-artifact.js";
 export type {
   SnapshotArtifact,

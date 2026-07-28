@@ -179,7 +179,11 @@ describe("real-a11y interact", () => {
     ]);
     expect(res.code).toBe(2);
     expect(res.stderr).toContain('no button "Nope"');
-    expect(res.stderr).toContain("--producer native");
+    // The hint must be a command that actually RUNS. It used to say
+    // `real-a11y tree <url> --producer native`, which now exits 2 with
+    // "Unknown option" — recovery advice that fails is worse than none.
+    expect(res.stderr).toContain("real-a11y tree <url>");
+    expect(res.stderr).not.toContain("--producer");
   });
 
   it("masks the value when a type step is malformed (R1 on the failure path)", async () => {

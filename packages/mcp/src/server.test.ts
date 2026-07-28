@@ -1029,6 +1029,48 @@ describe("checkpoints", () => {
     expect(call?.rootSelector).toBe("body");
   });
 
+  it("re-exporting an imported DOM-era checkpoint keeps its tabs view", async () => {
+    // export_checkpoint must read the measured views off the PAGE, not assume
+    // "native, so no tabs". A checkpoint loaded from a DOM-era artifact still
+    // carries one; declaring otherwise would drop that data on re-export, and
+    // the next reader would have no way to know it was ever measured.
+    const client = await connect(session);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/" },
+    });
+    session.nativeTreeResponse = unlabeledButtons(1);
+    await client.callTool({
+      name: "checkpoint_findings",
+      arguments: { name: "seed" },
+    });
+    const legacy = JSON.parse(
+      textOf(
+        await client.callTool({
+          name: "export_checkpoint",
+          arguments: { name: "seed" },
+        }),
+      ),
+    );
+    delete legacy.meta.views;
+    legacy.pages[0].tabs = 'link "Home"';
+
+    await client.callTool({
+      name: "import_checkpoint",
+      arguments: { name: "legacy", artifact: JSON.stringify(legacy) },
+    });
+    const round = parseSnapshotArtifact(
+      textOf(
+        await client.callTool({
+          name: "export_checkpoint",
+          arguments: { name: "legacy" },
+        }),
+      ),
+    );
+    expect(round.meta.views).toEqual(["tree", "outline", "tabs"]);
+    expect(round.pages[0].tabs).toBe('link "Home"');
+  });
+
   it("import_checkpoint rejects a partial (--only) artifact", async () => {
     const client = await connect(session);
     await client.callTool({

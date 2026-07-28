@@ -13,7 +13,7 @@ import {
   buildArtifact,
   diffArtifacts,
   fingerprintFindings,
-  SNAPSHOT_VIEWS,
+  viewsOfPage,
   type DiffClass,
   type DiffEntry,
   type DiffResult,
@@ -94,7 +94,7 @@ const DIFF_META = { toolName: "@real-a11y-dev/mcp", toolVersion: "0" } as const;
 function asArtifact(page: SnapshotPage): SnapshotArtifact {
   return buildArtifact([page], {
     ...DIFF_META,
-    views: page.tabs !== undefined ? SNAPSHOT_VIEWS : ["tree", "outline"],
+    views: viewsOfPage(page),
   });
 }
 

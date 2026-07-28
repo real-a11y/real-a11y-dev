@@ -28,6 +28,7 @@ import {
   projectNativeTree,
   serializeArtifact,
   SnapshotFormatError,
+  viewsOfPage,
 } from "@real-a11y-dev/snapshot";
 import { z } from "zod";
 
@@ -705,10 +706,13 @@ export function buildServer(
       const artifact = buildArtifact([cp.page], {
         toolName: "@real-a11y-dev/mcp",
         toolVersion: packageVersion(),
-        // Declare what was measured. A checkpoint is native, so it has no tabs
-        // view — and an artifact that stayed silent about that would be read as
-        // "every tab stop is gone" by whatever diffs it next.
-        views: ["tree", "outline"],
+        // Declare what was measured, reading it off the PAGE rather than
+        // assuming. A checkpoint captured here is native and has no tabs view —
+        // but one loaded by import_checkpoint may be a DOM-era artifact that
+        // does. Hardcoding "no tabs" would silently drop that page's tab data
+        // on re-export; hardcoding "tabs" would tell the next reader every stop
+        // vanished. The page is the only honest source.
+        views: viewsOfPage(cp.page),
         ...(cp.rules ? { rules: cp.rules } : {}),
       });
       const json = serializeArtifact(artifact);
@@ -944,7 +948,7 @@ export function buildServer(
     {
       title: "Click an element (by role + name)",
       description:
-        "Dispatch a REAL click against the element matched by role + accessible name in Chromium's native accessibility tree — the same view get_semantic_tree { producer: \"native\" } prints. Targeting is deliberately role+name only: if a control can't be reached that way, assistive technology can't reach it either, and that is itself an accessibility finding. For the full story call checkpoint_tree FIRST, then this, then diff_tree — the diff answers 'what did that click change for a screen reader?'. THE CLICK IS REAL: it can submit forms, toggle state, and NAVIGATE — navigation discards the page's tree checkpoint. If several nodes match, the error lists them; pass nth to pick one. Chromium only. See also type_text and focus_element.",
+        "Dispatch a REAL click against the element matched by role + accessible name in Chromium's accessibility tree — the same view get_semantic_tree prints. Targeting is deliberately role+name only: if a control can't be reached that way, assistive technology can't reach it either, and that is itself an accessibility finding. For the full story call checkpoint_tree FIRST, then this, then diff_tree — the diff answers 'what did that click change for a screen reader?'. THE CLICK IS REAL: it can submit forms, toggle state, and NAVIGATE — navigation discards the page's tree checkpoint. If several nodes match, the error lists them; pass nth to pick one. Chromium only. See also type_text and focus_element.",
       inputSchema: { role: actRole, name: actName, nth: actNth },
       annotations: {
         readOnlyHint: false,
