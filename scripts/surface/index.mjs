@@ -16,7 +16,11 @@ import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { checkAnchors, checkDuplicateAnchors } from "./check/anchors.mjs";
+import { checkCoverage, checkEnvDocumented } from "./check/coverage.mjs";
 import { checkDocs } from "./check/docs.mjs";
+import { checkSamples, checkToolExamples } from "./check/samples.mjs";
+import { validateAgainstSchema } from "./check/schema.mjs";
 import { buildManifest, MANIFEST_VERSION, serialize } from "./model.mjs";
 
 const repoRoot = resolve(fileURLToPath(import.meta.url), "../../..");
@@ -74,7 +78,39 @@ async function check() {
   }
 
   // 2. Do the docs agree with it?
-  const problems = await checkDocs(repoRoot, manifest);
+  const samples = await checkSamples(repoRoot, manifest);
+  const [docs, coverage, env, examples, anchors, duplicates] =
+    await Promise.all([
+      checkDocs(repoRoot, manifest),
+      checkCoverage(repoRoot, manifest),
+      checkEnvDocumented(repoRoot, manifest),
+      checkToolExamples(repoRoot, manifest, validateAgainstSchema),
+      checkAnchors(repoRoot),
+      checkDuplicateAnchors(repoRoot),
+    ]);
+
+  // A sample checker that stops recognising samples reports a clean run
+  // forever. Zero validated invocations means the tokenizer broke, not that
+  // the docs got shorter.
+  if (samples.checked === 0) {
+    die([
+      "The sample check validated no CLI invocations at all.",
+      "",
+      "  The docs contain `real-a11y …` examples, so this means the scanner",
+      "  stopped recognising them — not that there is nothing to check.",
+    ]);
+  }
+
+  const problems = [
+    ...docs,
+    ...samples.problems,
+    ...examples,
+    ...coverage,
+    ...env,
+    ...anchors,
+    ...duplicates,
+  ];
+
   if (problems.length) {
     console.error(
       `\nThe docs disagree with the code about the public surface.\n` +
@@ -93,7 +129,9 @@ async function check() {
 
   console.log(
     `Surface check OK — ${manifest.cli.commands.length} CLI commands, ` +
-      `${manifest.mcp.tools.length} MCP tools, manifest current, docs agree.`,
+      `${manifest.mcp.tools.length} MCP tools, manifest current, docs agree.\n` +
+      `  ${samples.checked} documented CLI invocations parse, ` +
+      `every flag and tool parameter is documented, and every #anchor resolves.`,
   );
 }
 
