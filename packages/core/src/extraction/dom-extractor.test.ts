@@ -1119,6 +1119,18 @@ describe("extractDomTree", () => {
       expect(idsIn(appRoot)).not.toContain("toaster");
     });
 
+    it("ignores an empty viewport that carries tabindex for focus management", () => {
+      // The shape Radix Toast and Sonner actually render while holding zero
+      // toasts: the stack gets `tabindex="-1"` so focus can be moved into it
+      // later. Counting a bare tabindex as content would let precisely the
+      // shells this guard exists to catch straight back through.
+      appendOverlay(
+        `<div id="toaster" role="status" aria-live="polite"><ol tabindex="-1"></ol></div>`,
+      );
+
+      expect(idsIn(appRoot)).not.toContain("toaster");
+    });
+
     it("still pivots once the announcer actually holds a message", () => {
       // The other half of the contract: an announcer with content IS a
       // showing overlay, so the pivot must still happen. Guards against

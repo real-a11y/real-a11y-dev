@@ -1147,12 +1147,18 @@ function findActiveModal(doc: Document): Element | null {
 }
 
 /**
- * "This overlay is displaying something" — anything focusable (an icon-only
- * menu item carries no text but the menu is unmistakably up) or a graphic.
- * Kept in step with {@link NATIVELY_FOCUSABLE}.
+ * "This overlay is displaying something" — a natively focusable control (an
+ * icon-only menu item carries no text but the menu is unmistakably up) or a
+ * graphic. Kept in step with {@link NATIVELY_FOCUSABLE}.
+ *
+ * Deliberately NOT `[tabindex]`: an empty toast viewport is routinely given
+ * `tabindex="-1"` for focus management (Radix Toast and Sonner both render
+ * `<ol tabindex="-1">` while holding zero toasts), so counting it would let
+ * exactly the empty shells this guard exists to catch back through. Custom
+ * widgets that are genuinely showing still qualify — an icon-only one through
+ * its `img`/`svg`, a labelled one through its text.
  */
-const OVERLAY_CONTENT_SELECTOR =
-  "a, button, input, select, textarea, [tabindex], img, svg";
+const OVERLAY_CONTENT_SELECTOR = "a, button, input, select, textarea, img, svg";
 
 /**
  * True if a portal-mounted overlay actually has something in it — collapsed
