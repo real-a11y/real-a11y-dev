@@ -94,6 +94,36 @@ headless cli/mcp correctly absent), and `website/privacy.md`.
 copy-paste-broken code. `website/**/*.md` and every `README.md` are
 prettier-ignored — don't format them.
 
+## 4b. Test scenarios — the same obligation as docs
+
+The pre-publish **Regression suite** and post-publish **Dogfood suite** in Notion
+are how a release gets checked by a human. They rot exactly like docs do — nothing
+fails when a scenario stops describing reality — and they have: one asserted "all
+9 commands" long after there were fourteen, another named a `get_native_tree` tool
+that never existed.
+
+So if this PR moved the public surface, say what happens to the scenarios. One of
+three, and "none" is a valid answer that still has to be stated:
+
+| This PR…                                       | Do                                                                                                                                                                              |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| adds a capability users can invoke             | **Add** a scenario. Set `Valid from` to the version it first ships in, package-qualified (`cli ≥ 0.1.0-beta.2`) — packages version independently, so a bare number is ambiguous |
+| changes behaviour an existing scenario asserts | **Update** that scenario's Steps/Expected, and note the transition so a run against the _previous_ release still makes sense                                                    |
+| removes a surface a scenario exists to test    | **Deprecate** it — `Status: Deprecated`, `Valid until: <pkg> ≤ <last version that had it>`. Keep the row; deleting it takes the reason it existed with it                       |
+| changes nothing user-visible                   | Nothing — say so in the PR body                                                                                                                                                 |
+
+Distinguish **evolves** from **dies**: a scenario that loses one step to a removed
+flag stays `Active` with that step version-ranged inline; a scenario whose whole
+subject is gone becomes `Deprecated`.
+
+Each scenario page carries **Steps**, **Expected**, and **Why this exists**. Write
+the third one — it is the failure being guarded, and it is what lets a runner spot
+a near-miss instead of ticking a box. Ground it in a real defect where there was
+one.
+
+Record the IDs in the PR body (`R23` new, `R8` updated, …) so the release run can
+be traced back to the change that caused it.
+
 ## 5. Changeset — only if a published package's `src` changed
 
 ```bash
@@ -107,7 +137,7 @@ ship with the next release without their own changeset.)
 ## 6. Verify
 
 ```bash
-pnpm verify   # build + typecheck + format:check + lint + test + website build
+pnpm verify   # build + typecheck + format:check + lint + surface:check + test + website build
 ```
 
 **If you touched any `website/*.md`, also regenerate the a11y baselines** — a

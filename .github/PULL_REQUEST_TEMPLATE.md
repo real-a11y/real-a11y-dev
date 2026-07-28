@@ -28,12 +28,17 @@ Cutting a release or adding a package? There are tailored templates:
 
 - [ ] `@real-a11y-dev/core`
 - [ ] `@real-a11y-dev/serialize`
+- [ ] `@real-a11y-dev/audit`
+- [ ] `@real-a11y-dev/snapshot`
+- [ ] `@real-a11y-dev/browser`
 - [ ] `@real-a11y-dev/validate`
 - [ ] `@real-a11y-dev/semantic-navigator-ui`
 - [ ] `@real-a11y-dev/inspector`
 - [ ] `@real-a11y-dev/react`
 - [ ] `@real-a11y-dev/testing`
 - [ ] `@real-a11y-dev/storybook-addon`
+- [ ] `@real-a11y-dev/cli`
+- [ ] `@real-a11y-dev/mcp`
 - [ ] Chrome extension
 - [ ] Website / docs / examples
 
@@ -60,7 +65,22 @@ Cutting a release or adding a package? There are tailored templates:
 <!-- Skip only for docs / examples / CI-only PRs. -->
 
 - [ ] Changeset added for every published-package change (`pnpm changeset`; confirm with `pnpm changeset:status`)
-- [ ] Changed `core` or `semantic-navigator-ui`? The packages that bundle them — `inspector`, `storybook-addon`, and the Chrome extension — are re-released too, so none ships a stale engine (`pnpm bundlers:check`)
+- [ ] Changed `core` or `semantic-navigator-ui`? The packages that bundle them — `inspector`, `storybook-addon`, and the Chrome extension — are re-released too, so none ships a stale engine (confirm with `pnpm changeset:status`)
+
+## Test scenarios
+
+<!-- The Regression (pre-publish) and Dogfood (post-publish) suites in Notion rot
+     the same way docs do — nothing fails when a scenario stops matching reality.
+     Name the IDs, or say why none was needed. "None" is a fine answer; a blank
+     is not, because a blank is indistinguishable from having forgotten. -->
+
+- **Added:** <!-- R23 — CLI act path -->
+- **Updated:** <!-- R8 — tool list is now 20 -->
+- **Deprecated:** <!-- R11 — compare_producers removed; Valid until mcp ≤ 0.1.0-beta.2 -->
+- [ ] None needed, because: <!-- e.g. internal refactor, no user-visible change -->
+
+New scenarios carry `Valid from` **package-qualified** (`cli ≥ 0.1.0-beta.2`) —
+packages version independently here, so a bare version number is ambiguous.
 
 ## Linked issues
 
