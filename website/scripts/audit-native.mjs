@@ -35,6 +35,8 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { killTree } from "../../scripts/kill-tree.mjs";
+
 import { ROUTES } from "./audit-routes.mjs";
 
 const websiteDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -129,10 +131,16 @@ function run(command, args, options = {}) {
   });
 }
 
+// `detached: true` puts the server in its own process group, which is what lets
+// `killTree` reap it *and* the vitepress process underneath. The thing we spawn
+// is `pnpm exec vitepress preview` — a wrapper whose actual server is its child
+// — so signalling only the wrapper leaves the server holding the port whenever
+// pnpm doesn't forward. That surviving server is precisely the stale-map hazard
+// this script exists to avoid, arriving via the cleanup meant to prevent it.
 const server = spawn(
   "pnpm",
   ["exec", "vitepress", "preview", "--port", String(PORT)],
-  { cwd: websiteDir, stdio: "ignore" },
+  { cwd: websiteDir, stdio: "ignore", detached: true },
 );
 
 // A server that dies on its own (EADDRINUSE, a missing build) must not read as
@@ -142,19 +150,26 @@ server.on("exit", (exitCode) => {
   died.code = exitCode ?? 1;
 });
 
-// Kill the server on every exit path, including Ctrl-C and an exception —
-// leaving one behind is the stale-map hazard described above.
+// Kill the server on every exit path — normal return, exception, Ctrl-C, and a
+// CI cancellation. SIGTERM is the one that used to be missing: a cancelled job
+// signals SIGTERM, not SIGINT, so without it the cleanup was skipped in the
+// case most likely to leave a runner dirty.
 let stopped = false;
 const stopServer = () => {
   if (stopped) return;
   stopped = true;
-  server.kill("SIGTERM");
+  killTree(server);
 };
 process.on("exit", stopServer);
-process.on("SIGINT", () => {
-  stopServer();
-  process.exit(130);
-});
+for (const [signal, code] of [
+  ["SIGINT", 130],
+  ["SIGTERM", 143],
+]) {
+  process.on(signal, () => {
+    stopServer();
+    process.exit(code);
+  });
+}
 
 let code;
 // Whether the audit itself ran. A non-zero `code` means two very different

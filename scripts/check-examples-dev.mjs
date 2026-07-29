@@ -20,9 +20,11 @@
 
 import { spawn } from "node:child_process";
 import { readFile, readdir } from "node:fs/promises";
+import { createServer } from "node:net";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createServer } from "node:net";
+
+import { killTree } from "./kill-tree.mjs";
 
 const repoRoot = resolve(fileURLToPath(import.meta.url), "../..");
 const examplesDir = resolve(repoRoot, "examples");
@@ -87,6 +89,7 @@ function smokeOne(example, port) {
       // Vite ignores NO_COLOR/FORCE_COLOR in some shells, so strip ANSI
       // before matching — otherwise `ready in \x1b[1m214\x1b[22m ms` fails
       // a naive `\d+` regex.
+      // eslint-disable-next-line no-control-regex -- ESC is the point: this strips ANSI.
       const plain = text.replace(/\x1b\[[0-9;]*m/g, "");
       if (!resolved && /ready in \d+ ms/.test(plain)) {
         resolved = true;
@@ -149,6 +152,7 @@ function smokeOne(example, port) {
         finalized = true;
         clearTimeout(exitTimeoutId);
         const captured = log.join("");
+        // eslint-disable-next-line no-control-regex -- ESC is the point: this strips ANSI.
         const plain = captured.replace(/\x1b\[[0-9;]*m/g, "");
         const matched = FAILURE_PATTERNS.find((p) => p.test(plain));
         if (matched) {
@@ -170,25 +174,6 @@ function smokeOne(example, port) {
       child.on("exit", () => finalize(true));
     });
   });
-}
-
-function killTree(child) {
-  if (process.platform === "win32") {
-    // Best-effort: spawn taskkill, ignore its result. We still SIGKILL
-    // afterward as a fallback — node's child.kill on Windows uses
-    // TerminateProcess which doesn't cascade but does kill the parent.
-    try {
-      const tk = spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], {
-        stdio: "ignore",
-      });
-      tk.on("error", () => {});
-    } catch {
-      /* ignore */
-    }
-  } else {
-    child.kill("SIGTERM");
-    setTimeout(() => child.kill("SIGKILL"), 2_000).unref();
-  }
 }
 
 // Pick a `@real-a11y-dev/*` workspace dep from the example's package.json
