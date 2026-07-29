@@ -47,7 +47,12 @@ const RULES = [
     why: "the exit-code table is stated on both, and it is a frozen contract",
   },
   {
-    match: /^mcp\.tools\.[^.]+\.(params|required)\./,
+    // `(\.|$)` because the two paths this rule covers end differently:
+    // `…params.url` has a trailing segment, `…required` does not. Demanding the
+    // dot made the `required` branch dead — a change to which parameters a tool
+    // requires fell through to the broader rule below and reported the MCP
+    // README as needing an update, which only enumerates names and counts.
+    match: /^mcp\.tools\.[^.]+\.(params|required)(\.|$)/,
     docs: ["website/packages/mcp/tools.md"],
     why: "every parameter has a bullet with its type, default, and whether it is required",
   },
@@ -108,7 +113,17 @@ export function requiredDocs(changes) {
     if (!rule) continue;
     for (const doc of rule.docs) require_(doc, change.what, rule.why);
 
-    // A package's own page, when the change belongs to that package.
+    // The package's own overview page, but only for a change at CAPABILITY
+    // level — a command or tool appearing or disappearing. The overview
+    // enumerates what the package can do; it doesn't list flags or parameters,
+    // so pulling it in for `--budget` or `settleMs` sends someone to a page
+    // with nothing to change on it. An obligation nobody can act on is how a
+    // report like this trains people to skim past it.
+    const isCapability =
+      /^cli\.commands\.[^.]+$/.test(change.path) ||
+      /^mcp\.tools\.[^.]+$/.test(change.path);
+    if (!isCapability) continue;
+
     if (change.path.startsWith("cli.")) {
       require_(
         "website/packages/cli.md",
