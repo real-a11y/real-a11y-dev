@@ -138,8 +138,8 @@ main
   table
     rowgroup
       row
-        rowheader "Mode"
-        rowheader "Shows"
+        columnheader "Mode"
+        columnheader "Shows"
     rowgroup
       row
         cell "A11y"

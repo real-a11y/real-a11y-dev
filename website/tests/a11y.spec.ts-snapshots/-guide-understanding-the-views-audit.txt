@@ -131,9 +131,9 @@ main
   table
     rowgroup
       row
-        rowheader "View"
-        rowheader "Question it answers"
-        rowheader "What you see"
+        columnheader "View"
+        columnheader "Question it answers"
+        columnheader "What you see"
     rowgroup
       row
         cell "Visual"

@@ -134,10 +134,10 @@ main
   table
     rowgroup
       row
-        rowheader "Option"
-        rowheader "Type"
-        rowheader "Default"
-        rowheader "Description"
+        columnheader "Option"
+        columnheader "Type"
+        columnheader "Default"
+        columnheader "Description"
     rowgroup
       row
         cell "mode"

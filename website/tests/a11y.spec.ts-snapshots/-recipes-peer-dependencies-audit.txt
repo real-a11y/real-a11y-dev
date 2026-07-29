@@ -104,11 +104,11 @@ main
   table
     rowgroup
       row
-        rowheader "Real A11y package"
-        rowheader "Node"
-        rowheader "React"
-        rowheader "Storybook"
-        rowheader "Playwright"
+        columnheader "Real A11y package"
+        columnheader "Node"
+        columnheader "React"
+        columnheader "Storybook"
+        columnheader "Playwright"
     rowgroup
       row
         cell "@real-a11y-dev/core"

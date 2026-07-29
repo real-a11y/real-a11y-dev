@@ -127,9 +127,9 @@ main
   table
     rowgroup
       row
-        rowheader "Aspect"
-        rowheader "Rule engine (e.g. jest-axe)"
-        rowheader "Accessibility Snapshot"
+        columnheader "Aspect"
+        columnheader "Rule engine (e.g. jest-axe)"
+        columnheader "Accessibility Snapshot"
     rowgroup
       row
         cell "Question"
@@ -159,9 +159,9 @@ main
   table
     rowgroup
       row
-        rowheader "Aspect"
-        rowheader "Playwright ARIA snapshots"
-        rowheader "Real A11y accessibility snapshots"
+        columnheader "Aspect"
+        columnheader "Playwright ARIA snapshots"
+        columnheader "Real A11y accessibility snapshots"
     rowgroup
       row
         cell "Runs in"

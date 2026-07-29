@@ -279,9 +279,9 @@ main
   table
     rowgroup
       row
-        rowheader "Variable"
-        rowheader "Default"
-        rowheader "Description"
+        columnheader "Variable"
+        columnheader "Default"
+        columnheader "Description"
     rowgroup
       row
         cell "A11Y_PAGES"
@@ -307,9 +307,9 @@ main
   table
     rowgroup
       row
-        rowheader "Key"
-        rowheader "Required"
-        rowheader "Description"
+        columnheader "Key"
+        columnheader "Required"
+        columnheader "Description"
     rowgroup
       row
         cell "urls"
@@ -444,8 +444,8 @@ main
   table
     rowgroup
       row
-        rowheader "Regression"
-        rowheader "Caught?"
+        columnheader "Regression"
+        columnheader "Caught?"
     rowgroup
       row
         cell "Input loses its label"

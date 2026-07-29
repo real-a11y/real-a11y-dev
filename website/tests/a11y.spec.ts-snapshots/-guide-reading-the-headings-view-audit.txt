@@ -214,8 +214,8 @@ main
   table
     rowgroup
       row
-        rowheader "View"
-        rowheader "What it answers"
+        columnheader "View"
+        columnheader "What it answers"
     rowgroup
       row
         cell "Headings"

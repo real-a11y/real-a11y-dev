@@ -121,8 +121,8 @@ main
   table
     rowgroup
       row
-        rowheader "Surface"
-        rowheader "How it appears"
+        columnheader "Surface"
+        columnheader "How it appears"
     rowgroup
       row
         cell "Chrome extension"
@@ -142,9 +142,9 @@ main
   table
     rowgroup
       row
-        rowheader "Filter"
-        rowheader "What it shows"
-        rowheader "What it's for"
+        columnheader "Filter"
+        columnheader "What it shows"
+        columnheader "What it's for"
     rowgroup
       row
         cell "Headings"
@@ -198,8 +198,8 @@ main
   table
     rowgroup
       row
-        rowheader "Surface"
-        rowheader "How to enable"
+        columnheader "Surface"
+        columnheader "How to enable"
     rowgroup
       row
         cell "Chrome extension"
@@ -249,8 +249,8 @@ main
   table
     rowgroup
       row
-        rowheader "Surface"
-        rowheader "API"
+        columnheader "Surface"
+        columnheader "API"
     rowgroup
       row
         cell "Chrome extension"
@@ -286,8 +286,8 @@ main
   table
     rowgroup
       row
-        rowheader "Surface"
-        rowheader "API"
+        columnheader "Surface"
+        columnheader "API"
     rowgroup
       row
         cell "Chrome extension"
@@ -336,8 +336,8 @@ main
   table
     rowgroup
       row
-        rowheader "Surface"
-        rowheader "Where the log appears"
+        columnheader "Surface"
+        columnheader "Where the log appears"
     rowgroup
       row
         cell "Chrome extension"
@@ -355,8 +355,8 @@ main
   table
     rowgroup
       row
-        rowheader "Key"
-        rowheader "Action"
+        columnheader "Key"
+        columnheader "Action"
     rowgroup
       row
         cell "↑ / ↓"
@@ -430,9 +430,9 @@ main
   table
     rowgroup
       row
-        rowheader "Surface"
-        rowheader "Where the panel renders"
-        rowheader "highlightOnHover / scrollHostOnSelect / focusHostOnActivate"
+        columnheader "Surface"
+        columnheader "Where the panel renders"
+        columnheader "highlightOnHover / scrollHostOnSelect / focusHostOnActivate"
           code "highlightOnHover"
           code "scrollHostOnSelect"
           code "focusHostOnActivate"

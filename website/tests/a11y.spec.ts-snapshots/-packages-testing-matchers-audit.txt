@@ -163,8 +163,8 @@ main
   table
     rowgroup
       row
-        rowheader "Matcher"
-        rowheader "Asserts"
+        columnheader "Matcher"
+        columnheader "Asserts"
     rowgroup
       row
         cell "toHaveNoUnlabeledInteractive()"
@@ -315,9 +315,9 @@ main
   table
     rowgroup
       row
-        rowheader "Reach for auditSnapshot when…"
+        columnheader "Reach for auditSnapshot when…"
           code "auditSnapshot"
-        rowheader "Reach for a11ySnapshot when…"
+        columnheader "Reach for a11ySnapshot when…"
           code "a11ySnapshot"
     rowgroup
       row
@@ -340,13 +340,13 @@ main
   table
     rowgroup
       row
-        rowheader "Dimension"
-        rowheader "Rule-basedtoBeValidA11yTree, toHaveNoUnlabeledInteractive, …"
+        columnheader "Dimension"
+        columnheader "Rule-basedtoBeValidA11yTree, toHaveNoUnlabeledInteractive, …"
           code "toBeValidA11yTree"
           code "toHaveNoUnlabeledInteractive"
-        rowheader "ContracttoMatchA11yContract"
+        columnheader "ContracttoMatchA11yContract"
           code "toMatchA11yContract"
-        rowheader "Snapshota11ySnapshot + toMatchSnapshot"
+        columnheader "Snapshota11ySnapshot + toMatchSnapshot"
           code "a11ySnapshot"
           code "toMatchSnapshot"
     rowgroup
@@ -422,9 +422,9 @@ main
   table
     rowgroup
       row
-        rowheader "Aspect"
-        rowheader "Vitest"
-        rowheader "Jest"
+        columnheader "Aspect"
+        columnheader "Vitest"
+        columnheader "Jest"
     rowgroup
       row
         cell "Runtime registration"

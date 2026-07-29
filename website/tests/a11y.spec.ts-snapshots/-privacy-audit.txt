@@ -134,8 +134,8 @@ main
   table
     rowgroup
       row
-        rowheader "Permission"
-        rowheader "Why"
+        columnheader "Permission"
+        columnheader "Why"
     rowgroup
       row
         cell "activeTab"

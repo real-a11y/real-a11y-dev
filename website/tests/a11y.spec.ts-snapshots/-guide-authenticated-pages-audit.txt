@@ -102,11 +102,11 @@ main
   table
     rowgroup
       row
-        rowheader "Aspect"
-        rowheader "Saved session (--storage-state)"
+        columnheader "Aspect"
+        columnheader "Saved session (--storage-state)"
           strong "Saved session"
           code "--storage-state"
-        rowheader "Attach to your browser (--cdp)"
+        columnheader "Attach to your browser (--cdp)"
           strong "Attach to your browser"
           code "--cdp"
     rowgroup

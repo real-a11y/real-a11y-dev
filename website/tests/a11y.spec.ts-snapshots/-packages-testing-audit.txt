@@ -118,9 +118,9 @@ main
   table
     rowgroup
       row
-        rowheader "Area"
-        rowheader "What it does"
-        rowheader "Page"
+        columnheader "Area"
+        columnheader "What it does"
+        columnheader "Page"
     rowgroup
       row
         cell "Snapshots"

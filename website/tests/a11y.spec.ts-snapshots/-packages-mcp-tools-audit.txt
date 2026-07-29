@@ -153,8 +153,8 @@ main
   table
     rowgroup
       row
-        rowheader "Tool"
-        rowheader "Purpose"
+        columnheader "Tool"
+        columnheader "Purpose"
     rowgroup
       row
         cell "open_page"
@@ -171,8 +171,8 @@ main
   table
     rowgroup
       row
-        rowheader "Tool"
-        rowheader "Purpose"
+        columnheader "Tool"
+        columnheader "Purpose"
     rowgroup
       row
         cell "audit_page"
@@ -190,8 +190,8 @@ main
   table
     rowgroup
       row
-        rowheader "Tool"
-        rowheader "Purpose"
+        columnheader "Tool"
+        columnheader "Purpose"
     rowgroup
       row
         cell "get_semantic_tree"
@@ -218,8 +218,8 @@ main
   table
     rowgroup
       row
-        rowheader "Tool"
-        rowheader "Purpose"
+        columnheader "Tool"
+        columnheader "Purpose"
     rowgroup
       row
         cell "checkpoint_findings"
@@ -256,8 +256,8 @@ main
   table
     rowgroup
       row
-        rowheader "Tool"
-        rowheader "Purpose"
+        columnheader "Tool"
+        columnheader "Purpose"
     rowgroup
       row
         cell "checkpoint_tree"
@@ -275,8 +275,8 @@ main
   table
     rowgroup
       row
-        rowheader "Tool"
-        rowheader "Purpose"
+        columnheader "Tool"
+        columnheader "Purpose"
     rowgroup
       row
         cell "click_element"
@@ -361,8 +361,8 @@ main
   table
     rowgroup
       row
-        rowheader "Server started with"
-        rowheader "What the agent is told"
+        columnheader "Server started with"
+        columnheader "What the agent is told"
     rowgroup
       row
         cell "REAL_A11Y_MCP_STORAGE_STATE"
