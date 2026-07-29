@@ -2,13 +2,14 @@ import type { ExtractionResult, SemanticNode } from "../types.js";
 
 import { extractDomTree } from "./dom-extractor.js";
 
-// legend/summary: text is consumed as the fieldset/details accessible name.
-// Drop them AND their entire subtree — their content is already reflected in
-// the parent element's name.
-// NOTE: "label" is intentionally excluded here. For wrapping labels
-// (<label>Text<input /></label>) the form control inside must still appear
-// in the a11y tree, so labels are handled separately below (children promoted).
-const SUPPRESS_WITH_CHILDREN = new Set(["legend", "summary"]);
+// legend/summary/label: the element's text is consumed as the accessible name
+// of the fieldset/details/form control, so the element itself and its text
+// carriers are dropped. Interactive descendants are promoted to the parent —
+// a link or button nested in any of them is keyboard-reachable and must stay
+// in the tree (<legend>Payment <a href="/help">(help)</a></legend>,
+// <summary>Details <button>Copy</button></summary>,
+// <label>Text<input /></label>).
+const SUPPRESS_KEEP_INTERACTIVE = new Set(["legend", "summary", "label"]);
 
 // Identify which nodes to keep in the a11y tree
 function keepNode(node: SemanticNode, rootId: string): boolean {
@@ -41,9 +42,9 @@ function keepNode(node: SemanticNode, rootId: string): boolean {
 
 /**
  * True if `nodeId`'s subtree contains at least one interactive element
- * (self-inclusive). Used inside label handling to drop decorative/text-only
- * descendants whose content is already consumed as the control's accessible
- * name.
+ * (self-inclusive). Used inside legend/summary/label handling to drop
+ * decorative/text-only descendants whose content is already consumed as the
+ * container's accessible name.
  */
 function hasInteractiveDescendant(
   nodeId: string,
@@ -72,21 +73,19 @@ function processNode(
 
   if (!node.a11y.isExposedToAT) return [];
 
-  // legend/summary: drop element AND all children — text is captured as the
-  // fieldset/details accessible name.
-  if (SUPPRESS_WITH_CHILDREN.has(node.dom!.tagName)) return [];
-
-  // label: suppress the label node itself but promote its children.
-  // For wrapping labels (<label>Text<input /></label>), the form control
-  // inside must still appear in the a11y tree with its accessible name
-  // already computed from the label's text content in dom-extractor.ts.
+  // legend/summary/label: suppress the element itself but promote its
+  // children. For wrapping labels (<label>Text<input /></label>), the form
+  // control inside must still appear in the a11y tree with its accessible name
+  // already computed from the label's text content in dom-extractor.ts; the
+  // same holds for a link or button nested in a <legend> or <summary>, which
+  // stays keyboard-reachable regardless of the name computation.
   //
   // Only promote subtrees that lead to an interactive descendant. A text
   // carrier inside a label (<label><span>Email</span><input /></label>)
   // would otherwise surface as a standalone `generic "Email"` node —
-  // redundant with the control's computed accessible name, and not what
+  // redundant with the container's computed accessible name, and not what
   // a screen reader announces.
-  if (node.dom!.tagName === "label") {
+  if (SUPPRESS_KEEP_INTERACTIVE.has(node.dom!.tagName)) {
     const promotedIds: string[] = [];
     for (const childId of node.childIds) {
       if (!hasInteractiveDescendant(childId, domNodes)) continue;

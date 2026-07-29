@@ -96,7 +96,7 @@ describe("extractA11yTree", () => {
     expect(btn!.a11y.name).toBe("Send");
   });
 
-  it("suppresses legend and summary nodes entirely (including children)", () => {
+  it("suppresses legend and summary nodes and their text-only children", () => {
     const root = createPage(`
       <fieldset>
         <legend>Credentials</legend>
@@ -119,6 +119,48 @@ describe("extractA11yTree", () => {
     const fieldset = allNodes.find((n) => n.a11y.role === "group");
     expect(fieldset).toBeDefined();
     expect(fieldset!.a11y.name).toBe("Credentials");
+  });
+
+  it("preserves interactive descendants inside a legend or summary", () => {
+    // The legend/summary text is consumed as the fieldset/details accessible
+    // name, so the text carriers are dropped — but a link or button nested
+    // inside is keyboard-reachable and must stay in the tree.
+    const root = createPage(`
+      <fieldset>
+        <legend>Payment <a href="/help">(help)</a></legend>
+        <input type="text" aria-label="Card number" />
+      </fieldset>
+      <details>
+        <summary>Details <button>Copy</button></summary>
+        <p>Hidden content</p>
+      </details>
+    `);
+
+    const { nodes } = extractA11yTree(root);
+    const allNodes = Array.from(nodes.values());
+
+    // legend and summary themselves are still suppressed
+    expect(allNodes.find((n) => n.dom.tagName === "legend")).toBeUndefined();
+    expect(allNodes.find((n) => n.dom.tagName === "summary")).toBeUndefined();
+
+    // ...but their interactive descendants survive
+    const helpLink = allNodes.find((n) => n.a11y.role === "link");
+    expect(helpLink).toBeDefined();
+    expect(helpLink!.a11y.name).toBe("(help)");
+
+    const copyButton = allNodes.find((n) => n.a11y.role === "button");
+    expect(copyButton).toBeDefined();
+    expect(copyButton!.a11y.name).toBe("Copy");
+
+    // The plain text in the legend/summary is not re-surfaced as a generic
+    const generics = allNodes.filter((n) => n.a11y.role === "generic");
+    expect(generics.find((n) => n.a11y.name === "Payment")).toBeUndefined();
+    expect(generics.find((n) => n.a11y.name === "Details")).toBeUndefined();
+
+    // The fieldset still takes its accessible name from the legend
+    const fieldset = allNodes.find((n) => n.a11y.role === "group");
+    expect(fieldset).toBeDefined();
+    expect(fieldset!.a11y.name).toContain("Payment");
   });
 
   it("does not duplicate label-for associated inputs", () => {
