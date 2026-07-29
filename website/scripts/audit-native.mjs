@@ -236,12 +236,66 @@ try {
   stopServer();
 }
 
+/**
+ * Read back what the run actually found, for printing.
+ *
+ * Necessary because `--output` sends the report to a FILE: the log gets
+ * progress lines, `baseline: N suppressed`, and `report written to …`, but
+ * never a finding. A failing CI job that says "see the findings above" is
+ * lying, and the reader burns time scrolling for something that was never
+ * emitted before concluding they have to download an artifact.
+ *
+ * Cheaper to prove than to argue: building this gate needed the artifact
+ * hand-parsed three separate times to see which links were unlabeled. That is
+ * the CI experience, reproduced.
+ */
+function readReport() {
+  try {
+    const report = JSON.parse(readFileSync(artifact, "utf8"));
+    const pages = report.pages ?? [];
+    return {
+      // Suppressed findings are the baseline doing its job — not news.
+      findings: pages.flatMap((page) =>
+        (page.findings ?? [])
+          .filter((f) => !f.suppressed)
+          .map((f) => ({ page: page.name, ...f })),
+      ),
+      errors: pages
+        .filter((page) => page.status === "error")
+        .map((page) => ({ page: page.name, error: page.error })),
+    };
+  } catch {
+    return null; // the artifact is the fallback; the paths below still print it
+  }
+}
+
+const MAX_PRINTED = 40;
+
+/** Print up to `MAX_PRINTED` lines, then say how many were held back. */
+function printLines(lines) {
+  for (const line of lines.slice(0, MAX_PRINTED)) console.error(line);
+  if (lines.length > MAX_PRINTED) {
+    console.error(`  … +${lines.length - MAX_PRINTED} more (see the artifact)`);
+  }
+}
+
 // Exit 1 — the site has findings the baseline hasn't accepted. The only case
 // where updating the baseline is a coherent thing to suggest.
 if (audited && code === 1 && !updating) {
+  const report = readReport();
+  console.error(`\nThe native tree disagrees with the site.\n`);
+  if (report?.findings.length) {
+    printLines(
+      report.findings.map(
+        (f) =>
+          `  [${f.severity}] ${f.page} — ${f.rule}: ${f.message}` +
+          (f.locator ? `\n      ${f.locator}` : ""),
+      ),
+    );
+    console.error("");
+  }
   console.error(
-    `\nThe native tree disagrees with the site. Findings above; full artifact at\n` +
-      `  ${artifact}\n\n` +
+    `Full artifact: ${artifact}\n\n` +
       `If a finding is accepted debt rather than a regression, re-run with\n` +
       `  pnpm --filter @real-a11y-dev/website audit:native:update\n` +
       `and commit the baseline — the diff is the record of what was accepted.\n`,
@@ -253,12 +307,18 @@ if (audited && code === 1 && !updating) {
 // pointing at the baseline here would send someone to record a broken page as
 // debt. Name the real remedy instead.
 if (audited && code === 2) {
+  const report = readReport();
   console.error(
     `\nThe audit could not finish — a page failed to load, or the CLI rejected\n` +
-      `its arguments. That is not a finding, and the baseline cannot absorb it.\n` +
-      `The per-page errors are above; the artifact records them per route at\n` +
-      `  ${artifact}\n`,
+      `its arguments. That is not a finding, and the baseline cannot absorb it.\n`,
   );
+  if (report?.errors.length) {
+    console.error("");
+    printLines(
+      report.errors.map((e) => `  ${e.page} — ${e.error ?? "unknown error"}`),
+    );
+  }
+  console.error(`\nFull artifact: ${artifact}\n`);
 }
 
 process.exit(code);
