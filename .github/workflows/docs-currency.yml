@@ -48,7 +48,11 @@ jobs:
       - name: Compute the surface plan
         id: plan
         run: |
-          git fetch --no-tags origin "$BASE_REF"
+          # Explicit refspec: actions/checkout leaves a narrow one behind, so a
+          # bare `git fetch origin <branch>` can update FETCH_HEAD without ever
+          # creating refs/remotes/origin/<branch> — which is the ref `plan`
+          # resolves. It refuses to run rather than guess, so this must be exact.
+          git fetch --no-tags origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
           node scripts/surface/index.mjs plan \
             --base "origin/$BASE_REF" --format markdown > plan.md
           # `changeset status` is unavailable without an install, so the version

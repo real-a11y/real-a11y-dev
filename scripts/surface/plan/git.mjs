@@ -17,23 +17,46 @@ async function git(repoRoot, args) {
   return stdout;
 }
 
+/** Whether a ref resolves at all. */
+export async function refExists(repoRoot, ref) {
+  try {
+    await git(repoRoot, [
+      "rev-parse",
+      "--verify",
+      "--quiet",
+      `${ref}^{commit}`,
+    ]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * The merge base, so the diff shows what THIS branch did rather than everything
  * that has landed on main since it forked. `git diff a...b` uses it implicitly;
  * `git show` needs it named.
+ *
+ * Returns null rather than falling back to `base` when there isn't one. The
+ * fallback looked harmless and wasn't: a base that doesn't resolve — a shallow
+ * clone, or a CI checkout whose refspec never created `refs/remotes/origin/…` —
+ * made every subsequent git call fail into its own catch, and the report came
+ * out as a confident "the entire surface is new". Silence is the one failure
+ * mode this tool can't afford, so the caller says so instead.
  */
 export async function mergeBase(repoRoot, base) {
   try {
     return (await git(repoRoot, ["merge-base", base, "HEAD"])).trim();
   } catch {
-    return base; // detached, shallow, or a base that isn't an ancestor
+    return null;
   }
 }
 
 /**
  * The manifest as of `ref`, or null when it didn't exist there — which is the
  * normal answer for a branch that forked before the manifest landed, and means
- * "everything is new" rather than "something is broken".
+ * "everything is new" rather than "something is broken". The caller has already
+ * established that `ref` resolves, so null here really is about the file.
  */
 export async function manifestAt(repoRoot, ref, path = "docs/surface.json") {
   try {

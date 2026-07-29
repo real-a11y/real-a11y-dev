@@ -27,9 +27,19 @@ export function buildReport(changes, touchedFiles, versions) {
         Number(a.touched) - Number(b.touched) || a.path.localeCompare(b.path),
     );
 
+  // Keyed off the CHANGE's kind, not the obligation's action. Only a removed
+  // command or tool becomes DEPRECATE; a removed *flag* is an UPDATE to whatever
+  // scenario used it — but it is still a removal, so it is still bounded by the
+  // last version that had it. Keying off the action stamped removed flags with
+  // `Valid from`, which is precisely the transposition this stamp exists to
+  // prevent.
   const scenarios = scenarioObligations(changes).map((o, i) => ({
     ...o,
-    stamp: versionStamp(changes[i].path, versions, o.action === "DEPRECATE"),
+    stamp: versionStamp(
+      changes[i].path,
+      versions,
+      changes[i].kind === "removed",
+    ),
   }));
 
   return {
