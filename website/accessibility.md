@@ -1,6 +1,6 @@
 # Accessibility Statement
 
-_Last updated: 2026-04-18_
+_Last updated: 2026-07-28_
 
 Real A11y builds accessibility tooling. Holding our own website, docs, and products to the same standard is table stakes — and also the best dogfood there is.
 
@@ -17,6 +17,7 @@ The accessibility tree the tools surface is built on top of the same HTML/ARIA s
 - The tree view in the Chrome extension uses the WAI-ARIA `tree` pattern. On very large pages (10K+ elements) the virtualization gap can cause noticeable delay for screen-reader users. Tracked as an open issue.
 - The "Curtain" mode (hide page visuals to audit purely from the tree) intentionally hides page content; this is a feature, not a regression, but it is incompatible with external screen-reader workflows that rely on sighted co-operation.
 - The Storybook addon panel inherits whatever theme Storybook provides; contrast on custom Storybook themes is the theme author's responsibility.
+- This site's automated checks read the accessibility tree computed **in the page**, by axe and by our own DOM walk. Chromium's own tree is stricter, and where the two disagree the browser is what assistive tech actually gets. Three unlabeled links shipped on this site's home page because both in-page implementations derived a name from content that Chromium refused to derive. Those links are fixed, but the gap is not: the native tree is read by our CLI, MCP server, and PR diff bot, and is not yet part of this site's own test suite.
 
 ## How we test
 

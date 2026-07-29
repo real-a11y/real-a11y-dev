@@ -199,3 +199,46 @@ test.describe("tab sequence snapshot", () => {
     });
   }
 });
+
+// The home page's linked feature cards must carry an explicit accessible
+// name. Asserted on the DOM rather than through a snapshot, because the
+// snapshots above could not have caught the bug this guards.
+//
+// A card with a `link:` renders as `<a class="VPFeature">` around an
+// `<article>`. Chromium computes NO name for it — `article` does not support
+// name-from-content, so the walk stops before the `<h2>`. Three of these
+// shipped, and a screen reader announced "link" three times with nothing to
+// tell the Chrome extension from the CLI from the MCP server.
+//
+// `auditSnapshot()` runs in the page, and the in-page walk is more permissive
+// than Chromium: it happily concatenated the whole card into a ~300-character
+// name, so the baseline looked populated the entire time the page was broken.
+// Only the native tree — Chromium's own, which is what assistive tech gets —
+// disagreed, and nothing here read it. Asserting the attribute is producer-
+// independent: it holds whichever tree you ask.
+//
+// See `.vitepress/theme/components/LabeledFeature.vue`.
+test.describe("home feature cards", () => {
+  test("every linked card has an explicit accessible name", async ({
+    page,
+  }) => {
+    await page.goto("/", { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    const links = page.locator("a.VPFeature");
+    const count = await links.count();
+    // A count assertion, not just a loop: `features:` is frontmatter, and a
+    // loop over zero elements passes silently if the selector ever goes stale.
+    expect(count).toBe(3);
+
+    for (let i = 0; i < count; i++) {
+      const link = links.nth(i);
+      const label = await link.getAttribute("aria-label");
+      expect(label, `feature card ${i + 1} has no aria-label`).toBeTruthy();
+      // WCAG 2.5.3: the name must contain the visible label. The card's
+      // heading is what a voice-control user would say.
+      const title = (await link.locator("h2.title").innerText()).trim();
+      expect(label).toContain(title);
+    }
+  });
+});
