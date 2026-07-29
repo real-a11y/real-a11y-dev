@@ -94,20 +94,29 @@ export function requiredDocs(changes) {
   };
 
   for (const change of changes) {
-    // A brand-new package is its own, much larger, obligation.
-    if (change.kind === "added" && /^packages\.[^.]+$/.test(change.path)) {
-      const name = change.path.slice("packages.".length);
-      if (change.detail === "published") {
-        for (const doc of [...NEW_PACKAGE_DOCS, packagePage(name)]) {
-          require_(
-            doc,
-            change.what,
-            "a brand-new published package lands here",
-          );
-        }
+    // A package becoming publicly available is its own, much larger,
+    // obligation — and it happens two ways. A brand-new published package is
+    // the obvious one; a package that already existed privately and is now
+    // published is the same event to a reader, and moves no other field.
+    const newlyPublished =
+      (change.kind === "added" &&
+        /^packages\.[^.]+$/.test(change.path) &&
+        change.detail === "published") ||
+      (change.kind === "changed" &&
+        /^packages\.[^.]+\.private$/.test(change.path) &&
+        change.detail === "private → published");
+
+    if (newlyPublished) {
+      const name = change.path
+        .slice("packages.".length)
+        .replace(/\.private$/, "");
+      for (const doc of [...NEW_PACKAGE_DOCS, packagePage(name)]) {
+        require_(doc, change.what, "a newly published package lands here");
       }
       continue;
     }
+    // Any other package-level add/remove has no doc rule of its own.
+    if (/^packages\.[^.]+$/.test(change.path)) continue;
 
     const rule = RULES.find((r) => r.match.test(change.path));
     if (!rule) continue;

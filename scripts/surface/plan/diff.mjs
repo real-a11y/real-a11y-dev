@@ -250,6 +250,22 @@ function diffPackages(base, head) {
       continue;
     }
     const was = before.get(name);
+
+    // Publishing a package that already existed privately is the same event as
+    // adding a published one — the seven-document obligation, the home page,
+    // all of it — and it moves no other field, so nothing else here would
+    // notice. The reverse (unpublishing) matters just as much: docs that tell
+    // people to `npm install` it are now wrong.
+    if (was.private !== pkg.private) {
+      changes.push(
+        changed(
+          `packages.${name}.private`,
+          `\`${name}\` is now ${pkg.private ? "private" : "published"}`,
+          pkg.private ? "published → private" : "private → published",
+        ),
+      );
+    }
+
     const wasExports = (was.exports ?? []).join();
     const nowExports = (pkg.exports ?? []).join();
     if (wasExports !== nowExports) {

@@ -69,7 +69,17 @@ export function renderText(report) {
     out.push(`  ${d.touched ? "✓" : "!"} ${d.path}`);
     if (!d.touched) out.push(`      ${d.why}`);
   }
-  if (report.missingDocs.length === 0) {
+  // "Nothing in scope" and "everything in scope is done" are opposite facts and
+  // an empty `missingDocs` covers both. Reporting the reassuring one for the
+  // first is how a contributor concludes their docs are complete for a change
+  // this tool simply has no rule for.
+  if (report.docs.length === 0) {
+    out.push(
+      "  — no documented page maps to these changes. That may be right, or it",
+      "    may be a gap in the map (scripts/surface/plan/obligations.mjs);",
+      "    check §4's table yourself before concluding there's nothing to write.",
+    );
+  } else if (report.missingDocs.length === 0) {
     out.push("  — every doc in scope was touched on this branch.");
   }
 
@@ -206,6 +216,10 @@ export function renderMarkdown(report, base) {
     for (const d of report.missingDocs) {
       out.push(`- \`${d.path}\` — ${d.why}`);
     }
+  } else if (report.docs.length === 0) {
+    out.push(
+      "⚠️ **No documented page maps to these changes.** That may be right, or a gap in the map (`scripts/surface/plan/obligations.mjs`) — worth checking §4's table before concluding there's nothing to write.",
+    );
   } else {
     out.push("✅ Every doc in scope was touched on this branch.");
   }
