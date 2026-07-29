@@ -172,9 +172,10 @@ for (const [signal, code] of [
 }
 
 let code;
-// Whether the audit itself ran. A non-zero `code` means two very different
-// things — the site has findings, or the run never got off the ground — and
-// only the first one is worth printing baseline advice about.
+// Whether the audit itself ran. Non-zero is not one outcome but three, and the
+// remedy differs for each — see the exit contract in `packages/cli/src/exit.ts`:
+// 1 is findings, 2 is a usage/navigation/engine error (a route that failed to
+// load is the realistic one here), and a throw before the CLI starts is neither.
 let audited = false;
 try {
   await waitForOurServer(`${BASE}/`, died);
@@ -227,18 +228,36 @@ try {
   // rejection print a stack that reads like a site failure — this and a real
   // finding have nothing in common but the exit code.
   console.error(`\nThe native audit could not run: ${err.message}`);
-  code = 1;
+  // 2, not 1, to speak the CLI's own exit language: setup failure, not
+  // findings. Nothing reads it but the shell, and the shell should not be told
+  // this site has accessibility problems when nobody ever looked.
+  code = 2;
 } finally {
   stopServer();
 }
 
-if (audited && code !== 0 && !updating) {
+// Exit 1 — the site has findings the baseline hasn't accepted. The only case
+// where updating the baseline is a coherent thing to suggest.
+if (audited && code === 1 && !updating) {
   console.error(
     `\nThe native tree disagrees with the site. Findings above; full artifact at\n` +
       `  ${artifact}\n\n` +
       `If a finding is accepted debt rather than a regression, re-run with\n` +
       `  pnpm --filter @real-a11y-dev/website audit:native:update\n` +
       `and commit the baseline — the diff is the record of what was accepted.\n`,
+  );
+}
+
+// Exit 2 — the audit ran but could not complete: a route that failed to load,
+// a navigation timeout, a bad invocation. There are no findings to accept, so
+// pointing at the baseline here would send someone to record a broken page as
+// debt. Name the real remedy instead.
+if (audited && code === 2) {
+  console.error(
+    `\nThe audit could not finish — a page failed to load, or the CLI rejected\n` +
+      `its arguments. That is not a finding, and the baseline cannot absorb it.\n` +
+      `The per-page errors are above; the artifact records them per route at\n` +
+      `  ${artifact}\n`,
   );
 }
 
