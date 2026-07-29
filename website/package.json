@@ -7,7 +7,9 @@
     "dev": "vitepress dev",
     "build": "vitepress build",
     "preview": "vitepress preview",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "audit:native": "node scripts/audit-native.mjs",
+    "audit:native:update": "node scripts/audit-native.mjs --update-baseline"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",

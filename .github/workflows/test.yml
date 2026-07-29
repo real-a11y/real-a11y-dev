@@ -231,6 +231,25 @@ jobs:
       - name: Run axe + a11y snapshot suite
         run: pnpm --filter @real-a11y-dev/website test:e2e
 
+      # The step above computes the accessibility tree IN THE PAGE — axe with
+      # its own implementation, `@real-a11y-dev/testing` with a DOM walk. This
+      # one reads Chromium's, through our own CLI. They disagree, and when they
+      # do the browser is what assistive tech gets: three unlabeled links
+      # shipped on the home page past a green run of the step above, because
+      # both in-page implementations derived a name Chromium refused to (#264).
+      # Runs after, not instead: it sees names the others can't, and they see
+      # contrast and ARIA rules it doesn't.
+      - name: Audit the built site through Chromium's own a11y tree
+        run: pnpm --filter @real-a11y-dev/website audit:native
+
+      - name: Upload the native audit artifact on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: website-native-audit
+          path: website/test-results/native-audit.json
+          retention-days: 7
+
       - name: Upload Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@v4
