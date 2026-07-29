@@ -81,6 +81,33 @@ function hasAccessibleName(el: Element): boolean {
   );
 }
 
+function thHeaderRole(el: Element): string {
+  // An explicit scope decides on its own; colgroup/rowgroup scope the same
+  // axis as col/row for role purposes.
+  const scope = el.getAttribute("scope");
+  if (scope === "col" || scope === "colgroup") return "columnheader";
+  if (scope === "row" || scope === "rowgroup") return "rowheader";
+
+  // No scope: HTML-AAM's auto algorithm looks at where the cell sits. A
+  // header row (<thead>, or the table's first row when there is no <thead>)
+  // labels columns; anything else labels its row. Ancestor walk only — no
+  // layout reads.
+  const row = el.parentElement;
+  if (!row || row.tagName.toLowerCase() !== "tr") return "rowheader";
+
+  if (row.parentElement?.tagName.toLowerCase() === "thead")
+    return "columnheader";
+
+  // Otherwise only the table's very first row heads columns. When a <thead>
+  // exists its row wins that check, so a <th> leading a body row stays a
+  // rowheader (the "Name | Ada" leading-cell pattern). A <tr> always precedes
+  // its own descendants in document order, so a nested table can't win here.
+  const table = row.closest("table");
+  return table && row === table.querySelector("tr")
+    ? "columnheader"
+    : "rowheader";
+}
+
 function isLandmarkContext(el: Element): boolean {
   // header/footer only map to banner/contentinfo when not inside
   // article, aside, main, nav, or section
@@ -213,8 +240,7 @@ const ROLE_MAP: Record<string, RoleResolver> = {
   template: "generic",
   textarea: "textbox",
   tfoot: "rowgroup",
-  th: (el) =>
-    el.getAttribute("scope") === "col" ? "columnheader" : "rowheader",
+  th: thHeaderRole,
   thead: "rowgroup",
   time: "time",
   tr: "row",
