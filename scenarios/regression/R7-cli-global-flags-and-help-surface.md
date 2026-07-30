@@ -8,7 +8,7 @@ priority: P1
 status: Active
 validFrom: "cli ≥ 0.1.0-beta.1. Steps 8–10 (act-command flag rejections) from cli ≥ 0.1.0-beta.2"
 validUntil: ""
-expected: "`--help` exits 0 with usage for EVERY command `real-a11y --help` lists — enumerate from that output rather than hardcoding a count, so the check can't rot. Unknown flag/command → exit 2 with a clear error; -o writes the file. A flag the help advertises must never be an unimplemented error, and a flag a command would ignore must not be accepted (the act commands take no --producer and no --root)."
+expected: "`--help` exits 0 with usage for EVERY command `real-a11y --help` lists — enumerate from that output rather than hardcoding a count, so the check can't rot. Unknown flag/command → exit 2 with a clear error; -o writes the file. A flag the help advertises must never be an unimplemented error, and a flag a command would ignore must not be accepted (the act commands take no --producer and no --root). Both exit 2, but only --root is refused BY NAME — --producer has no handler since the axis was deleted, so it takes the generic parser path."
 covers:
   - cli.exitCodes
 notion: "https://app.notion.com/p/3aa1c354b0b58191b674c0cca53141c1"
@@ -48,8 +48,14 @@ Then, for each command name, run `real-a11y <c> --help` and record its exit code
 - **6** — exit `2` explaining where pages come from
 - **7** — no flag in the help is an unimplemented error, and none is silently
   ignored
-- **8** — rejected by name. The act commands take neither, because they work
-  against the whole-document native tree
+- **8** — both exit `2`, but **only `--root` is refused by name.** `assertRootApplies`
+  in `run.ts` exists for exactly that: it pre-empts the strict parser so a leftover
+  `--root` gets "there is nothing for --root to scope" plus the remedy, rather than
+  "Unknown option", which reads like a typo instead of a deliberate removal.
+  `--producer` has no such handler — the axis was deleted outright at #258, so no
+  command declares it and the generic parser error is what you get. Assert the exit
+  code for both and the named message for `--root` only; demanding one for
+  `--producer` fails a healthy release
 - **9** — rejected **by name** — "`--text` applies to `type`" — not a generic
   parse error about positional arguments
 - **10** — exit `2` naming the unknown verb, and **no browser launched**. Argument
@@ -58,8 +64,11 @@ Then, for each command name, run `real-a11y <c> --help` and record its exit code
 ## Why this exists
 
 Previously asserted "all 9 commands" and was wrong the moment the act verbs
-landed — 14 today, 13 after the migration drops `tabs`. Enumerating from `--help`
-is the fix: the row now can't go stale from a count.
+landed. **Fourteen today, and it stays fourteen** — an earlier version of this row
+predicted 13 "after the migration drops `tabs`", which is not what happened: #258
+kept `tabs` deliberately and permanently, because native knows whether a node is
+focusable but cannot produce the sequence (see R4). Enumerating from `--help` is the
+fix, and is why the row survived being wrong about that twice.
 
 Steps 7–9 encode the house rule that a flag which would do nothing must be
 **refused**, with the remedy named. Accepting-and-ignoring is the worst option
@@ -72,8 +81,9 @@ Step 10 matters for cost: parse failures must never cost a browser launch.
 
 Was "all 9 commands" — wrong since the act verbs landed. 14 today (install, audit,
 inspect, tree, outline, tabs, list, interact, click, type, focus, login, snapshot,
-diff); 13 after the native-only migration drops `tabs`. Enumerating from `--help`
-is why this row no longer needs editing when that changes.
+diff), and it stays 14: the predicted drop to 13 never came, because #258 kept
+`tabs`. Enumerating from `--help` is why this row no longer needs editing when the
+count moves — and why being wrong about the prediction cost nothing.
 
 **On `covers:`** — this row touches every command's `--help`, but it is
 deliberately *not* listed as covering them. `covers` means "exercises the

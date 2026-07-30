@@ -6,7 +6,7 @@ area: CLI
 type: Automated
 priority: P0
 status: Active
-validFrom: "cli ≥ 0.1.0-beta.1 (installed from the registry on the `beta` tag). `tabs` and --producer/--root drop out at the native-only migration"
+validFrom: "cli ≥ 0.1.0-beta.1 (installed from the registry on the `beta` tag). Post-#258: --producer is gone and --root survives on `tabs` alone. `tabs` itself was predicted to go and did NOT — it is permanent."
 validUntil: ""
 expected: "audits a real site over the network; exit codes correct; every view command `real-a11y --help` lists returns real content — enumerate from that output rather than a hardcoded set"
 twin:
@@ -68,11 +68,16 @@ Step 6 deserves attention: an unreachable page must **never** report as clean. E
 page that failed to load is the single most dangerous wrong answer this tool can give,
 because it makes a broken CI job look green.
 
-**Transition:** the native-only migration removes `tabs` and the `--producer` / `--root`
-flags. Enumerating from `--help` (step 3) is what keeps this row correct across that change.
+**Resolved, and one half went the other way.** The native-only migration (#258) landed:
+`--producer` is gone entirely, and `--root` survives on `tabs` alone. But `tabs` itself
+was predicted to go and **did not** — native knows whether a node is focusable and
+cannot produce the _sequence_, so it is the only command that can answer the question
+at all (see R4). It ships, permanently, and must return real content here.
+
+Enumerating from `--help` (step 3) is what carried this row across a change it was
+half wrong about, which is the argument for never hardcoding the list.
 
 ## Notes
 
-Native-only migration removes `tabs` (native has no tab order) and the `--producer` /
-`--root` flags. Until it lands, `tabs` still ships and should still return real content.
-Enumerating from `--help` is what keeps this row honest across the change.
+This row previously read "until it lands, `tabs` still ships" — a forecast that
+outlived the migration and pointed the wrong way about `tabs`. Restated as settled.

@@ -62,7 +62,11 @@ page.
   is where it **landed**
 - **8** — exit `0`; the diff shows the focus move, not a bare `a11y.states.focused` flip
 - **9** — parses; `steps`, `diff` and `navigated` present; `url` is the final address
-- **10** — exit `2`, rejected by name. These commands accept neither flag
+- **10** — both exit `2`; these commands accept neither flag. Only `--root` is
+  refused **by name** (`assertRootApplies` in `run.ts` pre-empts the parser so a
+  leftover `--root` gets the reason and the remedy). `--producer` has no handler —
+  the axis was deleted at #258 rather than deprecated — so it exits through the
+  generic parser path. Assert exit `2` for both, the named message for `--root` only
 
 ## Why this exists
 

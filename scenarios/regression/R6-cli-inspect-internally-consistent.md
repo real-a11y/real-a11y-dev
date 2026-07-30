@@ -6,7 +6,7 @@ area: CLI
 type: Automated
 priority: P1
 status: Active
-validFrom: "cli ≥ 0.1.0-beta.1. Tab order drops out of the output at the native-only migration — accepted loss, not a regression"
+validFrom: "cli ≥ 0.1.0-beta.1. Tab order LEFT the output at the native-only migration (#258) — an accepted loss, already landed, not a regression to file. Steps below assume the post-#258 output."
 validUntil: ""
 expected: "one output containing findings + tree + outline, all describing the same instant — the point is that the views cannot disagree, so check them against each other, not just for presence"
 covers:
@@ -24,20 +24,26 @@ widget), so a multi-extraction implementation would visibly disagree with itself
    - every finding's locator points at a node the **tree** section actually
      contains
    - every heading in the **outline** appears in the tree with the same level
-   - _(while it ships)_ every tab stop in the **tab order** appears in the tree
+   - there is **no tab-order section** to cross-read — see Expected 1
 3. `real-a11y inspect <url> --include-generic`
 4. `real-a11y inspect <url> --format json`
-5. `real-a11y inspect <url> --producer native` _(rejected today; see Why)_
+5. `real-a11y inspect <url> --producer native`
 6. `real-a11y inspect <url1> <url2>`
 
 ## Expected
 
-- **1** — one output: findings **plus** tree **plus** outline (plus tab order
-  until the migration). Views print first, the gate outcome last
+- **1** — one output: findings **plus** tree **plus** outline. **No tab order** —
+  that left at #258 and is not coming back, because pairing a native tree with a
+  second, DOM-derived tab-order read would break the one promise this command
+  makes. `real-a11y tabs` is the tab sequence. Views print first, the gate outcome
+  last
 - **2** — no section contradicts another. This is the point of the command: they
   all describe the same instant
 - **4** — one parseable document
-- **5** — refused with guidance rather than silently ignored
+- **5** — exit `2`. The flag does not exist — #258 deleted the producer axis
+  outright — so this is the strict parser's generic unknown-option error, not a
+  guidance-carrying refusal. `--root` is the only flag with a named one. Assert the
+  exit code, not the wording
 - **6** — refused; `inspect` is single-URL
 
 ## Why this exists
@@ -47,13 +53,21 @@ separately on a page that mutates and they _will_ disagree — each is a fresh
 extraction at a different moment. Step 2 is therefore the actual test; step 1
 alone would pass a broken implementation that just calls the four views in a row.
 
-**Transition:** the native-only migration makes `inspect` **lose tab order**,
-because the native producer has none. That is an accepted loss recorded when
-native-only was chosen — do not file it as a regression. Until it lands, tab order
-is still present and still has to agree with the rest.
+**Resolved:** the native-only migration **has landed**, and `inspect` lost tab order
+with it. `commands/inspect.ts` states the reasoning directly — a native tree carries
+no tab order, and pairing one with a second, DOM-derived read would break exactly the
+same-instant promise the command exists for. An accepted loss, recorded when
+native-only was chosen; do not file it as a regression, and do not look for the
+section.
 
 ## Notes
 
-Native-only migration: `inspect` LOSES tab order (the native producer has none).
-Accepted loss, not a regression — don't file it. Until that PR lands, tab order is
-still in the output and should still be consistent with the rest.
+This row previously described the loss as pending ("until it lands, tab order is
+still present"), which outlived the migration by several releases and would have sent
+a runner looking for a section that no longer prints. Restated as settled, in the
+same style R4 and R9 use for their own resolved predictions.
+
+Worth noting what the mechanical checks did and didn't do here: the coverage gate
+confirmed `inspect` still ships and still has a scenario. It cannot see that a step
+inside the row describes output the command stopped producing — that granularity is
+still human.
