@@ -34,6 +34,7 @@ import { z } from "zod";
 
 import {
   CheckpointStore,
+  differentUrl,
   diffCheckpointPages,
   diffLabeledCheckpoints,
   renderDiff,
@@ -347,8 +348,20 @@ export function buildServer(
   // open preview → diff_findings). Only close_browser clears them, as session
   // hygiene. (Contrast Axis-A tree-checkpoints, which are page-instance-bound.)
   const checkpoints = new CheckpointStore();
-  // Last-opened URL, recorded on a checkpoint's (cosmetic, redacted) url field.
-  let currentUrl = "";
+  // Where `open_page` last put us. Only a fallback: `pageUrl()` prefers the
+  // live address, because the two are not the same thing once an act tool has
+  // clicked a link.
+  let openedUrl = "";
+  /**
+   * The address a checkpoint should record — read at extraction time, not at
+   * open time.
+   *
+   * `click_element` can navigate, and after it does, `openedUrl` names the page
+   * the session STARTED on. Recording that would put the wrong address on the
+   * page, and — since `differentUrl` compares these — would leave a diff across
+   * two genuinely different pages looking like one page twice.
+   */
+  const pageUrl = () => session.currentUrl() ?? openedUrl;
   // Axis-A tree checkpoint: the captured tree lives in the PAGE (node ids are
   // realm-bound). The server only remembers which root it was captured with, so
   // the diff re-extracts like-for-like instead of silently widening to <body>.
@@ -417,7 +430,7 @@ export function buildServer(
         device,
         viewport,
       });
-      currentUrl = info.url;
+      openedUrl = info.url;
       // Navigation replaces the page bundle, which wipes the in-page tree
       // checkpoint — drop the remembered root so server state stays honest.
       treeCheckpointRoot = undefined;
@@ -626,7 +639,7 @@ export function buildServer(
       // producer. `tabOrder: false` is the other half: a native page omits the
       // tabs view rather than storing an empty one.
       const snap = projectNativeTree(await session.nativeTree(), { rules });
-      const page = buildSnapshotPage(name, currentUrl, snap, {
+      const page = buildSnapshotPage(name, pageUrl(), snap, {
         root: "body",
         tabOrder: false,
       });
@@ -661,7 +674,7 @@ export function buildServer(
         // the checkpoint was saved.
         rules: base.rules as A11yRule[] | undefined,
       });
-      const head = buildSnapshotPage(name, currentUrl, snap, {
+      const head = buildSnapshotPage(name, pageUrl(), snap, {
         root: "body",
         tabOrder: false,
       });
@@ -669,7 +682,11 @@ export function buildServer(
       // always whole-document. Say so — silently widening turns everything
       // outside the old subtree into NEW findings, the class that gates CI.
       const note = scopeMismatch(base.page, head);
-      const body = renderDiff(diffCheckpointPages(base.page, head));
+      // Checkpoints survive navigation by design, so the agent may well have
+      // moved to another page between saving and diffing.
+      const body = renderDiff(diffCheckpointPages(base.page, head), {
+        differentUrl: differentUrl(base.page, head),
+      });
       return text(note ? `${note}\n\n${body}` : body, RULES_HINT);
     },
   );
@@ -692,8 +709,8 @@ export function buildServer(
       // side may have been imported from a scoped, DOM-era artifact.
       const note = scopeMismatch(b.page, h.page);
       const rendered = renderDiff(diffLabeledCheckpoints(b.page, h.page), {
-        base,
-        head,
+        labels: { base, head },
+        differentUrl: differentUrl(b.page, h.page),
       });
       return text(note ? `${note}\n\n${rendered}` : rendered, RULES_HINT);
     },

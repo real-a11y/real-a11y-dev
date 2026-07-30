@@ -293,6 +293,17 @@ export interface A11ySession {
    * values or field content. Chromium only.
    */
   act(request: ActionRequest): Promise<ActionResult>;
+  /**
+   * Where the page is **now** — see {@link BrowserSession.currentUrl}. On the
+   * interface because a caller that records a URL alongside an extraction has to
+   * read it at extraction time: a dispatched action can navigate, so the
+   * address `open()` returned is the one the run *started* at, not the one the
+   * data came from.
+   *
+   * Synchronous and `undefined`-when-closed so an implementation never has to
+   * touch the page to answer it.
+   */
+  currentUrl(): string | undefined;
   close(): Promise<void>;
 }
 

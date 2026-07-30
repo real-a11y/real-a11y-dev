@@ -117,8 +117,12 @@ link "audit_page"
 button "Copy Code"
 generic
 link "tree checkpoints"
+link "click_element"
 button "Copy Code"
 generic
+button "Copy Code"
+generic
+link "diff_findings"
 link "diff_findings"
 link "diff_checkpoints"
 link "findings checkpoints"

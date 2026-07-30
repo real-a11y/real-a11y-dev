@@ -556,6 +556,11 @@ main
   paragraph "Whole-document, and built from the same producer uses — which is what lets a checkpoint captured here be diffed by the CLI, and vice versa. The exported artifact records which views it measured () and omits the tabs view rather than storing an empty one."
     code "real-a11y snapshot"
     code "meta.views"
+  paragraph "The recorded URL is read , not when ran — a can navigate, so those are not the same address. It is what the diff tools compare to decide whether two sides are the same page."
+    strong "when the checkpoint is taken"
+    code "open_page"
+    link "click_element"
+      code "click_element"
   heading "diff_findings" (level 3)
     code "diff_findings"
   paragraph
@@ -574,6 +579,12 @@ main
   paragraph "The headline cross-deploy workflow — diff prod against a preview in one session:"
   button "Copy Code"
   code
+  paragraph "That works because only the differs. Checkpoints deliberately survive navigation, so it is just as easy to check one route and diff another by accident — and there the structural summary would report the whole page as rewritten. When the two sides are different pages, the diff says so and drops that section:"
+    strong "origin"
+  button "Copy Code"
+  code
+  paragraph ""Different page" means the differs. Host, port and scheme are ignored on purpose: that is exactly the prod-vs-preview diff above, and the structural summary is the whole point of it. An address that can't be parsed is never treated as a mismatch — silently dropping the section on a guess would be worse than printing a noisy one."
+    strong "path, query or fragment"
   heading "diff_checkpoints" (level 3)
     code "diff_checkpoints"
   paragraph
@@ -589,6 +600,9 @@ main
     listitem "— string — required."
       strong
         code "head"
+  paragraph "Same different-page rule as — two checkpoints of unrelated routes diff their findings and skip the structural summary."
+    link "diff_findings"
+      code "diff_findings"
   heading "list_checkpoints" (level 3)
     code "list_checkpoints"
   paragraph
