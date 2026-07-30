@@ -113,7 +113,18 @@ export function renderText(report) {
     out.push(`      ${s.note}`);
     if (s.stamp) out.push(`      ${s.stamp.text}`);
     if (s.ids.length) {
-      out.push(`      covered by: ${s.ids.join(", ")}`);
+      const label = (id) =>
+        s.deprecated?.includes(id) ? `${id} (Deprecated)` : id;
+      out.push(`      covered by: ${s.ids.map(label).join(", ")}`);
+      // A retired row is not coverage. `checkScenarios` already treats
+      // deprecated-only as a gap, so saying so here keeps the two halves of the
+      // same tool from disagreeing about the same fact.
+      if (s.deprecated?.length && s.deprecated.length === s.ids.length) {
+        out.push(
+          `      ⚠ every row naming this is Deprecated — that is a coverage gap,`,
+          `        not coverage. pnpm surface:scenarios will fail on it.`,
+        );
+      }
       // Always say which side of done this is on. Suppressing the line when
       // EVERY covering row was outstanding made "nothing updated yet" and
       // "all of them updated" render identically — the same collapse of two
@@ -312,11 +323,17 @@ export function renderMarkdown(report, base) {
     let line = `- **${s.action}** — ${s.subject}${stampMarkdown(s.stamp)}  \n  ${s.note}`;
     if (s.ids.length) {
       // Same rule as the text renderer: never let "none updated" and "all
-      // updated" produce the same line.
+      // updated" produce the same line, and never present a retired row as
+      // coverage.
       const outstanding = s.idsUntouched.length
         ? ` — ⚠️ still untouched: ${s.idsUntouched.map((i) => `\`${i}\``).join(", ")}`
         : " — ✅ all touched on this branch";
-      line += `  \n  Covered by ${s.ids.map((i) => `\`${i}\``).join(", ")}${outstanding}`;
+      const label = (i) =>
+        s.deprecated?.includes(i) ? `\`${i}\` _(Deprecated)_` : `\`${i}\``;
+      line += `  \n  Covered by ${s.ids.map(label).join(", ")}${outstanding}`;
+      if (s.deprecated?.length && s.deprecated.length === s.ids.length) {
+        line += `  \n  ⚠️ **Every row naming this is Deprecated** — a coverage gap, not coverage. \`pnpm surface:scenarios\` will fail on it.`;
+      }
     }
     if (s.twins.length) {
       line += `  \n  Twin${s.twins.length > 1 ? "s" : ""} ${s.twins.map((i) => `\`${i}\``).join(", ")} assert the same subject at the other altitude.`;

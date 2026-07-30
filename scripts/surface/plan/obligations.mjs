@@ -174,26 +174,53 @@ export function requiredDocs(changes) {
  * prefix of the change path counts. The dot guard stops `cli.commands.audit`
  * from appearing to cover `cli.commands.audit-extra`.
  *
- * Twins ride along on purpose. A pre-publish row and its post-publish
- * counterpart assert the same subject at two altitudes, so a change that
- * invalidates one almost always invalidates the other — and the one people
- * forget is whichever suite they aren't currently running.
+ * Twins ride along, but ONLY the ones the manifest can't speak for. A twin that
+ * covers this path is already in `direct`, so re-listing it says nothing; a twin
+ * that covers other paths is genuinely unrelated to this change and naming it is
+ * noise. `twin` is not 1:1 and a broad row makes that concrete: D2 covers six
+ * commands and twins both R3 (audit) and R4 (the views), so pulling in every twin
+ * reported R3 — the audit exit-code row — for a change to a `tree` flag.
+ *
+ * What's left is the case worth surfacing: a twin with NO `covers` at all. The
+ * extension and docs rows are like this, because the extension is private and
+ * prose has no manifest path, so the twin link is the only signal that anything
+ * over there is affected.
+ *
+ * Deprecated rows are reported but marked. `checkScenarios` treats
+ * deprecated-only coverage as a coverage GAP, so letting `plan` present a retired
+ * row as coverage would have the two halves of the same tool disagree — and would
+ * tell an author a change is covered by something nobody runs.
  */
 function coveringScenarios(path, scenarios) {
-  const direct = scenarios.filter((s) =>
+  const covered = (s) =>
     (s.covers ?? []).some(
       (entry) => entry === path || path.startsWith(`${entry}.`),
-    ),
-  );
+    );
+
+  const direct = scenarios.filter(covered);
   const ids = new Set(direct.map((s) => s.id));
+  const byId = new Map(scenarios.map((s) => [s.id, s]));
+
   const twins = new Set();
   for (const s of direct) {
-    for (const t of s.twin ?? []) if (!ids.has(t)) twins.add(t);
+    for (const t of s.twin ?? []) {
+      if (ids.has(t)) continue;
+      const other = byId.get(t);
+      // Unknown ids are `checkScenarios`' problem, not this report's.
+      if (other && (other.covers ?? []).length === 0) twins.add(t);
+    }
   }
+
+  const deprecated = direct
+    .filter((s) => s.status !== "Active")
+    .map((s) => s.id)
+    .sort(byIdOrder);
+
   return {
     ids: [...ids].sort(byIdOrder),
     twins: [...twins].sort(byIdOrder),
-    active: direct.filter((s) => s.status === "Active").length,
+    deprecated,
+    active: direct.length - deprecated.length,
   };
 }
 
@@ -236,7 +263,7 @@ export function scenarioObligations(changes, scenarios) {
 
     const found = resolvable
       ? coveringScenarios(change.path, scenarios)
-      : { ids: [], twins: [], active: 0 };
+      : { ids: [], twins: [], deprecated: [], active: 0 };
 
     let action;
     let note;
@@ -245,10 +272,14 @@ export function scenarioObligations(changes, scenarios) {
       action = "ADD";
       // A brand-new capability that something already covers means a scenario
       // was written ahead of the code — worth saying, because the obligation is
-      // then to check that row rather than to write one.
-      note = found.ids.length
+      // then to check that row rather than to write one. Keyed on ACTIVE rows:
+      // a retired row claiming the capability is not coverage, it is the gap
+      // `checkScenarios` is about to fail on.
+      note = found.active
         ? "a new capability — and these rows already claim to cover it, so confirm they actually assert the shipped behaviour"
-        : "a capability a user can invoke, with no scenario covering it yet";
+        : found.deprecated.length
+          ? "a capability a user can invoke, covered only by Deprecated rows — write a live one"
+          : "a capability a user can invoke, with no scenario covering it yet";
     } else if (change.kind === "removed" && isCapability) {
       action = "DEPRECATE";
       note =
@@ -273,6 +304,7 @@ export function scenarioObligations(changes, scenarios) {
       note,
       ids: found.ids,
       twins: found.twins,
+      deprecated: found.deprecated,
       resolvable,
     });
   }
