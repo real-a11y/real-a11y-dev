@@ -52,12 +52,31 @@ jobs:
           # bare `git fetch origin <branch>` can update FETCH_HEAD without ever
           # creating refs/remotes/origin/<branch> — which is the ref `plan`
           # resolves. It refuses to run rather than guess, so this must be exact.
-          git fetch --no-tags origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
-          node scripts/surface/index.mjs plan \
-            --base "origin/$BASE_REF" --format markdown > plan.md
-          # `changeset status` is unavailable without an install, so the version
-          # stamps degrade to "no pending changeset" — the obligations, which
-          # are the point, do not depend on it.
+          git fetch --no-tags origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF" || true
+
+          # `plan` exits non-zero when it can't establish the base — deliberately,
+          # so it never reports a bogus "everything is new". But this job is
+          # advisory, and a red X on an advisory check is a worse outcome than a
+          # comment saying what went wrong: it reads as "your PR is broken" when
+          # what happened is that a ref couldn't be resolved. So the failure
+          # becomes the comment body, and the step still succeeds.
+          #
+          # `changeset status` needs node_modules, which this job skips on
+          # purpose, so version stamps degrade to a note. The obligations — the
+          # point of the report — don't depend on it.
+          if ! node scripts/surface/index.mjs plan \
+                 --base "origin/$BASE_REF" --format markdown > plan.md 2> plan.err; then
+            {
+              echo "### 📋 Surface plan — couldn't run"
+              echo
+              echo "The plan step failed, so this PR has **no** doc/scenario report."
+              echo "That is a problem with this check, not with the PR."
+              echo
+              echo '```'
+              cat plan.err
+              echo '```'
+            } > plan.md
+          fi
           cat plan.md
         env:
           BASE_REF: ${{ github.base_ref }}
