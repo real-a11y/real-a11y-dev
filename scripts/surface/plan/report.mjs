@@ -13,7 +13,7 @@ const MARK = { added: "+", changed: "~", removed: "−" };
  * @returns the whole report as data, so the two renderers can't disagree about
  * what it says.
  */
-export function buildReport(changes, touchedFiles, versions) {
+export function buildReport(changes, touchedFiles, versionStatus) {
   const touched = new Set(touchedFiles);
   const docs = [...requiredDocs(changes)]
     .map(([path, { reasons, why }]) => ({
@@ -37,7 +37,7 @@ export function buildReport(changes, touchedFiles, versions) {
     ...o,
     stamp: versionStamp(
       changes[i].path,
-      versions,
+      versionStatus,
       changes[i].kind === "removed",
     ),
   }));

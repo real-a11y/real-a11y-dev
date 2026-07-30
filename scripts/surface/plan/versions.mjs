@@ -30,9 +30,9 @@ export function packageOf(changePath) {
 }
 
 /**
- * @returns {Promise<Map<string, {old: string, next: string}>>} package name →
- * the version it is on and the one its pending changesets will produce. Empty
- * when changesets can't answer.
+ * @returns {Promise<{available: boolean, versions: Map<string, {old: string, next: string}>}>}
+ * `available` is whether changesets could be asked at all; `versions` maps a
+ * package to the version it is on and the one its pending changesets produce.
  */
 export async function nextVersions(repoRoot) {
   // Resolve the installed CLI rather than shelling out to `npx`: with no
@@ -45,7 +45,7 @@ export async function nextVersions(repoRoot) {
       "@changesets/cli/bin.js",
     );
   } catch {
-    return new Map();
+    return UNAVAILABLE;
   }
 
   let dir;
@@ -53,22 +53,36 @@ export async function nextVersions(repoRoot) {
     dir = await mkdtemp(join(tmpdir(), "surface-status-"));
     const out = join(dir, "status.json");
     // `changeset status` writes the file and exits 0 even with no releases.
+    // The absolute `--output` path is safe: changesets writes it via
+    // `path.resolve(cwd, output)`, which an absolute second argument resets.
     await run(process.execPath, [cli, "status", `--output=${out}`], {
       cwd: repoRoot,
     });
     const status = JSON.parse(await readFile(out, "utf8"));
-    return new Map(
-      (status.releases ?? []).map((r) => [
-        r.name,
-        { old: r.oldVersion, next: r.newVersion },
-      ]),
-    );
+    return {
+      available: true,
+      versions: new Map(
+        (status.releases ?? []).map((r) => [
+          r.name,
+          { old: r.oldVersion, next: r.newVersion },
+        ]),
+      ),
+    };
   } catch {
-    return new Map();
+    return UNAVAILABLE;
   } finally {
     if (dir) await rm(dir, { recursive: true, force: true }).catch(() => {});
   }
 }
+
+/**
+ * Couldn't ask changesets at all — which is NOT the same fact as "changesets
+ * reports no pending release for this package", though an empty map renders
+ * identically. The first is a broken lookup, the second is a missing changeset
+ * the author needs to add. Saying the second when the first is true sends
+ * someone to write a changeset that already exists.
+ */
+const UNAVAILABLE = { available: false, versions: new Map() };
 
 /**
  * The version stamp for a scenario covering `changePath`.
@@ -79,15 +93,23 @@ export async function nextVersions(repoRoot) {
  * now, not the one it is about to become. §4b asks for exactly this and the two
  * are easy to transpose, so it is computed rather than typed.
  *
- * When there's no pending changeset for the package, that is itself worth
- * saying: a user-visible change with no changeset won't ship, so the version
- * can't be stamped and the changeset is the missing piece.
+ * Three outcomes, not two. A stamp; or "changesets reports nothing pending for
+ * this package", which is actionable — a user-visible change with no changeset
+ * won't ship, so the changeset is the missing piece; or "we couldn't ask", which
+ * is a different problem entirely and must not be reported as the second.
+ *
+ * @param {{available: boolean, versions: Map}} status from {@link nextVersions}
  */
-export function versionStamp(changePath, versions, removed = false) {
+export function versionStamp(changePath, status, removed = false) {
   const pkg = packageOf(changePath);
   if (!pkg) return null;
   const short = pkg.replace(/^@real-a11y-dev\//, "");
-  const version = versions.get(pkg);
+
+  if (!status.available) {
+    return `version not stamped — couldn't read pending changesets (run \`pnpm changeset:status\`); fill this in by hand`;
+  }
+
+  const version = status.versions.get(pkg);
   if (!version) {
     return `no pending changeset for ${pkg} — the version this ships in isn't decided yet`;
   }
