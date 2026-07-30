@@ -9,6 +9,13 @@
  *
  * Keep this file minimal: only include what needs to run _inside the page_.
  * Do NOT import Node-only modules here.
+ *
+ * Every export is a **published surface** — a caller can evaluate the IIFE and
+ * invoke `__realA11y__.<name>` directly, which is the documented path for a page
+ * under a Trusted Types CSP. So an export nobody calls is not free: it ships
+ * into every audited page forever and can't be withdrawn quietly.
+ * `page-bundle.test.ts` pins the list against the consumers that dispatch on it,
+ * so adding one is a decision rather than an import.
  */
 
 export {
@@ -17,6 +24,11 @@ export {
   serializeTabSequence as tabSequenceSnapshot,
 } from "@real-a11y-dev/serialize";
 
+// `listByRole` is deliberately NOT here. Both surfaces that list a category run
+// it in Node over a native tree now (`real-a11y list`, the MCP's
+// `list_elements`), and `@real-a11y-dev/testing` re-exports it for direct jsdom
+// use — so the in-page copy had no caller at all. It cost 0.37 kB gzipped of
+// every audited page.
 export {
   assertNoUnlabeledInteractive,
   assertHeadingOrder,
@@ -24,7 +36,6 @@ export {
   assertLandmarkStructure,
   A11yAssertionError,
   collectFindings,
-  listByRole,
 } from "@real-a11y-dev/audit";
 
 export {

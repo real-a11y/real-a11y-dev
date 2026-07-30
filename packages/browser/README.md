@@ -117,6 +117,8 @@ The write path holds the same redaction discipline as the read path: an `ActionR
 
 The injected bundle is built here (`dist/page-bundle.iife.global.js`) from the serializers (`@real-a11y-dev/serialize`), the findings engine (`@real-a11y-dev/audit`), and the query helpers (`@real-a11y-dev/core`). It's an IIFE that installs `window.__realA11y__` with the snapshot/assertion helpers so any caller can invoke them by name inside the page.
 
+Those names are a **published surface**, not an implementation detail — evaluating the IIFE and calling `__realA11y__.<name>` is the documented path for a page under a Trusted Types CSP, where `addScriptTag` is blocked. That cuts both ways: an export can't be withdrawn quietly, and an export nobody calls still ships into every audited page. `src/page-bundle.test.ts` pins the list against the consumer that dispatches on each name, so adding one is a decision rather than a stray import. `listByRole` is the cautionary case — category listing moved to Node with the producer migration, the in-page copy stayed, and it cost 0.37 kB gzipped of every page until anyone noticed.
+
 Because the bundle ships in this package, both drivers resolve the exact same file:
 
 - `BrowserSession` reads it from its own `dist/`.
