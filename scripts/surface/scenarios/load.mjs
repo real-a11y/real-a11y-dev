@@ -130,7 +130,7 @@ export function parseFrontmatter(text, where) {
         problems.push(`${at} — list item with no key above it: ${raw.trim()}`);
         continue;
       }
-      data[listKey].push(unquote(item[1].trim()));
+      data[listKey].push(unquote(item[1].trim(), at, problems));
       continue;
     }
 
@@ -148,7 +148,7 @@ export function parseFrontmatter(text, where) {
     const value = rest.trim();
     if (FLEX_LIST_KEYS.has(key)) {
       // `twin: D1` is shorthand for a one-item list; `twin:` opens a list.
-      data[key] = value ? [unquote(value)] : [];
+      data[key] = value ? [unquote(value, at, problems)] : [];
       listKey = value ? null : key;
       continue;
     }
@@ -168,7 +168,7 @@ export function parseFrontmatter(text, where) {
       listKey = null;
       continue;
     }
-    data[key] = unquote(value);
+    data[key] = unquote(value, at, problems);
     listKey = null;
   }
 
@@ -182,10 +182,31 @@ export function parseFrontmatter(text, where) {
   };
 }
 
-/** Strip one layer of matching quotes; values are plain strings otherwise. */
-function unquote(value) {
+/**
+ * Strip one layer of matching quotes; values are plain strings otherwise.
+ *
+ * A backslash inside a quoted value is REJECTED rather than passed through. This
+ * reader has no unescaping step, so `\"` would survive into the value as two
+ * literal characters — a silent mis-read into a plausible-looking wrong string,
+ * which is the one outcome the format promises can't happen. It is also the exact
+ * mistake a YAML-trained author makes, and R23 shipped with it.
+ *
+ * Inner quotes need no escaping anyway: the pattern is anchored to the first and
+ * last character, so `expected: "it reads as 'x' here"` round-trips fine, and so
+ * does a double quote inside a single-quoted value.
+ */
+function unquote(value, at, problems) {
   const m = /^"(.*)"$/.exec(value) ?? /^'(.*)'$/.exec(value);
-  return m ? m[1] : value;
+  if (!m) return value;
+  if (problems && m[1].includes("\\")) {
+    problems.push(
+      `${at} — backslash inside a quoted value. This reader is not YAML and does ` +
+        `no unescaping, so the backslash would end up in the value verbatim. ` +
+        `Inner quotes don't need escaping — swap the inner pair for the other ` +
+        `quote character, or drop the outer quotes.`,
+    );
+  }
+  return m[1];
 }
 
 /** Validate one scenario's frontmatter against the shared schema. */

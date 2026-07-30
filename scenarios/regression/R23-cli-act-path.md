@@ -8,7 +8,7 @@ priority: P0
 status: Active
 validFrom: "cli ≥ 0.1.0-beta.2 (unreleased — interact/click/type/focus + --step-settle are pending changesets)"
 validUntil: ""
-expected: "A step targets by role + accessible name only (never a selector) and the run exits 0 with a tree diff naming the change. Ambiguity lists copy-paste nth= candidates and acts on the right one once nth picks it. A DISABLED target is refused with the cause — never a success plus an empty diff, which reads as \"that button does nothing\". A step that navigates or reloads reports that no diff is possible, says where it LANDED, and still exits 0. An unreachable target exits 2. --step-settle delays the read; 0 opts out."
+expected: "A step targets by role + accessible name only (never a selector) and the run exits 0 with a tree diff naming the change. Ambiguity lists copy-paste nth= candidates and acts on the right one once nth picks it. A DISABLED target is refused with the cause — never a success plus an empty diff, which reads as 'that button does nothing'. A step that navigates or reloads reports that no diff is possible, says where it LANDED, and still exits 0. An unreachable target exits 2. --step-settle delays the read; 0 opts out."
 twin: D10
 covers:
   - cli.commands.interact

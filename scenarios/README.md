@@ -72,6 +72,10 @@ Two consequences worth knowing before you edit a row:
   `P0 # flagship`, which the enum check then rejects by name.
 - **Values are single-line.** No block scalars, no continuations — long prose lives
   in the body, which is ordinary markdown and can be as long as it needs to be.
+- **No backslash escapes.** There is no unescaping step, so `\"` would survive into
+  the value as two literal characters. A backslash inside a quoted value is a hard
+  error instead. Inner quotes never need escaping — the quote-stripping is anchored
+  to the first and last character, so `expected: "it reads as 'x'"` is fine.
 
 ### `covers:` — the part that does the work
 
