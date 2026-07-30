@@ -141,8 +141,8 @@ main
   table
     rowgroup
       row
-        rowheader "Field"
-        rowheader "Meaning"
+        columnheader "Field"
+        columnheader "Meaning"
     rowgroup
       row
         cell "rule"

@@ -150,9 +150,9 @@ main
   table
     rowgroup
       row
-        rowheader "Snapshot"
-        rowheader "Captures"
-        rowheader "Catches"
+        columnheader "Snapshot"
+        columnheader "Captures"
+        columnheader "Catches"
     rowgroup
       row
         cell "Tree ( auditSnapshot )"

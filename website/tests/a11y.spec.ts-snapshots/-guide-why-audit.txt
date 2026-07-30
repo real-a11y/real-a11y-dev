@@ -112,9 +112,9 @@ main
   table
     rowgroup
       row
-        rowheader "Tool"
-        rowheader "Strength"
-        rowheader "Real A11y difference"
+        columnheader "Tool"
+        columnheader "Strength"
+        columnheader "Real A11y difference"
     rowgroup
       row
         cell "axe-core"

@@ -146,8 +146,8 @@ main
   table
     rowgroup
       row
-        rowheader "Reach for Testing Library when…"
-        rowheader "Reach for flow() when…"
+        columnheader "Reach for Testing Library when…"
+        columnheader "Reach for flow() when…"
           code "flow()"
     rowgroup
       row
@@ -182,8 +182,8 @@ main
   table
     rowgroup
       row
-        rowheader "Step"
-        rowheader "Description"
+        columnheader "Step"
+        columnheader "Description"
     rowgroup
       row
         cell ".findByRole(role, opts?)"
@@ -329,10 +329,10 @@ main
   table
     rowgroup
       row
-        rowheader "Option"
-        rowheader "Type"
-        rowheader "Default"
-        rowheader "Description"
+        columnheader "Option"
+        columnheader "Type"
+        columnheader "Default"
+        columnheader "Description"
     rowgroup
       row
         cell "waitTimeout"
@@ -355,9 +355,9 @@ main
   table
     rowgroup
       row
-        rowheader "Option"
-        rowheader "Type"
-        rowheader "Default"
+        columnheader "Option"
+        columnheader "Type"
+        columnheader "Default"
     rowgroup
       row
         cell "timeout"

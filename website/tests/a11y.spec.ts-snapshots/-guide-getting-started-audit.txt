@@ -103,9 +103,9 @@ main
   table
     rowgroup
       row
-        rowheader "I want to…"
-        rowheader "Install"
-        rowheader "Dep type"
+        columnheader "I want to…"
+        columnheader "Install"
+        columnheader "Dep type"
     rowgroup
       row
         cell "Embed an interactive tree panel in any web app"
@@ -250,9 +250,9 @@ main
   table
     rowgroup
       row
-        rowheader "Package"
-        rowheader "Node"
-        rowheader "Browser / Runtime"
+        columnheader "Package"
+        columnheader "Node"
+        columnheader "Browser / Runtime"
     rowgroup
       row
         cell "@real-a11y-dev/core"
@@ -323,9 +323,9 @@ main
   table
     rowgroup
       row
-        rowheader "Package"
-        rowheader "Safe in prod?"
-        rowheader "Notes"
+        columnheader "Package"
+        columnheader "Safe in prod?"
+        columnheader "Notes"
     rowgroup
       row
         cell "@real-a11y-dev/core"

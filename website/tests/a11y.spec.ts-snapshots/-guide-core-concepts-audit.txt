@@ -119,8 +119,8 @@ main
   table
     rowgroup
       row
-        rowheader "Mode"
-        rowheader "What it shows"
+        columnheader "Mode"
+        columnheader "What it shows"
     rowgroup
       row
         cell ""a11y""
@@ -143,8 +143,8 @@ main
   table
     rowgroup
       row
-        rowheader "Element"
-        rowheader "Implicit role"
+        columnheader "Element"
+        columnheader "Implicit role"
     rowgroup
       row
         cell "<button>"

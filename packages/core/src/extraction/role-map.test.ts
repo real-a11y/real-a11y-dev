@@ -101,6 +101,90 @@ describe("getImplicitRole", () => {
     expect(getImplicitRole(el("<div>Content</div>"))).toBe("generic");
   });
 
+  describe("<th>", () => {
+    function th(tableHtml: string, selector = "th"): Element {
+      return el(tableHtml).querySelector(selector)!;
+    }
+
+    it("returns columnheader for scope=col", () => {
+      expect(
+        getImplicitRole(
+          th('<table><tr><th scope="col">Name</th></tr></table>'),
+        ),
+      ).toBe("columnheader");
+    });
+
+    it("returns columnheader for scope=colgroup", () => {
+      expect(
+        getImplicitRole(
+          th('<table><tr><th scope="colgroup">Name</th></tr></table>'),
+        ),
+      ).toBe("columnheader");
+    });
+
+    it("returns rowheader for scope=row", () => {
+      expect(
+        getImplicitRole(
+          th('<table><tr><th scope="row">Name</th></tr></table>'),
+        ),
+      ).toBe("rowheader");
+    });
+
+    it("returns rowheader for scope=rowgroup", () => {
+      expect(
+        getImplicitRole(
+          th('<table><tr><th scope="rowgroup">Name</th></tr></table>'),
+        ),
+      ).toBe("rowheader");
+    });
+
+    it("returns columnheader for an unscoped <th> in <thead>", () => {
+      expect(
+        getImplicitRole(
+          th(
+            "<table><thead><tr><th>Name</th></tr></thead>" +
+              "<tbody><tr><td>Ada</td></tr></tbody></table>",
+          ),
+        ),
+      ).toBe("columnheader");
+    });
+
+    it("returns columnheader for an unscoped <th> in the table's first row", () => {
+      expect(
+        getImplicitRole(
+          th(
+            "<table><tr><th>Name</th></tr><tr><td>Ada</td></tr></table>",
+            "tr:first-child th",
+          ),
+        ),
+      ).toBe("columnheader");
+    });
+
+    it("returns rowheader for an unscoped <th> leading a body row", () => {
+      expect(
+        getImplicitRole(
+          th(
+            "<table><thead><tr><th>Name</th></tr></thead>" +
+              "<tbody><tr><th>Ada</th><td>1815</td></tr></tbody></table>",
+            "tbody th",
+          ),
+        ),
+      ).toBe("rowheader");
+    });
+
+    it("returns rowheader for an unscoped <th> in a later row of a headless table", () => {
+      expect(
+        getImplicitRole(
+          th(
+            "<table><tr><th>Name</th><th>Born</th></tr>" +
+              "<tr><th>Ada</th><td>1815</td></tr></table>",
+            "tr:nth-child(2) th",
+          ),
+        ),
+      ).toBe("rowheader");
+    });
+  });
+
   it("returns generic for <span>", () => {
     expect(getImplicitRole(el("<span>Text</span>"))).toBe("generic");
   });

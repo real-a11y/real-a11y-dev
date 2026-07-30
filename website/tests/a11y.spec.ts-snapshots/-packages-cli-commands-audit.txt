@@ -145,8 +145,8 @@ main
   table
     rowgroup
       row
-        rowheader "Code"
-        rowheader "Meaning"
+        columnheader "Code"
+        columnheader "Meaning"
     rowgroup
       row
         cell "0"
@@ -223,8 +223,8 @@ main
   table
     rowgroup
       row
-        rowheader "Command"
-        rowheader "Purpose"
+        columnheader "Command"
+        columnheader "Purpose"
     rowgroup
       row
         cell "install"
@@ -245,8 +245,8 @@ main
   table
     rowgroup
       row
-        rowheader "Command"
-        rowheader "Purpose"
+        columnheader "Command"
+        columnheader "Purpose"
     rowgroup
       row
         cell "audit <url...>"
@@ -265,8 +265,8 @@ main
   table
     rowgroup
       row
-        rowheader "Command"
-        rowheader "Purpose"
+        columnheader "Command"
+        columnheader "Purpose"
     rowgroup
       row
         cell "tree <url>"
@@ -295,8 +295,8 @@ main
   table
     rowgroup
       row
-        rowheader "Command"
-        rowheader "Purpose"
+        columnheader "Command"
+        columnheader "Purpose"
     rowgroup
       row
         cell "interact <url> --step"
@@ -324,8 +324,8 @@ main
   table
     rowgroup
       row
-        rowheader "Command"
-        rowheader "Purpose"
+        columnheader "Command"
+        columnheader "Purpose"
     rowgroup
       row
         cell "snapshot [url...]"
@@ -793,10 +793,10 @@ main
   table
     rowgroup
       row
-        rowheader "Flag"
-        rowheader "Type / values"
-        rowheader "Default"
-        rowheader "Commands"
+        columnheader "Flag"
+        columnheader "Type / values"
+        columnheader "Default"
+        columnheader "Commands"
     rowgroup
       row
         cell "--root"
@@ -927,10 +927,10 @@ main
   table
     rowgroup
       row
-        rowheader "Flag"
-        rowheader "Type / values"
-        rowheader "Default"
-        rowheader "Commands"
+        columnheader "Flag"
+        columnheader "Type / values"
+        columnheader "Default"
+        columnheader "Commands"
     rowgroup
       row
         cell "-f, --format"
@@ -979,10 +979,10 @@ main
   table
     rowgroup
       row
-        rowheader "Flag"
-        rowheader "Type / values"
-        rowheader "Default"
-        rowheader "Commands"
+        columnheader "Flag"
+        columnheader "Type / values"
+        columnheader "Default"
+        columnheader "Commands"
     rowgroup
       row
         cell "--config"
@@ -1006,10 +1006,10 @@ main
   table
     rowgroup
       row
-        rowheader "Flag"
-        rowheader "Type / values"
-        rowheader "Default"
-        rowheader "Commands"
+        columnheader "Flag"
+        columnheader "Type / values"
+        columnheader "Default"
+        columnheader "Commands"
     rowgroup
       row
         cell "--rules"
@@ -1051,10 +1051,10 @@ main
   table
     rowgroup
       row
-        rowheader "Flag"
-        rowheader "Type / values"
-        rowheader "Default"
-        rowheader "Commands"
+        columnheader "Flag"
+        columnheader "Type / values"
+        columnheader "Default"
+        columnheader "Commands"
     rowgroup
       row
         cell "--step"
@@ -1465,9 +1465,9 @@ main
   table
     rowgroup
       row
-        rowheader "Command"
-        rowheader "Values"
-        rowheader "Default"
+        columnheader "Command"
+        columnheader "Values"
+        columnheader "Default"
     rowgroup
       row
         cell "audit, inspect, tree, outline, tabs, list"

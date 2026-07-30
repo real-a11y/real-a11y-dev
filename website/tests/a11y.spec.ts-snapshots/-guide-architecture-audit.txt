@@ -103,9 +103,9 @@ main
   table
     rowgroup
       row
-        rowheader "Package"
-        rowheader "Purpose"
-        rowheader "Runtime deps"
+        columnheader "Package"
+        columnheader "Purpose"
+        columnheader "Runtime deps"
     rowgroup
       row
         cell "@real-a11y-dev/core"
