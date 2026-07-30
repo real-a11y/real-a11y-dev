@@ -32,13 +32,13 @@ Against a page seeding a known violation:
 4. `get_semantic_tree`
 5. `get_heading_outline`
 6. `list_elements { filter: "image" }`
-7. **(6b)** `list_elements { filter: "image" }` on a page whose graphics are
-   `<figure>`s rather than `<img>` — a category that legitimately matches nothing
-8. `close_browser`, then call a perception tool again
-9. `get_semantic_tree { rootSelector: "main" }` — and
+   - **(6b)** `list_elements { filter: "image" }` on a page whose graphics are
+     `<figure>`s rather than `<img>` — a category that legitimately matches nothing
+7. `close_browser`, then call a perception tool again
+8. `get_semantic_tree { rootSelector: "main" }` — and
    `get_semantic_tree { producer: "native" }`
-10. `get_tab_order`, then `get_tab_order { rootSelector: "main" }`
-11. `tools/list` — assert the tool _list_, not a remembered count
+9. `get_tab_order`, then `get_tab_order { rootSelector: "main" }`
+10. `tools/list` — assert the tool _list_, not a remembered count
 
 ## Expected
 

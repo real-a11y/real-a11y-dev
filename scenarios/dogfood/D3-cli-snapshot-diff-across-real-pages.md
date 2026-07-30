@@ -6,7 +6,7 @@ area: CLI
 type: Automated
 priority: P0
 status: Active
-validFrom: "cli ≥ 0.1.0-beta.1. If re-baselining with --producer native, note that native findings gained locators at browser 0.1.0-beta.12 and re-fingerprint once"
+validFrom: "cli ≥ 0.1.0-beta.1. Snapshots are native-only since #258 (there is no --producer flag); native findings gained locators at browser 0.1.0-beta.12, so artifacts captured before that re-fingerprint once — re-baseline and move on"
 validUntil: ""
 expected: "artifacts capture real pages; identical→no changes; two different pages→ meaningful, readable structural diff"
 twin: R5

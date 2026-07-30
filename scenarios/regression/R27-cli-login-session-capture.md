@@ -33,7 +33,8 @@ real-a11y login https://app.example.com --save auth.json
 5. Check the file mode: `stat -c %a auth.json` (POSIX) → `600`
 6. Re-run `login --save` into a path **inside a git repo that doesn't gitignore
    it**, and read stderr
-7. `real-a11y login <url> --save auth.json --cdp http://localhost:9222`
+7. `real-a11y login <url> --save auth.json --cdp http://localhost:9222` — a flag
+   `login` does not declare
 8. `real-a11y login <url>` with no `--save`
 9. `real-a11y login --help` — read the flag list against the docs
 10. Try it on an app that keeps auth in **session storage** rather than cookies
@@ -51,8 +52,12 @@ real-a11y login https://app.example.com --save auth.json
   defect and an invisible one
 - **6** — a warning on **stderr** naming the path. Committing a session file is the
   worst available outcome and the easiest mistake to make
-- **7** — refused. `--storage-state` and `--cdp` are alternative auth strategies, so
-  combining them is meaningless rather than additive
+- **7** — refused, because `login` declares no attach or credential options at all.
+  Today that refusal is the strict parser's generic **unknown option**, which R7
+  calls the second-worst answer: correct, but it doesn't tell you what to do
+  instead. The invariant being pinned is that the flag is **not accepted**; a named
+  refusal like the one `--root` gets in `run.ts` would be the better behaviour, and
+  a run that reaches a browser here is the real failure
 - **8** — exit `2`; `--save` is required and the message says so
 - **9** — **no credential flag exists.** No `--username`, no `--password`, no
   `--token`. The password is typed into the real browser by a human and never

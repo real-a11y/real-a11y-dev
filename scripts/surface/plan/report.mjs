@@ -114,11 +114,15 @@ export function renderText(report) {
     if (s.stamp) out.push(`      ${s.stamp.text}`);
     if (s.ids.length) {
       out.push(`      covered by: ${s.ids.join(", ")}`);
-      // Flag what is still outstanding separately from what covers it. A branch
-      // that already edited the row needs no reminder, and a list that keeps
-      // naming finished work is one people stop reading.
-      if (s.idsUntouched.length && s.idsUntouched.length !== s.ids.length) {
+      // Always say which side of done this is on. Suppressing the line when
+      // EVERY covering row was outstanding made "nothing updated yet" and
+      // "all of them updated" render identically — the same collapse of two
+      // opposite facts that the docs half above is commented to avoid, and the
+      // "nothing updated yet" case is the one that actually needs the nudge.
+      if (s.idsUntouched.length) {
         out.push(`      not yet touched: ${s.idsUntouched.join(", ")}`);
+      } else {
+        out.push(`      — every covering scenario was touched on this branch.`);
       }
     }
     if (s.twins.length) {
@@ -307,10 +311,11 @@ export function renderMarkdown(report, base) {
   for (const s of report.scenarios) {
     let line = `- **${s.action}** — ${s.subject}${stampMarkdown(s.stamp)}  \n  ${s.note}`;
     if (s.ids.length) {
-      const outstanding =
-        s.idsUntouched.length && s.idsUntouched.length !== s.ids.length
-          ? ` (still untouched: ${s.idsUntouched.map((i) => `\`${i}\``).join(", ")})`
-          : "";
+      // Same rule as the text renderer: never let "none updated" and "all
+      // updated" produce the same line.
+      const outstanding = s.idsUntouched.length
+        ? ` — ⚠️ still untouched: ${s.idsUntouched.map((i) => `\`${i}\``).join(", ")}`
+        : " — ✅ all touched on this branch";
       line += `  \n  Covered by ${s.ids.map((i) => `\`${i}\``).join(", ")}${outstanding}`;
     }
     if (s.twins.length) {

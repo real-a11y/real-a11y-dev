@@ -26,15 +26,15 @@ notion: "https://app.notion.com/p/3aa1c354b0b581488056fb7ec111c33d"
    `real-a11y snapshot <url> -o pr.json`
 5. `real-a11y diff base.json pr.json` — and read what it says about the **tabs**
    axis specifically
-6. **(5b)** Diff a **pre-#258 artifact** (one that carries a tabs view) against a
-   current one, if you have one to hand — this is the upgrade path real users hit
-   once
-7. `real-a11y diff base.json pr.json --explain`
-8. `real-a11y diff base.json pr.json --only findings`, then `--only views`
-9. `real-a11y snapshot <url> --md -o report.md`
-10. `real-a11y diff base.json pr.json --fail-on never`
-11. Fix the violation, re-snapshot, diff again
-12. `real-a11y snapshot <url> --root main`
+   - **(5b)** Diff a **pre-#258 artifact** (one that carries a tabs view) against a
+     current one, if you have one to hand — this is the upgrade path real users hit
+     once
+6. `real-a11y diff base.json pr.json --explain`
+7. `real-a11y diff base.json pr.json --only findings`, then `--only views`
+8. `real-a11y snapshot <url> --md -o report.md`
+9. `real-a11y diff base.json pr.json --fail-on never`
+10. Fix the violation, re-snapshot, diff again
+11. `real-a11y snapshot <url> --root main`
 
 ## Expected
 

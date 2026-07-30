@@ -56,8 +56,8 @@ page.
 - **5** — exit `2` naming _disabled_ as the cause. Never exit 0 with an empty diff: a
   swallowed click reads as "that button does nothing" rather than "you can't click it"
 - **6** — exit `2`, worded as an accessibility finding (if role+name can't reach it,
-  assistive tech can't either), with a hint pointing at
-  `real-a11y tree <url> --producer native`
+  assistive tech can't either), with a hint pointing at `real-a11y tree <url>` so the
+  runner can go read the names that _do_ exist
 - **7** — exit `0`, reports that a new document loaded so no diff is possible, and `url`
   is where it **landed**
 - **8** — exit `0`; the diff shows the focus move, not a bare `a11y.states.focused` flip

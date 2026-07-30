@@ -32,12 +32,12 @@ real-a11y --help          # enumerate the view commands from here
 3. `real-a11y outline <url>`
 4. `real-a11y list image <url>` — then `link`, `button`, `form`, `landmark`,
    `heading`
-5. **(4b)** `real-a11y list image <url>` against a fixture whose graphics are
-   `<figure>`s rather than `<img>` — a category that legitimately matches nothing
-6. `real-a11y list nonsense <url>`
-7. `real-a11y tree <url> --format json`
-8. Every view command against the violating fixture
-9. `real-a11y tabs <url>` in a terminal, then `--format json`. Also
+   - **(4b)** `real-a11y list image <url>` against a fixture whose graphics are
+     `<figure>`s rather than `<img>` — a category that legitimately matches nothing
+5. `real-a11y list nonsense <url>`
+6. `real-a11y tree <url> --format json`
+7. Every view command against the violating fixture
+8. `real-a11y tabs <url>` in a terminal, then `--format json`. Also
    `real-a11y tabs <url> --root <selector>` — the only command that still accepts
    `--root`
 

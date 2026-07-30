@@ -21,43 +21,59 @@ Use a page with a `<video controls>` (UA-shadow media controls), an image with n
 `<section id="panel">`, a pair of sibling images, an element inside an open shadow
 root, and a text field.
 
-1. `real-a11y tree <url> --producer native` vs `real-a11y tree <url>`
-2. `real-a11y audit <url> --producer native --format json` — inspect every
-   finding's `locator`
-3. `real-a11y audit <url> --format json` (DOM) — compare the two locator sets
-4. `real-a11y list image <url> --producer native` _(rejected today; see Notes)_
-5. Focus a control, then `real-a11y tree <url> --producer native`
-6. Type a sentinel into the field, then re-read the native tree
-7. `real-a11y audit <url> --producer native --root main`
+**There is no `--producer` flag.** #258 removed the axis — every browser-driving read
+is native now — so these are plain invocations. An earlier version of this row spelled
+`--producer native` on most steps, which today is a bare parser error.
+
+1. `real-a11y tree <url>` — and compare against the shadow-DOM reality of the page
+2. `real-a11y audit <url> --format json` — inspect every finding's `locator`
+3. Locator **agreement across producers** — no longer reachable from the CLI, since
+   there is only one producer to ask. Step 8 is where this is still checked
+4. `real-a11y list image <url>` — locators present on every entry
+5. Focus a control, then `real-a11y tree <url>`
+6. Type a sentinel into the field, then re-read the tree
+7. `real-a11y audit <url> --root main`
 8. `pnpm --filter @real-a11y-dev/browser test:e2e`
 
 ## Expected
 
-- **1** — native surfaces the video's play / scrubber / mute controls the in-page
-  walk cannot reach; roles differ in places (Chromium vocabulary) and that is
-  expected, not a bug
+- **1** — the tree reaches the video's play / scrubber / mute controls, which live in
+  UA shadow DOM and the old in-page walk could not see. Roles read in Chromium's
+  vocabulary, which differs from the ARIA spelling in places — expected, not a bug
 - **2** — **every** finding carries a `locator`. None is `(none)`
-- **3** — for the same element, the two producers emit the **identical** locator:
+- **2, cont.** — the locators are the queryable, DOM-shaped ones:
   `#go`, `body > main > img`, `#panel > div > img`, `…img:nth-of-type(1)` / `(2)`
 - **shadow root** — the path stops at the boundary (`button:nth-of-type(2)`), never
   `#document-fragment > button`, which would look queryable and match nothing. No
   locator contains `#document`
+- **3** — nothing to run. Kept as a step so the loss is visible rather than quietly
+  dropped: cross-producer locator agreement was this row's original headline
+  assertion, and step 8's parity harness is now its only home
 - **5** — `[focused]` marks the focused node. The tree sets `focusedId`; without it
   a focus action reports a bare `a11y.states.focused` flip instead of a focus move
 - **6** — the sentinel appears **nowhere** in the tree. The producer never reads
   `.value`, drops the AX `value` field, excludes `valuenow`/`valuetext`, and copies
   only an allowlist of attributes
-- **7** — refused: native is whole-document, so it cannot be combined with a root
-  selector
+- **4** — locators on every entry. Native `list_elements` used to carry none, and
+  three docs stated that as intended; both were fixed together
+- **7** — refused: the read is whole-document, so it cannot be combined with a root
+  selector. `tabs` is the only command that still accepts `--root`
 - **8** — the parity harness passes its overlap **floor** (0.80) and logs the
   watermark — 88.7% at time of writing. It is a floor, not equality: the two
   producers are never byte-identical
 
 ## Why this exists
 
-Replaces the old _"producer parity — get_native_tree + compare_producers"_ row,
-which named a tool that never existed (native is reached via `producer: "native"`,
-not a `get_native_tree` tool) and one the native-only migration deletes.
+Replaces the old _"producer parity — get_native_tree + compare_producers"_ row, which
+named a tool that never existed and one the native-only migration deleted.
+
+This row has now been wrong about the producer surface **twice**, in the same
+direction: it referred to `get_native_tree`, which was never real, and then to
+`--producer native`, which stopped being real at #258 while the row went on
+prescribing it. Both are flag- and tool-level rot inside prose, which the coverage
+gate cannot see — it works at command and tool granularity. Worth knowing about the
+limit of the mechanical checks: they prove a scenario names a real _capability_, not
+that every invocation inside it still parses.
 
 Both behaviours checked here are recent repairs, and both failed silently rather
 than loudly:
@@ -74,9 +90,8 @@ gate can't see.
 ## Notes
 
 Replaces the old "producer parity — get_native_tree + compare_producers" row, which
-named a tool that does not exist (there is no `get_native_tree`; native is reached
-via `producer: "native"`) and one the native-only migration deletes
-(`compare_producers`). Parity itself is now covered automatically by
+named a tool that never existed (`get_native_tree`) and one the native-only migration
+deleted (`compare_producers`). Parity itself is now covered automatically by
 `packages/browser/e2e/native-parity.e2e.test.ts`, which asserts an overlap FLOOR
 (0.80) and logs the watermark — 88.7% at time of writing. Locators and `focusedId`
 are recent fixes: before them a native audit reported real defects with no address,

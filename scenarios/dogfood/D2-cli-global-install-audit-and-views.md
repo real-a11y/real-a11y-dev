@@ -41,8 +41,10 @@ enumerate the commands to test from **that output**, not from a list written her
 5. A page on the site with a known violation, if one exists — otherwise a deliberately
    broken local page
 6. `real-a11y audit https://<a site that 404s or is unreachable>`
-7. `real-a11y audit https://real-a11y.dev --producer native` and
-   `tree --producer native`
+7. `real-a11y audit https://real-a11y.dev` and `real-a11y tree https://real-a11y.dev`
+   again, reading them for **native-only** characteristics. There is no
+   `--producer` flag since #258 — an earlier version of this row passed
+   `--producer native` here, which is now a bare parser error
 8. Re-run `real-a11y install` — should be an instant no-op
 
 ## Expected
@@ -52,7 +54,8 @@ enumerate the commands to test from **that output**, not from a list written her
 - **3** — every view returns **real content**, not an empty shell. Views exit `0`
 - **4** — the mobile layout is audited, and the result differs where the layout does
 - **6** — exit `2`, reported as a navigation error, not a clean pass
-- **7** — native reaches structure the DOM walk can't; findings carry locators
+- **7** — the reads reach structure the old in-page walk couldn't (UA-shadow media
+  controls on any page that has a `<video>`), and every finding carries a locator
 - **8** — instant, zero network, exit `0`
 
 ## Why this exists

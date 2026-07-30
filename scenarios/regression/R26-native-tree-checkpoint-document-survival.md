@@ -39,17 +39,22 @@ Page A carries five controls and a link to page B:
 
 ## Expected
 
-| #   | URL changed | Verdict                                                                                            |
-| --- | ----------- | -------------------------------------------------------------------------------------------------- |
-| 1   | no          | **diff** — contains `heading "opened"`                                                             |
-| 2   | **yes**     | **diff** — `heading "Route 2"`, `button "SPA route"`, and the banner **not** listed as removed     |
-| 3   | **yes**     | **diff**                                                                                           |
-| 4   | no          | **replaced** — no diff offered                                                                     |
-| 5   | yes         | **replaced** — reports where it landed                                                             |
+Step **1** is a precondition, not a verdict — if it fails, stop, because the rest of
+the row silently doesn't test what it claims (see _Why this exists_). The five diff
+cases are steps 2–6:
 
-Rows 2–4 are the whole point: a URL comparison calls all three wrong. It suppresses the
-diff for a hash or SPA route change — where the document survived and the diff is exactly
-what was asked for — and emits a garbage whole-page diff for a reload.
+| Step | URL changed | Verdict                                                                                        |
+| ---- | ----------- | ---------------------------------------------------------------------------------------------- |
+| 2    | no          | **diff** — contains `heading "opened"`                                                         |
+| 3    | **yes**     | **diff** — `heading "Route 2"`, `button "SPA route"`, and the banner **not** listed as removed |
+| 4    | **yes**     | **diff**                                                                                       |
+| 5    | no          | **replaced** — no diff offered                                                                 |
+| 6    | yes         | **replaced** — reports where it landed                                                         |
+
+Steps **3–5** are the whole point: a URL comparison calls all three wrong. It suppresses
+the diff for a hash or SPA route change — where the document survived and the diff is
+exactly what was asked for — and emits a garbage whole-page diff for a reload, whose URL
+never moved.
 
 ## Why this exists
 
@@ -60,10 +65,11 @@ than it sounds:
 - **`ax-root` must not count.** It is synthesized for any page with more than one
   top-level node — the ordinary header/main/footer shape — and its id is a **constant**.
   Two unrelated documents both carry it, so counting it made a navigation between two
-  normal pages read as an in-place change with a whole-page remove/add diff. Step 0 exists
+  normal pages read as an in-place change with a whole-page remove/add diff. Step 1 exists
   because the original fixtures wrapped everything in a single `<main>`, were therefore
-  single-rooted, never minted `ax-root`, and skipped this entirely. (`ax-<n>` collides
-  across documents for the same reason.)
+  single-rooted, never minted `ax-root`, and skipped this entirely — which is why it is a
+  precondition rather than one of the verdicts. (`ax-<n>` collides across documents for
+  the same reason.)
 - **Cross-process navigation was checked and is fine.** A cross-origin hop swaps renderer
   process, which could in principle restart the id counter; measured, it keeps counting up
   (`7…13` → `25…31`, zero overlap), so no `loaderId` token is needed.
