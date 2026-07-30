@@ -8,10 +8,16 @@
 // page, which is both the most visible and the least obviously "documentation".
 
 /**
- * A new published package is the heaviest obligation in the repo. Straight from
- * the skill's "brand-new published package or product surface" row.
+ * Every page that enumerates the published packages. From the skill's
+ * "brand-new published package or product surface" row — the heaviest
+ * obligation in the repo.
+ *
+ * The same list applies in BOTH directions. Publishing a package means these
+ * pages don't mention something they should; unpublishing one means they tell
+ * people to install something they can't. The second is arguably worse, because
+ * the instructions are still there and still look right.
  */
-const NEW_PACKAGE_DOCS = [
+const PUBLISHED_PACKAGE_DOCS = [
   "README.md",
   "website/index.md",
   "website/guide/architecture.md",
@@ -94,24 +100,33 @@ export function requiredDocs(changes) {
   };
 
   for (const change of changes) {
-    // A package becoming publicly available is its own, much larger,
-    // obligation — and it happens two ways. A brand-new published package is
-    // the obvious one; a package that already existed privately and is now
-    // published is the same event to a reader, and moves no other field.
-    const newlyPublished =
-      (change.kind === "added" &&
-        /^packages\.[^.]+$/.test(change.path) &&
-        change.detail === "published") ||
-      (change.kind === "changed" &&
-        /^packages\.[^.]+\.private$/.test(change.path) &&
-        change.detail === "private → published");
+    // Whether a package is publicly installable is its own, much larger,
+    // obligation. Three events change it: a brand-new published package, a
+    // private one that is now published, and a published one that is now
+    // private. All three touch the same pages, because those pages enumerate
+    // what a user can install.
+    const isNewPackage =
+      change.kind === "added" &&
+      /^packages\.[^.]+$/.test(change.path) &&
+      change.detail === "published";
+    const flipped =
+      change.kind === "changed" &&
+      /^packages\.[^.]+\.private$/.test(change.path);
+    const unpublished = flipped && change.detail === "published → private";
 
-    if (newlyPublished) {
+    if (isNewPackage || flipped) {
       const name = change.path
         .slice("packages.".length)
         .replace(/\.private$/, "");
-      for (const doc of [...NEW_PACKAGE_DOCS, packagePage(name)]) {
-        require_(doc, change.what, "a newly published package lands here");
+      // Unpublishing was reported without a single document to fix, which made
+      // the report's own "no page maps to these changes" warning fire on the
+      // event most likely to leave instructions that are still there, still
+      // look right, and no longer work.
+      const why = unpublished
+        ? "these still tell a user to install it — including the `ignore` list in .changeset/config.json"
+        : "a newly published package lands here";
+      for (const doc of [...PUBLISHED_PACKAGE_DOCS, packagePage(name)]) {
+        require_(doc, change.what, why);
       }
       continue;
     }
