@@ -13,7 +13,12 @@ const MARK = { added: "+", changed: "~", removed: "−" };
  * @returns the whole report as data, so the two renderers can't disagree about
  * what it says.
  */
-export function buildReport(changes, touchedFiles, versionStatus) {
+export function buildReport(
+  changes,
+  touchedFiles,
+  versionStatus,
+  knownScenarios,
+) {
   const touched = new Set(touchedFiles);
   const docs = [...requiredDocs(changes)]
     .map(([path, { reasons, why }]) => ({
@@ -33,20 +38,39 @@ export function buildReport(changes, touchedFiles, versionStatus) {
   // last version that had it. Keying off the action stamped removed flags with
   // `Valid from`, which is precisely the transposition this stamp exists to
   // prevent.
-  const scenarios = scenarioObligations(changes).map((o, i) => ({
-    ...o,
-    stamp: versionStamp(
-      changes[i].path,
-      versionStatus,
-      changes[i].kind === "removed",
-    ),
-  }));
+  const scenarios = scenarioObligations(changes, knownScenarios).map(
+    (o, i) => ({
+      ...o,
+      stamp: versionStamp(
+        changes[i].path,
+        versionStatus,
+        changes[i].kind === "removed",
+      ),
+    }),
+  );
+
+  // A scenario file the branch already edited needs no nagging about. Same rule
+  // the docs half uses: report what is still outstanding, not what is done.
+  const scenarioFiles = new Map(
+    (knownScenarios ?? []).map((s) => [s.id, s.file]),
+  );
+  const untouched = (ids) =>
+    ids.filter((id) => {
+      const file = scenarioFiles.get(id);
+      return !file || !touched.has(file);
+    });
 
   return {
     changes,
     docs,
-    scenarios,
+    scenarios: scenarios.map((s) => ({
+      ...s,
+      idsUntouched: untouched(s.ids),
+      twinsUntouched: untouched(s.twins),
+    })),
     missingDocs: docs.filter((d) => !d.touched),
+    scenariosResolvable:
+      Array.isArray(knownScenarios) && knownScenarios.length > 0,
   };
 }
 
@@ -88,13 +112,38 @@ export function renderText(report) {
     out.push(`  ${s.action.padEnd(10)} ${s.subject}`);
     out.push(`      ${s.note}`);
     if (s.stamp) out.push(`      ${s.stamp.text}`);
+    if (s.ids.length) {
+      out.push(`      covered by: ${s.ids.join(", ")}`);
+      // Flag what is still outstanding separately from what covers it. A branch
+      // that already edited the row needs no reminder, and a list that keeps
+      // naming finished work is one people stop reading.
+      if (s.idsUntouched.length && s.idsUntouched.length !== s.ids.length) {
+        out.push(`      not yet touched: ${s.idsUntouched.join(", ")}`);
+      }
+    }
+    if (s.twins.length) {
+      out.push(
+        `      twin${s.twins.length > 1 ? "s" : ""}: ${s.twins.join(", ")} ` +
+          `— the other altitude asserts the same subject`,
+      );
+    }
   }
-  out.push(
-    "",
-    "  Scenario IDs aren't resolved: the suites live in Notion, so nothing here",
-    "  can say which existing rows assert what moved. Check them by hand and",
-    "  record the IDs in the PR body.",
-  );
+  if (!report.scenariosResolvable) {
+    out.push(
+      "",
+      "  Scenario IDs aren't resolved: no scenarios/ directory was found, so",
+      "  nothing here can say which existing rows assert what moved. Check them",
+      "  by hand and record the IDs in the PR body.",
+    );
+  } else if (report.scenarios.every((s) => !s.ids.length)) {
+    out.push(
+      "",
+      "  Nothing in scenarios/ covers any of these paths. For a new capability",
+      "  that is expected — write the row. For a change to something that ships,",
+      "  it means the surface had no scenario to begin with, which is its own",
+      "  finding: pnpm surface:scenarios reports the coverage gaps.",
+    );
+  }
 
   out.push("", "For the PR body", "", indent(prBodyBlock(report), "  "));
   return out.join("\n") + "\n";
@@ -133,26 +182,37 @@ export function prBodyBlock(report) {
       `- **${label}:** ${
         items.length
           ? items
-              .map(
-                // `R??` rather than an HTML comment: the placeholder has to
-                // survive being quoted inside the instruction below, and a
-                // comment nested in a comment ends the outer one at the first
-                // `-->`, spilling the rest onto the rendered page.
+              .map((s) => {
+                // Real IDs when they resolve. `R??` only survives as a
+                // placeholder for the case nothing covers the path — a new
+                // capability, where there genuinely is no row yet and the author
+                // has to supply the id of the one they write.
+                //
+                // It stays a literal `R??` rather than an HTML comment because
+                // the placeholder has to survive being quoted inside the
+                // instruction below, and a comment nested in a comment ends the
+                // outer one at the first `-->`, spilling the rest onto the page.
+                const who = s.ids.length ? s.ids.join(", ") : "R??";
                 // Only a real stamp. A note explains why there is no version;
                 // pasting it into the row as though it were one is noise, and
                 // the report body already says it.
-                (s) =>
-                  `R?? ${s.subject}${s.stamp?.kind === "stamp" ? ` — ${s.stamp.text}` : ""}`,
-              )
+                const stamp =
+                  s.stamp?.kind === "stamp" ? ` — ${s.stamp.text}` : "";
+                return `${who} ${s.subject}${stamp}`;
+              })
               .join(" · ")
           : "—"
       }`,
     );
   }
-  lines.push(
-    "",
-    "<!-- Replace each R?? with the scenario's ID: R12, D4, … -->",
-  );
+  // Only ask for a substitution when one is actually pending. An instruction to
+  // replace a placeholder that isn't there sends the reader looking for it.
+  if (report.scenarios.some((s) => !s.ids.length)) {
+    lines.push(
+      "",
+      "<!-- Replace each R?? with the scenario's ID: R12, D4, … -->",
+    );
+  }
   return lines.join("\n");
 }
 
@@ -245,13 +305,31 @@ export function renderMarkdown(report, base) {
 
   out.push("<details><summary><b>Scenarios (§4b)</b></summary>", "");
   for (const s of report.scenarios) {
+    let line = `- **${s.action}** — ${s.subject}${stampMarkdown(s.stamp)}  \n  ${s.note}`;
+    if (s.ids.length) {
+      const outstanding =
+        s.idsUntouched.length && s.idsUntouched.length !== s.ids.length
+          ? ` (still untouched: ${s.idsUntouched.map((i) => `\`${i}\``).join(", ")})`
+          : "";
+      line += `  \n  Covered by ${s.ids.map((i) => `\`${i}\``).join(", ")}${outstanding}`;
+    }
+    if (s.twins.length) {
+      line += `  \n  Twin${s.twins.length > 1 ? "s" : ""} ${s.twins.map((i) => `\`${i}\``).join(", ")} assert the same subject at the other altitude.`;
+    }
+    out.push(line);
+  }
+  if (!report.scenariosResolvable) {
     out.push(
-      `- **${s.action}** — ${s.subject}${stampMarkdown(s.stamp)}  \n  ${s.note}`,
+      "",
+      "_IDs aren't resolved — no `scenarios/` directory was found, so nothing in the repo can say which existing rows assert what moved._",
+    );
+  } else if (report.scenarios.every((s) => !s.ids.length)) {
+    out.push(
+      "",
+      "_Nothing in `scenarios/` covers any of these paths. Expected for a new capability; for a change to something that already ships it means the surface had no scenario to begin with — `pnpm surface:scenarios` reports the gaps._",
     );
   }
   out.push(
-    "",
-    "_IDs aren't resolved — the suites live in Notion, so nothing in the repo can say which existing rows assert what moved._",
     "",
     "</details>",
     "",

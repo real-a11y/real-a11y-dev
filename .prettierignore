@@ -15,6 +15,11 @@ packages/extension/public/icons/
 
 # Markdown content — keep manual line wrapping in docs
 website/**/*.md
+# Release test scenarios: hand-wrapped prose, tables, and frontmatter read by a
+# deliberately non-YAML parser (scripts/surface/scenarios/load.mjs). Reflowing
+# them would churn the diffs that make the suites reviewable, which is the whole
+# reason they moved out of Notion.
+scenarios/
 README.md
 CHANGELOG.md
 CONTRIBUTING.md

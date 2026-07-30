@@ -167,53 +167,114 @@ export function requiredDocs(changes) {
 }
 
 /**
+ * Which scenarios cover a change path, by id.
+ *
+ * A scenario covering a whole command covers its flags too — someone running
+ * `audit` end to end is exercising `--fail-on` — so a `covers:` entry that is a
+ * prefix of the change path counts. The dot guard stops `cli.commands.audit`
+ * from appearing to cover `cli.commands.audit-extra`.
+ *
+ * Twins ride along on purpose. A pre-publish row and its post-publish
+ * counterpart assert the same subject at two altitudes, so a change that
+ * invalidates one almost always invalidates the other — and the one people
+ * forget is whichever suite they aren't currently running.
+ */
+function coveringScenarios(path, scenarios) {
+  const direct = scenarios.filter((s) =>
+    (s.covers ?? []).some(
+      (entry) => entry === path || path.startsWith(`${entry}.`),
+    ),
+  );
+  const ids = new Set(direct.map((s) => s.id));
+  const twins = new Set();
+  for (const s of direct) {
+    for (const t of s.twin ?? []) if (!ids.has(t)) twins.add(t);
+  }
+  return {
+    ids: [...ids].sort(byIdOrder),
+    twins: [...twins].sort(byIdOrder),
+    active: direct.filter((s) => s.status === "Active").length,
+  };
+}
+
+/**
+ * R2 before R10 (a plain string sort puts R10 first), and R before D.
+ *
+ * R-first is the order the work happens in: the pre-publish row is what gates
+ * the release, and the dogfood row can only run once the thing is published. A
+ * list that led with D would name the one you can't act on yet.
+ */
+function byIdOrder(a, b) {
+  const suite = (id) => (id[0] === "R" ? 0 : 1);
+  return suite(a) - suite(b) || Number(a.slice(1)) - Number(b.slice(1));
+}
+
+/**
  * What §4b says to do to the Regression / Dogfood suites.
  *
- * Deliberately does NOT name existing scenario IDs. The scenarios live in
- * Notion today, so nothing in the repo can say which of them assert the
- * behaviour that moved — claiming otherwise would be worse than saying nothing,
- * because a confident wrong ID is one nobody re-checks. Naming them is what
- * putting the scenarios in the repo buys.
+ * This used to deliberately NOT name scenario IDs: the suites lived in Notion,
+ * so nothing in the repo could say which rows asserted the behaviour that moved,
+ * and a confident wrong ID is worse than none because it's one nobody re-checks.
+ * Naming them is exactly what moving the suites into `scenarios/` bought.
+ *
+ * `scenarios` stays optional so `plan` still works on a branch cut before the
+ * migration, or in a checkout where `scenarios/` is absent — it degrades to the
+ * old "check them by hand" wording rather than reporting that nothing is
+ * covered, which would read as a coverage gap that isn't there.
+ *
+ * @param {import("./diff.mjs").Change[]} changes
+ * @param {object[]} [scenarios] from `scenarios/load.mjs`
  */
-export function scenarioObligations(changes) {
+export function scenarioObligations(changes, scenarios) {
   const obligations = [];
+  const resolvable = Array.isArray(scenarios) && scenarios.length > 0;
 
   for (const change of changes) {
     const isCapability =
       /^cli\.commands\.[^.]+$/.test(change.path) ||
       /^mcp\.tools\.[^.]+$/.test(change.path);
 
+    const found = resolvable
+      ? coveringScenarios(change.path, scenarios)
+      : { ids: [], twins: [], active: 0 };
+
+    let action;
+    let note;
+
     if (change.kind === "added" && isCapability) {
-      obligations.push({
-        action: "ADD",
-        subject: change.what,
-        note: "a capability a user can invoke, with no scenario covering it yet",
-      });
+      action = "ADD";
+      // A brand-new capability that something already covers means a scenario
+      // was written ahead of the code — worth saying, because the obligation is
+      // then to check that row rather than to write one.
+      note = found.ids.length
+        ? "a new capability — and these rows already claim to cover it, so confirm they actually assert the shipped behaviour"
+        : "a capability a user can invoke, with no scenario covering it yet";
     } else if (change.kind === "removed" && isCapability) {
-      obligations.push({
-        action: "DEPRECATE",
-        subject: change.what,
-        note: "keep the row — Status: Deprecated, Valid until the last version that had it. Deleting it takes the reason it existed with it",
-      });
+      action = "DEPRECATE";
+      note =
+        "keep the row — Status: Deprecated, Valid until the last version that had it. Deleting it takes the reason it existed with it";
     } else if (change.kind === "removed") {
-      obligations.push({
-        action: "UPDATE",
-        subject: change.what,
-        note: "a scenario step that uses this now describes something that is gone — version-range the step, don't deprecate the scenario",
-      });
+      action = "UPDATE";
+      note =
+        "a scenario step that uses this now describes something that is gone — version-range the step, don't deprecate the scenario";
     } else if (change.kind === "added") {
-      obligations.push({
-        action: "UPDATE",
-        subject: change.what,
-        note: "worth a step if a scenario already covers the surface it belongs to",
-      });
+      action = "UPDATE";
+      note =
+        "worth a step if a scenario already covers the surface it belongs to";
     } else {
-      obligations.push({
-        action: "UPDATE",
-        subject: change.what,
-        note: "any scenario asserting the old behaviour needs its Steps/Expected adjusted, and the transition noted so a run against the previous release still makes sense",
-      });
+      action = "UPDATE";
+      note =
+        "any scenario asserting the old behaviour needs its Steps/Expected adjusted, and the transition noted so a run against the previous release still makes sense";
     }
+
+    obligations.push({
+      action,
+      subject: change.what,
+      note,
+      ids: found.ids,
+      twins: found.twins,
+      resolvable,
+    });
   }
   return obligations;
 }
