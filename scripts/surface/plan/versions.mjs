@@ -133,24 +133,42 @@ async function changesetCount(repoRoot) {
  * couldn't ask changesets" (fill it in by hand). Collapsing any of these into
  * another states a cause that hasn't been established.
  *
- * @param {{available: boolean, versions: Map}} status from {@link nextVersions}
+ * Returns a tagged result rather than a bare string, because the two kinds want
+ * different treatment downstream and conflating them broke both. A `stamp` is a
+ * literal value to copy into a scenario's field — worth a code span, worth
+ * pasting. A `note` is guidance about why there is no value, which contains
+ * prose and backticks of its own: wrapping it in a code span mangles it, and
+ * pasting it into a scenario row as though it were a version is worse.
+ *
+ * @param {{available: boolean, reason?: string, versions: Map}} status
+ * @returns {null | {kind: "stamp"|"note", text: string}}
  */
 export function versionStamp(changePath, status, removed = false) {
   const pkg = packageOf(changePath);
   if (!pkg) return null;
   const short = pkg.replace(/^@real-a11y-dev\//, "");
+  const note = (text) => ({ kind: "note", text });
 
   if (!status.available) {
     return status.reason === "none"
-      ? `no changeset on this branch — add one (\`pnpm changeset\`) and this stamps itself`
-      : `version not stamped — couldn't read pending changesets (\`pnpm changeset:status\`); fill this in by hand`;
+      ? note(
+          "no changeset on this branch — add one (`pnpm changeset`) and this stamps itself",
+        )
+      : note(
+          "version not stamped — couldn't read pending changesets (`pnpm changeset:status`); fill this in by hand",
+        );
   }
 
   const version = status.versions.get(pkg);
   if (!version) {
-    return `no pending changeset for ${pkg} — the version this ships in isn't decided yet`;
+    return note(
+      `no pending changeset for ${pkg} — the version this ships in isn't decided yet`,
+    );
   }
-  return removed
-    ? `Valid until: ${short} ≤ ${version.old}`
-    : `Valid from: ${short} ≥ ${version.next}`;
+  return {
+    kind: "stamp",
+    text: removed
+      ? `Valid until: ${short} ≤ ${version.old}`
+      : `Valid from: ${short} ≥ ${version.next}`,
+  };
 }

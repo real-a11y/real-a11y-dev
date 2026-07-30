@@ -87,7 +87,7 @@ export function renderText(report) {
   for (const s of report.scenarios) {
     out.push(`  ${s.action.padEnd(10)} ${s.subject}`);
     out.push(`      ${s.note}`);
-    if (s.stamp) out.push(`      ${s.stamp}`);
+    if (s.stamp) out.push(`      ${s.stamp.text}`);
   }
   out.push(
     "",
@@ -138,7 +138,11 @@ export function prBodyBlock(report) {
                 // survive being quoted inside the instruction below, and a
                 // comment nested in a comment ends the outer one at the first
                 // `-->`, spilling the rest onto the rendered page.
-                (s) => `R?? ${s.subject}${s.stamp ? ` — ${s.stamp}` : ""}`,
+                // Only a real stamp. A note explains why there is no version;
+                // pasting it into the row as though it were one is noise, and
+                // the report body already says it.
+                (s) =>
+                  `R?? ${s.subject}${s.stamp?.kind === "stamp" ? ` — ${s.stamp.text}` : ""}`,
               )
               .join(" · ")
           : "—"
@@ -177,6 +181,20 @@ function cell(text) {
       .replace(/\|/g, "\\|")
       .replace(/\n/g, " ")
   );
+}
+
+/**
+ * A scenario's version line for the comment. A stamp is a value, so it gets a
+ * code span; a note is prose that contains backticks of its own, and wrapping
+ * THAT in a code span ends the span at the first one and mangles the rest —
+ * which the CI path hit every time, since a job with no node_modules can never
+ * read changesets and always produces a note.
+ */
+function stampMarkdown(stamp) {
+  if (!stamp) return "";
+  // Two trailing spaces = a markdown hard line break.
+  const text = stamp.kind === "stamp" ? `\`${stamp.text}\`` : stamp.text;
+  return `  \n  ${text}`;
 }
 
 /** The sticky PR comment. */
@@ -228,7 +246,7 @@ export function renderMarkdown(report, base) {
   out.push("<details><summary><b>Scenarios (§4b)</b></summary>", "");
   for (const s of report.scenarios) {
     out.push(
-      `- **${s.action}** — ${s.subject}${s.stamp ? `  \n  \`${s.stamp}\`` : ""}  \n  ${s.note}`,
+      `- **${s.action}** — ${s.subject}${stampMarkdown(s.stamp)}  \n  ${s.note}`,
     );
   }
   out.push(
