@@ -107,11 +107,19 @@ a branch's surface changes oblige you to update.
 
 ### What is checked mechanically
 
-Ids are unique and match their filename · every `covers` path exists in the
-manifest · every shipped CLI command and MCP tool has at least one **Active** row
-covering it · every `twin` exists, sits in the other suite, and is reciprocated ·
-`Deprecated` rows carry a `validUntil` and `Active` rows don't · `validFrom` names
-a package · the body has its required sections.
+Ids are unique and match their filename · every **Active** row's `covers` paths
+exist in the manifest · every shipped CLI command and MCP tool has at least one
+Active row covering it · every `twin` exists, sits in the other suite, and is
+reciprocated · `Deprecated` rows carry a `validUntil` and `Active` rows don't ·
+`validFrom` names a package · the body has its required sections.
+
+**A Deprecated row keeps its `covers`, and its paths are exempt from the
+existence check.** That is not a loophole — it's the deprecation lifecycle. When a
+PR removes a surface, §4b says keep the row and mark it `Deprecated`, so its paths
+are *expected* to have left the manifest. Checking them would mean the PR that
+deletes a command couldn't pass the gate except by stripping the link. The coverage
+check relies on those paths surviving, too: it's how it can say "only R7 names this,
+and R7 is Deprecated" rather than just "nothing covers this".
 
 Whether a row's Steps still describe a *sensible test* is editorial and stays
 human. The checks cover what is objectively true or false.

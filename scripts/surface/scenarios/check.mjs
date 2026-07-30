@@ -37,17 +37,31 @@ export function checkScenarios(scenarios, manifest) {
     }
   }
 
-  // ---- every `covers` path exists ------------------------------------------
+  // ---- every ACTIVE row's `covers` path exists -----------------------------
   //
   // The `get_native_tree` case. A path that looks plausible and isn't real makes
   // a scenario appear to cover something nobody tests.
+  //
+  // Deprecated rows are exempt, and must be: §4b says that when a PR removes a
+  // surface you keep the row, set Status: Deprecated and a `validUntil` — so a
+  // retired row's `covers` paths are EXPECTED to have left the manifest. That is
+  // the whole reason it was retired. Enforcing existence here deadlocked the
+  // documented flow: the PR that deletes a command could not pass the gate except
+  // by stripping the `covers:` block, which destroys the link this migration
+  // exists to create and is documented nowhere.
+  //
+  // The coverage check below relies on retired rows keeping those paths, too —
+  // it looks them up by `covers` to say "only R7 names this, and it's Deprecated".
   for (const s of scenarios) {
+    if (s.status !== "Active") continue;
     for (const path of s.covers ?? []) {
       if (!valid.has(path)) {
         fail(
           s.file,
           `covers \`${path}\`, which the manifest has no such thing — a renamed ` +
-            `or removed surface, or a typo. Run \`pnpm surface:plan\` to see what moved.`,
+            `or removed surface, or a typo. Run \`pnpm surface:plan\` to see what moved.` +
+            ` If the surface is genuinely gone, this row should be Deprecated with a` +
+            ` \`validUntil\` rather than edited to point somewhere else.`,
         );
       }
     }
