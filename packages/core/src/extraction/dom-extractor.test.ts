@@ -1209,6 +1209,31 @@ describe("name from content covers the whole ARIA 1.2 role set", () => {
       ),
     ).toBe("Save");
   });
+
+  // The barrier is what keeps a real grid's rows quiet: ARIA requires a row's
+  // children to be cells, and a gridcell contributes nothing upward, so the
+  // checkbox inside it never reaches the row's name however deeply it nests.
+  it("keeps a row silent when its widget sits in a gridcell, as ARIA requires", () => {
+    expect(
+      nameOf(
+        `<div id="target" role="row"><div role="gridcell"><div role="checkbox"><span>Accept</span></div></div></div>`,
+      ),
+    ).toBe("");
+  });
+
+  // A widget as a row's DIRECT child is malformed grid markup, and there the
+  // named-widget recursion of accname §2F.iii applies: the checkbox
+  // contributes its computed name, which is what Chrome exposes. Not new
+  // behaviour — `<div role="cell"><div role="checkbox">…` took this same path
+  // before — but `row` reaches it now, so pin it rather than leave it to be
+  // rediscovered as a surprise.
+  it("takes a directly-nested widget's computed name into a row's name", () => {
+    expect(
+      nameOf(
+        `<div id="target" role="row"><div role="checkbox"><span>Accept</span></div></div>`,
+      ),
+    ).toBe("Accept");
+  });
 });
 
 describe("accessible-name cycle safety (accname visit-once)", () => {
