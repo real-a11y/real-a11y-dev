@@ -221,9 +221,24 @@ function fmtFinding(f: FingerprintedFinding): string {
   return `[${f.severity}] ${f.rule}: ${f.message}${where}`;
 }
 
+/**
+ * Which operation produced this diff — and what it was against.
+ *
+ * Required, not optional, because the header's job is to say which of the two
+ * ran. `diff_findings` re-reads the live page; `diff_checkpoints` compares two
+ * stored snapshots and touches no browser. The old headers ("Checkpoint diff
+ * (vs. saved)" / "Checkpoint diff base → head") did technically differ, but
+ * neither named the operation, and the first never said WHICH checkpoint — with
+ * several stored, the output couldn't be traced back to its input. An optional
+ * field would let a caller quietly go back to that.
+ */
+export type RenderDiffSource =
+  | { kind: "live"; checkpoint: string }
+  | { kind: "stored"; base: string; head: string };
+
 export interface RenderDiffOptions {
-  /** Name the two sides (`diff_checkpoints`); omit for a re-snapshot vs. saved. */
-  labels?: { base: string; head: string };
+  /** The operation behind this diff. Titles the output. */
+  source: RenderDiffSource;
   /**
    * The two addresses when the sides are different pages — pass
    * {@link differentUrl}'s result straight through.
@@ -242,13 +257,14 @@ export interface RenderDiffOptions {
  */
 export function renderDiff(
   diff: DiffResult,
-  options: RenderDiffOptions = {},
+  options: RenderDiffOptions,
 ): string {
-  const { labels, differentUrl: differing } = options;
+  const { source, differentUrl: differing } = options;
   const s = diff.summary;
-  const title = labels
-    ? `Checkpoint diff ${labels.base} → ${labels.head}`
-    : "Checkpoint diff (vs. saved)";
+  const title =
+    source.kind === "live"
+      ? `Live page vs. saved checkpoint "${source.checkpoint}"`
+      : `Saved checkpoints: "${source.base}" → "${source.head}" (no re-snapshot)`;
   const header = `${title}: ${s.new} new, ${s.removed} fixed, ${s.changed} changed, ${s.unchanged} unchanged.`;
 
   // Two different pages' trees differ almost everywhere, so the summary would

@@ -487,6 +487,16 @@ main
     code "image"
   button "Copy Code"
   code
+  paragraph "An empty category reports how much it scanned and which roles it looked for, so "none" is never confusable with a page that failed to load:"
+  button "Copy Code"
+  code
+  paragraph "Worth knowing when a category surprises you: looks for exactly , so a page whose graphics are s lists none, and includes the role while does not — that one lists the fields."
+    code "image"
+    code "img"
+    code "figure"
+    code "landmark"
+    code "form"
+    code "form"
   paragraph "· () · ."
     strong "Flags:"
     link "Browser & page"

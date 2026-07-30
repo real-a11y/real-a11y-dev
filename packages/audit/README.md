@@ -80,6 +80,19 @@ listByRole(document.body, "button");
 listByRole(document.body, "landmark"); // every landmark region, one per line
 ```
 
+It never returns an empty string, so no caller needs a sentinel of its own. An empty category explains itself instead — "none" alone answers three different questions the same way, and the fix differs for each:
+
+```ts
+listByRole(document.body, "image");
+// (none — filter "image" matched 0 of 412 nodes; it looks for role img)
+
+listByRole({ nodes: new Map(), rootId: "" }, "image");
+// (none — the tree is empty, so nothing could match filter "image"; the page
+//  may not have loaded, or extraction failed)
+```
+
+The node count separates *"this page has none"* from *"nothing was read"*. The role list is the other half: `image` looks for exactly `img`, so a page whose graphics are `figure`s reports none — and `landmark` includes the `form` role while the `form` filter does **not**, because that one looks for the fields.
+
 ## Design
 
 `collectFindings` is deliberately separate from anything that renders it. `@real-a11y-dev/testing` wraps these helpers as Vitest/Jest matchers, the `real-a11y audit` CLI command prints them, and the MCP `audit_page` tool returns them to an agent — but a rule is written **once**, here, and every surface reports it. [`@real-a11y-dev/core`](https://real-a11y.dev/packages/core) stays dependency-free; this package layers the rules on top of core's extracted tree, so consumers who only need extraction don't pay for the audit engine.

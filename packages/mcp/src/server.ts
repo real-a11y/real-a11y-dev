@@ -596,8 +596,10 @@ export function buildServer(
     async ({ filter }) => {
       // Node-side listing over the native tree — the same category engine the
       // page bundle runs.
-      const list = listByRole(await session.nativeTree(), filter as RoleFilter);
-      return text(list || "(none)");
+      // `listByRole` never returns "" — an empty category comes back as a line
+      // saying why (0 of N nodes matched, and which roles it looked for), so
+      // there is no sentinel for this caller to supply.
+      return text(listByRole(await session.nativeTree(), filter as RoleFilter));
     },
   );
 
@@ -685,6 +687,7 @@ export function buildServer(
       // Checkpoints survive navigation by design, so the agent may well have
       // moved to another page between saving and diffing.
       const body = renderDiff(diffCheckpointPages(base.page, head), {
+        source: { kind: "live", checkpoint: name },
         differentUrl: differentUrl(base.page, head),
       });
       return text(note ? `${note}\n\n${body}` : body, RULES_HINT);
@@ -709,7 +712,7 @@ export function buildServer(
       // side may have been imported from a scoped, DOM-era artifact.
       const note = scopeMismatch(b.page, h.page);
       const rendered = renderDiff(diffLabeledCheckpoints(b.page, h.page), {
-        labels: { base, head },
+        source: { kind: "stored", base, head },
         differentUrl: differentUrl(b.page, h.page),
       });
       return text(note ? `${note}\n\n${rendered}` : rendered, RULES_HINT);

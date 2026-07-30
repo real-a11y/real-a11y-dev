@@ -40,6 +40,9 @@ const page = (
 
 const at = (url: string) => page("home", [finding()], "button", url);
 
+/** Most cases don't care which operation ran; the header tests below do. */
+const LIVE = { kind: "live", checkpoint: "home" } as const;
+
 describe("CheckpointStore", () => {
   it("evicts the least-recently-saved when over capacity", () => {
     const store = new CheckpointStore<SnapshotPage>(2);
@@ -95,7 +98,7 @@ describe("diffLabeledCheckpoints", () => {
 describe("renderDiff", () => {
   it("reports no change when nothing differs", () => {
     const p = page("home", [finding()]);
-    expect(renderDiff(diffCheckpointPages(p, p))).toMatch(
+    expect(renderDiff(diffCheckpointPages(p, p), { source: LIVE })).toMatch(
       /No accessibility findings changed/,
     );
   });
@@ -103,7 +106,9 @@ describe("renderDiff", () => {
   it("lists a NEW finding and flags it as gating", () => {
     const before = page("home", [finding()]);
     const after = page("home", [finding(), finding({ locator: "#cancel" })]);
-    const out = renderDiff(diffCheckpointPages(before, after));
+    const out = renderDiff(diffCheckpointPages(before, after), {
+      source: LIVE,
+    });
     expect(out).toMatch(/1 new/);
     expect(out).toMatch(/NEW — gates CI/);
   });
@@ -113,7 +118,9 @@ describe("renderDiff", () => {
     // structural summary is the whole signal there, so it must not be skipped.
     const before = page("home", [finding()], "button");
     const after = page("home", [finding()], 'button\nlink "Docs"');
-    const out = renderDiff(diffCheckpointPages(before, after));
+    const out = renderDiff(diffCheckpointPages(before, after), {
+      source: LIVE,
+    });
     expect(out).toMatch(/0 new, 0 fixed/);
     expect(out).toMatch(/structure did/);
     expect(out).toMatch(/Structural changes/);
@@ -122,9 +129,53 @@ describe("renderDiff", () => {
   it("reports a FIXED finding", () => {
     const before = page("home", [finding()]);
     const after = page("home", []);
-    const out = renderDiff(diffCheckpointPages(before, after));
+    const out = renderDiff(diffCheckpointPages(before, after), {
+      source: LIVE,
+    });
     expect(out).toMatch(/1 fixed/);
     expect(out).toMatch(/FIXED/);
+  });
+});
+
+describe("renderDiff headers name the operation", () => {
+  const before = page("home", [finding()]);
+  const after = page("home", [finding(), finding({ locator: "#cancel" })]);
+  const diff = diffCheckpointPages(before, after);
+
+  it("a live re-snapshot says so, and names the checkpoint it read", () => {
+    // The old header was "Checkpoint diff (vs. saved)" — it never said WHICH
+    // checkpoint, so with several stored the output couldn't be traced to its
+    // input.
+    const out = renderDiff(diff, {
+      source: { kind: "live", checkpoint: "prod" },
+    });
+    expect(out.split("\n")[0]).toBe(
+      'Live page vs. saved checkpoint "prod": 1 new, 0 fixed, 0 changed, 1 unchanged.',
+    );
+  });
+
+  it("a stored-vs-stored comparison says no browser was read", () => {
+    const out = renderDiff(diff, {
+      source: { kind: "stored", base: "before", head: "after" },
+    });
+    expect(out.split("\n")[0]).toBe(
+      'Saved checkpoints: "before" → "after" (no re-snapshot): 1 new, 0 fixed, 0 changed, 1 unchanged.',
+    );
+  });
+
+  it("the two headers are not confusable with each other", () => {
+    const live = renderDiff(diff, {
+      source: { kind: "live", checkpoint: "prod" },
+    });
+    const stored = renderDiff(diff, {
+      source: { kind: "stored", base: "prod", head: "preview" },
+    });
+    expect(live).toMatch(/^Live page /);
+    expect(stored).toMatch(/^Saved checkpoints: /);
+    // Neither reuses the old ambiguous wording.
+    for (const out of [live, stored]) {
+      expect(out).not.toMatch(/Checkpoint diff/);
+    }
   });
 });
 
@@ -208,6 +259,7 @@ describe("renderDiff across two different pages", () => {
   );
   const differing = differentUrl(before, after);
   const out = renderDiff(diffCheckpointPages(before, after), {
+    source: LIVE,
     differentUrl: differing,
   });
 
@@ -242,6 +294,7 @@ describe("renderDiff across two different pages", () => {
       "https://staging.example.com/a",
     );
     const out = renderDiff(diffCheckpointPages(before, sameRoute), {
+      source: LIVE,
       differentUrl: differentUrl(before, sameRoute),
     });
     expect(out).toMatch(/Structural changes/);

@@ -158,6 +158,8 @@ link "Config"
 link "--root"
 button "Copy Code"
 generic
+button "Copy Code"
+generic
 link "Browser & page"
 link "Output"
 link "Config"

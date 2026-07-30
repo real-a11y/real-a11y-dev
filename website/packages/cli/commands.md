@@ -220,6 +220,17 @@ Categories: `heading`, `link`, `button`, `form`, `landmark`, `image`.
 real-a11y list image https://example.com
 ```
 
+An empty category reports how much it scanned and which roles it looked for,
+so "none" is never confusable with a page that failed to load:
+
+```
+(none — filter "image" matched 0 of 412 nodes; it looks for role img)
+```
+
+Worth knowing when a category surprises you: `image` looks for exactly `img`,
+so a page whose graphics are `figure`s lists none, and `landmark` includes the
+`form` role while `form` does not — that one lists the fields.
+
 **Flags:** [Browser & page](#browser-page) · [Output](#output) (`pretty | json`)
 · [Config](#config).
 

@@ -116,8 +116,14 @@ link "get_semantic_tree"
 link "audit_page"
 button "Copy Code"
 generic
+button "Copy Code"
+generic
 link "tree checkpoints"
 link "click_element"
+button "Copy Code"
+generic
+button "Copy Code"
+generic
 button "Copy Code"
 generic
 button "Copy Code"

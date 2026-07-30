@@ -392,4 +392,69 @@ describe("MCP end-to-end against a real browser", () => {
     );
     expect(out).toMatch(/no-unlabeled-interactive/);
   });
+
+  it("headers name which diff ran, against a real browser", async () => {
+    // The unit tests fake the session, so they can't prove the checkpoint name
+    // survives a real capture → re-snapshot round trip.
+    const html = `<!doctype html><html><head><title>Hdr</title></head><body>
+      <main><h1>Title</h1><button></button></main>
+    </body></html>`;
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: dataUrl(html) },
+    });
+    await client.callTool({
+      name: "checkpoint_findings",
+      arguments: { name: "prod" },
+    });
+
+    const live = textOf(
+      await client.callTool({
+        name: "diff_findings",
+        arguments: { name: "prod" },
+      }),
+    );
+    expect(live).toMatch(/^Live page vs\. saved checkpoint "prod":/m);
+
+    await client.callTool({
+      name: "checkpoint_findings",
+      arguments: { name: "preview" },
+    });
+    const stored = textOf(
+      await client.callTool({
+        name: "diff_checkpoints",
+        arguments: { base: "prod", head: "preview" },
+      }),
+    );
+    expect(stored).toMatch(
+      /^Saved checkpoints: "prod" → "preview" \(no re-snapshot\):/m,
+    );
+    // The whole point: the two are not confusable, and neither keeps the old
+    // wording that said nothing about which operation ran.
+    expect(live).not.toMatch(/Checkpoint diff/);
+    expect(stored).not.toMatch(/Checkpoint diff/);
+  });
+
+  it("an empty list_elements category reports a real scanned count", async () => {
+    // A hardcoded denominator would satisfy the unit tests; only a real
+    // extraction proves the number describes the page actually read.
+    const html = `<!doctype html><html><head><title>Figs</title></head><body>
+      <header><nav><a href="/a">Home</a></nav></header>
+      <main><h1>Charts</h1><figure>not an img</figure><button>Go</button></main>
+    </body></html>`;
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: dataUrl(html) },
+    });
+    const out = textOf(
+      await client.callTool({
+        name: "list_elements",
+        arguments: { filter: "image" },
+      }),
+    );
+    const matched = /matched 0 of (\d+) nodes/.exec(out);
+    expect(matched).not.toBeNull();
+    expect(Number(matched?.[1])).toBeGreaterThan(3); // a real tree, not zero
+    expect(out).toMatch(/it looks for role img\)/);
+  });
 });
