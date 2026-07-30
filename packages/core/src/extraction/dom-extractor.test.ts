@@ -1158,6 +1158,59 @@ describe("extractDomTree", () => {
   });
 });
 
+describe("name from content covers the whole ARIA 1.2 role set", () => {
+  // The role whitelist behind step 8 of the name computation used to hold only
+  // button/link/heading/option/treeitem/tab/menuitem/cell, so a widget whose
+  // label sat inside a child element — the normal shape for a custom control,
+  // `<div role="checkbox"><span>Accept terms</span></div>` — came out nameless
+  // while Chrome announced "Accept terms". Only markup with DIRECT text
+  // children was unaffected, because the step-9 fallback catches that; that
+  // near-miss is why this went unnoticed.
+  const nameOf = (html: string): string => {
+    const root = createPage(html);
+    const node = [...extractDomTree(root).nodes.values()].find(
+      (n) => n.dom.attributes["id"] === "target",
+    )!;
+    return node.a11y.name;
+  };
+
+  it.each([
+    ["checkbox", `<span>Accept terms</span>`, "Accept terms"],
+    ["radio", `<span>Small</span>`, "Small"],
+    ["switch", `<span>Dark mode</span>`, "Dark mode"],
+    ["menuitemcheckbox", `<span>Word wrap</span>`, "Word wrap"],
+    ["menuitemradio", `<span>Compact</span>`, "Compact"],
+    ["gridcell", `<span>42</span>`, "42"],
+    ["columnheader", `<span>Name</span>`, "Name"],
+    ["rowheader", `<span>Row 1</span>`, "Row 1"],
+    ["row", `<span>Totals</span>`, "Totals"],
+    ["tooltip", `<span>Saves the file</span>`, "Saves the file"],
+  ])("names a role=%s from wrapped content", (role, inner, expected) => {
+    expect(nameOf(`<div id="target" role="${role}">${inner}</div>`)).toBe(
+      expected,
+    );
+  });
+
+  // Naming from content is the opposite direction to NAME_BARRIER_ROLES, and
+  // most of these roles are in both sets. Adding them here must not start
+  // leaking their text into a container's name.
+  it("does not let a named-from-content cell leak into its row's name", () => {
+    expect(
+      nameOf(
+        `<div id="target" role="row"><div role="cell">A</div><div role="cell">B</div></div>`,
+      ),
+    ).toBe("");
+  });
+
+  it("does not let a tooltip leak into the name of the widget hosting it", () => {
+    expect(
+      nameOf(
+        `<button id="target">Save<span role="tooltip">Saves the file</span></button>`,
+      ),
+    ).toBe("Save");
+  });
+});
+
 describe("accessible-name cycle safety (accname visit-once)", () => {
   // Since PR #101, name-from-content recurses into named-widget descendants
   // (getAccessibleTextContent -> computeAccessibleName), and

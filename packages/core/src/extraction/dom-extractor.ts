@@ -456,7 +456,15 @@ const NAMES_FROM_CONTENT_TAGS = new Set<string>([
   "th",
 ]);
 
-/** Roles whose own text content is used as an accessible name. */
+/**
+ * Roles whose own text content is used as an accessible name — the ARIA 1.2
+ * `nameFromContent` set, minus the abstract `sectionhead`.
+ *
+ * Being here says nothing about what an element contributes to an *ancestor's*
+ * name: most of these are also in {@link NAME_BARRIER_ROLES}, which is the
+ * other direction of the same relationship. A `gridcell` names itself from its
+ * content and still contributes nothing to the row that contains it.
+ */
 const NAMES_FROM_CONTENT_ROLES = new Set<string>([
   "button",
   "link",
@@ -465,7 +473,17 @@ const NAMES_FROM_CONTENT_ROLES = new Set<string>([
   "treeitem",
   "tab",
   "menuitem",
+  "menuitemcheckbox",
+  "menuitemradio",
   "cell",
+  "gridcell",
+  "columnheader",
+  "rowheader",
+  "row",
+  "checkbox",
+  "radio",
+  "switch",
+  "tooltip",
 ]);
 
 /**
@@ -720,8 +738,9 @@ function computeRawAccessibleName(
   if (MEDIA_TAGS.has(tag)) return "";
 
   // 8. Recursive text content — ONLY for elements whose ARIA role supports
-  //    "name from content" (headings, links, buttons, table cells, options).
-  //    NOT for generic containers (div, span, p) which would grab huge text blobs.
+  //    "name from content" (headings, links, buttons, checkboxes, table cells,
+  //    options — see NAMES_FROM_CONTENT_ROLES). NOT for generic containers
+  //    (div, span, p) which would grab huge text blobs.
   const explicitRole = element.getAttribute("role")?.trim().split(/\s+/)[0];
   const namesFromContentRole =
     !!explicitRole && NAMES_FROM_CONTENT_ROLES.has(explicitRole);
