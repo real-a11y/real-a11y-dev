@@ -3,6 +3,7 @@
 //   node scripts/surface/index.mjs extract      write docs/surface.json
 //   node scripts/surface/index.mjs check        CI gate — read-only
 //   node scripts/surface/index.mjs check-built  the slug function vs the built site
+//   node scripts/surface/index.mjs plan         what this branch obliges you to update
 //
 // One model of what the packages expose, extracted from the code itself, so
 // every claim made about the surface — in the docs today, in the release test
@@ -17,13 +18,20 @@ import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { checkAnchors, checkDuplicateAnchors } from "./check/anchors.mjs";
-import { checkBuiltAnchors, DIST } from "./check/built.mjs";
-import { checkCoverage, checkEnvDocumented } from "./check/coverage.mjs";
-import { checkDocs } from "./check/docs.mjs";
-import { checkSamples, checkToolExamples } from "./check/samples.mjs";
-import { validateAgainstSchema } from "./check/schema.mjs";
-import { buildManifest, MANIFEST_VERSION, serialize } from "./model.mjs";
+// Only the `plan` half is imported statically. Everything under `check/` and
+// `model.mjs` is loaded on demand inside the verb that needs it, because ESM
+// resolves a module's ENTIRE static import graph before running a line of it:
+// a top-level `import` of `check/schema.mjs` (which imports `ajv`) made
+// `node scripts/surface/index.mjs plan` fail with ERR_MODULE_NOT_FOUND in any
+// checkout without `node_modules` — including, precisely, the CI job that runs
+// `plan` and deliberately skips the install.
+//
+// So the rule is: `plan` must reach nothing outside node core and `git`. The
+// `plan/*` modules honor that, and are safe at the top level.
+import { diffManifests } from "./plan/diff.mjs";
+import { changedFiles, manifestAt, mergeBase, refExists } from "./plan/git.mjs";
+import { buildReport, renderMarkdown, renderText } from "./plan/report.mjs";
+import { nextVersions } from "./plan/versions.mjs";
 
 const repoRoot = resolve(fileURLToPath(import.meta.url), "../../..");
 const manifestPath = resolve(repoRoot, "docs/surface.json");
@@ -36,6 +44,7 @@ function die(lines) {
 }
 
 async function extract() {
+  const { buildManifest, serialize } = await import("./model.mjs");
   const manifest = await buildManifest(repoRoot);
   await writeFile(manifestPath, serialize(manifest), "utf8");
   console.log(
@@ -46,6 +55,22 @@ async function extract() {
 }
 
 async function check() {
+  const [
+    { buildManifest, MANIFEST_VERSION, serialize },
+    { checkAnchors, checkDuplicateAnchors },
+    { checkCoverage, checkEnvDocumented },
+    { checkDocs },
+    { checkSamples, checkToolExamples },
+    { validateAgainstSchema },
+  ] = await Promise.all([
+    import("./model.mjs"),
+    import("./check/anchors.mjs"),
+    import("./check/coverage.mjs"),
+    import("./check/docs.mjs"),
+    import("./check/samples.mjs"),
+    import("./check/schema.mjs"),
+  ]);
+
   const manifest = await buildManifest(repoRoot);
   const current = serialize(manifest);
 
@@ -144,6 +169,7 @@ async function check() {
  * build` to have run; `check` stays a read-only checkout away from any build.
  */
 async function checkBuilt() {
+  const { checkBuiltAnchors, DIST } = await import("./check/built.mjs");
   const { problems, pages, ids } = await checkBuiltAnchors(repoRoot);
 
   // No pages means the build is missing or moved — the failure this check is
@@ -181,6 +207,72 @@ async function checkBuilt() {
   );
 }
 
+/**
+ * What this branch obliges you to update — computed, not remembered.
+ *
+ * Reads both manifests out of git, so it needs no install and no build: the
+ * whole point of committing `docs/surface.json` is that its diff is the answer.
+ * Read-only and never fails on findings — it reports obligations, and whether
+ * to act on them is the author's call, not a gate's.
+ */
+async function plan(argv) {
+  const flag = (name, fallback) => {
+    const i = argv.indexOf(`--${name}`);
+    return i === -1 ? fallback : argv[i + 1];
+  };
+  const base = flag("base", "origin/main");
+  const asMarkdown = argv.includes("--format")
+    ? flag("format") === "markdown"
+    : false;
+
+  // Establish the base before trusting anything derived from it. Both failures
+  // below would otherwise surface as "the entire public surface is new" — a
+  // confident, wrong, and very plausible-looking report.
+  if (!(await refExists(repoRoot, base))) {
+    die([
+      `Can't resolve \`${base}\`.`,
+      ``,
+      `  In CI this usually means the checkout's refspec never created the`,
+      `  remote-tracking ref. Fetch it explicitly:`,
+      ``,
+      `    git fetch --no-tags origin +refs/heads/<branch>:refs/remotes/origin/<branch>`,
+      ``,
+      `  Locally: git fetch origin, or pass --base <ref>.`,
+    ]);
+  }
+
+  const mergeBaseRef = await mergeBase(repoRoot, base);
+  if (mergeBaseRef === null) {
+    die([
+      `\`${base}\` and HEAD have no common ancestor.`,
+      ``,
+      `  A shallow clone is the usual cause — this needs enough history to find`,
+      `  the merge base (actions/checkout with fetch-depth: 0).`,
+    ]);
+  }
+
+  const [baseManifest, touched, versions] = await Promise.all([
+    manifestAt(repoRoot, mergeBaseRef),
+    changedFiles(repoRoot, mergeBaseRef),
+    nextVersions(repoRoot),
+  ]);
+
+  let headManifest;
+  try {
+    headManifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  } catch {
+    die([
+      `${MANIFEST_REL} is missing — nothing to plan against.`,
+      ``,
+      `  pnpm surface:extract`,
+    ]);
+  }
+
+  const changes = diffManifests(baseManifest, headManifest);
+  const report = buildReport(changes, touched, versions);
+  console.log(asMarkdown ? renderMarkdown(report, base) : renderText(report));
+}
+
 const verb = process.argv[2];
 if (verb === "extract") {
   await extract();
@@ -188,13 +280,17 @@ if (verb === "extract") {
   await check();
 } else if (verb === "check-built") {
   await checkBuilt();
+} else if (verb === "plan") {
+  await plan(process.argv.slice(3));
 } else {
   die([
-    `usage: node scripts/surface/index.mjs <extract|check|check-built>`,
+    `usage: node scripts/surface/index.mjs <extract|check|check-built|plan>`,
     ``,
     `  extract      rebuild ${MANIFEST_REL} from the packages' source`,
     `  check        fail if the manifest is stale or the docs disagree with it`,
     `  check-built  fail if slugify() disagrees with the built site's heading`,
     `               ids (needs the website build)`,
+    `  plan         report the docs and test scenarios this branch obliges you`,
+    `               to update  [--base <ref>] [--format markdown]`,
   ]);
 }
