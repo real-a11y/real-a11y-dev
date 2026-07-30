@@ -56,6 +56,9 @@ link "See also"
 link "failOn"
 link "urls"
 link "redact"
+link "--verbose"
+button "Copy Code"
+generic
 link "urls"
 button "Copy Code"
 generic

@@ -362,6 +362,8 @@ table
 link "--config"
 link "snapshot"
 link "install"
+button "Copy Code"
+generic
 link "audit"
 link "snapshot"
 link "Configure once"

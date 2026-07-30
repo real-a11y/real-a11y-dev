@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -7,7 +7,10 @@ import { describe, expect, it } from "vitest";
 import { COMMANDS } from "./args.js";
 import {
   clearConfigCache,
+  CONFIG_FILENAME,
+  configSource,
   DEFAULTABLE_FLAGS,
+  describeConfigSource,
   loadConfig,
   mergeDefaults,
   resolveConfig,
@@ -297,6 +300,97 @@ describe("resolveConfig", () => {
     expect(a?.config).toBe(b?.config); // same instance — memoized, one parse
     expect(a?.path).toBe(resolve(file));
     expect(resolveConfig({ "no-config": true })).toBeUndefined();
+  });
+});
+
+describe("configSource", () => {
+  it("reports --config as the source, unresolved", () => {
+    // The path stays as given; `describeConfigSource` is what absolutises it,
+    // so the two concerns don't have to agree about cwd.
+    expect(configSource({ config: "./custom.json" })).toEqual({
+      kind: "flag",
+      path: "./custom.json",
+    });
+  });
+
+  it("reports --no-config as skipped, and --config wins over it", () => {
+    expect(configSource({ "no-config": true })).toEqual({ kind: "skipped" });
+    expect(configSource({ config: "x.json", "no-config": true }).kind).toBe(
+      "flag",
+    );
+  });
+
+  it("distinguishes discovered from absent, and names the path it checked", () => {
+    const cwd = process.cwd();
+    const dir = mkdtempSync(join(tmpdir(), "real-a11y-src-"));
+    try {
+      process.chdir(dir);
+      const absent = configSource({});
+      expect(absent.kind).toBe("absent");
+      // The absolute path is the whole point — it is what tells a user their
+      // config is real but somewhere else.
+      expect(absent).toMatchObject({ searched: resolve(CONFIG_FILENAME) });
+
+      writeFileSync(join(dir, CONFIG_FILENAME), "{}");
+      expect(configSource({})).toEqual({
+        kind: "discovered",
+        path: CONFIG_FILENAME,
+      });
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
+  it("does not walk upward — a config in the parent is still absent", () => {
+    // The documented v1 limitation, pinned. If an upward walk is ever added,
+    // this test is the place that says the behaviour changed on purpose.
+    const cwd = process.cwd();
+    const parent = mkdtempSync(join(tmpdir(), "real-a11y-up-"));
+    const child = join(parent, "nested");
+    mkdirSync(child);
+    writeFileSync(join(parent, CONFIG_FILENAME), "{}");
+    try {
+      process.chdir(child);
+      expect(configSource({}).kind).toBe("absent");
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+});
+
+describe("describeConfigSource", () => {
+  it("absolutises every path it prints", () => {
+    // A relative path is exactly as useless as printing nothing here: the user
+    // already believes they have "a11y.config.json".
+    const flag = describeConfigSource({ kind: "flag", path: "./custom.json" });
+    expect(flag).toContain(resolve("./custom.json"));
+    expect(flag).toContain("--config");
+
+    const found = describeConfigSource({
+      kind: "discovered",
+      path: CONFIG_FILENAME,
+    });
+    expect(found).toContain(resolve(CONFIG_FILENAME));
+    expect(found).toContain("auto-discovered");
+  });
+
+  it("names the built-in defaults when discovery was skipped", () => {
+    expect(describeConfigSource({ kind: "skipped" })).toMatch(
+      /--no-config.*built-in defaults/,
+    );
+  });
+
+  it("the absent line carries the path, the rule, AND the way out", () => {
+    // All three, because each answers a different question: where did you look,
+    // why won't looking elsewhere help, and what do I do now. This is the line
+    // the whole change exists for.
+    const out = describeConfigSource({
+      kind: "absent",
+      searched: "/work/app/a11y.config.json",
+    });
+    expect(out).toContain("/work/app/a11y.config.json");
+    expect(out).toMatch(/does not walk upward/);
+    expect(out).toMatch(/--config <file>/);
   });
 });
 

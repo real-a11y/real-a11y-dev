@@ -773,6 +773,22 @@ resolved executable path on stdout.
 
 Extra diagnostics on stderr (per-page timings, and more).
 
+One line of it is worth knowing about before you need it — where the config came
+from, printed before anything depends on it:
+
+```
+config: /work/app/a11y.config.json (auto-discovered)
+config: skipped (--no-config); built-in defaults only
+config: none found — looked for /work/app/nested/a11y.config.json
+  auto-discovery checks the directory you run from and does not walk upward, so a
+  config in a parent directory is not picked up. Pass --config <file> to name one.
+```
+
+The last one is the case that costs people time: the config is real, just not in
+the directory the command ran from, and every default silently reverts to its
+built-in. The path is absolute on purpose — a relative one tells you nothing you
+didn't already assume.
+
 ### `-h, --help`
 
 - **Type:** boolean · **Commands:** all

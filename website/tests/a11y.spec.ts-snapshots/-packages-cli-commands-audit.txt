@@ -1539,6 +1539,10 @@ main
       code "false"
       strong "Commands:"
   paragraph "Extra diagnostics on stderr (per-page timings, and more)."
+  paragraph "One line of it is worth knowing about before you need it — where the config came from, printed before anything depends on it:"
+  button "Copy Code"
+  code
+  paragraph "The last one is the case that costs people time: the config is real, just not in the directory the command ran from, and every default silently reverts to its built-in. The path is absolute on purpose — a relative one tells you nothing you didn't already assume."
   heading "-h, --help" (level 3)
     code "-h, --help"
   list

@@ -194,6 +194,18 @@ real-a11y audit http://localhost:3000   # iPhone 13, networkidle, fail-on error 
 real-a11y audit http://localhost:3000 --no-config   # ignore the config for this run
 ```
 
+Discovery is `./a11y.config.json` in the directory you run from, with no upward
+walk — so running from a subdirectory quietly gets no config, and every default
+reverts to its built-in. `--verbose` says which happened, naming the absolute path
+it checked:
+
+```sh
+real-a11y audit http://localhost:3000 --verbose
+# config: /work/app/a11y.config.json (auto-discovered)
+# config: none found — looked for /work/app/nested/a11y.config.json
+#   auto-discovery checks the directory you run from and does not walk upward, …
+```
+
 Add a **`urls`** list — bare URL strings, or `{ url, name?, rootSelector? }`
 objects — to name your project's routes once; then a bare `real-a11y audit` (or
 `snapshot`) audits them all, no URL to re-type. Each route's `name` is the diff

@@ -316,12 +316,70 @@ export function loadConfig(path: string): A11yConfig {
 
 type ConfigFlags = { config?: unknown; "no-config"?: unknown };
 
+/** The auto-discovered filename. Exported so the diagnostic and the docs can't
+ *  drift from what is actually stat'd. */
+export const CONFIG_FILENAME = "a11y.config.json";
+
+/**
+ * How this run arrived at a config — or didn't.
+ *
+ * Separated from loading because the interesting case is `absent`, which has no
+ * file to report and is the one users get stuck on: discovery stats the current
+ * directory and nothing else, so running from a subdirectory silently gets no
+ * config and every default silently reverts. Modelling it means the diagnostic
+ * can name the exact path that was checked instead of the shape of the rule.
+ */
+export type ConfigSource =
+  | { kind: "flag"; path: string }
+  | { kind: "skipped" }
+  | { kind: "discovered"; path: string }
+  | { kind: "absent"; searched: string };
+
 /** --config <file> wins; --no-config skips; else auto-discover in cwd (no
  * upward walk in v1 — you inherit only a config in the directory you run from). */
+export function configSource(flags: ConfigFlags): ConfigSource {
+  if (typeof flags.config === "string") {
+    return { kind: "flag", path: flags.config };
+  }
+  if (flags["no-config"] === true) return { kind: "skipped" };
+  return existsSync(CONFIG_FILENAME)
+    ? { kind: "discovered", path: CONFIG_FILENAME }
+    : { kind: "absent", searched: resolve(CONFIG_FILENAME) };
+}
+
 function discoverConfigPath(flags: ConfigFlags): string | undefined {
-  if (typeof flags.config === "string") return flags.config;
-  if (flags["no-config"] === true) return undefined;
-  return existsSync("a11y.config.json") ? "a11y.config.json" : undefined;
+  const source = configSource(flags);
+  return source.kind === "flag" || source.kind === "discovered"
+    ? source.path
+    : undefined;
+}
+
+/**
+ * One `--verbose` line saying where the config came from.
+ *
+ * Paths are absolute on purpose. The failure this exists for is a config that
+ * *is* on disk but not where the command ran from, and a relative path is
+ * exactly as ambiguous as printing nothing — "a11y.config.json" is what the user
+ * already believes they have.
+ *
+ * The `absent` line also states the rule and the way out, because knowing the
+ * path that was checked doesn't tell you that no other path ever will be.
+ */
+export function describeConfigSource(source: ConfigSource): string {
+  switch (source.kind) {
+    case "flag":
+      return `config: ${resolve(source.path)} (from --config)`;
+    case "skipped":
+      return "config: skipped (--no-config); built-in defaults only";
+    case "discovered":
+      return `config: ${resolve(source.path)} (auto-discovered)`;
+    case "absent":
+      return (
+        `config: none found — looked for ${source.searched}\n` +
+        `  auto-discovery checks the directory you run from and does not walk upward, ` +
+        `so a config in a parent directory is not picked up. Pass --config <file> to name one.`
+      );
+  }
 }
 
 let configCache: { path: string; config: A11yConfig } | undefined;
