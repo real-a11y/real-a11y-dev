@@ -64,6 +64,15 @@ comment with no install — so a parser dependency would reintroduce the exact
 accept and this wouldn't is a hard error naming the file and line, so the
 restriction can never silently mis-read a file into a plausible wrong value.
 
+Two consequences worth knowing before you edit a row:
+
+- **There are no trailing comments.** A `#` at the start of a line is a comment; a
+  `#` anywhere else is literal text. It has to be, because real rows carry `(#258)`
+  in `validFrom` and `expected`. `priority: P0 # flagship` is the string
+  `P0 # flagship`, which the enum check then rejects by name.
+- **Values are single-line.** No block scalars, no continuations — long prose lives
+  in the body, which is ordinary markdown and can be as long as it needs to be.
+
 ### `covers:` — the part that does the work
 
 `covers` lists **manifest paths**, in the same vocabulary `plan/diff.mjs` already

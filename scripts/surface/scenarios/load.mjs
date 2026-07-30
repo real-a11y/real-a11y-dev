@@ -17,6 +17,15 @@
 // error naming the file and line, so the restriction can never silently
 // mis-read a file into a plausible-looking wrong value. A quiet mis-parse is
 // the one failure this cannot afford, since everything downstream trusts it.
+//
+// The one place that rule is asymmetric, and it is a decision rather than an
+// oversight: a `#` at the START of a line is a comment, and a `#` anywhere else
+// is literal text. It has to be literal, because real rows carry `(#258)` in
+// `validFrom` and `expected` — the PR that migrated the producers — and a
+// trailing-comment rule would truncate them. So there is NO trailing-comment
+// syntax; `expected: P0 # flagship` yields the string `P0 # flagship`, exactly as
+// written. For the enum-valued keys that is caught immediately by `validate`;
+// for the free-text ones the value is read verbatim, which is the promise.
 
 import { readdir, readFile } from "node:fs/promises";
 import { join, posix, relative, sep } from "node:path";
@@ -107,6 +116,11 @@ export function parseFrontmatter(text, where) {
   for (let i = 1; i < end; i++) {
     const raw = lines[i];
     const at = `${where}:${i + 1}`;
+    // A WHOLE-LINE `#` is a comment. A `#` anywhere else is literal text, and
+    // deliberately so: five rows carry `(#258)` in `validFrom` or `expected`,
+    // referring to the producer-migration PR, so treating a trailing `#` as a
+    // comment would silently truncate real content. There is no trailing-comment
+    // syntax in this format — see the header.
     if (!raw.trim() || raw.trim().startsWith("#")) continue;
 
     // A list item continues the key above it.
@@ -158,7 +172,14 @@ export function parseFrontmatter(text, where) {
     listKey = null;
   }
 
-  return { data, body: lines.slice(end + 1).join("\n").trim(), problems };
+  return {
+    data,
+    body: lines
+      .slice(end + 1)
+      .join("\n")
+      .trim(),
+    problems,
+  };
 }
 
 /** Strip one layer of matching quotes; values are plain strings otherwise. */
@@ -193,7 +214,8 @@ function validate(scenario, file) {
     );
   }
   if (!TYPES.includes(scenario.type)) fail(`\`type\` must be Automated|Manual`);
-  if (!PRIORITIES.includes(scenario.priority)) fail(`\`priority\` must be P0|P1|P2`);
+  if (!PRIORITIES.includes(scenario.priority))
+    fail(`\`priority\` must be P0|P1|P2`);
   if (!STATUSES.includes(scenario.status)) {
     fail(`\`status\` must be Active|Deprecated`);
   }
@@ -230,7 +252,9 @@ export async function loadScenarios(repoRoot, dir = "scenarios") {
   for (const suite of Object.keys(SUITES)) {
     let files;
     try {
-      files = (await readdir(join(root, suite))).filter((f) => f.endsWith(".md"));
+      files = (await readdir(join(root, suite))).filter((f) =>
+        f.endsWith(".md"),
+      );
     } catch {
       continue; // a suite with no directory yet is not an error
     }

@@ -130,7 +130,8 @@ export function checkScenarios(scenarios, manifest) {
   }
 
   return problems.sort(
-    (a, b) => a.where.localeCompare(b.where) || a.message.localeCompare(b.message),
+    (a, b) =>
+      a.where.localeCompare(b.where) || a.message.localeCompare(b.message),
   );
 }
 
