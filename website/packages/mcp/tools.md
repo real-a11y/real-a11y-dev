@@ -206,6 +206,15 @@ Parameters:
 
 - **`filter`** — `"heading"` \| `"link"` \| `"button"` \| `"form"` \| `"landmark"` \| `"image"` — **required** — the category to list.
 
+An empty category says why, because "none" otherwise answers three different questions the same way — the page has none of these, nothing was extracted, or the category doesn't cover the role you meant:
+
+```
+(none — filter "image" matched 0 of 412 nodes; it looks for role img)
+(none — the tree is empty, so nothing could match filter "image"; the page may not have loaded, or extraction failed)
+```
+
+The role list matters more than it looks. `image` looks for exactly `img`, so a page whose graphics are `figure`s reports none — and `landmark` includes the `form` role while `form` does **not**, since that filter looks for the fields. Both read as a bug until the roles are visible.
+
 An agent calls this to review one element type without pulling the whole tree:
 
 ```json
@@ -245,6 +254,12 @@ Parameters:
 
 The re-snapshot carries the same rule subset the checkpoint was captured with, so rules the base never ran can't surface as spurious NEW.
 
+The header names the operation and the checkpoint it read, so an output can be traced back to its input when several are stored:
+
+```
+Live page vs. saved checkpoint "prod": 1 new, 0 fixed, 0 changed, 12 unchanged.
+```
+
 The headline cross-deploy workflow — diff prod against a preview in one session:
 
 ```json
@@ -255,7 +270,7 @@ The headline cross-deploy workflow — diff prod against a preview in one sessio
 That works because only the **origin** differs. Checkpoints deliberately survive navigation, so it is just as easy to check one route and diff another by accident — and there the structural summary would report the whole page as rewritten. When the two sides are different pages, the diff says so and drops that section:
 
 ```
-Checkpoint diff (vs. saved): 0 new, 0 fixed, 0 changed, 3 unchanged.
+Live page vs. saved checkpoint "pricing": 0 new, 0 fixed, 0 changed, 3 unchanged.
 NOTE: different page — the base was captured at `https://example.com/pricing`,
 this side at `https://example.com/careers`. The structural summary is suppressed:
 two different pages differ almost everywhere, so it would describe a rewrite, not
@@ -274,6 +289,12 @@ Parameters:
 
 - **`base`** — string — required.
 - **`head`** — string — required.
+
+Its header says no browser was read, so a stored-vs-stored comparison is never mistaken for a live one:
+
+```
+Saved checkpoints: "prod" → "preview" (no re-snapshot): 0 new, 2 fixed, 0 changed, 9 unchanged.
+```
 
 Same different-page rule as [`diff_findings`](#diff-findings) — two checkpoints of unrelated routes diff their findings and skip the structural summary.
 

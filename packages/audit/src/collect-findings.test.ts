@@ -202,8 +202,61 @@ describe("listByRole", () => {
     expect(listByRole(root, "image")).toMatch(/img "A logo"/);
   });
 
-  it("returns (none) when nothing matches", () => {
-    expect(listByRole(mount(`<p>hi</p>`), "link")).toBe("(none)");
+  describe("nothing matched", () => {
+    // A bare "(none)" answered three different questions identically. Each of
+    // these is a different problem with a different fix, so each says which.
+    it("reports how much was scanned, so an empty page is distinguishable", () => {
+      const out = listByRole(mount(`<p>hi</p><p>there</p>`), "link");
+      expect(out).toMatch(/^\(none — filter "link" matched 0 of \d+ nodes;/);
+      // The denominator has to be real — a hardcoded 0 would defeat the point.
+      expect(out).not.toMatch(/0 of 0 nodes/);
+    });
+
+    it("names the roles the filter looks for", () => {
+      // `image` looks for exactly `img`, so a page whose graphics are figures
+      // reports none — unexplainable without the role named.
+      expect(listByRole(mount(`<figure>chart</figure>`), "image")).toMatch(
+        /it looks for role img\)$/,
+      );
+    });
+
+    it("names all of a multi-role group", () => {
+      // And `form` looks for the FIELDS — it does not include the `form` role,
+      // which lives under `landmark`. That reads as a bug until you see the list.
+      const out = listByRole(mount(`<p>hi</p>`), "form");
+      expect(out).toMatch(/it looks for roles /);
+      for (const role of ["textbox", "checkbox", "searchbox", "slider"]) {
+        expect(out).toContain(role);
+      }
+      expect(out).not.toMatch(/looks for .*\bform\b/);
+    });
+
+    it("says the tree was empty, rather than blaming the filter", () => {
+      // Nothing extracted at all: the page never loaded, or extraction failed.
+      // Reporting "0 of 0 matched" would point at the wrong thing.
+      const out = listByRole({ nodes: new Map(), rootId: "" }, "link");
+      expect(out).toMatch(/the tree is empty/);
+      expect(out).toMatch(/may not have loaded, or extraction failed/);
+    });
+
+    it("still reports an unknown filter as such", () => {
+      expect(listByRole(mount(`<p>hi</p>`), "nope" as never)).toBe(
+        '(unknown filter "nope")',
+      );
+    });
+
+    it("never returns an empty string — callers need no sentinel", () => {
+      for (const filter of [
+        "heading",
+        "link",
+        "button",
+        "form",
+        "landmark",
+        "image",
+      ] as const) {
+        expect(listByRole(mount(`<p>hi</p>`), filter)).not.toBe("");
+      }
+    });
   });
 });
 

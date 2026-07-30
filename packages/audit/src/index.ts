@@ -299,11 +299,49 @@ export function collectFindings(
 /** Filter categories for {@link listByRole} — the groups behind the extension's tabs. */
 export type RoleFilter = keyof typeof ROLE_FILTER_GROUPS;
 
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+/**
+ * Why a category came back empty.
+ *
+ * A bare `(none)` is the same answer to three different questions — the page
+ * genuinely has none of these, the tree never got extracted, or the category
+ * doesn't cover the role you were thinking of. An agent can't tell those apart,
+ * and the remedy differs for each, so the empty case says which.
+ *
+ * The role list is the half that carries most of the weight. `filter` names are
+ * everyday words and the roles behind them are not obvious: `image` looks for
+ * exactly `img`, so a page whose graphics are `figure`s reports none. Worse,
+ * `landmark` includes the `form` role while the `form` filter does *not* — it
+ * looks for the fields. Both read as a bug until you can see the roles.
+ */
+function nothingMatched(
+  filter: RoleFilter,
+  roles: readonly string[],
+  scanned: number,
+): string {
+  if (scanned === 0) {
+    return `(none — the tree is empty, so nothing could match filter "${filter}"; the page may not have loaded, or extraction failed)`;
+  }
+  // No count on the roles — the list is right there and countable. The count on
+  // the nodes IS the signal: it separates "this page has none" from "nothing was
+  // read".
+  const looksFor = roles.length === 1 ? "role" : "roles";
+  return (
+    `(none — filter "${filter}" matched 0 of ${plural(scanned, "node")}; ` +
+    `it looks for ${looksFor} ${roles.join(", ")})`
+  );
+}
+
 /**
  * List every element in a category (links, buttons, form controls, landmarks,
  * images, headings) as `role "name"` plus a best-effort locator + context — the
  * same role groups the extension's filter tabs use ({@link ROLE_FILTER_GROUPS}).
  * A token-efficient way to review one kind of element at a time.
+ *
+ * Never returns an empty string: an empty category returns a line explaining
+ * why (see {@link nothingMatched}), so a caller never has to invent a sentinel
+ * of its own.
  */
 export function listByRole(
   root: Element | ExtractionResult,
@@ -313,7 +351,12 @@ export function listByRole(
   if (!roles) return `(unknown filter "${filter}")`;
   const tree = toTree(root);
   const lines: string[] = [];
+  // Counted here rather than from `linearize(tree).length` so the denominator is
+  // exactly the set that was tested — if the walk ever starts skipping nodes,
+  // the two would quietly disagree and the ratio would be a lie.
+  let scanned = 0;
   for (const node of linearize(tree)) {
+    scanned += 1;
     if (!roles.includes(node.a11y.role)) continue;
     const name = node.a11y.name.trim();
     const nameSuffix = name ? ` "${name}"` : "";
@@ -325,7 +368,9 @@ export function listByRole(
       : "";
     lines.push(`${node.a11y.role}${nameSuffix}${levelSuffix}${where}`);
   }
-  return lines.length ? lines.join("\n") : "(none)";
+  return lines.length
+    ? lines.join("\n")
+    : nothingMatched(filter, roles, scanned);
 }
 
 /** Format findings into the multi-line message the `assert*` helpers throw. */

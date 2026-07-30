@@ -524,6 +524,17 @@ main
       code ""landmark""
       code ""image""
       strong "required"
+  paragraph "An empty category says why, because "none" otherwise answers three different questions the same way — the page has none of these, nothing was extracted, or the category doesn't cover the role you meant:"
+  button "Copy Code"
+  code
+  paragraph "The role list matters more than it looks. looks for exactly , so a page whose graphics are s reports none — and includes the role while does , since that filter looks for the fields. Both read as a bug until the roles are visible."
+    code "image"
+    code "img"
+    code "figure"
+    code "landmark"
+    code "form"
+    code "form"
+    strong "not"
   paragraph "An agent calls this to review one element type without pulling the whole tree:"
   button "Copy Code"
   code
@@ -576,6 +587,9 @@ main
       strong
         code "name"
   paragraph "The re-snapshot carries the same rule subset the checkpoint was captured with, so rules the base never ran can't surface as spurious NEW."
+  paragraph "The header names the operation and the checkpoint it read, so an output can be traced back to its input when several are stored:"
+  button "Copy Code"
+  code
   paragraph "The headline cross-deploy workflow — diff prod against a preview in one session:"
   button "Copy Code"
   code
@@ -600,6 +614,9 @@ main
     listitem "— string — required."
       strong
         code "head"
+  paragraph "Its header says no browser was read, so a stored-vs-stored comparison is never mistaken for a live one:"
+  button "Copy Code"
+  code
   paragraph "Same different-page rule as — two checkpoints of unrelated routes diff their findings and skip the structural summary."
     link "diff_findings"
       code "diff_findings"
