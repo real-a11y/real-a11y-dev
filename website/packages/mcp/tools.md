@@ -231,6 +231,8 @@ Parameters:
 
 Whole-document, and built from the same producer `real-a11y snapshot` uses — which is what lets a checkpoint captured here be diffed by the CLI, and vice versa. The exported artifact records which views it measured (`meta.views`) and omits the tabs view rather than storing an empty one.
 
+The recorded URL is read **when the checkpoint is taken**, not when `open_page` ran — a [`click_element`](#click-element) can navigate, so those are not the same address. It is what the diff tools compare to decide whether two sides are the same page.
+
 ### `diff_findings`
 
 _Read-only · re-snapshots the current page and diffs it against a stored checkpoint._
@@ -250,6 +252,18 @@ The headline cross-deploy workflow — diff prod against a preview in one sessio
 // open_page("https://preview.example.com") → diff_findings({ "name": "prod" })
 ```
 
+That works because only the **origin** differs. Checkpoints deliberately survive navigation, so it is just as easy to check one route and diff another by accident — and there the structural summary would report the whole page as rewritten. When the two sides are different pages, the diff says so and drops that section:
+
+```
+Checkpoint diff (vs. saved): 0 new, 0 fixed, 0 changed, 3 unchanged.
+NOTE: different page — the base was captured at `https://example.com/pricing`,
+this side at `https://example.com/careers`. The structural summary is suppressed:
+two different pages differ almost everywhere, so it would describe a rewrite, not
+a regression. Findings are still matched by fingerprint.
+```
+
+"Different page" means the **path, query or fragment** differs. Host, port and scheme are ignored on purpose: that is exactly the prod-vs-preview diff above, and the structural summary is the whole point of it. An address that can't be parsed is never treated as a mismatch — silently dropping the section on a guess would be worse than printing a noisy one.
+
 ### `diff_checkpoints`
 
 _Read-only · diffs two stored checkpoints._
@@ -260,6 +274,8 @@ Parameters:
 
 - **`base`** — string — required.
 - **`head`** — string — required.
+
+Same different-page rule as [`diff_findings`](#diff-findings) — two checkpoints of unrelated routes diff their findings and skip the structural summary.
 
 ### `list_checkpoints`
 

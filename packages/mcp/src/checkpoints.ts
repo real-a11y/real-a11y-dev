@@ -127,6 +127,53 @@ export function scopeMismatch(
 }
 
 /**
+ * Everything after the origin — path, query and fragment.
+ *
+ * `undefined` for anything that isn't a parseable absolute URL. A stored page's
+ * `url` has been through `redactUrl`, which falls back to sanitized raw text
+ * when the input wasn't a URL at all, so this can legitimately fail.
+ */
+function resourceOf(url: string): string | undefined {
+  try {
+    const u = new URL(url);
+    // `/pricing` and `/pricing/` are the same page; treat them as such.
+    const path = u.pathname.length > 1 ? u.pathname.replace(/\/$/, "") : "/";
+    return `${path}${u.search}${u.hash}`;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Are these two sides *different pages*, rather than the same page twice?
+ *
+ * Deliberately compares only what follows the origin. A checkpoint diff across
+ * two deploys of one page — `staging.example.com/pricing` vs
+ * `example.com/pricing`, or `localhost:3000` vs `localhost:3001` — is the
+ * documented workflow for both diff tools, and there the structural summary is
+ * the whole point. `SnapshotPage.name` says the same thing from the other
+ * direction: it is the join key *"never the URL (host/port legitimately
+ * differ)"*.
+ *
+ * What the origin can't tell apart is `/pricing` vs `/careers`. That is the case
+ * worth catching, and the path is what catches it.
+ *
+ * Returns the two addresses when they differ, `undefined` otherwise —
+ * INCLUDING when either side is unparseable or empty. Never claim a mismatch
+ * that can't be shown: silently dropping a section on a guess is worse than
+ * printing a noisy one.
+ */
+export function differentUrl(
+  base: SnapshotPage,
+  head: SnapshotPage,
+): { from: string; to: string } | undefined {
+  const from = resourceOf(base.url);
+  const to = resourceOf(head.url);
+  if (from === undefined || to === undefined || from === to) return undefined;
+  return { from: base.url, to: head.url };
+}
+
+/**
  * Diff two checkpoint pages that were fingerprinted under the **same** page
  * name (the `checkpoint_findings`/`diff_findings` pair, or a re-snapshot vs its
  * stored base). Their fingerprints are directly comparable.
@@ -174,32 +221,64 @@ function fmtFinding(f: FingerprintedFinding): string {
   return `[${f.severity}] ${f.rule}: ${f.message}${where}`;
 }
 
+export interface RenderDiffOptions {
+  /** Name the two sides (`diff_checkpoints`); omit for a re-snapshot vs. saved. */
+  labels?: { base: string; head: string };
+  /**
+   * The two addresses when the sides are different pages — pass
+   * {@link differentUrl}'s result straight through.
+   *
+   * Supplying it does two things at once: prints the note, and drops the
+   * structural summary. One input driving both is the point — a diff can then
+   * never suppress the section without saying why, nor say why while still
+   * printing it.
+   */
+  differentUrl?: { from: string; to: string };
+}
+
 /**
  * Render a {@link DiffResult} as a compact, agent-readable delta: NEW (the only
  * class that gates CI) → CHANGED → FIXED, plus an advisory structural summary.
  */
 export function renderDiff(
   diff: DiffResult,
-  labels?: { base: string; head: string },
+  options: RenderDiffOptions = {},
 ): string {
+  const { labels, differentUrl: differing } = options;
   const s = diff.summary;
   const title = labels
     ? `Checkpoint diff ${labels.base} → ${labels.head}`
     : "Checkpoint diff (vs. saved)";
   const header = `${title}: ${s.new} new, ${s.removed} fixed, ${s.changed} changed, ${s.unchanged} unchanged.`;
 
+  // Two different pages' trees differ almost everywhere, so the summary would
+  // describe a rewrite rather than a regression — pages, headings and tab stops
+  // reported wholesale as added and removed. Findings still diff usefully
+  // (fingerprints match on rule + role + locator, not on position), so the
+  // section goes and the rest stays.
+  const note = differing
+    ? `NOTE: different page — the base was captured at \`${differing.from}\`, this side at \`${differing.to}\`. ` +
+      `The structural summary is suppressed: two different pages differ almost everywhere, so it would describe a rewrite, not a regression. ` +
+      `Findings are still matched by fingerprint.`
+    : undefined;
+  const lead = note ? [header, note] : [header];
+
   const findingsChanged = s.new + s.removed + s.changed > 0;
-  const structuralChanged = diff.pages.some((p) => p.structural.length > 0);
+  // Suppressed counts as "no structural change to show" everywhere below —
+  // otherwise a URL-mismatched diff with no findings change would announce
+  // "the structure did" and then print nothing under it.
+  const structuralChanged =
+    !differing && diff.pages.some((p) => p.structural.length > 0);
 
   // Only short-circuit when NOTHING moved. A deploy can leave every finding
   // identical while reshuffling the page — suppressing the advisory structural
   // summary there would silently drop the most useful signal in the
   // cross-deploy workflow (and both tools promise that summary).
   if (!findingsChanged && !structuralChanged) {
-    return `${header}\nNo accessibility findings changed.`;
+    return [...lead, "No accessibility findings changed."].join("\n");
   }
 
-  const out: string[] = [header];
+  const out: string[] = [...lead];
   if (!findingsChanged) {
     out.push("", "No accessibility findings changed — but the structure did:");
   }
@@ -229,7 +308,7 @@ export function renderDiff(
     section("CHANGED", pick(page.entries, "changed"), "~", true);
     section("FIXED", pick(page.entries, "removed"), "✓");
 
-    if (page.structural.length > 0) {
+    if (!differing && page.structural.length > 0) {
       out.push("", "Structural changes (advisory):");
       for (const c of page.structural.slice(0, MAX_STRUCTURAL)) {
         out.push(`  • ${c.message}`);

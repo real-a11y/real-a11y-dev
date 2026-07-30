@@ -75,7 +75,7 @@ await session.act({ nodeId: button.id, action: "click" });
 // → { success: true }
 ```
 
-`session.currentUrl()` returns where the page is **now** — a click can navigate, so the URL `open()` returned goes stale the moment a step follows a link or submits a form. It returns `undefined` when no page is open.
+`session.currentUrl()` returns where the page is **now** — a click can navigate, so the URL `open()` returned goes stale the moment a step follows a link or submits a form. It returns `undefined` when no page is open. It is part of the `A11ySession` interface, not just the concrete class: anything that records a URL alongside an extraction has to read it at extraction time, and a consumer holding the interface needs the same guarantee.
 
 ### Seeing what an action changed — the native checkpoint
 

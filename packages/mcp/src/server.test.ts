@@ -32,7 +32,15 @@ class FakeSession implements A11ySession {
 
   async open(url: string, options?: OpenOptions) {
     this.opened.push({ url, options });
+    this.url = url;
     return { title: "Fake Title", url };
+  }
+
+  /** Where the fake page "is" — set by open(), and settable directly to stand
+   *  in for an act tool having navigated. */
+  url = "";
+  currentUrl() {
+    return this.url || undefined;
   }
 
   async call<T>(fn: string, rootSelector: string, args: unknown[] = []) {
@@ -1172,6 +1180,100 @@ describe("checkpoints", () => {
     expect(out).toMatch(/scope changed/);
     expect(out).toMatch(/\[role=dialog\]/);
     expect(out).toMatch(/appear as NEW/);
+  });
+
+  it("records the LIVE url on a checkpoint, not the one open_page landed on", async () => {
+    // `click_element` can navigate. Recording the opened address would put the
+    // wrong URL on the page — and, since the diff compares these, would leave a
+    // diff across two genuinely different pages looking like one page twice.
+    const client = await connect(session);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/pricing" },
+    });
+    session.nativeTreeResponse = unlabeledButtons(1);
+    session.url = "https://example.com/careers"; // as if an act tool navigated
+    const artifact = JSON.parse(
+      textOf(
+        await client.callTool({
+          name: "checkpoint_findings",
+          arguments: { name: "after-click" },
+        }),
+      ) &&
+        textOf(
+          await client.callTool({
+            name: "export_checkpoint",
+            arguments: { name: "after-click" },
+          }),
+        ),
+    );
+    expect(artifact.pages[0].url).toBe("https://example.com/careers");
+  });
+
+  it("suppresses the structural summary when the diff spans two pages", async () => {
+    // Checkpoints survive navigation by design, so this is easy to do by
+    // accident: checkpoint one route, click through to another, diff. The
+    // findings diff is still meaningful; the structural summary would describe a
+    // whole-page rewrite, which is noise.
+    const client = await connect(session);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/pricing" },
+    });
+    session.nativeTreeResponse = unlabeledButtons(1);
+    await client.callTool({
+      name: "checkpoint_findings",
+      arguments: { name: "pricing" },
+    });
+
+    // Navigate (as an act tool would) and change the structure.
+    session.url = "https://example.com/careers";
+    session.nativeTreeResponse = nativeTree([
+      { role: "heading", name: "Careers", level: "1" },
+      { role: "button" },
+      { role: "link", name: "Apply" },
+    ]);
+    const out = textOf(
+      await client.callTool({
+        name: "diff_findings",
+        arguments: { name: "pricing" },
+      }),
+    );
+    expect(out).toMatch(/different page/);
+    expect(out).toContain("https://example.com/pricing");
+    expect(out).toContain("https://example.com/careers");
+    expect(out).not.toMatch(/Structural changes/);
+  });
+
+  it("keeps the structural summary across two deploys of the same route", async () => {
+    // The cross-deploy diff is the documented workflow for these tools —
+    // checkpoint prod, open preview, diff. Only the origin differs there, and
+    // the structural summary is the whole point, so it must survive.
+    const client = await connect(session);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/pricing" },
+    });
+    session.nativeTreeResponse = unlabeledButtons(1);
+    await client.callTool({
+      name: "checkpoint_findings",
+      arguments: { name: "prod" },
+    });
+
+    session.url = "https://staging.example.com/pricing";
+    session.nativeTreeResponse = nativeTree([
+      { role: "heading", name: "Home", level: "1" },
+      { role: "button" },
+      { role: "link", name: "Docs" },
+    ]);
+    const out = textOf(
+      await client.callTool({
+        name: "diff_findings",
+        arguments: { name: "prod" },
+      }),
+    );
+    expect(out).not.toMatch(/different page/);
+    expect(out).toMatch(/Structural changes/);
   });
 
   it("stays quiet when both sides were captured whole-document", async () => {

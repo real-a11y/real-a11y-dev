@@ -54,6 +54,12 @@ over CDP — whole-document, and reaching structure no in-page walk can — exce
 | `export_checkpoint` | Export a checkpoint as a snapshot JSON artifact (CLI-compatible). |
 | `import_checkpoint` | Load an external snapshot artifact as a checkpoint. |
 
+Diffing prod against a preview is the headline workflow, so only the **origin** is
+allowed to differ. When the two sides are different pages — a different path,
+query or fragment — the diff tools say so and drop the advisory structural
+summary, which across unrelated routes describes a rewrite rather than a
+regression. Findings still match by fingerprint.
+
 **Tree checkpoints** — capture the tree, interact, then see exactly what an interaction changed for a screen reader. Bound to the page instance (do not survive navigation).
 
 | Tool | Purpose |
