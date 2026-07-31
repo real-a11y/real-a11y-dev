@@ -242,6 +242,25 @@ function getActions(element: Element): ActionType[] {
   return actions;
 }
 
+/**
+ * True if `element` or anything under it can be acted on — the same
+ * `getActions` predicate that decides `interaction.isInteractive` for a node,
+ * so "interactive" means one thing across the extractor. It covers plain
+ * focusables too: `getActions` gives any `[tabindex]` element a click action.
+ *
+ * Used to decide whether an `aria-describedby` target may be suppressed. The
+ * walk descends with `safeChildren` rather than `querySelectorAll` so a
+ * clobbered `<form>` in the subtree reads the same way it does everywhere else
+ * in the walk.
+ */
+function hasInteractiveContent(element: Element): boolean {
+  if (getActions(element).length > 0) return true;
+  for (const child of safeChildren(element)) {
+    if (hasInteractiveContent(child)) return true;
+  }
+  return false;
+}
+
 /** Tags that are natively interactive — never treated as visually hidden */
 const INTERACTIVE_TAGS = new Set([
   "input",
@@ -1346,10 +1365,28 @@ function buildNode(
     // Skip entire subtrees of display:none / hidden elements
     if (isSubtreeHidden(element, style)) return null;
 
-    // Skip elements that serve solely as aria-describedby text providers.
-    // Their content is shown inline on the referencing element as a description.
+    // Skip elements that serve SOLELY as aria-describedby text providers.
+    // Their content is shown inline on the referencing element as a
+    // description, so a node of their own would just be redundant.
+    //
+    // "Solely" is the operative word: description targets routinely carry
+    // interactive content, and dropping the target dropped its whole subtree
+    // with it. The everyday case is help text with a link —
+    //   <input aria-describedby="pw-help">
+    //   <p id="pw-help">Must be 8+ chars. <a href="/rules">Full rules</a></p>
+    // — where "Full rules" is visible, focusable content an AT user can reach,
+    // yet it vanished from the tree and from everything derived from it (the
+    // panel, audits, serialization). When the subtree holds anything
+    // actionable, keep it: the description text being duplicated on the
+    // referencing element is a far smaller cost than losing a control.
     const ownId = element.getAttribute("id");
-    if (ownId && descriptionTargetIds.has(ownId)) return null;
+    if (
+      ownId &&
+      descriptionTargetIds.has(ownId) &&
+      !hasInteractiveContent(element)
+    ) {
+      return null;
+    }
 
     const id = getNodeId(element);
     const role = getImplicitRole(element);

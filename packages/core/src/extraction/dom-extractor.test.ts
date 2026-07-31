@@ -1654,3 +1654,68 @@ describe("computed-style cache during extraction", () => {
     }
   });
 });
+
+describe("aria-describedby target suppression", () => {
+  it("suppresses a text-only description target", () => {
+    // The reason the suppression exists: the target's text is already shown
+    // inline on the referencing element as its description, so surfacing the
+    // <p> as its own node is pure redundancy.
+    const root = createPage(`
+      <input aria-label="Password" aria-describedby="pw-help" />
+      <p id="pw-help">Must be 8+ characters.</p>
+    `);
+
+    const { nodes } = extractDomTree(root);
+
+    expect([...nodes.values()].some((n) => n.dom.tagName === "p")).toBe(false);
+  });
+
+  it("keeps a description target that contains interactive content", () => {
+    // Regression: the whole target subtree was dropped, so the "Full rules"
+    // link — visible, focusable page content an AT user can tab to and
+    // activate — vanished from the tree, and with it from the panel, audits,
+    // and everything else derived from the tree.
+    const root = createPage(`
+      <input aria-label="Password" aria-describedby="pw-help" />
+      <p id="pw-help">Must be 8+ characters. <a href="/rules">Full rules</a></p>
+    `);
+
+    const { nodes } = extractDomTree(root);
+
+    const link = [...nodes.values()].find((n) => n.dom.tagName === "a");
+    expect(link).toBeDefined();
+    expect(link!.a11y.name).toBe("Full rules");
+    // The target itself has to survive too — it is the link's parent.
+    const p = [...nodes.values()].find((n) => n.dom.tagName === "p");
+    expect(p).toBeDefined();
+    expect(p!.childIds).toContain(link!.id);
+  });
+
+  it("keeps a description target whose interactive content is nested deeper", () => {
+    const root = createPage(`
+      <input aria-label="Card" aria-describedby="card-help" />
+      <div id="card-help">
+        <span>Where do I find this? <button type="button">Show me</button></span>
+      </div>
+    `);
+
+    const { nodes } = extractDomTree(root);
+
+    const button = [...nodes.values()].find((n) => n.dom.tagName === "button");
+    expect(button).toBeDefined();
+    expect(button!.a11y.name).toBe("Show me");
+  });
+
+  it("surfaces the kept interactive content in the a11y view too", () => {
+    const root = createPage(`
+      <input aria-label="Password" aria-describedby="pw-help" />
+      <p id="pw-help">Must be 8+ characters. <a href="/rules">Full rules</a></p>
+    `);
+
+    const { nodes } = extractA11yTree(root);
+
+    const link = [...nodes.values()].find((n) => n.a11y.role === "link");
+    expect(link).toBeDefined();
+    expect(link!.a11y.name).toBe("Full rules");
+  });
+});
