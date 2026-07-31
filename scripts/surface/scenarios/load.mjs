@@ -146,6 +146,29 @@ export function parseFrontmatter(text, where) {
 
     const [, key, rest] = pair;
     const value = rest.trim();
+
+    // A repeated key is an error, not last-wins.
+    //
+    // This is the inverse of the rule in the header and needs stating separately
+    // because of it: the header covers things real YAML accepts and this reader
+    // won't. Duplicate mapping keys are the other way round — real YAML REJECTS
+    // them, and this reader was quietly taking the last one. A second `covers:`
+    // block silently discarded the first, so a row could stop covering
+    // capabilities it visibly lists, and the coverage gate would report a gap
+    // against a file whose author had written it correctly.
+    //
+    // Guarded here rather than per-branch so it holds for scalars, lists and the
+    // flex keys alike — three places that would otherwise drift apart.
+    if (Object.hasOwn(data, key)) {
+      problems.push(
+        `${at} — \`${key}\` is set more than once. The reader would keep only the ` +
+          `last, silently dropping what the earlier one listed; real YAML rejects ` +
+          `duplicate keys too. Merge them into a single entry.`,
+      );
+      listKey = null;
+      continue;
+    }
+
     if (FLEX_LIST_KEYS.has(key)) {
       // `twin: D1` is shorthand for a one-item list; `twin:` opens a list.
       data[key] = value ? [unquote(value, at, problems)] : [];
