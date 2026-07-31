@@ -318,7 +318,22 @@ export async function loadScenarios(repoRoot, dir = "scenarios") {
           `${file} — filename must start with \`${scenario.id}-\` so the id in a PR body locates the file`,
         );
       }
-      problems.push(...validate(scenario, file));
+      const invalid = validate(scenario, file);
+      problems.push(...invalid);
+
+      // A row that failed validation is REPORTED but not RETURNED.
+      //
+      // `plan` ignores `problems` on purpose — a malformed file must not break a
+      // report whose whole value is being available on every PR. But "tolerate"
+      // has to mean skip, not consume: a row with no `id` renders as a blank
+      // entry in the paste-ready block (`Updated: D2, `), and one with
+      // `status: active` in the wrong case is read as non-Active, so `plan`
+      // labels a live row `(Deprecated)` and can fire the coverage-gap warning
+      // for something that is fine.
+      //
+      // `check` is unaffected either way: it refuses to run `checkScenarios` at
+      // all while any load problem exists, so it still reports every one of them.
+      if (invalid.length) continue;
       scenarios.push(scenario);
     }
   }
