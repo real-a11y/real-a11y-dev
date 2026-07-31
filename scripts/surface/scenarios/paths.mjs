@@ -79,6 +79,18 @@ export function coverageTargets(manifest) {
  * `audit` end to end is exercising `--fail-on` — so a prefix match counts. The
  * boundary check stops `cli.commands.audit` from appearing to cover
  * `cli.commands.audit-extra`, which a bare `startsWith` would.
+ *
+ * ANCESTOR ONLY, and not symmetric. A row listing just
+ * `cli.commands.snapshot.flags.--md` has not covered `snapshot`: exercising one
+ * flag is not exercising the command, and letting it satisfy the gate would be
+ * the false confidence the gate exists to prevent.
+ *
+ * `plan`'s `coveringScenarios` deliberately uses the OTHER rule — either side a
+ * prefix of the other — because it answers a different question: not "is this
+ * covered?" but "is this row affected by that change?". A row testing one flag of
+ * a command that just got deleted is affected. Keeping the two predicates apart is
+ * intentional; collapsing them would either weaken this gate or make the plan miss
+ * rows.
  */
 export function covers(covered, path) {
   return covered.some(

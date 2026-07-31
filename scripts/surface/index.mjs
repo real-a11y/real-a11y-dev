@@ -341,7 +341,24 @@ async function scenarios(argv) {
     ]);
   }
 
-  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  // Guarded the same way `check` and `plan` guard the identical read. This verb
+  // is the one the README tells a contributor to run right after adding a row,
+  // so it is the likeliest place to meet a checkout with no manifest — and a raw
+  // ENOENT stack tells them nothing about the one command that fixes it.
+  let manifest;
+  try {
+    manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  } catch {
+    die([
+      `${MANIFEST_REL} is missing or isn't valid JSON — nothing to check against.`,
+      ``,
+      `  Every \`covers\` path is resolved against it, so there is no useful`,
+      `  answer without it:`,
+      ``,
+      `    pnpm surface:extract`,
+    ]);
+  }
+
   const problems = checkScenarios(loaded, manifest);
   const coverage = coverageSummary(loaded, manifest);
 

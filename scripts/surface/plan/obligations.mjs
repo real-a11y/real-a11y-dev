@@ -192,10 +192,29 @@ export function requiredDocs(changes) {
  * tell an author a change is covered by something nobody runs.
  */
 function coveringScenarios(path, scenarios) {
-  const covered = (s) =>
-    (s.covers ?? []).some(
-      (entry) => entry === path || path.startsWith(`${entry}.`),
-    );
+  // SYMMETRIC on purpose, and deliberately different from the predicate the
+  // coverage gate uses. Two different questions:
+  //
+  //   "does this row COVER that capability?"  — gate, `paths.mjs`. Ancestor only.
+  //       Exercising `snapshot --md` is not covering `snapshot`, so a row listing
+  //       just the flag must not satisfy the gate for the whole command.
+  //
+  //   "is this row AFFECTED by that change?"  — here. Either direction.
+  //       If `mcp.tools.type_text` is removed, a row covering only
+  //       `mcp.tools.type_text.params.text` is very much affected — its subject
+  //       just disappeared — but an ancestor-only match would report `R??` and
+  //       the DEPRECATE obligation would look uncovered.
+  //
+  // Latent today, because no row uses a leaf-level entry. But `scenarios/README.md`
+  // explicitly invites them ("R5 covers `snapshot`'s `--md` specifically"), so the
+  // first row that takes that advice would go silently invisible to a
+  // capability-level removal — the exact false confidence this all exists to stop.
+  const affects = (entry) =>
+    entry === path ||
+    path.startsWith(`${entry}.`) ||
+    entry.startsWith(`${path}.`);
+
+  const covered = (s) => (s.covers ?? []).some(affects);
 
   const direct = scenarios.filter(covered);
   const ids = new Set(direct.map((s) => s.id));
