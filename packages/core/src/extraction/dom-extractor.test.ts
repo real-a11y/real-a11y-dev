@@ -1706,6 +1706,60 @@ describe("aria-describedby target suppression", () => {
     expect(button!.a11y.name).toBe("Show me");
   });
 
+  it("still suppresses a target whose only control is hidden", () => {
+    // The walk drops a display:none control, so counting it would keep the
+    // target for a node that never gets emitted — the redundant description
+    // node this suppression exists to avoid, with none of the control the
+    // exception was added for. The two decisions have to agree.
+    const root = createPage(`
+      <input aria-label="Password" aria-describedby="pw-help" />
+      <p id="pw-help">
+        Must be 8+ characters.
+        <button type="button" style="display: none">Show rules</button>
+      </p>
+    `);
+
+    const { nodes } = extractDomTree(root);
+
+    expect([...nodes.values()].some((n) => n.dom.tagName === "button")).toBe(
+      false,
+    );
+    expect([...nodes.values()].some((n) => n.dom.tagName === "p")).toBe(false);
+  });
+
+  it("still suppresses a tabindex='-1' target holding only text", () => {
+    // `getActions` hands any [tabindex] element a click action as a catch-all,
+    // but tabindex="-1" is programmatic-focus plumbing — the standard way to
+    // move focus to an error container — not something a user can tab to.
+    // Counting it would defeat suppression for plain help/error text.
+    const root = createPage(`
+      <input aria-label="Password" aria-describedby="pw-err" />
+      <div id="pw-err" tabindex="-1" role="alert">Password is required.</div>
+    `);
+
+    const { nodes } = extractDomTree(root);
+
+    expect(
+      [...nodes.values()].some((n) => n.dom.attributes?.id === "pw-err"),
+    ).toBe(false);
+  });
+
+  it("keeps a target whose control is reachable via tabindex='0'", () => {
+    const root = createPage(`
+      <input aria-label="Password" aria-describedby="pw-help" />
+      <p id="pw-help">
+        Must be 8+ characters.
+        <span tabindex="0" role="button">Show rules</span>
+      </p>
+    `);
+
+    const { nodes } = extractDomTree(root);
+
+    const widget = [...nodes.values()].find((n) => n.a11y.role === "button");
+    expect(widget).toBeDefined();
+    expect(widget!.a11y.name).toBe("Show rules");
+  });
+
   it("surfaces the kept interactive content in the a11y view too", () => {
     const root = createPage(`
       <input aria-label="Password" aria-describedby="pw-help" />

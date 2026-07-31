@@ -107,8 +107,18 @@ const TEXT_INPUT_TYPES = new Set([
 /** Input types that toggle on click (no text entry) */
 const TOGGLE_INPUT_TYPES = new Set(["checkbox", "radio"]);
 
-/** Determine what actions an element supports */
-function getActions(element: Element): ActionType[] {
+/**
+ * Determine what actions an element supports.
+ *
+ * `skipTabindexFallback` drops the trailing `[tabindex]` catch-all, leaving
+ * only actions a real tag/role branch produced. Callers judging whether an
+ * element is a control a USER can reach want this for a negative tabindex —
+ * see {@link hasInteractiveContent}.
+ */
+function getActions(
+  element: Element,
+  skipTabindexFallback = false,
+): ActionType[] {
   const tag = element.tagName.toLowerCase();
   const actions: ActionType[] = [];
   const role = element.getAttribute("role");
@@ -235,7 +245,11 @@ function getActions(element: Element): ActionType[] {
     actions.push("focus", "type", "increment", "decrement");
   }
 
-  if (element.getAttribute("tabindex") !== null && actions.length === 0) {
+  if (
+    !skipTabindexFallback &&
+    element.getAttribute("tabindex") !== null &&
+    actions.length === 0
+  ) {
     actions.push("click");
   }
 
@@ -243,20 +257,38 @@ function getActions(element: Element): ActionType[] {
 }
 
 /**
- * True if `element` or anything under it can be acted on — the same
- * `getActions` predicate that decides `interaction.isInteractive` for a node,
- * so "interactive" means one thing across the extractor. It covers plain
- * focusables too: `getActions` gives any `[tabindex]` element a click action.
+ * True if `element` or anything under it is a control a user can actually
+ * reach — the predicate deciding whether an `aria-describedby` target may be
+ * suppressed. Built on the same `getActions` that sets
+ * `interaction.isInteractive`, so "interactive" means one thing across the
+ * extractor, with two deliberate narrowings:
  *
- * Used to decide whether an `aria-describedby` target may be suppressed. The
- * walk descends with `safeChildren` rather than `querySelectorAll` so a
- * clobbered `<form>` in the subtree reads the same way it does everywhere else
- * in the walk.
+ * - **Hidden subtrees don't count.** The walk drops whatever `isSubtreeHidden`
+ *   rejects, so counting a `display:none` control would keep the target for a
+ *   node that never gets emitted — reinstating the redundant description node
+ *   with none of the control the exception exists for. Shares the walk's
+ *   per-extraction `styleCache`, so it resolves no style twice.
+ * - **A negative `tabindex` doesn't count on its own.** `getActions` gives any
+ *   `[tabindex]` element a click action as a catch-all, but `tabindex="-1"` is
+ *   programmatic-focus plumbing — a `role="alert"` error container, a toast
+ *   viewport — that nobody can tab to. Counting it would defeat suppression
+ *   for exactly the text-only help text this is meant to keep suppressing.
+ *   Same call the overlay-content guard makes when it omits `[tabindex]`.
+ *
+ * Descends with `safeChildren` rather than `querySelectorAll` so a clobbered
+ * `<form>` in the subtree reads the way it does everywhere else in the walk.
  */
-function hasInteractiveContent(element: Element): boolean {
-  if (getActions(element).length > 0) return true;
+function hasInteractiveContent(
+  element: Element,
+  styleCache: StyleCache,
+): boolean {
+  const tabindex = element.getAttribute("tabindex");
+  if (getActions(element, Number(tabindex) < 0).length > 0) return true;
   for (const child of safeChildren(element)) {
-    if (hasInteractiveContent(child)) return true;
+    if (isSubtreeHidden(child, getCachedComputedStyle(child, styleCache))) {
+      continue;
+    }
+    if (hasInteractiveContent(child, styleCache)) return true;
   }
   return false;
 }
@@ -1376,14 +1408,14 @@ function buildNode(
     //   <p id="pw-help">Must be 8+ chars. <a href="/rules">Full rules</a></p>
     // — where "Full rules" is visible, focusable content an AT user can reach,
     // yet it vanished from the tree and from everything derived from it (the
-    // panel, audits, serialization). When the subtree holds anything
-    // actionable, keep it: the description text being duplicated on the
+    // panel, audits, serialization). When the subtree holds a control the user
+    // can actually reach, keep it: the description text being duplicated on the
     // referencing element is a far smaller cost than losing a control.
     const ownId = element.getAttribute("id");
     if (
       ownId &&
       descriptionTargetIds.has(ownId) &&
-      !hasInteractiveContent(element)
+      !hasInteractiveContent(element, styleCache)
     ) {
       return null;
     }
