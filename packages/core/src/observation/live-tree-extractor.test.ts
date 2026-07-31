@@ -846,4 +846,95 @@ describe("LiveTreeExtractor", () => {
       expect(firstNodeWithTag(after, "p")).toBe(backgroundBefore);
     });
   });
+
+  describe("aria-describedby target suppression stays in sync", () => {
+    // Whether a description target is kept depends on its WHOLE subtree (does
+    // it still hold a reachable control?), so a mutation deep inside one can
+    // flip that verdict. The splice has to re-evaluate the target itself, or
+    // the live tree drifts from what a full extraction would produce.
+    const hasHelpNode = (result: ExtractionResult) =>
+      [...result.nodes.values()].some((n) => n.dom?.attributes?.id === "help");
+
+    const childListOn = (target: Element): TreeChange => ({
+      mutations: [
+        {
+          type: "childList",
+          target,
+          addedNodes: [],
+          removedNodes: [],
+        } as unknown as MutationRecord,
+      ],
+    });
+
+    it("drops the target once its last control is removed", () => {
+      document.body.innerHTML = `
+        <main id="app">
+          <input aria-label="Password" aria-describedby="help" />
+          <div id="help"><span>Must be 8+ chars. <a href="/x">Full rules</a></span></div>
+        </main>
+      `;
+      const root = document.getElementById("app")!;
+      const live = new LiveTreeExtractor(root, { mode: "dom" });
+
+      expect(hasHelpNode(live.extract())).toBe(true);
+
+      const span = document.querySelector("#help span")!;
+      document.querySelector("#help a")!.remove();
+      const after = live.refresh(childListOn(span));
+
+      expect(hasHelpNode(after)).toBe(false);
+      expect(after.nodes).toEqual(extractDomTree(root).nodes);
+    });
+
+    it("brings the target back once a control appears inside it", () => {
+      document.body.innerHTML = `
+        <main id="app">
+          <input aria-label="Password" aria-describedby="help" />
+          <div id="help"><span>Must be 8+ chars.</span></div>
+        </main>
+      `;
+      const root = document.getElementById("app")!;
+      const live = new LiveTreeExtractor(root, { mode: "dom" });
+
+      expect(hasHelpNode(live.extract())).toBe(false);
+
+      const span = document.querySelector("#help span")!;
+      const link = document.createElement("a");
+      link.setAttribute("href", "/x");
+      link.textContent = "Full rules";
+      span.append(link);
+      const after = live.refresh(childListOn(span));
+
+      expect(hasHelpNode(after)).toBe(true);
+      expect(after.nodes).toEqual(extractDomTree(root).nodes);
+    });
+
+    it("drops the target once its last control is hidden from AT", () => {
+      document.body.innerHTML = `
+        <main id="app">
+          <input aria-label="Password" aria-describedby="help" />
+          <div id="help"><span>Must be 8+ chars. <a href="/x">Full rules</a></span></div>
+        </main>
+      `;
+      const root = document.getElementById("app")!;
+      const live = new LiveTreeExtractor(root, { mode: "dom" });
+
+      expect(hasHelpNode(live.extract())).toBe(true);
+
+      const link = document.querySelector("#help a")!;
+      link.setAttribute("aria-hidden", "true");
+      const after = live.refresh({
+        mutations: [
+          {
+            type: "attributes",
+            target: link,
+            attributeName: "aria-hidden",
+          } as unknown as MutationRecord,
+        ],
+      });
+
+      expect(hasHelpNode(after)).toBe(false);
+      expect(after.nodes).toEqual(extractDomTree(root).nodes);
+    });
+  });
 });

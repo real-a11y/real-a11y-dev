@@ -507,6 +507,19 @@ export class LiveTreeExtractor {
                 }
               }
             }
+            // An aria-describedby target is suppressed only while it holds no
+            // reachable control, so that verdict depends on its WHOLE subtree
+            // — a change anywhere inside can flip it. Seed the target itself;
+            // nothing else would, and without it a target keeps its node after
+            // its last control goes away (or is hidden), leaving the panel and
+            // audits with a duplicate of text already shown as the field's
+            // description. The opposite direction — a control appearing inside
+            // a suppressed target — falls back to a full extraction, since the
+            // target has no node to splice.
+            if (this.descriptionTargetIds.has(id) && !dirty.has(ancestor)) {
+              dirty.add(ancestor);
+              changed = true;
+            }
           }
           if (ancestor === stopAt) break;
           ancestor = ancestor.parentElement;
