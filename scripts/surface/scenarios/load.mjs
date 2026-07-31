@@ -288,15 +288,30 @@ export async function loadScenarios(repoRoot, dir = "scenarios") {
       problems.push(...parsed.problems);
       if (parsed.problems.length) continue;
 
-      const scenario = { ...parsed.data, body: parsed.body, file, suite };
-      // The suite is implied by the directory; a frontmatter value that
-      // disagrees would make the file findable under the wrong prefix.
-      if (parsed.data.suite && parsed.data.suite !== suite) {
+      // Check the DECLARED suite before merging, not after. The merge below sets
+      // `suite` from the directory, and the directory always wins — so once it
+      // has run, `suite` can never be undefined and the `REQUIRED` entry for it
+      // (and validate's `SUITES[...]` guard) are both unreachable. A file that
+      // omitted `suite:` entirely was silently accepted, while README documents
+      // it as required.
+      if (!parsed.data.suite) {
+        problems.push(
+          `${file} — missing \`suite\`. It must be declared even though the ` +
+            `directory implies it: the two are cross-checked, and a row that ` +
+            `states nothing can't disagree with anything.`,
+        );
+        continue;
+      }
+      // A frontmatter value that disagrees with the directory would make the file
+      // findable under the wrong prefix.
+      if (parsed.data.suite !== suite) {
         problems.push(
           `${file} — \`suite: ${parsed.data.suite}\` but the file is under ${suite}/`,
         );
         continue;
       }
+
+      const scenario = { ...parsed.data, body: parsed.body, file, suite };
       // The filename carries the id so a PR that cites R12 finds R12.
       if (scenario.id && !name.startsWith(`${scenario.id}-`)) {
         problems.push(

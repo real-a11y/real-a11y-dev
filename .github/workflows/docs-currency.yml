@@ -23,6 +23,13 @@ on:
       - "packages/*/src/**"
       - "packages/*/package.json"
       - "docs/surface.json"
+      # `scenarios/**` is here for the follow-up commit, not the first one. The
+      # report says "still untouched: R3, D2", and the commit that answers it
+      # edits only scenario files — so without this the job never re-runs and the
+      # sticky comment goes on claiming the rows are outstanding after they've
+      # been done. A stale nag is worse than none: it is the thing that teaches
+      # people the comment isn't worth reading.
+      - "scenarios/**"
 
 permissions:
   contents: read

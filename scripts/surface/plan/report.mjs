@@ -137,9 +137,19 @@ export function renderText(report) {
       }
     }
     if (s.twins.length) {
+      // Same "always say which side of done" rule as the ids above. Printing the
+      // twin unconditionally kept nagging about a companion row the branch had
+      // already edited — and `twinsUntouched` was computed for exactly this and
+      // then never read, which is how the inconsistency survived.
+      const done = s.twinsUntouched.length === 0;
       out.push(
         `      twin${s.twins.length > 1 ? "s" : ""}: ${s.twins.join(", ")} ` +
           `— the other altitude asserts the same subject`,
+      );
+      out.push(
+        done
+          ? `        ✓ already touched on this branch`
+          : `        still to check: ${s.twinsUntouched.join(", ")}`,
       );
     }
   }
@@ -336,7 +346,14 @@ export function renderMarkdown(report, base) {
       }
     }
     if (s.twins.length) {
-      line += `  \n  Twin${s.twins.length > 1 ? "s" : ""} ${s.twins.map((i) => `\`${i}\``).join(", ")} assert the same subject at the other altitude.`;
+      // Same rule as the ids above — a twin the branch already edited is done,
+      // and saying so is the difference between a list people read and one they
+      // learn to skip.
+      const state = s.twinsUntouched.length
+        ? ` ⚠️ still to check: ${s.twinsUntouched.map((i) => `\`${i}\``).join(", ")}`
+        : " ✅ already touched on this branch";
+      const many = s.twins.length > 1;
+      line += `  \n  Twin${many ? "s" : ""} ${s.twins.map((i) => `\`${i}\``).join(", ")} assert${many ? "" : "s"} the same subject at the other altitude —${state}`;
     }
     out.push(line);
   }
