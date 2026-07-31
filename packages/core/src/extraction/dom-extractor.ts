@@ -263,11 +263,15 @@ function getActions(
  * `interaction.isInteractive`, so "interactive" means one thing across the
  * extractor, with two deliberate narrowings:
  *
- * - **Hidden subtrees don't count.** The walk drops whatever `isSubtreeHidden`
- *   rejects, so counting a `display:none` control would keep the target for a
- *   node that never gets emitted — reinstating the redundant description node
- *   with none of the control the exception exists for. Shares the walk's
- *   per-extraction `styleCache`, so it resolves no style twice.
+ * - **Only what the walk would emit, and AT would see, counts.** A control the
+ *   walk never reaches — inside a `SKIP_TAGS` element, past a media leaf, or
+ *   under a hidden ancestor — would keep the target alive for a node that
+ *   never appears, reinstating the redundant description node with none of the
+ *   control the exception exists for. Descent stops at `isHiddenFromAT`, which
+ *   covers the walk's own `isSubtreeHidden` rule plus `aria-hidden` and
+ *   `visibility:hidden`: those survive in the DOM view but are pruned from the
+ *   a11y view, and a control AT can't reach is not a reason to keep help text.
+ *   Shares the walk's per-extraction `styleCache`, so no style resolves twice.
  * - **A negative `tabindex` doesn't count on its own.** `getActions` gives any
  *   `[tabindex]` element a click action as a catch-all, but `tabindex="-1"` is
  *   programmatic-focus plumbing — a `role="alert"` error container, a toast
@@ -282,10 +286,21 @@ function hasInteractiveContent(
   element: Element,
   styleCache: StyleCache,
 ): boolean {
+  const tag = element.tagName.toLowerCase();
+  // The walk skips these outright, so nothing inside one is ever emitted.
+  if (SKIP_TAGS.has(tag)) return false;
+
   const tabindex = element.getAttribute("tabindex");
   if (getActions(element, Number(tabindex) < 0).length > 0) return true;
+
+  // Media elements are leaves in the walk: their light-DOM children are
+  // unrendered fallback content, so a control among them never appears
+  // either. (A media element with `controls` is itself actionable and has
+  // already returned true above.)
+  if (MEDIA_TAGS.has(tag)) return false;
+
   for (const child of safeChildren(element)) {
-    if (isSubtreeHidden(child, getCachedComputedStyle(child, styleCache))) {
+    if (isHiddenFromAT(child, getCachedComputedStyle(child, styleCache))) {
       continue;
     }
     if (hasInteractiveContent(child, styleCache)) return true;

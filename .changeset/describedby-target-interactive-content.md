@@ -11,7 +11,7 @@ Keep an `aria-describedby` target in the tree when its subtree contains interact
 
 "Full rules" is visible, focusable content an AT user can tab to and activate, yet it was absent from both the DOM and a11y views — and from everything derived from them (the panel, search, serialization, audits). A description target is now suppressed only when it holds no control a user can actually reach, using the same `getActions` predicate that sets `interaction.isInteractive`, with two narrowings so the exception stays tight:
 
-- A control the walk would drop as hidden (`display:none` and friends) does not keep the target alive — otherwise the target returns as a redundant node while the control it was kept for never appears.
+- Only a control that actually reaches the tree counts. One the walk never emits (hidden, inside a skipped element, or among a media element's fallback children) or that AT can't see (`aria-hidden`, `visibility:hidden`) does not keep the target alive — otherwise the target returns as a redundant node while the control it was kept for never appears.
 - A bare `tabindex="-1"` does not count. It is programmatic-focus plumbing (the standard way to move focus to a `role="alert"` error container), not something a user can tab to, so text-only help and error text stays suppressed as before.
 
 **Breaking change:** extraction output grows for pages using this pattern. A description target that holds a control — and that control, plus any nodes between them — now appears in the tree where it previously did not.

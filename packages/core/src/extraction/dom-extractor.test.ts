@@ -1744,6 +1744,52 @@ describe("aria-describedby target suppression", () => {
     ).toBe(false);
   });
 
+  it("still suppresses a target whose only control is hidden from AT", () => {
+    // aria-hidden (and visibility:hidden) survive the DOM view but are pruned
+    // from the a11y view, so counting one would bring the redundant
+    // description node back in a11y mode with no control behind it.
+    const root = createPage(`
+      <input aria-label="Password" aria-describedby="pw-help" />
+      <p id="pw-help">Must be 8+ characters. <button aria-hidden="true">i</button></p>
+    `);
+
+    const { nodes } = extractDomTree(root);
+
+    expect([...nodes.values()].some((n) => n.dom.tagName === "p")).toBe(false);
+  });
+
+  it("still suppresses a target whose only control is media fallback", () => {
+    // The walk treats media as a leaf — its light-DOM children are fallback
+    // content no browser renders — so a control in there is never emitted.
+    const root = createPage(`
+      <input aria-label="Clip" aria-describedby="clip-help" />
+      <p id="clip-help">
+        See the <video src="x.mp4"><a href="/transcript">transcript</a></video>
+      </p>
+    `);
+
+    const { nodes } = extractDomTree(root);
+
+    expect([...nodes.values()].some((n) => n.dom.tagName === "a")).toBe(false);
+    expect([...nodes.values()].some((n) => n.dom.tagName === "p")).toBe(false);
+  });
+
+  it("keeps a target holding a media element that is itself a tab stop", () => {
+    // <video controls> IS emitted and IS focusable, so it is a real reason to
+    // keep the target — unlike the fallback content above.
+    const root = createPage(`
+      <input aria-label="Clip" aria-describedby="clip-help" />
+      <p id="clip-help">Watch: <video src="x.mp4" controls></video></p>
+    `);
+
+    const { nodes } = extractDomTree(root);
+
+    expect([...nodes.values()].some((n) => n.dom.tagName === "video")).toBe(
+      true,
+    );
+    expect([...nodes.values()].some((n) => n.dom.tagName === "p")).toBe(true);
+  });
+
   it("keeps a target whose control is reachable via tabindex='0'", () => {
     const root = createPage(`
       <input aria-label="Password" aria-describedby="pw-help" />
