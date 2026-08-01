@@ -26,7 +26,7 @@
 // appear somewhere is a fact.
 
 import { readRegions } from "./regions.mjs";
-import { mergeTable } from "./table.mjs";
+import { mergeTable, parseTable } from "./table.mjs";
 
 export const TOOLS_FILE = "website/packages/mcp/tools.md";
 
@@ -63,12 +63,19 @@ export function mcpRegions(manifest) {
         body,
         where,
         carry,
-        // The region keeps exactly the tools it already lists that still ship.
-        // Nothing is added here — see the header on why placement is a human
-        // call — so `keys` never contains something `existing` lacks and
-        // `renderStub` is unreachable by construction. It throws rather than
-        // returning a plausible row, so a future change that does start adding
-        // here has to decide the taxonomy question deliberately.
+        // The region keeps exactly the tools its TABLE already lists that still
+        // ship. Nothing is added here — see the header on why placement is a
+        // human call — so `keys` is a subset of what the merge already parsed
+        // and `renderStub` should never fire.
+        //
+        // "Should", not "cannot". It fired once: `readKeys` used to scan the
+        // whole region body while the merge only reads the contiguous table, so
+        // a row added below the table went into `keys` without being in
+        // `existing`. Both now read through `parseTable`, and a stranded row is
+        // reported by `checkToolPlacement` instead. The throw stays as an
+        // assertion — if it ever fires again the invariant broke and a stack
+        // trace is the honest answer, but the path a person can actually take
+        // now ends in a message.
         keys: rows.filter((k) => shipped.has(k)),
         keyOfRow: toolKey,
         renderStub: (key) => {
@@ -85,12 +92,39 @@ export function mcpRegions(manifest) {
   return builders;
 }
 
-/** Row keys currently in a region body, in order. */
+/**
+ * Row keys in a region's TABLE, in order.
+ *
+ * Reads through `parseTable` rather than scanning every line, so this and the
+ * merge agree about what counts as a row. They didn't: this used to match any
+ * pipe-delimited line in the body, while `parseTable` stops at the first
+ * non-row line and files the rest as `tail`. A row added below the table with a
+ * blank line between it and the rows — the obvious way to follow "add it to
+ * whichever group fits" — was therefore *wanted* but not *existing*, which drove
+ * the merge into the `renderStub` that throws.
+ *
+ * So "unreachable by construction" was wrong, and reachable by exactly the
+ * action the error message asks for. One parser, one answer.
+ */
 function readKeys(body) {
-  return body
-    .split("\n")
-    .map((l) => {
-      const t = l.trim();
+  const table = parseTable(body);
+  if (!table) return [];
+  return table.rows.map((r) => toolKey(r.cells)).filter((k) => k !== null);
+}
+
+/**
+ * Tool rows stranded outside the table — in the region, but after the blank line
+ * that ends it. Detached from the rows above, so neither the merge nor the
+ * placement check can see them, and markdown won't render them as table rows
+ * either. Worth its own message: the row IS there, and being told "no row in the
+ * index" while looking straight at one is its own kind of wrong.
+ */
+function strandedRows(body) {
+  const table = parseTable(body);
+  if (!table) return [];
+  return table.tail
+    .map((line) => {
+      const t = line.trim();
       if (!t.startsWith("|") || !t.endsWith("|")) return null;
       return toolKey(
         t
@@ -116,17 +150,34 @@ export function checkToolPlacement(manifest, text, relPath) {
   const { regions } = readRegions(text, relPath);
 
   const placed = new Map(); // tool → [region ids]
+  const stranded = new Set(); // has a row, but not one that counts
+  const problems = [];
+
   for (const id of TOOL_REGIONS) {
     const region = regions.get(id);
     if (!region) continue;
     for (const key of readKeys(region.body)) {
       placed.set(key, [...(placed.get(key) ?? []), id]);
     }
+    for (const key of strandedRows(region.body)) {
+      stranded.add(key);
+      problems.push({
+        where: relPath,
+        message:
+          `\`${key}\` has a row in \`${id}\` but it sits below the table, past a ` +
+          `blank line. Markdown won't render it as a row and the tooling can't ` +
+          `see it either.\n    Move it up so it is contiguous with the rows above.`,
+      });
+    }
   }
 
-  const problems = [];
   for (const tool of manifest.mcp.tools) {
     const where = placed.get(tool.name);
+    // A stranded row already got the precise message. Adding "ships but has no
+    // row" on top would read as a contradiction to someone looking straight at
+    // the row they just wrote — two messages, one cause, and the vaguer one
+    // second.
+    if (!where && stranded.has(tool.name)) continue;
     if (!where) {
       problems.push({
         where: relPath,
