@@ -189,13 +189,26 @@ export function checkToolPlacement(manifest, text, relPath) {
           `index is the table people scan, and it is the one that fell behind ` +
           `when the act tools shipped.`,
       });
-    } else if (where.length > 1) {
-      problems.push({
-        where: relPath,
-        message:
-          `\`${tool.name}\` is listed in ${where.length} groups (${where.join(", ")}). ` +
-          `One row per tool, or the count stops meaning anything.`,
-      });
+    } else {
+      // Distinct GROUPS, not row count. Two rows for one tool inside a single
+      // table pushed the same region id twice and reported "listed in 2 groups
+      // (mcp-tools-act, mcp-tools-act)" — a second group that does not exist,
+      // sending someone to look for it.
+      //
+      // That case is already reported accurately by `mergeTable` ("two rows for
+      // `type_text`; remove one"), so it falls through to that rather than being
+      // described twice, once wrongly. Same rule as the stranded row above: one
+      // cause, one message, and the precise one wins.
+      const groups = [...new Set(where)];
+      if (groups.length > 1) {
+        problems.push({
+          where: relPath,
+          message:
+            `\`${tool.name}\` is listed in ${groups.length} groups ` +
+            `(${groups.join(", ")}). One row per tool, or the count stops ` +
+            `meaning anything.`,
+        });
+      }
     }
   }
 
