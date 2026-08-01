@@ -183,10 +183,13 @@ interface InteractOutcome {
 const MAX_SETTLE_MS = 30_000;
 
 const settle = (ms: number): Promise<void> => {
-  const safeMs = Math.max(0, Math.min(ms, MAX_SETTLE_MS));
-  return safeMs > 0
-    ? new Promise((resolve) => setTimeout(resolve, safeMs))
-    : Promise.resolve();
+  if (typeof ms !== "number" || !Number.isFinite(ms) || ms <= 0) {
+    return Promise.resolve();
+  }
+  if (ms > MAX_SETTLE_MS) {
+    return new Promise((resolve) => setTimeout(resolve, MAX_SETTLE_MS));
+  }
+  return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
 async function interactOnPage(
