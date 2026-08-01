@@ -115,6 +115,10 @@ export function renderText(report) {
       "",
       "If nothing a user reads changed either, say so in the body — but say it",
       "because you checked, not because this printed it.",
+      "",
+      "For the PR body",
+      "",
+      indent(prBodyBlock(report), "  "),
     );
     return lines.join("\n") + "\n";
   }
@@ -224,20 +228,24 @@ export function prBodyBlock(report) {
   const byAction = (action) =>
     report.scenarios.filter((s) => s.action === action);
 
+  // Reached only from the zero-change paths of the two renderers. One obligation
+  // is produced per change, so no scenarios means no changes — and until those
+  // paths started calling this, the branch was unreachable and its old pre-ticked
+  // `- [x] None needed, because: nothing user-visible moved.` had never once been
+  // shown to anyone.
   if (report.scenarios.length === 0) {
     lines.push("- **Added:** —", "- **Updated:** —", "- **Deprecated:** —");
-    // UNTICKED, and the reason is left blank on purpose.
+    // UNTICKED, and the reason left blank on purpose.
     //
     // This block gets pasted into a PR body verbatim, so a pre-ticked box with a
-    // reason already filled in is this tool asserting something it did not
-    // check — §4b's whole point is that a blank scenario answer and a forgotten
-    // one are indistinguishable, and a pre-ticked one is worse than either.
-    // The inventory is all that was measured; whether any output moved is the
-    // author's to answer.
+    // reason already filled in is the tool asserting something it did not check.
+    // §4b's whole point is that a blank scenario answer and a forgotten one are
+    // indistinguishable — a pre-ticked one is worse than either. The inventory is
+    // all that was measured; whether any output moved is the author's to answer.
     lines.push(
       report.sourceChanged
         ? "- [ ] None needed, because: <!-- the inventory didn't move, but packages/*/src did — confirm no printed output, error message or exit code changed -->"
-        : "- [ ] None needed, because: <!-- say why; the inventory didn't move, which is not the same as nothing user-visible -->",
+        : "- [ ] None needed, because: <!-- say why. The inventory didn't move, which is not the same as nothing user-visible. -->",
     );
     return lines.join("\n");
   }
@@ -370,6 +378,20 @@ export function renderMarkdown(report, base) {
       // Nothing moved and no source changed — genuinely nothing to post.
       out.push("", NOTHING_TO_REPORT);
     }
+    // The §4b section still has to be filled in on a quiet branch — "none" is a
+    // valid answer that must still be stated. Handing over an unticked block is
+    // the difference between the author answering it and the tool answering it
+    // for them, which is what this whole change is about.
+    out.push(
+      "",
+      "<details><summary><b>Paste into the PR body</b></summary>",
+      "",
+      "```markdown",
+      prBodyBlock(report),
+      "```",
+      "",
+      "</details>",
+    );
     return out.join("\n");
   }
 
