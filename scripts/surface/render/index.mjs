@@ -46,6 +46,9 @@ function plan(manifest) {
 export async function renderAll(repoRoot, manifest) {
   const files = [];
   const problems = [];
+  // Findings a human must act on, which `apply` cannot resolve. Surfaced by
+  // `check`, never allowed to stop the writer — see the note at the call site.
+  const advisories = [];
   const added = [];
   const removed = [];
   const moved = [];
@@ -60,7 +63,16 @@ export async function renderAll(repoRoot, manifest) {
     // File-level checks run against what is ON DISK, for the same reason the
     // TODO scan does: reporting against freshly rendered text would describe a
     // state no file is in yet.
-    if (validate) problems.push(...validate(current, relPath));
+    //
+    // They land in `advisories`, NOT `problems`, and the distinction is which
+    // ones make writing unsafe. A broken marker or an unparseable table means a
+    // write could corrupt the file, so it has to stop the writer. "This new tool
+    // needs a row" is work a human owes — `apply` cannot do it and never will,
+    // so letting it block would mean one unplaced MCP tool prevents the CLI
+    // tables in a different file from being rebuilt at all. A contributor adding
+    // a command and a tool in one PR would follow §4, run `apply`, and get
+    // "Nothing was written" for both.
+    if (validate) advisories.push(...validate(current, relPath));
 
     // Two passes, because a MOVE is only visible from the file.
     //
@@ -117,7 +129,7 @@ export async function renderAll(repoRoot, manifest) {
     files.push({ path: relPath, text, current, changed });
   }
 
-  return { files, added, removed, moved, problems };
+  return { files, added, removed, moved, problems, advisories };
 }
 
 /** Run every builder for one file. Split out so the move pass can repeat it. */
@@ -200,7 +212,8 @@ export async function applyAll(repoRoot, manifest) {
  */
 export async function checkDrift(repoRoot, manifest) {
   const result = await renderAll(repoRoot, manifest);
-  const problems = [...result.problems];
+  // `check` reports both kinds; only `apply` treats them differently.
+  const problems = [...result.problems, ...result.advisories];
 
   for (const file of result.files) {
     if (file.text === file.current) continue;
