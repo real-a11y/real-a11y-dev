@@ -75,6 +75,24 @@ sticky comment. Read the table below to understand _why_ a page is in scope, and
 for the cases the manifest can't see (an error message's wording, a network
 behavior change).
 
+**Then let the mechanical part happen on its own:**
+
+```bash
+pnpm surface:apply
+```
+
+This rebuilds the managed regions — the CLI command tables, the exit codes, the
+MCP tool index — so a new command or tool cannot be missing from the at-a-glance
+tables. It is the only surface verb that writes, and it deliberately writes very
+little: it owns whether a row **exists**, never its prose, its wording, or its
+position. A row it adds arrives as `TODO`, and `surface:check` fails until you
+replace that with a sentence. Everything it leaves alone is yours, and the
+sentence is the part worth your time.
+
+It won't place a new **MCP tool** for you — the manifest carries no group for a
+tool, so which table it belongs in is a judgement. `check` names the tool and
+lists the groups; you pick.
+
 If the change touches the **public surface** (a package, command, flag, export,
 option, MCP tool, env var, exit code, error message, or a whole product), update
 its docs now. Map the change with the table below, then confirm the branch
