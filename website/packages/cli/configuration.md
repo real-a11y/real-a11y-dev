@@ -13,6 +13,15 @@ The config is **optional**. Without one, every command works from flags and posi
 
 **Discovery.** Auto-discovered as `./a11y.config.json` in the directory you run from — no upward walk in v1, so you inherit only a config in the current directory, never a parent's. `--config <file>` points elsewhere; `--no-config` ignores a discovered one. Both flags are accepted on every command.
 
+Run with [`--verbose`](/packages/cli/commands#verbose) to see which of those happened. A config that isn't picked up looks exactly like no config at all — every default reverts to its built-in and nothing says why — so the diagnostic names the absolute path it checked:
+
+```
+$ real-a11y audit --verbose
+config: none found — looked for /work/app/nested/a11y.config.json
+  auto-discovery checks the directory you run from and does not walk upward, so a
+  config in a parent directory is not picked up. Pass --config <file> to name one.
+```
+
 **Precedence** is `flag > env > config defaults > built-in`. An explicit flag always wins, so a config default is a floor you override per run, never a ceiling you can't escape. (The env layer is `A11Y_PAGES` for the page list and `A11Y_SNAPSHOT_OUT` for `snapshot`'s output — see [`urls`](#urls).)
 
 A minimal, complete config:

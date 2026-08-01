@@ -16,7 +16,12 @@ import {
   rootHelp,
   type FlagValues,
 } from "./args.js";
-import { mergeDefaults, resolveConfig } from "./config.js";
+import {
+  configSource,
+  describeConfigSource,
+  mergeDefaults,
+  resolveConfig,
+} from "./config.js";
 import { CliError, EXIT, formatCliError } from "./exit.js";
 
 /**
@@ -111,6 +116,21 @@ export async function run(argv: string[]): Promise<number> {
     // already parsed into `values` wins; the config value fills the gap and is
     // validated by the command's own parser downstream. Scoped to this
     // command's declared flags so a default can't reach a flag it would reject.
+    // Say where the config came from before anything depends on it. Printed
+    // here rather than inside `resolveConfig` because that runs twice per
+    // command (defaults merge, then the page list) and the memo only covers the
+    // found case — so emitting it there would double the line for exactly the
+    // run where it says "none found".
+    //
+    // A direct write, not `progress()`, so `-q` does not silence it. That is
+    // the existing split, not a new one: `-q` suppresses PROGRESS (the per-page
+    // `auditing …` and its timing), while a `--verbose` diagnostic describing
+    // what the run is using survives it — same as the resolved Chrome binary
+    // (`session.ts`) and the browser cache directory (`chrome-install.ts`).
+    // `-q --verbose` is a deliberate pair: drop the narration, keep the facts.
+    if (verbose) {
+      process.stderr.write(`${describeConfigSource(configSource(values))}\n`);
+    }
     const resolved = resolveConfig(values);
     let seededFromConfig: ReadonlySet<string> = new Set();
     if (resolved) {

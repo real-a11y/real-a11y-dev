@@ -5,7 +5,7 @@
  */
 
 import { execFile } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -236,5 +236,82 @@ describe("--root now applies to `tabs` alone (built bin)", () => {
         /--root <selector>/,
       );
     }
+  });
+});
+
+describe("--verbose says where the config came from (built bin)", () => {
+  // The reported confusion: a config that exists, a command run from a
+  // subdirectory, and no indication that discovery never looked there.
+  it("names the exact path it checked, the rule, and the way out", async () => {
+    config({ defaults: { rules: ["image-alt"] } });
+    const nested = join(dir, "nested");
+    mkdirSync(nested);
+
+    const { stderr } = await runCli(
+      ["audit", CLEAN, "-q", "--verbose"],
+      nested,
+    );
+    expect(stderr).toContain(join(nested, "a11y.config.json"));
+    expect(stderr).toMatch(/does not walk upward/);
+    expect(stderr).toMatch(/--config <file>/);
+    // And it must not claim to have found the parent's config.
+    expect(stderr).not.toContain(join(dir, "a11y.config.json"));
+  });
+
+  it("prints exactly once when the page list comes from the config", async () => {
+    // `resolveConfig` runs twice on this path — once for the defaults merge, and
+    // again inside the page-list resolution, which is only reached when NO url
+    // positional was given. Printing from inside `resolveConfig` (the obvious
+    // place) doubles the line here; measured, and the reason it prints from the
+    // dispatcher instead. A positional url does NOT exercise this, because the
+    // second call never happens.
+    config({ urls: [CLEAN], defaults: { rules: ["image-alt"] } });
+    const { stderr } = await runCli(["audit", "-q", "--verbose"], dir);
+    const lines = stderr.split("\n").filter((l) => l.startsWith("config:"));
+    expect(lines).toHaveLength(1);
+  });
+
+  it("reports a discovered config, and stays silent without --verbose", async () => {
+    config({ defaults: { rules: ["image-alt"] } });
+    const loud = await runCli(["audit", CLEAN, "-q", "--verbose"], dir);
+    expect(loud.stderr).toContain(join(dir, "a11y.config.json"));
+    expect(loud.stderr).toMatch(/auto-discovered/);
+
+    const quiet = await runCli(["audit", CLEAN, "-q"], dir);
+    expect(quiet.stderr).not.toMatch(/^config:/m);
+  });
+
+  it("survives -q, while progress lines do not", async () => {
+    // `-q` suppresses PROGRESS ("auditing …", the per-page timing); a
+    // `--verbose` diagnostic describing what the run is using survives it, the
+    // same as the resolved Chrome binary and the browser cache directory.
+    // `-q --verbose` is a deliberate pair — drop the narration, keep the facts —
+    // and a reviewer read it as a bug, so it is pinned rather than described.
+    config({ defaults: { rules: ["image-alt"] } });
+    const { stderr } = await runCli(["audit", CLEAN, "-q", "--verbose"], dir);
+    expect(stderr).toMatch(/^config:/m);
+    expect(stderr).not.toMatch(/auditing /);
+    expect(stderr).not.toMatch(/done in \d+ms/);
+
+    // …and without -q the progress lines are back, so the assertion above is
+    // about -q rather than about them never being printed.
+    const loud = await runCli(["audit", CLEAN, "--verbose"], dir);
+    expect(loud.stderr).toMatch(/auditing /);
+    expect(loud.stderr).toMatch(/done in \d+ms/);
+  });
+
+  it("distinguishes --no-config from --config", async () => {
+    config({ defaults: { rules: ["image-alt"] } });
+    const skipped = await runCli(
+      ["audit", CLEAN, "-q", "--verbose", "--no-config"],
+      dir,
+    );
+    expect(skipped.stderr).toMatch(/skipped \(--no-config\)/);
+
+    const named = await runCli(
+      ["audit", CLEAN, "-q", "--verbose", "--config", "a11y.config.json"],
+      dir,
+    );
+    expect(named.stderr).toMatch(/from --config/);
   });
 });

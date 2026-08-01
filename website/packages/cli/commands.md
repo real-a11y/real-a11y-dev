@@ -764,14 +764,41 @@ is the fallback when this is omitted.
   inspect, tree, outline, tabs, list, interact, click, type, focus, snapshot,
   diff
 
-Suppress progress lines on stderr. [`install`](#install) still prints the
-resolved executable path on stdout.
+Suppress **progress** lines on stderr — `auditing <url> …`, per-page timings.
+[`install`](#install) still prints the resolved executable path on stdout.
+
+It does not silence [`--verbose`](#verbose) diagnostics, which answer "what is
+this run using?" rather than "how far along is it". `-q --verbose` is a useful
+pair, not a contradiction: it drops the per-page noise and keeps the facts.
 
 ### `--verbose`
 
 - **Type:** boolean · **Default:** `false` · **Commands:** all
 
-Extra diagnostics on stderr (per-page timings, and more).
+Extra diagnostics on stderr: which config was found (below), which Chrome binary
+was resolved and where it came from, the browser cache directory, and per-page
+timings.
+
+Only the timings are progress, so only they are suppressed by
+[`-q`](#q-quiet) — the rest describe the run's inputs and survive it. That is
+the point: `-q` is for CI logs you don't want narrated, and a diagnostic you
+asked for by name shouldn't vanish because the same job also asked for quiet.
+
+One line of it is worth knowing about before you need it — where the config came
+from, printed before anything depends on it:
+
+```
+config: /work/app/a11y.config.json (auto-discovered)
+config: skipped (--no-config); built-in defaults only
+config: none found — looked for /work/app/nested/a11y.config.json
+  auto-discovery checks the directory you run from and does not walk upward, so a
+  config in a parent directory is not picked up. Pass --config <file> to name one.
+```
+
+The last one is the case that costs people time: the config is real, just not in
+the directory the command ran from, and every default silently reverts to its
+built-in. The path is absolute on purpose — a relative one tells you nothing you
+didn't already assume.
 
 ### `-h, --help`
 

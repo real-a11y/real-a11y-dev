@@ -123,6 +123,11 @@ main
     code "./a11y.config.json"
     code "--config <file>"
     code "--no-config"
+  paragraph "Run with to see which of those happened. A config that isn't picked up looks exactly like no config at all — every default reverts to its built-in and nothing says why — so the diagnostic names the absolute path it checked:"
+    link "--verbose"
+      code "--verbose"
+  button "Copy Code"
+  code
   paragraph "is . An explicit flag always wins, so a config default is a floor you override per run, never a ceiling you can't escape. (The env layer is for the page list and for 's output — see .)"
     strong "Precedence"
     code "flag > env > config defaults > built-in"
