@@ -154,6 +154,10 @@ main
   code
   button "Copy Code"
   code
+  paragraph "That is the whole tree, not a tidied version of it: the root is because the page has no landmark to root at, and the paragraphs are there because a screen reader reads them. A page with a roots at instead."
+    code "document"
+    code "<main>"
+    code "main"
   paragraph "Then gate a build on it — exits on errors with no extra flags:"
     code "audit"
     code "1"

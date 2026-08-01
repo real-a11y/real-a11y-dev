@@ -5,7 +5,7 @@
  */
 
 import { execFile } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -249,5 +249,71 @@ describe("the native producer is the only producer (built bin)", () => {
     ]);
     expect(code).toBe(2);
     expect(stderr).toMatch(/Unknown option/);
+  });
+});
+
+/**
+ * The quick-start's tree output, checked against the tree the CLI actually
+ * prints.
+ *
+ * This block went stale and nobody noticed for four producer changes: it claimed
+ * a `main` root and two children for a page that has no landmark and four. Two
+ * things made that survivable — it was written once in #140 and never
+ * re-recorded, and documented OUTPUT is unguarded (`check/samples.mjs` validates
+ * that documented invocations *parse* and says outright it does not check
+ * semantics).
+ *
+ * What this pins is our half: if the producer changes what a tree looks like,
+ * the quick-start fails the build instead of quietly lying. What it cannot see
+ * is `example.com` changing its own markup — no test without network can — so
+ * the fixture below is a copy, and its accuracy is a human's job. That is a real
+ * limit, stated rather than papered over: it converts the failure that actually
+ * happened into a build error and leaves the one that didn't as a manual check.
+ */
+describe("quick-start docs match the real tree (built bin)", () => {
+  // example.com's markup: one wrapper div, an h1, two paragraphs, one link.
+  // No <main> — which is the whole reason the documented `main` root was wrong.
+  const EXAMPLE_DOT_COM = dataUrl(
+    "<!doctype html><html><head><title>Example Domain</title></head><body>" +
+      "<div><h1>Example Domain</h1>" +
+      "<p>This domain is for use in illustrative examples in documents. You may use this " +
+      "domain in literature without prior coordination or asking for permission.</p>" +
+      '<p><a href="https://www.iana.org/domains/example">More information...</a></p>' +
+      "</div></body></html>",
+  );
+
+  const HERE = dirname(fileURLToPath(import.meta.url));
+  const COPIES = {
+    "packages/cli/README.md": resolve(HERE, "../README.md"),
+    "website/packages/cli.md": resolve(
+      HERE,
+      "../../../website/packages/cli.md",
+    ),
+  };
+
+  /** The fenced block holding the quick-start tree, by its first line. */
+  function treeBlock(file: string): string {
+    const text = readFileSync(file, "utf8");
+    const match = /\n```\n(document\n(?:.*\n)*?)```\n/.exec(text);
+    if (!match) {
+      throw new Error(
+        `no fenced block starting with "document" in ${file} — ` +
+          "the quick-start output block moved or was reworded",
+      );
+    }
+    return match[1].trimEnd();
+  }
+
+  it("both copies are byte-identical", () => {
+    // The `pr` skill's README/website sync rule, made mechanical: two copies
+    // that drift are worse than one, because each looks authoritative.
+    const [readme, website] = Object.values(COPIES).map(treeBlock);
+    expect(readme).toBe(website);
+  });
+
+  it("is what `real-a11y tree` actually prints", async () => {
+    const { code, stdout } = await runCli(["tree", EXAMPLE_DOT_COM, "-q"]);
+    expect(code).toBe(0);
+    expect(stdout.trimEnd()).toBe(treeBlock(COPIES["packages/cli/README.md"]));
   });
 });
