@@ -9,6 +9,7 @@ import { spawn } from "node:child_process";
 import { createConnection } from "node:net";
 
 import type { FlagValues } from "../args.js";
+import { CliError } from "../exit.js";
 
 import {
   type RpcRequest,
@@ -39,11 +40,12 @@ export class DaemonClient {
     command: string,
     positionals: string[],
     flags: FlagValues,
+    cwd?: string,
   ): Promise<DaemonRunResult> {
     return this.request({
       id: generateId(),
       method: "run",
-      params: { session, command, positionals, flags },
+      params: { session, command, positionals, flags, cwd },
     });
   }
 
@@ -137,21 +139,17 @@ export class DaemonClient {
               return;
             case "error":
               socket.end();
-              reject(
-                new Error(
-                  response.error.hint
-                    ? `${response.error.message} (${response.error.hint})`
-                    : response.error.message,
-                ),
-              );
+              reject(new CliError(response.error.message, response.error.hint));
               return;
           }
         }
       });
 
-      socket.on("error", reject);
+      socket.on("error", (err) => {
+        reject(new CliError(`daemon connection failed: ${err.message}`));
+      });
       socket.on("close", () => {
-        reject(new Error("connection closed before response"));
+        reject(new CliError("daemon connection closed before response"));
       });
     });
   }

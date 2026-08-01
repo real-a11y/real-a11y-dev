@@ -4,19 +4,22 @@
 
 import type { BrowserSession } from "@real-a11y-dev/browser";
 
-import type { FlagValues } from "../args.js";
-import { runAuditOnSession } from "../commands/audit.js";
+import { parseFormat, parseListCategory, type FlagValues } from "../args.js";
+import { runAuditOnSession, validateAudit } from "../commands/audit.js";
 import {
+  outputOf,
   resolveAuditTargets,
   singleTarget,
   type Target,
 } from "../commands/common.js";
-import { runInspectOnSession } from "../commands/inspect.js";
+import { runInspectOnSession, validateInspect } from "../commands/inspect.js";
 import {
   runClickOnSession,
   runFocusOnSession,
   runInteractOnSession,
   runTypeOnSession,
+  stepsFromFlags,
+  sugarStep,
 } from "../commands/interact.js";
 import {
   runListOnSession,
@@ -24,6 +27,54 @@ import {
   runTabsOnSession,
   runTreeOnSession,
 } from "../commands/views.js";
+
+/**
+ * Fail fast on invalid flags / missing pages before the daemon spawns a browser.
+ * Mirrors the validation moved into the one-shot command wrappers.
+ */
+export function validateCommand(
+  command: string,
+  positionals: string[],
+  flags: FlagValues,
+): void {
+  switch (command) {
+    case "audit":
+      validateAudit(positionals, flags);
+      return;
+    case "inspect":
+      validateInspect(positionals, flags);
+      return;
+    case "list":
+      parseListCategory(positionals[0]);
+      parseFormat(flags.format, ["pretty", "json"] as const);
+      outputOf(flags);
+      singleTarget(positionals.slice(1), flags, "list");
+      return;
+    case "tree":
+    case "outline":
+    case "tabs":
+      parseFormat(flags.format, ["pretty", "json"] as const);
+      outputOf(flags);
+      singleTarget(positionals, flags, command);
+      return;
+    case "interact":
+      parseFormat(flags.format, ["pretty", "json"] as const);
+      outputOf(flags);
+      singleTarget(positionals, flags, command);
+      stepsFromFlags(flags);
+      return;
+    case "click":
+    case "type":
+    case "focus":
+      parseFormat(flags.format, ["pretty", "json"] as const);
+      outputOf(flags);
+      singleTarget(positionals, flags, command);
+      sugarStep(command, flags);
+      return;
+    default:
+      return;
+  }
+}
 
 /** Resolve the page target(s) a daemon command needs to build session flags. */
 export function resolveCommandTargets(

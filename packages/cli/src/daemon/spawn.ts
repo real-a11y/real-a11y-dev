@@ -5,10 +5,12 @@
 
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import { createConnection } from "node:net";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+
+import { CliError } from "../exit.js";
 
 import { DaemonClient } from "./client.js";
 
@@ -19,8 +21,12 @@ export interface SessionPaths {
 }
 
 function sanitizeSessionName(name: string): string {
-  // Limit length and forbid path separators / shell metacharacters.
-  return name.replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 64);
+  // Replace path separators / shell metacharacters, then append a short hash of
+  // the original so distinct names such as "team/prod" and "team_prod" don't
+  // collide when sanitized.
+  const base = name.replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 55);
+  const hash = createHash("sha256").update(name).digest("hex").slice(0, 8);
+  return `${base}_${hash}`;
 }
 
 export function sessionPaths(name: string): SessionPaths {
@@ -49,7 +55,7 @@ function waitForSocket(socketPath: string, timeoutMs: number): Promise<void> {
       socket.on("error", () => {
         if (Date.now() > deadline) {
           reject(
-            new Error(`daemon socket did not appear within ${timeoutMs}ms`),
+            new CliError(`daemon socket did not appear within ${timeoutMs}ms`),
           );
         } else {
           setTimeout(attempt, 50);
@@ -77,6 +83,11 @@ export async function ensureDaemonClient(
     await client.version();
     return client;
   } catch {
+    // A stale socket file from a crashed daemon can block the new daemon from
+    // listening; remove it before spawning. The daemon entry also removes it, but
+    // doing it here covers races where the entry hasn't started yet.
+    await rm(paths.socketPath, { force: true });
+
     // Spawn a detached daemon and wait for its socket.
     const child = spawn(
       process.execPath,
@@ -94,8 +105,15 @@ export async function ensureDaemonClient(
       { detached: true, stdio: "ignore" },
     );
 
-    child.on("error", (err) => {
-      throw new Error(`failed to spawn daemon: ${err.message}`);
+    await new Promise<void>((resolve, reject) => {
+      child.on("error", (err) => {
+        reject(new CliError(`failed to spawn daemon: ${err.message}`));
+      });
+      child.on("spawn", () => {
+        // Unref so the CLI can exit while the daemon keeps running.
+        child.unref();
+        resolve();
+      });
     });
 
     await waitForSocket(paths.socketPath, 15_000);

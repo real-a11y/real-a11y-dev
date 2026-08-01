@@ -68,14 +68,8 @@ async function runWithDaemon(
 ): Promise<number> {
   // `runner.ts` eagerly loads the command modules, so only import it when we
   // already know we're going through the daemon.
-  const { resolveCommandTargets } = await import("./daemon/runner.js");
-  const targets = resolveCommandTargets(command, positionals, flags);
-  if (targets.length === 0) {
-    throw new CliError(
-      `\`${command}\` does not support --session in this release`,
-      "run the command without --session, or use a supported command",
-    );
-  }
+  const { validateCommand } = await import("./daemon/runner.js");
+  validateCommand(command, positionals, flags);
 
   const sessionName =
     typeof flags.session === "string" && flags.session !== ""
@@ -87,6 +81,7 @@ async function runWithDaemon(
     command,
     positionals,
     flags,
+    process.cwd(),
   );
   if (stderr) process.stderr.write(stderr);
   if (stdout) process.stdout.write(stdout);
@@ -168,6 +163,11 @@ export async function run(argv: string[]): Promise<number> {
       process.stderr.write(`${describeConfigSource(configSource(values))}\n`);
     }
     const resolved = resolveConfig(values);
+    // Pin the config file path to the caller's cwd so the daemon (which may be
+    // running from a different directory) auto-discovers the same config.
+    if (resolved && values["no-config"] !== true) {
+      values.config = resolved.path;
+    }
     let seededFromConfig: ReadonlySet<string> = new Set();
     if (resolved) {
       seededFromConfig = mergeDefaults(
@@ -196,7 +196,27 @@ export async function run(argv: string[]): Promise<number> {
       }
     }
     if (values.session !== undefined) {
-      return await runWithDaemon(name, positionals, values as FlagValues);
+      const { resolveCommandTargets } = await import("./daemon/runner.js");
+      let daemonTargets: { length: number } | undefined;
+      let daemonErr: unknown;
+      try {
+        daemonTargets = resolveCommandTargets(
+          name,
+          positionals,
+          values as FlagValues,
+        );
+      } catch (err) {
+        daemonErr = err;
+      }
+      const sessionExplicit = !seededFromConfig.has("session");
+      const daemonSupported =
+        daemonTargets !== undefined && daemonTargets.length > 0;
+      if (daemonSupported || sessionExplicit) {
+        if (daemonErr) throw daemonErr;
+        return await runWithDaemon(name, positionals, values as FlagValues);
+      }
+      // `defaults.session` in config does not force unsupported commands through
+      // the daemon; fall through to the one-shot path.
     }
     const fn = await command.load();
     return await fn(positionals, values as FlagValues, seededFromConfig);

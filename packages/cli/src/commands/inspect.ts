@@ -37,6 +37,7 @@ import {
   outputOf,
   sessionFlags,
   singleTarget,
+  type Target,
 } from "./common.js";
 
 function section(title: string, body: string): string {
@@ -89,8 +90,20 @@ export async function runInspectOnSession(
   return exceedsThreshold(page.findings, failOn) ? EXIT.FINDINGS : EXIT.OK;
 }
 
-export const inspectCommand: CommandFn = async (positionals, flags) => {
+export function validateInspect(
+  positionals: readonly string[],
+  flags: FlagValues,
+): Target {
   const target = singleTarget(positionals, flags, "inspect");
+  parseRules(flags.rules);
+  parseFailOn(flags["fail-on"], "error");
+  parseFormat(flags.format, ["pretty", "json"] as const);
+  outputOf(flags);
+  return target;
+}
+
+export const inspectCommand: CommandFn = async (positionals, flags) => {
+  const target = validateInspect(positionals, flags);
   const session = await createSession(sessionFlags(flags, [target]));
   try {
     return await runInspectOnSession(session, positionals, flags);

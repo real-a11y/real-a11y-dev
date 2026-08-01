@@ -18,6 +18,7 @@ import {
   type CommandFn,
   type FlagValues,
 } from "../args.js";
+import { type ConfigPage } from "../config.js";
 import { CliError, EXIT, exceedsThreshold, formatCliError } from "../exit.js";
 import { progress, writeReport } from "../output.js";
 import {
@@ -35,6 +36,7 @@ import {
   outputOf,
   resolveAuditTargets,
   sessionFlags,
+  type Target,
   warnUnscopable,
 } from "./common.js";
 
@@ -114,8 +116,24 @@ export async function runAuditOnSession(
   return exceedsThreshold(findings, failOn) ? EXIT.FINDINGS : EXIT.OK;
 }
 
-export const auditCommand: CommandFn = async (positionals, flags) => {
+export function validateAudit(
+  positionals: readonly string[],
+  flags: FlagValues,
+): (Target & { page: ConfigPage })[] {
   const targets = resolveAuditTargets(positionals, flags);
+  parseRules(flags.rules);
+  parseFailOn(flags["fail-on"], "error");
+  parseFormat(flags.format, ["pretty", "json"] as const);
+  outputOf(flags);
+  warnUnscopable(
+    "audit",
+    targets.map((t) => t.page),
+  );
+  return targets;
+}
+
+export const auditCommand: CommandFn = async (positionals, flags) => {
+  const targets = validateAudit(positionals, flags);
   const session = await createSession(sessionFlags(flags, targets));
   try {
     return await runAuditOnSession(session, positionals, flags);
