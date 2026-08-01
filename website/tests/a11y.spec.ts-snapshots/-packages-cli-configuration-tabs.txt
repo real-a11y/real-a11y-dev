@@ -88,6 +88,8 @@ generic
 link "storageState"
 button "Copy Code"
 generic
+button "Copy Code"
+generic
 link "Adopt the gate on existing debt"
 button "Copy Code"
 generic

@@ -41,6 +41,7 @@ h1 Commands & flags
     h3 --allow-file
     h3 --storage-state <file>
     h3 --audit-origin <origin>
+    h3 --session <name>
   h2 Output
     h3 -f, --format <fmt>
     h3 -o, --output <file>

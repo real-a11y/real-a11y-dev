@@ -915,6 +915,13 @@ main
         cell "the target's own"
         cell "browser commands"
       row
+        cell "--session"
+          link "--session"
+            code "--session"
+        cell "string"
+        cell "cwd hash"
+        cell "browser commands"
+      row
         cell "--include-generic"
           link "--include-generic"
             code "--include-generic"
@@ -1459,6 +1466,21 @@ main
   paragraph "An extra origin allowed under . Origin pinning stops a redirect from routing extraction to an unintended, cookie-matching origin. Repeat for each additional origin; must parse as a URL."
     link "--storage-state"
       code "--storage-state"
+  button "Copy Code"
+  code
+  heading "--session <name>" (level 3)
+    code "--session <name>"
+  list
+    listitem "string · stable hash of the current working directory · audit, inspect, tree, outline, tabs, list, interact, click, type, focus, snapshot"
+      strong "Type:"
+      strong "Default:"
+      strong "Commands:"
+  paragraph "Reuse a long-lived browser session across invocations. The first run spawns a daemon process that keeps the page open; later runs with the same name connect to it and act on the same live page. Omit to keep the one-shot default. See for a project-wide name."
+    code "--session"
+    code "--session"
+    link "a11y.config.json"
+      code "a11y.config.json"
+    code "session"
   button "Copy Code"
   code
   heading "Output" (level 2)
