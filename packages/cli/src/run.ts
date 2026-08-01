@@ -121,6 +121,13 @@ export async function run(argv: string[]): Promise<number> {
     // command (defaults merge, then the page list) and the memo only covers the
     // found case — so emitting it there would double the line for exactly the
     // run where it says "none found".
+    //
+    // A direct write, not `progress()`, so `-q` does not silence it. That is
+    // the existing split, not a new one: `-q` suppresses PROGRESS (the per-page
+    // `auditing …` and its timing), while a `--verbose` diagnostic describing
+    // what the run is using survives it — same as the resolved Chrome binary
+    // (`session.ts`) and the browser cache directory (`chrome-install.ts`).
+    // `-q --verbose` is a deliberate pair: drop the narration, keep the facts.
     if (verbose) {
       process.stderr.write(`${describeConfigSource(configSource(values))}\n`);
     }

@@ -281,6 +281,25 @@ describe("--verbose says where the config came from (built bin)", () => {
     expect(quiet.stderr).not.toMatch(/^config:/m);
   });
 
+  it("survives -q, while progress lines do not", async () => {
+    // `-q` suppresses PROGRESS ("auditing …", the per-page timing); a
+    // `--verbose` diagnostic describing what the run is using survives it, the
+    // same as the resolved Chrome binary and the browser cache directory.
+    // `-q --verbose` is a deliberate pair — drop the narration, keep the facts —
+    // and a reviewer read it as a bug, so it is pinned rather than described.
+    config({ defaults: { rules: ["image-alt"] } });
+    const { stderr } = await runCli(["audit", CLEAN, "-q", "--verbose"], dir);
+    expect(stderr).toMatch(/^config:/m);
+    expect(stderr).not.toMatch(/auditing /);
+    expect(stderr).not.toMatch(/done in \d+ms/);
+
+    // …and without -q the progress lines are back, so the assertion above is
+    // about -q rather than about them never being printed.
+    const loud = await runCli(["audit", CLEAN, "--verbose"], dir);
+    expect(loud.stderr).toMatch(/auditing /);
+    expect(loud.stderr).toMatch(/done in \d+ms/);
+  });
+
   it("distinguishes --no-config from --config", async () => {
     config({ defaults: { rules: ["image-alt"] } });
     const skipped = await runCli(

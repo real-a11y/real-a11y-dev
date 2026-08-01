@@ -362,6 +362,8 @@ table
 link "--config"
 link "snapshot"
 link "install"
+link "--verbose"
+link "-q"
 button "Copy Code"
 generic
 link "audit"

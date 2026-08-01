@@ -764,14 +764,25 @@ is the fallback when this is omitted.
   inspect, tree, outline, tabs, list, interact, click, type, focus, snapshot,
   diff
 
-Suppress progress lines on stderr. [`install`](#install) still prints the
-resolved executable path on stdout.
+Suppress **progress** lines on stderr — `auditing <url> …`, per-page timings.
+[`install`](#install) still prints the resolved executable path on stdout.
+
+It does not silence [`--verbose`](#verbose) diagnostics, which answer "what is
+this run using?" rather than "how far along is it". `-q --verbose` is a useful
+pair, not a contradiction: it drops the per-page noise and keeps the facts.
 
 ### `--verbose`
 
 - **Type:** boolean · **Default:** `false` · **Commands:** all
 
-Extra diagnostics on stderr (per-page timings, and more).
+Extra diagnostics on stderr: which config was found (below), which Chrome binary
+was resolved and where it came from, the browser cache directory, and per-page
+timings.
+
+Only the timings are progress, so only they are suppressed by
+[`-q`](#q-quiet) — the rest describe the run's inputs and survive it. That is
+the point: `-q` is for CI logs you don't want narrated, and a diagnostic you
+asked for by name shouldn't vanish because the same job also asked for quiet.
 
 One line of it is worth knowing about before you need it — where the config came
 from, printed before anything depends on it:
