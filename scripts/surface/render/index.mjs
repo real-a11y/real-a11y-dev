@@ -1,0 +1,128 @@
+// One computation, two verbs — D4.
+//
+// `apply` writes the result; `check` compares against it and writes nothing. They
+// share this function so they cannot disagree about what "current" means, which
+// is the same reason `plan`'s two renderers share `buildReport`. A drift check
+// that computed its expectation separately from the writer would eventually
+// fail on something `apply` couldn't fix.
+
+import { readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+
+import { cliRegions, COMMANDS_FILE } from "./cli.mjs";
+import { readRegions, writeRegions } from "./regions.mjs";
+
+/** Which files carry regions, and what rebuilds each region in them. */
+function plan(manifest) {
+  return new Map([[COMMANDS_FILE, cliRegions(manifest)]]);
+}
+
+/**
+ * Recompute every managed region.
+ *
+ * @param {string} repoRoot
+ * @param {object} manifest
+ * @returns {Promise<{files: {path: string, text: string, current: string, changed: string[]}[], added: string[], removed: string[], problems: {where: string, message: string}[]}>}
+ */
+export async function renderAll(repoRoot, manifest) {
+  const files = [];
+  const problems = [];
+  const added = [];
+  const removed = [];
+
+  for (const [relPath, builders] of plan(manifest)) {
+    const current = await readFile(join(repoRoot, relPath), "utf8");
+    const { regions, problems: markerProblems } = readRegions(current, relPath);
+    for (const message of markerProblems)
+      problems.push({ where: relPath, message });
+    if (markerProblems.length) continue;
+
+    // A region the code knows about but the file doesn't have is a real
+    // failure, not a no-op: it means that table stopped being managed and
+    // nothing would ever say so again.
+    const bodies = {};
+    for (const [id, build] of builders) {
+      const region = regions.get(id);
+      if (!region) {
+        problems.push({
+          where: relPath,
+          message:
+            `no \`surface:begin ${id}\` / \`surface:end ${id}\` markers. That ` +
+            `region is generated, so without them the block silently stops being ` +
+            `maintained. Re-add the markers around it, or drop the region from ` +
+            `scripts/surface/render/.`,
+        });
+        continue;
+      }
+      const result = build(region.body, id);
+      for (const message of result.problems)
+        problems.push({ where: relPath, message });
+      if (result.problems.length) continue;
+
+      bodies[id] = result.body;
+      added.push(...result.added.map((k) => `${id}: ${k}`));
+      removed.push(...result.removed.map((k) => `${id}: ${k}`));
+    }
+
+    const { text, changed } = writeRegions(current, regions, bodies);
+    files.push({ path: relPath, text, current, changed });
+  }
+
+  return { files, added, removed, problems };
+}
+
+/** `apply` — the only verb that writes. */
+export async function applyAll(repoRoot, manifest) {
+  const result = await renderAll(repoRoot, manifest);
+  if (result.problems.length) return { ...result, written: [] };
+
+  const written = [];
+  for (const file of result.files) {
+    if (file.text === file.current) continue;
+    await writeFile(join(repoRoot, file.path), file.text, "utf8");
+    written.push({ path: file.path, regions: file.changed });
+  }
+  return { ...result, written };
+}
+
+/**
+ * `check` — read-only drift detection.
+ *
+ * Returns the same `{where, message}` shape as every other check so it drops
+ * straight into the existing problem list.
+ */
+export async function checkDrift(repoRoot, manifest) {
+  const result = await renderAll(repoRoot, manifest);
+  const problems = [...result.problems];
+
+  for (const file of result.files) {
+    if (file.text === file.current) continue;
+    problems.push({
+      where: file.path,
+      message:
+        `managed region${file.changed.length > 1 ? "s" : ""} ` +
+        `${file.changed.map((r) => `\`${r}\``).join(", ")} ` +
+        `${file.changed.length > 1 ? "are" : "is"} out of date with ` +
+        `docs/surface.json.\n    Regenerate and commit the result:\n\n      pnpm surface:apply`,
+    });
+  }
+
+  // A stub the generator inserted is not a fix — it is a marker that a human
+  // still owes prose. Failing here is the entire point of writing TODO rather
+  // than inventing a sentence.
+  for (const file of result.files) {
+    const { regions } = readRegions(file.text, file.path);
+    for (const [id, region] of regions) {
+      if (!region.body.includes("TODO")) continue;
+      problems.push({
+        where: file.path,
+        message:
+          `region \`${id}\` contains \`TODO\` — a row was generated for a surface ` +
+          `that had none, and its prose is still unwritten. The generator does not ` +
+          `write prose (see render/table.mjs); this one is yours.`,
+      });
+    }
+  }
+
+  return problems;
+}

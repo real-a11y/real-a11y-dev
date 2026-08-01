@@ -19,11 +19,15 @@ Findings and reports go to **stdout**; progress, warnings, and errors go to
 
 **Exit codes are frozen:**
 
+<!-- surface:begin cli-exit-codes -->
+
 | Code | Meaning |
 | --- | --- |
 | `0` | Clean — no findings at or above [`--fail-on`](#fail-on-level). |
 | `1` | Findings at or above the threshold (the CI gate). |
 | `2` | Usage or navigation error. |
+
+<!-- surface:end cli-exit-codes -->
 
 View commands ([`tree`](#tree-url), [`outline`](#outline-url),
 [`tabs`](#tabs-url), [`list`](#list-category-url)) aren't gates — they exit `0`
@@ -52,19 +56,29 @@ CDP, except [`tabs`](#tabs-url) — the one view that tree cannot produce (see
 
 **Setup**
 
+<!-- surface:begin cli-commands-setup -->
+
 | Command | Purpose |
 | --- | --- |
 | [`install`](#install) | Download Chrome for Testing into Real A11y's own cache — run once. |
 | [`login <url> --save <file>`](#login-url-save-file) | Log in by hand and save the session for `--storage-state`. |
 
+<!-- surface:end cli-commands-setup -->
+
 **Audit** — the gates: these exit `1` on findings at or above [`--fail-on`](#fail-on-level).
+
+<!-- surface:begin cli-commands-audit -->
 
 | Command | Purpose |
 | --- | --- |
 | [`audit <url...>`](#audit-url) | Every violation, grouped by rule with locator + severity — the flagship. |
 | [`inspect <url>`](#inspect-url) | Findings **plus** tree + outline from one read. |
 
+<!-- surface:end cli-commands-audit -->
+
 **Views** — never gates; they exit `0` unless something actually failed.
+
+<!-- surface:begin cli-commands-view -->
 
 | Command | Purpose |
 | --- | --- |
@@ -73,7 +87,11 @@ CDP, except [`tabs`](#tabs-url) — the one view that tree cannot produce (see
 | [`tabs <url>`](#tabs-url) | Focusable elements in keyboard Tab order — the one in-page read. |
 | [`list <category> <url>`](#list-category-url) | One category — heading, link, button, form, landmark, image. |
 
+<!-- surface:end cli-commands-view -->
+
 **Act** — Chromium only. Exit `0` when every step lands, `2` when one can't be reached.
+
+<!-- surface:begin cli-commands-act -->
 
 | Command | Purpose |
 | --- | --- |
@@ -82,12 +100,18 @@ CDP, except [`tabs`](#tabs-url) — the one view that tree cannot produce (see
 | [`type <url> --role --text`](#type-url-role-role-text-value) | Replace a text field's value; the value is never echoed back. |
 | [`focus <url> --role`](#focus-url-role-role) | Move real keyboard focus; the `[focused]` marker moves in the diff. |
 
+<!-- surface:end cli-commands-act -->
+
 **Artifacts**
+
+<!-- surface:begin cli-commands-artifact -->
 
 | Command | Purpose |
 | --- | --- |
 | [`snapshot [url...]`](#snapshot-url) | Audit a page set → one diffable JSON artifact (or `--md`). |
 | [`diff <base.json> <pr.json>`](#diff-base-json-pr-json) | Findings-aware diff of two artifacts — new / changed / fixed. Pure: no browser. |
+
+<!-- surface:end cli-commands-artifact -->
 
 ## Commands
 

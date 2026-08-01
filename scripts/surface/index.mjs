@@ -70,6 +70,7 @@ async function check() {
     { validateAgainstSchema },
     { checkScenarios },
     { checkPlanSentinel },
+    { checkDrift },
   ] = await Promise.all([
     import("./model.mjs"),
     import("./check/anchors.mjs"),
@@ -79,6 +80,7 @@ async function check() {
     import("./check/schema.mjs"),
     import("./scenarios/check.mjs"),
     import("./check/sentinel.mjs"),
+    import("./render/index.mjs"),
   ]);
 
   const manifest = await buildManifest(repoRoot);
@@ -163,6 +165,9 @@ async function check() {
     ...duplicates,
     ...scenarioProblems,
     ...(await checkPlanSentinel(repoRoot)),
+    // Read-only, and shares its computation with `apply` (D4) so the two can
+    // never disagree about what "current" means.
+    ...(await checkDrift(repoRoot, manifest)),
   ];
 
   if (problems.length) {
@@ -189,6 +194,60 @@ async function check() {
       `  ${loaded.length} release test scenarios parse, every \`covers\` path is real, ` +
       `and every\n  shipped capability has one.`,
   );
+}
+
+/**
+ * `apply` — the only verb that writes (D4).
+ *
+ * Never runs in CI. `check` reports the same drift and fixes nothing, so a
+ * read-only checkout can always tell you what is stale without being able to
+ * quietly make it not-stale.
+ */
+async function apply() {
+  const [{ buildManifest }, { applyAll }] = await Promise.all([
+    import("./model.mjs"),
+    import("./render/index.mjs"),
+  ]);
+
+  const manifest = await buildManifest(repoRoot);
+  const result = await applyAll(repoRoot, manifest);
+
+  if (result.problems.length) {
+    console.error(`\nCan't rebuild the managed regions.\n`);
+    for (const { where, message } of result.problems) {
+      console.error(`  ${where}\n    ${message}\n`);
+    }
+    die([
+      "Nothing was written — a partial apply is worse than none, because the",
+      "regions it did reach would look current while the rest silently didn't.",
+    ]);
+  }
+
+  if (result.written.length === 0) {
+    console.log("Managed regions already current — nothing written.");
+  } else {
+    for (const { path, regions } of result.written) {
+      console.log(`Wrote ${path} — ${regions.join(", ")}`);
+    }
+  }
+
+  // A row the generator invented is a row whose prose nobody has written. Say
+  // so loudly here, because `apply` is the moment the author can act on it.
+  if (result.added.length) {
+    console.log(
+      `\n  ${result.added.length} row(s) added as TODO — write their prose:\n` +
+        result.added.map((a) => `    ${a}`).join("\n") +
+        `\n\n  \`pnpm surface:check\` fails until you do. That is deliberate: the` +
+        `\n  generator does not write prose, it only refuses to hide a gap.`,
+    );
+  }
+  if (result.removed.length) {
+    console.log(
+      `\n  ${result.removed.length} row(s) dropped (the surface is gone):\n` +
+        result.removed.map((r) => `    ${r}`).join("\n") +
+        `\n\n  Each is a scenario-deprecation signal — see \`pnpm surface:plan\`.`,
+    );
+  }
 }
 
 /**
@@ -405,13 +464,17 @@ if (verb === "extract") {
   await plan(process.argv.slice(3));
 } else if (verb === "scenarios") {
   await scenarios(process.argv.slice(3));
+} else if (verb === "apply") {
+  await apply();
 } else {
   die([
-    `usage: node scripts/surface/index.mjs <extract|check|check-built|plan|scenarios>`,
+    `usage: node scripts/surface/index.mjs <extract|check|apply|check-built|plan|scenarios>`,
     ``,
     `  extract      rebuild ${MANIFEST_REL} from the packages' source`,
     `  check        fail if the manifest is stale, the docs disagree with it, or`,
     `               a scenario names a surface that doesn't exist`,
+    `  apply        rebuild the managed doc regions in place — the only verb that`,
+    `               writes to the docs; never runs in CI`,
     `  check-built  fail if slugify() disagrees with the built site's heading`,
     `               ids (needs the website build)`,
     `  plan         report the docs and test scenarios this branch obliges you`,
