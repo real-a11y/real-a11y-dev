@@ -69,6 +69,7 @@ async function check() {
     { checkSamples, checkToolExamples },
     { validateAgainstSchema },
     { checkScenarios },
+    { checkPlanSentinel },
   ] = await Promise.all([
     import("./model.mjs"),
     import("./check/anchors.mjs"),
@@ -77,6 +78,7 @@ async function check() {
     import("./check/samples.mjs"),
     import("./check/schema.mjs"),
     import("./scenarios/check.mjs"),
+    import("./check/sentinel.mjs"),
   ]);
 
   const manifest = await buildManifest(repoRoot);
@@ -160,6 +162,7 @@ async function check() {
     ...anchors,
     ...duplicates,
     ...scenarioProblems,
+    ...(await checkPlanSentinel(repoRoot)),
   ];
 
   if (problems.length) {

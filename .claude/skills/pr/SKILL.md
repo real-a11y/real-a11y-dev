@@ -130,11 +130,21 @@ three, and "none" is a valid answer that still has to be stated:
 | adds a capability users can invoke             | **Add** a scenario. Set `Valid from` to the version it first ships in, package-qualified (`cli ≥ 0.1.0-beta.2`) — packages version independently, so a bare number is ambiguous |
 | changes behaviour an existing scenario asserts | **Update** that scenario's Steps/Expected, and note the transition so a run against the _previous_ release still makes sense                                                    |
 | removes a surface a scenario exists to test    | **Deprecate** it — `Status: Deprecated`, `Valid until: <pkg> ≤ <last version that had it>`. Keep the row; deleting it takes the reason it existed with it                       |
-| changes nothing user-visible                   | Nothing — say so in the PR body                                                                                                                                                 |
+| changes what a surface **prints**              | **Update** the scenarios asserting that text. `surface:plan` can't see this — it models the inventory, not the output — so this row is on you                                   |
+| changes nothing user-visible                   | Nothing — say so in the PR body, and mean it                                                                                                                                    |
 
 Distinguish **evolves** from **dies**: a scenario that loses one step to a removed
 flag stays `Active` with that step version-ranged inline; a scenario whose whole
 subject is gone becomes `Deprecated`.
+
+**"Nothing user-visible" is a claim about output, and no tool checks it.**
+`surface:plan` reports the command / tool / flag / env inventory, which is _what
+exists_, not what any of it prints. A branch that reworded the MCP checkpoint-diff
+headers and `list`'s empty-category line moved nothing in the manifest and still
+obliged three docs and three scenarios. `surface:check` has the same blind spot —
+`check/samples.mjs` validates that documented invocations parse and says outright
+that it does not check semantics. Output text is the third staleness axis, after
+counts and names, and it is the one with no guard.
 
 Each scenario carries **Steps**, **Expected**, and **Why this exists** (the check
 requires all three), plus an optional **Notes** for durable design history. Write

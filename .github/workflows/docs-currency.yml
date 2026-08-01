@@ -105,7 +105,17 @@ jobs:
               /docs-check:\s*(n\/?a|skip|none)/i.test(body);
 
             const report = fs.readFileSync('plan.md', 'utf8').trim();
-            const nothingToSay = report.includes('No public-surface changes');
+            // Sentinel, not prose. `renderMarkdown` emits NOTHING_TO_REPORT
+            // (scripts/surface/plan/report.mjs) only when there is genuinely
+            // nothing to post: no inventory movement AND no package source
+            // change. This used to match on the report's wording, which meant a
+            // rewording silently turned every quiet PR into a commented one.
+            //
+            // Note the case this deliberately does NOT silence: inventory
+            // unchanged but `packages/*/src` touched. That is the shape of an
+            // output change, the report carries a warning about it, and it needs
+            // to be seen.
+            const nothingToSay = report.includes('<!-- surface-plan:silent -->');
 
             // Find our existing sticky comment (marker as FIRST line AND our bot).
             const comments = await github.paginate(github.rest.issues.listComments, {
@@ -126,7 +136,11 @@ jobs:
               '',
               optedOut
                 ? 'Marked as no docs needed for this change.'
-                : 'No public-surface changes on this PR — nothing for §4 or §4b to ask.',
+                // Narrowed to match the renderer. This used to claim "nothing
+                // for §4 or §4b to ask", which is the same over-broad conclusion
+                // the report itself stopped drawing: the inventory not moving
+                // says nothing about what any surface prints.
+                : 'No changes to the command / tool / flag / env inventory, and no package source touched.',
             ].join('\n');
 
             const full = [

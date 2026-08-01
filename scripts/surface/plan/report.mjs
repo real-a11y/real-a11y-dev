@@ -71,6 +71,11 @@ export function buildReport(
     missingDocs: docs.filter((d) => !d.touched),
     scenariosResolvable:
       Array.isArray(knownScenarios) && knownScenarios.length > 0,
+    // Package source moved while the inventory didn't. That is the shape of an
+    // OUTPUT change — a reworded error, a new empty-category line, a diff header
+    // — and it is exactly the case where "no surface changes" is true of the
+    // manifest and wrong as advice. See `renderText`'s zero-change branch.
+    sourceChanged: [...touched].some((f) => /^packages\/[^/]+\/src\//.test(f)),
   };
 }
 
@@ -78,8 +83,44 @@ export function buildReport(
 export function renderText(report) {
   const out = [];
 
+  // The zero-change branch says only what it measured.
+  //
+  // It used to conclude "nothing user-visible" and hand over a ready-made §4b
+  // opt-out. That is true of the inventory and false in general: a branch that
+  // reworded the MCP checkpoint-diff headers and `list`'s empty-category line
+  // moved no command, tool, flag or env var — and still obliged three docs and
+  // three scenarios. The docs got mapped by hand while this printed the
+  // opposite.
+  //
+  // The failure mode is the inverse of the one this tool fixes. A table nobody
+  // reads gets ignored; a confident "nothing to do" gets believed. So: report the
+  // inventory, and let the author answer the part that isn't modelled.
   if (report.changes.length === 0) {
-    return 'No public-surface changes on this branch.\n\nNothing in docs/surface.json moved, so §4 and §4b of the `pr` skill have\nnothing to ask of this PR. Say so in the body: "changes nothing user-visible".\n';
+    const lines = [
+      "No changes to the command / tool / flag / env inventory on this branch.",
+      "",
+      "Nothing in docs/surface.json moved. That covers WHAT exists — not what any",
+      'of it prints, so it is not the same as "nothing user-visible".',
+    ];
+    if (report.sourceChanged) {
+      lines.push(
+        "",
+        "  ! packages/*/src changed while the inventory did not — the shape of an",
+        "    output change. Did any printed text, error message, log line or exit",
+        "    code move? If so, §4 and §4b still apply and this report cannot see it:",
+        "    documented OUTPUT is unmodelled, on the check side and here.",
+      );
+    }
+    lines.push(
+      "",
+      "If nothing a user reads changed either, say so in the body — but say it",
+      "because you checked, not because this printed it.",
+      "",
+      "For the PR body",
+      "",
+      indent(prBodyBlock(report), "  "),
+    );
+    return lines.join("\n") + "\n";
   }
 
   out.push("Surface changes");
@@ -187,12 +228,24 @@ export function prBodyBlock(report) {
   const byAction = (action) =>
     report.scenarios.filter((s) => s.action === action);
 
+  // Reached only from the zero-change paths of the two renderers. One obligation
+  // is produced per change, so no scenarios means no changes — and until those
+  // paths started calling this, the branch was unreachable and its old pre-ticked
+  // `- [x] None needed, because: nothing user-visible moved.` had never once been
+  // shown to anyone.
   if (report.scenarios.length === 0) {
+    lines.push("- **Added:** —", "- **Updated:** —", "- **Deprecated:** —");
+    // UNTICKED, and the reason left blank on purpose.
+    //
+    // This block gets pasted into a PR body verbatim, so a pre-ticked box with a
+    // reason already filled in is the tool asserting something it did not check.
+    // §4b's whole point is that a blank scenario answer and a forgotten one are
+    // indistinguishable — a pre-ticked one is worse than either. The inventory is
+    // all that was measured; whether any output moved is the author's to answer.
     lines.push(
-      "- **Added:** —",
-      "- **Updated:** —",
-      "- **Deprecated:** —",
-      "- [x] None needed, because: nothing user-visible moved.",
+      report.sourceChanged
+        ? "- [ ] None needed, because: <!-- the inventory didn't move, but packages/*/src did — confirm no printed output, error message or exit code changed -->"
+        : "- [ ] None needed, because: <!-- say why. The inventory didn't move, which is not the same as nothing user-visible. -->",
     );
     return lines.join("\n");
   }
@@ -282,16 +335,64 @@ function stampMarkdown(stamp) {
   return `  \n  ${text}`;
 }
 
+/**
+ * Machine-readable "there is nothing here worth posting".
+ *
+ * LOAD-BEARING: `.github/workflows/docs-currency.yml` matches on this exact
+ * string to decide whether to post a sticky comment at all. Change it in both
+ * places or not at all.
+ *
+ * It exists because the workflow used to match on the report's PROSE
+ * (`report.includes("No public-surface changes")`). Rewording the renderer — the
+ * whole point of this change — silently made that test always false, so every PR
+ * with no inventory movement would have got a full comment and no existing
+ * comment would ever have cleared. Prose that automation depends on is prose
+ * nobody can edit; a sentinel says so out loud.
+ */
+export const NOTHING_TO_REPORT = "<!-- surface-plan:silent -->";
+
 /** The sticky PR comment. */
 export function renderMarkdown(report, base) {
+  // Narrowed for the same reason as the terminal renderer, and this is the copy
+  // that matters most: it lands on the PR where reviewers read it, so a confident
+  // "nothing to do" here is the version most likely to be taken at face value.
   if (report.changes.length === 0) {
-    return [
+    const out = [
       "### 📋 Surface plan",
       "",
-      `No public-surface changes vs \`${base}\` — \`docs/surface.json\` is identical.`,
+      `No changes to the command / tool / flag / env inventory vs \`${base}\` — \`docs/surface.json\` is identical.`,
       "",
-      "Nothing for §4 (docs) or §4b (scenarios) to ask of this PR. Worth saying so in the body.",
-    ].join("\n");
+      'That covers **what exists**, not what any of it prints — so it is not the same as "nothing user-visible".',
+    ];
+    if (report.sourceChanged) {
+      // There IS something to say here, so this case is deliberately NOT marked
+      // silent: the inventory didn't move but source did, which is the shape of
+      // an output change and the whole reason this PR exists.
+      out.push(
+        "",
+        "> ⚠️ `packages/*/src` changed while the inventory did not — the shape of an **output** change.",
+        "> Did any printed text, error message, log line or exit code move? If so §4 and §4b still apply,",
+        "> and this report cannot see it: documented output is unmodelled, here and in `surface:check`.",
+      );
+    } else {
+      // Nothing moved and no source changed — genuinely nothing to post.
+      out.push("", NOTHING_TO_REPORT);
+    }
+    // The §4b section still has to be filled in on a quiet branch — "none" is a
+    // valid answer that must still be stated. Handing over an unticked block is
+    // the difference between the author answering it and the tool answering it
+    // for them, which is what this whole change is about.
+    out.push(
+      "",
+      "<details><summary><b>Paste into the PR body</b></summary>",
+      "",
+      "```markdown",
+      prBodyBlock(report),
+      "```",
+      "",
+      "</details>",
+    );
+    return out.join("\n");
   }
 
   const out = [
