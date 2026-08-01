@@ -95,6 +95,35 @@ a reviewer sees what moved in the public surface, so it belongs in the same PR
 as the change. (Extraction imports the packages' built dependencies, so run
 `pnpm build` first.)
 
+### The released surface
+
+`docs/surface.json` describes `main`. `docs/surface.released.json` describes the
+newest **published** release, and `version-packages` writes it as part of the
+release cut:
+
+```bash
+pnpm surface:snapshot     # freeze surface.json as the released surface
+```
+
+You should not need to run it by hand — `version-packages` does, right after
+`changeset version` sets the versions the snapshot records. It copies the
+committed manifest rather than re-extracting, because `surface:check` already
+guarantees that file is current on any commit that reaches a release, and the
+copy is then byte-identical to the manifest the release PR reviewed.
+
+The difference between the two files is the set of capabilities the site
+documents but `npm install` does not yet deliver. That gap is structural: the
+docs deploy on every push to `main` while npm publishes on a release cut, so
+`main` is always some distance ahead of what a reader can actually install.
+
+**The file is deliberately not seeded from `main`.** `docs/surface.json` did not
+exist at `v0.1.0-beta.11`, the newest release when this landed, so there is no
+honest way to reconstruct what that release exposed. Writing today's manifest
+into it would assert that everything on `main` is published — precisely the
+claim this exists to stop anyone from making. Until the next release cut runs
+`version-packages`, the released surface is *unrecorded*, which is a different
+fact from "nothing is unreleased" and has to stay distinguishable from it.
+
 ### What a change obliges you to update
 
 ```bash
