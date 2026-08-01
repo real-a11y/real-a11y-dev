@@ -180,10 +180,14 @@ interface InteractOutcome {
  * a menu has to have opened it before the step that clicks an item can resolve
  * that item.
  */
-const settle = (ms: number): Promise<void> =>
-  ms > 0
-    ? new Promise((resolve) => setTimeout(resolve, ms))
+const MAX_SETTLE_MS = 30_000;
+
+const settle = (ms: number): Promise<void> => {
+  const safeMs = Math.max(0, Math.min(ms, MAX_SETTLE_MS));
+  return safeMs > 0
+    ? new Promise((resolve) => setTimeout(resolve, safeMs))
     : Promise.resolve();
+};
 
 async function interactOnPage(
   session: Session,
