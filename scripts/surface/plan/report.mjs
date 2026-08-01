@@ -327,6 +327,22 @@ function stampMarkdown(stamp) {
   return `  \n  ${text}`;
 }
 
+/**
+ * Machine-readable "there is nothing here worth posting".
+ *
+ * LOAD-BEARING: `.github/workflows/docs-currency.yml` matches on this exact
+ * string to decide whether to post a sticky comment at all. Change it in both
+ * places or not at all.
+ *
+ * It exists because the workflow used to match on the report's PROSE
+ * (`report.includes("No public-surface changes")`). Rewording the renderer — the
+ * whole point of this change — silently made that test always false, so every PR
+ * with no inventory movement would have got a full comment and no existing
+ * comment would ever have cleared. Prose that automation depends on is prose
+ * nobody can edit; a sentinel says so out loud.
+ */
+export const NOTHING_TO_REPORT = "<!-- surface-plan:silent -->";
+
 /** The sticky PR comment. */
 export function renderMarkdown(report, base) {
   // Narrowed for the same reason as the terminal renderer, and this is the copy
@@ -341,12 +357,18 @@ export function renderMarkdown(report, base) {
       'That covers **what exists**, not what any of it prints — so it is not the same as "nothing user-visible".',
     ];
     if (report.sourceChanged) {
+      // There IS something to say here, so this case is deliberately NOT marked
+      // silent: the inventory didn't move but source did, which is the shape of
+      // an output change and the whole reason this PR exists.
       out.push(
         "",
         "> ⚠️ `packages/*/src` changed while the inventory did not — the shape of an **output** change.",
         "> Did any printed text, error message, log line or exit code move? If so §4 and §4b still apply,",
         "> and this report cannot see it: documented output is unmodelled, here and in `surface:check`.",
       );
+    } else {
+      // Nothing moved and no source changed — genuinely nothing to post.
+      out.push("", NOTHING_TO_REPORT);
     }
     return out.join("\n");
   }
