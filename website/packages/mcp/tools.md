@@ -19,19 +19,29 @@ Click a tool for its parameters.
 
 **Session**
 
+<!-- surface:begin mcp-tools-session -->
+
 | Tool | Purpose |
 | --- | --- |
 | [`open_page`](#open-page) | Navigate to a URL and ready it for queries — call first. |
 | [`close_browser`](#close-browser) | Tear down the browser session. |
 
+<!-- surface:end mcp-tools-session -->
+
 **Audit**
+
+<!-- surface:begin mcp-tools-audit -->
 
 | Tool | Purpose |
 | --- | --- |
 | [`audit_page`](#audit-page) | Every accessibility violation, grouped with CSS locators + severity — the flagship. |
 | [`inspect_page`](#inspect-page) | Findings **plus** tree + outline from one read. |
 
+<!-- surface:end mcp-tools-audit -->
+
 **Views**
+
+<!-- surface:begin mcp-tools-views -->
 
 | Tool | Purpose |
 | --- | --- |
@@ -40,7 +50,11 @@ Click a tool for its parameters.
 | [`get_tab_order`](#get-tab-order) | Focusable elements in keyboard Tab order — the one in-page read. |
 | [`list_elements`](#list-elements) | Every element of one category (link / button / form / landmark / image / heading). |
 
+<!-- surface:end mcp-tools-views -->
+
 **Findings checkpoints**
+
+<!-- surface:begin mcp-tools-findings-checkpoints -->
 
 | Tool | Purpose |
 | --- | --- |
@@ -51,20 +65,30 @@ Click a tool for its parameters.
 | [`export_checkpoint`](#export-checkpoint) | Export a checkpoint as a snapshot JSON artifact (CLI-compatible). |
 | [`import_checkpoint`](#import-checkpoint) | Load an external snapshot artifact as a checkpoint. |
 
+<!-- surface:end mcp-tools-findings-checkpoints -->
+
 **Tree checkpoints**
+
+<!-- surface:begin mcp-tools-tree-checkpoints -->
 
 | Tool | Purpose |
 | --- | --- |
 | [`checkpoint_tree`](#checkpoint-tree) | Capture the current tree as an interaction-diff baseline (page-bound). |
 | [`diff_tree`](#diff-tree) | Diff the tree since `checkpoint_tree` — what an interaction changed. |
 
+<!-- surface:end mcp-tools-tree-checkpoints -->
+
 **Act**
+
+<!-- surface:begin mcp-tools-act -->
 
 | Tool | Purpose |
 | --- | --- |
 | [`click_element`](#click-element) | Real click at the node matched by role + accessible name. |
 | [`type_text`](#type-text) | Replace a text field's value; the result never echoes the text. |
 | [`focus_element`](#focus-element) | Move real keyboard focus; flags text fields for a follow-up `type_text`. |
+
+<!-- surface:end mcp-tools-act -->
 
 ## Session
 
