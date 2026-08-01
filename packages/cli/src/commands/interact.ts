@@ -187,7 +187,7 @@ const settle = (ms: number): Promise<void> => {
     return Promise.resolve();
   }
   if (ms > MAX_SETTLE_MS) {
-    return new Promise((resolve) => setTimeout(resolve, MAX_SETTLE_MS));
+    throw new CliError(`--step-settle exceeds the maximum ${MAX_SETTLE_MS}ms`);
   }
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
