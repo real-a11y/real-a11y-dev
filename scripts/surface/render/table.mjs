@@ -79,9 +79,13 @@ export function parseTable(body) {
  * @param {string[]} o.keys     desired row keys, in the order they should appear
  * @param {(cells: string[]) => string|null} o.keyOfRow
  * @param {(key: string) => string} o.renderStub  a brand-new row, including TODO
- * @returns {{body: string, added: string[], removed: string[], problems: string[]}}
+ * @param {Map<string, string>} [o.carry]  key → raw row rescued from another
+ *   region of the same file. Used instead of a stub, so a row that MOVED keeps
+ *   its prose. See `reconcileMoves` in ./index.mjs for why this can't be decided
+ *   here: one region cannot see that another just lost the same key.
+ * @returns {{body: string, added: string[], removed: string[], removedRows: Map<string, string>, problems: string[]}}
  */
-export function mergeTable({ body, where, keys, keyOfRow, renderStub }) {
+export function mergeTable({ body, where, keys, keyOfRow, renderStub, carry }) {
   const problems = [];
   const table = parseTable(body);
   if (!table) {
@@ -89,6 +93,7 @@ export function mergeTable({ body, where, keys, keyOfRow, renderStub }) {
       body,
       added: [],
       removed: [],
+      removedRows: new Map(),
       problems: [
         `${where} — no markdown table found inside the region. Expected a header ` +
           `row and a \`| --- |\` separator; the region markers may be around the ` +
@@ -105,11 +110,11 @@ export function mergeTable({ body, where, keys, keyOfRow, renderStub }) {
         `${where} — could not read a row key from: ${row.raw.trim()}. Leaving the ` +
           `region alone rather than guessing, because a misread key drops the row.`,
       );
-      return { body, added: [], removed: [], problems };
+      return { body, added: [], removed: [], removedRows: new Map(), problems };
     }
     if (existing.has(key)) {
       problems.push(`${where} — two rows for \`${key}\`; remove one.`);
-      return { body, added: [], removed: [], problems };
+      return { body, added: [], removed: [], removedRows: new Map(), problems };
     }
     existing.set(key, row);
   }
@@ -133,15 +138,23 @@ export function mergeTable({ body, where, keys, keyOfRow, renderStub }) {
     if (wanted.has(keyOfRow(row.cells))) out.push(row.raw);
   }
 
+  // A `carry` row is one this same file just lost from another region — the row
+  // MOVED, so its prose comes with it. Without this, splitting the command index
+  // into one region per group meant that changing a command's `group` deleted
+  // the sentence someone wrote for it: the old region saw a key it no longer
+  // wanted, the new region saw a key it had never seen, and neither could tell
+  // those were the same event.
   const added = keys.filter((k) => !existing.has(k));
-  for (const key of added) out.push(renderStub(key));
+  for (const key of added) out.push(carry?.get(key) ?? renderStub(key));
 
   const removed = [...existing.keys()].filter((k) => !wanted.has(k));
+  const removedRows = new Map(removed.map((k) => [k, existing.get(k).raw]));
 
   return {
     body: [...table.head, ...out, ...table.tail].join("\n"),
     added,
     removed,
+    removedRows,
     problems,
   };
 }

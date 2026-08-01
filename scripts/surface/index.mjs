@@ -248,6 +248,16 @@ async function apply() {
         `\n\n  Each is a scenario-deprecation signal — see \`pnpm surface:plan\`.`,
     );
   }
+  // Reported separately from added/removed, because it is neither. Calling a
+  // move "the surface is gone" plus "a row with no prose" describes two events
+  // that didn't happen, and would send someone to deprecate a scenario for a
+  // command that is still shipping.
+  if (result.moved?.length) {
+    console.log(
+      `\n  ${result.moved.length} row(s) moved between regions, prose intact:\n` +
+        result.moved.map((m) => `    ${m.key}: ${m.from} → ${m.to}`).join("\n"),
+    );
+  }
 }
 
 /**

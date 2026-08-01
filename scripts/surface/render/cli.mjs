@@ -70,10 +70,11 @@ export function cliRegions(manifest) {
   const groups = [...new Set(manifest.cli.commands.map((c) => c.group))];
   for (const group of groups) {
     const inGroup = manifest.cli.commands.filter((c) => c.group === group);
-    builders.set(GROUP_REGION(group), (body, where) =>
+    builders.set(GROUP_REGION(group), (body, where, carry) =>
       mergeTable({
         body,
         where,
+        carry,
         keys: inGroup.map((c) => c.name),
         keyOfRow: commandKey,
         renderStub: (name) => commandStub(inGroup.find((c) => c.name === name)),
@@ -86,10 +87,11 @@ export function cliRegions(manifest) {
   // findings at or above [--fail-on](#fail-on-level)." says considerably more
   // than `OK` does. So this region guards that the three codes are all present
   // and in order, which is what a frozen contract needs.
-  builders.set("cli-exit-codes", (body, where) =>
+  builders.set("cli-exit-codes", (body, where, carry) =>
     mergeTable({
       body,
       where,
+      carry,
       keys: manifest.cli.exitCodes.map((e) => String(e.code)),
       keyOfRow: exitCodeKey,
       renderStub: (code) => `| \`${code}\` | TODO |`,

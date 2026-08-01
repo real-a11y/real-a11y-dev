@@ -29,6 +29,7 @@ export async function renderAll(repoRoot, manifest) {
   const problems = [];
   const added = [];
   const removed = [];
+  const moved = [];
 
   for (const [relPath, builders] of plan(manifest)) {
     const current = await readFile(join(repoRoot, relPath), "utf8");
@@ -37,38 +38,85 @@ export async function renderAll(repoRoot, manifest) {
       problems.push({ where: relPath, message });
     if (markerProblems.length) continue;
 
-    // A region the code knows about but the file doesn't have is a real
-    // failure, not a no-op: it means that table stopped being managed and
-    // nothing would ever say so again.
-    const bodies = {};
-    for (const [id, build] of builders) {
-      const region = regions.get(id);
-      if (!region) {
-        problems.push({
-          where: relPath,
-          message:
-            `no \`surface:begin ${id}\` / \`surface:end ${id}\` markers. That ` +
-            `region is generated, so without them the block silently stops being ` +
-            `maintained. Re-add the markers around it, or drop the region from ` +
-            `scripts/surface/render/.`,
-        });
-        continue;
-      }
-      const result = build(region.body, id);
-      for (const message of result.problems)
-        problems.push({ where: relPath, message });
-      if (result.problems.length) continue;
+    // Two passes, because a MOVE is only visible from the file.
+    //
+    // Each region merges in isolation, so when a command's `group` changes, the
+    // region losing it sees a removal and the region gaining it sees something
+    // brand new. Neither can tell those are one event — and treating them as two
+    // destroys the hand-written Purpose cell that the whole merge exists to
+    // protect, then reports it as "the surface is gone" when it plainly isn't.
+    //
+    // This seam is a consequence of splitting the command index into one region
+    // per group. That split is still right (it puts the prose-carrying group
+    // headings outside the markers entirely), but it has to be paid for here.
+    const first = runBuilders(builders, regions, relPath);
+    problems.push(...first.problems);
 
+    const rescued = new Map();
+    for (const [id, result] of first.results) {
+      for (const [key, raw] of result.removedRows) {
+        const landsIn = [...first.results].find(
+          ([otherId, other]) => otherId !== id && other.added.includes(key),
+        );
+        if (landsIn) {
+          rescued.set(key, raw);
+          moved.push({ key, from: id, to: landsIn[0] });
+        }
+      }
+    }
+
+    const final = rescued.size
+      ? runBuilders(builders, regions, relPath, rescued)
+      : first;
+
+    const bodies = {};
+    const isMove = (key) => moved.some((m) => m.key === key);
+    for (const [id, result] of final.results) {
       bodies[id] = result.body;
-      added.push(...result.added.map((k) => `${id}: ${k}`));
-      removed.push(...result.removed.map((k) => `${id}: ${k}`));
+      added.push(
+        ...result.added.filter((k) => !isMove(k)).map((k) => `${id}: ${k}`),
+      );
+      removed.push(
+        ...result.removed.filter((k) => !isMove(k)).map((k) => `${id}: ${k}`),
+      );
     }
 
     const { text, changed } = writeRegions(current, regions, bodies);
     files.push({ path: relPath, text, current, changed });
   }
 
-  return { files, added, removed, problems };
+  return { files, added, removed, moved, problems };
+}
+
+/** Run every builder for one file. Split out so the move pass can repeat it. */
+function runBuilders(builders, regions, relPath, carry) {
+  const results = new Map();
+  const problems = [];
+
+  for (const [id, build] of builders) {
+    const region = regions.get(id);
+    // A region the code knows about but the file doesn't have is a real
+    // failure, not a no-op: it means that table stopped being managed and
+    // nothing would ever say so again.
+    if (!region) {
+      problems.push({
+        where: relPath,
+        message:
+          `no \`surface:begin ${id}\` / \`surface:end ${id}\` markers. That ` +
+          `region is generated, so without them the block silently stops being ` +
+          `maintained. Re-add the markers around it, or drop the region from ` +
+          `scripts/surface/render/.`,
+      });
+      continue;
+    }
+    const result = build(region.body, id, carry);
+    for (const message of result.problems)
+      problems.push({ where: relPath, message });
+    if (result.problems.length) continue;
+    results.set(id, result);
+  }
+
+  return { results, problems };
 }
 
 /** `apply` — the only verb that writes. */
