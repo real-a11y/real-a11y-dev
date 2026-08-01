@@ -206,10 +206,13 @@ async function check() {
  * quietly make it not-stale.
  */
 async function apply() {
-  const [{ buildManifest }, { applyAll }] = await Promise.all([
-    import("./model.mjs"),
-    import("./render/index.mjs"),
-  ]);
+  const [{ buildManifest }, { applyAll }, { RELEASED_REL }] = await Promise.all(
+    [
+      import("./model.mjs"),
+      import("./render/index.mjs"),
+      import("./released.mjs"),
+    ],
+  );
 
   const manifest = await buildManifest(repoRoot);
   const result = await applyAll(repoRoot, manifest);
@@ -271,6 +274,24 @@ async function apply() {
           .map(({ where, message }) => `    ${where}\n      ${message}`)
           .join("\n\n") +
         `\n\n  \`pnpm surface:check\` fails until these are handled.`,
+    );
+  }
+
+  // The "not yet published" notice renders EMPTY both when nothing is
+  // unreleased and when we can't tell. The reader can't act on the difference so
+  // the page doesn't show it — but the author can, and silence here would make
+  // an unwritten snapshot look like a clean bill of health.
+  const released = result.released;
+  if (released && !released.recorded) {
+    const why = {
+      absent: `no ${RELEASED_REL} yet — the next release cut writes it`,
+      unreadable: `${RELEASED_REL} isn't valid JSON`,
+      layout: `${RELEASED_REL} was written under an older manifest layout (${released.detail})`,
+    };
+    console.log(
+      `\n  The released surface is unrecorded, so the "not yet published" notice\n` +
+        `  is empty — that is "we can't tell", not "everything here is published".\n` +
+        `    ${why[released.reason] ?? released.reason}`,
     );
   }
 }

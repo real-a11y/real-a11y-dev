@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { cliRegions, COMMANDS_FILE } from "./cli.mjs";
 import { checkToolPlacement, mcpRegions, TOOLS_FILE } from "./mcp.mjs";
 import { readRegions, writeRegions } from "./regions.mjs";
+import { unreleasedRegion } from "./unreleased.mjs";
 
 /**
  * Which files carry regions, what rebuilds each region, and any check that only
@@ -21,10 +22,23 @@ import { readRegions, writeRegions } from "./regions.mjs";
  * a new one can't be placed automatically and instead has to be reported. That
  * question — "is every shipped tool listed somewhere?" — is unanswerable from
  * inside any single region.
+ *
+ * `unreleased` is passed in rather than built here because it reads a second
+ * file off disk (`docs/surface.released.json`) and this function is sync — the
+ * one async dependency is hoisted into `renderAll` rather than making every
+ * caller of `plan` await.
  */
-function plan(manifest) {
+function plan(manifest, unreleased) {
   return new Map([
-    [COMMANDS_FILE, { builders: cliRegions(manifest) }],
+    [
+      COMMANDS_FILE,
+      {
+        builders: new Map([
+          ...cliRegions(manifest),
+          ["cli-unreleased", unreleased],
+        ]),
+      },
+    ],
     [
       TOOLS_FILE,
       {
@@ -53,7 +67,12 @@ export async function renderAll(repoRoot, manifest) {
   const removed = [];
   const moved = [];
 
-  for (const [relPath, { builders, validate }] of plan(manifest)) {
+  const unreleased = await unreleasedRegion(repoRoot, manifest);
+
+  for (const [relPath, { builders, validate }] of plan(
+    manifest,
+    unreleased.builder,
+  )) {
     const current = await readFile(join(repoRoot, relPath), "utf8");
     const { regions, problems: markerProblems } = readRegions(current, relPath);
     for (const message of markerProblems)
@@ -129,7 +148,15 @@ export async function renderAll(repoRoot, manifest) {
     files.push({ path: relPath, text, current, changed });
   }
 
-  return { files, added, removed, moved, problems, advisories };
+  return {
+    files,
+    added,
+    removed,
+    moved,
+    problems,
+    advisories,
+    released: unreleased.released,
+  };
 }
 
 /** Run every builder for one file. Split out so the move pass can repeat it. */
