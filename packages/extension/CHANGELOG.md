@@ -8,6 +8,19 @@
   landed the change; versions match `package.json`/`public/manifest.json`.
 -->
 
+## Unreleased
+
+### Patch Changes
+
+- Keep the **screen curtain** liftable after Chrome idles the extension's
+  service worker. Curtain state lived only in the worker's memory, so once
+  Chrome tore the worker down (~30s idle, even with the panel open) a revived
+  worker no longer knew which tabs were curtained — closing the panel then
+  skipped the "lift curtain" broadcast and left the page black with no UI to
+  dismiss it. State is now mirrored into `chrome.storage.session`, which
+  outlives the worker, and the panel-disconnect teardown rehydrates before it
+  decides what to lift. Adds the `storage` permission.
+
 ## 0.1.8
 
 ### Patch Changes

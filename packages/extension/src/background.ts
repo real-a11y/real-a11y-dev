@@ -1,5 +1,12 @@
 /// <reference types="chrome" />
 
+import {
+  forgetTab as forgetCurtainTab,
+  hydrateCurtainState,
+  isCurtainOn,
+  setCurtain,
+  takeCurtainTabs,
+} from "./curtain-store.js";
 import { buildFrameInfoMap, mergeFrameTrees } from "./frame-merger.js";
 import {
   type PlannedTabMessage,
@@ -25,8 +32,13 @@ import {
 // ./frame-merger, and the Chrome side-effects below.
 
 const tabStates = new Map<number, TabState>();
-const tabCurtainOn = new Map<number, boolean>(); // curtain state per tab
 let activeTabId: number | null = null;
+
+// Curtain state lives in ./curtain-store, mirrored into chrome.storage.session
+// so it survives the MV3 idle teardown — the curtain is painted in the page and
+// outlives this worker, so a revived worker must still know to lift it. Start
+// rehydrating as soon as the worker boots; the disconnect teardown awaits it.
+void hydrateCurtainState();
 
 function getTabState(tabId: number): TabState {
   return getOrCreateTabState(tabStates, tabId);
@@ -225,15 +237,15 @@ chrome.runtime.onConnect.addListener((port) => {
     // the teardown to EVERY tab is complete by construction; a tab that was
     // never armed simply no-ops on the idempotent messages. `chrome.tabs.query`
     // returns tab ids without the `tabs` permission.
-    void chrome.tabs
-      .query({})
-      .then((tabs) => {
+    void Promise.all([chrome.tabs.query({}), hydrateCurtainState()])
+      .then(([tabs]) => {
         // A panel reconnected while we were querying — leave its fresh state be.
         if (sidepanelConnected) return;
 
-        const curtainTabs = new Set<number>();
-        for (const [tabId, on] of tabCurtainOn) if (on) curtainTabs.add(tabId);
-        tabCurtainOn.clear();
+        // Hydration above matters after a service-worker death: the mirror is
+        // empty on a fresh worker, so without it a curtain painted before the
+        // teardown would never be lifted.
+        const curtainTabs = takeCurtainTabs();
 
         const tabIds = tabs
           .map((t) => t.id)
@@ -356,7 +368,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           frameId,
           isNewTopFrame,
           sidepanelConnected,
-          curtainOn: !!tabCurtainOn.get(tabId),
+          curtainOn: isCurtainOn(tabId),
         });
         dispatchPlan(plan);
 
@@ -545,7 +557,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       activeTabId,
     );
     if (targetTabId != null) {
-      tabCurtainOn.set(targetTabId, message.payload.visible);
+      setCurtain(targetTabId, message.payload.visible);
       chrome.tabs.sendMessage(targetTabId, message, () => {
         if (chrome.runtime.lastError) {
           /* ignore */
@@ -705,7 +717,7 @@ chrome.webNavigation.onBeforeNavigate.addListener((details) => {
 // Clean up on tab removal
 chrome.tabs.onRemoved.addListener((tabId) => {
   disposeTabState(tabStates, tabId);
-  tabCurtainOn.delete(tabId);
+  forgetCurtainTab(tabId);
 });
 
 // Set side panel behavior
