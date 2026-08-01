@@ -110,33 +110,30 @@ jobs:
       - name: Test
         run: pnpm test
 
-      # Derive the channel from the version instead of hardcoding `beta`.
+      # Derive the channel from changesets pre-mode instead of hardcoding `beta`.
       # `release-tag.yml` dispatches *without* a `tag` input and a `v*` tag-push
-      # carries none either, so an empty input means "decide from the version":
-      # a prerelease → `beta` (advance-latest.mjs then moves `latest` per
-      # package), a plain `0.1.0` → `latest`. Without this a stable graduation
-      # would ship under `beta` and strand `latest` on the last prerelease, since
-      # advance-latest.mjs no-ops once pre-mode has exited.
+      # carries none either, so an empty input means "decide from pre-mode".
       #
-      # One derived tag is applied to every package by `pnpm publish -r --tag`,
-      # yet it reads only core's version. That is safe because changesets
-      # pre-mode is repo-global: in pre-mode every freshly-bumped package is a
-      # prerelease, out of it every one is stable, so core's state matches
-      # whatever is actually being published this run. A package left unbumped
-      # keeps its old version, is already on npm, and is skipped — never
-      # re-tagged. The only way to mix a stable core with a *new* prerelease of
-      # an independent package (cli/mcp/validate) is to hand-edit versions
-      # outside changesets; pass the `tag` input explicitly to override for that.
+      # The signal is `.changeset/pre.json` `mode` — the same repo-global flag
+      # `advance-latest.mjs` keys off, so the two never disagree. In pre-mode
+      # (`mode == "pre"`) every version `changeset version` produces is a
+      # prerelease → `beta` (advance-latest.mjs then moves `latest` per package);
+      # once `changeset pre exit` has run, every one is stable → `latest`.
+      # Hardcoding `beta` would ship a stable graduation under `beta` and strand
+      # `latest` on the last prerelease (advance-latest.mjs no-ops out of
+      # pre-mode). Reading core's *version string* instead would misfire in a
+      # legitimate changesets sequence — `pre exit` graduating core to `0.1.0`,
+      # then `pre enter` with a changeset touching only cli — where core reads
+      # stable but the cli prerelease being published wants `beta`; pre-mode is
+      # correct for whatever is actually published, since in pre-mode nothing
+      # graduates. Pass the `tag` input explicitly to force a channel.
       - name: Resolve dist-tag
         id: tag
         run: |
           TAG="${{ github.event.inputs.tag }}"
           if [ -z "$TAG" ]; then
-            VERSION="$(node -p "require('./packages/core/package.json').version")"
-            case "$VERSION" in
-              *-*) TAG="beta" ;;
-              *)   TAG="latest" ;;
-            esac
+            MODE="$(node -p "try { require('./.changeset/pre.json').mode } catch { 'exit' }")"
+            if [ "$MODE" = "pre" ]; then TAG="beta"; else TAG="latest"; fi
           fi
           echo "value=$TAG" >> "$GITHUB_OUTPUT"
 

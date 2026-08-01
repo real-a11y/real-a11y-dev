@@ -36,11 +36,16 @@ concurrency:
 
 jobs:
   tag:
-    # Merged, not merely closed, and from a release branch. Both halves matter:
-    # a release PR that is closed without merging must never publish, and no
-    # other branch prefix should be able to reach this job at all.
+    # Merged *into main*, not merely closed, and from a release branch. All
+    # three matter: a release PR closed without merging must never publish; only
+    # a merge to main publishes — `pull_request: closed` fires for every base
+    # branch, so without the base check a `release/*` branch merged into some
+    # other base (a staging or stacked branch) would tag + publish a commit that
+    # never landed on main, to the public registry, unrecoverably; and no other
+    # head prefix should reach this job at all.
     if: >-
       github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == 'main' &&
       startsWith(github.event.pull_request.head.ref, 'release/')
     runs-on: ubuntu-latest
     permissions:
