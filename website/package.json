@@ -13,7 +13,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",
-    "@playwright/test": "^1.61.1",
+    "@playwright/test": "^1.62.0",
     "@real-a11y-dev/design": "^0.2.0",
     "@real-a11y-dev/testing": "workspace:*",
     "markdown-it-anchor": "^9.2.1",
