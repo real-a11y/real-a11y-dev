@@ -18,6 +18,8 @@
  * Chromium only — the action backend is CDP.
  */
 
+import { setTimeout as timersSetTimeout } from "node:timers/promises";
+
 import type { BrowserSession } from "@real-a11y-dev/browser";
 import {
   captureNativeCheckpoint,
@@ -182,14 +184,14 @@ interface InteractOutcome {
  */
 const MAX_SETTLE_MS = 30_000;
 
-const settle = (ms: number): Promise<void> => {
+const settle = async (ms: number): Promise<void> => {
   if (typeof ms !== "number" || !Number.isFinite(ms) || ms <= 0) {
-    return Promise.resolve();
+    return;
   }
-  if (ms <= MAX_SETTLE_MS) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+  if (ms > MAX_SETTLE_MS) {
+    throw new CliError(`--step-settle exceeds the maximum ${MAX_SETTLE_MS}ms`);
   }
-  throw new CliError(`--step-settle exceeds the maximum ${MAX_SETTLE_MS}ms`);
+  await timersSetTimeout(ms);
 };
 
 async function interactOnPage(
