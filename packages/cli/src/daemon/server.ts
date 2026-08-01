@@ -27,7 +27,7 @@ import {
   decodeRpc,
 } from "./protocol.js";
 import { SessionRegistry } from "./registry.js";
-import { resolveCommandTarget, runCommandOnSession } from "./runner.js";
+import { resolveCommandTargets, runCommandOnSession } from "./runner.js";
 
 function chunkToString(chunk: unknown, encoding?: unknown): string {
   if (Buffer.isBuffer(chunk)) return chunk.toString(encoding as BufferEncoding);
@@ -305,8 +305,8 @@ export class DaemonServer {
     const sessionName = String(rawSession);
     if (!command) throw new Error("run requires a command");
 
-    const target = resolveCommandTarget(command, positionals, flags);
-    const sessionFlagsValue = sessionFlags(flags, target ? [target] : []);
+    const targets = resolveCommandTargets(command, positionals, flags);
+    const sessionFlagsValue = sessionFlags(flags, targets);
 
     const runWork = async (): Promise<number> => {
       return this.registry.run(

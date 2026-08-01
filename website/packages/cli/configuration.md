@@ -183,6 +183,16 @@ Audit as a logged-in user, using a session file saved by `real-a11y login`. The 
 
 Extra origins allowed under [`storageState`](#storagestate) — origin pinning that stops a redirect from routing extraction to an unintended, cookie-matching origin. Each entry must be a full origin like `https://app.example.com`.
 
+### `session`
+
+**`session: string`** — flag `--session` · default: stable hash of the current working directory · applies to `audit`, `inspect`, the view commands, `interact`, `click`, `type`, `focus`, `snapshot`
+
+Reuse a long-lived browser session across invocations. The first run with this name spawns a daemon; later runs connect to the same page. Omit to keep the one-shot default. An explicit `--session` always wins over the config value.
+
+```json
+{ "defaults": { "session": "checkout" } }
+```
+
 ### `format`
 
 **`format: string`** — flag `-f, --format` · default `pretty` (`json` on `snapshot`) · applies to `audit`, `inspect`, the view commands, `snapshot`, `diff`

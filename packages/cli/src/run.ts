@@ -6,6 +6,7 @@
  */
 
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
 import { SnapshotFormatError } from "@real-a11y-dev/snapshot";
@@ -22,6 +23,7 @@ import {
   mergeDefaults,
   resolveConfig,
 } from "./config.js";
+import { ensureDaemonClient, defaultSessionName } from "./daemon/spawn.js";
 import { CliError, EXIT, formatCliError } from "./exit.js";
 
 /**
@@ -55,6 +57,40 @@ function versionLine(): string {
   const cli = readVersion("../package.json") ?? "unknown";
   const playwright = readVersion("playwright/package.json");
   return `real-a11y ${cli} (playwright ${playwright ?? "not installed"})\n`;
+}
+
+const DAEMON_ENTRY = fileURLToPath(new URL("daemon/entry.js", import.meta.url));
+
+async function runWithDaemon(
+  command: string,
+  positionals: string[],
+  flags: FlagValues,
+): Promise<number> {
+  // `runner.ts` eagerly loads the command modules, so only import it when we
+  // already know we're going through the daemon.
+  const { resolveCommandTargets } = await import("./daemon/runner.js");
+  const targets = resolveCommandTargets(command, positionals, flags);
+  if (targets.length === 0) {
+    throw new CliError(
+      `\`${command}\` does not support --session in this release`,
+      "run the command without --session, or use a supported command",
+    );
+  }
+
+  const sessionName =
+    typeof flags.session === "string" && flags.session !== ""
+      ? flags.session
+      : defaultSessionName();
+  const client = await ensureDaemonClient(sessionName, DAEMON_ENTRY);
+  const { exitCode, stdout, stderr } = await client.run(
+    sessionName,
+    command,
+    positionals,
+    flags,
+  );
+  if (stderr) process.stderr.write(stderr);
+  if (stdout) process.stdout.write(stdout);
+  return exitCode;
 }
 
 function isParseArgsError(err: unknown): err is Error {
@@ -158,6 +194,9 @@ export async function run(argv: string[]): Promise<number> {
             `it reads Chromium's whole-document accessibility tree. Only \`tabs\` still scopes.\n`,
         );
       }
+    }
+    if (values.session !== undefined) {
+      return await runWithDaemon(name, positionals, values as FlagValues);
     }
     const fn = await command.load();
     return await fn(positionals, values as FlagValues, seededFromConfig);

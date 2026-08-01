@@ -14,9 +14,9 @@ import { fingerprintFindings, redactUrl } from "@real-a11y-dev/snapshot";
 import {
   parseFailOn,
   parseFormat,
-  parseOpenOptions,
   parseRules,
   type CommandFn,
+  type FlagValues,
 } from "../args.js";
 import { CliError, EXIT, exceedsThreshold, formatCliError } from "../exit.js";
 import { progress, writeReport } from "../output.js";
@@ -28,23 +28,24 @@ import {
 import { colorEnabled } from "../render/color.js";
 import { renderJson, type PageReport } from "../render/json.js";
 import { renderPretty } from "../render/pretty.js";
-
-import { createSession, nativeSnapshot, openPage } from "../session.js";
+import { createSession, nativeSnapshot } from "../session.js";
 
 import {
-  isAuthenticated,
+  ensurePageOpen,
   outputOf,
   resolveAuditTargets,
   sessionFlags,
   warnUnscopable,
 } from "./common.js";
 
-export const auditCommand: CommandFn = async (positionals, flags) => {
-  // Everything user-typed validates before a browser launches.
+export async function runAuditOnSession(
+  session: import("@real-a11y-dev/browser").BrowserSession,
+  positionals: string[],
+  flags: FlagValues,
+): Promise<number> {
   const rules = parseRules(flags.rules);
   const failOn = parseFailOn(flags["fail-on"], "error");
   const format = parseFormat(flags.format, ["pretty", "json"] as const);
-  const openOptions = parseOpenOptions(flags);
   const targets = resolveAuditTargets(positionals, flags);
   // Whole-document now, so a route's `rootSelector` can't narrow the audit.
   // Say so once and keep going — see `warnUnscopable`.
@@ -54,52 +55,40 @@ export const auditCommand: CommandFn = async (positionals, flags) => {
   );
   const output = outputOf(flags);
   const quiet = flags.quiet === true;
-  const authed = isAuthenticated(flags);
 
-  const session = await createSession(sessionFlags(flags, targets));
   const pages: PageReport[] = [];
-  try {
-    for (const target of targets) {
-      progress(`auditing ${target.name} …`, { quiet });
-      const started = Date.now();
-      try {
-        const opened = await openPage(
-          session,
-          target.url,
-          openOptions,
-          target.fileApproved,
-          authed,
-        );
-        const snapshot = await nativeSnapshot(session, {
-          ...(rules ? { rules } : {}),
-        });
-        pages.push({
-          name: target.name,
-          url: redactUrl(opened.url),
-          findings: fingerprintFindings(target.name, snapshot.findings),
-        });
-        if (flags.verbose === true) {
-          progress(`  done in ${Date.now() - started}ms`, { quiet });
-        }
-      } catch (err) {
-        if (!(err instanceof CliError)) throw err;
-        // The report entry keeps multi-page context; the stderr line keeps
-        // the error-catalog contract (errors are visible on stderr).
-        process.stderr.write(`${formatCliError(err)}\n`);
-        pages.push({
-          name: target.name,
-          // The target we tried to open — the success path reports the URL the
-          // browser landed on, which doesn't exist here. Not `target.name`:
-          // that's a display label for a named config entry, so this field
-          // would stop being a URL for exactly the routes that have one.
-          url: redactUrl(target.url),
-          findings: [],
-          error: err.hint ? `${err.message} (${err.hint})` : err.message,
-        });
+  for (const target of targets) {
+    progress(`auditing ${target.name} …`, { quiet });
+    const started = Date.now();
+    try {
+      const { url: finalUrl } = await ensurePageOpen(session, target, flags);
+      const snapshot = await nativeSnapshot(session, {
+        ...(rules ? { rules } : {}),
+      });
+      pages.push({
+        name: target.name,
+        url: redactUrl(finalUrl),
+        findings: fingerprintFindings(target.name, snapshot.findings),
+      });
+      if (flags.verbose === true) {
+        progress(`  done in ${Date.now() - started}ms`, { quiet });
       }
+    } catch (err) {
+      if (!(err instanceof CliError)) throw err;
+      // The report entry keeps multi-page context; the stderr line keeps
+      // the error-catalog contract (errors are visible on stderr).
+      process.stderr.write(`${formatCliError(err)}\n`);
+      pages.push({
+        name: target.name,
+        // The target we tried to open — the success path reports the URL the
+        // browser landed on, which doesn't exist here. Not `target.name`:
+        // that's a display label for a named config entry, so this field
+        // would stop being a URL for exactly the routes that have one.
+        url: redactUrl(target.url),
+        findings: [],
+        error: err.hint ? `${err.message} (${err.hint})` : err.message,
+      });
     }
-  } finally {
-    await session.close();
   }
 
   const content =
@@ -123,4 +112,14 @@ export const auditCommand: CommandFn = async (positionals, flags) => {
   if (pages.some((p) => p.error)) return EXIT.ERROR;
   const findings = pages.flatMap((p) => p.findings);
   return exceedsThreshold(findings, failOn) ? EXIT.FINDINGS : EXIT.OK;
+}
+
+export const auditCommand: CommandFn = async (positionals, flags) => {
+  const targets = resolveAuditTargets(positionals, flags);
+  const session = await createSession(sessionFlags(flags, targets));
+  try {
+    return await runAuditOnSession(session, positionals, flags);
+  } finally {
+    await session.close();
+  }
 };

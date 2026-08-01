@@ -4,6 +4,7 @@
  * state the interaction left behind.
  */
 
+import { execFile } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -12,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { DaemonClient, spawnDaemon } from "../src/daemon/client.js";
+import { sessionPaths } from "../src/daemon/spawn.js";
 
 const BIN = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -89,3 +91,108 @@ describe("session daemon", () => {
 function fileUrl(path: string): string {
   return `file://${path}`;
 }
+
+function runCli(
+  args: string[],
+): Promise<{ code: number; stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      process.execPath,
+      [BIN, ...args],
+      {
+        env: { ...process.env, NO_COLOR: "1" },
+        timeout: 30_000,
+      },
+      (err, stdout, stderr) => {
+        if (
+          err &&
+          (err as { code?: string | number | null }).code === undefined
+        ) {
+          reject(err);
+          return;
+        }
+        resolve({
+          code: (err?.code as number | undefined) ?? 0,
+          stdout,
+          stderr,
+        });
+      },
+    );
+  });
+}
+
+describe("session daemon CLI routing", () => {
+  it("routes the built CLI through a daemon with --session", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "real-a11y-daemon-cli-"));
+    const fixture = join(dir, "fixture.html");
+    writeFileSync(
+      fixture,
+      `<!doctype html>
+<html>
+  <body>
+    <main>
+      <h1>CLI daemon fixture</h1>
+      <button onclick="
+        const out = document.getElementById('status');
+        out.textContent = out.textContent === 'off' ? 'on' : 'off';
+      ">Toggle</button>
+      <p id="status">off</p>
+    </main>
+  </body>
+</html>`,
+    );
+
+    const name = "cli-demo";
+    const paths = sessionPaths(name);
+    const stop = await spawnDaemon(
+      paths.socketPath,
+      paths.pidfile,
+      0,
+      DAEMON_ENTRY,
+    );
+    const client = new DaemonClient({ socketPath: paths.socketPath });
+
+    try {
+      const url = fileUrl(fixture);
+      const tree1 = await runCli([
+        "tree",
+        "--session",
+        name,
+        "--allow-file",
+        url,
+        "--quiet",
+      ]);
+      expect(tree1.code).toBe(0);
+      expect(tree1.stdout).toContain('paragraph "off"');
+
+      const click = await runCli([
+        "click",
+        "--session",
+        name,
+        "--allow-file",
+        url,
+        "--quiet",
+        "--role",
+        "button",
+        "--name",
+        "Toggle",
+      ]);
+      expect(click.code).toBe(0);
+      expect(click.stdout).toContain('paragraph "on"');
+
+      const tree2 = await runCli([
+        "tree",
+        "--session",
+        name,
+        "--allow-file",
+        url,
+        "--quiet",
+      ]);
+      expect(tree2.code).toBe(0);
+      expect(tree2.stdout).toContain('paragraph "on"');
+    } finally {
+      await client.stopAll();
+      await stop();
+    }
+  }, 90_000);
+});
