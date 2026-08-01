@@ -14,10 +14,19 @@ npx real-a11y tree https://example.com
 ```
 
 ```
-main
+document
   heading "Example Domain" (level 1)
-  link "More information..."
+  paragraph "This domain is for use in illustrative examples in documents. You may use this domain in literature without prior coordination or asking for permission."
+  paragraph
+    link "More information..."
 ```
+
+That is the whole tree, not a tidied version of it. The paragraphs are there
+because a screen reader reads them, and the root is `document` because there is no
+single element to root at — plain wrappers are dropped, and what is left is a
+heading and two paragraphs side by side. A page whose content all sits inside one
+landmark roots at that instead (`main`); the ordinary `<header>` / `<main>` /
+`<footer>` page has three top-level regions, so it roots at `document` too.
 
 > `@beta`: the package publishes on the `beta` dist-tag while the Real A11y
 > family is in pre-release — unpinned `npx @real-a11y-dev/cli` won't resolve
