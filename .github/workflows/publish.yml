@@ -38,14 +38,6 @@ on:
         description: "npm dist-tag to publish under — blank = derive from version"
         required: false
         default: ""
-      sha:
-        # release-tag.yml passes the release PR's merge commit so the publish
-        # runs against exactly what was merged, even if another PR raced onto
-        # main in between. Blank falls back to the triggering ref (a pushed `v*`
-        # tag, or main for a bare manual run).
-        description: "Commit SHA to publish — blank = the triggering ref"
-        required: false
-        default: ""
   # Manual break-glass: pushing a `v*` tag by hand still publishes. The
   # automation uses per-package tags + an explicit dispatch instead, so this
   # path is only for recovering a release by hand.
@@ -73,11 +65,12 @@ jobs:
       id-token: write
       contents: read
     steps:
+      # No ref override: the run is dispatched at (or the break-glass `v*` tag is
+      # pushed at) the release commit, so the default checkout — GITHUB_SHA — and
+      # npm's provenance attestation, which is built from GITHUB_SHA/OIDC claims
+      # rather than the working tree, both resolve to that exact commit.
+      # `release-tag.yml` dispatches at a release tag precisely so these agree.
       - uses: actions/checkout@v4
-        with:
-          # A dispatched `sha` pins the exact merge commit; otherwise check out
-          # the triggering ref (the pushed `v*` tag, or main for a manual run).
-          ref: ${{ github.event.inputs.sha || github.ref }}
 
       # pnpm version is read from `packageManager` in package.json.
       - uses: pnpm/action-setup@v4

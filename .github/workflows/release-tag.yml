@@ -86,6 +86,10 @@ jobs:
           if [ ${#to_push[@]} -gt 0 ]; then
             git push origin "${to_push[@]}"
             printf '✓ tagged %s\n' "${to_push[@]}"
+            # Every one of these tags points at the merge commit, so any of them
+            # is a valid dispatch ref that resolves publish's checkout + npm
+            # provenance to the release commit. Hand the first to the next step.
+            echo "ref=${to_push[0]}" >> "$GITHUB_OUTPUT"
           fi
           echo "created=${#to_push[@]}" >> "$GITHUB_OUTPUT"
 
@@ -93,17 +97,18 @@ jobs:
       # every publishable version was already tagged, nothing here is new
       # (`changeset version` always bumps what it touches), so there is nothing
       # to publish and a dispatch would be a no-op run that reads like a real
-      # one. `--ref main` picks the workflow definition; `sha` pins the checkout
-      # to the exact merge commit, so a feature PR that raced in right after this
-      # one can't get published under these version numbers.
+      # one. Dispatching at a just-pushed release tag — not `--ref main` — pins
+      # the publish to the merge commit the tag points at: a feature PR that
+      # raced onto main can't be shipped under these versions, and npm's
+      # provenance attestation (built from the run's GITHUB_SHA, not the working
+      # tree) names that same commit. The tag carries the publish.yml definition,
+      # since it is the merge commit on main.
       - name: Publish to npm
         if: steps.tag.outputs.created != '0'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh workflow run publish.yml \
-            --ref main \
-            -f sha="${{ github.event.pull_request.merge_commit_sha }}"
+          gh workflow run publish.yml --ref "${{ steps.tag.outputs.ref }}"
 
       # The extension is changesets-ignored and ships on its own cadence, so most
       # releases leave its version alone. An existing tag just means "not

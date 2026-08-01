@@ -145,12 +145,13 @@ builds the zip and drafts the GitHub Release.
 
 Both workflows stay runnable by hand from the Actions tab, so a merge that didn't
 publish (automation bypassed, or you're recovering a failed run) is always
-recoverable. When you re-run **Publish to npm** from the Actions tab for
-recovery, **set its `sha` input to the release merge commit** — left blank it
-falls back to `main`'s current tip, which by recovery time may include commits
-merged after the release, so you'd publish those under the release's versions.
-(The automation always passes `sha`; only a hand-run can forget it.) Or push the
-break-glass aggregate tag:
+recoverable. To re-run **Publish to npm** from the Actions tab, set **Use
+workflow from** to one of the release's package tags (e.g.
+`@real-a11y-dev/core@<version>`) — the tag points at the release commit, so both
+the published tree and the npm provenance attestation resolve to it. (The
+automation dispatches at that tag for exactly this reason; picking `main` instead
+would publish its current tip, which by recovery time may include later commits.)
+Or push the break-glass aggregate tag:
 
 ```bash
 # break-glass only — the automation uses per-package tags, not this:
