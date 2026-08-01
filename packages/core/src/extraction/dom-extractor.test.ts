@@ -1654,3 +1654,168 @@ describe("computed-style cache during extraction", () => {
     }
   });
 });
+
+describe("aria-describedby target suppression", () => {
+  it("suppresses a text-only description target", () => {
+    // The reason the suppression exists: the target's text is already shown
+    // inline on the referencing element as its description, so surfacing the
+    // <p> as its own node is pure redundancy.
+    const root = createPage(`
+      <input aria-label="Password" aria-describedby="pw-help" />
+      <p id="pw-help">Must be 8+ characters.</p>
+    `);
+
+    const { nodes } = extractDomTree(root);
+
+    expect([...nodes.values()].some((n) => n.dom.tagName === "p")).toBe(false);
+  });
+
+  it("keeps a description target that contains interactive content", () => {
+    // Regression: the whole target subtree was dropped, so the "Full rules"
+    // link — visible, focusable page content an AT user can tab to and
+    // activate — vanished from the tree, and with it from the panel, audits,
+    // and everything else derived from the tree.
+    const root = createPage(`
+      <input aria-label="Password" aria-describedby="pw-help" />
+      <p id="pw-help">Must be 8+ characters. <a href="/rules">Full rules</a></p>
+    `);
+
+    const { nodes } = extractDomTree(root);
+
+    const link = [...nodes.values()].find((n) => n.dom.tagName === "a");
+    expect(link).toBeDefined();
+    expect(link!.a11y.name).toBe("Full rules");
+    // The target itself has to survive too — it is the link's parent.
+    const p = [...nodes.values()].find((n) => n.dom.tagName === "p");
+    expect(p).toBeDefined();
+    expect(p!.childIds).toContain(link!.id);
+  });
+
+  it("keeps a description target whose interactive content is nested deeper", () => {
+    const root = createPage(`
+      <input aria-label="Card" aria-describedby="card-help" />
+      <div id="card-help">
+        <span>Where do I find this? <button type="button">Show me</button></span>
+      </div>
+    `);
+
+    const { nodes } = extractDomTree(root);
+
+    const button = [...nodes.values()].find((n) => n.dom.tagName === "button");
+    expect(button).toBeDefined();
+    expect(button!.a11y.name).toBe("Show me");
+  });
+
+  it("still suppresses a target whose only control is hidden", () => {
+    // The walk drops a display:none control, so counting it would keep the
+    // target for a node that never gets emitted — the redundant description
+    // node this suppression exists to avoid, with none of the control the
+    // exception was added for. The two decisions have to agree.
+    const root = createPage(`
+      <input aria-label="Password" aria-describedby="pw-help" />
+      <p id="pw-help">
+        Must be 8+ characters.
+        <button type="button" style="display: none">Show rules</button>
+      </p>
+    `);
+
+    const { nodes } = extractDomTree(root);
+
+    expect([...nodes.values()].some((n) => n.dom.tagName === "button")).toBe(
+      false,
+    );
+    expect([...nodes.values()].some((n) => n.dom.tagName === "p")).toBe(false);
+  });
+
+  it("still suppresses a tabindex='-1' target holding only text", () => {
+    // `getActions` hands any [tabindex] element a click action as a catch-all,
+    // but tabindex="-1" is programmatic-focus plumbing — the standard way to
+    // move focus to an error container — not something a user can tab to.
+    // Counting it would defeat suppression for plain help/error text.
+    const root = createPage(`
+      <input aria-label="Password" aria-describedby="pw-err" />
+      <div id="pw-err" tabindex="-1" role="alert">Password is required.</div>
+    `);
+
+    const { nodes } = extractDomTree(root);
+
+    expect(
+      [...nodes.values()].some((n) => n.dom.attributes?.id === "pw-err"),
+    ).toBe(false);
+  });
+
+  it("still suppresses a target whose only control is hidden from AT", () => {
+    // aria-hidden (and visibility:hidden) survive the DOM view but are pruned
+    // from the a11y view, so counting one would bring the redundant
+    // description node back in a11y mode with no control behind it.
+    const root = createPage(`
+      <input aria-label="Password" aria-describedby="pw-help" />
+      <p id="pw-help">Must be 8+ characters. <button aria-hidden="true">i</button></p>
+    `);
+
+    const { nodes } = extractDomTree(root);
+
+    expect([...nodes.values()].some((n) => n.dom.tagName === "p")).toBe(false);
+  });
+
+  it("still suppresses a target whose only control is media fallback", () => {
+    // The walk treats media as a leaf — its light-DOM children are fallback
+    // content no browser renders — so a control in there is never emitted.
+    const root = createPage(`
+      <input aria-label="Clip" aria-describedby="clip-help" />
+      <p id="clip-help">
+        See the <video src="x.mp4"><a href="/transcript">transcript</a></video>
+      </p>
+    `);
+
+    const { nodes } = extractDomTree(root);
+
+    expect([...nodes.values()].some((n) => n.dom.tagName === "a")).toBe(false);
+    expect([...nodes.values()].some((n) => n.dom.tagName === "p")).toBe(false);
+  });
+
+  it("keeps a target holding a media element that is itself a tab stop", () => {
+    // <video controls> IS emitted and IS focusable, so it is a real reason to
+    // keep the target — unlike the fallback content above.
+    const root = createPage(`
+      <input aria-label="Clip" aria-describedby="clip-help" />
+      <p id="clip-help">Watch: <video src="x.mp4" controls></video></p>
+    `);
+
+    const { nodes } = extractDomTree(root);
+
+    expect([...nodes.values()].some((n) => n.dom.tagName === "video")).toBe(
+      true,
+    );
+    expect([...nodes.values()].some((n) => n.dom.tagName === "p")).toBe(true);
+  });
+
+  it("keeps a target whose control is reachable via tabindex='0'", () => {
+    const root = createPage(`
+      <input aria-label="Password" aria-describedby="pw-help" />
+      <p id="pw-help">
+        Must be 8+ characters.
+        <span tabindex="0" role="button">Show rules</span>
+      </p>
+    `);
+
+    const { nodes } = extractDomTree(root);
+
+    const widget = [...nodes.values()].find((n) => n.a11y.role === "button");
+    expect(widget).toBeDefined();
+    expect(widget!.a11y.name).toBe("Show rules");
+  });
+
+  it("surfaces the kept interactive content in the a11y view too", () => {
+    const root = createPage(`
+      <input aria-label="Password" aria-describedby="pw-help" />
+      <p id="pw-help">Must be 8+ characters. <a href="/rules">Full rules</a></p>
+    `);
+
+    const { nodes } = extractA11yTree(root);
+
+    const link = [...nodes.values()].find((n) => n.a11y.role === "link");
+    expect(link).toBeDefined();
+    expect(link!.a11y.name).toBe("Full rules");
+  });
+});

@@ -107,8 +107,18 @@ const TEXT_INPUT_TYPES = new Set([
 /** Input types that toggle on click (no text entry) */
 const TOGGLE_INPUT_TYPES = new Set(["checkbox", "radio"]);
 
-/** Determine what actions an element supports */
-function getActions(element: Element): ActionType[] {
+/**
+ * Determine what actions an element supports.
+ *
+ * `skipTabindexFallback` drops the trailing `[tabindex]` catch-all, leaving
+ * only actions a real tag/role branch produced. Callers judging whether an
+ * element is a control a USER can reach want this for a negative tabindex —
+ * see {@link hasInteractiveContent}.
+ */
+function getActions(
+  element: Element,
+  skipTabindexFallback = false,
+): ActionType[] {
   const tag = element.tagName.toLowerCase();
   const actions: ActionType[] = [];
   const role = element.getAttribute("role");
@@ -235,11 +245,67 @@ function getActions(element: Element): ActionType[] {
     actions.push("focus", "type", "increment", "decrement");
   }
 
-  if (element.getAttribute("tabindex") !== null && actions.length === 0) {
+  if (
+    !skipTabindexFallback &&
+    element.getAttribute("tabindex") !== null &&
+    actions.length === 0
+  ) {
     actions.push("click");
   }
 
   return actions;
+}
+
+/**
+ * True if `element` or anything under it is a control a user can actually
+ * reach — the predicate deciding whether an `aria-describedby` target may be
+ * suppressed. Built on the same `getActions` that sets
+ * `interaction.isInteractive`, so "interactive" means one thing across the
+ * extractor, with two deliberate narrowings:
+ *
+ * - **Only what the walk would emit, and AT would see, counts.** A control the
+ *   walk never reaches — inside a `SKIP_TAGS` element, past a media leaf, or
+ *   under a hidden ancestor — would keep the target alive for a node that
+ *   never appears, reinstating the redundant description node with none of the
+ *   control the exception exists for. Descent stops at `isHiddenFromAT`, which
+ *   covers the walk's own `isSubtreeHidden` rule plus `aria-hidden` and
+ *   `visibility:hidden`: those survive in the DOM view but are pruned from the
+ *   a11y view, and a control AT can't reach is not a reason to keep help text.
+ *   Shares the walk's per-extraction `styleCache`, so no style resolves twice.
+ * - **A negative `tabindex` doesn't count on its own.** `getActions` gives any
+ *   `[tabindex]` element a click action as a catch-all, but `tabindex="-1"` is
+ *   programmatic-focus plumbing — a `role="alert"` error container, a toast
+ *   viewport — that nobody can tab to. Counting it would defeat suppression
+ *   for exactly the text-only help text this is meant to keep suppressing.
+ *   Same call the overlay-content guard makes when it omits `[tabindex]`.
+ *
+ * Descends with `safeChildren` rather than `querySelectorAll` so a clobbered
+ * `<form>` in the subtree reads the way it does everywhere else in the walk.
+ */
+function hasInteractiveContent(
+  element: Element,
+  styleCache: StyleCache,
+): boolean {
+  const tag = element.tagName.toLowerCase();
+  // The walk skips these outright, so nothing inside one is ever emitted.
+  if (SKIP_TAGS.has(tag)) return false;
+
+  const tabindex = element.getAttribute("tabindex");
+  if (getActions(element, Number(tabindex) < 0).length > 0) return true;
+
+  // Media elements are leaves in the walk: their light-DOM children are
+  // unrendered fallback content, so a control among them never appears
+  // either. (A media element with `controls` is itself actionable and has
+  // already returned true above.)
+  if (MEDIA_TAGS.has(tag)) return false;
+
+  for (const child of safeChildren(element)) {
+    if (isHiddenFromAT(child, getCachedComputedStyle(child, styleCache))) {
+      continue;
+    }
+    if (hasInteractiveContent(child, styleCache)) return true;
+  }
+  return false;
 }
 
 /** Tags that are natively interactive — never treated as visually hidden */
@@ -1346,10 +1412,28 @@ function buildNode(
     // Skip entire subtrees of display:none / hidden elements
     if (isSubtreeHidden(element, style)) return null;
 
-    // Skip elements that serve solely as aria-describedby text providers.
-    // Their content is shown inline on the referencing element as a description.
+    // Skip elements that serve SOLELY as aria-describedby text providers.
+    // Their content is shown inline on the referencing element as a
+    // description, so a node of their own would just be redundant.
+    //
+    // "Solely" is the operative word: description targets routinely carry
+    // interactive content, and dropping the target dropped its whole subtree
+    // with it. The everyday case is help text with a link —
+    //   <input aria-describedby="pw-help">
+    //   <p id="pw-help">Must be 8+ chars. <a href="/rules">Full rules</a></p>
+    // — where "Full rules" is visible, focusable content an AT user can reach,
+    // yet it vanished from the tree and from everything derived from it (the
+    // panel, audits, serialization). When the subtree holds a control the user
+    // can actually reach, keep it: the description text being duplicated on the
+    // referencing element is a far smaller cost than losing a control.
     const ownId = element.getAttribute("id");
-    if (ownId && descriptionTargetIds.has(ownId)) return null;
+    if (
+      ownId &&
+      descriptionTargetIds.has(ownId) &&
+      !hasInteractiveContent(element, styleCache)
+    ) {
+      return null;
+    }
 
     const id = getNodeId(element);
     const role = getImplicitRole(element);
