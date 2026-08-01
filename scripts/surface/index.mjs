@@ -4,11 +4,12 @@
 //   node scripts/surface/index.mjs check        CI gate — read-only
 //   node scripts/surface/index.mjs check-built  the slug function vs the built site
 //   node scripts/surface/index.mjs plan         what this branch obliges you to update
+//   node scripts/surface/index.mjs scenarios    the release suites + coverage matrix
 //
 // One model of what the packages expose, extracted from the code itself, so
-// every claim made about the surface — in the docs today, in the release test
-// scenarios next — is checked against the same answer rather than against a
-// separate impression of it.
+// every claim made about the surface — in the docs, and in the release test
+// scenarios under `scenarios/` — is checked against the same answer rather than
+// against a separate impression of it.
 //
 // Only `extract` writes. `check` never fixes, so CI can run it on a read-only
 // checkout and a failure always means "the repo is out of date", never "the
@@ -32,6 +33,11 @@ import { diffManifests } from "./plan/diff.mjs";
 import { changedFiles, manifestAt, mergeBase, refExists } from "./plan/git.mjs";
 import { buildReport, renderMarkdown, renderText } from "./plan/report.mjs";
 import { nextVersions } from "./plan/versions.mjs";
+// Safe at the top level for the same reason: `scenarios/load.mjs` reads files
+// with node core only. It is deliberately not YAML-parsed — `plan` is its main
+// consumer and runs with no `node_modules`, so a parser dependency here would
+// reintroduce exactly the ERR_MODULE_NOT_FOUND described above.
+import { loadScenarios } from "./scenarios/load.mjs";
 
 const repoRoot = resolve(fileURLToPath(import.meta.url), "../../..");
 const manifestPath = resolve(repoRoot, "docs/surface.json");
@@ -62,6 +68,7 @@ async function check() {
     { checkDocs },
     { checkSamples, checkToolExamples },
     { validateAgainstSchema },
+    { checkScenarios },
   ] = await Promise.all([
     import("./model.mjs"),
     import("./check/anchors.mjs"),
@@ -69,6 +76,7 @@ async function check() {
     import("./check/docs.mjs"),
     import("./check/samples.mjs"),
     import("./check/schema.mjs"),
+    import("./scenarios/check.mjs"),
   ]);
 
   const manifest = await buildManifest(repoRoot);
@@ -128,6 +136,21 @@ async function check() {
     ]);
   }
 
+  // 3. Do the release test scenarios agree with it?
+  //
+  //    Same gate, same run, deliberately: a PR that renames a tool has to move
+  //    the scenario naming it in the same commit, or the suite silently claims
+  //    coverage of something that no longer exists.
+  const { scenarios: loaded, problems: scenarioLoadProblems } =
+    await loadScenarios(repoRoot);
+  const scenarioProblems = [
+    ...scenarioLoadProblems.map((message) => ({
+      where: "scenarios/",
+      message,
+    })),
+    ...(scenarioLoadProblems.length ? [] : checkScenarios(loaded, manifest)),
+  ];
+
   const problems = [
     ...docs,
     ...samples.problems,
@@ -136,6 +159,7 @@ async function check() {
     ...env,
     ...anchors,
     ...duplicates,
+    ...scenarioProblems,
   ];
 
   if (problems.length) {
@@ -158,7 +182,9 @@ async function check() {
     `Surface check OK — ${manifest.cli.commands.length} CLI commands, ` +
       `${manifest.mcp.tools.length} MCP tools, manifest current, docs agree.\n` +
       `  ${samples.checked} documented CLI invocations parse, ` +
-      `every flag and tool parameter is documented, and every #anchor resolves.`,
+      `every flag and tool parameter is documented, and every #anchor resolves.\n` +
+      `  ${loaded.length} release test scenarios parse, every \`covers\` path is real, ` +
+      `and every\n  shipped capability has one.`,
   );
 }
 
@@ -251,10 +277,17 @@ async function plan(argv) {
     ]);
   }
 
-  const [baseManifest, touched, versions] = await Promise.all([
+  const [baseManifest, touched, versions, scenarios] = await Promise.all([
     manifestAt(repoRoot, mergeBaseRef),
     changedFiles(repoRoot, mergeBaseRef),
     nextVersions(repoRoot),
+    // Malformed scenarios must not break `plan`. `check` is the gate that
+    // reports them; here they would only cost the report its ids, and a plan
+    // that refuses to run is worse than one that says "check by hand".
+    loadScenarios(repoRoot).then(
+      (r) => r.scenarios,
+      () => [],
+    ),
   ]);
 
   let headManifest;
@@ -269,8 +302,93 @@ async function plan(argv) {
   }
 
   const changes = diffManifests(baseManifest, headManifest);
-  const report = buildReport(changes, touched, versions);
+  const report = buildReport(changes, touched, versions, scenarios);
   console.log(asMarkdown ? renderMarkdown(report, base) : renderText(report));
+}
+
+/**
+ * The release test suites, as a gate and as a coverage report.
+ *
+ * Folded into `check` as well, so a PR that renames a tool can't leave a
+ * scenario pointing at a name that no longer exists — the failure mode the
+ * suites had for their whole life in Notion, where a row named a
+ * `get_native_tree` tool that was never real and nothing could tell.
+ */
+async function scenarios(argv) {
+  const { checkScenarios, coverageSummary } =
+    await import("./scenarios/check.mjs");
+  const { scenarios: loaded, problems: loadProblems } =
+    await loadScenarios(repoRoot);
+
+  if (loadProblems.length) {
+    console.error(`\n${loadProblems.length} scenario file(s) don't parse.\n`);
+    for (const p of loadProblems) console.error(`  ${p}`);
+    die([
+      "The frontmatter reader supports `key: value` and `  - item` only —",
+      "see the header of scripts/surface/scenarios/load.mjs for why it is not",
+      "YAML. Anything else is an error rather than a guess.",
+    ]);
+  }
+
+  // Zero scenarios means the directory moved or the reader stopped recognising
+  // files — the same class of silent-success failure the sample checker guards.
+  if (loaded.length === 0) {
+    die([
+      "Found no scenarios under scenarios/.",
+      ``,
+      `  The suites are committed to the repo, so this means the loader stopped`,
+      `  finding them — not that there are none to check.`,
+    ]);
+  }
+
+  // Guarded the same way `check` and `plan` guard the identical read. This verb
+  // is the one the README tells a contributor to run right after adding a row,
+  // so it is the likeliest place to meet a checkout with no manifest — and a raw
+  // ENOENT stack tells them nothing about the one command that fixes it.
+  let manifest;
+  try {
+    manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  } catch {
+    die([
+      `${MANIFEST_REL} is missing or isn't valid JSON — nothing to check against.`,
+      ``,
+      `  Every \`covers\` path is resolved against it, so there is no useful`,
+      `  answer without it:`,
+      ``,
+      `    pnpm surface:extract`,
+    ]);
+  }
+
+  const problems = checkScenarios(loaded, manifest);
+  const coverage = coverageSummary(loaded, manifest);
+
+  if (argv.includes("--coverage")) {
+    for (const row of coverage.rows) {
+      const by = row.by.length ? row.by.join(", ") : "— nothing";
+      console.log(`  ${row.label.padEnd(34)} ${by}`);
+    }
+    console.log("");
+  }
+
+  if (problems.length) {
+    console.error(`\nThe release test suites disagree with the code.\n`);
+    for (const { where, message } of problems) {
+      console.error(`  ${where}\n    ${message}\n`);
+    }
+    die([
+      "A scenario naming a surface that doesn't exist is worse than a missing",
+      "one: it reads as coverage. Run `pnpm surface:plan` to see what moved.",
+    ]);
+  }
+
+  const active = loaded.filter((s) => s.status === "Active").length;
+  const manual = loaded.filter((s) => s.type === "Manual").length;
+  console.log(
+    `Scenario check OK — ${loaded.length} scenarios (${active} active, ` +
+      `${manual} manual), every \`covers\` path exists,\n` +
+      `  every twin is reciprocated, and all ${coverage.total} shipped ` +
+      `capabilities have an active scenario.`,
+  );
 }
 
 const verb = process.argv[2];
@@ -282,15 +400,20 @@ if (verb === "extract") {
   await checkBuilt();
 } else if (verb === "plan") {
   await plan(process.argv.slice(3));
+} else if (verb === "scenarios") {
+  await scenarios(process.argv.slice(3));
 } else {
   die([
-    `usage: node scripts/surface/index.mjs <extract|check|check-built|plan>`,
+    `usage: node scripts/surface/index.mjs <extract|check|check-built|plan|scenarios>`,
     ``,
     `  extract      rebuild ${MANIFEST_REL} from the packages' source`,
-    `  check        fail if the manifest is stale or the docs disagree with it`,
+    `  check        fail if the manifest is stale, the docs disagree with it, or`,
+    `               a scenario names a surface that doesn't exist`,
     `  check-built  fail if slugify() disagrees with the built site's heading`,
     `               ids (needs the website build)`,
     `  plan         report the docs and test scenarios this branch obliges you`,
     `               to update  [--base <ref>] [--format markdown]`,
+    `  scenarios    the release suites on their own, with the coverage matrix`,
+    `               [--coverage]`,
   ]);
 }

@@ -15,6 +15,16 @@ packages/extension/public/icons/
 
 # Markdown content — keep manual line wrapping in docs
 website/**/*.md
+# Release test scenarios: hand-wrapped prose, tables, and frontmatter read by a
+# deliberately non-YAML parser (scripts/surface/scenarios/load.mjs). Reflowing
+# them would churn the diffs that make the suites reviewable, which is the whole
+# reason they moved out of Notion.
+#
+# ROOT-ANCHORED on purpose. A bare `scenarios/` is a gitignore-style pattern that
+# matches a directory of that name at ANY depth, which silently swallowed
+# `scripts/surface/scenarios/*.mjs` — the tooling that reads these files — so its
+# own formatting stopped being checked. Keep the leading slash.
+/scenarios/
 README.md
 CHANGELOG.md
 CONTRIBUTING.md

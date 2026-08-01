@@ -167,53 +167,165 @@ export function requiredDocs(changes) {
 }
 
 /**
+ * Which scenarios cover a change path, by id.
+ *
+ * A scenario covering a whole command covers its flags too — someone running
+ * `audit` end to end is exercising `--fail-on` — so a `covers:` entry that is a
+ * prefix of the change path counts. The dot guard stops `cli.commands.audit`
+ * from appearing to cover `cli.commands.audit-extra`.
+ *
+ * Twins ride along, but ONLY the ones the manifest can't speak for. A twin that
+ * covers this path is already in `direct`, so re-listing it says nothing; a twin
+ * that covers other paths is genuinely unrelated to this change and naming it is
+ * noise. `twin` is not 1:1 and a broad row makes that concrete: D2 covers six
+ * commands and twins both R3 (audit) and R4 (the views), so pulling in every twin
+ * reported R3 — the audit exit-code row — for a change to a `tree` flag.
+ *
+ * What's left is the case worth surfacing: a twin with NO `covers` at all. The
+ * extension and docs rows are like this, because the extension is private and
+ * prose has no manifest path, so the twin link is the only signal that anything
+ * over there is affected.
+ *
+ * Deprecated rows are reported but marked. `checkScenarios` treats
+ * deprecated-only coverage as a coverage GAP, so letting `plan` present a retired
+ * row as coverage would have the two halves of the same tool disagree — and would
+ * tell an author a change is covered by something nobody runs.
+ */
+function coveringScenarios(path, scenarios) {
+  // SYMMETRIC on purpose, and deliberately different from the predicate the
+  // coverage gate uses. Two different questions:
+  //
+  //   "does this row COVER that capability?"  — gate, `paths.mjs`. Ancestor only.
+  //       Exercising `snapshot --md` is not covering `snapshot`, so a row listing
+  //       just the flag must not satisfy the gate for the whole command.
+  //
+  //   "is this row AFFECTED by that change?"  — here. Either direction.
+  //       If `mcp.tools.type_text` is removed, a row covering only
+  //       `mcp.tools.type_text.params.text` is very much affected — its subject
+  //       just disappeared — but an ancestor-only match would report `R??` and
+  //       the DEPRECATE obligation would look uncovered.
+  //
+  // Latent today, because no row uses a leaf-level entry. But `scenarios/README.md`
+  // explicitly invites them ("R5 covers `snapshot`'s `--md` specifically"), so the
+  // first row that takes that advice would go silently invisible to a
+  // capability-level removal — the exact false confidence this all exists to stop.
+  const affects = (entry) =>
+    entry === path ||
+    path.startsWith(`${entry}.`) ||
+    entry.startsWith(`${path}.`);
+
+  const covered = (s) => (s.covers ?? []).some(affects);
+
+  const direct = scenarios.filter(covered);
+  const ids = new Set(direct.map((s) => s.id));
+  const byId = new Map(scenarios.map((s) => [s.id, s]));
+
+  const twins = new Set();
+  for (const s of direct) {
+    for (const t of s.twin ?? []) {
+      if (ids.has(t)) continue;
+      const other = byId.get(t);
+      // Unknown ids are `checkScenarios`' problem, not this report's.
+      if (other && (other.covers ?? []).length === 0) twins.add(t);
+    }
+  }
+
+  const deprecated = direct
+    .filter((s) => s.status !== "Active")
+    .map((s) => s.id)
+    .sort(byIdOrder);
+
+  return {
+    ids: [...ids].sort(byIdOrder),
+    twins: [...twins].sort(byIdOrder),
+    deprecated,
+    active: direct.length - deprecated.length,
+  };
+}
+
+/**
+ * R2 before R10 (a plain string sort puts R10 first), and R before D.
+ *
+ * R-first is the order the work happens in: the pre-publish row is what gates
+ * the release, and the dogfood row can only run once the thing is published. A
+ * list that led with D would name the one you can't act on yet.
+ */
+function byIdOrder(a, b) {
+  const suite = (id) => (id[0] === "R" ? 0 : 1);
+  return suite(a) - suite(b) || Number(a.slice(1)) - Number(b.slice(1));
+}
+
+/**
  * What §4b says to do to the Regression / Dogfood suites.
  *
- * Deliberately does NOT name existing scenario IDs. The scenarios live in
- * Notion today, so nothing in the repo can say which of them assert the
- * behaviour that moved — claiming otherwise would be worse than saying nothing,
- * because a confident wrong ID is one nobody re-checks. Naming them is what
- * putting the scenarios in the repo buys.
+ * This used to deliberately NOT name scenario IDs: the suites lived in Notion,
+ * so nothing in the repo could say which rows asserted the behaviour that moved,
+ * and a confident wrong ID is worse than none because it's one nobody re-checks.
+ * Naming them is exactly what moving the suites into `scenarios/` bought.
+ *
+ * `scenarios` stays optional so `plan` still works on a branch cut before the
+ * migration, or in a checkout where `scenarios/` is absent — it degrades to the
+ * old "check them by hand" wording rather than reporting that nothing is
+ * covered, which would read as a coverage gap that isn't there.
+ *
+ * @param {import("./diff.mjs").Change[]} changes
+ * @param {object[]} [scenarios] from `scenarios/load.mjs`
  */
-export function scenarioObligations(changes) {
+export function scenarioObligations(changes, scenarios) {
   const obligations = [];
+  const resolvable = Array.isArray(scenarios) && scenarios.length > 0;
 
   for (const change of changes) {
     const isCapability =
       /^cli\.commands\.[^.]+$/.test(change.path) ||
       /^mcp\.tools\.[^.]+$/.test(change.path);
 
+    const found = resolvable
+      ? coveringScenarios(change.path, scenarios)
+      : { ids: [], twins: [], deprecated: [], active: 0 };
+
+    let action;
+    let note;
+
     if (change.kind === "added" && isCapability) {
-      obligations.push({
-        action: "ADD",
-        subject: change.what,
-        note: "a capability a user can invoke, with no scenario covering it yet",
-      });
+      action = "ADD";
+      // A brand-new capability that something already covers means a scenario
+      // was written ahead of the code — worth saying, because the obligation is
+      // then to check that row rather than to write one. Keyed on ACTIVE rows:
+      // a retired row claiming the capability is not coverage, it is the gap
+      // `checkScenarios` is about to fail on.
+      note = found.active
+        ? "a new capability — and these rows already claim to cover it, so confirm they actually assert the shipped behaviour"
+        : found.deprecated.length
+          ? "a capability a user can invoke, covered only by Deprecated rows — write a live one"
+          : "a capability a user can invoke, with no scenario covering it yet";
     } else if (change.kind === "removed" && isCapability) {
-      obligations.push({
-        action: "DEPRECATE",
-        subject: change.what,
-        note: "keep the row — Status: Deprecated, Valid until the last version that had it. Deleting it takes the reason it existed with it",
-      });
+      action = "DEPRECATE";
+      note =
+        "keep the row — Status: Deprecated, Valid until the last version that had it. Deleting it takes the reason it existed with it";
     } else if (change.kind === "removed") {
-      obligations.push({
-        action: "UPDATE",
-        subject: change.what,
-        note: "a scenario step that uses this now describes something that is gone — version-range the step, don't deprecate the scenario",
-      });
+      action = "UPDATE";
+      note =
+        "a scenario step that uses this now describes something that is gone — version-range the step, don't deprecate the scenario";
     } else if (change.kind === "added") {
-      obligations.push({
-        action: "UPDATE",
-        subject: change.what,
-        note: "worth a step if a scenario already covers the surface it belongs to",
-      });
+      action = "UPDATE";
+      note =
+        "worth a step if a scenario already covers the surface it belongs to";
     } else {
-      obligations.push({
-        action: "UPDATE",
-        subject: change.what,
-        note: "any scenario asserting the old behaviour needs its Steps/Expected adjusted, and the transition noted so a run against the previous release still makes sense",
-      });
+      action = "UPDATE";
+      note =
+        "any scenario asserting the old behaviour needs its Steps/Expected adjusted, and the transition noted so a run against the previous release still makes sense";
     }
+
+    obligations.push({
+      action,
+      subject: change.what,
+      note,
+      ids: found.ids,
+      twins: found.twins,
+      deprecated: found.deprecated,
+      resolvable,
+    });
   }
   return obligations;
 }

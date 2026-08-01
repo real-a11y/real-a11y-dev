@@ -13,7 +13,12 @@ const MARK = { added: "+", changed: "~", removed: "−" };
  * @returns the whole report as data, so the two renderers can't disagree about
  * what it says.
  */
-export function buildReport(changes, touchedFiles, versionStatus) {
+export function buildReport(
+  changes,
+  touchedFiles,
+  versionStatus,
+  knownScenarios,
+) {
   const touched = new Set(touchedFiles);
   const docs = [...requiredDocs(changes)]
     .map(([path, { reasons, why }]) => ({
@@ -33,20 +38,39 @@ export function buildReport(changes, touchedFiles, versionStatus) {
   // last version that had it. Keying off the action stamped removed flags with
   // `Valid from`, which is precisely the transposition this stamp exists to
   // prevent.
-  const scenarios = scenarioObligations(changes).map((o, i) => ({
-    ...o,
-    stamp: versionStamp(
-      changes[i].path,
-      versionStatus,
-      changes[i].kind === "removed",
-    ),
-  }));
+  const scenarios = scenarioObligations(changes, knownScenarios).map(
+    (o, i) => ({
+      ...o,
+      stamp: versionStamp(
+        changes[i].path,
+        versionStatus,
+        changes[i].kind === "removed",
+      ),
+    }),
+  );
+
+  // A scenario file the branch already edited needs no nagging about. Same rule
+  // the docs half uses: report what is still outstanding, not what is done.
+  const scenarioFiles = new Map(
+    (knownScenarios ?? []).map((s) => [s.id, s.file]),
+  );
+  const untouched = (ids) =>
+    ids.filter((id) => {
+      const file = scenarioFiles.get(id);
+      return !file || !touched.has(file);
+    });
 
   return {
     changes,
     docs,
-    scenarios,
+    scenarios: scenarios.map((s) => ({
+      ...s,
+      idsUntouched: untouched(s.ids),
+      twinsUntouched: untouched(s.twins),
+    })),
     missingDocs: docs.filter((d) => !d.touched),
+    scenariosResolvable:
+      Array.isArray(knownScenarios) && knownScenarios.length > 0,
   };
 }
 
@@ -88,13 +112,63 @@ export function renderText(report) {
     out.push(`  ${s.action.padEnd(10)} ${s.subject}`);
     out.push(`      ${s.note}`);
     if (s.stamp) out.push(`      ${s.stamp.text}`);
+    if (s.ids.length) {
+      const label = (id) =>
+        s.deprecated?.includes(id) ? `${id} (Deprecated)` : id;
+      out.push(`      covered by: ${s.ids.map(label).join(", ")}`);
+      // A retired row is not coverage. `checkScenarios` already treats
+      // deprecated-only as a gap, so saying so here keeps the two halves of the
+      // same tool from disagreeing about the same fact.
+      if (s.deprecated?.length && s.deprecated.length === s.ids.length) {
+        out.push(
+          `      ⚠ every row naming this is Deprecated — that is a coverage gap,`,
+          `        not coverage. pnpm surface:scenarios will fail on it.`,
+        );
+      }
+      // Always say which side of done this is on. Suppressing the line when
+      // EVERY covering row was outstanding made "nothing updated yet" and
+      // "all of them updated" render identically — the same collapse of two
+      // opposite facts that the docs half above is commented to avoid, and the
+      // "nothing updated yet" case is the one that actually needs the nudge.
+      if (s.idsUntouched.length) {
+        out.push(`      not yet touched: ${s.idsUntouched.join(", ")}`);
+      } else {
+        out.push(`      — every covering scenario was touched on this branch.`);
+      }
+    }
+    if (s.twins.length) {
+      // Same "always say which side of done" rule as the ids above. Printing the
+      // twin unconditionally kept nagging about a companion row the branch had
+      // already edited — and `twinsUntouched` was computed for exactly this and
+      // then never read, which is how the inconsistency survived.
+      const done = s.twinsUntouched.length === 0;
+      out.push(
+        `      twin${s.twins.length > 1 ? "s" : ""}: ${s.twins.join(", ")} ` +
+          `— the other altitude asserts the same subject`,
+      );
+      out.push(
+        done
+          ? `        ✓ already touched on this branch`
+          : `        still to check: ${s.twinsUntouched.join(", ")}`,
+      );
+    }
   }
-  out.push(
-    "",
-    "  Scenario IDs aren't resolved: the suites live in Notion, so nothing here",
-    "  can say which existing rows assert what moved. Check them by hand and",
-    "  record the IDs in the PR body.",
-  );
+  if (!report.scenariosResolvable) {
+    out.push(
+      "",
+      "  Scenario IDs aren't resolved: no scenarios/ directory was found, so",
+      "  nothing here can say which existing rows assert what moved. Check them",
+      "  by hand and record the IDs in the PR body.",
+    );
+  } else if (report.scenarios.every((s) => !s.ids.length)) {
+    out.push(
+      "",
+      "  Nothing in scenarios/ covers any of these paths. For a new capability",
+      "  that is expected — write the row. For a change to something that ships,",
+      "  it means the surface had no scenario to begin with, which is its own",
+      "  finding: pnpm surface:scenarios reports the coverage gaps.",
+    );
+  }
 
   out.push("", "For the PR body", "", indent(prBodyBlock(report), "  "));
   return out.join("\n") + "\n";
@@ -133,26 +207,37 @@ export function prBodyBlock(report) {
       `- **${label}:** ${
         items.length
           ? items
-              .map(
-                // `R??` rather than an HTML comment: the placeholder has to
-                // survive being quoted inside the instruction below, and a
-                // comment nested in a comment ends the outer one at the first
-                // `-->`, spilling the rest onto the rendered page.
+              .map((s) => {
+                // Real IDs when they resolve. `R??` only survives as a
+                // placeholder for the case nothing covers the path — a new
+                // capability, where there genuinely is no row yet and the author
+                // has to supply the id of the one they write.
+                //
+                // It stays a literal `R??` rather than an HTML comment because
+                // the placeholder has to survive being quoted inside the
+                // instruction below, and a comment nested in a comment ends the
+                // outer one at the first `-->`, spilling the rest onto the page.
+                const who = s.ids.length ? s.ids.join(", ") : "R??";
                 // Only a real stamp. A note explains why there is no version;
                 // pasting it into the row as though it were one is noise, and
                 // the report body already says it.
-                (s) =>
-                  `R?? ${s.subject}${s.stamp?.kind === "stamp" ? ` — ${s.stamp.text}` : ""}`,
-              )
+                const stamp =
+                  s.stamp?.kind === "stamp" ? ` — ${s.stamp.text}` : "";
+                return `${who} ${s.subject}${stamp}`;
+              })
               .join(" · ")
           : "—"
       }`,
     );
   }
-  lines.push(
-    "",
-    "<!-- Replace each R?? with the scenario's ID: R12, D4, … -->",
-  );
+  // Only ask for a substitution when one is actually pending. An instruction to
+  // replace a placeholder that isn't there sends the reader looking for it.
+  if (report.scenarios.some((s) => !s.ids.length)) {
+    lines.push(
+      "",
+      "<!-- Replace each R?? with the scenario's ID: R12, D4, … -->",
+    );
+  }
   return lines.join("\n");
 }
 
@@ -245,13 +330,45 @@ export function renderMarkdown(report, base) {
 
   out.push("<details><summary><b>Scenarios (§4b)</b></summary>", "");
   for (const s of report.scenarios) {
+    let line = `- **${s.action}** — ${s.subject}${stampMarkdown(s.stamp)}  \n  ${s.note}`;
+    if (s.ids.length) {
+      // Same rule as the text renderer: never let "none updated" and "all
+      // updated" produce the same line, and never present a retired row as
+      // coverage.
+      const outstanding = s.idsUntouched.length
+        ? ` — ⚠️ still untouched: ${s.idsUntouched.map((i) => `\`${i}\``).join(", ")}`
+        : " — ✅ all touched on this branch";
+      const label = (i) =>
+        s.deprecated?.includes(i) ? `\`${i}\` _(Deprecated)_` : `\`${i}\``;
+      line += `  \n  Covered by ${s.ids.map(label).join(", ")}${outstanding}`;
+      if (s.deprecated?.length && s.deprecated.length === s.ids.length) {
+        line += `  \n  ⚠️ **Every row naming this is Deprecated** — a coverage gap, not coverage. \`pnpm surface:scenarios\` will fail on it.`;
+      }
+    }
+    if (s.twins.length) {
+      // Same rule as the ids above — a twin the branch already edited is done,
+      // and saying so is the difference between a list people read and one they
+      // learn to skip.
+      const state = s.twinsUntouched.length
+        ? ` ⚠️ still to check: ${s.twinsUntouched.map((i) => `\`${i}\``).join(", ")}`
+        : " ✅ already touched on this branch";
+      const many = s.twins.length > 1;
+      line += `  \n  Twin${many ? "s" : ""} ${s.twins.map((i) => `\`${i}\``).join(", ")} assert${many ? "" : "s"} the same subject at the other altitude —${state}`;
+    }
+    out.push(line);
+  }
+  if (!report.scenariosResolvable) {
     out.push(
-      `- **${s.action}** — ${s.subject}${stampMarkdown(s.stamp)}  \n  ${s.note}`,
+      "",
+      "_IDs aren't resolved — no `scenarios/` directory was found, so nothing in the repo can say which existing rows assert what moved._",
+    );
+  } else if (report.scenarios.every((s) => !s.ids.length)) {
+    out.push(
+      "",
+      "_Nothing in `scenarios/` covers any of these paths. Expected for a new capability; for a change to something that already ships it means the surface had no scenario to begin with — `pnpm surface:scenarios` reports the gaps._",
     );
   }
   out.push(
-    "",
-    "_IDs aren't resolved — the suites live in Notion, so nothing in the repo can say which existing rows assert what moved._",
     "",
     "</details>",
     "",

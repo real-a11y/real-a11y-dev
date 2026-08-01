@@ -110,11 +110,17 @@ prettier-ignored — don't format them.
 
 ## 4b. Test scenarios — the same obligation as docs
 
-The pre-publish **Regression suite** and post-publish **Dogfood suite** in Notion
-are how a release gets checked by a human. They rot exactly like docs do — nothing
-fails when a scenario stops describing reality — and they have: one asserted "all
-9 commands" long after there were fourteen, another named a `get_native_tree` tool
-that never existed.
+The pre-publish **Regression suite** (`scenarios/regression/`, `R*`) and
+post-publish **Dogfood suite** (`scenarios/dogfood/`, `D*`) are how a release gets
+checked by a human. They rot exactly like docs do — nothing fails when a scenario
+stops describing reality — and they did, for as long as they lived only in Notion:
+one asserted "all 9 commands" long after there were fourteen, another named a
+`get_native_tree` tool that never existed.
+
+They're in the repo now, so that class of rot is a build failure: `pnpm surface:check`
+rejects a `covers:` path that isn't in the manifest, and fails when a shipped command
+or tool has no Active row at all. Notion keeps `Result` and `Notes` as the per-run
+surface; nothing syncs those back. See `scenarios/README.md` for the format.
 
 So if this PR moved the public surface, say what happens to the scenarios. One of
 three, and "none" is a valid answer that still has to be stated:
@@ -130,16 +136,30 @@ Distinguish **evolves** from **dies**: a scenario that loses one step to a remov
 flag stays `Active` with that step version-ranged inline; a scenario whose whole
 subject is gone becomes `Deprecated`.
 
-Each scenario page carries **Steps**, **Expected**, and **Why this exists**. Write
+Each scenario carries **Steps**, **Expected**, and **Why this exists** (the check
+requires all three), plus an optional **Notes** for durable design history. Write
 the third one — it is the failure being guarded, and it is what lets a runner spot
 a near-miss instead of ticking a box. Ground it in a real defect where there was
 one.
 
+A new scenario also needs `covers:` — the manifest paths it genuinely exercises, in
+the same vocabulary `surface:plan` reports. That list is what makes the next PR's
+plan able to name it. `covers` means "exercises the behaviour of", not "touches":
+listing everything a row happens to invoke satisfies the coverage gate for
+capabilities nothing really drives.
+
 Record the IDs in the PR body (`R23` new, `R8` updated, …) so the release run can
-be traced back to the change that caused it. `pnpm surface:plan` prints this
-block ready to paste, with the version stamps already filled in — it leaves the
-IDs as `R??` because the suites live in Notion, so nothing in the repo can say
-which existing rows assert what moved. That is the one part you still look up.
+be traced back to the change that caused it. `pnpm surface:plan` prints this block
+ready to paste — with the version stamps filled in **and the IDs resolved**, matched
+from each scenario's `covers:` list against the manifest paths that moved. It also
+names the `twin` on the other side, since a change that invalidates one altitude
+usually invalidates the other and the forgotten one is always in the suite you
+aren't currently running.
+
+An `R??` left in the output means nothing covers that path. For a new capability
+that's expected — write the row and fill in its id. For a change to something that
+already ships, it means the surface had no scenario to begin with, which is its own
+finding: `pnpm surface:scenarios --coverage` prints the matrix.
 
 ## 5. Changeset — only if a published package's `src` changed
 

@@ -26,6 +26,7 @@
     "surface:check": "node scripts/surface/index.mjs check",
     "surface:check-built": "node scripts/surface/index.mjs check-built",
     "surface:plan": "node scripts/surface/index.mjs plan",
+    "surface:scenarios": "node scripts/surface/index.mjs scenarios",
     "examples:dev-smoke": "node scripts/check-examples-dev.mjs"
   },
   "devDependencies": {
