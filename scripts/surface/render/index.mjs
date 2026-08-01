@@ -124,6 +124,33 @@ function runBuilders(builders, regions, relPath, carry) {
     results.set(id, result);
   }
 
+  // The symmetric case: markers in the file that NO builder claims.
+  //
+  // Guarding only one direction left the worse one open. `cliRegions` derives
+  // its builders from the groups the manifest still has, so a group that empties
+  // out — every command in it re-grouped — loses its builder while its markers
+  // stay in the page. That region is then never rebuilt and never compared, and
+  // `check` says the docs are current.
+  //
+  // It also breaks the move rescue, because an unmanaged region reports no
+  // removedRows: the commands that left are seen as brand new by the region
+  // gaining them and rendered as TODO. Net effect is the published reference
+  // listing the same command twice — a stale row in the old table and a stub in
+  // the new one — with every check green. Silent, and wrong on the page.
+  for (const id of regions.keys()) {
+    if (builders.has(id)) continue;
+    problems.push({
+      where: relPath,
+      message:
+        `region \`${id}\` has markers but nothing generates it. Either the ` +
+        `manifest no longer has anything to put in it — a command group that ` +
+        `emptied out — or the region was renamed on one side only. An unclaimed ` +
+        `region is never rebuilt and never compared, so it would sit here going ` +
+        `stale while \`check\` reported everything as current.\n    ` +
+        `Delete the block and its markers, or restore whatever fills it.`,
+    });
+  }
+
   return { results, problems };
 }
 
