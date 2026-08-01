@@ -3,6 +3,8 @@ name: cli-session-daemon
 description: Test the real-a11y CLI session daemon lifecycle and --session reuse.
 ---
 
+> **Do not follow this skill on `main`.** The `session`, `--session`, and `--session-idle-timeout` surface it documents is part of the `feat/session-daemon-lifecycle` feature branch and is not yet merged to `main`. Use this skill only when working on that feature branch; merge this skill PR after the feature branch lands on `main`.
+
 # Testing the real-a11y CLI session daemon
 
 This skill covers end-to-end verification of the `real-a11y` session daemon lifecycle on the `feat/session-daemon-lifecycle` branch.
