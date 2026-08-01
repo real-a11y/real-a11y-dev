@@ -40,6 +40,7 @@ export class SessionRegistry<T extends SessionLike> {
   private sessions = new Map<string, SessionHolder<T>>();
   private creating = new Map<string, Promise<SessionHolder<T>>>();
   private idleTimer?: NodeJS.Timeout;
+  private busyCount = 0;
   private readonly idleMs: number;
   private readonly onIdleTimeout?: () => void | Promise<void>;
 
@@ -61,6 +62,7 @@ export class SessionRegistry<T extends SessionLike> {
     const next = (async () => {
       await holder.queue;
       holder.busy = true;
+      this.busyCount++;
       this.clearIdleTimer();
       try {
         const exitCode = await task(holder.session);
@@ -68,6 +70,7 @@ export class SessionRegistry<T extends SessionLike> {
         return exitCode;
       } finally {
         holder.busy = false;
+        this.busyCount--;
         this.resetIdleTimer();
       }
     })();
@@ -90,6 +93,7 @@ export class SessionRegistry<T extends SessionLike> {
     if (!holder) return false;
     this.sessions.delete(name);
     await holder.session.close();
+    this.resetIdleTimer();
     return true;
   }
 
@@ -112,18 +116,21 @@ export class SessionRegistry<T extends SessionLike> {
     if (inFlight) return inFlight;
 
     const create = (async () => {
-      const session = await factory();
-      const holder: SessionHolder<T> = {
-        session,
-        createdAt: Date.now(),
-        lastUsedAt: Date.now(),
-        queue: Promise.resolve(),
-        busy: false,
-      };
-      this.sessions.set(name, holder);
-      this.creating.delete(name);
-      this.resetIdleTimer();
-      return holder;
+      try {
+        const session = await factory();
+        const holder: SessionHolder<T> = {
+          session,
+          createdAt: Date.now(),
+          lastUsedAt: Date.now(),
+          queue: Promise.resolve(),
+          busy: false,
+        };
+        this.sessions.set(name, holder);
+        this.resetIdleTimer();
+        return holder;
+      } finally {
+        this.creating.delete(name);
+      }
     })();
 
     this.creating.set(name, create);
@@ -132,7 +139,8 @@ export class SessionRegistry<T extends SessionLike> {
 
   private resetIdleTimer(): void {
     this.clearIdleTimer();
-    if (this.idleMs <= 0 || this.sessions.size === 0) return;
+    if (this.idleMs <= 0 || this.sessions.size === 0 || this.busyCount > 0)
+      return;
     this.idleTimer = setTimeout(() => {
       void (this.onIdleTimeout ? this.onIdleTimeout() : this.stopAll());
     }, this.idleMs);

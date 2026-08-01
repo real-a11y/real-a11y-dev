@@ -10,7 +10,7 @@
  * will move this to a proper per-command output sink.
  */
 
-import { rm } from "node:fs/promises";
+import { chmod, rm } from "node:fs/promises";
 import { createServer, type Server, type Socket } from "node:net";
 
 import type { BrowserSession } from "@real-a11y-dev/browser";
@@ -103,6 +103,7 @@ export class DaemonServer {
   private server?: Server;
   private registry: SessionRegistry<BrowserSession>;
   private runQueue: Promise<unknown> = Promise.resolve();
+  private sockets = new Set<Socket>();
   private readonly socketPath: string;
   private readonly pidfile?: string;
   private readonly daemonVersion: string;
@@ -115,7 +116,13 @@ export class DaemonServer {
     this.onLog = options.onLog;
     this.registry = new SessionRegistry({
       idleTimeoutMs: options.idleTimeoutMs,
-      onIdleTimeout: () => this.stopAll(),
+      onIdleTimeout: () => {
+        this.log("idle timeout reached; shutting down");
+        void this.stop().then(
+          () => process.exit(0),
+          () => process.exit(1),
+        );
+      },
     });
   }
 
@@ -125,6 +132,11 @@ export class DaemonServer {
       this.server.on("error", reject);
       this.server.listen(this.socketPath, async () => {
         try {
+          // Lock the socket to the daemon owner on Unix. Named pipes on Windows
+          // are not filesystem paths and cannot be chmod'd.
+          if (!this.socketPath.startsWith("\\\\.\\pipe\\")) {
+            await chmod(this.socketPath, 0o600);
+          }
           await this.writePidfile();
           this.log(`daemon listening on ${this.socketPath}`);
           resolve();
@@ -142,6 +154,9 @@ export class DaemonServer {
       if (!this.server) {
         resolve();
         return;
+      }
+      for (const socket of this.sockets) {
+        socket.destroy();
       }
       this.server.close(async () => {
         try {
@@ -164,6 +179,8 @@ export class DaemonServer {
   }
 
   private handleConnection(socket: Socket): void {
+    this.sockets.add(socket);
+    socket.on("close", () => this.sockets.delete(socket));
     let buffer = "";
     socket.on("data", (data) => {
       buffer += data.toString("utf8");
@@ -205,10 +222,9 @@ export class DaemonServer {
       await this.handleRequest(request, send);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      const hint =
-        err instanceof Error && "hint" in err
-          ? String((err as { hint?: string }).hint)
-          : undefined;
+      const errHint =
+        err instanceof Error ? (err as { hint?: unknown }).hint : undefined;
+      const hint = typeof errHint === "string" ? errHint : undefined;
       send({
         id: request.id,
         type: "error",

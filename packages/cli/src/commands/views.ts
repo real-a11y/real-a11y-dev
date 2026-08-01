@@ -152,9 +152,10 @@ async function withOneShotCommand<T>(
   runner: (session: Awaited<ReturnType<typeof createSession>>) => Promise<T>,
 ): Promise<T> {
   const target = singleTarget(positionals, flags, command);
+  parseFormat(flags.format, ["pretty", "json"] as const);
+  outputOf(flags);
   const session = await createSession(sessionFlags(flags, [target]));
   try {
-    await ensurePageOpen(session, target, flags);
     return await runner(session);
   } finally {
     await session.close();
@@ -178,6 +179,8 @@ export const tabsCommand: CommandFn = async (positionals, flags) =>
 
 export const listCommand: CommandFn = async (positionals, flags) => {
   parseListCategory(positionals[0]);
+  parseFormat(flags.format, ["pretty", "json"] as const);
+  outputOf(flags);
   const target = singleTarget(positionals.slice(1), flags, "list");
   const session = await createSession(sessionFlags(flags, [target]));
   try {

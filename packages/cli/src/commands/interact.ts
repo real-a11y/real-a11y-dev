@@ -250,12 +250,13 @@ async function interactOnPage(
  */
 export async function runInteractStepsOnSession(
   session: BrowserSession,
+  command: string,
   steps: readonly InteractStep[],
   positionals: string[],
   flags: FlagValues,
 ): Promise<number> {
   const format = parseFormat(flags.format, ["pretty", "json"] as const);
-  const target: Target = singleTarget(positionals, flags, "interact");
+  const target: Target = singleTarget(positionals, flags, command);
   const output = outputOf(flags);
   const quiet = flags.quiet === true;
   const stepSettleMs = parseStepSettle(flags);
@@ -282,7 +283,7 @@ export async function runInteractStepsOnSession(
       // (and that `url` differs from the address the run opened).
       navigated: outcome.navigated,
     };
-    writeReport(output, renderJson("interact", [page]));
+    writeReport(output, renderJson(command, [page]));
   } else {
     const body = outcome.diff.endsWith("\n")
       ? outcome.diff
@@ -298,7 +299,13 @@ export async function runInteractOnSession(
   flags: FlagValues,
 ): Promise<number> {
   const steps = stepsFromFlags(flags);
-  return runInteractStepsOnSession(session, steps, positionals, flags);
+  return runInteractStepsOnSession(
+    session,
+    "interact",
+    steps,
+    positionals,
+    flags,
+  );
 }
 
 export const interactCommand: CommandFn = async (positionals, flags) => {
@@ -362,7 +369,13 @@ export async function runClickOnSession(
   flags: FlagValues,
 ): Promise<number> {
   const step = sugarStep("click", flags);
-  return runInteractStepsOnSession(session, [step], positionals, flags);
+  return runInteractStepsOnSession(
+    session,
+    "click",
+    [step],
+    positionals,
+    flags,
+  );
 }
 
 export async function runTypeOnSession(
@@ -371,7 +384,7 @@ export async function runTypeOnSession(
   flags: FlagValues,
 ): Promise<number> {
   const step = sugarStep("type", flags);
-  return runInteractStepsOnSession(session, [step], positionals, flags);
+  return runInteractStepsOnSession(session, "type", [step], positionals, flags);
 }
 
 export async function runFocusOnSession(
@@ -380,7 +393,13 @@ export async function runFocusOnSession(
   flags: FlagValues,
 ): Promise<number> {
   const step = sugarStep("focus", flags);
-  return runInteractStepsOnSession(session, [step], positionals, flags);
+  return runInteractStepsOnSession(
+    session,
+    "focus",
+    [step],
+    positionals,
+    flags,
+  );
 }
 
 function sugar(
