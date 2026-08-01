@@ -24,6 +24,7 @@
     "packaging:check": "node scripts/check-packaging.mjs",
     "surface:extract": "node scripts/surface/index.mjs extract",
     "surface:check": "node scripts/surface/index.mjs check",
+    "surface:apply": "node scripts/surface/index.mjs apply",
     "surface:check-built": "node scripts/surface/index.mjs check-built",
     "surface:plan": "node scripts/surface/index.mjs plan",
     "surface:scenarios": "node scripts/surface/index.mjs scenarios",
