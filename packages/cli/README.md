@@ -21,9 +21,12 @@ document
     link "More information..."
 ```
 
-That is the whole tree, not a tidied version of it: the root is `document` because
-the page has no landmark to root at, and the paragraphs are there because a screen
-reader reads them. A page with a `<main>` roots at `main` instead.
+That is the whole tree, not a tidied version of it. The paragraphs are there
+because a screen reader reads them, and the root is `document` because there is no
+single element to root at — plain wrappers are dropped, and what is left is a
+heading and two paragraphs side by side. A page whose content all sits inside one
+landmark roots at that instead (`main`); the ordinary `<header>` / `<main>` /
+`<footer>` page has three top-level regions, so it roots at `document` too.
 
 > `@beta`: the package publishes on the `beta` dist-tag while the Real A11y
 > family is in pre-release — unpinned `npx @real-a11y-dev/cli` won't resolve
