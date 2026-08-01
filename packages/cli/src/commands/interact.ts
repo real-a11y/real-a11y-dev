@@ -18,6 +18,7 @@
  * Chromium only — the action backend is CDP.
  */
 
+import type { BrowserSession } from "@real-a11y-dev/browser";
 import {
   captureNativeCheckpoint,
   diffNativeCheckpoint,
@@ -27,7 +28,6 @@ import { redactUrl } from "@real-a11y-dev/snapshot";
 
 import {
   parseFormat,
-  parseOpenOptions,
   parseStepSettle,
   type CommandFn,
   type FlagValues,
@@ -41,10 +41,10 @@ import {
 } from "../interact-step.js";
 import { progress, writeReport } from "../output.js";
 import { renderJson, type PageReport } from "../render/json.js";
-import { createSession, openPage } from "../session.js";
+import { createSession } from "../session.js";
 
 import {
-  isAuthenticated,
+  ensurePageOpen,
   outputOf,
   sessionFlags,
   singleTarget,
@@ -234,42 +234,31 @@ async function interactOnPage(
   };
 }
 
-/** Shared body for `interact` and the one-step sugar verbs. */
-async function runInteract(
-  command: string,
+/**
+ * Core body for `interact` and the one-step sugar verbs, run against a session
+ * the caller already owns.  The caller opens and closes the session — this is
+ * what both the one-shot CLI commands and the session daemon use.
+ */
+export async function runInteractStepsOnSession(
+  session: BrowserSession,
   steps: readonly InteractStep[],
   positionals: string[],
   flags: FlagValues,
 ): Promise<number> {
   const format = parseFormat(flags.format, ["pretty", "json"] as const);
-  const target: Target = singleTarget(positionals, flags, command);
+  const target: Target = singleTarget(positionals, flags, "interact");
   const output = outputOf(flags);
   const quiet = flags.quiet === true;
-  const openOptions = parseOpenOptions(flags);
   const stepSettleMs = parseStepSettle(flags);
 
-  const session = await createSession(sessionFlags(flags, [target]));
-  let outcome: InteractOutcome;
-  let finalUrl: string;
-  try {
-    progress(`opening ${target.name} …`, { quiet });
-    const opened = await openPage(
-      session,
-      target.url,
-      openOptions,
-      target.fileApproved,
-      isAuthenticated(flags),
-    );
-    finalUrl = redactUrl(opened.url);
-    outcome = await interactOnPage(session, steps, stepSettleMs, quiet);
-    // Re-read AFTER the steps: a click can navigate, and `url` is contracted
-    // as the final address. Reading it before acting reports where the run
-    // started, which is wrong in exactly the case the report flags as a
-    // navigation. Falls back to the opened URL if the page is already gone.
-    finalUrl = redactUrl(session.currentUrl() ?? opened.url);
-  } finally {
-    await session.close();
-  }
+  progress(`opening ${target.name} …`, { quiet });
+  const opened = await ensurePageOpen(session, target, flags);
+  const outcome = await interactOnPage(session, steps, stepSettleMs, quiet);
+  // Re-read AFTER the steps: a click can navigate, and `url` is contracted
+  // as the final address. Reading it before acting reports where the run
+  // started, which is wrong in exactly the case the report flags as a
+  // navigation. Falls back to the opened URL if the page is already gone.
+  const finalUrl = redactUrl(session.currentUrl() ?? opened.url);
 
   if (format === "json") {
     const page: PageReport = {
@@ -284,7 +273,7 @@ async function runInteract(
       // (and that `url` differs from the address the run opened).
       navigated: outcome.navigated,
     };
-    writeReport(output, renderJson(command, [page]));
+    writeReport(output, renderJson("interact", [page]));
   } else {
     const body = outcome.diff.endsWith("\n")
       ? outcome.diff
@@ -294,8 +283,24 @@ async function runInteract(
   return EXIT.OK;
 }
 
-export const interactCommand: CommandFn = async (positionals, flags) =>
-  runInteract("interact", stepsFromFlags(flags), positionals, flags);
+export async function runInteractOnSession(
+  session: BrowserSession,
+  positionals: string[],
+  flags: FlagValues,
+): Promise<number> {
+  const steps = stepsFromFlags(flags);
+  return runInteractStepsOnSession(session, steps, positionals, flags);
+}
+
+export const interactCommand: CommandFn = async (positionals, flags) => {
+  const target = singleTarget(positionals, flags, "interact");
+  const session = await createSession(sessionFlags(flags, [target]));
+  try {
+    return await runInteractOnSession(session, positionals, flags);
+  } finally {
+    await session.close();
+  }
+};
 
 /**
  * Build the single step behind a sugar verb. `--name` is optional in the same
@@ -342,11 +347,52 @@ export function sugarStep(verb: StepVerb, flags: FlagValues): InteractStep {
   };
 }
 
-function sugar(verb: StepVerb): CommandFn {
-  return async (positionals, flags) =>
-    runInteract(verb, [sugarStep(verb, flags)], positionals, flags);
+export async function runClickOnSession(
+  session: BrowserSession,
+  positionals: string[],
+  flags: FlagValues,
+): Promise<number> {
+  const step = sugarStep("click", flags);
+  return runInteractStepsOnSession(session, [step], positionals, flags);
 }
 
-export const clickCommand = sugar("click");
-export const typeCommand = sugar("type");
-export const focusCommand = sugar("focus");
+export async function runTypeOnSession(
+  session: BrowserSession,
+  positionals: string[],
+  flags: FlagValues,
+): Promise<number> {
+  const step = sugarStep("type", flags);
+  return runInteractStepsOnSession(session, [step], positionals, flags);
+}
+
+export async function runFocusOnSession(
+  session: BrowserSession,
+  positionals: string[],
+  flags: FlagValues,
+): Promise<number> {
+  const step = sugarStep("focus", flags);
+  return runInteractStepsOnSession(session, [step], positionals, flags);
+}
+
+function sugar(
+  verb: StepVerb,
+  runner: (
+    session: BrowserSession,
+    positionals: string[],
+    flags: FlagValues,
+  ) => Promise<number>,
+): CommandFn {
+  return async (positionals, flags) => {
+    const target = singleTarget(positionals, flags, verb);
+    const session = await createSession(sessionFlags(flags, [target]));
+    try {
+      return await runner(session, positionals, flags);
+    } finally {
+      await session.close();
+    }
+  };
+}
+
+export const clickCommand = sugar("click", runClickOnSession);
+export const typeCommand = sugar("type", runTypeOnSession);
+export const focusCommand = sugar("focus", runFocusOnSession);
