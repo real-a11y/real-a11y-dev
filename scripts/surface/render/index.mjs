@@ -52,7 +52,14 @@ export async function renderAll(repoRoot, manifest) {
     const first = runBuilders(builders, regions, relPath);
     problems.push(...first.problems);
 
+    // Scoped to THIS file. A move is a row leaving one region of a document and
+    // arriving in another region of the same document; two files that happen to
+    // share a row key have nothing to do with each other. Tracking it globally
+    // is inert while `plan()` returns one file, and stops being inert the moment
+    // `mcp-tool-index` lands in tools.md — a key moving here would then suppress
+    // a legitimate "added" over there.
     const rescued = new Map();
+    const movedHere = [];
     for (const [id, result] of first.results) {
       for (const [key, raw] of result.removedRows) {
         const landsIn = [...first.results].find(
@@ -60,17 +67,18 @@ export async function renderAll(repoRoot, manifest) {
         );
         if (landsIn) {
           rescued.set(key, raw);
-          moved.push({ key, from: id, to: landsIn[0] });
+          movedHere.push({ file: relPath, key, from: id, to: landsIn[0] });
         }
       }
     }
+    moved.push(...movedHere);
 
     const final = rescued.size
       ? runBuilders(builders, regions, relPath, rescued)
       : first;
 
     const bodies = {};
-    const isMove = (key) => moved.some((m) => m.key === key);
+    const isMove = (key) => movedHere.some((m) => m.key === key);
     for (const [id, result] of final.results) {
       bodies[id] = result.body;
       added.push(
@@ -155,11 +163,17 @@ export async function checkDrift(repoRoot, manifest) {
     });
   }
 
-  // A stub the generator inserted is not a fix — it is a marker that a human
-  // still owes prose. Failing here is the entire point of writing TODO rather
-  // than inventing a sentence.
+  // A stub is a marker that a human still owes prose, so failing on it is the
+  // point of writing TODO rather than inventing a sentence.
+  //
+  // Scanned against what is ON DISK, not against what we just rendered. The
+  // rendered text contains a fresh stub for every new row, so reading it made
+  // the first `check` after adding a command emit two failures: a true one
+  // ("out of date") and a false one ("this page contains a TODO") about a
+  // placeholder no file contained yet. A wrong message beside a right one is
+  // worse than no message — it sends someone hunting through the page for it.
   for (const file of result.files) {
-    const { regions } = readRegions(file.text, file.path);
+    const { regions } = readRegions(file.current, file.path);
     for (const [id, region] of regions) {
       if (!region.body.includes("TODO")) continue;
       problems.push({
