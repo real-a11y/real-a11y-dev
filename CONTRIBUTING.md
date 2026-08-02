@@ -109,17 +109,33 @@ You should not need to run it by hand — `version-packages` does, as the last
 step of:
 
 ```
-changeset version → build → surface:extract → surface:apply → surface:snapshot
+build → changeset version → surface:extract → surface:apply → surface:snapshot
 ```
 
-**That order is load-bearing.** `changeset version` rewrites every
-`packages/*/package.json` version, and the manifest records those versions — so
-the moment it runs, `docs/surface.json` is stale. Snapshotting before
-re-extracting would freeze the *previous* release's version numbers, and the
-docs would then name an older release than the one npm actually has.
-`surface:apply` sits between them because re-extracting rewrites the manifest
-the managed regions derive from, and a release should never leave those two
-disagreeing.
+**That order is load-bearing, in two different ways.**
+
+`changeset version` rewrites every `packages/*/package.json` version, and the
+manifest records those versions — so the moment it runs, `docs/surface.json` is
+stale. Snapshotting before re-extracting would freeze the *previous* release's
+version numbers, and the docs would then name an older release than the one npm
+actually has. `surface:apply` sits between them because re-extracting rewrites
+the manifest the managed regions derive from, and a release should never leave
+those two disagreeing.
+
+The **build comes first** for a different reason: `changeset version` is not
+idempotent. It is also the only irreversible step — everything after it is
+deterministic and fast, while the build is the slow part and the one that
+actually flakes. Running it first means a failure happens while nothing has
+been mutated yet, so the fix is simply to run the command again.
+
+> **If the chain does fail after the version bump**, do not re-run
+> `version-packages` — `changeset version` would bump a second time and you'd
+> ship `beta.13` where you meant `beta.12`, with nothing to warn you. Reset and
+> start over:
+>
+> ```bash
+> git checkout -- packages/ .changeset/ docs/ website/ pnpm-lock.yaml
+> ```
 
 The snapshot itself copies the committed manifest rather than re-extracting, so
 it is byte-identical to the one the release PR reviewed.

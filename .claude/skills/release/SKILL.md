@@ -77,11 +77,21 @@ pnpm version-packages
 # npx changeset pre exit && pnpm version-packages
 ```
 
-**Use `pnpm version-packages`, not `npx changeset version`.** The script runs
-`changeset version`, then rebuilds, re-extracts the surface manifest, rebuilds
-the managed doc regions, freezes `docs/surface.released.json`, and refreshes the
-lockfile — in that order, which is load-bearing (see CONTRIBUTING → _The
-released surface_). It takes a few minutes because of the build.
+**Use `pnpm version-packages`, not `npx changeset version`.** The script builds,
+runs `changeset version`, re-extracts the surface manifest, rebuilds the managed
+doc regions, freezes `docs/surface.released.json`, and refreshes the lockfile —
+in that order, which is load-bearing (see CONTRIBUTING → _The released surface_).
+It takes a few minutes because of the build.
+
+> **If it fails partway, do not just re-run it.** `changeset version` is not
+> idempotent: a second run bumps again, and you would ship `beta.13` where you
+> meant `beta.12` with nothing to warn you. The build runs first precisely so
+> the flakiest step cannot leave you in that state — but if the failure lands
+> after the bump, reset and start the step over:
+>
+> ```bash
+> git checkout -- packages/ .changeset/ docs/ website/ pnpm-lock.yaml
+> ```
 
 Calling `changeset version` directly still produces a correct-_looking_ release
 — it tags and publishes fine. What you get is a stale manifest (the version
