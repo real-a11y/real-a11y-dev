@@ -27,7 +27,11 @@ page — a stale service worker is the usual cause of "it didn't change".)
 2. Switch views: tree / outline / tab order / findings
 3. Search, and type-ahead within the tree
 4. Select a node — is the corresponding element highlighted on the page?
-5. The element picker: pick from the page, land on the right node
+5. The element picker: pick from the page, land on the right node. Pick a node on a
+   **widget that reacts before `click`** — a dropdown trigger (Radix/Headless UI open
+   on `pointerdown`), a button with a Material-style ripple, a focusable input — and
+   confirm the page does not react at all: no menu opens, no ripple, focus does not
+   move to what you picked
 6. **Keyboard only**, no mouse: reach the panel, move through the tree with arrows,
    expand/collapse, activate
 7. Repeat 6 with a screen reader running (VoiceOver / NVDA)
@@ -38,6 +42,9 @@ page — a stale service worker is the usual cause of "it didn't change".)
 - Panel connects and renders without a manual reload
 - Every view populates and stays in sync with the page
 - Selection highlights the right element; the picker resolves to the right node
+- **Picking never activates what you picked.** Before `core 0.1.0-beta.12` the picker
+  cancelled only the `click`, so on a run against an earlier release the menu opening
+  or focus moving on step 5 is the known defect, not a new one
 - **Arrowing announces the active row** to the screen reader. This is the one that
   actually matters
 - Expand/collapse state survives live tree updates — a re-render that collapses
