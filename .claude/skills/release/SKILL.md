@@ -72,11 +72,17 @@ what's merged.
 ```bash
 npx changeset status            # read-only preview of what will bump
 # next beta:
-npx changeset version
+pnpm version-packages
 # OR graduate to stable:
-# npx changeset pre exit && npx changeset version
-pnpm install --lockfile-only    # (usually a no-op with workspace:* — commit if it changes)
+# npx changeset pre exit && pnpm version-packages
 ```
+
+**Use `pnpm version-packages`, not `npx changeset version`.** The script is
+`changeset version` plus the two things a release also has to do — write
+`docs/surface.released.json` (the record of what this release makes public) and
+refresh the lockfile. Calling `changeset version` directly still produces a
+correct-looking release: it tags, it publishes, and the only symptom is that the
+site goes on documenting `main` as though it shipped. Nothing fails.
 
 Then **inspect before trusting it**:
 
@@ -85,6 +91,9 @@ Then **inspect before trusting it**:
   that's correct; `pnpm publish -r` will skip it (it already exists on npm).
 - The generated `CHANGELOG.md` entries read well (new packages get a fresh
   `CHANGELOG.md` — remember to `git add` it).
+- `docs/surface.released.json` is in the diff. Its diff against the previous
+  release is the list of capabilities becoming installable — worth reading as a
+  release note in its own right.
 
 ### 3. Bump the extension (only if shipping it)
 
