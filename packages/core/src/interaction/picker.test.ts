@@ -14,6 +14,11 @@ interface Harness {
   modes: boolean[];
 }
 
+// Pickers install capture listeners on the shared `document`, so one left
+// enabled at the end of a test keeps intercepting events in every test after
+// it. Every harness registers here and afterEach tears them all down.
+const createdPickers: ReturnType<typeof createPicker>[] = [];
+
 function makeHarness(overrides: Partial<PickerOptions> = {}): {
   picker: ReturnType<typeof createPicker>;
   harness: Harness;
@@ -53,6 +58,7 @@ function makeHarness(overrides: Partial<PickerOptions> = {}): {
     onModeChange: (enabled) => modes.push(enabled),
     ...overrides,
   });
+  createdPickers.push(picker);
 
   return {
     picker,
@@ -79,6 +85,8 @@ describe("createPicker", () => {
   });
 
   afterEach(() => {
+    for (const picker of createdPickers) picker.teardown();
+    createdPickers.length = 0;
     document.body.innerHTML = "";
     document.body.style.cursor = "";
   });
@@ -211,6 +219,50 @@ describe("createPicker", () => {
     // The picker listens at the capture phase + stopPropagation, so the
     // page's bubble-phase listener never sees the click.
     expect(pageHandler).not.toHaveBeenCalled();
+  });
+
+  it.each(["pointerdown", "mousedown", "pointerup", "mouseup", "auxclick"])(
+    "%s is suppressed while pick mode is on so the page can't act before the click",
+    (type) => {
+      const { picker, harness } = makeHarness();
+      const pageHandler = vi.fn();
+      harness.trackedDiv.addEventListener(type, pageHandler);
+
+      picker.setEnabled(true);
+
+      // Dispatched on the element itself so the real capture chain
+      // (document → … → #tracked) runs and propagation is exercised.
+      const evt = new MouseEvent(type, { bubbles: true, cancelable: true });
+      harness.trackedDiv.dispatchEvent(evt);
+
+      // Real widgets act well before `click`: Radix/Headless-UI dropdowns
+      // open on pointerdown, focus moves on mousedown. Letting those
+      // through means picking a menu button opens the menu.
+      expect(pageHandler).not.toHaveBeenCalled();
+      expect(evt.defaultPrevented).toBe(true);
+      // Suppressing the lead-in must not resolve the pick or exit the
+      // mode — `click` is still what completes a pick.
+      expect(harness.picks).toEqual([]);
+      expect(picker.isEnabled()).toBe(true);
+    },
+  );
+
+  it("suppressed pointer events stop once pick mode is off", () => {
+    const { picker, harness } = makeHarness();
+    const pageHandler = vi.fn();
+    harness.trackedDiv.addEventListener("pointerdown", pageHandler);
+
+    picker.setEnabled(true);
+    picker.setEnabled(false);
+
+    const evt = new MouseEvent("pointerdown", {
+      bubbles: true,
+      cancelable: true,
+    });
+    harness.trackedDiv.dispatchEvent(evt);
+
+    expect(pageHandler).toHaveBeenCalledTimes(1);
+    expect(evt.defaultPrevented).toBe(false);
   });
 
   it("Escape key exits pick mode without selecting", () => {
