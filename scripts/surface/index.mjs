@@ -74,6 +74,7 @@ async function check() {
     { checkPlanSentinel },
     { checkDrift },
     { checkReleasedSnapshot },
+    { checkApiImports },
   ] = await Promise.all([
     import("./model.mjs"),
     import("./check/anchors.mjs"),
@@ -85,6 +86,7 @@ async function check() {
     import("./check/sentinel.mjs"),
     import("./render/index.mjs"),
     import("./released.mjs"),
+    import("./check/api.mjs"),
   ]);
 
   const manifest = await buildManifest(repoRoot);
@@ -172,6 +174,7 @@ async function check() {
     // Read-only, and shares its computation with `apply` (D4) so the two can
     // never disagree about what "current" means.
     ...(await checkDrift(repoRoot, manifest)),
+    ...(await checkApiImports(repoRoot, manifest)),
   ];
 
   // Damage fails; an older layout only warns. An absent snapshot is the
