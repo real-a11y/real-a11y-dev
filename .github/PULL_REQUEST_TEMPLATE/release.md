@@ -24,6 +24,12 @@
 
 - [ ] `pnpm verify` green
 - [ ] `pnpm packaging:check` green (publint + attw)
+- [ ] `docs/surface.released.json` in the diff — `version-packages` writes it, and
+      it is the only record of what this release makes public. Its diff against
+      the previous release is the list of capabilities becoming installable; the
+      docs use it to mark everything else as not-yet-published. If it is absent,
+      `version-packages` did not run and the site will keep documenting `main`
+      as though it shipped.
 
 ## After merge
 
