@@ -126,11 +126,24 @@ Stage precisely (avoid stray untracked files), commit with a conventional
 message, push, and open the PR **using the release template**:
 
 ```bash
-git add packages/ .changeset/pre.json
+git add -u                              # everything version-packages rewrote
+git add docs/surface.released.json      # new file on the first release only
+git status                              # confirm nothing stray, nothing missing
 git commit -m "chore(release): version packages for <label>"
 git push -u origin release/<label>
 gh pr create --base main --template release.md   # fill in the table + notes
 ```
+
+`git add -u` rather than a path list, because `version-packages` writes well
+beyond `packages/`: the bumped manifests and changelogs, `docs/surface.json`
+(re-extracted — the versions changed), the managed doc regions rebuilt from it,
+`docs/surface.released.json`, and `pnpm-lock.yaml`. It stages only **tracked**
+modifications, so it still cannot sweep up a stray untracked file — which is
+what the "stage precisely" caution is actually about. The snapshot needs its own
+line the first time because it does not exist in `HEAD` yet.
+
+An earlier version of this step staged `packages/ .changeset/pre.json` only,
+which would now silently drop four of those.
 
 The template (`.github/PULL_REQUEST_TEMPLATE/release.md`) has the checklist:
 version-bumps table, changesets consumed, mechanical notes, `verify` +
