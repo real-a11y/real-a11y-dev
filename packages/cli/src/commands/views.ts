@@ -16,6 +16,7 @@ import { redactUrl, sanitizeText } from "@real-a11y-dev/snapshot";
 import {
   parseFormat,
   parseListCategory,
+  parseOpenOptions,
   type CommandFn,
   type FlagValues,
 } from "../args.js";
@@ -153,6 +154,7 @@ async function withOneShotCommand<T>(
 ): Promise<T> {
   const target = singleTarget(positionals, flags, command);
   parseFormat(flags.format, ["pretty", "json"] as const);
+  parseOpenOptions(flags);
   outputOf(flags);
   const session = await createSession(sessionFlags(flags, [target]));
   try {
@@ -180,6 +182,7 @@ export const tabsCommand: CommandFn = async (positionals, flags) =>
 export const listCommand: CommandFn = async (positionals, flags) => {
   parseListCategory(positionals[0]);
   parseFormat(flags.format, ["pretty", "json"] as const);
+  parseOpenOptions(flags);
   outputOf(flags);
   const target = singleTarget(positionals.slice(1), flags, "list");
   const session = await createSession(sessionFlags(flags, [target]));

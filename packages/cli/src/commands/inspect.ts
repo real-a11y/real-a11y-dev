@@ -16,6 +16,7 @@ import { fingerprintFindings, redactUrl } from "@real-a11y-dev/snapshot";
 import {
   parseFailOn,
   parseFormat,
+  parseOpenOptions,
   parseRules,
   type CommandFn,
   type FlagValues,
@@ -98,6 +99,7 @@ export function validateInspect(
   parseRules(flags.rules);
   parseFailOn(flags["fail-on"], "error");
   parseFormat(flags.format, ["pretty", "json"] as const);
+  parseOpenOptions(flags);
   outputOf(flags);
   return target;
 }

@@ -14,6 +14,7 @@ import { SnapshotFormatError } from "@real-a11y-dev/snapshot";
 import {
   COMMANDS,
   isNativeCommand,
+  parseMs,
   rootHelp,
   type FlagValues,
 } from "./args.js";
@@ -23,6 +24,8 @@ import {
   mergeDefaults,
   resolveConfig,
 } from "./config.js";
+import { DaemonTransportError } from "./daemon/client.js";
+import { ALLOWED_ENV_OVERRIDES } from "./daemon/env-allowlist.js";
 import { ensureDaemonClient, defaultSessionName } from "./daemon/spawn.js";
 import { CliError, EXIT, formatCliError } from "./exit.js";
 
@@ -65,6 +68,7 @@ async function runWithDaemon(
   command: string,
   positionals: string[],
   flags: FlagValues,
+  idleTimeoutMs: number,
 ): Promise<number> {
   // `runner.ts` eagerly loads the command modules, so only import it when we
   // already know we're going through the daemon.
@@ -75,17 +79,70 @@ async function runWithDaemon(
     typeof flags.session === "string" && flags.session !== ""
       ? flags.session
       : defaultSessionName();
-  const client = await ensureDaemonClient(sessionName, DAEMON_ENTRY);
-  const { exitCode, stdout, stderr } = await client.run(
-    sessionName,
-    command,
-    positionals,
-    flags,
-    process.cwd(),
-  );
-  if (stderr) process.stderr.write(stderr);
-  if (stdout) process.stdout.write(stdout);
-  return exitCode;
+
+  // The daemon can be mid-startup, can shut down from idleness, or can miss
+  // a handshake deadline on a slow machine. Retry once for a safe retryable
+  // failure: `ensureDaemonClient` transport/handshake errors, an explicit
+  // `ESHUTDOWN` refusal from the daemon, or a `run` request that never connected.
+  // `client.run` avoids `DaemonTransportError` once the socket has connected and
+  // no data was received, because the command may already be executing.
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const client = await ensureDaemonClient(
+        sessionName,
+        DAEMON_ENTRY,
+        idleTimeoutMs,
+      );
+      const { exitCode, stdout, stderr } = await client.run(
+        sessionName,
+        command,
+        positionals,
+        flags,
+        process.cwd(),
+        idleTimeoutMs,
+        envSnapshot(),
+      );
+      if (stderr) process.stderr.write(stderr);
+      if (stdout) process.stdout.write(stdout);
+      return exitCode;
+    } catch (err) {
+      lastErr = err;
+      if (attempt === 0 && err instanceof DaemonTransportError) {
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr;
+}
+
+function envSnapshot(): Record<string, string | undefined | null> {
+  const snapshot: Record<string, string | undefined | null> = {};
+  // Send every allowed variable explicitly, using `null` when the caller did
+  // not set it, so the daemon clears inherited values instead of leaking them
+  // between runs.
+  for (const key of ALLOWED_ENV_OVERRIDES) {
+    snapshot[key] = process.env[key] ?? null;
+  }
+  for (const [key, value] of Object.entries(process.env)) {
+    if (
+      (key.startsWith("GITHUB_") || key.startsWith("PLAYWRIGHT_")) &&
+      value !== undefined
+    ) {
+      snapshot[key] = value;
+    }
+  }
+  // The daemon has no TTY, so when the caller does, fake it so reports keep
+  // their color. Respect NO_COLOR/FORCE_COLOR if the user already set them.
+  if (
+    !process.env.NO_COLOR &&
+    !process.env.FORCE_COLOR &&
+    process.stdout.isTTY
+  ) {
+    snapshot.FORCE_COLOR = "1";
+  }
+  return snapshot;
 }
 
 function isParseArgsError(err: unknown): err is Error {
@@ -163,18 +220,23 @@ export async function run(argv: string[]): Promise<number> {
       process.stderr.write(`${describeConfigSource(configSource(values))}\n`);
     }
     const resolved = resolveConfig(values);
-    // Pin the config file path to the caller's cwd so the daemon (which may be
-    // running from a different directory) auto-discovers the same config.
     if (resolved && values["no-config"] !== true) {
+      // Pin the config file path to the caller's cwd so the daemon (which may be
+      // running from a different directory) auto-discovers the same config.
       values.config = resolved.path;
+    } else if (values["no-config"] !== true) {
+      // No config was found in the caller's cwd. Explicitly disable
+      // auto-discovery inside the daemon so a long-lived session cannot be made
+      // to load a config from a different working directory.
+      values["no-config"] = true;
     }
     let seededFromConfig: ReadonlySet<string> = new Set();
     if (resolved) {
-      seededFromConfig = mergeDefaults(
-        values,
-        resolved.config,
-        new Set(Object.keys(command.options)),
-      );
+      const declared = new Set(Object.keys(command.options));
+      for (const excluded of command.excludeDefaults ?? []) {
+        declared.delete(excluded);
+      }
+      seededFromConfig = mergeDefaults(values, resolved.config, declared);
       // `defaults.root` now reaches only `tabs`. Warn rather than hard-error:
       // the config loader is strict and fail-closed, so erroring here would red
       // every CI that set this key — mid-beta, over config that was correct
@@ -195,6 +257,18 @@ export async function run(argv: string[]): Promise<number> {
         );
       }
     }
+    const idleTimeoutValue = values["session-idle-timeout"] as
+      string | boolean | undefined;
+    if (
+      values.session === undefined &&
+      idleTimeoutValue !== undefined &&
+      !seededFromConfig.has("session-idle-timeout")
+    ) {
+      process.stderr.write(
+        "real-a11y: warning: --session-idle-timeout has no effect without --session\n",
+      );
+    }
+
     if (values.session !== undefined) {
       const { resolveCommandTargets } = await import("./daemon/runner.js");
       let daemonTargets: { length: number } | undefined;
@@ -208,12 +282,27 @@ export async function run(argv: string[]): Promise<number> {
       } catch (err) {
         daemonErr = err;
       }
+      // Only parse the idle timeout when the command is actually going through
+      // a daemon session, so a config typo does not break unrelated commands.
+      const parsedIdleTimeoutMs =
+        idleTimeoutValue !== undefined
+          ? (parseMs("--session-idle-timeout", idleTimeoutValue, {
+              fallback: 900_000,
+              max: 3_600_000,
+              min: 1,
+            }) ?? 900_000)
+          : 900_000;
       const sessionExplicit = !seededFromConfig.has("session");
       const daemonSupported =
         daemonTargets !== undefined && daemonTargets.length > 0;
       if (daemonSupported || sessionExplicit) {
         if (daemonErr) throw daemonErr;
-        return await runWithDaemon(name, positionals, values as FlagValues);
+        return await runWithDaemon(
+          name,
+          positionals,
+          values as FlagValues,
+          parsedIdleTimeoutMs,
+        );
       }
       // `defaults.session` in config does not force unsupported commands through
       // the daemon; fall through to the one-shot path.
@@ -223,7 +312,9 @@ export async function run(argv: string[]): Promise<number> {
   } catch (err) {
     if (err instanceof CliError || err instanceof SnapshotFormatError) {
       process.stderr.write(`${formatCliError(err)}\n`);
-      return EXIT.ERROR;
+      return err instanceof CliError
+        ? (err.exitCode ?? EXIT.ERROR)
+        : EXIT.ERROR;
     }
     if (isParseArgsError(err)) {
       process.stderr.write(

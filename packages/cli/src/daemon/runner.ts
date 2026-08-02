@@ -4,7 +4,12 @@
 
 import type { BrowserSession } from "@real-a11y-dev/browser";
 
-import { parseFormat, parseListCategory, type FlagValues } from "../args.js";
+import {
+  parseFormat,
+  parseListCategory,
+  parseOpenOptions,
+  type FlagValues,
+} from "../args.js";
 import { runAuditOnSession, validateAudit } from "../commands/audit.js";
 import {
   outputOf,
@@ -18,9 +23,13 @@ import {
   runFocusOnSession,
   runInteractOnSession,
   runTypeOnSession,
-  stepsFromFlags,
-  sugarStep,
+  validateInteract,
 } from "../commands/interact.js";
+import {
+  resolveSnapshotTargets,
+  runSnapshotOnSession,
+  validateSnapshot,
+} from "../commands/snapshot.js";
 import {
   runListOnSession,
   runOutlineOnSession,
@@ -44,9 +53,13 @@ export function validateCommand(
     case "inspect":
       validateInspect(positionals, flags);
       return;
+    case "snapshot":
+      validateSnapshot(positionals, flags);
+      return;
     case "list":
       parseListCategory(positionals[0]);
       parseFormat(flags.format, ["pretty", "json"] as const);
+      parseOpenOptions(flags);
       outputOf(flags);
       singleTarget(positionals.slice(1), flags, "list");
       return;
@@ -54,22 +67,15 @@ export function validateCommand(
     case "outline":
     case "tabs":
       parseFormat(flags.format, ["pretty", "json"] as const);
+      parseOpenOptions(flags);
       outputOf(flags);
       singleTarget(positionals, flags, command);
       return;
     case "interact":
-      parseFormat(flags.format, ["pretty", "json"] as const);
-      outputOf(flags);
-      singleTarget(positionals, flags, command);
-      stepsFromFlags(flags);
-      return;
     case "click":
     case "type":
     case "focus":
-      parseFormat(flags.format, ["pretty", "json"] as const);
-      outputOf(flags);
-      singleTarget(positionals, flags, command);
-      sugarStep(command, flags);
+      validateInteract(command, positionals, flags);
       return;
     default:
       return;
@@ -96,6 +102,8 @@ export function resolveCommandTargets(
       return [singleTarget(positionals.slice(1), flags, "list")];
     case "audit":
       return resolveAuditTargets(positionals, flags);
+    case "snapshot":
+      return resolveSnapshotTargets(positionals, flags).targets;
     default:
       return [];
   }
@@ -128,6 +136,8 @@ export async function runCommandOnSession(
       return runInspectOnSession(session, positionals, flags);
     case "audit":
       return runAuditOnSession(session, positionals, flags);
+    case "snapshot":
+      return runSnapshotOnSession(session, positionals, flags);
     default:
       throw new Error(
         `command "${command}" is not supported by the daemon in this release`,

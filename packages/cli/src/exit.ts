@@ -22,9 +22,21 @@ export class CliError extends Error {
   constructor(
     message: string,
     readonly hint?: string,
+    readonly exitCode?: number,
   ) {
     super(message);
     this.name = "CliError";
+  }
+}
+
+/**
+ * A transient failure because the session daemon is shutting down. The client
+ * should treat this like a lost connection and retry against a fresh daemon.
+ */
+export class DaemonShutdownError extends Error {
+  constructor() {
+    super("session daemon is shutting down");
+    this.name = "DaemonShutdownError";
   }
 }
 

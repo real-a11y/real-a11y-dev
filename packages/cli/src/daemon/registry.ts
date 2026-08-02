@@ -1,3 +1,10 @@
+import { redactUrl } from "@real-a11y-dev/snapshot";
+
+import { CliError, DaemonShutdownError, EXIT } from "../exit.js";
+
+/** Upper bound for idle timeouts (1 hour) to avoid resource-exhaustion warnings. */
+const MAX_IDLE_MS = 3_600_000;
+
 /**
  * Holds named browser sessions and schedules work on them.
  *
@@ -21,32 +28,78 @@ export interface SessionInfo {
   busy: boolean;
 }
 
+export interface SessionFlagsLike {
+  headful?: boolean;
+  cdp?: string;
+  storageState?: string;
+  allowedOrigins?: readonly string[];
+  chromePath?: string;
+  realA11yChromePath?: string;
+  realA11yBrowsersDir?: string;
+  proxy?: {
+    server: string;
+    bypass?: string;
+    username?: string;
+    password?: string;
+  };
+  verbose?: boolean;
+  /**
+   * Working directory pinned to the first run so a session cannot be reused
+   * to auto-discover a config from an arbitrary directory.
+   */
+  cwd?: string;
+}
+
 interface SessionHolder<T extends SessionLike> {
   session: T;
   createdAt: number;
   lastUsedAt: number;
   queue: Promise<unknown>;
   busy: boolean;
+  identityKey: string;
+  allowedOrigins: string[];
+  /** Working directory pinned to the first run. */
+  cwd?: string;
 }
 
 export interface SessionRegistryOptions {
-  /** Idle timeout in ms; `0` disables automatic shutdown. */
+  /**
+   * Idle timeout in ms; `0` disables automatic shutdown. Values above 1 hour
+   * are capped at 1 hour.
+   */
   idleTimeoutMs?: number;
   /** Called when the idle timer fires; the daemon stops itself. */
   onIdleTimeout?: () => void | Promise<void>;
 }
 
+interface CreationEntry<T extends SessionLike> {
+  promise: Promise<SessionHolder<T>>;
+  identityKey: string;
+  allowedOrigins: readonly string[];
+  /** Working directory pinned to the first run. */
+  cwd?: string;
+}
+
 export class SessionRegistry<T extends SessionLike> {
   private sessions = new Map<string, SessionHolder<T>>();
-  private creating = new Map<string, Promise<SessionHolder<T>>>();
+  private creating = new Map<string, CreationEntry<T>>();
+  private stopping = false;
+  private stopped = false;
   private idleTimer?: NodeJS.Timeout;
   private busyCount = 0;
-  private readonly idleMs: number;
+  private idleMs: number;
+  private readonly startupGraceMs: number;
+  private hasRun = false;
   private readonly onIdleTimeout?: () => void | Promise<void>;
 
   constructor(options: SessionRegistryOptions = {}) {
-    this.idleMs = options.idleTimeoutMs ?? 0;
+    this.idleMs = this.clampIdleTimeout(options.idleTimeoutMs ?? 0);
+    // Give the daemon enough time to bind its socket and process the first run
+    // before an aggressive idle timeout can shut it down. After the first run
+    // completes, the user-supplied idle timeout takes over.
+    this.startupGraceMs = Math.max(this.idleMs, 30_000);
     this.onIdleTimeout = options.onIdleTimeout;
+    if (this.idleMs > 0) this.resetIdleTimer();
   }
 
   /**
@@ -55,14 +108,30 @@ export class SessionRegistry<T extends SessionLike> {
    */
   async run(
     name: string,
+    sessionFlags: SessionFlagsLike,
+    idleTimeoutMs: number,
     factory: () => Promise<T>,
     task: (session: T) => Promise<number>,
   ): Promise<number> {
-    const holder = await this.getOrCreate(name, factory);
+    if (this.stopping || this.stopped) {
+      throw new DaemonShutdownError();
+    }
+    // A non-negative idle timeout overrides the registry default. `0` disables
+    // automatic shutdown for the current run (and any concurrent sessions).
+    if (idleTimeoutMs >= 0) {
+      this.setIdleTimeout(idleTimeoutMs);
+    }
+    this.busyCount++;
+    const holder = await this.getOrCreate(name, sessionFlags, factory).catch(
+      (err) => {
+        this.busyCount--;
+        this.resetIdleTimer();
+        throw err;
+      },
+    );
     const next = (async () => {
       await holder.queue;
       holder.busy = true;
-      this.busyCount++;
       this.clearIdleTimer();
       try {
         const exitCode = await task(holder.session);
@@ -70,60 +139,165 @@ export class SessionRegistry<T extends SessionLike> {
         return exitCode;
       } finally {
         holder.busy = false;
-        this.busyCount--;
-        this.resetIdleTimer();
       }
     })();
     holder.queue = next.catch(() => 0);
-    return next;
+    try {
+      return await next;
+    } finally {
+      this.busyCount--;
+      this.hasRun = true;
+      this.resetIdleTimer();
+    }
   }
 
   list(): SessionInfo[] {
-    return [...this.sessions.entries()].map(([name, holder]) => ({
-      name,
-      url: holder.session.currentUrl(),
-      createdAt: holder.createdAt,
-      lastUsedAt: holder.lastUsedAt,
-      busy: holder.busy,
-    }));
+    return [...this.sessions.entries()].map(([name, holder]) => {
+      const rawUrl = holder.session.currentUrl();
+      return {
+        name,
+        url: rawUrl ? redactUrl(rawUrl) : undefined,
+        createdAt: holder.createdAt,
+        lastUsedAt: holder.lastUsedAt,
+        busy: holder.busy,
+      };
+    });
   }
 
   async stop(name: string): Promise<boolean> {
     const holder = this.sessions.get(name);
     if (!holder) return false;
     this.sessions.delete(name);
+    // Let any in-flight work finish before tearing down the session.
+    await holder.queue.catch(() => 0);
     await holder.session.close();
     this.resetIdleTimer();
     return true;
   }
 
+  /** Drop all current sessions but keep the registry available for new runs. */
   async stopAll(): Promise<void> {
+    this.stopping = true;
     this.clearIdleTimer();
     const holders = [...this.sessions.values()];
+    const inFlight = [...this.creating.values()];
     this.sessions.clear();
     this.creating.clear();
-    await Promise.allSettled(holders.map((h) => h.session.close()));
+    try {
+      await Promise.allSettled([
+        ...inFlight.map((entry) => entry.promise.catch(() => 0)),
+        ...holders.map(async (h) => {
+          await h.queue.catch(() => 0);
+          await h.session.close();
+        }),
+      ]);
+    } finally {
+      this.stopping = false;
+      this.resetIdleTimer();
+    }
+  }
+
+  /** Shut the registry down permanently; no new runs will be accepted. */
+  shutdown(): void {
+    this.stopping = true;
+    this.stopped = true;
+    this.clearIdleTimer();
+  }
+
+  /** Whether the registry has been permanently shut down. */
+  isShutdown(): boolean {
+    return this.stopped;
+  }
+
+  setIdleTimeout(ms: number): void {
+    this.idleMs = this.clampIdleTimeout(ms);
+    this.clearIdleTimer();
+    this.resetIdleTimer();
+  }
+
+  private clampIdleTimeout(ms: number): number {
+    if (!Number.isFinite(ms)) return 0;
+    if (ms <= 0) return 0;
+    return Math.min(ms, MAX_IDLE_MS);
   }
 
   private async getOrCreate(
     name: string,
+    sessionFlags: SessionFlagsLike,
     factory: () => Promise<T>,
   ): Promise<SessionHolder<T>> {
+    const requestedOrigins = sessionFlags.allowedOrigins ?? [];
+    const requestedCwd = sessionFlags.cwd;
+    const identity = identityKey(sessionFlags);
+
     const existing = this.sessions.get(name);
-    if (existing) return existing;
+    if (existing) {
+      if (existing.cwd !== requestedCwd) {
+        throw new CliError(
+          `session "${name}" was created in a different working directory`,
+          "stop the session first, then retry with the new directory",
+          EXIT.ERROR,
+        );
+      }
+      if (existing.identityKey !== identity) {
+        throw new CliError(
+          `session "${name}" was created with different browser flags`,
+          "stop the session first, then retry with the new flags",
+          EXIT.ERROR,
+        );
+      }
+      if (!isOriginSubset(requestedOrigins, existing.allowedOrigins)) {
+        throw new CliError(
+          `session "${name}" does not include all requested origins`,
+          "stop the session first, then retry with the new targets or --audit-origin",
+          EXIT.ERROR,
+        );
+      }
+      return existing;
+    }
 
     const inFlight = this.creating.get(name);
-    if (inFlight) return inFlight;
+    if (inFlight) {
+      if (inFlight.cwd !== requestedCwd) {
+        throw new CliError(
+          `session "${name}" is already being created in a different working directory`,
+          "stop the session first, then retry with the new directory",
+          EXIT.ERROR,
+        );
+      }
+      if (inFlight.identityKey !== identity) {
+        throw new CliError(
+          `session "${name}" is already being created with different browser flags`,
+          "stop the session first, then retry with the new flags",
+          EXIT.ERROR,
+        );
+      }
+      if (!isOriginSubset(requestedOrigins, inFlight.allowedOrigins)) {
+        throw new CliError(
+          `session "${name}" is already being created without all requested origins`,
+          "stop the session first, then retry with the new targets or --audit-origin",
+          EXIT.ERROR,
+        );
+      }
+      return inFlight.promise;
+    }
 
     const create = (async () => {
       try {
         const session = await factory();
+        if (this.stopping || this.stopped) {
+          await session.close();
+          throw new DaemonShutdownError();
+        }
         const holder: SessionHolder<T> = {
           session,
           createdAt: Date.now(),
           lastUsedAt: Date.now(),
           queue: Promise.resolve(),
           busy: false,
+          identityKey: identity,
+          allowedOrigins: requestedOrigins.slice().sort(),
+          cwd: requestedCwd,
         };
         this.sessions.set(name, holder);
         this.resetIdleTimer();
@@ -133,17 +307,34 @@ export class SessionRegistry<T extends SessionLike> {
       }
     })();
 
-    this.creating.set(name, create);
+    this.creating.set(name, {
+      promise: create,
+      identityKey: identity,
+      allowedOrigins: requestedOrigins,
+      cwd: requestedCwd,
+    });
     return create;
   }
 
   private resetIdleTimer(): void {
     this.clearIdleTimer();
-    if (this.idleMs <= 0 || this.sessions.size === 0 || this.busyCount > 0)
+    if (this.idleMs <= 0 || this.busyCount > 0 || this.stopped) return;
+    // Use a longer grace period until the first run completes so a short
+    // `--session-idle-timeout` does not race the socket/pidfile handshake.
+    const requestedDelay = this.hasRun ? this.idleMs : this.startupGraceMs;
+    if (!Number.isFinite(requestedDelay) || requestedDelay < 0) return;
+    if (requestedDelay > MAX_IDLE_MS) {
+      this.idleTimer = setTimeout(() => this.fireIdleTimeout(), MAX_IDLE_MS);
       return;
-    this.idleTimer = setTimeout(() => {
-      void (this.onIdleTimeout ? this.onIdleTimeout() : this.stopAll());
-    }, this.idleMs);
+    }
+    this.idleTimer = setTimeout(() => this.fireIdleTimeout(), requestedDelay);
+  }
+
+  private fireIdleTimeout(): void {
+    // A run may have started between arming and firing; don't shut down
+    // while a command is still in progress.
+    if (this.busyCount > 0 || this.stopped) return;
+    void (this.onIdleTimeout ? this.onIdleTimeout() : this.stopAll());
   }
 
   private clearIdleTimer(): void {
@@ -152,4 +343,27 @@ export class SessionRegistry<T extends SessionLike> {
       this.idleTimer = undefined;
     }
   }
+}
+
+function identityKey(flags: SessionFlagsLike): string {
+  const base: Record<string, unknown> = {
+    headful: flags.headful,
+    cdp: flags.cdp,
+    chromePath: flags.chromePath,
+    realA11yChromePath: flags.realA11yChromePath,
+    realA11yBrowsersDir: flags.realA11yBrowsersDir,
+    storageState: flags.storageState,
+    proxy: flags.proxy,
+    cwd: flags.cwd,
+  };
+  return JSON.stringify(base);
+}
+
+function isOriginSubset(
+  requested: readonly string[],
+  pinned: readonly string[],
+): boolean {
+  if (requested.length === 0) return true;
+  const pinnedSet = new Set(pinned);
+  return requested.every((origin) => pinnedSet.has(origin));
 }

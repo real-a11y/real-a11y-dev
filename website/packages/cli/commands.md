@@ -5,14 +5,15 @@ description: Every real-a11y command and flag — audit, inspect, snapshot, diff
 
 # Commands & flags
 
-Every invocation is `real-a11y <command> [url...] [flags]`. Fourteen commands
+Every invocation is `real-a11y <command> [url...] [flags]`. Fifteen commands
 ship — [`install`](#install), [`audit`](#audit-url), [`inspect`](#inspect-url),
 [`tree`](#tree-url), [`outline`](#outline-url), [`tabs`](#tabs-url),
 [`list`](#list-category-url), [`interact`](#interact-url-step-step),
 [`click`](#click-url-role-role), [`type`](#type-url-role-role-text-value),
-[`focus`](#focus-url-role-role), [`snapshot`](#snapshot-url),
-[`diff`](#diff-base-json-pr-json), and [`login`](#login-url-save-file). Run
-`real-a11y <command> --help` for a command's own flags.
+[`focus`](#focus-url-role-role), [`session`](#session-subcommand),
+[`snapshot`](#snapshot-url), [`diff`](#diff-base-json-pr-json), and
+[`login`](#login-url-save-file). Run `real-a11y <command> --help` for a command's
+own flags.
 
 Findings and reports go to **stdout**; progress, warnings, and errors go to
 **stderr** — so `-o` / a pipe never mixes the two.
@@ -101,6 +102,16 @@ CDP, except [`tabs`](#tabs-url) — the one view that tree cannot produce (see
 | [`focus <url> --role`](#focus-url-role-role) | Move real keyboard focus; the `[focused]` marker moves in the diff. |
 
 <!-- surface:end cli-commands-act -->
+
+**Session** — manage the background browser daemons that [`--session`](#session-name) reuses.
+
+<!-- surface:begin cli-commands-session -->
+
+| Command | Purpose |
+| --- | --- |
+| [`session <subcommand>`](#session-subcommand) | List, stop, or stop-all named daemon sessions. |
+
+<!-- surface:end cli-commands-session -->
 
 **Artifacts**
 
@@ -473,6 +484,46 @@ real-a11y audit https://app.example.com/dashboard --storage-state auth.json
 · [`--settle`](#settle-ms) · [`--timeout`](#timeout-ms) · [Config](#config) ·
 [`--verbose`](#verbose) · [`-h, --help`](#h-help).
 
+### `session <subcommand>`
+
+Manage the long-lived browser daemons that invocations with
+[`--session`](#session-name) reuse. This command never launches a browser
+itself; it only talks to already-running daemons.
+
+- **`list`** — print every session, its pid, status, current URL, and whether it
+  is busy. Add [`--format json`](#f-format-fmt) for machine-readable output.
+- **`stop <name>`** — stop one session by name and remove its session directory.
+- **`stop-all`** — stop every session in `~/.real-a11y/sessions/`. By default a
+  session that is locked by a concurrent invocation only prints a warning and
+  exits `0`; pass `--strict` to exit `2` so CI cleanup can retry.
+
+Session names are sanitized for filesystem use: non-alphanumeric characters
+become underscores and the name is truncated to 64 characters. On Windows the
+daemon listens on a named pipe with a random per-session name
+(`\\.\pipe\real-a11y-<id>`; the id is stored in the session directory and is
+independent of the auth token); everywhere else it uses a Unix domain socket
+under `~/.real-a11y/sessions/<name>/`.
+
+Stale pidfiles/sockets are reported as `stale` instead of `running`, and
+`stop`/`stop-all` remove them.
+
+```sh
+real-a11y session list
+real-a11y session list --format json
+real-a11y session stop checkout
+real-a11y session stop-all
+real-a11y session stop-all --strict
+```
+
+**Flags:** [Config](#config) · [`-f, --format`](#f-format-fmt) (list only) ·
+[`--output`](#o-output-file) (list only) · [`--strict`](#strict) (stop-all
+only) · [`-q, --quiet`](#q-quiet) · [`--verbose`](#verbose) ·
+[`-h, --help`](#h-help).
+
+A flag passed to a subcommand it doesn't apply to is rejected with an error
+naming the right one (e.g. `session stop x --format json` fails with
+"--format applies to `session list`") rather than being silently ignored.
+
 ## Flags
 
 Grouped and documented once. The **Commands** line above each entry names which
@@ -506,6 +557,7 @@ Throughout this table, **browser commands** is the eleven that drive a page:
 | [`--storage-state`](#storage-state-file) | path to a saved session | none | browser commands |
 | [`--audit-origin`](#audit-origin-origin) | origin (repeatable) | the target's own | browser commands |
 | [`--session`](#session-name) | string | cwd hash | browser commands |
+| [`--session-idle-timeout`](#session-idle-timeout-ms) | ms | `900000` | browser commands |
 | [`--include-generic`](#include-generic) | boolean | `false` | `inspect`, `tree`, `outline`, `tabs`, `list`, `snapshot` |
 
 <sup>†</sup> Every other browser command reads Chromium's whole-document
@@ -719,9 +771,11 @@ real-a11y audit http://localhost:3000 --chrome-path /usr/bin/google-chrome
 - **Type:** boolean · **Default:** `false` · **Commands:** audit, inspect, tree,
   outline, tabs, list, interact, click, type, focus, snapshot
 
-Approve `file:` targets, which are blocked by default. Real, but omitted from
-`--help`. A path you type (`./dist/index.html`) is normalized to a `file:` URL,
-so this is what unlocks auditing a built file.
+Unlock `file:` targets that come from a config file, `A11Y_PAGES`, or the
+`snapshot` command. A path or `file:` URL you type directly on the command line
+is already allowed (you are the authority); `--allow-file` is the gate for
+indirect sources so a PR or environment variable cannot silently point CI at a
+local file.
 
 ### `--storage-state <file>`
 
@@ -764,9 +818,53 @@ name connect to it and act on the same live page. Omit `--session` to keep the
 one-shot default. See [`a11y.config.json`](#config) `session` for a project-wide
 name.
 
+The browser identity and working directory are frozen for the life of the
+session: `--headful`, `--cdp`, `--chrome-path`, `--storage-state`, the resolved
+proxy environment, and the directory the first run was started from must stay the
+same across runs. If you change any of them, `session stop <name>` first;
+otherwise the run is rejected with a "different browser flags" or "different
+working directory" error. `--allow-file` is a per-run gate for config-sourced
+`file://` targets; direct paths typed on the command line are always allowed,
+so it does not need to stay the same across runs.
+
 ```sh
 real-a11y tree https://app.example.com --session checkout
 real-a11y click https://app.example.com --session checkout --role button --name "Apply"
+```
+
+Commands that read the page (`audit`, `inspect`, `tree`, `outline`, `snapshot`,
+`tabs`, `list`) observe the **live DOM** at the moment they run. If you `click` or
+`type` first, a later `snapshot`/`audit` in the same session captures the
+post-interaction state. Capture baselines in a fresh session or before any act
+commands to avoid session-contaminated diffs.
+
+### `--session-idle-timeout <ms>`
+
+- **Type:** ms · **Default:** `900000` (15 minutes) · **Commands:** audit,
+  inspect, tree, outline, tabs, list, interact, click, type, focus, snapshot
+
+How long a daemon for this session stays alive with no commands. The timer resets
+after every completed run; when it expires the daemon exits and its socket/pidfile
+are removed. The value must be a positive number of milliseconds, is clamped to a
+minimum of 1 s, and is capped at one hour to prevent a typo from leaving a daemon
+alive indefinitely. `0` is not accepted.
+
+```sh
+real-a11y tree https://app.example.com --session checkout --session-idle-timeout 600000
+```
+
+### `--strict`
+
+- **Type:** boolean · **Default:** `false` · **Commands:** `session stop-all`
+
+When `session stop-all` cannot stop a session because another invocation is
+holding its lock, `--strict` makes the command exit `2` instead of `0`. The
+default is forgiving so concurrent races do not fail an ad-hoc cleanup, but CI
+pipelines that must guarantee no background browsers remain can use `--strict`
+to detect the condition and retry. `session list` and `session stop` reject it.
+
+```sh
+real-a11y session stop-all --strict
 ```
 
 ## Output
@@ -1075,3 +1173,90 @@ Session storage isn't captured — apps that keep auth there need
 ```sh
 real-a11y login https://app.example.com --save auth.json
 ```
+
+## Security posture
+
+`real-a11y` is designed to be run in CI and on shared workstations. The daemon
+feature makes the trust boundary explicit:
+
+### Socket and process isolation
+
+- **Unix domain sockets** live under `~/.real-a11y/sessions/<name>/daemon.sock`,
+  in a per-session directory created `0o700`. The socket file is created with
+  `0o600` permissions, so only the owning user can connect — the kernel refuses
+  other users at `connect()`, the same property a peer-credential
+  (`SO_PEERCRED`) check would assert.
+- **Windows** uses a named pipe at `\\.\pipe\real-a11y-<id>`, where the id is
+  random, stored in the per-user session directory, and independent of the
+  per-session 256-bit auth token — pipe names are enumerable by every local
+  process, so a name derived from the token would publish a hash of the
+  secret. The real protection is the token, which lives inside the per-user
+  session directory and is required for every RPC `auth` message. Node does not expose a
+  way to set a restrictive pipe DACL, and `chmod` has no effect on Windows, so
+  the CLI sets an explicit token-file ACL (via `icacls`) granting only the
+  current user full control. This is fail-closed: if `icacls` is unavailable
+  or the ACL cannot be applied, the session refuses to start — on the CLI
+  side before spawning and again in the daemon before it reads the token —
+  rather than leave the token relying on the profile directory's inherited
+  ACL. Do not use
+  `--session` with [`--storage-state`](#storage-state-file) on shared Windows
+  machines, and keep `~/.real-a11y/sessions` inside a profile directory that is
+  not readable by other users.
+- A **pidfile** (`daemon.pid`) records the daemon PID and version. A stale
+  pidfile (daemon gone) or an incompatible daemon version is replaced on the next
+  `--session` run, so a CLI upgrade does not silently talk to an old protocol.
+- Daemons exit automatically after the
+  [`--session-idle-timeout`](#session-idle-timeout-ms) elapses (default 15
+  minutes). `real-a11y session stop` and `real-a11y session stop-all` terminate
+  them immediately and remove the session directory.
+- **The RPC trust boundary is the token, not the request contents.** Any
+  process that can read the per-session token file is the same OS user, and a
+  request is treated exactly like that user running the CLI one-shot: it
+  carries the caller's working directory, from which `a11y.config.json`, page
+  lists, and relative `--output` paths resolve. The daemon grants nothing the
+  caller could not already do directly; the working directory is pinned to the
+  session's first run, so an existing session cannot be pointed at a different
+  project directory.
+
+### Authenticated state
+
+- The daemon keeps the same browser context for the life of the session. If you
+  started it with [`--storage-state`](#storage-state-file), that context carries
+  the saved cookies and local storage for every subsequent command with the same
+  `--session` name. Stop the session when you're done.
+- `--storage-state` is not allowed together with `--cdp` — CDP attaches to a
+  browser you already own, whose session lifecycle is outside `real-a11y`'s
+  control.
+
+### Origin pinning and the `file://` gate
+
+- By default a target is only allowed to redirect within its own origin.
+  [`--audit-origin`](#audit-origin-origin) adds extra allowed origins; redirects
+  outside the allowed set are refused.
+- `file://` targets you type directly on the command line are always allowed
+  (the shell user is the authority). [`--allow-file`](#allow-file) gates
+  `file://` targets from indirect sources — `a11y.config.json`, `A11Y_PAGES`,
+  and `snapshot` positionals — so a committed file or environment variable
+  cannot silently point CI at a local file. It is a per-run flag: the gate does
+  not persist across `--session` runs.
+- With `--session`, the browser context is reused across runs. The allowed
+  origins are pinned to the first run in that session; later runs can request
+  a subset of those origins. To target a new origin, stop the session and start
+  a new one.
+- The per-run origin pin is re-applied on every command, including the
+  reused-page fast path, so a command cannot silently read from a page the
+  previous run redirected to outside the allowed set.
+
+### Redaction
+
+- `a11y.config.json` [`redact`](/packages/cli/configuration#redact) patterns are applied to URLs and text
+  before anything is written or printed — snapshots, diffs, reports, and stdout.
+- This is especially important with `--session`, because a long-lived page may
+  contain tokens, PII, or signed URLs in query parameters. Redact them at the
+  source so they never reach the daemon log or a committed artifact.
+
+### Daemon log
+
+- Each session writes diagnostics to `~/.real-a11y/sessions/<name>/daemon.log`.
+  It may contain URLs and command names; it is owned by the same user and is
+  removed when the session is stopped.

@@ -56,6 +56,7 @@ link "Track regressions across a PR"
 link "Adopt the gate on existing debt"
 link "In CI"
 link "Pages behind a login"
+link "Reuse a live session"
 link "Output you can trust"
 link "Limitations"
 link "See also"
@@ -108,6 +109,13 @@ link "command reference"
 button "Copy Code"
 generic
 link "Authenticated pages"
+button "Copy Code"
+generic
+button "Copy Code"
+generic
+button "Copy Code"
+generic
+link "Security posture"
 button "Copy Code"
 generic
 link "axe-core"

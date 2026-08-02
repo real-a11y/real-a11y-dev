@@ -33,6 +33,7 @@ export interface ConfigPage {
 /** Project-wide flag defaults. Each key mirrors a CLI flag; see KEY_TO_FLAG. */
 export interface A11yDefaults {
   session?: string;
+  sessionIdleTimeout?: number;
   root?: string;
   device?: string;
   viewport?: string;
@@ -104,6 +105,7 @@ const DEFAULT_TYPES = {
   maxLines: "number",
   maxPages: "number",
   session: "string",
+  sessionIdleTimeout: "number",
   explain: "boolean",
 } as const;
 const DEFAULT_KEYS: ReadonlySet<string> = new Set(Object.keys(DEFAULT_TYPES));
@@ -184,7 +186,18 @@ function validateDefaults(raw: unknown): A11yDefaults {
         if (typeof v !== "number" || !Number.isFinite(v)) {
           throw new CliError(`${where} must be a number`);
         }
-        out[key] = v;
+        if (key === "sessionIdleTimeout" && (!Number.isInteger(v) || v <= 0)) {
+          throw new CliError(
+            `${where} must be a positive integer number of milliseconds`,
+          );
+        }
+        // Match the command-line `--session-idle-timeout` behaviour: values above
+        // the documented one-hour cap are clamped, not rejected.
+        if (key === "sessionIdleTimeout" && v > 3_600_000) {
+          out[key] = 3_600_000;
+        } else {
+          out[key] = v;
+        }
         break;
       case "string[]":
         out[key] = asStringArray(v, where);
@@ -419,6 +432,7 @@ const KEY_TO_FLAG: Record<string, string> = {
   ignoreViewLine: "ignore-view-line",
   maxLines: "max-lines",
   maxPages: "max-pages",
+  sessionIdleTimeout: "session-idle-timeout",
   annotate: "no-annotate",
 };
 /** The set of parseArgs flag names a config default can populate — every

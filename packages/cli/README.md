@@ -74,6 +74,7 @@ opt out.
 | `click <url> --role …` | Click one element by role + accessible name |
 | `type <url> --role … --text …` | Set a text field's value by role + accessible name |
 | `focus <url> --role …` | Move real keyboard focus by role + accessible name |
+| `session <subcommand>` | List, stop, or stop-all daemon sessions used by `--session` |
 | `snapshot [url...]` | Audit a URL (or a config page set) → one diffable JSON artifact (or `--md`) |
 | `diff <base> <pr>` | Findings-aware diff of two snapshots — new / changed / fixed |
 | `login <url> --save <file>` | Save a login session for `--storage-state` audits |

@@ -30,6 +30,7 @@ import { redactUrl } from "@real-a11y-dev/snapshot";
 
 import {
   parseFormat,
+  parseOpenOptions,
   parseStepSettle,
   type CommandFn,
   type FlagValues,
@@ -293,6 +294,27 @@ export async function runInteractStepsOnSession(
   return EXIT.OK;
 }
 
+/**
+ * Fail fast on malformed interaction flags before the browser opens.
+ * Mirrors the checks inside `runInteractStepsOnSession`.
+ */
+export function validateInteract(
+  command: "interact" | "click" | "type" | "focus",
+  positionals: string[],
+  flags: FlagValues,
+): void {
+  singleTarget(positionals, flags, command);
+  parseFormat(flags.format, ["pretty", "json"] as const);
+  parseOpenOptions(flags);
+  outputOf(flags);
+  parseStepSettle(flags);
+  if (command === "interact") {
+    stepsFromFlags(flags);
+  } else {
+    sugarStep(command, flags);
+  }
+}
+
 export async function runInteractOnSession(
   session: BrowserSession,
   positionals: string[],
@@ -309,6 +331,7 @@ export async function runInteractOnSession(
 }
 
 export const interactCommand: CommandFn = async (positionals, flags) => {
+  validateInteract("interact", positionals, flags);
   const target = singleTarget(positionals, flags, "interact");
   const session = await createSession(sessionFlags(flags, [target]));
   try {
@@ -403,7 +426,7 @@ export async function runFocusOnSession(
 }
 
 function sugar(
-  verb: StepVerb,
+  verb: "click" | "type" | "focus",
   runner: (
     session: BrowserSession,
     positionals: string[],
@@ -411,6 +434,7 @@ function sugar(
   ) => Promise<number>,
 ): CommandFn {
   return async (positionals, flags) => {
+    validateInteract(verb, positionals, flags);
     const target = singleTarget(positionals, flags, verb);
     const session = await createSession(sessionFlags(flags, [target]));
     try {
