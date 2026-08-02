@@ -284,10 +284,16 @@ async function apply() {
     );
   }
 
-  // The "not yet published" notice renders EMPTY both when nothing is
-  // unreleased and when we can't tell. The reader can't act on the difference so
-  // the page doesn't show it — but the author can, and silence here would make
-  // an unwritten snapshot look like a clean bill of health.
+  // The released surface is unrecorded, so the "not yet published" notice could
+  // not be computed. Silence here would make that look like a clean bill of
+  // health — the reader can't act on the difference, but the author can.
+  //
+  // The two outcomes are NOT the same and the message must not merge them:
+  // `absent` renders the notice empty, while `unreadable` and `layout` leave the
+  // region byte-for-byte as they found it (see render/unreleased.mjs). Saying
+  // "the notice is empty" in those cases describes a page that may still be
+  // showing an older warning, and would send someone past a stale notice
+  // believing the page said nothing.
   const released = result.released;
   if (released && !released.recorded) {
     const why = {
@@ -295,9 +301,15 @@ async function apply() {
       unreadable: `${RELEASED_REL} isn't valid JSON`,
       layout: `${RELEASED_REL} was written under an older manifest layout (${released.detail})`,
     };
+    const state =
+      released.reason === "absent"
+        ? `the "not yet published" notice is empty — that is "we can't tell",\n` +
+          `  not "everything here is published".`
+        : `the "not yet published" notice was LEFT AS IT IS on the page, not\n` +
+          `  recomputed — so whatever it says now is from the last good run, and\n` +
+          `  may be out of date. Fix the file and re-run to refresh it.`;
     console.log(
-      `\n  The released surface is unrecorded, so the "not yet published" notice\n` +
-        `  is empty — that is "we can't tell", not "everything here is published".\n` +
+      `\n  The released surface is unrecorded, so ${state}\n` +
         `    ${why[released.reason] ?? released.reason}`,
     );
   }
