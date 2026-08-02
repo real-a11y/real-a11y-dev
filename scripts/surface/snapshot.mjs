@@ -24,9 +24,23 @@
 // would then name an older release than the one npm actually has, which is a
 // more confusing lie than saying nothing.
 //
-// `version-packages` therefore runs `surface:extract` (and `surface:apply`,
-// which keeps the managed regions consistent with the manifest it just
-// rewrote) BEFORE this. Do not reorder them.
+// `version-packages` therefore runs `surface:extract` BEFORE this, and
+// `surface:apply` AFTER it:
+//
+//   build → changeset version → surface:extract → snapshot → surface:apply
+//
+// Both halves of that are load-bearing, and the second is the subtler one.
+// Managed regions are rendered from the difference between the manifest and
+// this file, so applying BEFORE the snapshot renders them against the PREVIOUS
+// release — producing a notice that lists everything the release being cut is
+// publishing, right as it becomes available. The snapshot then makes that
+// notice wrong, `checkDrift` reports the region stale, and `pnpm verify` fails
+// on the release PR. Merged anyway, the site would tell readers that features
+// they can already install are missing.
+//
+// That failure is invisible until the SECOND release: with no snapshot on disk
+// the first cut renders empty (unrecorded), snapshots, and the two agree by
+// accident.
 //
 // WHY THIS RUNS IN THE RELEASE CUT, NOT IN publish.yml
 //

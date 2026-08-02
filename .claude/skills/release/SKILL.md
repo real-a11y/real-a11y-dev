@@ -78,10 +78,10 @@ pnpm version-packages
 ```
 
 **Use `pnpm version-packages`, not `npx changeset version`.** The script builds,
-runs `changeset version`, re-extracts the surface manifest, rebuilds the managed
-doc regions, freezes `docs/surface.released.json`, and refreshes the lockfile —
-in that order, which is load-bearing (see CONTRIBUTING → _The released surface_).
-It takes a few minutes because of the build.
+runs `changeset version`, re-extracts the surface manifest, freezes
+`docs/surface.released.json`, rebuilds the managed doc regions from it, and
+refreshes the lockfile — in that order, which is load-bearing (see CONTRIBUTING
+→ _The released surface_). It takes a few minutes because of the build.
 
 > **If it fails partway, do not just re-run it.** `changeset version` is not
 > idempotent: a second run bumps again, and you would ship `beta.13` where you

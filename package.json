@@ -17,7 +17,7 @@
     "prepare": "husky",
     "changeset": "changeset",
     "changeset:status": "changeset status --since=origin/main",
-    "version-packages": "pnpm build && changeset version && pnpm surface:extract && pnpm surface:apply && pnpm surface:snapshot && pnpm install --lockfile-only",
+    "version-packages": "pnpm build && changeset version && pnpm surface:extract && pnpm surface:snapshot && pnpm surface:apply && pnpm install --lockfile-only",
     "size": "pnpm build && size-limit",
     "size:why": "pnpm build && size-limit --why",
     "commitlint": "commitlint",

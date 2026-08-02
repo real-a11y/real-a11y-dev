@@ -109,18 +109,28 @@ You should not need to run it by hand — `version-packages` does, as the last
 step of:
 
 ```
-build → changeset version → surface:extract → surface:apply → surface:snapshot
+build → changeset version → surface:extract → surface:snapshot → surface:apply
 ```
 
-**That order is load-bearing, in two different ways.**
+**That order is load-bearing, in three different ways.**
 
-`changeset version` rewrites every `packages/*/package.json` version, and the
-manifest records those versions — so the moment it runs, `docs/surface.json` is
-stale. Snapshotting before re-extracting would freeze the *previous* release's
-version numbers, and the docs would then name an older release than the one npm
-actually has. `surface:apply` sits between them because re-extracting rewrites
-the manifest the managed regions derive from, and a release should never leave
-those two disagreeing.
+**`surface:extract` before the snapshot.** `changeset version` rewrites every
+`packages/*/package.json` version, and the manifest records those versions — so
+the moment it runs, `docs/surface.json` is stale. Snapshotting first would
+freeze the *previous* release's version numbers, and the docs would then name an
+older release than the one npm actually has.
+
+**`surface:apply` after the snapshot**, and this is the subtle one. The managed
+regions are rendered from the *difference* between the manifest and the
+snapshot, so applying first renders them against the previous release —
+producing a "not published yet" notice listing everything this very release is
+publishing, at the moment it becomes available. Snapshotting then makes that
+notice wrong, `surface:check` reports the region stale, and `pnpm verify` fails
+on the release PR. Merged anyway, the site would tell readers that features they
+can already install are missing.
+
+That one stays invisible until the **second** release: with no snapshot on disk
+the first cut renders empty, snapshots, and the two agree by accident.
 
 The **build comes first** for a different reason: `changeset version` is not
 idempotent. It is also the only irreversible step — everything after it is
