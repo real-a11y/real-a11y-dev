@@ -45,12 +45,12 @@ push the tags that trigger the publish workflows.
 
 ## Choose the flavor
 
-|             | Next beta                       | Graduate to stable                               |
-| ----------- | ------------------------------- | ------------------------------------------------ |
-| Command     | `changeset version`             | `changeset pre exit` then `changeset version`    |
-| Result      | `-beta.N` → `-beta.N+1`         | all accumulated changesets collapse into `0.1.0` |
-| dist-tag    | `beta` (auto-advances `latest`) | `latest` (own publish owns it)                   |
-| Reversible? | mostly (it's a beta)            | no — a stable can't be un-published              |
+|             | Next beta                       | Graduate to stable                                |
+| ----------- | ------------------------------- | ------------------------------------------------- |
+| Command     | `pnpm version-packages`         | `changeset pre exit` then `pnpm version-packages` |
+| Result      | `-beta.N` → `-beta.N+1`         | all accumulated changesets collapse into `0.1.0`  |
+| dist-tag    | `beta` (auto-advances `latest`) | `latest` (own publish owns it)                    |
+| Reversible? | mostly (it's a beta)            | no — a stable can't be un-published               |
 
 If the user just says "release" and it's ambiguous, **ask** which one — it sets
 the versions, the tag, and whether pre-mode ends.
