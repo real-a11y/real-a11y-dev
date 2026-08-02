@@ -156,30 +156,52 @@ export function surfaceKeys(manifest) {
 }
 
 /**
- * Fail when the snapshot is present but unreadable.
+ * Fail when the snapshot is present but unreadable; warn when it is at an older
+ * layout.
  *
- * Deliberately narrow, because two of the three unrecorded states must NOT fail:
+ * Only `unreadable` FAILS, deliberately, because the other two states are not
+ * things a PR author can fix:
  *
  *   - `absent` is the legitimate pre-first-release state. Failing on it would
- *     make every PR red until someone cuts a release, to report a condition
- *     nobody can fix from a PR.
+ *     make every PR red until someone cuts a release.
  *   - `layout` self-heals — the next release cut rewrites the file at the
- *     current manifest version. Failing on it would block every PR in the
- *     window after a `MANIFEST_VERSION` bump, again for something a PR author
- *     cannot resolve.
+ *     current manifest version. Failing would block every PR in the window
+ *     after a `MANIFEST_VERSION` bump.
  *
  * `unreadable` is different in kind: a corrupt file is not a state the release
  * process produces, it is damage. And it is silent — the notice just renders
- * empty, which reads exactly like "nothing is unreleased". Without this, the
- * page would quietly stop warning anyone and no check would ever say so.
+ * empty, which reads exactly like "nothing is unreleased".
+ *
+ * `layout` still gets a WARNING, because "cannot fail the build" is not the same
+ * as "nobody needs to know". In that window the region is left untouched (see
+ * render/unreleased.mjs), so the published page keeps whatever notice was
+ * written last — which may name capabilities that have since shipped. Every gate
+ * green and a stale public claim is precisely the failure this feature exists to
+ * prevent, so it is said out loud even though nothing blocks on it.
  *
  * @param {string} repoRoot
- * @returns {Promise<{where: string, message: string}[]>}
+ * @returns {Promise<{problems: {where: string, message: string}[], warnings: string[]}>}
  */
 export async function checkReleasedSnapshot(repoRoot) {
   const released = await loadReleased(repoRoot);
-  if (released.recorded || released.reason !== "unreadable") return [];
-  return [
+
+  if (released.recorded) return { problems: [], warnings: [] };
+
+  if (released.reason === "layout") {
+    return {
+      problems: [],
+      warnings: [
+        `${RELEASED_REL} is at an older manifest layout (${released.detail}), so the\n` +
+          `  "not published yet" notice can't be recomputed and the page still shows\n` +
+          `  whatever it said last. That may now name capabilities that HAVE shipped.\n` +
+          `  It clears itself at the next release cut; until then the page is stale.`,
+      ],
+    };
+  }
+
+  if (released.reason !== "unreadable") return { problems: [], warnings: [] };
+
+  const problems = [
     {
       where: RELEASED_REL,
       message:
@@ -190,6 +212,7 @@ export async function checkReleasedSnapshot(repoRoot) {
         `anyone.\n\n      git checkout ${RELEASED_REL}   # if it was corrupted locally`,
     },
   ];
+  return { problems, warnings: [] };
 }
 
 /**

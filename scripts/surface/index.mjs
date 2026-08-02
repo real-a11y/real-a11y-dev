@@ -172,12 +172,22 @@ async function check() {
     // Read-only, and shares its computation with `apply` (D4) so the two can
     // never disagree about what "current" means.
     ...(await checkDrift(repoRoot, manifest)),
-    // Damage only — an absent snapshot is the legitimate pre-first-release
-    // state and a layout mismatch self-heals at the next release cut. See the
-    // docstring for why failing on either would block PRs over something their
-    // author cannot fix.
-    ...(await checkReleasedSnapshot(repoRoot)),
   ];
+
+  // Damage fails; an older layout only warns. An absent snapshot is the
+  // legitimate pre-first-release state and a layout mismatch self-heals at the
+  // next release cut, so failing on either would block PRs over something their
+  // author cannot fix — but the layout window leaves a stale notice on the
+  // published page, which nobody should have to discover by accident.
+  const snapshot = await checkReleasedSnapshot(repoRoot);
+  problems.push(...snapshot.problems);
+
+  // Printed BEFORE the pass/fail branch, because `die()` never returns — a
+  // warning emitted after it would be invisible on exactly the runs that are
+  // already going badly, which is when it is most worth reading.
+  for (const warning of snapshot.warnings) {
+    console.warn(`\nWarning: ${warning}\n`);
+  }
 
   if (problems.length) {
     console.error(
