@@ -11,6 +11,8 @@
 // doesn't exist is worse: someone types it and gets an error from a tool they
 // were told to trust.
 
+import { withoutGeneratedClaims } from "../render/regions.mjs";
+
 import { docFiles, headings, readDoc } from "./markdown.mjs";
 
 const CLI_REFERENCE = "website/packages/cli/commands.md";
@@ -63,7 +65,15 @@ export async function checkCoverage(repoRoot, manifest) {
   const problems = [];
 
   // ---- CLI flags -----------------------------------------------------------
-  const reference = await readDoc(repoRoot, CLI_REFERENCE);
+  //
+  // Scanned WITHOUT the generated "not published yet" notice. That region names
+  // unreleased flags in code spans, which `mentionedFlags` would otherwise count
+  // as documentation — so a brand-new flag would satisfy this check purely by
+  // being listed as not-yet-installable. See `NON_DOCUMENTING` in
+  // ../render/regions.mjs.
+  const reference = withoutGeneratedClaims(
+    await readDoc(repoRoot, CLI_REFERENCE),
+  );
   const mentioned = mentionedFlags(reference);
   const shipped = new Set(
     manifest.cli.commands.flatMap((c) => c.flags.map((f) => `--${f.name}`)),

@@ -20,6 +20,52 @@ const BEGIN = /^<!--\s*surface:begin\s+([a-z0-9-]+)\s*-->$/;
 const END = /^<!--\s*surface:end\s+([a-z0-9-]+)\s*-->$/;
 
 /**
+ * Regions that NAME surface without DOCUMENTING it.
+ *
+ * `cli-unreleased` lists the commands and flags a release does not yet ship, as
+ * code spans, because that is how they read. But the doc gates count a code
+ * span as proof: `mentionedFlags` in check/coverage.mjs treats any `--flag`
+ * inside one as documented, and `documentedAs` in check/docs.mjs matches a
+ * backtick followed by a command name. So the notice would satisfy the very
+ * checks that are supposed to catch an undocumented capability — a brand-new
+ * flag could ship with no prose at all, and the only page "documenting" it
+ * would be the one saying you cannot install it yet.
+ *
+ * That is worse than no check. It is a green gate asserting the docs are
+ * complete, caused by the tool that exists to tell the truth about them.
+ *
+ * The merged regions are NOT here and must not be: the command tables carry
+ * hand-written Purpose cells and are real documentation. The distinction is
+ * whether a human wrote the prose, which is the same line ./table.mjs draws.
+ */
+export const NON_DOCUMENTING = new Set(["cli-unreleased"]);
+
+/**
+ * The document with every non-documenting region's body removed.
+ *
+ * Markers are left in place so line-based errors elsewhere stay meaningful; only
+ * the generated body between them goes. Callers that ASK about documentation
+ * coverage use this; callers that ask about structure (anchors, drift) read the
+ * real file.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+export function withoutGeneratedClaims(text) {
+  const { regions } = readRegions(text, "<coverage scan>");
+  const drop = new Set();
+  for (const [id, region] of regions) {
+    if (!NON_DOCUMENTING.has(id)) continue;
+    for (let i = region.beginLine + 1; i < region.endLine; i++) drop.add(i);
+  }
+  if (drop.size === 0) return text;
+  return text
+    .split("\n")
+    .filter((_, i) => !drop.has(i))
+    .join("\n");
+}
+
+/**
  * @typedef {object} Region
  * @property {string} id
  * @property {number} beginLine  index of the begin marker

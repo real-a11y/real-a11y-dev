@@ -115,6 +115,12 @@ export function surfaceKeys(manifest) {
 
   for (const tool of manifest.mcp?.tools ?? []) {
     keys.push(`mcp.${tool.name}`);
+    // Parameters, for the same reason as flags: a tool that shipped two
+    // releases ago growing a parameter last week is the common case, and a
+    // tool-level answer would call the whole thing released. Without these the
+    // MCP notice would be quietly incomplete the moment it is added.
+    for (const param of Object.keys(tool.inputSchema?.properties ?? {}))
+      keys.push(`mcp.${tool.name}.${param}`);
   }
 
   for (const pkg of manifest.packages ?? []) {

@@ -18,6 +18,8 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
+import { withoutGeneratedClaims } from "../render/regions.mjs";
+
 /**
  * The docs spell counts as words, so a number has to become one to compare.
  *
@@ -189,7 +191,14 @@ export async function checkDocs(repoRoot, manifest) {
   const tools = manifest.mcp.tools.map((t) => t.name);
 
   // ---- CLI -----------------------------------------------------------------
-  const cliRef = await read("website/packages/cli/commands.md");
+  //
+  // Without the generated "not published yet" notice: it opens a code span with
+  // each unreleased command name, which is exactly the shape `documentedAs`
+  // accepts as proof of documentation. A new command would otherwise document
+  // itself by being listed as unavailable. See ../render/regions.mjs.
+  const cliRef = withoutGeneratedClaims(
+    await read("website/packages/cli/commands.md"),
+  );
   checkCount(
     fail,
     "website/packages/cli/commands.md",
