@@ -258,6 +258,19 @@ async function apply() {
         result.moved.map((m) => `    ${m.key}: ${m.from} → ${m.to}`).join("\n"),
     );
   }
+  // Reported, never fatal. These are things `apply` cannot do — placing a new
+  // MCP tool needs a taxonomy decision — so treating them as blockers would mean
+  // one unplaced tool stops the CLI tables in a different file from being
+  // rebuilt at all, which is the opposite of useful.
+  if (result.advisories?.length) {
+    console.log(
+      `\n  ${result.advisories.length} thing(s) apply can't do for you:\n\n` +
+        result.advisories
+          .map(({ where, message }) => `    ${where}\n      ${message}`)
+          .join("\n\n") +
+        `\n\n  \`pnpm surface:check\` fails until these are handled.`,
+    );
+  }
 }
 
 /**

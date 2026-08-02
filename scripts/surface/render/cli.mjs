@@ -18,6 +18,29 @@
 // is welded into a sentence with hand-written clauses on both sides — generating
 // it would be the over-generation this whole design is arranged to avoid, in
 // exchange for a guard that already exists.
+//
+// NEITHER IS THE PER-COMMAND `**Flags:**` LINE, and the plan listed it as a
+// region (`cli-flags-<cmd>`). Read one before assuming it is a list of flags:
+//
+//   **Flags:** [Browser & page](#browser-page) · [Output](#output) (`pretty | json`)
+//   · [Config](#config) · [`--include-generic`](#include-generic) · no `--root`.
+//
+// Four things in there are not derivable from the manifest. It links flag
+// GROUPS, not flags, because listing all fourteen shared flags per command would
+// be unreadable. It annotates inline (`(default \`error\`)`). It states what a
+// command does NOT take ("no `--root`"), which is absence — the manifest has no
+// representation for a flag that isn't there. And it is hand-wrapped.
+//
+// The guard it was meant to provide already exists and is stronger:
+// `check/coverage.mjs` asserts both directions — every flag the code ships is
+// documented, and every flag the docs describe exists — and its own header
+// describes precisely this rot ("a new `--flag` ships with the feature and the
+// reference page keeps its old list"). Generating these lines would risk the
+// curated content to duplicate a check that already passes.
+//
+// So Phase 2 ships three of its four listed regions and declines the fourth on
+// purpose. If that call is ever revisited, the thing to solve first is how to
+// express "no `--root`" from a manifest that only knows what exists.
 
 import { slugify } from "../check/markdown.mjs";
 

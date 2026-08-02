@@ -10,11 +10,30 @@ import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { cliRegions, COMMANDS_FILE } from "./cli.mjs";
+import { checkToolPlacement, mcpRegions, TOOLS_FILE } from "./mcp.mjs";
 import { readRegions, writeRegions } from "./regions.mjs";
 
-/** Which files carry regions, and what rebuilds each region in them. */
+/**
+ * Which files carry regions, what rebuilds each region, and any check that only
+ * makes sense across a whole file.
+ *
+ * `validate` exists for the MCP index: the manifest has no group for a tool, so
+ * a new one can't be placed automatically and instead has to be reported. That
+ * question — "is every shipped tool listed somewhere?" — is unanswerable from
+ * inside any single region.
+ */
 function plan(manifest) {
-  return new Map([[COMMANDS_FILE, cliRegions(manifest)]]);
+  return new Map([
+    [COMMANDS_FILE, { builders: cliRegions(manifest) }],
+    [
+      TOOLS_FILE,
+      {
+        builders: mcpRegions(manifest),
+        validate: (text, relPath) =>
+          checkToolPlacement(manifest, text, relPath),
+      },
+    ],
+  ]);
 }
 
 /**
@@ -27,16 +46,33 @@ function plan(manifest) {
 export async function renderAll(repoRoot, manifest) {
   const files = [];
   const problems = [];
+  // Findings a human must act on, which `apply` cannot resolve. Surfaced by
+  // `check`, never allowed to stop the writer — see the note at the call site.
+  const advisories = [];
   const added = [];
   const removed = [];
   const moved = [];
 
-  for (const [relPath, builders] of plan(manifest)) {
+  for (const [relPath, { builders, validate }] of plan(manifest)) {
     const current = await readFile(join(repoRoot, relPath), "utf8");
     const { regions, problems: markerProblems } = readRegions(current, relPath);
     for (const message of markerProblems)
       problems.push({ where: relPath, message });
     if (markerProblems.length) continue;
+
+    // File-level checks run against what is ON DISK, for the same reason the
+    // TODO scan does: reporting against freshly rendered text would describe a
+    // state no file is in yet.
+    //
+    // They land in `advisories`, NOT `problems`, and the distinction is which
+    // ones make writing unsafe. A broken marker or an unparseable table means a
+    // write could corrupt the file, so it has to stop the writer. "This new tool
+    // needs a row" is work a human owes — `apply` cannot do it and never will,
+    // so letting it block would mean one unplaced MCP tool prevents the CLI
+    // tables in a different file from being rebuilt at all. A contributor adding
+    // a command and a tool in one PR would follow §4, run `apply`, and get
+    // "Nothing was written" for both.
+    if (validate) advisories.push(...validate(current, relPath));
 
     // Two passes, because a MOVE is only visible from the file.
     //
@@ -93,7 +129,7 @@ export async function renderAll(repoRoot, manifest) {
     files.push({ path: relPath, text, current, changed });
   }
 
-  return { files, added, removed, moved, problems };
+  return { files, added, removed, moved, problems, advisories };
 }
 
 /** Run every builder for one file. Split out so the move pass can repeat it. */
@@ -176,7 +212,8 @@ export async function applyAll(repoRoot, manifest) {
  */
 export async function checkDrift(repoRoot, manifest) {
   const result = await renderAll(repoRoot, manifest);
-  const problems = [...result.problems];
+  // `check` reports both kinds; only `apply` treats them differently.
+  const problems = [...result.problems, ...result.advisories];
 
   for (const file of result.files) {
     if (file.text === file.current) continue;
