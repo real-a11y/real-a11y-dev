@@ -31,9 +31,16 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "npm dist-tag to publish under (e.g. `beta`, `latest`)"
+        # Leave blank to derive from the version (prerelease → `beta`, otherwise
+        # → `latest`). Set it only to force a channel. Default is intentionally
+        # empty, not `beta`: `release-tag.yml` dispatches without this input, so
+        # a `beta` default would publish a stable graduation under `beta`.
+        description: "npm dist-tag to publish under — blank = derive from version"
         required: false
-        default: "beta"
+        default: ""
+  # Manual break-glass: pushing a `v*` tag by hand still publishes. The
+  # automation uses per-package tags + an explicit dispatch instead, so this
+  # path is only for recovering a release by hand.
   push:
     tags:
       - "v*"
@@ -58,6 +65,11 @@ jobs:
       id-token: write
       contents: read
     steps:
+      # No ref override: the run is dispatched at (or the break-glass `v*` tag is
+      # pushed at) the release commit, so the default checkout — GITHUB_SHA — and
+      # npm's provenance attestation, which is built from GITHUB_SHA/OIDC claims
+      # rather than the working tree, both resolve to that exact commit.
+      # `release-tag.yml` dispatches at a release tag precisely so these agree.
       - uses: actions/checkout@v4
 
       # pnpm version is read from `packageManager` in package.json.
@@ -91,11 +103,31 @@ jobs:
       - name: Test
         run: pnpm test
 
+      # Derive the channel from changesets pre-mode instead of hardcoding `beta`.
+      # `release-tag.yml` dispatches *without* a `tag` input and a `v*` tag-push
+      # carries none either, so an empty input means "decide from pre-mode".
+      #
+      # The signal is `.changeset/pre.json` `mode` — the same repo-global flag
+      # `advance-latest.mjs` keys off, so the two never disagree. In pre-mode
+      # (`mode == "pre"`) every version `changeset version` produces is a
+      # prerelease → `beta` (advance-latest.mjs then moves `latest` per package);
+      # once `changeset pre exit` has run, every one is stable → `latest`.
+      # Hardcoding `beta` would ship a stable graduation under `beta` and strand
+      # `latest` on the last prerelease (advance-latest.mjs no-ops out of
+      # pre-mode). Reading core's *version string* instead would misfire in a
+      # legitimate changesets sequence — `pre exit` graduating core to `0.1.0`,
+      # then `pre enter` with a changeset touching only cli — where core reads
+      # stable but the cli prerelease being published wants `beta`; pre-mode is
+      # correct for whatever is actually published, since in pre-mode nothing
+      # graduates. Pass the `tag` input explicitly to force a channel.
       - name: Resolve dist-tag
         id: tag
         run: |
           TAG="${{ github.event.inputs.tag }}"
-          if [ -z "$TAG" ]; then TAG="beta"; fi
+          if [ -z "$TAG" ]; then
+            MODE="$(node -p "try { require('./.changeset/pre.json').mode } catch { 'exit' }")"
+            if [ "$MODE" = "pre" ]; then TAG="beta"; else TAG="latest"; fi
+          fi
           echo "value=$TAG" >> "$GITHUB_OUTPUT"
 
       # pnpm's `publish -r` publishes every package whose version/tag is new,
