@@ -8,6 +8,17 @@
   landed the change; versions match `package.json`/`public/manifest.json`.
 -->
 
+## Unreleased
+
+### Patch Changes
+
+- Fix the element picker activating the widget you were trying to inspect.
+  Pick mode cancelled only the `click`, so everything leading up to it still
+  reached the page — dropdown triggers open on `pointerdown`, focus moves on
+  `mousedown` — and picking a menu button opened its menu. The whole pointer
+  sequence is now suppressed while the picker is on, the way Chrome's own
+  inspect mode behaves. ([#287])
+
 ## 0.1.8
 
 ### Patch Changes
@@ -127,3 +138,4 @@ Earlier releases predate this changelog.
 [#194]: https://github.com/real-a11y/real-a11y-dev/pull/194
 [#195]: https://github.com/real-a11y/real-a11y-dev/pull/195
 [#213]: https://github.com/real-a11y/real-a11y-dev/pull/213
+[#287]: https://github.com/real-a11y/real-a11y-dev/pull/287

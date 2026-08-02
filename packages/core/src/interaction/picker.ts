@@ -3,14 +3,17 @@
  * so it can be unit-tested in jsdom without any chrome.runtime.
  *
  * Behavior (mirrors Chrome's "select an element in the page to inspect it"):
- *   - When enabled, installs three capture-phase listeners on the document:
+ *   - When enabled, installs capture-phase listeners on the document:
  *       click     → preventDefault + stopPropagation, resolve the click
  *                   target up the DOM tree to the nearest tracked node id,
  *                   notify the host (panel) and exit pick mode
  *       mousemove → call onHighlight(id) for tracked elements, onClearHighlight()
  *                   when over an untracked one
  *       keydown   → Escape exits pick mode without selecting
- *   - When disabled, removes all three listeners, calls onClearHighlight(),
+ *       the rest of the pointer sequence (see SUPPRESSED_EVENTS)
+ *                 → preventDefault + stopPropagation only, so the page never
+ *                   sees the lead-in to a pick
+ *   - When disabled, removes every listener, calls onClearHighlight(),
  *     and restores the body cursor it captured on enable. The cursor swap
  *     is skipped entirely when `isSubFrame` is true (only the top frame
  *     should change the user-visible cursor).
@@ -18,6 +21,25 @@
  *     even when the picker exits autonomously (Escape, NODE_PICKED click).
  *   - setEnabled is idempotent — calling with the current state is a no-op.
  */
+
+/**
+ * Pointer events swallowed wholesale while pick mode is on.
+ *
+ * Suppressing only `click` is not enough: real pages act on the events that
+ * come first. Radix and Headless UI open dropdowns on `pointerdown`, focus
+ * moves on `mousedown`, and Material ripples start on `pointerdown` — so
+ * clicking a menu button to inspect it would open the menu even though the
+ * click itself never lands. Chrome's own inspect mode suppresses the whole
+ * sequence; this list is that sequence, minus `click`, which stays a real
+ * handler because it is what resolves the pick.
+ */
+const SUPPRESSED_EVENTS = [
+  "pointerdown",
+  "mousedown",
+  "pointerup",
+  "mouseup",
+  "auxclick",
+] as const;
 
 export interface PickerOptions {
   /** Document the picker listens on. */
@@ -61,6 +83,7 @@ export function createPicker(options: PickerOptions): Picker {
   let onClick: ((e: MouseEvent) => void) | null = null;
   let onMove: ((e: MouseEvent) => void) | null = null;
   let onKey: ((e: KeyboardEvent) => void) | null = null;
+  let onSuppress: ((e: Event) => void) | null = null;
 
   function resolveTracked(start: Element | null): string | undefined {
     let el: Element | null = start;
@@ -95,9 +118,17 @@ export function createPicker(options: PickerOptions): Picker {
       }
     };
 
+    onSuppress = (e: Event) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
     doc.addEventListener("click", onClick, true);
     doc.addEventListener("mousemove", onMove, true);
     doc.addEventListener("keydown", onKey, true);
+    for (const type of SUPPRESSED_EVENTS) {
+      doc.addEventListener(type, onSuppress, true);
+    }
 
     if (!isSubFrame && doc.body) {
       prevCursor = doc.body.style.cursor;
@@ -109,9 +140,15 @@ export function createPicker(options: PickerOptions): Picker {
     if (onClick) doc.removeEventListener("click", onClick, true);
     if (onMove) doc.removeEventListener("mousemove", onMove, true);
     if (onKey) doc.removeEventListener("keydown", onKey, true);
+    if (onSuppress) {
+      for (const type of SUPPRESSED_EVENTS) {
+        doc.removeEventListener(type, onSuppress, true);
+      }
+    }
     onClick = null;
     onMove = null;
     onKey = null;
+    onSuppress = null;
 
     onClearHighlight();
 
