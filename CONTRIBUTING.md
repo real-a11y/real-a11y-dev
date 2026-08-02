@@ -105,11 +105,24 @@ release cut:
 pnpm surface:snapshot     # freeze surface.json as the released surface
 ```
 
-You should not need to run it by hand — `version-packages` does, right after
-`changeset version` sets the versions the snapshot records. It copies the
-committed manifest rather than re-extracting, because `surface:check` already
-guarantees that file is current on any commit that reaches a release, and the
-copy is then byte-identical to the manifest the release PR reviewed.
+You should not need to run it by hand — `version-packages` does, as the last
+step of:
+
+```
+changeset version → build → surface:extract → surface:apply → surface:snapshot
+```
+
+**That order is load-bearing.** `changeset version` rewrites every
+`packages/*/package.json` version, and the manifest records those versions — so
+the moment it runs, `docs/surface.json` is stale. Snapshotting before
+re-extracting would freeze the *previous* release's version numbers, and the
+docs would then name an older release than the one npm actually has.
+`surface:apply` sits between them because re-extracting rewrites the manifest
+the managed regions derive from, and a release should never leave those two
+disagreeing.
+
+The snapshot itself copies the committed manifest rather than re-extracting, so
+it is byte-identical to the one the release PR reviewed.
 
 The difference between the two files is the set of capabilities the site
 documents but `npm install` does not yet deliver. That gap is structural: the

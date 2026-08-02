@@ -12,12 +12,21 @@
 //
 // WHY THIS COPIES RATHER THAN RE-EXTRACTS
 //
-// `surface:check` is a required check, so on any commit that reaches a release
-// `docs/surface.json` is current by construction. Re-deriving the manifest here
-// would need a built workspace, boot the MCP server a second time, and could
-// answer differently from the manifest the release PR actually reviewed. The
-// committed file IS the reviewed answer — copy that one, byte for byte, so the
-// snapshot can never disagree with the diff a human approved.
+// The committed manifest is the answer a human reviewed. Re-deriving it here
+// would boot the MCP server a second time and could produce something subtly
+// different from the diff that was approved, so the snapshot copies it byte for
+// byte and can never disagree with it.
+//
+// That makes ORDERING load-bearing, and it is easy to get wrong. `changeset
+// version` rewrites every `packages/*/package.json` version, and the manifest
+// records those versions — so the instant it runs, `docs/surface.json` is stale
+// and a copy of it would freeze the versions of the PREVIOUS release. The page
+// would then name an older release than the one npm actually has, which is a
+// more confusing lie than saying nothing.
+//
+// `version-packages` therefore runs `surface:extract` (and `surface:apply`,
+// which keeps the managed regions consistent with the manifest it just
+// rewrote) BEFORE this. Do not reorder them.
 //
 // WHY THIS RUNS IN THE RELEASE CUT, NOT IN publish.yml
 //

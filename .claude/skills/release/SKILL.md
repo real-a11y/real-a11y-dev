@@ -77,12 +77,17 @@ pnpm version-packages
 # npx changeset pre exit && pnpm version-packages
 ```
 
-**Use `pnpm version-packages`, not `npx changeset version`.** The script is
-`changeset version` plus the two things a release also has to do — write
-`docs/surface.released.json` (the record of what this release makes public) and
-refresh the lockfile. Calling `changeset version` directly still produces a
-correct-looking release: it tags, it publishes, and the only symptom is that the
-site goes on documenting `main` as though it shipped. Nothing fails.
+**Use `pnpm version-packages`, not `npx changeset version`.** The script runs
+`changeset version`, then rebuilds, re-extracts the surface manifest, rebuilds
+the managed doc regions, freezes `docs/surface.released.json`, and refreshes the
+lockfile — in that order, which is load-bearing (see CONTRIBUTING → _The
+released surface_). It takes a few minutes because of the build.
+
+Calling `changeset version` directly still produces a correct-_looking_ release
+— it tags and publishes fine. What you get is a stale manifest (the version
+bump is not reflected in `docs/surface.json`, so `pnpm verify` fails at step 4
+with "docs/surface.json is out of date") and, if you fix that by hand without
+snapshotting, a site that goes on documenting `main` as though it shipped.
 
 Then **inspect before trusting it**:
 
