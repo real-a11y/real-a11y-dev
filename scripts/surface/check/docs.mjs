@@ -230,7 +230,12 @@ export async function checkDocs(repoRoot, manifest) {
   checkCount(fail, "packages/mcp/README.md", mcpReadme, "tools", tools.length);
   checkNames(fail, "packages/mcp/README.md", mcpReadme, "tool", tools, bin);
 
-  const mcpRef = await read("website/packages/mcp/tools.md");
+  // Stripped for the same reason as the CLI reference, and a no-op until an
+  // `mcp-unreleased` region exists — wrapping it now so the follow-up cannot
+  // reopen the self-documenting hole by missing a call site.
+  const mcpRef = withoutGeneratedClaims(
+    await read("website/packages/mcp/tools.md"),
+  );
   checkCount(
     fail,
     "website/packages/mcp/tools.md",

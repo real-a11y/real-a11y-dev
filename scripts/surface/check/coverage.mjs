@@ -107,7 +107,21 @@ export async function checkCoverage(repoRoot, manifest) {
   // and as a ghost on whichever section precedes them. Page-level is a weaker
   // claim that is actually true, and it still catches the failure that matters
   // — a parameter renamed in the schema and left alone in the prose.
-  const toolsRef = await readDoc(repoRoot, MCP_REFERENCE);
+  //
+  // Same strip as the CLI reference. A no-op today: `tools.md` carries six
+  // managed regions (#283's tool index) but none of them is in
+  // `NON_DOCUMENTING` — they are merged tables with hand-written prose, which
+  // is documentation and must keep counting as such.
+  //
+  // It stops being a no-op the moment an `mcp-unreleased` notice exists.
+  // `documentedParams` matches `- **\`name\`** — …`, so a bullet-shaped notice
+  // would satisfy it exactly the way the CLI notice satisfied `mentionedFlags`.
+  // Wrapping the read now means that follow-up cannot reopen the hole by
+  // forgetting a call site; all it has to remember is the id in
+  // `NON_DOCUMENTING`.
+  const toolsRef = withoutGeneratedClaims(
+    await readDoc(repoRoot, MCP_REFERENCE),
+  );
   const documented = documentedParams(toolsRef);
   const params = new Set(
     manifest.mcp.tools.flatMap((t) =>

@@ -116,11 +116,28 @@ export function renderNotice(unreleased, versions) {
  * merge — they drive the TODO-prose reporting in ./index.mjs, which does not
  * apply to a body with no prose in it.
  *
+ * CANNOT-COMPUTE IS NOT THE SAME AS COMPUTES-TO-EMPTY
+ *
+ * When the snapshot is damaged or at an older layout, there is no answer — and
+ * rendering "" would be asserting one. Worse, it would be a DESTRUCTIVE
+ * assertion: `checkDrift` would then report `cli-unreleased` as out of date and
+ * tell the author to run `pnpm surface:apply`, and following that advice wipes
+ * a notice that was accurate when it was written. The drift message would also
+ * blame `docs/surface.json`, which had nothing to do with it.
+ *
+ * So those two cases leave the region exactly as they found it. No drift, no
+ * destructive remedy, and `checkReleasedSnapshot` still reports the real fault.
+ *
+ * `absent` DOES render empty, because that one is not a failure to compute: it
+ * is the pre-first-release state, where nothing is recorded and an empty notice
+ * is the honest page.
+ *
  * @param {string} repoRoot
  * @param {object} manifest
  */
 export async function unreleasedRegion(repoRoot, manifest) {
   const released = await loadReleased(repoRoot);
+  const computable = released.recorded || released.reason === "absent";
   const body = renderNotice(
     unreleasedKeys(manifest, released),
     released.versions,
@@ -128,8 +145,8 @@ export async function unreleasedRegion(repoRoot, manifest) {
 
   return {
     released,
-    builder: () => ({
-      body,
+    builder: (current) => ({
+      body: computable ? body : current,
       added: [],
       removed: [],
       removedRows: new Map(),
