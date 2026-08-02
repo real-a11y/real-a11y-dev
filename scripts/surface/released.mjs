@@ -57,6 +57,24 @@ export async function loadReleased(repoRoot) {
     return unrecorded("unreadable");
   }
 
+  // `JSON.parse` succeeding does not mean we have a manifest. It happily
+  // returns scalars, and both of the ways that goes wrong are bad:
+  //
+  //   - `null` — reading `.manifestVersion` off it throws, and nothing above
+  //     `check()` catches, so the whole run dies on a raw TypeError instead of
+  //     reaching `checkReleasedSnapshot`, which exists precisely to turn a
+  //     corrupt snapshot into an actionable message.
+  //   - `123`, `"x"`, `[]` — `.manifestVersion` is `undefined`, which lands in
+  //     the layout branch below. That branch deliberately does NOT fail the
+  //     check, because a layout mismatch self-heals at the next release. So a
+  //     corrupt file would be classified as "will fix itself" and `check` would
+  //     pass in silence — the exact outcome the gate is meant to prevent.
+  //
+  // Damage is `unreadable`, whatever shape it arrives in.
+  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
+    return unrecorded("unreadable");
+  }
+
   // A snapshot written under an older manifest layout cannot be compared key by
   // key: the extractors that produced it may have named or nested things
   // differently, so every key could differ for reasons that have nothing to do
