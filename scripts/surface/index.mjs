@@ -73,6 +73,7 @@ async function check() {
     { checkScenarios },
     { checkPlanSentinel },
     { checkDrift },
+    { checkReleasedSnapshot },
   ] = await Promise.all([
     import("./model.mjs"),
     import("./check/anchors.mjs"),
@@ -83,6 +84,7 @@ async function check() {
     import("./scenarios/check.mjs"),
     import("./check/sentinel.mjs"),
     import("./render/index.mjs"),
+    import("./released.mjs"),
   ]);
 
   const manifest = await buildManifest(repoRoot);
@@ -170,6 +172,11 @@ async function check() {
     // Read-only, and shares its computation with `apply` (D4) so the two can
     // never disagree about what "current" means.
     ...(await checkDrift(repoRoot, manifest)),
+    // Damage only — an absent snapshot is the legitimate pre-first-release
+    // state and a layout mismatch self-heals at the next release cut. See the
+    // docstring for why failing on either would block PRs over something their
+    // author cannot fix.
+    ...(await checkReleasedSnapshot(repoRoot)),
   ];
 
   if (problems.length) {

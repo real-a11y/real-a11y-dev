@@ -138,6 +138,43 @@ export function surfaceKeys(manifest) {
 }
 
 /**
+ * Fail when the snapshot is present but unreadable.
+ *
+ * Deliberately narrow, because two of the three unrecorded states must NOT fail:
+ *
+ *   - `absent` is the legitimate pre-first-release state. Failing on it would
+ *     make every PR red until someone cuts a release, to report a condition
+ *     nobody can fix from a PR.
+ *   - `layout` self-heals — the next release cut rewrites the file at the
+ *     current manifest version. Failing on it would block every PR in the
+ *     window after a `MANIFEST_VERSION` bump, again for something a PR author
+ *     cannot resolve.
+ *
+ * `unreadable` is different in kind: a corrupt file is not a state the release
+ * process produces, it is damage. And it is silent — the notice just renders
+ * empty, which reads exactly like "nothing is unreleased". Without this, the
+ * page would quietly stop warning anyone and no check would ever say so.
+ *
+ * @param {string} repoRoot
+ * @returns {Promise<{where: string, message: string}[]>}
+ */
+export async function checkReleasedSnapshot(repoRoot) {
+  const released = await loadReleased(repoRoot);
+  if (released.recorded || released.reason !== "unreadable") return [];
+  return [
+    {
+      where: RELEASED_REL,
+      message:
+        `exists but isn't valid JSON, so the released surface can't be read.\n    ` +
+        `The "not published yet" notice renders empty when that happens, which ` +
+        `is indistinguishable on the page from "everything here is published" — ` +
+        `so this fails loudly rather than letting the docs quietly stop warning ` +
+        `anyone.\n\n      git checkout ${RELEASED_REL}   # if it was corrupted locally`,
+    },
+  ];
+}
+
+/**
  * The capabilities on `main` that the newest release does not expose.
  *
  * Returns `null` — not an empty array — when the released surface is unrecorded.
