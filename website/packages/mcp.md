@@ -159,7 +159,7 @@ the Playwright-backed session standalone — without pulling in the MCP SDK
 dependency graph:
 
 ```ts
-import { BrowserSession } from "@real-a11y-dev/mcp/browser";
+import { BrowserSession } from "@real-a11y-dev/browser";
 ```
 
 `BrowserSession` (with its option types `BrowserSessionOptions`, `OpenOptions`,
