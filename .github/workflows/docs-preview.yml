@@ -75,7 +75,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Acknowledge /preview
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const { data: pr } = await github.rest.pulls.get({
@@ -162,15 +162,15 @@ jobs:
       sha: ${{ needs.resolve.outputs.sha }}
     steps:
       - name: Checkout PR head
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ${{ needs.resolve.outputs.repo }}
           ref: ${{ needs.resolve.outputs.sha }}
           persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6.0.9
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: pnpm
@@ -182,7 +182,7 @@ jobs:
       - run: pnpm --filter @real-a11y-dev/website build
 
       - name: Upload site artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: docs-preview-dist
           path: website/.vitepress/dist
@@ -203,7 +203,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Comment that the preview failed
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           PR_NUMBER: ${{ needs.resolve.outputs.number || github.event.issue.number }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -259,7 +259,7 @@ jobs:
 
       - name: Download site artifact
         if: steps.gate.outputs.open == 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: docs-preview-dist
           path: dist
@@ -270,7 +270,7 @@ jobs:
         # Outputs used below: deployment-url, pages-deployment-alias-url
         # (documented on cloudflare/wrangler-action@v3; alias needs wrangler
         # >= 3.78). Fallback URL is constructed if either is empty.
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -287,7 +287,7 @@ jobs:
 
       - name: Comment preview URL
         if: steps.gate.outputs.open == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           ALIAS_URL: ${{ steps.deploy.outputs.pages-deployment-alias-url }}
           DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment-url }}
@@ -458,7 +458,7 @@ jobs:
 
       - name: Comment that the preview was removed
         if: steps.delete.outputs.deleted != '0'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           DELETED: ${{ steps.delete.outputs.deleted }}
