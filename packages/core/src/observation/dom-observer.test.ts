@@ -316,7 +316,7 @@ describe("DomObserver", () => {
       expect(onTreeChange).toHaveBeenCalledTimes(1);
     });
 
-    it("custom internalIds extends the default sentinel set", async () => {
+    it("skips mutations on a caller-supplied custom sentinel id", async () => {
       observer = new DomObserver(
         document.documentElement,
         onTreeChange,
@@ -327,6 +327,28 @@ describe("DomObserver", () => {
 
       const overlay = document.createElement("div");
       overlay.id = "__custom-overlay";
+      document.documentElement.appendChild(overlay);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+
+    it("custom internalIds still filters the built-in sentinel ids", async () => {
+      // Passing a custom set must ADD to the built-ins, not replace them.
+      // If it replaced them, the highlight overlay would be observed as a
+      // user mutation and re-arm the re-extract → re-render → re-highlight
+      // feedback loop the sentinel filter exists to prevent.
+      observer = new DomObserver(
+        document.documentElement,
+        onTreeChange,
+        100,
+        new Set(["__custom-overlay"]),
+      );
+      observer.start();
+
+      const overlay = document.createElement("div");
+      overlay.id = "__sn-highlight";
       document.documentElement.appendChild(overlay);
 
       await settleObserver(100);
