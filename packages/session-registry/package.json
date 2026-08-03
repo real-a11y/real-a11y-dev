@@ -1,0 +1,41 @@
+{
+  "name": "@real-a11y-dev/session-registry",
+  "version": "0.0.0",
+  "description": "Internal session registry shared by the CLI daemon and the MCP server — named browser sessions, single-flight scheduling, identity pinning, and idle timeout. Private: bundled into its consumers, never published.",
+  "private": true,
+  "license": "MIT",
+  "author": "Juan Crisostomo (Real A11y)",
+  "engines": {
+    "node": ">=20"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@real-a11y-dev/snapshot": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.2.7"
+  }
+}

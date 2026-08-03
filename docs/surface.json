@@ -2222,6 +2222,20 @@
     },
     {
       "bin": [],
+      "description": "Internal session registry shared by the CLI daemon and the MCP server — named browser sessions, single-flight scheduling, identity pinning, and idle timeout. Private: bundled into its consumers, never published.",
+      "dir": "session-registry",
+      "exports": [
+        "."
+      ],
+      "name": "@real-a11y-dev/session-registry",
+      "private": true,
+      "version": "0.0.0",
+      "workspaceDeps": [
+        "@real-a11y-dev/snapshot"
+      ]
+    },
+    {
+      "bin": [],
       "description": "The Real A11y snapshot engine — deterministic finding fingerprints, the diffable a11y-snapshot.json artifact, the findings/views/unified diff, and baselines. Node-only; the single home for what the CLI and MCP both capture and compare.",
       "dir": "snapshot",
       "exports": [

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { SessionRegistry } from "./registry.js";
+import { SessionRegistry } from "./index.js";
 
 class FakeSession {
   closed = false;
