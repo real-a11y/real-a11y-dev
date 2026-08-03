@@ -151,17 +151,22 @@ export class DomObserver {
   private pendingFull = false;
   /** Upper bound on how long a mutation stream may defer a flush. */
   private readonly maxWaitMs: number;
+  /** Sentinel ids to filter: always the built-ins, plus any caller additions. */
+  private readonly internalIds: ReadonlySet<string>;
 
   constructor(
     private root: Element,
     private onTreeChange: (change?: TreeChange) => void,
     private debounceMs = 300,
-    private internalIds: ReadonlySet<string> = DEFAULT_INTERNAL_IDS,
+    internalIds: ReadonlySet<string> = DEFAULT_INTERNAL_IDS,
     maxWaitMs = 1000,
   ) {
     // The ceiling can't be shorter than one debounce interval, or it would
     // pre-empt normal debouncing and fire on the leading edge of every burst.
     this.maxWaitMs = Math.max(maxWaitMs, debounceMs);
+    // Union, never replace: a caller adding its own overlay sentinel must not
+    // silently drop the built-ins and re-arm the overlay feedback loop.
+    this.internalIds = new Set([...DEFAULT_INTERNAL_IDS, ...internalIds]);
   }
 
   start(): void {
