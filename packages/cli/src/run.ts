@@ -6,6 +6,7 @@
  */
 
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
 import { SnapshotFormatError } from "@real-a11y-dev/snapshot";
@@ -22,6 +23,7 @@ import {
   mergeDefaults,
   resolveConfig,
 } from "./config.js";
+import { ensureDaemonClient, defaultSessionName } from "./daemon/spawn.js";
 import { CliError, EXIT, formatCliError } from "./exit.js";
 
 /**
@@ -55,6 +57,35 @@ function versionLine(): string {
   const cli = readVersion("../package.json") ?? "unknown";
   const playwright = readVersion("playwright/package.json");
   return `real-a11y ${cli} (playwright ${playwright ?? "not installed"})\n`;
+}
+
+const DAEMON_ENTRY = fileURLToPath(new URL("daemon/entry.js", import.meta.url));
+
+async function runWithDaemon(
+  command: string,
+  positionals: string[],
+  flags: FlagValues,
+): Promise<number> {
+  // `runner.ts` eagerly loads the command modules, so only import it when we
+  // already know we're going through the daemon.
+  const { validateCommand } = await import("./daemon/runner.js");
+  validateCommand(command, positionals, flags);
+
+  const sessionName =
+    typeof flags.session === "string" && flags.session !== ""
+      ? flags.session
+      : defaultSessionName();
+  const client = await ensureDaemonClient(sessionName, DAEMON_ENTRY);
+  const { exitCode, stdout, stderr } = await client.run(
+    sessionName,
+    command,
+    positionals,
+    flags,
+    process.cwd(),
+  );
+  if (stderr) process.stderr.write(stderr);
+  if (stdout) process.stdout.write(stdout);
+  return exitCode;
 }
 
 function isParseArgsError(err: unknown): err is Error {
@@ -132,6 +163,11 @@ export async function run(argv: string[]): Promise<number> {
       process.stderr.write(`${describeConfigSource(configSource(values))}\n`);
     }
     const resolved = resolveConfig(values);
+    // Pin the config file path to the caller's cwd so the daemon (which may be
+    // running from a different directory) auto-discovers the same config.
+    if (resolved && values["no-config"] !== true) {
+      values.config = resolved.path;
+    }
     let seededFromConfig: ReadonlySet<string> = new Set();
     if (resolved) {
       seededFromConfig = mergeDefaults(
@@ -158,6 +194,29 @@ export async function run(argv: string[]): Promise<number> {
             `it reads Chromium's whole-document accessibility tree. Only \`tabs\` still scopes.\n`,
         );
       }
+    }
+    if (values.session !== undefined) {
+      const { resolveCommandTargets } = await import("./daemon/runner.js");
+      let daemonTargets: { length: number } | undefined;
+      let daemonErr: unknown;
+      try {
+        daemonTargets = resolveCommandTargets(
+          name,
+          positionals,
+          values as FlagValues,
+        );
+      } catch (err) {
+        daemonErr = err;
+      }
+      const sessionExplicit = !seededFromConfig.has("session");
+      const daemonSupported =
+        daemonTargets !== undefined && daemonTargets.length > 0;
+      if (daemonSupported || sessionExplicit) {
+        if (daemonErr) throw daemonErr;
+        return await runWithDaemon(name, positionals, values as FlagValues);
+      }
+      // `defaults.session` in config does not force unsupported commands through
+      // the daemon; fall through to the one-shot path.
     }
     const fn = await command.load();
     return await fn(positionals, values as FlagValues, seededFromConfig);

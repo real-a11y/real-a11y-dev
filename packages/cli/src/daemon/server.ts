@@ -27,7 +27,7 @@ import {
   decodeRpc,
 } from "./protocol.js";
 import { SessionRegistry } from "./registry.js";
-import { resolveCommandTarget, runCommandOnSession } from "./runner.js";
+import { resolveCommandTargets, runCommandOnSession } from "./runner.js";
 
 function chunkToString(chunk: unknown, encoding?: unknown): string {
   if (Buffer.isBuffer(chunk)) return chunk.toString(encoding as BufferEncoding);
@@ -96,7 +96,7 @@ interface RunParams {
   command: string;
   positionals?: string[];
   flags?: Record<string, string | boolean | undefined>;
-  seeded?: string[];
+  cwd?: string;
 }
 
 export class DaemonServer {
@@ -300,32 +300,40 @@ export class DaemonServer {
       command,
       positionals = [],
       flags = {},
+      cwd,
     } = params;
     if (!rawSession) throw new Error("run requires a session name");
     const sessionName = String(rawSession);
     if (!command) throw new Error("run requires a command");
 
-    const target = resolveCommandTarget(command, positionals, flags);
-    const sessionFlagsValue = sessionFlags(flags, target ? [target] : []);
+    const runCwd = cwd ?? process.cwd();
+    const originalCwd = process.cwd();
 
     const runWork = async (): Promise<number> => {
-      return this.registry.run(
-        sessionName,
-        async () => createSession(sessionFlagsValue),
-        async (session) => {
-          installCapture(send, id);
-          try {
-            return await runCommandOnSession(
-              session as import("@real-a11y-dev/browser").BrowserSession,
-              command,
-              positionals,
-              flags,
-            );
-          } finally {
-            restoreCapture();
-          }
-        },
-      );
+      process.chdir(runCwd);
+      try {
+        const targets = resolveCommandTargets(command, positionals, flags);
+        const sessionFlagsValue = sessionFlags(flags, targets);
+        return await this.registry.run(
+          sessionName,
+          async () => createSession(sessionFlagsValue),
+          async (session) => {
+            installCapture(send, id);
+            try {
+              return await runCommandOnSession(
+                session as import("@real-a11y-dev/browser").BrowserSession,
+                command,
+                positionals,
+                flags,
+              );
+            } finally {
+              restoreCapture();
+            }
+          },
+        );
+      } finally {
+        process.chdir(originalCwd);
+      }
     };
 
     const enqueued = this.enqueueRun(runWork);

@@ -70,6 +70,10 @@
             "type": "string"
           },
           {
+            "name": "session",
+            "type": "string"
+          },
+          {
             "name": "settle",
             "type": "string"
           },
@@ -167,6 +171,10 @@
           },
           {
             "name": "role",
+            "type": "string"
+          },
+          {
+            "name": "session",
             "type": "string"
           },
           {
@@ -348,6 +356,10 @@
             "type": "string"
           },
           {
+            "name": "session",
+            "type": "string"
+          },
+          {
             "name": "settle",
             "type": "string"
           },
@@ -457,6 +469,10 @@
           },
           {
             "name": "rules",
+            "type": "string"
+          },
+          {
+            "name": "session",
             "type": "string"
           },
           {
@@ -591,6 +607,10 @@
             "type": "boolean"
           },
           {
+            "name": "session",
+            "type": "string"
+          },
+          {
             "name": "settle",
             "type": "string"
           },
@@ -690,6 +710,10 @@
             "name": "quiet",
             "short": "q",
             "type": "boolean"
+          },
+          {
+            "name": "session",
+            "type": "string"
           },
           {
             "name": "settle",
@@ -826,6 +850,10 @@
             "type": "boolean"
           },
           {
+            "name": "session",
+            "type": "string"
+          },
+          {
             "name": "settle",
             "type": "string"
           },
@@ -938,6 +966,10 @@
             "type": "string"
           },
           {
+            "name": "session",
+            "type": "string"
+          },
+          {
             "name": "settle",
             "type": "string"
           },
@@ -1038,6 +1070,10 @@
             "type": "string"
           },
           {
+            "name": "session",
+            "type": "string"
+          },
+          {
             "name": "settle",
             "type": "string"
           },
@@ -1128,6 +1164,10 @@
             "name": "quiet",
             "short": "q",
             "type": "boolean"
+          },
+          {
+            "name": "session",
+            "type": "string"
           },
           {
             "name": "settle",
@@ -1227,6 +1267,10 @@
           },
           {
             "name": "role",
+            "type": "string"
+          },
+          {
+            "name": "session",
             "type": "string"
           },
           {

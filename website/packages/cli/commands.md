@@ -505,6 +505,7 @@ Throughout this table, **browser commands** is the eleven that drive a page:
 | [`--allow-file`](#allow-file) | boolean | `false` | browser commands |
 | [`--storage-state`](#storage-state-file) | path to a saved session | none | browser commands |
 | [`--audit-origin`](#audit-origin-origin) | origin (repeatable) | the target's own | browser commands |
+| [`--session`](#session-name) | string | cwd hash | browser commands |
 | [`--include-generic`](#include-generic) | boolean | `false` | `inspect`, `tree`, `outline`, `tabs`, `list`, `snapshot` |
 
 <sup>†</sup> Every other browser command reads Chromium's whole-document
@@ -749,6 +750,23 @@ cookie-matching origin. Repeat for each additional origin; must parse as a URL.
 ```sh
 real-a11y audit https://app.example.com --storage-state auth.json \
   --audit-origin https://accounts.example.com
+```
+
+### `--session <name>`
+
+- **Type:** string · **Default:** stable hash of the current working directory ·
+  **Commands:** audit, inspect, tree, outline, tabs, list, interact, click,
+  type, focus, snapshot
+
+Reuse a long-lived browser session across invocations. The first `--session`
+run spawns a daemon process that keeps the page open; later runs with the same
+name connect to it and act on the same live page. Omit `--session` to keep the
+one-shot default. See [`a11y.config.json`](#config) `session` for a project-wide
+name.
+
+```sh
+real-a11y tree https://app.example.com --session checkout
+real-a11y click https://app.example.com --session checkout --role button --name "Apply"
 ```
 
 ## Output

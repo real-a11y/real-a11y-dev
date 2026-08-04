@@ -272,6 +272,7 @@ link "--chrome-path"
 link "--allow-file"
 link "--storage-state"
 link "--audit-origin"
+link "--session"
 link "--include-generic"
 link "Output"
 table
@@ -356,6 +357,9 @@ link "Authenticated pages"
 button "Copy Code"
 generic
 link "--storage-state"
+button "Copy Code"
+generic
+link "a11y.config.json"
 button "Copy Code"
 generic
 table

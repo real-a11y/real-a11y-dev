@@ -16,9 +16,9 @@ import { fingerprintFindings, redactUrl } from "@real-a11y-dev/snapshot";
 import {
   parseFailOn,
   parseFormat,
-  parseOpenOptions,
   parseRules,
   type CommandFn,
+  type FlagValues,
 } from "../args.js";
 import { EXIT, exceedsThreshold } from "../exit.js";
 import { progress, writeReport } from "../output.js";
@@ -30,54 +30,45 @@ import {
 import { colorEnabled } from "../render/color.js";
 import { renderJson, type PageReport } from "../render/json.js";
 import { renderPretty } from "../render/pretty.js";
-
-import { createSession, nativeSnapshot, openPage } from "../session.js";
+import { createSession, nativeSnapshot } from "../session.js";
 
 import {
-  isAuthenticated,
+  ensurePageOpen,
   outputOf,
   sessionFlags,
   singleTarget,
+  type Target,
 } from "./common.js";
 
 function section(title: string, body: string): string {
   return `== ${title} ==\n${body.trim() === "" ? "(empty)" : body}\n`;
 }
 
-export const inspectCommand: CommandFn = async (positionals, flags) => {
+export async function runInspectOnSession(
+  session: import("@real-a11y-dev/browser").BrowserSession,
+  positionals: string[],
+  flags: FlagValues,
+): Promise<number> {
   const rules = parseRules(flags.rules);
   const failOn = parseFailOn(flags["fail-on"], "error");
   const format = parseFormat(flags.format, ["pretty", "json"] as const);
-  const openOptions = parseOpenOptions(flags);
   const target = singleTarget(positionals, flags, "inspect");
   const output = outputOf(flags);
   const quiet = flags.quiet === true;
 
-  const session = await createSession(sessionFlags(flags, [target]));
-  let page: PageReport;
-  try {
-    progress(`inspecting ${target.name} …`, { quiet });
-    const opened = await openPage(
-      session,
-      target.url,
-      openOptions,
-      target.fileApproved,
-      isAuthenticated(flags),
-    );
-    const snapshot = await nativeSnapshot(session, {
-      ...(rules ? { rules } : {}),
-      includeGeneric: flags["include-generic"] === true,
-    });
-    page = {
-      name: target.name,
-      url: redactUrl(opened.url),
-      findings: fingerprintFindings(target.name, snapshot.findings),
-      tree: snapshot.tree,
-      outline: snapshot.outline,
-    };
-  } finally {
-    await session.close();
-  }
+  progress(`inspecting ${target.name} …`, { quiet });
+  const { url: finalUrl } = await ensurePageOpen(session, target, flags);
+  const snapshot = await nativeSnapshot(session, {
+    ...(rules ? { rules } : {}),
+    includeGeneric: flags["include-generic"] === true,
+  });
+  const page: PageReport = {
+    name: target.name,
+    url: redactUrl(finalUrl),
+    findings: fingerprintFindings(target.name, snapshot.findings),
+    tree: snapshot.tree,
+    outline: snapshot.outline,
+  };
 
   const content =
     format === "json"
@@ -97,4 +88,26 @@ export const inspectCommand: CommandFn = async (positionals, flags) => {
   }
 
   return exceedsThreshold(page.findings, failOn) ? EXIT.FINDINGS : EXIT.OK;
+}
+
+export function validateInspect(
+  positionals: readonly string[],
+  flags: FlagValues,
+): Target {
+  const target = singleTarget(positionals, flags, "inspect");
+  parseRules(flags.rules);
+  parseFailOn(flags["fail-on"], "error");
+  parseFormat(flags.format, ["pretty", "json"] as const);
+  outputOf(flags);
+  return target;
+}
+
+export const inspectCommand: CommandFn = async (positionals, flags) => {
+  const target = validateInspect(positionals, flags);
+  const session = await createSession(sessionFlags(flags, [target]));
+  try {
+    return await runInspectOnSession(session, positionals, flags);
+  } finally {
+    await session.close();
+  }
 };

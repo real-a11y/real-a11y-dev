@@ -48,6 +48,7 @@ const PAGE_FLAGS: Options = {
   "allow-file": { type: "boolean" },
   "storage-state": { type: "string" },
   "audit-origin": { type: "string", multiple: true },
+  session: { type: "string" },
 };
 
 const OUTPUT_FLAGS: Options = {

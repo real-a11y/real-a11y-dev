@@ -32,6 +32,7 @@ export interface ConfigPage {
 
 /** Project-wide flag defaults. Each key mirrors a CLI flag; see KEY_TO_FLAG. */
 export interface A11yDefaults {
+  session?: string;
   root?: string;
   device?: string;
   viewport?: string;
@@ -102,6 +103,7 @@ const DEFAULT_TYPES = {
   ignoreViewLine: "string[]",
   maxLines: "number",
   maxPages: "number",
+  session: "string",
   explain: "boolean",
 } as const;
 const DEFAULT_KEYS: ReadonlySet<string> = new Set(Object.keys(DEFAULT_TYPES));

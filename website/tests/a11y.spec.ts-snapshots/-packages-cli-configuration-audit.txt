@@ -400,6 +400,23 @@ main
     link "storageState"
       code "storageState"
     code "https://app.example.com"
+  heading "session" (level 3)
+    code "session"
+  paragraph "— flag · default: stable hash of the current working directory · applies to , , the view commands, , , , ,"
+    strong
+      code "session: string"
+    code "--session"
+    code "audit"
+    code "inspect"
+    code "interact"
+    code "click"
+    code "type"
+    code "focus"
+    code "snapshot"
+  paragraph "Reuse a long-lived browser session across invocations. The first run with this name spawns a daemon; later runs connect to the same page. Omit to keep the one-shot default. An explicit always wins over the config value."
+    code "--session"
+  button "Copy Code"
+  code
   heading "format" (level 3)
     code "format"
   paragraph "— flag · default ( on ) · applies to , , the view commands, ,"

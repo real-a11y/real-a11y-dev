@@ -83,6 +83,22 @@ Every command takes `--format json` for a stable machine envelope
 `--device "iPhone 13"`, `--output <file>`, and more — see
 `real-a11y <command> --help`.
 
+### Reuse a page across invocations with `--session`
+
+By default every command opens a fresh browser tab and closes it when done.
+Pass `--session <name>` to keep the page open between commands:
+
+```sh
+real-a11y tree https://example.com --session checkout
+real-a11y click https://example.com --session checkout --role button --name "Add to cart"
+real-a11y tree https://example.com --session checkout
+```
+
+The first `--session` run starts a background daemon; later runs connect to it
+and act on the same live page. The session name defaults to a stable hash of
+the current working directory and can be set in `a11y.config.json` with
+`defaults.session`.
+
 Local builds audit directly: `real-a11y audit ./dist/index.html` (paths you
 type need no ceremony).
 
