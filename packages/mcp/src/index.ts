@@ -26,6 +26,12 @@
  *                                refuses to start rather than silently falling back.
  *   REAL_A11Y_BROWSERS_DIR       Cache directory `real-a11y install` downloaded Chrome for
  *                                Testing into, if not the platform default (~/.cache/real-a11y).
+ *   REAL_A11Y_MCP_MAX_SESSIONS   Cap on concurrently live named sessions (default 4) so an
+ *                                agent typo in `session` can't accumulate browsers.
+ *   REAL_A11Y_MCP_SESSION_IDLE_TIMEOUT_MS
+ *                                Idle ms before all sessions close (default 900000 = 15 min;
+ *                                0 disables; capped at 1 hour). The server stays up — the next
+ *                                tool call relaunches, and saved findings checkpoints survive.
  */
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -35,8 +41,12 @@ import {
   resolveChromeExecutable,
 } from "@real-a11y-dev/browser";
 
-import { assertValidStorageState, parseAllowedOrigins } from "./config.js";
-import { buildServer } from "./server.js";
+import {
+  assertValidStorageState,
+  envInt,
+  parseAllowedOrigins,
+} from "./config.js";
+import { buildServer, McpSessionManager } from "./server.js";
 
 async function main(): Promise<void> {
   const storageState = process.env.REAL_A11Y_MCP_STORAGE_STATE;
@@ -54,32 +64,51 @@ async function main(): Promise<void> {
   // be worse than refusing to start.
   const chrome = cdpEndpoint ? undefined : resolveChromeExecutable();
 
-  const session = new BrowserSession({
-    cdpEndpoint,
-    // Ignored when `cdpEndpoint` is set: `connectOverCDP` reuses the running
-    // browser, window state and all. `open_page` reports that case separately
-    // rather than repeating a launch flag that had no say in it.
-    headless: !headful,
-    // Auth material is env-configured, never a tool parameter — session tokens
-    // never enter the agent's context. The constructor rejects storageState +
-    // cdpEndpoint together (a CDP connection carries its own session).
-    ...(storageState ? { storageState } : {}),
-    ...(allowedOrigins.length ? { allowedOrigins } : {}),
-    ...(chrome ? { executablePath: chrome.executablePath } : {}),
+  // Every named session is built from the SAME env-derived config — the
+  // `session` tool parameter selects a page context, never credentials or a
+  // different browser. Sessions launch lazily on first use.
+  const manager = new McpSessionManager({
+    createSession: () =>
+      new BrowserSession({
+        cdpEndpoint,
+        // Ignored when `cdpEndpoint` is set: `connectOverCDP` reuses the running
+        // browser, window state and all. `open_page` reports that case separately
+        // rather than repeating a launch flag that had no say in it.
+        headless: !headful,
+        // Auth material is env-configured, never a tool parameter — session tokens
+        // never enter the agent's context. The constructor rejects storageState +
+        // cdpEndpoint together (a CDP connection carries its own session).
+        ...(storageState ? { storageState } : {}),
+        ...(allowedOrigins.length ? { allowedOrigins } : {}),
+        ...(chrome ? { executablePath: chrome.executablePath } : {}),
+      }),
+    maxSessions: envInt(
+      "REAL_A11Y_MCP_MAX_SESSIONS",
+      process.env.REAL_A11Y_MCP_MAX_SESSIONS,
+      4,
+    ),
+    idleTimeoutMs: envInt(
+      "REAL_A11Y_MCP_SESSION_IDLE_TIMEOUT_MS",
+      process.env.REAL_A11Y_MCP_SESSION_IDLE_TIMEOUT_MS,
+      900_000,
+    ),
   });
-  const server = buildServer(session, {
+  const server = buildServer(manager, {
     authenticated: Boolean(storageState),
     headful,
     cdpAttached: Boolean(cdpEndpoint),
   });
 
-  // Tear down the browser exactly once on any shutdown signal. The SDK's stdio
-  // transport doesn't reliably fire onclose on stdin EOF, so wire every path.
+  // Tear down every session exactly once on any shutdown signal. The SDK's
+  // stdio transport doesn't reliably fire onclose on stdin EOF, so wire every
+  // path.
   let shuttingDown = false;
   const shutdown = async (code: number): Promise<void> => {
     if (shuttingDown) return;
     shuttingDown = true;
-    await session.close().catch(() => {});
+    // shutdown(), not stopAll(): this is process exit, so refuse new work and
+    // release the registry's idle timer, not just close today's sessions.
+    await manager.shutdown().catch(() => {});
     await server.close().catch(() => {});
     process.exit(code);
   };

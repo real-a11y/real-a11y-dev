@@ -6,7 +6,7 @@ area: MCP
 type: Automated
 priority: P0
 status: Active
-validFrom: "mcp ≥ 0.1.0-beta.1. Expected list: 20 from mcp 0.1.0-beta.2 (act tools); **19** from the producer migration (#258), which removed `compare_producers` and kept `get_tab_order`."
+validFrom: "mcp ≥ 0.1.0-beta.1. Expected list: 20 from mcp 0.1.0-beta.2 (act tools); 19 from the producer migration (#258), which removed `compare_producers` and kept `get_tab_order`; **20** since named sessions added `list_sessions`."
 validUntil: ""
 expected: "tools/list returns EXACTLY the documented set — assert the sorted list of names, not just the count, so a rename or a swap can't pass. Each entry has a description + inputSchema. Cross-check against the count stated in packages/mcp/README.md and website/packages/mcp/tools.md; a mismatch there is itself the bug."
 twin: D4
@@ -39,14 +39,15 @@ differently and hides packaging faults.
 - **5** — docs and reality agree. A mismatch there is itself the bug: the count is
   the number a user trusts before installing
 - **6** — the instructions name the working loop (`open_page` first;
-  `checkpoint_tree` → act → `diff_tree`) and state that all tools share **one**
-  page, so calls must be sequential, never parallel
+  `checkpoint_tree` → act → `diff_tree`) and the session semantics: named
+  sessions are opt-in via the `session` parameter, calls within one session
+  serialize automatically, and different sessions may run in parallel
 - **7** — a clear error telling the agent to `open_page` first
 
 ## Why this exists
 
 Previously asserted "exactly the 18 expected names" and was wrong from the moment
-the act tools landed — then 20, and **19 today**.
+the act tools landed — then 20, then 19 after the producer migration, and **20 today** (named sessions added `list_sessions`).
 
 The reason this asserts the **list** rather than the count is not pedantry, and the
 migration proved it twice over. This row predicted `get_tab_order` and
@@ -59,7 +60,7 @@ before installing.
 
 ## Notes
 
-Was "18" — wrong since the act tools landed (#239), then 20. **19 today**
+Was "18" — wrong since the act tools landed (#239), then 20, then 19. **20 today**
 (mcp ≥ 0.1.0-beta.3). The producer migration (#258) dropped `compare_producers`
 only; `get_tab_order` was predicted to go with it and did not — it is the sole
 source of tab-order sequence. So this row's own reasoning was right and its

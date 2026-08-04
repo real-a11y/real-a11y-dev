@@ -6,7 +6,7 @@ area: MCP
 type: Automated
 priority: P0
 status: Active
-validFrom: "mcp ≥ 0.1.0-beta.1. Native list_elements locators from mcp ≥ 0.1.0-beta.2 / browser ≥ 0.1.0-beta.12. From the producer migration (#258): no `producer` param, `rootSelector` on `get_tab_order` + the tree checkpoints only, 19 tools. `get_tab_order` has no end date. Step 6b is from mcp ≥ 0.1.0-beta.2 / audit ≥ 0.1.0-beta.12; earlier releases print a bare `(none)`, which is the old behaviour, not a fail."
+validFrom: "mcp ≥ 0.1.0-beta.1. Native list_elements locators from mcp ≥ 0.1.0-beta.2 / browser ≥ 0.1.0-beta.12. From the producer migration (#258): no `producer` param, `rootSelector` on `get_tab_order` + the tree checkpoints only. 20 tools from mcp ≥ 0.1.0-beta.3 (`list_sessions` added with named sessions); 19 before that. `get_tab_order` has no end date. Step 6b is from mcp ≥ 0.1.0-beta.2 / audit ≥ 0.1.0-beta.12; earlier releases print a bare `(none)`, which is the old behaviour, not a fail."
 validUntil: ""
 expected: "each returns non-empty, correctly-shaped text; audit reports the seeded violation; list_elements returns role + name + a CSS locator (native included — that was fixed, docs used to say native carried none), and an empty category explains itself (scanned count + the roles it looked for) rather than a bare (none)"
 twin: D4
@@ -64,8 +64,9 @@ Against a page seeding a known violation:
   and then does nothing
 - **9** — tab order **numbered** at render, and `rootSelector` scopes the walk.
   This is the one read that still takes it
-- **10** — 19 tools, `get_tab_order` among them, `compare_producers` absent. Assert
-  names: a count alone passes while the wrong tool is missing
+- **10** — 20 tools, `get_tab_order` and `list_sessions` among them,
+  `compare_producers` absent. Assert names: a count alone passes while the wrong
+  tool is missing
 
 Every result must be non-empty and correctly shaped. An empty string that parses is
 the failure mode to watch for — it looks like success to a schema check and like a
@@ -96,16 +97,23 @@ absence would now be the regression.
 
 What the migration actually removed is the **producer axis**: no `producer` param
 anywhere, `rootSelector` only on `get_tab_order` and the tree checkpoints, and
-`compare_producers` gone (20 → 19). Step 8 is the guard for that — and it checks
+`compare_producers` gone (20 → 19; named sessions later took it back to 20 by
+adding `list_sessions`). Step 8 is the guard for that — and it checks
 _schema rejection_ on purpose, because a parameter that is accepted and silently
 ignored is worse than one that errors, and looks identical from the outside.
 
 ## Notes
+
+Since mcp 0.1.0-beta.2 the tools take an optional `session` parameter and
+`close_browser` takes `session`/`all`. This scenario deliberately omits them
+everywhere: it asserts the single-default-session behavior, which named
+sessions must leave unchanged. The named-session behavior itself is R31.
 
 Producer migration (#258) — `get_tab_order` SURVIVES, on the DOM producer, and is
 the one tool that still takes `rootSelector`. It was expected to be deleted; it
 wasn't, because native knows per-node `focusable` but not the _sequence_. What did
 go is the `producer` param (every read is native now) and `rootSelector` on every
 other tool — both are `additionalProperties: false`, so a call passing either is
-rejected by the schema. `compare_producers` is gone too: 20 → 19 tools. Steps
+rejected by the schema. `compare_producers` is gone too: 20 → 19 tools, and named sessions then added
+`list_sessions` for 20 again. Steps
 4/6/8 rewritten accordingly.

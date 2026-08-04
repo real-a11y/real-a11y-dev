@@ -6,7 +6,7 @@ area: MCP
 type: Automated
 priority: P0
 status: Active
-validFrom: "mcp ≥ 0.1.0-beta.1 via npx on the `beta` tag. Tool list: 20 from mcp 0.1.0-beta.2 (act tools); **19** from the producer migration (#258) — `compare_producers` removed, `get_tab_order` kept. Assert names."
+validFrom: "mcp ≥ 0.1.0-beta.1 via npx on the `beta` tag. Tool list: 20 from mcp 0.1.0-beta.2 (act tools); 19 from the producer migration (#258) — `compare_producers` removed, `get_tab_order` kept; **20** from mcp ≥ 0.1.0-beta.3, which adds `list_sessions`. Assert names."
 validUntil: ""
 expected: "npx starts the published server; tools/list matches the documented set EXACTLY (assert the names, not the count); perception + audit tools return real data for the live site"
 twin:
@@ -52,8 +52,8 @@ Point a real MCP client (Claude Code, Claude Desktop, Cursor) at the **published
 ## Expected
 
 - **1** — `npx` starts the published server on a machine with nothing installed
-- **2** — names match the docs exactly (assert the list, not the count). 19 today;
-  `get_tab_order` present, `compare_producers` absent
+- **2** — names match the docs exactly (assert the list, not the count). 20 today;
+  `get_tab_order` and `list_sessions` present, `compare_producers` absent
 - **3–6** — real data for the live site, not empty shells
 - **7** — the diff reports the real delta between two live pages
 - **9** — the agent picks a sensible sequence **from the tool descriptions alone**. If it
@@ -72,7 +72,7 @@ thing that goes stale when tools are added or renamed.
 
 ## Notes
 
-Was "the 18 tools" — wrong since the act tools landed, then 20. **19 today.** The producer
+Was "the 18 tools" — wrong since the act tools landed, then 20, then 19. **20 today.** The producer
 migration (#258) dropped `compare_producers`; `get_tab_order` was predicted to go with it and
 survived, so the "back to 18" arithmetic was wrong while the reasoning (assert names, not the
 count) was right. Step 5 also loses its `producer: "native"` half — the param is gone and the

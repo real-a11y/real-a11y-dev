@@ -47,6 +47,33 @@ export function assertValidStorageState(path: string): void {
   }
 }
 
+/**
+ * Parse a non-negative INTEGER environment variable, strictly. `Number()`
+ * alone is a trap here: `Number(" ")` is `0` — a stray space in
+ * REAL_A11Y_MCP_SESSION_IDLE_TIMEOUT_MS would silently DISABLE the idle
+ * timeout — and hex ("0x10") or fractions ("2.5") would configure caps the
+ * operator never wrote. Digits only, surrounding whitespace tolerated;
+ * anything else refuses to start rather than run a configuration nobody
+ * chose. Unset, empty (`VAR=`), or whitespace-only all mean the fallback —
+ * never `0`, which would DISABLE the timeout.
+ *
+ * The env read stays at the call site (a property access) so the surface
+ * extractor can see the variable's name; this helper only validates.
+ */
+export function envInt(
+  name: string,
+  raw: string | undefined,
+  fallback: number,
+): number {
+  if (raw === undefined) return fallback;
+  const trimmed = raw.trim();
+  if (trimmed === "") return fallback;
+  if (!/^\d+$/.test(trimmed)) {
+    throw new Error(`${name} must be a non-negative integer, got "${raw}"`);
+  }
+  return Number(trimmed);
+}
+
 /** Parse the comma-separated origin allowlist, normalizing each to its origin. */
 export function parseAllowedOrigins(raw: string | undefined): string[] {
   if (!raw) return [];

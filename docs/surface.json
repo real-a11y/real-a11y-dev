@@ -1492,6 +1492,18 @@
       ]
     },
     {
+      "name": "REAL_A11Y_MCP_MAX_SESSIONS",
+      "packages": [
+        "mcp"
+      ]
+    },
+    {
+      "name": "REAL_A11Y_MCP_SESSION_IDLE_TIMEOUT_MS",
+      "packages": [
+        "mcp"
+      ]
+    },
+    {
       "name": "REAL_A11Y_MCP_STORAGE_STATE",
       "packages": [
         "mcp"
@@ -1525,6 +1537,11 @@
                 "type": "string"
               },
               "type": "array"
+            },
+            "session": {
+              "default": "default",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
+              "type": "string"
             }
           },
           "type": "object"
@@ -1539,7 +1556,7 @@
           "openWorldHint": false,
           "readOnlyHint": false
         },
-        "description": "Snapshot the CURRENT page's accessibility findings and store them under `name`. Later call diff_findings to see which findings are new / changed / fixed — the same identity semantics (fingerprints) the CI a11y-diff uses. Checkpoints survive navigation, so you can checkpoint one deploy and diff another: save 'prod', open the preview URL, then diff_findings('prod'). They are held in memory and do NOT survive close_browser — call export_checkpoint first if you need one to outlive the session. Whole-document. Chromium only.",
+        "description": "Snapshot the CURRENT page's accessibility findings and store them under `name`. Later call diff_findings to see which findings are new / changed / fixed — the same identity semantics (fingerprints) the CI a11y-diff uses. Checkpoints survive navigation AND the session idle timeout (the browser may close and relaunch between saving and diffing; checkpoints remain), so you can checkpoint one deploy and diff another: save 'prod', open the preview URL, then diff_findings('prod'). They are held in memory and do NOT survive close_browser — call export_checkpoint first if you need one to outlive the session. Whole-document. Chromium only.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "additionalProperties": false,
@@ -1563,6 +1580,11 @@
                 "type": "string"
               },
               "type": "array"
+            },
+            "session": {
+              "default": "default",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
+              "type": "string"
             }
           },
           "required": [
@@ -1588,6 +1610,11 @@
             "rootSelector": {
               "default": "body",
               "description": "CSS selector for the extraction root. Defaults to 'body'.",
+              "type": "string"
+            },
+            "session": {
+              "default": "default",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
             }
           },
@@ -1621,6 +1648,11 @@
               "description": "ARIA role of the target, exactly as the tree prints it — e.g. 'button', 'link', 'textbox', 'checkbox', 'menuitem'.",
               "minLength": 1,
               "type": "string"
+            },
+            "session": {
+              "default": "default",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
+              "type": "string"
             }
           },
           "required": [
@@ -1638,14 +1670,25 @@
           "openWorldHint": false,
           "readOnlyHint": false
         },
-        "description": "Close the browser session and free resources. This also DISCARDS every saved findings checkpoint — export_checkpoint anything you still need first. Only call it when you're done; the other tools reopen nothing on their own.",
+        "description": "Close a named browser session (default: the default session) and free its resources, or pass all=true to close every live session — not both. Closing a session DISCARDS its saved findings checkpoints — export_checkpoint anything you still need first. Only call it when you're done; the other tools reopen nothing on their own.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
-          "properties": {},
+          "additionalProperties": false,
+          "properties": {
+            "all": {
+              "default": false,
+              "description": "Close every live session instead of just one.",
+              "type": "boolean"
+            },
+            "session": {
+              "description": "Session to close. Omit for the default session. Not combinable with all=true.",
+              "type": "string"
+            }
+          },
           "type": "object"
         },
         "name": "close_browser",
-        "title": "Close browser"
+        "title": "Close browser session(s)"
       },
       {
         "annotations": {
@@ -1666,6 +1709,11 @@
             },
             "head": {
               "$ref": "#/properties/base"
+            },
+            "session": {
+              "default": "default",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
+              "type": "string"
             }
           },
           "required": [
@@ -1693,6 +1741,11 @@
               "maxLength": 64,
               "minLength": 1,
               "type": "string"
+            },
+            "session": {
+              "default": "default",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
+              "type": "string"
             }
           },
           "required": [
@@ -1717,6 +1770,11 @@
             "rootSelector": {
               "description": "CSS root for the re-extraction. Defaults to the root the checkpoint was captured with.",
               "type": "string"
+            },
+            "session": {
+              "default": "default",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
+              "type": "string"
             }
           },
           "type": "object"
@@ -1739,6 +1797,11 @@
               "description": "Checkpoint label — the in-memory store key.",
               "maxLength": 64,
               "minLength": 1,
+              "type": "string"
+            },
+            "session": {
+              "default": "default",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
             }
           },
@@ -1775,6 +1838,11 @@
               "description": "ARIA role of the target, exactly as the tree prints it — e.g. 'button', 'link', 'textbox', 'checkbox', 'menuitem'.",
               "minLength": 1,
               "type": "string"
+            },
+            "session": {
+              "default": "default",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
+              "type": "string"
             }
           },
           "required": [
@@ -1794,7 +1862,14 @@
         "description": "Return the page's heading outline (h1..h6 in document order) as an indented list, derived from Chromium's own accessibility tree. Whole-document. Chromium only.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
-          "properties": {},
+          "additionalProperties": false,
+          "properties": {
+            "session": {
+              "default": "default",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
+              "type": "string"
+            }
+          },
           "type": "object"
         },
         "name": "get_heading_outline",
@@ -1815,6 +1890,11 @@
               "default": false,
               "description": "Include generic container nodes (role=generic).",
               "type": "boolean"
+            },
+            "session": {
+              "default": "default",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
+              "type": "string"
             }
           },
           "type": "object"
@@ -1836,6 +1916,11 @@
             "rootSelector": {
               "default": "body",
               "description": "CSS selector for the extraction root. Defaults to 'body'.",
+              "type": "string"
+            },
+            "session": {
+              "default": "default",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
             }
           },
@@ -1864,6 +1949,11 @@
               "description": "Checkpoint label — the in-memory store key.",
               "maxLength": 64,
               "minLength": 1,
+              "type": "string"
+            },
+            "session": {
+              "default": "default",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
             }
           },
@@ -1905,6 +1995,11 @@
                 "type": "string"
               },
               "type": "array"
+            },
+            "session": {
+              "default": "default",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
+              "type": "string"
             }
           },
           "type": "object"
@@ -1921,7 +2016,14 @@
         "description": "List the stored checkpoint labels with their finding counts and approximate tree sizes.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
-          "properties": {},
+          "additionalProperties": false,
+          "properties": {
+            "session": {
+              "default": "default",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
+              "type": "string"
+            }
+          },
           "type": "object"
         },
         "name": "list_checkpoints",
@@ -1949,6 +2051,11 @@
                 "image"
               ],
               "type": "string"
+            },
+            "session": {
+              "default": "default",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
+              "type": "string"
             }
           },
           "required": [
@@ -1958,6 +2065,22 @@
         },
         "name": "list_elements",
         "title": "List elements by category"
+      },
+      {
+        "annotations": {
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": true
+        },
+        "description": "List every live named browser session: name, current URL (redacted), created/last-used times, and whether a call is running on it right now. Sessions are created lazily by the first tool call that names them and closed by close_browser or the idle timeout (which keeps their checkpoints).",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
+          "properties": {},
+          "type": "object"
+        },
+        "name": "list_sessions",
+        "title": "List browser sessions"
       },
       {
         "annotations": {
@@ -1973,6 +2096,11 @@
           "properties": {
             "device": {
               "description": "Emulate a device so the tree reflects the mobile/tablet layout. A Playwright device name, e.g. 'iPhone 13', 'Pixel 7', 'iPad Pro 11'. Omit for desktop.",
+              "type": "string"
+            },
+            "session": {
+              "default": "default",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
             },
             "settleMs": {
@@ -2056,6 +2184,11 @@
             "role": {
               "description": "ARIA role of the target, exactly as the tree prints it — e.g. 'button', 'link', 'textbox', 'checkbox', 'menuitem'.",
               "minLength": 1,
+              "type": "string"
+            },
+            "session": {
+              "default": "default",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
             },
             "text": {

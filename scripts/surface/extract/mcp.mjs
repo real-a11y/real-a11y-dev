@@ -14,26 +14,35 @@ import { pathToFileURL } from "node:url";
 import { loadTs } from "../ts-load.mjs";
 
 /**
- * A session that throws on any use.
+ * A `SessionManager` whose every method throws if actually called.
  *
- * `buildServer` takes an `A11ySession`, but only the tool *handlers* touch it —
- * registration doesn't, and we never invoke a handler. If registration ever
- * starts reaching into the session, this makes it fail loudly rather than
- * quietly extracting a surface built from `undefined`.
+ * A MANAGER, not a bare session, because that is what the shipped bin wires
+ * (`index.ts` builds an `McpSessionManager`) — and the two paths advertise
+ * different text: on the single-session path the tools say so in `session`'s
+ * description. Extracting from a bare session would put the embedder-only
+ * wording in the manifest the docs are checked against.
+ *
+ * The methods exist (registration discriminates on their shape) but only tool
+ * *handlers* invoke them, and we never invoke a handler. If registration ever
+ * starts running one, this fails loudly rather than quietly extracting a
+ * surface built from `undefined`.
  */
-function stubSession() {
-  return new Proxy(
-    {},
-    {
-      get(_target, prop) {
-        throw new Error(
-          `The surface extractor's stub session was used (.${String(prop)}). ` +
-            `Tool registration is supposed to be side-effect free — if that ` +
-            `changed, the extractor needs a real session.`,
-        );
-      },
-    },
-  );
+function stubManager() {
+  const refuse = (method) => () => {
+    throw new Error(
+      `The surface extractor's stub manager was used (.${method}). ` +
+        `Tool registration is supposed to be side-effect free — if that ` +
+        `changed, the extractor needs a real session.`,
+    );
+  };
+  return {
+    run: refuse("run"),
+    list: refuse("list"),
+    stop: refuse("stop"),
+    stopAll: refuse("stopAll"),
+    checkpoints: refuse("checkpoints"),
+    shutdown: refuse("shutdown"),
+  };
 }
 
 export async function extractMcp(repoRoot) {
@@ -54,7 +63,7 @@ export async function extractMcp(repoRoot) {
     "@modelcontextprotocol/sdk/inMemory.js",
   );
 
-  const server = mod.buildServer(stubSession());
+  const server = mod.buildServer(stubManager());
   const [clientTransport, serverTransport] =
     InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "real-a11y-surface", version: "0.0.0" });
