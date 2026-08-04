@@ -14,7 +14,11 @@ primitives layered underneath.
 
 ## Tools
 
-Nineteen tools, grouped. Every tool reads **Chromium's own accessibility tree**
+Twenty tools, grouped. Every page tool takes an optional `session` — a name
+selecting an independent live page with its own checkpoints; calls within one
+session are serialized automatically, and different sessions run in parallel.
+Omit it everywhere for the single default page. Every tool reads **Chromium's
+own accessibility tree**
 over CDP — whole-document, and reaching structure no in-page walk can — except
 `get_tab_order`, which is the one view that tree cannot produce (see
 [below](#one-producer-per-surface)). Full parameter reference:
@@ -25,7 +29,8 @@ over CDP — whole-document, and reaching structure no in-page walk can — exce
 | Tool | Purpose |
 | --- | --- |
 | `open_page` | Navigate to a URL and ready it for queries (call first). `waitUntil` / `settleMs` settle dynamic pages; `device` audits the **mobile/tablet** layout. |
-| `close_browser` | Tear down the session. Also discards every saved findings checkpoint — `export_checkpoint` first if one needs to outlive the session. |
+| `close_browser` | Close one named session (or `all: true` for every one). Discards that session's findings checkpoints — `export_checkpoint` first if one needs to outlive it. |
+| `list_sessions` | List the live named sessions — URL (redacted), busy state, timestamps. |
 
 **Audit**
 
@@ -175,6 +180,8 @@ To pin the version instead, add it to your project (`pnpm add -D
 | `REAL_A11Y_MCP_ALLOW_FILE` | `1` permits auditing `file://` URLs. Off by default: an LLM-driven server that can open `file:///…/.env` and read the DOM back is a local-file exfiltration primitive. |
 | `REAL_A11Y_MCP_STORAGE_STATE` | Path to a Playwright storage-state file — audit pages behind a login as that saved session. Create it out-of-band (e.g. `real-a11y login`); it's never a tool parameter, so session tokens never enter the agent's context. The server refuses to start if the file is missing or malformed. |
 | `REAL_A11Y_MCP_ALLOWED_ORIGINS` | Comma-separated origins that auditing is restricted to when a storage state is loaded (origin pinning). **Strongly recommended** alongside `STORAGE_STATE`: without it, a redirect could audit an unintended site with your session. |
+| `REAL_A11Y_MCP_MAX_SESSIONS` | Cap on concurrently live named sessions (default 4) — each session is its own browser, so this keeps a `session` typo from accumulating Chromiums. |
+| `REAL_A11Y_MCP_SESSION_IDLE_TIMEOUT_MS` | Idle ms before all sessions close (default 900000 = 15 min; 0 disables; capped at 1 hour). The server stays up; the next call relaunches. |
 
 Auth material is always operator-configured, never a tool parameter — the agent
 just benefits from a session you set up. Use a dedicated low-privilege test

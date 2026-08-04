@@ -194,11 +194,16 @@ main
   paragraph "The session path is server configuration, never a tool argument, so tokens stay out of the assistant's context. See for the full workflow and security rules."
     link "Authenticated pages"
   heading "Configuration" (level 2)
-  paragraph "All server behavior is set through environment variables, in the block of the config above — attaching to a running Chrome over CDP, headful mode, access, a saved login session, and origin pinning. Each one, with its values and security notes, is documented in in the tools reference."
+  paragraph "All server behavior is set through environment variables, in the block of the config above — attaching to a running Chrome over CDP, headful mode, access, a saved login session, origin pinning, and the named-session limits (, ). Each one, with its values and security notes, is documented in in the tools reference."
     code "REAL_A11Y_MCP_*"
     code ""env""
     code "file://"
+    code "REAL_A11Y_MCP_MAX_SESSIONS"
+    code "REAL_A11Y_MCP_SESSION_IDLE_TIMEOUT_MS"
     link "Environment"
+  paragraph "Every page tool also takes an optional parameter — independent named live pages with their own checkpoints, serialized within a session and parallel across sessions. Omit it and the server behaves as a single-page tool; the has the full semantics."
+    code "session"
+    link "tools reference"
   heading "Scripting audits without an MCP client" (level 2)
   paragraph "Beyond the server, the package ships a subpath export that gives you the Playwright-backed session standalone — without pulling in the MCP SDK dependency graph:"
     code "./browser"

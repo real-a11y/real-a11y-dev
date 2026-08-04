@@ -12,5 +12,9 @@ export default defineConfig({
   treeshake: true,
   // playwright is a peer dep, resolved by the host — never bundle it.
   external: ["playwright"],
+  // The session registry is a PRIVATE workspace package: npm can never resolve
+  // it, so it must be bundled into the dist (it is a devDependency for the
+  // same reason — a published "dependencies" entry would break installs).
+  noExternal: ["@real-a11y-dev/session-registry"],
   banner: { js: "" },
 });

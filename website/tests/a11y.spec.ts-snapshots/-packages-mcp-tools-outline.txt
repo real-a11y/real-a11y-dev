@@ -13,6 +13,7 @@ h1 MCP tools reference
   h2 Session
     h3 open_page
     h3 close_browser
+    h3 list_sessions
   h2 Audit
     h3 audit_page
     h3 inspect_page
@@ -41,3 +42,5 @@ h1 MCP tools reference
     h3 REAL_A11Y_MCP_ALLOW_FILE
     h3 REAL_A11Y_MCP_STORAGE_STATE
     h3 REAL_A11Y_MCP_ALLOWED_ORIGINS
+    h3 REAL_A11Y_MCP_MAX_SESSIONS
+    h3 REAL_A11Y_MCP_SESSION_IDLE_TIMEOUT_MS

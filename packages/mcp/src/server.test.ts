@@ -17,6 +17,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 
 import {
   buildServer,
+  McpSessionManager,
   renderAudit,
   renderSnapshot,
   type BuildServerOptions,
@@ -385,6 +386,7 @@ describe("MCP server wiring", () => {
         "inspect_page",
         "list_checkpoints",
         "list_elements",
+        "list_sessions",
         "open_page",
         "checkpoint_findings",
         "type_text",
@@ -397,7 +399,10 @@ describe("MCP server wiring", () => {
     const schema = (await client.listTools()).tools.find(
       (t) => t.name === "list_elements",
     )?.inputSchema;
-    expect(Object.keys(schema?.properties ?? {})).toEqual(["filter"]);
+    expect(Object.keys(schema?.properties ?? {})).toEqual([
+      "filter",
+      "session",
+    ]);
     // A rejected extra property beats one that is silently ignored.
     const res = await client.callTool({
       name: "list_elements",
@@ -1608,5 +1613,174 @@ describe("act tools (click_element / type_text / focus_element)", () => {
     // A repeated type replaces the same value — honestly idempotent.
     expect(type.annotations?.idempotentHint).toBe(true);
     expect(byName("focus_element").annotations?.readOnlyHint).toBe(false);
+  });
+});
+
+describe("named sessions", () => {
+  /** A manager whose factory hands out one FakeSession per name, recorded. */
+  function makeManager(options: { maxSessions?: number } = {}) {
+    const created: FakeSession[] = [];
+    const manager = new McpSessionManager({
+      createSession: () => {
+        const s = new FakeSession();
+        created.push(s);
+        return s;
+      },
+      maxSessions: options.maxSessions,
+    });
+    return { manager, created };
+  }
+
+  async function connectManager(manager: McpSessionManager) {
+    const server = buildServer(manager);
+    const [clientT, serverT] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "test", version: "0.0.0" });
+    await Promise.all([server.connect(serverT), client.connect(clientT)]);
+    return client;
+  }
+
+  it("creates one browser session per name, lazily, and routes calls to it", async () => {
+    const { manager, created } = makeManager();
+    const client = await connectManager(manager);
+    expect(created.length).toBe(0);
+
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://a.example/", session: "alpha" },
+    });
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://b.example/", session: "beta" },
+    });
+    expect(created.length).toBe(2);
+    expect(created[0].opened.map((o) => o.url)).toEqual(["https://a.example/"]);
+    expect(created[1].opened.map((o) => o.url)).toEqual(["https://b.example/"]);
+
+    // Same name → same session, no new launch.
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://a2.example/", session: "alpha" },
+    });
+    expect(created.length).toBe(2);
+    expect(created[0].opened.map((o) => o.url)).toEqual([
+      "https://a.example/",
+      "https://a2.example/",
+    ]);
+  });
+
+  it("keeps checkpoints isolated between sessions", async () => {
+    const { manager } = makeManager();
+    const client = await connectManager(manager);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://a.example/", session: "alpha" },
+    });
+    await client.callTool({
+      name: "checkpoint_findings",
+      arguments: { name: "base", session: "alpha" },
+    });
+
+    const inAlpha = await client.callTool({
+      name: "list_checkpoints",
+      arguments: { session: "alpha" },
+    });
+    expect(textOf(inAlpha as never)).toMatch(/1 checkpoint/);
+
+    // The same label does not exist in a different session.
+    const inBeta = await client.callTool({
+      name: "list_checkpoints",
+      arguments: { session: "beta" },
+    });
+    expect(textOf(inBeta as never)).toMatch(/No checkpoints saved/);
+  });
+
+  it("close_browser closes one named session; all=true closes every one", async () => {
+    const { manager, created } = makeManager();
+    const client = await connectManager(manager);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://a.example/", session: "alpha" },
+    });
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://b.example/", session: "beta" },
+    });
+
+    const one = await client.callTool({
+      name: "close_browser",
+      arguments: { session: "alpha" },
+    });
+    expect(textOf(one as never)).toMatch(/"alpha" closed/);
+    expect(created[0].closed).toBe(1);
+    expect(created[1].closed).toBe(0);
+
+    const rest = await client.callTool({
+      name: "close_browser",
+      arguments: { all: true },
+    });
+    expect(textOf(rest as never)).toMatch(/Closed 1 session/);
+    expect(created[1].closed).toBe(1);
+  });
+
+  it("list_sessions reports live sessions and empty state", async () => {
+    const { manager } = makeManager();
+    const client = await connectManager(manager);
+
+    const empty = await client.callTool({
+      name: "list_sessions",
+      arguments: {},
+    });
+    expect(textOf(empty as never)).toMatch(/No sessions/);
+
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://a.example/", session: "alpha" },
+    });
+    const listed = await client.callTool({
+      name: "list_sessions",
+      arguments: {},
+    });
+    expect(textOf(listed as never)).toMatch(/1 session\(s\):/);
+    expect(textOf(listed as never)).toMatch(/alpha/);
+  });
+
+  it("refuses a session beyond the cap, naming the remedy", async () => {
+    const { manager, created } = makeManager({ maxSessions: 1 });
+    const client = await connectManager(manager);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://a.example/", session: "alpha" },
+    });
+    const refused = await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://b.example/", session: "beta" },
+    });
+    expect(textOf(refused as never)).toMatch(/session limit reached/);
+    expect(textOf(refused as never)).toMatch(/close_browser/);
+    expect(created.length).toBe(1);
+
+    // The existing session is unaffected and still usable.
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://a2.example/", session: "alpha" },
+    });
+    expect(created[0].opened.length).toBe(2);
+  });
+
+  it("rejects an invalid session name before creating anything", async () => {
+    const { manager, created } = makeManager();
+    const client = await connectManager(manager);
+    const res = await client.callTool({
+      name: "open_page",
+      // Too long for the schema? No — schema-valid but registry-invalid names
+      // can't exist (same regex), so go through the manager directly to prove
+      // the second gate holds even for embedders that bypass the schema.
+      arguments: { url: "https://a.example/", session: "ok-name" },
+    });
+    expect(res).toBeDefined();
+    await expect(manager.run("not ok!", async () => 0)).rejects.toThrow(
+      /invalid session name/,
+    );
+    expect(created.length).toBe(1);
   });
 });

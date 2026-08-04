@@ -148,9 +148,16 @@ security rules.
 
 All server behavior is set through `REAL_A11Y_MCP_*` environment variables, in
 the `"env"` block of the config above — attaching to a running Chrome over CDP,
-headful mode, `file://` access, a saved login session, and origin pinning. Each
-one, with its values and security notes, is documented in
+headful mode, `file://` access, a saved login session, origin pinning, and the
+named-session limits (`REAL_A11Y_MCP_MAX_SESSIONS`,
+`REAL_A11Y_MCP_SESSION_IDLE_TIMEOUT_MS`). Each one, with its values and
+security notes, is documented in
 [Environment](/packages/mcp/tools#environment) in the tools reference.
+
+Every page tool also takes an optional `session` parameter — independent named
+live pages with their own checkpoints, serialized within a session and parallel
+across sessions. Omit it and the server behaves as a single-page tool; the
+[tools reference](/packages/mcp/tools#session) has the full semantics.
 
 ## Scripting audits without an MCP client
 

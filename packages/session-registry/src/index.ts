@@ -151,14 +151,17 @@ export class SessionRegistry<T extends SessionLike> {
   /**
    * Run `task` exclusively for `name`.  Creates the session with `factory` on
    * first use; `factory` is only called once per name even for racing requests.
+   *
+   * Generic over the task's result: the CLI daemon returns exit codes, the MCP
+   * server returns structured tool results — the scheduling is identical.
    */
-  async run(
+  async run<R>(
     name: string,
     sessionFlags: SessionFlagsLike,
     idleTimeoutMs: number,
     factory: () => Promise<T>,
-    task: (session: T) => Promise<number>,
-  ): Promise<number> {
+    task: (session: T) => Promise<R>,
+  ): Promise<R> {
     if (this.stopping || this.stopped) {
       throw new RegistryShutdownError();
     }
@@ -180,9 +183,9 @@ export class SessionRegistry<T extends SessionLike> {
       holder.busy = true;
       this.clearIdleTimer();
       try {
-        const exitCode = await task(holder.session);
+        const result = await task(holder.session);
         holder.lastUsedAt = Date.now();
-        return exitCode;
+        return result;
       } finally {
         holder.busy = false;
       }

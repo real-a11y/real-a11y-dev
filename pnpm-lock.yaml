@@ -480,6 +480,9 @@ importers:
         specifier: ^3.25.0
         version: 3.25.76
     devDependencies:
+      '@real-a11y-dev/session-registry':
+        specifier: workspace:*
+        version: link:../session-registry
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.17

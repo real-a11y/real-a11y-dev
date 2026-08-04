@@ -19,6 +19,7 @@ import type { A11yRule, Finding, RoleFilter } from "@real-a11y-dev/audit";
 import { resolveTarget } from "@real-a11y-dev/browser";
 import type { A11ySession, TargetCandidate } from "@real-a11y-dev/browser";
 import { numberTabStops } from "@real-a11y-dev/serialize";
+import { SessionRegistryError } from "@real-a11y-dev/session-registry";
 import {
   assertFullArtifact,
   buildArtifact,
@@ -32,13 +33,28 @@ import {
 import { z } from "zod";
 
 import {
-  CheckpointStore,
   differentUrl,
   diffCheckpointPages,
   diffLabeledCheckpoints,
   renderDiff,
   scopeMismatch,
 } from "./checkpoints.js";
+import {
+  DEFAULT_SESSION,
+  SESSION_NAME_RE,
+  singleSessionManager,
+  type SessionManager,
+  type SessionRecord,
+} from "./sessions.js";
+
+export {
+  McpSessionManager,
+  singleSessionManager,
+  DEFAULT_SESSION,
+  type SessionManager,
+  type SessionRecord,
+  type McpSessionManagerOptions,
+} from "./sessions.js";
 
 export { BrowserSession } from "@real-a11y-dev/browser";
 export type {
@@ -303,9 +319,16 @@ export interface BuildServerOptions {
 }
 
 export function buildServer(
-  session: A11ySession,
+  sessionOrManager: A11ySession | SessionManager,
   options: BuildServerOptions = {},
 ): McpServer {
+  // Back-compat: embedders that pass one A11ySession get exactly the old
+  // single-page behavior (every session name resolves to that one session).
+  // `act` exists on sessions and not on managers, so it discriminates.
+  const manager: SessionManager =
+    "act" in sessionOrManager
+      ? singleSessionManager(sessionOrManager)
+      : sessionOrManager;
   const authenticated = options.authenticated === true;
   const cdpAttached = options.cdpAttached === true;
   const headful = options.headful === true;
@@ -336,21 +359,44 @@ export function buildServer(
     },
     {
       instructions:
-        "Audit any web page's accessibility for AI agents. Call open_page(url) FIRST, then use audit_page (violations), inspect_page (findings + tree + outline + tab order from one consistent snapshot — prefer on dynamic pages), or the get_* / list_elements views. To interact: checkpoint_tree, then click_element / type_text / focus_element (target by role + accessible name), then diff_tree to see exactly what changed. All tools share ONE browser page — issue calls sequentially, never in parallel.",
+        "Audit any web page's accessibility for AI agents. Call open_page(url) FIRST, then use audit_page (violations), inspect_page (findings + tree + outline + tab order from one consistent snapshot — prefer on dynamic pages), or the get_* / list_elements views. To interact: checkpoint_tree, then click_element / type_text / focus_element (target by role + accessible name), then diff_tree to see exactly what changed. Every page tool takes an optional `session` — separate names are independent live pages with their own checkpoints; calls within one session are serialized automatically, and different sessions may run in parallel. Omit `session` to keep using the one default page.",
     },
   );
 
-  // ── Checkpoints (Axis-B findings diff) ──────────────────────────────────
-  // A named, in-memory store of a11y snapshots. Each is pure data (strings +
-  // fingerprinted findings, no DOM references), so checkpoints deliberately
-  // SURVIVE navigation — that enables the cross-deploy diff (checkpoint prod →
-  // open preview → diff_findings). Only close_browser clears them, as session
-  // hygiene. (Contrast Axis-A tree-checkpoints, which are page-instance-bound.)
-  const checkpoints = new CheckpointStore();
-  // Where `open_page` last put us. Only a fallback: `pageUrl()` prefers the
-  // live address, because the two are not the same thing once an act tool has
-  // clicked a link.
-  let openedUrl = "";
+  // ── Sessions ─────────────────────────────────────────────────────────────
+  // Per-session state (the browser session, the checkpoint store, the last
+  // opened URL, the tree-checkpoint root) lives in a SessionRecord owned by
+  // the manager. Tools reach it only through `withSession`, which is what
+  // makes the per-session single-flight guarantee structural. Checkpoints
+  // deliberately SURVIVE navigation (cross-deploy diffs); they are discarded
+  // when their session closes.
+  const errText = (msg: string) => ({
+    content: [{ type: "text" as const, text: msg }],
+    isError: true as const,
+  });
+  const sessionParam = z
+    .string()
+    .regex(SESSION_NAME_RE, "1-32 characters from A-Z, a-z, 0-9, _ and -")
+    .default(DEFAULT_SESSION)
+    .describe(
+      "Named browser session to use. Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
+    );
+  const withSession = async <R>(
+    name: string,
+    fn: (rec: SessionRecord) => Promise<R>,
+  ): Promise<R | ReturnType<typeof errText>> => {
+    try {
+      return await manager.run(name, fn);
+    } catch (err) {
+      // Session-level refusals (bad name, session cap, shutdown) are expected,
+      // user-fixable conditions — surface them as tool errors with the remedy,
+      // not as protocol-level exceptions.
+      if (err instanceof SessionRegistryError) {
+        return errText(err.hint ? `${err.message} — ${err.hint}` : err.message);
+      }
+      throw err;
+    }
+  };
   /**
    * The address a checkpoint should record — read at extraction time, not at
    * open time.
@@ -360,11 +406,8 @@ export function buildServer(
    * page, and — since `differentUrl` compares these — would leave a diff across
    * two genuinely different pages looking like one page twice.
    */
-  const pageUrl = () => session.currentUrl() ?? openedUrl;
-  // Axis-A tree checkpoint: the captured tree lives in the PAGE (node ids are
-  // realm-bound). The server only remembers which root it was captured with, so
-  // the diff re-extracts like-for-like instead of silently widening to <body>.
-  let treeCheckpointRoot: string | undefined;
+  const pageUrl = (rec: SessionRecord) =>
+    rec.session.currentUrl() ?? rec.openedUrl;
 
   // ── Session ────────────────────────────────────────────────────────────
   server.registerTool(
@@ -413,6 +456,7 @@ export function buildServer(
           .describe(
             "Explicit viewport override, e.g. { width: 375, height: 812 }. Layered on top of `device`.",
           ),
+        session: sessionParam,
       },
       annotations: {
         readOnlyHint: false,
@@ -421,42 +465,57 @@ export function buildServer(
         openWorldHint: true,
       },
     },
-    async ({ url, waitUntil, settleMs, timeoutMs, device, viewport }) => {
-      const info = await session.open(url, {
-        waitUntil,
-        settleMs,
-        timeoutMs,
-        device,
-        viewport,
-      });
-      openedUrl = info.url;
-      // Navigation replaces the page bundle, which wipes the in-page tree
-      // checkpoint — drop the remembered root so server state stays honest.
-      treeCheckpointRoot = undefined;
-      const emu = device
-        ? ` [${device}]`
-        : viewport
-          ? ` [${viewport.width}×${viewport.height}]`
-          : "";
-      return text(
-        `Opened ${info.url}${emu}\nTitle: ${info.title || "(untitled)"}` +
-          `\nBrowser: ${browserMode}` +
-          (authenticated
-            ? "\n(authenticated session: storage state loaded)"
-            : cdpAttached
-              ? "\n(session: whatever the attached Chrome holds — verify rather than assume)"
-              : ""),
-      );
-    },
+    async ({
+      url,
+      waitUntil,
+      settleMs,
+      timeoutMs,
+      device,
+      viewport,
+      session,
+    }) =>
+      withSession(session, async (rec) => {
+        const info = await rec.session.open(url, {
+          waitUntil,
+          settleMs,
+          timeoutMs,
+          device,
+          viewport,
+        });
+        rec.openedUrl = info.url;
+        // Navigation replaces the page bundle, which wipes the in-page tree
+        // checkpoint — drop the remembered root so server state stays honest.
+        rec.treeCheckpointRoot = undefined;
+        const emu = device
+          ? ` [${device}]`
+          : viewport
+            ? ` [${viewport.width}×${viewport.height}]`
+            : "";
+        return text(
+          `Opened ${info.url}${emu}\nTitle: ${info.title || "(untitled)"}` +
+            `\nBrowser: ${browserMode}` +
+            (authenticated
+              ? "\n(authenticated session: storage state loaded)"
+              : cdpAttached
+                ? "\n(session: whatever the attached Chrome holds — verify rather than assume)"
+                : ""),
+        );
+      }),
   );
 
   server.registerTool(
     "close_browser",
     {
-      title: "Close browser",
+      title: "Close browser session(s)",
       description:
-        "Close the browser session and free resources. This also DISCARDS every saved findings checkpoint — export_checkpoint anything you still need first. Only call it when you're done; the other tools reopen nothing on their own.",
-      inputSchema: {},
+        "Close a named browser session (default: the default session) and free its resources, or pass all=true to close every live session. Closing a session DISCARDS its saved findings checkpoints — export_checkpoint anything you still need first. Only call it when you're done; the other tools reopen nothing on their own.",
+      inputSchema: {
+        session: sessionParam,
+        all: z
+          .boolean()
+          .default(false)
+          .describe("Close every live session instead of just one."),
+      },
       annotations: {
         readOnlyHint: false,
         destructiveHint: true,
@@ -464,11 +523,22 @@ export function buildServer(
         openWorldHint: false,
       },
     },
-    async () => {
-      await session.close();
-      checkpoints.clear();
-      treeCheckpointRoot = undefined;
-      return text("Browser session closed.");
+    async ({ session, all }) => {
+      if (all) {
+        const count = manager.list().length;
+        await manager.stopAll();
+        return text(
+          count === 0
+            ? "No sessions were open."
+            : `Closed ${count} session(s).`,
+        );
+      }
+      const stopped = await manager.stop(session);
+      return text(
+        stopped
+          ? `Session "${session}" closed.`
+          : `Session "${session}" was not open.`,
+      );
     },
   );
 
@@ -485,13 +555,17 @@ export function buildServer(
           .array(z.enum(RULES))
           .optional()
           .describe("Subset of rules to run. Omit to run all rules."),
+        session: sessionParam,
       },
     },
-    async ({ rules }) => {
-      // Findings are computed in Node over Chromium's own tree.
-      const snap = projectNativeTree(await session.nativeTree(), { rules });
-      return text(renderAudit(snap.findings), RULES_HINT);
-    },
+    async ({ rules, session }) =>
+      withSession(session, async (rec) => {
+        // Findings are computed in Node over Chromium's own tree.
+        const snap = projectNativeTree(await rec.session.nativeTree(), {
+          rules,
+        });
+        return text(renderAudit(snap.findings), RULES_HINT);
+      }),
   );
 
   server.registerTool(
@@ -510,15 +584,17 @@ export function buildServer(
           .boolean()
           .default(false)
           .describe("Include generic container nodes in the tree."),
+        session: sessionParam,
       },
     },
-    async ({ rules, includeGeneric }) => {
-      const snap = projectNativeTree(await session.nativeTree(), {
-        rules,
-        includeGeneric,
-      });
-      return text(renderSnapshot(snap), `${RULES_HINT} ${SLICE_HINT}`);
-    },
+    async ({ rules, includeGeneric, session }) =>
+      withSession(session, async (rec) => {
+        const snap = projectNativeTree(await rec.session.nativeTree(), {
+          rules,
+          includeGeneric,
+        });
+        return text(renderSnapshot(snap), `${RULES_HINT} ${SLICE_HINT}`);
+      }),
   );
 
   // ── Inspect (perception primitives) ───────────────────────────────────────
@@ -534,14 +610,16 @@ export function buildServer(
           .boolean()
           .default(false)
           .describe("Include generic container nodes (role=generic)."),
+        session: sessionParam,
       },
     },
-    async ({ includeGeneric }) => {
-      const snap = projectNativeTree(await session.nativeTree(), {
-        includeGeneric,
-      });
-      return text(snap.tree || "(empty tree)", SLICE_HINT);
-    },
+    async ({ includeGeneric, session }) =>
+      withSession(session, async (rec) => {
+        const snap = projectNativeTree(await rec.session.nativeTree(), {
+          includeGeneric,
+        });
+        return text(snap.tree || "(empty tree)", SLICE_HINT);
+      }),
   );
 
   server.registerTool(
@@ -551,12 +629,13 @@ export function buildServer(
       annotations: READ_ONLY,
       description:
         "Return the page's heading outline (h1..h6 in document order) as an indented list, derived from Chromium's own accessibility tree. Whole-document. Chromium only.",
-      inputSchema: {},
+      inputSchema: { session: sessionParam },
     },
-    async () => {
-      const snap = projectNativeTree(await session.nativeTree());
-      return text(snap.outline);
-    },
+    async ({ session }) =>
+      withSession(session, async (rec) => {
+        const snap = projectNativeTree(await rec.session.nativeTree());
+        return text(snap.outline);
+      }),
   );
 
   server.registerTool(
@@ -566,17 +645,18 @@ export function buildServer(
       annotations: READ_ONLY,
       description:
         "Return the focusable elements in the order a keyboard user encounters them when pressing Tab, numbered, with role + accessible name. The stop focused at capture time is marked `[focused]`. Built from the in-page DOM walk — Chromium's accessibility tree knows whether a node is focusable but not the SEQUENCE (tabindex never reaches it), so this is the only source for tab order, and the one tool `rootSelector` still scopes.",
-      inputSchema: { rootSelector },
+      inputSchema: { rootSelector, session: sessionParam },
     },
-    async ({ rootSelector }) => {
-      const seq = await session.call<string>(
-        "tabSequenceSnapshot",
-        rootSelector,
-      );
-      // Number at render — the page bundle produces the canonical unnumbered
-      // form; the ordinals help an agent reference "stop 7" and are never stored.
-      return text(numberTabStops(seq), SCOPE_HINT);
-    },
+    async ({ rootSelector, session }) =>
+      withSession(session, async (rec) => {
+        const seq = await rec.session.call<string>(
+          "tabSequenceSnapshot",
+          rootSelector,
+        );
+        // Number at render — the page bundle produces the canonical unnumbered
+        // form; the ordinals help an agent reference "stop 7" and are never stored.
+        return text(numberTabStops(seq), SCOPE_HINT);
+      }),
   );
 
   server.registerTool(
@@ -590,23 +670,23 @@ export function buildServer(
         filter: z
           .enum(["heading", "link", "button", "form", "landmark", "image"])
           .describe("Which category of element to list."),
+        session: sessionParam,
       },
     },
-    async ({ filter }) => {
-      // Node-side listing over the native tree — the same category engine the
-      // page bundle runs.
-      // `listByRole` never returns "" — an empty category comes back as a line
-      // saying why (0 of N nodes matched, and which roles it looked for), so
-      // there is no sentinel for this caller to supply.
-      return text(listByRole(await session.nativeTree(), filter as RoleFilter));
-    },
+    async ({ filter, session }) =>
+      withSession(session, async (rec) => {
+        // Node-side listing over the native tree — the same category engine the
+        // page bundle runs.
+        // `listByRole` never returns "" — an empty category comes back as a line
+        // saying why (0 of N nodes matched, and which roles it looked for), so
+        // there is no sentinel for this caller to supply.
+        return text(
+          listByRole(await rec.session.nativeTree(), filter as RoleFilter),
+        );
+      }),
   );
 
   // ── Checkpoints (Axis-B findings diff) ───────────────────────────────────
-  const errText = (msg: string) => ({
-    content: [{ type: "text" as const, text: msg }],
-    isError: true as const,
-  });
   const checkpointName = z
     .string()
     .min(1)
@@ -625,6 +705,7 @@ export function buildServer(
           .array(z.enum(RULES))
           .optional()
           .describe("Subset of rules for the findings. Omit to run all."),
+        session: sessionParam,
       },
       annotations: {
         readOnlyHint: false,
@@ -633,23 +714,26 @@ export function buildServer(
         openWorldHint: false,
       },
     },
-    async ({ name, rules }) => {
-      // Native, like `real-a11y snapshot`. These two write the SAME artifact
-      // shape through the same assembler so a checkpoint captured by one can be
-      // diffed by the other — which only holds while both read the same
-      // producer. `tabOrder: false` is the other half: a native page omits the
-      // tabs view rather than storing an empty one.
-      const snap = projectNativeTree(await session.nativeTree(), { rules });
-      const page = buildSnapshotPage(name, pageUrl(), snap, {
-        root: "body",
-        tabOrder: false,
-      });
-      checkpoints.save(name, { page, rules });
-      const treeKb = (page.tree.length / 1024).toFixed(1);
-      return text(
-        `"${name}" saved: ${page.findings.length} finding(s) (tree ${treeKb} KB). ${checkpoints.size} checkpoint(s) stored.`,
-      );
-    },
+    async ({ name, rules, session }) =>
+      withSession(session, async (rec) => {
+        // Native, like `real-a11y snapshot`. These two write the SAME artifact
+        // shape through the same assembler so a checkpoint captured by one can be
+        // diffed by the other — which only holds while both read the same
+        // producer. `tabOrder: false` is the other half: a native page omits the
+        // tabs view rather than storing an empty one.
+        const snap = projectNativeTree(await rec.session.nativeTree(), {
+          rules,
+        });
+        const page = buildSnapshotPage(name, pageUrl(rec), snap, {
+          root: "body",
+          tabOrder: false,
+        });
+        rec.checkpoints.save(name, { page, rules });
+        const treeKb = (page.tree.length / 1024).toFixed(1);
+        return text(
+          `"${name}" saved: ${page.findings.length} finding(s) (tree ${treeKb} KB). ${rec.checkpoints.size} checkpoint(s) stored.`,
+        );
+      }),
   );
 
   server.registerTool(
@@ -659,38 +743,39 @@ export function buildServer(
       annotations: READ_ONLY,
       description:
         "Re-snapshot the CURRENT page and diff it against the stored checkpoint `name`: which accessibility findings are NEW (these gate CI), CHANGED, or FIXED, plus an advisory structural summary. Use after a change (deploy, feature toggle, DOM edit) or after navigating to a different deploy of the same page.",
-      inputSchema: { name: checkpointName },
+      inputSchema: { name: checkpointName, session: sessionParam },
     },
-    async ({ name }) => {
-      const base = checkpoints.get(name);
-      if (!base) {
-        return errText(
-          `No checkpoint named "${name}". Save one first with checkpoint_findings.`,
-        );
-      }
-      // Re-snapshot with the SAME rule set the checkpoint was captured with, so
-      // findings from rules the base never ran don't read as spurious NEW.
-      const snap = projectNativeTree(await session.nativeTree(), {
-        // Stored loosely as `string[]`; validated against the rule enum when
-        // the checkpoint was saved.
-        rules: base.rules as A11yRule[] | undefined,
-      });
-      const head = buildSnapshotPage(name, pageUrl(), snap, {
-        root: "body",
-        tabOrder: false,
-      });
-      // An imported base may have been captured at a narrow root; this side is
-      // always whole-document. Say so — silently widening turns everything
-      // outside the old subtree into NEW findings, the class that gates CI.
-      const note = scopeMismatch(base.page, head);
-      // Checkpoints survive navigation by design, so the agent may well have
-      // moved to another page between saving and diffing.
-      const body = renderDiff(diffCheckpointPages(base.page, head), {
-        source: { kind: "live", checkpoint: name },
-        differentUrl: differentUrl(base.page, head),
-      });
-      return text(note ? `${note}\n\n${body}` : body, RULES_HINT);
-    },
+    async ({ name, session }) =>
+      withSession(session, async (rec) => {
+        const base = rec.checkpoints.get(name);
+        if (!base) {
+          return errText(
+            `No checkpoint named "${name}". Save one first with checkpoint_findings.`,
+          );
+        }
+        // Re-snapshot with the SAME rule set the checkpoint was captured with, so
+        // findings from rules the base never ran don't read as spurious NEW.
+        const snap = projectNativeTree(await rec.session.nativeTree(), {
+          // Stored loosely as `string[]`; validated against the rule enum when
+          // the checkpoint was saved.
+          rules: base.rules as A11yRule[] | undefined,
+        });
+        const head = buildSnapshotPage(name, pageUrl(rec), snap, {
+          root: "body",
+          tabOrder: false,
+        });
+        // An imported base may have been captured at a narrow root; this side is
+        // always whole-document. Say so — silently widening turns everything
+        // outside the old subtree into NEW findings, the class that gates CI.
+        const note = scopeMismatch(base.page, head);
+        // Checkpoints survive navigation by design, so the agent may well have
+        // moved to another page between saving and diffing.
+        const body = renderDiff(diffCheckpointPages(base.page, head), {
+          source: { kind: "live", checkpoint: name },
+          differentUrl: differentUrl(base.page, head),
+        });
+        return text(note ? `${note}\n\n${body}` : body, RULES_HINT);
+      }),
   );
 
   server.registerTool(
@@ -700,22 +785,27 @@ export function buildServer(
       annotations: READ_ONLY,
       description:
         "Diff two already-stored checkpoints against each other (no re-snapshot): which findings are new / changed / fixed going from `base` to `head`.",
-      inputSchema: { base: checkpointName, head: checkpointName },
+      inputSchema: {
+        base: checkpointName,
+        head: checkpointName,
+        session: sessionParam,
+      },
     },
-    async ({ base, head }) => {
-      const b = checkpoints.get(base);
-      if (!b) return errText(`No checkpoint named "${base}".`);
-      const h = checkpoints.get(head);
-      if (!h) return errText(`No checkpoint named "${head}".`);
-      // Two stored checkpoints can disagree on scope just as easily — either
-      // side may have been imported from a scoped, DOM-era artifact.
-      const note = scopeMismatch(b.page, h.page);
-      const rendered = renderDiff(diffLabeledCheckpoints(b.page, h.page), {
-        source: { kind: "stored", base, head },
-        differentUrl: differentUrl(b.page, h.page),
-      });
-      return text(note ? `${note}\n\n${rendered}` : rendered, RULES_HINT);
-    },
+    async ({ base, head, session }) =>
+      withSession(session, async (rec) => {
+        const b = rec.checkpoints.get(base);
+        if (!b) return errText(`No checkpoint named "${base}".`);
+        const h = rec.checkpoints.get(head);
+        if (!h) return errText(`No checkpoint named "${head}".`);
+        // Two stored checkpoints can disagree on scope just as easily — either
+        // side may have been imported from a scoped, DOM-era artifact.
+        const note = scopeMismatch(b.page, h.page);
+        const rendered = renderDiff(diffLabeledCheckpoints(b.page, h.page), {
+          source: { kind: "stored", base, head },
+          differentUrl: differentUrl(b.page, h.page),
+        });
+        return text(note ? `${note}\n\n${rendered}` : rendered, RULES_HINT);
+      }),
   );
 
   server.registerTool(
@@ -725,20 +815,23 @@ export function buildServer(
       annotations: READ_ONLY,
       description:
         "List the stored checkpoint labels with their finding counts and approximate tree sizes.",
-      inputSchema: {},
+      inputSchema: { session: sessionParam },
     },
-    async () => {
-      if (checkpoints.size === 0) {
-        return text("No checkpoints saved. Use checkpoint_findings first.");
-      }
-      const lines = checkpoints
-        .entries()
-        .map(
-          ([name, cp]) =>
-            `  ${name}: ${cp.page.findings.length} finding(s), tree ${(cp.page.tree.length / 1024).toFixed(1)} KB`,
+    async ({ session }) =>
+      withSession(session, async (rec) => {
+        if (rec.checkpoints.size === 0) {
+          return text("No checkpoints saved. Use checkpoint_findings first.");
+        }
+        const lines = rec.checkpoints
+          .entries()
+          .map(
+            ([name, cp]) =>
+              `  ${name}: ${cp.page.findings.length} finding(s), tree ${(cp.page.tree.length / 1024).toFixed(1)} KB`,
+          );
+        return text(
+          `${rec.checkpoints.size} checkpoint(s):\n${lines.join("\n")}`,
         );
-      return text(`${checkpoints.size} checkpoint(s):\n${lines.join("\n")}`);
-    },
+      }),
   );
 
   server.registerTool(
@@ -748,48 +841,49 @@ export function buildServer(
       annotations: READ_ONLY,
       description:
         "Return a stored checkpoint as a Real A11y snapshot artifact — the same a11y-snapshot.json the CLI writes (same schemaVersion, same fingerprints). Persist it to your own file to diff across sessions, or feed it to the CI a11y-diff. Checkpoints are whole-document, and the artifact has to come back as one valid JSON string, so a large page can exceed the output cap and fail — use the CLI's `real-a11y snapshot --output` for those.",
-      inputSchema: { name: checkpointName },
+      inputSchema: { name: checkpointName, session: sessionParam },
     },
-    async ({ name }) => {
-      const cp = checkpoints.get(name);
-      if (!cp) return errText(`No checkpoint named "${name}".`);
-      const artifact = buildArtifact([cp.page], {
-        toolName: "@real-a11y-dev/mcp",
-        toolVersion: packageVersion(),
-        // Declare what was measured, reading it off the PAGE rather than
-        // assuming. A checkpoint captured here is native and has no tabs view —
-        // but one loaded by import_checkpoint may be a DOM-era artifact that
-        // does. Hardcoding "no tabs" would silently drop that page's tab data
-        // on re-export; hardcoding "tabs" would tell the next reader every stop
-        // vanished. The page is the only honest source.
-        views: viewsOfPage(cp.page),
-        ...(cp.rules ? { rules: cp.rules } : {}),
-      });
-      const json = serializeArtifact(artifact);
-      // Never truncate a JSON artifact into invalid JSON — the outer bounded()
-      // cap would corrupt it. Fail cleanly so the agent gets no artifact rather
-      // than an unparseable one.
-      //
-      // What the failure SAYS is the harder half. Checkpoints are whole-document
-      // now, so the old "re-save it with a narrower rootSelector" names a
-      // parameter `checkpoint_findings` no longer has: an agent that follows it
-      // gets a schema error, and one that doesn't has nothing left to try. The
-      // levers that do exist are worth naming precisely — `rules` shrinks the
-      // findings and NOT the tree, so it only helps when findings are the bulk,
-      // which is why the sizes are broken out rather than summed. And the honest
-      // answer for a genuinely large page is that this tool is the wrong one:
-      // the CLI writes the identical artifact to a file, with no inline cap.
-      if (json.length > MAX_OUTPUT_CHARS) {
-        const kb = (n: number) => Math.round(n / 1024);
-        return errText(
-          `Checkpoint "${name}" is too large to export inline (${kb(json.length)} KB > ${kb(MAX_OUTPUT_CHARS)} KB cap; the tree alone is ${kb(cp.page.tree.length)} KB, ${cp.page.findings.length} finding(s)). ` +
-            `Checkpoints are whole-document, so there is no scope to narrow — a \`rules\` subset shrinks the findings but never the tree. ` +
-            `To compare it, diff in-session (diff_findings / diff_checkpoints need no export). ` +
-            `To keep it, capture the page with the CLI instead: \`real-a11y snapshot <url> --output a11y-snapshot.json\` writes the same artifact to a file, uncapped.`,
-        );
-      }
-      return text(json);
-    },
+    async ({ name, session }) =>
+      withSession(session, async (rec) => {
+        const cp = rec.checkpoints.get(name);
+        if (!cp) return errText(`No checkpoint named "${name}".`);
+        const artifact = buildArtifact([cp.page], {
+          toolName: "@real-a11y-dev/mcp",
+          toolVersion: packageVersion(),
+          // Declare what was measured, reading it off the PAGE rather than
+          // assuming. A checkpoint captured here is native and has no tabs view —
+          // but one loaded by import_checkpoint may be a DOM-era artifact that
+          // does. Hardcoding "no tabs" would silently drop that page's tab data
+          // on re-export; hardcoding "tabs" would tell the next reader every stop
+          // vanished. The page is the only honest source.
+          views: viewsOfPage(cp.page),
+          ...(cp.rules ? { rules: cp.rules } : {}),
+        });
+        const json = serializeArtifact(artifact);
+        // Never truncate a JSON artifact into invalid JSON — the outer bounded()
+        // cap would corrupt it. Fail cleanly so the agent gets no artifact rather
+        // than an unparseable one.
+        //
+        // What the failure SAYS is the harder half. Checkpoints are whole-document
+        // now, so the old "re-save it with a narrower rootSelector" names a
+        // parameter `checkpoint_findings` no longer has: an agent that follows it
+        // gets a schema error, and one that doesn't has nothing left to try. The
+        // levers that do exist are worth naming precisely — `rules` shrinks the
+        // findings and NOT the tree, so it only helps when findings are the bulk,
+        // which is why the sizes are broken out rather than summed. And the honest
+        // answer for a genuinely large page is that this tool is the wrong one:
+        // the CLI writes the identical artifact to a file, with no inline cap.
+        if (json.length > MAX_OUTPUT_CHARS) {
+          const kb = (n: number) => Math.round(n / 1024);
+          return errText(
+            `Checkpoint "${name}" is too large to export inline (${kb(json.length)} KB > ${kb(MAX_OUTPUT_CHARS)} KB cap; the tree alone is ${kb(cp.page.tree.length)} KB, ${cp.page.findings.length} finding(s)). ` +
+              `Checkpoints are whole-document, so there is no scope to narrow — a \`rules\` subset shrinks the findings but never the tree. ` +
+              `To compare it, diff in-session (diff_findings / diff_checkpoints need no export). ` +
+              `To keep it, capture the page with the CLI instead: \`real-a11y snapshot <url> --output a11y-snapshot.json\` writes the same artifact to a file, uncapped.`,
+          );
+        }
+        return text(json);
+      }),
   );
 
   server.registerTool(
@@ -803,6 +897,7 @@ export function buildServer(
         artifact: z
           .string()
           .describe("A serialized Real A11y snapshot artifact (JSON)."),
+        session: sessionParam,
       },
       annotations: {
         readOnlyHint: false,
@@ -811,41 +906,44 @@ export function buildServer(
         openWorldHint: false,
       },
     },
-    async ({ name, artifact }) => {
-      try {
-        const parsed = parseSnapshotArtifact(artifact);
-        // Refuse a partial (`--only`) capture, exactly as `real-a11y diff` does:
-        // an imported checkpoint becomes the diff BASE, and a filtered-away axis
-        // would read as everything-new — reported as findings that "gate CI".
-        assertFullArtifact(parsed, `artifact for "${name}"`);
-        const src = parsed.pages[0];
-        if (!src) return errText(`Artifact for "${name}" has no pages.`);
-        // Stored exactly as it arrived. This used to rename the page to the
-        // store label and re-fingerprint under it, because the label WAS the
-        // identity and an artifact's own page name would never equal it — so
-        // without the rewrite every finding read as both NEW and FIXED.
-        //
-        // Pages carry an `id` derived from their URL now, so the artifact
-        // already agrees with a live re-snapshot of the same route, and
-        // rewriting would break the very join it once repaired. The store key
-        // and the page's own name are free to differ, which is what they are.
-        checkpoints.save(name, {
-          page: src,
-          rules: parsed.meta?.rules ?? undefined,
-        });
-        const extra =
-          parsed.pages.length > 1
-            ? ` (first of ${parsed.pages.length} pages)`
-            : "";
-        return text(
-          `Imported "${name}": ${src.findings.length} finding(s)${extra}. ${checkpoints.size} checkpoint(s) stored.`,
-        );
-      } catch (err) {
-        const msg =
-          err instanceof SnapshotFormatError ? err.message : "invalid artifact";
-        return errText(`Could not import "${name}": ${msg}`);
-      }
-    },
+    async ({ name, artifact, session }) =>
+      withSession(session, async (rec) => {
+        try {
+          const parsed = parseSnapshotArtifact(artifact);
+          // Refuse a partial (`--only`) capture, exactly as `real-a11y diff` does:
+          // an imported checkpoint becomes the diff BASE, and a filtered-away axis
+          // would read as everything-new — reported as findings that "gate CI".
+          assertFullArtifact(parsed, `artifact for "${name}"`);
+          const src = parsed.pages[0];
+          if (!src) return errText(`Artifact for "${name}" has no pages.`);
+          // Stored exactly as it arrived. This used to rename the page to the
+          // store label and re-fingerprint under it, because the label WAS the
+          // identity and an artifact's own page name would never equal it — so
+          // without the rewrite every finding read as both NEW and FIXED.
+          //
+          // Pages carry an `id` derived from their URL now, so the artifact
+          // already agrees with a live re-snapshot of the same route, and
+          // rewriting would break the very join it once repaired. The store key
+          // and the page's own name are free to differ, which is what they are.
+          rec.checkpoints.save(name, {
+            page: src,
+            rules: parsed.meta?.rules ?? undefined,
+          });
+          const extra =
+            parsed.pages.length > 1
+              ? ` (first of ${parsed.pages.length} pages)`
+              : "";
+          return text(
+            `Imported "${name}": ${src.findings.length} finding(s)${extra}. ${rec.checkpoints.size} checkpoint(s) stored.`,
+          );
+        } catch (err) {
+          const msg =
+            err instanceof SnapshotFormatError
+              ? err.message
+              : "invalid artifact";
+          return errText(`Could not import "${name}": ${msg}`);
+        }
+      }),
   );
 
   // ── Tree checkpoints (Axis-A interaction diff) ───────────────────────────
@@ -855,7 +953,7 @@ export function buildServer(
       title: "Checkpoint the tree (for an interaction diff)",
       description:
         "Capture the CURRENT accessibility tree in the page as a comparison point. Then interact — click, type, open a dialog — and call diff_tree to see exactly which nodes were added, removed, or changed, and where focus moved. Unlike checkpoint_findings (which stores findings and survives navigation), a tree checkpoint is bound to THIS page instance and is discarded when the page navigates.",
-      inputSchema: { rootSelector },
+      inputSchema: { rootSelector, session: sessionParam },
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -863,11 +961,15 @@ export function buildServer(
         openWorldHint: false,
       },
     },
-    async ({ rootSelector }) => {
-      const out = await session.call<string>("checkpointTree", rootSelector);
-      treeCheckpointRoot = rootSelector;
-      return text(out, SCOPE_HINT);
-    },
+    async ({ rootSelector, session }) =>
+      withSession(session, async (rec) => {
+        const out = await rec.session.call<string>(
+          "checkpointTree",
+          rootSelector,
+        );
+        rec.treeCheckpointRoot = rootSelector;
+        return text(out, SCOPE_HINT);
+      }),
   );
 
   server.registerTool(
@@ -884,21 +986,23 @@ export function buildServer(
           .describe(
             "CSS root for the re-extraction. Defaults to the root the checkpoint was captured with.",
           ),
+        session: sessionParam,
       },
     },
-    async ({ rootSelector }) => {
-      // Like-for-like: re-extract from the checkpoint's root unless overridden,
-      // so the diff can't silently widen to <body> and invent added nodes.
-      const root = rootSelector ?? treeCheckpointRoot ?? "body";
-      try {
-        return text(
-          await session.call<string>("diffSinceCheckpoint", root),
-          SCOPE_HINT,
-        );
-      } catch (err) {
-        return errText(err instanceof Error ? err.message : String(err));
-      }
-    },
+    async ({ rootSelector, session }) =>
+      withSession(session, async (rec) => {
+        // Like-for-like: re-extract from the checkpoint's root unless overridden,
+        // so the diff can't silently widen to <body> and invent added nodes.
+        const root = rootSelector ?? rec.treeCheckpointRoot ?? "body";
+        try {
+          return text(
+            await rec.session.call<string>("diffSinceCheckpoint", root),
+            SCOPE_HINT,
+          );
+        } catch (err) {
+          return errText(err instanceof Error ? err.message : String(err));
+        }
+      }),
   );
 
   // ── Act (the write side of the native producer) ──────────────────────────
@@ -909,6 +1013,7 @@ export function buildServer(
   const MAX_CANDIDATES = 10;
 
   async function resolveActTarget(
+    rec: SessionRecord,
     role: string,
     name: string | undefined,
     nth: number | undefined,
@@ -916,7 +1021,7 @@ export function buildServer(
     | { ok: true; nodeId: string; candidate: TargetCandidate }
     | { ok: false; res: ReturnType<typeof errText> }
   > {
-    const tree = await session.nativeTree();
+    const tree = await rec.session.nativeTree();
     const resolved = resolveTarget(tree, { role, name, nth });
     switch (resolved.kind) {
       case "resolved":
@@ -991,8 +1096,8 @@ export function buildServer(
   }
 
   // The diff loop is the payoff of acting at all — steer every success to it.
-  const diffSteer = () =>
-    treeCheckpointRoot !== undefined
+  const diffSteer = (rec: SessionRecord) =>
+    rec.treeCheckpointRoot !== undefined
       ? " Call diff_tree to see what this changed."
       : " Tip: call checkpoint_tree before acting, then diff_tree after, to see exactly what an action changed for a screen reader.";
 
@@ -1015,7 +1120,12 @@ export function buildServer(
       title: "Click an element (by role + name)",
       description:
         "Dispatch a REAL click against the element matched by role + accessible name in Chromium's accessibility tree — the same view get_semantic_tree prints. Targeting is deliberately role+name only: if a control can't be reached that way, assistive technology can't reach it either, and that is itself an accessibility finding. For the full story call checkpoint_tree FIRST, then this, then diff_tree — the diff answers 'what did that click change for a screen reader?'. THE CLICK IS REAL: it can submit forms, toggle state, and NAVIGATE — navigation discards the page's tree checkpoint. If several nodes match, the error lists them; pass nth to pick one. Chromium only. See also type_text and focus_element.",
-      inputSchema: { role: actRole, name: actName, nth: actNth },
+      inputSchema: {
+        role: actRole,
+        name: actName,
+        nth: actNth,
+        session: sessionParam,
+      },
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -1023,19 +1133,22 @@ export function buildServer(
         openWorldHint: true,
       },
     },
-    async ({ role, name, nth }) => {
-      const target = await resolveActTarget(role, name, nth);
-      if (!target.ok) return target.res;
-      if (target.candidate.disabled) {
-        return disabledRefusal(target.candidate, "click");
-      }
-      const result = await session.act({
-        nodeId: target.nodeId,
-        action: "click",
-      });
-      if (!result.success) return actFailure("click_element", result.error);
-      return text(`Clicked ${describeTarget(target.candidate)}.` + diffSteer());
-    },
+    async ({ role, name, nth, session }) =>
+      withSession(session, async (rec) => {
+        const target = await resolveActTarget(rec, role, name, nth);
+        if (!target.ok) return target.res;
+        if (target.candidate.disabled) {
+          return disabledRefusal(target.candidate, "click");
+        }
+        const result = await rec.session.act({
+          nodeId: target.nodeId,
+          action: "click",
+        });
+        if (!result.success) return actFailure("click_element", result.error);
+        return text(
+          `Clicked ${describeTarget(target.candidate)}.` + diffSteer(rec),
+        );
+      }),
   );
 
   server.registerTool(
@@ -1053,6 +1166,7 @@ export function buildServer(
           .describe(
             "The text to enter. Replaces the field's current value. Never echoed back in the result.",
           ),
+        session: sessionParam,
       },
       annotations: {
         readOnlyHint: false,
@@ -1061,23 +1175,24 @@ export function buildServer(
         openWorldHint: false,
       },
     },
-    async ({ role, name, nth, text: value }) => {
-      const target = await resolveActTarget(role, name, nth);
-      if (!target.ok) return target.res;
-      if (target.candidate.disabled) {
-        return disabledRefusal(target.candidate, "input");
-      }
-      const result = await session.act({
-        nodeId: target.nodeId,
-        action: "type",
-        payload: { value },
-      });
-      if (!result.success) return actFailure("type_text", result.error);
-      return text(
-        `Typed into ${describeTarget(target.candidate)} — the field's previous value was replaced.` +
-          diffSteer(),
-      );
-    },
+    async ({ role, name, nth, text: value, session }) =>
+      withSession(session, async (rec) => {
+        const target = await resolveActTarget(rec, role, name, nth);
+        if (!target.ok) return target.res;
+        if (target.candidate.disabled) {
+          return disabledRefusal(target.candidate, "input");
+        }
+        const result = await rec.session.act({
+          nodeId: target.nodeId,
+          action: "type",
+          payload: { value },
+        });
+        if (!result.success) return actFailure("type_text", result.error);
+        return text(
+          `Typed into ${describeTarget(target.candidate)} — the field's previous value was replaced.` +
+            diffSteer(rec),
+        );
+      }),
   );
 
   server.registerTool(
@@ -1086,7 +1201,12 @@ export function buildServer(
       title: "Focus an element (by role + name)",
       description:
         "Move REAL keyboard focus to the element matched by role + accessible name in the native accessibility tree. The result says whether the target is a text field, so a type_text can follow. Useful alongside get_tab_order for focus-order work, and for checking what a keyboard user would land on. Chromium only. See also click_element and type_text.",
-      inputSchema: { role: actRole, name: actName, nth: actNth },
+      inputSchema: {
+        role: actRole,
+        name: actName,
+        nth: actNth,
+        session: sessionParam,
+      },
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -1094,25 +1214,51 @@ export function buildServer(
         openWorldHint: false,
       },
     },
-    async ({ role, name, nth }) => {
-      const target = await resolveActTarget(role, name, nth);
-      if (!target.ok) return target.res;
-      if (target.candidate.disabled) {
-        return disabledRefusal(target.candidate, "focus");
+    async ({ role, name, nth, session }) =>
+      withSession(session, async (rec) => {
+        const target = await resolveActTarget(rec, role, name, nth);
+        if (!target.ok) return target.res;
+        if (target.candidate.disabled) {
+          return disabledRefusal(target.candidate, "focus");
+        }
+        const result = await rec.session.act({
+          nodeId: target.nodeId,
+          action: "focus",
+        });
+        if (!result.success) return actFailure("focus_element", result.error);
+        const inputNote = result.requiresInput
+          ? ` It is a text field (${result.inputType ?? "text"}) — follow with type_text to enter a value.`
+          : "";
+        return text(
+          `Focused ${describeTarget(target.candidate)}.` +
+            inputNote +
+            diffSteer(rec),
+        );
+      }),
+  );
+
+  // ── Sessions (lifecycle view) ────────────────────────────────────────────
+  server.registerTool(
+    "list_sessions",
+    {
+      title: "List browser sessions",
+      annotations: READ_ONLY,
+      description:
+        "List every live named browser session: name, current URL (redacted), created/last-used times, and whether a call is running on it right now. Sessions are created lazily by the first tool call that names them and closed by close_browser or the idle timeout.",
+      inputSchema: {},
+    },
+    async () => {
+      const sessions = manager.list();
+      if (sessions.length === 0) {
+        return text(
+          "No sessions. The first tool call (e.g. open_page) creates one.",
+        );
       }
-      const result = await session.act({
-        nodeId: target.nodeId,
-        action: "focus",
-      });
-      if (!result.success) return actFailure("focus_element", result.error);
-      const inputNote = result.requiresInput
-        ? ` It is a text field (${result.inputType ?? "text"}) — follow with type_text to enter a value.`
-        : "";
-      return text(
-        `Focused ${describeTarget(target.candidate)}.` +
-          inputNote +
-          diffSteer(),
+      const lines = sessions.map(
+        (s) =>
+          `  ${s.name}: ${s.url ?? "(no page open)"}${s.busy ? " [busy]" : ""} — created ${new Date(s.createdAt).toISOString()}, last used ${new Date(s.lastUsedAt).toISOString()}`,
       );
+      return text(`${sessions.length} session(s):\n${lines.join("\n")}`);
     },
   );
 

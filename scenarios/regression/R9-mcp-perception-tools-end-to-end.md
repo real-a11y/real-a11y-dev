@@ -102,6 +102,11 @@ ignored is worse than one that errors, and looks identical from the outside.
 
 ## Notes
 
+Since mcp 0.1.0-beta.2 the tools take an optional `session` parameter and
+`close_browser` takes `session`/`all`. This scenario deliberately omits them
+everywhere: it asserts the single-default-session behavior, which named
+sessions must leave unchanged. The named-session behavior itself is R30.
+
 Producer migration (#258) — `get_tab_order` SURVIVES, on the DOM producer, and is
 the one tool that still takes `rootSelector`. It was expected to be deleted; it
 wasn't, because native knows per-node `focusable` but not the _sequence_. What did
