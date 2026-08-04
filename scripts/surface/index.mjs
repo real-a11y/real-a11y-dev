@@ -5,15 +5,17 @@
 //   node scripts/surface/index.mjs check-built  the slug function vs the built site
 //   node scripts/surface/index.mjs plan         what this branch obliges you to update
 //   node scripts/surface/index.mjs scenarios    the release suites + coverage matrix
+//   node scripts/surface/index.mjs snapshot     freeze the manifest as the released surface
 //
 // One model of what the packages expose, extracted from the code itself, so
 // every claim made about the surface — in the docs, and in the release test
 // scenarios under `scenarios/` — is checked against the same answer rather than
 // against a separate impression of it.
 //
-// Only `extract` writes. `check` never fixes, so CI can run it on a read-only
-// checkout and a failure always means "the repo is out of date", never "the
-// tool changed something under you".
+// `check` never fixes, so CI can run it on a read-only checkout and a failure
+// always means "the repo is out of date", never "the tool changed something
+// under you". The writing verbs — `extract`, `apply`, `snapshot` — are all
+// author-run and none of them is in CI.
 
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -476,9 +478,41 @@ async function scenarios(argv) {
   );
 }
 
+/**
+ * `snapshot` — freeze the current manifest as the released surface.
+ *
+ * Run by `version-packages`, immediately after `changeset version` has set the
+ * versions this release will publish. See scripts/surface/snapshot.mjs for why
+ * it copies rather than re-extracts, and why it lives in the release cut rather
+ * than in publish.yml.
+ */
+async function snapshot() {
+  const { writeSnapshot, RELEASED_REL, SnapshotError } =
+    await import("./snapshot.mjs");
+
+  let result;
+  try {
+    result = await writeSnapshot(repoRoot);
+  } catch (error) {
+    if (error instanceof SnapshotError) die(error.lines);
+    throw error;
+  }
+
+  console.log(
+    result.written
+      ? `Wrote ${RELEASED_REL} — the released surface is now ${MANIFEST_REL} ` +
+          `as of this commit (${result.packages} packages).\n` +
+          `  Commit it with the version bump: its diff is the list of ` +
+          `capabilities this release makes public.`
+      : `${RELEASED_REL} already matches ${MANIFEST_REL} — nothing written.`,
+  );
+}
+
 const verb = process.argv[2];
 if (verb === "extract") {
   await extract();
+} else if (verb === "snapshot") {
+  await snapshot();
 } else if (verb === "check") {
   await check();
 } else if (verb === "check-built") {
@@ -491,13 +525,15 @@ if (verb === "extract") {
   await apply();
 } else {
   die([
-    `usage: node scripts/surface/index.mjs <extract|check|apply|check-built|plan|scenarios>`,
+    `usage: node scripts/surface/index.mjs <extract|check|apply|snapshot|check-built|plan|scenarios>`,
     ``,
     `  extract      rebuild ${MANIFEST_REL} from the packages' source`,
     `  check        fail if the manifest is stale, the docs disagree with it, or`,
     `               a scenario names a surface that doesn't exist`,
     `  apply        rebuild the managed doc regions in place — the only verb that`,
     `               writes to the docs; never runs in CI`,
+    `  snapshot     freeze ${MANIFEST_REL} as docs/surface.released.json — the`,
+    `               surface this release publishes; run by \`version-packages\``,
     `  check-built  fail if slugify() disagrees with the built site's heading`,
     `               ids (needs the website build)`,
     `  plan         report the docs and test scenarios this branch obliges you`,

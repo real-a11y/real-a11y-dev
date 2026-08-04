@@ -45,12 +45,12 @@ push the tags that trigger the publish workflows.
 
 ## Choose the flavor
 
-|             | Next beta                       | Graduate to stable                               |
-| ----------- | ------------------------------- | ------------------------------------------------ |
-| Command     | `changeset version`             | `changeset pre exit` then `changeset version`    |
-| Result      | `-beta.N` → `-beta.N+1`         | all accumulated changesets collapse into `0.1.0` |
-| dist-tag    | `beta` (auto-advances `latest`) | `latest` (own publish owns it)                   |
-| Reversible? | mostly (it's a beta)            | no — a stable can't be un-published              |
+|             | Next beta                       | Graduate to stable                                |
+| ----------- | ------------------------------- | ------------------------------------------------- |
+| Command     | `pnpm version-packages`         | `changeset pre exit` then `pnpm version-packages` |
+| Result      | `-beta.N` → `-beta.N+1`         | all accumulated changesets collapse into `0.1.0`  |
+| dist-tag    | `beta` (auto-advances `latest`) | `latest` (own publish owns it)                    |
+| Reversible? | mostly (it's a beta)            | no — a stable can't be un-published               |
 
 If the user just says "release" and it's ambiguous, **ask** which one — it sets
 the versions, the tag, and whether pre-mode ends.
@@ -72,11 +72,32 @@ what's merged.
 ```bash
 npx changeset status            # read-only preview of what will bump
 # next beta:
-npx changeset version
+pnpm version-packages
 # OR graduate to stable:
-# npx changeset pre exit && npx changeset version
-pnpm install --lockfile-only    # (usually a no-op with workspace:* — commit if it changes)
+# npx changeset pre exit && pnpm version-packages
 ```
+
+**Use `pnpm version-packages`, not `npx changeset version`.** The script builds,
+runs `changeset version`, re-extracts the surface manifest, freezes
+`docs/surface.released.json`, rebuilds the managed doc regions from it, and
+refreshes the lockfile — in that order, which is load-bearing (see CONTRIBUTING
+→ _The released surface_). It takes a few minutes because of the build.
+
+> **If it fails partway, do not just re-run it.** `changeset version` is not
+> idempotent: a second run bumps again, and you would ship `beta.13` where you
+> meant `beta.12` with nothing to warn you. The build runs first precisely so
+> the flakiest step cannot leave you in that state — but if the failure lands
+> after the bump, reset and start the step over:
+>
+> ```bash
+> git checkout -- packages/ .changeset/ docs/ website/ pnpm-lock.yaml
+> ```
+
+Calling `changeset version` directly still produces a correct-_looking_ release
+— it tags and publishes fine. What you get is a stale manifest (the version
+bump is not reflected in `docs/surface.json`, so `pnpm verify` fails at step 4
+with "docs/surface.json is out of date") and, if you fix that by hand without
+snapshotting, a site that goes on documenting `main` as though it shipped.
 
 Then **inspect before trusting it**:
 
@@ -85,6 +106,9 @@ Then **inspect before trusting it**:
   that's correct; `pnpm publish -r` will skip it (it already exists on npm).
 - The generated `CHANGELOG.md` entries read well (new packages get a fresh
   `CHANGELOG.md` — remember to `git add` it).
+- `docs/surface.released.json` is in the diff. Its diff against the previous
+  release is the list of capabilities becoming installable — worth reading as a
+  release note in its own right.
 
 ### 3. Bump the extension (only if shipping it)
 
@@ -112,11 +136,25 @@ Stage precisely (avoid stray untracked files), commit with a conventional
 message, push, and open the PR **using the release template**:
 
 ```bash
-git add packages/ .changeset/pre.json
+git add -A packages/ .changeset/ docs/ website/ pnpm-lock.yaml
+git status                              # confirm nothing stray, nothing missing
 git commit -m "chore(release): version packages for <label>"
 git push -u origin release/<label>
 gh pr create --base main --template release.md   # fill in the table + notes
 ```
+
+**Scoped `-A`, not a bare path list and not `-u`.** `version-packages` writes
+well beyond `packages/`: the bumped manifests and changelogs, `docs/surface.json`
+(re-extracted — the versions changed), the managed doc regions rebuilt from it,
+`docs/surface.released.json`, and `pnpm-lock.yaml`. It also creates files that
+do not exist in `HEAD` yet — `docs/surface.released.json` on the first release,
+and a fresh `CHANGELOG.md` any time a package is versioned for the first time
+(see the note above). `-A` catches new files; `-u` would silently skip both.
+Naming the directories is what keeps it from sweeping up a stray untracked file
+elsewhere in the tree, which is what the "stage precisely" caution is about.
+
+`git status` before committing is not ceremony: it is the only step that catches
+a file this list does not name.
 
 The template (`.github/PULL_REQUEST_TEMPLATE/release.md`) has the checklist:
 version-bumps table, changesets consumed, mechanical notes, `verify` +

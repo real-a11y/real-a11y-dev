@@ -95,6 +95,74 @@ a reviewer sees what moved in the public surface, so it belongs in the same PR
 as the change. (Extraction imports the packages' built dependencies, so run
 `pnpm build` first.)
 
+### The released surface
+
+`docs/surface.json` describes `main`. `docs/surface.released.json` describes the
+newest **published** release, and `version-packages` writes it as part of the
+release cut:
+
+```bash
+pnpm surface:snapshot     # freeze surface.json as the released surface
+```
+
+You should not need to run it by hand — `version-packages` does, as the last
+step of:
+
+```
+build → changeset version → surface:extract → surface:snapshot → surface:apply
+```
+
+**That order is load-bearing, in three different ways.**
+
+**`surface:extract` before the snapshot.** `changeset version` rewrites every
+`packages/*/package.json` version, and the manifest records those versions — so
+the moment it runs, `docs/surface.json` is stale. Snapshotting first would
+freeze the *previous* release's version numbers, and the docs would then name an
+older release than the one npm actually has.
+
+**`surface:apply` after the snapshot**, and this is the subtle one. The managed
+regions are rendered from the *difference* between the manifest and the
+snapshot, so applying first renders them against the previous release —
+producing a "not published yet" notice listing everything this very release is
+publishing, at the moment it becomes available. Snapshotting then makes that
+notice wrong, `surface:check` reports the region stale, and `pnpm verify` fails
+on the release PR. Merged anyway, the site would tell readers that features they
+can already install are missing.
+
+That one stays invisible until the **second** release: with no snapshot on disk
+the first cut renders empty, snapshots, and the two agree by accident.
+
+The **build comes first** for a different reason: `changeset version` is not
+idempotent. It is also the only irreversible step — everything after it is
+deterministic and fast, while the build is the slow part and the one that
+actually flakes. Running it first means a failure happens while nothing has
+been mutated yet, so the fix is simply to run the command again.
+
+> **If the chain does fail after the version bump**, do not re-run
+> `version-packages` — `changeset version` would bump a second time and you'd
+> ship `beta.13` where you meant `beta.12`, with nothing to warn you. Reset and
+> start over:
+>
+> ```bash
+> git checkout -- packages/ .changeset/ docs/ website/ pnpm-lock.yaml
+> ```
+
+The snapshot itself copies the committed manifest rather than re-extracting, so
+it is byte-identical to the one the release PR reviewed.
+
+The difference between the two files is the set of capabilities the site
+documents but `npm install` does not yet deliver. That gap is structural: the
+docs deploy on every push to `main` while npm publishes on a release cut, so
+`main` is always some distance ahead of what a reader can actually install.
+
+**The file is deliberately not seeded from `main`.** `docs/surface.json` did not
+exist at `v0.1.0-beta.11`, the newest release when this landed, so there is no
+honest way to reconstruct what that release exposed. Writing today's manifest
+into it would assert that everything on `main` is published — precisely the
+claim this exists to stop anyone from making. Until the next release cut runs
+`version-packages`, the released surface is *unrecorded*, which is a different
+fact from "nothing is unreleased" and has to stay distinguishable from it.
+
 ### What a change obliges you to update
 
 ```bash
