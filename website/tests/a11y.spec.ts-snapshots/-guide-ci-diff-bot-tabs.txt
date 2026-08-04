@@ -67,7 +67,6 @@ button "Copy Code"
 generic
 link "Security tab"
 link "Configuration"
-link "diff"
 button "Copy Code"
 generic
 link "Combine with assertions"

@@ -22,12 +22,30 @@ import { diffFindings } from "./diff/findings-diff.js";
 import { SnapshotFormatError } from "./errors.js";
 import type { FingerprintId, FingerprintedFinding } from "./fingerprint.js";
 
-export const BASELINE_SCHEMA_VERSION = 1;
+/**
+ * Bumped to 2 when pages gained an identity separate from their display label.
+ *
+ * A v1 baseline stores only `page` — the label — and carries no `url`, so unlike
+ * a snapshot artifact its identity cannot be derived and back-filled. Rather
+ * than guess a mapping (a wrong guess would silently suppress a real finding,
+ * the one outcome worth avoiding outright), a v1 file is refused with the
+ * command that regenerates it.
+ */
+export const BASELINE_SCHEMA_VERSION = 2;
 export const DEFAULT_BASELINE_PATH = ".a11y-baseline.json";
 
 /** One accepted finding. The identity fields feed the matcher; `message` (and
  *  the rest) make the committed file reviewable; `note` is yours to keep. */
 export interface BaselineEntry {
+  /**
+   * The page's identity — the bucket this entry is matched in. Derived from the
+   * URL's path, never from the display label: a page renamed for readability
+   * must keep suppressing debt already accepted for it.
+   *
+   * Named `pageId` because `id` on this type is already the fingerprint tuple.
+   */
+  pageId: string;
+  /** The page's display label at record time — for reviewing the file. */
   page: string;
   fingerprint: string;
   id: FingerprintId;
@@ -47,8 +65,16 @@ export interface Baseline {
   entries: BaselineEntry[];
 }
 
-/** A page's current findings, keyed by the stable config name (never the URL). */
+/**
+ * A page's current findings, keyed by the page's **id** — its identity, derived
+ * from the URL's path. Never the display name: a page renamed for readability
+ * must keep suppressing the debt already accepted for it, and while this bucket
+ * was keyed on the label a rename silently un-suppressed every entry.
+ *
+ * `name` rides along so a stored entry stays readable in review.
+ */
 export interface BaselinePage {
+  id: string;
   name: string;
   findings: FingerprintedFinding[];
 }
@@ -71,11 +97,13 @@ function entryToFinding(e: BaselineEntry): FingerprintedFinding {
 }
 
 function findingToEntry(
+  pageId: string,
   page: string,
   f: FingerprintedFinding,
   note?: string,
 ): BaselineEntry {
   return {
+    pageId,
     page,
     fingerprint: f.fingerprint,
     id: f.id,
@@ -117,8 +145,10 @@ export function loadBaseline(path: string): Baseline {
   const b = parsed as Partial<Baseline>;
   if (b.schemaVersion !== BASELINE_SCHEMA_VERSION) {
     throw new SnapshotFormatError(
-      `baseline has schemaVersion ${String(b.schemaVersion)} — this build reads ${BASELINE_SCHEMA_VERSION}.`,
-      "regenerate it: real-a11y snapshot --update-baseline",
+      b.schemaVersion === 1
+        ? `baseline is schemaVersion 1, recorded before pages had an identity separate from their name — this build reads ${BASELINE_SCHEMA_VERSION}. Its entries key on the display label, which cannot be mapped to a page id without guessing, and a wrong guess would silently suppress a real finding.`
+        : `baseline has schemaVersion ${String(b.schemaVersion)} — this build reads ${BASELINE_SCHEMA_VERSION}.`,
+      "re-record it against the current build, reviewing the diff: real-a11y snapshot --update-baseline",
     );
   }
   if (!Array.isArray(b.entries)) {
@@ -130,6 +160,7 @@ export function loadBaseline(path: string): Baseline {
       e === null ||
       typeof (e as BaselineEntry).fingerprint !== "string" ||
       typeof (e as BaselineEntry).page !== "string" ||
+      typeof (e as BaselineEntry).pageId !== "string" ||
       !Array.isArray((e as BaselineEntry).id)
     ) {
       throw new SnapshotFormatError(`baseline has a malformed entry: ${abs}`);
@@ -151,17 +182,17 @@ export function applyBaseline(
 ): { suppressed: number; stale: BaselineEntry[] } {
   const byPage = new Map<string, BaselineEntry[]>();
   for (const e of baseline.entries) {
-    const pool = byPage.get(e.page);
+    const pool = byPage.get(e.pageId);
     if (pool) pool.push(e);
-    else byPage.set(e.page, [e]);
+    else byPage.set(e.pageId, [e]);
   }
 
   let suppressed = 0;
   const matchedEntries = new Set<BaselineEntry>();
-  const currentNames = new Set(pages.map((p) => p.name));
+  const currentIds = new Set(pages.map((p) => p.id));
 
   for (const page of pages) {
-    const entries = byPage.get(page.name);
+    const entries = byPage.get(page.id);
     if (!entries || entries.length === 0) continue;
     // Reconstruct base findings; keep a reference back to each source entry so a
     // "removed" (unmatched-base) result maps to the right stale entry.
@@ -179,7 +210,7 @@ export function applyBaseline(
   }
 
   const stale = baseline.entries.filter(
-    (e) => !matchedEntries.has(e) || !currentNames.has(e.page),
+    (e) => !matchedEntries.has(e) || !currentIds.has(e.pageId),
   );
   return { suppressed, stale };
 }
@@ -196,9 +227,9 @@ export function buildBaseline(
 ): { baseline: Baseline; added: number; removed: number } {
   const oldByPage = new Map<string, BaselineEntry[]>();
   for (const e of old?.entries ?? []) {
-    const pool = oldByPage.get(e.page);
+    const pool = oldByPage.get(e.pageId);
     if (pool) pool.push(e);
-    else oldByPage.set(e.page, [e]);
+    else oldByPage.set(e.pageId, [e]);
   }
 
   const carriedNote = new Map<FingerprintedFinding, string>();
@@ -206,7 +237,7 @@ export function buildBaseline(
   let added = 0;
 
   for (const page of pages) {
-    const oldEntries = oldByPage.get(page.name) ?? [];
+    const oldEntries = oldByPage.get(page.id) ?? [];
     const baseFindings = oldEntries.map(entryToFinding);
     const entryOf = new Map<FingerprintedFinding, BaselineEntry>();
     baseFindings.forEach((f, i) => entryOf.set(f, oldEntries[i]));
@@ -227,7 +258,7 @@ export function buildBaseline(
   const entries = pages
     .flatMap((page) =>
       page.findings.map((f) =>
-        findingToEntry(page.name, f, carriedNote.get(f)),
+        findingToEntry(page.id, page.name, f, carriedNote.get(f)),
       ),
     )
     .sort(byCanonicalOrder);

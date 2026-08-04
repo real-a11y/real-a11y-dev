@@ -48,7 +48,7 @@ Three keys: [`urls`](#urls) (what to audit), [`defaults`](#defaults) (how to aud
 
 ### `urls`
 
-**`urls: (string | { url, name?, rootSelector?, sourcePath? })[]`** — optional · non-empty · max 100 entries
+**`urls: (string | { url, id?, name?, rootSelector?, sourcePath? })[]`** — optional · non-empty · max 100 entries
 
 The project's audit targets. Each entry is a **bare URL string**, or an **object** with a required `url` plus optional fields. A bare string's [`name`](#urls) defaults to the URL itself.
 
@@ -57,8 +57,9 @@ A configured `urls` list drives a bare **`audit`** and **`snapshot`** — run ei
 Entry fields:
 
 - **`url`** — the target. Any URL the browser can reach: a public site, a local dev server, staging, or a built file path.
-- **`name`** — the diff join key and display label. This is what pairs a route across two snapshots, so keep it stable when a URL changes. Defaults to `url`, canonicalized (`http://localhost:3000` is recorded as `http://localhost:3000/`) and stripped of userinfo and secret-looking query params, so a credential in a URL never lands in an artifact. `audit` and `snapshot` settle it identically, so a route fingerprints the same whichever command produced the artifact.
-- **`rootSelector`** — a region for this route (per-page [`root`](#root)). **No longer scopes `audit` or `snapshot`**: both read Chromium's whole-document accessibility tree, which has no subtree to narrow to. They warn once on stderr, naming the routes that set it, and keep running — findings from outside that subtree are now included. The key is still accepted (it identifies a route, and `real-a11y tabs --root <selector>` still scopes the in-page tab-order walk), so a committed config keeps loading.
+- **`id`** — the page's **identity**: the join key for diffs, baselines and fingerprints. Defaults to the URL's path + query (`http://localhost:3000/pricing` → `/pricing`), so it is stable across hosts, ports and schemes — base and PR on different servers pair automatically, and renaming a page for readability changes nothing. Set it explicitly only to collapse routes the path separates, or to separate two sites that share one (two homepages both at `/` collide, and that is a hard error naming the fix rather than a silent merge).
+- **`name`** — the **display label**, and nothing more. Free to change without changing what page this is. Defaults to `url`, canonicalized (`http://localhost:3000` is recorded as `http://localhost:3000/`) and stripped of userinfo and secret-looking query params, so a credential in a URL never lands in an artifact.
+- **`rootSelector`** — a region for this route (per-page [`root`](#root)). **No longer scopes `audit` or `snapshot`**: both read Chromium's whole-document accessibility tree, which has no subtree to narrow to. They warn once on stderr, naming the routes that set it, and keep running — findings from outside that subtree are now included. The key is still accepted (it identifies a route, and `real-a11y tabs --root <selector>` still scopes the in-page tab-order walk), so a committed config keeps loading. **But two entries that differ only by `rootSelector` are now an error**, not a warning: they name one URL, they measure the same whole document, and so they are one page with one `id`. That pairing used to produce two identically-audited pages; delete the redundant entry, or give one an explicit `id` if you really do want the route listed twice.
 - **`sourcePath`** — repo-relative file the route's findings anchor to in [SARIF](/packages/cli/commands#f-format-fmt). GitHub code scanning only displays results tied to a file path; without it, results anchor to the config file.
 
 ```json
@@ -70,7 +71,9 @@ Entry fields:
 }
 ```
 
-Precedence for the audited list: positional URLs → the `A11Y_PAGES` env var (JSON `[{name,url}]`) → this `urls` list. Positionals are gated as `arg`; env and config go through the stricter `config` URL gate.
+Precedence for the audited list: positional URLs → the `A11Y_PAGES` env var (JSON `[{name,url}]`, each entry also taking an optional `id`) → this `urls` list. Positionals are gated as `arg`; env and config go through the stricter `config` URL gate.
+
+`id` is accepted on both `urls` entries and `A11Y_PAGES` entries, because two pages resolving to one identity is a hard error and the fix has to be reachable from whichever list you actually use. Positional URLs carry no `id`; if two of them collide, switch that run to `A11Y_PAGES` or a config file.
 
 ### `defaults`
 

@@ -1,7 +1,7 @@
 /** Shared target/flag plumbing for the browser-driving commands. */
 
 import type { BrowserSession } from "@real-a11y-dev/browser";
-import { redactUrl } from "@real-a11y-dev/snapshot";
+import { pageIdOf, redactUrl } from "@real-a11y-dev/snapshot";
 
 import { type FlagValues, parseOpenOptions } from "../args.js";
 import { resolveConfig, type ConfigPage } from "../config.js";
@@ -24,14 +24,42 @@ export interface Target {
   /** Normalized absolute URL (paths become file: URLs). */
   url: string;
   /**
-   * Display identity, and the fingerprint page component. Settled once by
-   * {@link resolvePageList}, so `audit` and `snapshot` always agree on it for
-   * the same page — their fingerprints diverge otherwise (see
-   * `buildSnapshotPage`). Never re-derive it here.
+   * Display label. Settled once by {@link resolvePageList} so every command
+   * shows the same page the same way.
+   *
+   * **No longer the fingerprint page component** — that is the page's id now,
+   * derived from the redacted url (see `pageIdOf`). While the two were one
+   * field, renaming a config entry silently changed every finding's identity
+   * and un-suppressed its baseline. Only the fallback survives: a URL with no
+   * route (a `data:` document) has no id to derive, and the label is what's
+   * left.
    */
   name: string;
   /** True when this is a file: target the gate approved. */
   fileApproved: boolean;
+}
+
+/**
+ * The page identity every command fingerprints and joins under.
+ *
+ * One function because the alternative was tried and drifted: `audit` and
+ * `inspect` derived from the LANDED url (`opened.url`) while `snapshot` handed
+ * `buildSnapshotPage` the REQUESTED one, so any redirect that changed the path
+ * (`/` → `/en`) gave a single finding two different "stable" ids depending on
+ * which command reported it — the exact divergence page identity exists to
+ * close, reintroduced one call site over.
+ *
+ * **Requested, not landed.** The landed address is where the findings came from
+ * and stays in `page.url` for that reason, but identity must not move when a
+ * redirect is added or removed later — that is the same rename-sensitivity in
+ * another costume. What the user declared is the stable thing.
+ *
+ * Mirrors `buildSnapshotPage`'s own fallback chain exactly (explicit id →
+ * derived from the redacted url → display label), so the snapshot path, which
+ * derives inside the package, lands on the same string.
+ */
+export function pageIdentityOf(target: Target, page?: ConfigPage): string {
+  return page?.id ?? pageIdOf(redactUrl(target.url)) ?? target.name;
 }
 
 /**
@@ -94,7 +122,22 @@ function parseEnvPages(env: string): ConfigPage[] {
     if (typeof o?.name !== "string" || typeof o?.url !== "string") {
       throw new CliError(`A11Y_PAGES[${i}] needs string "name" and "url"`);
     }
-    return { name: o.name, url: o.url };
+    // `id` is optional here for the same reason it exists in the config: two
+    // pages that resolve to one identity are refused, and without a way to
+    // express an id on THIS page source the refusal would name a remedy the
+    // user cannot reach. A11Y_PAGES is the documented drop-in for the CI guide,
+    // so "rewrite it as a config file" is not an acceptable answer.
+    if (o.id !== undefined && (typeof o.id !== "string" || o.id.length === 0)) {
+      throw new CliError(
+        `A11Y_PAGES[${i}].id must be a non-empty string`,
+        'omit "id" to derive the page identity from the url',
+      );
+    }
+    return {
+      ...(typeof o.id === "string" ? { id: o.id } : {}),
+      name: o.name,
+      url: o.url,
+    };
   });
 }
 

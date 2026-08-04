@@ -17,14 +17,17 @@ import { resolve } from "node:path";
 import type { BrowserSession } from "@real-a11y-dev/browser";
 import {
   applyBaseline,
+  assertDistinctPageIds,
   buildArtifact,
   buildBaseline,
   buildSnapshotPage,
   DEFAULT_BASELINE_PATH,
   loadBaseline,
+  pageIdOf,
   redactUrl,
   serializeArtifact,
   serializeBaseline,
+  SnapshotFormatError,
   type Baseline,
   type SnapshotPage,
 } from "@real-a11y-dev/snapshot";
@@ -198,6 +201,14 @@ export async function runSnapshotOnSession(
     // Whole-document now — recorded as "body" so the field keeps meaning what
     // it says, rather than claiming a scope the run didn't apply.
     const root = "body";
+    // Redacted once, out here, because BOTH branches need it. The error branch
+    // builds its page by hand and has to derive its id from the same safe url
+    // `buildSnapshotPage` uses internally: an id built from the raw url carries
+    // `?token=…` straight into the artifact, every fingerprint tuple and the
+    // committed baseline — around `redactUrl`, into the files this tool posts
+    // into PR comments — and it wouldn't even join, since the healthy capture
+    // of that same page derives its id from the redacted url.
+    const safeUrl = redactUrl(target.url);
     try {
       // Only the first target in a snapshot run benefits from session reuse;
       // later targets must be freshly navigated so redirects or duplicate URLs
@@ -223,6 +234,7 @@ export async function runSnapshotOnSession(
         buildSnapshotPage(target.name, target.url, snap, {
           root,
           tabOrder: false,
+          ...(target.page.id ? { id: target.page.id } : {}),
           ...(target.page.sourcePath
             ? { sourcePath: target.page.sourcePath }
             : {}),
@@ -231,8 +243,13 @@ export async function runSnapshotOnSession(
     } catch (err) {
       if (!(err instanceof CliError)) throw err;
       snapshotPages.push({
+        // A page that failed to open still needs an identity, or it can't be
+        // joined against its healthy self in the base artifact — which is
+        // exactly when you want the diff to say "this one broke". Derived from
+        // `safeUrl` for that join to actually land (see above).
+        id: target.page.id ?? pageIdOf(safeUrl) ?? target.name,
         name: target.name,
-        url: redactUrl(target.url),
+        url: safeUrl,
         root,
         status: "error",
         error: err.message,
@@ -243,7 +260,16 @@ export async function runSnapshotOnSession(
     }
   }
 
+  // Identity collisions are fatal on every path, and this is the earliest point
+  // all the pages exist. `buildArtifact` runs the same guard, but it is only
+  // reached below the `--update-baseline` return — so without this the two
+  // commands disagreed about whether one config was valid, and the one that
+  // WRITES a file was the permissive one: it would blend two colliding pages
+  // into a single baseline bucket and report nothing.
+  assertDistinctPageIds(snapshotPages);
+
   const baselinePages = snapshotPages.map((p) => ({
+    id: p.id,
     name: p.name,
     findings: p.findings,
   }));
@@ -253,7 +279,29 @@ export async function runSnapshotOnSession(
   if (updateBaseline) {
     const writePath = baselinePath ?? DEFAULT_BASELINE_PATH;
     let old: Baseline | undefined;
-    if (existsSync(resolve(writePath))) old = loadBaseline(writePath);
+    if (existsSync(resolve(writePath))) {
+      // A prior baseline this build can't read is NOT fatal here — this command
+      // exists to replace it, and the old entries are only ever consulted for
+      // the +new/-stale counts. Refusing would be a dead end: the error on the
+      // gating path sends you to `--update-baseline`, and if that also refused
+      // there'd be no way out but deleting the file by hand.
+      //
+      // It is still reported. Those counts are how you review what changed, and
+      // "+41 new" means something quite different when nothing was carried over.
+      try {
+        old = loadBaseline(writePath);
+      } catch (err) {
+        if (!(err instanceof SnapshotFormatError)) throw err;
+        process.stderr.write(
+          `real-a11y: warning: the existing baseline could not be read, so it is being ` +
+            `replaced wholesale rather than updated — every entry below counts as new, ` +
+            `and any "note" you wrote on an entry is NOT carried over. Recover them from ` +
+            `version control before committing: a note is the only part of a baseline ` +
+            `nothing can regenerate.\n` +
+            `  ${err.message}\n`,
+        );
+      }
+    }
     const { baseline, added, removed } = buildBaseline(baselinePages, old);
     writeReport(writePath, serializeBaseline(baseline));
     process.stderr.write(

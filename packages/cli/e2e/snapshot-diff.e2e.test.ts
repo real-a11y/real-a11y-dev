@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { ARTIFACT_SCHEMA_VERSION } from "@real-a11y-dev/snapshot";
 import { beforeAll, describe, expect, it } from "vitest";
 
 const BIN = resolve(
@@ -75,7 +76,7 @@ beforeAll(async () => {
 }, 60_000);
 
 describe("snapshot", () => {
-  it("writes a schemaVersion-1 artifact with fingerprinted findings", () => {
+  it("writes a versioned artifact with fingerprinted findings", () => {
     const artifact = JSON.parse(readFileSync(base, "utf8")) as {
       schemaVersion: number;
       pages: {
@@ -84,7 +85,7 @@ describe("snapshot", () => {
         tree: string;
       }[];
     };
-    expect(artifact.schemaVersion).toBe(1);
+    expect(artifact.schemaVersion).toBe(ARTIFACT_SCHEMA_VERSION);
     expect(artifact.pages[0].name).toBe("Home");
     expect(artifact.pages[0].findings[0].fingerprint).toMatch(/^v1:/);
     expect(artifact.pages[0].tree).toContain("button");
@@ -107,7 +108,7 @@ describe("snapshot", () => {
       schemaVersion: number;
       pages: { name: string; url: string; findings: unknown[] }[];
     };
-    expect(artifact.schemaVersion).toBe(1);
+    expect(artifact.schemaVersion).toBe(ARTIFACT_SCHEMA_VERSION);
     expect(artifact.pages).toHaveLength(1);
     // Page name defaults to the URL, matching `audit`/`tree`.
     expect(artifact.pages[0].name).toBe(artifact.pages[0].url);
@@ -123,6 +124,35 @@ describe("snapshot", () => {
     expect(code).toBe(0);
     const artifact = JSON.parse(stdout) as { pages: unknown[] };
     expect(artifact.pages).toHaveLength(2);
+  });
+
+  it("keeps a secret out of the artifact when the page FAILS to open", async () => {
+    // The error branch builds its page by hand rather than through
+    // `buildSnapshotPage`, so it has its own chance to get redaction wrong —
+    // and it did: the id was derived from the raw url while `url` beside it was
+    // redacted, writing `?token=…` into the artifact, every fingerprint tuple
+    // and the committed baseline. A failed navigation is if anything the
+    // LIKELIER carrier of a token-bearing preview url, so it is tested here and
+    // not left to the healthy path's coverage.
+    //
+    // Port 1 is privileged and unbound: the connection is refused promptly, so
+    // this exercises the CliError branch without waiting on a timeout.
+    const url = "http://127.0.0.1:1/callback?token=hunter2SECRET";
+    const { stdout } = await runCli(["snapshot", url, "-q"], {
+      A11Y_PAGES: "",
+    });
+    const artifact = JSON.parse(stdout) as {
+      pages: { id: string; url: string; status: string }[];
+    };
+    const page = artifact.pages[0];
+    expect(page.status).toBe("error");
+    // The whole document, not just the fields we thought to check.
+    expect(stdout).not.toContain("hunter2SECRET");
+    expect(page.id).not.toContain("hunter2SECRET");
+    // And the id still derives from the same redacted url as `url` does, so a
+    // failed capture joins its healthy self in the base artifact — which is the
+    // entire reason a broken page carries an id at all.
+    expect(page.id).toBe("/callback?token=%5BREDACTED%5D");
   });
 });
 

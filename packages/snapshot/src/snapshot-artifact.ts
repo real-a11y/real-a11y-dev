@@ -10,16 +10,51 @@
  */
 
 import { SnapshotFormatError } from "./errors.js";
-import type { FingerprintedFinding } from "./fingerprint.js";
+import {
+  fingerprintFindings,
+  type FingerprintedFinding,
+} from "./fingerprint.js";
+import { pageIdOf, scopeId } from "./page-id.js";
 
-export const ARTIFACT_SCHEMA_VERSION = 1;
+/**
+ * Bumped to 2 when the fingerprint's page component became the page **id**
+ * rather than the display label.
+ *
+ * The field layout is back-compatible — `id` back-fills from `url` on read —
+ * but the `v1:` hashes inside a pre-bump artifact were computed over a
+ * different tuple than a fresh one's. Left at 1, the two would be compared as
+ * though they were the same scheme: exact matching misses every pair, the fuzzy
+ * tier has to rescue all of them, and anything it can't rescue (a doc-scoped
+ * finding, or one whose locator moved in the same change) surfaces as FIXED +
+ * NEW — a spurious gating regression on the first diff after upgrading.
+ *
+ * Baselines were protected with a version bump for exactly this change, and
+ * they are *refused* because a baseline stores no url — its identity cannot be
+ * derived from what it holds, and guessing would silently suppress a real
+ * finding. An artifact holds both the url and each finding's components, so it
+ * is **converted** on read instead: same protection, no data loss, no re-record.
+ */
+export const ARTIFACT_SCHEMA_VERSION = 2;
 
 /** The serialized views a run can measure. */
 export const SNAPSHOT_VIEWS = ["tree", "outline", "tabs"] as const;
 export type SnapshotView = (typeof SNAPSHOT_VIEWS)[number];
 
 export interface SnapshotPage {
-  /** Join key across base/PR — never the URL (host/port legitimately differ). */
+  /**
+   * Join key across base/PR, baselines and fingerprints — the page's identity.
+   *
+   * Derived from the URL's path (see `pageIdOf`), never from the origin and
+   * never from `name`. Both of those were tried: the origin fails across
+   * environments, the label fails across a rename, and until this field existed
+   * `name` was doing both jobs — which is why renaming a page silently
+   * un-suppressed its baseline.
+   */
+  id: string;
+  /**
+   * Display label only. Free to change without changing what page this is.
+   * Defaults to the redacted URL when the config doesn't name one.
+   */
   name: string;
   url: string;
   root: string;
@@ -87,10 +122,67 @@ export interface ArtifactMeta {
   views?: readonly SnapshotView[];
 }
 
+/**
+ * Refuse an artifact whose pages share an identity.
+ *
+ * Two pages with one id would be joined as a single page by every consumer —
+ * the diff would compare one against the other and report the difference as a
+ * regression, and a baseline entry would suppress on whichever matched first.
+ * Blending two pages' findings is the worst outcome this model can produce, and
+ * it is silent, so it is a hard error rather than a warning.
+ *
+ * Reachable in practice by auditing two sites that share a route (`/` is the
+ * usual one). The remedy is an explicit `id` on the config entry, which the
+ * message names.
+ *
+ * `readLabel` marks the read path. An artifact already on disk cannot be fixed
+ * by editing today's config — the collision is baked into a file that was
+ * written before ids existed — so it is pointed at a re-capture instead. Same
+ * defect, two honest remedies.
+ */
+export function assertDistinctPageIds(
+  pages: readonly SnapshotPage[],
+  readLabel?: string,
+): void {
+  const seen = new Map<string, string>();
+  for (const page of pages) {
+    // `id` is required by the type, but this package is published and callable
+    // from JS, and a page built by hand is the one way to reach here without
+    // one. Caught by name: two id-less pages would otherwise both key on
+    // `undefined` and be reported as a collision, which names the wrong defect
+    // and sends the reader looking for a route clash that isn't there.
+    if (typeof page.id !== "string" || page.id.length === 0) {
+      throw new SnapshotFormatError(
+        `page ${page.url} has no id — a page's identity is what the diff, ` +
+          `baselines and fingerprints all join on, so it cannot be omitted.`,
+        "build pages with buildSnapshotPage(), or read them back through parseSnapshotArtifact(), which derives an id from the url",
+      );
+    }
+    const first = seen.get(page.id);
+    if (first !== undefined) {
+      throw new SnapshotFormatError(
+        (readLabel === undefined ? "" : `${readLabel}: `) +
+          `two pages share the id "${page.id}" — ${first} and ${page.url}. ` +
+          `Page identity is the URL's path, so two sites sharing a route collide.`,
+        // The remedy has to be reachable from whichever page source the caller
+        // actually used. A config `urls` entry and an `A11Y_PAGES` entry both
+        // take an `id`; positional URLs carry no such field, so naming only the
+        // config would hand a CLI user advice they cannot act on without
+        // rewriting their whole invocation.
+        readLabel === undefined
+          ? 'give one an explicit "id" — a config `urls` entry or an `A11Y_PAGES` entry both accept { "id": "marketing-home", "url": "…" }. Positional URLs carry no id, so use one of those for a run whose routes collide'
+          : 'this artifact predates page identity and cannot be repaired in place — re-capture it with an explicit "id" on one of the colliding pages',
+      );
+    }
+    seen.set(page.id, page.url);
+  }
+}
+
 export function buildArtifact(
   pages: SnapshotPage[],
   meta: ArtifactMeta,
 ): SnapshotArtifact {
+  assertDistinctPageIds(pages);
   return {
     schemaVersion: ARTIFACT_SCHEMA_VERSION,
     tool: { name: meta.toolName, version: meta.toolVersion },
@@ -176,7 +268,21 @@ export function parseSnapshotArtifact(
     );
   }
   const a = parsed as Partial<SnapshotArtifact>;
-  if (a.schemaVersion !== ARTIFACT_SCHEMA_VERSION) {
+  // A version-1 artifact is CONVERTED, not refused.
+  //
+  // Its hashes were keyed on the display label, so reading it as-is would
+  // compare two different fingerprint schemes and report unchanged findings as
+  // fixed + new. But everything needed to redo them is in the file: the page's
+  // `url` yields the identity, and each finding carries its own components
+  // (rule, role, locator, …), so re-keying reproduces exactly what a fresh
+  // capture of the same page would hash. The conversion happens below, once the
+  // ids are back-filled — nothing here is a guess.
+  //
+  // This is where artifacts and baselines diverge, and the asymmetry is the
+  // whole reason baselines are refused instead: a baseline stores no url, so
+  // its identity cannot be derived from what it holds. An artifact's can.
+  const legacy = a.schemaVersion === 1;
+  if (!legacy && a.schemaVersion !== ARTIFACT_SCHEMA_VERSION) {
     throw new SnapshotFormatError(
       `${label} has schemaVersion ${String(a.schemaVersion)} — this build reads ${ARTIFACT_SCHEMA_VERSION}.`,
       "re-generate it with a matching real-a11y version: real-a11y snapshot",
@@ -197,6 +303,10 @@ export function parseSnapshotArtifact(
         )
       : SNAPSHOT_VIEWS,
   );
+  // Which pages had no id of their own. Only these may fall back to `name` on a
+  // collision — a page that carries an explicit id means it, and two of those
+  // clashing is a malformed artifact rather than a legacy one.
+  const backFilled = new Set<SnapshotPage>();
   for (const page of a.pages) {
     if (
       typeof page !== "object" ||
@@ -206,12 +316,78 @@ export function parseSnapshotArtifact(
       throw new SnapshotFormatError(`${label} has a page without a "name"`);
     }
     const p = page as SnapshotPage;
+    // Back-fill identity for any page that arrived without one: a v1 artifact
+    // (written before pages had an id) or a hand-made v2 one. The `url` is on
+    // every page, so the id is derivable and the file stays readable rather
+    // than needing a re-record. When the url won't parse there is nothing
+    // honest to derive, so fall back to the name — which is exactly what that
+    // artifact was joined on when it was written.
+    if (typeof p.id !== "string" || p.id.length === 0) {
+      const derived =
+        (typeof p.url === "string" ? pageIdOf(p.url) : undefined) ?? p.name;
+      // Scope by the recorded root, exactly as `buildSnapshotPage` does, so an
+      // old artifact holding one URL at two roots back-fills to two ids instead
+      // of collapsing into one.
+      p.id = scopeId(derived, typeof p.root === "string" ? p.root : undefined);
+      backFilled.add(p);
+    }
     if (!Array.isArray(p.findings)) p.findings = [];
     if (typeof p.tree !== "string") p.tree = "";
     if (typeof p.outline !== "string") p.outline = "";
     if (!measured.has("tabs")) delete p.tabs;
     else if (typeof p.tabs !== "string") p.tabs = "";
     if (p.status !== "ok" && p.status !== "error") p.status = "ok";
+  }
+  // A back-filled id can collide where the artifact itself was coherent: two
+  // sites sharing a route (`/` is the usual one) were distinct pages when this
+  // file was written, because back then pages joined on `name`. Throwing here
+  // would make a file that diffed correctly for months permanently unreadable,
+  // and the remedy an in-place error can offer — "re-capture it" — is not open
+  // to an archived CI artifact.
+  //
+  // So the read path falls back to what that artifact was ACTUALLY joined on,
+  // which is the same reasoning the unparseable-url case already follows above.
+  // Only the colliding pages move, so a legacy `/` that collides with nothing
+  // keeps the derived id and still joins a freshly-captured page of that route.
+  // Two legacy artifacts both land on `name` and join exactly as they did
+  // before ids existed.
+  const collided = new Map<string, SnapshotPage[]>();
+  for (const p of a.pages as SnapshotPage[]) {
+    const pool = collided.get(p.id);
+    if (pool) pool.push(p);
+    else collided.set(p.id, [p]);
+  }
+  for (const pool of collided.values()) {
+    if (pool.length < 2 || !pool.every((p) => backFilled.has(p))) continue;
+    for (const p of pool) p.id = p.name;
+  }
+  // The same guard `buildArtifact` applies, on the way in rather than the way
+  // out. Without it an artifact written in-process could never hold colliding
+  // ids while one read from disk could, and `diffArtifacts` joins pages through
+  // a Map — so a collision drops the first page's findings from the comparison
+  // silently, which is the single outcome this model must never produce.
+  //
+  // Still reached by a collision the fallback can't resolve: an artifact whose
+  // pages carry explicit ids that clash (genuinely malformed, not legacy), or a
+  // legacy one whose names clash too — which had the same silent-merge defect
+  // when it was written and cannot be repaired by reading it differently.
+  assertDistinctPageIds(a.pages as SnapshotPage[], label);
+  if (legacy) {
+    // Re-key every finding under the identity settled above. A v1 hash was
+    // computed with the display label in the tuple's page slot; every other
+    // component (rule, role, locator, …) is carried on the finding itself and
+    // is unchanged, so hashing again with the id in that slot yields exactly
+    // what a fresh capture of this page produces. `occ` recomputes from array
+    // order, which the file preserves, so repeated identical findings keep
+    // their numbering.
+    //
+    // Without this the artifact would parse and then mis-compare in silence,
+    // which is the one failure mode worth refusing over — so the version is
+    // stamped forward only once the conversion has actually happened.
+    for (const p of a.pages as SnapshotPage[]) {
+      p.findings = fingerprintFindings(p.id, p.findings);
+    }
+    a.schemaVersion = ARTIFACT_SCHEMA_VERSION;
   }
   return a as SnapshotArtifact;
 }

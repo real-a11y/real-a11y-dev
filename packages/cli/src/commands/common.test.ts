@@ -2,6 +2,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { buildSnapshotPage } from "@real-a11y-dev/snapshot";
 import { describe, expect, it } from "vitest";
 
 import { mergeDefaults, resolveConfig } from "../config.js";
@@ -9,12 +10,21 @@ import { CliError } from "../exit.js";
 
 import {
   isAuthenticated,
+  pageIdentityOf,
   sessionFlags,
   warnUnscopable,
   resolveAuditTargets,
   resolvePageList,
   type Target,
 } from "./common.js";
+
+/** Minimal capture payload — these tests only care about the derived id. */
+const EMPTY_SNAPSHOT = {
+  findings: [],
+  tree: "",
+  outline: "",
+  tabOrder: "",
+};
 
 function stateFile(): string {
   const dir = mkdtempSync(join(tmpdir(), "real-a11y-cf-"));
@@ -237,6 +247,97 @@ describe("resolveAuditTargets", () => {
     expect(() => resolveAuditTargets([], { "no-config": true })).toThrow(
       CliError,
     );
+  });
+
+  describe("pageIdentityOf — one derivation for every command", () => {
+    // Regression: `audit`/`inspect` derived identity from the LANDED url while
+    // `snapshot` handed `buildSnapshotPage` the REQUESTED one, so a redirect
+    // that changed the path gave one finding two "stable" ids depending on
+    // which command reported it. The parity assertion below is the real guard —
+    // it fails if either side's derivation moves.
+    const target = (url: string): Target => ({
+      url,
+      name: url,
+      fileApproved: false,
+    });
+
+    it("agrees with buildSnapshotPage, which derives inside the package", () => {
+      for (const url of [
+        "https://example.com/pricing",
+        "https://example.com/pricing/",
+        "https://user:pw@example.com/cb?token=abc123",
+        "https://example.com/search?q=cats#top",
+        "data:text/html,<button></button>",
+      ]) {
+        const t = target(url);
+        expect(pageIdentityOf(t)).toBe(
+          buildSnapshotPage(t.name, t.url, EMPTY_SNAPSHOT).id,
+        );
+      }
+    });
+
+    it("honours an explicit config id, exactly as the snapshot path does", () => {
+      const t = target("https://example.com/");
+      expect(
+        pageIdentityOf(t, { id: "marketing", name: "H", url: t.url }),
+      ).toBe("marketing");
+      expect(
+        buildSnapshotPage(t.name, t.url, EMPTY_SNAPSHOT, { id: "marketing" })
+          .id,
+      ).toBe("marketing");
+    });
+
+    it("keeps a secret out of the identity", () => {
+      expect(
+        pageIdentityOf(target("https://example.com/cb?token=abc123")),
+      ).not.toContain("abc123");
+    });
+  });
+
+  describe("A11Y_PAGES carries an optional page id", () => {
+    // Two pages resolving to one identity is a hard error, and the remedy is an
+    // explicit `id`. Without one HERE, that refusal named something only a
+    // config file could provide — while A11Y_PAGES is the documented drop-in
+    // for the CI guide and what this repo's own audit script uses. The error
+    // would have been unactionable without rewriting the whole setup.
+    const withEnv = <T>(value: string, fn: () => T): T => {
+      const prev = process.env.A11Y_PAGES;
+      process.env.A11Y_PAGES = value;
+      try {
+        return fn();
+      } finally {
+        if (prev === undefined) delete process.env.A11Y_PAGES;
+        else process.env.A11Y_PAGES = prev;
+      }
+    };
+
+    it("passes an explicit id through, so a route collision is fixable", () => {
+      const { pages } = withEnv(
+        JSON.stringify([
+          { name: "A", url: "http://a.test/" },
+          { id: "b-home", name: "B", url: "http://b.test/" },
+        ]),
+        () => resolvePageList([], {}),
+      );
+      expect(pages.map((p) => p.id)).toEqual([undefined, "b-home"]);
+    });
+
+    it("rejects a non-string or empty id at the edge", () => {
+      // Same rule as the config path, so the two page sources can't disagree
+      // about what an id is.
+      expect(() =>
+        withEnv(
+          JSON.stringify([{ id: "", name: "A", url: "http://a.test/" }]),
+          () => resolvePageList([], {}),
+        ),
+      ).toThrow(/id must be a non-empty string/);
+      expect(() =>
+        withEnv(
+          JSON.stringify([{ id: 5, name: "A", url: "http://a.test/" }]),
+          () => resolvePageList([], {}),
+        ),
+      ).toThrow(/id must be a non-empty string/);
+    });
   });
 });
 

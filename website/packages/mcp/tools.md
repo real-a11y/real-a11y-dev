@@ -348,7 +348,7 @@ Load an externally-held Real A11y snapshot artifact (e.g. a CLI-generated baseli
 
 Parameters:
 
-- **`name`** — string — required — the label to store it under.
+- **`name`** — string — required — the label to store it under, and **only** a label. The imported page keeps the identity it arrived with (derived from its URL), so a CLI-written artifact of `/pricing` diffs against a live page at `/pricing` whatever you call it here. Earlier releases rewrote the page under this label, which made an imported artifact join on the store name instead of the route — the reason the cross-tool diff didn't work before.
 - **`artifact`** — string — required — a serialized Real A11y snapshot artifact (JSON).
 
 ## Tree checkpoints

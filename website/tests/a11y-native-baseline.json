@@ -1,14 +1,15 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "entries": [
     {
+      "pageId": "/",
       "page": "/",
       "fingerprint": "v1:9a1167a99541e415",
       "id": ["v1", "/", "landmark-structure", "missing-main", "", 0],
       "rule": "landmark-structure",
       "severity": "error",
       "message": "Missing <main>: every page needs a main landmark.",
-      "note": "VitePress home layout: the hero and feature sections sit outside any landmark, so the page has no <main>. Not ours to fix in markup we do not author \u2014 the same finding is suppressed for / in the axe suite (ROUTE_DISABLED_RULES: landmark-one-main, region). Accepted here for the same reason, and in the same one place, so the two gates cannot disagree about what is known."
+      "note": "VitePress home layout: the hero and feature sections sit outside any landmark, so the page has no <main>. Not ours to fix in markup we do not author — the same finding is suppressed for / in the axe suite (ROUTE_DISABLED_RULES: landmark-one-main, region). Accepted here for the same reason, and in the same one place, so the two gates cannot disagree about what is known."
     }
   ]
 }

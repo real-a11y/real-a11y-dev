@@ -27,9 +27,12 @@ const raw = (over: Partial<Finding> = {}): Finding =>
     ...over,
   }) as Finding;
 
+// `id` is the bucket key; `name` is the label. They differ here on purpose so a
+// test that accidentally keys on the label fails instead of passing by accident.
 const page = (name: string, findings: Finding[]): BaselinePage => ({
+  id: `/${name.toLowerCase()}`,
   name,
-  findings: fingerprintFindings(name, findings),
+  findings: fingerprintFindings(`/${name.toLowerCase()}`, findings),
 });
 
 describe("buildBaseline", () => {
@@ -135,5 +138,72 @@ describe("loadBaseline", () => {
     expect(() => loadBaseline("/nope/does-not-exist.json")).toThrow(
       /not found/,
     );
+  });
+});
+
+describe("identity is the page id, not its label", () => {
+  // The defect this split exists for. Recorded against a page, then the page is
+  // renamed for readability — accepted debt must survive, because renaming a
+  // label is not a claim about what the page is.
+  const findings = [raw()];
+
+  it("a renamed page keeps suppressing its accepted debt", () => {
+    const recorded = { id: "/pricing", name: "http://localhost:3000/pricing" };
+    const renamed = { id: "/pricing", name: "Pricing page" };
+
+    const { baseline } = buildBaseline([
+      { ...recorded, findings: fingerprintFindings(recorded.id, findings) },
+    ]);
+    const { suppressed, stale } = applyBaseline(
+      [{ ...renamed, findings: fingerprintFindings(renamed.id, findings) }],
+      baseline,
+    );
+    expect(suppressed).toBe(1);
+    expect(stale).toEqual([]);
+  });
+
+  it("still un-suppresses when the page genuinely is a different page", () => {
+    // The other half: identity must not become so loose that moving a finding
+    // to another route silently keeps it accepted.
+    const { baseline } = buildBaseline([
+      {
+        id: "/pricing",
+        name: "P",
+        findings: fingerprintFindings("/pricing", findings),
+      },
+    ]);
+    const { suppressed, stale } = applyBaseline(
+      [
+        {
+          id: "/careers",
+          name: "C",
+          findings: fingerprintFindings("/careers", findings),
+        },
+      ],
+      baseline,
+    );
+    expect(suppressed).toBe(0);
+    expect(stale).toHaveLength(1);
+  });
+
+  it("carries across environments — the same route on a different host", () => {
+    const { baseline } = buildBaseline([
+      {
+        id: "/pricing",
+        name: "localhost",
+        findings: fingerprintFindings("/pricing", findings),
+      },
+    ]);
+    const { suppressed } = applyBaseline(
+      [
+        {
+          id: "/pricing",
+          name: "prod",
+          findings: fingerprintFindings("/pricing", findings),
+        },
+      ],
+      baseline,
+    );
+    expect(suppressed).toBe(1);
   });
 });

@@ -6,9 +6,9 @@ area: MCP
 type: Automated
 priority: P1
 status: Active
-validFrom: "mcp ≥ 0.1.0-beta.1. The MCP tree checkpoint stays in-page for now; the native Node-side checkpoint lands with the MCP native-only migration (see R26 for the CLI side). Step 7's a/b split is from mcp ≥ 0.1.0-beta.2 — before that, a diff across any two pages printed the structural summary regardless, so on an earlier release expect 7a to dump a large advisory section and treat that as the old behaviour, not a fail. The operation-naming headers in (3)/(6) are also mcp ≥ 0.1.0-beta.2; earlier releases print `Checkpoint diff …` for both."
+validFrom: "mcp ≥ 0.1.0-beta.1. The MCP tree checkpoint stays in-page for now; the native Node-side checkpoint lands with the MCP native-only migration (see R26 for the CLI side). Step 7's a/b split is from mcp ≥ 0.1.0-beta.2 — before that, a diff across any two pages printed the structural summary regardless, so on an earlier release expect 7a to dump a large advisory section and treat that as the old behaviour, not a fail. The operation-naming headers in (3)/(6) are also mcp ≥ 0.1.0-beta.2; earlier releases print `Checkpoint diff …` for both. From mcp ≥ 0.1.0-beta.2 a page also carries an identity separate from its checkpoint LABEL, which changes what 7a's FINDINGS do (see its Expected) and stops import from rewriting what it stores (5)."
 validUntil: ""
-expected: "checkpoint → change page → diff reports exactly the introduced delta; export→import round-trips losslessly; each diff's header names which operation ran and what it read; a diff across two different routes suppresses the structural summary and says so, while a diff across two deploys of one route keeps it"
+expected: "checkpoint → change page → diff reports exactly the introduced delta; export→import round-trips losslessly and unmodified; each diff's header names which operation ran and what it read; a diff across two different routes reports them as separate pages and suppresses the structural summary, while a diff across two deploys of one route compares them normally"
 covers:
   - mcp.tools.checkpoint_findings
   - mcp.tools.checkpoint_tree
@@ -55,13 +55,28 @@ differently.
   back to back and confirm the two headers cannot be mistaken for each other —
   neither should say the old `Checkpoint diff …`
 - **5** — round-trips losslessly; the imported checkpoint diffs identically to the
-  original
-- **7** — both still work; findings checkpoints are pure data and survive
-  navigation **by design**. What differs is the rest of the output:
+  original. From mcp ≥ 0.1.0-beta.2, check it round-trips **unmodified**: import
+  stores the artifact's page as it arrived. Earlier releases rewrote it under the
+  store label and re-fingerprinted — a workaround for the label being the identity,
+  which now would _break_ the join rather than repair it. The payoff is worth
+  checking directly: export a CLI-written artifact
+  (`real-a11y snapshot <url> -o base.json`), `import_checkpoint` it, and
+  `diff_findings` a live page against it. That cross-tool diff has never worked
+  before this release; the imported page kept the store label as its identity while
+  the live one derived its own
+- **7** — both still run; findings checkpoints are pure data and survive navigation
+  **by design**. What differs is the rest of the output:
   - **7a** — a `NOTE: different page` naming both addresses, and **no** "Structural
-    changes (advisory)" section. From mcp ≥ 0.1.0-beta.2
-  - **7b** — the structural summary is **kept**. Only the origin differs, and
-    prod-vs-preview is the headline cross-deploy workflow
+    changes (advisory)" section. From mcp ≥ 0.1.0-beta.2. The **findings** now also
+    read as two separate pages: the checkpoint's report as fixed and the live page's
+    as new, rather than pairing up. Read that as correct, not as a regression — it
+    is what actually happened, and the `NOTE` above it is what makes it legible. On
+    an earlier release the same run reported `0 new, 0 fixed`, because both sides
+    were fingerprinted under the same checkpoint LABEL, which made two unrelated
+    routes look like one page that hadn't changed
+  - **7b** — the structural summary is **kept**, and the findings pair normally.
+    Only the origin differs, and prod-vs-preview is the headline cross-deploy
+    workflow
 - **8** — the tree diff names what the interaction changed
 - **9** — a clean, explicit error — the tree checkpoint is bound to the page
   instance and does not survive navigation
@@ -88,7 +103,9 @@ side will.
 structural summary across unrelated routes is the fix; suppressing it across two
 deploys of one route would destroy the tool's headline use. A change that keys the
 decision on the whole URL rather than on the path passes 7a and quietly breaks 7b,
-which is why both are listed.
+which is why both are listed. The same pair now guards the **findings** join as
+well, since both read the same page identity — see R29 for the CLI-side version of
+that pair.
 
 ## Notes
 
@@ -100,3 +117,11 @@ nothing. A checkpoint also now records the LIVE url rather than whatever
 `open_page` landed on, so a `click_element` that navigates before
 `checkpoint_findings` is recorded honestly — without that, 7a could not be detected
 at all, since both sides carried the opened address.
+
+That comparison used to be advisory only: it decided whether to print a section,
+while the findings underneath it still joined on the checkpoint's label. The same
+release that split 7a/7b later promoted the rule to the page's actual identity, so
+one definition of "same page" now drives both the note and the join. Two
+workarounds went with it — `diffLabeledCheckpoints` re-fingerprinted both sides
+under a neutral literal, and `import_checkpoint` rewrote what it stored (5) —
+because both existed only to undo the label-as-identity conflation.

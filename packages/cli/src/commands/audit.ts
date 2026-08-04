@@ -36,6 +36,7 @@ import {
   ensurePageOpen,
   isAuthenticated,
   outputOf,
+  pageIdentityOf,
   resolveAuditTargets,
   sessionFlags,
   type Target,
@@ -99,10 +100,27 @@ export async function runAuditOnSession(
       const snapshot = await nativeSnapshot(session, {
         ...(rules ? { rules } : {}),
       });
+      // Fingerprint under the page's IDENTITY, through the one shared
+      // derivation — keyed on the label instead, a finding carried a different
+      // "stable" id per command, and derived here rather than in
+      // `pageIdentityOf` it drifted again the moment `audit` reached for the
+      // landed url while `snapshot` used the requested one.
+      //
+      // The displayed `url` stays the LANDED address (`finalUrl`): that is
+      // where these findings actually came from. Only the identity keys on the
+      // requested one — see `pageIdentityOf` for why the two differ.
+      //
+      // Not scoped by `rootSelector`, unlike the snapshot path: this audit is
+      // whole-document and says so above, so two entries differing only by root
+      // really do produce the same findings. Qualifying the id would invent a
+      // distinction the output doesn't have.
       pages.push({
         name: target.name,
         url: redactUrl(finalUrl),
-        findings: fingerprintFindings(target.name, snapshot.findings),
+        findings: fingerprintFindings(
+          pageIdentityOf(target, target.page),
+          snapshot.findings,
+        ),
       });
       if (flags.verbose === true) {
         progress(`  done in ${Date.now() - started}ms`, { quiet });

@@ -122,14 +122,14 @@ Your snapshot *policy* — which pages, which rules, what to fail on — lives i
   "urls": [
     "http://localhost:3000",
     "http://localhost:3000/about",
-    { "name": "Header nav", "url": "http://localhost:3000", "rootSelector": "header" }
+    { "name": "Login", "url": "http://localhost:3000/login" }
   ],
   "rules": ["no-unlabeled-interactive", "image-alt", "heading-order", "dialog-labeled", "landmark-structure"],
   "failOn": "error"
 }
 ```
 
-A `urls` entry is a bare URL string (its `name` — the diff's join key — defaults to the URL) or an object when you need a custom `name`, a `rootSelector` (narrows the audit to a subtree), or a `sourcePath` (for the [Security tab](#findings-in-the-security-tab-sarif)). See [Configuration](#configuration) for every key. Give every entry an explicit `name` when base and PR are served from different hosts or ports — otherwise the names default to URLs that never match, and [`diff`](/packages/cli/commands#diff-base-json-pr-json) warns that it compared nothing.
+A `urls` entry is a bare URL string or an object when you need a custom `name` (a display label), an `id` (the join key — defaults to the URL's path), a `rootSelector` (narrows the audit to a subtree), or a `sourcePath` (for the [Security tab](#findings-in-the-security-tab-sarif)). See [Configuration](#configuration) for every key. Base and PR served from different hosts or ports pair automatically, because identity is the path and not the whole URL — no naming discipline required.
 
 Run it locally whenever you want — the output is a single JSON artifact:
 
@@ -176,7 +176,7 @@ The config is strict and **fail-closed** — an unknown or typo'd key is a hard 
 
 | Key | Required | Description |
 |---|---|---|
-| `urls` | ✅ (or `A11Y_PAGES`) | The routes to audit. Each entry is a URL **string**, or an object `{ url, name?, rootSelector?, sourcePath? }`. `name` is the diff join key (defaults to the URL, so keep URLs stable across base/PR); `rootSelector` scopes the audit to a subtree; `sourcePath` is the repo file findings anchor to for SARIF (see [the Security tab](#findings-in-the-security-tab-sarif)). Formerly `pages` — still accepted. |
+| `urls` | ✅ (or `A11Y_PAGES`) | The routes to audit. Each entry is a URL **string**, or an object `{ url, id?, name?, rootSelector?, sourcePath? }`. `id` is the diff join key and defaults to the URL's path, so base and PR pair across hosts and ports on their own; `name` is a display label you can change freely; `rootSelector` scopes the audit to a subtree; `sourcePath` is the repo file findings anchor to for SARIF (see [the Security tab](#findings-in-the-security-tab-sarif)). Formerly `pages` — still accepted. |
 | `rules` | | Subset of the five rules — `no-unlabeled-interactive`, `image-alt`, `heading-order`, `dialog-labeled`, `landmark-structure`. Omit to run all. |
 | `failOn` | | `error` \| `warning` \| `never`. |
 | `device` | | Device to emulate, e.g. `"iPhone 13"` — audit the mobile layout. |
@@ -188,8 +188,9 @@ The config is strict and **fail-closed** — an unknown or typo'd key is a hard 
   "urls": [
     "http://localhost:3000",
     { "name": "Login", "url": "http://localhost:3000/login" },
-    // Optional: narrow the audit to a subtree
-    { "name": "Header nav", "url": "http://localhost:3000", "rootSelector": "header" },
+    // Optional: give a page an explicit identity — the join key for diffs and
+    // baselines. Only needed to override the default (the URL's path).
+    { "id": "marketing-home", "name": "Marketing", "url": "http://marketing.localhost:3000/" },
     // Optional: anchor SARIF findings to the route's source file
     { "name": "About", "url": "http://localhost:3000/about", "sourcePath": "src/pages/about.tsx" }
   ]

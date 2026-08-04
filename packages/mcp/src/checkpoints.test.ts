@@ -93,6 +93,62 @@ describe("diffLabeledCheckpoints", () => {
     expect(diff.summary.new).toBe(1);
     expect(diff.summary.unchanged).toBe(1);
   });
+
+  it("pairs two checkpoints of a page whose address has NO route", () => {
+    // The cases above use https://example.com/, so both sides derive the id `/`
+    // and join on their own — page identity doing its job. A `data:` document
+    // has no route to derive from, so `pageIdOf` returns undefined and
+    // `buildSnapshotPage` falls back to the display name, which for a
+    // checkpoint is its LABEL. Two labels then never pair, and the whole
+    // before/after workflow reports total turnover on an unchanged page.
+    //
+    // `differentUrl` can't even explain it — it returns undefined for an
+    // unparseable side too, so no note prints. Silent and wrong, which is why
+    // the neutral re-fingerprint still has a job here.
+    const url = "data:text/html,<button></button>";
+    const before = page("before-fix", [finding()], "button", url);
+    const after = page("after-fix", [finding()], "button", url);
+    // Precondition: the ids really are the two labels, or this tests nothing.
+    expect([before.id, after.id]).toEqual(["before-fix", "after-fix"]);
+
+    const diff = diffLabeledCheckpoints(before, after);
+    expect(diff.summary.new).toBe(0);
+    expect(diff.summary.removed).toBe(0);
+    expect(diff.summary.unchanged).toBe(1);
+  });
+
+  it("still reports a real change on a routeless page", () => {
+    // The neutral join must not paper over an actual difference.
+    const url = "data:text/html,<button></button>";
+    const before = page("before-fix", [finding()], "button", url);
+    const after = page(
+      "after-fix",
+      [finding(), finding({ locator: "#cancel" })],
+      "button",
+      url,
+    );
+    const diff = diffLabeledCheckpoints(before, after);
+    expect(diff.summary.new).toBe(1);
+    expect(diff.summary.unchanged).toBe(1);
+  });
+
+  it("does NOT force a join when only one side lacks a route", () => {
+    // One routed side and one not is a genuine mismatch — a live https capture
+    // against a stored data: one. Re-keying both to a literal would join two
+    // unrelated pages and report their findings as comparable, which is the
+    // silent-merge failure the whole identity model exists to prevent.
+    const before = page("before-fix", [finding()], "button", "https://x.test/");
+    const after = page(
+      "after-fix",
+      [finding()],
+      "button",
+      "data:text/html,<button></button>",
+    );
+    const diff = diffLabeledCheckpoints(before, after);
+    expect(diff.summary.unchanged).toBe(0);
+    expect(diff.summary.new).toBe(1);
+    expect(diff.summary.removed).toBe(1);
+  });
 });
 
 describe("renderDiff", () => {
@@ -274,16 +330,25 @@ describe("renderDiff across two different pages", () => {
     expect(out).toContain("https://example.com/b");
   });
 
-  it("still diffs findings — fingerprints don't depend on position", () => {
-    expect(out).toMatch(/0 new, 0 fixed/);
-    expect(out).toMatch(/Findings are still matched by fingerprint/);
+  it("classifies them as separate pages rather than comparing them", () => {
+    // This used to assert `0 new, 0 fixed` — findings matched across the two
+    // sides because both were fingerprinted under the same checkpoint LABEL,
+    // which made two unrelated routes look like one page that hadn't changed.
+    //
+    // Pages carry an identity derived from their URL now, so `/a` and `/b` no
+    // longer join at all: the base's findings are reported gone and the head's
+    // reported new, which is what actually happened. The note above is what
+    // stops that reading as a regression.
+    expect(out).toMatch(/1 new, 1 fixed/);
   });
 
   it("does not announce structure it then fails to print", () => {
-    // The bug this guards: `structuralChanged` ignoring the suppression would
-    // leave the "but the structure did:" lead-in with nothing under it.
+    // The lead-in must not appear with nothing under it. Two non-joining pages
+    // carry no structural entries either, so this holds for a second reason
+    // now — belt and braces, and the suppression is still the load-bearing one
+    // for pages that DO join.
     expect(out).not.toMatch(/structure did/);
-    expect(out).toMatch(/No accessibility findings changed\./);
+    expect(out).not.toMatch(/Structural changes/);
   });
 
   it("keeps the summary when the pages ARE the same route", () => {

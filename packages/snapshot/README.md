@@ -10,16 +10,32 @@ This is the single place a Real A11y snapshot is built and compared, so a snapsh
 
 ## Fingerprints
 
-`fingerprintFindings` assigns each finding a stable `v1:` id derived from its identity (rule + role + locator + normalized message), so the same problem keeps the same id across runs and across tools:
+`fingerprintFindings` assigns each finding a stable `v1:` id derived from its identity (the page it was found on + rule + role + locator + normalized message), so the same problem keeps the same id across runs and across tools:
 
 ```ts
-import { fingerprintFindings } from "@real-a11y-dev/snapshot";
+import { fingerprintFindings, pageIdOf } from "@real-a11y-dev/snapshot";
 
-const withIds = fingerprintFindings(findings);
+const withIds = fingerprintFindings(pageIdOf("https://example.com/pricing"), findings);
 // [{ ...finding, fingerprint: "v1:9c2f…" }, …]
 ```
 
+The first argument is the **page's identity**, not its display name — see [Page identity](#page-identity). Passing a label here makes the fingerprint change when the label does, which is the defect that field exists to prevent.
+
 The `v1:` scheme is frozen — improvements ship as `v2:` alongside it, never by mutating `v1:` — so a baseline recorded months ago still matches today.
+
+## Page identity
+
+A page has an `id` (what it **is**) and a `name` (what you **call** it). Only the first one joins:
+
+| field  | job                                              | default                 |
+| ------ | ------------------------------------------------ | ----------------------- |
+| `id`   | join key — diffs, baselines, fingerprints        | the URL's path + search |
+| `name` | display label, free to change                    | the redacted URL        |
+| `url`  | where it was captured                            | —                       |
+
+`pageIdOf` derives one from a URL: path + search + hash, **origin dropped**, one trailing slash stripped. So the same route on `localhost:3000`, `localhost:3001` and prod is one page — base and PR pair up without you keeping two labels character-identical by hand — while `/pricing` and `/careers` never merge. It returns `undefined` for anything unparseable rather than inventing an id, because a made-up id silently joins two unrelated pages.
+
+These were one field until recently, and the join key was the label, so renaming a page for readability un-suppressed its baseline. If you build pages by hand, `buildArtifact` refuses two that share an id — naming both URLs and the fix. Blending two pages' findings is the one failure here that is invisible afterwards, so it is a hard error rather than a warning.
 
 ## Artifact
 
@@ -72,6 +88,10 @@ import { loadBaseline, applyBaseline, buildBaseline } from "@real-a11y-dev/snaps
 const baseline = loadBaseline(".a11y-baseline.json"); // throws SnapshotFormatError if malformed
 const gated = applyBaseline(findings, baseline); // only findings absent from the baseline
 ```
+
+Entries are bucketed by the page's **id**, so accepted debt survives a rename and follows the page across environments.
+
+`BASELINE_SCHEMA_VERSION` is `2`. `loadBaseline` refuses a version-1 file by name, with the command that re-records it: those entries key on the display label, and mapping a label to a page id means guessing — a wrong guess silently suppresses a real finding, which is worse than the error. Artifacts have no such problem; `parseSnapshotArtifact` back-fills a missing `id` from the page's `url`, so an older artifact stays readable.
 
 The read/serialize helpers take and return data; the file writes stay with the caller, so the engine never touches the filesystem on your behalf beyond an explicit `loadBaseline`.
 

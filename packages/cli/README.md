@@ -234,8 +234,9 @@ real-a11y audit http://localhost:3000 --verbose
 
 Add a **`urls`** list — bare URL strings, or `{ url, name?, rootSelector? }`
 objects — to name your project's routes once; then a bare `real-a11y audit` (or
-`snapshot`) audits them all, no URL to re-type. Each route's `name` is the diff
-join key. Its `rootSelector` no longer scopes `audit` or `snapshot` — those read
+`snapshot`) audits them all, no URL to re-type. Each route's `id` is the diff join key — it
+defaults to the URL's path, so base and PR pair across hosts and ports without
+naming discipline, and `name` is a display label you can change freely. Its `rootSelector` no longer scopes `audit` or `snapshot` — those read
 the whole document — so both warn (they do not fail) when a route sets one, and
 it still scopes `real-a11y tabs --root <selector>`:
 

@@ -22,7 +22,15 @@ import { ALL_RULES, type A11yRule } from "@real-a11y-dev/audit";
 import { CliError, type FailOn } from "./exit.js";
 
 export interface ConfigPage {
-  /** Diff join key + display label. Defaults to `url` when not given. */
+  /**
+   * The page's identity — the diff/baseline join key. Defaults to the URL's
+   * path (see `pageIdOf`), which is right for almost every route.
+   *
+   * Set it explicitly to collapse routes the path separates (a paginated list,
+   * say) or to separate ones it collides (two sites both rooted at `/`).
+   */
+  id?: string;
+  /** Display label. Free to change — it is not the join key. Defaults to `url`. */
   name: string;
   url: string;
   rootSelector?: string;
@@ -80,7 +88,7 @@ const TOP_KEYS = new Set([
   "failOn",
   "device",
 ]);
-const URL_KEYS = new Set(["name", "url", "rootSelector", "sourcePath"]);
+const URL_KEYS = new Set(["id", "name", "url", "rootSelector", "sourcePath"]);
 const RULE_SET: ReadonlySet<string> = new Set(ALL_RULES);
 
 // Coarse types validated at load; "rules"/"failOn" get the extra enum check.
@@ -229,6 +237,19 @@ function parseUrlEntry(raw: unknown, where: string): ConfigPage {
     name: p.name !== undefined ? asString(p.name, `${where}.name`) : url,
     url,
   };
+  if (p.id !== undefined) {
+    // Empty is rejected rather than treated as absent. Callers test it two
+    // ways — `id ?? derive()` keeps `""`, `id ? … : derive()` drops it — so an
+    // empty id made a page's identity depend on which branch read it (a page
+    // that loaded derived one; the same page failing to open kept `""` and
+    // tripped the "no id" guard). One rule, at the edge, and both agree.
+    page.id = asString(p.id, `${where}.id`);
+    if (page.id.length === 0) {
+      throw new CliError(
+        `${where}.id must not be empty — omit it to derive the id from the url`,
+      );
+    }
+  }
   if (p.rootSelector !== undefined) {
     page.rootSelector = asString(p.rootSelector, `${where}.rootSelector`);
   }

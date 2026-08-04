@@ -44,6 +44,10 @@ they exit `0` when every step lands, and `2` when one can't be reached.
 
 - **`A11Y_PAGES`** — a JSON `[{ "name": …, "url": … }]` array, the page set for
   [`audit`](#audit-url) and [`snapshot`](#snapshot-url) when no URL is passed.
+  Each entry also takes an optional `"id"` — the page's identity, which defaults
+  to the URL's path. Set it only to separate two routes that collide (two sites
+  both rooted at `/`) or to join two the path keeps apart; see
+  [`urls`](/packages/cli/configuration#urls).
 - **`A11Y_SNAPSHOT_OUT`** — default output path for [`snapshot`](#snapshot-url)
   when [`-o`](#o-output-file) is omitted.
 
@@ -444,14 +448,22 @@ Add [`--explain`](#explain) for a plain-language summary, or report a single
 axis with [`--only findings | views`](#only-axis) (an output filter — the exit
 gate is unchanged).
 
-Pages are matched by their `name`, never by URL — base and PR legitimately run on
-different hosts and ports. A page whose name is on only one side is reported as
-added or removed and is never compared. Since a bare `urls` entry (or a
-positional `snapshot` URL) takes the URL as its name, snapshotting the two sides
-from different origins leaves nothing to join on: give the pages explicit names
-(config `urls` entries, or `A11Y_PAGES` as `[{ name, url }]`) so both runs agree.
-If no name matches at all, `diff` warns on stderr that it compared nothing — the
-report and exit code are unaffected.
+Pages are matched by their **identity** — the URL's path, not the display label
+and not the whole URL. Base and PR legitimately run on different hosts and ports,
+so the origin is ignored: `localhost:3000/pricing` and `example.com/pricing` are
+one page and compare normally, whatever either side calls them. Renaming a page
+therefore changes nothing about what it is.
+
+A page whose identity is on only one side is reported as added or removed and is
+never compared, which is the right answer for genuinely different routes
+(`/pricing` vs `/careers`). If nothing matches at all, `diff` warns on stderr
+that it compared nothing — the report and exit code are unaffected. That now
+means the two runs really did capture different routes, so check each entry's
+`url`; it is no longer something a rename can cause.
+
+To override the derived identity — to separate two sites that share a route, or
+join two the path keeps apart — set an explicit `id` on the entry (config `urls`,
+or `A11Y_PAGES` as `[{ id, name, url }]`).
 
 ```sh
 real-a11y diff base.json pr.json
