@@ -4,7 +4,7 @@ export default defineConfig({
   // `index` is the bin (has a shebang). The CLI is a command, not a library:
   // the programmatic engine (fingerprints, artifact, diff, baselines) lives in
   // @real-a11y-dev/snapshot, so there is no importable `.` entry here.
-  entry: ["src/index.ts"],
+  entry: ["src/index.ts", "src/daemon/entry.ts"],
   format: ["esm"],
   dts: true,
   sourcemap: true,

@@ -1,11 +1,13 @@
 /** Shared target/flag plumbing for the browser-driving commands. */
 
+import type { BrowserSession } from "@real-a11y-dev/browser";
 import { redactUrl } from "@real-a11y-dev/snapshot";
 
-import { type FlagValues } from "../args.js";
+import { type FlagValues, parseOpenOptions } from "../args.js";
 import { resolveConfig, type ConfigPage } from "../config.js";
 import { CliError } from "../exit.js";
 import { assertWritableTarget } from "../output.js";
+import { openPage } from "../session.js";
 import type { SessionFlags } from "../session.js";
 import { validateStorageStatePath } from "../storage-state.js";
 import { assertAllowedUrl, normalizeTarget } from "../url-gate.js";
@@ -270,4 +272,35 @@ export function outputOf(flags: FlagValues): string | undefined {
   // browser launches, not after the whole audit ran.
   if (target !== undefined) assertWritableTarget(target);
   return target;
+}
+
+function sameUrl(a: string, b: string): boolean {
+  try {
+    return new URL(a).href === new URL(b).href;
+  } catch {
+    return a === b;
+  }
+}
+
+/**
+ * Open `target.url` only when the session is not already on it.  Used by both
+ * the one-shot commands and the daemon's session-aware runners so repeated
+ * invocations against the same session do not reload the page.
+ */
+export async function ensurePageOpen(
+  session: BrowserSession,
+  target: Target,
+  flags: FlagValues,
+): Promise<{ title: string; url: string }> {
+  const current = session.currentUrl();
+  if (current && sameUrl(current, target.url)) {
+    return { title: "", url: current };
+  }
+  return openPage(
+    session,
+    target.url,
+    parseOpenOptions(flags),
+    target.fileApproved,
+    isAuthenticated(flags),
+  );
 }

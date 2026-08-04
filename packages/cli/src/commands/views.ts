@@ -16,7 +16,6 @@ import { redactUrl, sanitizeText } from "@real-a11y-dev/snapshot";
 import {
   parseFormat,
   parseListCategory,
-  parseOpenOptions,
   type CommandFn,
   type FlagValues,
 } from "../args.js";
@@ -27,40 +26,17 @@ import {
   createSession,
   nativeSnapshot,
   nativeTree,
-  openPage,
   snapshotPage,
 } from "../session.js";
 
 import {
-  isAuthenticated,
+  ensurePageOpen,
   outputOf,
   rootOf,
   sessionFlags,
   singleTarget,
   type Target,
 } from "./common.js";
-
-async function withPage<T>(
-  target: Target,
-  flags: FlagValues,
-  body: (session: Awaited<ReturnType<typeof createSession>>) => Promise<T>,
-): Promise<{ value: T; finalUrl: string }> {
-  const openOptions = parseOpenOptions(flags);
-  const session = await createSession(sessionFlags(flags, [target]));
-  try {
-    progress(`opening ${target.name} …`, { quiet: flags.quiet === true });
-    const opened = await openPage(
-      session,
-      target.url,
-      openOptions,
-      target.fileApproved,
-      isAuthenticated(flags),
-    );
-    return { value: await body(session), finalUrl: redactUrl(opened.url) };
-  } finally {
-    await session.close();
-  }
-}
 
 /** Emit one view, either as `--format json` or as plain text. */
 function writeView(
@@ -90,53 +66,75 @@ function writeView(
   return EXIT.OK;
 }
 
-function makeNativeView(
-  command: "tree" | "outline",
-  pick: (snapshot: { tree: string; outline: string }) => string,
-): CommandFn {
-  return async (positionals, flags) => {
-    // Validate the format before a browser launches.
-    parseFormat(flags.format, ["pretty", "json"] as const);
-    const target = singleTarget(positionals, flags, command);
-    const { value: text, finalUrl } = await withPage(target, flags, (session) =>
-      nativeSnapshot(session, {
-        includeGeneric: flags["include-generic"] === true,
-      }).then(pick),
-    );
-    return writeView(command, target, flags, finalUrl, text);
-  };
+export async function runTreeOnSession(
+  session: import("@real-a11y-dev/browser").BrowserSession,
+  positionals: string[],
+  flags: FlagValues,
+): Promise<number> {
+  parseFormat(flags.format, ["pretty", "json"] as const);
+  const target = singleTarget(positionals, flags, "tree");
+  progress(`opening ${target.name} …`, { quiet: flags.quiet === true });
+  const { url: finalUrl } = await ensurePageOpen(session, target, flags);
+  const snapshot = await nativeSnapshot(session, {
+    includeGeneric: flags["include-generic"] === true,
+  });
+  return writeView("tree", target, flags, redactUrl(finalUrl), snapshot.tree);
 }
 
-export const treeCommand = makeNativeView("tree", (s) => s.tree);
-export const outlineCommand = makeNativeView("outline", (s) => s.outline);
+export async function runOutlineOnSession(
+  session: import("@real-a11y-dev/browser").BrowserSession,
+  positionals: string[],
+  flags: FlagValues,
+): Promise<number> {
+  parseFormat(flags.format, ["pretty", "json"] as const);
+  const target = singleTarget(positionals, flags, "outline");
+  progress(`opening ${target.name} …`, { quiet: flags.quiet === true });
+  const { url: finalUrl } = await ensurePageOpen(session, target, flags);
+  const snapshot = await nativeSnapshot(session, {
+    includeGeneric: flags["include-generic"] === true,
+  });
+  return writeView(
+    "outline",
+    target,
+    flags,
+    redactUrl(finalUrl),
+    snapshot.outline,
+  );
+}
 
-/** The one DOM read left: tab ORDER is layout work Chromium's AX tree doesn't
- *  expose (`tabindex` never reaches a native node), so this walks the page. */
-export const tabsCommand: CommandFn = async (positionals, flags) => {
+export async function runTabsOnSession(
+  session: import("@real-a11y-dev/browser").BrowserSession,
+  positionals: string[],
+  flags: FlagValues,
+): Promise<number> {
   parseFormat(flags.format, ["pretty", "json"] as const);
   const target = singleTarget(positionals, flags, "tabs");
-  const { value: text, finalUrl } = await withPage(target, flags, (session) =>
-    snapshotPage(session, rootOf(flags), {}).then((s) => s.tabOrder),
+  progress(`opening ${target.name} …`, { quiet: flags.quiet === true });
+  const { url: finalUrl } = await ensurePageOpen(session, target, flags);
+  const text = await snapshotPage(session, rootOf(flags), {}).then(
+    (s) => s.tabOrder,
   );
-  return writeView("tabs", target, flags, finalUrl, text);
-};
+  return writeView("tabs", target, flags, redactUrl(finalUrl), text);
+}
 
-export const listCommand: CommandFn = async (positionals, flags) => {
+export async function runListOnSession(
+  session: import("@real-a11y-dev/browser").BrowserSession,
+  positionals: string[],
+  flags: FlagValues,
+): Promise<number> {
   const category = parseListCategory(positionals[0]);
   const format = parseFormat(flags.format, ["pretty", "json"] as const);
   const target = singleTarget(positionals.slice(1), flags, "list");
-  // Listed from the native tree in Node — the same category engine the page
-  // bundle runs, over the tree `audit` and `tree` already agree on.
-  const { value: raw, finalUrl } = await withPage(target, flags, (session) =>
-    nativeTree(session).then((tree) =>
-      listByRole(tree, category as RoleFilter),
-    ),
+  progress(`opening ${target.name} …`, { quiet: flags.quiet === true });
+  const { url: finalUrl } = await ensurePageOpen(session, target, flags);
+  const raw = await nativeTree(session).then((tree) =>
+    listByRole(tree, category as RoleFilter),
   );
   const text = sanitizeText(raw);
   if (format === "json") {
     const page: PageReport = {
       name: target.name,
-      url: finalUrl,
+      url: redactUrl(finalUrl),
       findings: [],
       items: text === "" ? [] : text.split("\n"),
     };
@@ -145,4 +143,49 @@ export const listCommand: CommandFn = async (positionals, flags) => {
     writeReport(outputOf(flags), text.endsWith("\n") ? text : `${text}\n`);
   }
   return EXIT.OK;
+}
+
+async function withOneShotCommand<T>(
+  command: string,
+  positionals: string[],
+  flags: FlagValues,
+  runner: (session: Awaited<ReturnType<typeof createSession>>) => Promise<T>,
+): Promise<T> {
+  const target = singleTarget(positionals, flags, command);
+  parseFormat(flags.format, ["pretty", "json"] as const);
+  outputOf(flags);
+  const session = await createSession(sessionFlags(flags, [target]));
+  try {
+    return await runner(session);
+  } finally {
+    await session.close();
+  }
+}
+
+export const treeCommand: CommandFn = async (positionals, flags) =>
+  withOneShotCommand("tree", positionals, flags, (session) =>
+    runTreeOnSession(session, positionals, flags),
+  );
+
+export const outlineCommand: CommandFn = async (positionals, flags) =>
+  withOneShotCommand("outline", positionals, flags, (session) =>
+    runOutlineOnSession(session, positionals, flags),
+  );
+
+export const tabsCommand: CommandFn = async (positionals, flags) =>
+  withOneShotCommand("tabs", positionals, flags, (session) =>
+    runTabsOnSession(session, positionals, flags),
+  );
+
+export const listCommand: CommandFn = async (positionals, flags) => {
+  parseListCategory(positionals[0]);
+  parseFormat(flags.format, ["pretty", "json"] as const);
+  outputOf(flags);
+  const target = singleTarget(positionals.slice(1), flags, "list");
+  const session = await createSession(sessionFlags(flags, [target]));
+  try {
+    return await runListOnSession(session, positionals, flags);
+  } finally {
+    await session.close();
+  }
 };
