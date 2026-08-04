@@ -14,5 +14,9 @@ export default defineConfig({
   // @puppeteer/browsers is a regular dep but a large one (proxy-agent,
   // extract-zip, ...) — resolved from node_modules at runtime, never bundled.
   external: ["playwright", "@puppeteer/browsers"],
+  // The session registry is a PRIVATE workspace package: npm can never resolve
+  // it, so it must be bundled into the dist (it is a devDependency for the
+  // same reason — a published "dependencies" entry would break installs).
+  noExternal: ["@real-a11y-dev/session-registry"],
   banner: { js: "" },
 });

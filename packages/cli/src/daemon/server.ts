@@ -18,6 +18,10 @@ import { createServer, type Server, type Socket } from "node:net";
 import { dirname, isAbsolute, join as pathJoin } from "node:path";
 
 import type { BrowserSession } from "@real-a11y-dev/browser";
+import {
+  RegistryShutdownError,
+  SessionRegistry,
+} from "@real-a11y-dev/session-registry";
 
 import { sessionFlags } from "../commands/common.js";
 import { clearConfigCache } from "../config.js";
@@ -34,7 +38,6 @@ import {
   encodeRpc,
   decodeRpc,
 } from "./protocol.js";
-import { SessionRegistry } from "./registry.js";
 import { resolveCommandTargets, runCommandOnSession } from "./runner.js";
 
 function constantTimeEquals(a: string, b: string): boolean {
@@ -488,8 +491,13 @@ export class DaemonServer {
       const hint = typeof errHint === "string" ? errHint : undefined;
       const exitCode =
         err instanceof CliError ? (err.exitCode ?? EXIT.ERROR) : EXIT.ERROR;
+      // The registry's shutdown error is the package-neutral twin of the
+      // CLI's DaemonShutdownError; both mean "retry against a fresh daemon".
       const code =
-        err instanceof DaemonShutdownError ? "ESHUTDOWN" : "ECOMMAND";
+        err instanceof DaemonShutdownError ||
+        err instanceof RegistryShutdownError
+          ? "ESHUTDOWN"
+          : "ECOMMAND";
       send({
         id: request.id,
         type: "error",

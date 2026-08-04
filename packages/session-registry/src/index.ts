@@ -1,19 +1,65 @@
 import { redactUrl } from "@real-a11y-dev/snapshot";
 
-import { CliError, DaemonShutdownError, EXIT } from "../exit.js";
-
 /** Upper bound for idle timeouts (1 hour) to avoid resource-exhaustion warnings. */
 const MAX_IDLE_MS = 3_600_000;
 
 /**
  * Holds named browser sessions and schedules work on them.
  *
- * - One command per session at a time, so concurrent CLI invocations against
+ * - One command per session at a time, so concurrent invocations against
  *   the same session do not race a mutable page.
  * - Multiple sessions run independently.
  * - An idle timeout stops every session if no command has completed recently,
  *   preventing orphaned Chromium processes on quiet machines.
+ *
+ * This package is consumer-neutral: errors are the typed classes below, each
+ * carrying a `hint`, and the embedding surface (CLI daemon, MCP server) maps
+ * them onto its own error contract.
  */
+
+/**
+ * Base class for every error this registry throws. The `hint` is a remedy the
+ * consumer can surface next to the message.
+ */
+export class SessionRegistryError extends Error {
+  constructor(
+    message: string,
+    readonly hint?: string,
+  ) {
+    super(message);
+    this.name = "SessionRegistryError";
+  }
+}
+
+/**
+ * A session was requested with browser-defining flags (or a working directory)
+ * different from the ones it was created with.
+ */
+export class SessionIdentityError extends SessionRegistryError {
+  constructor(message: string, hint?: string) {
+    super(message, hint);
+    this.name = "SessionIdentityError";
+  }
+}
+
+/** A session reuse requested origins outside the session's pinned allowlist. */
+export class SessionOriginError extends SessionRegistryError {
+  constructor(message: string, hint?: string) {
+    super(message, hint);
+    this.name = "SessionOriginError";
+  }
+}
+
+/**
+ * A transient failure because the registry is shutting down. Consumers should
+ * treat this as retryable against a fresh registry/daemon.
+ */
+export class RegistryShutdownError extends SessionRegistryError {
+  constructor() {
+    super("session daemon is shutting down");
+    this.name = "RegistryShutdownError";
+  }
+}
 
 export interface SessionLike {
   currentUrl(): string | undefined;
@@ -114,7 +160,7 @@ export class SessionRegistry<T extends SessionLike> {
     task: (session: T) => Promise<number>,
   ): Promise<number> {
     if (this.stopping || this.stopped) {
-      throw new DaemonShutdownError();
+      throw new RegistryShutdownError();
     }
     // A non-negative idle timeout overrides the registry default. `0` disables
     // automatic shutdown for the current run (and any concurrent sessions).
@@ -233,24 +279,21 @@ export class SessionRegistry<T extends SessionLike> {
     const existing = this.sessions.get(name);
     if (existing) {
       if (existing.cwd !== requestedCwd) {
-        throw new CliError(
+        throw new SessionIdentityError(
           `session "${name}" was created in a different working directory`,
           "stop the session first, then retry with the new directory",
-          EXIT.ERROR,
         );
       }
       if (existing.identityKey !== identity) {
-        throw new CliError(
+        throw new SessionIdentityError(
           `session "${name}" was created with different browser flags`,
           "stop the session first, then retry with the new flags",
-          EXIT.ERROR,
         );
       }
       if (!isOriginSubset(requestedOrigins, existing.allowedOrigins)) {
-        throw new CliError(
+        throw new SessionOriginError(
           `session "${name}" does not include all requested origins`,
           "stop the session first, then retry with the new targets or --audit-origin",
-          EXIT.ERROR,
         );
       }
       return existing;
@@ -259,24 +302,21 @@ export class SessionRegistry<T extends SessionLike> {
     const inFlight = this.creating.get(name);
     if (inFlight) {
       if (inFlight.cwd !== requestedCwd) {
-        throw new CliError(
+        throw new SessionIdentityError(
           `session "${name}" is already being created in a different working directory`,
           "stop the session first, then retry with the new directory",
-          EXIT.ERROR,
         );
       }
       if (inFlight.identityKey !== identity) {
-        throw new CliError(
+        throw new SessionIdentityError(
           `session "${name}" is already being created with different browser flags`,
           "stop the session first, then retry with the new flags",
-          EXIT.ERROR,
         );
       }
       if (!isOriginSubset(requestedOrigins, inFlight.allowedOrigins)) {
-        throw new CliError(
+        throw new SessionOriginError(
           `session "${name}" is already being created without all requested origins`,
           "stop the session first, then retry with the new targets or --audit-origin",
-          EXIT.ERROR,
         );
       }
       return inFlight.promise;
@@ -287,7 +327,7 @@ export class SessionRegistry<T extends SessionLike> {
         const session = await factory();
         if (this.stopping || this.stopped) {
           await session.close();
-          throw new DaemonShutdownError();
+          throw new RegistryShutdownError();
         }
         const holder: SessionHolder<T> = {
           session,
@@ -320,7 +360,7 @@ export class SessionRegistry<T extends SessionLike> {
     this.clearIdleTimer();
     if (this.idleMs <= 0 || this.busyCount > 0 || this.stopped) return;
     // Use a longer grace period until the first run completes so a short
-    // `--session-idle-timeout` does not race the socket/pidfile handshake.
+    // idle timeout does not race the socket/pidfile handshake.
     const requestedDelay = this.hasRun ? this.idleMs : this.startupGraceMs;
     if (!Number.isFinite(requestedDelay) || requestedDelay < 0) return;
     if (requestedDelay > MAX_IDLE_MS) {
