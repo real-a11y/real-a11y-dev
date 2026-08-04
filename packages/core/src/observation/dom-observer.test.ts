@@ -860,4 +860,149 @@ describe("DomObserver", () => {
       expect(onTreeChange).not.toHaveBeenCalled();
     });
   });
+
+  describe("state attributes the extractor records", () => {
+    // These flip IN PLACE on an element that is already in the tree — there is
+    // no childList mutation to fall back on, so the tree only refreshes if the
+    // attribute itself is in the observer's filter.
+    it("fires when aria-current moves on an SPA route change", async () => {
+      document.body.innerHTML = `
+        <nav>
+          <a id="home" href="/" aria-current="page">Home</a>
+          <a id="about" href="/about">About</a>
+        </nav>
+      `;
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      document.getElementById("home")!.removeAttribute("aria-current");
+      document.getElementById("about")!.setAttribute("aria-current", "page");
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("fires when aria-required toggles on a field", async () => {
+      document.body.innerHTML = '<input id="email" aria-required="false" />';
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      document.getElementById("email")!.setAttribute("aria-required", "true");
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("fires when aria-busy toggles on a region", async () => {
+      document.body.innerHTML = '<section id="results">Results</section>';
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      document.getElementById("results")!.setAttribute("aria-busy", "true");
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("fires when aria-readonly toggles on a field", async () => {
+      document.body.innerHTML = '<input id="name" aria-readonly="true" />';
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      document.getElementById("name")!.setAttribute("aria-readonly", "false");
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("fires when a control's placeholder changes", async () => {
+      document.body.innerHTML = '<input id="q" />';
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      document.getElementById("q")!.setAttribute("placeholder", "Search…");
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("fires when a control's name changes", async () => {
+      document.body.innerHTML = '<input id="q" name="query" />';
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      document.getElementById("q")!.setAttribute("name", "search");
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("attributes the pipeline reads without recording", () => {
+    // Not in the extractor's two lists — they feed name/role computation and
+    // the value redaction — so the union doesn't cover them and they have to
+    // be observed explicitly.
+    it("fires when aria-description changes", async () => {
+      document.body.innerHTML =
+        '<button id="save" aria-description="Saves the draft">Save</button>';
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      document
+        .getElementById("save")!
+        .setAttribute("aria-description", "Publishes the draft");
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("fires when aria-level changes on a heading", async () => {
+      document.body.innerHTML =
+        '<div id="h" role="heading" aria-level="2">Section</div>';
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      document.getElementById("h")!.setAttribute("aria-level", "3");
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("fires when a th's scope changes (it selects the header role)", async () => {
+      document.body.innerHTML =
+        '<table><tr><th id="th" scope="col">Q1</th></tr></table>';
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      document.getElementById("th")!.setAttribute("scope", "row");
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("fires when autocomplete marks a field sensitive", async () => {
+      // The field's value is redacted once autocomplete names a credential or
+      // payment field — which only takes effect on the next extraction.
+      document.body.innerHTML = '<input id="card" />';
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      document
+        .getElementById("card")!
+        .setAttribute("autocomplete", "cc-number");
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+  });
 });
