@@ -88,6 +88,10 @@ class FakeSession implements A11ySession {
 
   async close() {
     this.closed += 1;
+    // The real BrowserSession drops its page here, so `currentUrl()` goes back
+    // to undefined. A fake that kept reporting the last URL would make
+    // "is anything open?" logic look right in tests and wrong in production.
+    this.url = "";
   }
 }
 
@@ -686,9 +690,23 @@ describe("MCP server wiring", () => {
     expect(textOf(res)).toMatch(/empty tree/);
   });
 
-  it("close_browser closes the session", async () => {
+  it("close_browser closes the session once it has been used", async () => {
     const client = await connect(session);
-    await client.callTool({ name: "close_browser", arguments: {} });
+    // Nothing has run and no page is open: there is nothing to close, and a
+    // browser that was never launched must not be close()d just to say so.
+    const fresh = await client.callTool({
+      name: "close_browser",
+      arguments: {},
+    });
+    expect(textOf(fresh)).toMatch(/was not open/);
+    expect(session.closed).toBe(0);
+
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/" },
+    });
+    const res = await client.callTool({ name: "close_browser", arguments: {} });
+    expect(textOf(res)).toMatch(/"default" closed/);
     expect(session.closed).toBe(1);
   });
 
@@ -1618,7 +1636,9 @@ describe("act tools (click_element / type_text / focus_element)", () => {
 
 describe("named sessions", () => {
   /** A manager whose factory hands out one FakeSession per name, recorded. */
-  function makeManager(options: { maxSessions?: number } = {}) {
+  function makeManager(
+    options: { maxSessions?: number; idleTimeoutMs?: number } = {},
+  ) {
     const created: FakeSession[] = [];
     const manager = new McpSessionManager({
       createSession: () => {
@@ -1627,6 +1647,7 @@ describe("named sessions", () => {
         return s;
       },
       maxSessions: options.maxSessions,
+      idleTimeoutMs: options.idleTimeoutMs,
     });
     return { manager, created };
   }
@@ -1767,20 +1788,301 @@ describe("named sessions", () => {
     expect(created[0].opened.length).toBe(2);
   });
 
-  it("rejects an invalid session name before creating anything", async () => {
+  it("rejects an invalid session name as a TOOL error carrying the grammar", async () => {
     const { manager, created } = makeManager();
     const client = await connectManager(manager);
+    // Not a schema regex: that would reject in the SDK's pre-handler parse and
+    // reach the agent as a raw zod issue array (a protocol InvalidParams), with
+    // the actionable hint nowhere in sight. The manager is the gate.
     const res = await client.callTool({
       name: "open_page",
-      // Too long for the schema? No — schema-valid but registry-invalid names
-      // can't exist (same regex), so go through the manager directly to prove
-      // the second gate holds even for embedders that bypass the schema.
-      arguments: { url: "https://a.example/", session: "ok-name" },
+      arguments: { url: "https://a.example/", session: "not ok!" },
     });
-    expect(res).toBeDefined();
-    await expect(manager.run("not ok!", async () => 0)).rejects.toThrow(
-      /invalid session name/,
+    expect(res.isError).toBe(true);
+    expect(textOf(res as never)).toMatch(/invalid session name "not ok!"/);
+    expect(textOf(res as never)).toMatch(/1-32 characters/);
+    expect(created.length).toBe(0);
+
+    // Checkpoint-only tools go through a different path — same treatment.
+    const cp = await client.callTool({
+      name: "list_checkpoints",
+      arguments: { session: "nope!" },
+    });
+    expect(cp.isError).toBe(true);
+    expect(textOf(cp as never)).toMatch(/invalid session name/);
+  });
+
+  it("holds the cap when new sessions are requested concurrently", async () => {
+    // The check must not read a map that in-flight creations haven't reached
+    // yet: four parallel calls with four new names would all see "0 live".
+    const { manager, created } = makeManager({ maxSessions: 2 });
+    const client = await connectManager(manager);
+    const results = await Promise.all(
+      ["a", "b", "c", "d"].map((name) =>
+        client.callTool({
+          name: "open_page",
+          arguments: { url: `https://${name}.example/`, session: name },
+        }),
+      ),
     );
+    const refused = results.filter((r) => r.isError);
+    expect(created.length).toBe(2);
+    expect(refused.length).toBe(2);
+    expect(textOf(refused[0] as never)).toMatch(/session limit reached \(2/);
+  });
+
+  it("does not spend a session slot on checkpoint-only tools", async () => {
+    // list/diff/export/import never touch the page. A typo'd session there
+    // must not reserve a slot (or launch anything) — the cap exists to catch
+    // typos, not to be exhausted by them.
+    const { manager, created } = makeManager({ maxSessions: 1 });
+    const client = await connectManager(manager);
+    for (const session of ["typo1", "typo2", "typo3"]) {
+      const res = await client.callTool({
+        name: "list_checkpoints",
+        arguments: { session },
+      });
+      expect(textOf(res as never)).toMatch(/No checkpoints saved/);
+    }
+    expect(created.length).toBe(0);
+    expect(manager.list()).toHaveLength(0);
+
+    // The one real session is still available.
+    const ok = await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://a.example/", session: "alpha" },
+    });
+    expect(ok.isError).toBeFalsy();
     expect(created.length).toBe(1);
+  });
+
+  it("keeps findings checkpoints when the idle timeout closes the browser", async () => {
+    // The idle timeout closes the browser and the next call relaunches it.
+    // Baselines saved for a later diff must NOT go with it: an agent that
+    // saved 'prod', waited, then diffed would silently re-baseline against the
+    // new page and report zero regressions.
+    const { manager, created } = makeManager({ idleTimeoutMs: 40 });
+    const client = await connectManager(manager);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://a.example/", session: "alpha" },
+    });
+    await client.callTool({
+      name: "checkpoint_findings",
+      arguments: { name: "prod", session: "alpha" },
+    });
+
+    // Real timer, real path: SessionRegistry.fireIdleTimeout → registry
+    // stopAll, which cannot reach the manager's checkpoint stores.
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(created[0].closed).toBe(1);
+    expect(manager.list()).toHaveLength(0);
+
+    const listed = await client.callTool({
+      name: "list_checkpoints",
+      arguments: { session: "alpha" },
+    });
+    expect(textOf(listed as never)).toMatch(/1 checkpoint/);
+    expect(textOf(listed as never)).toMatch(/prod/);
+
+    // close_browser remains the documented way to discard them.
+    const closed = await client.callTool({
+      name: "close_browser",
+      arguments: { session: "alpha" },
+    });
+    expect(textOf(closed as never)).toMatch(
+      /1 stored checkpoint\(s\) discarded/,
+    );
+    const after = await client.callTool({
+      name: "list_checkpoints",
+      arguments: { session: "alpha" },
+    });
+    expect(textOf(after as never)).toMatch(/No checkpoints saved/);
+  });
+
+  it("refuses close_browser with both a session and all=true", async () => {
+    const { manager, created } = makeManager();
+    const client = await connectManager(manager);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://a.example/", session: "alpha" },
+    });
+    const res = await client.callTool({
+      name: "close_browser",
+      arguments: { session: "alpha", all: true },
+    });
+    // A destructive tool must never quietly do MORE than it was asked.
+    expect(res.isError).toBe(true);
+    expect(textOf(res as never)).toMatch(/not both/);
+    expect(created[0].closed).toBe(0);
+  });
+
+  it("rejects unknown arguments to list_sessions instead of ignoring them", async () => {
+    const { manager } = makeManager();
+    const client = await connectManager(manager);
+    const tool = (await client.listTools()).tools.find(
+      (t) => t.name === "list_sessions",
+    );
+    expect(tool?.inputSchema.additionalProperties).toBe(false);
+    // An agent will reach for list_sessions({session}) expecting a filter. A
+    // rejected extra property beats one that is silently ignored.
+    const res = await client.callTool({
+      name: "list_sessions",
+      arguments: { session: "a" },
+    });
+    expect(res.isError).toBe(true);
+    expect(textOf(res as never)).toMatch(/Unrecognized key|unrecognized_keys/);
+  });
+
+  it("survives its methods being detached from the manager", async () => {
+    // `SessionManager` is shaped like a callback bag and gets used like one:
+    // `process.on("SIGTERM", manager.shutdown)`.
+    const { manager, created } = makeManager();
+    const { run, list, stop, stopAll, checkpoints, shutdown } = manager;
+    await run("alpha", async (rec) => {
+      await rec.session.open("https://a.example/");
+      return 0;
+    });
+    expect(list()).toHaveLength(1);
+    expect(checkpoints("alpha").size).toBe(0);
+    expect(await stop("alpha")).toBe(true);
+    await stopAll();
+    await shutdown();
+    expect(created[0].closed).toBeGreaterThan(0);
+  });
+
+  it("shutdown() releases the registry for good", async () => {
+    const { manager, created } = makeManager();
+    await manager.run("alpha", async () => 0);
+    await manager.shutdown();
+    expect(created[0].closed).toBe(1);
+    await expect(manager.run("alpha", async () => 0)).rejects.toThrow(
+      /shut down/,
+    );
+  });
+});
+
+describe("single-session embedder path (buildServer(session))", () => {
+  let session: FakeSession;
+  beforeEach(() => {
+    session = new FakeSession();
+  });
+
+  it("refuses a named session instead of silently sharing one page", async () => {
+    // The old adapter ignored `name`: every name resolved to the same page and
+    // the same checkpoint store, while the descriptions promised isolation —
+    // so a two-deploy diff compared a page against a baseline of itself.
+    const client = await connect(session);
+    const res = await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://a.example/", session: "preview" },
+    });
+    expect(res.isError).toBe(true);
+    expect(textOf(res as never)).toMatch(/single browser session/);
+    expect(textOf(res as never)).toMatch(/omit the session parameter/);
+    expect(session.opened).toHaveLength(0);
+  });
+
+  it("says it is single-session in the instructions and the parameter", async () => {
+    const client = await connect(session);
+    const tool = (await client.listTools()).tools.find(
+      (t) => t.name === "open_page",
+    );
+    const sessionProp = (
+      tool?.inputSchema.properties as
+        Record<string, { description?: string }> | undefined
+    )?.session;
+    expect(sessionProp?.description).toMatch(/single browser session/);
+    expect(sessionProp?.description).not.toMatch(/run in parallel/);
+    expect(client.getInstructions()).toMatch(/SINGLE browser session/);
+  });
+
+  it("redacts the URL in list_sessions, like the registry path", async () => {
+    const client = await connect(session);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://user:pw@app.example/x?access_token=SECRET" },
+    });
+    const res = await client.callTool({ name: "list_sessions", arguments: {} });
+    const out = textOf(res as never);
+    expect(out).not.toContain("SECRET");
+    expect(out).not.toContain("pw@");
+    expect(out).toContain("app.example");
+  });
+
+  it("reports no sessions until one is actually used", async () => {
+    const client = await connect(session);
+    const before = await client.callTool({
+      name: "list_sessions",
+      arguments: {},
+    });
+    expect(textOf(before as never)).toMatch(/No sessions/);
+
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://a.example/" },
+    });
+    const after = await client.callTool({
+      name: "list_sessions",
+      arguments: {},
+    });
+    expect(textOf(after as never)).toMatch(/1 session\(s\)/);
+
+    await client.callTool({ name: "close_browser", arguments: {} });
+    const closed = await client.callTool({
+      name: "list_sessions",
+      arguments: {},
+    });
+    expect(textOf(closed as never)).toMatch(/No sessions/);
+  });
+
+  it("never closes the embedder's browser for a name it does not have", async () => {
+    const client = await connect(session);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://a.example/" },
+    });
+    const res = await client.callTool({
+      name: "close_browser",
+      arguments: { session: "typo" },
+    });
+    // The old adapter closed the one real browser and replied `"typo" closed.`
+    expect(res.isError).toBe(true);
+    expect(textOf(res as never)).toMatch(/single browser session/);
+    expect(session.closed).toBe(0);
+  });
+
+  it("closes nothing on all=true when nothing was ever opened", async () => {
+    const client = await connect(session);
+    const res = await client.callTool({
+      name: "close_browser",
+      arguments: { all: true },
+    });
+    expect(textOf(res as never)).toMatch(/No sessions were open/);
+    expect(session.closed).toBe(0);
+  });
+
+  it("refuses a bad argument to buildServer by name", async () => {
+    // `"act" in sessionOrManager` threw "Cannot use 'in' operator" here, with
+    // no clue which argument was wrong.
+    expect(() => buildServer(null as unknown as A11ySession)).toThrow(
+      /buildServer requires an A11ySession or a SessionManager, got null/,
+    );
+    expect(() => buildServer(undefined as unknown as A11ySession)).toThrow(
+      /got undefined/,
+    );
+  });
+
+  it("classifies a session-like Proxy as a session, not a manager", async () => {
+    // A Proxy without a `has` trap answered `"act" in x` unpredictably; the
+    // check is now a positive test of the manager's own methods.
+    const proxied = new Proxy(session, {}) as A11ySession;
+    const client = await connect(proxied);
+    const res = await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://a.example/" },
+    });
+    expect(res.isError).toBeFalsy();
+    expect(session.opened).toHaveLength(1);
   });
 });

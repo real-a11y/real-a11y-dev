@@ -415,10 +415,12 @@ main
   paragraph
     emphasis "Session · tears sessions down."
   paragraph "Close a named browser session and free its resources, or every live session at once. Over a CDP attach it closes only the tabs the server created and disconnects — it never closes the user's own Chrome or their other tabs."
-  paragraph "Closing a session also — anything that needs to outlive it first."
+  paragraph "Closing a session also — anything that needs to outlive it first. This is the thing that discards them; the closes the browser and keeps them."
     strong "discards that session's saved findings checkpoints"
     link "export_checkpoint"
       code "export_checkpoint"
+    emphasis "only"
+    link "idle timeout"
   paragraph "Parameters:"
   list
     listitem "— string — optional (default ) — the session to close. Closing a session that isn't open reports that rather than failing."
@@ -430,13 +432,19 @@ main
         code "all"
       code "false"
       strong "every"
+  paragraph "The two are : together with a is refused rather than silently closing everything, since a destructive tool doing more than it was asked is the expensive kind of surprise."
+    strong "not combinable"
+    code "all=true"
+    code "session"
   heading "list_sessions" (level 3)
     code "list_sessions"
   paragraph
     emphasis "Session · read-only · takes no arguments."
   paragraph "List every live named session: its name, current URL (redacted the same way the CLI's redacts), whether a call is running on it right now, and created / last-used timestamps. Sessions are created lazily by the first tool call that names them, so an empty list just means nothing has opened a page yet."
     code "session list"
-  paragraph "Parameters: none."
+  paragraph "Parameters: none — and unknown ones are , like every other tool here. is not a filtered view; it is a mistake, and it says so instead of quietly returning the full list."
+    strong "rejected"
+    code "list_sessions({session})"
   heading "Audit" (level 2)
   paragraph "The reason the server exists. Both tools report violations a screen reader would announce; adds the three views from the same extraction."
     link "inspect_page"
@@ -516,10 +524,17 @@ main
   heading "get_heading_outline" (level 3)
     code "get_heading_outline"
   paragraph
-    emphasis "Read-only · whole-document · takes no parameters."
+    emphasis "Read-only · whole-document."
   paragraph "Return the heading outline (– in document order) as an indented list — the structure a screen-reader user navigates by heading. Derived from Chromium's own accessibility tree."
     code "h1"
     code "h6"
+  paragraph "Parameters:"
+  list
+    listitem "— string — optional (default ) — the to read."
+      strong
+        code "session"
+      code ""default""
+      link "named session"
   paragraph "An agent calls this to flag skipped levels or a missing/duplicate ."
     code "h1"
   heading "get_tab_order" (level 3)
@@ -581,10 +596,11 @@ main
   button "Copy Code"
   code
   heading "Findings checkpoints" (level 2)
-  paragraph "Give the agent the CLI's snapshot + diff power mid-session: capture the page's findings under a name, change something (deploy, feature toggle, DOM edit), then ask what's — with the same fingerprint identity the CI a11y-diff bot uses. Checkpoints are held in memory (LRU-capped at 20) and , so you can checkpoint one deploy and diff another. clears the store."
+  paragraph "Give the agent the CLI's snapshot + diff power mid-session: capture the page's findings under a name, change something (deploy, feature toggle, DOM edit), then ask what's — with the same fingerprint identity the CI a11y-diff bot uses. Checkpoints are held in memory (LRU-capped at 20) and , so you can checkpoint one deploy and diff another — and they survive the closing the browser, because that workflow routinely spans more than 15 minutes. clears the store."
     strong "new / changed / fixed"
     code "v1:"
     strong "survive navigation by design"
+    link "idle timeout"
     code "close_browser"
   paragraph "These capture the accessibility . To capture the tree and diff what an interaction changed, see — which are bound to the page instance and do not survive navigation."
     emphasis "problems"
@@ -666,7 +682,22 @@ main
     code "list_checkpoints"
   paragraph
     emphasis "Read-only."
-  paragraph "List the stored checkpoint labels with their finding counts and approximate tree sizes. No parameters."
+  paragraph "List the stored checkpoint labels with their finding counts and approximate tree sizes."
+  paragraph "Parameters:"
+  list
+    listitem "— string — optional (default ) — whose checkpoint store to list."
+      strong
+        code "session"
+      code ""default""
+  paragraph "Like the other checkpoint-only tools (, , ), this never touches the page: naming a session that has no browser open reads that session's store without launching one or counting against ."
+    link "diff_checkpoints"
+      code "diff_checkpoints"
+    link "export_checkpoint"
+      code "export_checkpoint"
+    link "import_checkpoint"
+      code "import_checkpoint"
+    link "REAL_A11Y_MCP_MAX_SESSIONS"
+      code "REAL_A11Y_MCP_MAX_SESSIONS"
   heading "export_checkpoint" (level 3)
     code "export_checkpoint"
   paragraph
@@ -894,7 +925,6 @@ main
     emphasis "without"
   button "Copy Code"
   code
-  paragraph "Proxy"
   heading "REAL_A11Y_MCP_MAX_SESSIONS" (level 3)
     code "REAL_A11Y_MCP_MAX_SESSIONS"
   paragraph
@@ -912,9 +942,15 @@ main
   paragraph
     emphasis "integer (ms) · optional (default = 15 minutes)."
       code "900000"
-  paragraph "How long the server keeps sessions alive with no tool call before closing them all — the same idle discipline as the CLI daemon's . disables the timer; values are capped at one hour. Only the browsers close: the server process stays up, and the next tool call relaunches its session from scratch (checkpoints are discarded with the session)."
+  paragraph "How long the server keeps sessions alive with no tool call before closing them all — the same idle discipline as the CLI daemon's . disables the timer; values are capped at one hour. Only the browsers close: the server process stays up, and the next tool call relaunches its session from scratch. — the cross-deploy workflow (checkpoint prod, review, diff a preview later) routinely spans more than 15 minutes, and silently dropping the baseline would re-baseline against the new page and report zero regressions. Only discards them. (A tree checkpoint is bound to the live page and does not survive.)"
     code "--session-idle-timeout"
     code "0"
+    strong "Saved findings checkpoints survive the timeout"
+    link "close_browser"
+      code "close_browser"
+  paragraph "Both variables must be non-negative integers; anything else — hex, a fraction, a stray character — refuses to start rather than run a limit nobody chose. Unset, empty, or whitespace-only means the default (never , which would disable the timer)."
+    code "0"
+  paragraph "Proxy"
   paragraph "There is no variable — Chromium doesn't honor / on its own, and a proxy is a constructor option, not read from the environment by the stdio server. Configure it only if you embed directly."
     code "REAL_A11Y_MCP_PROXY"
     code "HTTP_PROXY"

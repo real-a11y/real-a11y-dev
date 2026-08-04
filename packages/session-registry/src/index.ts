@@ -51,13 +51,32 @@ export class SessionOriginError extends SessionRegistryError {
 }
 
 /**
- * A transient failure because the registry is shutting down. Consumers should
- * treat this as retryable against a fresh registry/daemon.
+ * A transient failure because the registry has been shut down. Consumers
+ * should treat this as retryable against a fresh registry/daemon — the CLI
+ * daemon maps it to its retryable `ESHUTDOWN` and respawns; the MCP server
+ * surfaces the hint as a tool error. The default text is consumer-neutral
+ * (this package doesn't know whether it's inside a daemon); pass a message
+ * to override it.
  */
 export class RegistryShutdownError extends SessionRegistryError {
-  constructor() {
-    super("session daemon is shutting down");
+  constructor(
+    message = "the session registry has shut down and accepts no new work",
+    hint = "retry the call — a restarted daemon or server starts sessions fresh",
+  ) {
+    super(message, hint);
     this.name = "RegistryShutdownError";
+  }
+}
+
+/**
+ * Internal: a session finished creating after `stopAll()` had already swept
+ * the registry, so it was closed instead of committed. `run` retries — the
+ * caller's request is still valid; only this creation attempt was stale.
+ */
+class StaleCreationError extends Error {
+  constructor() {
+    super("session creation raced stopAll; retrying");
+    this.name = "StaleCreationError";
   }
 }
 
@@ -129,7 +148,13 @@ interface CreationEntry<T extends SessionLike> {
 export class SessionRegistry<T extends SessionLike> {
   private sessions = new Map<string, SessionHolder<T>>();
   private creating = new Map<string, CreationEntry<T>>();
-  private stopping = false;
+  /**
+   * Bumped by `stopAll()`. A creation that finishes under a different
+   * generation than it started in raced a sweep: it closes itself and the
+   * caller retries, instead of either committing a session the sweep should
+   * have covered or failing a perfectly valid request.
+   */
+  private generation = 0;
   private stopped = false;
   private idleTimer?: NodeJS.Timeout;
   private busyCount = 0;
@@ -162,7 +187,7 @@ export class SessionRegistry<T extends SessionLike> {
     factory: () => Promise<T>,
     task: (session: T) => Promise<R>,
   ): Promise<R> {
-    if (this.stopping || this.stopped) {
+    if (this.stopped) {
       throw new RegistryShutdownError();
     }
     // A non-negative idle timeout overrides the registry default. `0` disables
@@ -171,13 +196,22 @@ export class SessionRegistry<T extends SessionLike> {
       this.setIdleTimeout(idleTimeoutMs);
     }
     this.busyCount++;
-    const holder = await this.getOrCreate(name, sessionFlags, factory).catch(
-      (err) => {
+    let holder: SessionHolder<T>;
+    // A creation can race a concurrent `stopAll()` sweep; the closed-and-retry
+    // path is bounded so back-to-back sweeps can't spin this forever.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        holder = await this.getOrCreate(name, sessionFlags, factory);
+        break;
+      } catch (err) {
+        if (err instanceof StaleCreationError && attempt < 3) continue;
         this.busyCount--;
         this.resetIdleTimer();
-        throw err;
-      },
-    );
+        throw err instanceof StaleCreationError
+          ? new RegistryShutdownError()
+          : err;
+      }
+    }
     const next = (async () => {
       await holder.queue;
       holder.busy = true;
@@ -214,6 +248,12 @@ export class SessionRegistry<T extends SessionLike> {
   }
 
   async stop(name: string): Promise<boolean> {
+    // A session still being created is a session all the same: wait for the
+    // creation to commit (or fail), then stop it like any other. Otherwise a
+    // stop racing the first run reports "not open" while the creation finishes
+    // anyway and the session lives on.
+    const inFlight = this.creating.get(name);
+    if (inFlight) await inFlight.promise.catch(() => 0);
     const holder = this.sessions.get(name);
     if (!holder) return false;
     this.sessions.delete(name);
@@ -224,9 +264,16 @@ export class SessionRegistry<T extends SessionLike> {
     return true;
   }
 
-  /** Drop all current sessions but keep the registry available for new runs. */
+  /**
+   * Drop all current sessions but keep the registry available for new runs —
+   * including runs that arrive DURING the teardown, which simply create fresh
+   * sessions. (An earlier version rejected the whole teardown window with
+   * `RegistryShutdownError`; for a browser close that window is seconds long,
+   * and it reopened on every idle timeout.) In-flight creations are swept by
+   * the generation bump: they close themselves instead of committing.
+   */
   async stopAll(): Promise<void> {
-    this.stopping = true;
+    this.generation++;
     this.clearIdleTimer();
     const holders = [...this.sessions.values()];
     const inFlight = [...this.creating.values()];
@@ -241,14 +288,12 @@ export class SessionRegistry<T extends SessionLike> {
         }),
       ]);
     } finally {
-      this.stopping = false;
       this.resetIdleTimer();
     }
   }
 
   /** Shut the registry down permanently; no new runs will be accepted. */
   shutdown(): void {
-    this.stopping = true;
     this.stopped = true;
     this.clearIdleTimer();
   }
@@ -256,6 +301,20 @@ export class SessionRegistry<T extends SessionLike> {
   /** Whether the registry has been permanently shut down. */
   isShutdown(): boolean {
     return this.stopped;
+  }
+
+  /**
+   * Whether `name` is live or currently being created. Capacity checks must
+   * count both: a holder isn't committed to the live map until its factory
+   * resolves, and `list()` deliberately shows only committed sessions.
+   */
+  has(name: string): boolean {
+    return this.sessions.has(name) || this.creating.has(name);
+  }
+
+  /** Live plus in-creation session count — the number capacity checks want. */
+  size(): number {
+    return this.sessions.size + this.creating.size;
   }
 
   setIdleTimeout(ms: number): void {
@@ -325,12 +384,20 @@ export class SessionRegistry<T extends SessionLike> {
       return inFlight.promise;
     }
 
+    const generationAtStart = this.generation;
     const create = (async () => {
       try {
         const session = await factory();
-        if (this.stopping || this.stopped) {
+        if (this.stopped) {
           await session.close();
           throw new RegistryShutdownError();
+        }
+        if (this.generation !== generationAtStart) {
+          // `stopAll()` swept the registry while the factory ran. Committing
+          // now would resurrect a session the sweep promised to remove — close
+          // it and let `run` retry against the new generation.
+          await session.close();
+          throw new StaleCreationError();
         }
         const holder: SessionHolder<T> = {
           session,
@@ -366,11 +433,12 @@ export class SessionRegistry<T extends SessionLike> {
     // idle timeout does not race the socket/pidfile handshake.
     const requestedDelay = this.hasRun ? this.idleMs : this.startupGraceMs;
     if (!Number.isFinite(requestedDelay) || requestedDelay < 0) return;
-    if (requestedDelay > MAX_IDLE_MS) {
-      this.idleTimer = setTimeout(() => this.fireIdleTimeout(), MAX_IDLE_MS);
-      return;
-    }
-    this.idleTimer = setTimeout(() => this.fireIdleTimeout(), requestedDelay);
+    const delay = Math.min(requestedDelay, MAX_IDLE_MS);
+    this.idleTimer = setTimeout(() => this.fireIdleTimeout(), delay);
+    // The idle timer is a cleanup, not work: it must never be the only thing
+    // keeping a process alive. The daemon's socket server / the MCP stdio
+    // transport hold the loop open while there is anyone to serve.
+    this.idleTimer.unref?.();
   }
 
   private fireIdleTimeout(): void {

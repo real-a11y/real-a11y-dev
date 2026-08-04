@@ -109,6 +109,7 @@ table
 link "REAL_A11Y_MCP_STORAGE_STATE"
 link "REAL_A11Y_MCP_CDP"
 link "export_checkpoint"
+link "idle timeout"
 link "inspect_page"
 button "Copy Code"
 generic
@@ -118,12 +119,14 @@ button "Copy Code"
 generic
 link "get_tab_order"
 link "act tools"
+link "named session"
 link "get_semantic_tree"
 link "audit_page"
 button "Copy Code"
 generic
 button "Copy Code"
 generic
+link "idle timeout"
 link "tree checkpoints"
 link "click_element"
 button "Copy Code"
@@ -135,6 +138,10 @@ generic
 button "Copy Code"
 generic
 link "diff_findings"
+link "diff_checkpoints"
+link "export_checkpoint"
+link "import_checkpoint"
+link "REAL_A11Y_MCP_MAX_SESSIONS"
 link "diff_findings"
 link "diff_checkpoints"
 link "findings checkpoints"
@@ -164,6 +171,7 @@ button "Copy Code"
 generic
 link "named sessions"
 link "list_sessions"
+link "close_browser"
 link "close_browser"
 link "Edit this page on GitHub"
 link "Previous page@real-a11y-dev/mcp"

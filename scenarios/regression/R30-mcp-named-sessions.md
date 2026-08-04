@@ -8,7 +8,7 @@ priority: P1
 status: Active
 validFrom: "mcp ≥ 0.1.0-beta.2"
 validUntil: ""
-expected: "Two named sessions hold two independent live pages with isolated checkpoints; `list_sessions` reports them; `close_browser` closes one by name or all at once; the session cap refuses a new name with a remedy."
+expected: "Two named sessions hold two independent live pages with isolated checkpoints; `list_sessions` reports them; `close_browser` closes one by name or all at once (never both); the session cap refuses a new name with a remedy; the idle timeout closes browsers but keeps findings checkpoints."
 covers:
   - mcp.tools.list_sessions
   - mcp.tools.open_page.params.session
@@ -32,7 +32,11 @@ covers:
 6. `close_browser` with `session: "alpha"`; `list_sessions` again.
 7. Restart the server with `REAL_A11Y_MCP_MAX_SESSIONS=1`; `open_page` in `alpha`, then attempt `open_page` in `beta`.
 8. `close_browser` with `all: true`.
-9. Restart with `REAL_A11Y_MCP_SESSION_IDLE_TIMEOUT_MS=2000`; `open_page` in `alpha`, wait >2 s, then `list_sessions`.
+9. Restart with `REAL_A11Y_MCP_SESSION_IDLE_TIMEOUT_MS=2000`; `open_page` in `alpha`, `checkpoint_findings` name `base`, wait >2 s, then `list_sessions` and `list_checkpoints` with `session: "alpha"`.
+10. Still on that server: `list_checkpoints` with three never-used session names, then `open_page` in a fourth name (default cap 4).
+11. `close_browser` with `session: "alpha"` **and** `all: true` together.
+12. `list_sessions` with an unknown argument (`{"session": "alpha"}`).
+13. Restart with `REAL_A11Y_MCP_MAX_SESSIONS=" "`, then with `REAL_A11Y_MCP_MAX_SESSIONS=2.5`.
 
 ## Expected
 
@@ -43,7 +47,19 @@ covers:
 - **6** — only `beta` remains listed; `alpha`'s checkpoints are gone with it.
 - **7** — the second `open_page` fails with `session limit reached` naming `close_browser` / `list_sessions` / `REAL_A11Y_MCP_MAX_SESSIONS` as remedies; the `alpha` session still works.
 - **8** — reply reports the number of sessions closed; a final `list_sessions` is empty.
-- **9** — the idle timer closed the session: `list_sessions` is empty, the server is still responsive, and a fresh `open_page` relaunches.
+- **9** — the idle timer closed the browser: `list_sessions` is empty and a fresh
+  `open_page` relaunches — but `list_checkpoints` still reports `base`. The
+  baseline outlives the browser it was captured in.
+- **10** — the three checkpoint-only calls report "No checkpoints saved" without
+  launching anything (`list_sessions` stays empty), and the fourth `open_page`
+  succeeds: reading a store never spends a session slot.
+- **11** — refused, naming both parameters; nothing is closed. A destructive tool
+  never silently does more than it was asked.
+- **12** — rejected by the schema (`additionalProperties: false`), not answered
+  with the unfiltered list.
+- **13** — both refuse to start, naming the variable and the value. The
+  whitespace case matters most: `Number(" ")` is `0`, and `0` on the idle
+  timeout means "disabled" — the opposite of what the operator typed.
 
 ## Why this exists
 
@@ -55,3 +71,9 @@ routed to the wrong browser), and browser leaks (a typo in `session` spawning
 an uncapped Chromium per call). The cap-with-remedy step exists because the
 refusal is the guard rail — if it ever stops naming the fix, an agent just
 retries in a loop.
+
+Steps 9–10 guard the second-order version of the same idea: the lifetime rules
+have to match the workflows the tools advertise. A findings checkpoint exists to
+be diffed later, and "later" for a cross-deploy review is longer than the
+15-minute idle timeout — so the timeout closing browsers must not take baselines
+with it, and a checkpoint read must not need (or reserve) a browser at all.

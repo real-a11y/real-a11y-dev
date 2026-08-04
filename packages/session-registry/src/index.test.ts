@@ -221,4 +221,127 @@ describe("SessionRegistry", () => {
     await new Promise((resolve) => setTimeout(resolve, 150));
     expect(fired).toBe(true);
   });
+
+  it("stop() covers a session that is still being created", async () => {
+    const registry = makeRegistry();
+    const session = new FakeSession("page-a");
+    let releaseFactory!: () => void;
+    const factory = () =>
+      new Promise<FakeSession>((resolve) => {
+        releaseFactory = () => resolve(session);
+      });
+
+    const run = registry.run("alpha", {}, 0, factory, async () => 0);
+    // The factory has not resolved: "alpha" exists only in the creating map.
+    // A stop dispatched now must not report "not open" while the creation
+    // finishes anyway and the session lives on.
+    expect(registry.has("alpha")).toBe(true);
+    const stop = registry.stop("alpha");
+    releaseFactory();
+    await run;
+    expect(await stop).toBe(true);
+    expect(session.closed).toBe(true);
+    expect(registry.list()).toHaveLength(0);
+  });
+
+  it("counts in-creation sessions in has()/size(), unlike list()", async () => {
+    const registry = makeRegistry();
+    let release!: () => void;
+    const factory = () =>
+      new Promise<FakeSession>((resolve) => {
+        release = () => resolve(new FakeSession());
+      });
+    const run = registry.run("alpha", {}, 0, factory, async () => 0);
+    expect(registry.list()).toHaveLength(0); // not committed yet…
+    expect(registry.has("alpha")).toBe(true); // …but capacity-visible
+    expect(registry.size()).toBe(1);
+    release();
+    await run;
+    expect(registry.list()).toHaveLength(1);
+    await registry.stopAll();
+  });
+
+  it("a run arriving during stopAll creates a fresh session instead of failing", async () => {
+    const registry = makeRegistry();
+    // A session whose close() hangs until released holds the teardown window
+    // open, so the test can prove what happens INSIDE it.
+    const slow = new FakeSession("page-a");
+    let releaseClose!: () => void;
+    slow.close = () =>
+      new Promise<void>((resolve) => {
+        releaseClose = () => {
+          slow.closed = true;
+          resolve();
+        };
+      });
+    await registry.run(
+      "alpha",
+      {},
+      0,
+      async () => slow,
+      async () => 0,
+    );
+
+    const teardown = registry.stopAll();
+    // Mid-teardown: the registry stays open for business. This window used to
+    // reject with RegistryShutdownError for the whole (browser-close-sized)
+    // duration — on every idle timeout.
+    const rerun = await registry.run(
+      "alpha",
+      {},
+      0,
+      async () => new FakeSession("page-b"),
+      async (s) => s.url,
+    );
+    expect(rerun).toBe("page-b");
+    releaseClose();
+    await teardown;
+    expect(slow.closed).toBe(true);
+    // The fresh session survived the sweep of the old generation.
+    expect(registry.list()).toHaveLength(1);
+    await registry.stopAll();
+  });
+
+  it("a creation racing stopAll is closed and retried, not committed stale", async () => {
+    const registry = makeRegistry();
+    const sessions: FakeSession[] = [];
+    let releaseFirst: (() => void) | undefined;
+    const factory = () => {
+      const s = new FakeSession(`page-${sessions.length}`);
+      sessions.push(s);
+      // First creation hangs until stopAll has swept; later ones resolve
+      // immediately (they run under the new generation).
+      if (sessions.length === 1) {
+        return new Promise<FakeSession>((resolve) => {
+          releaseFirst = () => resolve(s);
+        });
+      }
+      return Promise.resolve(s);
+    };
+
+    const run = registry.run("alpha", {}, 0, factory, async (s) => s.url);
+    const teardown = registry.stopAll();
+    releaseFirst?.();
+    // The run still succeeds — on a session created AFTER the sweep.
+    expect(await run).toBe("page-1");
+    await teardown;
+    expect(sessions[0].closed).toBe(true); // the stale creation was closed
+    expect(sessions[1].closed).toBe(false);
+    await registry.stopAll();
+  });
+
+  it("shutdown() permanently refuses new runs", async () => {
+    const registry = makeRegistry();
+    registry.shutdown();
+    await expect(
+      registry.run(
+        "alpha",
+        {},
+        0,
+        async () => new FakeSession(),
+        async () => 0,
+      ),
+    ).rejects.toThrow(/shut down/);
+    expect(registry.isShutdown()).toBe(true);
+  });
 });

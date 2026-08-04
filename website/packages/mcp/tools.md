@@ -137,12 +137,14 @@ In all three, there is deliberately **no credential parameter** — auth is oper
 
 Close a named browser session and free its resources, or every live session at once. Over a CDP attach it closes only the tabs the server created and disconnects — it never closes the user's own Chrome or their other tabs.
 
-Closing a session also **discards that session's saved findings checkpoints** — [`export_checkpoint`](#export-checkpoint) anything that needs to outlive it first.
+Closing a session also **discards that session's saved findings checkpoints** — [`export_checkpoint`](#export-checkpoint) anything that needs to outlive it first. This is the *only* thing that discards them; the [idle timeout](#real-a11y-mcp-session-idle-timeout-ms) closes the browser and keeps them.
 
 Parameters:
 
 - **`session`** — string — optional (default `"default"`) — the session to close. Closing a session that isn't open reports that rather than failing.
 - **`all`** — boolean — optional (default `false`) — close **every** live session instead of just one.
+
+The two are **not combinable**: `all=true` together with a `session` is refused rather than silently closing everything, since a destructive tool doing more than it was asked is the expensive kind of surprise.
 
 ### `list_sessions`
 
@@ -150,7 +152,7 @@ Parameters:
 
 List every live named session: its name, current URL (redacted the same way the CLI's `session list` redacts), whether a call is running on it right now, and created / last-used timestamps. Sessions are created lazily by the first tool call that names them, so an empty list just means nothing has opened a page yet.
 
-Parameters: none.
+Parameters: none — and unknown ones are **rejected**, like every other tool here. `list_sessions({session})` is not a filtered view; it is a mistake, and it says so instead of quietly returning the full list.
 
 ## Audit
 
@@ -213,9 +215,13 @@ An agent calls this to reason about page structure or diff it against another re
 
 ### `get_heading_outline`
 
-*Read-only · whole-document · takes no parameters.*
+*Read-only · whole-document.*
 
 Return the heading outline (`h1`–`h6` in document order) as an indented list — the structure a screen-reader user navigates by heading. Derived from Chromium's own accessibility tree.
+
+Parameters:
+
+- **`session`** — string — optional (default `"default"`) — the [named session](#open-page) to read.
 
 An agent calls this to flag skipped levels or a missing/duplicate `h1`.
 
@@ -260,7 +266,7 @@ An agent calls this to review one element type without pulling the whole tree:
 
 ## Findings checkpoints
 
-Give the agent the CLI's snapshot + diff power mid-session: capture the page's findings under a name, change something (deploy, feature toggle, DOM edit), then ask what's **new / changed / fixed** — with the same `v1:` fingerprint identity the CI a11y-diff bot uses. Checkpoints are held in memory (LRU-capped at 20) and **survive navigation by design**, so you can checkpoint one deploy and diff another. `close_browser` clears the store.
+Give the agent the CLI's snapshot + diff power mid-session: capture the page's findings under a name, change something (deploy, feature toggle, DOM edit), then ask what's **new / changed / fixed** — with the same `v1:` fingerprint identity the CI a11y-diff bot uses. Checkpoints are held in memory (LRU-capped at 20) and **survive navigation by design**, so you can checkpoint one deploy and diff another — and they survive the [idle timeout](#real-a11y-mcp-session-idle-timeout-ms) closing the browser, because that workflow routinely spans more than 15 minutes. `close_browser` clears the store.
 
 These capture the accessibility _problems_. To capture the tree _structure_ and diff what an interaction changed, see [tree checkpoints](#tree-checkpoints) — which are bound to the page instance and do not survive navigation.
 
@@ -339,7 +345,13 @@ Same different-page rule as [`diff_findings`](#diff-findings) — two checkpoint
 
 _Read-only._
 
-List the stored checkpoint labels with their finding counts and approximate tree sizes. No parameters.
+List the stored checkpoint labels with their finding counts and approximate tree sizes.
+
+Parameters:
+
+- **`session`** — string — optional (default `"default"`) — whose checkpoint store to list.
+
+Like the other checkpoint-only tools ([`diff_checkpoints`](#diff-checkpoints), [`export_checkpoint`](#export-checkpoint), [`import_checkpoint`](#import-checkpoint)), this never touches the page: naming a session that has no browser open reads that session's store without launching one or counting against [`REAL_A11Y_MCP_MAX_SESSIONS`](#real-a11y-mcp-max-sessions).
 
 ### `export_checkpoint`
 
@@ -495,7 +507,6 @@ Origins that auditing is pinned to — enforced on the **final** URL after redir
 }
 ```
 
-::: tip Proxy
 ### `REAL_A11Y_MCP_MAX_SESSIONS`
 
 *integer · optional (default `4`).*
@@ -506,7 +517,10 @@ Cap on concurrently live [named sessions](#session). Each session is its own bro
 
 *integer (ms) · optional (default `900000` = 15 minutes).*
 
-How long the server keeps sessions alive with no tool call before closing them all — the same idle discipline as the CLI daemon's `--session-idle-timeout`. `0` disables the timer; values are capped at one hour. Only the browsers close: the server process stays up, and the next tool call relaunches its session from scratch (checkpoints are discarded with the session).
+How long the server keeps sessions alive with no tool call before closing them all — the same idle discipline as the CLI daemon's `--session-idle-timeout`. `0` disables the timer; values are capped at one hour. Only the browsers close: the server process stays up, and the next tool call relaunches its session from scratch. **Saved findings checkpoints survive the timeout** — the cross-deploy workflow (checkpoint prod, review, diff a preview later) routinely spans more than 15 minutes, and silently dropping the baseline would re-baseline against the new page and report zero regressions. Only [`close_browser`](#close-browser) discards them. (A tree checkpoint is bound to the live page and does not survive.)
 
+Both variables must be non-negative integers; anything else — hex, a fraction, a stray character — refuses to start rather than run a limit nobody chose. Unset, empty, or whitespace-only means the default (never `0`, which would disable the timer).
+
+::: tip Proxy
 There is no `REAL_A11Y_MCP_PROXY` variable — Chromium doesn't honor `HTTP_PROXY`/`HTTPS_PROXY` on its own, and a proxy is a **programmatic** `BrowserSession` constructor option, not read from the environment by the stdio server. Configure it only if you embed `BrowserSession` directly.
 :::

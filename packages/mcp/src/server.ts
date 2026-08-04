@@ -33,6 +33,7 @@ import {
 import { z } from "zod";
 
 import {
+  type CheckpointStore,
   differentUrl,
   diffCheckpointPages,
   diffLabeledCheckpoints,
@@ -41,7 +42,6 @@ import {
 } from "./checkpoints.js";
 import {
   DEFAULT_SESSION,
-  SESSION_NAME_RE,
   singleSessionManager,
   type SessionManager,
   type SessionRecord,
@@ -51,8 +51,16 @@ export {
   McpSessionManager,
   singleSessionManager,
   DEFAULT_SESSION,
+  SESSION_NAME_RE,
+  // The error contract of a custom `SessionManager`: this package bundles the
+  // private registry, so these classes are only importable from HERE — an
+  // embedder that can't reach them can only throw refusals the server won't
+  // recognize as tool errors.
+  SessionRegistryError,
+  RegistryShutdownError,
   type SessionManager,
   type SessionRecord,
+  type SessionInfo,
   type McpSessionManagerOptions,
 } from "./sessions.js";
 
@@ -322,13 +330,32 @@ export function buildServer(
   sessionOrManager: A11ySession | SessionManager,
   options: BuildServerOptions = {},
 ): McpServer {
-  // Back-compat: embedders that pass one A11ySession get exactly the old
-  // single-page behavior (every session name resolves to that one session).
-  // `act` exists on sessions and not on managers, so it discriminates.
-  const manager: SessionManager =
-    "act" in sessionOrManager
-      ? singleSessionManager(sessionOrManager)
-      : sessionOrManager;
+  if (sessionOrManager === null || typeof sessionOrManager !== "object") {
+    // Fail here, by name, instead of letting the first property probe throw
+    // "Cannot use 'in' operator" (or worse, a late "manager.run is not a
+    // function") with no mention of which argument was wrong.
+    throw new TypeError(
+      `buildServer requires an A11ySession or a SessionManager, got ${
+        sessionOrManager === null ? "null" : typeof sessionOrManager
+      }`,
+    );
+  }
+  // Back-compat: embedders that pass one A11ySession get the old single-page
+  // behavior under the default session name. Discriminate POSITIVELY on the
+  // manager shape — a session-like object must not be misclassified just
+  // because a property probe on it behaves unusually (e.g. a Proxy).
+  const candidate = sessionOrManager as Partial<SessionManager>;
+  const isManager =
+    typeof candidate.run === "function" &&
+    typeof candidate.stopAll === "function" &&
+    typeof candidate.checkpoints === "function";
+  const manager: SessionManager = isManager
+    ? (sessionOrManager as SessionManager)
+    : singleSessionManager(sessionOrManager as A11ySession);
+  // The one page-visible difference between the two paths: whether named
+  // sessions exist. Descriptions must not promise isolation a
+  // `buildServer(session)` embedder can't deliver.
+  const multiSession = isManager;
   const authenticated = options.authenticated === true;
   const cdpAttached = options.cdpAttached === true;
   const headful = options.headful === true;
@@ -359,28 +386,47 @@ export function buildServer(
     },
     {
       instructions:
-        "Audit any web page's accessibility for AI agents. Call open_page(url) FIRST, then use audit_page (violations), inspect_page (findings + tree + outline + tab order from one consistent snapshot — prefer on dynamic pages), or the get_* / list_elements views. To interact: checkpoint_tree, then click_element / type_text / focus_element (target by role + accessible name), then diff_tree to see exactly what changed. Every page tool takes an optional `session` — separate names are independent live pages with their own checkpoints; calls within one session are serialized automatically, and different sessions may run in parallel. Omit `session` to keep using the one default page.",
+        "Audit any web page's accessibility for AI agents. Call open_page(url) FIRST, then use audit_page (violations), inspect_page (findings + tree + outline + tab order from one consistent snapshot — prefer on dynamic pages), or the get_* / list_elements views. To interact: checkpoint_tree, then click_element / type_text / focus_element (target by role + accessible name), then diff_tree to see exactly what changed. " +
+        (multiSession
+          ? "Every page tool takes an optional `session` — separate names are independent live pages with their own checkpoints; calls within one session are serialized automatically, and different sessions may run in parallel. Omit `session` to keep using the one default page."
+          : 'This server manages a SINGLE browser session — always omit the `session` parameter (or pass "default"); other names are refused.'),
     },
   );
 
   // ── Sessions ─────────────────────────────────────────────────────────────
-  // Per-session state (the browser session, the checkpoint store, the last
-  // opened URL, the tree-checkpoint root) lives in a SessionRecord owned by
-  // the manager. Tools reach it only through `withSession`, which is what
-  // makes the per-session single-flight guarantee structural. Checkpoints
-  // deliberately SURVIVE navigation (cross-deploy diffs); they are discarded
-  // when their session closes.
+  // Page-coupled state (the browser session, the last opened URL, the
+  // tree-checkpoint root) lives in a SessionRecord owned by the manager;
+  // tools reach it only through `withSession`, which is what makes the
+  // per-session single-flight guarantee structural. Findings checkpoints
+  // deliberately SURVIVE navigation (cross-deploy diffs) AND the idle
+  // timeout closing the browser (the store lives outside the record, see
+  // `SessionManager.checkpoints`); the one thing that discards them is
+  // close_browser.
   const errText = (msg: string) => ({
     content: [{ type: "text" as const, text: msg }],
     isError: true as const,
   });
+  // No zod `.regex()` here on purpose: the SDK enforces the schema BEFORE the
+  // handler runs, so a schema-level regex would reject bad names as a
+  // protocol-level InvalidParams (a raw zod issue array) — the manager's own
+  // check turns the same mistake into a tool error with the remedy attached.
+  // The grammar lives in the description and in `SESSION_NAME_RE`.
+  const sessionDescription = multiSession
+    ? "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session."
+    : 'This server manages a single browser session — omit this parameter (or pass "default").';
   const sessionParam = z
     .string()
-    .regex(SESSION_NAME_RE, "1-32 characters from A-Z, a-z, 0-9, _ and -")
     .default(DEFAULT_SESSION)
-    .describe(
-      "Named browser session to use. Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
-    );
+    .describe(sessionDescription);
+  // Session-level refusals (bad name, session cap, shutdown) are expected,
+  // user-fixable conditions — surface them as tool errors with the remedy,
+  // not as protocol-level exceptions.
+  const sessionErrText = (err: unknown) => {
+    if (err instanceof SessionRegistryError) {
+      return errText(err.hint ? `${err.message} — ${err.hint}` : err.message);
+    }
+    throw err;
+  };
   const withSession = async <R>(
     name: string,
     fn: (rec: SessionRecord) => Promise<R>,
@@ -388,13 +434,23 @@ export function buildServer(
     try {
       return await manager.run(name, fn);
     } catch (err) {
-      // Session-level refusals (bad name, session cap, shutdown) are expected,
-      // user-fixable conditions — surface them as tool errors with the remedy,
-      // not as protocol-level exceptions.
-      if (err instanceof SessionRegistryError) {
-        return errText(err.hint ? `${err.message} — ${err.hint}` : err.message);
-      }
-      throw err;
+      return sessionErrText(err);
+    }
+  };
+  /**
+   * Checkpoint-only tools (list / diff / export / import) never touch the
+   * page, so they read the store WITHOUT reserving a session: a typo'd
+   * `session` on `list_checkpoints` must not burn a `maxSessions` slot or
+   * launch anything.
+   */
+  const withCheckpoints = async <R>(
+    name: string,
+    fn: (checkpoints: CheckpointStore) => Promise<R> | R,
+  ): Promise<R | ReturnType<typeof errText>> => {
+    try {
+      return await fn(manager.checkpoints(name));
+    } catch (err) {
+      return sessionErrText(err);
     }
   };
   /**
@@ -508,9 +564,18 @@ export function buildServer(
     {
       title: "Close browser session(s)",
       description:
-        "Close a named browser session (default: the default session) and free its resources, or pass all=true to close every live session. Closing a session DISCARDS its saved findings checkpoints — export_checkpoint anything you still need first. Only call it when you're done; the other tools reopen nothing on their own.",
+        "Close a named browser session (default: the default session) and free its resources, or pass all=true to close every live session — not both. Closing a session DISCARDS its saved findings checkpoints — export_checkpoint anything you still need first. Only call it when you're done; the other tools reopen nothing on their own.",
       inputSchema: {
-        session: sessionParam,
+        // No `.default()` here, unlike the shared sessionParam: this handler
+        // must see whether `session` was actually passed, because passing it
+        // TOGETHER with all=true is refused rather than silently widened to
+        // "close everything".
+        session: z
+          .string()
+          .optional()
+          .describe(
+            "Session to close. Omit for the default session. Not combinable with all=true.",
+          ),
         all: z
           .boolean()
           .default(false)
@@ -524,21 +589,39 @@ export function buildServer(
       },
     },
     async ({ session, all }) => {
-      if (all) {
-        const count = manager.list().length;
-        await manager.stopAll();
+      try {
+        if (all && session !== undefined) {
+          // A destructive tool must not do more than what was asked: closing
+          // everything when a single session was named is exactly that.
+          return errText(
+            `Pass either session or all=true, not both. all=true closes EVERY live session; drop it to close just "${session}".`,
+          );
+        }
+        if (all) {
+          const count = manager.list().length;
+          await manager.stopAll();
+          return text(
+            count === 0
+              ? "No sessions were open."
+              : `Closed ${count} session(s).`,
+          );
+        }
+        const name = session ?? DEFAULT_SESSION;
+        // Read before stop clears the store: the reply should say when saved
+        // checkpoints went away with the session — including checkpoints that
+        // outlived an idle-timeout browser close.
+        const discarded = manager.checkpoints(name).size;
+        const stopped = await manager.stop(name);
+        const checkpointNote =
+          discarded > 0 ? ` ${discarded} stored checkpoint(s) discarded.` : "";
         return text(
-          count === 0
-            ? "No sessions were open."
-            : `Closed ${count} session(s).`,
+          stopped
+            ? `Session "${name}" closed.${checkpointNote}`
+            : `Session "${name}" was not open.${checkpointNote}`,
         );
+      } catch (err) {
+        return sessionErrText(err);
       }
-      const stopped = await manager.stop(session);
-      return text(
-        stopped
-          ? `Session "${session}" closed.`
-          : `Session "${session}" was not open.`,
-      );
     },
   );
 
@@ -698,7 +781,7 @@ export function buildServer(
     {
       title: "Save a11y checkpoint",
       description:
-        "Snapshot the CURRENT page's accessibility findings and store them under `name`. Later call diff_findings to see which findings are new / changed / fixed — the same identity semantics (fingerprints) the CI a11y-diff uses. Checkpoints survive navigation, so you can checkpoint one deploy and diff another: save 'prod', open the preview URL, then diff_findings('prod'). They are held in memory and do NOT survive close_browser — call export_checkpoint first if you need one to outlive the session. Whole-document. Chromium only.",
+        "Snapshot the CURRENT page's accessibility findings and store them under `name`. Later call diff_findings to see which findings are new / changed / fixed — the same identity semantics (fingerprints) the CI a11y-diff uses. Checkpoints survive navigation AND the session idle timeout (the browser may close and relaunch between saving and diffing; checkpoints remain), so you can checkpoint one deploy and diff another: save 'prod', open the preview URL, then diff_findings('prod'). They are held in memory and do NOT survive close_browser — call export_checkpoint first if you need one to outlive the session. Whole-document. Chromium only.",
       inputSchema: {
         name: checkpointName,
         rules: z
@@ -792,10 +875,10 @@ export function buildServer(
       },
     },
     async ({ base, head, session }) =>
-      withSession(session, async (rec) => {
-        const b = rec.checkpoints.get(base);
+      withCheckpoints(session, (checkpoints) => {
+        const b = checkpoints.get(base);
         if (!b) return errText(`No checkpoint named "${base}".`);
-        const h = rec.checkpoints.get(head);
+        const h = checkpoints.get(head);
         if (!h) return errText(`No checkpoint named "${head}".`);
         // Two stored checkpoints can disagree on scope just as easily — either
         // side may have been imported from a scoped, DOM-era artifact.
@@ -818,19 +901,17 @@ export function buildServer(
       inputSchema: { session: sessionParam },
     },
     async ({ session }) =>
-      withSession(session, async (rec) => {
-        if (rec.checkpoints.size === 0) {
+      withCheckpoints(session, (checkpoints) => {
+        if (checkpoints.size === 0) {
           return text("No checkpoints saved. Use checkpoint_findings first.");
         }
-        const lines = rec.checkpoints
+        const lines = checkpoints
           .entries()
           .map(
             ([name, cp]) =>
               `  ${name}: ${cp.page.findings.length} finding(s), tree ${(cp.page.tree.length / 1024).toFixed(1)} KB`,
           );
-        return text(
-          `${rec.checkpoints.size} checkpoint(s):\n${lines.join("\n")}`,
-        );
+        return text(`${checkpoints.size} checkpoint(s):\n${lines.join("\n")}`);
       }),
   );
 
@@ -844,8 +925,8 @@ export function buildServer(
       inputSchema: { name: checkpointName, session: sessionParam },
     },
     async ({ name, session }) =>
-      withSession(session, async (rec) => {
-        const cp = rec.checkpoints.get(name);
+      withCheckpoints(session, (checkpoints) => {
+        const cp = checkpoints.get(name);
         if (!cp) return errText(`No checkpoint named "${name}".`);
         const artifact = buildArtifact([cp.page], {
           toolName: "@real-a11y-dev/mcp",
@@ -907,7 +988,7 @@ export function buildServer(
       },
     },
     async ({ name, artifact, session }) =>
-      withSession(session, async (rec) => {
+      withCheckpoints(session, (checkpoints) => {
         try {
           const parsed = parseSnapshotArtifact(artifact);
           // Refuse a partial (`--only`) capture, exactly as `real-a11y diff` does:
@@ -925,7 +1006,7 @@ export function buildServer(
           // already agrees with a live re-snapshot of the same route, and
           // rewriting would break the very join it once repaired. The store key
           // and the page's own name are free to differ, which is what they are.
-          rec.checkpoints.save(name, {
+          checkpoints.save(name, {
             page: src,
             rules: parsed.meta?.rules ?? undefined,
           });
@@ -934,7 +1015,7 @@ export function buildServer(
               ? ` (first of ${parsed.pages.length} pages)`
               : "";
           return text(
-            `Imported "${name}": ${src.findings.length} finding(s)${extra}. ${rec.checkpoints.size} checkpoint(s) stored.`,
+            `Imported "${name}": ${src.findings.length} finding(s)${extra}. ${checkpoints.size} checkpoint(s) stored.`,
           );
         } catch (err) {
           const msg =
@@ -1244,8 +1325,13 @@ export function buildServer(
       title: "List browser sessions",
       annotations: READ_ONLY,
       description:
-        "List every live named browser session: name, current URL (redacted), created/last-used times, and whether a call is running on it right now. Sessions are created lazily by the first tool call that names them and closed by close_browser or the idle timeout.",
-      inputSchema: {},
+        "List every live named browser session: name, current URL (redacted), created/last-used times, and whether a call is running on it right now. Sessions are created lazily by the first tool call that names them and closed by close_browser or the idle timeout (which keeps their checkpoints).",
+      // A Zod OBJECT, not the `{}` raw shape: an empty raw shape skips the
+      // strictness every other tool's schema carries (additionalProperties:
+      // false), and this is exactly the tool an agent will call with
+      // `{session: "alpha"}` expecting a filter. A rejected extra property
+      // beats one that is silently ignored.
+      inputSchema: z.object({}).strict(),
     },
     async () => {
       const sessions = manager.list();

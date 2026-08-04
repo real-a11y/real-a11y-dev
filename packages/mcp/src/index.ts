@@ -31,7 +31,7 @@
  *   REAL_A11Y_MCP_SESSION_IDLE_TIMEOUT_MS
  *                                Idle ms before all sessions close (default 900000 = 15 min;
  *                                0 disables; capped at 1 hour). The server stays up — the next
- *                                tool call relaunches.
+ *                                tool call relaunches, and saved findings checkpoints survive.
  */
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -41,23 +41,12 @@ import {
   resolveChromeExecutable,
 } from "@real-a11y-dev/browser";
 
-import { assertValidStorageState, parseAllowedOrigins } from "./config.js";
+import {
+  assertValidStorageState,
+  envInt,
+  parseAllowedOrigins,
+} from "./config.js";
 import { buildServer, McpSessionManager } from "./server.js";
-
-// The env read stays at the call site (a property access) so the surface
-// extractor can see the variable's name; this helper only validates.
-function envInt(
-  name: string,
-  raw: string | undefined,
-  fallback: number,
-): number {
-  if (raw === undefined || raw === "") return fallback;
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n < 0) {
-    throw new Error(`${name} must be a non-negative number, got "${raw}"`);
-  }
-  return n;
-}
 
 async function main(): Promise<void> {
   const storageState = process.env.REAL_A11Y_MCP_STORAGE_STATE;
@@ -117,7 +106,9 @@ async function main(): Promise<void> {
   const shutdown = async (code: number): Promise<void> => {
     if (shuttingDown) return;
     shuttingDown = true;
-    await manager.stopAll().catch(() => {});
+    // shutdown(), not stopAll(): this is process exit, so refuse new work and
+    // release the registry's idle timer, not just close today's sessions.
+    await manager.shutdown().catch(() => {});
     await server.close().catch(() => {});
     process.exit(code);
   };

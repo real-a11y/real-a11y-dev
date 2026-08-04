@@ -1540,8 +1540,7 @@
             },
             "session": {
               "default": "default",
-              "description": "Named browser session to use. Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
-              "pattern": "^[A-Za-z0-9_-]{1,32}$",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
             }
           },
@@ -1557,7 +1556,7 @@
           "openWorldHint": false,
           "readOnlyHint": false
         },
-        "description": "Snapshot the CURRENT page's accessibility findings and store them under `name`. Later call diff_findings to see which findings are new / changed / fixed — the same identity semantics (fingerprints) the CI a11y-diff uses. Checkpoints survive navigation, so you can checkpoint one deploy and diff another: save 'prod', open the preview URL, then diff_findings('prod'). They are held in memory and do NOT survive close_browser — call export_checkpoint first if you need one to outlive the session. Whole-document. Chromium only.",
+        "description": "Snapshot the CURRENT page's accessibility findings and store them under `name`. Later call diff_findings to see which findings are new / changed / fixed — the same identity semantics (fingerprints) the CI a11y-diff uses. Checkpoints survive navigation AND the session idle timeout (the browser may close and relaunch between saving and diffing; checkpoints remain), so you can checkpoint one deploy and diff another: save 'prod', open the preview URL, then diff_findings('prod'). They are held in memory and do NOT survive close_browser — call export_checkpoint first if you need one to outlive the session. Whole-document. Chromium only.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "additionalProperties": false,
@@ -1584,8 +1583,7 @@
             },
             "session": {
               "default": "default",
-              "description": "Named browser session to use. Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
-              "pattern": "^[A-Za-z0-9_-]{1,32}$",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
             }
           },
@@ -1616,8 +1614,7 @@
             },
             "session": {
               "default": "default",
-              "description": "Named browser session to use. Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
-              "pattern": "^[A-Za-z0-9_-]{1,32}$",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
             }
           },
@@ -1654,8 +1651,7 @@
             },
             "session": {
               "default": "default",
-              "description": "Named browser session to use. Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
-              "pattern": "^[A-Za-z0-9_-]{1,32}$",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
             }
           },
@@ -1674,7 +1670,7 @@
           "openWorldHint": false,
           "readOnlyHint": false
         },
-        "description": "Close a named browser session (default: the default session) and free its resources, or pass all=true to close every live session. Closing a session DISCARDS its saved findings checkpoints — export_checkpoint anything you still need first. Only call it when you're done; the other tools reopen nothing on their own.",
+        "description": "Close a named browser session (default: the default session) and free its resources, or pass all=true to close every live session — not both. Closing a session DISCARDS its saved findings checkpoints — export_checkpoint anything you still need first. Only call it when you're done; the other tools reopen nothing on their own.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "additionalProperties": false,
@@ -1685,9 +1681,7 @@
               "type": "boolean"
             },
             "session": {
-              "default": "default",
-              "description": "Named browser session to use. Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
-              "pattern": "^[A-Za-z0-9_-]{1,32}$",
+              "description": "Session to close. Omit for the default session. Not combinable with all=true.",
               "type": "string"
             }
           },
@@ -1718,8 +1712,7 @@
             },
             "session": {
               "default": "default",
-              "description": "Named browser session to use. Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
-              "pattern": "^[A-Za-z0-9_-]{1,32}$",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
             }
           },
@@ -1751,8 +1744,7 @@
             },
             "session": {
               "default": "default",
-              "description": "Named browser session to use. Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
-              "pattern": "^[A-Za-z0-9_-]{1,32}$",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
             }
           },
@@ -1781,8 +1773,7 @@
             },
             "session": {
               "default": "default",
-              "description": "Named browser session to use. Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
-              "pattern": "^[A-Za-z0-9_-]{1,32}$",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
             }
           },
@@ -1810,8 +1801,7 @@
             },
             "session": {
               "default": "default",
-              "description": "Named browser session to use. Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
-              "pattern": "^[A-Za-z0-9_-]{1,32}$",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
             }
           },
@@ -1851,8 +1841,7 @@
             },
             "session": {
               "default": "default",
-              "description": "Named browser session to use. Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
-              "pattern": "^[A-Za-z0-9_-]{1,32}$",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
             }
           },
@@ -1877,8 +1866,7 @@
           "properties": {
             "session": {
               "default": "default",
-              "description": "Named browser session to use. Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
-              "pattern": "^[A-Za-z0-9_-]{1,32}$",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
             }
           },
@@ -1905,8 +1893,7 @@
             },
             "session": {
               "default": "default",
-              "description": "Named browser session to use. Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
-              "pattern": "^[A-Za-z0-9_-]{1,32}$",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
             }
           },
@@ -1933,8 +1920,7 @@
             },
             "session": {
               "default": "default",
-              "description": "Named browser session to use. Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
-              "pattern": "^[A-Za-z0-9_-]{1,32}$",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
             }
           },
@@ -1967,8 +1953,7 @@
             },
             "session": {
               "default": "default",
-              "description": "Named browser session to use. Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
-              "pattern": "^[A-Za-z0-9_-]{1,32}$",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
             }
           },
@@ -2013,8 +1998,7 @@
             },
             "session": {
               "default": "default",
-              "description": "Named browser session to use. Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
-              "pattern": "^[A-Za-z0-9_-]{1,32}$",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
             }
           },
@@ -2036,8 +2020,7 @@
           "properties": {
             "session": {
               "default": "default",
-              "description": "Named browser session to use. Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
-              "pattern": "^[A-Za-z0-9_-]{1,32}$",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
             }
           },
@@ -2071,8 +2054,7 @@
             },
             "session": {
               "default": "default",
-              "description": "Named browser session to use. Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
-              "pattern": "^[A-Za-z0-9_-]{1,32}$",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
             }
           },
@@ -2090,9 +2072,10 @@
           "openWorldHint": false,
           "readOnlyHint": true
         },
-        "description": "List every live named browser session: name, current URL (redacted), created/last-used times, and whether a call is running on it right now. Sessions are created lazily by the first tool call that names them and closed by close_browser or the idle timeout.",
+        "description": "List every live named browser session: name, current URL (redacted), created/last-used times, and whether a call is running on it right now. Sessions are created lazily by the first tool call that names them and closed by close_browser or the idle timeout (which keeps their checkpoints).",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": false,
           "properties": {},
           "type": "object"
         },
@@ -2117,8 +2100,7 @@
             },
             "session": {
               "default": "default",
-              "description": "Named browser session to use. Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
-              "pattern": "^[A-Za-z0-9_-]{1,32}$",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
             },
             "settleMs": {
@@ -2206,8 +2188,7 @@
             },
             "session": {
               "default": "default",
-              "description": "Named browser session to use. Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
-              "pattern": "^[A-Za-z0-9_-]{1,32}$",
+              "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
             },
             "text": {
