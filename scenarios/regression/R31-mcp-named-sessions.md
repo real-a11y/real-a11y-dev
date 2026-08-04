@@ -1,5 +1,5 @@
 ---
-id: R30
+id: R31
 suite: regression
 scenario: "MCP named sessions — parallel isolation, reuse, and lifecycle"
 area: MCP
