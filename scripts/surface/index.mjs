@@ -73,6 +73,7 @@ async function check() {
     { checkScenarios },
     { checkPlanSentinel },
     { checkDrift },
+    { checkReleasedSnapshot },
   ] = await Promise.all([
     import("./model.mjs"),
     import("./check/anchors.mjs"),
@@ -83,6 +84,7 @@ async function check() {
     import("./scenarios/check.mjs"),
     import("./check/sentinel.mjs"),
     import("./render/index.mjs"),
+    import("./released.mjs"),
   ]);
 
   const manifest = await buildManifest(repoRoot);
@@ -172,6 +174,21 @@ async function check() {
     ...(await checkDrift(repoRoot, manifest)),
   ];
 
+  // Damage fails; an older layout only warns. An absent snapshot is the
+  // legitimate pre-first-release state and a layout mismatch self-heals at the
+  // next release cut, so failing on either would block PRs over something their
+  // author cannot fix — but the layout window leaves a stale notice on the
+  // published page, which nobody should have to discover by accident.
+  const snapshot = await checkReleasedSnapshot(repoRoot);
+  problems.push(...snapshot.problems);
+
+  // Printed BEFORE the pass/fail branch, because `die()` never returns — a
+  // warning emitted after it would be invisible on exactly the runs that are
+  // already going badly, which is when it is most worth reading.
+  for (const warning of snapshot.warnings) {
+    console.warn(`\nWarning: ${warning}\n`);
+  }
+
   if (problems.length) {
     console.error(
       `\nThe docs disagree with the code about the public surface.\n` +
@@ -206,10 +223,13 @@ async function check() {
  * quietly make it not-stale.
  */
 async function apply() {
-  const [{ buildManifest }, { applyAll }] = await Promise.all([
-    import("./model.mjs"),
-    import("./render/index.mjs"),
-  ]);
+  const [{ buildManifest }, { applyAll }, { RELEASED_REL }] = await Promise.all(
+    [
+      import("./model.mjs"),
+      import("./render/index.mjs"),
+      import("./released.mjs"),
+    ],
+  );
 
   const manifest = await buildManifest(repoRoot);
   const result = await applyAll(repoRoot, manifest);
@@ -271,6 +291,36 @@ async function apply() {
           .map(({ where, message }) => `    ${where}\n      ${message}`)
           .join("\n\n") +
         `\n\n  \`pnpm surface:check\` fails until these are handled.`,
+    );
+  }
+
+  // The released surface is unrecorded, so the "not yet published" notice could
+  // not be computed. Silence here would make that look like a clean bill of
+  // health — the reader can't act on the difference, but the author can.
+  //
+  // The two outcomes are NOT the same and the message must not merge them:
+  // `absent` renders the notice empty, while `unreadable` and `layout` leave the
+  // region byte-for-byte as they found it (see render/unreleased.mjs). Saying
+  // "the notice is empty" in those cases describes a page that may still be
+  // showing an older warning, and would send someone past a stale notice
+  // believing the page said nothing.
+  const released = result.released;
+  if (released && !released.recorded) {
+    const why = {
+      absent: `no ${RELEASED_REL} yet — the next release cut writes it`,
+      unreadable: `${RELEASED_REL} isn't valid JSON`,
+      layout: `${RELEASED_REL} was written under an older manifest layout (${released.detail})`,
+    };
+    const state =
+      released.reason === "absent"
+        ? `the "not yet published" notice is empty — that is "we can't tell",\n` +
+          `  not "everything here is published".`
+        : `the "not yet published" notice was LEFT AS IT IS on the page, not\n` +
+          `  recomputed — so whatever it says now is from the last good run, and\n` +
+          `  may be out of date. Fix the file and re-run to refresh it.`;
+    console.log(
+      `\n  The released surface is unrecorded, so ${state}\n` +
+        `    ${why[released.reason] ?? released.reason}`,
     );
   }
 }

@@ -15,6 +15,9 @@ ship — [`install`](#install), [`audit`](#audit-url), [`inspect`](#inspect-url)
 [`login`](#login-url-save-file). Run `real-a11y <command> --help` for a command's
 own flags.
 
+<!-- surface:begin cli-unreleased -->
+<!-- surface:end cli-unreleased -->
+
 Findings and reports go to **stdout**; progress, warnings, and errors go to
 **stderr** — so `-o` / a pipe never mixes the two.
 

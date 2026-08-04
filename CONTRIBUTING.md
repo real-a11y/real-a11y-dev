@@ -163,6 +163,13 @@ claim this exists to stop anyone from making. Until the next release cut runs
 `version-packages`, the released surface is *unrecorded*, which is a different
 fact from "nothing is unreleased" and has to stay distinguishable from it.
 
+The CLI reference carries a managed `cli-unreleased` region that turns that
+difference into a notice on the page — which commands and flags a reader can
+see documented but cannot yet install. It is **empty** whenever there is no true
+warning to give: when nothing is unreleased, and when the released surface is
+unrecorded. `pnpm surface:apply` tells *you* which of those two it was, because
+the page can't and the distinction is the whole point.
+
 ### What a change obliges you to update
 
 ```bash
