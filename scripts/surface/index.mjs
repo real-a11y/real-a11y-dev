@@ -58,7 +58,8 @@ async function extract() {
   console.log(
     `Wrote ${MANIFEST_REL} — ${manifest.cli.commands.length} CLI commands, ` +
       `${manifest.mcp.tools.length} MCP tools, ${manifest.packages.length} packages, ` +
-      `${manifest.env.length} env vars.`,
+      `${manifest.env.length} env vars, ` +
+      `${manifest.api.reduce((n, p) => n + p.entries.reduce((m, e) => m + e.values.length + (e.types?.length ?? 0), 0), 0)} exported symbols.`,
   );
 }
 

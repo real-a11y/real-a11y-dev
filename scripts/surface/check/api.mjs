@@ -57,6 +57,19 @@ export async function checkApiImports(repoRoot, manifest) {
   const problems = [];
   let checked = 0;
 
+  // Extraction failures first, because they change what every later message
+  // MEANS. `extractApi` records a package that wouldn't build or wouldn't
+  // import, and nothing read that field — so the entry point simply wasn't in
+  // the index, and every documented import from it came back as "not an entry
+  // point any package exports". Confident, and the wrong diagnosis: the subpath
+  // is fine, the build isn't. Reported up front so the real cause is the first
+  // thing on screen.
+  for (const pkg of manifest.api ?? []) {
+    for (const message of pkg.problems ?? []) {
+      problems.push({ where: "docs/surface.json", message });
+    }
+  }
+
   for (const relPath of await docFiles(repoRoot)) {
     const text = await readDoc(repoRoot, relPath);
 

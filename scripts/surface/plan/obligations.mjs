@@ -80,7 +80,21 @@ const RULES = [
     docs: ["website/guide/architecture.md"],
     why: "an entry point someone is told to import has to exist",
   },
+  {
+    // A whole entry point appearing or vanishing is a package-page event: the
+    // overview is where "you can import this from here" is stated.
+    match: /^api\.@real-a11y-dev\/[^.]+$/,
+    docs: ["website/guide/architecture.md"],
+    why: "the architecture page lists what each package exposes and from where",
+  },
 ];
+
+/** `api.@real-a11y-dev/testing/playwright.attach` → `website/packages/testing.md`. */
+function apiPage(path) {
+  const specifier = path.slice("api.".length).split(".")[0];
+  const short = specifier.replace(/^@real-a11y-dev\//, "").split("/")[0];
+  return `website/packages/${short}.md`;
+}
 
 /** `@real-a11y-dev/cli` → `website/packages/cli.md`. */
 function packagePage(name) {
@@ -132,6 +146,18 @@ export function requiredDocs(changes) {
     }
     // Any other package-level add/remove has no doc rule of its own.
     if (/^packages\.[^.]+$/.test(change.path)) continue;
+
+    // An individual symbol points at its own package's page, which is the only
+    // place that can say what it does. Computed rather than listed, because
+    // there are 309 of them across 11 packages and a table would rot.
+    if (/^api\.@real-a11y-dev\//.test(change.path)) {
+      require_(
+        apiPage(change.path),
+        change.what,
+        "the package page is where an exported symbol is introduced and shown in use",
+      );
+      continue;
+    }
 
     const rule = RULES.find((r) => r.match.test(change.path));
     if (!rule) continue;
