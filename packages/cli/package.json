@@ -64,7 +64,7 @@
   "devDependencies": {
     "@real-a11y-dev/session-registry": "workspace:*",
     "@types/node": "^22.0.0",
-    "playwright": "^1.61.1",
+    "playwright": "^1.62.1",
     "tsup": "^8.3.0",
     "typescript": "^5.6.0",
     "vitest": "^3.2.7"
