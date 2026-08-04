@@ -5,6 +5,7 @@ import type { Finding } from "@real-a11y-dev/audit";
 import {
   buildArtifact,
   fingerprintFindings,
+  pageIdOf,
   type SnapshotPage,
 } from "@real-a11y-dev/snapshot";
 import { describe, expect, it } from "vitest";
@@ -30,12 +31,17 @@ function page(
   findings: Finding[],
   over: Partial<SnapshotPage> = {},
 ): SnapshotPage {
+  // Identity comes from the URL, exactly as production does it — a fixture that
+  // hardcoded an id could drift from `pageIdOf` without anything noticing.
+  const url = `http://localhost/${name}`;
+  const id = pageIdOf(url) ?? name;
   return {
+    id,
     name,
-    url: `http://localhost/${name}`,
+    url,
     root: "body",
     status: "ok",
-    findings: fingerprintFindings(name, findings),
+    findings: fingerprintFindings(id, findings),
     tree: "",
     outline: "",
     tabs: "",

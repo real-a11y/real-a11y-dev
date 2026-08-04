@@ -655,9 +655,12 @@ main
     code "name"
   paragraph "Parameters:"
   list
-    listitem "— string — required — the label to store it under."
+    listitem "— string — required — the label to store it under, and a label. The imported page keeps the identity it arrived with (derived from its URL), so a CLI-written artifact of diffs against a live page at whatever you call it here. Earlier releases rewrote the page under this label, which made an imported artifact join on the store name instead of the route — the reason the cross-tool diff didn't work before."
       strong
         code "name"
+      strong "only"
+      code "/pricing"
+      code "/pricing"
     listitem "— string — required — a serialized Real A11y snapshot artifact (JSON)."
       strong
         code "artifact"

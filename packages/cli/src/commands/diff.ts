@@ -119,13 +119,19 @@ export const diffCommand: CommandFn = async (positionals, flags) => {
 
   // A diff that matches nothing still renders (every page added/removed) and
   // still exits on its NEW findings — it just never compares structure, so
-  // --explain has nothing to say. Say so; the usual cause is names derived from
-  // positional URLs that differ by host/port between the two runs.
+  // --explain has nothing to say.
+  //
+  // The old advice here was "give both sides the same page NAMES", which is now
+  // actively wrong: pages join on identity, so names have no bearing and a user
+  // following it would rename everything and match exactly as little. Host and
+  // port no longer trip this either. What's left is genuinely two different sets
+  // of routes — so the remedy is to check the addresses, not the labels.
   if (noPagesMatched(base, pr)) {
     process.stderr.write(
-      "real-a11y: warning: no pages matched by name between the two snapshots — " +
-        "pages join by NAME, not URL; snapshot both sides with the same page names " +
-        "(config `urls` entries or A11Y_PAGES [{name,url}])\n",
+      "real-a11y: warning: no pages matched between the two snapshots — " +
+        "pages join on the URL's path (host and port are ignored), so this means " +
+        "the two runs captured different routes; check the `url` of each entry on " +
+        "both sides, or set a matching `id` if one side deliberately moved\n",
     );
   }
 
@@ -134,7 +140,7 @@ export const diffCommand: CommandFn = async (positionals, flags) => {
   // finding the baseline accepts is reported (truth) but never gates (policy).
   if (typeof flags.baseline === "string") {
     const { stale } = applyBaseline(
-      pr.pages.map((p) => ({ name: p.name, findings: p.findings })),
+      pr.pages.map((p) => ({ id: p.id, name: p.name, findings: p.findings })),
       loadBaseline(flags.baseline),
     );
     if (stale.length > 0) {

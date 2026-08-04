@@ -2,6 +2,7 @@ import type { Finding } from "@real-a11y-dev/audit";
 import { describe, expect, it } from "vitest";
 
 import { fingerprintFindings } from "../fingerprint.js";
+import { pageIdOf } from "../page-id.js";
 import {
   buildArtifact,
   type SnapshotArtifact,
@@ -25,12 +26,16 @@ function page(
   findings: Finding[],
   over: Partial<SnapshotPage> = {},
 ): SnapshotPage {
+  const url = `http://x/${name}`;
   return {
+    // Derived the way `buildSnapshotPage` does, so these fixtures exercise the
+    // real identity rather than a hand-picked one.
+    id: pageIdOf(url) ?? name,
     name,
-    url: `http://x/${name}`,
+    url,
     root: "body",
     status: "ok",
-    findings: fingerprintFindings(name, findings),
+    findings: fingerprintFindings(pageIdOf(url) ?? name, findings),
     tree: "main",
     outline: "",
     tabs: "",
@@ -182,13 +187,30 @@ describe("diffArtifacts", () => {
 });
 
 describe("noPagesMatched", () => {
-  it("is true when both sides have pages but share no name", () => {
-    const base = artifact([page("http://localhost:3000/", [])]);
-    const pr = artifact([page("http://localhost:4173/", [])]);
+  it("is true when both sides have pages but share no id", () => {
+    const base = artifact([page("pricing", [])]);
+    const pr = artifact([page("careers", [])]);
     expect(noPagesMatched(base, pr)).toBe(true);
     // The diff still runs — it just compares nothing.
     const result = diffArtifacts(base, pr);
     expect(result.pages.map((p) => p.status)).toEqual(["added", "removed"]);
+  });
+
+  it("is FALSE across hosts and ports — that is the same page, not a mismatch", () => {
+    // This used to be the warning's headline case: two runs taken with
+    // positional URLs whose auto-derived names differed by host/port were
+    // reported as sharing nothing. Identity now derives from the path, so
+    // prod-vs-preview and :3000-vs-:4173 join by construction, and the pages
+    // are actually compared instead of classifying as added + removed.
+    const withUrl = (url: string): SnapshotPage => ({
+      ...page("home", []),
+      id: pageIdOf(url)!,
+      url,
+    });
+    const base = artifact([withUrl("http://localhost:3000/pricing")]);
+    const pr = artifact([withUrl("https://preview.example.com/pricing/")]);
+    expect(noPagesMatched(base, pr)).toBe(false);
+    expect(diffArtifacts(base, pr).pages.map((p) => p.status)).toEqual(["ok"]);
   });
 
   it("is false when at least one name is on both sides", () => {

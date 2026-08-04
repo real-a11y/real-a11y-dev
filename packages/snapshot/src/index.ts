@@ -19,6 +19,7 @@ export type {
 export {
   ARTIFACT_SCHEMA_VERSION,
   assertFullArtifact,
+  assertDistinctPageIds,
   buildArtifact,
   measuredViews,
   serializeArtifact,
@@ -31,6 +32,10 @@ export type {
   SnapshotPage,
   SnapshotView,
 } from "./snapshot-artifact.js";
+
+// Page identity — the join key, derived from the URL's path (never the origin,
+// never the display label). One rule, shared with the MCP's different-page note.
+export { DEFAULT_ROOT, pageIdOf, scopeId } from "./page-id.js";
 
 // The shared page assembler — the single home for capture→fingerprint, so the
 // CLI and the MCP server compute identical fingerprints for the same page.

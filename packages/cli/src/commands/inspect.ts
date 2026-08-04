@@ -36,6 +36,7 @@ import { createSession, nativeSnapshot } from "../session.js";
 import {
   ensurePageOpen,
   outputOf,
+  pageIdentityOf,
   sessionFlags,
   singleTarget,
   type Target,
@@ -65,8 +66,14 @@ export async function runInspectOnSession(
   });
   const page: PageReport = {
     name: target.name,
+    // The LANDED url is what gets displayed; identity keys on the requested one
+    // through the shared derivation, matching `audit` and `snapshot` — one
+    // finding must not carry a different "stable" id per command. No config
+    // entry to consult: `inspect` takes a positional URL only, so there is
+    // never an explicit id to honour here. Unscoped by `rootSelector` for the
+    // same reason as `audit`: whole-document.
     url: redactUrl(finalUrl),
-    findings: fingerprintFindings(target.name, snapshot.findings),
+    findings: fingerprintFindings(pageIdentityOf(target), snapshot.findings),
     tree: snapshot.tree,
     outline: snapshot.outline,
   };

@@ -164,20 +164,21 @@ function pageHunks(
 }
 
 /**
- * True when both sides have pages but share no `name` at all — so every page
- * classifies as added/removed and no pair is ever structurally compared. Since
- * the join is by name (never URL), this is nearly always a snapshotting slip:
- * both sides taken with positional URLs, whose auto-derived names then differ
- * by host/port. A genuine full rewrite trips it too, hence a warning, not an
- * error. Empty on either side is not this case — nothing to match against.
+ * True when both sides have pages but share no `id` at all — so every page
+ * classifies as added/removed and no pair is ever structurally compared.
+ *
+ * Since ids derive from the URL's path, host/port differences no longer trip
+ * this: prod-vs-preview joins by construction, which is what it used to warn
+ * about. What remains is a genuine full rewrite, or two artifacts of entirely
+ * different routes — hence still a warning rather than an error.
  */
 export function noPagesMatched(
   base: SnapshotArtifact,
   pr: SnapshotArtifact,
 ): boolean {
   if (base.pages.length === 0 || pr.pages.length === 0) return false;
-  const baseNames = new Set(base.pages.map((p) => p.name));
-  return !pr.pages.some((p) => baseNames.has(p.name));
+  const baseIds = new Set(base.pages.map((p) => p.id));
+  return !pr.pages.some((p) => baseIds.has(p.id));
 }
 
 export function diffArtifacts(
@@ -199,14 +200,14 @@ export function diffArtifacts(
     SNAPSHOT_VIEWS.filter((v) => baseViews.has(v) && prViews.has(v)),
   );
   const skippedViews = SNAPSHOT_VIEWS.filter((v) => !compare.has(v));
-  const baseByName = new Map(base.pages.map((p) => [p.name, p]));
+  const baseById = new Map(base.pages.map((p) => [p.id, p]));
   const seen = new Set<string>();
   const pages: PageDiff[] = [];
 
   // PR order drives the output; base-only pages are appended after.
   for (const prPage of pr.pages) {
-    seen.add(prPage.name);
-    const basePage = baseByName.get(prPage.name);
+    seen.add(prPage.id);
+    const basePage = baseById.get(prPage.id);
     if (!basePage) {
       pages.push({
         name: prPage.name,
@@ -250,7 +251,7 @@ export function diffArtifacts(
   }
 
   for (const basePage of base.pages) {
-    if (seen.has(basePage.name)) continue;
+    if (seen.has(basePage.id)) continue;
     pages.push({
       name: basePage.name,
       status: "removed",

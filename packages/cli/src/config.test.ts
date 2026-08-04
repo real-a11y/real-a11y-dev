@@ -130,6 +130,23 @@ describe("loadConfig", () => {
     );
   });
 
+  it("rejects an empty page id rather than treating it as absent", () => {
+    // Callers read it two ways — `id ?? derive()` keeps "", `id ? … : derive()`
+    // drops it — so an empty id made a page's identity depend on which branch
+    // saw it: a page that loaded derived one, the same page failing to open
+    // kept "" and tripped the "no id" guard. Rejected at the edge so both agree.
+    expect(() =>
+      loadConfig(
+        writeConfig({ urls: [{ id: "", name: "H", url: "http://x" }] }),
+      ),
+    ).toThrow(/urls\[0\]\.id must not be empty/);
+    expect(() =>
+      loadConfig(
+        writeConfig({ urls: [{ id: 5, name: "H", url: "http://x" }] }),
+      ),
+    ).toThrow(/urls\[0\]\.id must be a string/);
+  });
+
   it("compile-checks redact patterns", () => {
     expect(() =>
       loadConfig(

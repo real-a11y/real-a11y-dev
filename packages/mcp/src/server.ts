@@ -23,7 +23,6 @@ import {
   assertFullArtifact,
   buildArtifact,
   buildSnapshotPage,
-  fingerprintFindings,
   parseSnapshotArtifact,
   projectNativeTree,
   serializeArtifact,
@@ -821,18 +820,17 @@ export function buildServer(
         assertFullArtifact(parsed, `artifact for "${name}"`);
         const src = parsed.pages[0];
         if (!src) return errText(`Artifact for "${name}" has no pages.`);
-        // Store under `name` with the page renamed and re-fingerprinted to that
-        // label — exactly as checkpoint_findings does — so a later diff_findings
-        // (which builds the head under `name`) joins and matches. The artifact's
-        // original page name would otherwise never equal the store label, and
-        // the diff would report every finding as both NEW and FIXED.
-        const page = {
-          ...src,
-          name,
-          findings: fingerprintFindings(name, src.findings),
-        };
+        // Stored exactly as it arrived. This used to rename the page to the
+        // store label and re-fingerprint under it, because the label WAS the
+        // identity and an artifact's own page name would never equal it — so
+        // without the rewrite every finding read as both NEW and FIXED.
+        //
+        // Pages carry an `id` derived from their URL now, so the artifact
+        // already agrees with a live re-snapshot of the same route, and
+        // rewriting would break the very join it once repaired. The store key
+        // and the page's own name are free to differ, which is what they are.
         checkpoints.save(name, {
-          page,
+          page: src,
           rules: parsed.meta?.rules ?? undefined,
         });
         const extra =
@@ -840,7 +838,7 @@ export function buildServer(
             ? ` (first of ${parsed.pages.length} pages)`
             : "";
         return text(
-          `Imported "${name}": ${page.findings.length} finding(s)${extra}. ${checkpoints.size} checkpoint(s) stored.`,
+          `Imported "${name}": ${src.findings.length} finding(s)${extra}. ${checkpoints.size} checkpoint(s) stored.`,
         );
       } catch (err) {
         const msg =

@@ -13,6 +13,7 @@ import {
   buildArtifact,
   diffArtifacts,
   fingerprintFindings,
+  pageIdOf,
   viewsOfPage,
   type DiffClass,
   type DiffEntry,
@@ -127,24 +128,6 @@ export function scopeMismatch(
 }
 
 /**
- * Everything after the origin — path, query and fragment.
- *
- * `undefined` for anything that isn't a parseable absolute URL. A stored page's
- * `url` has been through `redactUrl`, which falls back to sanitized raw text
- * when the input wasn't a URL at all, so this can legitimately fail.
- */
-function resourceOf(url: string): string | undefined {
-  try {
-    const u = new URL(url);
-    // `/pricing` and `/pricing/` are the same page; treat them as such.
-    const path = u.pathname.length > 1 ? u.pathname.replace(/\/$/, "") : "/";
-    return `${path}${u.search}${u.hash}`;
-  } catch {
-    return undefined;
-  }
-}
-
-/**
  * Are these two sides *different pages*, rather than the same page twice?
  *
  * Deliberately compares only what follows the origin. A checkpoint diff across
@@ -167,8 +150,8 @@ export function differentUrl(
   base: SnapshotPage,
   head: SnapshotPage,
 ): { from: string; to: string } | undefined {
-  const from = resourceOf(base.url);
-  const to = resourceOf(head.url);
+  const from = pageIdOf(base.url);
+  const to = pageIdOf(head.url);
   if (from === undefined || to === undefined || from === to) return undefined;
   return { from: base.url, to: head.url };
 }
@@ -186,24 +169,61 @@ export function diffCheckpointPages(
 }
 
 /**
- * Diff two **independently-labeled** checkpoints (`diff_checkpoints`). Each was
- * fingerprinted under its own label as the page name — and `page` is part of
- * the `v1` fingerprint tuple — so a naive diff would read every finding as
- * removed+new. Re-fingerprint both under one neutral name first; the identity
- * *components* (rule, role, locator, …) are unchanged, so matching findings
- * collapse correctly.
+ * The id a page falls back to when its address has no route to derive from —
+ * `data:`, `about:blank`, anything `pageIdOf` refuses. `buildSnapshotPage` uses
+ * the display name there, which for a checkpoint is its *label*.
+ */
+function idIsLabelFallback(page: SnapshotPage): boolean {
+  return pageIdOf(page.url) === undefined;
+}
+
+/** The literal both sides are re-keyed to when neither has a real route. */
+const NEUTRAL_PAGE_ID = "checkpoint";
+
+/**
+ * Diff two independently-labeled checkpoints (`diff_checkpoints`).
+ *
+ * For a page with a real route this is just the ordinary diff: both sides carry
+ * an `id` derived from the URL, so the label is only a label and they join on
+ * their own. That is what page identity bought, and it is the common case.
+ *
+ * **But when NEITHER side has a route, the label is still the identity.**
+ * `pageIdOf` returns `undefined` for `data:`, `about:blank` and friends —
+ * correctly, since their path is content rather than a location — so
+ * `buildSnapshotPage` falls back to the name, and two checkpoints of one such
+ * page saved as `before-fix` and `after-fix` get two different ids and never
+ * pair. Every finding then reads as removed + re-added, and `differentUrl`
+ * cannot even explain it: it also returns `undefined` for an unparseable side,
+ * so the note never prints. That is the primary before/after checkpoint
+ * workflow silently reporting total turnover on an unchanged page.
+ *
+ * So the neutral re-fingerprint survives, narrowed to exactly the case that
+ * still needs it. I removed it wholesale when ids landed and claimed the
+ * workaround had deleted itself; it had not — it had one job left, for the
+ * addresses identity can't describe.
+ *
+ * Only when BOTH sides fall back: one routed side and one not is a genuine
+ * mismatch, and forcing those together would join two unrelated pages.
  */
 export function diffLabeledCheckpoints(
   base: SnapshotPage,
   head: SnapshotPage,
 ): DiffResult {
-  const NAME = "checkpoint";
-  const rename = (p: SnapshotPage): SnapshotPage => ({
-    ...p,
-    name: NAME,
-    findings: fingerprintFindings(NAME, p.findings),
-  });
-  return diffCheckpointPages(rename(base), rename(head));
+  if (idIsLabelFallback(base) && idIsLabelFallback(head)) {
+    // Re-key AND re-fingerprint. The id is what `diffArtifacts` joins pages on,
+    // but every finding's fingerprint embeds the page component too — so an id
+    // swap alone would pair the pages and then fail to pair a single finding
+    // inside them. The identity components (rule, role, locator, …) are
+    // untouched, so matching findings collapse correctly once both sides hash
+    // under one literal.
+    const neutral = (p: SnapshotPage): SnapshotPage => ({
+      ...p,
+      id: NEUTRAL_PAGE_ID,
+      findings: fingerprintFindings(NEUTRAL_PAGE_ID, p.findings),
+    });
+    return diffCheckpointPages(neutral(base), neutral(head));
+  }
+  return diffCheckpointPages(base, head);
 }
 
 // ── rendering ────────────────────────────────────────────────────────────
@@ -269,13 +289,19 @@ export function renderDiff(
 
   // Two different pages' trees differ almost everywhere, so the summary would
   // describe a rewrite rather than a regression — pages, headings and tab stops
-  // reported wholesale as added and removed. Findings still diff usefully
-  // (fingerprints match on rule + role + locator, not on position), so the
-  // section goes and the rest stays.
+  // reported wholesale as added and removed.
+  //
+  // This used to add "Findings are still matched by fingerprint", which was
+  // true while a checkpoint's LABEL was its identity and both sides were
+  // fingerprinted under it. Pages carry a URL-derived identity now, and
+  // `differentUrl` is non-undefined in exactly the case where the two ids
+  // differ — so the note would have promised a like-for-like comparison in
+  // precisely the situation where not one finding can pair. The counts say
+  // "everything gone, everything new"; the note now says why.
   const note = differing
     ? `NOTE: different page — the base was captured at \`${differing.from}\`, this side at \`${differing.to}\`. ` +
       `The structural summary is suppressed: two different pages differ almost everywhere, so it would describe a rewrite, not a regression. ` +
-      `Findings are still matched by fingerprint.`
+      `The findings are NOT compared either — these are two pages, so the base's are reported fixed and this side's new.`
     : undefined;
   const lead = note ? [header, note] : [header];
 
