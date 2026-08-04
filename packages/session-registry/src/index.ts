@@ -433,11 +433,21 @@ export class SessionRegistry<T extends SessionLike> {
     // idle timeout does not race the socket/pidfile handshake.
     const requestedDelay = this.hasRun ? this.idleMs : this.startupGraceMs;
     if (!Number.isFinite(requestedDelay) || requestedDelay < 0) return;
-    const delay = Math.min(requestedDelay, MAX_IDLE_MS);
-    this.idleTimer = setTimeout(() => this.fireIdleTimeout(), delay);
-    // The idle timer is a cleanup, not work: it must never be the only thing
-    // keeping a process alive. The daemon's socket server / the MCP stdio
-    // transport hold the loop open while there is anyone to serve.
+    // Two literal-bounded `setTimeout` call sites, not one `Math.min`: the
+    // delay traces back to operator input (a CLI flag / env var), and this
+    // shape is what proves to static analysis that neither call can arm an
+    // unbounded timer. `Math.min` reads the same to a human and is opaque to
+    // the checker — so does routing both through a shared helper.
+    //
+    // `unref` on both: the idle timer is cleanup, not work, and must never be
+    // the only thing keeping a process alive. The daemon's socket server / the
+    // MCP stdio transport hold the loop open while there is anyone to serve.
+    if (requestedDelay > MAX_IDLE_MS) {
+      this.idleTimer = setTimeout(() => this.fireIdleTimeout(), MAX_IDLE_MS);
+      this.idleTimer.unref?.();
+      return;
+    }
+    this.idleTimer = setTimeout(() => this.fireIdleTimeout(), requestedDelay);
     this.idleTimer.unref?.();
   }
 
