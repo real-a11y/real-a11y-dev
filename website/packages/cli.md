@@ -311,6 +311,54 @@ real-a11y audit https://app.example.com/dashboard --storage-state auth.json
 See the [Authenticated pages](/guide/authenticated-pages) guide for the full
 workflow, the security rules, and the interactive `--cdp` alternative.
 
+## Reuse a live session
+
+By default every `real-a11y` command opens a fresh browser page and closes it
+when it finishes. With `--session <name>` the command reuses the same live page
+across invocations, so you can `tree` a page, `click` something, then `tree`
+again and see the difference on the same page.
+
+```sh
+real-a11y tree https://example.com --session checkout
+real-a11y click https://example.com --session checkout --role button --name "Add to cart"
+real-a11y tree https://example.com --session checkout
+```
+
+Commands that read the page observe the live DOM, so a `snapshot` or `audit` run
+after a `click`/`type` captures the post-interaction state. Capture baselines in
+a fresh session (or before any act commands) to avoid session-contaminated diffs.
+
+The first `--session` run spawns a background daemon; later runs connect over a
+Unix domain socket (or a named pipe on Windows) and act on the same page.
+`--session` works on every browser-driving command: `audit`, `inspect`, `tree`,
+`outline`, `tabs`, `list`, `interact`, `click`, `type`, `focus`, and `snapshot`.
+The session name defaults to a stable hash of the current working directory, and
+can be pinned in `a11y.config.json`:
+
+```json
+{
+  "defaults": {
+    "session": "checkout",
+    "sessionIdleTimeout": 900000
+  }
+}
+```
+
+The daemon shuts down after a period of inactivity (15 minutes by default, capped
+at 1 hour; `0` is not accepted). Manage it explicitly with:
+
+```sh
+real-a11y session list
+real-a11y session stop checkout
+real-a11y session stop-all
+```
+
+Security note: each session gets its own socket under `~/.real-a11y/sessions/`
+with `0700`/`0600` permissions, a per-session pidfile, and a version handshake
+so a CLI upgrade restarts a mismatched daemon. See
+[Security posture](/packages/cli/commands#security-posture) in the command
+reference.
+
 ## Output you can trust
 
 `--format json` emits one stable envelope for every command, single- or

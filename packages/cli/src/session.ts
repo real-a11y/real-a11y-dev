@@ -29,9 +29,14 @@ import { registerCleanup } from "./cleanup.js";
 import { CliError } from "./exit.js";
 import { assertFinalUrl } from "./url-gate.js";
 
-function proxyFromEnv():
-  | { server: string; bypass?: string; username?: string; password?: string }
-  | undefined {
+export interface ProxyConfig {
+  server: string;
+  bypass?: string;
+  username?: string;
+  password?: string;
+}
+
+export function proxyFromEnv(): ProxyConfig | undefined {
   const env = process.env;
   const raw =
     env.HTTPS_PROXY ?? env.https_proxy ?? env.HTTP_PROXY ?? env.http_proxy;
@@ -72,8 +77,28 @@ export interface SessionFlags {
   allowedOrigins?: string[];
   /** `--chrome-path` — a specific browser binary to launch. Ignored with `cdp`. */
   chromePath?: string;
+  /**
+   * `REAL_A11Y_CHROME_PATH` as seen by the spawner, recorded for session
+   * identity only. The actual launch still goes through `resolveChromeExecutable`
+   * so the source label and error text remain accurate.
+   */
+  realA11yChromePath?: string;
+  /**
+   * `REAL_A11Y_BROWSERS_DIR` as seen by the spawner, recorded for session
+   * identity only. The actual install-cache lookup still uses `process.env`
+   * (set by the per-run env snapshot) so the resolution path is accurate.
+   */
+  realA11yBrowsersDir?: string;
+  /** Resolved proxy to use for this browser launch. */
+  proxy?: ProxyConfig;
   /** Note which Chrome binary was chosen, and why, on stderr. */
   verbose?: boolean;
+  /**
+   * Working directory the session was started from. Pinned to the first run so a
+   * later caller cannot make a long-lived session auto-discover a config from an
+   * arbitrary directory.
+   */
+  cwd?: string;
 }
 
 export async function createSession(
@@ -94,7 +119,7 @@ export async function createSession(
   }
   const { BrowserSession, resolveChromeExecutable } =
     await import("@real-a11y-dev/browser");
-  const proxy = proxyFromEnv();
+  const proxy = flags.proxy ?? proxyFromEnv();
   // CDP mode reuses a running browser — there's no binary for us to choose.
   // Otherwise: --chrome-path (hard error if missing) > REAL_A11Y_CHROME_PATH
   // (hard error if missing) > the `real-a11y install` manifest (soft, if any)
@@ -126,7 +151,16 @@ export async function createSession(
       : {}),
     ...(chrome ? { executablePath: chrome.executablePath } : {}),
   });
-  registerCleanup(() => session.close());
+  const unregister = registerCleanup(() => session.close());
+  const originalClose = session.close.bind(session);
+  let closed = false;
+  session.close = async (): Promise<void> => {
+    if (!closed) {
+      closed = true;
+      unregister();
+    }
+    return originalClose();
+  };
   return session;
 }
 
@@ -270,7 +304,7 @@ export async function callPage<T>(
  * but content from an unexpected host quietly entering a report is worth a
  * visible note (it may end up in a PR comment in phase 2).
  */
-function noteCrossOrigin(
+export function noteCrossOrigin(
   requested: string,
   landed: string,
   authenticated: boolean,

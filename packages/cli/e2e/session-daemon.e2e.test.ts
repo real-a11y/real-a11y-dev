@@ -50,8 +50,13 @@ describe("session daemon", () => {
 </html>`,
     );
 
-    const stop = await spawnDaemon(socketPath, pidfile, 0, DAEMON_ENTRY);
-    const client = new DaemonClient({ socketPath });
+    const { stop, tokenFile } = await spawnDaemon(
+      socketPath,
+      pidfile,
+      60_000,
+      DAEMON_ENTRY,
+    );
+    const client = new DaemonClient({ socketPath, tokenFile });
 
     try {
       const tree1 = await client.run("demo", "tree", [fileUrl(fixture)], {
@@ -88,19 +93,106 @@ describe("session daemon", () => {
   }, 60_000);
 });
 
+describe("session lifecycle", () => {
+  it("lists, stops, and stop-alls daemon sessions through the CLI", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "real-a11y-session-lifecycle-"));
+    const fixture = join(dir, "fixture.html");
+    writeFileSync(
+      fixture,
+      `<!doctype html>
+<html>
+  <body>
+    <main>
+      <h1>Session lifecycle fixture</h1>
+      <button onclick="
+        const out = document.getElementById('status');
+        out.textContent = out.textContent === 'off' ? 'on' : 'off';
+      ">Toggle</button>
+      <p id="status">off</p>
+    </main>
+  </body>
+</html>`,
+    );
+
+    const name = `lifecycle-${Date.now()}`;
+    const url = fileUrl(fixture);
+
+    try {
+      const tree = await runCli([
+        "tree",
+        "--session",
+        name,
+        "--allow-file",
+        url,
+        "--quiet",
+      ]);
+      expect(tree.code).toBe(0);
+      expect(tree.stdout).toContain('paragraph "off"');
+
+      const list = await runCli([
+        "session",
+        "list",
+        "--format",
+        "json",
+        "--no-config",
+      ]);
+      expect(list.code).toBe(0);
+      const listBody = JSON.parse(list.stdout) as {
+        schemaVersion: number;
+        command: string;
+        sessions: { name: string; status: string }[];
+      };
+      expect(listBody.schemaVersion).toBe(1);
+      expect(listBody.command).toBe("session list");
+      const ours = listBody.sessions.find((s) => s.name === name);
+      expect(ours).toBeDefined();
+      expect(ours?.status).toBe("running");
+
+      const stop = await runCli([
+        "session",
+        "stop",
+        name,
+        "--quiet",
+        "--no-config",
+      ]);
+      expect(stop.code).toBe(0);
+
+      const list2 = await runCli([
+        "session",
+        "list",
+        "--format",
+        "json",
+        "--no-config",
+      ]);
+      expect(list2.code).toBe(0);
+      const names = (
+        JSON.parse(list2.stdout) as {
+          schemaVersion: number;
+          command: string;
+          sessions: { name: string }[];
+        }
+      ).sessions.map((s) => s.name);
+      expect(names).not.toContain(name);
+    } finally {
+      await runCli(["session", "stop", name, "--quiet", "--no-config"]);
+    }
+  }, 90_000);
+});
+
 function fileUrl(path: string): string {
   return `file://${path}`;
 }
 
 function runCli(
   args: string[],
+  env?: NodeJS.ProcessEnv,
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     execFile(
       process.execPath,
       [BIN, ...args],
       {
-        env: { ...process.env, NO_COLOR: "1" },
+        env: { ...process.env, NO_COLOR: "1", ...env },
         timeout: 30_000,
       },
       (err, stdout, stderr) => {
@@ -144,13 +236,17 @@ describe("session daemon CLI routing", () => {
 
     const name = "cli-demo";
     const paths = sessionPaths(name);
-    const stop = await spawnDaemon(
+    const { stop, tokenFile } = await spawnDaemon(
       paths.socketPath,
       paths.pidfile,
-      0,
+      60_000,
       DAEMON_ENTRY,
+      paths.tokenFile,
     );
-    const client = new DaemonClient({ socketPath: paths.socketPath });
+    const client = new DaemonClient({
+      socketPath: paths.socketPath,
+      tokenFile,
+    });
 
     try {
       const url = fileUrl(fixture);

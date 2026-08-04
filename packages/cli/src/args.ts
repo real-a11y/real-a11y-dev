@@ -49,6 +49,7 @@ const PAGE_FLAGS: Options = {
   "storage-state": { type: "string" },
   "audit-origin": { type: "string", multiple: true },
   session: { type: "string" },
+  "session-idle-timeout": { type: "string" },
 };
 
 const OUTPUT_FLAGS: Options = {
@@ -154,6 +155,14 @@ const LOGIN_FLAGS: Options = {
   help: { type: "boolean", short: "h" },
 };
 
+// session is a lifecycle command: list, stop, stop-all daemon sessions. It has
+// no page flags — it never launches a browser itself.
+const SESSION_FLAGS: Options = {
+  ...CONFIG_FLAGS,
+  ...OUTPUT_FLAGS,
+  strict: { type: "boolean" },
+};
+
 // snapshot audits a config-/env-supplied page set and writes the JSON artifact.
 const SNAPSHOT_FLAGS: Options = {
   ...PAGE_FLAGS,
@@ -232,10 +241,11 @@ ${SHARED_FLAG_HELP_NO_ROOT}`;
 /**
  * Which section of the command reference a command belongs to. Declared here
  * rather than in the markdown so the grouping has one source of truth: the
- * docs' "All commands at a glance" tables are five headed groups, and a new
+ * docs' "All commands at a glance" tables are six headed groups, and a new
  * command that lands in none of them is a table row nobody wrote.
  */
-export type CommandGroup = "setup" | "audit" | "view" | "act" | "artifact";
+export type CommandGroup =
+  "setup" | "audit" | "view" | "act" | "artifact" | "session";
 
 export interface CommandSpec {
   summary: string;
@@ -258,6 +268,8 @@ export interface CommandSpec {
    */
   producers: readonly Producer[];
   options: Options;
+  /** Config `defaults` keys that should never seed this command's flags. */
+  excludeDefaults?: readonly string[];
   help: string;
   load: () => Promise<CommandFn>;
 }
@@ -597,6 +609,43 @@ Flags:
 `,
     load: async () => (await import("./commands/login.js")).loginCommand,
   },
+  session: {
+    summary: "List, stop, or stop-all daemon sessions",
+    group: "session",
+    producers: [],
+    options: SESSION_FLAGS,
+    // `session list` accepts `--format`, but a project `defaults.format` (e.g.
+    // "md") makes no sense for a lifecycle table, so don't seed it from config.
+    excludeDefaults: ["format"],
+    help: `Usage: real-a11y session <list|stop|stop-all> [flags]
+
+Manage the long-lived browser daemons that invocations with --session reuse.
+
+  list      Print every session, its pid, status, and current URL
+  stop      Stop one session by name
+  stop-all  Stop every session
+
+Session names are sanitized for filesystem use: non-alphanumeric characters
+become underscores and the name is truncated to 64 characters. On Windows,
+sessions use named pipes; everywhere else they use Unix domain sockets under
+~/.real-a11y/sessions/<name>/.
+
+Examples:
+  real-a11y session list
+  real-a11y session stop checkout
+  real-a11y session stop-all
+
+Flags:
+  -f, --format <fmt>     pretty | json, list only         (default: pretty)
+  -o, --output <file>    Write the list report to a file, list only
+  --strict               With stop-all, exit non-zero if any session is locked
+  --config <file>        a11y.config.json whose "defaults" seed unset flags
+  --no-config            Ignore an auto-discovered config
+  -q, --quiet            Suppress progress
+  --verbose              Extra diagnostics on stderr
+`,
+    load: async () => (await import("./commands/session.js")).sessionCommand,
+  },
   snapshot: {
     summary: "Audit a page set → a diffable JSON artifact",
     group: "artifact",
@@ -708,14 +757,20 @@ const USAGE: Record<string, string> = {
   type: "type <url> --role",
   focus: "focus <url> --role",
   login: "login <url> --save",
+  session: "session <subcommand>",
   snapshot: "snapshot [url...]",
   diff: "diff <base> <pr>",
 };
 
 export function rootHelp(): string {
+  const labels = Object.keys(COMMANDS).map(
+    (name) => `  ${USAGE[name] ?? `${name} <url>`}`,
+  );
+  const usageWidth = Math.max(...labels.map((l) => l.length));
   const lines = Object.entries(COMMANDS).map(
     ([name, spec]) =>
-      `  ${USAGE[name] ?? `${name} <url>`}`.padEnd(21) + spec.summary,
+      `  ${USAGE[name] ?? `${name} <url>`}`.padEnd(usageWidth + 1) +
+      spec.summary,
   );
   return `real-a11y — audit what a screen reader hears, from your shell
 
@@ -841,7 +896,7 @@ export function parseOnly(
   );
 }
 
-function parseMs(
+export function parseMs(
   name: string,
   value: string | boolean | undefined,
   { fallback, max, min = 0 }: { fallback?: number; max: number; min?: number },

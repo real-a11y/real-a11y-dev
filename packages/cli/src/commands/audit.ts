@@ -14,6 +14,7 @@ import { fingerprintFindings, redactUrl } from "@real-a11y-dev/snapshot";
 import {
   parseFailOn,
   parseFormat,
+  parseOpenOptions,
   parseRules,
   type CommandFn,
   type FlagValues,
@@ -29,10 +30,11 @@ import {
 import { colorEnabled } from "../render/color.js";
 import { renderJson, type PageReport } from "../render/json.js";
 import { renderPretty } from "../render/pretty.js";
-import { createSession, nativeSnapshot } from "../session.js";
+import { createSession, nativeSnapshot, openPage } from "../session.js";
 
 import {
   ensurePageOpen,
+  isAuthenticated,
   outputOf,
   resolveAuditTargets,
   sessionFlags,
@@ -58,12 +60,42 @@ export async function runAuditOnSession(
   const output = outputOf(flags);
   const quiet = flags.quiet === true;
 
+  // The whole invocation may redirect between explicit targets, so the
+  // per-run origin allowlist must include every target origin plus
+  // `--audit-origin`. It is pinned separately from the session identity.
+  const invocationAllowedOrigins = sessionFlags(flags, targets).allowedOrigins;
+
   const pages: PageReport[] = [];
+  let isFirstAuditTarget = true;
   for (const target of targets) {
     progress(`auditing ${target.name} …`, { quiet });
     const started = Date.now();
     try {
-      const { url: finalUrl } = await ensurePageOpen(session, target, flags);
+      // Only the first target in an audit run benefits from session reuse; later
+      // targets must be freshly navigated so redirects or duplicate URLs do not
+      // inherit a previous entry's DOM state. Flip the flag before opening so a
+      // failed first target does not let the second one silently reuse stale DOM.
+      const reuseCurrentPage = isFirstAuditTarget;
+      isFirstAuditTarget = false;
+      let finalUrl: string;
+      if (reuseCurrentPage) {
+        ({ url: finalUrl } = await ensurePageOpen(
+          session,
+          target,
+          flags,
+          invocationAllowedOrigins,
+        ));
+      } else {
+        const openOptions = parseOpenOptions(flags);
+        openOptions.allowedOrigins = invocationAllowedOrigins;
+        ({ url: finalUrl } = await openPage(
+          session,
+          target.url,
+          openOptions,
+          target.fileApproved,
+          isAuthenticated(flags),
+        ));
+      }
       const snapshot = await nativeSnapshot(session, {
         ...(rules ? { rules } : {}),
       });
@@ -124,11 +156,10 @@ export function validateAudit(
   parseRules(flags.rules);
   parseFailOn(flags["fail-on"], "error");
   parseFormat(flags.format, ["pretty", "json"] as const);
+  parseOpenOptions(flags);
   outputOf(flags);
-  warnUnscopable(
-    "audit",
-    targets.map((t) => t.page),
-  );
+  // `runAuditOnSession` emits the unscopable warning for the same targets —
+  // don't repeat it here.
   return targets;
 }
 

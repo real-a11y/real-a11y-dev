@@ -417,6 +417,25 @@ main
     code "--session"
   button "Copy Code"
   code
+  heading "sessionIdleTimeout" (level 3)
+    code "sessionIdleTimeout"
+  paragraph "— flag · default (15 minutes) · applies to , , the view commands, , , , ,"
+    strong
+      code "sessionIdleTimeout: number"
+    code "--session-idle-timeout"
+    code "900000"
+    code "audit"
+    code "inspect"
+    code "interact"
+    code "click"
+    code "type"
+    code "focus"
+    code "snapshot"
+  paragraph "How long a daemon for stays alive with no commands. The timer resets after every completed run. Capped at one hour."
+    link "session"
+      code "session"
+  button "Copy Code"
+  code
   heading "format" (level 3)
     code "format"
   paragraph "— flag · default ( on ) · applies to , , the view commands, ,"

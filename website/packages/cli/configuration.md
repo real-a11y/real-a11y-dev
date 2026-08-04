@@ -193,6 +193,16 @@ Reuse a long-lived browser session across invocations. The first run with this n
 { "defaults": { "session": "checkout" } }
 ```
 
+### `sessionIdleTimeout`
+
+**`sessionIdleTimeout: number`** — flag `--session-idle-timeout` · default `900000` (15 minutes) · applies to `audit`, `inspect`, the view commands, `interact`, `click`, `type`, `focus`, `snapshot`
+
+How long a daemon for [`session`](#session) stays alive with no commands. The timer resets after every completed run. Capped at one hour.
+
+```json
+{ "defaults": { "session": "checkout", "sessionIdleTimeout": 600000 } }
+```
+
 ### `format`
 
 **`format: string`** — flag `-f, --format` · default `pretty` (`json` on `snapshot`) · applies to `audit`, `inspect`, the view commands, `snapshot`, `diff`

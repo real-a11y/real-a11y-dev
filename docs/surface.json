@@ -74,6 +74,10 @@
             "type": "string"
           },
           {
+            "name": "session-idle-timeout",
+            "type": "string"
+          },
+          {
             "name": "settle",
             "type": "string"
           },
@@ -175,6 +179,10 @@
           },
           {
             "name": "session",
+            "type": "string"
+          },
+          {
+            "name": "session-idle-timeout",
             "type": "string"
           },
           {
@@ -360,6 +368,10 @@
             "type": "string"
           },
           {
+            "name": "session-idle-timeout",
+            "type": "string"
+          },
+          {
             "name": "settle",
             "type": "string"
           },
@@ -473,6 +485,10 @@
           },
           {
             "name": "session",
+            "type": "string"
+          },
+          {
+            "name": "session-idle-timeout",
             "type": "string"
           },
           {
@@ -611,6 +627,10 @@
             "type": "string"
           },
           {
+            "name": "session-idle-timeout",
+            "type": "string"
+          },
+          {
             "name": "settle",
             "type": "string"
           },
@@ -713,6 +733,10 @@
           },
           {
             "name": "session",
+            "type": "string"
+          },
+          {
+            "name": "session-idle-timeout",
             "type": "string"
           },
           {
@@ -854,6 +878,10 @@
             "type": "string"
           },
           {
+            "name": "session-idle-timeout",
+            "type": "string"
+          },
+          {
             "name": "settle",
             "type": "string"
           },
@@ -885,6 +913,51 @@
         ],
         "summary": "Heading outline (h1–h6)",
         "usage": "outline <url> [flags]"
+      },
+      {
+        "flags": [
+          {
+            "name": "config",
+            "type": "string"
+          },
+          {
+            "name": "format",
+            "short": "f",
+            "type": "string"
+          },
+          {
+            "name": "help",
+            "short": "h",
+            "type": "boolean"
+          },
+          {
+            "name": "no-config",
+            "type": "boolean"
+          },
+          {
+            "name": "output",
+            "short": "o",
+            "type": "string"
+          },
+          {
+            "name": "quiet",
+            "short": "q",
+            "type": "boolean"
+          },
+          {
+            "name": "strict",
+            "type": "boolean"
+          },
+          {
+            "name": "verbose",
+            "type": "boolean"
+          }
+        ],
+        "group": "session",
+        "name": "session",
+        "producers": [],
+        "summary": "List, stop, or stop-all daemon sessions",
+        "usage": "session <list|stop|stop-all> [flags]"
       },
       {
         "flags": [
@@ -967,6 +1040,10 @@
           },
           {
             "name": "session",
+            "type": "string"
+          },
+          {
+            "name": "session-idle-timeout",
             "type": "string"
           },
           {
@@ -1074,6 +1151,10 @@
             "type": "string"
           },
           {
+            "name": "session-idle-timeout",
+            "type": "string"
+          },
+          {
             "name": "settle",
             "type": "string"
           },
@@ -1167,6 +1248,10 @@
           },
           {
             "name": "session",
+            "type": "string"
+          },
+          {
+            "name": "session-idle-timeout",
             "type": "string"
           },
           {
@@ -1274,6 +1359,10 @@
             "type": "string"
           },
           {
+            "name": "session-idle-timeout",
+            "type": "string"
+          },
+          {
             "name": "settle",
             "type": "string"
           },
@@ -1366,13 +1455,15 @@
     {
       "name": "REAL_A11Y_BROWSERS_DIR",
       "packages": [
-        "browser"
+        "browser",
+        "cli"
       ]
     },
     {
       "name": "REAL_A11Y_CHROME_PATH",
       "packages": [
-        "browser"
+        "browser",
+        "cli"
       ]
     },
     {

@@ -6,12 +6,13 @@
  * streams followed by exactly one `done` or `error`.
  */
 
-export const DAEMON_PROTOCOL_VERSION = "1";
+export const DAEMON_PROTOCOL_VERSION = "2";
 
 export interface RpcRequest {
   id: string | number;
   method: string;
   params: unknown;
+  authToken?: string;
 }
 
 export interface RpcStream {
@@ -33,6 +34,8 @@ export interface RpcError {
     code: string;
     message: string;
     hint?: string;
+    /** Process exit code to surface when the CLI is driving the daemon. */
+    exitCode?: number;
   };
 }
 

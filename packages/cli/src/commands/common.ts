@@ -7,10 +7,18 @@ import { type FlagValues, parseOpenOptions } from "../args.js";
 import { resolveConfig, type ConfigPage } from "../config.js";
 import { CliError } from "../exit.js";
 import { assertWritableTarget } from "../output.js";
-import { openPage } from "../session.js";
-import type { SessionFlags } from "../session.js";
+import {
+  noteCrossOrigin,
+  openPage,
+  proxyFromEnv,
+  type SessionFlags,
+} from "../session.js";
 import { validateStorageStatePath } from "../storage-state.js";
-import { assertAllowedUrl, normalizeTarget } from "../url-gate.js";
+import {
+  assertAllowedUrl,
+  assertFinalUrl,
+  normalizeTarget,
+} from "../url-gate.js";
 
 export interface Target {
   /** Normalized absolute URL (paths become file: URLs). */
@@ -51,6 +59,8 @@ export function resolveTargets(
   });
   if (targets.some((t) => t.fileApproved)) {
     process.env.REAL_A11Y_MCP_ALLOW_FILE = "1";
+  } else {
+    delete process.env.REAL_A11Y_MCP_ALLOW_FILE;
   }
   return targets;
 }
@@ -170,6 +180,8 @@ export function resolveAuditTargets(
   });
   if (targets.some((t) => t.fileApproved)) {
     process.env.REAL_A11Y_MCP_ALLOW_FILE = "1";
+  } else {
+    delete process.env.REAL_A11Y_MCP_ALLOW_FILE;
   }
   return targets;
 }
@@ -209,13 +221,18 @@ export function sessionFlags(
   flags: FlagValues,
   targets: readonly Target[] = [],
 ): SessionFlags {
+  const explicitChromePath =
+    typeof flags["chrome-path"] === "string" ? flags["chrome-path"] : undefined;
+  const realA11yChromePath = process.env.REAL_A11Y_CHROME_PATH;
+  const realA11yBrowsersDir = process.env.REAL_A11Y_BROWSERS_DIR;
   const base: SessionFlags = {
     headful: flags.headful === true,
     verbose: flags.verbose === true,
+    proxy: proxyFromEnv(),
     ...(typeof flags.cdp === "string" ? { cdp: flags.cdp } : {}),
-    ...(typeof flags["chrome-path"] === "string"
-      ? { chromePath: flags["chrome-path"] }
-      : {}),
+    ...(explicitChromePath ? { chromePath: explicitChromePath } : {}),
+    ...(realA11yChromePath ? { realA11yChromePath } : {}),
+    ...(realA11yBrowsersDir ? { realA11yBrowsersDir } : {}),
   };
   const stateFlag = flags["storage-state"];
   if (typeof stateFlag !== "string") return base;
@@ -283,23 +300,61 @@ function sameUrl(a: string, b: string): boolean {
 }
 
 /**
- * Open `target.url` only when the session is not already on it.  Used by both
- * the one-shot commands and the daemon's session-aware runners so repeated
- * invocations against the same session do not reload the page.
+ * Open `target.url` only when the session is not already on it with the same
+ * emulation. Used by both the one-shot commands and the daemon's session-aware
+ * runners so repeated invocations against the same session do not reload the
+ * page, while a changed `--device` or `--viewport` still rebuilds the context.
  */
 export async function ensurePageOpen(
   session: BrowserSession,
   target: Target,
   flags: FlagValues,
+  allowedOrigins?: readonly string[],
 ): Promise<{ title: string; url: string }> {
   const current = session.currentUrl();
-  if (current && sameUrl(current, target.url)) {
+  const options = parseOpenOptions(flags);
+  // Origin pinning is per-run, not per-session, so the reused session doesn't
+  // inherit a wider allowlist from an earlier invocation. When the caller has
+  // multiple targets (audit/snapshot), pass the invocation-wide allowlist so a
+  // redirect to another explicit target is still allowed.
+  options.allowedOrigins = allowedOrigins
+    ? [...allowedOrigins]
+    : sessionFlags(flags, [target]).allowedOrigins;
+  const requestedKey = JSON.stringify({
+    device: options.device ?? null,
+    viewport: options.viewport ?? null,
+  });
+  // A CDP session never records an emulation key (emulation is rejected over
+  // CDP), so an empty key means "nothing to compare", not a mismatch.
+  const emulationKey = session.currentEmulationKey();
+  if (
+    current &&
+    sameUrl(current, target.url) &&
+    (emulationKey === "" || emulationKey === requestedKey)
+  ) {
+    // Re-apply the per-run URL gate even when we skip a redundant navigation.
+    assertFinalUrl(current, target.fileApproved);
+    try {
+      session.assertAllowedOrigin(current, options.allowedOrigins);
+    } catch (err) {
+      // `assertAllowedOrigin` throws a plain Error; map it like `openPage`
+      // does so audit/snapshot record a per-page error entry instead of
+      // aborting the whole multi-page run as an unexpected failure. The
+      // per-run allowlist always contains the target's own origin today, so
+      // this is unreachable — but the invariant is implicit, and a future
+      // caller passing a narrower allowlist must not change the error shape.
+      throw new CliError(
+        err instanceof Error ? err.message : String(err),
+        "the page redirected off the audited origin; pass --audit-origin <origin> if that's expected.",
+      );
+    }
+    noteCrossOrigin(target.url, current, isAuthenticated(flags));
     return { title: "", url: current };
   }
   return openPage(
     session,
     target.url,
-    parseOpenOptions(flags),
+    options,
     target.fileApproved,
     isAuthenticated(flags),
   );

@@ -239,6 +239,16 @@ export interface OpenOptions {
   viewport?: { width: number; height: number };
   /** Navigation timeout in ms. Default is Playwright's 30s. */
   timeoutMs?: number;
+  /**
+   * Per-call origin allowlist. A non-empty array is intersected with the
+   * session-level allowlist, so a single call cannot widen a pinned session's
+   * origins. If the session-level allowlist is empty/absent, the per-call list
+   * is used directly. An empty or absent per-call value falls back to the
+   * session-level allowlist (`BrowserSessionOptions.allowedOrigins`). An empty
+   * intersection (no shared origins) denies every origin instead of allowing
+   * all of them.
+   */
+  allowedOrigins?: string[];
 }
 
 /** Options for a single-extraction {@link A11ySession.snapshot}. */
@@ -304,6 +314,11 @@ export interface A11ySession {
    * touch the page to answer it.
    */
   currentUrl(): string | undefined;
+  /**
+   * Emulation signature of the current context, so callers can avoid reusing a
+   * page whose device/viewport does not match the request.
+   */
+  currentEmulationKey?(): string;
   close(): Promise<void>;
 }
 
@@ -324,12 +339,6 @@ export class BrowserSession implements A11ySession {
         "storageState is for launched browsers — a CDP connection reuses the running browser's own session, so the two can't be combined.",
       );
     }
-  }
-
-  /** Origins allowed for extraction, or null when unrestricted. */
-  private get allowedOrigins(): Set<string> | null {
-    const list = this.opts.allowedOrigins;
-    return list && list.length ? new Set(list) : null;
   }
 
   /**
@@ -359,6 +368,7 @@ export class BrowserSession implements A11ySession {
         device,
         viewport,
         timeoutMs,
+        allowedOrigins,
       } = options;
       const page = await this.ensurePage({ device, viewport });
       try {
@@ -383,8 +393,9 @@ export class BrowserSession implements A11ySession {
       }
       // Origin pinning: with a session loaded, a redirect to a recorded cookie
       // domain would render an authenticated page we never intended to audit.
-      // Enforce the allowlist on the FINAL url, before injecting or extracting.
-      this.assertAllowedOrigin(page.url());
+      // Enforce the per-call allowlist on the FINAL url, before injecting or
+      // extracting, so a reused session can't leverage an earlier wider allowlist.
+      this.assertAllowedOrigin(page.url(), allowedOrigins);
       await this.injectBundle(page);
       await this.verifyReady(page);
       return { title: await page.title(), url: page.url() };
@@ -577,7 +588,7 @@ export class BrowserSession implements A11ySession {
   }
 
   hasPage(): boolean {
-    return this.page !== undefined;
+    return this.page !== undefined && !this.page.isClosed();
   }
 
   /**
@@ -586,26 +597,45 @@ export class BrowserSession implements A11ySession {
    * button), so a caller that reports a URL after acting has to re-read it or
    * it will report the address the run started from.
    *
-   * Returns `undefined` when no page is open. Not queued: it reads Playwright's
-   * cached location rather than touching the page, so it can't race the
-   * single-flight chain.
+   * Returns `undefined` when no page is open or the page has been closed. Not
+   * queued: it reads Playwright's cached location rather than touching the page,
+   * so it can't race the single-flight chain.
    */
   currentUrl(): string | undefined {
-    return this.page?.url();
+    return this.hasPage() ? this.page!.url() : undefined;
+  }
+
+  /** Emulation signature of the current context, or `""` when no page is open. */
+  currentEmulationKey(): string {
+    return this.hasPage() ? this.emulationKey : "";
   }
 
   // ── internals ────────────────────────────────────────────────────────────
 
   private requirePage(): Page {
-    if (!this.page) {
+    if (!this.hasPage()) {
       throw new Error("No page is open. Call the open_page tool first.");
     }
-    return this.page;
+    return this.page!;
   }
 
   /** Refuse extraction when the final URL's origin isn't allowlisted. */
-  private assertAllowedOrigin(finalUrl: string): void {
-    const allowed = this.allowedOrigins;
+  public assertAllowedOrigin(finalUrl: string, list?: string[] | null): void {
+    // A non-empty per-call list narrows the session-level allowlist. This
+    // prevents a single open() from widening a pinned session, while still
+    // allowing each run to enforce only the origins it requested.
+    let source = this.opts.allowedOrigins;
+    const hadPerCall = list && list.length;
+    if (hadPerCall) {
+      if (source && source.length) {
+        const sessionSet = new Set(source);
+        source = list.filter((origin) => sessionSet.has(origin));
+      } else {
+        source = list;
+      }
+    }
+    const allowed =
+      hadPerCall || (source && source.length) ? new Set(source ?? []) : null;
     if (!allowed) return;
     let origin: string;
     try {

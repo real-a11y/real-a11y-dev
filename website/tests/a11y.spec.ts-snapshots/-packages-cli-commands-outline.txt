@@ -25,6 +25,7 @@ h1 Commands & flags
     h3 snapshot [url...]
     h3 diff <base.json> <pr.json>
     h3 login <url> --save <file>
+    h3 session <subcommand>
   h2 Flags
     h3 All flags at a glance
   h2 Browser & page
@@ -42,6 +43,8 @@ h1 Commands & flags
     h3 --storage-state <file>
     h3 --audit-origin <origin>
     h3 --session <name>
+    h3 --session-idle-timeout <ms>
+    h3 --strict
   h2 Output
     h3 -f, --format <fmt>
     h3 -o, --output <file>
@@ -69,3 +72,9 @@ h1 Commands & flags
     h3 --max-lines <n>
     h3 --max-pages <n>
     h3 --save <file>
+  h2 Security posture
+    h3 Socket and process isolation
+    h3 Authenticated state
+    h3 Origin pinning and the file:// gate
+    h3 Redaction
+    h3 Daemon log
