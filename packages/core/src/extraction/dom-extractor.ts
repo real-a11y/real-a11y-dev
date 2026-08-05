@@ -990,41 +990,50 @@ export function isSensitiveField(element: Element): boolean {
   return false;
 }
 
+/**
+ * Attributes recorded verbatim on every node's `dom.attributes`.
+ *
+ * Exported because `DomObserver` builds its `attributeFilter` from this list:
+ * an attribute the extractor reads but the observer doesn't watch produces a
+ * node that silently goes stale, since an in-place flip yields no other
+ * mutation to fall back on.
+ */
+export const KEY_ATTRIBUTES = [
+  "id",
+  "class",
+  "href",
+  "src",
+  "type",
+  "name",
+  "role",
+  "aria-label",
+  "aria-expanded",
+  "aria-hidden",
+  "aria-checked",
+  "aria-disabled",
+  "aria-required",
+  "aria-controls",
+  "aria-haspopup",
+  "alt",
+  "title",
+  "for",
+  "action",
+  "method",
+  "placeholder",
+  "tabindex",
+  // Media a11y signals (boolean attributes render as "")
+  "controls",
+  "autoplay",
+  "muted",
+  "loop",
+  "poster",
+];
+
 /** Get key attributes for display */
 function getKeyAttributes(element: Element): Record<string, string> {
   const attrs: Record<string, string> = {};
-  const attrNames = [
-    "id",
-    "class",
-    "href",
-    "src",
-    "type",
-    "name",
-    "role",
-    "aria-label",
-    "aria-expanded",
-    "aria-hidden",
-    "aria-checked",
-    "aria-disabled",
-    "aria-required",
-    "aria-controls",
-    "aria-haspopup",
-    "alt",
-    "title",
-    "for",
-    "action",
-    "method",
-    "placeholder",
-    "tabindex",
-    // Media a11y signals (boolean attributes render as "")
-    "controls",
-    "autoplay",
-    "muted",
-    "loop",
-    "poster",
-  ];
 
-  for (const name of attrNames) {
+  for (const name of KEY_ATTRIBUTES) {
     const val = element.getAttribute(name);
     if (val !== null) {
       attrs[name] = val;
@@ -1046,26 +1055,31 @@ function getKeyAttributes(element: Element): Record<string, string> {
   return attrs;
 }
 
+/**
+ * ARIA state attributes hoisted onto every node's `state`. Exported for the
+ * same reason as `KEY_ATTRIBUTES` — these are exactly the attributes an app
+ * flips in place (`aria-current` on an SPA route change, `aria-busy` around a
+ * fetch), so the observer has to watch them or the state never refreshes.
+ */
+export const ARIA_STATE_ATTRIBUTES = [
+  "aria-expanded",
+  "aria-checked",
+  "aria-disabled",
+  "aria-hidden",
+  "aria-pressed",
+  "aria-selected",
+  "aria-required",
+  "aria-readonly",
+  "aria-busy",
+  "aria-current",
+];
+
 /** Get ARIA states from an element */
 function getAriaStates(element: Element): Record<string, string | boolean> {
   const states: Record<string, string | boolean> = {};
   const tag = element.tagName.toLowerCase();
 
-  // Boolean ARIA states
-  const booleanAttrs = [
-    "aria-expanded",
-    "aria-checked",
-    "aria-disabled",
-    "aria-hidden",
-    "aria-pressed",
-    "aria-selected",
-    "aria-required",
-    "aria-readonly",
-    "aria-busy",
-    "aria-current",
-  ];
-
-  for (const attr of booleanAttrs) {
+  for (const attr of ARIA_STATE_ATTRIBUTES) {
     const val = element.getAttribute(attr);
     if (val !== null) {
       const key = attr.replace("aria-", "");

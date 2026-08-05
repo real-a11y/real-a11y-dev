@@ -1,41 +1,69 @@
+import {
+  ARIA_STATE_ATTRIBUTES,
+  KEY_ATTRIBUTES,
+} from "../extraction/dom-extractor.js";
 import type { TreeChange } from "../types.js";
 
-/** Observed attribute changes that affect the tree */
-const OBSERVED_ATTRIBUTES = [
+/**
+ * Attributes that affect the tree WITHOUT landing on a node as
+ * `dom.attributes` / `state` — they steer name and role computation,
+ * visibility, or extraction scope.
+ *
+ * Deliberately restates the handful that ALSO appear in `KEY_ATTRIBUTES`
+ * (`role`, `class`, `id`, `for`). Those are the ones `LiveTreeExtractor`'s
+ * `SCOPE_ATTRS` / `REFERENCE_ATTRS` pivot on, and `KEY_ATTRIBUTES` is a
+ * *display* list — someone trimming it for cosmetic reasons must not silently
+ * turn off the rescope or the reference-change fallback. The union makes the
+ * duplication free.
+ */
+const EXTRA_OBSERVED_ATTRIBUTES = [
+  // Load-bearing for scope/reference handling; see the note above.
   "role",
-  "aria-label",
+  "class", // also CSS visibility, which findActiveModal/findPortalOverlay gate on
+  "id",
+  // `for` re-points a <label> at a different control, changing the accessible
+  // name of BOTH the old and the new target. LiveTreeExtractor treats it as a
+  // reference attribute and falls back to a full extraction — but only if the
+  // change is observed in the first place.
+  "for",
+
   "aria-labelledby",
-  "aria-hidden",
-  "aria-expanded",
-  "aria-checked",
-  "aria-disabled",
-  "aria-pressed",
-  "aria-selected",
   "aria-describedby",
+  "aria-description", // inline description, ARIA 1.3+ (getDescription)
+  "aria-level", // explicit heading / treeitem level (role-map)
   "aria-live",
   "aria-modal",
-  "class",
-  "id",
-  // `for` re-points a <label> at a different control, which changes the
-  // accessible name of BOTH the old and new target. LiveTreeExtractor treats
-  // it as a reference attribute and falls back to a full extraction — but only
-  // if the change is actually observed, so it has to be in this filter.
-  "for",
+  "scope", // <th scope> selects the columnheader/rowheader role (role-map)
+  "autocomplete", // names credential/payment fields, whose value gets redacted
   "disabled",
   "checked",
-  "href",
-  "src",
-  "type",
-  "alt",
-  "title",
   "hidden",
   "inert",
-  "tabindex",
   "contenteditable",
   "open", // <details open>
   "style", // CSS visibility/display changes (e.g., captcha showing/hiding content)
-  "controls", // media players toggling native controls changes focusability
   "kind", // <track kind> drives the media node's hoisted captions property
+];
+
+/**
+ * Observed attribute changes that affect the tree.
+ *
+ * Unioned with the extractor's own lists rather than restating them, because
+ * the two drifting apart is invisible at runtime: an attribute the extractor
+ * reads but this filter omits (`aria-current` on an SPA route change,
+ * `aria-busy` around a fetch) simply never re-extracts, and the panel keeps
+ * showing the old state with nothing to indicate it is stale.
+ *
+ * That covers what a node RECORDS. Attributes consumed further along the
+ * pipeline — name/description/role computation, the sensitive-value redaction
+ * — are not in those lists and still have to be added above by hand.
+ */
+const OBSERVED_ATTRIBUTES = [
+  ...new Set([
+    ...KEY_ATTRIBUTES,
+    ...ARIA_STATE_ATTRIBUTES,
+    ...EXTRA_OBSERVED_ATTRIBUTES,
+  ]),
 ];
 
 /**
