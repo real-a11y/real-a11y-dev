@@ -14,7 +14,21 @@ import type { ChromeChannel, OpenOptions } from "@real-a11y-dev/browser";
 
 import { CliError, type FailOn } from "./exit.js";
 
-export type FlagValues = Record<string, string | boolean | undefined>;
+/**
+ * A parsed flag value.
+ *
+ * `string[]` is not optional decoration: `audit-origin`, `step` and
+ * `ignore-view-line` are declared `multiple: true`, so `node:util.parseArgs`
+ * hands back an array for them and always has. The type said otherwise, which
+ * made every `Array.isArray(flags[…])` guard in the commands look like dead
+ * code to a reader and to the compiler — while being the branch that actually
+ * fires at runtime.
+ *
+ * Nothing caught it because the tests that pass real array values were the
+ * files excluded from typecheck.
+ */
+export type FlagValue = string | string[] | boolean | undefined;
+export type FlagValues = Record<string, FlagValue>;
 export type CommandFn = (
   positionals: string[],
   flags: FlagValues,
@@ -787,9 +801,7 @@ Docs: https://real-a11y.dev
 
 // ── validated flag views ─────────────────────────────────────────────────────
 
-export function parseRules(
-  value: string | boolean | undefined,
-): A11yRule[] | undefined {
+export function parseRules(value: FlagValue): A11yRule[] | undefined {
   if (typeof value !== "string" || value.trim() === "") return undefined;
   const wanted = value
     .split(",")
@@ -806,10 +818,7 @@ export function parseRules(
   return wanted as A11yRule[];
 }
 
-export function parseFailOn(
-  value: string | boolean | undefined,
-  fallback: FailOn,
-): FailOn {
+export function parseFailOn(value: FlagValue, fallback: FailOn): FailOn {
   if (value === undefined) return fallback;
   if (value === "error" || value === "warning" || value === "never") {
     return value;
@@ -820,7 +829,7 @@ export function parseFailOn(
 }
 
 export function parseFormat<T extends string>(
-  value: string | boolean | undefined,
+  value: FlagValue,
   allowed: readonly T[],
 ): T {
   if (value === undefined) return allowed[0];
@@ -869,9 +878,7 @@ const CHROME_CHANNELS = ["stable", "beta", "dev", "canary"] as const;
  * default "stable", so `install` can tell "bare invocation" (zero network,
  * trust the cache) apart from "explicitly asked to track stable" (re-checks
  * for a newer build). */
-export function parseChannel(
-  value: string | boolean | undefined,
-): ChromeChannel | undefined {
+export function parseChannel(value: FlagValue): ChromeChannel | undefined {
   if (value === undefined) return undefined;
   if ((CHROME_CHANNELS as readonly string[]).includes(String(value))) {
     return value as ChromeChannel;
@@ -886,9 +893,7 @@ export function parseChannel(
  * config default is overridable from the command line. */
 export type OnlyAxis = "findings" | "views";
 
-export function parseOnly(
-  value: string | boolean | undefined,
-): OnlyAxis | undefined {
+export function parseOnly(value: FlagValue): OnlyAxis | undefined {
   if (value === undefined) return undefined;
   if (value === "findings" || value === "views") return value;
   throw new CliError(
@@ -898,7 +903,7 @@ export function parseOnly(
 
 export function parseMs(
   name: string,
-  value: string | boolean | undefined,
+  value: FlagValue,
   { fallback, max, min = 0 }: { fallback?: number; max: number; min?: number },
 ): number | undefined {
   if (value === undefined) return fallback;

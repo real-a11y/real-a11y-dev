@@ -25,6 +25,7 @@ import {
   parseFormat,
   parseOnly,
   type CommandFn,
+  type FlagValue,
 } from "../args.js";
 
 import { CliError, EXIT, exceedsThreshold } from "../exit.js";
@@ -41,9 +42,7 @@ import { outputOf } from "./common.js";
 
 /** `--ignore-view-line` is repeatable; each value must be a valid RegExp.
  * Built without flags — `g` would make `.test` stateful across lines. */
-function parseIgnoreViewLine(
-  value: string | boolean | undefined | string[],
-): RegExp[] {
+function parseIgnoreViewLine(value: FlagValue): RegExp[] {
   const raw = Array.isArray(value)
     ? value
     : typeof value === "string"
@@ -61,10 +60,7 @@ function parseIgnoreViewLine(
 }
 
 /** A positive-integer cap flag (--max-lines / --max-pages); undefined = off. */
-function parsePositive(
-  name: string,
-  value: string | boolean | undefined,
-): number | undefined {
+function parsePositive(name: string, value: FlagValue): number | undefined {
   if (value === undefined) return undefined;
   const raw = String(value).trim();
   const n = Number(raw);

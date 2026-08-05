@@ -348,10 +348,20 @@ describe("runInstall — validation", () => {
         throw new Error("getaddrinfo ENOTFOUND");
       }),
     });
-    const err: CliError = await runInstall(
+    const err = await runInstall(
       { force: false, quiet: true, verbose: false },
       { deps, env: envFor(dir), os: LINUX_OS },
-    ).catch((e: unknown) => e as CliError);
+    ).then(
+      () => {
+        // `.catch` alone types this `ResolvedValue | CliError`, so the old
+        // `const err: CliError` annotation was false on the success path — and
+        // reported it as "expected {…} to be an instance of CliError", which
+        // names the wrong problem. Rejecting here says what actually went
+        // wrong and leaves the variable genuinely a CliError.
+        throw new Error("expected the call to reject, but it resolved");
+      },
+      (e: unknown) => e as CliError,
+    );
     expect(err).toBeInstanceOf(CliError);
     expect(err.hint).toMatch(/--version/);
   });

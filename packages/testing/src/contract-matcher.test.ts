@@ -78,7 +78,6 @@ describe("toMatchA11yContract", () => {
   });
 
   it("reports a clear error when given a non-Element, non-string", () => {
-    // @ts-expect-error — exercising the runtime guard
     expect(() => expect(42).toMatchA11yContract(`main`)).toThrow(
       /expected a DOM Element or a serialized tree string/,
     );

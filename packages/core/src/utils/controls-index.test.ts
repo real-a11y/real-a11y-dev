@@ -18,6 +18,12 @@ function makeNode(
       tagName: "div",
       attributes: attrs,
       textContent: null,
+      // Required on `DomInfo`, and this fixture omitted it — which typechecking
+      // test files is what surfaced. `controls-index` doesn't read it today, so
+      // nothing was broken; the fixture was simply lying about being a
+      // `DomInfo`, and would have started handing this code `undefined` the
+      // moment it did read it.
+      descendantText: "",
       isHidden: opts.isHidden ?? false,
     },
     a11y: {

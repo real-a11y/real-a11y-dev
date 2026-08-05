@@ -18,10 +18,13 @@ import { createServer, type Server, type Socket } from "node:net";
 import { dirname, isAbsolute, join as pathJoin } from "node:path";
 
 import type { BrowserSession } from "@real-a11y-dev/browser";
+
 import {
   RegistryShutdownError,
   SessionRegistry,
 } from "@real-a11y-dev/session-registry";
+
+import type { FlagValue } from "../args.js";
 
 import { sessionFlags } from "../commands/common.js";
 import { clearConfigCache } from "../config.js";
@@ -170,7 +173,7 @@ interface RunParams {
   session?: string;
   command: string;
   positionals?: string[];
-  flags?: Record<string, string | boolean | undefined>;
+  flags?: Record<string, FlagValue>;
   cwd?: string;
   idleTimeoutMs?: number;
   env?: Record<string, string | undefined | null>;

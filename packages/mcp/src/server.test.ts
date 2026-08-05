@@ -146,8 +146,20 @@ async function connect(session: A11ySession, options?: BuildServerOptions) {
   return client;
 }
 
-function textOf(res: { content: { type: string; text?: string }[] }): string {
-  return res.content.map((c) => c.text ?? "").join("");
+/**
+ * Concatenate the text parts of a tool result.
+ *
+ * Typed from what `client.callTool` actually returns, rather than a hand-rolled
+ * `{ content: { type, text? }[] }`. That approximation was wrong — the SDK's
+ * content is a discriminated union (text / image / audio / resource), so `text`
+ * exists on exactly one arm — and nothing noticed while this file was excluded
+ * from typecheck. Narrowing on `type` is what the union actually requires.
+ */
+type ToolResult = Awaited<ReturnType<Client["callTool"]>>;
+
+function textOf(res: ToolResult): string {
+  const content = res.content as { type: string; text?: string }[];
+  return content.map((c) => (c.type === "text" ? (c.text ?? "") : "")).join("");
 }
 
 describe("renderAudit", () => {

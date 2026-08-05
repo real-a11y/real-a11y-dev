@@ -71,22 +71,23 @@ describe("extractA11yTree", () => {
     const allNodes = Array.from(nodes.values());
 
     // label elements must NOT appear in the a11y tree
-    expect(allNodes.find((n) => n.dom.tagName === "label")).toBeUndefined();
+    expect(allNodes.find((n) => n.dom?.tagName === "label")).toBeUndefined();
 
     // The form controls inside the labels MUST appear with correct names
     const textInput = allNodes.find(
-      (n) => n.dom.tagName === "input" && n.dom.attributes["type"] === "text",
+      (n) => n.dom?.tagName === "input" && n.dom?.attributes["type"] === "text",
     );
     expect(textInput).toBeDefined();
     expect(textInput!.a11y.name).toBe("Full name");
 
     const emailInput = allNodes.find(
-      (n) => n.dom.tagName === "input" && n.dom.attributes["type"] === "email",
+      (n) =>
+        n.dom?.tagName === "input" && n.dom?.attributes["type"] === "email",
     );
     expect(emailInput).toBeDefined();
     expect(emailInput!.a11y.name).toBe("Email address");
 
-    const textarea = allNodes.find((n) => n.dom.tagName === "textarea");
+    const textarea = allNodes.find((n) => n.dom?.tagName === "textarea");
     expect(textarea).toBeDefined();
     expect(textarea!.a11y.name).toBe("Message");
 
@@ -112,8 +113,8 @@ describe("extractA11yTree", () => {
     const allNodes = Array.from(nodes.values());
 
     // legend and summary must not appear
-    expect(allNodes.find((n) => n.dom.tagName === "legend")).toBeUndefined();
-    expect(allNodes.find((n) => n.dom.tagName === "summary")).toBeUndefined();
+    expect(allNodes.find((n) => n.dom?.tagName === "legend")).toBeUndefined();
+    expect(allNodes.find((n) => n.dom?.tagName === "summary")).toBeUndefined();
 
     // fieldset keeps its accessible name from the legend text
     const fieldset = allNodes.find((n) => n.a11y.role === "group");
@@ -140,8 +141,8 @@ describe("extractA11yTree", () => {
     const allNodes = Array.from(nodes.values());
 
     // legend and summary themselves are still suppressed
-    expect(allNodes.find((n) => n.dom.tagName === "legend")).toBeUndefined();
-    expect(allNodes.find((n) => n.dom.tagName === "summary")).toBeUndefined();
+    expect(allNodes.find((n) => n.dom?.tagName === "legend")).toBeUndefined();
+    expect(allNodes.find((n) => n.dom?.tagName === "summary")).toBeUndefined();
 
     // ...but their interactive descendants survive
     const helpLink = allNodes.find((n) => n.a11y.role === "link");
@@ -175,8 +176,8 @@ describe("extractA11yTree", () => {
     const allNodes = Array.from(nodes.values());
 
     // label suppressed, input promoted
-    expect(allNodes.find((n) => n.dom.tagName === "label")).toBeUndefined();
-    const inputs = allNodes.filter((n) => n.dom.tagName === "input");
+    expect(allNodes.find((n) => n.dom?.tagName === "label")).toBeUndefined();
+    const inputs = allNodes.filter((n) => n.dom?.tagName === "input");
     expect(inputs).toHaveLength(1);
     expect(inputs[0].a11y.name).toBe("Search");
 
@@ -209,10 +210,10 @@ describe("extractA11yTree", () => {
 
     // Controls are present with their name computed from the label
     const email = allNodes.find(
-      (n) => n.dom.tagName === "input" && n.a11y.name === "Email",
+      (n) => n.dom?.tagName === "input" && n.a11y.name === "Email",
     );
     const role = allNodes.find(
-      (n) => n.dom.tagName === "select" && n.a11y.name === "Role",
+      (n) => n.dom?.tagName === "select" && n.a11y.name === "Role",
     );
     expect(email).toBeDefined();
     expect(role).toBeDefined();
@@ -237,7 +238,7 @@ describe("extractA11yTree", () => {
     expect(helpLink).toBeDefined();
 
     // And the input is still there with its computed name.
-    const pw = allNodes.find((n) => n.dom.tagName === "input");
+    const pw = allNodes.find((n) => n.dom?.tagName === "input");
     expect(pw).toBeDefined();
   });
 
@@ -313,7 +314,7 @@ describe("extractA11yTree", () => {
       const allNodes = Array.from(nodes.values());
 
       // No img and no leftover "presentation" node.
-      expect(allNodes.find((n) => n.dom.tagName === "img")).toBeUndefined();
+      expect(allNodes.find((n) => n.dom?.tagName === "img")).toBeUndefined();
       expect(
         allNodes.find((n) => n.a11y.role === "presentation"),
       ).toBeUndefined();
@@ -338,9 +339,9 @@ describe("extractA11yTree", () => {
       const allNodes = Array.from(nodes.values());
 
       // The link is still in the tree (focusable carve-out).
-      const link = allNodes.find((n) => n.dom.tagName === "a");
+      const link = allNodes.find((n) => n.dom?.tagName === "a");
       expect(link).toBeDefined();
-      expect(link!.interaction.isInteractive).toBe(true);
+      expect(link!.interaction?.isInteractive).toBe(true);
     });
   });
 });

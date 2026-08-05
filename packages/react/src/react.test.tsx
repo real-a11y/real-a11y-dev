@@ -11,7 +11,7 @@ function Harness({
   child,
 }: {
   html: string;
-  child?: (ref: React.RefObject<HTMLDivElement>) => React.ReactNode;
+  child?: (ref: React.RefObject<HTMLDivElement | null>) => React.ReactNode;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   return (
@@ -376,7 +376,7 @@ describe("useActiveModal", () => {
       container.firstElementChild!.appendChild(dialog);
       await new Promise((r) => setTimeout(r, 400));
     });
-    expect(latest?.a11y.name).toBe("Confirm");
+    expect(latest!.a11y.name).toBe("Confirm");
   });
 
   it("stops reporting a dialog once its root is removed", async () => {
@@ -403,7 +403,7 @@ describe("useActiveModal", () => {
     await act(async () => {
       await new Promise((r) => setTimeout(r, 20));
     });
-    expect(latest?.a11y.name).toBe("Confirm");
+    expect(latest!.a11y.name).toBe("Confirm");
 
     await act(async () => {
       getByText("hide").click();
