@@ -324,12 +324,89 @@ function diffEnv(base, head) {
  * first, because they are what needs writing; removals last, because they are
  * what needs deprecating.
  */
+/**
+ * Exported symbols, per entry point.
+ *
+ * Without this the `api` section was invisible to `plan`: removing a public
+ * export changed `docs/surface.json`, tripped the freshness gate, and produced
+ * no obligation — in the report whose whole job is saying "you moved something,
+ * here is what to update". Deleting an export is about as user-visible as this
+ * project gets.
+ *
+ * Values and types are diffed together and reported as one kind of thing,
+ * because that is how a consumer meets them: `import { X }` breaks identically
+ * whether X was a function or an interface.
+ */
+function diffApi(base, head) {
+  const changes = [];
+
+  const index = (manifest) => {
+    const out = new Map();
+    for (const pkg of manifest?.api ?? []) {
+      for (const entry of pkg.entries ?? []) {
+        out.set(pkg.name + entry.subpath.slice(1), {
+          names: new Set([...entry.values, ...(entry.types ?? [])]),
+        });
+      }
+    }
+    return out;
+  };
+
+  const before = index(base);
+  const after = index(head);
+
+  for (const [specifier, { names }] of after) {
+    const was = before.get(specifier);
+    // A brand-new entry point reports as the entry point, not as N exports —
+    // one obligation to add a page beats thirty to mention symbols.
+    if (!was) {
+      changes.push(
+        added(`api.${specifier}`, `the \`${specifier}\` entry point`),
+      );
+      continue;
+    }
+    for (const name of names) {
+      if (!was.names.has(name)) {
+        changes.push(
+          added(
+            `api.${specifier}.${name}`,
+            `\`${name}\` from \`${specifier}\``,
+          ),
+        );
+      }
+    }
+  }
+
+  for (const [specifier, { names }] of before) {
+    const now = after.get(specifier);
+    if (!now) {
+      changes.push(
+        removed(`api.${specifier}`, `the \`${specifier}\` entry point`),
+      );
+      continue;
+    }
+    for (const name of names) {
+      if (!now.names.has(name)) {
+        changes.push(
+          removed(
+            `api.${specifier}.${name}`,
+            `\`${name}\` from \`${specifier}\``,
+          ),
+        );
+      }
+    }
+  }
+
+  return changes;
+}
+
 export function diffManifests(base, head) {
   const changes = [
     ...diffCommands(base, head),
     ...diffTools(base, head),
     ...diffPackages(base, head),
     ...diffEnv(base, head),
+    ...diffApi(base, head),
   ];
   const rank = { added: 0, changed: 1, removed: 2 };
   return changes.sort(

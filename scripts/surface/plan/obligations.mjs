@@ -82,6 +82,13 @@ const RULES = [
   },
 ];
 
+/** `api.@real-a11y-dev/testing/playwright.attach` → `website/packages/testing.md`. */
+function apiPage(path) {
+  const specifier = path.slice("api.".length).split(".")[0];
+  const short = specifier.replace(/^@real-a11y-dev\//, "").split("/")[0];
+  return `website/packages/${short}.md`;
+}
+
 /** `@real-a11y-dev/cli` → `website/packages/cli.md`. */
 function packagePage(name) {
   const short = name.replace(/^@real-a11y-dev\//, "");
@@ -132,6 +139,43 @@ export function requiredDocs(changes) {
     }
     // Any other package-level add/remove has no doc rule of its own.
     if (/^packages\.[^.]+$/.test(change.path)) continue;
+
+    // Every `api.*` obligation is decided HERE, in one place.
+    //
+    // There was a `RULES` entry for the entry-point case as well, and it could
+    // never fire: this branch matched the whole `api.` namespace and `continue`d
+    // before `RULES.find` was reached. So it was dead code AND a dropped
+    // obligation — a new entry point never pulled in the architecture page the
+    // rule existed to name. Splitting one decision across a guard and a table is
+    // what let those drift apart, so the table entry is gone rather than
+    // resurrected.
+    //
+    // Two shapes, told apart by whether a dot follows the specifier:
+    //   api.@real-a11y-dev/testing            → an entry point
+    //   api.@real-a11y-dev/testing.flow       → a symbol within one
+    if (/^api\.@real-a11y-dev\//.test(change.path)) {
+      // Both shapes touch the package page — it introduces the symbol, or
+      // documents that the entry point exists at all.
+      require_(
+        apiPage(change.path),
+        change.what,
+        "the package page is where an exported symbol is introduced and shown in use",
+      );
+
+      // An entry point additionally appears in the architecture page, which is
+      // where "you can import this, from here" is stated across the workspace.
+      // An individual symbol does not: that page lists packages, not exports,
+      // and sending someone there for `flow` gives them nothing to change.
+      const isEntryPoint = !/^api\.@real-a11y-dev\/[^.]+\./.test(change.path);
+      if (isEntryPoint) {
+        require_(
+          "website/guide/architecture.md",
+          change.what,
+          "the architecture page lists what each package exposes and from where",
+        );
+      }
+      continue;
+    }
 
     const rule = RULES.find((r) => r.match.test(change.path));
     if (!rule) continue;

@@ -189,12 +189,16 @@ account, and keep the storage-state file out of version control.
 
 ## Programmatic use
 
-Beyond the MCP server, the package ships a `./browser` subpath export that gives
-you the Playwright-backed session standalone — without pulling in the MCP SDK
-dependency graph:
+Beyond the MCP server, the Playwright-backed session is available standalone from
+**`@real-a11y-dev/browser`** — a separate package, so you get the session without
+the MCP SDK dependency graph. Install it directly:
+
+```sh
+npm install @real-a11y-dev/browser playwright
+```
 
 ```ts
-import { BrowserSession } from "@real-a11y-dev/mcp/browser";
+import { BrowserSession } from "@real-a11y-dev/browser";
 ```
 
 `BrowserSession` (and its option types `BrowserSessionOptions`, `OpenOptions`,

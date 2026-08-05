@@ -75,6 +75,8 @@ link "Environment"
 link "tools reference"
 button "Copy Code"
 generic
+button "Copy Code"
+generic
 link "Playwright MCP"
 link "act tools"
 link "diff_tree"

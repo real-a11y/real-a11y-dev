@@ -205,8 +205,11 @@ main
     code "session"
     link "tools reference"
   heading "Scripting audits without an MCP client" (level 2)
-  paragraph "Beyond the server, the package ships a subpath export that gives you the Playwright-backed session standalone — without pulling in the MCP SDK dependency graph:"
-    code "./browser"
+  paragraph "Beyond the server, the Playwright-backed session is available standalone from — a separate package, so you get the session without the MCP SDK dependency graph. Install it directly:"
+    strong
+      code "@real-a11y-dev/browser"
+  button "Copy Code"
+  code
   button "Copy Code"
   code
   paragraph "(with its option types , , ) drives a real browser, injects the extraction bundle, and returns findings, tree, outline, and tab order from a single extraction — handy for scripting audits directly in Node."
