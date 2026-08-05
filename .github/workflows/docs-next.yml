@@ -35,6 +35,13 @@ name: Deploy next docs
 #      on the deploy job to match — nothing else here depends on which.
 
 on:
+  # Deliberately NOT path-filtered, unlike the pull_request trigger below.
+  #
+  # This one is the deploy, and its job is that `next.` matches `main`. A path
+  # allowlist for "things that can change a built site" is a bet you only
+  # discover you lost when the channel has been silently stale for a week —
+  # and staleness is the single thing this channel must never be. A rebuild per
+  # merge is a couple of minutes; being quietly wrong has no upper bound.
   push:
     branches: [main]
 
@@ -46,10 +53,27 @@ on:
   # `transformHead` refactor, a VitePress upgrade reordering `buildEnd` against
   # the `public/` copy) would sail through review, because `website-a11y` only
   # ever builds the STABLE channel. Nothing else looks at this build.
+  #
+  # Filtered here — unlike `push` — because this trigger has a narrower job:
+  # it guards the CHANNEL SWITCH, not the site. The paths are what can change
+  # the switch's outputs (robots.txt, sitemap, noindex, canonical):
+  #
+  #   website/**         config.ts, buildEnd, transformHead, the theme
+  #   pnpm-lock.yaml     a VitePress bump WITHIN its existing range moves
+  #                      `buildEnd` ordering against the `public/` copy while
+  #                      touching no other file — precisely the threat named
+  #                      above, and invisible to a `website/**` filter
+  #   this workflow      the guard itself
+  #
+  # `packages/**` is left out on purpose. A workspace package can change what
+  # the site *renders*, but not robots/sitemap/noindex/canonical — and if one
+  # broke the build outright, the `website-a11y` job already builds the site on
+  # every PR and would fail first.
   pull_request:
     branches: [main]
     paths:
       - "website/**"
+      - "pnpm-lock.yaml"
       - ".github/workflows/docs-next.yml"
 
   # Rebuild on demand without waiting for a push — useful after changing the
