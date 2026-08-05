@@ -91,13 +91,25 @@ function typesEntry(value) {
  *
  * `A as B` contributes B, because B is the name a consumer imports. `type X` is
  * stripped of its modifier for the same reason.
+ *
+ * `export type { … }` counts too, and the `type\s+` in the pattern is the whole
+ * reason. Without it the block form was invisible — `export\s*\{` needs the brace
+ * straight after `export`, and the keyword blocks it — so a package emitting that
+ * style would contribute ZERO type names. Nothing emits it today, which is why
+ * this passed: it was a trap set for whichever build tool changed next, and it
+ * would have surfaced as "doesn't export it" against documentation that was
+ * right. That is the exact failure the `.d.ts` half exists to prevent, so leaving
+ * it to chance would have been a poor joke.
  */
 async function declaredNames(file) {
   const text = await readFile(file, "utf8");
   const names = new Set();
 
-  for (const list of text.matchAll(/export\s*\{([^}]*)\}/g)) {
-    for (let part of list[1].split(",")) {
+  const BLOCK = /export\s+type\s*\{([^}]*)\}|export\s*\{([^}]*)\}/g;
+  for (const list of text.matchAll(BLOCK)) {
+    // Group 1 is the `export type { … }` form, group 2 the plain one; exactly
+    // one is set per match.
+    for (let part of (list[1] ?? list[2]).split(",")) {
       part = part.trim();
       if (!part) continue;
       const aliased = /\s+as\s+(.+)$/.exec(part);
