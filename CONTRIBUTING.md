@@ -264,10 +264,12 @@ The documentation ships on two sites, from the same source:
 
 | | Serves | Deploys from |
 | --- | --- | --- |
-| [real-a11y.dev](https://real-a11y.dev) | the released docs | GitHub Pages, `docs.yml` |
+| [real-a11y.dev](https://real-a11y.dev) | **today:** every push to `main` | GitHub Pages, `docs.yml` |
 | [next.real-a11y.dev](https://next.real-a11y.dev) | `main` as it stands | Cloudflare Pages, `docs-next.yml` |
 
-The split exists because the two audiences want opposite things. Someone who just ran `npm install` needs docs describing the version they actually have; someone following development needs `main`. One site cannot be both, and for most of this project's life it was quietly the second while claiming to be the first.
+The split exists because the two audiences want opposite things. Someone who just ran `npm install` needs docs describing the version they actually have; someone following development needs `main`. One site cannot be both, and for most of this project's life it has quietly been the second while presenting as the first.
+
+**That is still true as you read this.** `docs.yml` deploys `real-a11y.dev` on every push to `main`, so both sites currently serve the same content and this section describes a split that is only half-built. Gating stable on a successful npm publish is a follow-up; once it lands, `real-a11y.dev` serves the released docs and the table's first row changes to match. `next.` exists first so that gating does not freeze docs fixes behind a release.
 
 **The two builds are not interchangeable.** `DOCS_CHANNEL=next` turns off the sitemap, replaces `robots.txt` with `Disallow: /`, adds `noindex` to every page, and labels the nav `next · unreleased`. Reproduce it locally with:
 

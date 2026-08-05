@@ -27,7 +27,9 @@ const hideTokenSpans: ShikiTransformer = {
 /**
  * Which channel this build is for.
  *
- *   real-a11y.dev       the released docs — deployed from a publish
+ *   real-a11y.dev       the stable site. Deployed on every push to `main`
+ *                       today; being gated on a successful npm publish in a
+ *                       follow-up, after which it serves only released docs.
  *   next.real-a11y.dev  `main`, deployed on every push
  *
  * The two builds are NOT interchangeable, which is why this is a build-time
