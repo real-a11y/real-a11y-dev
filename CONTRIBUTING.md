@@ -258,9 +258,33 @@ This is an accessibility tool — the tool itself must be fully accessible:
 5. Write a clear PR description explaining what changed and why
 6. Link any related issues
 
+### Docs channels
+
+The documentation ships on two sites, from the same source:
+
+| | Serves | Deploys from |
+| --- | --- | --- |
+| [real-a11y.dev](https://real-a11y.dev) | the released docs | GitHub Pages, `docs.yml` |
+| [next.real-a11y.dev](https://next.real-a11y.dev) | `main` as it stands | Cloudflare Pages, `docs-next.yml` |
+
+The split exists because the two audiences want opposite things. Someone who just ran `npm install` needs docs describing the version they actually have; someone following development needs `main`. One site cannot be both, and for most of this project's life it was quietly the second while claiming to be the first.
+
+**The two builds are not interchangeable.** `DOCS_CHANNEL=next` turns off the sitemap, replaces `robots.txt` with `Disallow: /`, adds `noindex` to every page, and labels the nav `next · unreleased`. Reproduce it locally with:
+
+```bash
+DOCS_CHANNEL=next pnpm --filter @real-a11y-dev/website build
+```
+
+Everything keys off that one variable in `website/.vitepress/config.ts`. Two details there are load-bearing and easy to undo by accident:
+
+- **`rel=canonical` points at `real-a11y.dev` on both channels.** That is what tells a crawler the two copies are one document and stable is the real one. Pointing it at `next.` would invite indexing of docs for unreleased software.
+- **`noindex` is belt and braces on top of that.** Canonical is a hint a search engine may overrule; `noindex` is a directive. The cost of being overruled — someone finding unreleased docs through a search and installing against them — is exactly what the split exists to prevent.
+
+`docs-next.yml` asserts all of this against the built output before deploying, so a channel switch that silently stopped working fails the run instead of quietly publishing a crawlable second copy.
+
 ### Docs preview (`/preview`)
 
-Production docs deploy from `main` to [real-a11y.dev](https://real-a11y.dev) (GitHub Pages). To browse a PR's docs site before merge, a repo collaborator can comment **`/preview`** at the start of a PR comment (alone or followed by more text).
+The two channels above both track branches. To browse a *pull request's* docs before merge, a repo collaborator can comment **`/preview`** at the start of a PR comment (alone or followed by more text).
 
 That triggers `.github/workflows/docs-preview.yml`, which builds the PR head and uploads it to the Cloudflare Pages project `real-a11y-docs-preview`. The bot replies with a stable URL of the form:
 

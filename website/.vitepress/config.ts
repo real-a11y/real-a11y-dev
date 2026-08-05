@@ -1,3 +1,5 @@
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { fileURLToPath, URL } from "node:url";
 
 import anchor from "markdown-it-anchor";
@@ -22,6 +24,32 @@ const hideTokenSpans: ShikiTransformer = {
   },
 };
 
+/**
+ * Which channel this build is for.
+ *
+ *   real-a11y.dev       the released docs — deployed from a publish
+ *   next.real-a11y.dev  `main`, deployed on every push
+ *
+ * The two builds are NOT interchangeable, which is why this is a build-time
+ * switch rather than a runtime one: `next` has to be excluded from search, and
+ * a single artifact cannot be both indexed and not.
+ *
+ * Reproduce the next build locally with `DOCS_CHANNEL=next pnpm --filter
+ * @real-a11y-dev/website build` — everything below keys off this one value.
+ */
+const CHANNEL = process.env.DOCS_CHANNEL === "next" ? "next" : "stable";
+const isNext = CHANNEL === "next";
+
+/**
+ * The canonical host stays `real-a11y.dev` on BOTH channels, deliberately.
+ *
+ * Every `next` page declares the stable page as its canonical, which is what
+ * tells a crawler the two copies are one document and stable is the real one.
+ * Pointing canonical at `next.` would be the bug — it would invite indexing of
+ * docs describing unreleased software.
+ */
+const SITE = "https://real-a11y.dev";
+
 export default defineConfig({
   title: "Real A11y",
   description:
@@ -29,12 +57,36 @@ export default defineConfig({
   lang: "en-US",
 
   // Emit sitemap.xml for search engines (matches robots.txt reference).
-  sitemap: {
-    hostname: "https://real-a11y.dev",
-  },
+  //
+  // NOT on `next`. The hostname below is stable's, so a sitemap built for
+  // `next` would advertise real-a11y.dev URLs from a host that does not serve
+  // them — a crawler instruction that is simply false. `next` ships no sitemap
+  // at all rather than a wrong one.
+  sitemap: isNext ? undefined : { hostname: SITE },
 
   // Drop .html extensions — friendlier URLs, cleaner sitemap.
   cleanUrls: true,
+
+  /**
+   * `next` replaces the shipped robots.txt.
+   *
+   * `website/public/robots.txt` is `Allow: /` and points at stable's sitemap —
+   * correct for stable, and exactly wrong served from `next.`, where it would
+   * invite a crawl of the copy we just marked `noindex`.
+   *
+   * Done here rather than in the deploy workflow so that
+   * `DOCS_CHANNEL=next pnpm build` produces byte-identical output to CI. A
+   * post-build step in the workflow would mean the thing you can inspect
+   * locally is not the thing that ships.
+   */
+  async buildEnd({ outDir }) {
+    if (!isNext) return;
+    await writeFile(
+      join(outDir, "robots.txt"),
+      ["User-agent: *", "Disallow: /", ""].join("\n"),
+      "utf8",
+    );
+  },
 
   vite: {
     resolve: {
@@ -133,17 +185,29 @@ export default defineConfig({
     const path = pageData.relativePath
       .replace(/\.md$/, "")
       .replace(/(^|\/)index$/, "");
-    const href = `https://real-a11y.dev/${path}`.replace(/\/$/, "/");
+    const href = `${SITE}/${path}`.replace(/\/$/, "/");
     const tags: [string, Record<string, string>][] = [
       [
         "link",
         {
           rel: "canonical",
-          href:
-            href === "https://real-a11y.dev/" ? "https://real-a11y.dev/" : href,
+          href: href === `${SITE}/` ? `${SITE}/` : href,
         },
       ],
     ];
+
+    // `next` is excluded from search outright.
+    //
+    // The canonical above already tells a crawler which copy is real, and on
+    // its own it would probably hold. But "probably" is the wrong standard for
+    // a second, permanently-out-of-date copy of the documentation: canonical is
+    // a HINT that search engines are free to overrule, while `noindex` is a
+    // directive. The failure mode if it is overruled — someone finding docs for
+    // unreleased software through a search and installing against them — is the
+    // exact thing this whole channel split exists to prevent.
+    if (isNext) {
+      tags.push(["meta", { name: "robots", content: "noindex, nofollow" }]);
+    }
     // Rich results: SoftwareApplication schema on the homepage.
     if (pageData.relativePath === "index.md") {
       return [
@@ -188,7 +252,11 @@ export default defineConfig({
       { text: "Recipes", link: "/recipes/nextjs" },
       { text: "Packages", link: "/packages/core" },
       {
-        text: "v0.1 · Beta",
+        // `noindex` keeps `next` out of search, but a direct link still lands
+        // someone here with no way to tell which copy they are reading. Until
+        // the banner work replaces this hardcoded label with the real published
+        // version, this is the minimum honest signal.
+        text: isNext ? "next · unreleased" : "v0.1 · Beta",
         items: [
           {
             text: "Changelog",

@@ -1,0 +1,115 @@
+name: Deploy next docs
+
+# The unreleased-docs channel: `main` as it stands, at next.real-a11y.dev.
+#
+# `docs.yml` serves real-a11y.dev and is being gated on a successful npm
+# publish, so it will describe only what you can install. That leaves a gap
+# this fills: docs fixes, new guides and typo repairs would otherwise sit
+# unpublished until the next release. They land here immediately, and reach
+# stable with the release.
+#
+# NOT the same build as stable. `DOCS_CHANNEL=next` turns off the sitemap,
+# swaps robots.txt to `Disallow: /`, and adds `noindex` to every page — see
+# website/.vitepress/config.ts. The two artifacts are deliberately not
+# interchangeable, which is why this builds its own rather than reusing the
+# one docs.yml uploads. Reproduce it locally with:
+#
+#   DOCS_CHANNEL=next pnpm --filter @real-a11y-dev/website build
+#
+# Security: unlike docs-preview.yml, this runs only on `main` — trusted code —
+# so building and deploying in one job is safe. docs-preview.yml splits them
+# across jobs because it executes pull-request code and must never let that
+# share a runner with the Cloudflare credentials.
+#
+# One-time setup, both outside this repo:
+#   1. Create the Cloudflare Pages project `real-a11y-docs-next` (Direct
+#      Upload). wrangler will not create it for you in a non-interactive run.
+#   2. Point `next.real-a11y.dev` at that project, or drop the custom domain
+#      and use the *.pages.dev URL — nothing here depends on which.
+
+on:
+  push:
+    branches: [main]
+  # Rebuild on demand without waiting for a push — useful after changing the
+  # channel switch itself, where the interesting output is the artifact.
+  workflow_dispatch:
+
+# Read-only: this job checks out trusted code, builds, and hands a directory to
+# wrangler. It needs nothing from the GitHub token beyond the checkout.
+permissions:
+  contents: read
+
+# Superseding is correct here — this channel tracks `main`, so an in-flight
+# deploy of an older commit has no value once a newer one exists.
+concurrency:
+  group: docs-next
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: docs-next
+      url: https://next.real-a11y.dev
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm version is read from `packageManager` in package.json.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # The website imports from the packages, so their dist/ has to exist
+      # before VitePress can resolve `workspace:*` entry points.
+      - run: pnpm -r --filter='./packages/*' build
+
+      - name: Build the next channel
+        env:
+          DOCS_CHANNEL: next
+        run: pnpm --filter @real-a11y-dev/website build
+
+      # A wrong answer here is worse than a failed deploy: publishing a
+      # crawlable second copy of the docs is the one outcome this channel must
+      # never produce, and it would be invisible until it showed up in search
+      # results weeks later. Cheap to assert, so assert it.
+      - name: Verify the channel is excluded from search
+        run: |
+          DIST=website/.vitepress/dist
+          fail() { echo "::error::$1"; exit 1; }
+
+          [ -f "$DIST/robots.txt" ] || fail "no robots.txt in the build"
+          grep -q '^Disallow: /$' "$DIST/robots.txt" \
+            || fail "robots.txt does not disallow crawling: $(cat "$DIST/robots.txt")"
+          [ ! -f "$DIST/sitemap.xml" ] \
+            || fail "sitemap.xml was emitted — it would advertise real-a11y.dev URLs"
+
+          # Every page, not just the homepage: a per-page tag added in
+          # transformHead could regress on one route and nowhere else.
+          missing=$(find "$DIST" -name '*.html' -print0 \
+            | xargs -0 grep -L 'name="robots" content="noindex' || true)
+          [ -z "$missing" ] || fail "pages missing noindex:"$'\n'"$missing"
+
+          # Canonical must still point at STABLE. If this ever flipped to
+          # next.real-a11y.dev it would invite indexing of the copy we just
+          # excluded — the failure the noindex above is guarding.
+          grep -q 'rel="canonical" href="https://real-a11y.dev/' "$DIST/index.html" \
+            || fail "homepage canonical no longer points at real-a11y.dev"
+
+          echo "OK — no sitemap, robots disallows, every page noindex, canonical is stable."
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: >-
+            pages deploy website/.vitepress/dist
+            --project-name=real-a11y-docs-next
+            --branch=main
+            --commit-hash=${{ github.sha }}
+            --commit-message=docs-next-${{ github.sha }}
