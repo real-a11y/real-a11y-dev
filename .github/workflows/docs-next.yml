@@ -1,0 +1,191 @@
+name: Deploy next docs
+
+# The unreleased-docs channel: `main` as it stands, at next.real-a11y.dev.
+#
+# `docs.yml` serves real-a11y.dev and is being gated on a successful npm
+# publish (a follow-up PR — it still deploys on every push to `main` today).
+# That will leave a gap this fills: docs fixes, new guides and typo repairs
+# would otherwise sit unpublished until the next release. They land here
+# immediately, and reach stable with the release.
+#
+# NOT the same build as stable. `DOCS_CHANNEL=next` turns off the sitemap,
+# swaps robots.txt to `Disallow: /`, and adds `noindex` to every page — see
+# website/.vitepress/config.ts. The two artifacts are deliberately not
+# interchangeable, which is why this builds its own rather than reusing the
+# one docs.yml uploads. Reproduce it locally with:
+#
+#   DOCS_CHANNEL=next pnpm --filter @real-a11y-dev/website build
+#
+# Security: unlike docs-preview.yml, the deploy half runs only for `push` and
+# `workflow_dispatch` — trusted refs. The `pull_request` trigger builds and
+# verifies but never reaches the Cloudflare credentials, so PR code and the
+# secrets never share a runner.
+#
+# One-time setup, both outside this repo:
+#   1. Create the Cloudflare Pages project `real-a11y-docs-next` (Direct
+#      Upload) **with production branch `main`**. wrangler will not create the
+#      project for you in a non-interactive run — and if the production branch
+#      is anything else, `--branch=main` below produces a *preview* deployment:
+#      the workflow goes green, the deploy really does succeed, and
+#      next.real-a11y.dev keeps serving whatever it served before. That failure
+#      is silent and looks like success, unlike a missing project, which fails
+#      loudly.
+#   2. Point `next.real-a11y.dev` at that project. If you skip the custom
+#      domain and use the *.pages.dev URL instead, update the `environment.url`
+#      on the deploy job to match — nothing else here depends on which.
+
+on:
+  # Deliberately NOT path-filtered, unlike the pull_request trigger below.
+  #
+  # This one is the deploy, and its job is that `next.` matches `main`. A path
+  # allowlist for "things that can change a built site" is a bet you only
+  # discover you lost when the channel has been silently stale for a week —
+  # and staleness is the single thing this channel must never be. A rebuild per
+  # merge is a couple of minutes; being quietly wrong has no upper bound.
+  push:
+    branches: [main]
+
+  # Build and verify on pull requests, WITHOUT deploying.
+  #
+  # Without this the guard below would first run after merge, which defeats
+  # most of its purpose. Its job is to catch a channel switch that silently
+  # stopped working — but a PR that breaks `DOCS_CHANNEL=next` (a
+  # `transformHead` refactor, a VitePress upgrade reordering `buildEnd` against
+  # the `public/` copy) would sail through review, because `website-a11y` only
+  # ever builds the STABLE channel. Nothing else looks at this build.
+  #
+  # Filtered here — unlike `push` — because this trigger has a narrower job:
+  # it guards the CHANNEL SWITCH, not the site. The paths are what can change
+  # the switch's outputs (robots.txt, sitemap, noindex, canonical):
+  #
+  #   website/**         config.ts, buildEnd, transformHead, the theme
+  #   pnpm-lock.yaml     a VitePress bump WITHIN its existing range moves
+  #                      `buildEnd` ordering against the `public/` copy while
+  #                      touching no other file — precisely the threat named
+  #                      above, and invisible to a `website/**` filter
+  #   this workflow      the guard itself
+  #
+  # `packages/**` is left out on purpose. A workspace package can change what
+  # the site *renders*, but not robots/sitemap/noindex/canonical — and if one
+  # broke the build outright, the `website-a11y` job already builds the site on
+  # every PR and would fail first.
+  pull_request:
+    branches: [main]
+    paths:
+      - "website/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/docs-next.yml"
+
+  # Rebuild on demand without waiting for a push — useful after changing the
+  # channel switch itself, where the interesting output is the artifact.
+  workflow_dispatch:
+
+# Read-only: the build job checks out code and produces a directory. The deploy
+# job needs nothing from the GitHub token either — its credentials are the
+# Cloudflare secrets.
+permissions:
+  contents: read
+
+# Per-ref: a PR and `main` must not cancel each other. Within one ref,
+# superseding is right — this channel tracks its ref, so an in-flight build of
+# an older commit has no value once a newer one exists.
+concurrency:
+  group: docs-next-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm version is read from `packageManager` in package.json.
+      - uses: pnpm/action-setup@v4
+
+      # Deliberately `node-version-file` rather than the hardcoded `20` the
+      # other workflows use. `.nvmrc` is `20`, so there is no behavioural
+      # difference today — this is the form the others should converge on, not
+      # an inconsistency to "fix" back.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # The website imports from the packages, so their dist/ has to exist
+      # before VitePress can resolve `workspace:*` entry points.
+      - run: pnpm -r --filter='./packages/*' build
+
+      - name: Build the next channel
+        env:
+          DOCS_CHANNEL: next
+        run: pnpm --filter @real-a11y-dev/website build
+
+      # A wrong answer here is worse than a failed deploy: publishing a
+      # crawlable second copy of the docs is the one outcome this channel must
+      # never produce, and it would be invisible until it showed up in search
+      # results weeks later. Cheap to assert, so assert it.
+      - name: Verify the channel is excluded from search
+        run: |
+          DIST=website/.vitepress/dist
+          fail() { echo "::error::$1"; exit 1; }
+
+          [ -f "$DIST/robots.txt" ] || fail "no robots.txt in the build"
+          grep -q '^Disallow: /$' "$DIST/robots.txt" \
+            || fail "robots.txt does not disallow crawling: $(cat "$DIST/robots.txt")"
+          [ ! -f "$DIST/sitemap.xml" ] \
+            || fail "sitemap.xml was emitted — it would advertise real-a11y.dev URLs"
+
+          # Every page, not just the homepage: a per-page tag added in
+          # transformHead could regress on one route and nowhere else.
+          missing=$(find "$DIST" -name '*.html' -print0 \
+            | xargs -0 grep -L 'name="robots" content="noindex' || true)
+          [ -z "$missing" ] || fail "pages missing noindex:"$'\n'"$missing"
+
+          # Canonical must still point at STABLE. If this ever flipped to
+          # next.real-a11y.dev it would invite indexing of the copy we just
+          # excluded — the failure the noindex above is guarding.
+          grep -q 'rel="canonical" href="https://real-a11y.dev/' "$DIST/index.html" \
+            || fail "homepage canonical no longer points at real-a11y.dev"
+
+          echo "OK — no sitemap, robots disallows, every page noindex, canonical is stable."
+
+      - name: Upload the built channel
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-next-dist
+          path: website/.vitepress/dist
+          retention-days: 1
+
+  deploy:
+    # PRs stop after build + verify. Deploying is what needs the trusted ref.
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: docs-next
+      # Update this if you take the *.pages.dev route instead of the custom
+      # domain — see setup step 2 in the header.
+      url: https://next.real-a11y.dev
+    steps:
+      - name: Download the built channel
+        uses: actions/download-artifact@v4
+        with:
+          name: docs-next-dist
+          path: dist
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Produces a PRODUCTION deployment only if the project's production
+          # branch is `main` — see setup step 1.
+          command: >-
+            pages deploy dist
+            --project-name=real-a11y-docs-next
+            --branch=main
+            --commit-hash=${{ github.sha }}
+            --commit-message=docs-next-${{ github.sha }}
