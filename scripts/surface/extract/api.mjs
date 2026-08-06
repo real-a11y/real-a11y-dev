@@ -144,16 +144,37 @@ function declaredNames(text) {
  * condition points at is read. A package with no `exports` map contributes
  * nothing here (`cli` is one — its declarations are clean today, but unwatched),
  * and a secondary chunk no condition names is not followed.
+ *
+ * Forms the pattern covers, probed rather than assumed: `import … from`,
+ * `export … from`, `export * from`, `import type … from`, `import("pkg")`,
+ * subpaths, and `/// <reference types="pkg" />`. That last one is not
+ * hypothetical — `rollup-plugin-dts` emits it for ambient dependencies, and a
+ * private package arriving that way is exactly as unresolvable, with the same
+ * silent-`any` result.
+ *
+ * Deliberately NOT covered: a bare `import "pkg";`. A side-effect import in a
+ * declaration file carries no types, so it cannot produce the failure this
+ * guards. And one known false positive: a JSDoc comment containing `from "…"`
+ * matches. Nothing hits it today, and unlike the bug it fails loudly and
+ * explains itself in one read — worth knowing, not worth pre-empting.
  */
 function unpublishableRefs(text, unpublishable) {
-  const found = new Set();
-  for (const m of text.matchAll(/(?:from|import\()\s*["']([^"']+)["']/g)) {
-    // Subpaths count: `@scope/private/sub` is as unresolvable as the root.
-    for (const name of unpublishable) {
-      if (m[1] === name || m[1].startsWith(`${name}/`)) found.add(m[1]);
+  const found = new Map();
+  for (const m of text.matchAll(
+    /(?:from|import\(|\/\/\/\s*<reference\s+types=)\s*["']([^"']+)["']/g,
+  )) {
+    // Subpaths count: `@scope/private/sub` is as unresolvable as the root — so
+    // the SPECIFIER is reported (that is what the reader must go find) while the
+    // OWNING package is what the suggested remedy names. Resolving one subpath
+    // leaves a sibling import from the same package still dangling.
+    for (const owner of unpublishable) {
+      if (m[1] === owner || m[1].startsWith(`${owner}/`))
+        found.set(m[1], owner);
     }
   }
-  return [...found].sort();
+  return [...found]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([specifier, owner]) => ({ specifier, owner }));
 }
 
 /**
@@ -216,15 +237,20 @@ export async function extractApi(repoRoot, packages) {
             const declText = await readFile(dtsAbs, "utf8");
             types = declaredNames(declText).filter((n) => !values.includes(n));
 
-            for (const ref of unpublishableRefs(declText, unpublishable)) {
+            for (const { specifier, owner } of unpublishableRefs(
+              declText,
+              unpublishable,
+            )) {
               problems.push(
-                `${pkg.name}${subpath.slice(1)} → ${dts} references \`${ref}\`, ` +
-                  `which is a PRIVATE workspace package and is never published. ` +
-                  `npm cannot resolve it, so a consumer gets \`TS2307\` — or, with ` +
+                `${pkg.name}${subpath.slice(1)} → ${dts} references ` +
+                  `\`${specifier}\`, which belongs to \`${owner}\` — a PRIVATE ` +
+                  `workspace package that is never published. npm cannot resolve ` +
+                  `it, so a consumer gets \`TS2307\` — or, with ` +
                   `\`skipLibCheck: true\`, the types silently become \`any\`. If the ` +
                   `package is bundled, tell the bundler to inline its declarations ` +
-                  `too (tsup: \`dts: { resolve: ["${ref}"] }\`); otherwise the names ` +
-                  `have to come from somewhere publishable.`,
+                  `too (tsup: \`dts: { resolve: ["${owner}"] }\` — the package root, ` +
+                  `so sibling subpaths are covered too); otherwise the names have ` +
+                  `to come from somewhere publishable.`,
               );
             }
           } else {

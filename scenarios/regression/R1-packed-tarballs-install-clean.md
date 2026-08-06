@@ -62,7 +62,8 @@ Then, in a scratch project outside the repo:
   `skipLibCheck: false` or this one cannot fail. A private workspace package is
   bundled into its consumers, so the JS is fine and the install is fine — but the
   declarations are a separate emit, and unless the bundler inlines them the
-  `.d.ts` keeps `from "@real-a11y-dev/<private>"`. Expect `TS2307`
+  `.d.ts` keeps `from "@real-a11y-dev/<private>"`. A violation shows up as
+  `TS2307`
 - Bins are executable and exit `0` on `--version`
 - Zero `MODULE_NOT_FOUND`, zero unexported-path errors
 
