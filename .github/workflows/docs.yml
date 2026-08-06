@@ -80,10 +80,26 @@ jobs:
       # pnpm version is read from `packageManager` in package.json.
       - uses: pnpm/action-setup@v4
 
+      # NO dependency cache on the `workflow_run` path — deliberately.
+      #
+      # `workflow_run` runs are privileged: they carry the default branch's
+      # cache scope. Combined with the checkout above, which takes its ref from
+      # the triggering run, `pnpm install` would populate a store that
+      # `setup-node`'s post-step then writes into the cache every `main` build
+      # reads. That is a cache-poisoning vector, and CodeQL flags it as one
+      # (`actions/cache-poisoning/poisonable-step`).
+      #
+      # The commit is in fact trusted here — `publish.yml` only runs from
+      # `workflow_dispatch` or a pushed `v*` tag, both of which need write
+      # access, so nobody without it can influence `head_sha`. The cache is
+      # dropped anyway: the argument for safety is a chain of four facts about
+      # another workflow's triggers, and that is exactly the kind of reasoning
+      # that stops being true when someone edits that workflow. Releases are
+      # rare, so a cold install costs a couple of minutes a few times a month.
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: pnpm
+          cache: ${{ github.event_name == 'workflow_run' && '' || 'pnpm' }}
 
       - run: pnpm install --frozen-lockfile
 
