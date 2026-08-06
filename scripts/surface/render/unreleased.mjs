@@ -1,9 +1,16 @@
 // The "not yet published" notice on the CLI reference.
 //
-// A reader on real-a11y.dev has no way to tell whether the flag they are
-// reading about is in the version `npm install` gives them. The site deploys on
-// every push to `main`; npm publishes on a release cut. This says so, on the
-// page, using the two manifests rather than anyone's memory.
+// A reader has no way to tell whether the flag they are reading about is in the
+// version `npm install` gives them. `main` moves continuously; npm publishes on
+// a release cut. This says so, on the page, using the two manifests rather than
+// anyone's memory.
+//
+// Since the deploy gate landed, the two channels need it for different reasons.
+// next.real-a11y.dev ships every push to `main`, so it is where the notice does
+// its everyday work. real-a11y.dev is built from a released commit, where the
+// notice is empty by construction — except after a manual **Deploy docs** run,
+// which builds `main`'s tip on purpose and is exactly when stable needs it.
+// So the gate did not make this redundant; it narrowed when it fires.
 //
 // FULLY GENERATED, UNLIKE EVERY OTHER REGION
 //

@@ -1,42 +1,160 @@
 name: Deploy docs
 
+# real-a11y.dev — the RELEASED docs.
+#
+# Deploys when `Publish to npm` succeeds, not when `main` moves. Before this,
+# the site tracked `main`, so it documented commands and flags that `npm
+# install` did not yet deliver, with no way for a reader to tell. Gating the
+# deploy makes that structurally impossible rather than merely discouraged.
+#
+# `main` still ships continuously — to next.real-a11y.dev via `docs-next.yml`.
+# That channel exists precisely so this gate does not freeze docs fixes behind
+# a release: a typo repair lands on `next.` immediately and reaches stable with
+# the next publish.
+#
+# HOW A RELEASE REACHES HERE. `publish.yml` dispatches this workflow after a
+# successful publish, passing the released commit as `sha`. That is an explicit
+# dispatch rather than a `workflow_run` listener, for the same reason
+# `release-tag.yml` dispatches `publish.yml` instead of relying on the tag push
+# it makes: a run created with GITHUB_TOKEN does not raise events that start
+# further runs. `workflow_dispatch` is the documented exception to that rule —
+# `workflow_run` is not, so a listener would never fire on the automated path,
+# and would fail silently, because a run that never starts leaves no failed
+# check. The dispatch is also greppable from `publish.yml`, survives renaming
+# that workflow (a `workflow_run` filter matches its display NAME), and can be
+# exercised by hand before it ever runs for real.
+#
+# The dispatch is made at `main` while `sha` carries the release commit. That
+# split is deliberate: the `github-pages` environment's deployment-branch
+# policy sees an allowed ref, while the build checks out what was actually
+# published. `main` has usually moved on by then, and building its tip would
+# reintroduce the exact drift this gate removes.
+#
+# Builds run on every pull request, so a broken docs build is still caught at
+# review time. There is deliberately no `push` trigger: after gating, a push
+# build could only ever produce a Pages artifact no job is allowed to deploy,
+# and `main` is already built on every merge by `test.yml`'s `website-a11y`
+# (a required check) and by `docs-next.yml`, which actually ships it.
+
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
 
+  # The only deploy path — from `publish.yml` after a release, or by hand.
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: >-
+          Commit to build and deploy. Must carry a release tag. Leave empty to
+          deploy `main`'s tip — the escape hatch for a broken link or a wrong
+          command in the published reference, where "correct at the next
+          release" is not good enough. A tip deploy WILL contain unreleased
+          surface.
+        required: false
+
 # Default to read-only. The build job runs on every pull_request (including
 # forks) and executes untrusted PR code — it only needs to check out, build,
-# and upload a Pages artifact. pages: write + id-token: write are escalated
-# on the deploy job alone (gated to main). Matches the least-privilege
+# and upload a Pages artifact. pages: write + id-token: write are escalated on
+# the deploy job alone, which is gated to `main`. Matches the least-privilege
 # posture in publish.yml / test.yml (OpenSSF Scorecard Token-Permissions /
 # CodeQL missing-workflow-permissions).
 permissions:
   contents: read
 
-# Per-ref concurrency: each branch / PR gets its own group, so PR runs and
-# main runs no longer cancel each other. Within a single ref the lock still
-# holds — a new push supersedes any in-flight run on the same branch.
-# (The previous repo-wide `pages` group was killing every concurrent PR
-# build whenever any sibling PR or main push triggered this workflow.)
-concurrency:
-  group: pages-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
+    # `deployments: read` is for the ordering check below, which asks the API
+    # which commit real-a11y.dev is currently serving.
+    permissions:
+      contents: read
+      deployments: read
+    # Keyed on what is actually being built, and separate from the deploy group
+    # below. With `push` gone, the old collision cannot happen: a release build
+    # is keyed on its own sha, and the only runs sharing `refs/heads/main` are
+    # two manual deploys, where superseding is what you want.
+    concurrency:
+      group: pages-build-${{ github.event.inputs.sha || github.ref }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The released commit when dispatched by publish.yml; the triggering
+          # ref otherwise.
+          ref: ${{ github.event.inputs.sha || github.sha }}
+          # `lastUpdated: true` in the VitePress config reads git history per
+          # page. A shallow clone grafts every tracked file onto the tip commit,
+          # so every page's "Last updated" would render the same date.
+          fetch-depth: 0
+
+      # A dispatched `sha` has to be a release commit. Two things that look like
+      # successes otherwise deploy the wrong tree: `pnpm publish -r` skips
+      # versions already on npm and still exits 0, so re-running Publish at an
+      # older tag — the recovery path the release skill documents — would roll
+      # the site backwards; and dispatching Publish at `main` mid-cycle
+      # publishes nothing, concludes success, and would ship every unreleased
+      # flag to the site whose whole point is that it cannot describe any.
+      - name: Require a release commit
+        if: github.event.inputs.sha != ''
+        env:
+          SHA: ${{ github.event.inputs.sha }}
+        run: |
+          git describe --exact-match --tags "$SHA" >/dev/null 2>&1 || {
+            echo "::error::$SHA carries no release tag — refusing to deploy it as the released docs."
+            exit 1
+          }
+
+      # ...and a NEWER one than what is live. The tag check above proves the
+      # commit is a release; it does not prove it is the latest. Re-running
+      # Publish at an older tag — the recovery path the release skill documents
+      # — publishes nothing, exits 0, and would otherwise redeploy that older
+      # release over the current site with no failed run anywhere.
+      #
+      # Deliberately fails OPEN when the live commit cannot be determined (the
+      # first ever deploy, an API hiccup, a commit not in this clone). Failing
+      # closed here would let an unrelated GitHub outage strand a real release's
+      # docs, which is the worse of the two: going backwards takes a human
+      # deliberately re-running an old publish, and is visible on the site.
+      # Every skip says so in the log rather than passing quietly.
+      - name: Refuse to deploy an older release
+        if: github.event.inputs.sha != ''
+        env:
+          SHA: ${{ github.event.inputs.sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          LIVE=$(gh api \
+            "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=1" \
+            --jq '.[0].sha // empty' 2>/dev/null || true)
+
+          if [ -z "$LIVE" ]; then
+            echo "::notice::No previous github-pages deployment found — nothing to compare against."
+          elif [ "$LIVE" = "$SHA" ]; then
+            echo "::notice::$SHA is already live; redeploying it is harmless."
+          elif ! git cat-file -e "$LIVE^{commit}" 2>/dev/null; then
+            echo "::warning::Live commit $LIVE is not in this clone — skipping the ordering check."
+          elif git merge-base --is-ancestor "$SHA" "$LIVE"; then
+            echo "::error::$SHA is an ancestor of the live commit $LIVE. Deploying it would roll the published docs backwards."
+            exit 1
+          else
+            echo "$SHA is newer than the live commit $LIVE."
+          fi
 
       # pnpm version is read from `packageManager` in package.json.
       - uses: pnpm/action-setup@v4
 
+      # No dependency cache when building a commit other than the ref we are
+      # running on. The run carries the default branch's cache scope, so saving
+      # a store built from another commit into it is the cache-poisoning shape
+      # CodeQL flags (`actions/cache-poisoning/poisonable-step`).
+      #
+      # Mind the operand order. In GitHub Actions expressions `''` is FALSY, so
+      # `cond && '' || 'pnpm'` returns `'pnpm'` on BOTH branches — the cache is
+      # never disabled and the mitigation silently does not exist. The truthy
+      # value has to sit in the `&&` slot, as it does here.
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: pnpm
+          cache: ${{ github.event.inputs.sha == '' && 'pnpm' || '' }}
 
       - run: pnpm install --frozen-lockfile
 
@@ -51,9 +169,19 @@ jobs:
           path: website/.vitepress/dist
 
   deploy:
-    if: github.ref == 'refs/heads/main'
+    # Dispatch only, and only from `main`. The ref check is not redundant with
+    # the trigger: the Run-workflow dropdown accepts any branch or tag, and
+    # without it a dispatch from an unreviewed branch would build that branch's
+    # tip and publish it to the production site.
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
+    # One at a time, and never cancelled. A half-superseded Pages deploy is
+    # worth avoiding for the sake of a few wasted minutes, and releases are
+    # rare enough that queueing costs nothing.
+    concurrency:
+      group: pages-deploy
+      cancel-in-progress: false
     permissions:
       pages: write
       id-token: write
