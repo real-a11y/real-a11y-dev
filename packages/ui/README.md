@@ -4,11 +4,21 @@ Preact tree rendering components for [Semantic Navigator](https://real-a11y.dev)
 
 Provides the interactive tree view UI used by the inspector, the React wrapper, the Storybook addon, and the Chrome extension. Built with Preact for minimal bundle size — the `TreeView` entry point measures ~5 KB gzipped (excluding `preact` and `@real-a11y-dev/core`, which consumers usually share).
 
-## Installation
+## Internal package — not published to npm
 
-```bash
-npm install @real-a11y-dev/semantic-navigator-ui
-```
+Every consumer already **bundles** it rather than resolving it: the inspector and
+the Storybook addon's manager entry both list it in `noExternal`, and the Chrome
+extension is private too. So there is nothing to install — you get these
+components through
+[`@real-a11y-dev/inspector`](../inspector),
+[`@real-a11y-dev/react`](../react), or
+[`@real-a11y-dev/storybook-addon`](../storybook-addon).
+
+It was published up to `0.1.0-beta.11` before becoming internal. If you imported
+it directly, one of the three packages above is the supported route.
+
+The rest of this file documents the components for anyone working on them inside
+the workspace.
 
 ## Components
 
@@ -107,9 +117,16 @@ Follows the [WAI-ARIA TreeView pattern](https://www.w3.org/WAI/ARIA/apg/patterns
 
 Self-contained CSS with CSS custom properties for theming. No Tailwind or framework dependencies.
 
+Inside the workspace, the `./styles` subpath resolves the stylesheet directly:
+
 ```ts
 import "@real-a11y-dev/semantic-navigator-ui/styles";
 ```
+
+Published consumers never take that route. The inspector and the Storybook addon
+read `src/styles/*.css` at build time and inline it through an esbuild `define`,
+so the CSS ships inside their bundles and no import is needed — which is also why
+making this package private costs those consumers nothing.
 
 Supports light, dark, and auto (system preference) themes.
 

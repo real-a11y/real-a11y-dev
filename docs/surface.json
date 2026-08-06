@@ -444,67 +444,6 @@
         }
       ],
       "name": "@real-a11y-dev/testing"
-    },
-    {
-      "entries": [
-        {
-          "subpath": ".",
-          "types": [
-            "InputModality",
-            "NodeDiffStatus",
-            "TreeDiffView",
-            "TreePanelProps",
-            "TreeViewProps",
-            "TypeAheadBuffer"
-          ],
-          "values": [
-            "EMPTY_DIFF_VIEW",
-            "TYPE_AHEAD_TIMEOUT_MS",
-            "TreeNode",
-            "TreePanel",
-            "TreeToolbar",
-            "TreeView",
-            "buildTreeDiffView",
-            "createTypeAheadBuffer",
-            "findTypeAheadIndex",
-            "isTypeAheadKey",
-            "preserveExpandedState",
-            "resolveStepperKeyAction",
-            "useInputModality",
-            "useSearch",
-            "useTreeKeyboard",
-            "useVirtualTree"
-          ]
-        }
-      ],
-      "name": "@real-a11y-dev/semantic-navigator-ui"
-    },
-    {
-      "entries": [
-        {
-          "subpath": ".",
-          "types": [
-            "AttrSpec",
-            "AttrType",
-            "NodeIssue",
-            "RoleMeta",
-            "ValidatedNode"
-          ],
-          "values": [
-            "CONCRETE_ROLES",
-            "STATE_ATTRS",
-            "attributesForRole",
-            "isPresentationalChildren",
-            "isValidRole",
-            "requiredOwnedRoles",
-            "roleMeta",
-            "suggestedChildRoles",
-            "validateNode",
-            "validateTree"
-          ]
-        }
-      ],
-      "name": "@real-a11y-dev/validate"
     }
   ],
   "cli": {
@@ -2905,7 +2844,6 @@
       "version": "0.1.0-beta.11",
       "workspaceDeps": [
         "@real-a11y-dev/core",
-        "@real-a11y-dev/semantic-navigator-ui",
         "@real-a11y-dev/testing"
       ]
     },
@@ -2926,8 +2864,7 @@
         "@real-a11y-dev/audit",
         "@real-a11y-dev/browser",
         "@real-a11y-dev/core",
-        "@real-a11y-dev/serialize",
-        "@real-a11y-dev/validate"
+        "@real-a11y-dev/serialize"
       ]
     },
     {
@@ -2939,7 +2876,7 @@
         "./styles"
       ],
       "name": "@real-a11y-dev/semantic-navigator-ui",
-      "private": false,
+      "private": true,
       "version": "0.1.0-beta.11",
       "workspaceDeps": [
         "@real-a11y-dev/core"
@@ -2953,7 +2890,7 @@
         "."
       ],
       "name": "@real-a11y-dev/validate",
-      "private": false,
+      "private": true,
       "version": "0.1.0-beta.7",
       "workspaceDeps": []
     }

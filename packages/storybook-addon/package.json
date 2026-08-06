@@ -79,7 +79,6 @@
   },
   "dependencies": {
     "@real-a11y-dev/core": "workspace:*",
-    "@real-a11y-dev/semantic-navigator-ui": "workspace:*",
     "@real-a11y-dev/testing": "workspace:*"
   },
   "peerDependencies": {
@@ -111,6 +110,7 @@
     }
   },
   "devDependencies": {
+    "@real-a11y-dev/semantic-navigator-ui": "workspace:*",
     "@storybook/manager-api": "^8.6.0",
     "@storybook/preview-api": "^8.6.0",
     "@types/react": "^19.2.0",

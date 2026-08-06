@@ -304,10 +304,11 @@ jobs:
           BASE: origin/${{ github.base_ref }}
         run: |
           changed=$(git diff --name-only "$BASE"...HEAD)
-          # Published packages only — extension and example-patterns are
-          # private; test-only edits need no changelog entry.
+          # Published packages only — extension, example-patterns, ui,
+          # validate and session-registry are private; test-only edits need no
+          # changelog entry.
           src=$(echo "$changed" \
-            | grep -E '^packages/(core|serialize|ui|inspector|react|storybook-addon|testing|validate|mcp|cli)/src/' \
+            | grep -E '^packages/(core|serialize|inspector|react|storybook-addon|testing|mcp|cli)/src/' \
             | grep -vE '\.(test|spec)\.[tj]sx?$' || true)
           added=$(git diff --name-only --diff-filter=A "$BASE"...HEAD -- .changeset \
             | grep -E '\.md$' | grep -viE 'README' || true)

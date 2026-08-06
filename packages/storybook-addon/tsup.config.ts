@@ -56,7 +56,11 @@ export default defineConfig([
   {
     entry: { manager: "src/manager.tsx" },
     format: ["esm", "cjs"],
-    dts: true,
+    // `dts.resolve` alongside the `noExternal` below: the UI package is PRIVATE,
+    // so inlining its JS is only half the job. Left as `dts: true`, the emitted
+    // declarations would keep `from "@real-a11y-dev/semantic-navigator-ui"` —
+    // unresolvable on npm, and silently `any` under `skipLibCheck: true`.
+    dts: { resolve: ["@real-a11y-dev/semantic-navigator-ui"] },
     sourcemap: true,
     clean: false,
     noExternal: [
