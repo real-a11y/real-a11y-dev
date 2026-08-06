@@ -101,8 +101,7 @@ function typesEntry(value) {
  * right. That is the exact failure the `.d.ts` half exists to prevent, so leaving
  * it to chance would have been a poor joke.
  */
-async function declaredNames(file) {
-  const text = await readFile(file, "utf8");
+function declaredNames(text) {
   const names = new Set();
 
   const BLOCK = /export\s+type\s*\{([^}]*)\}|export\s*\{([^}]*)\}/g;
@@ -128,10 +127,67 @@ async function declaredNames(file) {
 }
 
 /**
+ * Module specifiers a `.d.ts` names that npm could never resolve.
+ *
+ * A private workspace package is bundled into its consumers, so the JS works —
+ * and that is exactly what makes this hard to notice. The declarations are a
+ * separate emit, and unless the bundler is told to inline them too, the shipped
+ * `.d.ts` keeps `from "@real-a11y-dev/<private>"`. A consumer then gets either a
+ * hard `TS2307` (`skipLibCheck: false`) or, with the far commoner default, the
+ * type silently degrading to `any` — no error, no type safety.
+ *
+ * That second shape is why this is a check and not a comment. The published
+ * artifact looks fine, installs fine, runs fine, and quietly stops type-checking
+ * three exported names.
+ *
+ * Scope, stated so it isn't mistaken for more: only the `.d.ts` a `types`
+ * condition points at is read. A package with no `exports` map contributes
+ * nothing here (`cli` is one — its declarations are clean today, but unwatched),
+ * and a secondary chunk no condition names is not followed.
+ *
+ * Forms the pattern covers, probed rather than assumed: `import … from`,
+ * `export … from`, `export * from`, `import type … from`, `import("pkg")`,
+ * subpaths, and `/// <reference types="pkg" />`. That last one is not
+ * hypothetical — `rollup-plugin-dts` emits it for ambient dependencies, and a
+ * private package arriving that way is exactly as unresolvable, with the same
+ * silent-`any` result.
+ *
+ * Deliberately NOT covered: a bare `import "pkg";`. A side-effect import in a
+ * declaration file carries no types, so it cannot produce the failure this
+ * guards. And one known false positive: a JSDoc comment containing `from "…"`
+ * matches. Nothing hits it today, and unlike the bug it fails loudly and
+ * explains itself in one read — worth knowing, not worth pre-empting.
+ */
+function unpublishableRefs(text, unpublishable) {
+  const found = new Map();
+  for (const m of text.matchAll(
+    /(?:from|import\(|\/\/\/\s*<reference\s+types=)\s*["']([^"']+)["']/g,
+  )) {
+    // Subpaths count: `@scope/private/sub` is as unresolvable as the root — so
+    // the SPECIFIER is reported (that is what the reader must go find) while the
+    // OWNING package is what the suggested remedy names. Resolving one subpath
+    // leaves a sibling import from the same package still dangling.
+    for (const owner of unpublishable) {
+      if (m[1] === owner || m[1].startsWith(`${owner}/`))
+        found.set(m[1], owner);
+    }
+  }
+  return [...found]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([specifier, owner]) => ({ specifier, owner }));
+}
+
+/**
  * @returns {Promise<{name: string, entries: {subpath: string, values: string[], types: string[]}[], problems: string[]}[]>}
  */
 export async function extractApi(repoRoot, packages) {
   const out = [];
+
+  // Built BEFORE the loop skips them: a private package contributes no surface
+  // of its own, but it is precisely what a public `.d.ts` must never name.
+  const unpublishable = new Set(
+    packages.filter((p) => p.private).map((p) => p.name),
+  );
 
   for (const pkg of packages) {
     if (pkg.private) continue;
@@ -178,8 +234,25 @@ export async function extractApi(repoRoot, packages) {
         if (dts) {
           const dtsAbs = resolve(dir, dts);
           if (existsSync(dtsAbs)) {
-            const declared = await declaredNames(dtsAbs);
-            types = declared.filter((n) => !values.includes(n));
+            const declText = await readFile(dtsAbs, "utf8");
+            types = declaredNames(declText).filter((n) => !values.includes(n));
+
+            for (const { specifier, owner } of unpublishableRefs(
+              declText,
+              unpublishable,
+            )) {
+              problems.push(
+                `${pkg.name}${subpath.slice(1)} → ${dts} references ` +
+                  `\`${specifier}\`, which belongs to \`${owner}\` — a PRIVATE ` +
+                  `workspace package that is never published. npm cannot resolve ` +
+                  `it, so a consumer gets \`TS2307\` — or, with ` +
+                  `\`skipLibCheck: true\`, the types silently become \`any\`. If the ` +
+                  `package is bundled, tell the bundler to inline its declarations ` +
+                  `too (tsup: \`dts: { resolve: ["${owner}"] }\` — the package root, ` +
+                  `so sibling subpaths are covered too); otherwise the names have ` +
+                  `to come from somewhere publishable.`,
+              );
+            }
           } else {
             problems.push(
               `${pkg.name}${subpath.slice(1)} → ${dts} does not exist, so type ` +

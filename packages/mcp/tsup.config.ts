@@ -6,7 +6,13 @@ export default defineConfig({
   // the CLI and this server), so it is no longer built or re-exported here.
   entry: ["src/index.ts", "src/server.ts"],
   format: ["esm"],
-  dts: true,
+  // `resolve` is what makes the private-package bundling below actually work
+  // for TYPES. Bundling the JS is only half of it: without this, tsup emits
+  // `export { SessionInfo } from "@real-a11y-dev/session-registry"` into
+  // `server.d.ts` — a module npm cannot resolve, because it is never published.
+  // Naming the package here inlines its declaration text instead, so the
+  // published `.d.ts` has no reference to it at all.
+  dts: { resolve: ["@real-a11y-dev/session-registry"] },
   sourcemap: true,
   clean: true,
   treeshake: true,

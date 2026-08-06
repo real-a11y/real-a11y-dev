@@ -45,7 +45,9 @@ Then, in a scratch project outside the repo:
 4. Import each **subpath** export — `@real-a11y-dev/testing/playwright`,
    `/matchers`, `/matchers/vitest`, the UI's `styles`, and any others in the
    exports maps
-5. Resolve types for every entry (`tsc --noEmit` on a file importing each)
+5. Resolve types for every entry (`tsc --noEmit` on a file importing each),
+   **with `skipLibCheck: false`** — see below, the default hides the fault this
+   step exists to find
 6. Run each package's `bin` — `npx real-a11y --version`, and the MCP server's bin
 7. Repeat 2–3 on a **Node 24** runtime as well
 8. Grep the install for `MODULE_NOT_FOUND` / `ERR_PACKAGE_PATH_NOT_EXPORTED`
@@ -56,6 +58,12 @@ Then, in a scratch project outside the repo:
 - Every subpath in every `exports` map is reachable — an entry nobody imports in
   CI is exactly the one that's broken
 - Types are found for every entry, from both module systems
+- **No shipped `.d.ts` imports a package that isn't published.** Run step 5 with
+  `skipLibCheck: false` or this one cannot fail. A private workspace package is
+  bundled into its consumers, so the JS is fine and the install is fine — but the
+  declarations are a separate emit, and unless the bundler inlines them the
+  `.d.ts` keeps `from "@real-a11y-dev/<private>"`. A violation shows up as
+  `TS2307`
 - Bins are executable and exit `0` on `--version`
 - Zero `MODULE_NOT_FOUND`, zero unexported-path errors
 
@@ -68,3 +76,14 @@ resolves by `exports` map, and those two agree right up until they don't.
 Node 24 (7) is checked separately because CI's `packages-node24` job exists for
 it: newer Node is stricter about exports resolution, so a package can install
 cleanly on 20 and fail on 24.
+
+`skipLibCheck: false` in (5) is not pedantry, and this row already missed one
+because of it. `@real-a11y-dev/mcp` shipped `server.d.ts` importing
+`@real-a11y-dev/session-registry` — a private package, 404 on npm. Under the
+common `skipLibCheck: true` a consumer sees **no error at all**: the three
+re-exported names (`SessionInfo`, `SessionRegistryError`,
+`RegistryShutdownError`) quietly degrade to `any`. It installs, it runs, it type-
+checks, and it has silently stopped type-checking part of the public contract.
+That is the same silent-success shape R9 watches for in `list_elements` — a
+result that looks like a pass and isn't — so the assertion has to be written to
+fail loudly, not left to a default.
