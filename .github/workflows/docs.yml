@@ -64,6 +64,11 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # `deployments: read` is for the ordering check below, which asks the API
+    # which commit real-a11y.dev is currently serving.
+    permissions:
+      contents: read
+      deployments: read
     # Keyed on what is actually being built, and separate from the deploy group
     # below. With `push` gone, the old collision cannot happen: a release build
     # is keyed on its own sha, and the only runs sharing `refs/heads/main` are
@@ -98,6 +103,41 @@ jobs:
             echo "::error::$SHA carries no release tag — refusing to deploy it as the released docs."
             exit 1
           }
+
+      # ...and a NEWER one than what is live. The tag check above proves the
+      # commit is a release; it does not prove it is the latest. Re-running
+      # Publish at an older tag — the recovery path the release skill documents
+      # — publishes nothing, exits 0, and would otherwise redeploy that older
+      # release over the current site with no failed run anywhere.
+      #
+      # Deliberately fails OPEN when the live commit cannot be determined (the
+      # first ever deploy, an API hiccup, a commit not in this clone). Failing
+      # closed here would let an unrelated GitHub outage strand a real release's
+      # docs, which is the worse of the two: going backwards takes a human
+      # deliberately re-running an old publish, and is visible on the site.
+      # Every skip says so in the log rather than passing quietly.
+      - name: Refuse to deploy an older release
+        if: github.event.inputs.sha != ''
+        env:
+          SHA: ${{ github.event.inputs.sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          LIVE=$(gh api \
+            "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=1" \
+            --jq '.[0].sha // empty' 2>/dev/null || true)
+
+          if [ -z "$LIVE" ]; then
+            echo "::notice::No previous github-pages deployment found — nothing to compare against."
+          elif [ "$LIVE" = "$SHA" ]; then
+            echo "::notice::$SHA is already live; redeploying it is harmless."
+          elif ! git cat-file -e "$LIVE^{commit}" 2>/dev/null; then
+            echo "::warning::Live commit $LIVE is not in this clone — skipping the ordering check."
+          elif git merge-base --is-ancestor "$SHA" "$LIVE"; then
+            echo "::error::$SHA is an ancestor of the live commit $LIVE. Deploying it would roll the published docs backwards."
+            exit 1
+          else
+            echo "$SHA is newer than the live commit $LIVE."
+          fi
 
       # pnpm version is read from `packageManager` in package.json.
       - uses: pnpm/action-setup@v4

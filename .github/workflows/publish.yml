@@ -65,6 +65,9 @@ jobs:
       # the docs still have to catch up. Keying the deploy on the job would
       # freeze real-a11y.dev on the previous release with nothing reporting it.
       published: ${{ steps.publish.outputs.published }}
+      # Whether `latest` ends up pointing at this publish — see `Resolve
+      # dist-tag`. The stable docs deploy on this, not on the channel name.
+      is_latest: ${{ steps.tag.outputs.is_latest }}
     permissions:
       # Required for OIDC: lets npm validate the GitHub Actions identity
       # against each package's Trusted Publisher config, and lets npm
@@ -130,12 +133,35 @@ jobs:
       - name: Resolve dist-tag
         id: tag
         run: |
+          MODE="$(node -p "try { require('./.changeset/pre.json').mode } catch { 'exit' }")"
           TAG="${{ github.event.inputs.tag }}"
           if [ -z "$TAG" ]; then
-            MODE="$(node -p "try { require('./.changeset/pre.json').mode } catch { 'exit' }")"
             if [ "$MODE" = "pre" ]; then TAG="beta"; else TAG="latest"; fi
           fi
           echo "value=$TAG" >> "$GITHUB_OUTPUT"
+
+          # Does `latest` end up pointing at THIS publish? That, not the channel
+          # name, is what decides whether the stable docs may deploy — the site
+          # describes what `npm install <pkg>` delivers, which is whatever
+          # `latest` resolves to.
+          #
+          # True two ways: the channel IS `latest`; or the channel is `beta` in
+          # prerelease mode, because `Advance latest dist-tag` below then moves
+          # `latest` onto the just-published prereleases. Gating on
+          # `TAG = latest` alone would be wrong for the whole pre-1.0 period —
+          # it would freeze real-a11y.dev until `changeset pre exit`, even
+          # though the betas are exactly what a reader installs.
+          #
+          # The case this exists to catch is forcing `tag: beta` OUTSIDE
+          # pre-mode: advance-latest.mjs no-ops there (its own pre-mode guard),
+          # so `latest` stays on the previous stable while the site would
+          # otherwise jump to the beta commit — npm and the docs describing
+          # different code, which is the drift this whole gate exists to remove.
+          if [ "$TAG" = "latest" ] || { [ "$TAG" = "beta" ] && [ "$MODE" = "pre" ]; }; then
+            echo "is_latest=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_latest=false" >> "$GITHUB_OUTPUT"
+          fi
 
       # pnpm's `publish -r` publishes every package whose version/tag is new,
       # skips the rest. `--no-git-checks` lets tag-triggered runs proceed even
@@ -186,7 +212,14 @@ jobs:
     # `always()` on purpose: a failure in a post-publish chore must not strand
     # the docs on the previous release. `published` is what decides, and it is
     # set by the publish step rather than inferred from the job.
-    if: always() && needs.publish.outputs.published == 'true'
+    #
+    # `is_latest` is the second half: the stable site describes what `npm
+    # install` delivers, so it may only move when this publish is what `latest`
+    # now resolves to. In prerelease mode that includes a `beta` publish, since
+    # advance-latest.mjs moves `latest` onto it.
+    if: >-
+      always() && needs.publish.outputs.published == 'true' &&
+      needs.publish.outputs.is_latest == 'true'
     runs-on: ubuntu-latest
     permissions:
       actions: write
