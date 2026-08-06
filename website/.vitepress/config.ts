@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath, URL } from "node:url";
@@ -49,6 +50,97 @@ const isNext = CHANNEL === "next";
  * docs describing unreleased software.
  */
 const SITE = "https://real-a11y.dev";
+
+/**
+ * The version label in the nav — read from the manifests, never hand-written.
+ *
+ * It replaces a hardcoded `v0.1 · Beta` that had never changed and could not:
+ * it read the same at `0.1.0-beta.1` as it would at `0.1.0-beta.40`, so a
+ * reader had no way to tell whether the page in front of them described the
+ * version `npm install` had just given them.
+ *
+ * WHY THE LINKED COHORT, AND NOT "the version"
+ *
+ * There isn't one. The linked packages move together while `cli` and `mcp`
+ * version independently and lag — beta.5 against the cohort's beta.15 — so any
+ * single number is wrong for something. The cohort's identifies the RELEASE
+ * CUT these docs were built from, which is a real question with a real answer
+ * now that the site deploys once per publish. Readers needing per-package
+ * precision get it where it matters: the "not published yet" notice names the
+ * exact package and version it is talking about.
+ *
+ * WHY IT IS LOOKED UP RATHER THAN NAMED
+ *
+ * The first version of this hardcoded `@real-a11y-dev/core`, which was the
+ * cohort's anchor at the time. #325 then made `core` private, and it stopped
+ * being versioned — so that label would now read `v0.1.0-beta.13`, the version
+ * of a package nobody can install, while the published cohort sat at beta.15.
+ * Confidently wrong, which is the one thing this label exists to stop being.
+ *
+ * So the cohort is read from `.changeset/config.json`, which is what actually
+ * decides it: the packages listed under `linked` are versioned together by
+ * definition, and the file is updated in the same PR that changes the shape of
+ * the release. A repackaging like #325 now moves the label with it.
+ */
+const RELEASE_LABEL = releaseLabel();
+
+function releaseLabel(): string {
+  // `next` names the release it is AHEAD of, which is the more useful fact
+  // there: the reader wants to know what they would get if they installed
+  // today, not what this branch will eventually become.
+  const stable = cohortVersion("../../docs/surface.json");
+  if (!isNext) return stable ? `v${stable}` : "Beta";
+
+  const released = cohortVersion("../../docs/surface.released.json");
+  return released ? `next · ahead of ${released}` : "next · unreleased";
+}
+
+/**
+ * The linked cohort's version out of a surface manifest, or null.
+ *
+ * Null is a real answer, not a failure to handle: `surface.released.json` does
+ * not exist until the first release cut writes it, and a docs build must not
+ * depend on a file whose whole design is to be absent at first. Every caller
+ * falls back to a label that claims nothing rather than a number that might be
+ * wrong — the same rule the notice follows.
+ *
+ * A cohort member that is PRIVATE is skipped rather than trusted. Privatising a
+ * package stops `changeset version` bumping it while it may still be listed as
+ * linked, which is exactly how the hardcoded version of this went stale.
+ */
+function cohortVersion(relative: string): string | null {
+  try {
+    const linked = readJson("../../.changeset/config.json").linked?.[0];
+    if (!Array.isArray(linked) || linked.length === 0) return null;
+
+    const packages = readJson(relative).packages ?? [];
+    for (const name of linked) {
+      const pkg = packages.find((p) => p.name === name);
+      if (pkg && !pkg.private && typeof pkg.version === "string") {
+        return pkg.version;
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Read a repo-relative JSON file.
+ *
+ * Throws on a missing or malformed file rather than returning a default — the
+ * one caller wraps it, and turning "the manifest is broken" into a silent empty
+ * object there would produce a label that claims nothing for a reason nobody
+ * could diagnose.
+ */
+function readJson(relative: string): {
+  packages?: { name?: string; version?: string; private?: boolean }[];
+  linked?: string[][];
+} {
+  const path = fileURLToPath(new URL(relative, import.meta.url));
+  return JSON.parse(readFileSync(path, "utf8"));
+}
 
 export default defineConfig({
   title: "Real A11y",
@@ -255,11 +347,12 @@ export default defineConfig({
       // the one you can run without installing anything.
       { text: "Packages", link: "/packages/cli" },
       {
-        // `noindex` keeps `next` out of search, but a direct link still lands
-        // someone here with no way to tell which copy they are reading. Until
-        // the banner work replaces this hardcoded label with the real published
-        // version, this is the minimum honest signal.
-        text: isNext ? "next · unreleased" : "v0.1 · Beta",
+        // Which release these docs describe. `noindex` keeps `next` out of
+        // search, but a direct link still lands someone on either channel with
+        // no way to tell which copy they are reading — so this is the signal
+        // that distinguishes them, and on stable it is also the answer to "do
+        // these docs match what I just installed". See `releaseLabel` above.
+        text: RELEASE_LABEL,
         items: [
           {
             text: "Changelog",
