@@ -59,7 +59,7 @@ describe("extraction focusedId", () => {
 
     const dom = extractDomTree(root);
     expect(dom.focusedId).toBeDefined();
-    expect(dom.nodes.get(dom.focusedId!)?.dom.tagName).toBe("button");
+    expect(dom.nodes.get(dom.focusedId!)?.dom?.tagName).toBe("button");
   });
 
   it("is undefined when nothing is focused", () => {

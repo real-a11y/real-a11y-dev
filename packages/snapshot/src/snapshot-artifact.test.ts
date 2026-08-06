@@ -375,7 +375,10 @@ describe("legacy artifacts (written before pages had an id)", () => {
     tree: "",
     outline: "",
   });
-  const artifact = (pages: ReturnType<typeof legacy>[]) =>
+  // Takes an optional `id` so the "explicit ids clash" case below can add one
+  // without a cast. It used to be `ReturnType<typeof legacy>[]` with the caller
+  // casting — and a cast on a fixture defeats the only check the fixture has.
+  const artifact = (pages: (ReturnType<typeof legacy> & { id?: string })[]) =>
     JSON.stringify({
       schemaVersion: ARTIFACT_SCHEMA_VERSION,
       tool: { name: "real-a11y", version: "0.1.0" },
@@ -463,7 +466,7 @@ describe("legacy artifacts (written before pages had an id)", () => {
         artifact([
           { ...legacy("Site A", "https://a.example.com/"), id: "/" },
           { ...legacy("Site B", "https://b.example.com/"), id: "/" },
-        ] as ReturnType<typeof legacy>[]),
+        ]),
         "base.json",
       ),
     ).toThrow(/share the id "\/"/);

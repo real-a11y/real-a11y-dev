@@ -189,7 +189,7 @@ describe("LiveTreeExtractor", () => {
     expect(result.nodes).toEqual(expected.nodes);
 
     const inputId = result.nodes.get(result.rootId!)?.childIds[0];
-    expect(result.nodes.get(inputId!)?.dom.attributes.value).toBe("hello");
+    expect(result.nodes.get(inputId!)?.dom?.attributes.value).toBe("hello");
 
     observer.stop();
   });
@@ -230,7 +230,12 @@ describe("LiveTreeExtractor", () => {
     document.body.innerHTML = `<main><button>One</button></main>`;
 
     const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
-    const changes: TreeChange[] = [];
+    // `DomObserver`'s callback is `(change?: TreeChange)`, and `refresh` accepts
+    // the same optional — a debounced batch can coalesce to "something moved,
+    // no usable delta". Recording that faithfully is the point: typing this
+    // `TreeChange[]` would have the test assert a guarantee the observer never
+    // made.
+    const changes: (TreeChange | undefined)[] = [];
     const observer = new DomObserver(
       document.body,
       (change) => {
@@ -277,7 +282,7 @@ describe("LiveTreeExtractor", () => {
     const result = live.refresh(lastChange);
 
     const divId = result.nodes.get(result.rootId!)?.childIds[0];
-    expect(result.nodes.get(divId!)?.dom.textContent).toBe("New");
+    expect(result.nodes.get(divId!)?.dom?.textContent).toBe("New");
 
     observer.stop();
   });
@@ -719,7 +724,7 @@ describe("LiveTreeExtractor", () => {
     expect(result.nodes.size).toBe(expected.nodes.size);
     expect(result.nodes).toEqual(expected.nodes);
     expect(
-      [...result.nodes.values()].some((n) => n.dom.textContent === "Gone"),
+      [...result.nodes.values()].some((n) => n.dom?.textContent === "Gone"),
     ).toBe(false);
   });
 
@@ -744,7 +749,7 @@ describe("LiveTreeExtractor", () => {
     });
 
     const firstNodeWithTag = (result: ExtractionResult, tag: string) =>
-      [...result.nodes.values()].find((n) => n.dom.tagName === tag);
+      [...result.nodes.values()].find((n) => n.dom?.tagName === tag);
 
     it("re-scopes to a modal when aria-modal is toggled on in place", () => {
       document.body.innerHTML = `
@@ -793,7 +798,7 @@ describe("LiveTreeExtractor", () => {
       expect(result.nodes).toEqual(expected.nodes);
       expect(
         [...result.nodes.values()].some(
-          (n) => n.dom.textContent === "Background",
+          (n) => n.dom?.textContent === "Background",
         ),
       ).toBe(true);
     });

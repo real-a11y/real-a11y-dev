@@ -26,7 +26,7 @@ describe("searchTree", () => {
     const results = searchTree(nodes, "nav", "dom");
     const matchedNodes = Array.from(results)
       .map((id) => nodes.get(id)!)
-      .filter((n) => n.dom.tagName === "nav");
+      .filter((n) => n.dom?.tagName === "nav");
 
     expect(matchedNodes.length).toBe(1);
   });
@@ -66,7 +66,7 @@ describe("searchTree", () => {
     const directMatches = Array.from(results).filter((id) => {
       const node = nodes.get(id)!;
       return (
-        node.dom.tagName.includes("xyznonexistent") ||
+        node.dom?.tagName.includes("xyznonexistent") ||
         node.a11y.name.includes("xyznonexistent")
       );
     });
@@ -91,7 +91,7 @@ describe("searchTree", () => {
 
     // The button, plus all its ancestors should be in the result
     const buttonNode = Array.from(nodes.values()).find(
-      (n) => n.dom.tagName === "button",
+      (n) => n.dom?.tagName === "button",
     )!;
     expect(results.has(buttonNode.id)).toBe(true);
 
@@ -110,7 +110,7 @@ describe("applySearchFilter", () => {
     applySearchFilter(nodes, "", "dom");
 
     for (const node of nodes.values()) {
-      expect(node.ui.matchesFilter).toBe(true);
+      expect(node.ui?.matchesFilter).toBe(true);
     }
   });
 

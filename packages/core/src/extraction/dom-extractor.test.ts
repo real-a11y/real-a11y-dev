@@ -223,7 +223,7 @@ describe("extractDomTree", () => {
 
     const rootNode = nodes.get(rootId);
     expect(rootNode).toBeDefined();
-    expect(rootNode!.dom.tagName).toBe("div");
+    expect(rootNode!.dom?.tagName).toBe("div");
     expect(rootNode!.depth).toBe(0);
     expect(rootNode!.parentId).toBe(null);
   });
@@ -250,13 +250,13 @@ describe("extractDomTree", () => {
 
     const ulId = rootNode.childIds[0];
     const ulNode = nodes.get(ulId)!;
-    expect(ulNode.dom.tagName).toBe("ul");
+    expect(ulNode.dom?.tagName).toBe("ul");
     expect(ulNode.childIds.length).toBe(2);
 
     const li1 = nodes.get(ulNode.childIds[0])!;
     const li2 = nodes.get(ulNode.childIds[1])!;
-    expect(li1.dom.tagName).toBe("li");
-    expect(li2.dom.tagName).toBe("li");
+    expect(li1.dom?.tagName).toBe("li");
+    expect(li2.dom?.tagName).toBe("li");
     expect(li1.parentId).toBe(ulId);
     expect(li2.parentId).toBe(ulId);
   });
@@ -323,16 +323,16 @@ describe("extractDomTree", () => {
     const input = nodes.get(rootNode.childIds[2])!;
     const div = nodes.get(rootNode.childIds[3])!;
 
-    expect(link.interaction.isInteractive).toBe(true);
-    expect(link.interaction.actions).toContain("navigate");
+    expect(link.interaction?.isInteractive).toBe(true);
+    expect(link.interaction?.actions).toContain("navigate");
 
-    expect(button.interaction.isInteractive).toBe(true);
-    expect(button.interaction.actions).toContain("click");
+    expect(button.interaction?.isInteractive).toBe(true);
+    expect(button.interaction?.actions).toContain("click");
 
-    expect(input.interaction.isInteractive).toBe(true);
-    expect(input.interaction.actions).toContain("focus");
+    expect(input.interaction?.isInteractive).toBe(true);
+    expect(input.interaction?.actions).toContain("focus");
 
-    expect(div.interaction.isInteractive).toBe(false);
+    expect(div.interaction?.isInteractive).toBe(false);
   });
 
   it("exposes increment/decrement (not type) for ARIA [role='slider']", () => {
@@ -346,12 +346,12 @@ describe("extractDomTree", () => {
     `);
     const { nodes } = extractDomTree(root);
     const slider = [...nodes.values()].find(
-      (n) => n.dom.attributes["role"] === "slider",
+      (n) => n.dom?.attributes["role"] === "slider",
     )!;
-    expect(slider.interaction.actions).toContain("focus");
-    expect(slider.interaction.actions).toContain("increment");
-    expect(slider.interaction.actions).toContain("decrement");
-    expect(slider.interaction.actions).not.toContain("type");
+    expect(slider.interaction?.actions).toContain("focus");
+    expect(slider.interaction?.actions).toContain("increment");
+    expect(slider.interaction?.actions).toContain("decrement");
+    expect(slider.interaction?.actions).not.toContain("type");
   });
 
   it("pairs increment/decrement on native <input type='range'> (no 'type')", () => {
@@ -360,10 +360,10 @@ describe("extractDomTree", () => {
     );
     const { nodes, rootId } = extractDomTree(root);
     const input = nodes.get(nodes.get(rootId)!.childIds[0])!;
-    expect(input.interaction.actions).toContain("increment");
-    expect(input.interaction.actions).toContain("decrement");
+    expect(input.interaction?.actions).toContain("increment");
+    expect(input.interaction?.actions).toContain("decrement");
     // Sliders aren't typeable — keep the action surface honest.
-    expect(input.interaction.actions).not.toContain("type");
+    expect(input.interaction?.actions).not.toContain("type");
   });
 
   it("pairs increment/decrement AND type on native <input type='number'>", () => {
@@ -371,9 +371,9 @@ describe("extractDomTree", () => {
     const root = createPage(`<input type="number" value="10">`);
     const { nodes, rootId } = extractDomTree(root);
     const input = nodes.get(nodes.get(rootId)!.childIds[0])!;
-    expect(input.interaction.actions).toContain("type");
-    expect(input.interaction.actions).toContain("increment");
-    expect(input.interaction.actions).toContain("decrement");
+    expect(input.interaction?.actions).toContain("type");
+    expect(input.interaction?.actions).toContain("increment");
+    expect(input.interaction?.actions).toContain("decrement");
   });
 
   it("classifies an editable (contenteditable) combobox as typeable, not click", () => {
@@ -387,11 +387,11 @@ describe("extractDomTree", () => {
     );
     const { nodes, rootId } = extractDomTree(root);
     const combo = nodes.get(nodes.get(rootId)!.childIds[0])!;
-    expect(combo.interaction.actions).toContain("type");
-    expect(combo.interaction.actions).toContain("focus");
+    expect(combo.interaction?.actions).toContain("type");
+    expect(combo.interaction?.actions).toContain("focus");
     // "click" would outrank "type" in getPrimaryAction and re-hijack the
     // primary action, so it must NOT be present for an editable combobox.
-    expect(combo.interaction.actions).not.toContain("click");
+    expect(combo.interaction?.actions).not.toContain("click");
   });
 
   it('treats a contenteditable="plaintext-only" combobox as typeable', () => {
@@ -400,8 +400,8 @@ describe("extractDomTree", () => {
     );
     const { nodes, rootId } = extractDomTree(root);
     const combo = nodes.get(nodes.get(rootId)!.childIds[0])!;
-    expect(combo.interaction.actions).toContain("type");
-    expect(combo.interaction.actions).not.toContain("click");
+    expect(combo.interaction?.actions).toContain("type");
+    expect(combo.interaction?.actions).not.toContain("click");
   });
 
   it("keeps a select-only combobox click-driven (no text entry)", () => {
@@ -412,8 +412,8 @@ describe("extractDomTree", () => {
     );
     const { nodes, rootId } = extractDomTree(root);
     const combo = nodes.get(nodes.get(rootId)!.childIds[0])!;
-    expect(combo.interaction.actions).toContain("click");
-    expect(combo.interaction.actions).not.toContain("type");
+    expect(combo.interaction?.actions).toContain("click");
+    expect(combo.interaction?.actions).not.toContain("type");
   });
 
   it("classifies a native <input role='combobox'> as typeable (W3C APG example)", () => {
@@ -425,8 +425,8 @@ describe("extractDomTree", () => {
     );
     const { nodes, rootId } = extractDomTree(root);
     const combo = nodes.get(nodes.get(rootId)!.childIds[0])!;
-    expect(combo.interaction.actions).toContain("type");
-    expect(combo.interaction.actions).not.toContain("click");
+    expect(combo.interaction?.actions).toContain("type");
+    expect(combo.interaction?.actions).not.toContain("click");
   });
 
   it("computes correct roles", () => {
@@ -442,15 +442,15 @@ describe("extractDomTree", () => {
       </main>
     `);
 
-    const { nodes, rootId } = extractDomTree(root);
+    const { nodes } = extractDomTree(root);
 
     const allNodes = Array.from(nodes.values());
-    const nav = allNodes.find((n) => n.dom.tagName === "nav")!;
-    const link = allNodes.find((n) => n.dom.tagName === "a")!;
-    const main = allNodes.find((n) => n.dom.tagName === "main")!;
-    const h1 = allNodes.find((n) => n.dom.tagName === "h1")!;
-    const article = allNodes.find((n) => n.dom.tagName === "article")!;
-    const p = allNodes.find((n) => n.dom.tagName === "p")!;
+    const nav = allNodes.find((n) => n.dom?.tagName === "nav")!;
+    const link = allNodes.find((n) => n.dom?.tagName === "a")!;
+    const main = allNodes.find((n) => n.dom?.tagName === "main")!;
+    const h1 = allNodes.find((n) => n.dom?.tagName === "h1")!;
+    const article = allNodes.find((n) => n.dom?.tagName === "article")!;
+    const p = allNodes.find((n) => n.dom?.tagName === "p")!;
 
     expect(nav.a11y.role).toBe("navigation");
     expect(link.a11y.role).toBe("link");
@@ -486,7 +486,7 @@ describe("extractDomTree", () => {
     `);
 
     const { nodes } = extractDomTree(root);
-    const allTags = Array.from(nodes.values()).map((n) => n.dom.tagName);
+    const allTags = Array.from(nodes.values()).map((n) => n.dom?.tagName);
 
     expect(allTags).not.toContain("script");
     expect(allTags).not.toContain("style");
@@ -509,9 +509,9 @@ describe("extractDomTree", () => {
     const rootNode = nodes.get(rootId)!;
     const link = nodes.get(rootNode.childIds[0])!;
 
-    expect(link.dom.attributes["id"]).toBe("home-link");
-    expect(link.dom.attributes["class"]).toBe("nav-link active");
-    expect(link.dom.attributes["href"]).toBe("/home");
+    expect(link.dom?.attributes["id"]).toBe("home-link");
+    expect(link.dom?.attributes["class"]).toBe("nav-link active");
+    expect(link.dom?.attributes["href"]).toBe("/home");
   });
 
   it("computes accessible name from wrapping <label> (implicit association)", () => {
@@ -525,16 +525,17 @@ describe("extractDomTree", () => {
     const allNodes = Array.from(nodes.values());
 
     const textInput = allNodes.find(
-      (n) => n.dom.tagName === "input" && n.dom.attributes["type"] === "text",
+      (n) => n.dom?.tagName === "input" && n.dom?.attributes["type"] === "text",
     )!;
     expect(textInput.a11y.name).toBe("Full name");
 
     const emailInput = allNodes.find(
-      (n) => n.dom.tagName === "input" && n.dom.attributes["type"] === "email",
+      (n) =>
+        n.dom?.tagName === "input" && n.dom?.attributes["type"] === "email",
     )!;
     expect(emailInput.a11y.name).toBe("Email address");
 
-    const textarea = allNodes.find((n) => n.dom.tagName === "textarea")!;
+    const textarea = allNodes.find((n) => n.dom?.tagName === "textarea")!;
     expect(textarea.a11y.name).toBe("Message");
   });
 
@@ -548,7 +549,7 @@ describe("extractDomTree", () => {
 
     const { nodes } = extractDomTree(document.body);
     const input = Array.from(nodes.values()).find(
-      (n) => n.dom.tagName === "input",
+      (n) => n.dom?.tagName === "input",
     )!;
     expect(input.a11y.name).toBe("Name");
 
@@ -576,13 +577,13 @@ describe("extractDomTree", () => {
       `);
 
       const { nodes } = extractDomTree(root);
-      const code = [...nodes.values()].find((n) => n.dom.tagName === "code")!;
+      const code = [...nodes.values()].find((n) => n.dom?.tagName === "code")!;
 
-      expect(code.dom.descendantText).toBe(
+      expect(code.dom?.descendantText).toBe(
         "npm install @real-a11y-dev/inspector",
       );
       // Direct textContent stays empty — the spans are children, not text nodes.
-      expect(code.dom.textContent).toBe("");
+      expect(code.dom?.textContent).toBe("");
     });
 
     it("collapses whitespace in descendantText", () => {
@@ -594,11 +595,11 @@ describe("extractDomTree", () => {
       `);
 
       const div = [...extractDomTree(root).nodes.values()].find(
-        (n) => n.dom.tagName === "div" && n.parentId !== null,
+        (n) => n.dom?.tagName === "div" && n.parentId !== null,
       )!;
 
       // Newlines + indentation between spans collapse to a single space.
-      expect(div.dom.descendantText).toBe("line one line two");
+      expect(div.dom?.descendantText).toBe("line one line two");
     });
 
     it("truncates very long text with an ellipsis", () => {
@@ -608,19 +609,19 @@ describe("extractDomTree", () => {
       );
 
       const code = [...extractDomTree(root).nodes.values()].find(
-        (n) => n.dom.tagName === "code",
+        (n) => n.dom?.tagName === "code",
       )!;
 
-      expect(code.dom.descendantText.length).toBeLessThanOrEqual(240);
-      expect(code.dom.descendantText.endsWith("…")).toBe(true);
+      expect(code.dom?.descendantText.length).toBeLessThanOrEqual(240);
+      expect(code.dom?.descendantText.endsWith("…")).toBe(true);
     });
 
     it("returns empty string for elements with no text", () => {
       const root = createPage(`<div><img alt="" /><br /></div>`);
       const div = [...extractDomTree(root).nodes.values()].find(
-        (n) => n.dom.tagName === "div" && n.parentId !== null,
+        (n) => n.dom?.tagName === "div" && n.parentId !== null,
       )!;
-      expect(div.dom.descendantText).toBe("");
+      expect(div.dom?.descendantText).toBe("");
     });
 
     it("does not add a false ellipsis when collapsed text is exactly 240 chars", () => {
@@ -676,7 +677,7 @@ describe("extractDomTree", () => {
         </a>
       `);
       const link = [...extractDomTree(root).nodes.values()].find(
-        (n) => n.dom.tagName === "a",
+        (n) => n.dom?.tagName === "a",
       )!;
       expect(link.a11y.name.replace(/\s+/g, " ").trim()).toBe("Go home");
     });
@@ -689,7 +690,7 @@ describe("extractDomTree", () => {
         </button>
       `);
       const btn = [...extractDomTree(root).nodes.values()].find(
-        (n) => n.dom.tagName === "button",
+        (n) => n.dom?.tagName === "button",
       )!;
       expect(btn.a11y.name.replace(/\s+/g, " ").trim()).toBe("Close dialog");
     });
@@ -702,7 +703,7 @@ describe("extractDomTree", () => {
         </h1>
       `);
       const h1 = [...extractDomTree(root).nodes.values()].find(
-        (n) => n.dom.tagName === "h1",
+        (n) => n.dom?.tagName === "h1",
       )!;
       expect(h1.a11y.name.replace(/\s+/g, " ").trim()).toBe("Real A11y");
     });
@@ -718,7 +719,7 @@ describe("extractDomTree", () => {
       document.body.appendChild(root);
       try {
         const btn = [...extractDomTree(root).nodes.values()].find(
-          (n) => n.dom.tagName === "button",
+          (n) => n.dom?.tagName === "button",
         )!;
         expect(btn.a11y.name.replace(/\s+/g, " ").trim()).toBe("Submit");
       } finally {
@@ -736,7 +737,7 @@ describe("extractDomTree", () => {
       `;
       try {
         const btn = [...extractDomTree(document.body).nodes.values()].find(
-          (n) => n.dom.tagName === "button",
+          (n) => n.dom?.tagName === "button",
         )!;
         expect(btn.a11y.name.replace(/\s+/g, " ").trim()).toBe("Real A11y");
       } finally {
@@ -753,7 +754,7 @@ describe("extractDomTree", () => {
         </label>
       `);
       const input = [...extractDomTree(root).nodes.values()].find(
-        (n) => n.dom.tagName === "input",
+        (n) => n.dom?.tagName === "input",
       )!;
       expect(input.a11y.name.replace(/\s+/g, " ").trim()).toBe("Email");
     });
@@ -765,7 +766,7 @@ describe("extractDomTree", () => {
         </a>
       `);
       const link = [...extractDomTree(root).nodes.values()].find(
-        (n) => n.dom.tagName === "a",
+        (n) => n.dom?.tagName === "a",
       )!;
       expect(link.a11y.name).toBe("Real A11y — go to home");
     });
@@ -793,13 +794,13 @@ describe("extractDomTree", () => {
         </ul>
       `);
       const reports = [...extractDomTree(root).nodes.values()].find(
-        (n) => n.dom.attributes["id"] === "reports",
+        (n) => n.dom?.attributes["id"] === "reports",
       )!;
       expect(reports.a11y.name).toBe("Reports");
       // The nested rows still appear as their own nodes with their own names.
       const inner = [...extractDomTree(root).nodes.values()].filter(
         (n) =>
-          n.a11y.role === "treeitem" && n.dom.attributes["id"] !== "reports",
+          n.a11y.role === "treeitem" && n.dom?.attributes["id"] !== "reports",
       );
       expect(inner.map((n) => n.a11y.name)).toEqual(["report-1", "report-2"]);
     });
@@ -817,7 +818,7 @@ describe("extractDomTree", () => {
         </div>
       `);
       const outer = [...extractDomTree(root).nodes.values()].find(
-        (n) => n.dom.attributes["id"] === "outer",
+        (n) => n.dom?.attributes["id"] === "outer",
       )!;
       expect(outer.a11y.name.trim()).toBe("Folder");
     });
@@ -837,7 +838,7 @@ describe("extractDomTree", () => {
         </ul>
       `);
       const file = [...extractDomTree(root).nodes.values()].find(
-        (n) => n.dom.attributes["id"] === "file",
+        (n) => n.dom?.attributes["id"] === "file",
       )!;
       expect(file.a11y.name.trim()).toBe("File");
     });
@@ -850,7 +851,7 @@ describe("extractDomTree", () => {
         <button>Save <strong>changes</strong> <em>now</em></button>
       `);
       const btn = [...extractDomTree(root).nodes.values()].find(
-        (n) => n.dom.tagName === "button",
+        (n) => n.dom?.tagName === "button",
       )!;
       expect(btn.a11y.name.replace(/\s+/g, " ").trim()).toBe(
         "Save changes now",
@@ -869,7 +870,7 @@ describe("extractDomTree", () => {
         </div>
       `);
       const outer = [...extractDomTree(root).nodes.values()].find(
-        (n) => n.dom.attributes["id"] === "outer",
+        (n) => n.dom?.attributes["id"] === "outer",
       )!;
       expect(outer.a11y.name).toBe("Outer Inner");
     });
@@ -882,7 +883,7 @@ describe("extractDomTree", () => {
         <div role="tab" id="t1"><h3>Overview</h3></div>
       `);
       const tab = [...extractDomTree(root).nodes.values()].find(
-        (n) => n.dom.attributes["id"] === "t1",
+        (n) => n.dom?.attributes["id"] === "t1",
       )!;
       expect(tab.a11y.name.trim()).toBe("Overview");
     });
@@ -1069,7 +1070,7 @@ describe("extractDomTree", () => {
       const tree = extractDomTree(appRoot);
       const rootNode = tree.nodes.get(tree.rootId)!;
       // Without portals, the root is appRoot itself, not body.
-      expect(rootNode.dom.attributes["id"]).toBe("app-root");
+      expect(rootNode.dom?.attributes["id"]).toBe("app-root");
     });
 
     it("ignores hidden portal overlays (no pivot)", () => {
@@ -1084,7 +1085,7 @@ describe("extractDomTree", () => {
       const tree = extractDomTree(appRoot);
       const rootNode = tree.nodes.get(tree.rootId)!;
       // Hidden overlay shouldn't trigger the pivot.
-      expect(rootNode.dom.attributes["id"]).toBe("app-root");
+      expect(rootNode.dom?.attributes["id"]).toBe("app-root");
     });
 
     // A tree that pivoted to body swallows every body child, so the honest
@@ -1094,7 +1095,7 @@ describe("extractDomTree", () => {
     // either way.
     const idsIn = (root: Element) =>
       [...extractDomTree(root).nodes.values()].map(
-        (n) => n.dom.attributes["id"],
+        (n) => n.dom?.attributes["id"],
       );
 
     it("ignores an empty live-region announcer shell (no pivot)", () => {
@@ -1169,7 +1170,7 @@ describe("name from content covers the whole ARIA 1.2 role set", () => {
   const nameOf = (html: string): string => {
     const root = createPage(html);
     const node = [...extractDomTree(root).nodes.values()].find(
-      (n) => n.dom.attributes["id"] === "target",
+      (n) => n.dom?.attributes["id"] === "target",
     )!;
     return node.a11y.name;
   };
@@ -1262,7 +1263,7 @@ describe("accessible-name cycle safety (accname visit-once)", () => {
     let name: string | undefined;
     expect(() => {
       const outer = [...extractDomTree(host).nodes.values()].find(
-        (n) => n.dom.attributes["id"] === "outer",
+        (n) => n.dom?.attributes["id"] === "outer",
       )!;
       name = outer.a11y.name;
     }).not.toThrow();
@@ -1331,7 +1332,7 @@ describe("sensitive value redaction", () => {
     const node = firstChild(
       createPage(`<input type="password" value="hunter2">`),
     );
-    expect(node.dom.attributes["value"]).toBe("[redacted]");
+    expect(node.dom?.attributes["value"]).toBe("[redacted]");
     expect(JSON.stringify(node)).not.toContain("hunter2");
   });
 
@@ -1339,7 +1340,7 @@ describe("sensitive value redaction", () => {
     const node = firstChild(
       createPage(`<input autocomplete="cc-number" value="4111111111111111">`),
     );
-    expect(node.dom.attributes["value"]).toBe("[redacted]");
+    expect(node.dom?.attributes["value"]).toBe("[redacted]");
     expect(JSON.stringify(node)).not.toContain("4111111111111111");
   });
 
@@ -1347,7 +1348,7 @@ describe("sensitive value redaction", () => {
     const node = firstChild(
       createPage(`<input type="text" value="Ada Lovelace">`),
     );
-    expect(node.dom.attributes["value"]).toBe("Ada Lovelace");
+    expect(node.dom?.attributes["value"]).toBe("Ada Lovelace");
   });
 
   it("never uses a sensitive value as the accessible name", () => {
@@ -1373,7 +1374,7 @@ describe("input accessible name (HTML-AAM)", () => {
   const nameOf = (html: string) => {
     const root = createPage(html);
     const input = [...extractDomTree(root).nodes.values()].find(
-      (n) => n.dom.tagName === "input",
+      (n) => n.dom?.tagName === "input",
     )!;
     return input.a11y.name;
   };
@@ -1413,7 +1414,7 @@ describe("input accessible name (HTML-AAM)", () => {
       '<input id="e" type="text" value="typed" placeholder="you@x.com">';
     try {
       const input = [...extractDomTree(document.body).nodes.values()].find(
-        (n) => n.dom.tagName === "input",
+        (n) => n.dom?.tagName === "input",
       )!;
       expect(input.a11y.name).toBe("Email");
     } finally {
@@ -1431,7 +1432,7 @@ describe("media elements (video/audio)", () => {
   function mediaNode(html: string, tagName: string) {
     const root = createPage(html);
     return [...extractDomTree(root).nodes.values()].find(
-      (n) => n.dom.tagName === tagName,
+      (n) => n.dom?.tagName === tagName,
     )!;
   }
 
@@ -1462,14 +1463,14 @@ describe("media elements (video/audio)", () => {
       </video>
     `);
     const { nodes } = extractDomTree(root);
-    const tags = [...nodes.values()].map((n) => n.dom.tagName);
+    const tags = [...nodes.values()].map((n) => n.dom?.tagName);
     expect(tags).toContain("video");
     expect(tags).not.toContain("track");
     expect(tags).not.toContain("source");
     // Fallback link is unrendered content — must not leak into the tree.
     expect(tags).not.toContain("a");
 
-    const video = [...nodes.values()].find((n) => n.dom.tagName === "video")!;
+    const video = [...nodes.values()].find((n) => n.dom?.tagName === "video")!;
     expect(video.childIds).toEqual([]);
   });
 
@@ -1480,8 +1481,8 @@ describe("media elements (video/audio)", () => {
     );
     // Chromium exposes an unlabeled <video> with an empty name.
     expect(node.a11y.name).toBe("");
-    expect(node.dom.textContent).toBe("");
-    expect(node.dom.descendantText).toBe("");
+    expect(node.dom?.textContent).toBe("");
+    expect(node.dom?.descendantText).toBe("");
   });
 
   it("hoists the captions signal onto the media node (WCAG 1.2.2)", () => {
@@ -1544,12 +1545,12 @@ describe("media elements (video/audio)", () => {
       `<video controls src="x.mp4"></video>`,
       "video",
     );
-    expect(withControls.interaction.isFocusable).toBe(true);
-    expect(withControls.interaction.actions).toContain("focus");
+    expect(withControls.interaction?.isFocusable).toBe(true);
+    expect(withControls.interaction?.actions).toContain("focus");
 
     const withoutControls = mediaNode(`<video src="x.mp4"></video>`, "video");
-    expect(withoutControls.interaction.isFocusable).toBe(false);
-    expect(withoutControls.interaction.actions).toEqual([]);
+    expect(withoutControls.interaction?.isFocusable).toBe(false);
+    expect(withoutControls.interaction?.actions).toEqual([]);
   });
 
   it("surfaces media attributes (controls/autoplay/muted/loop) for the panel", () => {
@@ -1557,10 +1558,10 @@ describe("media elements (video/audio)", () => {
       `<video controls autoplay muted loop src="x.mp4"></video>`,
       "video",
     );
-    expect(node.dom.attributes["controls"]).toBe("");
-    expect(node.dom.attributes["autoplay"]).toBe("");
-    expect(node.dom.attributes["muted"]).toBe("");
-    expect(node.dom.attributes["loop"]).toBe("");
+    expect(node.dom?.attributes["controls"]).toBe("");
+    expect(node.dom?.attributes["autoplay"]).toBe("");
+    expect(node.dom?.attributes["muted"]).toBe("");
+    expect(node.dom?.attributes["loop"]).toBe("");
   });
 
   it("does not leak media fallback text into a wrapping container's preview", () => {
@@ -1575,10 +1576,10 @@ describe("media elements (video/audio)", () => {
       </figure>
     `);
     const figure = [...extractDomTree(root).nodes.values()].find(
-      (n) => n.dom.tagName === "figure",
+      (n) => n.dom?.tagName === "figure",
     )!;
-    expect(figure.dom.descendantText).toBe("Product tour");
-    expect(figure.dom.descendantText).not.toContain("Sorry");
+    expect(figure.dom?.descendantText).toBe("Product tour");
+    expect(figure.dom?.descendantText).not.toContain("Sorry");
   });
 
   it("still collects non-media descendant text around a pruned media element", () => {
@@ -1590,10 +1591,10 @@ describe("media elements (video/audio)", () => {
       </div>
     `);
     const div = [...extractDomTree(root).nodes.values()].find(
-      (n) => n.dom.tagName === "div" && n.parentId !== null,
+      (n) => n.dom?.tagName === "div" && n.parentId !== null,
     )!;
-    expect(div.dom.descendantText).toBe("Before After");
-    expect(div.dom.descendantText).not.toContain("fallback");
+    expect(div.dom?.descendantText).toBe("Before After");
+    expect(div.dom?.descendantText).not.toContain("fallback");
   });
 
   it("skips <source> inside <picture> too, keeping the <img>", () => {
@@ -1604,7 +1605,7 @@ describe("media elements (video/audio)", () => {
       </picture>
     `);
     const tags = [...extractDomTree(root).nodes.values()].map(
-      (n) => n.dom.tagName,
+      (n) => n.dom?.tagName,
     );
     expect(tags).not.toContain("source");
     expect(tags).toContain("img");
@@ -1667,7 +1668,7 @@ describe("aria-describedby target suppression", () => {
 
     const { nodes } = extractDomTree(root);
 
-    expect([...nodes.values()].some((n) => n.dom.tagName === "p")).toBe(false);
+    expect([...nodes.values()].some((n) => n.dom?.tagName === "p")).toBe(false);
   });
 
   it("keeps a description target that contains interactive content", () => {
@@ -1682,11 +1683,11 @@ describe("aria-describedby target suppression", () => {
 
     const { nodes } = extractDomTree(root);
 
-    const link = [...nodes.values()].find((n) => n.dom.tagName === "a");
+    const link = [...nodes.values()].find((n) => n.dom?.tagName === "a");
     expect(link).toBeDefined();
     expect(link!.a11y.name).toBe("Full rules");
     // The target itself has to survive too — it is the link's parent.
-    const p = [...nodes.values()].find((n) => n.dom.tagName === "p");
+    const p = [...nodes.values()].find((n) => n.dom?.tagName === "p");
     expect(p).toBeDefined();
     expect(p!.childIds).toContain(link!.id);
   });
@@ -1701,7 +1702,7 @@ describe("aria-describedby target suppression", () => {
 
     const { nodes } = extractDomTree(root);
 
-    const button = [...nodes.values()].find((n) => n.dom.tagName === "button");
+    const button = [...nodes.values()].find((n) => n.dom?.tagName === "button");
     expect(button).toBeDefined();
     expect(button!.a11y.name).toBe("Show me");
   });
@@ -1721,10 +1722,10 @@ describe("aria-describedby target suppression", () => {
 
     const { nodes } = extractDomTree(root);
 
-    expect([...nodes.values()].some((n) => n.dom.tagName === "button")).toBe(
+    expect([...nodes.values()].some((n) => n.dom?.tagName === "button")).toBe(
       false,
     );
-    expect([...nodes.values()].some((n) => n.dom.tagName === "p")).toBe(false);
+    expect([...nodes.values()].some((n) => n.dom?.tagName === "p")).toBe(false);
   });
 
   it("still suppresses a tabindex='-1' target holding only text", () => {
@@ -1740,7 +1741,7 @@ describe("aria-describedby target suppression", () => {
     const { nodes } = extractDomTree(root);
 
     expect(
-      [...nodes.values()].some((n) => n.dom.attributes?.id === "pw-err"),
+      [...nodes.values()].some((n) => n.dom?.attributes?.id === "pw-err"),
     ).toBe(false);
   });
 
@@ -1755,7 +1756,7 @@ describe("aria-describedby target suppression", () => {
 
     const { nodes } = extractDomTree(root);
 
-    expect([...nodes.values()].some((n) => n.dom.tagName === "p")).toBe(false);
+    expect([...nodes.values()].some((n) => n.dom?.tagName === "p")).toBe(false);
   });
 
   it("still suppresses a target whose only control is media fallback", () => {
@@ -1770,8 +1771,8 @@ describe("aria-describedby target suppression", () => {
 
     const { nodes } = extractDomTree(root);
 
-    expect([...nodes.values()].some((n) => n.dom.tagName === "a")).toBe(false);
-    expect([...nodes.values()].some((n) => n.dom.tagName === "p")).toBe(false);
+    expect([...nodes.values()].some((n) => n.dom?.tagName === "a")).toBe(false);
+    expect([...nodes.values()].some((n) => n.dom?.tagName === "p")).toBe(false);
   });
 
   it("keeps a target holding a media element that is itself a tab stop", () => {
@@ -1784,10 +1785,10 @@ describe("aria-describedby target suppression", () => {
 
     const { nodes } = extractDomTree(root);
 
-    expect([...nodes.values()].some((n) => n.dom.tagName === "video")).toBe(
+    expect([...nodes.values()].some((n) => n.dom?.tagName === "video")).toBe(
       true,
     );
-    expect([...nodes.values()].some((n) => n.dom.tagName === "p")).toBe(true);
+    expect([...nodes.values()].some((n) => n.dom?.tagName === "p")).toBe(true);
   });
 
   it("keeps a target whose control is reachable via tabindex='0'", () => {

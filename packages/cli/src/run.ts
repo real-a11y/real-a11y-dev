@@ -16,6 +16,7 @@ import {
   isNativeCommand,
   parseMs,
   rootHelp,
+  type FlagValue,
   type FlagValues,
 } from "./args.js";
 import {
@@ -257,8 +258,7 @@ export async function run(argv: string[]): Promise<number> {
         );
       }
     }
-    const idleTimeoutValue = values["session-idle-timeout"] as
-      string | boolean | undefined;
+    const idleTimeoutValue = values["session-idle-timeout"] as FlagValue;
     if (
       values.session === undefined &&
       idleTimeoutValue !== undefined &&

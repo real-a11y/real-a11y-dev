@@ -234,7 +234,10 @@ describe("listByRole", () => {
     it("says the tree was empty, rather than blaming the filter", () => {
       // Nothing extracted at all: the page never loaded, or extraction failed.
       // Reporting "0 of 0 matched" would point at the wrong thing.
-      const out = listByRole({ nodes: new Map(), rootId: "" }, "link");
+      const out = listByRole(
+        { nodes: new Map(), rootId: "", source: { producer: "dom" } },
+        "link",
+      );
       expect(out).toMatch(/the tree is empty/);
       expect(out).toMatch(/may not have loaded, or extraction failed/);
     });
@@ -307,19 +310,36 @@ describe("collectFindings — locators on a pre-extracted tree", () => {
       parentId: id === "ax-1" ? null : "ax-1",
       childIds: [],
       depth: id === "ax-1" ? 0 : 1,
-      a11y: { role, name: "", states: {}, properties: {} },
+      // `description` and `isExposedToAT` are required on `A11yInfo` and were
+      // both missing — the second layer the cast hid. `isExposedToAT` is not
+      // inert: `a11y-extractor` filters on it, so a fixture omitting it was
+      // feeding `undefined` to a real predicate and getting the falsy branch by
+      // accident. A native AX node in this tree is exposed; say so.
+      a11y: {
+        role,
+        name: "",
+        description: "",
+        states: {},
+        properties: {},
+        isExposedToAT: true,
+      },
       ...(dom
         ? {
             dom: {
               tagName: dom.tagName,
               attributes: {},
               textContent: null,
+              // Required on `DomInfo` and omitted here. The `as SemanticNode`
+              // below was what let it through — a cast on a fixture asserts the
+              // shape is right instead of checking it, so the one thing the
+              // fixture exists to be was the one thing nothing verified.
+              descendantText: "",
               isHidden: false,
               ...(dom.locator ? { locator: dom.locator } : {}),
             },
           }
         : {}),
-    } as SemanticNode;
+    };
   }
 
   function nativeTree(nodes: SemanticNode[]): ExtractionResult {
@@ -331,7 +351,7 @@ describe("collectFindings — locators on a pre-extracted tree", () => {
       rootId: "ax-1",
       nodes: all,
       source: { producer: "native" },
-    } as ExtractionResult;
+    };
   }
 
   it("uses the locator the producer precomputed", () => {
