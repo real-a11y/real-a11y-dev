@@ -150,10 +150,14 @@ been mutated yet, so the fix is simply to run the command again.
 The snapshot itself copies the committed manifest rather than re-extracting, so
 it is byte-identical to the one the release PR reviewed.
 
-The difference between the two files is the set of capabilities the site
-documents but `npm install` does not yet deliver. That gap is structural: the
-docs deploy on every push to `main` while npm publishes on a release cut, so
-`main` is always some distance ahead of what a reader can actually install.
+The difference between the two files is the set of capabilities `main`
+documents but `npm install` does not yet deliver. That gap is structural, since
+`main` moves continuously and npm publishes on a release cut — what varies is
+which site shows it. [next.real-a11y.dev](https://next.real-a11y.dev) ships
+every push to `main`, so it always carries some; real-a11y.dev is gated on a
+successful publish (see *Docs channels* below), so it normally carries none —
+the exception being a manual **Deploy docs** run, which builds `main`'s tip on
+purpose. The notice is what keeps both honest.
 
 **The file is deliberately not seeded from `main`.** `docs/surface.json` did not
 exist at `v0.1.0-beta.11`, the newest release when this landed, so there is no
@@ -264,8 +268,8 @@ The documentation ships on two sites, from the same source:
 
 | | Serves | Deploys on |
 | --- | --- | --- |
-| [real-a11y.dev](https://real-a11y.dev) | the **released** docs | a successful `Publish to npm`, `docs.yml` |
-| [next.real-a11y.dev](https://next.real-a11y.dev) | `main` as it stands | every push to `main`, `docs-next.yml` |
+| [real-a11y.dev](https://real-a11y.dev) | the **released** docs | a successful `Publish to npm` — GitHub Pages, `docs.yml` |
+| [next.real-a11y.dev](https://next.real-a11y.dev) | `main` as it stands | every push to `main` — Cloudflare Pages, `docs-next.yml` |
 
 The split exists because the two audiences want opposite things. Someone who just ran `npm install` needs docs describing the version they actually have; someone following development needs `main`. One site cannot be both, and for most of this project's life it was quietly the second while presenting as the first.
 
@@ -273,8 +277,8 @@ Gating the stable deploy is what makes that structurally impossible rather than 
 
 Two consequences worth knowing:
 
-- **The stable site does not move between releases.** That is the point, not a fault. If something on it is wrong enough to need fixing now — a broken link, a wrong command — run **Actions → Deploy docs → Run workflow**, which deploys `main`'s tip. That will include unreleased surface; the "not published yet" notice marks it, so the page stays honest.
-- **The deploy builds the published commit, not `main`.** `release-tag.yml` dispatches `publish.yml` at the release tag, so `workflow_run.head_sha` is the release commit. Building `main`'s tip instead would reintroduce exactly the drift the gate removes.
+- **The stable site does not move between releases.** That is the point, not a fault. If something on it is wrong enough to need fixing now — a broken link, a wrong command — run **Actions → Deploy docs → Run workflow** with `sha` left empty, which deploys `main`'s tip. That will include unreleased surface, and the ["not published yet" notice](#the-released-surface) is what marks it — **but that notice renders nothing until the first release cut writes `docs/surface.released.json`**, so until then a manual deploy ships unreleased surface unmarked. Prefer `next.` while that is true.
+- **The deploy builds the published commit, not `main`.** `publish.yml` dispatches `docs.yml` with the released commit as its `sha` input, and `docs.yml` refuses a `sha` that carries no release tag. Building `main`'s tip instead would reintroduce exactly the drift the gate removes.
 
 **The two builds are not interchangeable.** `DOCS_CHANNEL=next` turns off the sitemap, replaces `robots.txt` with `Disallow: /`, adds `noindex` to every page, and labels the nav `next · unreleased`. Reproduce it locally with:
 

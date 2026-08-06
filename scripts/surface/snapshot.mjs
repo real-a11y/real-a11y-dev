@@ -5,10 +5,13 @@
 // site documents but `npm install` does not yet deliver.
 //
 // That gap is otherwise invisible, and it is structural rather than accidental:
-// docs.yml deploys the site on every push to `main`, npm publishes on a release
-// cut, and nothing has ever compared the two. D8 asks a human to check exactly
-// this at release time ("nothing documented is unshipped"), against no recorded
-// answer — this is the recorded answer.
+// `main` moves continuously while npm publishes on a release cut, and nothing
+// has ever compared the two. docs-next.yml ships `main` to next.real-a11y.dev
+// on every push, so that channel always carries the gap; docs.yml gates
+// real-a11y.dev on a successful publish, so stable normally does not — except
+// after a manual deploy, which builds `main`'s tip deliberately. D8 asks a
+// human to check exactly this at release time ("nothing documented is
+// unshipped"), against no recorded answer — this is the recorded answer.
 //
 // WHY THIS COPIES RATHER THAN RE-EXTRACTS
 //

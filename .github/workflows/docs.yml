@@ -12,94 +12,109 @@ name: Deploy docs
 # a release: a typo repair lands on `next.` immediately and reaches stable with
 # the next publish.
 #
-# Builds still run on every push and pull request. Only DEPLOY is gated, so a
-# broken docs build is caught at review time exactly as before.
+# HOW A RELEASE REACHES HERE. `publish.yml` dispatches this workflow after a
+# successful publish, passing the released commit as `sha`. That is an explicit
+# dispatch rather than a `workflow_run` listener, for the same reason
+# `release-tag.yml` dispatches `publish.yml` instead of relying on the tag push
+# it makes: a run created with GITHUB_TOKEN does not raise events that start
+# further runs. `workflow_dispatch` is the documented exception to that rule —
+# `workflow_run` is not, so a listener would never fire on the automated path,
+# and would fail silently, because a run that never starts leaves no failed
+# check. The dispatch is also greppable from `publish.yml`, survives renaming
+# that workflow (a `workflow_run` filter matches its display NAME), and can be
+# exercised by hand before it ever runs for real.
 #
-# The deploy builds the PUBLISHED commit, not `main`'s tip.
-# `release-tag.yml` dispatches `publish.yml --ref <release tag>`, so
-# `workflow_run.head_sha` is the release commit. `main` has usually moved on by
-# the time this runs, and building its tip would reintroduce the exact drift
-# this gate removes.
+# The dispatch is made at `main` while `sha` carries the release commit. That
+# split is deliberate: the `github-pages` environment's deployment-branch
+# policy sees an allowed ref, while the build checks out what was actually
+# published. `main` has usually moved on by then, and building its tip would
+# reintroduce the exact drift this gate removes.
+#
+# Builds run on every pull request, so a broken docs build is still caught at
+# review time. There is deliberately no `push` trigger: after gating, a push
+# build could only ever produce a Pages artifact no job is allowed to deploy,
+# and `main` is already built on every merge by `test.yml`'s `website-a11y`
+# (a required check) and by `docs-next.yml`, which actually ships it.
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
 
-  # The deploy path. `workflow_run` fires only for workflow files on the
-  # default branch, which also means the run's own ref is `main` — so the
-  # `github-pages` environment sees an allowed branch even though the checkout
-  # below is a release commit.
-  workflow_run:
-    workflows: ["Publish to npm"]
-    types: [completed]
-
-  # Escape hatch: publish the docs without waiting for a release. For a broken
-  # link or a wrong command in the published reference — the cases where
-  # "correct at the next release" is not good enough. Deploys `main`'s tip,
-  # which will contain unreleased surface; the "not published yet" notice marks
-  # it, so the page stays honest.
+  # The only deploy path — from `publish.yml` after a release, or by hand.
   workflow_dispatch:
+    inputs:
+      sha:
+        description: >-
+          Commit to build and deploy. Must carry a release tag. Leave empty to
+          deploy `main`'s tip — the escape hatch for a broken link or a wrong
+          command in the published reference, where "correct at the next
+          release" is not good enough. A tip deploy WILL contain unreleased
+          surface.
+        required: false
 
 # Default to read-only. The build job runs on every pull_request (including
 # forks) and executes untrusted PR code — it only needs to check out, build,
-# and upload a Pages artifact. pages: write + id-token: write are escalated
-# on the deploy job alone. Matches the least-privilege posture in publish.yml /
-# test.yml (OpenSSF Scorecard Token-Permissions / CodeQL
-# missing-workflow-permissions).
+# and upload a Pages artifact. pages: write + id-token: write are escalated on
+# the deploy job alone, which is gated to `main`. Matches the least-privilege
+# posture in publish.yml / test.yml (OpenSSF Scorecard Token-Permissions /
+# CodeQL missing-workflow-permissions).
 permissions:
   contents: read
 
 jobs:
   build:
-    # `workflow_run` fires on every publish completion, including failures.
-    # Building for one would burn several minutes to produce an artifact the
-    # deploy below is going to skip anyway.
-    if: >-
-      github.event_name != 'workflow_run' ||
-      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    # Per-ref, and separate from the deploy group below. A push to `main` must
-    # never cancel an in-flight release deploy — with one workflow-level group
-    # keyed on `github.ref` it would, since `workflow_run` runs also carry
-    # `refs/heads/main`. A merge landing mid-release would have killed the
-    # deploy silently.
+    # Keyed on what is actually being built, and separate from the deploy group
+    # below. With `push` gone, the old collision cannot happen: a release build
+    # is keyed on its own sha, and the only runs sharing `refs/heads/main` are
+    # two manual deploys, where superseding is what you want.
     concurrency:
-      group: pages-build-${{ github.event.workflow_run.head_sha || github.ref }}
+      group: pages-build-${{ github.event.inputs.sha || github.ref }}
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
         with:
-          # The published commit on the deploy path; the triggering ref
-          # otherwise. `github.sha` on a `workflow_run` is the default branch's
-          # tip, NOT the commit that was published — the same distinction
-          # publish.yml draws for npm provenance.
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          # The released commit when dispatched by publish.yml; the triggering
+          # ref otherwise.
+          ref: ${{ github.event.inputs.sha || github.sha }}
+          # `lastUpdated: true` in the VitePress config reads git history per
+          # page. A shallow clone grafts every tracked file onto the tip commit,
+          # so every page's "Last updated" would render the same date.
+          fetch-depth: 0
+
+      # A dispatched `sha` has to be a release commit. Two things that look like
+      # successes otherwise deploy the wrong tree: `pnpm publish -r` skips
+      # versions already on npm and still exits 0, so re-running Publish at an
+      # older tag — the recovery path the release skill documents — would roll
+      # the site backwards; and dispatching Publish at `main` mid-cycle
+      # publishes nothing, concludes success, and would ship every unreleased
+      # flag to the site whose whole point is that it cannot describe any.
+      - name: Require a release commit
+        if: github.event.inputs.sha != ''
+        env:
+          SHA: ${{ github.event.inputs.sha }}
+        run: |
+          git describe --exact-match --tags "$SHA" >/dev/null 2>&1 || {
+            echo "::error::$SHA carries no release tag — refusing to deploy it as the released docs."
+            exit 1
+          }
 
       # pnpm version is read from `packageManager` in package.json.
       - uses: pnpm/action-setup@v4
 
-      # NO dependency cache on the `workflow_run` path — deliberately.
+      # No dependency cache when building a commit other than the ref we are
+      # running on. The run carries the default branch's cache scope, so saving
+      # a store built from another commit into it is the cache-poisoning shape
+      # CodeQL flags (`actions/cache-poisoning/poisonable-step`).
       #
-      # `workflow_run` runs are privileged: they carry the default branch's
-      # cache scope. Combined with the checkout above, which takes its ref from
-      # the triggering run, `pnpm install` would populate a store that
-      # `setup-node`'s post-step then writes into the cache every `main` build
-      # reads. That is a cache-poisoning vector, and CodeQL flags it as one
-      # (`actions/cache-poisoning/poisonable-step`).
-      #
-      # The commit is in fact trusted here — `publish.yml` only runs from
-      # `workflow_dispatch` or a pushed `v*` tag, both of which need write
-      # access, so nobody without it can influence `head_sha`. The cache is
-      # dropped anyway: the argument for safety is a chain of four facts about
-      # another workflow's triggers, and that is exactly the kind of reasoning
-      # that stops being true when someone edits that workflow. Releases are
-      # rare, so a cold install costs a couple of minutes a few times a month.
+      # Mind the operand order. In GitHub Actions expressions `''` is FALSY, so
+      # `cond && '' || 'pnpm'` returns `'pnpm'` on BOTH branches — the cache is
+      # never disabled and the mitigation silently does not exist. The truthy
+      # value has to sit in the `&&` slot, as it does here.
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: ${{ github.event_name == 'workflow_run' && '' || 'pnpm' }}
+          cache: ${{ github.event.inputs.sha == '' && 'pnpm' || '' }}
 
       - run: pnpm install --frozen-lockfile
 
@@ -114,13 +129,11 @@ jobs:
           path: website/.vitepress/dist
 
   deploy:
-    # A successful publish, or a deliberate manual deploy. Note `workflow_run`
-    # fires on completion of ANY conclusion — a failed or cancelled publish
-    # must not ship docs claiming that release exists.
-    if: >-
-      (github.event_name == 'workflow_run' &&
-       github.event.workflow_run.conclusion == 'success') ||
-      github.event_name == 'workflow_dispatch'
+    # Dispatch only, and only from `main`. The ref check is not redundant with
+    # the trigger: the Run-workflow dropdown accepts any branch or tag, and
+    # without it a dispatch from an unreviewed branch would build that branch's
+    # tip and publish it to the production site.
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     # One at a time, and never cancelled. A half-superseded Pages deploy is

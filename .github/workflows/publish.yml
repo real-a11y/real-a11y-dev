@@ -58,6 +58,13 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    outputs:
+      # Set by the Publish step itself, deliberately NOT derived from this job's
+      # conclusion. `Advance latest dist-tag` runs after it and exits non-zero
+      # on a transient npm error — but the packages are on npm either way, so
+      # the docs still have to catch up. Keying the deploy on the job would
+      # freeze real-a11y.dev on the previous release with nothing reporting it.
+      published: ${{ steps.publish.outputs.published }}
     permissions:
       # Required for OIDC: lets npm validate the GitHub Actions identity
       # against each package's Trusted Publisher config, and lets npm
@@ -140,6 +147,7 @@ jobs:
       # signing on (uses GHA OIDC under the hood — independent of the
       # publish-auth path).
       - name: Publish
+        id: publish
         env:
           NPM_CONFIG_PROVENANCE: "true"
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -148,6 +156,7 @@ jobs:
             --access public \
             --tag ${{ steps.tag.outputs.value }} \
             --no-git-checks
+          echo "published=true" >> "$GITHUB_OUTPUT"
 
       # After a prerelease publish, advance `latest` to the just-published
       # versions. `--tag beta` never moves `latest`, so pre-1.0 `npm install
@@ -159,3 +168,38 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: node scripts/advance-latest.mjs --published-tag ${{ steps.tag.outputs.value }}
+
+  # The stable docs are the last link in the release chain: real-a11y.dev serves
+  # the RELEASED docs, so it can only move once the packages are on npm.
+  #
+  # An explicit dispatch, not a `workflow_run` listener in docs.yml — see that
+  # file's header for the full reasoning. Short version: this run is itself
+  # created by `release-tag.yml` with GITHUB_TOKEN, and a run created that way
+  # does not raise events that start further runs. `workflow_dispatch` is the
+  # documented exception; `workflow_run` is not, so a listener would never fire
+  # here and would do it silently.
+  #
+  # Its own job so `actions: write` is never granted to the job holding
+  # NPM_TOKEN, and so the two never share a runner.
+  deploy-docs:
+    needs: publish
+    # `always()` on purpose: a failure in a post-publish chore must not strand
+    # the docs on the previous release. `published` is what decides, and it is
+    # set by the publish step rather than inferred from the job.
+    if: always() && needs.publish.outputs.published == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      # Dispatched at `main` so the `github-pages` environment sees an allowed
+      # branch; the released commit travels as an input and is what docs.yml
+      # checks out. docs.yml refuses a sha that carries no release tag.
+      - name: Deploy the released docs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run docs.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref main \
+            -f sha="$GITHUB_SHA"
