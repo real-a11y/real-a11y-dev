@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath, URL } from "node:url";
@@ -49,6 +50,64 @@ const isNext = CHANNEL === "next";
  * docs describing unreleased software.
  */
 const SITE = "https://real-a11y.dev";
+
+/**
+ * The version label in the nav — read from the manifests, never hand-written.
+ *
+ * It replaces a hardcoded `v0.1 · Beta` that had never changed and could not:
+ * it read the same at `0.1.0-beta.1` as it would at `0.1.0-beta.40`, so a
+ * reader had no way to tell whether the page in front of them described the
+ * version `npm install` had just given them.
+ *
+ * WHY THE COHORT'S VERSION, AND NOT "the version"
+ *
+ * There isn't one. `core`, `serialize`, `ui`, `inspector`, `react`,
+ * `storybook-addon` and `testing` are a linked cohort and move together;
+ * `cli`, `mcp` and `validate` version independently and lag (beta.1 and beta.7
+ * against the cohort's beta.11). Any single number is therefore wrong for
+ * something.
+ *
+ * `core`'s version is the honest headline because it identifies the RELEASE
+ * CUT these docs were built from — the site now deploys once per publish, so
+ * "which release is this" is a real question with a real answer, even though
+ * "which version is every package" is not. Readers who need per-package
+ * precision get it where it actually matters: the "not published yet" notice
+ * names the exact package and version it is talking about.
+ */
+const RELEASE_LABEL = releaseLabel();
+
+function releaseLabel(): string {
+  // `next` names the release it is AHEAD of, which is the more useful fact
+  // there: the reader wants to know what they would get if they installed
+  // today, not what this branch will eventually become.
+  const stable = coreVersion("../../docs/surface.json");
+  if (!isNext) return stable ? `v${stable}` : "Beta";
+
+  const released = coreVersion("../../docs/surface.released.json");
+  return released ? `next · ahead of ${released}` : "next · unreleased";
+}
+
+/**
+ * `core`'s version out of a surface manifest, or null if it cannot be read.
+ *
+ * Null is a real answer, not a failure to handle: `surface.released.json` does
+ * not exist until the first release cut writes it, and a docs build must not
+ * depend on a file whose whole design is to be absent at first. Every caller
+ * falls back to a label that claims nothing rather than a number that might be
+ * wrong — the same rule the notice follows.
+ */
+function coreVersion(relative: string): string | null {
+  try {
+    const path = fileURLToPath(new URL(relative, import.meta.url));
+    const manifest = JSON.parse(readFileSync(path, "utf8"));
+    const core = manifest.packages?.find(
+      (p: { name?: string }) => p.name === "@real-a11y-dev/core",
+    );
+    return typeof core?.version === "string" ? core.version : null;
+  } catch {
+    return null;
+  }
+}
 
 export default defineConfig({
   title: "Real A11y",
@@ -252,11 +311,12 @@ export default defineConfig({
       { text: "Recipes", link: "/recipes/nextjs" },
       { text: "Packages", link: "/packages/core" },
       {
-        // `noindex` keeps `next` out of search, but a direct link still lands
-        // someone here with no way to tell which copy they are reading. Until
-        // the banner work replaces this hardcoded label with the real published
-        // version, this is the minimum honest signal.
-        text: isNext ? "next · unreleased" : "v0.1 · Beta",
+        // Which release these docs describe. `noindex` keeps `next` out of
+        // search, but a direct link still lands someone on either channel with
+        // no way to tell which copy they are reading — so this is the signal
+        // that distinguishes them, and on stable it is also the answer to "do
+        // these docs match what I just installed". See `releaseLabel` above.
+        text: RELEASE_LABEL,
         items: [
           {
             text: "Changelog",
