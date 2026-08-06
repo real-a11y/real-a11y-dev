@@ -1,34 +1,81 @@
 name: Deploy docs
 
+# real-a11y.dev — the RELEASED docs.
+#
+# Deploys when `Publish to npm` succeeds, not when `main` moves. Before this,
+# the site tracked `main`, so it documented commands and flags that `npm
+# install` did not yet deliver, with no way for a reader to tell. Gating the
+# deploy makes that structurally impossible rather than merely discouraged.
+#
+# `main` still ships continuously — to next.real-a11y.dev via `docs-next.yml`.
+# That channel exists precisely so this gate does not freeze docs fixes behind
+# a release: a typo repair lands on `next.` immediately and reaches stable with
+# the next publish.
+#
+# Builds still run on every push and pull request. Only DEPLOY is gated, so a
+# broken docs build is caught at review time exactly as before.
+#
+# The deploy builds the PUBLISHED commit, not `main`'s tip.
+# `release-tag.yml` dispatches `publish.yml --ref <release tag>`, so
+# `workflow_run.head_sha` is the release commit. `main` has usually moved on by
+# the time this runs, and building its tip would reintroduce the exact drift
+# this gate removes.
+
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
 
+  # The deploy path. `workflow_run` fires only for workflow files on the
+  # default branch, which also means the run's own ref is `main` — so the
+  # `github-pages` environment sees an allowed branch even though the checkout
+  # below is a release commit.
+  workflow_run:
+    workflows: ["Publish to npm"]
+    types: [completed]
+
+  # Escape hatch: publish the docs without waiting for a release. For a broken
+  # link or a wrong command in the published reference — the cases where
+  # "correct at the next release" is not good enough. Deploys `main`'s tip,
+  # which will contain unreleased surface; the "not published yet" notice marks
+  # it, so the page stays honest.
+  workflow_dispatch:
+
 # Default to read-only. The build job runs on every pull_request (including
 # forks) and executes untrusted PR code — it only needs to check out, build,
 # and upload a Pages artifact. pages: write + id-token: write are escalated
-# on the deploy job alone (gated to main). Matches the least-privilege
-# posture in publish.yml / test.yml (OpenSSF Scorecard Token-Permissions /
-# CodeQL missing-workflow-permissions).
+# on the deploy job alone. Matches the least-privilege posture in publish.yml /
+# test.yml (OpenSSF Scorecard Token-Permissions / CodeQL
+# missing-workflow-permissions).
 permissions:
   contents: read
 
-# Per-ref concurrency: each branch / PR gets its own group, so PR runs and
-# main runs no longer cancel each other. Within a single ref the lock still
-# holds — a new push supersedes any in-flight run on the same branch.
-# (The previous repo-wide `pages` group was killing every concurrent PR
-# build whenever any sibling PR or main push triggered this workflow.)
-concurrency:
-  group: pages-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   build:
+    # `workflow_run` fires on every publish completion, including failures.
+    # Building for one would burn several minutes to produce an artifact the
+    # deploy below is going to skip anyway.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
+    # Per-ref, and separate from the deploy group below. A push to `main` must
+    # never cancel an in-flight release deploy — with one workflow-level group
+    # keyed on `github.ref` it would, since `workflow_run` runs also carry
+    # `refs/heads/main`. A merge landing mid-release would have killed the
+    # deploy silently.
+    concurrency:
+      group: pages-build-${{ github.event.workflow_run.head_sha || github.ref }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The published commit on the deploy path; the triggering ref
+          # otherwise. `github.sha` on a `workflow_run` is the default branch's
+          # tip, NOT the commit that was published — the same distinction
+          # publish.yml draws for npm provenance.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       # pnpm version is read from `packageManager` in package.json.
       - uses: pnpm/action-setup@v4
@@ -51,9 +98,21 @@ jobs:
           path: website/.vitepress/dist
 
   deploy:
-    if: github.ref == 'refs/heads/main'
+    # A successful publish, or a deliberate manual deploy. Note `workflow_run`
+    # fires on completion of ANY conclusion — a failed or cancelled publish
+    # must not ship docs claiming that release exists.
+    if: >-
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success') ||
+      github.event_name == 'workflow_dispatch'
     needs: build
     runs-on: ubuntu-latest
+    # One at a time, and never cancelled. A half-superseded Pages deploy is
+    # worth avoiding for the sake of a few wasted minutes, and releases are
+    # rare enough that queueing costs nothing.
+    concurrency:
+      group: pages-deploy
+      cancel-in-progress: false
     permissions:
       pages: write
       id-token: write

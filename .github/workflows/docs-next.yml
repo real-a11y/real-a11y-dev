@@ -2,11 +2,10 @@ name: Deploy next docs
 
 # The unreleased-docs channel: `main` as it stands, at next.real-a11y.dev.
 #
-# `docs.yml` serves real-a11y.dev and is being gated on a successful npm
-# publish (a follow-up PR — it still deploys on every push to `main` today).
-# That will leave a gap this fills: docs fixes, new guides and typo repairs
-# would otherwise sit unpublished until the next release. They land here
-# immediately, and reach stable with the release.
+# `docs.yml` serves real-a11y.dev and deploys only on a successful npm publish,
+# so it describes just what you can install. That leaves a gap this fills: docs
+# fixes, new guides and typo repairs would otherwise sit unpublished until the
+# next release. They land here immediately, and reach stable with the release.
 #
 # NOT the same build as stable. `DOCS_CHANNEL=next` turns off the sitemap,
 # swaps robots.txt to `Disallow: /`, and adds `noindex` to every page — see

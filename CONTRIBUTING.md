@@ -262,14 +262,19 @@ This is an accessibility tool — the tool itself must be fully accessible:
 
 The documentation ships on two sites, from the same source:
 
-| | Serves | Deploys from |
+| | Serves | Deploys on |
 | --- | --- | --- |
-| [real-a11y.dev](https://real-a11y.dev) | **today:** every push to `main` | GitHub Pages, `docs.yml` |
-| [next.real-a11y.dev](https://next.real-a11y.dev) | `main` as it stands | Cloudflare Pages, `docs-next.yml` |
+| [real-a11y.dev](https://real-a11y.dev) | the **released** docs | a successful `Publish to npm`, `docs.yml` |
+| [next.real-a11y.dev](https://next.real-a11y.dev) | `main` as it stands | every push to `main`, `docs-next.yml` |
 
-The split exists because the two audiences want opposite things. Someone who just ran `npm install` needs docs describing the version they actually have; someone following development needs `main`. One site cannot be both, and for most of this project's life it has quietly been the second while presenting as the first.
+The split exists because the two audiences want opposite things. Someone who just ran `npm install` needs docs describing the version they actually have; someone following development needs `main`. One site cannot be both, and for most of this project's life it was quietly the second while presenting as the first.
 
-**That is still true as you read this.** `docs.yml` deploys `real-a11y.dev` on every push to `main`, so both sites currently serve the same content and this section describes a split that is only half-built. Gating stable on a successful npm publish is a follow-up; once it lands, `real-a11y.dev` serves the released docs and the table's first row changes to match. `next.` exists first so that gating does not freeze docs fixes behind a release.
+Gating the stable deploy is what makes that structurally impossible rather than merely discouraged — real-a11y.dev cannot describe unreleased surface, because it is never built from a commit that has any. `next.` exists so the gate does not freeze docs fixes behind a release: a typo repair reaches `next.` immediately and stable with the next publish.
+
+Two consequences worth knowing:
+
+- **The stable site does not move between releases.** That is the point, not a fault. If something on it is wrong enough to need fixing now — a broken link, a wrong command — run **Actions → Deploy docs → Run workflow**, which deploys `main`'s tip. That will include unreleased surface; the "not published yet" notice marks it, so the page stays honest.
+- **The deploy builds the published commit, not `main`.** `release-tag.yml` dispatches `publish.yml` at the release tag, so `workflow_run.head_sha` is the release commit. Building `main`'s tip instead would reintroduce exactly the drift the gate removes.
 
 **The two builds are not interchangeable.** `DOCS_CHANNEL=next` turns off the sitemap, replaces `robots.txt` with `Disallow: /`, adds `noindex` to every page, and labels the nav `next · unreleased`. Reproduce it locally with:
 
