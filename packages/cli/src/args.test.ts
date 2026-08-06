@@ -240,3 +240,29 @@ describe("parseStepSettle", () => {
     expect(() => parseStepSettle({ "step-settle": "" })).toThrow(CliError);
   });
 });
+
+describe("FlagValue covers what parseArgs can actually produce", () => {
+  it("every multiple:true flag is type string, so the array arm is complete", () => {
+    // `FlagValue` carries exactly one array arm — `string[]`. That is only
+    // sufficient while every repeatable flag is a string flag: a
+    // `{ type: "boolean", multiple: true }` would have parseArgs hand back
+    // `boolean[]`, which the union does not admit, and the failure would look
+    // exactly like the one this file's `FlagValue` widening fixed — a type
+    // quietly narrower than the runtime.
+    //
+    // Asserted over the declaration space rather than the flags that happen to
+    // be repeatable today, because the original bug survived precisely by being
+    // checked against known cases instead of against what the parser can emit.
+    const repeatable: string[] = [];
+    for (const [command, spec] of Object.entries(COMMANDS)) {
+      for (const [flag, opt] of Object.entries(spec.options)) {
+        if (opt?.multiple !== true) continue;
+        repeatable.push(`${command} --${flag}`);
+        expect(opt.type, `${command} --${flag} is repeatable`).toBe("string");
+      }
+    }
+    // Guard the guard: if the options tables stop being reachable this way, the
+    // loop above would pass by iterating nothing.
+    expect(repeatable.length).toBeGreaterThan(0);
+  });
+});
