@@ -31,8 +31,8 @@ Cutting a release or adding a package? There are tailored templates:
 - [ ] `@real-a11y-dev/audit`
 - [ ] `@real-a11y-dev/snapshot`
 - [ ] `@real-a11y-dev/browser`
-- [ ] `@real-a11y-dev/validate`
-- [ ] `@real-a11y-dev/semantic-navigator-ui`
+- [ ] `@real-a11y-dev/validate` (internal — ships inside `testing`)
+- [ ] `@real-a11y-dev/semantic-navigator-ui` (internal — ships inside `inspector` / `storybook-addon` / the extension)
 - [ ] `@real-a11y-dev/inspector`
 - [ ] `@real-a11y-dev/react`
 - [ ] `@real-a11y-dev/testing`
@@ -65,7 +65,8 @@ Cutting a release or adding a package? There are tailored templates:
 <!-- Skip only for docs / examples / CI-only PRs. -->
 
 - [ ] Changeset added for every published-package change (`pnpm changeset`; confirm with `pnpm changeset:status`)
-- [ ] Changed `core` or `semantic-navigator-ui`? The packages that bundle them — `inspector`, `storybook-addon`, and the Chrome extension — are re-released too, so none ships a stale engine (confirm with `pnpm changeset:status`)
+- [ ] Changed `core`, `semantic-navigator-ui` or `validate`? Everything that bundles them is re-released too, so nothing ships a stale engine — `inspector`, `storybook-addon` and the Chrome extension for the first two, `testing` for `validate` (confirm with `pnpm changeset:status`)
+- [ ] `validate` and `semantic-navigator-ui` are workspace-internal, not published. A changeset names the **consumers** that bundle them, never the packages themselves — one that mixes a private package in with published ones fails `pnpm changeset:status`
 
 ## Test scenarios
 

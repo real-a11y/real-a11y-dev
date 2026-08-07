@@ -1,6 +1,5 @@
 ---
 "@real-a11y-dev/react": minor
-"@real-a11y-dev/semantic-navigator-ui": patch
 "@real-a11y-dev/inspector": patch
 ---
 

@@ -36,9 +36,10 @@ For critical issues, we will coordinate a disclosure date with you before publis
 ## Scope
 
 In scope:
-- `@real-a11y-dev/core`, `@real-a11y-dev/inspector`, `@real-a11y-dev/react`, `@real-a11y-dev/testing`, `@real-a11y-dev/storybook-addon`, `@real-a11y-dev/semantic-navigator-ui`
+- `@real-a11y-dev/core`, `@real-a11y-dev/inspector`, `@real-a11y-dev/react`, `@real-a11y-dev/testing`, `@real-a11y-dev/storybook-addon`
 - The Chrome extension in `packages/extension/`
 - The website at `real-a11y.dev`
+- The workspace-internal packages `validate` and `semantic-navigator-ui` — not published to npm, but bundled into the packages and the extension above, so report against whichever one ships the code
 
 Out of scope:
 - Third-party dependencies (please report upstream; we'll track and update)

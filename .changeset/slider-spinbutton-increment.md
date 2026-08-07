@@ -1,6 +1,5 @@
 ---
 "@real-a11y-dev/core": minor
-"@real-a11y-dev/semantic-navigator-ui": patch
 ---
 
 Add increment/decrement actions for slider and spinbutton rows. The panel

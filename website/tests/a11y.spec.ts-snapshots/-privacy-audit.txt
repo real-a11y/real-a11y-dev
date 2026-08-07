@@ -151,13 +151,12 @@ main
         cell "Detect iframe load events to merge subtree data from cross-origin frames"
   paragraph "No other permissions are requested."
   heading "npm packages" (level 2)
-  paragraph "The , , , , , and packages are pure libraries. They:"
+  paragraph "The , , , , and packages are pure libraries. They:"
     code "@real-a11y-dev/core"
     code "@real-a11y-dev/inspector"
     code "@real-a11y-dev/testing"
     code "@real-a11y-dev/react"
     code "@real-a11y-dev/storybook-addon"
-    code "@real-a11y-dev/semantic-navigator-ui"
   list
     listitem "Run where you run them (browser, Node, jsdom, Playwright)."
     listitem "Make no network requests."

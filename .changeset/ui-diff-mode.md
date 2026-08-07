@@ -1,5 +1,5 @@
 ---
-"@real-a11y-dev/semantic-navigator-ui": minor
+"@real-a11y-dev/inspector": minor
 ---
 
 Add **diff mode** to the tree view — checkpoint the tree, interact with the page, and see what the interaction actually did to the accessibility tree.
