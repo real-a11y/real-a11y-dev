@@ -12,9 +12,11 @@ Real A11y follows [Semantic Versioning](https://semver.org/), with the **0.x exc
 | `0.X.0` (minor) | **May contain breaking changes.** New features, deprecation removals, or small contract breaks land here. Read the CHANGELOG before upgrading. |
 | `1.0.0` (major) | Future. Marks the point where breaking changes require a major bump per standard SemVer. |
 
-All `@real-a11y-dev/*` packages are linked: they bump together so consumers see one version across the suite. See [.changeset/README.md](../.changeset/README.md).
+Most `@real-a11y-dev/*` packages are linked: they bump together so consumers see one version across the suite. `cli` and `mcp` version independently, and packages that are internal (below) are not published at all, so they have no version to bump. The `linked` array in [.changeset/config.json](../.changeset/config.json) is the list — read it there rather than from memory; it loses a name each time a package goes internal. See also [.changeset/README.md](../.changeset/README.md).
 
 ## Public vs. internal API
+
+The distinction below is about **symbols**. There is a package-level version of it too: a workspace package may be internal, meaning it is never published and is bundled into the packages that use it. Nothing it exports is public, whatever its JSDoc says, and the [root README](../README.md#internal) lists which packages those are.
 
 **Public** — anything exported from a package's `dist/index.{js,d.ts}` (or a documented sub-entry like `@real-a11y-dev/testing/playwright`). Typed by the published `.d.ts`. Covered by the version contract above.
 
