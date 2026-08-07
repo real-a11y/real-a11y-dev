@@ -2,9 +2,16 @@
 
 ARIA semantics validation for the [Semantic Navigator](https://real-a11y.dev) accessibility tree. It catches the structural mistakes a per-node check can't — an interactive control nested inside another, composite content inside a `button`, a container that must own children but doesn't — using [`aria-query`](https://github.com/A11yance/aria-query) so the rules never drift from the spec.
 
-```sh
-npm install @real-a11y-dev/validate
-```
+> **Internal package — not published to npm.** It is bundled into
+> [`@real-a11y-dev/testing`](../testing), which is where its rules reach you: the
+> `toBeValidA11yTree` matcher runs them. There is nothing to install and nothing
+> to import by this name. The examples below are written from inside the
+> workspace, for anyone working on the rules themselves.
+>
+> It was published up to `0.1.0-beta.7` before becoming internal. If you depended
+> on that version directly, `toBeValidA11yTree` covers the validation itself; the
+> role-metadata helpers below (`roleMeta`, `isValidRole`, `attributesForRole`,
+> `requiredOwnedRoles`, …) have no published replacement.
 
 ```ts
 import { validateTree } from "@real-a11y-dev/validate";

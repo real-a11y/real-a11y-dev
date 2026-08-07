@@ -37,10 +37,35 @@ const IMPORT =
   /import\s*(?:type\s+)?\{([^}]+)\}\s*from\s*["'](@real-a11y-dev\/[^"']+)["']/g;
 
 /**
+ * Private workspace packages, by specifier prefix → the page allowed to import
+ * them.
+ *
+ * A private package has no `api` entry, so without this every documented import
+ * of one came back as "not an entry point any package exports — check the
+ * `exports` map". Confident, and the wrong diagnosis: the exports map is fine,
+ * the package is simply never published. Sending a reader to inspect the wrong
+ * file is how a check earns the reputation that gets it muted.
+ *
+ * Its OWN README is the one place the import is legitimate. A private package
+ * ships nowhere, so that file is workspace-internal documentation for whoever
+ * maintains the thing, and showing them the real import is the point. Anywhere
+ * else — the website, another package's README — an import a reader cannot
+ * resolve is exactly the copy-paste-broken snippet this module exists to catch.
+ */
+function privateHomes(manifest) {
+  const homes = new Map();
+  for (const pkg of manifest.packages ?? []) {
+    if (pkg.private) homes.set(pkg.name, `packages/${pkg.dir}/README.md`);
+  }
+  return homes;
+}
+
+/**
  * @returns {Promise<{where: string, message: string}[]>}
  */
 export async function checkApiImports(repoRoot, manifest) {
   const index = surfaceIndex(manifest);
+  const privates = privateHomes(manifest);
   if (index.size === 0) {
     return [
       {
@@ -77,10 +102,30 @@ export async function checkApiImports(repoRoot, manifest) {
       const specifier = match[2];
       const known = index.get(specifier);
 
-      // An unknown specifier is its own finding: either the subpath was removed
-      // from the exports map — in which case the import fails for a reader too —
-      // or it never existed.
       if (!known) {
+        // Private package first — it explains the missing entry, and the
+        // generic message below would send the reader to the wrong file.
+        const owner = [...privates].find(
+          ([name]) => specifier === name || specifier.startsWith(`${name}/`),
+        );
+        if (owner) {
+          const [name, home] = owner;
+          if (relPath === home) continue; // its own README: internal by design
+          problems.push({
+            where: relPath,
+            message:
+              `imports from \`${specifier}\`, but \`${name}\` is a PRIVATE ` +
+              `workspace package — it is never published, so a reader cannot ` +
+              `install it and this snippet cannot run. Point at whichever ` +
+              `published package bundles it, or drop the example. (Its own ` +
+              `\`${home}\` may show the import; nothing else may.)`,
+          });
+          continue;
+        }
+
+        // Otherwise a genuinely unknown specifier: either the subpath was
+        // removed from the exports map — in which case the import fails for a
+        // reader too — or it never existed.
         problems.push({
           where: relPath,
           message:

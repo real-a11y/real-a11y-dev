@@ -601,9 +601,6 @@ importers:
       '@real-a11y-dev/core':
         specifier: workspace:*
         version: link:../core
-      '@real-a11y-dev/semantic-navigator-ui':
-        specifier: workspace:*
-        version: link:../ui
       '@real-a11y-dev/testing':
         specifier: workspace:*
         version: link:../testing
@@ -614,6 +611,9 @@ importers:
         specifier: ^8.0.0
         version: 8.6.18(prettier@3.9.5)
     devDependencies:
+      '@real-a11y-dev/semantic-navigator-ui':
+        specifier: workspace:*
+        version: link:../ui
       '@storybook/manager-api':
         specifier: ^8.6.0
         version: 8.6.14(storybook@8.6.18(prettier@3.9.5))
@@ -656,9 +656,6 @@ importers:
       '@real-a11y-dev/serialize':
         specifier: workspace:*
         version: link:../serialize
-      '@real-a11y-dev/validate':
-        specifier: workspace:*
-        version: link:../validate
       playwright:
         specifier: '*'
         version: 1.61.1
@@ -666,6 +663,9 @@ importers:
       '@playwright/test':
         specifier: ^1.61.1
         version: 1.61.1
+      '@real-a11y-dev/validate':
+        specifier: workspace:*
+        version: link:../validate
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.17

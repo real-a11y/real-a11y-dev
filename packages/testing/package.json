@@ -86,8 +86,7 @@
     "@real-a11y-dev/audit": "workspace:*",
     "@real-a11y-dev/browser": "workspace:*",
     "@real-a11y-dev/core": "workspace:*",
-    "@real-a11y-dev/serialize": "workspace:*",
-    "@real-a11y-dev/validate": "workspace:*"
+    "@real-a11y-dev/serialize": "workspace:*"
   },
   "peerDependencies": {
     "playwright": "*"
@@ -99,6 +98,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
+    "@real-a11y-dev/validate": "workspace:*",
     "@types/node": "^22.0.0",
     "tsup": "^8.3.0",
     "typescript": "^5.6.0",

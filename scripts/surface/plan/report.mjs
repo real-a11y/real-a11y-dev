@@ -18,9 +18,10 @@ export function buildReport(
   touchedFiles,
   versionStatus,
   knownScenarios,
+  repoRoot,
 ) {
   const touched = new Set(touchedFiles);
-  const docs = [...requiredDocs(changes)]
+  const docs = [...requiredDocs(changes, repoRoot)]
     .map(([path, { reasons, why }]) => ({
       path,
       why,

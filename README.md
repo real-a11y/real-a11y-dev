@@ -18,15 +18,17 @@ Existing tools (Chrome DevTools, Axe, WAVE) show the accessibility tree as a pas
 
 ## Packages
 
+### Published
+
+Distributed to users — on npm, except the extension, which ships on the Chrome Web Store.
+
 | Package | Description | npm |
 |---------|-------------|-----|
 | [`@real-a11y-dev/core`](./packages/core) | Tree extraction, data model, interaction engine | [![npm](https://img.shields.io/npm/v/@real-a11y-dev/core)](https://www.npmjs.com/package/@real-a11y-dev/core) |
 | [`@real-a11y-dev/serialize`](./packages/serialize) | Deterministic text serialization — full tree, heading outline, tab sequence | [![npm](https://img.shields.io/npm/v/@real-a11y-dev/serialize)](https://www.npmjs.com/package/@real-a11y-dev/serialize) |
-| [`@real-a11y-dev/validate`](./packages/validate) | ARIA semantics validation (per-node + tree-level rules), aria-query-backed | [![npm](https://img.shields.io/npm/v/@real-a11y-dev/validate)](https://www.npmjs.com/package/@real-a11y-dev/validate) |
 | [`@real-a11y-dev/audit`](./packages/audit) | Audit engine — `Finding` model, a11y rules, `collectFindings`, `assert*` primitives | [![npm](https://img.shields.io/npm/v/@real-a11y-dev/audit)](https://www.npmjs.com/package/@real-a11y-dev/audit) |
 | [`@real-a11y-dev/snapshot`](./packages/snapshot) | Snapshot engine — fingerprints, the diffable `a11y-snapshot.json`, findings/views diff, baselines (Node-only) | [![npm](https://img.shields.io/npm/v/@real-a11y-dev/snapshot)](https://www.npmjs.com/package/@real-a11y-dev/snapshot) |
 | [`@real-a11y-dev/browser`](./packages/browser) | Browser driver — the Playwright `BrowserSession` + injected page-bundle; the one way to extract a live Chromium's a11y tree | [![npm](https://img.shields.io/npm/v/@real-a11y-dev/browser)](https://www.npmjs.com/package/@real-a11y-dev/browser) |
-| [`@real-a11y-dev/semantic-navigator-ui`](./packages/ui) | Preact tree rendering components | [![npm](https://img.shields.io/npm/v/@real-a11y-dev/semantic-navigator-ui)](https://www.npmjs.com/package/@real-a11y-dev/semantic-navigator-ui) |
 | [`@real-a11y-dev/inspector`](./packages/inspector) | Framework-agnostic interactive accessibility tree panel | [![npm](https://img.shields.io/npm/v/@real-a11y-dev/inspector)](https://www.npmjs.com/package/@real-a11y-dev/inspector) |
 | [`@real-a11y-dev/testing`](./packages/testing) | Headless audit helpers — snapshots, assertions, `flow()` chain | [![npm](https://img.shields.io/npm/v/@real-a11y-dev/testing)](https://www.npmjs.com/package/@real-a11y-dev/testing) |
 | [`@real-a11y-dev/cli`](./packages/cli) | The `real-a11y` shell command — audit/tree/outline/tabs/list/inspect/snapshot/diff/login, CI-grade exit codes | [![npm](https://img.shields.io/npm/v/@real-a11y-dev/cli)](https://www.npmjs.com/package/@real-a11y-dev/cli) |
@@ -34,6 +36,17 @@ Existing tools (Chrome DevTools, Axe, WAVE) show the accessibility tree as a pas
 | [`@real-a11y-dev/react`](./packages/react) | React hooks and `<SemanticNavigator />` component | [![npm](https://img.shields.io/npm/v/@real-a11y-dev/react)](https://www.npmjs.com/package/@real-a11y-dev/react) |
 | [`@real-a11y-dev/storybook-addon`](./packages/storybook-addon) | Per-story A11y tree panel for Storybook 8+ | [![npm](https://img.shields.io/npm/v/@real-a11y-dev/storybook-addon)](https://www.npmjs.com/package/@real-a11y-dev/storybook-addon) |
 | [`extension`](./packages/extension) | Chrome extension with Side Panel UI | — |
+
+### Internal
+
+Not distributed at all — no npm package, no Chrome Web Store listing. They are bundled into the packages above at build time: the bundler inlines the JS, and wherever a consumer's public types touch them, the declarations are inlined too. So there is nothing to install and nothing to import; you get them by installing whatever carries them. The links go to the source.
+
+| Package | Description | Ships inside |
+|---------|-------------|--------------|
+| [`validate`](./packages/validate) | ARIA semantics validation (per-node + tree-level rules), aria-query-backed | `testing` |
+| [`ui`](./packages/ui) | Preact tree rendering components | `inspector`, `storybook-addon`, `extension` |
+
+`validate` was published as `@real-a11y-dev/validate` through `0.1.0-beta.7`, and `ui` as `@real-a11y-dev/semantic-navigator-ui` through `0.1.0-beta.11`; those versions stay on npm and will not be updated. If you imported one directly: the validity rules reach you through `testing`'s `toBeValidA11yTree` matcher, and the components through `inspector`, `react`, or `storybook-addon`. `validate`'s role-metadata helpers (`roleMeta`, `isValidRole`, `attributesForRole`, `requiredOwnedRoles`, …) have no published replacement — open an issue if you were using them. The symbol-level version of this distinction — what carries a stability promise and what doesn't — is in [docs/STABILITY.md](./docs/STABILITY.md#public-vs-internal-api).
 
 ## Quick start
 

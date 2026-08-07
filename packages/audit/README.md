@@ -8,11 +8,13 @@ npm install @real-a11y-dev/audit
 
 Most people never install this directly — they use [`@real-a11y-dev/testing`](https://real-a11y.dev/packages/testing) (which re-exports everything here), the `real-a11y` CLI, or the MCP server. Install `audit` when you want the raw findings engine with no test-runner or renderer attached.
 
-## `audit` vs [`@real-a11y-dev/validate`](https://real-a11y.dev/packages/validate)
+## `audit` vs `@real-a11y-dev/validate`
+
+`validate` is workspace-internal — it isn't published to npm. You meet it bundled inside `@real-a11y-dev/testing`, whose ARIA matchers run it, rather than as an install of its own. The split below is still worth knowing, because a matcher failure names one or the other.
 
 Sibling packages — neither is built on the other — that answer **different questions**:
 
-|                     | [`@real-a11y-dev/validate`](https://real-a11y.dev/packages/validate)          | `@real-a11y-dev/audit` (this package)                                     |
+|                     | `@real-a11y-dev/validate` (internal)                                          | `@real-a11y-dev/audit` (this package)                                     |
 | ------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | **Answers**         | Is it **spec-legal ARIA**?                                                    | Does it follow **best practice**?                                        |
 | **Grounded in**     | [`aria-query`](https://github.com/A11yance/aria-query) — tracks the ARIA spec | Curated accessibility rules                                              |
@@ -20,7 +22,7 @@ Sibling packages — neither is built on the other — that answer **different q
 | **Flags**           | invalid roles, a role missing its _required_ name, illegally nested controls | heading order, one `main` landmark, alt text, labeled dialogs & controls |
 | **Only it catches** | `role="madeup"`, a `link` nested inside a `button`                            | three `<h1>`s — perfectly spec-legal, but bad accessibility             |
 
-A full audit runs **both**: the `real-a11y audit` CLI command and the MCP `audit_page` tool report `validate`'s ARIA-conformance errors alongside this package's best-practice findings. Rule of thumb: reach for **`validate`** to check ARIA _correctness_, **`audit`** to check accessibility _quality_.
+A full audit runs **both**: the `real-a11y audit` CLI command and the MCP `audit_page` tool report `validate`'s ARIA-conformance errors alongside this package's best-practice findings. Rule of thumb: ARIA _correctness_ is **`validate`**'s question, accessibility _quality_ is **`audit`**'s.
 
 ## Collect findings
 

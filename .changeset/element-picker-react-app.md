@@ -1,6 +1,5 @@
 ---
 "@real-a11y-dev/core": minor
-"@real-a11y-dev/semantic-navigator-ui": minor
 "@real-a11y-dev/inspector": minor
 "@real-a11y-dev/react": minor
 ---

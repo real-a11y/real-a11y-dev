@@ -6,7 +6,7 @@ area: Release
 type: Automated
 priority: P1
 status: Active
-validFrom: "every release. Pre-mode `beta` is active (.changeset/pre.json). Linked family and cli/mcp version independently — differing numbers are correct, not a bug"
+validFrom: "every release. Pre-mode `beta` is active (.changeset/pre.json). Linked family and cli/mcp version independently — differing numbers are correct, not a bug. `semantic-navigator-ui` left the linked group when it went private, so the group is nine packages from that release on, not ten"
 validUntil: ""
 expected: "linked group shares one version; every bumped package has a changelog entry; the intended dist-tag is correct for a beta"
 twin: D1
@@ -21,8 +21,10 @@ Publishing is irreversible; every check here is cheap and every miss is permanen
 1. `pnpm changeset:status` — no unconsumed changesets remain for packages being
    released
 2. Confirm the **linked family** all moved to one version together: `core`,
-   `serialize`, `audit`, `snapshot`, `ui`, `inspector`, `react`, `storybook-addon`,
-   `testing`, `browser`
+   `serialize`, `audit`, `snapshot`, `browser`, `inspector`, `react`,
+   `storybook-addon`, `testing` — nine since `ui` left the group on going private.
+   Read the group out of `.changeset/config.json`'s `linked` array rather than from
+   memory: it loses a name every time a package goes internal
 3. Confirm `cli` and `mcp` versioned **independently** — they are not in the linked
    group, so their numbers legitimately differ (today: family `beta.11`, cli/mcp
    `beta.1`)
@@ -31,8 +33,14 @@ Publishing is irreversible; every check here is cheap and every miss is permanen
 5. `.changeset/pre.json` — `mode: "pre"`, `tag: "beta"` for a beta; absent/exited for
    a stable
 6. Intended dist-tag: `beta` publishes never move `latest`
-7. Cross-package consistency: anything bundling `core` or `ui` (`inspector`,
-   `storybook-addon`, extension) is re-released, so none ships a stale engine
+7. Cross-package consistency: anything bundling a changed package is re-released, so
+   none ships a stale engine. For a **private** dependency changesets cannot do this
+   for you — `ui` and `validate` have no version to cascade from, and they are
+   `devDependencies` of the packages that publish them besides — so a fix in
+   `packages/ui` or `packages/validate` bumps nothing at all unless the changeset
+   names the consumers itself: `inspector` and `storybook-addon` for `ui`,
+   `testing` for `validate`, plus the extension (which holds `ui` as a runtime
+   dependency) on its own track
 8. Confirm the tag you're about to push matches the versions just written
 
 ## Expected
@@ -41,6 +49,8 @@ Publishing is irreversible; every check here is cheap and every miss is permanen
 - Every bump has a changelog entry a user could act on
 - Beta publishes go to the `beta` dist-tag and leave `latest` untouched
 - No package bundling a changed engine is left behind at an older build
+- A change confined to a private package (`ui`, `validate`, `session-registry`) has
+  a changeset naming its consumers — otherwise the release silently ships without it
 
 ## Why this exists
 
@@ -51,6 +61,19 @@ the linked group's contract.
 
 Step 7 is the one with the longest tail — a bundler shipping a stale engine produces
 bugs already fixed upstream, reported against a version that contains the fix.
+
+Privatizing a package erodes the mechanism that used to make step 7 automatic — and
+it was never fully automatic, which is the part worth knowing. While `ui` was
+published, `storybook-addon` listed it in `dependencies`, so a ui bump cascaded
+there, and `linked` then put the released members on one number. `linked` only
+aligns packages already IN the release; it never pulls an unchanged one in.
+`inspector` already held `ui` as a devDependency, which changesets deliberately
+does not bump for — so half of step 7 was manual before this PR, and privatizing
+`ui` makes it all of it. Now `changeset:status` is clean, the release goes out, and
+the fix is in nobody's tarball — silent in both directions, since there is also no
+changelog entry to notice missing. Expect this to grow as more packages go internal:
+each one subtracts a name from `linked` (2) and adds one to the set step 7 has to
+check by hand.
 
 Note the mechanical guard: CI's changeset gate keys on a newly **added**
 `.changeset/*.md`. Editing an existing changeset does not satisfy it, by design — one

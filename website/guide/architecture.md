@@ -11,23 +11,32 @@ Real A11y is a monorepo of small, composable packages built around one extractio
 
 ## Packages
 
+### Published to npm
+
 | Package | Purpose | Runtime deps |
 |---|---|---|
 | [`@real-a11y-dev/core`](/packages/core) | Extraction engine — accessibility + DOM tree walk, role map, accessible-name computation, action dispatch, DOM observer, stable-id generator, tree queries. **No UI.** | None |
-| [`@real-a11y-dev/semantic-navigator-ui`](https://github.com/real-a11y/real-a11y-dev/tree/main/packages/ui) | Preact tree-view components — TreePanel, TreeNode, FilteredList, TabSequenceView, theming CSS. Consumed as a build-time dependency of the packages below; **not usually installed directly**. | `preact` |
-| [`@real-a11y-dev/inspector`](/packages/inspector) | Framework-agnostic inspector. `createInspector({ root, container })` mounts the tree panel into any DOM node, isolated via Shadow DOM. | (bundles `semantic-navigator-ui` + `core` + `preact`) |
+| [`@real-a11y-dev/inspector`](/packages/inspector) | Framework-agnostic inspector. `createInspector({ root, container })` mounts the tree panel into any DOM node, isolated via Shadow DOM. | `preact` (bundles `core` plus the internal `semantic-navigator-ui`) |
 | [`@real-a11y-dev/react`](/packages/react) | React integration — `<SemanticNavigator />` component + `useSemanticTree()` / `useActiveModal()` hooks. Wraps `inspector` for inline and floating modes. | `react >= 18`, `react-dom >= 18` |
-| [`@real-a11y-dev/testing`](/packages/testing) | Headless audit helpers — `auditSnapshot`, `outlineSnapshot`, `tabSequenceSnapshot`, `flow()`, plus the interaction-diff API (`capture`, `a11yDiff`). Re-exports the `assert*`/`collectFindings` surface from `@real-a11y-dev/audit`. A separate `/playwright` entrypoint ships a `Page`-handle adapter that injects `@real-a11y-dev/browser`'s page-bundle for real-browser E2E. **No UI.** | `@real-a11y-dev/audit`, `@real-a11y-dev/browser` (optional: `@playwright/test`) |
-| [`@real-a11y-dev/storybook-addon`](/packages/storybook-addon) | Storybook 8 panel — preview-side extractor posts tree snapshots over the Storybook channel; manager-side React panel renders them. | `storybook >= 8`, `react >= 18` |
+| [`@real-a11y-dev/testing`](/packages/testing) | Headless audit helpers — `auditSnapshot`, `outlineSnapshot`, `tabSequenceSnapshot`, `flow()`, plus the interaction-diff API (`capture`, `a11yDiff`). Re-exports the `assert*`/`collectFindings` surface from `@real-a11y-dev/audit`. A separate `/playwright` entrypoint ships a `Page`-handle adapter that injects `@real-a11y-dev/browser`'s page-bundle for real-browser E2E. **No UI.** | `@real-a11y-dev/audit`, `@real-a11y-dev/browser` (bundles the internal `validate`; optional: `@playwright/test`) |
+| [`@real-a11y-dev/storybook-addon`](/packages/storybook-addon) | Storybook 8 panel — preview-side extractor posts tree snapshots over the Storybook channel; manager-side React panel renders them. | `storybook >= 8`, `react >= 18` (the manager entry bundles the internal `semantic-navigator-ui`) |
 | [`@real-a11y-dev/serialize`](https://github.com/real-a11y/real-a11y-dev/tree/main/packages/serialize) | Deterministic text serialization of the tree — full tree, heading outline, and tab sequence. **No UI.** | `@real-a11y-dev/core` |
-| [`@real-a11y-dev/validate`](https://github.com/real-a11y/real-a11y-dev/tree/main/packages/validate) | ARIA-semantics validation — per-node rules plus tree-level relationship checks, backed by `aria-query` so it tracks the spec. Standalone. | `aria-query` |
 | [`@real-a11y-dev/audit`](https://github.com/real-a11y/real-a11y-dev/tree/main/packages/audit) | Audit engine — the `Finding` data model, the a11y rule set, `collectFindings`, and the `assert*` primitives. The one place a finding is defined and detected; `testing`, `mcp`, and `cli` all render what it produces. **No UI.** | `@real-a11y-dev/core` |
 | [`@real-a11y-dev/snapshot`](https://github.com/real-a11y/real-a11y-dev/tree/main/packages/snapshot) | Snapshot engine — deterministic finding fingerprints, the diffable `a11y-snapshot.json` artifact, the findings/views/unified diff, and baselines. Node-only; the single place a snapshot is captured and compared, so the CLI and MCP diff identically. **No UI.** | `@real-a11y-dev/audit`, `@real-a11y-dev/core` |
 | [`@real-a11y-dev/browser`](https://github.com/real-a11y/real-a11y-dev/tree/main/packages/browser) | Browser driver — the Playwright `BrowserSession` plus the injected page-bundle it ships. The one place that touches Playwright; the CLI, the MCP server, and the testing adapter all drive a real Chromium through it. | `@real-a11y-dev/audit`, `@real-a11y-dev/serialize`, `@real-a11y-dev/core` (optional peer: `playwright`) |
 | [`@real-a11y-dev/mcp`](/packages/mcp) | Model Context Protocol server exposing `audit_page` / `get_semantic_tree` / `inspect_page`, plus **a11y snapshot checkpoints** (`checkpoint_findings` / `diff_findings` / …), to AI agents (bin `real-a11y-mcp`). | `@real-a11y-dev/audit`, `@real-a11y-dev/browser`, `@real-a11y-dev/snapshot`, `@modelcontextprotocol/sdk` (optional peer: `playwright`) |
 | [`@real-a11y-dev/cli`](/packages/cli) | The `real-a11y` shell command — audits, perception views (`tree` / `outline` / `tabs` / `list` / `inspect`), and `snapshot` + `diff` from the shell and CI. A command, not a library — the programmatic engine lives in `snapshot`. | `@real-a11y-dev/audit`, `@real-a11y-dev/snapshot`, `@real-a11y-dev/browser` (optional peer: `playwright`) |
 
-A private `@real-a11y-dev/semantic-navigator-extension` workspace builds the Chrome extension using the same engine — unlike the packages above, it is not published to npm.
+### Internal — bundled, not published
+
+These live in the same repo and their code still ships; it ships *inside* the packages above. tsup's `noExternal` inlines the JS and `dts.resolve` inlines the declarations, so no published `.d.ts` names them either — there is nothing to install and no version to pin. The line isn't drawn by the build: a package is on npm because someone installs it on purpose, so a seam that exists to keep the source tidy belongs here. Expect the table to grow.
+
+| Package | Purpose | Reaches you through |
+|---|---|---|
+| [`@real-a11y-dev/semantic-navigator-ui`](https://github.com/real-a11y/real-a11y-dev/tree/main/packages/ui) | Preact tree-view components — TreePanel, TreeNode, FilteredList, TabSequenceView, theming CSS. Published up to `0.1.0-beta.11`. | `inspector` (and so `react`, which depends on it), `storybook-addon`'s manager entry |
+| [`@real-a11y-dev/validate`](https://github.com/real-a11y/real-a11y-dev/tree/main/packages/validate) | ARIA-semantics validation — per-node rules plus tree-level relationship checks, backed by `aria-query` so it tracks the spec. No internal deps. Published up to `0.1.0-beta.7`. | `testing`, where the `toBeValidA11yTree` matcher runs the rules |
+
+`@real-a11y-dev/semantic-navigator-extension` is internal too, but it isn't a library: it builds the Chrome extension from the same engine and ships through the Chrome Web Store, not a registry.
 
 ---
 
@@ -39,7 +48,6 @@ A private `@real-a11y-dev/semantic-navigator-extension` workspace builds the Chr
         ├─▶ semantic-navigator-ui (Preact)  ─▶ inspector ─▶ react
         │                                    └─▶ storybook-addon
         ├─▶ serialize   (deterministic text)
-        ├─▶ validate    (aria-query ARIA validity — standalone)
         └─▶ audit       (Finding model, rules, collectFindings, assert*)
                  │
                  ├─▶ snapshot   (fingerprints, artifact, findings/views diff, baselines — Node-only)
@@ -52,14 +60,17 @@ A private `@real-a11y-dev/semantic-navigator-extension` workspace builds the Chr
   browser is the ONLY package that touches Playwright — everything above it is browserless.
   audit is imported directly everywhere — no reaching an engine through the test-helper package.
   snapshot is Node-only (node:crypto) and never enters the page bundle; browser *builds* it.
-  Standalone:  @real-a11y-dev/validate — aria-query-backed ARIA validation, no internal deps.
-  Private:     @real-a11y-dev/semantic-navigator-extension — Chrome extension, not published.
+  Internal:    semantic-navigator-ui → bundled into inspector and the addon's manager entry;
+               react gets it through its inspector dependency.
+               validate (aria-query only, no internal deps) → bundled into testing.
+               semantic-navigator-extension — the Chrome extension, never on npm.
+  Nothing on that list is installable; it ships inside the packages named beside it.
 ```
 
 Two observations:
 
 1. **`@real-a11y-dev/testing` and `@real-a11y-dev/snapshot` have zero UI dependency.** Assertions, snapshots, and diffs only read the tree or operate on data; they never render. That's what makes them safe for jsdom and Node and fast enough to run in every unit test.
-2. **The UI package is bundled into consumers.** `inspector`, `react`, and `storybook-addon` each pull `@real-a11y-dev/semantic-navigator-ui` through `noExternal` in tsup, shipping self-contained artifacts. Consumers only ever install the top-level package; they never reason about Preact versions or tree-view internals.
+2. **Internal packages are bundled into their consumers, not installed alongside them.** `inspector` and the Storybook addon's manager entry pull `@real-a11y-dev/semantic-navigator-ui` through `noExternal` in tsup (`react` gets it transitively, through `inspector`); `testing` does the same with `validate`, `cli` and `mcp` with `session-registry`. Consumers only ever install the top-level package; they never reason about Preact versions or tree-view internals, and never resolve a name npm has no copy of.
 
 ---
 
@@ -83,8 +94,10 @@ Like a finding, a _snapshot_ — the diffable `a11y-snapshot.json`, its frozen `
 ### The real browser lives in one place
 Driving a real Chromium — launching Playwright, injecting the page-bundle, marshalling calls across `page.evaluate()` — is the one genuinely heavyweight dependency in the stack. It all lives in `@real-a11y-dev/browser`: the `BrowserSession` and the injected bundle it ships, depending on `audit`/`serialize`/`core` and an *optional* `playwright` peer. The CLI, the MCP server, and the testing Playwright adapter all drive the browser through this single package, so there is exactly one place the bundle is built and one contract for injecting it — a tree captured by any of the three is identical. Everything above `browser` is browserless and Node- or jsdom-safe; a consumer that only needs the engine never pulls Playwright into its graph.
 
-### UI is bundled, not shipped separately
-In theory `@real-a11y-dev/semantic-navigator-ui` could be a normal dependency. In practice consumers always want the exact tree-view version the parent package was tested against. Bundling via `noExternal` eliminates an entire class of peer-range support questions and lets the UI refactor freely inside any release that also updates its consumers.
+### Internal packages are bundled, not shipped separately
+`@real-a11y-dev/semantic-navigator-ui` and `@real-a11y-dev/validate` could each have been a normal dependency — both were, through `0.1.0-beta.11` and `0.1.0-beta.7`. Nobody was ever told to install them: the only `npm install` lines were in their own READMEs, and no published declaration named their types. What a consumer wants is the exact version the parent package was tested against, which is what `noExternal` already gave them; making that official removes an entire class of peer-range support questions and lets both refactor freely inside any release that updates their consumers. The rule the split now follows: a package is published because someone installs it on purpose, not because the build happens to split there — and that reads on the rest of the graph too, since an engine seam is a seam whether or not it has a registry entry.
+
+Bundling a private package is two halves, not one. `noExternal` inlines the JS; `dts.resolve` inlines the declarations. Skip the second and the emitted `.d.ts` still says `from "@real-a11y-dev/validate"` — a specifier npm cannot resolve, which is `TS2307` for a consumer, or, under `skipLibCheck: true`, types silently degrading to `any`. `surface:check` fails on exactly that, so it is enforced rather than remembered.
 
 ---
 
@@ -101,7 +114,7 @@ Per-entrypoint specifics:
 
 - **`@real-a11y-dev/testing`** — two entries (`index`, `playwright`). The Playwright entry imports `node:fs` to read a pre-built IIFE bundle (`dist/page-bundle.iife.global.js`) that gets injected into the page via `page.addScriptTag()`.
 - **`@real-a11y-dev/storybook-addon`** — three entries (`index`, `preview`, `manager`). The manager entry forces classic JSX transform so Storybook's React-externalization works; see [`packages/storybook-addon/tsup.config.ts`](https://github.com/real-a11y/real-a11y-dev/blob/main/packages/storybook-addon/tsup.config.ts).
-- **`@real-a11y-dev/inspector` / `/react` / `/storybook-addon`** — `noExternal: ["@real-a11y-dev/semantic-navigator-ui", "@real-a11y-dev/core", "preact"]` so the bundled artifact is self-contained.
+- **Internal packages are inlined** — `inspector` and the addon's `manager` entry set `noExternal` for `@real-a11y-dev/semantic-navigator-ui` (plus `core`); `testing` does it for `validate`, `cli` and `mcp` for `session-registry`. Any entry that inlines a private package and also emits declarations pairs `noExternal` with `dts: { resolve: [...] }` — `testing`, `mcp`, the addon's `manager` — because otherwise the shipped `.d.ts` keeps an import npm cannot resolve.
 
 ---
 

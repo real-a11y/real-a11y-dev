@@ -6,7 +6,7 @@ area: Packaging
 type: Automated
 priority: P0
 status: Active
-validFrom: "every published package, all versions. Currently: engine family 0.1.0-beta.11, cli/mcp 0.1.0-beta.1, validate 0.1.0-beta.7"
+validFrom: "every published package, all versions. Currently: engine family 0.1.0-beta.11, cli/mcp 0.1.0-beta.1. `validate` (last published 0.1.0-beta.7) and `semantic-navigator-ui` (0.1.0-beta.11) became PRIVATE and are no longer packed — a tarball for either is now itself the failure"
 validUntil: ""
 expected: "Every import/require resolves; types found; bins executable; zero MODULE_NOT_FOUND"
 twin: D1

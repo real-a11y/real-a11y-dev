@@ -56,7 +56,14 @@ export default defineConfig([
   {
     entry: { manager: "src/manager.tsx" },
     format: ["esm", "cjs"],
-    dts: true,
+    // `dts.resolve` alongside the `noExternal` below: the UI package is PRIVATE,
+    // so if its types ever reached the emitted declarations they would arrive as
+    // `from "@real-a11y-dev/semantic-navigator-ui"` — unresolvable on npm, and
+    // silently `any` under `skipLibCheck: true`. That cannot happen today:
+    // `manager.tsx` exports nothing (it only calls `addons.register`), so
+    // `manager.d.ts` is an empty `export {}` with or without this option. It is
+    // insurance for the day this entry grows an export, not a bug it prevented.
+    dts: { resolve: ["@real-a11y-dev/semantic-navigator-ui"] },
     sourcemap: true,
     clean: false,
     noExternal: [

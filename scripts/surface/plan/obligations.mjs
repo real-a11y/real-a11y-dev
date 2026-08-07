@@ -6,25 +6,85 @@
 // people get wrong: the table is read once, remembered approximately, and the
 // page that gets missed is always the same one — `website/index.md`, the home
 // page, which is both the most visible and the least obviously "documentation".
+//
+// It reads the checkout, synchronously, so that it never names a page that does
+// not exist or that never mentioned the package. `node:fs` is the only thing
+// that adds, which keeps the rule `plan` runs under — node core and `git`, no
+// install, no build — intact; see the import note in scripts/surface/index.mjs.
+
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 
 /**
  * Every page that enumerates the published packages. From the skill's
  * "brand-new published package or product surface" row — the heaviest
  * obligation in the repo.
  *
- * The same list applies in BOTH directions. Publishing a package means these
- * pages don't mention something they should; unpublishing one means they tell
- * people to install something they can't. The second is arguably worse, because
- * the instructions are still there and still look right.
+ * The list applies WHOLE in the arriving direction — a newly published package
+ * has to be ADDED to every page that enumerates what you can install, and a page
+ * that doesn't name it yet is precisely the one to edit.
+ *
+ * Leaving inverts the question. Unpublishing means a page tells people to
+ * install something they can't, which is worse because the instructions are
+ * still there and still look right — but that is only true of the pages that
+ * name it. `website/index.md`, `getting-started.md` and `why.md` never mentioned
+ * `validate` or `semantic-navigator-ui`, so demanding the whole list on the PR
+ * that privatized them made three of its demands unactionable. That direction is
+ * filtered by `namesPackage` below.
+ *
+ * That filter is also why this list should be GENEROUS rather than minimal. An
+ * entry a page doesn't mention costs nothing on the way out — it is dropped
+ * before it is reported — so a wrong entry costs one unactionable line on the
+ * arriving event, while a missing one costs silence. The short list had that
+ * backwards, and the PR that privatized both packages is the proof: it held six
+ * paths, `SECURITY.md`, `website/privacy.md` and `.github/PULL_REQUEST_TEMPLATE.md`
+ * were left still naming the two as published, and the report said "every doc in
+ * scope was touched" — short, confident, wrong. Anything that enumerates the
+ * packages by name belongs here, not only the pages under `website/`.
  */
 const PUBLISHED_PACKAGE_DOCS = [
   "README.md",
+  "SECURITY.md",
   "website/index.md",
+  "website/privacy.md",
   "website/guide/architecture.md",
   "website/guide/getting-started.md",
   "website/guide/why.md",
+  ".github/PULL_REQUEST_TEMPLATE.md",
   ".changeset/config.json",
 ];
+
+/**
+ * Every `packages/<dir>/README.md`, read off the checkout — for the LEAVING
+ * direction only.
+ *
+ * A package README says `npm install @real-a11y-dev/<name>`, so it belongs to
+ * this obligation. It is not in the list above because that list applies WHOLE
+ * when a package ARRIVES, and publishing `snapshot` obliges nothing in the other
+ * fourteen READMEs. The one it does oblige — its own — can't be singled out here
+ * anyway: the directory isn't derivable from the scoped name, since
+ * `@real-a11y-dev/semantic-navigator-ui` lives in `packages/ui`.
+ *
+ * Leaving reverses that. "Which README still tells someone to install this?" has
+ * no curated answer — it is a search, and `namesPackage` is the search.
+ * `packages/audit/README.md` is the case that proves it: a whole section on
+ * `audit` vs `validate`, linking twice to `real-a11y.dev/packages/validate`, a
+ * page that has never existed. No entry in the list above could have found it,
+ * because the mention lives in a SIBLING's README.
+ *
+ * A missing README needs no guard: `namesPackage` tries to read it, fails, and
+ * reports that it names nothing, which is the right answer.
+ */
+function packageReadmes(repoRoot) {
+  try {
+    return readdirSync(join(repoRoot, "packages"), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => `packages/${entry.name}/README.md`);
+  } catch {
+    // No `packages/` at all — not a checkout this has anything to say about.
+    return [];
+  }
+}
 
 /**
  * Change path → the docs that have to move with it.
@@ -96,10 +156,114 @@ function packagePage(name) {
 }
 
 /**
+ * Whether a page the two functions above computed is a file at all.
+ *
+ * They compute `website/packages/<short>.md` for ANY package, and seven packages
+ * have such a page. The rest do not — including every package with an `api.`
+ * namespace but no page (`audit`, `browser`, `serialize`, `snapshot`), and
+ * `validate` and `ui`, which never had one. (Not a complement of the seven: nine
+ * of the sixteen are page-less once `example-patterns`, `session-registry` and
+ * the extension are counted.) So the computed path was a demand to update a
+ * file that has never existed, reported with the same weight as `README.md` on a
+ * PR where README really was stale — which is how a report teaches people to
+ * skim it.
+ *
+ * This is not a page-creation nag in disguise. A published package with no page
+ * is worth an opinion, but it is one decision for §4's table, not something for
+ * every symbol added to `serialize` to re-raise. The one place absence is still
+ * reported is the arriving direction below, where creating the page IS the
+ * obligation.
+ *
+ * What it cannot tell apart is a page that MOVED from one that was never
+ * written: both are "not a file", so a rename retires the obligation instead of
+ * reporting it and the report gets QUIETER, which is the failure this tool
+ * exists to stop. One page moving is not cheaply detectable from here, and the
+ * reason is the paragraph above — telling `testing.md` renamed from
+ * `serialize.md` deliberately absent needs the list of which packages are
+ * SUPPOSED to have a page, and writing that list down is the editorial call this
+ * function declines to make.
+ *
+ * The wholesale case is cheap, so it is guarded: if `website/packages/` holds no
+ * `.md` at all, every call here returns false at once and the entire `api.` half
+ * of the report disappears without a word — the same shape as a sample checker
+ * that stops recognising samples and reports a clean run forever. It warns to
+ * stderr, which `docs-currency.yml` redirects to a file it prints only on
+ * failure, so this is a guard for the local run. That is the right size for it:
+ * plumbing a field through `buildReport` and both renderers to reach the PR
+ * comment buys nothing for a condition that means someone reorganised
+ * `website/packages/` wholesale and will meet it the next time they run
+ * `pnpm surface:plan`.
+ */
+const PACKAGE_PAGES_DIR = "website/packages";
+/** `plan` is one-shot, so a module-level latch is enough to warn exactly once. */
+let checkedPagesDir = false;
+
+function pageExists(repoRoot, doc) {
+  if (!checkedPagesDir) {
+    checkedPagesDir = true;
+    let pages = [];
+    try {
+      pages = readdirSync(join(repoRoot, PACKAGE_PAGES_DIR)).filter((f) =>
+        f.endsWith(".md"),
+      );
+    } catch {
+      // A missing directory is the empty case, and reads the same.
+    }
+    if (pages.length === 0) {
+      console.warn(
+        `\nWarning: no .md pages under ${PACKAGE_PAGES_DIR}/, so every package-page\n` +
+          `  obligation below was dropped as "there is no such page". If the pages\n` +
+          `  moved, the paths computed here (${PACKAGE_PAGES_DIR}/<name>.md) are\n` +
+          `  stale, not satisfied.\n`,
+      );
+    }
+  }
+  return existsSync(join(repoRoot, doc));
+}
+
+/**
+ * Whether `doc` says anything about `name` — "is there still an instruction in
+ * here to unwrite?".
+ *
+ * The SCOPED name, never the short one: `validate` matches `validated` and
+ * `validation` across half the prose in the repo, while a page that tells you to
+ * install something always writes `@real-a11y-dev/<name>`, because that is the
+ * string you type. What that misses is a page naming a package only in prose —
+ * `why.md` has "the React, Storybook, CLI, and MCP packages".
+ *
+ * The trade is deliberate, and narrower than this comment used to claim. What
+ * the filter buys is that the direction is never reported as EMPTY: `README.md`
+ * and `architecture.md` name every package in full, so an unpublishing always
+ * produces obligations and the report never reads "nothing to do". What it does
+ * NOT buy is the prose-only page itself — nothing here recovers `why.md`, and "a
+ * missed page still gets found" was a non-empty direction mistaken for a
+ * complete one. Two different facts. The pages that DO name the package are
+ * covered by keeping PUBLISHED_PACKAGE_DOCS generous; the ones that merely allude
+ * to it are a known hole. Against that: a page demanded for a name it has never
+ * contained is the noise this exists to remove.
+ *
+ * Read from the WORKING TREE rather than the merge base, deliberately. The
+ * obligation is "this file still names a package that is no longer published",
+ * so the answer self-clears as the branch does the work instead of nagging about
+ * a page already fixed — and it stays true when only some of a file's mentions
+ * have been dealt with. A file that isn't there names nothing, which is the
+ * right answer for the same reason `pageExists` is.
+ */
+function namesPackage(repoRoot, doc, name) {
+  try {
+    return readFileSync(join(repoRoot, doc), "utf8").includes(name);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * @param {import("./diff.mjs").Change[]} changes
+ * @param {string} repoRoot the checkout to resolve doc paths against — this
+ *   reads it, to avoid naming pages that don't exist or never named the package
  * @returns {Map<string, {reasons: Set<string>, why: string}>} doc path → why
  */
-export function requiredDocs(changes) {
+export function requiredDocs(changes, repoRoot) {
   const required = new Map();
   const require_ = (doc, reason, why) => {
     if (!required.has(doc)) required.set(doc, { reasons: new Set(), why });
@@ -110,8 +274,11 @@ export function requiredDocs(changes) {
     // Whether a package is publicly installable is its own, much larger,
     // obligation. Three events change it: a brand-new published package, a
     // private one that is now published, and a published one that is now
-    // private. All three touch the same pages, because those pages enumerate
-    // what a user can install.
+    // private. All three draw on the same list, because those pages enumerate
+    // what a user can install — but only the two arriving events draw on the
+    // WHOLE of it; leaving is filtered to the pages that still name the
+    // package and additionally sweeps every `packages/*/README.md`, for the
+    // reasons given on PUBLISHED_PACKAGE_DOCS and `packageReadmes`.
     const isNewPackage =
       change.kind === "added" &&
       /^packages\.[^.]+$/.test(change.path) &&
@@ -132,7 +299,22 @@ export function requiredDocs(changes) {
       const why = unpublished
         ? "these still tell a user to install it — including the `ignore` list in .changeset/config.json"
         : "a newly published package lands here";
-      for (const doc of [...PUBLISHED_PACKAGE_DOCS, packagePage(name)]) {
+      const pages = [...PUBLISHED_PACKAGE_DOCS, packagePage(name)];
+      // Sibling READMEs join on the way OUT only — see `packageReadmes` for why
+      // a newly published package has no business in the other fourteen.
+      if (unpublished) pages.push(...packageReadmes(repoRoot));
+      for (const doc of pages) {
+        // Leaving: only the pages that still name it. `.changeset/config.json`
+        // is exempt because it is the one entry where NOT naming the package can
+        // itself be the thing to fix — a package dropping out of `linked` may
+        // belong in `ignore`, and no search for its name can tell you that.
+        if (
+          unpublished &&
+          doc !== ".changeset/config.json" &&
+          !namesPackage(repoRoot, doc, name)
+        ) {
+          continue;
+        }
         require_(doc, change.what, why);
       }
       continue;
@@ -155,12 +337,18 @@ export function requiredDocs(changes) {
     //   api.@real-a11y-dev/testing.flow       → a symbol within one
     if (/^api\.@real-a11y-dev\//.test(change.path)) {
       // Both shapes touch the package page — it introduces the symbol, or
-      // documents that the entry point exists at all.
-      require_(
-        apiPage(change.path),
-        change.what,
-        "the package page is where an exported symbol is introduced and shown in use",
-      );
+      // documents that the entry point exists at all. When there is one: four of
+      // the packages with an `api.` namespace (`audit`, `browser`, `serialize`,
+      // `snapshot`) have no page, and a symbol moving inside one of them is not
+      // a reason to invent `website/packages/serialize.md`.
+      const page = apiPage(change.path);
+      if (pageExists(repoRoot, page)) {
+        require_(
+          page,
+          change.what,
+          "the package page is where an exported symbol is introduced and shown in use",
+        );
+      }
 
       // An entry point additionally appears in the architecture page, which is
       // where "you can import this, from here" is stated across the workspace.

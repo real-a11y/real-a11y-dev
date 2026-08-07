@@ -39,6 +39,13 @@
     "ignore": ["@real-a11y-dev/core"]
   },
   {
+    "name": "@real-a11y-dev/testing/matchers (esm)",
+    "path": "packages/testing/dist/matchers.js",
+    "limit": "18.5 KB",
+    "gzip": true,
+    "ignore": ["@real-a11y-dev/core"]
+  },
+  {
     "name": "@real-a11y-dev/storybook-addon (manager)",
     "path": "packages/storybook-addon/dist/manager.js",
     "limit": "24 KB",

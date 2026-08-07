@@ -304,8 +304,17 @@ jobs:
           BASE: origin/${{ github.base_ref }}
         run: |
           changed=$(git diff --name-only "$BASE"...HEAD)
-          # Published packages only — extension and example-patterns are
-          # private; test-only edits need no changelog entry.
+          # Packages whose source reaches npm — either published directly, or
+          # BUNDLED into something published. `ui` and `validate` are private as
+          # of #301 but their code still ships inside inspector / storybook-addon
+          # / testing, so a change there is still a user-visible change and still
+          # needs a changelog entry. Dropping them from this list would let a
+          # tree-view fix pass every check, merge, and never reach npm.
+          #
+          # The changeset it demands must name a CONSUMER: naming a private
+          # package alone is accepted by changesets and then silently ignored
+          # (`privatePackages.version: false`). This grep cannot tell the
+          # difference — see the follow-up issue for the check that can.
           src=$(echo "$changed" \
             | grep -E '^packages/(core|serialize|ui|inspector|react|storybook-addon|testing|validate|mcp|cli)/src/' \
             | grep -vE '\.(test|spec)\.[tj]sx?$' || true)

@@ -1,5 +1,4 @@
 ---
-"@real-a11y-dev/validate": minor
 "@real-a11y-dev/testing": minor
 ---
 
