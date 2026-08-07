@@ -8,6 +8,17 @@
   landed the change; versions match `package.json`/`public/manifest.json`.
 -->
 
+## Unreleased
+
+### Patch Changes
+
+- Halve the work the panel's search box does per keystroke. Filtering ran the
+  match predicate over the whole tree twice — once to decide what stays
+  visible, once to count the matches — and re-climbed to the root for every
+  match when marking ancestor paths. Both are now a single pass. The results
+  are identical; there is just less to do between the keypress and the
+  redraw. ([#308])
+
 ## 0.1.9
 
 ### Patch Changes

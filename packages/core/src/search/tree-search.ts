@@ -47,26 +47,67 @@ export function searchTree(
   query: string,
   viewMode: TreeViewMode,
 ): Set<string> {
-  const matchedIds = new Set<string>();
-  if (!query.trim()) return matchedIds;
+  return collectSearchMatches(nodes, query, viewMode).visibleIds;
+}
+
+/** Nodes a query selects, split into the matches themselves and what to show. */
+interface SearchMatches {
+  /** Nodes whose own content matched the query. */
+  directIds: Set<string>;
+  /** `directIds` plus every ancestor, so the path to each match is visible. */
+  visibleIds: Set<string>;
+}
+
+/**
+ * Run the match predicate over the tree exactly once, keeping the direct
+ * matches and the visible set separately. Callers that need both (see
+ * {@link applySearchFilter}) would otherwise have to re-run the predicate —
+ * doubling the string matching and `Object.entries` allocation on every
+ * keystroke.
+ */
+function collectSearchMatches(
+  nodes: Map<string, SemanticNode>,
+  query: string,
+  viewMode: TreeViewMode,
+): SearchMatches {
+  const directIds = new Set<string>();
+  const visibleIds = new Set<string>();
+  if (!query.trim()) return { directIds, visibleIds };
 
   const lowerQuery = query.toLowerCase();
 
   for (const [id, node] of nodes) {
     if (matchesNode(node, lowerQuery, viewMode)) {
-      matchedIds.add(id);
-
+      directIds.add(id);
+      visibleIds.add(id);
       // Also mark all ancestors as matching (so the path is visible)
-      let parentId = node.parentId;
-      while (parentId) {
-        matchedIds.add(parentId);
-        const parent = nodes.get(parentId);
-        parentId = parent?.parentId ?? null;
-      }
+      addAncestors(nodes, node, visibleIds);
     }
   }
 
-  return matchedIds;
+  return { directIds, visibleIds };
+}
+
+/**
+ * Add every ancestor of `node` to `into`, so the path down to it stays visible.
+ *
+ * Stops at the first ancestor already in the set: whatever put it there marked
+ * its ancestors in the same breath, so the rest of the climb is redundant. That
+ * turns a per-match walk to the root into one walk per distinct path segment,
+ * and makes the loop terminate on a malformed tree whose `parentId` links form
+ * a cycle.
+ */
+function addAncestors(
+  nodes: Map<string, SemanticNode>,
+  node: SemanticNode,
+  into: Set<string>,
+): void {
+  let parentId = node.parentId;
+  while (parentId && !into.has(parentId)) {
+    into.add(parentId);
+    const parent = nodes.get(parentId);
+    parentId = parent?.parentId ?? null;
+  }
 }
 
 function matchesNode(
@@ -140,8 +181,9 @@ export function applySearchFilter(
     return 0;
   }
 
-  // Find nodes matching search query
-  const searchMatchedIds = hasQuery ? searchTree(nodes, query, viewMode) : null;
+  // Find nodes matching search query. One pass yields both the visible set and
+  // the direct matches the count below reports.
+  const search = hasQuery ? collectSearchMatches(nodes, query, viewMode) : null;
 
   // Find nodes matching role filter (include ancestors for path visibility)
   const roleMatchedIds = new Set<string>();
@@ -150,30 +192,21 @@ export function applySearchFilter(
       if (matchesRoleFilter(node, roleFilter)) {
         roleMatchedIds.add(id);
         // Include ancestors
-        let parentId = node.parentId;
-        while (parentId) {
-          roleMatchedIds.add(parentId);
-          const parent = nodes.get(parentId);
-          parentId = parent?.parentId ?? null;
-        }
+        addAncestors(nodes, node, roleMatchedIds);
       }
     }
   }
 
-  // Apply combined filter: AND when both active
+  // Apply combined filter: AND when both active, and count the direct matches
+  // (nodes that match both filters themselves, not ancestors pulled in for the
+  // path) in the same pass.
   let directMatches = 0;
   for (const [id, node] of nodes) {
-    const matchesSearch = searchMatchedIds ? searchMatchedIds.has(id) : true;
+    const matchesSearch = search ? search.visibleIds.has(id) : true;
     const matchesRole = hasRoleFilter ? roleMatchedIds.has(id) : true;
     if (node.ui) node.ui.matchesFilter = matchesSearch && matchesRole;
-  }
 
-  // Count direct matches (nodes that match both filters directly, not ancestors)
-  const lowerQuery = hasQuery ? query.toLowerCase() : "";
-  for (const node of nodes.values()) {
-    const directSearchMatch = hasQuery
-      ? matchesNode(node, lowerQuery, viewMode)
-      : true;
+    const directSearchMatch = search ? search.directIds.has(id) : true;
     const directRoleMatch = hasRoleFilter
       ? matchesRoleFilter(node, roleFilter)
       : true;
