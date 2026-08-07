@@ -48,10 +48,7 @@
   },
   "dependencies": {
     "@puppeteer/browsers": "^3.0.6",
-    "@real-a11y-dev/audit": "workspace:*",
-    "@real-a11y-dev/browser": "workspace:*",
-    "@real-a11y-dev/serialize": "workspace:*",
-    "@real-a11y-dev/snapshot": "workspace:*"
+    "@real-a11y-dev/browser": "workspace:*"
   },
   "peerDependencies": {
     "playwright": ">=1.49.0 <2"
@@ -62,7 +59,10 @@
     }
   },
   "devDependencies": {
+    "@real-a11y-dev/audit": "workspace:*",
+    "@real-a11y-dev/serialize": "workspace:*",
     "@real-a11y-dev/session-registry": "workspace:*",
+    "@real-a11y-dev/snapshot": "workspace:*",
     "@types/node": "^22.0.0",
     "playwright": "^1.61.1",
     "tsup": "^8.3.0",

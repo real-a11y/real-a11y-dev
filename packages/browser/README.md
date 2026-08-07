@@ -43,7 +43,7 @@ Everything above uses the **DOM producer**: the page-bundle walks the light DOM 
 ```ts
 const tree = await session.nativeTree();
 // ExtractionResult with source.producer === "native"
-// — feed it to serialize / audit / diff exactly like a DOM tree
+// — serialize it, audit it, or diff it exactly like a DOM tree
 ```
 
 Why a second producer: Chromium exposes structure no in-page walk can reach — most visibly a `<video controls>`'s play/scrubber/mute controls, which live in a closed user-agent shadow root. The vocabulary (which nodes survive, sibling order, role map, name promotion) comes from core's shared `normalizeNativeAX`, so native and DOM trees are directly comparable.
@@ -128,4 +128,4 @@ One bundle, one home — so a tree captured through the CLI, the MCP server, or 
 
 ## Design
 
-This package is **the only place that touches Playwright**. Everything above it in the stack is a pure, browserless engine (`core` extraction, `serialize` text, `audit` findings, `snapshot` diffs); everything that needs a live page — the CLI, the MCP server, the testing Playwright adapter — composes `browser`. Isolating the real-browser concern here means a consumer that only needs the engine never pulls Playwright into its dependency graph.
+This package is **the only place that touches Playwright**. Everything above it in the stack is a pure, browserless engine (`core` extraction, plus the internal `serialize` text, `audit` findings, and `snapshot` diffs); everything that needs a live page — the CLI, the MCP server, the testing Playwright adapter — composes `browser`. Isolating the real-browser concern here means nothing in the engine layer pulls Playwright into its dependency graph.

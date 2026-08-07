@@ -6,7 +6,7 @@ area: Packaging
 type: Automated
 priority: P0
 status: Active
-validFrom: "every published package, all versions. Automated by `pnpm packaging:check`; also runs in CI's verify job. `validate` (last published 0.1.0-beta.7) and `semantic-navigator-ui` (0.1.0-beta.11) became PRIVATE and are no longer scanned — `findPublicPackages` skips `private: true`, so either one still appearing in the output is now the failure"
+validFrom: "every published package, all versions. Automated by `pnpm packaging:check`; also runs in CI's verify job. `findPublicPackages` skips `private: true`, so a package that went internal must vanish from the output entirely — still seeing one means its `package.json` never got the flag. Read the private set from the manifests, not from this line."
 validUntil: ""
 expected: "publint + attw clean for every published package; no `files` entry pointing at a nonexistent path"
 twin: D1

@@ -2,9 +2,22 @@
 
 Deterministic text serialization of the [Semantic Navigator](https://real-a11y.dev) accessibility tree. The same string format the Real A11y panel, the testing snapshots, the `real-a11y` CLI (`tree`/`outline`/`tabs`), the MCP server, and the Chrome extension all share.
 
-```sh
-npm install @real-a11y-dev/serialize
-```
+> **Internal package — not published to npm.** It is bundled into
+> [`@real-a11y-dev/testing`](../testing), the `real-a11y` CLI, the MCP server,
+> [`@real-a11y-dev/browser`](../browser)'s page-bundle, and the Chrome
+> extension — every surface that prints one of these views already carries it.
+> There is nothing to install and nothing to import by this name. The examples
+> below are written from inside the workspace, for anyone working on the format
+> itself.
+>
+> It was published up to `0.1.0-beta.12` before becoming internal.
+> [`@real-a11y-dev/testing`](https://real-a11y.dev/packages/testing) is the
+> published home for the serializers: `serializeTree`, `serializeTreeDiff`,
+> `extract`, `SerializeOptions` and `TreeDiffSerializeOptions` keep their names,
+> while `serializeOutline` and `serializeTabSequence` arrive as
+> `outlineSnapshot` and `tabSequenceSnapshot` (with `auditSnapshot` aliasing
+> `serializeTree`). `numberTabStops`, `foldTypography` and the `SerializeInput`
+> type are not re-exported and have no published replacement.
 
 ```ts
 import {

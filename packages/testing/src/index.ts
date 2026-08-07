@@ -8,6 +8,12 @@ export {
   serializeTabSequence as tabSequenceSnapshot,
   serializeTreeDiff,
   extract,
+  // `numberTabStops` is the documented companion to `tabSequenceSnapshot` —
+  // snapshots.md tells you to render an explicit "stop 7" with it. With
+  // `serialize` private it had no published home at all, so the doc pointed at
+  // an install that no longer exists. Re-exported here, next to the serializer
+  // it decorates, rather than losing a capability to a packaging change.
+  numberTabStops,
 } from "@real-a11y-dev/serialize";
 export type {
   SerializeOptions,

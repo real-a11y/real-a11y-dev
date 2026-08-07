@@ -1,5 +1,4 @@
 ---
-"@real-a11y-dev/serialize": minor
 "@real-a11y-dev/testing": patch
 ---
 

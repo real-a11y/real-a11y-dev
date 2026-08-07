@@ -2,11 +2,21 @@
 
 The audit engine for [Semantic Navigator](https://real-a11y.dev) — the one place an accessibility *finding* is defined and detected. It holds the `Finding` data model, the rule set, `collectFindings` (non-throwing), and the `assert*` primitives (throwing), depending on nothing but [`@real-a11y-dev/core`](https://real-a11y.dev/packages/core).
 
-```sh
-npm install @real-a11y-dev/audit
-```
-
-Most people never install this directly — they use [`@real-a11y-dev/testing`](https://real-a11y.dev/packages/testing) (which re-exports everything here), the `real-a11y` CLI, or the MCP server. Install `audit` when you want the raw findings engine with no test-runner or renderer attached.
+> **Internal package — not published to npm.** It is bundled into
+> [`@real-a11y-dev/testing`](../testing), the `real-a11y` CLI, the MCP server,
+> and [`@real-a11y-dev/browser`](../browser)'s page-bundle — every surface that
+> reports a finding already carries it. There is nothing to install and nothing
+> to import by this name. The examples below are written from inside the
+> workspace, for anyone working on the rules themselves.
+>
+> It was published up to `0.1.0-beta.12` before becoming internal. If you
+> depended on it directly,
+> [`@real-a11y-dev/testing`](https://real-a11y.dev/packages/testing) re-exports
+> this vocabulary under the same names — `Finding`, `A11yRule`, `RoleFilter`,
+> `ALL_RULES`, `INTERACTIVE_ROLES`, `collectFindings`, `listByRole`,
+> `A11yAssertionError`, and the four `assert*` helpers below. Only
+> `formatFindings` and `assertRules` are left behind, with no published
+> replacement.
 
 ## `audit` vs `@real-a11y-dev/validate`
 
@@ -14,7 +24,7 @@ Most people never install this directly — they use [`@real-a11y-dev/testing`](
 
 Sibling packages — neither is built on the other — that answer **different questions**:
 
-|                     | `@real-a11y-dev/validate` (internal)                                          | `@real-a11y-dev/audit` (this package)                                     |
+|                     | `@real-a11y-dev/validate` (internal)                                          | `@real-a11y-dev/audit` (this package, internal too)                                     |
 | ------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | **Answers**         | Is it **spec-legal ARIA**?                                                    | Does it follow **best practice**?                                        |
 | **Grounded in**     | [`aria-query`](https://github.com/A11yance/aria-query) — tracks the ARIA spec | Curated accessibility rules                                              |

@@ -264,7 +264,7 @@ main
     strong "no"
     code "NN."
     code "numberTabStops"
-    code "@real-a11y-dev/serialize"
+    code "@real-a11y-dev/testing"
     code "numberTabStops(tabSequenceSnapshot(root))"
   paragraph "Honors (default ) — the currently-focused stop is shown with a trailing . See ."
     code "markFocus"

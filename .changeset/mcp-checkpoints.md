@@ -1,6 +1,5 @@
 ---
 "@real-a11y-dev/mcp": minor
-"@real-a11y-dev/snapshot": minor
 "@real-a11y-dev/cli": patch
 ---
 

@@ -6,7 +6,7 @@ area: Install health
 type: Automated
 priority: P0
 status: Active
-validFrom: "every published release. While pre-mode `beta` is active, the `beta` dist-tag moves and `latest` must not. `validate` (last published 0.1.0-beta.7) and `semantic-navigator-ui` (0.1.0-beta.11) are PRIVATE from this release on — npm keeps serving those two versions, so for them every assertion here inverts: nothing moves"
+validFrom: "every published release. While pre-mode `beta` is active, the `beta` dist-tag moves and `latest` must not. For any package that has gone PRIVATE, every assertion here INVERTS — npm keeps serving its last published version, so assert nothing moved. Read that set from `private: true` in the manifests."
 validUntil: ""
 expected: "npm view shows the new version + intended tag; a fresh install of each package imports (ESM + CJS) with types"
 twin:

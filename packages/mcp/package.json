@@ -56,10 +56,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
-    "@real-a11y-dev/audit": "workspace:*",
     "@real-a11y-dev/browser": "workspace:*",
-    "@real-a11y-dev/serialize": "workspace:*",
-    "@real-a11y-dev/snapshot": "workspace:*",
     "zod": "^3.25.0"
   },
   "peerDependencies": {
@@ -71,7 +68,10 @@
     }
   },
   "devDependencies": {
+    "@real-a11y-dev/audit": "workspace:*",
+    "@real-a11y-dev/serialize": "workspace:*",
     "@real-a11y-dev/session-registry": "workspace:*",
+    "@real-a11y-dev/snapshot": "workspace:*",
     "@types/node": "^22.0.0",
     "playwright": "^1.61.1",
     "tsup": "^8.3.0",

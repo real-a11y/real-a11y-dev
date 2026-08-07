@@ -71,7 +71,7 @@ view.removed; // SemanticNode[] — gone from the current tree
 
 Pass the result as `TreePanel`'s `diff` prop, along with `enableDiff`, `diffActive`, and `onToggleDiff` to drive the button.
 
-> This is the in-page, interaction-scoped diff. It is keyed on live node identity, so it dies on navigation. For a diff that survives navigation and gates CI, use the snapshot fingerprint diff in [`@real-a11y-dev/snapshot`](../snapshot) / the MCP checkpoint tools.
+> This is the in-page, interaction-scoped diff. It is keyed on live node identity, so it dies on navigation. For a diff that survives navigation and gates CI, use the snapshot fingerprint diff — the `real-a11y snapshot` / `real-a11y diff` CLI commands, or the MCP checkpoint tools, each carrying the internal [`@real-a11y-dev/snapshot`](../snapshot) engine.
 
 ## Hooks
 

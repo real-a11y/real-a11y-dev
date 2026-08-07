@@ -17,8 +17,22 @@ export default defineConfig({
   // `from "@real-a11y-dev/validate"` and a consumer would get `TS2307` — or,
   // with `skipLibCheck: true`, types silently degrading to `any`. `surface:check`
   // fails on exactly that, so this is enforced rather than remembered.
-  noExternal: ["@real-a11y-dev/validate"],
-  dts: { resolve: ["@real-a11y-dev/validate"] },
+  noExternal: [
+    "@real-a11y-dev/validate",
+    "@real-a11y-dev/audit",
+    "@real-a11y-dev/serialize",
+  ],
+  dts: {
+    resolve: [
+      "@real-a11y-dev/validate",
+      // `testing` re-exports audit's `Finding` / `A11yRule` / `ALL_RULES` and
+      // serialize's `SerializeOptions` / `extract` — with both private, those
+      // are now the ONLY published home for that vocabulary, so the
+      // declarations must carry them rather than point at a 404.
+      "@real-a11y-dev/audit",
+      "@real-a11y-dev/serialize",
+    ],
+  },
   sourcemap: true,
   clean: true,
   treeshake: true,

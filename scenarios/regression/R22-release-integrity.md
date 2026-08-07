@@ -6,7 +6,7 @@ area: Release
 type: Automated
 priority: P1
 status: Active
-validFrom: "every release. Pre-mode `beta` is active (.changeset/pre.json). Linked family and cli/mcp version independently — differing numbers are correct, not a bug. `semantic-navigator-ui` left the linked group when it went private, so the group is nine packages from that release on, not ten"
+validFrom: "every release. Pre-mode `beta` is active (.changeset/pre.json). The linked family and cli/mcp version independently — differing numbers are correct, not a bug. The linked group SHRINKS each time a package goes internal, so read it out of `.changeset/config.json`'s `linked` array rather than from memory or from this line."
 validUntil: ""
 expected: "linked group shares one version; every bumped package has a changelog entry; the intended dist-tag is correct for a beta"
 twin: D1
