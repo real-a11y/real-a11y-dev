@@ -1,5 +1,139 @@
 # @real-a11y-dev/core
 
+## 0.1.0-beta.12
+
+### Minor Changes
+
+- e4e9c89: Keep an `aria-describedby` target in the tree when its subtree contains interactive content. Targets are suppressed because their text is already shown inline as the referencing element's description — but the suppression dropped the target's whole subtree with it, so a control living inside help text disappeared. The everyday case is a link:
+
+  ```html
+  <input aria-describedby="pw-help" />
+  <p id="pw-help">Must be 8+ characters. <a href="/rules">Full rules</a></p>
+  ```
+
+  "Full rules" is visible, focusable content an AT user can tab to and activate, yet it was absent from both the DOM and a11y views — and from everything derived from them (the panel, search, serialization, audits). A description target is now suppressed only when it holds no control a user can actually reach, using the same `getActions` predicate that sets `interaction.isInteractive`, with two narrowings so the exception stays tight:
+
+  - Only a control that actually reaches the tree counts. One the walk never emits (hidden, inside a skipped element, or among a media element's fallback children) or that AT can't see (`aria-hidden`, `visibility:hidden`) does not keep the target alive — otherwise the target returns as a redundant node while the control it was kept for never appears.
+  - A bare `tabindex="-1"` does not count. It is programmatic-focus plumbing (the standard way to move focus to a `role="alert"` error container), not something a user can tab to, so text-only help and error text stays suppressed as before.
+
+  `LiveTreeExtractor` keeps up with this: the verdict now depends on the target's whole subtree, so a mutation anywhere inside one re-evaluates the target itself. A watched page that loses (or hides) the last control in its help text drops the target node, instead of leaving a stale duplicate in the panel and audits.
+
+  **Breaking change:** extraction output grows for pages using this pattern. A description target that holds a control — and that control, plus any nodes between them — now appears in the tree where it previously did not.
+
+  Migration: re-record tree snapshots that cover an `aria-describedby` target with interactive content. Audits now see those newly-visible nodes, so a suite that was green may surface findings for controls inside help text (for example an unlabeled icon link); these are real defects the tree was previously hiding, and should be fixed on the page rather than re-suppressed. Nothing changes for text-only description targets, which are the common case.
+
+- c15960d: Keep interactive descendants of `<legend>` and `<summary>` in the a11y tree. Both tags were suppressed with their **entire** subtree, on the reasoning that their text is already consumed as the `<fieldset>` / `<details>` accessible name. That holds for text, but not for controls: in
+
+  ```html
+  <legend>Payment <a href="/help">(help)</a></legend>
+  <summary>Details <button>Copy</button></summary>
+  ```
+
+  the link and the button are focusable and operable on the real page, yet were invisible in the inspector panel, uncounted by audits, and undispatchable by `testing`/`cli`/`mcp` — a keyboard-reachable control the tooling swore did not exist.
+
+  `<legend>` and `<summary>` now go through the same promotion the `<label>` branch already used: the element itself is still dropped, child subtrees that lead to an interactive descendant are promoted to the parent, and text-only children are still discarded so the name isn't duplicated as a stray `generic` row.
+
+  **Breaking change.** Pages with a link or button nested inside a `<legend>` or `<summary>` gain nodes they didn't have before, so stored snapshots and node counts for those pages will change. Migration: re-record the affected baselines — re-run `real-a11y snapshot` for stored CLI artifacts, and update `expect(a11ySnapshot(root)).toMatchSnapshot()` files with your runner's update flag (`vitest -u` / `jest -u`). The new nodes are the ones assistive technology exposes — if an audit now reports a finding on one of them, that finding was always there, just hidden. Trees with no interactive content inside a `<legend>`/`<summary>` are byte-identical to before.
+
+- 4aa1036: Compute the accessible name from content for every role ARIA says supports it. The role whitelist behind step 8 of the name computation held eight roles — `button`, `link`, `heading`, `option`, `treeitem`, `tab`, `menuitem`, `cell` — while ARIA 1.2's `nameFromContent` list also contains `checkbox`, `radio`, `switch`, `menuitemcheckbox`, `menuitemradio`, `gridcell`, `columnheader`, `rowheader`, `row`, and `tooltip`. So
+
+  ```html
+  <div role="checkbox"><span>Accept terms</span></div>
+  ```
+
+  came out **nameless** where Chrome announces "Accept terms" — a custom control that reads fine in a screen reader, reported by the inspector, the audits, and `@real-a11y-dev/testing` as unlabeled. The gap only showed when the label sat inside a child element; markup with direct text children was caught by the fallback below the whitelist, which is how ten missing roles went unnoticed.
+
+  Naming from content is the opposite direction to the name **barrier** set, and most of these roles sit in both: a `gridcell` now names itself from its content and still contributes nothing to the name of the row containing it, exactly as `cell` and `treeitem` already did.
+
+  **Breaking change.** Elements with those ten roles gain accessible names they didn't have before, so stored snapshots, contract assertions, and unlabeled-control findings change for pages that use them.
+
+  _Migration:_ re-record affected baselines — re-run `real-a11y snapshot` for stored CLI artifacts, and update `toMatchSnapshot()` files with your runner's update flag (`vitest -u` / `jest -u`). An audit finding that disappears was a false positive: the control had a name all along and only this library couldn't see it. Trees with none of these roles, and ones whose labels are direct text children, are byte-identical to before.
+
+- b304069: Findings from the native producer now say **where**.
+
+  `audit` is rule · severity · locator, but `--producer native` (and MCP `producer: "native"`) reported every finding with no locator at all — a real defect with no address. The DOM producer derives the locator from a live `Element` it holds in an in-page map; the native producer runs in Node over a CDP snapshot and has no such element, so nothing was left to derive from.
+
+  The path is now computed during the `DOM.getDocument` walk the native producer already makes — the only place it ever sees parent and sibling links, and free, since that walk was happening anyway. Both producers share one builder (`buildCssPath`, exported from `@real-a11y-dev/core` with `CssPathAdapter` and `DOM_ELEMENT_ADAPTER`), each supplying accessors for its own node shape, so `#panel > div > img:nth-of-type(2)` means the same thing whichever producer found the problem. `SemanticNode["dom"]` gains an optional `locator` to carry it. `list_elements` / `listByRole` gain native locators for the same reason, and the docs that said native had none are corrected.
+
+  ```
+  # before                          # after
+  image-alt   locator: (none)       image-alt   locator: body > main > img
+  image-alt   locator: (none)       image-alt   locator: #panel > div > img
+  ```
+
+  One case has no honest answer and is treated as one: the native walk pierces shadow roots and the in-page walk doesn't, so native alone reaches elements with no whole-document selector. Those paths stop at the boundary — `button:nth-of-type(2)`, not a `#document-fragment > button` that would look queryable and match nothing.
+
+  **Native snapshots taken before this will not diff cleanly against ones taken after.** A finding's fingerprint includes its locator, so native findings that previously fingerprinted with an empty anchor now fingerprint with a real one: `real-a11y diff` will read a re-run of an unchanged page as every finding fixed and re-introduced. Re-baseline native artifacts once. DOM-producer artifacts are unaffected — their locators never changed.
+
+- 2f2ab7b: feat(core): the native AX normalizer now preserves _named_ `generic` containers instead of always dropping them. A bare `generic` wrapper is still flattened, but a generic that carries an accessible name (e.g. Chromium's `generic "YouTube Video Player"`, which groups the media controls) is kept as a labelled group. This restores meaningful grouping in native-producer output and closes a native↔DOM structural divergence where the DOM producer kept the container and the native producer flattened it. `none`/`presentation` remain unconditionally dropped (the author explicitly removed semantics). Bumps `NATIVE_AX_VOCABULARY_VERSION` to 2 — native snapshots/baselines that contain named generic wrappers will pick up the new grouping.
+- 3ab20f2: Resolve `<th>` to `columnheader` / `rowheader` the way HTML-AAM's auto
+  algorithm does, instead of treating every cell without `scope="col"` as a
+  `rowheader`.
+
+  The old rule was a single ternary — `scope === "col" ? "columnheader" :
+"rowheader"` — so the overwhelmingly common markup
+
+  ```html
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Born</th>
+      </tr>
+    </thead>
+    …
+  </table>
+  ```
+
+  came out as two `rowheader`s. Chrome, Firefox, and HTML-AAM all expose those
+  as `columnheader`, so a plain `<thead>` table read back from the tree
+  described its own structure wrongly, and `scope="colgroup"` / `scope="rowgroup"`
+  were ignored outright.
+
+  The resolution is now:
+
+  - `scope="col"` or `scope="colgroup"` → `columnheader`
+  - `scope="row"` or `scope="rowgroup"` → `rowheader`
+  - no `scope` → the cell's position decides: a `<th>` inside `<thead>`, or in
+    the table's first row when the table has no `<thead>`, is a `columnheader`;
+    anything else (the leading `<th>` of a body row) stays a `rowheader`
+
+  Position is read with an ancestor walk and two `querySelector` calls — no
+  layout reads, so extraction cost is unchanged.
+
+  **Breaking change.** Trees extracted from tables whose header cells omit
+  `scope` now report `columnheader` where they previously reported `rowheader`.
+  If you have accessibility snapshots or `toMatchA11yTree`-style assertions
+  covering such a table, they will fail until re-baselined — the new role is the
+  one assistive technology actually announces. Re-record the snapshot
+  (`--update-snapshots`, or your suite's equivalent) to adopt it; if you assert
+  on roles directly, change the expected `rowheader` to `columnheader` for cells
+  in the header row. Tables that already spell out `scope="col"` / `scope="row"`
+  are unaffected.
+
+### Patch Changes
+
+- cd20458: `DomObserver` no longer drops its built-in sentinel ids when a caller passes a custom `internalIds` set.
+
+  The 4th constructor parameter defaulted to the built-in set, so supplying your own ids **replaced** it rather than adding to it — silently un-filtering `__sn-highlight` and `__sn-curtain`. Mutations from our own focus-highlight overlay and screen curtain would then be observed as user mutations, re-arming the re-extract → re-render → re-highlight feedback loop the filter exists to prevent. The provided set is now unioned with the built-ins, so the built-in sentinels are always filtered.
+
+- 229c5ac: Stop `ElementRefMap` from retaining an entry per element it has ever seen. The `WeakRef` always let the element itself be collected, but the surrounding `Map` entry was only cleared by a `get` for that exact id — and the ids of removed elements are the ones nobody looks up again, so on a long-lived SPA tab the map grew for the life of the page. `set` now sweeps collected entries once the map outgrows twice its live size, which keeps the cost amortized constant. Lookups are unaffected: `get` already reported a collected element as `undefined`.
+- 1ef740a: Fix live state going stale when an app flips an ARIA state attribute in place.
+
+  `DomObserver`'s `attributeFilter` restated its own list of attributes instead of tracking the ones the extraction pipeline reads, and had drifted from it. `aria-current`, `aria-busy`, `aria-readonly`, `aria-required`, `aria-controls`, `aria-haspopup`, `name`, `placeholder`, `action`, `method`, and the media attributes (`autoplay`, `muted`, `loop`, `poster`) were recorded on every node but never observed — so an SPA moving `aria-current="page"` between nav links on a route change, or a form toggling `aria-required` / `aria-busy`, produced no re-extraction and the tree kept showing the previous state, with nothing to indicate it was stale. These flip in place on an element that is already in the tree, so there was no childList mutation to fall back on; the change only surfaced if some unrelated observed attribute happened to change too.
+
+  Four more attributes are consumed further along the pipeline without being recorded on a node, and were missing for the same reason: `aria-description` and `aria-level` (description and heading level), `scope` (selects a `<th>`'s columnheader/rowheader role), and `autocomplete` — which decides whether a field's value is redacted, so a field turned into a credential field mid-session kept showing its value until something else forced a re-extraction.
+
+  The filter is now the union of the extractor's own attribute lists and the ones only the observer needs, so the recorded-attribute half can't drift again.
+
+- 3b4967b: Stop the element picker from activating the widget you were trying to inspect. `createPicker` intercepted only `click`, so while pick mode was on the rest of the pointer sequence still reached the page: Radix and Headless UI dropdowns open on `pointerdown`, focus moves on `mousedown`, Material ripples start on `pointerdown`. Clicking a menu button to inspect it opened the menu — the click was cancelled, but everything leading up to it had already fired.
+
+  Pick mode now suppresses `pointerdown`, `mousedown`, `pointerup`, `mouseup`, and `auxclick` at the capture phase (`preventDefault` + `stopPropagation`) for as long as it is enabled, the way Chrome's own inspect mode swallows the whole sequence. `click` is unchanged — it is still what resolves the pick and exits the mode — and all the added listeners come off with the rest on disable or `teardown()`.
+
+- 4d982ce: Stop an empty live-region announcer from permanently pivoting the extraction scope to `document.body`. `findPortalOverlay` pivoted for **any** matching overlay outside the configured root that passed a visibility check — and visibility is display/visibility only, so the permanent, empty announcer or toast viewport that every toast library (Sonner, react-hot-toast, Radix Toast, MUI Snackbar) mounts at body level on first render counted as a showing overlay. Because those shells are never removed, the pivot was never released either: with `createInspector({ root: '#app' })` the `root` option was dead for the rest of the session, not just while a toast was up.
+
+  The pivot now also requires the overlay to actually have something in it — collapsed text, a natively focusable control, or a graphic. A bare `tabindex` deliberately does not count: an empty toast viewport is routinely given `tabindex="-1"` for focus management (Radix Toast and Sonner both render `<ol tabindex="-1">` while holding zero toasts), so counting it would let the very shells this guards against back through. An overlay that is genuinely showing still pivots exactly as before, including an icon-only menu with no text at all; only the empty shells are ignored.
+
 ## 0.1.0-beta.11
 
 ### Minor Changes

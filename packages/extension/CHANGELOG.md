@@ -8,10 +8,20 @@
   landed the change; versions match `package.json`/`public/manifest.json`.
 -->
 
-## Unreleased
+## 0.1.9
 
 ### Patch Changes
 
+- Let keyboard users lower a slider or spinbutton from the panel. The ▼/▲
+  stepper buttons are mouse-only, and Enter always took the widget's primary
+  action — which prefers `increment` — so a keyboard-only user could raise a
+  value but never lower it. `+`/`=` now increment, `-`/`_` and `Shift+Enter`
+  decrement, in both the tree and the role-filtered lists. ([#248])
+- Stop the "ResizeObserver loop completed with undelivered notifications"
+  warning appearing in the extension's Errors panel. The virtualized tree's
+  re-measure now defers to a single animation frame, breaking the synchronous
+  observe → setState → relayout loop Chromium reports. Benign before, but it
+  buried real errors. No change to how virtualization behaves. ([#244])
 - Fix the element picker activating the widget you were trying to inspect.
   Pick mode cancelled only the `click`, so everything leading up to it still
   reached the page — dropdown triggers open on `pointerdown`, focus moves on
@@ -138,4 +148,6 @@ Earlier releases predate this changelog.
 [#194]: https://github.com/real-a11y/real-a11y-dev/pull/194
 [#195]: https://github.com/real-a11y/real-a11y-dev/pull/195
 [#213]: https://github.com/real-a11y/real-a11y-dev/pull/213
+[#244]: https://github.com/real-a11y/real-a11y-dev/pull/244
+[#248]: https://github.com/real-a11y/real-a11y-dev/pull/248
 [#287]: https://github.com/real-a11y/real-a11y-dev/pull/287

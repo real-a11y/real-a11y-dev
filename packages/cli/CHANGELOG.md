@@ -1,5 +1,336 @@
 # @real-a11y-dev/cli
 
+## 0.1.0-beta.2
+
+### Minor Changes
+
+- 87a7244: `audit` now honors each URL entry's `rootSelector`, and `audit` and `snapshot` derive a page's `name` identically — so the same configured route fingerprints the same way whichever command produced the artifact.
+
+  **`rootSelector` scopes the audit.** `resolveAuditTargets` collapsed every config page down to `{ url, name, fileApproved }`, discarding both `rootSelector` and `name`. A route configured with `"rootSelector": "main"` was audited at `body` anyway and reported findings from outside the region it was scoped to — a site-wide header link, say. An explicit `--root` still wins, since it's a deliberate override for that run; omit it and each route uses its own selector. `--producer native` combined with a config `rootSelector` is now a hard error with the same wording as `--producer native --root`, rather than silently auditing the whole document.
+
+  **One page name, settled once.** The name is the `v1` fingerprint's page component and `diff`'s join key, but the two commands derived it differently: `audit` re-derived it with `redactUrl`, while `snapshot` used the config value raw. A bare entry like `"http://localhost:3000"` therefore became `http://localhost:3000/` under `audit` and `http://localhost:3000` under `snapshot` — divergent fingerprints for one route. `resolvePageList` now settles the name once, at the single point both commands read their pages from.
+
+  One divergence remains and is unchanged by this release: `snapshot` honors neither `--root` nor `defaults.root`, so a route with no `rootSelector` is snapshotted at `body` while `audit` scopes it to `defaults.root` if you set one. Give a route its own `rootSelector` when you need the two commands to agree on it.
+
+  **Breaking:** for `urls` entries written as bare URL strings, the page `name` in a snapshot artifact is now the canonical URL (`http://localhost:3000/`, trailing slash) instead of the string as written. Since `name` feeds every finding fingerprint and `diff` joins on it, a baseline or committed artifact produced by an older version won't match one produced by this release for those routes — re-record it with `--update-baseline`. Entries with an explicit `name` are unaffected.
+
+  **Security:** a name that defaulted to the URL is now redacted the same way the `url` field always was. Previously a positional or bare-string target carrying userinfo or a `?token=` wrote those credentials into the artifact's `name` field and the baseline, beside a carefully redacted `url`.
+
+- 823d1cc: `real-a11y install` — download Chrome from Chrome for Testing (first time only), and use it for every launched session from then on:
+
+  ```sh
+  real-a11y install                           # latest Stable
+  real-a11y install --channel beta            # track a channel
+  real-a11y install --version 131.0.6778.87   # pin an exact build
+  ```
+
+  This replaces the `npx playwright install chromium` step (still supported) with a browser download that's independent of the Playwright package version — no more "Executable doesn't exist" from a global/local Playwright revision mismatch. Playwright remains the driver; only the browser binary changes.
+
+  The CLI's browser-driving commands gain `--chrome-path <file>` to launch a specific binary (ignored with `--cdp`). Resolution precedence, shared by the CLI and the MCP server: `--chrome-path` > `REAL_A11Y_CHROME_PATH` env > the `real-a11y install` cache > Playwright's own bundled Chromium.
+
+  `@real-a11y-dev/browser` gains `executablePath` on `BrowserSessionOptions`, plus `resolveChromeExecutable`/`readChromeManifest`/`chromeCacheDir` for anyone building their own installer or launch wiring. The MCP server picks up `REAL_A11Y_CHROME_PATH` and `REAL_A11Y_BROWSERS_DIR` the same way.
+
+- 4e3c10a: `real-a11y interact` — drive a page, then see what it changed for a screen reader. Plus one-step sugar verbs `click`, `type`, and `focus`.
+
+  A page audited as it loads never shows the dialog, the expanded menu, or the validation error. `interact` runs steps against a live page and prints the accessibility-tree diff they produced:
+
+  ```sh
+  real-a11y interact http://localhost:3000 --step 'click button "Open menu"'
+  # + link "Alpha"
+  # + navigation "Main"
+  # ~ button "Open menu": a11y.states.expanded false → true
+  # ~ main: childIds 1 child → 2 children
+  ```
+
+  Steps are written in the vocabulary the tree already prints — `<verb> <role> ["<name>"] [nth=<n>] [= <text>]`, verbs `click | type | focus` — so a line of `real-a11y tree` output is nearly a step already. `--step` is repeatable and ordered, stopping at the first failure. Omit the name to match any; pass `""` to target the unlabeled control an audit just flagged. The one-step cases have sugar: `real-a11y click <url> --role button --name "Save" --nth 2`, and likewise `type` (with `--text`) and `focus`.
+
+  Targeting is **role + accessible name only**, resolved against Chromium's own accessibility tree immediately before each dispatch — never a CSS selector, and no node id ever reaches the command line. If a control can't be reached that way, assistive technology can't reach it either, and that is surfaced as the accessibility finding it is. Ambiguous matches list their copy-paste `nth=` candidates; a disabled target is refused with the cause, because a swallowed click plus an empty diff reads as "that button does nothing" rather than "you can't click it".
+
+  Targeting, acting, and the diff all read the same tree — Chromium's own, over CDP — so a node you aim at by one name can't come back in the report under another. That tree is whole-document, so these commands take neither `--producer` nor `--root`, rather than accepting flags they'd ignore. A step that loads a new document (a navigation, or a reload) leaves the captured tree describing a page that no longer exists; the run reports that, says where it landed, and still exits `0`.
+
+  A typed value is never echoed — not in progress output, not in `--format json`, where the step renders as `= ‹hidden›`. There is deliberately no credential workflow here: a password on the command line is visible to other processes and lands in shell history, so `real-a11y login` remains the way to authenticate.
+
+  The JSON envelope gains three additive optional fields on a page: `steps` (rendered, redacted), `diff`, and `navigated` — the last so a consumer can tell that a step loaded a new document (so there is no diff) without string-matching the diff prose. `url` is re-read after the steps run, so it reports where the page LANDED rather than where the run opened it. Chromium only.
+
+- 0aa04c5: One producer per surface — `--producer` and the MCP `producer` param are gone.
+
+  The rule is **native for the a11y tree, DOM where the data only exists in the DOM**. Every read now comes from Chromium's own accessibility tree, which reaches structure no in-page walk can (a `<video controls>`'s user-agent-shadow media controls) and carries locators as of #251 — except tab order, which it cannot produce at all.
+
+  **The flags are removed, not defaulted.** Each surface has exactly one correct producer, so there was nothing left to choose: `--producer` is gone from the CLI, `producer` from the MCP tools, and `compare_producers` with them (20 → 19 tools). `--root` survives on `tabs` alone; every other command reads the whole document, so a selector has nothing to scope, and they refuse the flag with that explanation rather than the parser's "Unknown option". A config `defaults.root` **warns on stderr and keeps running** — this loader is otherwise strict and fail-closed, and erroring would red every CI that set the key, mid-beta, over config that was correct when it was written.
+
+  **`tabs` stays on the DOM producer, and that is not a fallback.** Native does know per-node focusability — `"focusable"` is in `STATE_PROPS`, which is what `focusedId` was built on. What it cannot produce is the _sequence_: `tabindex` is not in `DOM_ATTR_ALLOWLIST`, so it never reaches a native node, and ordering by it is DOM/layout work Chromium's AX tree doesn't expose. One DOM extraction still yields all four views from a single `page.evaluate`, so `tabs` is one read, not a second pass.
+
+  ## The artifact had to change shape, and omission alone was not enough
+
+  `projectNativeTree` returns `tabOrder: ""`, which `buildSnapshotPage` renamed to the artifact's `tabs`. So the **first diff across this migration** would compare a DOM artifact's N tab stops against a native one's none, and `views-summary` would report every stop as gone:
+
+  ```
+  Keyboard tab stop removed: button "Save"
+  Keyboard tab stop removed: link "Home"
+  … once per focusable element, on every page
+  ```
+
+  That is the tool's most safety-critical signal firing spuriously, at volume, on an upgrade where no page changed — plus the `NOTHING_FOCUSABLE` sentinel ("Nothing on this page is keyboard-focusable any more") reachable the same way.
+
+  Simply omitting the view does not fix it. `parseSnapshotArtifact` coerced a missing `tabs` straight back to `""`, so a reader could not tell _absent_ from _empty_ and landed in the same place. The fix needs a presence signal that survives the round trip:
+
+  - **`SnapshotPage.tabs` is now optional**, and a native page omits it.
+  - **`meta.views`** records which views the run measured. Additive, so `schemaVersion` stays `1`; absent/null reads as a legacy artifact that measured all three, which is what its silence meant.
+  - **The parser respects it** — an unmeasured view stays `undefined` (and a stray one is dropped, so the two can never disagree), while a _measured_-but-missing view still defaults to `""`, because "measured, nothing focusable" is a real state.
+  - **`diff` compares an axis only when both sides measured it**, and reports the rest as `skippedViews` — surfaced in every format, so a silently skipped axis is never read as "tab order is fine".
+
+  The same signal rides through the MCP server: `checkpoint_findings` is native too (both tools must read one producer, or a checkpoint captured by one and diffed by the other compares cross-producer findings), and `export_checkpoint` declares `views: ["tree", "outline"]`. A DOM-era artifact imported as a base still diffs cleanly — the tabs axis is skipped, not emptied.
+
+  ## What this costs
+  - **`inspect` no longer prints tab order**, and prints no empty section either — an empty block reads as _nothing here is focusable_, a very different claim from _not measured_. `real-a11y tabs` is the sequence. In exchange `inspect` and `audit` finally agree on findings, which they previously did not.
+  - **`snapshot`/`diff` no longer detect tab-order regressions at all**, since the artifact carries no tabs view. The CI diff-bot guide says so plainly rather than leaving a stale promise. `real-a11y tabs` still reports the sequence, and still takes `--root`.
+  - **A route's `urls[].rootSelector` no longer scopes `audit` or `snapshot`.** Both warn once, naming the routes, and keep running — findings from outside that subtree are now included. The entry still identifies a route.
+  - **MCP checkpoints are whole-document too.** `checkpoint_findings`/`diff_findings` lost their `rootSelector`, so a base imported from a DOM-era artifact that was captured at a narrow root now diffs against a whole-page re-snapshot: the old findings still match by fingerprint, but everything outside that subtree arrives as NEW — the class that gates CI. The diff says so in its first line, naming both scopes, rather than widening silently.
+
+  - **Every "narrow with `rootSelector`" hint had to be re-aimed.** The MCP output cap appended that line to _any_ truncated result, and `export_checkpoint` told you to re-save with a narrower one — advice four of the five read tools can no longer take, arriving at the exact moment the agent has lost information and most needs a way forward. Each read now names the lever it actually has (`rules`, a genuine `rootSelector` on `get_tab_order` and the tree checkpoints, or a smaller sibling read), and an oversized checkpoint export says what it can't do and points at `diff_findings` or the CLI's `snapshot --output` instead.
+
+  Tab-order machinery stays in core / serialize / browser / extension / mcp; only the CLI's `inspect` and `snapshot` stopped consuming it. `@real-a11y-dev/testing` runs in-page by design and is unaffected.
+
+- 7e85937: Session daemon core: a long-lived `real-a11y` process that keeps a browser page warm across CLI invocations.
+
+  The daemon (`packages/cli/src/daemon/entry.ts` → `dist/daemon/entry.js`) listens on a Unix domain socket and speaks NDJSON RPC. It holds a `SessionRegistry` of named `BrowserSession` instances, serialises commands per session, supports an idle timeout, and writes a pidfile on startup.
+
+  Initial daemon-side command runners are wired for the view and interaction commands: `tree`, `outline`, `tabs`, `list`, `interact`, `click`, `type`, and `focus`. Each runner compares the session's current URL and skips navigation when already on the target page, so successive requests against the same session reuse the live page. `audit` and `snapshot` daemon runners follow in a later PR.
+
+- 37f5859: Session daemon lifecycle and hardening.
+
+  - Adds `real-a11y session list|stop|stop-all` to inspect and terminate daemon sessions.
+  - `--session-idle-timeout <ms>` caps how long a daemon stays warm (default 15 min, max 1 hour) and resets after each run.
+  - Session names are sanitized and stored per-user under `~/.real-a11y/sessions/`, with `0o600` Unix sockets or Windows named pipes with a random per-session name (`\\.\pipe\real-a11y-<id>`; the id is independent of the auth token, which is still required on every RPC).
+  - Orphan cleanup: stale pidfiles/sockets are detected and removed by `list`/`stop`/`stop-all`; a CLI version/protocol handshake auto-restarts incompatible daemons.
+  - Daemon log is written to `~/.real-a11y/sessions/<name>/daemon.log`.
+  - `snapshot` and `audit` are now routed through the daemon and reuse the live page when the current URL already matches the target.
+  - `--storage-state` now origin-pins `snapshot` the same way it already pinned `audit` and `inspect`; use `--audit-origin` if you need to allow additional origins.
+
+- aa32b98: Add `--session` routing so browser-driving CLI commands reuse the session daemon.
+
+  Any browser-driving command (`tree`, `outline`, `tabs`, `list`, `interact`, `click`, `type`, `focus`, `inspect`, `audit`) accepts `--session <name>`. The first such run spawns a detached daemon listening on a Unix domain socket under `~/.real-a11y/sessions/<name>/daemon.sock`; later runs with the same name connect to it and act on the same live page. Without `--session` the one-shot default is unchanged.
+
+  The session name resolves as explicit `--session` → `a11y.config.json` `defaults.session` → a stable hash of the current working directory. `snapshot` declares `--session` but is not yet routed to the daemon in this release.
+
+- f834cfa: `--step-settle` — give a step's effect time to land before reading the page.
+
+  A dispatch returning is not the same as its effect having landed. A React state update flushes on a later tick, a dialog mounts on the next frame, and an immediate read reports "no changes" for a click that plainly did something:
+
+  ```
+  setTimeout(() => location.href = "/b", 300)   # a deferred navigation
+  act() returned after 8ms
+  read done at 17ms  ->  diff: (no changes)     # the page was about to navigate
+  ```
+
+  `--step-settle <ms>` (default `200`, the same debounce `@real-a11y-dev/testing`'s `flow()` already settled on) waits after **each** step, so it gates the next step's targeting as much as the final diff — a step that opens a menu has to have opened it before the step that clicks an item can resolve that item against a fresh tree. `0` opts out and reads immediately; `stepSettleMs` sets it project-wide, beside `settleMs`.
+
+  Deliberately separate from `--settle`, which waits once after the initial page load — conflating them would make one number serve two unrelated jobs, and `--settle`'s default of `0` is right for its job and wrong for this one.
+
+  It is a **heuristic wait, not a synchronisation point**. Nothing can tell you a page is _about_ to navigate, so a reaction landing later than the settle still won't appear, and "no changes" is never proof that nothing happened. A synchronous navigation was never affected either way: the dispatch already blocks until it commits.
+
+- 759c1a1: feat(cli): --verbose says where the config came from
+
+  Config auto-discovery stats `./a11y.config.json` in the directory you run from and
+  nowhere else — no upward walk, which is deliberate for v1. The consequence is a
+  quiet one: run from a subdirectory and you get no config, every default reverts to
+  its built-in, and nothing says so. The config is right there on disk, so the
+  natural conclusion is that config defaults don't work.
+
+  `--verbose` now prints one line before anything depends on it:
+
+  ```
+  config: /work/app/a11y.config.json (auto-discovered)
+  config: /work/app/custom.json (from --config)
+  config: skipped (--no-config); built-in defaults only
+  config: none found — looked for /work/app/nested/a11y.config.json
+    auto-discovery checks the directory you run from and does not walk upward, so a
+    config in a parent directory is not picked up. Pass --config <file> to name one.
+  ```
+
+  Paths are absolute deliberately. The failure this exists for is a config that is
+  real but not where the command ran from, and `a11y.config.json` is what the user
+  already believes they have — a relative path would add nothing.
+
+  The `none found` line carries three things because each answers a different
+  question: which path was checked, why checking elsewhere won't help, and what to
+  do instead. Knowing the path alone doesn't tell you that no other path ever will
+  be searched.
+
+  Behaviour is unchanged without `--verbose`, and discovery itself is untouched — an
+  upward walk to the git root would change documented behaviour and is a separate
+  call.
+
+- c10cfad: feat!: a page's identity is now separate from its display label
+
+  `SnapshotPage.name` was documented as _"Diff join key + display label"_ — one
+  field with two jobs. Because the join key **was** the label, changing the label
+  changed what the tool believed the page was. Three failures came from that one
+  conflation:
+
+  - renaming a page for readability un-suppressed its baseline;
+  - auditing a bare URL and later naming it in a config did the same;
+  - the same page on localhost vs prod only paired if you kept the names
+    character-identical by hand.
+
+  No single field fixes all three — the URL breaks the third (which is why `name`
+  was chosen over it), the label breaks the first two. So identity is its own
+  field now, derived from the part of a URL that survives both:
+
+  | field  | job                                      | default                 |
+  | ------ | ---------------------------------------- | ----------------------- |
+  | `id`   | join key — diff, baselines, fingerprints | the URL's path + search |
+  | `name` | display label, free to change            | the redacted URL        |
+  | `url`  | where it was captured                    | —                       |
+
+  Config entries take an optional `id` to collapse routes the path separates, or
+  to separate two sites that share one. Two pages with the same id is a **hard
+  error** naming both URLs and the fix — silently blending two pages' findings is
+  the worst outcome this model can produce.
+
+  The rule is not new: `differentUrl` already compared path + search + hash and
+  ignored the origin when deciding whether a checkpoint diff spanned two pages.
+  This promotes it to the identity it was always implying, and both now read the
+  same `pageIdOf` so a second definition can't drift into existence.
+
+  **Breaking.** `ARTIFACT_SCHEMA_VERSION` and `BASELINE_SCHEMA_VERSION` are both
+  `2`, because a finding's fingerprint now keys on the page's id rather than its
+  label — the hashes in a pre-upgrade file were computed over a different tuple,
+  and comparing the two schemes reports unchanged findings as fixed + new.
+
+  The two formats are treated differently, and the asymmetry is the point:
+
+  - **Artifacts are converted on read.** A v1 artifact holds the page `url` (→ the
+    identity) and each finding's own components (rule, role, locator, …), so it
+    can be re-keyed to produce exactly what a fresh capture of that page hashes.
+    Nothing is guessed and nothing is lost — an old `a11y-snapshot.json` still
+    diffs correctly against a new one, with no re-record.
+  - **Baselines are refused by name.** A baseline stores no URL, only a label, so
+    its identity cannot be derived from what it holds. Guessing was rejected
+    outright: a wrong guess silently suppresses a real finding.
+
+  **Upgrading a baseline.** Run `real-a11y snapshot --update-baseline`. It
+  replaces an unreadable baseline rather than refusing it — refusing would be a
+  dead end, since that is the command the refusal points you at — and says so, so
+  the `+new/-stale` counts stay interpretable. **Any `note` you wrote on an entry
+  does not survive**, and a note is the only part of a baseline nothing can
+  regenerate, so recover those from version control before committing.
+
+  The id is derived from the **redacted** url, so a `?token=…` never reaches the
+  artifact, the fingerprints or the committed baseline through this new field.
+  Schemes with no route — `data:`, `about:`, `blob:` — get no id at all and fall
+  back to the display label, which is the pre-identity behaviour and the right
+  answer for a content-addressed URL.
+
+  **Two config entries that differ only by `rootSelector` are now an error.**
+  Since the native-only migration both `audit` and `snapshot` read the whole
+  document, so such a pair names one URL and measures the same thing twice — one
+  page, one id. It used to warn and audit the page twice identically. Delete the
+  redundant entry, or give one an explicit `id`.
+
+  `import_checkpoint` no longer rewrites an imported page under the store label —
+  it did that because a label was an identity, and the rewrite would now break the
+  join it once repaired, so an artifact is stored as it arrived. Cross-tool diffs
+  (MCP `export_checkpoint` → CLI `diff`) work as a result, which they never have.
+
+  `diffLabeledCheckpoints` mostly stands down too: for a page with a real route
+  both sides derive the same id and join on their own. It keeps its neutral
+  re-fingerprint for one case — when **neither** side has a route (`data:`,
+  `about:blank`), where the id falls back to the display label and two checkpoints
+  of one unchanged page would otherwise report every finding as removed + re-added
+  with no note explaining why. One routed side and one not stays a genuine
+  mismatch and is not forced together.
+
+  `A11Y_PAGES` entries take an optional `id`, matching config `urls` entries. Two
+  pages resolving to one identity is a hard error, so the remedy has to be
+  reachable from whichever page list you use — `A11Y_PAGES` is the documented
+  drop-in for the CI guide, and "rewrite it as a config file" is not an answer.
+
+- a4cfac8: Tab-order serialization is now number-free by default; numbering moves to a render-time step.
+
+  `serializeTabSequence` used to render `01. link "Home"` / `02. button "Go"`. Inserting one focusable element near the top of the page renumbered every following line, so a committed snapshot's diff — and the reviewable unified-diff hunk of `real-a11y diff` — churned the whole view instead of showing the one inserted stop. Line order already conveys the sequence, so the serialized form is now just `link "Home"` / `button "Go"`: the canonical, diff-stable output you store and compare.
+
+  For a human- or agent-read listing where an explicit "stop 7" helps, a new `numberTabStops(tabs)` export re-adds the `NN. ` prefix at **render time** (never stored):
+
+  ```ts
+  import {
+    serializeTabSequence,
+    numberTabStops,
+  } from "@real-a11y-dev/serialize";
+  numberTabStops(serializeTabSequence(root)); // 01. link "Home"  02. button "Go"
+  ```
+
+  Numbering is applied where output is read, not diffed: the CLI `tabs` terminal view, the MCP `get_tab_order` and `inspect_page` tools, and the extension's Markdown export (which stays numbered, matching its on-screen panel). It is absent where output is committed or diffed: `tabSequenceSnapshot()` in `@real-a11y-dev/testing`, the CLI `snapshot`/`inspect` artifacts and JSON, and the browser audit's `tabOrder`. (Also fixes an MCP snapshot summary that reported "0 tab stops" once lines were unnumbered.)
+
+  **Breaking change.** Any committed snapshot of a tab sequence (vitest/jest `toMatchSnapshot`, an inline snapshot, or a golden file / CI artifact) will differ by the removed `NN. ` prefix on every line.
+
+  **Migration.** Either re-generate the affected snapshots (`vitest -u`, `jest -u`, or re-capture the golden file), or wrap the value for display: `numberTabStops(tabSequenceSnapshot(root))`.
+
+  Structural diffing tolerates the transition: `real-a11y diff` still strips leading `NN. ` numbers before comparing, so a base captured by an older numbered tool version diffs cleanly in findings, the multiset view, and the plain-language statements. The one exception is the tabs **hunk** view — a legacy numbered base shows a one-time full rewrite there until it is re-captured. That output is advisory and never gates.
+
+### Patch Changes
+
+- 0cf3860: Internal restructure: the daemon's `SessionRegistry` moved into the private workspace package `@real-a11y-dev/session-registry` (bundled into the CLI dist), so the upcoming MCP session support can embed the identical scheduling, identity-pinning, and idle-timeout semantics. No behavior change — the registry code, its tests, and the daemon E2E suite are unchanged apart from the package boundary and consumer-neutral error types.
+- 8cc6078: fix: `FlagValues` admits the array values `parseArgs` actually produces
+
+  `FlagValues` was `Record<string, string | boolean | undefined>`, but three flags
+  are declared `multiple: true` — `--audit-origin`, `--step` and
+  `--ignore-view-line` — so `node:util.parseArgs` hands back a `string[]` for them
+  and always has.
+
+  Nothing misbehaved at runtime, because the commands already guard with
+  `Array.isArray(...)`. The cost was to the type: those guards read as dead code
+  to both a reader and the compiler while being the branch that actually fires,
+  and one call site had already been patched by hand to accept `string[]` locally.
+  `FlagValue` is now a named alias carrying the array arm, used by every parser
+  helper.
+
+  The type was wrong for as long as it existed because the files that pass real
+  array values — the tests — were excluded from typechecking.
+
+- fea46b0: Declare each command's producer support once, on the command table.
+
+  Which commands accept `--producer native` was recorded in three places that could disagree: a `supportsNative` boolean passed in at each of five `producerOf` call sites, a hand-written `"native works with: audit, tree, outline"` list inside the refusal hint, and the Producer column in the docs. The hint's list is the one that had already drifted — it is offered to someone who just hit a refusal, so a stale entry sends them at a command that will refuse them too.
+
+  `CommandSpec` now carries `producers` (and `group`, the command reference's section). `producerOf` reads support from the table instead of taking it as an argument, and builds the hint's alternatives from the same place — filtered to commands that both support native and actually expose `--producer`, so the act commands (native-only, no such flag) are never suggested as somewhere to pass it.
+
+  No behavior change: the same commands accept native, and the hint reads the same today. It just can't fall out of step tomorrow.
+
+  **Superseded in this same release.** `--producer` was removed entirely — each surface now has exactly one correct producer, so there is nothing to choose and no refusal hint to keep current. `producers` and `group` outlive the flag: `producers` became a description of which producer a command _reads_ (still the fact that decides whether `--root` applies, and still what `docs/surface.json` publishes), and deriving it from the table rather than a hand-written list is what kept that removal honest.
+
+- adeffcf: `snapshot` now rejects a typed `--root` instead of silently ignoring it.
+
+  `snapshot` scopes each page by that page's `urls[].rootSelector` — that's what
+  makes its artifact a faithful record of the config, and what keeps two snapshots
+  of the same route comparable. It never read `--root`, but it accepted the flag
+  and dropped it, exiting 0 with an artifact whose `v1:` fingerprints looked like
+  they came from a scope that was never applied. It now errors (exit 2) and points
+  at `urls[].rootSelector`, or `audit --root` for a one-off scoped run.
+
+  A project-wide `defaults.root` is unaffected: it's config aimed at `audit`, not
+  an instruction for this run, so `snapshot` still ignores it silently rather than
+  failing every run. `snapshot --help` no longer lists `--root`.
+
+- Updated dependencies [37f5859]
+- Updated dependencies [37f5859]
+- Updated dependencies [4e3c10a]
+- Updated dependencies [b2ccee0]
+- Updated dependencies [37f5859]
+- Updated dependencies [bbbcb04]
+- Updated dependencies [823d1cc]
+- Updated dependencies [0aa04c5]
+- Updated dependencies [135ccc3]
+- Updated dependencies [6785622]
+- Updated dependencies [43f085c]
+- Updated dependencies [b304069]
+- Updated dependencies [0a41085]
+- Updated dependencies [c10cfad]
+- Updated dependencies [a4cfac8]
+  - @real-a11y-dev/browser@0.1.0-beta.12
+  - @real-a11y-dev/snapshot@0.1.0-beta.12
+  - @real-a11y-dev/audit@0.1.0-beta.12
+  - @real-a11y-dev/serialize@0.1.0-beta.12
+
 ## 0.1.0-beta.1
 
 ### Minor Changes
