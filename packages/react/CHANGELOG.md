@@ -1,5 +1,27 @@
 # @real-a11y-dev/react
 
+## 0.1.0-beta.12
+
+### Patch Changes
+
+- Updated dependencies [e4e9c89]
+- Updated dependencies [cd20458]
+- Updated dependencies [229c5ac]
+- Updated dependencies [c15960d]
+- Updated dependencies [4aa1036]
+- Updated dependencies [b304069]
+- Updated dependencies [2f2ab7b]
+- Updated dependencies [1ef740a]
+- Updated dependencies [3b4967b]
+- Updated dependencies [4d982ce]
+- Updated dependencies [3ab20f2]
+- Updated dependencies [489cd82]
+- Updated dependencies [96aee1f]
+- Updated dependencies [0aa67f4]
+- Updated dependencies [a67fd38]
+  - @real-a11y-dev/core@0.1.0-beta.12
+  - @real-a11y-dev/inspector@0.1.0-beta.12
+
 ## 0.1.0-beta.11
 
 ### Minor Changes

@@ -1,5 +1,74 @@
 # @real-a11y-dev/testing
 
+## 0.1.0-beta.12
+
+### Minor Changes
+
+- 4eff732: Stop publishing `@real-a11y-dev/validate` and `@real-a11y-dev/semantic-navigator-ui`; they are internal now.
+
+  Neither was ever a package anyone was told to install. Nothing on the website recommended either one — the only `npm install` lines for them were in their own READMEs — and no published `.d.ts` referenced their types. `semantic-navigator-ui` was already bundled by every consumer that uses it (`inspector` doesn't even declare it as a dependency), so for that one this mostly writes down what the build already did.
+
+  **Nothing changes for you unless you imported one directly.** They move from `dependencies` to `devDependencies` and are bundled into the packages that use them, so `@real-a11y-dev/testing` and `@real-a11y-dev/storybook-addon` now install _fewer_ packages, not more. The trade is real, though: those packages come off your install, and ~218 KB goes into `@real-a11y-dev/testing`'s `matchers` entry, which now carries `aria-query`'s role tables inline — ~15x raw, 4.8x gzipped. Nothing had been measuring that: the only `testing` entry in `.size-limit.json` pointed at `dist/index.js`, which never imported `validate`, so `pnpm size` stayed green by construction rather than by measurement. This adds a budget for `dist/matchers.js` so the number that actually moved is governed. If your suite also uses `@testing-library/dom`, you already had two copies of `aria-query` on disk (it pins `5.3.0`; `validate` asked for `^5.3.2`) — what changes is that the second copy is now frozen inside our entry, past the module boundary, where an `overrides`/`resolutions` pin can no longer collapse them.
+
+  If you did import one directly:
+
+  - `@real-a11y-dev/validate` (last published `0.1.0-beta.7`) → its rules reach you through `@real-a11y-dev/testing`'s `toBeValidA11yTree` matcher. The role-metadata helpers it also exported (`roleMeta`, `isValidRole`, `attributesForRole`, `requiredOwnedRoles`, …) have no published replacement — open an issue if you were using them directly.
+  - `@real-a11y-dev/semantic-navigator-ui` (last published `0.1.0-beta.11`) → use `@real-a11y-dev/inspector`, `@real-a11y-dev/react`, or `@real-a11y-dev/storybook-addon`, each of which bundles the components.
+
+  No shipped `.d.ts` names a package npm cannot resolve. Neither consumer's public surface exposes a private type today, so nothing needs inlining yet; `dts.resolve` is configured on both so it stays that way if one ever does, and `surface:check` fails if that regresses.
+
+- a4cfac8: Tab-order serialization is now number-free by default; numbering moves to a render-time step.
+
+  `serializeTabSequence` used to render `01. link "Home"` / `02. button "Go"`. Inserting one focusable element near the top of the page renumbered every following line, so a committed snapshot's diff — and the reviewable unified-diff hunk of `real-a11y diff` — churned the whole view instead of showing the one inserted stop. Line order already conveys the sequence, so the serialized form is now just `link "Home"` / `button "Go"`: the canonical, diff-stable output you store and compare.
+
+  For a human- or agent-read listing where an explicit "stop 7" helps, a new `numberTabStops(tabs)` export re-adds the `NN. ` prefix at **render time** (never stored):
+
+  ```ts
+  import {
+    serializeTabSequence,
+    numberTabStops,
+  } from "@real-a11y-dev/serialize";
+  numberTabStops(serializeTabSequence(root)); // 01. link "Home"  02. button "Go"
+  ```
+
+  Numbering is applied where output is read, not diffed: the CLI `tabs` terminal view, the MCP `get_tab_order` and `inspect_page` tools, and the extension's Markdown export (which stays numbered, matching its on-screen panel). It is absent where output is committed or diffed: `tabSequenceSnapshot()` in `@real-a11y-dev/testing`, the CLI `snapshot`/`inspect` artifacts and JSON, and the browser audit's `tabOrder`. (Also fixes an MCP snapshot summary that reported "0 tab stops" once lines were unnumbered.)
+
+  **Breaking change.** Any committed snapshot of a tab sequence (vitest/jest `toMatchSnapshot`, an inline snapshot, or a golden file / CI artifact) will differ by the removed `NN. ` prefix on every line.
+
+  **Migration.** Either re-generate the affected snapshots (`vitest -u`, `jest -u`, or re-capture the golden file), or wrap the value for display: `numberTabStops(tabSequenceSnapshot(root))`.
+
+  Structural diffing tolerates the transition: `real-a11y diff` still strips leading `NN. ` numbers before comparing, so a base captured by an older numbered tool version diffs cleanly in findings, the multiset view, and the plain-language statements. The one exception is the tabs **hunk** view — a legacy numbered base shows a one-time full rewrite there until it is re-captured. That output is advisory and never gates.
+
+### Patch Changes
+
+- Updated dependencies [37f5859]
+- Updated dependencies [37f5859]
+- Updated dependencies [4e3c10a]
+- Updated dependencies [b2ccee0]
+- Updated dependencies [37f5859]
+- Updated dependencies [bbbcb04]
+- Updated dependencies [823d1cc]
+- Updated dependencies [e4e9c89]
+- Updated dependencies [cd20458]
+- Updated dependencies [229c5ac]
+- Updated dependencies [c15960d]
+- Updated dependencies [135ccc3]
+- Updated dependencies [6785622]
+- Updated dependencies [43f085c]
+- Updated dependencies [4aa1036]
+- Updated dependencies [b304069]
+- Updated dependencies [2f2ab7b]
+- Updated dependencies [0a41085]
+- Updated dependencies [1ef740a]
+- Updated dependencies [3b4967b]
+- Updated dependencies [4d982ce]
+- Updated dependencies [a4cfac8]
+- Updated dependencies [3ab20f2]
+  - @real-a11y-dev/browser@0.1.0-beta.12
+  - @real-a11y-dev/core@0.1.0-beta.12
+  - @real-a11y-dev/audit@0.1.0-beta.12
+  - @real-a11y-dev/serialize@0.1.0-beta.12
+
 ## 0.1.0-beta.11
 
 ### Minor Changes
