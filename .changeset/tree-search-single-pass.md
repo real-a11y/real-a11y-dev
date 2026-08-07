@@ -1,5 +1,6 @@
 ---
 "@real-a11y-dev/core": patch
+"@real-a11y-dev/inspector": patch
 ---
 
 Halve the tree-search work done per keystroke. `applySearchFilter` ran the match predicate over the whole tree twice — once inside `searchTree` to build the visible set, then again to count the direct matches — so every character typed into the panel's search box paid for the string matching and `Object.entries` allocation of both passes. The two are now collected in one pass, and the loop that writes `ui.matchesFilter` folds the counting in rather than iterating the tree a second time.
