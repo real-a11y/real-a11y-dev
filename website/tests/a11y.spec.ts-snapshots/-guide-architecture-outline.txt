@@ -10,6 +10,8 @@
   h2 On this page
 h1 Architecture
   h2 Packages
+    h3 Published to npm
+    h3 Internal — bundled, not published
   h2 Dependency graph
   h2 Why this split
     h3 Engine separate from renderer
@@ -18,7 +20,7 @@ h1 Architecture
     h3 The findings engine has one home
     h3 The snapshot engine has one home
     h3 The real browser lives in one place
-    h3 UI is bundled, not shipped separately
+    h3 Internal packages are bundled, not shipped separately
   h2 Build pipeline per package
   h2 The SemanticNode data model
   h2 Where to read next
