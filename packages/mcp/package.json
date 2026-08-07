@@ -55,7 +55,7 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@real-a11y-dev/audit": "workspace:*",
     "@real-a11y-dev/browser": "workspace:*",
     "@real-a11y-dev/serialize": "workspace:*",
@@ -73,7 +73,7 @@
   "devDependencies": {
     "@real-a11y-dev/session-registry": "workspace:*",
     "@types/node": "^22.0.0",
-    "playwright": "^1.61.1",
+    "playwright": "^1.62.1",
     "tsup": "^8.3.0",
     "typescript": "^5.6.0",
     "vitest": "^3.2.7"

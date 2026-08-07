@@ -97,7 +97,7 @@
     }
   },
   "devDependencies": {
-    "@playwright/test": "^1.61.1",
+    "@playwright/test": "^1.62.1",
     "@real-a11y-dev/validate": "workspace:*",
     "@types/node": "^22.0.0",
     "tsup": "^8.3.0",
