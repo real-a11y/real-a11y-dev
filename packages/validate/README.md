@@ -4,12 +4,14 @@ ARIA semantics validation for the [Semantic Navigator](https://real-a11y.dev) ac
 
 > **Internal package — not published to npm.** It is bundled into
 > [`@real-a11y-dev/testing`](../testing), which is where its rules reach you: the
-> `toBeValidA11yTree` / `toBeValidA11yNode` matchers run them. There is nothing
-> to install and nothing to import by this name. The examples below are written
-> from inside the workspace, for anyone working on the rules themselves.
+> `toBeValidA11yTree` matcher runs them. There is nothing to install and nothing
+> to import by this name. The examples below are written from inside the
+> workspace, for anyone working on the rules themselves.
 >
-> It was published up to `0.1.0-beta.7` before becoming internal. If you depend
-> on that version directly, move to `@real-a11y-dev/testing`.
+> It was published up to `0.1.0-beta.7` before becoming internal. If you depended
+> on that version directly, `toBeValidA11yTree` covers the validation itself; the
+> role-metadata helpers below (`roleMeta`, `isValidRole`, `attributesForRole`,
+> `requiredOwnedRoles`, …) have no published replacement.
 
 ```ts
 import { validateTree } from "@real-a11y-dev/validate";

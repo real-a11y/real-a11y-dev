@@ -11,7 +11,7 @@ Neither was ever a package anyone was told to install. Nothing on the website re
 
 If you did import one directly:
 
-- `@real-a11y-dev/validate` (last published `0.1.0-beta.7`) → its rules reach you through `@real-a11y-dev/testing`'s `toBeValidA11yTree` / `toBeValidA11yNode` matchers.
+- `@real-a11y-dev/validate` (last published `0.1.0-beta.7`) → its rules reach you through `@real-a11y-dev/testing`'s `toBeValidA11yTree` matcher. The role-metadata helpers it also exported (`roleMeta`, `isValidRole`, `attributesForRole`, `requiredOwnedRoles`, …) have no published replacement — open an issue if you were using them directly.
 - `@real-a11y-dev/semantic-navigator-ui` (last published `0.1.0-beta.11`) → use `@real-a11y-dev/inspector`, `@real-a11y-dev/react`, or `@real-a11y-dev/storybook-addon`, each of which bundles the components.
 
 Both consumers inline the private declarations (`dts.resolve`) as well as the JS, so no shipped `.d.ts` names a package npm cannot resolve — `surface:check` fails if that ever regresses.

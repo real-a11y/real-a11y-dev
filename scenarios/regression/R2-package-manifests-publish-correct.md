@@ -6,7 +6,7 @@ area: Packaging
 type: Automated
 priority: P0
 status: Active
-validFrom: "every published package, all versions. Automated by `pnpm packaging:check`; also runs in CI's verify job"
+validFrom: "every published package, all versions. Automated by `pnpm packaging:check`; also runs in CI's verify job. `validate` (last published 0.1.0-beta.7) and `semantic-navigator-ui` (0.1.0-beta.11) became PRIVATE and are no longer scanned — `findPublicPackages` skips `private: true`, so either one still appearing in the output is now the failure"
 validUntil: ""
 expected: "publint + attw clean for every published package; no `files` entry pointing at a nonexistent path"
 twin: D1
@@ -40,17 +40,28 @@ pnpm packaging:check     # publint + attw, every public package
    disk after `pnpm build`
 3. Check every path in `exports` resolves to a real built file
 4. Check `types` / the `types` condition points at emitted `.d.ts`
-5. Confirm the two documented exemptions still apply, and only those:
-   - `semantic-navigator-ui` skips **attw** for its `styles` (CSS-only) subpath
+5. Confirm the documented exemptions still apply, and only those. One is live:
    - `cli` skips **attw** entirely — a bin-only package has no import surface
+   - `semantic-navigator-ui` skipped **attw** for its `styles` (CSS-only) subpath —
+     dead config now, true through `0.1.0-beta.11` and inert after it, since the scan
+     never reaches a `private: true` package
 6. `pnpm size-limit` — budgets in `.size-limit.json`
-7. Confirm nothing private (`extension`) leaked into the publish set
+7. Confirm nothing private leaked into the publish set. `node
+   scripts/list-publishable-packages.mjs` prints exactly what `pnpm publish -r`
+   will act on; `extension`, `example-patterns`, `session-registry`, `validate` and
+   `semantic-navigator-ui` must not be in it. Read that list against the current
+   intent rather than a remembered count — it shrinks every time a package goes
+   internal, and a name *appearing* is the finding, not a name missing
 
 ## Expected
 
 - publint clean for every published package
-- attw clean for every package except the two documented skips — and if a _new_
-  skip appears, that's the finding
+- attw clean for every package except the documented skips — one live one (`cli`)
+  since `semantic-navigator-ui` stopped being scanned — and if a _new_ skip
+  appears, that's the finding
+- Nothing private is scanned at all. A package that went internal must vanish
+  from the output entirely; still seeing it means its `package.json` never got
+  `"private": true`
 - No `files` entry pointing at a nonexistent path
 - Size budgets hold, including the Storybook manager panel and the browser
   page-bundle IIFE (the one injected into every Playwright/MCP page — it ships in
@@ -63,6 +74,13 @@ the manifest, attw actually packs each entry and resolves it as Node 10 / Node 1
 / bundler, catching the "types masquerade as ESM but the JS is CJS" trap that a
 manifest read can't see.
 
-Step 5 matters because exemptions accrete. Two are deliberate and documented at
-the top of `check-packaging.mjs`; a third appearing silently means someone made a
-real failure go away.
+Step 5 matters because exemptions accrete. They are deliberate and documented at
+the top of `check-packaging.mjs`; a new one appearing silently means someone made
+a real failure go away.
+
+The `semantic-navigator-ui` entry is the opposite failure and worth recognising:
+`findPublicPackages` skips `private: true`, so that exemption is dead config
+rather than a live skip. Leaving it costs nothing and it is still the truth about
+every release up to `0.1.0-beta.11` — but read the list as history, not as the
+set of things currently being waived, or step 5's "one live skip" stops meaning
+anything.

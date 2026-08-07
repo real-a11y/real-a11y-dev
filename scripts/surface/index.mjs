@@ -443,7 +443,7 @@ async function plan(argv) {
   }
 
   const changes = diffManifests(baseManifest, headManifest);
-  const report = buildReport(changes, touched, versions, scenarios);
+  const report = buildReport(changes, touched, versions, scenarios, repoRoot);
   console.log(asMarkdown ? renderMarkdown(report, base) : renderText(report));
 }
 
