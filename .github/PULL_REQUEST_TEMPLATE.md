@@ -93,18 +93,31 @@ Cutting a release or adding a package? There are tailored templates:
 
 ## Test scenarios
 
-<!-- The Regression (pre-publish) and Dogfood (post-publish) suites in Notion rot
-     the same way docs do — nothing fails when a scenario stops matching reality.
-     Name the IDs, or say why none was needed. "None" is a fine answer; a blank
-     is not, because a blank is indistinguishable from having forgotten. -->
+<!-- The Regression (pre-publish, `scenarios/regression/R*`) and Dogfood
+     (post-publish, `scenarios/dogfood/D*`) suites live in the repo, so they
+     diff alongside the code that breaks them: `pnpm surface:check` rejects a
+     `covers:` path that isn't in `docs/surface.json`, and fails when a shipped
+     command or MCP tool has no Active row at all. Notion now holds only the
+     per-run `Result` / `Notes`; nothing there is authoritative about what a
+     scenario says.
+
+     What no check can see is whether a row still describes a *sensible* test.
+     That part is editorial and rots the way docs do, so name the IDs. "None"
+     is a fine answer; a blank is not, because a blank is indistinguishable
+     from having forgotten.
+
+     `pnpm surface:plan` prints this block ready to paste — IDs resolved from
+     each row's `covers:`, version stamps filled in from your changesets. Format
+     and rules: `scenarios/README.md` and `.claude/skills/pr/SKILL.md` §4b. -->
 
 - **Added:** <!-- R23 — CLI act path -->
 - **Updated:** <!-- R8 — tool list is now 20 -->
-- **Deprecated:** <!-- R11 — compare_producers removed; Valid until mcp ≤ 0.1.0-beta.2 -->
+- **Deprecated:** <!-- R11 — compare_producers removed; validUntil: mcp ≤ 0.1.0-beta.2 -->
 - [ ] None needed, because: <!-- e.g. internal refactor, no user-visible change -->
 
-New scenarios carry `Valid from` **package-qualified** (`cli ≥ 0.1.0-beta.2`) —
-packages version independently here, so a bare version number is ambiguous.
+New scenarios carry `validFrom` **package-qualified** (`cli ≥ 0.1.0-beta.2`) —
+packages version independently here, so a bare version number is ambiguous. A
+deprecated row keeps its `covers:` and gains a matching `validUntil`.
 
 ## Linked issues
 
