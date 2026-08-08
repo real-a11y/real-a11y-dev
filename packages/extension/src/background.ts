@@ -44,11 +44,8 @@ async function mergeAndSendTree(tabId: number) {
   // An emptied `frames` map must stay side-effect-free. `clearTabFrames` runs
   // on every top-frame navigation, and until the new document commits
   // `getAllFrames` still describes the outgoing one — whose subframes are
-  // typically alive and mutating. Returning here, before any Chrome call,
-  // is what stops a merge in that window from soliciting and republishing
-  // the page the user just left.
-  const topFrame = state.frames.get(0);
-  if (!topFrame) return;
+  // typically alive and mutating. Bail before spending a Chrome call on it.
+  if (!state.frames.has(0)) return;
 
   let allFrames: chrome.webNavigation.GetAllFrameResultDetails[] = [];
   try {
@@ -58,9 +55,16 @@ async function mergeAndSendTree(tabId: number) {
     // Tab might be closed or invalid
   }
 
-  // The panel can close while `getAllFrames` is in flight; re-check before
-  // acting on the result, or we arm extraction with nobody left to read it.
+  // Everything above was decided before the await; both facts can have
+  // changed under it. The panel can close (leaving nobody to read a tree, and
+  // nobody to want frames armed), and `onBeforeNavigate` can empty the map —
+  // which is the window the pre-await check cannot cover, and the one where
+  // soliciting would republish the page the user just left. Re-read rather
+  // than reuse: the page identity below has to come from the same snapshot as
+  // the nodes it labels.
   if (!sidepanelConnected) return;
+  const topFrame = state.frames.get(0);
+  if (!topFrame) return;
 
   const pinged = recoverMissingFrames(tabId, state, allFrames);
   if (pinged > 0) {
@@ -136,6 +140,7 @@ function recoverMissingFrames(
   let pinged = 0;
   for (const { frameId, url } of allFrames) {
     if (state.frames.has(frameId)) continue;
+    if (state.droppedFrames.has(frameId)) continue;
     if (!canHostContentScript(url)) continue;
     pinged++;
     chrome.tabs.sendMessage(tabId, { type: "RESEND_TREE" }, { frameId }, () => {

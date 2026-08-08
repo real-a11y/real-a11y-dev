@@ -545,6 +545,54 @@ describe("background: recovery after a service-worker restart", () => {
   });
 
   /**
+   * The same window as the test above, but entered *during* the merge's
+   * `await getAllFrames()`. A pre-await check cannot see this one — the map
+   * is emptied after it passed — so the recovery would still solicit and
+   * republish the outgoing page.
+   */
+  it("does not solicit the outgoing page when the navigation lands mid-merge", async () => {
+    connectPanel(h);
+    await vi.runAllTimersAsync();
+
+    // The tab's one shot has to still be unspent when the window opens, so
+    // this is the tab's first merge — no settled merge before it.
+    h.knobs.getAllFramesDelayMs = 100;
+    const before = h.tabMessages.length;
+    announce(h, 0);
+
+    // Debounce fires at 200ms; the merge is then parked on getAllFrames.
+    await vi.advanceTimersByTimeAsync(250);
+    beginTopFrameNavigation(h);
+    await vi.runAllTimersAsync();
+
+    // With the map emptied under it, the merge must not solicit anyone —
+    // every frame now reads as missing, including the top one.
+    expect(reAnnounceRequests(h, before)).toEqual([]);
+    expect(h.panelMessages.filter((m) => m.type === "TREE_DATA")).toEqual([]);
+  });
+
+  /**
+   * A subframe mid-navigation is still reported by `getAllFrames` and its
+   * outgoing document still answers. Soliciting it would reinstate the very
+   * tree `removeFrame` just chose to drop.
+   */
+  it("does not solicit a subframe whose tree was deliberately dropped", async () => {
+    connectPanel(h);
+    await vi.runAllTimersAsync();
+
+    // Only frame 0 has announced, so the shot is still unspent and frame 1
+    // is about to navigate.
+    announce(h, 0);
+    const before = h.tabMessages.length;
+    for (const fn of h.navigateListeners) fn({ tabId: TAB_ID, frameId: 1 });
+    await vi.runAllTimersAsync();
+
+    expect(reAnnounceRequests(h, before).map((m) => m.frameId)).not.toContain(
+      1,
+    );
+  });
+
+  /**
    * `scheduleMerge` used to resolve the tab state by id through
    * `getOrCreateTabState`, which inserts on miss. Now that a merge can
    * re-enter it after an `await`, one still in flight when the tab closes

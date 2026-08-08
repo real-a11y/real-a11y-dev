@@ -24,6 +24,12 @@ export interface TabState {
    * and the background's `recoverMissingFrames`.
    */
   recoveryChecked: boolean;
+  /**
+   * Frames whose tree we dropped on purpose and have not heard from since.
+   * The recovery must not read these as "lost" and solicit them: a frame
+   * that is mid-navigation still answers, from the document it is leaving.
+   */
+  droppedFrames: Set<number>;
 }
 
 export function createTabState(): TabState {
@@ -32,6 +38,7 @@ export function createTabState(): TabState {
     nodeToFrame: new Map(),
     mergeTimer: null,
     recoveryChecked: false,
+    droppedFrames: new Set(),
   };
 }
 
@@ -64,6 +71,7 @@ export function recordFrameTree(
 ): { isNewTopFrame: boolean } {
   const isNewTopFrame = frameTree.frameId === 0 && !state.frames.has(0);
   state.frames.set(frameTree.frameId, frameTree);
+  state.droppedFrames.delete(frameTree.frameId);
   return { isNewTopFrame };
 }
 
@@ -93,17 +101,26 @@ export function recordFrameTree(
 export function clearTabFrames(state: TabState): void {
   state.frames.clear();
   state.nodeToFrame.clear();
+  // Everything is dropped, so nothing is individually "dropped" any more —
+  // the whole-map case is handled by the `frames.has(0)` guard in the merge.
+  state.droppedFrames.clear();
 }
 
 /**
  * A subframe navigated away. Drop its tree and report whether anything
  * remains; the caller schedules a re-merge only if the answer is yes.
+ *
+ * Records the id as deliberately dropped so the recovery doesn't read the
+ * hole as a lost tree and solicit it — the frame is mid-navigation, and its
+ * outgoing document would answer with the tree we just chose to discard.
+ * Cleared when the frame announces again.
  */
 export function removeFrame(
   state: TabState,
   frameId: number,
 ): { shouldRemerge: boolean } {
   state.frames.delete(frameId);
+  state.droppedFrames.add(frameId);
   return { shouldRemerge: state.frames.size > 0 };
 }
 
