@@ -1,6 +1,7 @@
 /// <reference types="chrome" />
 
 import { buildFrameInfoMap, mergeFrameTrees } from "./frame-merger.js";
+import { registerNativeMode } from "./native/index.js";
 import {
   type PlannedTabMessage,
   isTrustedSender,
@@ -19,6 +20,15 @@ import {
   recordFrameTree,
   removeFrame,
 } from "./tab-state.js";
+
+// `chrome.debugger` native mode (RFC PR H) is a DEV-ONLY dogfood. `__DOGFOOD__`
+// is a build-time constant — false in the store build, so this branch (and the
+// entire native/ module + its `debugger` use) is dead-code-eliminated; the
+// shipped extension never carries the capability. See BUILD_TARGET=dogfood.
+declare const __DOGFOOD__: boolean;
+if (typeof __DOGFOOD__ !== "undefined" && __DOGFOOD__) {
+  registerNativeMode();
+}
 
 // ---- Per-tab frame state ----
 // Pure state-machine helpers live in ./tab-state, the merge algorithm in
@@ -330,6 +340,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // powerful commands (CLOSE_TAB, SEND_KEY, DISPATCH_ACTION) to the active
   // tab, so the trust boundary is worth asserting explicitly here.
   if (!isTrustedSender(sender, chrome.runtime.id)) return false;
+
+  // Native-mode (dogfood) messages have their own dedicated onMessage listener
+  // (native/index.ts, registered only in the DOGFOOD build). They carry no
+  // `sender.tab`, so without this guard they fall through to the catch-all
+  // fallback below — which would forward a meaningless message to the active
+  // tab or, with no active tab, race a synchronous `{ success:false }` error
+  // reply against the native handler's slower async response. Leave them to
+  // the native listener. No-op in the store build (no NATIVE_* is ever sent).
+  if (typeof message?.type === "string" && message.type.startsWith("NATIVE_")) {
+    return false;
+  }
 
   // ---- Messages from content script frames ----
   if (sender.tab?.id) {
