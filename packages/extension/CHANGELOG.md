@@ -8,6 +8,22 @@
   landed the change; versions match `package.json`/`public/manifest.json`.
 -->
 
+## Unreleased
+
+### Patch Changes
+
+- Stop iframe content from vanishing from the panel after Chrome restarts the
+  extension's service worker. The worker keeps each tab's per-frame trees in
+  memory, so a restart loses them — and the page's content scripts, still
+  loaded and still observing, re-announce only when their own DOM next
+  mutates. The first frame to do so was merged on its own, replacing the
+  panel's complete tree with one missing every iframe subtree until each
+  other frame happened to change. Once per tab, the background now compares
+  the frames Chrome reports against the trees it holds and asks any frame it
+  is missing — and could actually be running a content script — to
+  re-announce, so the panel is whole again a moment later instead of after an
+  arbitrary edit. ([#315])
+
 ## 0.1.10
 
 ### Patch Changes
@@ -163,3 +179,4 @@ Earlier releases predate this changelog.
 [#248]: https://github.com/real-a11y/real-a11y-dev/pull/248
 [#287]: https://github.com/real-a11y/real-a11y-dev/pull/287
 [#308]: https://github.com/real-a11y/real-a11y-dev/pull/308
+[#315]: https://github.com/real-a11y/real-a11y-dev/pull/315

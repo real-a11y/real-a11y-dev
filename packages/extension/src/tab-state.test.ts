@@ -27,6 +27,7 @@ describe("createTabState", () => {
     expect(s.frames.size).toBe(0);
     expect(s.nodeToFrame.size).toBe(0);
     expect(s.mergeTimer).toBeNull();
+    expect(s.recoveryChecked).toBe(false);
   });
 });
 
@@ -105,6 +106,16 @@ describe("clearTabFrames", () => {
     expect(s.nodeToFrame.size).toBe(0);
     expect(s.mergeTimer).not.toBeNull(); // intentionally untouched
     if (s.mergeTimer) clearTimeout(s.mergeTimer);
+  });
+
+  it("leaves the worker-scoped recovery flag alone", () => {
+    // Deliberate: re-arming per clear would fire on every panel REQUEST_TREE
+    // too. See the doc block on clearTabFrames for what that costs and what
+    // it gives up.
+    const s = createTabState();
+    s.recoveryChecked = true;
+    clearTabFrames(s);
+    expect(s.recoveryChecked).toBe(true);
   });
 });
 
