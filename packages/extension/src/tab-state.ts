@@ -19,9 +19,9 @@ export interface TabState {
   /** Pending merge debounce handle; null when no merge is scheduled. */
   mergeTimer: ReturnType<typeof setTimeout> | null;
   /**
-   * Whether we've already checked, since `frames` was last emptied, for
-   * frames the page has but we hold no tree for. See the background's
-   * `recoverMissingFrames`.
+   * Whether this worker has already checked for frames the page has but we
+   * hold no tree for. Worker-scoped on purpose — see {@link clearTabFrames}
+   * and the background's `recoverMissingFrames`.
    */
   recoveryChecked: boolean;
 }
@@ -75,18 +75,24 @@ export function recordFrameTree(
  * harmless (it just sees an empty `frames`) and clearing it would leak
  * the pending callback if the next merge isn't scheduled.
  *
- * DOES re-arm `recoveryChecked`, because emptying the map is precisely the
- * condition that can strand frames: the usual callers have a re-announce
- * coming, but an aborted top-frame navigation (a download link, a 204) fires
- * `onBeforeNavigate` and then nothing loads, leaving the page's content
- * scripts alive, observing and silent with no tree on our side. Re-arming
- * costs nothing when the re-announce does arrive — by the time the next merge
- * looks, there is nothing missing to ask for.
+ * Does NOT re-arm `recoveryChecked`. That flag is scoped to the worker, which
+ * is the scope the fault it guards against has: losing `tabStates` is what a
+ * restart does, and a restart always starts from a fresh state anyway. Tying
+ * it to the frame map instead would re-arm on every panel `REQUEST_TREE` too
+ * — which `App.tsx` sends after every dispatch, submit and refresh — so any
+ * frame that never answers would cost a wasted solicit and a held-back
+ * publish on every user interaction, for the tab's lifetime.
+ *
+ * The cost of that choice: a clear that is NOT followed by a re-announce
+ * strands whatever was in the map. An aborted top-frame navigation (a
+ * download link, a 204) does exactly that — `onBeforeNavigate` fires, nothing
+ * loads, and the old document stays alive, observing and silent. Covering it
+ * needs a per-frame pending set that can tell the two emptied states apart;
+ * `removeFrame` has the same gap one scope down.
  */
 export function clearTabFrames(state: TabState): void {
   state.frames.clear();
   state.nodeToFrame.clear();
-  state.recoveryChecked = false;
 }
 
 /**

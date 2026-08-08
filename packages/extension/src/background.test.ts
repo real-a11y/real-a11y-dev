@@ -126,21 +126,45 @@ type ConnectListener = (port: unknown) => void;
 
 type NavigateListener = (details: { tabId: number; frameId: number }) => void;
 
+type RemovedListener = (tabId: number) => void;
+
+/**
+ * Knobs, not constants. Each of these is a dimension along which the real
+ * thing varies and the recovery can fail: how long a frame takes to answer,
+ * whether it can answer at all, what Chrome reports, and whether a send
+ * errored. Pinning any of them to the happy value makes the matching test
+ * unfailable, so they are per-test.
+ */
 function makeHarness() {
   const tabMessages: SentTabMessage[] = [];
   const panelMessages: Array<{ type: string; [k: string]: unknown }> = [];
   const messageListeners: MessageListener[] = [];
   const connectListeners: ConnectListener[] = [];
   const navigateListeners: NavigateListener[] = [];
-  /** Frames whose content script is loaded and will answer. */
+  const removedListeners: RemovedListener[] = [];
+  /** Frames whose content script is loaded and will answer. Reducible. */
   const liveFrames = new Set(PAGE_FRAMES.map((f) => f.frameId));
+  /** What `chrome.webNavigation.getAllFrames` reports. Settable. */
+  const knobs = {
+    frames: [...PAGE_FRAMES] as Array<{
+      frameId: number;
+      parentFrameId: number;
+      url: string;
+    }>,
+    /** How long a pinged frame takes to answer, in ms. */
+    answerDelayMs: 0,
+    /** How long `getAllFrames` takes to resolve, in ms. */
+    getAllFramesDelayMs: 0,
+    /** `chrome.runtime.lastError` seen by a `tabs.sendMessage` callback. */
+    sendError: undefined as undefined | { message: string },
+  };
 
   const noopEvent = () => ({ addListener: () => {} });
 
   const chromeMock = {
     runtime: {
       id: EXTENSION_ID,
-      lastError: undefined,
+      lastError: undefined as undefined | { message: string },
       onMessage: {
         addListener: (fn: MessageListener) => messageListeners.push(fn),
       },
@@ -162,11 +186,21 @@ function makeHarness() {
       onBeforeNavigate: {
         addListener: (fn: NavigateListener) => navigateListeners.push(fn),
       },
-      getAllFrames: () => Promise.resolve(PAGE_FRAMES),
+      getAllFrames: () =>
+        knobs.getAllFramesDelayMs === 0
+          ? Promise.resolve(knobs.frames)
+          : new Promise((resolve) =>
+              setTimeout(
+                () => resolve(knobs.frames),
+                knobs.getAllFramesDelayMs,
+              ),
+            ),
     },
     tabs: {
       onActivated: noopEvent(),
-      onRemoved: noopEvent(),
+      onRemoved: {
+        addListener: (fn: RemovedListener) => removedListeners.push(fn),
+      },
       query: () => Promise.resolve([{ id: TAB_ID, windowId: 1 }]),
       sendMessage: (
         tabId: number,
@@ -177,21 +211,30 @@ function makeHarness() {
         const opts = typeof optsOrCb === "function" ? undefined : optsOrCb;
         const cb = typeof optsOrCb === "function" ? optsOrCb : maybeCb;
         tabMessages.push({ tabId, frameId: opts?.frameId, body });
-        cb?.();
+
+        // Real Chrome invokes the callback on a later turn, with
+        // `lastError` set when the frame had no receiver.
+        setTimeout(() => {
+          chromeMock.runtime.lastError = knobs.sendError;
+          try {
+            cb?.();
+          } finally {
+            chromeMock.runtime.lastError = undefined;
+          }
+        }, 0);
 
         // The addressed content script(s) act on it. Anything that makes a
-        // real one call `sendTree()` announces back, a turn later — the same
-        // ordering the real message round trip has.
+        // real one call `sendTree()` announces back after the round trip.
         if (!RE_ANNOUNCE_TRIGGERS.has(body.type)) return;
         // `chrome.tabs.sendMessage` reaches every frame in the tab unless
         // `options.frameId` names one.
         const targets =
           opts?.frameId === undefined
-            ? PAGE_FRAMES.map((f) => f.frameId)
+            ? knobs.frames.map((f) => f.frameId)
             : [opts.frameId];
         for (const frameId of targets) {
           if (!liveFrames.has(frameId)) continue;
-          queueMicrotask(() => announce(harness, frameId));
+          setTimeout(() => announce(harness, frameId), knobs.answerDelayMs);
         }
       },
     },
@@ -204,7 +247,9 @@ function makeHarness() {
     messageListeners,
     connectListeners,
     navigateListeners,
+    removedListeners,
     liveFrames,
+    knobs,
   };
   return harness;
 }
@@ -232,6 +277,16 @@ function connectPanel(h: Harness) {
 /** Simulate `chrome.webNavigation.onBeforeNavigate` for the top frame. */
 function beginTopFrameNavigation(h: Harness) {
   for (const fn of h.navigateListeners) fn({ tabId: TAB_ID, frameId: 0 });
+}
+
+/** Simulate `chrome.tabs.onRemoved`. */
+function removeTab(h: Harness) {
+  for (const fn of h.removedListeners) fn(TAB_ID);
+}
+
+/** Messages of one type the background sent to the tab since `from`. */
+function sentSince(h: Harness, from: number, type: string): SentTabMessage[] {
+  return h.tabMessages.slice(from).filter((m) => m.body.type === type);
 }
 
 /**
@@ -359,14 +414,15 @@ describe("background: recovery after a service-worker restart", () => {
   });
 
   /**
-   * The panel rebuilds its node map from each TREE_DATA, so publishing the
-   * half-known tree would cost the user their expanded rows, selection and
-   * scope and then restore the subtrees collapsed — the iframe content still
-   * vanishing, just briefly. Nothing should go out until it is whole.
+   * The panel rebuilds its node map from each TREE_DATA, so a half-known tree
+   * costs the user their expanded rows, selection and scope. Frames that
+   * answer inside the merge debounce are held for — the common case.
    */
-  it("publishes no half-known tree while the missing frames are being fetched", async () => {
+  it("publishes no half-known tree when the missing frames answer in time", async () => {
     connectPanel(h);
     await vi.runAllTimersAsync();
+
+    h.knobs.answerDelayMs = 20;
 
     announce(h, 0);
     await vi.runAllTimersAsync();
@@ -383,27 +439,134 @@ describe("background: recovery after a service-worker restart", () => {
   });
 
   /**
-   * An aborted top-frame navigation — a download link, a 204 — fires
-   * `onBeforeNavigate` and then nothing loads. The frame map is emptied while
-   * the page's content scripts stay alive, observing and silent, which is the
-   * same stranding the restart causes.
+   * The deferral is one debounce, not a wait on the frames, so a frame slower
+   * than it is published without and completes the tree when its answer
+   * lands. Pinned here as the known limit of the current mechanism rather
+   * than left to be discovered: closing it needs a per-frame pending set with
+   * its own deadline.
    */
-  it("recovers again after a navigation that empties the frame map", async () => {
+  it("still completes the tree when a frame answers slower than the debounce", async () => {
     connectPanel(h);
     await vi.runAllTimersAsync();
 
-    announce(h, 0);
-    await vi.runAllTimersAsync();
+    h.knobs.answerDelayMs = 260;
 
-    beginTopFrameNavigation(h);
-
-    // The navigation is abandoned; the still-loaded top frame mutates later.
     announce(h, 0);
     await vi.runAllTimersAsync();
 
     const ids = lastTreeToPanel(h);
     expect(ids).toContain("f1-root");
     expect(ids).toContain("f2-root");
+  });
+
+  /**
+   * A frame that cannot host a content script — `about:blank`, `srcdoc`,
+   * sandboxed, a PDF — is reported by `getAllFrames` and never answers. It
+   * must not hold the panel's tree back, or an ordinary page with an ad slot
+   * pays the wait forever.
+   */
+  it("publishes without waiting on a frame that can never answer", async () => {
+    connectPanel(h);
+    await vi.runAllTimersAsync();
+
+    h.knobs.frames = [
+      ...PAGE_FRAMES,
+      { frameId: 9, parentFrameId: 0, url: "about:blank" },
+    ];
+    h.liveFrames.delete(9); // no content script, will never announce
+
+    announce(h, 0);
+    await vi.runAllTimersAsync();
+
+    const ids = lastTreeToPanel(h);
+    expect(ids).toContain("f1-root");
+    expect(ids).toContain("f2-root");
+  });
+
+  /**
+   * A top-frame navigation empties `frames` while `getAllFrames` still
+   * describes the outgoing document, whose subframes are typically still
+   * alive and mutating. Soliciting them would republish the page the user
+   * just left — `content.ts` documents the hazard: node ids are a per-frame
+   * counter, so a stale tree's ids resolve to unrelated live elements.
+   */
+  it("does not solicit or republish the outgoing page during a navigation", async () => {
+    connectPanel(h);
+    await vi.runAllTimersAsync();
+
+    announce(h, 0);
+    await vi.runAllTimersAsync();
+    h.panelMessages.length = 0;
+
+    beginTopFrameNavigation(h);
+    const before = h.tabMessages.length;
+
+    // The outgoing page's subframe is still animating and announces.
+    announce(h, 1);
+    await vi.runAllTimersAsync();
+
+    expect(reAnnounceRequests(h, before)).toEqual([]);
+    expect(h.panelMessages.filter((m) => m.type === "TREE_DATA")).toEqual([]);
+  });
+
+  /**
+   * `planFrameAnnouncementResponse` re-applies the curtain only when
+   * `isNewTopFrame`, which is `frameId === 0 && !state.frames.has(0)`. If
+   * anything puts frame 0 back into the map during a navigation, the new
+   * document's announce no longer reads as new and the curtain silently
+   * fails to re-apply — with the UI still reporting it as on, and this
+   * extension's own users the ones left looking at an uncovered screen.
+   */
+  it("re-applies the curtain on the new page after a navigation", async () => {
+    connectPanel(h);
+    await vi.runAllTimersAsync();
+
+    // Turn the curtain on for the tab, the way the panel does.
+    for (const fn of h.messageListeners) {
+      fn(
+        { type: "TOGGLE_CURTAIN", tabId: TAB_ID, payload: { visible: true } },
+        { id: EXTENSION_ID },
+        () => {},
+      );
+    }
+    announce(h, 0);
+    await vi.runAllTimersAsync();
+
+    beginTopFrameNavigation(h);
+    // The outgoing page's subframe announces while the new document loads.
+    announce(h, 1);
+    await vi.runAllTimersAsync();
+
+    const before = h.tabMessages.length;
+    announce(h, 0); // the NEW document's top frame
+    await vi.runAllTimersAsync();
+
+    expect(sentSince(h, before, "TOGGLE_CURTAIN").length).toBeGreaterThan(0);
+  });
+
+  /**
+   * `scheduleMerge` used to resolve the tab state by id through
+   * `getOrCreateTabState`, which inserts on miss. Now that a merge can
+   * re-enter it after an `await`, one still in flight when the tab closes
+   * would resurrect the entry — and `onRemoved`, the only deleter, will
+   * never fire for that id again.
+   */
+  it("does not resurrect tab state for a tab that has been closed", async () => {
+    connectPanel(h);
+    await vi.runAllTimersAsync();
+
+    // Force the deferral path (frame 2 silent), then close the tab while the
+    // merge that would re-schedule is still in flight.
+    h.liveFrames.delete(2);
+    h.knobs.getAllFramesDelayMs = 50;
+    announce(h, 0);
+    await vi.advanceTimersByTimeAsync(220);
+    removeTab(h);
+    await vi.runAllTimersAsync();
+
+    const before = h.tabMessages.length;
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(h.tabMessages.length).toBe(before);
   });
 
   it("stays quiet when no panel is connected, without spending the one shot", async () => {

@@ -41,6 +41,14 @@ async function mergeAndSendTree(tabId: number) {
   // mainly guards stale in-flight data arriving just as the panel closes.
   if (!sidepanelConnected) return;
   const state = getTabState(tabId);
+  // An emptied `frames` map must stay side-effect-free. `clearTabFrames` runs
+  // on every top-frame navigation, and until the new document commits
+  // `getAllFrames` still describes the outgoing one — whose subframes are
+  // typically alive and mutating. Returning here, before any Chrome call,
+  // is what stops a merge in that window from soliciting and republishing
+  // the page the user just left.
+  const topFrame = state.frames.get(0);
+  if (!topFrame) return;
 
   let allFrames: chrome.webNavigation.GetAllFrameResultDetails[] = [];
   try {
@@ -54,23 +62,18 @@ async function mergeAndSendTree(tabId: number) {
   // acting on the result, or we arm extraction with nobody left to read it.
   if (!sidepanelConnected) return;
 
-  // Before merging, check we aren't about to merge a page we only half know.
-  // Deliberately ahead of the `topFrame` guard: after a worker restart it can
-  // be a subframe that announces first, and that case needs the repair too.
   const pinged = recoverMissingFrames(tabId, state, allFrames);
   if (pinged > 0) {
-    // Publishing now would hand the panel a tree with those frames missing,
-    // and the panel rebuilds its node map from each TREE_DATA — so the flash
-    // would cost the user their expanded rows, selection and scope, then
-    // restore the subtrees collapsed. Wait one more debounce instead: the
-    // re-announces reset the timer as they land, and if nobody answers the
-    // timer still fires and publishes whatever we do have.
+    // Hold this publish back one debounce. The panel rebuilds its node map
+    // from each TREE_DATA, so shipping the half-known tree costs the user
+    // their expanded rows, selection and scope, then restores the subtrees
+    // collapsed. Best-effort, not a guarantee: a frame slower than the
+    // debounce still gets published without, and completes the tree when its
+    // answer lands. Closing that gap properly needs a per-frame pending set
+    // with its own deadline rather than a re-armed 200 ms timer.
     scheduleMerge(tabId);
     return;
   }
-
-  const topFrame = state.frames.get(0);
-  if (!topFrame) return;
 
   const result = mergeFrameTrees({
     frames: state.frames,
@@ -125,26 +128,56 @@ async function mergeAndSendTree(tabId: number) {
 function recoverMissingFrames(
   tabId: number,
   state: TabState,
-  allFrames: ReadonlyArray<{ frameId: number }>,
+  allFrames: ReadonlyArray<{ frameId: number; url?: string }>,
 ): number {
   if (state.recoveryChecked || allFrames.length === 0) return 0;
   state.recoveryChecked = true;
 
   let pinged = 0;
-  for (const { frameId } of allFrames) {
+  for (const { frameId, url } of allFrames) {
     if (state.frames.has(frameId)) continue;
+    if (!canHostContentScript(url)) continue;
     pinged++;
     chrome.tabs.sendMessage(tabId, { type: "RESEND_TREE" }, { frameId }, () => {
       if (chrome.runtime.lastError) {
-        /* frame may have no content script (chrome://, PDF, sandboxed) */
+        /* frame went away between the frame list and the send */
       }
     });
   }
   return pinged;
 }
 
+/**
+ * Whether a frame Chrome reported could be running one of our content
+ * scripts, judged by its URL scheme.
+ *
+ * `public/manifest.json` injects at `<all_urls>` with no `match_about_blank`,
+ * so a whole class of frames is guaranteed-reported and guaranteed-silent: a
+ * bare or `srcdoc` iframe (`about:blank`), `data:`/`blob:` frames, sandboxed
+ * frames, PDF and plugin frames, `chrome-error://`. Ad slots are usually the
+ * first of those. Pinging them is harmless in itself, but each one counts as
+ * missing forever and would hold the publish back a debounce every time.
+ *
+ * Unknown/absent URLs are treated as reachable — better one wasted ping than
+ * a silently skipped frame that needed the repair.
+ */
+function canHostContentScript(url: string | undefined): boolean {
+  if (!url) return true;
+  return (
+    url.startsWith("http:") ||
+    url.startsWith("https:") ||
+    url.startsWith("file:") ||
+    url.startsWith("ftp:")
+  );
+}
+
 function scheduleMerge(tabId: number) {
-  const state = getTabState(tabId);
+  // Resolve, don't create. `mergeAndSendTree` can now re-enter this after its
+  // `await`, and `getOrCreateTabState` inserts on miss — so a merge in flight
+  // when the tab closes would resurrect the entry `chrome.tabs.onRemoved`
+  // just disposed, with nothing left to ever delete it again.
+  const state = tabStates.get(tabId);
+  if (!state) return;
   if (state.mergeTimer) clearTimeout(state.mergeTimer);
   state.mergeTimer = setTimeout(() => {
     state.mergeTimer = null;
@@ -155,10 +188,16 @@ function scheduleMerge(tabId: number) {
 // ---- Side panel lifecycle ----
 
 /**
- * Broadcast a message to every frame of the given tab. Content scripts run
- * in all frames (manifest `all_frames: true`), but `chrome.tabs.sendMessage`
- * without an explicit `frameId` targets only the top frame — so iframe
- * overlays and focus-tracker state would otherwise drift on panel close.
+ * Send a message to every frame of the given tab, one send per frame.
+ *
+ * NOTE: the rationale this used to carry — that `chrome.tabs.sendMessage`
+ * without an explicit `frameId` reaches only the top frame — is not what
+ * Chrome does. `frameId` selects one frame *instead of all frames in the
+ * tab*, so a frameId-less send already fans out and this enumeration is
+ * redundant with it. Left in place here rather than removed as a drive-by:
+ * the frameId-less sends elsewhere in this file were written under the same
+ * wrong assumption, so which of the two forms each call site wants is worth
+ * settling deliberately, not inside an unrelated fix.
  */
 async function broadcastToAllFrames(tabId: number, message: unknown) {
   const frames = await chrome.webNavigation
@@ -201,8 +240,10 @@ async function broadcastMessagesToAllFrames(
 
 /**
  * Execute a plan produced by the pure routing.ts planners. An item with a
- * `frameId` targets that one frame; without one it goes to the tab (top
- * frame). Errors (a frame with no content script) are swallowed.
+ * `frameId` targets that one frame; without one it goes to every frame in the
+ * tab (see the note on {@link broadcastToAllFrames} — that is Chrome's
+ * default, not top-frame-only). Errors (a frame with no content script) are
+ * swallowed.
  */
 function dispatchPlan(plan: PlannedTabMessage[]) {
   for (const item of plan) {

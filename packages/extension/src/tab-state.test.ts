@@ -59,18 +59,24 @@ describe("getOrCreateTabState", () => {
 describe("recordFrameTree", () => {
   it("flags the first top-frame announce as new", () => {
     const s = createTabState();
-    expect(recordFrameTree(s, makeFrameTree(0)).isNewTopFrame).toBe(true);
+    expect(recordFrameTree(s, makeFrameTree(0))).toEqual({
+      isNewTopFrame: true,
+    });
   });
 
   it("does not flag a re-announce of the top frame as new", () => {
     const s = createTabState();
     recordFrameTree(s, makeFrameTree(0));
-    expect(recordFrameTree(s, makeFrameTree(0)).isNewTopFrame).toBe(false);
+    expect(recordFrameTree(s, makeFrameTree(0))).toEqual({
+      isNewTopFrame: false,
+    });
   });
 
   it("never flags a subframe announce as new top frame", () => {
     const s = createTabState();
-    expect(recordFrameTree(s, makeFrameTree(5)).isNewTopFrame).toBe(false);
+    expect(recordFrameTree(s, makeFrameTree(5))).toEqual({
+      isNewTopFrame: false,
+    });
     // Even if no top frame exists yet, frameId !== 0 is never "new top".
     expect(s.frames.has(0)).toBe(false);
   });
@@ -102,13 +108,14 @@ describe("clearTabFrames", () => {
     if (s.mergeTimer) clearTimeout(s.mergeTimer);
   });
 
-  it("re-arms the missing-frame check", () => {
-    // Emptying the map is the condition that can strand silent frames — an
-    // aborted top-frame navigation clears and then nothing loads.
+  it("leaves the worker-scoped recovery flag alone", () => {
+    // Deliberate: re-arming per clear would fire on every panel REQUEST_TREE
+    // too. See the doc block on clearTabFrames for what that costs and what
+    // it gives up.
     const s = createTabState();
     s.recoveryChecked = true;
     clearTabFrames(s);
-    expect(s.recoveryChecked).toBe(false);
+    expect(s.recoveryChecked).toBe(true);
   });
 });
 

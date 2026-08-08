@@ -36,6 +36,15 @@ Use a real SPA with client-side routing and at least one same-origin iframe.
 9. Act on a control on the restored page
 10. Forward, then Back again
 
+**Service-worker restart**
+
+11. Back on the iframe page from step 1, expand an iframe subtree and select a node
+    inside it
+12. Kill the background worker: `chrome://extensions` → the extension's **service
+    worker** link → close it. (Idling it out for ~30s works too.)
+13. Cause a DOM change in the **top** frame only — type in a field, click a button.
+    Do not touch anything inside the iframes
+
 ## Expected
 
 - **2** — iframe subtrees render under their iframe node, not as a separate root or a
@@ -44,6 +53,8 @@ Use a real SPA with client-side routing and at least one same-origin iframe.
 - **4/6** — the panel tracks client-side navigation; it must not require a manual
   reload
 - **8** — the panel shows the **restored** page. This is the one that breaks
+- **13** — the iframe subtrees are still there after the tree redraws. They must not
+  disappear and wait for you to interact inside each iframe to come back
 
 ## Why this exists
 
@@ -55,3 +66,11 @@ document, or on nothing, and the panel gives no indication anything is wrong.
 
 Step 9 is the specific check: reading a stale tree is confusing, but _acting_ on a
 stale tree mutates a page the user isn't looking at.
+
+Steps 11–13 cover the same "iframe subtrees are present" assertion under the one
+condition the load / SPA / bfcache paths never reach. The background holds each
+tab's per-frame trees in memory, so a worker restart drops them while the page's
+content scripts keep running and stay silent until their own DOM next changes —
+which meant the first top-frame change republished the page without any iframe.
+Chrome restarts that worker on its own schedule, so this is a state users reach by
+waiting, not by doing anything unusual.

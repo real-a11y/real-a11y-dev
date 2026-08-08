@@ -179,10 +179,13 @@ chrome.runtime.onMessage.addListener(
         // Unlike REQUEST_TREE it carries no viewMode and must not change
         // ours — `currentViewMode` survived the restart and is still right.
         //
-        // `startObserving()` announces by itself when it arms, so only send a
-        // tree here if we were already armed (which is the restart case).
+        // Only answer if already armed — which is the restart case, and the
+        // only one the background sends this for. Arming here instead would
+        // make this the one message that can start extraction in a frame the
+        // background deliberately didn't arm (observation is panel-gated;
+        // `planFrameHello` returns nothing when no panel is connected), and
+        // the panel can drop between the send and its arrival.
         if (observingEnabled) sendTree();
-        else startObserving();
         sendResponse({ success: true });
         break;
       }

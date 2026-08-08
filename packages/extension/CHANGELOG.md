@@ -18,10 +18,11 @@
   loaded and still observing, re-announce only when their own DOM next
   mutates. The first frame to do so was merged on its own, replacing the
   panel's complete tree with one missing every iframe subtree until each
-  other frame happened to change. Before its first merge for a tab, the
-  background now compares the frames Chrome reports against the trees it
-  holds and asks any frame it is missing to re-announce, so the panel is
-  whole again a moment later instead of after an arbitrary edit. ([#315])
+  other frame happened to change. Once per tab, the background now compares
+  the frames Chrome reports against the trees it holds and asks any frame it
+  is missing — and could actually be running a content script — to
+  re-announce, so the panel is whole again a moment later instead of after an
+  arbitrary edit. ([#315])
 
 ## 0.1.10
 
