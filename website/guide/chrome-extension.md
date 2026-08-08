@@ -131,7 +131,7 @@ Every export opens with a reproducibility header, so a pasted report is self-des
 - **URL:** https://example.com/checkout
 - **Scope:** dialog "Confirm order"
 - **Captured:** 2026-07-11T14:32:10.000Z
-- **Tool:** Semantic Navigator 0.1.7
+- **Tool:** Semantic Navigator 0.1.9
 ```
 
 The `Scope` line appears only when the panel is scoped to a subtree, so the report states exactly what it covers. Each selected view then follows as its own fenced `##` section — drop the whole thing into a GitHub issue or any Markdown tracker and the person reading it can see the structure without re-running anything.
