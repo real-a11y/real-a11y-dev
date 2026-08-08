@@ -1,5 +1,7 @@
 ---
-"@real-a11y-dev/serialize": minor
+"@real-a11y-dev/testing": minor
+"@real-a11y-dev/cli": minor
+"@real-a11y-dev/mcp": minor
 ---
 
 Add `serializeTreeDiff(diff, options?)` — render a `TreeDiff` from core's `diffTrees` as a deterministic, committable change list. This is the renderer that turns tree diffing from a raw primitive into something you can assert on: what **one interaction changed**, in a line each.

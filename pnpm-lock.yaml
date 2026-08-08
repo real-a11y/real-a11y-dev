@@ -310,6 +310,9 @@ importers:
       '@real-a11y-dev/browser':
         specifier: workspace:*
         version: link:../browser
+      '@real-a11y-dev/core':
+        specifier: workspace:*
+        version: link:../core
     devDependencies:
       '@real-a11y-dev/audit':
         specifier: workspace:*
@@ -467,6 +470,9 @@ importers:
       '@real-a11y-dev/browser':
         specifier: workspace:*
         version: link:../browser
+      '@real-a11y-dev/core':
+        specifier: workspace:*
+        version: link:../core
       zod:
         specifier: ^3.25.0
         version: 3.25.76

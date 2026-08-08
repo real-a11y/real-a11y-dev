@@ -18,9 +18,15 @@ export default defineConfig({
   external: ["playwright", "@puppeteer/browsers"],
   // PRIVATE workspace packages: npm can never resolve them, so they are bundled
   // into the dist and held as devDependencies (a published "dependencies" entry
-  // would break every install). No `dts.resolve` needed — the CLI emits no
-  // public types that name them; the guard in `surface:check` says so if that
-  // ever changes.
+  // would break every install). No `dts.resolve` needed TODAY — both emitted
+  // declarations are just the shebang, so nothing names a private package.
+  //
+  // Nothing WATCHES that, though, and it is worth knowing before relying on it:
+  // `surface:check`'s guard reads only the `.d.ts` a package's `exports` `types`
+  // condition points at, and this package has no `exports` map at all; attw
+  // skips `cli` outright (ATTW_SKIP_PACKAGES). So the day an exported type here
+  // names `Finding` or `SnapshotPage`, the unresolvable specifier ships silently.
+  // Add `dts.resolve` at the same time as the first such export.
   noExternal: [
     "@real-a11y-dev/session-registry",
     "@real-a11y-dev/audit",

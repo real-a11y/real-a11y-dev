@@ -15,8 +15,13 @@ export default defineConfig({
   dts: {
     resolve: [
       "@real-a11y-dev/session-registry",
-      // `server.d.ts` also re-exports `Finding` (audit) and `SnapshotPage`
-      // (snapshot), both now private — same failure, same fix.
+      // `server.d.ts` also REFERENCES `Finding` (audit) and `SnapshotPage`
+      // (snapshot) structurally — `renderAudit(findings: Finding[])` and friends —
+      // without re-exporting either. A structural reference is enough to emit
+      // `from "@real-a11y-dev/audit"`, which is the trap: checking `index.ts` for
+      // `export … from` statements, finding none, and skipping `dts.resolve` ships
+      // an unresolvable specifier. The rule is "does any emitted declaration NAME
+      // it", not "do we re-export it".
       "@real-a11y-dev/audit",
       "@real-a11y-dev/snapshot",
       "@real-a11y-dev/serialize",

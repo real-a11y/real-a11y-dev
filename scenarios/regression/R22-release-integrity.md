@@ -20,14 +20,16 @@ Publishing is irreversible; every check here is cheap and every miss is permanen
 
 1. `pnpm changeset:status` — no unconsumed changesets remain for packages being
    released
-2. Confirm the **linked family** all moved to one version together: `core`,
-   `serialize`, `audit`, `snapshot`, `browser`, `inspector`, `react`,
-   `storybook-addon`, `testing` — nine since `ui` left the group on going private.
-   Read the group out of `.changeset/config.json`'s `linked` array rather than from
-   memory: it loses a name every time a package goes internal
+2. Confirm the **linked family** all moved to one version together. **Read the
+   group out of `.changeset/config.json`'s `linked` array — do not use a list from
+   memory or from this file.** It loses a name every time a package goes internal
+   (ten originally; six after `ui`, `serialize`, `audit` and `snapshot` left), and a
+   remembered count makes you either fail a good release or "fix" it by re-adding a
+   private package to `linked` — which recreates the mixed-changeset group that
+   breaks `changeset version` outright
 3. Confirm `cli` and `mcp` versioned **independently** — they are not in the linked
-   group, so their numbers legitimately differ (today: family `beta.11`, cli/mcp
-   `beta.1`)
+   group, so their numbers legitimately differ — read both from the manifests
+   rather than expecting a particular pair
 4. Every bumped package has a matching CHANGELOG entry, and the entry describes the
    change rather than repeating the version
 5. `.changeset/pre.json` — `mode: "pre"`, `tag: "beta"` for a beta; absent/exited for
@@ -49,8 +51,19 @@ Publishing is irreversible; every check here is cheap and every miss is permanen
 - Every bump has a changelog entry a user could act on
 - Beta publishes go to the `beta` dist-tag and leave `latest` untouched
 - No package bundling a changed engine is left behind at an older build
-- A change confined to a private package (`ui`, `validate`, `session-registry`) has
-  a changeset naming its consumers — otherwise the release silently ships without it
+- A change confined to a private package has a changeset naming its **consumers** —
+  otherwise the release silently ships the code with no version bump and no changelog
+  line anywhere a user reads. Naming the private package alone is accepted and then
+  ignored, so it looks done. The mapping, derived from `noExternal` in each
+  consumer's tsup config rather than memorised:
+
+  | private | a changeset must name |
+  | --- | --- |
+  | `audit`, `serialize` | `testing`, `browser`, `cli`, `mcp` |
+  | `snapshot` | `cli`, `mcp` |
+  | `semantic-navigator-ui` | `inspector`, `storybook-addon` (+ the extension, own track) |
+  | `validate` | `testing` |
+  | `session-registry` | `cli`, `mcp` |
 
 ## Why this exists
 

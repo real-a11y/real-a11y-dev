@@ -1,5 +1,8 @@
 ---
-"@real-a11y-dev/serialize": minor
+"@real-a11y-dev/testing": minor
+"@real-a11y-dev/browser": minor
+"@real-a11y-dev/cli": minor
+"@real-a11y-dev/mcp": minor
 ---
 
 Mark the focused element in the tree, outline, and tab-order serializations with a trailing `[focused]`. This makes focus management — invisible in a plain tree dump — a one-line, committable assertion: "opening this dialog moved focus onto its heading", "this control is where focus lands after the click".

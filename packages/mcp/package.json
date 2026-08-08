@@ -57,6 +57,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
     "@real-a11y-dev/browser": "workspace:*",
+    "@real-a11y-dev/core": "workspace:*",
     "zod": "^3.25.0"
   },
   "peerDependencies": {

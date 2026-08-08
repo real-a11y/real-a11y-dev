@@ -323,7 +323,7 @@ jobs:
           # (`privatePackages.version: false`). This grep cannot tell the
           # difference — see the follow-up issue for the check that can.
           src=$(echo "$changed" \
-            | grep -E '^packages/(audit|browser|cli|core|inspector|mcp|react|serialize|snapshot|storybook-addon|testing|ui|validate)/src/' \
+            | grep -E '^packages/(audit|browser|cli|core|inspector|mcp|react|serialize|session-registry|snapshot|storybook-addon|testing|ui|validate)/src/' \
             | grep -vE '\.(test|spec)\.[tj]sx?$' || true)
           added=$(git diff --name-only --diff-filter=A "$BASE"...HEAD -- .changeset \
             | grep -E '\.md$' | grep -viE 'README' || true)

@@ -41,6 +41,13 @@ export {
   listByRole,
   ALL_RULES,
   INTERACTIVE_ROLES,
+  // `assertRules` and `formatFindings` were made public by a pending changeset
+  // (`audit-assert-rules-native`) that announced them as an `audit` export. With
+  // `audit` private that announcement had nowhere to land: the code would ship
+  // inside this bundle with no way to call it. Re-exported here so the feature
+  // is reachable and the changelog entry is true.
+  assertRules,
+  formatFindings,
 } from "@real-a11y-dev/audit";
 export type { Finding, A11yRule, RoleFilter } from "@real-a11y-dev/audit";
 
