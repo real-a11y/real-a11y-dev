@@ -67,13 +67,19 @@ jobs:
           # resolves. It refuses to run rather than guess, so this must be exact.
           git fetch --no-tags origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF" || true
 
+          # Written to RUNNER_TEMP, never into the checkout. The shell creates a
+          # redirect target BEFORE node runs, so `> risk.json` inside the repo
+          # made the script count its own output as a changed file: the first
+          # call reported 7 files for a 6-file PR, and the second — which by then
+          # could also see risk.json — reported 8. Wrong numbers in the comment
+          # that is supposed to be the authoritative reading of the diff.
           node scripts/pr-risk.mjs --base "origin/$BASE_REF" \
-            --title "$PR_TITLE" --body "$PR_BODY" --format json > risk.json
+            --title "$PR_TITLE" --body "$PR_BODY" --format json > "$RUNNER_TEMP/risk.json"
           node scripts/pr-risk.mjs --base "origin/$BASE_REF" \
-            --title "$PR_TITLE" --body "$PR_BODY" --format markdown > risk.md
+            --title "$PR_TITLE" --body "$PR_BODY" --format markdown > "$RUNNER_TEMP/risk.md"
 
-          cat risk.json
-          echo "tier=$(node -p "require('./risk.json').tier")" >> "$GITHUB_OUTPUT"
+          cat "$RUNNER_TEMP/risk.json"
+          echo "tier=$(node -p "require('$RUNNER_TEMP/risk.json').tier")" >> "$GITHUB_OUTPUT"
 
       # Forks get a read-only token even with `pull-requests: write` above, so
       # labelling would throw. The gate below still runs — that is the part that
@@ -122,7 +128,8 @@ jobs:
 
             // Sticky comment: marker as the FIRST line AND our bot, so it can
             // never adopt a human's comment that happens to quote the marker.
-            const body = `${MARKER}\n${fs.readFileSync('risk.md', 'utf8').trim()}`;
+            const report = fs.readFileSync(`${process.env.RUNNER_TEMP}/risk.md`, 'utf8');
+            const body = `${MARKER}\n${report.trim()}`;
             const comments = await github.paginate(github.rest.issues.listComments, {
               owner, repo, issue_number, per_page: 100,
             });
