@@ -355,10 +355,11 @@ main
       code "NodeChange"
   button "Copy Code"
   code
-  paragraph "To render a diff as a committable change list (, ), pass it to from ."
+  paragraph "To render a diff as a committable change list (, ), pass it to from (the serializers' published home — is workspace-internal)."
     code "+ option "Spain""
     code "~ combobox "Country": a11y.states.expanded false → true"
     code "serializeTreeDiff"
+    code "@real-a11y-dev/testing"
     code "@real-a11y-dev/serialize"
   separator
   heading "DOM observation" (level 2)
