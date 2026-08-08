@@ -8,7 +8,7 @@
   landed the change; versions match `package.json`/`public/manifest.json`.
 -->
 
-## Unreleased
+## 0.1.10
 
 ### Patch Changes
 
@@ -162,3 +162,4 @@ Earlier releases predate this changelog.
 [#244]: https://github.com/real-a11y/real-a11y-dev/pull/244
 [#248]: https://github.com/real-a11y/real-a11y-dev/pull/248
 [#287]: https://github.com/real-a11y/real-a11y-dev/pull/287
+[#308]: https://github.com/real-a11y/real-a11y-dev/pull/308
