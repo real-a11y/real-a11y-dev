@@ -27,6 +27,7 @@ describe("createTabState", () => {
     expect(s.frames.size).toBe(0);
     expect(s.nodeToFrame.size).toBe(0);
     expect(s.mergeTimer).toBeNull();
+    expect(s.recoveryChecked).toBe(false);
   });
 });
 
@@ -58,24 +59,18 @@ describe("getOrCreateTabState", () => {
 describe("recordFrameTree", () => {
   it("flags the first top-frame announce as new", () => {
     const s = createTabState();
-    expect(recordFrameTree(s, makeFrameTree(0))).toEqual({
-      isNewTopFrame: true,
-    });
+    expect(recordFrameTree(s, makeFrameTree(0)).isNewTopFrame).toBe(true);
   });
 
   it("does not flag a re-announce of the top frame as new", () => {
     const s = createTabState();
     recordFrameTree(s, makeFrameTree(0));
-    expect(recordFrameTree(s, makeFrameTree(0))).toEqual({
-      isNewTopFrame: false,
-    });
+    expect(recordFrameTree(s, makeFrameTree(0)).isNewTopFrame).toBe(false);
   });
 
   it("never flags a subframe announce as new top frame", () => {
     const s = createTabState();
-    expect(recordFrameTree(s, makeFrameTree(5))).toEqual({
-      isNewTopFrame: false,
-    });
+    expect(recordFrameTree(s, makeFrameTree(5)).isNewTopFrame).toBe(false);
     // Even if no top frame exists yet, frameId !== 0 is never "new top".
     expect(s.frames.has(0)).toBe(false);
   });
@@ -105,6 +100,15 @@ describe("clearTabFrames", () => {
     expect(s.nodeToFrame.size).toBe(0);
     expect(s.mergeTimer).not.toBeNull(); // intentionally untouched
     if (s.mergeTimer) clearTimeout(s.mergeTimer);
+  });
+
+  it("re-arms the missing-frame check", () => {
+    // Emptying the map is the condition that can strand silent frames — an
+    // aborted top-frame navigation clears and then nothing loads.
+    const s = createTabState();
+    s.recoveryChecked = true;
+    clearTabFrames(s);
+    expect(s.recoveryChecked).toBe(false);
   });
 });
 

@@ -112,6 +112,13 @@ export type PanelToContent =
       type: "REQUEST_TREE";
       payload: { viewMode: TreeViewMode };
     })
+  // Background→content recovery ping: re-announce your current tree.
+  // Deliberately distinct from REQUEST_TREE, which carries the panel's
+  // `viewMode` and assigns it. The background does not track the view mode,
+  // so it has none to send — and it must not reset one either: the content
+  // script's `currentViewMode` outlives a service-worker restart and is the
+  // correct mode to re-announce at.
+  | (BoundTab & { type: "RESEND_TREE" })
   | (BoundTab & { type: "DISPATCH_ACTION"; payload: ActionRequest })
   | (BoundTab & {
       type: "HIGHLIGHT_NODE";

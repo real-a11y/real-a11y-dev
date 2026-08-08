@@ -41,8 +41,6 @@ async function mergeAndSendTree(tabId: number) {
   // mainly guards stale in-flight data arriving just as the panel closes.
   if (!sidepanelConnected) return;
   const state = getTabState(tabId);
-  const topFrame = state.frames.get(0);
-  if (!topFrame) return;
 
   let allFrames: chrome.webNavigation.GetAllFrameResultDetails[] = [];
   try {
@@ -51,6 +49,28 @@ async function mergeAndSendTree(tabId: number) {
   } catch {
     // Tab might be closed or invalid
   }
+
+  // The panel can close while `getAllFrames` is in flight; re-check before
+  // acting on the result, or we arm extraction with nobody left to read it.
+  if (!sidepanelConnected) return;
+
+  // Before merging, check we aren't about to merge a page we only half know.
+  // Deliberately ahead of the `topFrame` guard: after a worker restart it can
+  // be a subframe that announces first, and that case needs the repair too.
+  const pinged = recoverMissingFrames(tabId, state, allFrames);
+  if (pinged > 0) {
+    // Publishing now would hand the panel a tree with those frames missing,
+    // and the panel rebuilds its node map from each TREE_DATA — so the flash
+    // would cost the user their expanded rows, selection and scope, then
+    // restore the subtrees collapsed. Wait one more debounce instead: the
+    // re-announces reset the timer as they land, and if nobody answers the
+    // timer still fires and publishes whatever we do have.
+    scheduleMerge(tabId);
+    return;
+  }
+
+  const topFrame = state.frames.get(0);
+  if (!topFrame) return;
 
   const result = mergeFrameTrees({
     frames: state.frames,
@@ -78,6 +98,49 @@ async function mergeAndSendTree(tabId: number) {
     .catch(() => {
       // Side panel might not be open
     });
+}
+
+/**
+ * Ask frames the page has but we hold no tree for to re-announce themselves.
+ * Returns how many were asked.
+ *
+ * This exists because an empty (or partial) `frames` map does not always mean
+ * the missing frames are about to speak up. `tabStates` lives only in the
+ * worker's memory, so a restart under an already-loaded page loses every
+ * tree — while the content scripts survive, keep observing, and re-announce
+ * only when their own DOM next mutates. The first frame to mutate would then
+ * be merged on its own, replacing the panel's complete tree with one missing
+ * every iframe subtree until each other frame happened to change. The
+ * panel-connect `SET_OBSERVING` re-arm doesn't shake them loose either:
+ * `startObserving()` early-returns when the frame is already observing.
+ *
+ * Running at merge time rather than on the announce is what keeps this from
+ * being busywork. On an ordinary panel open, or a navigation, every frame
+ * announces within milliseconds of being armed or loaded, so by the time the
+ * merge debounce fires there is nothing missing and nothing is asked for. It
+ * is also why the flag is spent only once the panel is connected and the
+ * frame list actually arrived: neither of those is a chance to repair
+ * anything.
+ */
+function recoverMissingFrames(
+  tabId: number,
+  state: TabState,
+  allFrames: ReadonlyArray<{ frameId: number }>,
+): number {
+  if (state.recoveryChecked || allFrames.length === 0) return 0;
+  state.recoveryChecked = true;
+
+  let pinged = 0;
+  for (const { frameId } of allFrames) {
+    if (state.frames.has(frameId)) continue;
+    pinged++;
+    chrome.tabs.sendMessage(tabId, { type: "RESEND_TREE" }, { frameId }, () => {
+      if (chrome.runtime.lastError) {
+        /* frame may have no content script (chrome://, PDF, sandboxed) */
+      }
+    });
+  }
+  return pinged;
 }
 
 function scheduleMerge(tabId: number) {

@@ -171,6 +171,22 @@ chrome.runtime.onMessage.addListener(
         break;
       }
 
+      case "RESEND_TREE": {
+        // The background's per-tab frame registry is memory-only, so a
+        // service-worker restart empties it while this frame keeps observing
+        // and stays silent until its own DOM next mutates. This is the
+        // background asking us to re-announce so its merge sees us again.
+        // Unlike REQUEST_TREE it carries no viewMode and must not change
+        // ours — `currentViewMode` survived the restart and is still right.
+        //
+        // `startObserving()` announces by itself when it arms, so only send a
+        // tree here if we were already armed (which is the restart case).
+        if (observingEnabled) sendTree();
+        else startObserving();
+        sendResponse({ success: true });
+        break;
+      }
+
       case "SET_VIEW_MODE": {
         currentViewMode = message.payload.viewMode;
         sendTree();

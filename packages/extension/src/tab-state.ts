@@ -18,6 +18,12 @@ export interface TabState {
   nodeToFrame: Map<string, number>;
   /** Pending merge debounce handle; null when no merge is scheduled. */
   mergeTimer: ReturnType<typeof setTimeout> | null;
+  /**
+   * Whether we've already checked, since `frames` was last emptied, for
+   * frames the page has but we hold no tree for. See the background's
+   * `recoverMissingFrames`.
+   */
+  recoveryChecked: boolean;
 }
 
 export function createTabState(): TabState {
@@ -25,6 +31,7 @@ export function createTabState(): TabState {
     frames: new Map(),
     nodeToFrame: new Map(),
     mergeTimer: null,
+    recoveryChecked: false,
   };
 }
 
@@ -67,10 +74,19 @@ export function recordFrameTree(
  * Does NOT clear the merge timer; an in-flight merge after a clear is
  * harmless (it just sees an empty `frames`) and clearing it would leak
  * the pending callback if the next merge isn't scheduled.
+ *
+ * DOES re-arm `recoveryChecked`, because emptying the map is precisely the
+ * condition that can strand frames: the usual callers have a re-announce
+ * coming, but an aborted top-frame navigation (a download link, a 204) fires
+ * `onBeforeNavigate` and then nothing loads, leaving the page's content
+ * scripts alive, observing and silent with no tree on our side. Re-arming
+ * costs nothing when the re-announce does arrive — by the time the next merge
+ * looks, there is nothing missing to ask for.
  */
 export function clearTabFrames(state: TabState): void {
   state.frames.clear();
   state.nodeToFrame.clear();
+  state.recoveryChecked = false;
 }
 
 /**
