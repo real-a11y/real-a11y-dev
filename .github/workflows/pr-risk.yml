@@ -125,7 +125,30 @@ jobs:
           mkdir -p "$RUNNER_TEMP/base"
           git archive "origin/$BASE_REF" scripts | tar -x -C "$RUNNER_TEMP/base"
           RUBRIC="$RUNNER_TEMP/base/scripts/pr-risk.mjs"
-          test -f "$RUBRIC" || { echo "::error::no rubric on origin/$BASE_REF"; exit 1; }
+
+          # BOOTSTRAP ONLY. Before this lands, `origin/main` has no rubric to
+          # grade with, so the very PR introducing the check could never pass it.
+          #
+          # Falling back to the PR's copy is the thing the header forbids, so be
+          # precise about why it is safe here and nowhere else: this workflow runs
+          # only on PRs targeting `main`, and the branch is reachable only while
+          # `main` lacks the file. A pull request cannot remove it from `main`
+          # without first being merged — which is the review this is protecting.
+          # So it fires exactly once, on the PR you are reading, and is dead
+          # afterwards.
+          #
+          # It warns loudly rather than passing quietly, because a fallback that
+          # looks like a normal run is how "temporary" becomes permanent.
+          if [ ! -f "$RUBRIC" ]; then
+            if [ -f "$GITHUB_WORKSPACE/scripts/pr-risk.mjs" ]; then
+              echo "::warning::origin/$BASE_REF has no rubric yet — grading with the PR's own copy (bootstrap). This is NOT a trustworthy grade: once the rubric is on $BASE_REF this path is unreachable and the gate becomes real."
+              RUBRIC="$GITHUB_WORKSPACE/scripts/pr-risk.mjs"
+            else
+              echo "::error::no rubric on origin/$BASE_REF and none in the PR"
+              exit 1
+            fi
+          fi
+          echo "rubric=$RUBRIC" >> "$GITHUB_OUTPUT"
 
           run_rubric() {
             node "$RUBRIC" --repo "$GITHUB_WORKSPACE" --base "origin/$BASE_REF" \
@@ -227,6 +250,7 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
           LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          RUBRIC: ${{ steps.classify.outputs.rubric }}
         run: |
           set -euo pipefail
 
@@ -252,6 +276,7 @@ jobs:
           args=""
           case ",$LABELS," in *,reviewed:deep,*) args="--reviewed" ;; esac
 
-          node "$RUNNER_TEMP/base/scripts/pr-risk.mjs" \
+          # Same rubric the Classify step resolved, bootstrap fallback included.
+          node "$RUBRIC" \
             --repo "$GITHUB_WORKSPACE" --base "origin/$BASE_REF" \
             --title "$PR_TITLE" --body "$PR_BODY" --gate $args
