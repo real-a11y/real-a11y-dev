@@ -47,11 +47,11 @@ pnpm packaging:check     # publint + attw, every public package
      never reaches a `private: true` package
 6. `pnpm size-limit` — budgets in `.size-limit.json`
 7. Confirm nothing private leaked into the publish set. `node
-   scripts/list-publishable-packages.mjs` prints exactly what `pnpm publish -r`
-   will act on; `extension`, `example-patterns`, `session-registry`, `validate` and
-   `semantic-navigator-ui` must not be in it. Read that list against the current
-   intent rather than a remembered count — it shrinks every time a package goes
-   internal, and a name *appearing* is the finding, not a name missing
+   scripts/list-publishable-packages.mjs` prints exactly what `pnpm publish -r` will
+   act on. Diff it against the packages WITHOUT `private: true` in
+   `packages/*/package.json` — the two must agree exactly. Do not check against a
+   list written here or a remembered count: the publish set shrinks every release,
+   and a private name *appearing* is the finding, not a name missing
 
 ## Expected
 

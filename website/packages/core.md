@@ -228,7 +228,7 @@ interface NodeChange {
 
 To render a diff as a committable change list (`+ option "Spain"`,
 `~ combobox "Country": a11y.states.expanded false → true`), pass it to
-`serializeTreeDiff` from `@real-a11y-dev/serialize`.
+`serializeTreeDiff` from `@real-a11y-dev/testing` (the serializers' published home — `@real-a11y-dev/serialize` is workspace-internal).
 
 ---
 
