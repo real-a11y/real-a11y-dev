@@ -1,0 +1,282 @@
+name: PR risk
+
+# What this PR is risking, computed from its diff — the tier from
+# `scripts/pr-risk.mjs`, applied as a `risk:*` label and a sticky comment.
+#
+# Unlike `docs-currency`, this one BLOCKS: a high-risk change with no recorded
+# deep review fails the job. That is the whole point of it being a required
+# check — the `pr` skill's §0 review depth is otherwise a rule that only applies
+# when someone remembers it, which for the failure modes in the high tier
+# (publishing to npm, weakening CODEOWNERS, removing a public export) is the same
+# as not applying.
+#
+# ---------------------------------------------------------------------------
+# THE RUBRIC COMES FROM THE BASE BRANCH. This is the single most important line
+# in the file.
+#
+# `pull_request` runs the workflow definition from the base, but
+# `actions/checkout` lands the MERGE ref — which contains the pull request's
+# changes. So `node scripts/pr-risk.mjs` out of the workspace is the PR's own
+# copy of the rubric, and a six-line stub printing `{"tier":"low"}` clears its
+# own required check. Reproduced end-to-end alongside an exfiltrating
+# `publish.yml` edit, and it works from forks too, because the gate needs no
+# token to lie.
+#
+# It is also the second-order version of the same problem: executing PR-authored
+# code inside a job holding `pull-requests: write`.
+#
+# So the grader is extracted from `origin/$BASE_REF` into RUNNER_TEMP and run
+# from there, with `--repo` pointing at the workspace it is grading. The whole
+# `scripts/` tree is taken rather than the one file, so the rubric's imports
+# (`surface/plan/diff.mjs`) resolve from the base branch as well — no per-file
+# list here to drift out of sync with the imports over there.
+#
+# The consequence, which is correct and worth stating: a PR that ADDS a rule is
+# graded without it. New rules take effect once they land on the base branch,
+# after a human has reviewed them.
+# ---------------------------------------------------------------------------
+#
+# Two more things follow from being REQUIRED, and both are easy to get wrong:
+#
+#   1. NO `paths:` FILTER. A required check that doesn't run never reports, and
+#      GitHub blocks the PR forever waiting for it. Every path filter you would
+#      want here is already expressed inside the rubric.
+#   2. It has to run cheaply on every PR — so, like `surface plan`, the script
+#      is node-core + git only and this job deliberately skips `pnpm install`.
+#      Adding an import of anything installed breaks it with ERR_MODULE_NOT_FOUND
+#      on every run.
+
+on:
+  pull_request:
+    branches: [main]
+    # `edited` because the title and body feed the rubric (a `!` title, a
+    # `BREAKING CHANGE` body, the `risk-override:` reason). `labeled`/`unlabeled`
+    # because `reviewed:deep` and `risk-override` are how a red gate goes green,
+    # and without these the label would sit there while the check stayed failed.
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: write # apply the risk label + post the sticky comment
+
+concurrency:
+  group: pr-risk-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr-risk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The rubric is computed against the merge base, so it needs both
+          # sides of history. A shallow clone reports "no common ancestor".
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      # Runs FIRST, before anything can grade the diff: a review recorded
+      # against one tree must not carry over to a different one.
+      #
+      # The old sweep was `startsWith('risk:')`, which matches neither
+      # `reviewed:deep` (starts `reviewed:`) nor `risk-override` (starts
+      # `risk-`). So a maintainer could approve a `feat!:` PR, the author could
+      # force-push a tree adding `curl $NPM_TOKEN` to publish.yml, and the
+      # `synchronize` run would recompute `tier: high`, say so in the comment,
+      # and still exit 0. This is the label analogue of `dismiss_stale_reviews`.
+      - name: Drop stale review labels on a new head
+        if: >-
+          github.event.action == 'synchronize' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const present = (context.payload.pull_request.labels || []).map((l) => l.name);
+            for (const name of ['reviewed:deep', 'risk-override']) {
+              if (!present.includes(name)) continue;
+              await github.rest.issues.removeLabel({ owner, repo, issue_number, name });
+              console.log(`Removed ${name} — the head changed, so the review is owed again.`);
+            }
+
+      - name: Classify
+        id: classify
+        env:
+          # Via the environment, never `${{ }}` interpolated into the script
+          # body: a PR title is attacker-controlled text, and interpolation makes
+          # it shell. This is the single most common Actions injection.
+          BASE_REF: ${{ github.base_ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+
+          # Explicit refspec: actions/checkout leaves a narrow one behind, so a
+          # bare `git fetch origin <branch>` can update FETCH_HEAD without ever
+          # creating refs/remotes/origin/<branch> — which is the ref the script
+          # resolves. It refuses to run rather than guess, so this must be exact.
+          git fetch --no-tags origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
+
+          # The grader, from the BASE branch — see the header.
+          mkdir -p "$RUNNER_TEMP/base"
+          git archive "origin/$BASE_REF" scripts | tar -x -C "$RUNNER_TEMP/base"
+          RUBRIC="$RUNNER_TEMP/base/scripts/pr-risk.mjs"
+
+          # BOOTSTRAP ONLY. Before this lands, `origin/main` has no rubric to
+          # grade with, so the very PR introducing the check could never pass it.
+          #
+          # Falling back to the PR's copy is the thing the header forbids, so be
+          # precise about why it is safe here and nowhere else: this workflow runs
+          # only on PRs targeting `main`, and the branch is reachable only while
+          # `main` lacks the file. A pull request cannot remove it from `main`
+          # without first being merged — which is the review this is protecting.
+          # So it fires exactly once, on the PR you are reading, and is dead
+          # afterwards.
+          #
+          # It warns loudly rather than passing quietly, because a fallback that
+          # looks like a normal run is how "temporary" becomes permanent.
+          if [ ! -f "$RUBRIC" ]; then
+            if [ -f "$GITHUB_WORKSPACE/scripts/pr-risk.mjs" ]; then
+              echo "::warning::origin/$BASE_REF has no rubric yet — grading with the PR's own copy (bootstrap). This is NOT a trustworthy grade: once the rubric is on $BASE_REF this path is unreachable and the gate becomes real."
+              RUBRIC="$GITHUB_WORKSPACE/scripts/pr-risk.mjs"
+            else
+              echo "::error::no rubric on origin/$BASE_REF and none in the PR"
+              exit 1
+            fi
+          fi
+          echo "rubric=$RUBRIC" >> "$GITHUB_OUTPUT"
+
+          run_rubric() {
+            node "$RUBRIC" --repo "$GITHUB_WORKSPACE" --base "origin/$BASE_REF" \
+              --title "$PR_TITLE" --body "$PR_BODY" "$@"
+          }
+
+          run_rubric --format json > "$RUNNER_TEMP/risk.json"
+          run_rubric --format markdown > "$RUNNER_TEMP/risk.md"
+          cat "$RUNNER_TEMP/risk.json"
+
+          # Validated, not trusted. `echo "x=$(cmd)"` does NOT abort under
+          # `set -e` when the substitution fails — the `echo` succeeds — so a
+          # broken `node -p` used to write an empty tier, and the labelling step
+          # then stripped the PR's accurate `risk:high` and applied a bare
+          # `risk:`. Silently downgrading a label is the worst available failure.
+          TIER="$(node -p "require('$RUNNER_TEMP/risk.json').tier")"
+          case "$TIER" in
+            low|medium|high) ;;
+            *) echo "::error::rubric produced no usable tier (got '$TIER')"; exit 1 ;;
+          esac
+          echo "tier=$TIER" >> "$GITHUB_OUTPUT"
+
+      # Forks get a read-only token even with `pull-requests: write` above, so
+      # labelling would throw. The gate below still runs — that is the part that
+      # has to be trustworthy — and a maintainer labelling the PR re-triggers
+      # this workflow through the `labeled` event.
+      - name: Label and report
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const MARKER = '<!-- pr-risk -->';
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const tier = '${{ steps.classify.outputs.tier }}';
+            if (!['low', 'medium', 'high'].includes(tier)) {
+              throw new Error(`refusing to label with tier '${tier}'`);
+            }
+
+            // Created on demand rather than assumed to exist, so the check works
+            // on a fresh clone of this repo with no label setup.
+            const SPEC = {
+              'risk:low': ['0e8a16', 'Diff touches nothing the rubric grades — an agent may merge it when green'],
+              'risk:medium': ['fbca04', 'Published source, public surface, dependencies, or a path the rubric does not recognise'],
+              'risk:high': ['b60205', 'Publish, policy, packaging or breaking change — full review, human merges'],
+              'reviewed:deep': ['1d76db', 'Deep review recorded at the current head; dropped automatically on a new push'],
+              'risk-override': ['5319e7', 'A risk rule fired on something inert; the reason is in the description'],
+            };
+            for (const [name, [color, description]] of Object.entries(SPEC)) {
+              try {
+                await github.rest.issues.createLabel({ owner, repo, name, color, description });
+              } catch (error) {
+                // 422 is "already exists", which is the normal case.
+                if (error.status !== 422) throw error;
+              }
+            }
+
+            // Only ever touch the risk:<tier> labels. Anything else on the PR is
+            // somebody's deliberate triage and is none of this job's business —
+            // the two gate labels are handled by their own step above, on the
+            // one event where they go stale.
+            const want = `risk:${tier}`;
+            const current = (context.payload.pull_request.labels || []).map((l) => l.name);
+            for (const name of current.filter((l) => /^risk:(low|medium|high)$/.test(l) && l !== want)) {
+              await github.rest.issues.removeLabel({ owner, repo, issue_number, name });
+            }
+            if (!current.includes(want)) {
+              await github.rest.issues.addLabels({ owner, repo, issue_number, labels: [want] });
+            }
+
+            // Sticky comment: marker as the FIRST line AND our bot, so it can
+            // never adopt a human's comment that happens to quote the marker.
+            const report = fs.readFileSync(`${process.env.RUNNER_TEMP}/risk.md`, 'utf8');
+            const body = `${MARKER}\n${report.trim()}`;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number, per_page: 100,
+            });
+            const mine = comments.find(
+              (c) => c.user?.login === 'github-actions[bot]' && c.body?.startsWith(MARKER),
+            );
+
+            if (!mine) {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+              console.log('Risk comment posted.');
+            } else if (mine.body?.trim() !== body.trim()) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body });
+              console.log('Risk comment updated.');
+            } else {
+              console.log('Risk comment already current — no write.');
+            }
+
+      # Last, so the label and the comment are already in place when it fails —
+      # a red X whose explanation posts afterwards reads as "your PR is broken".
+      - name: Gate
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          RUBRIC: ${{ steps.classify.outputs.rubric }}
+        run: |
+          set -euo pipefail
+
+          # The override is honoured BEFORE the rubric runs, not passed to it.
+          # This check is required, so a bug in the rubric would otherwise block
+          # every PR in the repo with no way out — including the PR that fixes
+          # the bug. Checking the label here means the escape hatch still works
+          # when the thing it is escaping is what's broken.
+          #
+          # It still demands a written reason, because the comment claims the
+          # override is "recorded, not silent" and a label alone is neither.
+          case ",$LABELS," in
+            *,risk-override,*)
+              if ! printf '%s' "$PR_BODY" | grep -qiE '^[[:space:]]*risk-override:[[:space:]]*[^[:space:]]'; then
+                echo "::error::risk-override is set, but the description has no 'risk-override: <reason>' line."
+                exit 1
+              fi
+              echo "risk-override accepted — reason is on the PR."
+              exit 0
+              ;;
+          esac
+
+          args=""
+          case ",$LABELS," in *,reviewed:deep,*) args="--reviewed" ;; esac
+
+          # Same rubric the Classify step resolved, bootstrap fallback included.
+          node "$RUBRIC" \
+            --repo "$GITHUB_WORKSPACE" --base "origin/$BASE_REF" \
+            --title "$PR_TITLE" --body "$PR_BODY" --gate $args
