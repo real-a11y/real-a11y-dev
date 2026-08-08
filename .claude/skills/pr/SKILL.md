@@ -35,16 +35,22 @@ where the `pr-risk` workflow applies it as a `risk:*` label and a sticky comment
 Run it early. The tier is an input to how you work the PR, not a verdict issued
 at the end of it.
 
-| Tier          | Set by                                                                                                                                                                                                                                                                                                 | Review (§3a)                                                                    | Merge (§9)                            |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- | ------------------------------------- |
-| 🟢 **low**    | nothing below matched — docs, website, examples, tests, skills, changeset prose                                                                                                                                                                                                                        | CI only                                                                         | **an agent may merge it** when green  |
-| 🟡 **medium** | a published package's `src`, the surface manifest gaining entries, the lockfile, a scenario                                                                                                                                                                                                            | `/code-review`                                                                  | a human merges                        |
-| 🔴 **high**   | `.github/workflows`, CODEOWNERS, `.changeset/config.json`, root `scripts`/`packageManager`/`engines`, a `major` changeset or `!` subject, a release cut, the extension manifest, a package's `exports`/`files`/`private`, a tsup config, a **removed** export, or added code touching redaction/tokens | `/code-review` + `/security-review` + `/a11y-review`, and §4b worked explicitly | a human merges, after `reviewed:deep` |
+| Tier          | Set by                                                                                                                                                                                                                                                                                                                                                                                                                    | Review (§3a)                                                   | Merge (§9)                            |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------- |
+| 🟢 **low**    | only recognised-inert paths — website, root/package docs, examples, tests, changeset prose, issue templates                                                                                                                                                                                                                                                                                                               | CI only                                                        | **an agent may merge it** when green  |
+| 🟡 **medium** | a published package's `src`, the surface manifest gaining entries, `pnpm-lock.yaml`, a scenario — **or any path the rubric doesn't recognise**                                                                                                                                                                                                                                                                            | `/code-review`                                                 | a human merges                        |
+| 🔴 **high**   | `.github/workflows`, CODEOWNERS, the PR templates, `.claude/`, `scripts/`, `.husky/`, the test/lint config, `.changeset/config.json`, root `scripts`/`packageManager`/`engines`, a `major` changeset or `!` subject or `BREAKING CHANGE:` footer, a release cut, the extension manifest, a package's `exports`/`files`/`private`/`scripts`, a tsup config, a **removed** surface entry, or code touching redaction/tokens | `/code-review` + `/security-review`, and §4b worked explicitly | a human merges, after `reviewed:deep` |
 
 **The tier grades blast radius, not correctness.** A one-character typo in
 `publish.yml` is high; a 2,000-line docs rewrite is low. Nothing in the rubric
 reads the diff for whether the change is any _good_ — that's what the review is
 for, and the tier only decides how much review to buy.
+
+**Unknown paths grade 🟡 medium, not 🟢 low.** For a control whose whole job is
+blast radius, "the rubric has never heard of this path" is not the same as
+"harmless" — so a path nobody has classified costs you a human, and the report
+names it. If it genuinely is inert, add it to `LOW_SHAPED` in
+`scripts/pr-risk.mjs` rather than working around it.
 
 **Escalate freely, and say why in the PR body.** The rubric is a floor. If you
 touched something the rules can't see — a subtle behavioral change in a hot
@@ -52,10 +58,20 @@ path, an error message users script against, anything you had to think hard
 about — treat it as the next tier up. Nothing stops you; the label just won't
 agree, and a sentence in the description reconciles it.
 
-**De-escalating is the one direction that needs a record.** If a high rule fired
-on something genuinely inert, add the `risk-override` label and say why in the
-description. That clears the gate and leaves the reason attached to the PR — the
-point is that the override is visible, not that it's hard.
+**De-escalating needs a written reason, not just a label.** If a high rule fired
+on something genuinely inert, add the `risk-override` label **and** put a line in
+the description:
+
+```
+risk-override: <reason>
+risk-override: <rule-id>[, <rule-id>] — <reason>
+```
+
+The check reads that line back and fails without it, so "the override is
+recorded" is a fact rather than a hope. Naming rule ids narrows the waiver to
+those rules — worth doing, because an unscoped override waives `ci-workflows`,
+`packaging` and `secrets-and-redaction` all at once, and a waiver applied by
+habit means nothing on the PR where it mattered.
 
 ## 1. Branch off main
 
@@ -108,16 +124,28 @@ Run these yourself, before pushing for review — not after someone asks:
 - **🟢 low** — nothing. CI is the review. Don't spend a review pass here; that
   restraint is what makes the budget available where it matters.
 - **🟡 medium** — `/code-review` over the branch diff.
-- **🔴 high** — `/code-review`, then `/security-review`, then `/a11y-review`, and
-  work §4b's scenario table explicitly rather than concluding "none needed". Name
-  which ones ran in the PR body, then add the `reviewed:deep` label — the
-  `pr-risk` check stays red until you do, deliberately.
+- **🔴 high** — `/code-review`, then `/security-review`, and work §4b's scenario
+  table explicitly rather than concluding "none needed". Name which ones ran in
+  the PR body, then add the `reviewed:deep` label — the `pr-risk` check stays red
+  until you do, deliberately.
 
-Three passes on high because they look for different things, and the overlap is
+Two passes on high because they look for different things, and the overlap is
 smaller than it sounds: `/code-review` hunts consistency defects (two paths that
 should agree and don't), `/security-review` hunts the redaction and credential
-boundaries, `/a11y-review` hunts regressions in the extractor and the role map
-that the snapshots would happily bless.
+boundaries.
+
+**Only name passes that exist.** This list said `/a11y-review` for a while, which
+is not a repo skill and not a session one — so a blocking check told every
+high-risk author to run something unrunnable, and "say which ran" could only be
+answered falsely. A gate whose clearance instruction can't be carried out teaches
+people to route around the gate. Check `ls .claude/skills/` before adding one
+here. (If you do want an a11y pass, `.claude/skills/a11y-review/` is the thing to
+write; this line moves the day it exists.)
+
+**`reviewed:deep` is dropped automatically whenever you push.** It records "this
+diff was reviewed", not "this PR was reviewed once" — the label analogue of
+`dismiss_stale_reviews`. Without that, a reviewed `feat!:` PR could be
+force-pushed into something else and keep its green gate.
 
 Fix what they find in this PR. A finding deferred to a follow-up is a finding
 that shipped.
@@ -369,7 +397,13 @@ because each item is something that has actually blocked a merge here:
 - `mergeStateStatus` is **`CLEAN`** — not `BEHIND`, not `BLOCKED`
 - every check has passed, including the non-required ones
 - `reviewDecision` is not `CHANGES_REQUESTED`
-- no unaddressed review comment, from a human or from Copilot
+- no unaddressed review comment. **Read the PR rather than assuming a bot got
+  there first** — `copilot_code_review` is armed in the `branches` ruleset and
+  `cursor[bot]` is installed, but as of 2026-08-08 neither has ever produced a
+  review here (checked across #300, #306, #307, #308, #313, #309); Cursor says
+  outright that Bugbot isn't enabled. Two review bots configured, zero running.
+  A precondition that names a reviewer who never speaks is a precondition that
+  always passes.
 
 ```bash
 gh pr checks <n> --watch --fail-fast
@@ -386,10 +420,17 @@ unavailable and the command fails outright. Watching the checks and merging is
 the mechanism; if that ever changes, this line is what to delete.
 
 **Never merge, whatever the tier says:** a release PR (`chore(release)` — that's
-the `release` skill's job and it stops for sign-off), anything touching
-`.github/`, or any PR where the user has said they want to look at it first. When
-in doubt, don't — an unmerged PR costs a message, and a merged one costs a revert
-plus whatever the deploy did in between.
+the `release` skill's job and it stops for sign-off), or any PR where the user
+has said they want to look at it first. When in doubt, don't — an unmerged PR
+costs a message, and a merged one costs a revert plus whatever the deploy did in
+between.
+
+This list used to also say "anything touching `.github/`", which contradicted the
+machine-readable policy for the same diff — and the permissive one was the
+machine. It's gone because the rubric now grades `.github/`, `.claude/`,
+`scripts/` and `.husky/` 🔴 high outright, so the rule enforces itself instead of
+relying on a human remembering a second, prose-only list. **If you find yourself
+adding another "never merge X" line here, add a rule instead.**
 
 **After merging, watch what it did.** `main` deploys real-a11y.dev on a
 successful publish, so a docs merge is a production change. If the post-merge

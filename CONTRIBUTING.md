@@ -209,11 +209,26 @@ pushed for review, and whether it may be merged without a human. Both are
 spelled out in the `pr` skill (§0, §3a, §9b). The `pr-risk` workflow computes the
 same answer in CI, applies it as a `risk:*` label, and — unlike `docs-currency` —
 **blocks**: a 🔴 high change fails the check until the deep review is recorded
-with a `reviewed:deep` label, or waived with `risk-override` plus a reason in the
-description.
+with a `reviewed:deep` label, or waived with `risk-override` plus a
+`risk-override: <reason>` line in the description, which the check reads back.
 
 It grades blast radius, not correctness. A one-character typo in `publish.yml` is
-high; a 2,000-line docs rewrite is low.
+high; a 2,000-line docs rewrite is low. A path it doesn't recognise grades 🟡
+medium rather than 🟢 low, on the principle that "never heard of it" is not
+evidence of harmlessness.
+
+Two properties worth knowing before you change it:
+
+- **CI grades with the base branch's copy of the rubric, not yours.** The
+  workflow extracts `scripts/` from `origin/main` into a temp directory and runs
+  that. Otherwise a pull request could rewrite the rubric that judges it — a stub
+  printing `{"tier":"low"}` clears its own required check. The consequence is
+  that a PR adding a rule is graded without it; the rule takes effect once it
+  lands.
+- **It fails closed.** Any git read it needs but can't get is a hard error, not
+  an empty diff. An empty diff matches no rule, grades low, and exits 0 — a
+  control that reports "nothing to see here" when it cannot see is worse than no
+  control at all.
 
 ### Testing the Chrome extension
 

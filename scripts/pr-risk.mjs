@@ -6,8 +6,15 @@
 //   node scripts/pr-risk.mjs --gate --reviewed      exit 1 if high risk is unreviewed
 //
 // Three tiers, and the tier decides two things: how deep the review goes
-// (`.claude/skills/pr/SKILL.md` §0) and whether an agent may merge the PR
-// itself instead of leaving it for a human (§8).
+// (`.claude/skills/pr/SKILL.md` §3a) and whether an agent may merge the PR
+// itself instead of leaving it for a human (§9b).
+//
+// IN CI THIS RUNS FROM THE BASE BRANCH, not from the pull request — see the
+// header of `.github/workflows/pr-risk.yml`. A rubric a PR can edit is a rubric
+// that PR can switch off, and `--repo` exists for exactly that separation.
+//
+// It fails CLOSED. Anything it needs and cannot read is an error, never an empty
+// answer: an empty diff matches no rule, grades low, and exits 0.
 //
 // It is a rubric rather than a score on purpose. A number invites tuning until
 // the thing you wanted to catch falls under the threshold; a named reason —
@@ -27,13 +34,24 @@
 // ERR_MODULE_NOT_FOUND on precisely the run that matters.
 
 import { execFile } from "node:child_process";
-import { readdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 const run = promisify(execFile);
-const repoRoot = resolve(fileURLToPath(import.meta.url), "../..");
+
+/**
+ * The repository being graded — NOT necessarily where this file lives.
+ *
+ * The CI gate deliberately runs the BASE branch's copy of this script out of
+ * `$RUNNER_TEMP`, because a rubric checked out from the pull request is a rubric
+ * the pull request can rewrite. Deriving the root from `import.meta.url` would
+ * then resolve to the temp directory and every git call would run against the
+ * wrong tree — so the root is an argument, and only falls back to this file's
+ * own location for the ordinary `pnpm pr:risk` case.
+ */
+let repoRoot = resolve(fileURLToPath(import.meta.url), "../..");
 
 /** Bare enough to be obvious in CI logs; the detail is in the failure body. */
 function die(lines) {
@@ -49,6 +67,44 @@ async function git(args) {
   return stdout;
 }
 
+/**
+ * Run git, and DIE if it fails. This is the default for anything whose absence
+ * would change the verdict.
+ *
+ * The version this replaced returned a benign fallback everywhere, which made
+ * the required gate fail **open**: a `git diff` that errored for any reason
+ * produced an empty file list, an empty file list matches no rule, no rule means
+ * 🟢 low, and low exits 0 — silently, with the report cheerfully stating "0
+ * files changed". A control that reports "nothing to see here" when it cannot
+ * see is worse than no control, because the green check is evidence to whoever
+ * reads it.
+ *
+ * `gitOr` still exists below for the two reads where an empty answer is a real,
+ * expected answer rather than a failure.
+ */
+async function gitOrDie(args, what) {
+  try {
+    return await git(args);
+  } catch (error) {
+    die([
+      `Can't read ${what} from git — refusing to grade this diff.`,
+      ``,
+      `  git ${args.join(" ")}`,
+      `  ${error.shortMessage ?? error.message}`,
+      ``,
+      `  This exits non-zero on purpose. The alternative is reporting an empty`,
+      `  diff, which is indistinguishable from a clean PR and would pass the gate.`,
+    ]);
+  }
+}
+
+/**
+ * Run git, tolerate failure.
+ *
+ * Only for reads where "it didn't work" and "there is nothing there" are the
+ * same answer and neither can hide a risk — `git show <base>:<path>` for a file
+ * that legitimately did not exist at the base, which means "new", not "broken".
+ */
 async function gitOr(args, fallback) {
   try {
     return await git(args);
@@ -60,6 +116,33 @@ async function gitOr(args, fallback) {
 // ---------------------------------------------------------------------------
 // Facts
 // ---------------------------------------------------------------------------
+
+/**
+ * Path-safe `git diff`.
+ *
+ * Three git defaults each quietly defeat every `^`-anchored rule in the rubric,
+ * and all three are ordinary things to hit rather than exotic ones:
+ *
+ * - **rename detection** (on by default since 2.9) reports only a renamed file's
+ *   NEW path, so `git mv .github/workflows/publish.yml docs/publish.yml` grades
+ *   🟢 low while the identical change as `rm` + add grades 🔴 high;
+ * - **core.quotePath** wraps any non-ASCII path in literal double quotes, so the
+ *   leading `"` breaks the anchor — `packages/core/src/José.ts` grades low where
+ *   `Jose.ts` grades medium;
+ * - **newline-separated output** is ambiguous for paths containing newlines.
+ *
+ * `-z` + `core.quotePath=false` + `--no-renames` closes all three, which is why
+ * they travel together here instead of being applied per call site.
+ */
+function diffArgs(extra) {
+  return ["-c", "core.quotePath=false", "diff", "--no-renames", "-z", ...extra];
+}
+
+/** NUL-separated git output → array. */
+const splitZ = (out) => out.split("\0").filter(Boolean);
+
+/** This file's own path in the repo — see the `excludeSelf` rule flag. */
+const SELF_PATH = "scripts/pr-risk.mjs";
 
 /**
  * Everything the rules are allowed to look at, gathered once.
@@ -110,29 +193,64 @@ async function collectFacts(base) {
   // what this replaced: `files` came from HEAD while `rootPackageKeys` came from
   // disk, so an uncommitted change reported "0 files changed" and a high tier in
   // the same breath.
-  const files = [
-    ...(await gitOr(["diff", "--name-only", mergeBase], "")).split("\n"),
-    ...(await gitOr(["ls-files", "--others", "--exclude-standard"], "")).split(
-      "\n",
+  const tracked = splitZ(
+    await gitOrDie(
+      diffArgs(["--name-only", mergeBase]),
+      "the list of changed files",
     ),
-  ].filter(Boolean);
+  );
+  const untracked = splitZ(
+    await gitOrDie(
+      [
+        "-c",
+        "core.quotePath=false",
+        "ls-files",
+        "--others",
+        "-z",
+        "--exclude-standard",
+      ],
+      "the list of untracked files",
+    ),
+  );
+  const files = [...new Set([...tracked, ...untracked])];
 
-  const numstat = (await gitOr(["diff", "--numstat", mergeBase], ""))
-    .split("\n")
-    .filter(Boolean);
-  const lines = numstat.reduce((n, row) => {
+  // `--numstat` cannot see untracked files, so counting only it made the header
+  // contradict itself — a new uncommitted 800-line workflow reported
+  // "1 files, 0 lines". The tier was right and the number was a lie, which is
+  // exactly what the commit "stop the risk report counting its own output"
+  // exists to prevent. So untracked files are counted by reading them.
+  const numstat = splitZ(
+    await gitOrDie(diffArgs(["--numstat", mergeBase]), "the diff line counts"),
+  );
+  let lines = numstat.reduce((n, row) => {
     const [added, removed] = row.split("\t");
     // Binary files report `-`; they contribute files but not lines.
     return n + (Number(added) || 0) + (Number(removed) || 0);
   }, 0);
+  for (const file of untracked) {
+    try {
+      const text = await readFile(resolve(repoRoot, file), "utf8");
+      lines += text.length ? text.split("\n").length : 0;
+    } catch {
+      // Unreadable or binary — it still counts as a file, just not as lines.
+    }
+  }
 
-  // Added lines only, and only from the file types that can carry a secret or a
-  // redaction boundary. Scoped this narrowly because the alternative — the whole
-  // diff — is unbounded on a PR that regenerates a snapshot fixture, and the
-  // rule reading it cares about code, not data.
-  const codeDiff = await gitOr(
+  // Only the file types that can carry a secret or a redaction boundary. Scoped
+  // this narrowly because the alternative — the whole diff — is unbounded on a
+  // PR that regenerates a snapshot fixture, and the rule reading it cares about
+  // code, not data.
+  //
+  // BOTH sides, not just additions. Scanning `+` lines alone meant that
+  // *removing* a `redactUrl()` call — the single most direct way to reintroduce
+  // the leak the rule exists for — graded LOWER than adding one. `-U0` keeps
+  // this bounded to changed lines.
+  const codeDiff = await gitOrDie(
     [
+      "-c",
+      "core.quotePath=false",
       "diff",
+      "--no-renames",
       "-U0",
       mergeBase,
       "--",
@@ -143,20 +261,43 @@ async function collectFacts(base) {
       "*.yml",
       "*.yaml",
     ],
-    "",
+    "the code diff",
   );
-  const addedCode = codeDiff
-    .split("\n")
-    .filter((l) => l.startsWith("+") && !l.startsWith("+++"))
-    .join("\n");
+  const changedLines = (section) =>
+    section
+      .split("\n")
+      .filter(
+        (l) =>
+          (l.startsWith("+") || l.startsWith("-")) &&
+          !l.startsWith("+++") &&
+          !l.startsWith("---"),
+      )
+      .join("\n");
+
+  // Kept per-file so a rule can opt out of scanning the rubric's own source
+  // (see `excludeSelf`). Splitting on the `diff --git` header is safe here
+  // because `core.quotePath=false` and `--no-renames` mean the paths are literal
+  // and the two sides always match.
+  const sections = codeDiff.split(/^diff --git /m).filter(Boolean);
+  const codeByFile = new Map();
+  for (const section of sections) {
+    const path = section.match(/^a\/(.*?) b\//)?.[1];
+    if (path) codeByFile.set(path, changedLines(section));
+  }
+  const joinExcept = (skip) =>
+    [...codeByFile]
+      .filter(([path]) => path !== skip)
+      .map(([, body]) => body)
+      .join("\n");
 
   return {
     base,
     mergeBase,
     files,
     lines,
-    addedCode,
-    changesets: await readChangesets(),
+    touchedCode: joinExcept(null),
+    touchedCodeExcludingSelf: joinExcept(SELF_PATH),
+    changesets: await readChangesets(files),
     rootPackageKeys: await changedRootPackageKeys(mergeBase),
     packageManifests: await changedPackageManifests(mergeBase, files),
     surfaceRemovals: await surfaceRemovals(mergeBase, files),
@@ -172,21 +313,31 @@ async function collectFacts(base) {
  * more exotic is a changeset this rule declines to have an opinion about rather
  * than one it guesses at.
  */
-async function readChangesets() {
-  let entries;
-  try {
-    entries = await readdir(resolve(repoRoot, ".changeset"));
-  } catch {
-    return [];
-  }
+async function readChangesets(files) {
+  // THIS BRANCH's changesets — intersected with the diff, not read off disk.
+  //
+  // Reading the whole directory meant one pending `major` anywhere in
+  // `.changeset/` marked EVERY pull request in the repo 🔴 high, citing a file
+  // the PR never touched. Latent only because the repo currently holds 132
+  // pending entries at 0 major; the first `major` to land would have failed a
+  // required check on every docs typo for the rest of the beta, leaving
+  // `risk-override` as the only way through — and an override applied to
+  // everything stops meaning anything on the PR where it matters.
+  //
+  // Every neighbouring fact was already scoped this way, and the docstring
+  // above already claimed it. It is also ~400 fewer reads per workflow event.
+  const entries = files.filter(
+    (f) => /^\.changeset\/[^/]+\.md$/.test(f) && !/\/readme\.md$/i.test(f),
+  );
 
   const out = [];
-  for (const name of entries) {
-    if (!name.endsWith(".md") || name.toLowerCase() === "readme.md") continue;
+  for (const path of entries) {
+    const name = path.slice(".changeset/".length);
     let text;
     try {
-      text = await readFile(resolve(repoRoot, ".changeset", name), "utf8");
+      text = await readFile(resolve(repoRoot, path), "utf8");
     } catch {
+      // Deleted by this branch — nothing left to declare.
       continue;
     }
     const fence = text.split(/^---\s*$/m);
@@ -226,7 +377,25 @@ async function changedRootPackageKeys(mergeBase) {
   return [...keys].filter((k) => JSON.stringify(a[k]) !== JSON.stringify(b[k]));
 }
 
-/** Publish-shaping keys — see PACKAGING_KEYS' rule for why each one is here. */
+/**
+ * Publish-shaping keys — what a consumer can observe after `npm install`.
+ *
+ * `scripts` is here because a published package's `postinstall` runs arbitrary
+ * code on **every consumer's machine at install time**. The root manifest's
+ * `scripts` was already graded high for defining what `pnpm verify` runs in this
+ * repo; a package's is strictly the larger radius and was graded by nothing —
+ * adding a `postinstall` to `packages/cli` came out 🟢 low, "an agent may merge
+ * it".
+ *
+ * `dependencies` and `peerDependencies` are deliberately NOT here. They made
+ * every weekly grouped Dependabot PR 🔴 high — ten `packages/<pkg>/package.json` at
+ * a time, three of them `private` and never published — from a bot author that
+ * cannot label itself, so the repo's most frequent PR stalled every week on a
+ * hand-applied `reviewed:deep`. That is the habituation this file's header warns
+ * about. A dependency change still reaches 🟡 medium through the `dependencies`
+ * rule on `pnpm-lock.yaml`, which is where a version change becomes real, and
+ * that now matches what SKILL.md's medium row has always said.
+ */
 const PACKAGING_KEYS = [
   "name",
   "version",
@@ -238,10 +407,8 @@ const PACKAGING_KEYS = [
   "exports",
   "files",
   "bin",
+  "scripts",
   "publishConfig",
-  "dependencies",
-  "peerDependencies",
-  "optionalDependencies",
   "engines",
   "sideEffects",
 ];
@@ -277,48 +444,75 @@ async function changedPackageManifests(mergeBase, files) {
   return out;
 }
 
-/** Every identity in the surface manifest, flattened to comparable strings. */
-function surfaceIdentities(manifest) {
-  const ids = new Set();
-  if (!manifest || typeof manifest !== "object") return ids;
-  for (const c of manifest.cli?.commands ?? [])
-    ids.add(`cli command ${c.name}`);
-  for (const t of manifest.mcp?.tools ?? []) ids.add(`mcp tool ${t.name}`);
-  for (const p of manifest.packages ?? []) ids.add(`package ${p.name}`);
-  for (const e of manifest.env ?? []) ids.add(`env ${e.name}`);
-  for (const pkg of manifest.api ?? []) {
-    for (const entry of pkg.entries ?? []) {
-      for (const v of [...(entry.values ?? []), ...(entry.types ?? [])]) {
-        ids.add(`export ${pkg.name}${entry.subpath?.replace(/^\.$/, "")} ${v}`);
-      }
-    }
-  }
-  return ids;
-}
-
 /**
- * Surface identities that exist at the merge base and don't exist on HEAD.
+ * Public surface present at the merge base and gone on HEAD.
  *
- * A removal is the one surface movement that is a break for somebody who has
- * already shipped against it, which is why it is graded apart from an addition.
+ * A removal is the one surface movement that breaks somebody who has already
+ * shipped against it, which is why it is graded apart from an addition.
  * `surface:check` guarantees the committed manifest is current on any PR that
  * passes CI, so this can be read straight out of git rather than rebuilt.
+ *
+ * **The comparison is delegated to `scripts/surface/plan/diff.mjs`, not
+ * reimplemented here.** The hand-rolled version this replaced flattened only
+ * top-level names, so the removals people actually ship — a CLI flag, an MCP
+ * tool parameter, an exit code — were invisible: `pnpm surface:plan` reported
+ * `[removed] cli.commands.audit.flags.--chrome-path` while `pnpm pr:risk` graded
+ * the same diff 🟡 medium and exited 0, skipping the §4b deprecation obligation
+ * this rule exists to trigger. Two differs also drifted on their own key format,
+ * and the local one emitted the literal string `"undefined"` for a missing
+ * subpath — a phantom removal, i.e. a false 🔴.
+ *
+ * `diff.mjs` has zero imports, so it stays inside this file's node-core-only
+ * constraint; `surface/index.mjs` imports it statically for that same reason.
  */
 async function surfaceRemovals(mergeBase, files) {
   if (!files.includes("docs/surface.json")) return [];
+
   const before = await gitOr(["show", `${mergeBase}:docs/surface.json`], null);
+  // Absent at the base is the honest "everything is new" case, not a failure.
   if (before === null) return [];
+
+  // Fails CLOSED, both sides. The version this replaced caught every parse
+  // error and returned `[]`, which meant DESTROYING the manifest graded LOWER
+  // (medium, exit 0) than removing a single export from it (high, exit 1) — and
+  // the base side counts, so the author needn't even touch the file.
+  // `changedRootPackageKeys` already got this right and says why: unparseable on
+  // either side is itself worth a human.
   let a, b;
   try {
     a = JSON.parse(before);
+  } catch {
+    return ["docs/surface.json at the merge base isn't valid JSON"];
+  }
+  try {
     b = JSON.parse(
       await readFile(resolve(repoRoot, "docs/surface.json"), "utf8"),
     );
   } catch {
-    return [];
+    return ["docs/surface.json on this branch is missing or isn't valid JSON"];
   }
-  const head = surfaceIdentities(b);
-  return [...surfaceIdentities(a)].filter((id) => !head.has(id));
+
+  let diffManifests;
+  try {
+    ({ diffManifests } = await import("./surface/plan/diff.mjs"));
+  } catch (error) {
+    // Also fails closed. In CI this file runs from a copy of the base branch's
+    // `scripts/` tree, so a missing sibling means the workflow's extraction step
+    // stopped matching this file's imports — which must be loud, not silent.
+    die([
+      `Can't load the surface differ — refusing to grade this diff.`,
+      ``,
+      `  ${error.message}`,
+      ``,
+      `  In CI, \`.github/workflows/pr-risk.yml\` extracts the base branch's whole`,
+      `  \`scripts/\` tree so this import resolves. If you added an import here,`,
+      `  make sure that step still covers it.`,
+    ]);
+  }
+
+  return diffManifests(a, b)
+    .filter((c) => c.kind === "removed")
+    .map((c) => c.path);
 }
 
 // ---------------------------------------------------------------------------
@@ -343,11 +537,26 @@ const RULES = [
     match: (f) => any(f.files, /^\.github\/(workflows|actions)\//),
   },
   {
-    id: "codeowners",
+    id: "review-policy",
     tier: "high",
     title: "Review or branch policy",
-    why: "CODEOWNERS and the issue/PR templates decide who has to look at the next change. Weakening them is the one edit that makes every future edit less reviewed.",
-    match: (f) => any(f.files, /^\.github\/CODEOWNERS$/),
+    why: "CODEOWNERS, the PR templates and this repo's agent skills decide who — or what — has to look at the next change. Weakening them is the one edit that makes every future edit less reviewed, and `.claude/skills/pr/SKILL.md` is where an agent's authority to merge without a human is granted.",
+    match: (f) =>
+      any(
+        f.files,
+        /^(\.github\/(CODEOWNERS|PULL_REQUEST_TEMPLATE|dependabot\.yml)|\.claude\/)/,
+      ),
+  },
+  {
+    id: "verification-machinery",
+    tier: "high",
+    title: "What the gate actually checks",
+    why: "`scripts/` is run by the workflows (`advance-latest.mjs` with `NPM_TOKEN` in scope, `list-publishable-packages.mjs` deciding what gets tagged), and `vitest.workspace.ts`, `tsconfig*`, `eslint.config.mjs`, `.size-limit.json` and `.husky/` decide what `pnpm verify` covers. Deleting one workspace entry makes `pnpm test` pass green while running none of that package's tests — the same damage the root manifest rule names, one level down.",
+    match: (f) =>
+      any(
+        f.files,
+        /^(scripts\/|\.husky\/|vitest\.workspace\.|tsconfig[^/]*\.json$|eslint\.config\.|\.size-limit\.json$|\.prettierrc|\.prettierignore$|\.gitattributes$)/,
+      ),
   },
   {
     id: "release-config",
@@ -382,16 +591,28 @@ const RULES = [
     id: "breaking",
     tier: "high",
     title: "Declared breaking change",
-    why: "A `major` changeset or a `!` in the conventional title is the author stating that consumers will have to change their code. That is the definition of needing a human.",
+    why: "A `major` changeset, a `!` in the conventional subject, or a `BREAKING CHANGE:` footer is the author stating that consumers will have to change their code. That is the definition of needing a human.",
     match: (f) => [
       ...f.changesets
         .filter((c) => c.bump === "major")
         .map((c) => `${c.file} → ${c.package}: major`),
+      // Case-INSENSITIVE. `feat!:` fired and `Feat!:` did not, and because the
+      // repo squash-merges, the PR title becomes the only commit subject — so a
+      // capitalisation slip silently switched off the rule whose own `why` reads
+      // "the definition of needing a human". commitlint governs commit messages,
+      // not PR titles, and GitHub doesn't normalise title case.
       ...[f.title ?? "", ...(f.subjects ?? [])]
-        .filter((s) => /^[a-z]+(\([^)]*\))?!:/.test(s))
+        .filter((s) => /^[a-z]+(\([^)]*\))?!:/i.test(s))
         .map((s) => `subject: ${s}`),
+      // Conventional Commits treats `!` and a `BREAKING CHANGE:` footer as
+      // equivalent declarations. `f.body` is the PR description; `f.commitBodies`
+      // is the commits' own, which `--format=%s` used to drop entirely — so a
+      // commit declaring the break only in its footer graded 🟢 low.
       ...(/BREAKING[ -]CHANGE/.test(f.body ?? "")
-        ? ["body: BREAKING CHANGE"]
+        ? ["PR description: BREAKING CHANGE"]
+        : []),
+      ...(/BREAKING[ -]CHANGE/.test(f.commitBodies ?? "")
+        ? ["commit body: BREAKING CHANGE"]
         : []),
     ],
   },
@@ -441,16 +662,28 @@ const RULES = [
     id: "secrets-and-redaction",
     tier: "high",
     title: "Redaction boundary or credential handling",
-    why: "Preview URLs carry tokens, and this tool writes files that get posted into PR comments. A field derived from a raw url next to one derived from the redacted url is the signature of a leak — it shipped twice in one PR here.",
+    why: "Preview URLs carry tokens, and this tool writes files that get posted into PR comments. A field derived from a raw url next to one derived from the redacted url is the signature of a leak — it shipped twice in one PR here. Removing a redaction call counts too, and is the most direct way to bring the leak back.",
     match: (f) => {
       const hits = new Set();
-      for (const m of f.addedCode.matchAll(
-        /\b(redactUrl|sanitizeUrl|storageState|NPM_TOKEN|GITHUB_TOKEN|CHROME_[A-Z_]*(TOKEN|SECRET)|client_secret|refresh_token)\b/g,
+      // Boundaries are `(?<![A-Za-z0-9_])` / `(?![A-Za-z0-9])` rather than `\b`.
+      // `\b` does not fire next to `_`, and a trailing `\b` blocks every suffix,
+      // so the rule missed `storageStatePath`, `MY_NPM_TOKEN`,
+      // `CHROME_CLIENT_SECRET_PATH` — and `redactUrlsIn`, which is this repo's
+      // OWN bulk redaction helper (packages/snapshot/src/sanitize.ts), used by
+      // snapshot, cli and the daemon. A PR adding redaction via the plural
+      // helper was silently not flagged.
+      for (const m of f.touchedCode.matchAll(
+        /(?<![A-Za-z0-9_])(redactUrl|sanitizeUrl|storageState|NPM_TOKEN|GITHUB_TOKEN|CHROME_[A-Z_]*(?:TOKEN|SECRET)|client_secret|refresh_token)(?![A-Za-z0-9])/g,
       )) {
         hits.add(m[1]);
       }
-      return [...hits].map((h) => `added code references \`${h}\``);
+      return [...hits].map((h) => `touched code references \`${h}\``);
     },
+    // A rule whose pattern lists the very tokens it hunts will always match its
+    // own source. It did: the PR introducing this rule was graded 🔴 by the rule
+    // matching itself, and the public comment carried seven meaningless bullets.
+    // Seven bullets of noise on the first PR is how a rule stops being read.
+    excludeSelf: true,
   },
 
   {
@@ -483,7 +716,16 @@ const RULES = [
   },
 ];
 
-/** Paths that can only ever be low — used to explain a low verdict, not reach it. */
+/**
+ * The paths a 🟢 low verdict is allowed to be made of — an ALLOW-LIST.
+ *
+ * This is the difference between "the rubric found nothing" and "the rubric
+ * recognised everything". Previously anything unmatched fell into an `"other"`
+ * bucket that still graded low, so any path the rubric had never heard of was
+ * agent-mergeable by default — which for a control whose entire job is blast
+ * radius is the wrong way round. Unknown now means 🟡 medium: a human looks, and
+ * whoever adds the path here says which bucket it belongs in.
+ */
 const LOW_SHAPED = [
   [/^website\//, "docs site"],
   [
@@ -491,36 +733,47 @@ const LOW_SHAPED = [
     "root docs",
   ],
   [/^packages\/[^/]+\/(README|CHANGELOG)\.md$/, "package docs"],
+  [/^docs\/(?!surface).*\.md$/, "internal docs"],
   [/^examples\//, "examples"],
-  [/^\.claude\//, "agent skills"],
   [/\.(test|spec)\.[cm]?[jt]sx?$/, "tests"],
+  [/^packages\/[^/]+\/src\/__(tests|fixtures|snapshots)__\//, "test fixtures"],
   [/^\.changeset\/[^/]+\.md$/, "changeset entries"],
+  [/^\.github\/ISSUE_TEMPLATE\//, "issue templates"],
 ];
 
 function classify(facts) {
   const reasons = [];
   for (const rule of RULES) {
-    const evidence = rule.match(facts);
+    // A rule flagged `excludeSelf` is scanned against a diff with this file's
+    // own hunks removed, so a pattern listing the tokens it hunts cannot match
+    // its own source text.
+    const view = rule.excludeSelf
+      ? { ...facts, touchedCode: facts.touchedCodeExcludingSelf }
+      : facts;
+    const evidence = rule.match(view);
     if (evidence && evidence.length) {
       reasons.push({ ...rule, evidence: [...new Set(evidence)].slice(0, 12) });
     }
   }
 
+  // What a verdict is made of, and — for anything unrecognised — the paths that
+  // forced it up a tier, so the fix (classify the path) is obvious.
+  const shape = new Set();
+  const unrecognised = [];
+  for (const file of facts.files) {
+    const hit = LOW_SHAPED.find(([re]) => re.test(file));
+    if (hit) shape.add(hit[1]);
+    else unrecognised.push(file);
+  }
+  if (unrecognised.length) shape.add("unrecognised");
+
   const tier = reasons.some((r) => r.tier === "high")
     ? "high"
-    : reasons.length
+    : reasons.length || unrecognised.length
       ? "medium"
       : "low";
 
-  // What a low verdict is actually made of, so "low" reads as an observation
-  // rather than as the rubric having failed to notice something.
-  const shape = new Set();
-  for (const file of facts.files) {
-    const hit = LOW_SHAPED.find(([re]) => re.test(file));
-    shape.add(hit ? hit[1] : "other");
-  }
-
-  return { tier, reasons, shape: [...shape] };
+  return { tier, reasons, shape: [...shape], unrecognised };
 }
 
 // ---------------------------------------------------------------------------
@@ -539,8 +792,14 @@ const POLICY = {
     merge: "A human merges. An agent must not.",
   },
   high: {
+    // Names ONLY skills that exist. This used to name `/a11y-review`, which is
+    // not a repo skill and not a session one — so every high PR got a blocking
+    // check whose one documented clearance instruction could not be carried out,
+    // and §3a's "say which ran" could only be answered falsely. A gate whose
+    // clearance step is unrunnable teaches people to route around the gate,
+    // which is the exact failure this file's header is built against.
     review:
-      "Run `/code-review`, `/security-review` and `/a11y-review`, and work §4b's scenario table explicitly. Say in the PR body which ran.",
+      "Run `/code-review` and `/security-review`, and work §4b's scenario table explicitly. Say in the PR body which ran.",
     merge:
       "A human merges, after the deep review is on record (`reviewed:deep`).",
   },
@@ -552,7 +811,7 @@ const POLICY = {
 
 const BADGE = { low: "🟢 low", medium: "🟡 medium", high: "🔴 high" };
 
-function renderText({ tier, reasons, shape }, facts) {
+function renderText({ tier, reasons, shape, unrecognised }, facts) {
   const out = [
     ``,
     `Risk: ${BADGE[tier].toUpperCase()}  (${facts.files.length} files, ${facts.lines} lines, vs ${facts.base})`,
@@ -568,7 +827,16 @@ function renderText({ tier, reasons, shape }, facts) {
       for (const e of r.evidence) out.push(`      ${e}`);
       out.push(``);
     }
-  } else {
+  }
+  if (unrecognised.length) {
+    out.push(
+      `Paths the rubric doesn't recognise (medium until one of us classifies them):`,
+      ``,
+      ...unrecognised.slice(0, 12).map((f) => `      ${f}`),
+      ``,
+    );
+  }
+  if (!reasons.length && !unrecognised.length) {
     out.push(
       `Nothing in the rubric matched. The diff is: ${shape.join(", ")}.`,
       ``,
@@ -577,7 +845,26 @@ function renderText({ tier, reasons, shape }, facts) {
   return out.join("\n");
 }
 
-function renderMarkdown({ tier, reasons, shape }, facts) {
+/**
+ * Author-written text, rendered so it cannot become markup.
+ *
+ * Evidence quotes the PR title and commit subjects — attacker-controlled text,
+ * as this file's own header says, which is the realisation that already forced
+ * the argv parser rewrite. The same input was still trusted one layer down: the
+ * fence was hard-coded at two backticks, and CommonMark closes a two-backtick
+ * span at the next run of exactly two. A title containing ``two`` therefore
+ * escaped the span, so a link rendered live, `@everyone` became a real mention,
+ * and `</summary>` closed the `<details>` block and let the author replace the
+ * risk verdict with their own text — under `github-actions[bot]`'s identity, on
+ * the comment §0 tells reviewers and agents to read.
+ *
+ * HTML-escaping into a literal `<code>` needs no fence arithmetic and cannot be
+ * closed from the inside, so there is no n+1 rule to get wrong later.
+ */
+const asCode = (s) =>
+  `<code>${String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</code>`;
+
+function renderMarkdown({ tier, reasons, shape, unrecognised }, facts) {
   const out = [
     `### ${BADGE[tier]} risk`,
     ``,
@@ -596,18 +883,27 @@ function renderMarkdown({ tier, reasons, shape }, facts) {
       out.push(
         `**${BADGE[r.tier].split(" ")[0]} ${r.title}** — ${r.why}`,
         ``,
-        // Evidence can quote the PR title, which its author writes and which
-        // this renders straight into a comment we post. A backtick in it would
-        // close the code span and let the rest render as markdown; doubling the
-        // fence and padding is the standard way to hold a literal backtick.
-        ...r.evidence.map((e) =>
-          e.includes("`") ? `- \`\` ${e} \`\`` : `- \`${e}\``,
-        ),
+        ...r.evidence.map((e) => `- ${asCode(e)}`),
         ``,
       );
     }
     out.push(`</details>`, ``);
-  } else {
+  }
+
+  if (unrecognised.length) {
+    out.push(
+      `<details><summary><b>${unrecognised.length} path(s) the rubric doesn't recognise</b> — medium until classified</summary>`,
+      ``,
+      ...unrecognised.slice(0, 12).map((f) => `- ${asCode(f)}`),
+      ``,
+      `Unknown paths grade 🟡 medium rather than 🟢 low on purpose: for a control that measures blast radius, "never heard of it" is not the same as "harmless". Add the path to \`LOW_SHAPED\` in \`scripts/pr-risk.mjs\` if it genuinely is.`,
+      ``,
+      `</details>`,
+      ``,
+    );
+  }
+
+  if (!reasons.length && !unrecognised.length) {
     out.push(
       `No rule matched: the diff is ${shape.map((s) => `_${s}_`).join(", ")}.`,
       ``,
@@ -616,7 +912,7 @@ function renderMarkdown({ tier, reasons, shape }, facts) {
 
   if (tier === "high") {
     out.push(
-      `> This check stays red until the deep review is on record. Run the three review passes, then add the **\`reviewed:deep\`** label. If a rule fired on something genuinely inert, add **\`risk-override\`** and say why in the description — the override is recorded, not silent.`,
+      `> This check stays red until the deep review is on record. Run the review passes named above, then add the **\`reviewed:deep\`** label — it is cleared automatically whenever the head changes, so it always means "reviewed at this diff". If a rule fired on something genuinely inert, add **\`risk-override\`** and put the reason in the description; the check reads it back.`,
       ``,
     );
   }
@@ -645,7 +941,7 @@ function renderMarkdown({ tier, reasons, shape }, facts) {
  * Consuming the next argv item as an opaque value is what fixes it: after
  * `--title`, whatever follows is data and is never read as a flag again.
  */
-const VALUE_FLAGS = new Set(["base", "format", "title", "body"]);
+const VALUE_FLAGS = new Set(["base", "format", "title", "body", "repo"]);
 const BOOL_FLAGS = new Set(["gate", "reviewed", "override"]);
 
 function parseArgs(argv) {
@@ -664,7 +960,7 @@ function parseArgs(argv) {
         `Unknown argument: ${arg}`,
         ``,
         `  usage: node scripts/pr-risk.mjs [--base <ref>] [--format text|markdown|json]`,
-        `                                  [--title <s>] [--body <s>]`,
+        `                                  [--repo <path>] [--title <s>] [--body <s>]`,
         `                                  [--gate] [--reviewed] [--override]`,
       ]);
     }
@@ -686,6 +982,8 @@ const flag = (name, fallback) => values.get(name) ?? fallback;
 
 const base = flag("base", "origin/main");
 const format = flag("format", "text");
+// Set before anything touches git — every read below runs with `cwd: repoRoot`.
+if (values.has("repo")) repoRoot = resolve(flag("repo"));
 
 const facts = await collectFacts(base);
 
@@ -698,11 +996,25 @@ const facts = await collectFacts(base);
 // All of them, not just the newest. A branch whose middle commit is the breaking
 // one is still a breaking branch, and squash-merge means that subject may well be
 // the only place it was ever written down.
-facts.subjects = (
-  await gitOr(["log", `${facts.mergeBase}..HEAD`, "--format=%s"], "")
-)
-  .split("\n")
-  .filter(Boolean);
+facts.subjects = splitZ(
+  await gitOrDie(
+    ["log", `${facts.mergeBase}..HEAD`, "-z", "--format=%s"],
+    "this branch's commit subjects",
+  ),
+).filter(Boolean);
+
+// The commits' own message BODIES, separately from their subjects. Conventional
+// Commits treats a `BREAKING CHANGE:` footer as equivalent to `!`, and it lives
+// in the body — which `--format=%s` dropped entirely, so a commit declaring the
+// break only in its footer graded 🟢 low. NUL-separated so a multi-line body
+// can't be mistaken for several commits.
+facts.commitBodies = splitZ(
+  await gitOrDie(
+    ["log", `${facts.mergeBase}..HEAD`, "-z", "--format=%b"],
+    "this branch's commit bodies",
+  ),
+).join("\n");
+
 facts.title = flag("title") ?? facts.subjects[0] ?? "";
 facts.body = flag("body", "");
 
@@ -714,6 +1026,7 @@ if (format === "json") {
       {
         tier: result.tier,
         shape: result.shape,
+        unrecognised: result.unrecognised,
         files: facts.files.length,
         lines: facts.lines,
         reasons: result.reasons.map(({ id, tier, title, evidence }) => ({
@@ -739,7 +1052,67 @@ if (format === "json") {
 // which is why this is a flag rather than a property of the tier.
 if (bools.has("gate")) {
   const reviewed = bools.has("reviewed");
-  const overridden = bools.has("override");
+
+  // `risk-override` demands a written reason, and may name the rules it waives.
+  //
+  // The label alone used to clear the gate while `renderMarkdown` claimed "the
+  // override is recorded, not silent" — but nothing read the body, so the only
+  // artifact was a label the same person could remove after merge. Reading the
+  // reason back is what makes that sentence true. Naming rules is optional and
+  // narrows the waiver, so overriding one misfiring rule stops silently waiving
+  // `ci-workflows`, `packaging` and `secrets-and-redaction` alongside it.
+  //
+  //   risk-override: the workflow edit is a comment typo
+  //   risk-override: packaging — version bump only, no exports moved
+  let overridden = false;
+  if (bools.has("override")) {
+    const line = (facts.body ?? "").match(/^\s*risk-override:\s*(.+)$/im)?.[1];
+    if (!line?.trim()) {
+      die([
+        `The \`risk-override\` label is set, but no reason is recorded.`,
+        ``,
+        `  Put a line in the PR description saying what misfired and why it is inert:`,
+        ``,
+        `    risk-override: <reason>`,
+        `    risk-override: <rule-id>[, <rule-id>] — <reason>`,
+        ``,
+        `  Rules that fired: ${result.reasons
+          .filter((r) => r.tier === "high")
+          .map((r) => r.id)
+          .join(", ")}`,
+        ``,
+        `  A waiver nobody has to justify is one that gets applied by habit, and`,
+        `  then it means nothing on the PR where it mattered.`,
+      ]);
+    }
+
+    const [, named, reason] = line.match(/^([^—:]*?)\s*[—:]\s*(.+)$/) ?? [];
+    const ids = (named ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => RULES.some((r) => r.id === s));
+
+    if (ids.length) {
+      const remaining = result.reasons.filter(
+        (r) => r.tier === "high" && !ids.includes(r.id),
+      );
+      overridden = remaining.length === 0;
+      if (!overridden) {
+        die([
+          `\`risk-override\` waives ${ids.join(", ")}, but other high rules fired:`,
+          ``,
+          ...remaining.map((r) => `    ${r.id} — ${r.title}`),
+          ``,
+          `  Name them too, or review them. Reason on record: ${reason}`,
+        ]);
+      }
+      console.log(`\nOverride accepted for ${ids.join(", ")} — ${reason}\n`);
+    } else {
+      overridden = true;
+      console.log(`\nOverride accepted (all rules) — ${line.trim()}\n`);
+    }
+  }
+
   if (result.tier === "high" && !reviewed && !overridden) {
     die([
       `High-risk change without a recorded deep review.`,
@@ -749,9 +1122,13 @@ if (bools.has("gate")) {
         .map((r) => r.title)
         .join(", ")}`,
       ``,
-      `  Run the three passes named above, then add the \`reviewed:deep\` label.`,
-      `  If a rule fired on something inert, \`risk-override\` + a reason in the`,
-      `  description clears it — recorded, not silent.`,
+      `  Run the passes named above, then add the \`reviewed:deep\` label — it is`,
+      `  dropped automatically whenever the head changes, so it always means`,
+      `  "reviewed at this diff" rather than "reviewed once".`,
+      ``,
+      `  If a rule fired on something inert, \`risk-override\` plus a reason in the`,
+      `  description clears it. The reason is required: the check reads the body`,
+      `  back and refuses an empty one.`,
     ]);
   }
 }

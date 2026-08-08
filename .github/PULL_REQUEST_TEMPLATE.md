@@ -45,16 +45,23 @@ Cutting a release or adding a package? There are tailored templates:
 ## Risk
 
 <!-- `pnpm pr:risk` prints the tier and why. The `pr-risk` check computes the same
-     answer and labels the PR, so this section is for what the rubric can't see:
-     which review passes you ran, and anything you think it under- or over-graded.
+     answer (from main's copy of the rubric) and labels the PR, so this section is
+     for what the rubric can't see: which review passes you ran, and anything you
+     think it under- or over-graded.
 
      🟢 low     CI is the review; may be merged without a human once green
      🟡 medium  /code-review before pushing for review
-     🔴 high    /code-review + /security-review + /a11y-review, then the
-                `reviewed:deep` label — the check stays red until it is there -->
+     🔴 high    /code-review + /security-review, then the `reviewed:deep` label —
+                the check stays red until it is there, and the label is dropped
+                again automatically on every push
+
+     To waive a rule that misfired, add the `risk-override` label AND a line here:
+       risk-override: <reason>
+       risk-override: <rule-id>[, <rule-id>] — <reason>
+     The check reads that line back and fails without it. -->
 
 - **Tier:** <!-- low | medium | high -->
-- **Review passes run:** <!-- none (low) | /code-review | all three -->
+- **Review passes run:** <!-- none (low) | /code-review | /code-review + /security-review -->
 - [ ] Escalated or overrode the computed tier, because: <!-- leave unchecked if the rubric got it right -->
 
 ## How to verify
