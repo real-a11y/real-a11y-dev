@@ -39,27 +39,41 @@ import { nativeTree as computeNativeTree } from "./native-tree.js";
  * without a fragile cross-package `require.resolve` (this package is ESM-only,
  * so CJS resolution of its entry fails).
  */
-export const PAGE_BUNDLE_PATH = fileURLToPath(
-  new URL("./page-bundle.iife.global.js", import.meta.url),
-);
+declare const __REAL_A11Y_PAGE_BUNDLE__: string | undefined;
 
-function bundlePath(): string {
-  return PAGE_BUNDLE_PATH;
-}
-
-let cachedBundle: string | undefined;
-function readBundle(): string {
-  if (!cachedBundle) {
-    try {
-      cachedBundle = readFileSync(bundlePath(), "utf8");
-    } catch {
-      // Don't leak the absolute local path into tool output.
-      throw new Error(
-        "Real A11y extraction bundle is missing — reinstall dependencies (is @real-a11y-dev/browser installed?).",
+/**
+ * The injected IIFE page-bundle, as SOURCE TEXT.
+ *
+ * It used to be an absolute path — `new URL("./page-bundle.iife.global.js",
+ * import.meta.url)` — which is correct only while this package is its own
+ * published artifact sitting next to its own `dist/`. This package is now
+ * PRIVATE and bundled into `cli`, `mcp` and `testing`, so `import.meta.url`
+ * evaluates inside the CONSUMER's dist, the file is not beside it, and every
+ * `attach()` or page open fails at runtime. Nothing type-checks a path, and
+ * `pnpm verify` does not run the e2e suites, so that failure would have reached
+ * users. Inlining the text removes the path — and the failure mode — entirely.
+ *
+ * Bound ONCE, at module level, deliberately: a `define` is substituted at every
+ * occurrence of the identifier, so referencing it from two places embeds two
+ * complete copies of the bundle. That is precisely how the inspector once
+ * shipped its stylesheet twice.
+ *
+ * The `?? readFileSync(...)` arm is for running from SOURCE (vitest, `tsx`),
+ * where no bundler has applied the define. In a built artifact the define is a
+ * string literal, so the fallback is dead code that treeshakes away.
+ */
+export const PAGE_BUNDLE_SOURCE: string =
+  typeof __REAL_A11Y_PAGE_BUNDLE__ === "string"
+    ? __REAL_A11Y_PAGE_BUNDLE__
+    : readFileSync(
+        fileURLToPath(
+          new URL("../dist/page-bundle.iife.global.js", import.meta.url),
+        ),
+        "utf8",
       );
-    }
-  }
-  return cachedBundle;
+
+function readBundle(): string {
+  return PAGE_BUNDLE_SOURCE;
 }
 
 /**

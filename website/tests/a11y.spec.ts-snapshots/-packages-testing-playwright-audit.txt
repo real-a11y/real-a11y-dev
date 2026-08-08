@@ -165,12 +165,12 @@ main
   button "Copy Code"
   code
   heading "Auditing the native tree" (level 2)
-  paragraph "By default uses the : it injects the page-bundle and walks the light DOM in the page. Pass to use the instead — it reads Chromium's own accessibility tree over CDP (via 's ) and runs the same serialize/audit helpers in Node:"
+  paragraph "By default uses the : it injects the page-bundle and walks the light DOM in the page. Pass to use the instead — it reads Chromium's own accessibility tree over CDP (via the internal driver's , bundled into this package) and runs the same serialize/audit helpers in Node:"
     code "attach()"
     strong "DOM producer"
     code "{ tree: "native" }"
     strong "native producer"
-    code "@real-a11y-dev/browser"
+    code "browser"
     code "nativeTree"
   button "Copy Code"
   code
@@ -231,15 +231,15 @@ main
   button "Copy Code"
   code
   list
-    listitem "reads the pre-built IIFE bundle () from the package."
+    listitem "carries the pre-built IIFE bundle as inlined source text (from , which is bundled into this package)."
       code "attach()"
-      code "dist/page-bundle.iife.global.js"
+      code "@real-a11y-dev/browser"
     listitem "Injects it into the page via . This sets ."
       code "page.addScriptTag()"
       code "window.__realA11y__"
     listitem "Each method calls , running the helper in the browser and returning the result (or re-throwing the error) in Node."
       code "page.evaluate()"
-  paragraph "The bundle is read once and cached in the Node process — subsequent calls on the same process are instant."
+  paragraph "The bundle is a string constant baked in at build time — there is no filesystem read to cache, and every call is instant."
     code "attach()"
   heading "Error propagation" (level 2)
   paragraph "When an assertion throws inside the page, Playwright propagates the error message back to Node. The full descriptive message (including all offending elements) is preserved."

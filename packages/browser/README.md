@@ -1,12 +1,30 @@
 # @real-a11y-dev/browser
 
-Drive a real browser for Real A11y. This package is the **one way** the toolkit extracts an accessibility tree from a live Chromium — a Playwright-based `BrowserSession` plus the pre-built page-bundle it injects. The CLI and the MCP server both drive the browser through it.
+Drive a real browser for Real A11y. This package is the **one way** the toolkit extracts an accessibility tree from a live Chromium — a Playwright-based `BrowserSession` plus the pre-built page-bundle it injects. The CLI, the MCP server, and `@real-a11y-dev/testing`'s Playwright adapter all drive the browser through it.
 
-```sh
-npm install @real-a11y-dev/browser
-# a real browser is required:
-npm install playwright   # optional peer
-```
+> **Internal package — not published to npm.** It is bundled into the
+> `real-a11y` CLI, the MCP server, and `@real-a11y-dev/testing`'s Playwright
+> adapter — the three surfaces that drive a real browser, and every one of them
+> already carries it. There is nothing to install and nothing to import by this
+> name; `playwright` stays an optional peer of whichever of the three you
+> installed. The examples below are written from inside the workspace, for
+> anyone working on the driver itself.
+>
+> It was published up to `0.1.0-beta.13` before becoming internal. Five names
+> keep a published home: [`@real-a11y-dev/mcp`](../mcp) re-exports
+> `BrowserSession` along with `A11ySession`, `BrowserSessionOptions`,
+> `PageSnapshot` and `SnapshotOptions`, because `buildServer` takes an
+> `A11ySession` and an embedder writing its own `SessionManager` has to name
+> that contract. Everything else here — `nativeTree`, `buildNativeTree`, the
+> native checkpoint helpers, `resolveTarget`, `CdpActionBackend`,
+> `PAGE_BUNDLE_SOURCE`, `OpenOptions`, and the Chrome-resolution helpers
+> (`resolveChromeExecutable`, `chromeCacheDir`, `readChromeManifest`) — has
+> **no drop-in replacement**. The route is a surface that carries the driver:
+> `real-a11y` for the shell and CI (`audit`, `snapshot` / `diff`, the
+> `click` / `type` / `focus` / `interact` act commands, `--session` to hold one
+> browser across them, all taking `--format json` and `-o`), the MCP tools for
+> an agent, and `attach(page)` from `@real-a11y-dev/testing/playwright` when you
+> already hold a Playwright `Page`.
 
 Why a real browser and not jsdom? The extraction engine relies on `getComputedStyle` and layout to decide what is actually exposed to assistive tech — visibility, focusability, computed roles. A server-side jsdom can't reproduce that faithfully, so an audit that matters needs a real Chromium.
 
@@ -119,12 +137,18 @@ The injected bundle is built here (`dist/page-bundle.iife.global.js`) from the s
 
 Those names are a **published surface**, not an implementation detail — evaluating the IIFE and calling `__realA11y__.<name>` is the documented path for a page under a Trusted Types CSP, where `addScriptTag` is blocked. That cuts both ways: an export can't be withdrawn quietly, and an export nobody calls still ships into every audited page. `src/page-bundle.test.ts` pins the list against the consumer that dispatches on each name, so adding one is a decision rather than a stray import. `listByRole` is the cautionary case — category listing moved to Node with the producer migration, the in-page copy stayed, and it cost 0.37 kB gzipped of every page until anyone noticed.
 
-Because the bundle ships in this package, both drivers resolve the exact same file:
+The bundle is **inlined as source text** at build time, not read from disk. Every
+carrier — the CLI, the MCP server, and the Playwright adapter — embeds the same
+bytes and evaluates them, so a tree captured through any of the three is
+identical.
 
-- `BrowserSession` reads it from its own `dist/`.
-- The `@real-a11y-dev/testing/playwright` adapter imports the exported `PAGE_BUNDLE_PATH` and injects the same bundle.
-
-One bundle, one home — so a tree captured through the CLI, the MCP server, or the Playwright adapter is identical.
+It used to be a path: `BrowserSession` computed one from its own `import.meta.url`
+and exported it as `PAGE_BUNDLE_PATH` for the adapter to read. That works only
+while this package is its own published artifact sitting beside its own `dist/`.
+Now that it is bundled into its consumers, `import.meta.url` resolves inside
+THEIR dist, where the file is not — so the path became a runtime failure with
+nothing to catch it. `PAGE_BUNDLE_SOURCE` replaces it, and the failure mode is
+gone rather than guarded.
 
 ## Design
 

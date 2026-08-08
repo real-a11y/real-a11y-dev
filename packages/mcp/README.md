@@ -189,22 +189,28 @@ account, and keep the storage-state file out of version control.
 
 ## Programmatic use
 
-Beyond the MCP server, the Playwright-backed session is available standalone from
-**`@real-a11y-dev/browser`** — a separate package, so you get the session without
-the MCP SDK dependency graph. Install it directly:
+For scripting audits without an MCP client, the route is the **CLI**, not a
+library — `@real-a11y-dev/cli` runs the same engine and prints machine formats:
 
 ```sh
-npm install @real-a11y-dev/browser playwright
+npx -y @real-a11y-dev/cli audit https://example.com --format json -o report.json
 ```
 
-```ts
-import { BrowserSession } from "@real-a11y-dev/browser";
-```
+`snapshot` / `diff` gate a PR, `--session <name>` keeps one browser alive across
+invocations, and `click` / `type` / `focus` / `interact` act on the page and
+print the tree diff each action caused. Full reference:
+<https://real-a11y.dev/packages/cli/commands>.
 
-`BrowserSession` (and its option types `BrowserSessionOptions`, `OpenOptions`,
-`SnapshotOptions`) drives a real browser, injects the extraction bundle, and
-returns findings / tree / outline / tab order from a single extraction — handy
-for scripting audits directly in Node without an MCP client.
+What that leaves out is an in-process Node API. `@real-a11y-dev/browser` — the
+Playwright-backed session this server drives — is workspace-internal as of
+`0.1.0-beta.13`, bundled into this package, the CLI and the testing adapter,
+with nothing to install by that name. This package still exports
+`BrowserSession` and its session types (`A11ySession`, `BrowserSessionOptions`,
+`PageSnapshot`, `SnapshotOptions`), because `buildServer` takes an `A11ySession`
+and a custom `SessionManager` has to name that contract — an embedding surface
+that arrives with the whole MCP SDK, not a standalone session package. If you
+already hold a Playwright `Page`, `attach(page)` from
+`@real-a11y-dev/testing/playwright` runs the same helpers against it.
 
 ## Status
 

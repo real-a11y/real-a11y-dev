@@ -1,5 +1,4 @@
 ---
-"@real-a11y-dev/browser": minor
 "@real-a11y-dev/mcp": patch
 ---
 

@@ -1,5 +1,5 @@
 ---
-"@real-a11y-dev/browser": minor
+"@real-a11y-dev/testing": minor
 ---
 
 refactor(browser)!: drop `listByRole` from the injected page bundle
@@ -8,9 +8,8 @@ refactor(browser)!: drop `listByRole` from the injected page bundle
 `window.__realA11y__.listByRole(root, filter)` no longer exists. Everything
 routed through `BrowserSession` or `@real-a11y-dev/testing/playwright` is
 unaffected — neither ever called it. If you do call it in-page, import it from
-`@real-a11y-dev/audit` (or `@real-a11y-dev/testing`, which re-exports it) and run
-it in Node over an `ExtractionResult`, which is what both of our own surfaces now
-do.
+`@real-a11y-dev/testing` and run it in Node over an `ExtractionResult`, which
+is what both of our own surfaces now do.
 
 It had no in-page caller at all. Since the producer migration, `real-a11y list`
 and the MCP's `list_elements` both run the category listing in Node over

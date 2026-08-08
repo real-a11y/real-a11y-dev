@@ -161,22 +161,47 @@ across sessions. Omit it and the server behaves as a single-page tool; the
 
 ## Scripting audits without an MCP client
 
-Beyond the server, the Playwright-backed session is available standalone from
-**`@real-a11y-dev/browser`** — a separate package, so you get the session without
-the MCP SDK dependency graph. Install it directly:
+Same engine, no agent: the route is the **CLI**. `@real-a11y-dev/cli` runs these
+audits from a shell script or a CI job and prints them in machine formats, so
+nothing in the pipeline has to speak MCP.
 
 ```sh
-npm install @real-a11y-dev/browser playwright
+npx -y @real-a11y-dev/cli audit https://example.com --format json -o report.json
 ```
 
-```ts
-import { BrowserSession } from "@real-a11y-dev/browser";
-```
+- **The audit itself** — `audit` exits `1` on error-severity findings, so it
+  gates a build with no configuration; `--format json` with `-o` writes the same
+  findings `audit_page` reports.
+- **Multi-step flows** — [`--session <name>`](/packages/cli/commands#session-name)
+  keeps one browser alive across invocations, so successive commands read the
+  same live page instead of reloading it — the shell's version of the `session`
+  parameter above.
+- **Acting on the page** — `click`, `type`, and `focus` target a control by role
+  + accessible name and print the tree diff the action caused;
+  `interact --step '<step>'` chains several of them in one run.
+- **Gating a PR** — `snapshot` writes the diffable artifact, and
+  `diff base.json pr.json` classifies findings as new / changed / fixed in
+  `pretty`, `json`, or `md` (`--format md -o comment.md` is the PR-comment
+  shape).
 
-`BrowserSession` (with its option types `BrowserSessionOptions`, `OpenOptions`,
-`SnapshotOptions`) drives a real browser, injects the extraction bundle, and
-returns findings, tree, outline, and tab order from a single extraction — handy
-for scripting audits directly in Node.
+Every command and flag is in [Commands & flags](/packages/cli/commands).
+
+What the CLI cannot give you is an **in-process Node API**, and no other package
+does either now. The Playwright-backed session lives in
+`@real-a11y-dev/browser`, which is workspace-internal as of `0.1.0-beta.13`: it
+is bundled into this server, the CLI, and the testing adapter, and there is
+nothing to install by that name. Two narrower doors stay open, neither a
+replacement for it:
+
+- **You already have a Playwright `Page`** — `attach(page)` from
+  [`@real-a11y-dev/testing/playwright`](/packages/testing/playwright) runs the
+  same audit helpers against it, and stays public.
+- **You are embedding this server** — it re-exports `BrowserSession` along with
+  `A11ySession`, `BrowserSessionOptions`, `PageSnapshot`, and `SnapshotOptions`,
+  because `buildServer` takes an `A11ySession` and a custom `SessionManager` has
+  to name that contract. That is an embedding surface, not a session package: it
+  arrives with the whole MCP SDK dependency graph, which is exactly what
+  installing `browser` on its own used to avoid.
 
 ## How it compares to Playwright MCP
 
