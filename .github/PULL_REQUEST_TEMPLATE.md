@@ -42,6 +42,21 @@ Cutting a release or adding a package? There are tailored templates:
 - [ ] Chrome extension
 - [ ] Website / docs / examples
 
+## Risk
+
+<!-- `pnpm pr:risk` prints the tier and why. The `pr-risk` check computes the same
+     answer and labels the PR, so this section is for what the rubric can't see:
+     which review passes you ran, and anything you think it under- or over-graded.
+
+     🟢 low     CI is the review; may be merged without a human once green
+     🟡 medium  /code-review before pushing for review
+     🔴 high    /code-review + /security-review + /a11y-review, then the
+                `reviewed:deep` label — the check stays red until it is there -->
+
+- **Tier:** <!-- low | medium | high -->
+- **Review passes run:** <!-- none (low) | /code-review | all three -->
+- [ ] Escalated or overrode the computed tier, because: <!-- leave unchecked if the rubric got it right -->
+
 ## How to verify
 
 <!-- Concrete steps a reviewer can run on a fresh checkout of this branch: the
