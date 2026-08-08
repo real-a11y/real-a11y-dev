@@ -18,10 +18,8 @@
  * Playwright re-throws it in Node with the original message preserved.
  */
 
-import { readFileSync } from "node:fs";
-
 import { assertRules } from "@real-a11y-dev/audit";
-import { PAGE_BUNDLE_PATH, nativeTree } from "@real-a11y-dev/browser";
+import { PAGE_BUNDLE_SOURCE, nativeTree } from "@real-a11y-dev/browser";
 import { serializeTree, serializeOutline } from "@real-a11y-dev/serialize";
 
 // ---------------------------------------------------------------------------
@@ -31,19 +29,12 @@ import { serializeTree, serializeOutline } from "@real-a11y-dev/serialize";
 // cross-package resolve of an ESM-only entry).
 // ---------------------------------------------------------------------------
 
-function getPageBundlePath(): string {
-  return PAGE_BUNDLE_PATH;
-}
-
-// Cache the bundle content so subsequent `attach()` calls in the same
-// process don't re-read the file.
-let _cachedBundle: string | undefined;
-
+// The bundle arrives as SOURCE TEXT, not a path. `@real-a11y-dev/browser` is
+// private and inlined here, so a path computed from its `import.meta.url` would
+// resolve inside THIS package's dist, where the file is not. No read, so no
+// cache is needed either.
 function readBundle(): string {
-  if (!_cachedBundle) {
-    _cachedBundle = readFileSync(getPageBundlePath(), "utf8");
-  }
-  return _cachedBundle;
+  return PAGE_BUNDLE_SOURCE;
 }
 
 // ---------------------------------------------------------------------------

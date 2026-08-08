@@ -1,6 +1,7 @@
 {
   "name": "@real-a11y-dev/browser",
   "version": "0.1.0-beta.13",
+  "private": true,
   "description": "Drive a real browser for Real A11y — the Playwright-based BrowserSession plus the injected page-bundle. The one way to extract a live accessibility tree from a real Chromium.",
   "license": "MIT",
   "author": "Juan Crisostomo (Real A11y)",
@@ -43,7 +44,7 @@
     "provenance": true
   },
   "scripts": {
-    "build": "tsup",
+    "build": "tsup --config tsup.page-bundle.config.ts && tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

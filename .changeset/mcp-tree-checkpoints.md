@@ -1,6 +1,5 @@
 ---
 "@real-a11y-dev/mcp": minor
-"@real-a11y-dev/browser": minor
 ---
 
 Add **tree checkpoints** to the MCP server — the interaction diff. `checkpoint_tree` captures the current accessibility tree; after an interaction, `diff_tree` reports exactly which nodes were added, removed, or changed, plus where focus moved.

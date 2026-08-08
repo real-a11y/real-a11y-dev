@@ -4,8 +4,8 @@ The audit engine for [Semantic Navigator](https://real-a11y.dev) — the one pla
 
 > **Internal package — not published to npm.** It is bundled into
 > [`@real-a11y-dev/testing`](../testing), the `real-a11y` CLI, the MCP server,
-> and [`@real-a11y-dev/browser`](../browser)'s page-bundle — every surface that
-> reports a finding already carries it. There is nothing to install and nothing
+> and the internal [`browser`](../browser) driver's page-bundle — every surface
+> that reports a finding already carries it. There is nothing to install and nothing
 > to import by this name. The examples below are written from inside the
 > workspace, for anyone working on the rules themselves.
 >

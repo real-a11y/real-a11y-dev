@@ -1,5 +1,6 @@
 ---
-"@real-a11y-dev/browser": minor
+"@real-a11y-dev/cli": minor
+"@real-a11y-dev/mcp": minor
 ---
 
 A Node-side tree checkpoint against the native producer — so acting and reporting finally speak the same language.

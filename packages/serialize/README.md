@@ -4,7 +4,7 @@ Deterministic text serialization of the [Semantic Navigator](https://real-a11y.d
 
 > **Internal package — not published to npm.** It is bundled into
 > [`@real-a11y-dev/testing`](../testing), the `real-a11y` CLI, the MCP server,
-> [`@real-a11y-dev/browser`](../browser)'s page-bundle, and the Chrome
+> the internal [`browser`](../browser) driver's page-bundle, and the Chrome
 > extension — every surface that prints one of these views already carries it.
 > There is nothing to install and nothing to import by this name. The examples
 > below are written from inside the workspace, for anyone working on the format

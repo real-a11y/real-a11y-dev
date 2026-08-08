@@ -75,8 +75,9 @@ link "Environment"
 link "tools reference"
 button "Copy Code"
 generic
-button "Copy Code"
-generic
+link "--session <name>"
+link "Commands & flags"
+link "@real-a11y-dev/testing/playwright"
 link "Playwright MCP"
 link "act tools"
 link "diff_tree"

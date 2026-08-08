@@ -1,6 +1,5 @@
 ---
 "@real-a11y-dev/testing": patch
-"@real-a11y-dev/browser": patch
 "@real-a11y-dev/cli": patch
 "@real-a11y-dev/mcp": patch
 ---

@@ -57,7 +57,7 @@ await sn.assertNoUnlabeledInteractive();
 
 ## Auditing the native tree
 
-By default `attach()` uses the **DOM producer**: it injects the page-bundle and walks the light DOM in the page. Pass `{ tree: "native" }` to use the **native producer** instead — it reads Chromium's own accessibility tree over CDP (via `@real-a11y-dev/browser`'s `nativeTree`) and runs the same serialize/audit helpers in Node:
+By default `attach()` uses the **DOM producer**: it injects the page-bundle and walks the light DOM in the page. Pass `{ tree: "native" }` to use the **native producer** instead — it reads Chromium's own accessibility tree over CDP (via the internal `browser` driver's `nativeTree`, bundled into this package) and runs the same serialize/audit helpers in Node:
 
 ```ts
 test("native tree sees the media controls", async ({ page }) => {
@@ -162,11 +162,11 @@ sn.assertHeadingOrder()
     )                            ◀──  throws A11yAssertionError (message preserved)
 ```
 
-1. `attach()` reads the pre-built IIFE bundle (`dist/page-bundle.iife.global.js`) from the package.
+1. `attach()` carries the pre-built IIFE bundle as inlined source text (from `@real-a11y-dev/browser`, which is bundled into this package).
 2. Injects it into the page via `page.addScriptTag()`. This sets `window.__realA11y__`.
 3. Each method calls `page.evaluate()`, running the helper in the browser and returning the result (or re-throwing the error) in Node.
 
-The bundle is read once and cached in the Node process — subsequent `attach()` calls on the same process are instant.
+The bundle is a string constant baked in at build time — there is no filesystem read to cache, and every `attach()` call is instant.
 
 ## Error propagation
 

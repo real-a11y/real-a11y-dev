@@ -307,9 +307,6 @@ importers:
       '@puppeteer/browsers':
         specifier: ^3.0.6
         version: 3.0.6
-      '@real-a11y-dev/browser':
-        specifier: workspace:*
-        version: link:../browser
       '@real-a11y-dev/core':
         specifier: workspace:*
         version: link:../core
@@ -317,6 +314,9 @@ importers:
       '@real-a11y-dev/audit':
         specifier: workspace:*
         version: link:../audit
+      '@real-a11y-dev/browser':
+        specifier: workspace:*
+        version: link:../browser
       '@real-a11y-dev/serialize':
         specifier: workspace:*
         version: link:../serialize
@@ -467,9 +467,6 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.12.0
         version: 1.29.0(zod@3.25.76)
-      '@real-a11y-dev/browser':
-        specifier: workspace:*
-        version: link:../browser
       '@real-a11y-dev/core':
         specifier: workspace:*
         version: link:../core
@@ -480,6 +477,9 @@ importers:
       '@real-a11y-dev/audit':
         specifier: workspace:*
         version: link:../audit
+      '@real-a11y-dev/browser':
+        specifier: workspace:*
+        version: link:../browser
       '@real-a11y-dev/serialize':
         specifier: workspace:*
         version: link:../serialize
@@ -650,9 +650,6 @@ importers:
 
   packages/testing:
     dependencies:
-      '@real-a11y-dev/browser':
-        specifier: workspace:*
-        version: link:../browser
       '@real-a11y-dev/core':
         specifier: workspace:*
         version: link:../core
@@ -666,6 +663,9 @@ importers:
       '@real-a11y-dev/audit':
         specifier: workspace:*
         version: link:../audit
+      '@real-a11y-dev/browser':
+        specifier: workspace:*
+        version: link:../browser
       '@real-a11y-dev/serialize':
         specifier: workspace:*
         version: link:../serialize

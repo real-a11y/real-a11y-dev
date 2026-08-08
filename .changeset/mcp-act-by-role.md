@@ -1,6 +1,5 @@
 ---
 "@real-a11y-dev/mcp": minor
-"@real-a11y-dev/browser": minor
 ---
 
 Add **act tools** to the MCP server — `click_element`, `type_text`, and `focus_element` — closing the `checkpoint_tree` → interact → `diff_tree` loop an agent previously couldn't complete alone. Each dispatches a real action over CDP through `A11ySession.act()`, the write side the native producer shipped and nothing drove.

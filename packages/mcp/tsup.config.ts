@@ -25,6 +25,10 @@ export default defineConfig({
       "@real-a11y-dev/audit",
       "@real-a11y-dev/snapshot",
       "@real-a11y-dev/serialize",
+      // mcp genuinely RE-EXPORTS these (server.d.ts line 3:
+      // `export { A11ySession, BrowserSession, ... } from "@real-a11y-dev/browser"`),
+      // so with browser private this is the published home for that API.
+      "@real-a11y-dev/browser",
     ],
   },
   sourcemap: true,
@@ -47,6 +51,7 @@ export default defineConfig({
     "@real-a11y-dev/audit",
     "@real-a11y-dev/serialize",
     "@real-a11y-dev/snapshot",
+    "@real-a11y-dev/browser",
   ],
   banner: { js: "" },
 });
