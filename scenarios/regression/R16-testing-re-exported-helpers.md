@@ -6,7 +6,7 @@ area: Testing
 type: Automated
 priority: P1
 status: Active
-validFrom: "testing ≥ 0.1.0-beta.11. Pairs with R2 — attw covers the types side of the dual-package hazard, step 9 here covers the runtime side"
+validFrom: "testing ≥ 0.1.0-beta.11. Pairs with R2 — attw covers the types side of the dual-package hazard, step 9 here covers the runtime side. `numberTabStops`, `assertRules` and `formatFindings` join the list when `serialize` and `audit` go private: this scenario is the only thing standing between a re-export being dropped and the capability disappearing with no error anywhere."
 validUntil: ""
 expected: "findByRole, findAllByRole, linearize, getOutline, getTabSequence, diffTrees, extract, capture, a11yDiff, dispatch, waitForMutations all resolve and behave"
 covers:
@@ -26,6 +26,7 @@ resolution alone is not enough, since a broken re-export can still resolve to
 import {
   findByRole, findAllByRole, linearize, getOutline, getTabSequence,
   diffTrees, extract, capture, a11yDiff, dispatch, waitForMutations,
+  numberTabStops, assertRules, formatFindings,
 } from "@real-a11y-dev/testing";
 ```
 

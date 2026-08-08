@@ -25,9 +25,6 @@ Distributed to users — on npm, except the extension, which ships on the Chrome
 | Package | Description | npm |
 |---------|-------------|-----|
 | [`@real-a11y-dev/core`](./packages/core) | Tree extraction, data model, interaction engine | [![npm](https://img.shields.io/npm/v/@real-a11y-dev/core)](https://www.npmjs.com/package/@real-a11y-dev/core) |
-| [`@real-a11y-dev/serialize`](./packages/serialize) | Deterministic text serialization — full tree, heading outline, tab sequence | [![npm](https://img.shields.io/npm/v/@real-a11y-dev/serialize)](https://www.npmjs.com/package/@real-a11y-dev/serialize) |
-| [`@real-a11y-dev/audit`](./packages/audit) | Audit engine — `Finding` model, a11y rules, `collectFindings`, `assert*` primitives | [![npm](https://img.shields.io/npm/v/@real-a11y-dev/audit)](https://www.npmjs.com/package/@real-a11y-dev/audit) |
-| [`@real-a11y-dev/snapshot`](./packages/snapshot) | Snapshot engine — fingerprints, the diffable `a11y-snapshot.json`, findings/views diff, baselines (Node-only) | [![npm](https://img.shields.io/npm/v/@real-a11y-dev/snapshot)](https://www.npmjs.com/package/@real-a11y-dev/snapshot) |
 | [`@real-a11y-dev/browser`](./packages/browser) | Browser driver — the Playwright `BrowserSession` + injected page-bundle; the one way to extract a live Chromium's a11y tree | [![npm](https://img.shields.io/npm/v/@real-a11y-dev/browser)](https://www.npmjs.com/package/@real-a11y-dev/browser) |
 | [`@real-a11y-dev/inspector`](./packages/inspector) | Framework-agnostic interactive accessibility tree panel | [![npm](https://img.shields.io/npm/v/@real-a11y-dev/inspector)](https://www.npmjs.com/package/@real-a11y-dev/inspector) |
 | [`@real-a11y-dev/testing`](./packages/testing) | Headless audit helpers — snapshots, assertions, `flow()` chain | [![npm](https://img.shields.io/npm/v/@real-a11y-dev/testing)](https://www.npmjs.com/package/@real-a11y-dev/testing) |
@@ -43,10 +40,15 @@ Not distributed at all — no npm package, no Chrome Web Store listing. They are
 
 | Package | Description | Ships inside |
 |---------|-------------|--------------|
+| [`serialize`](./packages/serialize) | Deterministic text serialization — full tree, heading outline, tab sequence | `testing`, `cli`, `mcp`, `browser`, `extension` |
+| [`audit`](./packages/audit) | Audit engine — `Finding` model, a11y rules, `collectFindings`, `assert*` primitives | `testing`, `cli`, `mcp`, `browser` |
+| [`snapshot`](./packages/snapshot) | Snapshot engine — fingerprints, the diffable `a11y-snapshot.json`, findings/views diff, baselines (Node-only) | `cli`, `mcp` |
 | [`validate`](./packages/validate) | ARIA semantics validation (per-node + tree-level rules), aria-query-backed | `testing` |
 | [`ui`](./packages/ui) | Preact tree rendering components | `inspector`, `storybook-addon`, `extension` |
 
-`validate` was published as `@real-a11y-dev/validate` through `0.1.0-beta.7`, and `ui` as `@real-a11y-dev/semantic-navigator-ui` through `0.1.0-beta.11`; those versions stay on npm and will not be updated. If you imported one directly: the validity rules reach you through `testing`'s `toBeValidA11yTree` matcher, and the components through `inspector`, `react`, or `storybook-addon`. `validate`'s role-metadata helpers (`roleMeta`, `isValidRole`, `attributesForRole`, `requiredOwnedRoles`, …) have no published replacement — open an issue if you were using them. The symbol-level version of this distinction — what carries a stability promise and what doesn't — is in [docs/STABILITY.md](./docs/STABILITY.md#public-vs-internal-api).
+All five stay on npm at their last release and will not be updated: `@real-a11y-dev/serialize`, `@real-a11y-dev/audit`, and `@real-a11y-dev/snapshot` through `0.1.0-beta.12`, `ui` as `@real-a11y-dev/semantic-navigator-ui` through `0.1.0-beta.11`, and `validate` as `@real-a11y-dev/validate` through `0.1.0-beta.7`. If you imported one directly, most of the vocabulary still has a published home, and it is `@real-a11y-dev/testing` in every case: it re-exports `Finding`, `A11yRule`, `ALL_RULES`, `collectFindings` and the `assert*` primitives from `audit`, plus `extract`, `SerializeOptions`, `numberTabStops`, and the `auditSnapshot` / `outlineSnapshot` / `tabSequenceSnapshot` serializers from `serialize` — note the last two are the renamed `serializeOutline` / `serializeTabSequence`. The validity rules reach you through `testing`'s `toBeValidA11yTree` matcher, and the components through `inspector`, `react`, or `storybook-addon`.
+
+A few things have no drop-in replacement. `snapshot`'s engine — the fingerprints, the `a11y-snapshot.json` artifact, the diff, the baselines — is not importable from anywhere now; the `real-a11y` CLI (`snapshot` and `diff`, both take `--format json` and `-o`) or the MCP tools is the only way to reach it. `serialize`'s `foldTypography` and `SerializeInput`, `audit`'s `assertRules` and `formatFindings`, and `validate`'s role-metadata helpers (`roleMeta`, `isValidRole`, `attributesForRole`, `requiredOwnedRoles`, …) are not re-exported anywhere — open an issue if you were relying on any of them. The symbol-level version of this distinction — what carries a stability promise and what doesn't — is in [docs/STABILITY.md](./docs/STABILITY.md#public-vs-internal-api).
 
 ## Quick start
 

@@ -6,7 +6,7 @@ area: Testing
 type: Automated
 priority: P0
 status: Active
-validFrom: "testing ≥ 0.1.0-beta.11 · audit ≥ 0.1.0-beta.11. Exercise both matcher entry points: ./matchers and ./matchers/vitest"
+validFrom: "testing ≥ 0.1.0-beta.11. Exercise both matcher entry points: ./matchers and ./matchers/vitest. The engine behind these lives in `audit`, which is now PRIVATE and bundled — so assert against `@real-a11y-dev/testing` only; there is no `audit` version to pin, and importing it is the failure."
 validUntil: ""
 expected: "each assert* passes on good markup and throws A11yAssertionError naming the offender on bad; matchers register and read well"
 twin: D5
