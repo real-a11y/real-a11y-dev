@@ -95,7 +95,7 @@
     }
   },
   "devDependencies": {
-    "@playwright/test": "^1.61.1",
+    "@playwright/test": "^1.62.1",
     "@real-a11y-dev/audit": "workspace:*",
     "@real-a11y-dev/serialize": "workspace:*",
     "@real-a11y-dev/validate": "workspace:*",
