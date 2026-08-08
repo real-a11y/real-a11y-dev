@@ -305,18 +305,25 @@ jobs:
         run: |
           changed=$(git diff --name-only "$BASE"...HEAD)
           # Packages whose source reaches npm — either published directly, or
-          # BUNDLED into something published. `ui` and `validate` are private as
-          # of #301 but their code still ships inside inspector / storybook-addon
-          # / testing, so a change there is still a user-visible change and still
-          # needs a changelog entry. Dropping them from this list would let a
-          # tree-view fix pass every check, merge, and never reach npm.
+          # BUNDLED into something published. `ui`, `validate`, `audit`,
+          # `serialize` and `snapshot` are private, but their code still ships
+          # inside browser / cli / mcp / testing / inspector / storybook-addon,
+          # so a change there is still user-visible and still needs a changelog
+          # entry. Dropping a private package from this list would let a real fix
+          # pass every check, merge, and never reach npm.
+          #
+          # `audit`, `serialize` and `snapshot` were missing here while they were
+          # PUBLISHED, which was a hole in the other direction — a change to them
+          # demanded nothing. Privatizing them is what made adding them
+          # uncontroversial, so it is done here rather than left to the
+          # follow-up.
           #
           # The changeset it demands must name a CONSUMER: naming a private
           # package alone is accepted by changesets and then silently ignored
           # (`privatePackages.version: false`). This grep cannot tell the
           # difference — see the follow-up issue for the check that can.
           src=$(echo "$changed" \
-            | grep -E '^packages/(core|serialize|ui|inspector|react|storybook-addon|testing|validate|mcp|cli)/src/' \
+            | grep -E '^packages/(audit|browser|cli|core|inspector|mcp|react|serialize|session-registry|snapshot|storybook-addon|testing|ui|validate)/src/' \
             | grep -vE '\.(test|spec)\.[tj]sx?$' || true)
           added=$(git diff --name-only --diff-filter=A "$BASE"...HEAD -- .changeset \
             | grep -E '\.md$' | grep -viE 'README' || true)

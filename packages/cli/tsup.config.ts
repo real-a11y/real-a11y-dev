@@ -1,9 +1,11 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  // `index` is the bin (has a shebang). The CLI is a command, not a library:
-  // the programmatic engine (fingerprints, artifact, diff, baselines) lives in
-  // @real-a11y-dev/snapshot, so there is no importable `.` entry here.
+  // `index` is the bin (has a shebang). The CLI is a command, not a library,
+  // and there is no importable `.` entry here. The engine it drives
+  // (fingerprints, artifact, diff, baselines) lives in @real-a11y-dev/snapshot,
+  // which is now PRIVATE — so the CLI is not one way to reach that engine, it
+  // is the way. `--format json` and `--session` are the programmatic surface.
   entry: ["src/index.ts", "src/daemon/entry.ts"],
   format: ["esm"],
   dts: true,
@@ -14,9 +16,22 @@ export default defineConfig({
   // @puppeteer/browsers is a regular dep but a large one (proxy-agent,
   // extract-zip, ...) — resolved from node_modules at runtime, never bundled.
   external: ["playwright", "@puppeteer/browsers"],
-  // The session registry is a PRIVATE workspace package: npm can never resolve
-  // it, so it must be bundled into the dist (it is a devDependency for the
-  // same reason — a published "dependencies" entry would break installs).
-  noExternal: ["@real-a11y-dev/session-registry"],
+  // PRIVATE workspace packages: npm can never resolve them, so they are bundled
+  // into the dist and held as devDependencies (a published "dependencies" entry
+  // would break every install). No `dts.resolve` needed TODAY — both emitted
+  // declarations are just the shebang, so nothing names a private package.
+  //
+  // Nothing WATCHES that, though, and it is worth knowing before relying on it:
+  // `surface:check`'s guard reads only the `.d.ts` a package's `exports` `types`
+  // condition points at, and this package has no `exports` map at all; attw
+  // skips `cli` outright (ATTW_SKIP_PACKAGES). So the day an exported type here
+  // names `Finding` or `SnapshotPage`, the unresolvable specifier ships silently.
+  // Add `dts.resolve` at the same time as the first such export.
+  noExternal: [
+    "@real-a11y-dev/session-registry",
+    "@real-a11y-dev/audit",
+    "@real-a11y-dev/serialize",
+    "@real-a11y-dev/snapshot",
+  ],
   banner: { js: "" },
 });

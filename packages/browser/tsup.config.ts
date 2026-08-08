@@ -6,12 +6,25 @@ export default defineConfig([
   {
     entry: ["src/index.ts"],
     format: ["esm"],
-    dts: true,
+    // `audit` and `serialize` are PRIVATE workspace packages — npm cannot
+    // resolve them, so both halves are required: `noExternal` inlines the JS,
+    // `dts.resolve` inlines the declarations. Without the second the shipped
+    // `.d.ts` keeps `from "@real-a11y-dev/audit"` — which is `TS2307` under
+    // `skipLibCheck: false` and a silent `any` under the common default.
+    //
+    // Note WHY it keeps it: nothing here re-exports `Finding`. `export interface
+    // PageSnapshot { findings: Finding[] }` merely NAMES the type, and a
+    // structural reference is enough. So the rule is "does any emitted
+    // declaration name a private package", not "do we re-export one" — checking
+    // `index.ts` for `export … from` and finding none proves nothing.
+    // `surface:check` fails on exactly this.
+    dts: { resolve: ["@real-a11y-dev/audit", "@real-a11y-dev/serialize"] },
     sourcemap: true,
     clean: true,
     treeshake: true,
     // playwright is an optional peer, resolved by the host — never bundle it.
     external: ["playwright"],
+    noExternal: ["@real-a11y-dev/audit", "@real-a11y-dev/serialize"],
   },
 
   // ── IIFE page-bundle ─────────────────────────────────────────────────────

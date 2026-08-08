@@ -1,5 +1,4 @@
 ---
-"@real-a11y-dev/serialize": minor
 "@real-a11y-dev/testing": minor
 "@real-a11y-dev/browser": minor
 "@real-a11y-dev/cli": minor
@@ -13,8 +12,8 @@ Tab-order serialization is now number-free by default; numbering moves to a rend
 For a human- or agent-read listing where an explicit "stop 7" helps, a new `numberTabStops(tabs)` export re-adds the `NN. ` prefix at **render time** (never stored):
 
 ```ts
-import { serializeTabSequence, numberTabStops } from "@real-a11y-dev/serialize";
-numberTabStops(serializeTabSequence(root)); // 01. link "Home"  02. button "Go"
+import { tabSequenceSnapshot, numberTabStops } from "@real-a11y-dev/testing";
+numberTabStops(tabSequenceSnapshot(root)); // 01. link "Home"  02. button "Go"
 ```
 
 Numbering is applied where output is read, not diffed: the CLI `tabs` terminal view, the MCP `get_tab_order` and `inspect_page` tools, and the extension's Markdown export (which stays numbered, matching its on-screen panel). It is absent where output is committed or diffed: `tabSequenceSnapshot()` in `@real-a11y-dev/testing`, the CLI `snapshot`/`inspect` artifacts and JSON, and the browser audit's `tabOrder`. (Also fixes an MCP snapshot summary that reported "0 tab stops" once lines were unnumbered.)

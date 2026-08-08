@@ -1,5 +1,8 @@
 ---
-"@real-a11y-dev/serialize": minor
+"@real-a11y-dev/testing": minor
+"@real-a11y-dev/browser": minor
+"@real-a11y-dev/cli": minor
+"@real-a11y-dev/mcp": minor
 ---
 
 Fix indentation when hidden nodes are dropped, so the serialized tree reflects real nesting. `serializeTree` indented each line by `node.depth` — the node's depth in the _extracted_ tree — while also hiding nodes from the output. A hidden node's indent level stayed behind, so its children rendered under whatever printed line happened to precede them.

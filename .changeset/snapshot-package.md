@@ -1,5 +1,4 @@
 ---
-"@real-a11y-dev/snapshot": minor
 "@real-a11y-dev/cli": minor
 ---
 

@@ -12,7 +12,21 @@ export default defineConfig({
   // `server.d.ts` — a module npm cannot resolve, because it is never published.
   // Naming the package here inlines its declaration text instead, so the
   // published `.d.ts` has no reference to it at all.
-  dts: { resolve: ["@real-a11y-dev/session-registry"] },
+  dts: {
+    resolve: [
+      "@real-a11y-dev/session-registry",
+      // `server.d.ts` also REFERENCES `Finding` (audit) and `SnapshotPage`
+      // (snapshot) structurally — `renderAudit(findings: Finding[])` and friends —
+      // without re-exporting either. A structural reference is enough to emit
+      // `from "@real-a11y-dev/audit"`, which is the trap: checking `index.ts` for
+      // `export … from` statements, finding none, and skipping `dts.resolve` ships
+      // an unresolvable specifier. The rule is "does any emitted declaration NAME
+      // it", not "do we re-export it".
+      "@real-a11y-dev/audit",
+      "@real-a11y-dev/snapshot",
+      "@real-a11y-dev/serialize",
+    ],
+  },
   sourcemap: true,
   clean: true,
   treeshake: true,
@@ -28,6 +42,11 @@ export default defineConfig({
   // `SessionInfo`). That matters for the public `SessionManager` contract: a
   // third-party manager signals refusals by throwing `SessionRegistryError`,
   // and an error class it cannot import is a contract it cannot implement.
-  noExternal: ["@real-a11y-dev/session-registry"],
+  noExternal: [
+    "@real-a11y-dev/session-registry",
+    "@real-a11y-dev/audit",
+    "@real-a11y-dev/serialize",
+    "@real-a11y-dev/snapshot",
+  ],
   banner: { js: "" },
 });

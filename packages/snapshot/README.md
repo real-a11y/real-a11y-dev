@@ -1,12 +1,24 @@
 # @real-a11y-dev/snapshot
 
-The Real A11y **snapshot engine** — deterministic finding fingerprints, the diffable `a11y-snapshot.json` artifact, the findings/views/unified diff, and baselines. Node-only, pure data. It depends on nothing but [`@real-a11y-dev/audit`](https://real-a11y.dev/packages/audit) and [`@real-a11y-dev/core`](https://real-a11y.dev/packages/core).
+The Real A11y **snapshot engine** — deterministic finding fingerprints, the diffable `a11y-snapshot.json` artifact, the findings/views/unified diff, and baselines. Node-only, pure data. It depends on nothing but [`@real-a11y-dev/audit`](../audit), [`@real-a11y-dev/serialize`](../serialize), and [`@real-a11y-dev/core`](https://real-a11y.dev/packages/core).
 
-```sh
-npm install @real-a11y-dev/snapshot
-```
+> **Internal package — not published to npm.** It is bundled into the
+> `real-a11y` CLI and the MCP server, the only two surfaces this engine reaches
+> you through. There is nothing to install and nothing to import by this name.
+> The examples below are written from inside the workspace, for anyone working
+> on the engine itself.
+>
+> It was published up to `0.1.0-beta.12` before becoming internal, and unlike
+> the other internal engines it has **no drop-in replacement** — nothing
+> published re-exports `buildArtifact`, `diffArtifacts`, `fingerprintFindings`,
+> the baseline helpers, or any other symbol here. The route is the CLI:
+> `real-a11y snapshot` writes the artifact and `real-a11y diff` compares two,
+> both taking `--format json` and `-o <file>`, so a CI action, a GitHub App or a
+> dashboard shells out and reads JSON instead of importing. For an agent, the
+> MCP `checkpoint_findings` / `diff_findings` / `export_checkpoint` tools cover
+> the same ground — `export_checkpoint` returns this exact artifact.
 
-This is the single place a Real A11y snapshot is built and compared, so a snapshot captured by the CLI and diffed by the MCP server (or vice-versa) is byte-for-byte identical. Most people use it through the `real-a11y` CLI or the MCP server; install it directly to build or diff snapshots programmatically — a CI action, a GitHub App, a dashboard — without a browser or a test runner.
+This is the single place a Real A11y snapshot is built and compared, so a snapshot captured by the CLI and diffed by the MCP server (or vice-versa) is byte-for-byte identical.
 
 ## Fingerprints
 
@@ -97,4 +109,4 @@ The read/serialize helpers take and return data; the file writes stay with the c
 
 ## Design
 
-Everything here is **Node-only and browserless** — `node:crypto` for fingerprints, plain data structures for artifacts and diffs. The extraction that produces findings happens elsewhere (in the page, via [`@real-a11y-dev/core`](https://real-a11y.dev/packages/core) + [`@real-a11y-dev/audit`](https://real-a11y.dev/packages/audit)); this package only ever operates on the results. That split is deliberate: the snapshot engine can run anywhere Node runs, and the page bundle stays free of Node.
+Everything here is **Node-only and browserless** — `node:crypto` for fingerprints, plain data structures for artifacts and diffs. The extraction that produces findings happens elsewhere (in the page, via [`@real-a11y-dev/core`](https://real-a11y.dev/packages/core) + [`@real-a11y-dev/audit`](../audit)); this package only ever operates on the results. That split is deliberate: the snapshot engine can run anywhere Node runs, and the page bundle stays free of Node.

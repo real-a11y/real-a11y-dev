@@ -49,9 +49,9 @@ It extracts the element's accessibility tree, runs both validators, and fails on
 
 Tests aren't the only consumer: the `real-a11y audit` CLI command and the MCP `audit_page` tool run these same `validateTree`/`validateNode` validators over a live page's extracted tree, so the ARIA rules are identical across tests, CI, and agents.
 
-## Not [`@real-a11y-dev/audit`](https://real-a11y.dev/packages/audit)
+## Not `@real-a11y-dev/audit`
 
-That same `real-a11y audit` command pairs these ARIA-conformance checks with the **best-practice** findings from [`@real-a11y-dev/audit`](https://real-a11y.dev/packages/audit) — heading order, landmark structure, unlabeled controls, missing alt text. The two are complementary siblings, neither built on the other: `validate` answers _is the ARIA spec-legal?_, `audit` answers _does the page follow accessibility best practice?_ A page can pass one and fail the other (three `<h1>`s are spec-legal but bad practice). Reach for **`validate`** to check ARIA *correctness*, **`audit`** for accessibility *quality*.
+That same `real-a11y audit` command pairs these ARIA-conformance checks with the **best-practice** findings from [`@real-a11y-dev/audit`](../audit) — heading order, landmark structure, unlabeled controls, missing alt text. It is internal too, so like this package you meet it bundled inside the surfaces that run it. The two are complementary siblings, neither built on the other: `validate` answers _is the ARIA spec-legal?_, `audit` answers _does the page follow accessibility best practice?_ A page can pass one and fail the other (three `<h1>`s are spec-legal but bad practice). ARIA *correctness* is **`validate`**'s question, accessibility *quality* is **`audit`**'s.
 
 ## Design
 

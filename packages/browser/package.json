@@ -51,9 +51,7 @@
     "test:e2e": "vitest run --config vitest.e2e.config.ts"
   },
   "dependencies": {
-    "@real-a11y-dev/audit": "workspace:*",
-    "@real-a11y-dev/core": "workspace:*",
-    "@real-a11y-dev/serialize": "workspace:*"
+    "@real-a11y-dev/core": "workspace:*"
   },
   "peerDependencies": {
     "playwright": ">=1.49.0 <2"
@@ -64,6 +62,8 @@
     }
   },
   "devDependencies": {
+    "@real-a11y-dev/audit": "workspace:*",
+    "@real-a11y-dev/serialize": "workspace:*",
     "@types/node": "^22.0.0",
     "jsdom": "^29.1.1",
     "playwright": "^1.61.1",

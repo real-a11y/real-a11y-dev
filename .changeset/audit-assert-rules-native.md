@@ -1,5 +1,5 @@
 ---
-"@real-a11y-dev/audit": minor
+"@real-a11y-dev/testing": minor
 ---
 
 Export `assertRules` and `formatFindings`, and make the audit engine run in plain Node over a pre-extracted tree.

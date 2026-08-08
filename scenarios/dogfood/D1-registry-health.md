@@ -6,7 +6,7 @@ area: Install health
 type: Automated
 priority: P0
 status: Active
-validFrom: "every published release. While pre-mode `beta` is active, the `beta` dist-tag moves and `latest` must not. `validate` (last published 0.1.0-beta.7) and `semantic-navigator-ui` (0.1.0-beta.11) are PRIVATE from this release on — npm keeps serving those two versions, so for them every assertion here inverts: nothing moves"
+validFrom: "every published release. While pre-mode `beta` is active, the `beta` dist-tag moves and `latest` must not. For any package that has gone PRIVATE, every assertion here INVERTS — npm keeps serving its last published version, so assert nothing moved. Read that set from `private: true` in the manifests."
 validUntil: ""
 expected: "npm view shows the new version + intended tag; a fresh install of each package imports (ESM + CJS) with types"
 twin:
@@ -47,11 +47,12 @@ monorepo.
 8. Repeat 5 on Node 24
 9. Check the linked family all published together at one version, and that `cli`/`mcp` are
    at their own (correct) versions
-10. For a package that has gone **private**, the check inverts — assert nothing moved.
-    `npm view @real-a11y-dev/validate` still shows `0.1.0-beta.7` and
-    `@real-a11y-dev/semantic-navigator-ui` still shows `0.1.0-beta.11`, with their
-    dist-tags where the last release left them, and `npm i` of a pinned old version
-    still resolves. Do not unpublish, do not re-point a tag
+10. For every package that has gone **private**, the check inverts — assert nothing
+    moved. Take the set from `private: true` in `packages/*/package.json` rather than
+    from a list here; it grows each release. For each, `npm view` still reports the
+    version it was last published at, its dist-tags sit where that release left them,
+    and `npm i` of a pinned old version still resolves. Do not unpublish, do not
+    re-point a tag — `npm deprecate` is the only thing that should have changed
 
 ## Expected
 
