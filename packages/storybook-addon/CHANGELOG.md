@@ -1,5 +1,14 @@
 # @real-a11y-dev/storybook-addon
 
+## 0.1.0-beta.13
+
+### Patch Changes
+
+- Updated dependencies [f54f398]
+- Updated dependencies [80d2b02]
+  - @real-a11y-dev/testing@0.1.0-beta.13
+  - @real-a11y-dev/core@0.1.0-beta.13
+
 ## 0.1.0-beta.12
 
 ### Minor Changes

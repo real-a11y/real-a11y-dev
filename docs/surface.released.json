@@ -5,32 +5,6 @@
         {
           "subpath": ".",
           "types": [
-            "A11yRule",
-            "Finding",
-            "RoleFilter"
-          ],
-          "values": [
-            "A11yAssertionError",
-            "ALL_RULES",
-            "INTERACTIVE_ROLES",
-            "assertDialogsLabeled",
-            "assertHeadingOrder",
-            "assertLandmarkStructure",
-            "assertNoUnlabeledInteractive",
-            "assertRules",
-            "collectFindings",
-            "formatFindings",
-            "listByRole"
-          ]
-        }
-      ],
-      "name": "@real-a11y-dev/audit"
-    },
-    {
-      "entries": [
-        {
-          "subpath": ".",
-          "types": [
             "A11ySession",
             "BrowserSessionOptions",
             "ChromeChannel",
@@ -227,111 +201,6 @@
         {
           "subpath": ".",
           "types": [
-            "ExtractionResult",
-            "NodeChange",
-            "OutlineEntry",
-            "SemanticNode",
-            "SerializeInput",
-            "SerializeOptions",
-            "TreeDiff",
-            "TreeDiffSerializeOptions",
-            "TreeViewMode"
-          ],
-          "values": [
-            "extract",
-            "foldTypography",
-            "numberTabStops",
-            "serializeOutline",
-            "serializeTabSequence",
-            "serializeTree",
-            "serializeTreeDiff"
-          ]
-        }
-      ],
-      "name": "@real-a11y-dev/serialize"
-    },
-    {
-      "entries": [
-        {
-          "subpath": ".",
-          "types": [
-            "Baseline",
-            "BaselineEntry",
-            "BaselinePage",
-            "BuildSnapshotPageOptions",
-            "CleanSnapshot",
-            "DiffClass",
-            "DiffEntry",
-            "DiffLine",
-            "DiffOptions",
-            "DiffResult",
-            "DiffSummary",
-            "FindingComponents",
-            "FingerprintId",
-            "FingerprintedFinding",
-            "Hunk",
-            "NativeSnapshotOptions",
-            "PageDiff",
-            "RawViews",
-            "SnapshotArtifact",
-            "SnapshotPage",
-            "SnapshotView",
-            "SummarizeViewsInput",
-            "ViewChange",
-            "ViewChangeKind",
-            "ViewDiff",
-            "ViewHunks"
-          ],
-          "values": [
-            "ARTIFACT_SCHEMA_VERSION",
-            "BASELINE_SCHEMA_VERSION",
-            "DEFAULT_BASELINE_PATH",
-            "DEFAULT_ROOT",
-            "SNAPSHOT_VIEWS",
-            "SnapshotFormatError",
-            "VIEW_CHANGE_ORDER",
-            "applyBaseline",
-            "assertDistinctPageIds",
-            "assertFullArtifact",
-            "buildArtifact",
-            "buildBaseline",
-            "buildSnapshotPage",
-            "componentsOf",
-            "diffArtifacts",
-            "diffFindings",
-            "diffViews",
-            "fingerprintFindings",
-            "hashId",
-            "hunkHeader",
-            "hunkLineCount",
-            "loadBaseline",
-            "measuredViews",
-            "noPagesMatched",
-            "pageIdOf",
-            "parseSnapshotArtifact",
-            "projectFinding",
-            "projectFindings",
-            "projectNativeTree",
-            "projectSnapshot",
-            "redactUrl",
-            "redactUrlsIn",
-            "sanitizeText",
-            "scopeId",
-            "serializeArtifact",
-            "serializeBaseline",
-            "summarizeViews",
-            "unifiedDiff",
-            "viewsOfPage"
-          ]
-        }
-      ],
-      "name": "@real-a11y-dev/snapshot"
-    },
-    {
-      "entries": [
-        {
-          "subpath": ".",
-          "types": [
             "TreeMode",
             "TreeUpdatePayload"
           ],
@@ -393,6 +262,7 @@
             "assertHeadingOrder",
             "assertLandmarkStructure",
             "assertNoUnlabeledInteractive",
+            "assertRules",
             "auditSnapshot",
             "capture",
             "collectFindings",
@@ -402,10 +272,12 @@
             "findAllByRole",
             "findByRole",
             "flow",
+            "formatFindings",
             "getOutline",
             "getTabSequence",
             "linearize",
             "listByRole",
+            "numberTabStops",
             "outlineSnapshot",
             "serializeTree",
             "serializeTreeDiff",
@@ -2663,7 +2535,7 @@
         "."
       ],
       "name": "@real-a11y-dev/audit",
-      "private": false,
+      "private": true,
       "version": "0.1.0-beta.12",
       "workspaceDeps": [
         "@real-a11y-dev/core"
@@ -2678,11 +2550,9 @@
       ],
       "name": "@real-a11y-dev/browser",
       "private": false,
-      "version": "0.1.0-beta.12",
+      "version": "0.1.0-beta.13",
       "workspaceDeps": [
-        "@real-a11y-dev/audit",
-        "@real-a11y-dev/core",
-        "@real-a11y-dev/serialize"
+        "@real-a11y-dev/core"
       ]
     },
     {
@@ -2694,12 +2564,10 @@
       "exports": [],
       "name": "@real-a11y-dev/cli",
       "private": false,
-      "version": "0.1.0-beta.2",
+      "version": "0.1.0-beta.3",
       "workspaceDeps": [
-        "@real-a11y-dev/audit",
         "@real-a11y-dev/browser",
-        "@real-a11y-dev/serialize",
-        "@real-a11y-dev/snapshot"
+        "@real-a11y-dev/core"
       ]
     },
     {
@@ -2711,7 +2579,7 @@
       ],
       "name": "@real-a11y-dev/core",
       "private": false,
-      "version": "0.1.0-beta.12",
+      "version": "0.1.0-beta.13",
       "workspaceDeps": []
     },
     {
@@ -2733,7 +2601,7 @@
       "exports": [],
       "name": "@real-a11y-dev/semantic-navigator-extension",
       "private": true,
-      "version": "0.1.9",
+      "version": "0.1.10",
       "workspaceDeps": [
         "@real-a11y-dev/core",
         "@real-a11y-dev/semantic-navigator-ui",
@@ -2749,7 +2617,7 @@
       ],
       "name": "@real-a11y-dev/inspector",
       "private": false,
-      "version": "0.1.0-beta.12",
+      "version": "0.1.0-beta.13",
       "workspaceDeps": []
     },
     {
@@ -2763,12 +2631,10 @@
       ],
       "name": "@real-a11y-dev/mcp",
       "private": false,
-      "version": "0.1.0-beta.2",
+      "version": "0.1.0-beta.3",
       "workspaceDeps": [
-        "@real-a11y-dev/audit",
         "@real-a11y-dev/browser",
-        "@real-a11y-dev/serialize",
-        "@real-a11y-dev/snapshot"
+        "@real-a11y-dev/core"
       ]
     },
     {
@@ -2780,7 +2646,7 @@
       ],
       "name": "@real-a11y-dev/react",
       "private": false,
-      "version": "0.1.0-beta.12",
+      "version": "0.1.0-beta.13",
       "workspaceDeps": [
         "@real-a11y-dev/core",
         "@real-a11y-dev/inspector"
@@ -2794,7 +2660,7 @@
         "."
       ],
       "name": "@real-a11y-dev/serialize",
-      "private": false,
+      "private": true,
       "version": "0.1.0-beta.12",
       "workspaceDeps": [
         "@real-a11y-dev/core"
@@ -2822,7 +2688,7 @@
         "."
       ],
       "name": "@real-a11y-dev/snapshot",
-      "private": false,
+      "private": true,
       "version": "0.1.0-beta.12",
       "workspaceDeps": [
         "@real-a11y-dev/audit",
@@ -2841,7 +2707,7 @@
       ],
       "name": "@real-a11y-dev/storybook-addon",
       "private": false,
-      "version": "0.1.0-beta.12",
+      "version": "0.1.0-beta.13",
       "workspaceDeps": [
         "@real-a11y-dev/core",
         "@real-a11y-dev/testing"
@@ -2859,12 +2725,10 @@
       ],
       "name": "@real-a11y-dev/testing",
       "private": false,
-      "version": "0.1.0-beta.12",
+      "version": "0.1.0-beta.13",
       "workspaceDeps": [
-        "@real-a11y-dev/audit",
         "@real-a11y-dev/browser",
-        "@real-a11y-dev/core",
-        "@real-a11y-dev/serialize"
+        "@real-a11y-dev/core"
       ]
     },
     {
