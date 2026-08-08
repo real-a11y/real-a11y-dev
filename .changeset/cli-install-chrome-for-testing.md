@@ -1,5 +1,4 @@
 ---
-"@real-a11y-dev/browser": minor
 "@real-a11y-dev/cli": minor
 "@real-a11y-dev/mcp": minor
 ---
@@ -16,4 +15,4 @@ This replaces the `npx playwright install chromium` step (still supported) with 
 
 The CLI's browser-driving commands gain `--chrome-path <file>` to launch a specific binary (ignored with `--cdp`). Resolution precedence, shared by the CLI and the MCP server: `--chrome-path` > `REAL_A11Y_CHROME_PATH` env > the `real-a11y install` cache > Playwright's own bundled Chromium.
 
-`@real-a11y-dev/browser` gains `executablePath` on `BrowserSessionOptions`, plus `resolveChromeExecutable`/`readChromeManifest`/`chromeCacheDir` for anyone building their own installer or launch wiring. The MCP server picks up `REAL_A11Y_CHROME_PATH` and `REAL_A11Y_BROWSERS_DIR` the same way.
+`BrowserSessionOptions` — re-exported by `@real-a11y-dev/mcp` — gains `executablePath`, so a caller driving the session directly can point it at a specific binary. The MCP server picks up `REAL_A11Y_CHROME_PATH` and `REAL_A11Y_BROWSERS_DIR` the same way.

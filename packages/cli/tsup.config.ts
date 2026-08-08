@@ -32,6 +32,7 @@ export default defineConfig({
     "@real-a11y-dev/audit",
     "@real-a11y-dev/serialize",
     "@real-a11y-dev/snapshot",
+    "@real-a11y-dev/browser",
   ],
   banner: { js: "" },
 });

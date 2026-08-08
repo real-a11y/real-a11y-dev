@@ -1,6 +1,5 @@
 ---
 "@real-a11y-dev/core": minor
-"@real-a11y-dev/browser": minor
 ---
 
 Findings from the native producer now say **where**.
