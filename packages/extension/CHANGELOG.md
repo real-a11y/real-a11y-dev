@@ -8,6 +8,19 @@
   landed the change; versions match `package.json`/`public/manifest.json`.
 -->
 
+## Unreleased
+
+### Patch Changes
+
+- Stop the panel opening an unrelated subtree when focus moves inside an
+  iframe. Focus and picker events reached the panel twice — once straight
+  from the frame, once relayed by the background with the node id prefixed by
+  its frame — and only the relayed id is addressable in the merged tree. The
+  direct copy's frame-local `sn-<n>` resolved to a different top-frame node,
+  which the panel selected and force-expanded before the relayed copy put the
+  selection right; the expansions stayed behind. The panel now ignores the
+  direct copy. ([#317])
+
 ## 0.1.10
 
 ### Patch Changes
@@ -163,3 +176,4 @@ Earlier releases predate this changelog.
 [#248]: https://github.com/real-a11y/real-a11y-dev/pull/248
 [#287]: https://github.com/real-a11y/real-a11y-dev/pull/287
 [#308]: https://github.com/real-a11y/real-a11y-dev/pull/308
+[#317]: https://github.com/real-a11y/real-a11y-dev/pull/317
