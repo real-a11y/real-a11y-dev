@@ -13,10 +13,22 @@ import { defineConfig } from "tsup";
 // `testing`, `import.meta.url` becomes the CONSUMER's dist, the file is not
 // beside it, and every `attach()` / page open fails at runtime — silently,
 // because nothing type-checks a path. Inlining removes the path entirely.
-const PAGE_BUNDLE = readFileSync(
-  path.resolve(__dirname, "dist/page-bundle.iife.global.js"),
-  "utf8",
-);
+const BUNDLE_FILE = path.resolve(__dirname, "dist/page-bundle.iife.global.js");
+
+let PAGE_BUNDLE: string;
+try {
+  PAGE_BUNDLE = readFileSync(BUNDLE_FILE, "utf8");
+} catch {
+  // A raw ENOENT here reads as a broken repo. It almost always means the
+  // page-bundle pass hasn't run — `pnpm dev` invokes this config alone, so on a
+  // clean checkout there is nothing to inline yet.
+  throw new Error(
+    `The page-bundle has not been built yet, so there is nothing to inline.\n` +
+      `  Expected: ${BUNDLE_FILE}\n\n` +
+      `  Run \`pnpm build\` once (it runs tsup.page-bundle.config.ts first),\n` +
+      `  then \`pnpm dev\` works — the watcher only rebuilds the main entry.`,
+  );
+}
 
 export default defineConfig({
   // ── Main entry: the BrowserSession Node API ────────────────────────────────

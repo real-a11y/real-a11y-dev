@@ -45,7 +45,7 @@
   },
   "scripts": {
     "build": "tsup --config tsup.page-bundle.config.ts && tsup",
-    "dev": "tsup --watch",
+    "dev": "tsup --config tsup.page-bundle.config.ts && tsup --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
