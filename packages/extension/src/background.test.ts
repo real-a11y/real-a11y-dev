@@ -475,9 +475,19 @@ describe("background: recovery after a service-worker restart", () => {
     ];
     h.liveFrames.delete(9); // no content script, will never announce
 
-    announce(h, 0);
-    await vi.runAllTimersAsync();
+    const before = h.tabMessages.length;
+    // Every real frame announces, so the unanswerable one is the ONLY thing
+    // missing — otherwise the deferral is owed to frames 1 and 2 and this
+    // says nothing about frame 9.
+    for (const frameId of [0, 1, 2]) announce(h, frameId);
+    // ONE debounce, not `runAllTimersAsync()`. The wait is the whole subject:
+    // soliciting the unanswerable frame reaches the same complete tree, just
+    // a debounce later, so draining every timer hides the difference.
+    await vi.advanceTimersByTimeAsync(200);
 
+    expect(reAnnounceRequests(h, before).map((m) => m.frameId)).not.toContain(
+      9,
+    );
     const ids = lastTreeToPanel(h);
     expect(ids).toContain("f1-root");
     expect(ids).toContain("f2-root");
@@ -593,13 +603,18 @@ describe("background: recovery after a service-worker restart", () => {
   });
 
   /**
-   * `scheduleMerge` used to resolve the tab state by id through
-   * `getOrCreateTabState`, which inserts on miss. Now that a merge can
-   * re-enter it after an `await`, one still in flight when the tab closes
-   * would resurrect the entry — and `onRemoved`, the only deleter, will
-   * never fire for that id again.
+   * What this pins is the name: a closed tab produces no further traffic,
+   * however far along its in-flight merge was.
+   *
+   * It does NOT cover `scheduleMerge`'s resolve-don't-create — reverting that
+   * leaves this green. The resurrected `TabState` has an empty `frames` map,
+   * so the pre-`await` guard bails it out before any Chrome call: the leak is
+   * a dangling entry nothing will ever delete, with no route to the module's
+   * surface for a black-box test to observe. Asserting it would mean
+   * exporting the registry from a service-worker entry purely for tests,
+   * which costs more than the leak does.
    */
-  it("does not resurrect tab state for a tab that has been closed", async () => {
+  it("sends nothing more once the tab has been closed", async () => {
     connectPanel(h);
     await vi.runAllTimersAsync();
 

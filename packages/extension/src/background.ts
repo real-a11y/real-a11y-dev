@@ -44,7 +44,17 @@ async function mergeAndSendTree(tabId: number) {
   // An emptied `frames` map must stay side-effect-free. `clearTabFrames` runs
   // on every top-frame navigation, and until the new document commits
   // `getAllFrames` still describes the outgoing one — whose subframes are
-  // typically alive and mutating. Bail before spending a Chrome call on it.
+  // typically alive and mutating.
+  //
+  // What it costs: after a restart where a SUBFRAME announces first, nothing
+  // is repaired until the top frame announces too. An empty map plus one
+  // subframe tree is indistinguishable from a navigation in progress, and
+  // guessing wrong there republishes the page the user just left. The outcome
+  // is still correct once the top frame speaks.
+  //
+  // Purely an optimisation, not the correctness boundary — the post-`await`
+  // re-read below is that, since this check cannot see a navigation that
+  // lands while `getAllFrames` is in flight. This one just saves the IPC.
   if (!state.frames.has(0)) return;
 
   let allFrames: chrome.webNavigation.GetAllFrameResultDetails[] = [];
