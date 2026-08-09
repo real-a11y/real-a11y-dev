@@ -268,6 +268,77 @@ export function isTrustedSender(
   return Boolean(ownExtensionId) && sender?.id === ownExtensionId;
 }
 
+// ---- Side-panel inbound message filtering ----
+
+/**
+ * Message types whose payload carries a **frame-local** node id, and which the
+ * background therefore re-sends with the id prefixed by its frame.
+ *
+ * A content script's `chrome.runtime.sendMessage` fans out to every extension
+ * context, so each of these reaches the panel twice: once directly from the
+ * frame (raw `sn-<n>`) and once relayed by the background (`f<frameId>-sn-<n>`).
+ * Only the relayed copy is addressable in the merged tree — see
+ * {@link shouldPanelAcceptMessage}.
+ */
+const BACKGROUND_RELAYED_TYPES: ReadonlySet<string> = new Set([
+  "FOCUS_CHANGED",
+  "NODE_PICKED",
+]);
+
+/**
+ * Whether the side panel should act on an inbound runtime message.
+ *
+ * Two independent rules:
+ *
+ *   1. **Frame-scoped events must come via the background.** `FOCUS_CHANGED`
+ *      and `NODE_PICKED` are sent by the content script with a frame-LOCAL
+ *      node id, and the content script's `sendMessage` reaches the panel
+ *      directly as well as the background. For a subframe event the direct
+ *      copy's `sn-<n>` collides with a *different*, unrelated top-frame node
+ *      in the merged tree: the panel selects it and force-expands its
+ *      ancestors, and although the background's prefixed forward then corrects
+ *      the selection, those expansions stay. Delivery order isn't guaranteed
+ *      either way round, so both orders leave the stray expansions behind.
+ *      Requiring the background's `tabId` stamp drops the direct copy — the
+ *      same shape as the earlier `LIVE_REGION` fix, which no-opped the
+ *      *forward* because there the direct copy is the correct one (its payload
+ *      is text, not an id).
+ *
+ *   2. **Tab scoping.** Drop broadcasts belonging to another tab. Relayed
+ *      messages carry an explicit `tabId`; content-direct ones (`LIVE_REGION`)
+ *      carry theirs in `sender.tab.id`. With neither, accept — panel-internal
+ *      and future message types have no tab to compare.
+ *
+ * `ACTIVE_TAB_CHANGED` is exempt from both: it is intentionally about a tab
+ * other than ours, because it is how the panel LEARNS which tab it is bound to.
+ *
+ * Pure (no `chrome` access) so both rules are unit-tested directly rather than
+ * living as inline conditions in the panel's message handler.
+ */
+export function shouldPanelAcceptMessage(opts: {
+  type: string;
+  /** `message.tabId` — stamped by the background on everything it relays. */
+  messageTabId?: number;
+  /** `sender.tab?.id` — set when a content script messaged the panel directly. */
+  senderTabId?: number;
+  /** The tab the panel is bound to; `null` before it has learned one. */
+  myTabId: number | null;
+}): boolean {
+  if (opts.type === "ACTIVE_TAB_CHANGED") return true;
+
+  if (
+    BACKGROUND_RELAYED_TYPES.has(opts.type) &&
+    opts.messageTabId === undefined
+  ) {
+    return false;
+  }
+
+  if (opts.myTabId === null) return true;
+
+  const provenance = opts.messageTabId ?? opts.senderTabId;
+  return provenance === undefined || provenance === opts.myTabId;
+}
+
 /**
  * How a `HIGHLIGHT_NODE` should be applied on the page.
  *

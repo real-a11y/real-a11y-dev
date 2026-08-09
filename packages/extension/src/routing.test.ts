@@ -10,6 +10,7 @@ import {
   planFrameHello,
   isTrustedSender,
   resolvePanelTargetTab,
+  shouldPanelAcceptMessage,
 } from "./routing.js";
 
 describe("prefixNodeId", () => {
@@ -453,5 +454,153 @@ describe("planHighlight", () => {
     // Older panel builds omit the flag entirely; selection is the safe default
     // because it preserves the click/arrow-key behaviour.
     expect(planHighlight({})).toEqual({ scroll: true, moveFocus: true });
+  });
+});
+
+describe("shouldPanelAcceptMessage", () => {
+  const MY_TAB = 7;
+
+  describe("the frame-scoped events reach the panel twice", () => {
+    // One `focusin` inside an iframe produces TWO deliveries to the panel:
+    // the content script's own sendMessage (frame-LOCAL id, no tabId stamp)
+    // and the background's forward (frame-PREFIXED id, tabId stamped). The
+    // panel must act on the prefixed one only — `sn-3` from frame 2 is a
+    // different, unrelated node in the merged tree's top-frame portion, and
+    // selecting it force-expands its ancestors. The prefixed forward then
+    // fixes the selection but not those expansions, whichever order the two
+    // arrive in.
+    const deliveriesFor = (type: string) => [
+      // direct from the iframe's content script
+      { type, messageTabId: undefined, senderTabId: MY_TAB, myTabId: MY_TAB },
+      // relayed by the background
+      { type, messageTabId: MY_TAB, senderTabId: undefined, myTabId: MY_TAB },
+    ];
+
+    it.each(["FOCUS_CHANGED", "NODE_PICKED"])(
+      "accepts exactly one of the two %s deliveries — the relayed one",
+      (type) => {
+        expect(deliveriesFor(type).map(shouldPanelAcceptMessage)).toEqual([
+          false,
+          true,
+        ]);
+      },
+    );
+
+    it.each(["FOCUS_CHANGED", "NODE_PICKED"])(
+      "drops the direct %s copy from the top frame too",
+      (type) => {
+        // Frame 0 ids are unprefixed, so the direct copy looks harmless — but
+        // accepting it still double-handles every focus change, and the rule
+        // is not worth making frame-dependent when the panel cannot tell
+        // which frame a direct copy came from.
+        expect(
+          shouldPanelAcceptMessage({
+            type,
+            senderTabId: MY_TAB,
+            myTabId: MY_TAB,
+          }),
+        ).toBe(false);
+      },
+    );
+
+    it.each(["FOCUS_CHANGED", "NODE_PICKED"])(
+      "drops the direct %s copy before the panel knows its tab",
+      (type) => {
+        // The duplicate is wrong regardless of tab binding, so the relay
+        // requirement is not conditional on myTabId being known.
+        expect(
+          shouldPanelAcceptMessage({
+            type,
+            senderTabId: MY_TAB,
+            myTabId: null,
+          }),
+        ).toBe(false);
+      },
+    );
+  });
+
+  describe("content-direct messages that are not frame-scoped", () => {
+    it("accepts LIVE_REGION straight from the content script", () => {
+      // LIVE_REGION is the mirror case: the background no-ops its forward,
+      // so the direct copy is the only one — and its payload is text, not an
+      // id, so there is nothing to prefix.
+      expect(
+        shouldPanelAcceptMessage({
+          type: "LIVE_REGION",
+          senderTabId: MY_TAB,
+          myTabId: MY_TAB,
+        }),
+      ).toBe(true);
+    });
+
+    it("drops LIVE_REGION from another tab", () => {
+      expect(
+        shouldPanelAcceptMessage({
+          type: "LIVE_REGION",
+          senderTabId: 99,
+          myTabId: MY_TAB,
+        }),
+      ).toBe(false);
+    });
+  });
+
+  describe("tab scoping", () => {
+    it("drops a relayed message stamped with another tab", () => {
+      expect(
+        shouldPanelAcceptMessage({
+          type: "TREE_DATA",
+          messageTabId: 99,
+          myTabId: MY_TAB,
+        }),
+      ).toBe(false);
+    });
+
+    it("accepts a relayed message stamped with our tab", () => {
+      expect(
+        shouldPanelAcceptMessage({
+          type: "TREE_DATA",
+          messageTabId: MY_TAB,
+          myTabId: MY_TAB,
+        }),
+      ).toBe(true);
+    });
+
+    it("prefers the message stamp over the sender's tab", () => {
+      expect(
+        shouldPanelAcceptMessage({
+          type: "TREE_DATA",
+          messageTabId: MY_TAB,
+          senderTabId: 99,
+          myTabId: MY_TAB,
+        }),
+      ).toBe(true);
+    });
+
+    it("accepts a message with no tab on either side", () => {
+      // Panel-internal and future message types have nothing to compare.
+      expect(
+        shouldPanelAcceptMessage({ type: "TREE_DATA", myTabId: MY_TAB }),
+      ).toBe(true);
+    });
+
+    it("accepts anything before the panel has learned its tab", () => {
+      expect(
+        shouldPanelAcceptMessage({
+          type: "TREE_DATA",
+          messageTabId: 99,
+          myTabId: null,
+        }),
+      ).toBe(true);
+    });
+  });
+
+  it("never filters ACTIVE_TAB_CHANGED — it is how the panel learns its tab", () => {
+    expect(
+      shouldPanelAcceptMessage({
+        type: "ACTIVE_TAB_CHANGED",
+        messageTabId: 99,
+        myTabId: MY_TAB,
+      }),
+    ).toBe(true);
   });
 });
