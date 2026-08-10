@@ -239,10 +239,11 @@ main
       code "--format md -o comment.md"
   paragraph "Every command and flag is in ."
     link "Commands & flags"
-  paragraph "What the CLI cannot give you is an , and no other package does either now. The Playwright-backed session lives in , which was published through and is workspace-internal from the next release on: it is bundled into this server, the CLI, and the testing adapter, and there is nothing to install by that name. Two narrower doors stay open, neither a replacement for it:"
+  paragraph "What the CLI cannot give you is an , and no other package does either now. The Playwright-backed session lives in , which was published through and is workspace-internal from on: it is bundled into this server, the CLI, and the testing adapter, and there is nothing to install by that name. Two narrower doors stay open, neither a replacement for it:"
     strong "in-process Node API"
     code "@real-a11y-dev/browser"
     code "0.1.0-beta.13"
+    code "mcp@0.1.0-beta.4"
   list
     listitem "— from runs the same audit helpers against it, and stays public."
       strong "You already have a Playwright"
