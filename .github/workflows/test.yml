@@ -65,11 +65,49 @@ jobs:
           fi
 
           git fetch --no-tags origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
-          node scripts/pr-risk.mjs --base "origin/$BASE_REF" --format json > risk.json
 
-          CODE="$(node -p "require('./risk.json').ci.code")"
-          SITE="$(node -p "require('./risk.json').ci.website")"
-          MATRIX="$(node -p "JSON.stringify(require('./risk.json').ci.matrix)")"
+          # The classifier comes from the BASE branch, exactly as
+          # `.github/workflows/pr-risk.yml` does it and for the same reason: a
+          # classifier read out of the pull request is one the pull request can
+          # rewrite, and here that would skip e2e, examples-dev, packages-node24
+          # and website-a11y while the required `test` gate still reported green.
+          # The likelier case is the accidental one — a branch that simply breaks
+          # the classifier — and this makes that safe too.
+          #
+          # It is not a complete boundary: for `pull_request`, GitHub reads THIS
+          # WORKFLOW from the head branch, so an author who edits test.yml itself
+          # is not stopped by anything here. That is why `.github/workflows/` is
+          # graded 🔴 high and needs `reviewed:deep` — the backstop is review, and
+          # this raises what review has to notice from "one line of a script" to
+          # "the workflow was rewritten".
+          mkdir -p "$RUNNER_TEMP/base"
+          git archive "origin/$BASE_REF" scripts | tar -x -C "$RUNNER_TEMP/base"
+          RUBRIC="$RUNNER_TEMP/base/scripts/pr-risk.mjs"
+
+          # Output goes to RUNNER_TEMP, NOT the working tree. Writing `risk.json`
+          # into the repo made this whole job a no-op: the shell creates the file
+          # before node starts, `collectFacts` counts untracked files as changed,
+          # an unrecognised path forces `code=true`, and every PR ran the full
+          # matrix while appearing to be optimised. Same defect as the earlier
+          # "stop the risk report counting its own output as changed files" — it
+          # came back the moment the redirection moved to a second workflow.
+          OUT="$RUNNER_TEMP/risk.json"
+
+          # Fails SAFE, unlike the pr-risk gate: if the classifier can't be read
+          # or can't run, run everything. The cost of a wrong "run it all" is a few
+          # minutes; the cost of a wrong "skip it all" is a suite that never ran.
+          if [ ! -f "$RUBRIC" ] || ! node "$RUBRIC" --repo "$GITHUB_WORKSPACE" \
+               --base "origin/$BASE_REF" --format json > "$OUT"; then
+            echo "::warning::couldn't classify the diff — running every job"
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            echo "website=true" >> "$GITHUB_OUTPUT"
+            echo 'matrix={"node":[20,22],"os":["ubuntu-latest","macos-latest"]}' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          CODE="$(node -p "require('$OUT').ci.code")"
+          SITE="$(node -p "require('$OUT').ci.website")"
+          MATRIX="$(node -p "JSON.stringify(require('$OUT').ci.matrix)")"
 
           # Validated, not trusted. A failed substitution inside `echo` does not
           # abort under `set -e`, and an empty value here reads as `false` — which
