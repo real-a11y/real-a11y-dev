@@ -3,6 +3,7 @@
 import { buildFrameInfoMap, mergeFrameTrees } from "./frame-merger.js";
 import {
   type PlannedTabMessage,
+  describeBroadcastDelivery,
   isTrustedSender,
   prefixNodeId,
   parseNodeId,
@@ -578,31 +579,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       (message as { tabId?: number }).tabId,
       activeTabId,
     );
-    if (targetTabId !== null) {
+    // One responder for both routes. Answering from inside the send callback
+    // is the whole point — until Chrome runs it, whether ANY frame took the
+    // message is unknown, and a premature `success: true` is
+    // indistinguishable from a page the extension can never reach. Keeping it
+    // in one place also means neither route can be left silently not
+    // answering, which would hang the panel on an open message channel.
+    const broadcast = (tabId: number) => {
       // Clear old frame data on fresh request
       if (message.type === "REQUEST_TREE") {
-        clearTabFrames(getTabState(targetTabId));
+        clearTabFrames(getTabState(tabId));
       }
-      chrome.tabs.sendMessage(targetTabId, message, () => {
-        if (chrome.runtime.lastError) {
-          // Some frames might not have the content script
-        }
+      chrome.tabs.sendMessage(tabId, message, () => {
+        sendResponse(describeBroadcastDelivery(chrome.runtime.lastError));
       });
-      sendResponse({ success: true });
+    };
+
+    if (targetTabId !== null) {
+      broadcast(targetTabId);
     } else {
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         const tabId = tabs[0]?.id;
         if (tabId) {
           activeTabId = tabId;
-          if (message.type === "REQUEST_TREE") {
-            clearTabFrames(getTabState(tabId));
-          }
-          chrome.tabs.sendMessage(tabId, message, () => {
-            if (chrome.runtime.lastError) {
-              /* ignore */
-            }
-          });
-          sendResponse({ success: true });
+          broadcast(tabId);
         } else {
           sendResponse({ success: false, error: "No active tab" });
         }

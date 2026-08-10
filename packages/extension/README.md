@@ -50,6 +50,8 @@ Web Page
 
 The content script is declared in the manifest with `<all_urls>` and `all_frames: true` so the tree is ready the moment the user opens the side panel. No data leaves your browser; the extension makes no network requests.
 
+Chrome still blocks content scripts outright on some pages — `chrome://` pages (including the default new-tab page), the Chrome Web Store, and the built-in PDF viewer. A panel→content broadcast there reaches no frame, and the background reports that back (`{ success: false, error: "restricted-page" }`) rather than claiming delivery. Any tree request that comes back that way — the panel's first load, the `↻` refresh, **Load tree** — puts the panel in a **This page can't be inspected** state instead of leaving it waiting on a tree that can never arrive. Switching to such a tab does not by itself show it: the panel never auto-requests on a tab switch (see "Manual refresh" in the guide), so the message appears once you ask.
+
 ### Content Security Policy
 
 `extension_pages` is locked to `script-src 'self'; object-src 'self'; base-uri 'self'` — the side panel cannot load remote scripts, embed `<object>`/`<embed>` from third parties, or be re-based to a different origin. See `public/manifest.json`.

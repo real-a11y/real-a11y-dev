@@ -647,3 +647,85 @@ describe("background: recovery after a service-worker restart", () => {
     expect(reAnnounceRequests(h, before).map((m) => m.frameId)).toEqual([1, 2]);
   });
 });
+
+/**
+ * Delivery of a panel→content broadcast is only known once Chrome has run the
+ * `tabs.sendMessage` callback. Answering the panel before then reports success
+ * on pages where no content script can run at all (chrome://, the Web Store,
+ * the built-in PDF viewer) — and since the panel's whole "am I attached?"
+ * signal is a tree that never arrives, it sits on "Connecting to page..."
+ * forever instead of saying the page is out of reach.
+ */
+describe("background: panel broadcast delivery reporting", () => {
+  let h: Harness;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.resetModules();
+    h = makeHarness();
+    (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
+    await import("./background.js");
+    await vi.runAllTimersAsync();
+    h.panelMessages.length = 0;
+    h.tabMessages.length = 0;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    delete (globalThis as { chrome?: unknown }).chrome;
+  });
+
+  /** Send a panel→background message and collect every reply it produces. */
+  function sendFromPanel(message: {
+    type: string;
+    payload?: unknown;
+    tabId?: number;
+  }): unknown[] {
+    const replies: unknown[] = [];
+    for (const fn of h.messageListeners) {
+      fn({ tabId: TAB_ID, ...message }, { id: EXTENSION_ID }, (response) =>
+        replies.push(response),
+      );
+    }
+    return replies;
+  }
+
+  it("reports failure when no frame in the tab could receive REQUEST_TREE", async () => {
+    h.knobs.sendError = { message: "Could not establish connection." };
+
+    const replies = sendFromPanel({
+      type: "REQUEST_TREE",
+      payload: { viewMode: "a11y" },
+    });
+    // Nothing may be claimed before Chrome has run the send callback.
+    expect(replies).toEqual([]);
+
+    await vi.runAllTimersAsync();
+    expect(replies).toEqual([{ success: false, error: "restricted-page" }]);
+  });
+
+  it("does not report a restricted page when the tab simply went away", async () => {
+    // A re-extract queued before the user closed the tab lands after it is
+    // gone. Reporting that as `restricted-page` would put the panel's
+    // "Chrome doesn't allow extensions here" message on an ordinary page.
+    h.knobs.sendError = { message: "No tab with id: 42." };
+
+    const replies = sendFromPanel({
+      type: "REQUEST_TREE",
+      payload: { viewMode: "a11y" },
+    });
+    await vi.runAllTimersAsync();
+
+    expect(replies).toEqual([{ success: false, error: "No tab with id: 42." }]);
+  });
+
+  it("reports success once a reachable tab has taken REQUEST_TREE", async () => {
+    const replies = sendFromPanel({
+      type: "REQUEST_TREE",
+      payload: { viewMode: "a11y" },
+    });
+    await vi.runAllTimersAsync();
+
+    expect(replies).toEqual([{ success: true }]);
+  });
+});
