@@ -19,8 +19,8 @@
 // --since overrides the auto-detected previous tag (useful when a tagged version
 // was skipped on the Web Store, so notes should be cumulative).
 
-import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -108,7 +108,7 @@ if (!prevTag) {
 
 // Commit subjects in range, restricted to the bundled surface.
 const range = prevTag ? `${prevTag}..HEAD` : "HEAD";
-let subjects = [];
+let subjects;
 try {
   const out = git([
     "log",

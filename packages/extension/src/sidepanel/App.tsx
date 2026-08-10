@@ -37,7 +37,7 @@ import {
 } from "preact/hooks";
 
 import type { FieldState } from "../field-state.js";
-import { isTrustedSender } from "../routing.js";
+import { isTrustedSender, shouldPanelAcceptMessage } from "../routing.js";
 import type { ContentToPanel, PanelToContent } from "../types.js";
 
 import { buildExportMarkdown, ALL_VIEWS } from "./export.js";
@@ -320,25 +320,19 @@ export function App() {
       // the trust boundary explicit before we mutate panel state.
       if (!isTrustedSender(sender, chrome.runtime.id)) return;
 
-      // Drop broadcasts that aren't for our tab. Background-relayed
-      // messages carry an explicit `tabId`; content-direct messages
-      // (LIVE_REGION) carry their tab in `sender.tab`. When neither is
-      // present, accept (e.g., panel-internal messages, future types).
-      const myId = myTabIdRef.current;
-      if (myId !== null) {
-        const messageTabId = (message as { tabId?: number }).tabId;
-        const senderTabId = sender.tab?.id;
-        const provenance = messageTabId ?? senderTabId;
-        // ACTIVE_TAB_CHANGED is the one message type that's intentionally
-        // about a tab other than ours — it's how we LEARN about tab
-        // changes. Don't filter it.
-        if (
-          message.type !== "ACTIVE_TAB_CHANGED" &&
-          provenance !== undefined &&
-          provenance !== myId
-        ) {
-          return;
-        }
+      // Drop broadcasts for another tab, and drop the content script's
+      // direct copy of the frame-scoped events (it carries a frame-local
+      // node id that collides with the top frame's). Rules are in
+      // routing.ts — unit-tested there.
+      if (
+        !shouldPanelAcceptMessage({
+          type: message.type,
+          messageTabId: (message as { tabId?: number }).tabId,
+          senderTabId: sender.tab?.id,
+          myTabId: myTabIdRef.current,
+        })
+      ) {
+        return;
       }
 
       if (message.type === "ACTIVE_TAB_CHANGED") {

@@ -6,8 +6,8 @@
     "build": "pnpm -r --filter \"!@real-a11y-dev/website\" --filter \"!@real-a11y-dev/example-vanilla\" --filter \"!@real-a11y-dev/example-react\" --filter \"!@real-a11y-dev/example-storybook\" --filter \"!@real-a11y-dev/example-testing\" build",
     "dev": "pnpm -r --parallel dev",
     "test": "pnpm -r --filter \"!@real-a11y-dev/website\" --filter \"!@real-a11y-dev/example-vanilla\" --filter \"!@real-a11y-dev/example-react\" --filter \"!@real-a11y-dev/example-storybook\" --filter \"!@real-a11y-dev/example-testing\" test",
-    "lint": "eslint packages/ scripts/surface website/scripts website/tests",
-    "lint:fix": "eslint packages/ scripts/surface website/scripts website/tests --fix",
+    "lint": "eslint packages/ scripts/ website/scripts website/tests",
+    "lint:fix": "eslint packages/ scripts/ website/scripts website/tests --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "pnpm -r --filter \"!@real-a11y-dev/website\" --filter \"!@real-a11y-dev/example-vanilla\" --filter \"!@real-a11y-dev/example-react\" --filter \"!@real-a11y-dev/example-storybook\" --filter \"!@real-a11y-dev/example-testing\" typecheck",
@@ -29,6 +29,7 @@
     "surface:check-built": "node scripts/surface/index.mjs check-built",
     "surface:plan": "node scripts/surface/index.mjs plan",
     "surface:scenarios": "node scripts/surface/index.mjs scenarios",
+    "pr:risk": "node scripts/pr-risk.mjs",
     "examples:dev-smoke": "node scripts/check-examples-dev.mjs"
   },
   "devDependencies": {

@@ -2,18 +2,76 @@
 name: pr
 description: >-
   The house workflow for opening (or updating) a pull request in this repo:
-  branch off main, make the change, KEEP THE DOCS IN SYNC, add a changeset,
-  verify, conventional commit, and open a normal (non-draft) PR. Use whenever
-  you're about to open or push a PR. Enforces that README and website markdown
-  move with any public-surface change, in the SAME PR — this is how the docs
-  stay current instead of drifting. (For cutting a release, use the `release`
-  skill instead.)
+  classify its risk, branch off main, make the change, KEEP THE DOCS IN SYNC,
+  add a changeset, verify, conventional commit, open a normal (non-draft) PR,
+  and land it — including when an agent may merge a low-risk PR itself and how
+  to rebase a branch whose merge button is blocked for being behind main. Use
+  whenever you're about to open, push, review, or merge a PR. Enforces that
+  README and website markdown move with any public-surface change, in the SAME
+  PR — this is how the docs stay current instead of drifting. (For cutting a
+  release, use the `release` skill instead.)
 ---
 
 # pr
 
-The end-to-end flow for a pull request here. Step 3 (docs) is not optional: a
+The end-to-end flow for a pull request here. Step 4 (docs) is not optional: a
 change to the public surface updates its docs in the same PR.
+
+Step 0 decides how much of the rest applies. Not every PR deserves the same
+effort, and spending a full review on a typo is the thing that makes the full
+review get skipped on the PR that needed it.
+
+## 0. Classify the risk — it decides how much of this skill applies
+
+```bash
+pnpm pr:risk
+```
+
+Prints the tier, which rule set it, and the evidence. It's a **rubric, not a
+score**: named reasons that either apply or don't, computed from the diff
+against the merge base. So it says the same thing on your machine and in CI —
+where the `pr-risk` workflow applies it as a `risk:*` label and a sticky comment.
+
+Run it early. The tier is an input to how you work the PR, not a verdict issued
+at the end of it.
+
+| Tier          | Set by                                                                                                                                                                                                                                                                                                                                                                                                                    | Review (§3a)                                                   | Merge (§9)                            |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------- |
+| 🟢 **low**    | only recognised-inert paths — website, root/package docs, examples, tests, changeset prose, issue templates                                                                                                                                                                                                                                                                                                               | CI only                                                        | **an agent may merge it** when green  |
+| 🟡 **medium** | a published package's `src`, the surface manifest gaining entries, `pnpm-lock.yaml`, a scenario — **or any path the rubric doesn't recognise**                                                                                                                                                                                                                                                                            | `/code-review`                                                 | a human merges                        |
+| 🔴 **high**   | `.github/workflows`, CODEOWNERS, the PR templates, `.claude/`, `scripts/`, `.husky/`, the test/lint config, `.changeset/config.json`, root `scripts`/`packageManager`/`engines`, a `major` changeset or `!` subject or `BREAKING CHANGE:` footer, a release cut, the extension manifest, a package's `exports`/`files`/`private`/`scripts`, a tsup config, a **removed** surface entry, or code touching redaction/tokens | `/code-review` + `/security-review`, and §4b worked explicitly | a human merges, after `reviewed:deep` |
+
+**The tier grades blast radius, not correctness.** A one-character typo in
+`publish.yml` is high; a 2,000-line docs rewrite is low. Nothing in the rubric
+reads the diff for whether the change is any _good_ — that's what the review is
+for, and the tier only decides how much review to buy.
+
+**Unknown paths grade 🟡 medium, not 🟢 low.** For a control whose whole job is
+blast radius, "the rubric has never heard of this path" is not the same as
+"harmless" — so a path nobody has classified costs you a human, and the report
+names it. If it genuinely is inert, add it to `LOW_SHAPED` in
+`scripts/pr-risk.mjs` rather than working around it.
+
+**Escalate freely, and say why in the PR body.** The rubric is a floor. If you
+touched something the rules can't see — a subtle behavioral change in a hot
+path, an error message users script against, anything you had to think hard
+about — treat it as the next tier up. Nothing stops you; the label just won't
+agree, and a sentence in the description reconciles it.
+
+**De-escalating needs a written reason, not just a label.** If a high rule fired
+on something genuinely inert, add the `risk-override` label **and** put a line in
+the description:
+
+```
+risk-override: <reason>
+risk-override: <rule-id>[, <rule-id>] — <reason>
+```
+
+The check reads that line back and fails without it, so "the override is
+recorded" is a fact rather than a hope. Naming rule ids narrows the waiver to
+those rules — worth doing, because an unscoped override waives `ci-workflows`,
+`packaging` and `secrets-and-redaction` all at once, and a waiver applied by
+habit means nothing on the PR where it mattered.
 
 ## 1. Branch off main
 
@@ -58,6 +116,39 @@ one and its expected result for the PR's **How to verify** section (step 8), so 
 reviewer can reproduce your check on a fresh checkout instead of reverse-
 engineering it from the diff. (That reviewer-facing "how to verify" is a
 different thing from a past-tense "here's what I ran" — write the instructions.)
+
+## 3a. Review to the tier §0 gave you
+
+Run these yourself, before pushing for review — not after someone asks:
+
+- **🟢 low** — nothing. CI is the review. Don't spend a review pass here; that
+  restraint is what makes the budget available where it matters.
+- **🟡 medium** — `/code-review` over the branch diff.
+- **🔴 high** — `/code-review`, then `/security-review`, and work §4b's scenario
+  table explicitly rather than concluding "none needed". Name which ones ran in
+  the PR body, then add the `reviewed:deep` label — the `pr-risk` check stays red
+  until you do, deliberately.
+
+Two passes on high because they look for different things, and the overlap is
+smaller than it sounds: `/code-review` hunts consistency defects (two paths that
+should agree and don't), `/security-review` hunts the redaction and credential
+boundaries.
+
+**Only name passes that exist.** This list said `/a11y-review` for a while, which
+is not a repo skill and not a session one — so a blocking check told every
+high-risk author to run something unrunnable, and "say which ran" could only be
+answered falsely. A gate whose clearance instruction can't be carried out teaches
+people to route around the gate. Check `ls .claude/skills/` before adding one
+here. (If you do want an a11y pass, `.claude/skills/a11y-review/` is the thing to
+write; this line moves the day it exists.)
+
+**`reviewed:deep` is dropped automatically whenever you push.** It records "this
+diff was reviewed", not "this PR was reviewed once" — the label analogue of
+`dismiss_stale_reviews`. Without that, a reviewed `feat!:` PR could be
+force-pushed into something else and keep its green gate.
+
+Fix what they find in this PR. A finding deferred to a follow-up is a finding
+that shipped.
 
 ## 4. Update the docs — same PR, no exceptions
 
@@ -236,8 +327,8 @@ Push triggers the pre-push hook (runs `pnpm verify`) — don't `--no-verify`.
 gh pr create --base main   # add --template release.md only for releases
 ```
 
-- **Non-draft.** No "WIP" / "don't merge yet" tags — the user merges on their own
-  cadence.
+- **Non-draft.** No "WIP" / "don't merge yet" tags. On anything above 🟢 low the
+  user merges on their own cadence — opening it non-draft is what lets them.
 - Fill the PR template (`.github/PULL_REQUEST_TEMPLATE.md`, or `package.md` for a
   new package); don't replace it with a freeform body.
 - In **How to verify**, give the reviewer the exact steps to run on a fresh
@@ -245,6 +336,106 @@ gh pr create --base main   # add --template release.md only for releases
   instructions, not "ran `pnpm verify`." For a UI/docs change, name the page to
   open and what to look for.
 - Link issues (`Fixes #123`).
+
+## 9. Land it
+
+### 9a. Behind main? Rebase — that's what's blocking the button
+
+`main`'s ruleset sets `strict_required_status_checks_policy: true`, so a branch
+that is merely **behind** cannot merge no matter how green it is. This is not a
+failure state and nothing on the PR says "rebase me" — the checks all show ✅ and
+the button is simply dead, which is why it reads as a bug the first few times.
+
+Confirm it before doing anything:
+
+```bash
+gh pr view <n> --json mergeStateStatus,mergeable,reviewDecision,isDraft
+```
+
+`"mergeStateStatus": "BEHIND"` with `"mergeable": "MERGEABLE"` is exactly this.
+Fix it by rebasing — **never** with a merge commit and never with GitHub's
+"Update branch" button, which makes one:
+
+```bash
+git fetch origin main
+git rebase origin/main
+git push --force-with-lease
+```
+
+Then wait for CI again: the rebase is a new SHA, so every check re-runs from
+scratch (`verify` ~5 min, `website-a11y` ~7.5 min). Budget the wait — a PR is not
+mergeable the moment the push lands.
+
+**If the branch touched any `website/*.md`, regenerate the a11y baselines after
+the rebase, not before** — you're rebasing onto whatever else has since changed
+the site, and stale snapshots taken against the old base will fail
+`website-a11y`. Re-run the §6 baseline block.
+
+The other blocked states, so you can tell them apart:
+
+| `mergeStateStatus` | What it is                                                    | Do                                                                                                                                        |
+| ------------------ | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `BEHIND`           | green, but not up to date with main                           | rebase, above                                                                                                                             |
+| `DIRTY`            | genuine merge conflict                                        | rebase and resolve. Note the main `Test` workflow **silently does not run** on a conflicting PR, so checks look absent rather than failed |
+| `BLOCKED`          | a required check is failing, or a review thread is unresolved | `gh pr checks <n>`; the ruleset sets `required_review_thread_resolution: true`, so an open thread alone does this                         |
+| `UNSTABLE`         | a non-required check is failing                               | look at it anyway — it is required-in-spirit or it should be deleted                                                                      |
+| `CLEAN`            | mergeable now                                                 | §9b                                                                                                                                       |
+
+### 9b. Merging — who is allowed to
+
+**🟢 low only.** On a low-risk PR, whichever agent is driving it — Claude,
+Cursor, Devin, whoever — merges it rather than parking it on a human. On
+🟡 medium and 🔴 high the agent stops at "ready", and says so.
+
+Every one of these has to hold. They are cheap to check and the list is short
+because each item is something that has actually blocked a merge here:
+
+- `pnpm pr:risk` says **low**, and the PR carries `risk:low` (CI agreeing with
+  you is the point — if it doesn't, the diff you classified isn't the diff that's
+  pushed)
+- not a draft, and the title has no `!`
+- `mergeStateStatus` is **`CLEAN`** — not `BEHIND`, not `BLOCKED`
+- every check has passed, including the non-required ones
+- `reviewDecision` is not `CHANGES_REQUESTED`
+- no unaddressed review comment. **Read the PR rather than assuming a bot got
+  there first** — `copilot_code_review` is armed in the `branches` ruleset and
+  `cursor[bot]` is installed, but as of 2026-08-08 neither has ever produced a
+  review here (checked across #300, #306, #307, #308, #313, #309); Cursor says
+  outright that Bugbot isn't enabled. Two review bots configured, zero running.
+  A precondition that names a reviewer who never speaks is a precondition that
+  always passes.
+
+```bash
+gh pr checks <n> --watch --fail-fast
+gh pr view <n> --json mergeStateStatus,mergeable,reviewDecision,isDraft,statusCheckRollup
+gh pr merge <n> --squash --delete-branch
+```
+
+**`--squash` is not a preference** — the ruleset sets
+`allowed_merge_methods: ["squash"]` and rejects anything else.
+
+**`gh pr merge --auto` does not work here.** The repo has
+`allow_auto_merge: false`, so GitHub's queue-it-and-forget-it auto-merge is
+unavailable and the command fails outright. Watching the checks and merging is
+the mechanism; if that ever changes, this line is what to delete.
+
+**Never merge, whatever the tier says:** a release PR (`chore(release)` — that's
+the `release` skill's job and it stops for sign-off), or any PR where the user
+has said they want to look at it first. When in doubt, don't — an unmerged PR
+costs a message, and a merged one costs a revert plus whatever the deploy did in
+between.
+
+This list used to also say "anything touching `.github/`", which contradicted the
+machine-readable policy for the same diff — and the permissive one was the
+machine. It's gone because the rubric now grades `.github/`, `.claude/`,
+`scripts/` and `.husky/` 🔴 high outright, so the rule enforces itself instead of
+relying on a human remembering a second, prose-only list. **If you find yourself
+adding another "never merge X" line here, add a rule instead.**
+
+**After merging, watch what it did.** `main` deploys real-a11y.dev on a
+successful publish, so a docs merge is a production change. If the post-merge
+`Test` run on main goes red, say so in the same breath as reporting the merge —
+"merged, and main is red" is the useful sentence, not two separate ones.
 
 ## Scaling the docs step
 

@@ -18,8 +18,8 @@
 //
 // Usage: node scripts/advance-latest.mjs --published-tag <tag> [--dry-run]
 
-import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
