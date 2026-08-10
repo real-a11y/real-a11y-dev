@@ -777,6 +777,61 @@ function classify(facts) {
 }
 
 // ---------------------------------------------------------------------------
+// Which CI jobs this diff can actually affect
+// ---------------------------------------------------------------------------
+
+/**
+ * A DIFFERENT question from the tier, deliberately kept apart.
+ *
+ * "How much review does this need" and "which test jobs can this break" are not
+ * the same axis, and conflating them gets both wrong: a `.github/workflows` edit
+ * is 🔴 high and runs no package code, while a one-line `packages/core/src` fix
+ * is 🟡 medium and must run everything. So `test.yml` reads this, not `tier`.
+ *
+ * It lives here rather than in the workflow because the repo's path taxonomy
+ * should have ONE definition. Two lists of "what counts as docs" drift, and the
+ * drift is invisible until the day the skipped job was the one that mattered.
+ *
+ * Everything not proven inert counts as code. That direction is the whole point:
+ * the cost of a wrong "inert" is a real failure that never ran, and the cost of a
+ * wrong "code" is a few wasted minutes.
+ */
+const CI_INERT = [
+  /^(README|CONTRIBUTING|CHANGELOG|SUPPORT|CODE_OF_CONDUCT|SECURITY)\.md$/,
+  /^packages\/[^/]+\/(README|CHANGELOG)\.md$/,
+  /^docs\/(?!surface).*\.md$/,
+  /^\.changeset\/[^/]+\.md$/,
+  // Templates, ownership and bot config: reviewed carefully (they are 🔴 high),
+  // but they cannot change what any test asserts. `.github/workflows/` is NOT
+  // here — a workflow edit may be the very thing that needs exercising.
+  /^\.github\/(ISSUE_TEMPLATE\/|PULL_REQUEST_TEMPLATE)/,
+  /^\.github\/(CODEOWNERS|FUNDING\.yml|dependabot\.yml)$/,
+  /^\.claude\//,
+  /^scenarios\//,
+  /^\.vscode\//,
+  /^\.idea\//,
+];
+
+function ciNeeds(files) {
+  const website = files.some((f) => /^website\//.test(f));
+  const code = files.some(
+    (f) => !/^website\//.test(f) && !CI_INERT.some((re) => re.test(f)),
+  );
+  return {
+    // The package matrix, e2e, the example apps, Node 24 — everything that
+    // exercises built output.
+    code,
+    // The docs site's own axe baselines and dead-link build.
+    website,
+    // `verify` always runs at least once: it carries format:check and lint,
+    // which any text file can break. Only its BREADTH is conditional.
+    matrix: code
+      ? { node: [20, 22], os: ["ubuntu-latest", "macos-latest"] }
+      : { node: [20], os: ["ubuntu-latest"] },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // What the tier means
 // ---------------------------------------------------------------------------
 
@@ -1036,6 +1091,7 @@ if (format === "json") {
           evidence,
         })),
         policy: POLICY[result.tier],
+        ci: ciNeeds(facts.files),
       },
       null,
       2,

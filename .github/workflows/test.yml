@@ -17,6 +17,120 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Which jobs this diff can actually affect, from `pnpm pr:risk --format json`.
+  #
+  # The classification lives in `scripts/pr-risk.mjs` rather than in a `paths:`
+  # filter here, so the repo has ONE definition of what counts as docs. Two lists
+  # drift, and the drift is invisible until the day the skipped job was the one
+  # that mattered.
+  #
+  # It answers a different question from the risk tier and must not be confused
+  # with it: a `.github/workflows` edit is 🔴 high and runs no package code, while
+  # a one-line `packages/core/src` fix is 🟡 medium and has to run everything.
+  #
+  # NEVER add `paths:` to this workflow's trigger instead. `test` and `build` are
+  # required checks, so a filtered-out workflow never reports and the pull request
+  # is blocked forever waiting for it.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.classify.outputs.code }}
+      website: ${{ steps.classify.outputs.website }}
+      matrix: ${{ steps.classify.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the rubric diffs against the merge base
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Classify the diff
+        id: classify
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+
+          # The one safe answer, reached from four places. Skipping is the only
+          # decision here that can hide a failure, so every path that cannot
+          # confidently answer "this diff is inert" ends up in this function.
+          run_everything() {
+            echo "$1 — running every job"
+            {
+              echo "code=true"
+              echo "website=true"
+              echo 'matrix={"node":[20,22],"os":["ubuntu-latest","macos-latest"]}'
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+
+          # 1. On a push to main there is no pull request to scope, and the "what
+          #    changed" question has no safe cheap answer. This is the branch that
+          #    protects main itself; it must not be the clever one.
+          [ "${{ github.event_name }}" = "pull_request" ] || run_everything "push build"
+
+          git fetch --no-tags origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
+
+          # The classifier comes from the BASE branch, exactly as
+          # `.github/workflows/pr-risk.yml` does it and for the same reason: a
+          # classifier read out of the pull request is one the pull request can
+          # rewrite, and here that would skip e2e, examples-dev, packages-node24
+          # and website-a11y while the required `test` gate still reported green.
+          # The likelier case is the accidental one — a branch that simply breaks
+          # the classifier — and this makes that safe too.
+          #
+          # It is not a complete boundary: for `pull_request`, GitHub reads THIS
+          # WORKFLOW from the head branch, so an author who edits test.yml itself
+          # is not stopped by anything here. That is why `.github/workflows/` is
+          # graded 🔴 high and needs `reviewed:deep` — the backstop is review, and
+          # this raises what review has to notice from "one line of a script" to
+          # "the workflow was rewritten".
+          mkdir -p "$RUNNER_TEMP/base"
+          git archive "origin/$BASE_REF" scripts | tar -x -C "$RUNNER_TEMP/base"
+          RUBRIC="$RUNNER_TEMP/base/scripts/pr-risk.mjs"
+
+          # Output goes to RUNNER_TEMP, NOT the working tree. Writing `risk.json`
+          # into the repo made this whole job a no-op: the shell creates the file
+          # before node starts, `collectFacts` counts untracked files as changed,
+          # an unrecognised path forces `code=true`, and every PR ran the full
+          # matrix while appearing to be optimised. Same defect as the earlier
+          # "stop the risk report counting its own output as changed files" — it
+          # came back the moment the redirection moved to a second workflow.
+          OUT="$RUNNER_TEMP/risk.json"
+
+          # 2. Fails SAFE, unlike the pr-risk gate: if the classifier can't be read
+          #    or can't run, run everything. The cost of a wrong "run it all" is a
+          #    few minutes; a wrong "skip it all" is a suite that never ran.
+          [ -f "$RUBRIC" ] || run_everything "no classifier on origin/$BASE_REF"
+          node "$RUBRIC" --repo "$GITHUB_WORKSPACE" --base "origin/$BASE_REF" \
+            --format json > "$OUT" || run_everything "the classifier failed"
+
+          # 3. The base branch's rubric may predate the `ci` object entirely —
+          #    which is exactly the case on the pull request that ADDS it, since
+          #    the grader deliberately comes from the base. Absent means "this
+          #    version cannot tell", not "nothing to run". Self-healing: once this
+          #    lands on main, the base rubric emits `ci` and the branch goes cold.
+          node -e "process.exit(require('$OUT').ci ? 0 : 3)" \
+            || run_everything "the base rubric has no ci classification"
+
+          CODE="$(node -p "require('$OUT').ci.code")"
+          SITE="$(node -p "require('$OUT').ci.website")"
+          MATRIX="$(node -p "JSON.stringify(require('$OUT').ci.matrix)")"
+
+          # Validated, not trusted. A failed substitution inside `echo` does not
+          # abort under `set -e`, and an empty value here reads as `false` — which
+          # would silently skip the entire test suite rather than fail loudly.
+          case "$CODE" in true|false) ;; *) echo "::error::bad ci.code '$CODE'"; exit 1 ;; esac
+          case "$SITE" in true|false) ;; *) echo "::error::bad ci.website '$SITE'"; exit 1 ;; esac
+          case "$MATRIX" in '{"node"'*) ;; *) echo "::error::bad ci.matrix '$MATRIX'"; exit 1 ;; esac
+
+          echo "code=$CODE"    >> "$GITHUB_OUTPUT"
+          echo "website=$SITE" >> "$GITHUB_OUTPUT"
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "code=$CODE website=$SITE matrix=$MATRIX"
+
   # Primary correctness gate: build + typecheck + format + lint + tests +
   # the testing example's audit snapshots + the runnable npm-side examples.
   # Matrixed across Node 20 (the dev default + engines floor) and 22, on Linux
@@ -30,11 +144,13 @@ jobs:
   # advances past the break, drop 22 here. The docs build itself needs Node 20.
   # The libraries are Node-24 clean and covered by `packages-node24` below.
   verify:
+    needs: changes
     strategy:
       fail-fast: false
-      matrix:
-        node: [20, 22]
-        os: [ubuntu-latest, macos-latest]
+      # Full 2x2 when the diff touches code; one Node 20 / ubuntu leg otherwise.
+      # `verify` is never skipped outright — it carries `format:check` and `lint`,
+      # which any text file in the repo can break.
+      matrix: ${{ fromJSON(needs.changes.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -90,6 +206,8 @@ jobs:
   # combo — the e2e suites test our adapters, not Node/OS portability, and the
   # `test` matrix already covers those for the libraries themselves.
   e2e:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -151,6 +269,8 @@ jobs:
   # this job was Windows-only. The job is cheap (<60s per OS), so it
   # earns its keep without expanding the heavy `verify` matrix.
   examples-dev:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -196,6 +316,11 @@ jobs:
   # website/tests/a11y.spec.ts-snapshots/; drift fails the test, and
   # intentional changes are accepted via `--update-snapshots` locally.
   website-a11y:
+    needs: changes
+    # The site's own axe baselines. `code` counts too: a `packages/*/src` change
+    # can alter what the docs' embedded examples render, and the baselines are
+    # committed, so a drift caught here is caught nowhere else.
+    if: needs.changes.outputs.website == 'true' || needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -266,6 +391,8 @@ jobs:
   # VitePress 2 ships stable and the docs build on 24, fold 24 into `verify` and
   # delete this job.
   packages-node24:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -339,14 +466,50 @@ jobs:
   # Without it, switching the matrix on/off requires a settings change for
   # every required-check entry. `test` becomes the stable contract; the
   # underlying matrix can grow or shrink freely.
+  #
+  # `skipped` is a PASS, and that is load-bearing. Jobs above are now conditional
+  # on what the diff touches, and a skipped job's `result` is `skipped`, not
+  # `success` — so the previous `!= "success"` test would have failed this gate on
+  # every docs-only PR the moment anything was allowed to skip, blocking them all.
+  #
+  # Only `failure` and `cancelled` fail. Listing the bad outcomes rather than
+  # demanding the good one is also what keeps this correct when a future GitHub
+  # adds a result state: a new state reads as "not a failure" instead of silently
+  # blocking every PR in the repo.
   test:
     if: always()
     runs-on: ubuntu-latest
-    needs: [verify, packages-node24, e2e, examples-dev, website-a11y, changeset]
+    needs:
+      [
+        changes,
+        verify,
+        packages-node24,
+        e2e,
+        examples-dev,
+        website-a11y,
+        changeset,
+      ]
     steps:
       - name: Aggregate result
+        env:
+          RESULTS: >-
+            changes=${{ needs.changes.result }}
+            verify=${{ needs.verify.result }}
+            packages-node24=${{ needs.packages-node24.result }}
+            e2e=${{ needs.e2e.result }}
+            examples-dev=${{ needs.examples-dev.result }}
+            website-a11y=${{ needs.website-a11y.result }}
+            changeset=${{ needs.changeset.result }}
         run: |
-          if [ "${{ needs.verify.result }}" != "success" ] || [ "${{ needs.packages-node24.result }}" != "success" ] || [ "${{ needs.e2e.result }}" != "success" ] || [ "${{ needs.examples-dev.result }}" != "success" ] || [ "${{ needs.website-a11y.result }}" != "success" ] || [ "${{ needs.changeset.result }}" != "success" ]; then
-            echo "verify=${{ needs.verify.result }} packages-node24=${{ needs.packages-node24.result }} e2e=${{ needs.e2e.result }} examples-dev=${{ needs.examples-dev.result }} website-a11y=${{ needs.website-a11y.result }} changeset=${{ needs.changeset.result }}"
+          echo "$RESULTS"
+          failed=""
+          for pair in $RESULTS; do
+            case "${pair#*=}" in
+              failure|cancelled) failed="$failed ${pair%%=*}" ;;
+            esac
+          done
+          if [ -n "$failed" ]; then
+            echo "::error::failed or cancelled:$failed"
             exit 1
           fi
+          echo "All required jobs passed or were skipped as irrelevant to this diff."
