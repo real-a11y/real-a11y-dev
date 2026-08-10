@@ -53,16 +53,23 @@ jobs:
         run: |
           set -euo pipefail
 
-          # On a push to main there is no pull request to scope, and the "what
-          # changed" question has no safe cheap answer — so run everything. This
-          # is the branch that protects main itself; it must not be the clever one.
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
-            echo "push build — running everything"
-            echo "code=true" >> "$GITHUB_OUTPUT"
-            echo "website=true" >> "$GITHUB_OUTPUT"
-            echo 'matrix={"node":[20,22],"os":["ubuntu-latest","macos-latest"]}' >> "$GITHUB_OUTPUT"
+          # The one safe answer, reached from four places. Skipping is the only
+          # decision here that can hide a failure, so every path that cannot
+          # confidently answer "this diff is inert" ends up in this function.
+          run_everything() {
+            echo "$1 — running every job"
+            {
+              echo "code=true"
+              echo "website=true"
+              echo 'matrix={"node":[20,22],"os":["ubuntu-latest","macos-latest"]}'
+            } >> "$GITHUB_OUTPUT"
             exit 0
-          fi
+          }
+
+          # 1. On a push to main there is no pull request to scope, and the "what
+          #    changed" question has no safe cheap answer. This is the branch that
+          #    protects main itself; it must not be the clever one.
+          [ "${{ github.event_name }}" = "pull_request" ] || run_everything "push build"
 
           git fetch --no-tags origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
 
@@ -93,17 +100,20 @@ jobs:
           # came back the moment the redirection moved to a second workflow.
           OUT="$RUNNER_TEMP/risk.json"
 
-          # Fails SAFE, unlike the pr-risk gate: if the classifier can't be read
-          # or can't run, run everything. The cost of a wrong "run it all" is a few
-          # minutes; the cost of a wrong "skip it all" is a suite that never ran.
-          if [ ! -f "$RUBRIC" ] || ! node "$RUBRIC" --repo "$GITHUB_WORKSPACE" \
-               --base "origin/$BASE_REF" --format json > "$OUT"; then
-            echo "::warning::couldn't classify the diff — running every job"
-            echo "code=true" >> "$GITHUB_OUTPUT"
-            echo "website=true" >> "$GITHUB_OUTPUT"
-            echo 'matrix={"node":[20,22],"os":["ubuntu-latest","macos-latest"]}' >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
+          # 2. Fails SAFE, unlike the pr-risk gate: if the classifier can't be read
+          #    or can't run, run everything. The cost of a wrong "run it all" is a
+          #    few minutes; a wrong "skip it all" is a suite that never ran.
+          [ -f "$RUBRIC" ] || run_everything "no classifier on origin/$BASE_REF"
+          node "$RUBRIC" --repo "$GITHUB_WORKSPACE" --base "origin/$BASE_REF" \
+            --format json > "$OUT" || run_everything "the classifier failed"
+
+          # 3. The base branch's rubric may predate the `ci` object entirely —
+          #    which is exactly the case on the pull request that ADDS it, since
+          #    the grader deliberately comes from the base. Absent means "this
+          #    version cannot tell", not "nothing to run". Self-healing: once this
+          #    lands on main, the base rubric emits `ci` and the branch goes cold.
+          node -e "process.exit(require('$OUT').ci ? 0 : 3)" \
+            || run_everything "the base rubric has no ci classification"
 
           CODE="$(node -p "require('$OUT').ci.code")"
           SITE="$(node -p "require('$OUT').ci.website")"
