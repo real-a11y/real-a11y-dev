@@ -54,7 +54,15 @@ function isNativeMessage(m: unknown): m is NativeMessage {
 }
 
 export function registerNativeMode(): void {
-  const session = new NativeDebuggerSession(chrome.storage.local);
+  // The dogfood log is durable (`local` — it spans the ~2-week exercise);
+  // attach bookkeeping is per-browser-session (`session`), which outlives a
+  // service-worker suspend but not a browser restart — the exact lifetime of a
+  // debugger attachment. Keeping it out of memory is what lets the unsolicited
+  // detach survive the very suspend it measures.
+  const session = new NativeDebuggerSession(
+    chrome.storage.local,
+    chrome.storage.session ?? chrome.storage.local,
+  );
   const log = session.dogfoodLog();
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -197,12 +205,12 @@ export async function withRecovery<T>(
 }
 
 /**
- * withDebugger, but a mid-operation throw — the CDP call failing AFTER a
- * successful attach, i.e. a dropped connection — becomes a `connection-lost`
- * outcome instead of propagating. A failed *attach* returns its own
- * `attach-failed`/`conflict` outcome and never throws, so a throw here always
- * means we were attached and lost it. The distinct tag lets `withRecovery`
- * count only genuine lifecycle recoveries.
+ * Backstop around `withDebugger`, which already classifies a mid-operation
+ * failure itself (`connection-lost` vs `command-failed`) rather than throwing.
+ * Anything that still escapes is unclassifiable, so it defaults to
+ * `command-failed` — the tag that does NOT count toward the reattach metric.
+ * Guessing `connection-lost` here would inflate the dogfood's headline
+ * lifecycle number with failures that were never lifecycle events.
  */
 export async function runGuarded<T>(
   session: NativeDebuggerSession,
@@ -212,6 +220,6 @@ export async function runGuarded<T>(
   try {
     return await session.withDebugger(tabId, fn);
   } catch {
-    return { outcome: { ok: false, error: "connection-lost" } };
+    return { outcome: { ok: false, error: "command-failed" } };
   }
 }

@@ -5,9 +5,10 @@ import type { DogfoodEvent } from "./dogfood.js";
 import { withRecovery } from "./index.js";
 
 // A minimal stand-in for NativeDebuggerSession: each withDebugger() call
-// consumes the next scripted behavior (throw = a mid-operation connection drop;
-// otherwise return the given outcome). Records are captured so we can assert
-// exactly which reattach events the recovery path logged.
+// consumes the next scripted behavior. `withDebugger` classifies mid-operation
+// failures itself, so a drop arrives as `connection-lost` rather than a throw;
+// `throw` here models something escaping that classification entirely. Records
+// are captured so we can assert exactly which reattach events were logged.
 function fakeSession(
   behaviors: Array<{ throw?: true; outcome: { ok: boolean; error?: string } }>,
 ) {
@@ -36,9 +37,8 @@ const run = (s: ReturnType<typeof fakeSession>) =>
 
 describe("withRecovery reattach accounting", () => {
   it("records reattach-ok when a mid-operation drop recovers", async () => {
-    // First call throws (was attached, connection lost); retry succeeds.
     const s = fakeSession([
-      { throw: true, outcome: { ok: false } },
+      { outcome: { ok: false, error: "connection-lost" } },
       { outcome: { ok: true } },
     ]);
     await run(s);
@@ -47,11 +47,35 @@ describe("withRecovery reattach accounting", () => {
 
   it("records reattach-failed when a mid-operation drop does not recover", async () => {
     const s = fakeSession([
-      { throw: true, outcome: { ok: false } },
+      { outcome: { ok: false, error: "connection-lost" } },
       { outcome: { ok: false, error: "attach-failed" } },
     ]);
     await run(s);
     expect(s.records.map((r) => r.kind)).toEqual(["reattach-failed"]);
+  });
+
+  it("does NOT record a reattach for a CDP command failure", async () => {
+    // readNativeTree does not swallow protocol errors the way dispatchNative
+    // does, so a failed command surfaces as `command-failed`. It is retried
+    // best-effort but is not a service-worker lifecycle event, so counting it
+    // would inflate the metric the ship/no-ship decision rests on.
+    const s = fakeSession([
+      { outcome: { ok: false, error: "command-failed" } },
+      { outcome: { ok: true } },
+    ]);
+    await run(s);
+    expect(s.records).toHaveLength(0);
+    expect(s.calls()).toBe(2); // still retried
+  });
+
+  it("treats an unclassifiable throw as command-failed, not a drop", async () => {
+    // runGuarded's backstop must not guess `connection-lost`.
+    const s = fakeSession([
+      { throw: true, outcome: { ok: false } },
+      { outcome: { ok: true } },
+    ]);
+    await run(s);
+    expect(s.records).toHaveLength(0);
   });
 
   it("does NOT record a reattach for a plain attach failure (unattachable page)", async () => {

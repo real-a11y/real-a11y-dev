@@ -66,7 +66,11 @@ the RFC PR H thread. The three questions it answers:
   actually bother you during deliberate audit sessions?
 - **MV3 service-worker lifecycle** — unsolicited detaches (the worker suspending
   drops the debugger) and whether reattach recovered. _This is the main
-  engineering risk._
+  engineering risk._ Both numbers are deliberately narrow: attach bookkeeping
+  lives in `chrome.storage.session`, so a detach still gets attributed after the
+  suspend that destroyed the worker's memory; and only a genuine dropped
+  connection counts as a reattach — a CDP command that merely failed, or a page
+  the debugger can never attach to (`chrome://`, the Web Store), does not.
 - **DevTools conflict** — how often attach was refused because DevTools (or
   another debugger) held the tab.
 
