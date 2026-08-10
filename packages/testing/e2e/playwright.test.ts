@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { test, expect } from "@playwright/test";
-import { PAGE_BUNDLE_SOURCE } from "@real-a11y-dev/browser";
+import { pageBundleSource } from "@real-a11y-dev/browser";
 
 import { attach } from "../src/playwright.js";
 
@@ -374,6 +374,6 @@ test.describe("injected bundle", () => {
     // Reads the SOURCE, not a path: `@real-a11y-dev/browser` is private and
     // inlined into this package, so a path computed from its `import.meta.url`
     // would point inside THIS dist, where the file is not.
-    expect(PAGE_BUNDLE_SOURCE).not.toContain("sourceMappingURL");
+    expect(pageBundleSource()).not.toContain("sourceMappingURL");
   });
 });

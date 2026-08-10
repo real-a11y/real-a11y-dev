@@ -1,5 +1,7 @@
 ---
 "@real-a11y-dev/testing": minor
+"@real-a11y-dev/cli": minor
+"@real-a11y-dev/mcp": minor
 ---
 
 refactor(browser)!: drop `listByRole` from the injected page bundle

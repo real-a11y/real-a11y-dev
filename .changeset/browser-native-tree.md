@@ -1,5 +1,7 @@
 ---
 "@real-a11y-dev/mcp": minor
+"@real-a11y-dev/cli": minor
+"@real-a11y-dev/testing": minor
 ---
 
 Add the **native accessibility-tree producer**: `browser.nativeTree()` reads Chromium's own tree over CDP (`Accessibility.getFullAXTree`) and normalizes it into the same `ExtractionResult` model the DOM producer emits, stamped `source.producer === "native"`. This is the second producer from the native-tree RFC (#197) — one canonical model, two producers.

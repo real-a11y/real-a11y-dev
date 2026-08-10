@@ -15,19 +15,32 @@ import { defineConfig } from "tsup";
 // because nothing type-checks a path. Inlining removes the path entirely.
 const BUNDLE_FILE = path.resolve(__dirname, "dist/page-bundle.iife.global.js");
 
-let PAGE_BUNDLE: string;
-try {
-  PAGE_BUNDLE = readFileSync(BUNDLE_FILE, "utf8");
-} catch {
-  // A raw ENOENT here reads as a broken repo. It almost always means the
-  // page-bundle pass hasn't run — `pnpm dev` invokes this config alone, so on a
-  // clean checkout there is nothing to inline yet.
-  throw new Error(
-    `The page-bundle has not been built yet, so there is nothing to inline.\n` +
-      `  Expected: ${BUNDLE_FILE}\n\n` +
-      `  Run \`pnpm build\` once (it runs tsup.page-bundle.config.ts first),\n` +
-      `  then \`pnpm dev\` works — the watcher only rebuilds the main entry.`,
-  );
+/**
+ * Read the page-bundle to inline.
+ *
+ * Called from `esbuildOptions`, i.e. DURING a build — never at config-module
+ * scope. That distinction is the whole point: this reads a gitignored BUILD
+ * ARTIFACT, so reading it while the config module evaluates makes the config
+ * itself unloadable whenever the artifact is absent. `bundle-require` evaluates
+ * the config for every tsup invocation, so a bare `pnpm exec tsup`, a root
+ * `pnpm -r --parallel dev`, or any tool that merely loads the config would die
+ * with a raw ENOENT before tsup printed anything.
+ *
+ * `packages/inspector/tsup.config.ts` looks like precedent for a config-scope
+ * read and is not: it reads `../ui/src/styles`, committed SOURCE that is always
+ * present. Artifact vs source is the difference, and it is why this one is lazy.
+ */
+function readPageBundle(): string {
+  try {
+    return readFileSync(BUNDLE_FILE, "utf8");
+  } catch {
+    throw new Error(
+      `The page-bundle has not been built yet, so there is nothing to inline.\n` +
+        `  Expected: ${BUNDLE_FILE}\n\n` +
+        `  Run \`pnpm build\` in this package once — it runs\n` +
+        `  tsup.page-bundle.config.ts first, which emits that file.`,
+    );
+  }
 }
 
 export default defineConfig({
@@ -56,7 +69,12 @@ export default defineConfig({
   // playwright is an optional peer, resolved by the host — never bundle it.
   external: ["playwright"],
   noExternal: ["@real-a11y-dev/audit", "@real-a11y-dev/serialize"],
-  define: {
-    __REAL_A11Y_PAGE_BUNDLE__: JSON.stringify(PAGE_BUNDLE),
+  // Set here rather than in `define` so the artifact is read during the build,
+  // not while this config module is being evaluated. See `readPageBundle`.
+  esbuildOptions(options) {
+    options.define = {
+      ...options.define,
+      __REAL_A11Y_PAGE_BUNDLE__: JSON.stringify(readPageBundle()),
+    };
   },
 });

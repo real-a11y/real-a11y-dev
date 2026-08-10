@@ -1,5 +1,6 @@
 ---
 "@real-a11y-dev/mcp": minor
+"@real-a11y-dev/cli": minor
 ---
 
 `BrowserSession.act()` — the write side of the native producer.
