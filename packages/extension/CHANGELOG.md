@@ -8,7 +8,7 @@
   landed the change; versions match `package.json`/`public/manifest.json`.
 -->
 
-## Unreleased
+## 0.1.11
 
 ### Patch Changes
 
