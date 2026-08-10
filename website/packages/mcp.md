@@ -188,9 +188,9 @@ Every command and flag is in [Commands & flags](/packages/cli/commands).
 What the CLI cannot give you is an **in-process Node API**, and no other package
 does either now. The Playwright-backed session lives in
 `@real-a11y-dev/browser`, which was published through `0.1.0-beta.13` and is
-workspace-internal from the next release on: it is bundled into this server, the
-CLI, and the testing adapter, and there is nothing to install by that name. Two narrower doors stay open, neither a
-replacement for it:
+workspace-internal from `mcp` `0.1.0-beta.4` on: it is bundled into this server,
+the CLI, and the testing adapter, and there is nothing to install by that name.
+Two narrower doors stay open, neither a replacement for it:
 
 - **You already have a Playwright `Page`** — `attach(page)` from
   [`@real-a11y-dev/testing/playwright`](/packages/testing/playwright) runs the

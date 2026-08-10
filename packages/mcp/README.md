@@ -203,8 +203,9 @@ print the tree diff each action caused. Full reference:
 
 What that leaves out is an in-process Node API. `@real-a11y-dev/browser` — the
 Playwright-backed session this server drives — was published through
-`0.1.0-beta.13` and is workspace-internal from the next release on, bundled into this package, the CLI and the testing adapter,
-with nothing to install by that name. This package still exports
+`0.1.0-beta.13` and is workspace-internal from `0.1.0-beta.4` of this package
+on, bundled into it, the CLI and the testing adapter, with nothing to install by
+that name. This package still exports
 `BrowserSession` and its session types (`A11ySession`, `BrowserSessionOptions`,
 `PageSnapshot`, `SnapshotOptions`), because `buildServer` takes an `A11ySession`
 and a custom `SessionManager` has to name that contract — an embedding surface
