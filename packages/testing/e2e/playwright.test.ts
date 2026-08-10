@@ -1,10 +1,9 @@
-import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { fileURLToPath } from "node:url";
 
 import { test, expect } from "@playwright/test";
-import { PAGE_BUNDLE_PATH } from "@real-a11y-dev/browser";
+import { pageBundleSource } from "@real-a11y-dev/browser";
 
 import { attach } from "../src/playwright.js";
 
@@ -369,9 +368,12 @@ test.describe("injected bundle", () => {
   test("ships no sourceMappingURL (would 404 against the target page)", () => {
     // The bundle is injected as inline source, so a trailing
     // `//# sourceMappingURL=…` resolves relative to the page under test and
-    // 404s. Assert on the built file itself — deterministic, and pretest:e2e
-    // just rebuilt it.
-    const bundle = readFileSync(PAGE_BUNDLE_PATH, "utf8");
-    expect(bundle).not.toContain("sourceMappingURL");
+    // 404s. Assert on the bundle text — deterministic, and pretest:e2e just
+    // rebuilt it.
+    //
+    // Reads the SOURCE, not a path: `@real-a11y-dev/browser` is private and
+    // inlined into this package, so a path computed from its `import.meta.url`
+    // would point inside THIS dist, where the file is not.
+    expect(pageBundleSource()).not.toContain("sourceMappingURL");
   });
 });

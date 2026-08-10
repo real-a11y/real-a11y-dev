@@ -1,5 +1,6 @@
 ---
-"@real-a11y-dev/browser": minor
+"@real-a11y-dev/mcp": minor
+"@real-a11y-dev/cli": minor
 ---
 
 `BrowserSession.currentUrl()` — where the page is **now**, which isn't necessarily where `open()` put it.

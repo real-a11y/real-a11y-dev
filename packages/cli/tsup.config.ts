@@ -8,7 +8,20 @@ export default defineConfig({
   // is the way. `--format json` and `--session` are the programmatic surface.
   entry: ["src/index.ts", "src/daemon/entry.ts"],
   format: ["esm"],
-  dts: true,
+  // `dts.resolve` for the private packages even though the emit is currently
+  // just a shebang: `src/args.ts` imports `ChromeChannel` / `OpenOptions` as
+  // types from browser, and nothing watches this package — `surface:check` reads
+  // only the `.d.ts` an `exports` `types` condition points at (cli has no
+  // `exports` map) and `check-packaging.mjs` skips cli via ATTW_SKIP_PACKAGES.
+  dts: {
+    resolve: [
+      "@real-a11y-dev/session-registry",
+      "@real-a11y-dev/audit",
+      "@real-a11y-dev/serialize",
+      "@real-a11y-dev/snapshot",
+      "@real-a11y-dev/browser",
+    ],
+  },
   sourcemap: true,
   clean: true,
   treeshake: true,
@@ -18,20 +31,14 @@ export default defineConfig({
   external: ["playwright", "@puppeteer/browsers"],
   // PRIVATE workspace packages: npm can never resolve them, so they are bundled
   // into the dist and held as devDependencies (a published "dependencies" entry
-  // would break every install). No `dts.resolve` needed TODAY — both emitted
-  // declarations are just the shebang, so nothing names a private package.
-  //
-  // Nothing WATCHES that, though, and it is worth knowing before relying on it:
-  // `surface:check`'s guard reads only the `.d.ts` a package's `exports` `types`
-  // condition points at, and this package has no `exports` map at all; attw
-  // skips `cli` outright (ATTW_SKIP_PACKAGES). So the day an exported type here
-  // names `Finding` or `SnapshotPage`, the unresolvable specifier ships silently.
-  // Add `dts.resolve` at the same time as the first such export.
+  // would break every install). The matching `dts.resolve` is set above — see
+  // the note there for why it is there before it is needed.
   noExternal: [
     "@real-a11y-dev/session-registry",
     "@real-a11y-dev/audit",
     "@real-a11y-dev/serialize",
     "@real-a11y-dev/snapshot",
+    "@real-a11y-dev/browser",
   ],
   banner: { js: "" },
 });

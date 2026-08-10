@@ -5,8 +5,8 @@
  * that only use the jsdom/Vitest helpers.
  *
  * Architecture:
- *   1. `attach()` reads the pre-built IIFE page-bundle from
- *      `@real-a11y-dev/browser` (the single home for the injected bundle).
+ *   1. `attach()` carries the pre-built IIFE page-bundle as inlined source
+ *      text from `@real-a11y-dev/browser` (the single home for the bundle).
  *   2. Injects it into the Playwright page by evaluating its source, which
  *      sets `window.__realA11y__` inside the browser. Evaluating rather than
  *      appending a `<script>` keeps injection working on pages that ship a
@@ -18,32 +18,18 @@
  * Playwright re-throws it in Node with the original message preserved.
  */
 
-import { readFileSync } from "node:fs";
-
 import { assertRules } from "@real-a11y-dev/audit";
-import { PAGE_BUNDLE_PATH, nativeTree } from "@real-a11y-dev/browser";
+import { pageBundleSource, nativeTree } from "@real-a11y-dev/browser";
 import { serializeTree, serializeOutline } from "@real-a11y-dev/serialize";
 
 // ---------------------------------------------------------------------------
-// Bundle path — the injected IIFE page-bundle lives in @real-a11y-dev/browser,
-// which exports its absolute path (it computes it from its own dist location,
-// so this works whether testing is run from src or dist, and avoids a fragile
-// cross-package resolve of an ESM-only entry).
+// Bundle source — the injected IIFE page-bundle lives in @real-a11y-dev/browser,
+// which is private and inlined into this package. It arrives as SOURCE TEXT, not
+// a path: a path computed from its `import.meta.url` would resolve inside THIS
+// package's dist, where the file is not. `pageBundleSource()` caches internally.
 // ---------------------------------------------------------------------------
-
-function getPageBundlePath(): string {
-  return PAGE_BUNDLE_PATH;
-}
-
-// Cache the bundle content so subsequent `attach()` calls in the same
-// process don't re-read the file.
-let _cachedBundle: string | undefined;
-
 function readBundle(): string {
-  if (!_cachedBundle) {
-    _cachedBundle = readFileSync(getPageBundlePath(), "utf8");
-  }
-  return _cachedBundle;
+  return pageBundleSource();
 }
 
 // ---------------------------------------------------------------------------

@@ -33,33 +33,61 @@ import { CdpActionBackend } from "./cdp-action-backend.js";
 import { nativeTree as computeNativeTree } from "./native-tree.js";
 
 /**
- * Absolute path to the injected IIFE page-bundle shipped in this package's
- * `dist/`, beside the compiled module. Exported so a sibling adapter — the
- * `@real-a11y-dev/testing` Playwright adapter — resolves the exact same file
- * without a fragile cross-package `require.resolve` (this package is ESM-only,
- * so CJS resolution of its entry fails).
+ * The injected IIFE page-bundle, as SOURCE TEXT — lazily, and cached.
+ *
+ * Exported so the `@real-a11y-dev/testing` Playwright adapter evaluates
+ * byte-identical text. It used to be an absolute path (`PAGE_BUNDLE_PATH`),
+ * computed from this module's own `import.meta.url`. That is correct only while
+ * this package is its own published artifact beside its own `dist/`; bundled
+ * into a consumer, the path resolves inside THEIR dist and every injection
+ * fails. Inlining removes the path, and the failure mode with it.
  */
-export const PAGE_BUNDLE_PATH = fileURLToPath(
-  new URL("./page-bundle.iife.global.js", import.meta.url),
-);
+declare const __REAL_A11Y_PAGE_BUNDLE__: string | undefined;
 
-function bundlePath(): string {
-  return PAGE_BUNDLE_PATH;
-}
-
+// Read ONCE and cached.
+//
+// The `define` identifier appears TWICE below — in the `typeof` guard and in the
+// assignment. Only one copy of the bundle survives, because esbuild folds
+// `typeof "<literal>"` to `"string"` at build time and drops the branch. That is
+// worth knowing before restructuring the guard: a define is substituted at every
+// occurrence, and an occurrence esbuild cannot fold away embeds another complete
+// copy — precisely how the inspector once shipped its stylesheet twice.
 let cachedBundle: string | undefined;
-function readBundle(): string {
-  if (!cachedBundle) {
-    try {
-      cachedBundle = readFileSync(bundlePath(), "utf8");
-    } catch {
-      // Don't leak the absolute local path into tool output.
-      throw new Error(
-        "Real A11y extraction bundle is missing — reinstall dependencies (is @real-a11y-dev/browser installed?).",
-      );
-    }
+
+export function pageBundleSource(): string {
+  if (cachedBundle !== undefined) return cachedBundle;
+
+  // In a built artifact the `define` has already replaced this identifier with
+  // a string literal, so this is the only branch and there is no file read.
+  if (typeof __REAL_A11Y_PAGE_BUNDLE__ === "string") {
+    cachedBundle = __REAL_A11Y_PAGE_BUNDLE__;
+    return cachedBundle;
+  }
+
+  // Running from SOURCE (vitest, `tsx`) — no bundler has applied the define.
+  // LAZY on purpose: every consumer imports this module at top level, so doing
+  // this at module scope turned a missing artifact into a module-graph failure
+  // that killed suites which never touch the bundle at all.
+  try {
+    cachedBundle = readFileSync(
+      fileURLToPath(
+        new URL("../dist/page-bundle.iife.global.js", import.meta.url),
+      ),
+      "utf8",
+    );
+  } catch {
+    // Don't leak the absolute local path into tool output.
+    throw new Error(
+      "Real A11y extraction bundle is missing — run `pnpm build` in " +
+        "@real-a11y-dev/browser (running from source requires the page-bundle " +
+        "to have been built at least once).",
+    );
   }
   return cachedBundle;
+}
+
+function readBundle(): string {
+  return pageBundleSource();
 }
 
 /**

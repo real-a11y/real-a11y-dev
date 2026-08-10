@@ -1,5 +1,6 @@
 ---
-"@real-a11y-dev/browser": patch
+"@real-a11y-dev/mcp": patch
+"@real-a11y-dev/cli": patch
 ---
 
 `CdpActionBackend`: fix three cases where an action reported success but the page never reacted. The CDP write path was implemented independently of the in-page dispatcher `@real-a11y-dev/core` has used for a while in the extension and Storybook panel, and it was missing the hardening that dispatcher earned from real pages. Because a swallowed action still returns `{ success: true }`, the failure was silent: the MCP `click_element` / `type_text` tools reported success and the follow-up `diff_tree` read "(no changes)", which an agent takes as "the click did nothing" rather than "the click missed".

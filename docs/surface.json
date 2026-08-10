@@ -5,48 +5,6 @@
         {
           "subpath": ".",
           "types": [
-            "A11ySession",
-            "BrowserSessionOptions",
-            "ChromeChannel",
-            "InstalledChrome",
-            "NativeCheckpoint",
-            "NativeCheckpointDiff",
-            "NativeDomInfo",
-            "OpenOptions",
-            "PageSnapshot",
-            "ResolveTargetQuery",
-            "ResolveTargetResult",
-            "ResolvedChromeExecutable",
-            "SnapshotOptions",
-            "TargetCandidate"
-          ],
-          "values": [
-            "BrowserSession",
-            "CHROME_MANIFEST_VERSION",
-            "CdpActionBackend",
-            "PAGE_BUNDLE_PATH",
-            "assertOpenableUrl",
-            "backendNodeIdFrom",
-            "buildNativeTree",
-            "captureNativeCheckpoint",
-            "chromeCacheDir",
-            "chromeManifestPath",
-            "diffNativeCheckpoint",
-            "documentWasReplaced",
-            "nativeTree",
-            "readChromeManifest",
-            "resolveChromeExecutable",
-            "resolveTarget"
-          ]
-        }
-      ],
-      "name": "@real-a11y-dev/browser"
-    },
-    {
-      "entries": [
-        {
-          "subpath": ".",
-          "types": [
             "A11yInfo",
             "ActionRequest",
             "ActionResult",
@@ -2549,7 +2507,7 @@
         "."
       ],
       "name": "@real-a11y-dev/browser",
-      "private": false,
+      "private": true,
       "version": "0.1.0-beta.13",
       "workspaceDeps": [
         "@real-a11y-dev/core"
@@ -2566,7 +2524,6 @@
       "private": false,
       "version": "0.1.0-beta.3",
       "workspaceDeps": [
-        "@real-a11y-dev/browser",
         "@real-a11y-dev/core"
       ]
     },
@@ -2633,7 +2590,6 @@
       "private": false,
       "version": "0.1.0-beta.3",
       "workspaceDeps": [
-        "@real-a11y-dev/browser",
         "@real-a11y-dev/core"
       ]
     },
@@ -2727,7 +2683,6 @@
       "private": false,
       "version": "0.1.0-beta.13",
       "workspaceDeps": [
-        "@real-a11y-dev/browser",
         "@real-a11y-dev/core"
       ]
     },

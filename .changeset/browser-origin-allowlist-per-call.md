@@ -1,5 +1,6 @@
 ---
-"@real-a11y-dev/browser": minor
+"@real-a11y-dev/cli": minor
+"@real-a11y-dev/mcp": minor
 ---
 
 `BrowserSession.open` gains `OpenOptions.allowedOrigins` for per-call origin pinning.
