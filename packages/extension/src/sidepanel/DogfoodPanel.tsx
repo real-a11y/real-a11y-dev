@@ -35,6 +35,10 @@ export function DogfoodPanel() {
   const [enabled, setEnabled] = useState(false);
   const [nodes, setNodes] = useState<NativeNode[]>([]);
   const [status, setStatus] = useState("native mode is off");
+  // The tab the current tree was read from. Native node ids encode Chromium
+  // `backendDOMNodeId`s, which are scoped to that tab's document — dispatching
+  // one anywhere else would act on an unrelated element in a different page.
+  const [treeTabId, setTreeTabId] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     void chrome.runtime
@@ -52,7 +56,10 @@ export function DogfoodPanel() {
     setStatus(
       next ? "native mode on — Load tree to attach" : "native mode off",
     );
-    if (!next) setNodes([]);
+    if (!next) {
+      setNodes([]);
+      setTreeTabId(undefined);
+    }
   }
 
   async function loadTree() {
@@ -63,14 +70,28 @@ export function DogfoodPanel() {
       type: "NATIVE_READ",
       tabId,
     })) as { ok?: boolean; error?: string; nodes?: NativeNode[] };
-    if (!r?.ok) return setStatus(`read failed: ${r?.error ?? "unknown"}`);
+    if (!r?.ok) {
+      setNodes([]);
+      setTreeTabId(undefined);
+      return setStatus(`read failed: ${r?.error ?? "unknown"}`);
+    }
     setNodes(r.nodes ?? []);
+    setTreeTabId(tabId);
     setStatus(`read ${r.nodes?.length ?? 0} nodes`);
   }
 
   async function act(node: NativeNode) {
-    const tabId = await activeTabId();
-    if (tabId === undefined) return;
+    // Dispatch against the tab the tree came from, and refuse if the user has
+    // since switched away: these ids only mean something in that document, so
+    // acting on the new active tab would click a different page's element.
+    if (treeTabId === undefined) return setStatus("load a tree first");
+    const current = await activeTabId();
+    if (current !== treeTabId) {
+      setNodes([]);
+      setTreeTabId(undefined);
+      return setStatus("active tab changed — reload the native tree");
+    }
+    const tabId = treeTabId;
     const isText = node.role === "textbox" || node.role === "combobox";
     const value = isText
       ? prompt(`Type into "${node.name || node.role}":`)
