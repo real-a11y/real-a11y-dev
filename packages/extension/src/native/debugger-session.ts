@@ -159,7 +159,10 @@ export class NativeDebuggerSession {
     const attach = await this.attach(tabId);
     if (!attach.ok) return { outcome: attach };
     const startedAt = Date.now();
-    let outcome: AttachOutcome;
+    // `finally` runs on paths where neither assignment has happened yet, so it
+    // reads this optionally; only an explicit `connection-lost` marks the
+    // teardown as a drop, which is the conservative default.
+    let outcome: AttachOutcome | undefined;
     let value: T | undefined;
     try {
       value = await fn(transportFor(tabId));
@@ -173,7 +176,11 @@ export class NativeDebuggerSession {
     } finally {
       // A book-keeping failure here must not discard an already-successful
       // result, nor turn it into a spurious retry of a page action.
-      await this.detach(tabId, Date.now() - startedAt).catch(() => {});
+      await this.detach(
+        tabId,
+        Date.now() - startedAt,
+        outcome?.error === "connection-lost",
+      ).catch(() => {});
     }
     return outcome.ok ? { outcome, value } : { outcome };
   }
@@ -198,10 +205,22 @@ export class NativeDebuggerSession {
     return { ok: true };
   }
 
-  private async detach(tabId: number, attachedMs: number): Promise<void> {
+  /**
+   * @param connectionLost the operation failed because the debuggee went away,
+   *   so this teardown is cleaning up after a drop rather than ending a healthy
+   *   session. It must still be recorded as **unsolicited**: claiming the entry
+   *   here is what stops `onDetach` from recording it, so logging a deliberate
+   *   `detach` instead would erase the drop entirely — a report reading
+   *   "unsolicited detaches: 0" beside "reattach recovered: N" is exactly the
+   *   contradiction that hides the MV3 signal this dogfood measures.
+   */
+  private async detach(
+    tabId: number,
+    attachedMs: number,
+    connectionLost = false,
+  ): Promise<void> {
     // Claim the entry atomically: if onDetach already took it, that drop was
-    // unsolicited and is its to record — this deliberate detach must not
-    // double-count it.
+    // unsolicited and is its to record — this teardown must not double-count.
     const wasAttached = await this.enqueue(async () => {
       const attached = await this.readAttached();
       if (attached[tabId] === undefined) return false;
@@ -210,7 +229,16 @@ export class NativeDebuggerSession {
       return true;
     });
     if (!wasAttached) return;
-    await this.log.record({ kind: "detach", at: Date.now(), attachedMs });
+    await this.log.record(
+      connectionLost
+        ? {
+            kind: "detach-unsolicited",
+            at: Date.now(),
+            reason: "connection-lost",
+            attachedMs,
+          }
+        : { kind: "detach", at: Date.now(), attachedMs },
+    );
     // The tab may be gone; a failed detach is not actionable.
     await chrome.debugger.detach({ tabId }).catch(() => {});
   }

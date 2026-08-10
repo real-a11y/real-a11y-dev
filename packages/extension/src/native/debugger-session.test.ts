@@ -126,6 +126,34 @@ describe("NativeDebuggerSession attach bookkeeping", () => {
     expect(failed.outcome.error).toBe("command-failed");
   });
 
+  it("records a mid-operation drop as unsolicited, never as deliberate", async () => {
+    // The teardown claims the attach entry, which stops onDetach from
+    // recording — so if it logged a plain `detach` the drop would vanish and
+    // the report could read "unsolicited detaches: 0" beside a reattach count.
+    const log = new FakeStorage();
+    const attach = new FakeStorage();
+    const session = new NativeDebuggerSession(log, attach);
+
+    await session.withDebugger(3, async () => {
+      throw new Error("Detached while handling command.");
+    });
+    await settle();
+
+    expect(kinds(log)).toEqual(["attach", "detach-unsolicited"]);
+    expect(kinds(log)).not.toContain("detach");
+    expect(attach.data["dogfood.attachedTabs"]).toEqual({});
+  });
+
+  it("still records a plain command failure as a deliberate detach", async () => {
+    const log = new FakeStorage();
+    const session = new NativeDebuggerSession(log, new FakeStorage());
+    await session.withDebugger(4, async () => {
+      throw new Error("Protocol error: Internal error");
+    });
+    await settle();
+    expect(kinds(log)).toEqual(["attach", "detach"]);
+  });
+
   it("records a deliberate detach once, and not as unsolicited", async () => {
     const log = new FakeStorage();
     const attach = new FakeStorage();
