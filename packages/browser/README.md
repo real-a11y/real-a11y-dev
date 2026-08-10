@@ -17,7 +17,7 @@ Drive a real browser for Real A11y. This package is the **one way** the toolkit 
 > `A11ySession` and an embedder writing its own `SessionManager` has to name
 > that contract. Everything else here — `nativeTree`, `buildNativeTree`, the
 > native checkpoint helpers, `resolveTarget`, `CdpActionBackend`,
-> `PAGE_BUNDLE_SOURCE`, `OpenOptions`, and the Chrome-resolution helpers
+> `pageBundleSource`, `OpenOptions`, and the Chrome-resolution helpers
 > (`resolveChromeExecutable`, `chromeCacheDir`, `readChromeManifest`) — has
 > **no drop-in replacement**. The route is a surface that carries the driver:
 > `real-a11y` for the shell and CI (`audit`, `snapshot` / `diff`, the
@@ -147,7 +147,7 @@ and exported it as `PAGE_BUNDLE_PATH` for the adapter to read. That works only
 while this package is its own published artifact sitting beside its own `dist/`.
 Now that it is bundled into its consumers, `import.meta.url` resolves inside
 THEIR dist, where the file is not — so the path became a runtime failure with
-nothing to catch it. `PAGE_BUNDLE_SOURCE` replaces it, and the failure mode is
+nothing to catch it. `pageBundleSource()` replaces it, and the failure mode is
 gone rather than guarded.
 
 ## Design

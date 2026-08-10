@@ -88,7 +88,7 @@ Cutting a release or adding a package? There are tailored templates:
 
 - [ ] Changeset added for every published-package change (`pnpm changeset`; confirm with `pnpm changeset:status`)
 - [ ] Changed a **bundled** package? Everything that inlines it is re-released too, so nothing ships a stale engine (confirm with `pnpm changeset:status`). Read the carriers from `noExternal` in each consumer's tsup config rather than from memory — this list grows every time a package goes internal:
-      `core` → `inspector`, `storybook-addon`, the extension · `semantic-navigator-ui` → `inspector`, `storybook-addon`, the extension · `validate` → `testing` · `audit`, `serialize` → `testing`, `browser`, `cli`, `mcp` · `snapshot` → `cli`, `mcp` · `session-registry` → `cli`, `mcp` · `browser` → `cli`, `mcp`, `testing`
+      `core` → `inspector`, `storybook-addon`, the extension · `semantic-navigator-ui` → `inspector`, `storybook-addon`, the extension · `validate` → `testing` · `audit`, `serialize` → `testing`, `cli`, `mcp` · `snapshot` → `cli`, `mcp` · `session-registry` → `cli`, `mcp` · `browser` → `cli`, `mcp`, `testing`
 - [ ] The internal packages — `browser`, `audit`, `serialize`, `snapshot`, `validate`, `semantic-navigator-ui`, `session-registry` — are not published. A changeset names the **consumers** that bundle them, never the packages themselves. Both wrong forms fail quietly in different ways: mixing a private package in with published ones makes `pnpm changeset:status` throw, and naming one _alone_ is accepted and then silently ignored, so the fix ships with no version bump and no changelog line anywhere a user reads
 
 ## Test scenarios

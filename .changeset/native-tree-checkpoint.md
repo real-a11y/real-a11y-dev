@@ -5,7 +5,7 @@
 
 A Node-side tree checkpoint against the native producer — so acting and reporting finally speak the same language.
 
-`captureNativeCheckpoint(tree, url)` holds a native tree in Node; `diffNativeCheckpoint(checkpoint, after, afterUrl)` renders what changed. Both are pure, so the policy is unit-testable with no browser.
+Internally, `captureNativeCheckpoint(tree, url)` holds a native tree in Node and `diffNativeCheckpoint(checkpoint, after, afterUrl)` renders what changed. Both are pure, so the policy is unit-testable with no browser.
 
 The in-page checkpoint (`checkpointTree` / `diffSinceCheckpoint`, which `@real-a11y-dev/testing` still uses) is keyed by realm-bound WeakMap ids, so it dies with the page instance — and it diffs the **DOM** producer's tree while acting targets the **native** one. A user clicks `button "Attach"` and reads a diff in which that node is `textbox "Attach"`. Same element, two vocabularies. Holding the checkpoint here, against the same tree the targeting uses, removes that seam.
 

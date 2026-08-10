@@ -8,7 +8,20 @@ export default defineConfig({
   // is the way. `--format json` and `--session` are the programmatic surface.
   entry: ["src/index.ts", "src/daemon/entry.ts"],
   format: ["esm"],
-  dts: true,
+  // `dts.resolve` for the private packages even though the emit is currently
+  // just a shebang: `src/args.ts` imports `ChromeChannel` / `OpenOptions` as
+  // types from browser, and nothing watches this package — `surface:check` reads
+  // only the `.d.ts` an `exports` `types` condition points at (cli has no
+  // `exports` map) and `check-packaging.mjs` skips cli via ATTW_SKIP_PACKAGES.
+  dts: {
+    resolve: [
+      "@real-a11y-dev/session-registry",
+      "@real-a11y-dev/audit",
+      "@real-a11y-dev/serialize",
+      "@real-a11y-dev/snapshot",
+      "@real-a11y-dev/browser",
+    ],
+  },
   sourcemap: true,
   clean: true,
   treeshake: true,

@@ -32,6 +32,11 @@ export default defineConfig({
       // declarations must carry them rather than point at a 404.
       "@real-a11y-dev/audit",
       "@real-a11y-dev/serialize",
+      // Paired with the `noExternal` above. Latent today — no browser type
+      // reaches this package's public surface — but the pairing is what the
+      // architecture page promises, and the day one does the emit would name
+      // an unresolvable specifier.
+      "@real-a11y-dev/browser",
     ],
   },
   sourcemap: true,

@@ -176,8 +176,7 @@ npx -y @real-a11y-dev/cli audit https://example.com --format json -o report.json
   keeps one browser alive across invocations, so successive commands read the
   same live page instead of reloading it — the shell's version of the `session`
   parameter above.
-- **Acting on the page** — `click`, `type`, and `focus` target a control by role
-  + accessible name and print the tree diff the action caused;
+- **Acting on the page** — `click`, `type`, and `focus` target a control by role + accessible name and print the tree diff the action caused;
   `interact --step '<step>'` chains several of them in one run.
 - **Gating a PR** — `snapshot` writes the diffable artifact, and
   `diff base.json pr.json` classifies findings as new / changed / fixed in

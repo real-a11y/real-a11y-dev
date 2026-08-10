@@ -654,7 +654,7 @@ importers:
         specifier: workspace:*
         version: link:../core
       playwright:
-        specifier: '*'
+        specifier: '>=1.49.0 <2'
         version: 1.61.1
     devDependencies:
       '@playwright/test':

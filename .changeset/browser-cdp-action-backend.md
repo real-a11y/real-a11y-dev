@@ -15,4 +15,4 @@ await session.act({ nodeId: node.id, action: "click" }); // { success: true }
 
 Safety is enforced by construction, matching the read path: an `ActionResult` never carries the value typed into a field or any field content (the in-page function returns only a structural marker), and CDP errors are surfaced as content-free strings. A node with no backing DOM element (`ax-<n>`, e.g. a synthesized document root) is refused. Actions beyond click/type/focus are rejected with a clear message rather than guessed at.
 
-`act` is added to the `A11ySession` interface. `CdpActionBackend` and `backendNodeIdFrom` are exported for callers driving their own CDP session. Chromium only.
+`act` is added to the `A11ySession` interface. `CdpActionBackend` and `backendNodeIdFrom` back this internally — they live in the workspace-internal browser package and are not importable. Chromium only.

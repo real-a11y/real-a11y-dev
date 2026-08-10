@@ -86,7 +86,7 @@
     "@real-a11y-dev/core": "workspace:*"
   },
   "peerDependencies": {
-    "playwright": "*"
+    "playwright": ">=1.49.0 <2"
   },
   "peerDependenciesMeta": {
     "playwright": {
