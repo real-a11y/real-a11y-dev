@@ -20,7 +20,9 @@ Publishing is irreversible; every check here is cheap and every miss is permanen
 
 1. `pnpm changeset:status` — no unconsumed changesets remain for packages being
    released
-2. Confirm the **linked family** all moved to one version together. **Read the
+2. Confirm the linked family members **this release moves** all moved to one version
+   together — `linked` never pulls an unchanged member in, so one left at its previous
+   number is correct (see the last paragraph). **Read the
    group out of `.changeset/config.json`'s `linked` array — do not use a list from
    memory or from this file.** It loses a name every time a package goes internal
    (ten originally; six after `ui`, `serialize`, `audit` and `snapshot` left), and a
@@ -34,7 +36,9 @@ Publishing is irreversible; every check here is cheap and every miss is permanen
    change rather than repeating the version
 5. `.changeset/pre.json` — `mode: "pre"`, `tag: "beta"` for a beta; absent/exited for
    a stable
-6. Intended dist-tag: `beta` publishes never move `latest`
+6. Intended dist-tag: while `mode: "pre"`, a `beta` publish **also advances `latest`**
+   (`scripts/advance-latest.mjs`, so `npm i` hands out the newest beta rather than a
+   stale one). After `changeset pre exit` it must not — the stable owns `latest`
 7. Cross-package consistency: anything bundling a changed package is re-released, so
    none ships a stale engine. For a **private** dependency changesets cannot do this
    for you — `ui` and `validate` have no version to cascade from, and they are
@@ -47,9 +51,11 @@ Publishing is irreversible; every check here is cheap and every miss is permanen
 
 ## Expected
 
-- One version across the linked family; `cli`/`mcp` independent and deliberate
+- One version across the linked family members the release moves; unmoved members stay
+  where they were; `cli`/`mcp` independent and deliberate
 - Every bump has a changelog entry a user could act on
-- Beta publishes go to the `beta` dist-tag and leave `latest` untouched
+- Beta publishes go to the `beta` dist-tag and, pre-1.0, take `latest` with them; once a
+  stable exists they leave it untouched
 - No package bundling a changed engine is left behind at an older build
 - A change confined to a private package has a changeset naming its **consumers** —
   otherwise the release silently ships the code with no version bump and no changelog
@@ -87,6 +93,14 @@ the fix is in nobody's tarball — silent in both directions, since there is als
 changelog entry to notice missing. Expect this to grow as more packages go internal:
 each one subtracts a name from `linked` (2) and adds one to the set step 7 has to
 check by hand.
+
+`0.1.0-beta.14` is the release that made both of those concrete. It published
+`testing`/`storybook-addon` at `beta.14` and left `core`/`inspector`/`react` at
+`beta.13` — a linked family on two numbers, and correct. Step 2 said "all moved to one
+version together" and would have called it a bug. Step 6 was wrong in the other
+direction: it said a beta never moves `latest`, when `scripts/advance-latest.mjs` has
+advanced it on every prerelease since #115 — predating this suite's import in #270, so
+the assertion was never true while it was written down.
 
 Note the mechanical guard: CI's changeset gate keys on a newly **added**
 `.changeset/*.md`. Editing an existing changeset does not satisfy it, by design — one
