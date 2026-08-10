@@ -123,6 +123,7 @@
     "playwright-attach-hardening",
     "playwright-nav-iframe-bundle",
     "portal-overlay-empty-announcer",
+    "privatize-browser",
     "privatize-engine-packages",
     "privatize-validate-and-ui",
     "producer-support-from-the-command-table",
