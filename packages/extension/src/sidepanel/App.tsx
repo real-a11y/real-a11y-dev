@@ -265,27 +265,60 @@ export function App() {
   // `tabs.sendMessage` callback, and that reply is the panel's ONLY signal for
   // a page where no content script can run: no tree ever arrives, which is
   // indistinguishable from one still on its way.
-  const requestTree = useCallback(() => {
-    sendToBoundTab(
-      { type: "REQUEST_TREE", payload: { viewMode } },
-      (response: unknown) => {
-        // Read lastError even though the reply carries the verdict: an
-        // unread one logs "Unchecked runtime.lastError" to the panel console
-        // on every MV3 worker teardown. `response` is `undefined` in exactly
-        // that case, which is not a restricted page and must not render as
-        // one — hence the undefined-safe gate rather than a truthiness test.
-        void chrome.runtime.lastError;
-        const unreachable = isUnreachablePageResponse(response);
-        setPageUnreachable(unreachable);
-        // A page nothing can be delivered to is not one we are attached to.
-        // Without this the restricted screen — which lives behind
-        // `!connected` — stays unreachable after a SAME-TAB navigation to a
-        // PDF or the Web Store: no tab switch fires, so `connected` is still
-        // true and the panel keeps rendering the previous page's tree.
-        if (unreachable) setConnected(false);
-      },
-    );
-  }, [sendToBoundTab, viewMode]);
+  //
+  // `applyVerdict` is what separates the two callers, and it is not a
+  // refinement — an unreachable reply does NOT mean "restricted page" on its
+  // own. The content script is injected at `document_idle`, so between a new
+  // document committing and the script loading the tab has no receiver and
+  // Chrome reports the very same "receiving end does not exist". The
+  // automatic re-extracts below fire 100-300ms after an action that commonly
+  // navigates, which lands squarely in that gap — acting on their verdict
+  // would blank an ordinary page's tree and accuse Chrome of forbidding it.
+  // Only a request the user made (opening the panel, ↻, Load tree / Try
+  // again) is allowed to move that state, because only there does the answer
+  // describe a page they are looking at and waiting on.
+  const sendTreeRequest = useCallback(
+    (applyVerdict: boolean) => {
+      sendToBoundTab(
+        { type: "REQUEST_TREE", payload: { viewMode } },
+        (response: unknown) => {
+          // Read lastError even though the reply carries the verdict: an
+          // unread one logs "Unchecked runtime.lastError" to the panel
+          // console on every MV3 worker teardown. `response` is `undefined`
+          // in exactly that case, which is not a restricted page and must not
+          // render as one — hence the undefined-safe gate rather than a
+          // truthiness test.
+          void chrome.runtime.lastError;
+          if (!applyVerdict) return;
+          const unreachable = isUnreachablePageResponse(response);
+          setPageUnreachable(unreachable);
+          // A page nothing can be delivered to is not one we are attached to.
+          // Without this the restricted screen — which lives behind
+          // `!connected` — stays unreachable after a SAME-TAB navigation to a
+          // PDF or the Web Store: no tab switch fires, so `connected` is
+          // still true and the panel keeps rendering the previous page's tree.
+          if (unreachable) setConnected(false);
+        },
+      );
+    },
+    [sendToBoundTab, viewMode],
+  );
+
+  /** The user asked for the tree. Its answer decides what they are shown. */
+  const requestTree = useCallback(
+    () => sendTreeRequest(true),
+    [sendTreeRequest],
+  );
+
+  /**
+   * Follow-up extraction after an action, to pick up the state it changed.
+   * Nobody is waiting on it, and it races page navigation by construction, so
+   * an unreachable reply here is ignored — the next `TREE_DATA` is the answer.
+   */
+  const reExtract = useCallback(
+    () => sendTreeRequest(false),
+    [sendTreeRequest],
+  );
 
   // First time we learn our tab: auto-fetch the tree so the panel
   // populates on open. On subsequent tab changes we deliberately do NOT
@@ -721,10 +754,10 @@ export function App() {
           setTimeout(() => setLastAction(null), 3000);
         }
         // Re-extract to reflect state change (checked, expanded, etc.)
-        setTimeout(requestTree, 100);
+        setTimeout(reExtract, 100);
       });
     },
-    [nodes, handleToggle, sendToBoundTab, requestTree],
+    [nodes, handleToggle, sendToBoundTab, reExtract],
   );
 
   const handleInputSubmit = useCallback(
@@ -744,12 +777,12 @@ export function App() {
           );
           setTimeout(() => setLastAction(null), 2000);
           // Re-extract tree to reflect new values
-          setTimeout(requestTree, 100);
+          setTimeout(reExtract, 100);
         },
       );
       setInputState(null);
     },
-    [nodes, inputState, sendToBoundTab, requestTree],
+    [nodes, inputState, sendToBoundTab, reExtract],
   );
 
   const handleInputCancel = useCallback(() => {
@@ -872,9 +905,9 @@ export function App() {
           }
         },
       );
-      setTimeout(requestTree, 300);
+      setTimeout(reExtract, 300);
     },
-    [sendToBoundTab, requestTree],
+    [sendToBoundTab, reExtract],
   );
 
   // Export the selected view(s) as a Markdown report and copy to clipboard.
@@ -1057,7 +1090,7 @@ export function App() {
             */}
             <button
               class="sn-input-panel-btn sn-input-panel-btn--primary"
-              onClick={requestTree}
+              onClick={() => requestTree()}
             >
               {pageUnreachable ? "Try again" : "Load tree"}
             </button>
