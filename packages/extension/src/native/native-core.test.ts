@@ -1,10 +1,13 @@
 import type { RawNativeAXNode } from "@real-a11y-dev/core";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   backendNodeIdFrom,
   dispatchNative,
   findNative,
+  IN_PAGE_ACTION_SOURCE,
+  pageClick,
+  pageType,
   readNativeTree,
   type CdpTransport,
 } from "./native-core.js";
@@ -140,5 +143,159 @@ describe("dispatchNative", () => {
     const res = await dispatchNative(t, "ax-dom-8", "click");
     expect(res.success).toBe(false);
     expect(res.error).not.toContain("secret@example.com");
+  });
+});
+
+// The in-page action functions are DOM code that happens to be *delivered* over
+// CDP, so they're exercised as DOM code — called with the element as `this`,
+// exactly as `Runtime.callFunctionOn` invokes them.
+
+/** Call an in-page function the way Runtime.callFunctionOn does: as `this`. */
+function on<A extends unknown[], R>(
+  fn: (this: Element, ...args: A) => R,
+  el: Element,
+  ...args: A
+): R {
+  return fn.call(el, ...args);
+}
+
+function record(el: Element, types: string[]): string[] {
+  const seen: string[] = [];
+  for (const type of types) el.addEventListener(type, () => seen.push(type));
+  return seen;
+}
+
+const POINTER_SEQUENCE = [
+  "pointerdown",
+  "mousedown",
+  "pointerup",
+  "mouseup",
+  "click",
+];
+
+describe("in-page actions — click", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("fires the full pointer sequence, not a bare click", () => {
+    // Regression: this path used to call `this.click()`, which fires `click`
+    // alone. jsaction / Material handlers gate on the pointer sequence, so
+    // those pages saw nothing while the marker still reported success.
+    const el = document.createElement("button");
+    document.body.appendChild(el);
+    const seen = record(el, POINTER_SEQUENCE);
+
+    expect(on(pageClick, el)).toEqual({ ok: true });
+    expect(seen).toEqual(POINTER_SEQUENCE);
+  });
+
+  it("reaches a pointerdown-only handler (the jsaction failure mode)", () => {
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    let fired = false;
+    el.addEventListener("pointerdown", () => {
+      fired = true;
+    });
+    expect(on(pageClick, el)).toEqual({ ok: true });
+    expect(fired).toBe(true);
+  });
+
+  it("redirects a composite wrapper to the control that carries the handler", () => {
+    // `menuitem` and `tab` are in the panel's ACTABLE set, and a delegated
+    // handler walks UP from the target — so dispatching on the wrapper misses
+    // it entirely and the click silently does nothing.
+    for (const role of ["menuitem", "tab", "treeitem", "option"]) {
+      document.body.innerHTML = `<div role="${role}"><button>go</button></div>`;
+      const wrapper = document.body.firstElementChild as Element;
+      const inner = wrapper.querySelector("button") as Element;
+      let innerClicked = false;
+      inner.addEventListener("click", () => {
+        innerClicked = true;
+      });
+
+      expect(on(pageClick, wrapper)).toEqual({ ok: true });
+      expect(innerClicked).toBe(true);
+    }
+  });
+
+  it("leaves a well-formed control alone", () => {
+    document.body.innerHTML = `<button id="b">go</button>`;
+    const el = document.getElementById("b") as Element;
+    const seen = record(el, ["click"]);
+    expect(on(pageClick, el)).toEqual({ ok: true });
+    expect(seen).toEqual(["click"]);
+  });
+});
+
+describe("in-page actions — type", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("writes a native input through the prototype setter", () => {
+    const el = document.createElement("input");
+    document.body.appendChild(el);
+    const seen = record(el, ["input", "change"]);
+    expect(on(pageType, el, "hello")).toEqual({ ok: true });
+    expect(el.value).toBe("hello");
+    expect(seen).toEqual(["input", "change"]);
+  });
+
+  it("gives a model-driven editor a cancelable beforeinput and respects it", () => {
+    // Regression: this path used to write `textContent` unconditionally.
+    // ProseMirror/Lexical/Draft consume `beforeinput`, insert into their own
+    // model, and revert the DOM — so the write was lost while the marker said
+    // success. Cancelling must leave the DOM untouched.
+    const el = document.createElement("div");
+    el.setAttribute("contenteditable", "true");
+    el.textContent = "original";
+    document.body.appendChild(el);
+    let sawBeforeInput = false;
+    el.addEventListener("beforeinput", (e) => {
+      sawBeforeInput = true;
+      e.preventDefault(); // the editor handled it
+    });
+
+    expect(on(pageType, el, "typed")).toEqual({ ok: true });
+    expect(sawBeforeInput).toBe(true);
+    expect(el.textContent).toBe("original"); // not clobbered
+  });
+
+  it("writes contenteditable when nothing handled beforeinput", () => {
+    const el = document.createElement("div");
+    el.setAttribute("contenteditable", "true");
+    document.body.appendChild(el);
+    expect(on(pageType, el, "typed")).toEqual({ ok: true });
+    expect(el.textContent).toBe("typed");
+  });
+
+  it("refuses a non-text element instead of reporting success", () => {
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    expect(on(pageType, el, "x")).toEqual({
+      ok: false,
+      reason: "not-a-text-field",
+    });
+  });
+
+  it("never returns the typed text (R1)", () => {
+    const el = document.createElement("input");
+    document.body.appendChild(el);
+    const marker = on(pageType, el, "hunter2");
+    expect(JSON.stringify(marker)).not.toContain("hunter2");
+  });
+});
+
+describe("in-page action source", () => {
+  it("serializes to self-contained source for Runtime.callFunctionOn", () => {
+    // Each is shipped as source text, so nothing may reference a module-scope
+    // binding — that would be a ReferenceError in the page, not a build error.
+    for (const src of Object.values(IN_PAGE_ACTION_SOURCE)) {
+      expect(src).toMatch(/^function/);
+      expect(src).not.toContain("import");
+    }
+    // The composite list must live inside the click body, not hoisted.
+    expect(IN_PAGE_ACTION_SOURCE.click).toContain("treeitem");
   });
 });
