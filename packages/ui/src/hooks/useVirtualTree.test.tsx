@@ -309,3 +309,71 @@ describe("useVirtualTree", () => {
     expect(fns[0]).toBe(fns[fns.length - 1]);
   });
 });
+
+describe("useVirtualTree teardown", () => {
+  // Regression: the ResizeObserver callback defers its re-measure by a frame
+  // (to break the observe→setState→relayout loop Chromium warns about). That
+  // frame must not outlive the component. `disconnect()` does not cancel an
+  // already-queued frame, and the stray callback sets state, which makes
+  // Preact schedule post-paint work — so once the host has torn down, that
+  // work throws on globals that no longer exist (seen as an intermittent
+  // "cancelAnimationFrame is not defined" in inspector's suite on macOS).
+  let container: HTMLDivElement;
+  let originalRO: unknown;
+  let observerCallbacks: Array<() => void>;
+  let cancelled: number[];
+  let queued: number[];
+  let originalRaf: typeof requestAnimationFrame;
+  let originalCancel: typeof cancelAnimationFrame;
+
+  beforeEach(() => {
+    observerCallbacks = [];
+    cancelled = [];
+    queued = [];
+    originalRO = (globalThis as Record<string, unknown>).ResizeObserver;
+    (globalThis as Record<string, unknown>).ResizeObserver = class {
+      constructor(cb: () => void) {
+        observerCallbacks.push(cb);
+      }
+      observe() {}
+      disconnect() {}
+    };
+
+    let nextId = 1;
+    originalRaf = globalThis.requestAnimationFrame;
+    originalCancel = globalThis.cancelAnimationFrame;
+    // Never actually run the callback: the point is whether it stays pending.
+    globalThis.requestAnimationFrame = ((): number => {
+      const id = nextId++;
+      queued.push(id);
+      return id;
+    }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = ((id: number) => {
+      cancelled.push(id);
+    }) as typeof cancelAnimationFrame;
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+  });
+
+  afterEach(() => {
+    render(null, container);
+    container.remove();
+    (globalThis as Record<string, unknown>).ResizeObserver = originalRO;
+    globalThis.requestAnimationFrame = originalRaf;
+    globalThis.cancelAnimationFrame = originalCancel;
+  });
+
+  it("cancels a frame the observer queued, so none survives unmount", async () => {
+    render(<Harness connected={true} />, container);
+    await waitFor(() => observerCallbacks.length > 0);
+
+    observerCallbacks[0](); // the element resized: a re-measure is now queued
+    expect(queued.length).toBeGreaterThan(0);
+    const pending = queued[queued.length - 1];
+
+    render(null, container); // unmount → teardown runs
+
+    expect(cancelled).toContain(pending);
+  });
+});
