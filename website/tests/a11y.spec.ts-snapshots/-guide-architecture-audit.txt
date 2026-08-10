@@ -527,7 +527,7 @@ main
       code "manager"
       link "packages/storybook-addon/tsup.config.ts"
         code "packages/storybook-addon/tsup.config.ts"
-    listitem "— and the addon's entry set for (plus ); does it for , , , and ; itself for and ; and for , , , , and . Any entry whose declarations could a private package pairs with — , , , the addon's — because otherwise the shipped keeps an import npm cannot resolve. is the sharpest case: re-exports five names straight , so the resolve entry is what turns them into inlined declaration text instead of a specifier npm has no copy of. is the exception: its entries are the and the daemon, and neither exports a type."
+    listitem "— and the addon's entry set for (plus ); does it for , , , and ; itself for and ; and for , , , , and . Any entry whose declarations could a private package pairs with — , , , the addon's — because otherwise the shipped keeps an import npm cannot resolve. is the sharpest case: re-exports five names straight , so the resolve entry is what turns them into inlined declaration text instead of a specifier npm has no copy of. pairs them pre-emptively: its entries are the and the daemon, so the emit is currently just a shebang — but nothing watches it (no map for to read, and skips it), so the resolve list is there before it is needed rather than after."
       strong "Internal packages are inlined"
       code "inspector"
       code "manager"
@@ -563,6 +563,9 @@ main
       code "browser"
       code "cli"
       code "bin"
+      code "exports"
+      code "surface:check"
+      code "ATTW_SKIP_PACKAGES"
   separator
   heading "The SemanticNode data model" (level 2)
   paragraph "All packages share a single node shape from . See for the full schema. The contract:"

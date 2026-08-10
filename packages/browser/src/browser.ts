@@ -44,10 +44,14 @@ import { nativeTree as computeNativeTree } from "./native-tree.js";
  */
 declare const __REAL_A11Y_PAGE_BUNDLE__: string | undefined;
 
-// Read ONCE and cached. The `define` identifier is referenced from exactly one
-// place below, deliberately: a define is substituted at every occurrence, so
-// naming it twice would embed two complete copies of the bundle — precisely how
-// the inspector once shipped its stylesheet twice.
+// Read ONCE and cached.
+//
+// The `define` identifier appears TWICE below — in the `typeof` guard and in the
+// assignment. Only one copy of the bundle survives, because esbuild folds
+// `typeof "<literal>"` to `"string"` at build time and drops the branch. That is
+// worth knowing before restructuring the guard: a define is substituted at every
+// occurrence, and an occurrence esbuild cannot fold away embeds another complete
+// copy — precisely how the inspector once shipped its stylesheet twice.
 let cachedBundle: string | undefined;
 
 export function pageBundleSource(): string {
