@@ -171,6 +171,25 @@ chrome.runtime.onMessage.addListener(
         break;
       }
 
+      case "RESEND_TREE": {
+        // The background's per-tab frame registry is memory-only, so a
+        // service-worker restart empties it while this frame keeps observing
+        // and stays silent until its own DOM next mutates. This is the
+        // background asking us to re-announce so its merge sees us again.
+        // Unlike REQUEST_TREE it carries no viewMode and must not change
+        // ours — `currentViewMode` survived the restart and is still right.
+        //
+        // Only answer if already armed — which is the restart case, and the
+        // only one the background sends this for. Arming here instead would
+        // make this the one message that can start extraction in a frame the
+        // background deliberately didn't arm (observation is panel-gated;
+        // `planFrameHello` returns nothing when no panel is connected), and
+        // the panel can drop between the send and its arrival.
+        if (observingEnabled) sendTree();
+        sendResponse({ success: true });
+        break;
+      }
+
       case "SET_VIEW_MODE": {
         currentViewMode = message.payload.viewMode;
         sendTree();
