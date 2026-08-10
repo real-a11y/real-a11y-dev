@@ -3,4 +3,4 @@
 "@real-a11y-dev/storybook-addon": patch
 ---
 
-fix(ui): cancel the virtualized tree's pending re-measure frame on teardown. The ResizeObserver defers its re-measure by one `requestAnimationFrame`; `disconnect()` does not cancel a frame already queued, so it could fire after the component went away, set state, and make Preact schedule post-paint work against a host that had already torn down — surfacing as an intermittent `cancelAnimationFrame is not defined` in the inspector suite on macOS. The frame is now cancelled with the observer.
+fix(ui): cancel the virtualized tree's pending re-measure frame on teardown. The ResizeObserver defers its re-measure by one `requestAnimationFrame`, and `disconnect()` does not cancel a frame already queued — so in a real browser the callback could still run after the component went away. The frame is now cancelled with the observer. (Test-only companion: every jsdom suite that renders Preact now shares one raf/cancelAnimationFrame setup file, so Preact's own scheduler can't throw after environment teardown.)
