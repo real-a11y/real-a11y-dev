@@ -573,6 +573,18 @@ const RULES = [
     tier: "high",
     title: "Root manifest — build/publish keys",
     why: "The root `scripts`, `packageManager`, `engines` and `pnpm` overrides define what `pnpm verify` and the pre-push hook actually run. A change here can make CI pass by doing less.",
+    // The only rule that watches a path it can then decline to fire on: the key
+    // filter below ignores everything outside the build/publish set, so a root
+    // `devDependencies` bump matches no rule and is in no `LOW_SHAPED` entry.
+    // It therefore landed under "paths the rubric doesn't recognise", advising
+    // the reader to add the ROOT MANIFEST to a list documented as harmless.
+    //
+    // `watches` says "considered, and deliberately not interesting" — distinct
+    // from "never heard of it", which is what that section is for. Any future
+    // rule that filters a watched path down to no evidence needs one too; every
+    // other rule today either cites the path it matched or is scoped to a
+    // LOW_SHAPED one, which is why this is the sole occurrence.
+    watches: /^package\.json$/,
     match: (f) =>
       f.rootPackageKeys
         .filter((k) =>
@@ -793,12 +805,25 @@ function classify(facts) {
 
   // What a verdict is made of, and — for anything unrecognised — the paths that
   // forced it up a tier, so the fix (classify the path) is obvious.
+  //
+  // Three ways a path counts as recognised, in order: it is low-shaped, a rule
+  // cited it, or a rule WATCHES it but declined to fire. Only the third needs
+  // explaining — see `watches` on `root-manifest`.
   const shape = new Set();
   const unrecognised = [];
   for (const file of facts.files) {
-    const hit = LOW_SHAPED.find(([re]) => re.test(file));
-    if (hit) shape.add(hit[1]);
-    else if (!cited(evidenceSeen, file)) unrecognised.push(file);
+    const low = LOW_SHAPED.find(([re]) => re.test(file));
+    if (low) {
+      shape.add(low[1]);
+      continue;
+    }
+    if (cited(evidenceSeen, file)) continue;
+    const watcher = RULES.find((r) => r.watches?.test(file));
+    if (watcher) {
+      shape.add(watcher.id);
+      continue;
+    }
+    unrecognised.push(file);
   }
   if (unrecognised.length) shape.add("unrecognised");
 
