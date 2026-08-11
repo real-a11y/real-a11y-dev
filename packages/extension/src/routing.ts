@@ -378,3 +378,67 @@ export function resolvePanelTargetTab(
 ): number | null {
   return messageTabId ?? activeTabId ?? null;
 }
+
+// ---- Panel→content broadcast delivery ----
+
+/**
+ * `error` on the reply to a panel→content broadcast that no frame received.
+ *
+ * One code covers the whole class the panel can act on: pages where a content
+ * script cannot run at all (`chrome://`, the Web Store, the built-in PDF
+ * viewer) and, transiently, a page whose content script has not loaded yet.
+ * The panel treats both the same way — say the page is out of reach and offer
+ * a retry — because from its side they are the same fact.
+ */
+export const RESTRICTED_PAGE_ERROR = "restricted-page";
+
+export type BroadcastDelivery =
+  { success: true } | { success: false; error: string };
+
+/**
+ * Chrome's `lastError` text for "the message was delivered to nobody".
+ *
+ * Matching on it is deliberate, and the alternative is worse: `lastError` on a
+ * `tabs.sendMessage` also covers a tab that no longer exists ("No tab with
+ * id: 42" — a queued re-extract landing after the user closed the tab), and
+ * calling that a restricted page would tell the user Chrome forbids
+ * extensions here when the page merely went away.
+ */
+const NO_RECEIVER_PATTERNS = [
+  "Receiving end does not exist",
+  "Could not establish connection",
+];
+
+/**
+ * The panel's reply for a broadcast, decided from the `chrome.runtime.lastError`
+ * visible inside the `tabs.sendMessage` callback.
+ *
+ * Delivery is only knowable there. Answering the panel synchronously — as this
+ * did — reports success on every restricted page, and since the panel's only
+ * other signal is a tree that then never arrives, it waits on "Connecting to
+ * page..." indefinitely for what is a platform restriction, not a failure.
+ */
+export function describeBroadcastDelivery(
+  lastError: { message?: string } | undefined,
+): BroadcastDelivery {
+  if (!lastError) return { success: true };
+  const message = lastError.message ?? "";
+  const noReceiver = NO_RECEIVER_PATTERNS.some((p) => message.includes(p));
+  return {
+    success: false,
+    error: noReceiver ? RESTRICTED_PAGE_ERROR : message || "send failed",
+  };
+}
+
+/**
+ * True when a panel→content reply reports the page could not be reached.
+ *
+ * Undefined-safe on purpose: the reply is `undefined` when the MV3 service
+ * worker was torn down before answering, which is not the same thing as the
+ * page being unreachable and must not render as it.
+ */
+export function isUnreachablePageResponse(response: unknown): boolean {
+  if (typeof response !== "object" || response === null) return false;
+  const reply = response as { success?: unknown; error?: unknown };
+  return reply.success === false && reply.error === RESTRICTED_PAGE_ERROR;
+}

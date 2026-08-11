@@ -37,7 +37,11 @@ import {
 } from "preact/hooks";
 
 import type { FieldState } from "../field-state.js";
-import { isTrustedSender, shouldPanelAcceptMessage } from "../routing.js";
+import {
+  isTrustedSender,
+  isUnreachablePageResponse,
+  shouldPanelAcceptMessage,
+} from "../routing.js";
 import type { ContentToPanel, PanelToContent } from "../types.js";
 
 import { buildExportMarkdown, ALL_VIEWS } from "./export.js";
@@ -135,6 +139,11 @@ export function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [renderCount, forceRender] = useState(0);
   const [connected, setConnected] = useState(false);
+  // The last REQUEST_TREE came back saying no content script could receive it.
+  // Distinct from `!connected`: that is "no tree yet", which on a restricted
+  // page never resolves, and rendering the two the same is what left the panel
+  // saying "Connecting to page..." forever on chrome:// and the PDF viewer.
+  const [pageUnreachable, setPageUnreachable] = useState(false);
   const [lastAction, setLastAction] = useState<string | null>(null);
   const [roleFilter, setRoleFilter] = useState<RoleFilter>(null);
   const [curtainOn, setCurtainOn] = useState(false);
@@ -251,6 +260,66 @@ export function App() {
     [],
   );
 
+  // Every REQUEST_TREE goes through here so its reply is always read. The
+  // background can only tell whether a page is reachable from inside its
+  // `tabs.sendMessage` callback, and that reply is the panel's ONLY signal for
+  // a page where no content script can run: no tree ever arrives, which is
+  // indistinguishable from one still on its way.
+  //
+  // `applyVerdict` is what separates the two callers, and it is not a
+  // refinement — an unreachable reply does NOT mean "restricted page" on its
+  // own. The content script is injected at `document_idle`, so between a new
+  // document committing and the script loading the tab has no receiver and
+  // Chrome reports the very same "receiving end does not exist". The
+  // automatic re-extracts below fire 100-300ms after an action that commonly
+  // navigates, which lands squarely in that gap — acting on their verdict
+  // would blank an ordinary page's tree and accuse Chrome of forbidding it.
+  // Only a request the user made (opening the panel, ↻, Load tree / Try
+  // again) is allowed to move that state, because only there does the answer
+  // describe a page they are looking at and waiting on.
+  const sendTreeRequest = useCallback(
+    (applyVerdict: boolean) => {
+      sendToBoundTab(
+        { type: "REQUEST_TREE", payload: { viewMode } },
+        (response: unknown) => {
+          // Read lastError even though the reply carries the verdict: an
+          // unread one logs "Unchecked runtime.lastError" to the panel
+          // console on every MV3 worker teardown. `response` is `undefined`
+          // in exactly that case, which is not a restricted page and must not
+          // render as one — hence the undefined-safe gate rather than a
+          // truthiness test.
+          void chrome.runtime.lastError;
+          if (!applyVerdict) return;
+          const unreachable = isUnreachablePageResponse(response);
+          setPageUnreachable(unreachable);
+          // A page nothing can be delivered to is not one we are attached to.
+          // Without this the restricted screen — which lives behind
+          // `!connected` — stays unreachable after a SAME-TAB navigation to a
+          // PDF or the Web Store: no tab switch fires, so `connected` is
+          // still true and the panel keeps rendering the previous page's tree.
+          if (unreachable) setConnected(false);
+        },
+      );
+    },
+    [sendToBoundTab, viewMode],
+  );
+
+  /** The user asked for the tree. Its answer decides what they are shown. */
+  const requestTree = useCallback(
+    () => sendTreeRequest(true),
+    [sendTreeRequest],
+  );
+
+  /**
+   * Follow-up extraction after an action, to pick up the state it changed.
+   * Nobody is waiting on it, and it races page navigation by construction, so
+   * an unreachable reply here is ignored — the next `TREE_DATA` is the answer.
+   */
+  const reExtract = useCallback(
+    () => sendTreeRequest(false),
+    [sendTreeRequest],
+  );
+
   // First time we learn our tab: auto-fetch the tree so the panel
   // populates on open. On subsequent tab changes we deliberately do NOT
   // auto-fetch — too many edge cases made it unreliable (restricted
@@ -264,10 +333,7 @@ export function App() {
     if (myTabId === null) return;
     if (!hasRequestedInitial.current) {
       hasRequestedInitial.current = true;
-      sendToBoundTab({
-        type: "REQUEST_TREE",
-        payload: { viewMode },
-      });
+      requestTree();
       return;
     }
     setNodes(new Map());
@@ -275,9 +341,12 @@ export function App() {
     setSelectedId(null);
     setScopedRootId(null);
     setConnected(false);
+    // The verdict belonged to the tab we just left; the new one is unknown
+    // until it is asked.
+    setPageUnreachable(false);
     setPageTitle("");
     setPageUrl("");
-  }, [myTabId, viewMode, sendToBoundTab]);
+  }, [myTabId, requestTree]);
 
   // Keep a port alive so the background knows when the side panel closes.
   // On disconnect the background clears the highlight overlay AND disables
@@ -340,6 +409,27 @@ export function App() {
         return;
       }
 
+      // The document under us is leaving. Drop the tree rather than keep
+      // showing one that describes a page the user has left: node ids are a
+      // per-frame counter, so its rows resolve to unrelated elements on the
+      // new page, and every row stays clickable. On an ordinary page the new
+      // content script announces within moments and this empty state is a
+      // blink; on one that cannot run a content script — the Web Store, a
+      // PDF, a chrome:// page — nothing announces, and Load tree is then the
+      // honest answer instead of a tree that quietly lies.
+      if (message.type === "PAGE_NAVIGATED") {
+        setNodes(new Map());
+        setRootId("");
+        setSelectedId(null);
+        setScopedRootId(null);
+        setConnected(false);
+        // The old page's verdict says nothing about the new one.
+        setPageUnreachable(false);
+        setPageTitle("");
+        setPageUrl("");
+        return;
+      }
+
       if (message.type === "TREE_DATA" || message.type === "TREE_UPDATED") {
         const nodeMap = new Map<string, SemanticNode>(message.payload.nodes);
 
@@ -359,6 +449,9 @@ export function App() {
 
         setRootId(message.payload.rootId);
         setConnected(true);
+        // A tree is proof of reach, whoever asked for it — a live update from
+        // a frame that loaded late clears the verdict as well as a retry does.
+        setPageUnreachable(false);
         // Reset scope if scoped node no longer exists in tree
         setScopedRootId((prev) => (prev && !nodeMap.has(prev) ? null : prev));
         if (message.type === "TREE_DATA" && "pageTitle" in message.payload) {
@@ -682,15 +775,10 @@ export function App() {
           setTimeout(() => setLastAction(null), 3000);
         }
         // Re-extract to reflect state change (checked, expanded, etc.)
-        setTimeout(() => {
-          sendToBoundTab({
-            type: "REQUEST_TREE",
-            payload: { viewMode },
-          });
-        }, 100);
+        setTimeout(reExtract, 100);
       });
     },
-    [nodes, handleToggle, sendToBoundTab, viewMode],
+    [nodes, handleToggle, sendToBoundTab, reExtract],
   );
 
   const handleInputSubmit = useCallback(
@@ -710,17 +798,12 @@ export function App() {
           );
           setTimeout(() => setLastAction(null), 2000);
           // Re-extract tree to reflect new values
-          setTimeout(() => {
-            sendToBoundTab({
-              type: "REQUEST_TREE",
-              payload: { viewMode },
-            });
-          }, 100);
+          setTimeout(reExtract, 100);
         },
       );
       setInputState(null);
     },
-    [nodes, inputState, viewMode, sendToBoundTab],
+    [nodes, inputState, sendToBoundTab, reExtract],
   );
 
   const handleInputCancel = useCallback(() => {
@@ -843,14 +926,9 @@ export function App() {
           }
         },
       );
-      setTimeout(() => {
-        sendToBoundTab({
-          type: "REQUEST_TREE",
-          payload: { viewMode },
-        });
-      }, 300);
+      setTimeout(reExtract, 300);
     },
-    [viewMode, sendToBoundTab],
+    [sendToBoundTab, reExtract],
   );
 
   // Export the selected view(s) as a Markdown report and copy to clipboard.
@@ -996,13 +1074,32 @@ export function App() {
         </div>
         <div class="sn-empty">
           <div class="sn-empty-stack">
-            <span>
-              Connecting to page...
-              <br />
-              <small>
-                Switched tabs? Load this tab's tree — or reload the page.
-              </small>
-            </span>
+            {/*
+              Two different states share this screen, and saying "connecting"
+              for both is the bug: on a page where no content script can run,
+              nothing is connecting and nothing ever will. The retry stays on
+              the restricted branch too, because the same reply comes back for
+              a content script that simply hasn't loaded yet.
+            */}
+            {pageUnreachable ? (
+              <span>
+                This page can't be inspected.
+                <br />
+                <small>
+                  Chrome doesn't allow extensions on pages like chrome://, the
+                  Web Store, or the built-in PDF viewer. Open a regular http(s)
+                  page — or, if this is one, reload it and try again.
+                </small>
+              </span>
+            ) : (
+              <span>
+                Connecting to page...
+                <br />
+                <small>
+                  Switched tabs? Load this tab's tree — or reload the page.
+                </small>
+              </span>
+            )}
             {/*
               Switching tabs clears the tree and drops us here, but the
               toolbar's refresh button lives in the connected UI below this
@@ -1014,14 +1111,9 @@ export function App() {
             */}
             <button
               class="sn-input-panel-btn sn-input-panel-btn--primary"
-              onClick={() => {
-                sendToBoundTab({
-                  type: "REQUEST_TREE",
-                  payload: { viewMode },
-                });
-              }}
+              onClick={() => requestTree()}
             >
-              Load tree
+              {pageUnreachable ? "Try again" : "Load tree"}
             </button>
           </div>
         </div>
@@ -1182,13 +1274,10 @@ export function App() {
         <button
           class="sn-toolbar-btn"
           onClick={() => {
-            // sendToBoundTab stamps myTabId so this doesn't race the
-            // background's activeTabId update — without that, hitting
+            // requestTree stamps myTabId (via sendToBoundTab) so this doesn't
+            // race the background's activeTabId update — without that, hitting
             // refresh right after a tab switch would route to the wrong tab.
-            sendToBoundTab({
-              type: "REQUEST_TREE",
-              payload: { viewMode },
-            });
+            requestTree();
             setLastAction("Tree refreshed");
             setTimeout(() => setLastAction(null), 1500);
           }}

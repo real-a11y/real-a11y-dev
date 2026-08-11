@@ -647,3 +647,177 @@ describe("background: recovery after a service-worker restart", () => {
     expect(reAnnounceRequests(h, before).map((m) => m.frameId)).toEqual([1, 2]);
   });
 });
+
+/**
+ * Delivery of a panel→content broadcast is only known once Chrome has run the
+ * `tabs.sendMessage` callback. Answering the panel before then reports success
+ * on pages where no content script can run at all (chrome://, the Web Store,
+ * the built-in PDF viewer) — and since the panel's whole "am I attached?"
+ * signal is a tree that never arrives, it sits on "Connecting to page..."
+ * forever instead of saying the page is out of reach.
+ */
+describe("background: panel broadcast delivery reporting", () => {
+  let h: Harness;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.resetModules();
+    h = makeHarness();
+    (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
+    await import("./background.js");
+    await vi.runAllTimersAsync();
+    h.panelMessages.length = 0;
+    h.tabMessages.length = 0;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    delete (globalThis as { chrome?: unknown }).chrome;
+  });
+
+  /** Send a panel→background message and collect every reply it produces. */
+  function sendFromPanel(message: {
+    type: string;
+    payload?: unknown;
+    tabId?: number;
+  }): unknown[] {
+    const replies: unknown[] = [];
+    for (const fn of h.messageListeners) {
+      fn({ tabId: TAB_ID, ...message }, { id: EXTENSION_ID }, (response) =>
+        replies.push(response),
+      );
+    }
+    return replies;
+  }
+
+  it("reports failure when no frame in the tab could receive REQUEST_TREE", async () => {
+    h.knobs.sendError = { message: "Could not establish connection." };
+
+    const replies = sendFromPanel({
+      type: "REQUEST_TREE",
+      payload: { viewMode: "a11y" },
+    });
+    // Nothing may be claimed before Chrome has run the send callback.
+    expect(replies).toEqual([]);
+
+    await vi.runAllTimersAsync();
+    expect(replies).toEqual([{ success: false, error: "restricted-page" }]);
+  });
+
+  it("does not report a restricted page when the tab simply went away", async () => {
+    // A re-extract queued before the user closed the tab lands after it is
+    // gone. Reporting that as `restricted-page` would put the panel's
+    // "Chrome doesn't allow extensions here" message on an ordinary page.
+    h.knobs.sendError = { message: "No tab with id: 42." };
+
+    const replies = sendFromPanel({
+      type: "REQUEST_TREE",
+      payload: { viewMode: "a11y" },
+    });
+    await vi.runAllTimersAsync();
+
+    expect(replies).toEqual([{ success: false, error: "No tab with id: 42." }]);
+  });
+
+  /**
+   * The panel's only "am I attached?" signal is a tree arriving, so a request
+   * that is delivered but never answered is indistinguishable from a page
+   * still loading — and it never resolves. `sidepanelConnected` tracks a
+   * connected PORT, which a service worker revived BY THIS VERY MESSAGE does
+   * not yet have, so the merge used to drop the answer on the floor. Nothing
+   * retried: a content script re-announces only when its own DOM next
+   * mutates, so on a static page the panel waited on "Connecting to page…"
+   * forever.
+   */
+  it("publishes the tree for a panel request even with no port connected yet", async () => {
+    // No connectPanel() — this is a worker woken by the request itself.
+    const replies = sendFromPanel({
+      type: "REQUEST_TREE",
+      payload: { viewMode: "a11y" },
+    });
+    await vi.runAllTimersAsync();
+
+    expect(replies).toEqual([{ success: true }]);
+    expect(lastTreeToPanel(h)).not.toBeNull();
+  });
+
+  it("still publishes nothing for an unsolicited announce with no panel", async () => {
+    // The guard's original job: a frame announcing with no panel attached
+    // buys nobody anything. Only a request the panel made relaxes it.
+    announce(h, 0);
+    await vi.runAllTimersAsync();
+
+    expect(lastTreeToPanel(h)).toBeNull();
+  });
+
+  it("reports success once a reachable tab has taken REQUEST_TREE", async () => {
+    const replies = sendFromPanel({
+      type: "REQUEST_TREE",
+      payload: { viewMode: "a11y" },
+    });
+    await vi.runAllTimersAsync();
+
+    expect(replies).toEqual([{ success: true }]);
+  });
+});
+
+/**
+ * A tree only ever reaches the panel because some frame announced. Navigating
+ * to a page that can run no content script produces no announcement at all —
+ * so without an explicit signal the panel kept rendering the PREVIOUS page's
+ * tree indefinitely. Worse than empty: node ids are a per-frame counter, so
+ * those rows resolve to unrelated elements on the new page while staying
+ * clickable.
+ */
+describe("background: top-frame navigation tells the panel its tree is stale", () => {
+  let h: Harness;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.resetModules();
+    h = makeHarness();
+    (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
+    await import("./background.js");
+    await vi.runAllTimersAsync();
+    h.panelMessages.length = 0;
+    h.tabMessages.length = 0;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    delete (globalThis as { chrome?: unknown }).chrome;
+  });
+
+  it("pushes PAGE_NAVIGATED when the top frame navigates", async () => {
+    connectPanel(h);
+    await vi.runAllTimersAsync();
+    announce(h, 0);
+    await vi.runAllTimersAsync();
+    h.panelMessages.length = 0;
+
+    beginTopFrameNavigation(h);
+    await vi.runAllTimersAsync();
+
+    expect(h.panelMessages.filter((m) => m.type === "PAGE_NAVIGATED")).toEqual([
+      { type: "PAGE_NAVIGATED", tabId: TAB_ID },
+    ]);
+  });
+
+  it("does not push it for a subframe navigation", async () => {
+    // A subframe leaving invalidates its own subtree, not the whole page —
+    // the existing remerge covers that, and blanking the panel would be a
+    // gratuitous loss of the user's expand state and selection.
+    connectPanel(h);
+    await vi.runAllTimersAsync();
+    announce(h, 0);
+    await vi.runAllTimersAsync();
+    h.panelMessages.length = 0;
+
+    for (const fn of h.navigateListeners) fn({ tabId: TAB_ID, frameId: 1 });
+    await vi.runAllTimersAsync();
+
+    expect(h.panelMessages.filter((m) => m.type === "PAGE_NAVIGATED")).toEqual(
+      [],
+    );
+  });
+});

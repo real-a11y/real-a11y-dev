@@ -36,6 +36,22 @@ page — a stale service worker is the usual cause of "it didn't change".)
    expand/collapse, activate
 7. Repeat 6 with a screen reader running (VoiceOver / NVDA)
 8. A heavy page (a long docs page, a big table) — is it usable, or does it stall?
+9. Open the panel on `chrome://newtab` (or the Chrome Web Store, or a PDF opened in
+   Chrome's built-in viewer) — does the panel say the page can't be inspected, rather
+   than sitting on "Connecting to page…"? Then, from a normal page with a tree loaded,
+   switch to one of those tabs and press **Load tree** — same message? (Switching alone
+   shows the ordinary empty state; the panel does not auto-request on a tab switch.)
+   Finally navigate that same tab back to an `http(s)` page and hit **Try again** / `↻`
+   — does it attach? (If it sticks on "Connecting to page…" and never resolves, that is
+   the service-worker case below, not a slow page.)
+10. With a tree loaded on an ordinary page, navigate that same tab to the Chrome Web
+   Store — does the panel EMPTY, rather than keep showing the previous page's tree?
+   Then **Load tree** → "This page can't be inspected". Navigate back to a normal page
+   and confirm the tree returns on its own, without pressing anything.
+11. Leave the panel parked on a restricted page long enough for Chrome to stop the
+   extension's service worker (`chrome://extensions` shows "service worker (inactive)",
+   usually ~30s), then navigate to an ordinary page and press **Try again** — does the
+   tree arrive on the FIRST press?
 
 ## Expected
 
@@ -50,6 +66,17 @@ page — a stale service worker is the usual cause of "it didn't change".)
 - Expand/collapse state survives live tree updates — a re-render that collapses
   everything makes the panel unusable on a real page
 - No visible stall on a heavy page
+- **Navigating never leaves another page's tree on screen** (step 10). A stale tree is
+  not a cosmetic problem: node ids are a per-frame counter, so its rows point at
+  unrelated elements on the new page and remain clickable
+- **One press is enough** (step 11). A tree request that is delivered but never
+  answered looks exactly like a page still loading, and it never resolves on its own —
+  a content script re-announces only when its own DOM next mutates
+- **A page Chrome won't run a content script on says so.** From the next extension
+  release (the `Unreleased` entry in `packages/extension/CHANGELOG.md`) step 9 shows
+  "This page can't be inspected" with a **Try again** button; on an earlier build the
+  panel shows "Connecting to page…" indefinitely there, which is the defect this step
+  exists for, not a new one
 
 ## Why this exists
 
@@ -59,6 +86,15 @@ row and cannot be automated meaningfully — they need a human with a screen rea
 
 Step 8 is here because tree virtualization and live-update handling have both
 regressed before in ways that only show at scale, never on a fixture.
+
+Step 9 is the day-one path and was silently broken: the new-tab page is what's open
+when most people first click the extension, and the panel's "am I attached?" signal
+is a tree arriving — which on a restricted page never does. The background reported
+delivery before Chrome had confirmed it, so there was nothing to distinguish "still
+loading" from "impossible here". It needs a human because it is a Chrome restriction
+no test environment reproduces: the background half has a regression test, the panel
+half has none — the extension's vitest config only collects `*.test.ts`, so there are
+no side-panel component tests to add one to.
 
 ## Notes
 

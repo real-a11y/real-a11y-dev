@@ -11,6 +11,8 @@ import {
   isTrustedSender,
   resolvePanelTargetTab,
   shouldPanelAcceptMessage,
+  describeBroadcastDelivery,
+  isUnreachablePageResponse,
 } from "./routing.js";
 
 describe("prefixNodeId", () => {
@@ -602,5 +604,69 @@ describe("shouldPanelAcceptMessage", () => {
         myTabId: MY_TAB,
       }),
     ).toBe(true);
+  });
+});
+
+describe("describeBroadcastDelivery", () => {
+  it("reports success when the send callback saw no error", () => {
+    expect(describeBroadcastDelivery(undefined)).toEqual({ success: true });
+  });
+
+  it("reports a restricted page when nothing in the tab received it", () => {
+    expect(
+      describeBroadcastDelivery({
+        message:
+          "Could not establish connection. Receiving end does not exist.",
+      }),
+    ).toEqual({ success: false, error: "restricted-page" });
+  });
+
+  it("does not call a vanished tab a restricted page", () => {
+    // A re-extract queued before the user closed the tab lands after it is
+    // gone. That is a failure, but telling the user Chrome forbids
+    // extensions on this page would be a lie.
+    expect(
+      describeBroadcastDelivery({ message: "No tab with id: 42." }),
+    ).toEqual({ success: false, error: "No tab with id: 42." });
+  });
+
+  it("still fails, with a placeholder, when the error carries no message", () => {
+    expect(describeBroadcastDelivery({})).toEqual({
+      success: false,
+      error: "send failed",
+    });
+  });
+});
+
+describe("isUnreachablePageResponse", () => {
+  it("recognises the background's restricted-page reply", () => {
+    expect(
+      isUnreachablePageResponse({ success: false, error: "restricted-page" }),
+    ).toBe(true);
+  });
+
+  it("rejects a success reply", () => {
+    expect(isUnreachablePageResponse({ success: true })).toBe(false);
+  });
+
+  it("rejects a failure for some other reason", () => {
+    // "No active tab" is a panel-side race, and "No tab with id" is a tab
+    // that closed — neither is a page the extension can never reach, so
+    // rendering the restricted-page message for them would be wrong.
+    expect(
+      isUnreachablePageResponse({ success: false, error: "No active tab" }),
+    ).toBe(false);
+    expect(
+      isUnreachablePageResponse({
+        success: false,
+        error: "No tab with id: 42.",
+      }),
+    ).toBe(false);
+  });
+
+  it("rejects a missing reply", () => {
+    // The reply is `undefined` when the MV3 worker died before answering.
+    expect(isUnreachablePageResponse(undefined)).toBe(false);
+    expect(isUnreachablePageResponse(null)).toBe(false);
   });
 });

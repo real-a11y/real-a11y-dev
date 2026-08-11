@@ -55,6 +55,11 @@ export type ContentToPanel =
     }
   | { type: "ACTION_RESULT"; tabId?: number; payload: ActionResult }
   | { type: "NAVIGATION"; tabId?: number; payload: { url: string } }
+  // Background → panel push: the tab's TOP frame is navigating, so whatever
+  // tree the panel is holding describes a document that is on its way out.
+  // Carries no replacement — the new page's content script announces one if
+  // it can run at all, and if it can't, saying so is the panel's job.
+  | { type: "PAGE_NAVIGATED"; tabId: number }
   | { type: "FOCUS_CHANGED"; tabId?: number; payload: { nodeId: string } }
   | {
       type: "LIVE_REGION";

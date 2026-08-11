@@ -3,6 +3,7 @@
 import { buildFrameInfoMap, mergeFrameTrees } from "./frame-merger.js";
 import {
   type PlannedTabMessage,
+  describeBroadcastDelivery,
   isTrustedSender,
   prefixNodeId,
   parseNodeId,
@@ -28,6 +29,22 @@ const tabStates = new Map<number, TabState>();
 const tabCurtainOn = new Map<number, boolean>(); // curtain state per tab
 let activeTabId: number | null = null;
 
+/**
+ * Tabs whose panel has asked for a tree and not yet been given one.
+ *
+ * `sidepanelConnected` tracks a connected PORT, and a revived service worker
+ * has none until the panel's `onDisconnect` reconnect lands — but the panel is
+ * plainly there, because it is what just woke us. Without this the merge below
+ * refuses to publish that tree, and since a content script re-announces only
+ * when its own DOM next mutates, a static page never produces another: the
+ * panel waits on "Connecting to page…" forever. A request the panel itself
+ * sent is proof enough of a panel to answer it.
+ *
+ * Scoped to the answer for that request — cleared as soon as one is published
+ * — so it relaxes the guard for exactly one tree and never re-arms anything.
+ */
+const panelTreeRequests = new Set<number>();
+
 function getTabState(tabId: number): TabState {
   return getOrCreateTabState(tabStates, tabId);
 }
@@ -39,7 +56,7 @@ async function mergeAndSendTree(tabId: number) {
   // call, the merge, the node clone, and the (dropped) sendMessage. Content
   // scripts only send FRAME_TREE_DATA while observing (panel-gated), so this
   // mainly guards stale in-flight data arriving just as the panel closes.
-  if (!sidepanelConnected) return;
+  if (!sidepanelConnected && !panelTreeRequests.has(tabId)) return;
   const state = getTabState(tabId);
   // An emptied `frames` map must stay side-effect-free. `clearTabFrames` runs
   // on every top-frame navigation, and until the new document commits
@@ -72,7 +89,7 @@ async function mergeAndSendTree(tabId: number) {
   // soliciting would republish the page the user just left. Re-read rather
   // than reuse: the page identity below has to come from the same snapshot as
   // the nodes it labels.
-  if (!sidepanelConnected) return;
+  if (!sidepanelConnected && !panelTreeRequests.has(tabId)) return;
   const topFrame = state.frames.get(0);
   if (!topFrame) return;
 
@@ -101,6 +118,9 @@ async function mergeAndSendTree(tabId: number) {
   // panel filter out broadcasts for tabs it isn't bound to — without that
   // any background tab's tree update leaks into every open panel.
   const serialized = Array.from(result.nodes.entries());
+  // The outstanding request is answered by this publish, whatever prompted the
+  // merge — so the guard above goes back to being purely port-driven.
+  panelTreeRequests.delete(tabId);
   chrome.runtime
     .sendMessage({
       type: "TREE_DATA",
@@ -578,31 +598,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       (message as { tabId?: number }).tabId,
       activeTabId,
     );
-    if (targetTabId !== null) {
+    // One responder for both routes. Answering from inside the send callback
+    // is the whole point — until Chrome runs it, whether ANY frame took the
+    // message is unknown, and a premature `success: true` is
+    // indistinguishable from a page the extension can never reach. Keeping it
+    // in one place also means neither route can be left silently not
+    // answering, which would hang the panel on an open message channel.
+    const broadcast = (tabId: number) => {
       // Clear old frame data on fresh request
       if (message.type === "REQUEST_TREE") {
-        clearTabFrames(getTabState(targetTabId));
+        clearTabFrames(getTabState(tabId));
+        // Remember that a panel is waiting, so the answer gets published even
+        // on a worker revived by this very message (see panelTreeRequests).
+        panelTreeRequests.add(tabId);
       }
-      chrome.tabs.sendMessage(targetTabId, message, () => {
-        if (chrome.runtime.lastError) {
-          // Some frames might not have the content script
-        }
+      chrome.tabs.sendMessage(tabId, message, () => {
+        sendResponse(describeBroadcastDelivery(chrome.runtime.lastError));
       });
-      sendResponse({ success: true });
+    };
+
+    if (targetTabId !== null) {
+      broadcast(targetTabId);
     } else {
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         const tabId = tabs[0]?.id;
         if (tabId) {
           activeTabId = tabId;
-          if (message.type === "REQUEST_TREE") {
-            clearTabFrames(getTabState(tabId));
-          }
-          chrome.tabs.sendMessage(tabId, message, () => {
-            if (chrome.runtime.lastError) {
-              /* ignore */
-            }
-          });
-          sendResponse({ success: true });
+          broadcast(tabId);
         } else {
           sendResponse({ success: false, error: "No active tab" });
         }
@@ -814,6 +836,25 @@ chrome.webNavigation.onBeforeNavigate.addListener((details) => {
   if (details.frameId === 0) {
     // Top frame navigating — clear ALL frame data for this tab
     clearTabFrames(state);
+    // And tell the panel, which holds its own copy. Nothing else would:
+    // a tree only reaches it when some frame announces, so navigating to a
+    // page that cannot run a content script (the Web Store, a PDF, a
+    // chrome:// page) left the PREVIOUS page's tree on screen indefinitely.
+    // That is worse than empty — node ids are a per-frame counter, so the
+    // stale rows resolve to unrelated elements on the new page, the same
+    // hazard the bfcache refresh exists to prevent.
+    //
+    // Deliberately just "drop it", not "go fetch a new one": the content
+    // script is injected at `document_idle`, so anything asked now lands in
+    // the gap before the new document has one and would come back looking
+    // exactly like a restricted page. On an ordinary page the new content
+    // script announces on load and the tree repopulates on its own; on one
+    // that can't, the panel offers Load tree, which answers honestly.
+    chrome.runtime
+      .sendMessage({ type: "PAGE_NAVIGATED", tabId: details.tabId })
+      .catch(() => {
+        // Side panel might not be open
+      });
   } else {
     // Subframe navigating — remove just this frame's data
     const { shouldRemerge } = removeFrame(state, details.frameId);
@@ -825,6 +866,7 @@ chrome.webNavigation.onBeforeNavigate.addListener((details) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   disposeTabState(tabStates, tabId);
   tabCurtainOn.delete(tabId);
+  panelTreeRequests.delete(tabId);
 });
 
 // Set side panel behavior
