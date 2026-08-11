@@ -50,7 +50,9 @@ Web Page
 
 The content script is declared in the manifest with `<all_urls>` and `all_frames: true` so the tree is ready the moment the user opens the side panel. No data leaves your browser; the extension makes no network requests.
 
-Chrome still blocks content scripts outright on some pages — `chrome://` pages (including the default new-tab page), the Chrome Web Store, and the built-in PDF viewer. A panel→content broadcast there reaches no frame, and the background reports that back (`{ success: false, error: "restricted-page" }`) rather than claiming delivery. Any tree request that comes back that way — the panel's first load, the `↻` refresh, **Load tree** — puts the panel in a **This page can't be inspected** state instead of leaving it waiting on a tree that can never arrive. Switching to such a tab does not by itself show it: the panel never auto-requests on a tab switch (see "Manual refresh" in the guide), so the message appears once you ask.
+Chrome still blocks content scripts outright on some pages — `chrome://` pages (including the default new-tab page), the Chrome Web Store, and the built-in PDF viewer. A panel→content broadcast there reaches no frame, and the background reports that back (`{ success: false, error: "restricted-page" }`) rather than claiming delivery. Any tree request that comes back that way — the panel's first load, the `↻` refresh, **Load tree** — puts the panel in a **This page can't be inspected** state instead of leaving it waiting on a tree that can never arrive.
+
+Reaching such a page by switching tabs or by navigating does not show that message on its own; it empties the panel first. A tree only ever reaches the panel because a frame announced one, and on these pages none ever will, so the background pushes `PAGE_NAVIGATED` on every top-frame navigation and the panel drops what it holds. Keeping the old tree would be worse than an empty one: node ids are a per-frame counter, so its rows resolve to unrelated elements on the new page while staying clickable. From there **Load tree** answers honestly.
 
 ### Content Security Policy
 

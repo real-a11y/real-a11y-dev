@@ -28,6 +28,23 @@
   longer exists stays a plain failure, so a re-extract queued just before the
   user closed the tab cannot claim the page was restricted.
 
+- Stop the panel showing the previous page's tree after you navigate. A tree
+  only ever reached the panel because some frame announced one, so
+  navigating to a page that can run no content script — the Web Store, a
+  PDF, a `chrome://` page — left the tree you were last looking at on screen
+  indefinitely. That is worse than an empty panel: node ids are a per-frame
+  counter, so its rows resolve to unrelated elements on the new page and stay
+  clickable. Every top-frame navigation now tells the panel to drop what it
+  holds; an ordinary page repopulates it within moments, and one that cannot
+  offers **Load tree**, which says so.
+- Stop the panel waiting on "Connecting to page…" forever after Chrome has
+  restarted the extension's service worker. The merge that publishes a tree
+  refused to run without a connected side-panel port — which a worker revived
+  by the panel's own request does not yet have — so the tree the content
+  script sent back was recorded and never delivered, and nothing retried,
+  because a content script re-announces only when its own DOM next mutates. A
+  request the panel itself sent is now proof enough of a panel to answer it.
+
 ## 0.1.11
 
 ### Patch Changes

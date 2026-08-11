@@ -185,7 +185,9 @@ This is intentional: auto-refresh on tab switch was unreliable across the long t
 
 Chrome refuses to run any extension's content script on some pages — `chrome://` pages (including the default new-tab page), the Chrome Web Store, and the built-in PDF viewer. There is nothing for the panel to attach to there, so instead of the "Connecting…" state it says **This page can't be inspected** and explains why.
 
-You see it whenever the panel actually asks and the request reaches nobody: opening the panel on such a page, hitting `↻`, or pressing **Load tree**. Merely switching to one of those tabs shows the ordinary empty state first, because the panel never auto-requests on a tab switch (above) — the message appears when you ask for the tree.
+You see it whenever the panel actually asks and the request reaches nobody: opening the panel on such a page, hitting `↻`, or pressing **Load tree**. Arriving at one of those pages — by switching tabs or by navigating there — shows the ordinary empty state first, because the panel does not auto-request in either case; the message appears when you ask for the tree.
+
+What it will **not** do is keep showing you the last page's tree. Navigating the top frame anywhere empties the panel, because a tree reaches it only when a frame announces one and a page that can run no content script never will. That matters beyond tidiness: node ids are a per-frame counter, so a stale tree's rows point at unrelated elements on the new page and every one of them stays clickable.
 
 The **Try again** button is still live, because the same signal comes back for a page whose content script simply hasn't finished loading. On a normal `http(s)` page, retrying attaches; on a restricted one, the message stays.
 

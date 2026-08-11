@@ -409,6 +409,27 @@ export function App() {
         return;
       }
 
+      // The document under us is leaving. Drop the tree rather than keep
+      // showing one that describes a page the user has left: node ids are a
+      // per-frame counter, so its rows resolve to unrelated elements on the
+      // new page, and every row stays clickable. On an ordinary page the new
+      // content script announces within moments and this empty state is a
+      // blink; on one that cannot run a content script — the Web Store, a
+      // PDF, a chrome:// page — nothing announces, and Load tree is then the
+      // honest answer instead of a tree that quietly lies.
+      if (message.type === "PAGE_NAVIGATED") {
+        setNodes(new Map());
+        setRootId("");
+        setSelectedId(null);
+        setScopedRootId(null);
+        setConnected(false);
+        // The old page's verdict says nothing about the new one.
+        setPageUnreachable(false);
+        setPageTitle("");
+        setPageUrl("");
+        return;
+      }
+
       if (message.type === "TREE_DATA" || message.type === "TREE_UPDATED") {
         const nodeMap = new Map<string, SemanticNode>(message.payload.nodes);
 

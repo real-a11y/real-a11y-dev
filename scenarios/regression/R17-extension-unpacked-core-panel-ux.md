@@ -42,7 +42,16 @@ page — a stale service worker is the usual cause of "it didn't change".)
    switch to one of those tabs and press **Load tree** — same message? (Switching alone
    shows the ordinary empty state; the panel does not auto-request on a tab switch.)
    Finally navigate that same tab back to an `http(s)` page and hit **Try again** / `↻`
-   — does it attach?
+   — does it attach? (If it sticks on "Connecting to page…" and never resolves, that is
+   the service-worker case below, not a slow page.)
+10. With a tree loaded on an ordinary page, navigate that same tab to the Chrome Web
+   Store — does the panel EMPTY, rather than keep showing the previous page's tree?
+   Then **Load tree** → "This page can't be inspected". Navigate back to a normal page
+   and confirm the tree returns on its own, without pressing anything.
+11. Leave the panel parked on a restricted page long enough for Chrome to stop the
+   extension's service worker (`chrome://extensions` shows "service worker (inactive)",
+   usually ~30s), then navigate to an ordinary page and press **Try again** — does the
+   tree arrive on the FIRST press?
 
 ## Expected
 
@@ -57,6 +66,12 @@ page — a stale service worker is the usual cause of "it didn't change".)
 - Expand/collapse state survives live tree updates — a re-render that collapses
   everything makes the panel unusable on a real page
 - No visible stall on a heavy page
+- **Navigating never leaves another page's tree on screen** (step 10). A stale tree is
+  not a cosmetic problem: node ids are a per-frame counter, so its rows point at
+  unrelated elements on the new page and remain clickable
+- **One press is enough** (step 11). A tree request that is delivered but never
+  answered looks exactly like a page still loading, and it never resolves on its own —
+  a content script re-announces only when its own DOM next mutates
 - **A page Chrome won't run a content script on says so.** From the next extension
   release (the `Unreleased` entry in `packages/extension/CHANGELOG.md`) step 9 shows
   "This page can't be inspected" with a **Try again** button; on an earlier build the
