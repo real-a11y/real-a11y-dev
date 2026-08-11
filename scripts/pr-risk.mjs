@@ -573,6 +573,18 @@ const RULES = [
     tier: "high",
     title: "Root manifest — build/publish keys",
     why: "The root `scripts`, `packageManager`, `engines` and `pnpm` overrides define what `pnpm verify` and the pre-push hook actually run. A change here can make CI pass by doing less.",
+    // The only rule that watches a path it can then decline to fire on: the key
+    // filter below ignores everything outside the build/publish set, so a root
+    // `devDependencies` bump matches no rule and is in no `LOW_SHAPED` entry.
+    // It therefore landed under "paths the rubric doesn't recognise", advising
+    // the reader to add the ROOT MANIFEST to a list documented as harmless.
+    //
+    // `watches` says "considered, and deliberately not interesting" — distinct
+    // from "never heard of it", which is what that section is for. Any future
+    // rule that filters a watched path down to no evidence needs one too; every
+    // other rule today either cites the path it matched or is scoped to a
+    // LOW_SHAPED one, which is why this is the sole occurrence.
+    watches: /^package\.json$/,
     match: (f) =>
       f.rootPackageKeys
         .filter((k) =>
@@ -741,8 +753,41 @@ const LOW_SHAPED = [
   [/^\.github\/ISSUE_TEMPLATE\//, "issue templates"],
 ];
 
+/**
+ * Did a named rule already point at this file?
+ *
+ * A path a rule cited is, by definition, recognised, so it must not also appear
+ * under "paths the rubric doesn't recognise". It did: every rule-matched path was
+ * printed in BOTH sections of the same comment — #320 listed its two scenario
+ * files directly beneath the "Release test scenarios" rule that named them, and
+ * #318 did it for seven of nine, including the extension manifest.
+ *
+ * The grade was never wrong. Every entry in `RULES` is high or medium, so a
+ * matched file already forces at least medium on its own and `unrecognised`
+ * added nothing. The harm was the advice attached to that section — "add the path
+ * to `LOW_SHAPED` if it genuinely is [harmless]" — which, followed to quiet the
+ * noise, moves every package manifest or scenario file into a list documented as
+ * harmless. A control that invites you to mislabel the paths it cares most about
+ * is worse than one that says nothing.
+ *
+ * Evidence is free text rather than paths, so this matches by prefix: rules emit
+ * bare paths from `any(f.files, …)` next to decorated forms (`<path> → version`,
+ * `<path> → <pkg>: major`) and tokens that are not paths at all (`title: …`,
+ * `subject: …`). Requiring a SPACE after the path is what stops `a/foo.json`
+ * from claiming `a/foo.json.bak → version`.
+ */
+function cited(evidenceSeen, file) {
+  if (evidenceSeen.has(file)) return true;
+  for (const e of evidenceSeen) if (e.startsWith(`${file} `)) return true;
+  return false;
+}
+
 function classify(facts) {
   const reasons = [];
+  // Every evidence string any rule produced, UNtruncated — `cited()` reads this
+  // rather than `reason.evidence`, which is sliced to 12 for display. Reusing the
+  // display copy would leave file 13 of a wide rule looking unclassified.
+  const evidenceSeen = new Set();
   for (const rule of RULES) {
     // A rule flagged `excludeSelf` is scanned against a diff with this file's
     // own hunks removed, so a pattern listing the tokens it hunts cannot match
@@ -752,18 +797,33 @@ function classify(facts) {
       : facts;
     const evidence = rule.match(view);
     if (evidence && evidence.length) {
-      reasons.push({ ...rule, evidence: [...new Set(evidence)].slice(0, 12) });
+      const unique = [...new Set(evidence)];
+      for (const e of unique) evidenceSeen.add(e);
+      reasons.push({ ...rule, evidence: unique.slice(0, 12) });
     }
   }
 
   // What a verdict is made of, and — for anything unrecognised — the paths that
   // forced it up a tier, so the fix (classify the path) is obvious.
+  //
+  // Three ways a path counts as recognised, in order: it is low-shaped, a rule
+  // cited it, or a rule WATCHES it but declined to fire. Only the third needs
+  // explaining — see `watches` on `root-manifest`.
   const shape = new Set();
   const unrecognised = [];
   for (const file of facts.files) {
-    const hit = LOW_SHAPED.find(([re]) => re.test(file));
-    if (hit) shape.add(hit[1]);
-    else unrecognised.push(file);
+    const low = LOW_SHAPED.find(([re]) => re.test(file));
+    if (low) {
+      shape.add(low[1]);
+      continue;
+    }
+    if (cited(evidenceSeen, file)) continue;
+    const watcher = RULES.find((r) => r.watches?.test(file));
+    if (watcher) {
+      shape.add(watcher.id);
+      continue;
+    }
+    unrecognised.push(file);
   }
   if (unrecognised.length) shape.add("unrecognised");
 
