@@ -326,6 +326,55 @@ describe("mergeFrameTrees", () => {
     });
   });
 
+  it("lets the live frame claim the <iframe> when a stale tree for the same url lingers", () => {
+    // The caller's `frames` map is not pruned when an <iframe> ELEMENT is
+    // removed: the background only drops a frame when it navigates, and a
+    // deleted iframe never navigates. So after a page swaps an embed out for
+    // an equal-src one (ad refresh, widget re-mount), a dead frame tree sits
+    // alongside the live one, and only the live frame appears in
+    // `frameInfoMap` (which is built from Chrome's getAllFrames).
+    //
+    // The dead frame must not be the one that claims the iframe: it has no
+    // frameInfo, so frameHierarchyDepth walks a chain it isn't in and returns
+    // 0, which would otherwise sort it ahead of every live child frame.
+    const top = makeFrame(0, "https://top.test/", [
+      ["root", makeNode("root", { childIds: ["ifr"] })],
+      [
+        "ifr",
+        makeNode("ifr", {
+          tagName: "iframe",
+          attrs: { src: "https://ads.test/unit" },
+          parentId: "root",
+          depth: 1,
+        }),
+      ],
+    ]);
+    const staleFrame = makeFrame(5, "https://ads.test/unit", [
+      ["c-root", makeNode("c-root")],
+    ]);
+    const liveFrame = makeFrame(9, "https://ads.test/unit", [
+      ["c-root", makeNode("c-root")],
+    ]);
+
+    const result = mergeFrameTrees({
+      frames: new Map([
+        [0, top],
+        [5, staleFrame],
+        [9, liveFrame],
+      ]),
+      // Only frame 9 is still reported by Chrome.
+      frameInfoMap: new Map<number, FrameInfo>([
+        [9, { parentFrameId: 0, url: "https://ads.test/unit" }],
+      ]),
+    });
+
+    // The live frame's content is what the user must see under the iframe.
+    expect(result!.nodes.get("ifr")!.childIds).toEqual(["f9-c-root"]);
+    expect(result!.nodes.get("f9-c-root")!.parentId).toBe("ifr");
+    // The stale subtree stays addressable for routing but hangs off nothing.
+    expect(result!.nodes.get("f5-c-root")!.parentId).toBeNull();
+  });
+
   it("keeps an unattached subframe's nodes in the result with parentId=null on root", () => {
     // Top frame has no <iframe> at all — degenerate case where Chrome
     // reports a subframe but the DOM walker missed it. We still return the

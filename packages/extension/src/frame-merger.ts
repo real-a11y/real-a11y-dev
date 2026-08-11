@@ -97,12 +97,25 @@ export function mergeFrameTrees(opts: {
   // tree) and its depth would fall back to the parent's frame-local depth.
   // Sorting by hierarchy depth guarantees a frame's parent is always merged
   // first, regardless of announce order.
+  //
+  // Frames Chrome still reports are ordered ahead of ones it doesn't, so a
+  // live frame always picks its <iframe> before a stale tree can. `frames`
+  // is not pruned when an <iframe> ELEMENT is removed — the background drops
+  // a frame only when it NAVIGATES, and a deleted iframe never navigates — so
+  // a page that swaps an embed for an equal-src one (ad refresh, widget
+  // re-mount) leaves the dead frame's tree in the map. It is absent from
+  // `frameInfoMap`, which means frameHierarchyDepth walks a chain it isn't in
+  // and returns 0: without this tie-break it would sort ahead of every live
+  // child frame, claim the iframe, and leave the live frame that actually
+  // hosts the document attached to nothing and so invisible.
+  const isLive = (id: number) => (opts.frameInfoMap.has(id) ? 0 : 1);
   const childFrameIds = Array.from(opts.frames.keys())
     .filter((id) => id !== 0)
     .sort(
       (a, b) =>
+        isLive(a) - isLive(b) ||
         frameHierarchyDepth(a, opts.frameInfoMap) -
-        frameHierarchyDepth(b, opts.frameInfoMap),
+          frameHierarchyDepth(b, opts.frameInfoMap),
     );
 
   // <iframe> nodes already handed to a frame, as merged (prefixed) node ids.

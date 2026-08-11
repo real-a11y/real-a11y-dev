@@ -53,7 +53,10 @@
   iframe rendered empty. Matching now tries the url with its query string
   before falling back to the query-stripped comparison, and an `<iframe>` a
   frame has attached under is no longer offered to any other frame, in the
-  fallback pass as well as the url ones.
+  fallback pass as well as the url ones. Frames Chrome still reports pick
+  their `<iframe>` first, so a page that swaps an embed for an equal-address
+  one — an ad refresh, a widget re-mount — shows the live document rather than
+  the tree left behind by the one it replaced.
 
 ## 0.1.11
 
