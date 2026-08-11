@@ -154,6 +154,60 @@ describe("NativeDebuggerSession attach bookkeeping", () => {
     expect(kinds(log)).toEqual(["attach", "detach"]);
   });
 
+  it("serializes overlapping operations on one tab, so we never collide with ourselves", async () => {
+    // Chrome allows one debugger client per target. Two overlapping operations
+    // would make our OWN second attach fail with "Another debugger is already
+    // attached" — indistinguishable from DevTools holding the tab, so it would
+    // be scored as a `conflict` and inflate a headline metric with a
+    // self-inflicted collision. It would also detach out from under the first.
+    const log = new FakeStorage();
+    const session = new NativeDebuggerSession(log, new FakeStorage());
+
+    let concurrent = 0;
+    let maxConcurrent = 0;
+    const op = async () => {
+      concurrent++;
+      maxConcurrent = Math.max(maxConcurrent, concurrent);
+      await new Promise((r) => setTimeout(r, 5));
+      concurrent--;
+      return "done";
+    };
+
+    const results = await Promise.all([
+      session.withDebugger(1, op),
+      session.withDebugger(1, op),
+      session.withDebugger(1, op),
+    ]);
+
+    expect(maxConcurrent).toBe(1); // never overlapped
+    expect(results.every((r) => r.outcome.ok)).toBe(true);
+    // Three clean attach/detach pairs, and no conflict invented along the way.
+    expect(kinds(log).filter((k) => k === "attach")).toHaveLength(3);
+    expect(kinds(log).filter((k) => k === "detach")).toHaveLength(3);
+    expect(kinds(log)).not.toContain("conflict");
+  });
+
+  it("still runs different tabs concurrently", async () => {
+    const session = new NativeDebuggerSession(
+      new FakeStorage(),
+      new FakeStorage(),
+    );
+    let concurrent = 0;
+    let maxConcurrent = 0;
+    const op = async () => {
+      concurrent++;
+      maxConcurrent = Math.max(maxConcurrent, concurrent);
+      await new Promise((r) => setTimeout(r, 5));
+      concurrent--;
+      return "done";
+    };
+    await Promise.all([
+      session.withDebugger(1, op),
+      session.withDebugger(2, op),
+    ]);
+    expect(maxConcurrent).toBe(2); // per-tab lock, not a global one
+  });
+
   it("records a deliberate detach once, and not as unsolicited", async () => {
     const log = new FakeStorage();
     const attach = new FakeStorage();

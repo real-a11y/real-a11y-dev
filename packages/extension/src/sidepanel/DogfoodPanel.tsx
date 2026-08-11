@@ -39,6 +39,11 @@ export function DogfoodPanel() {
   // `backendDOMNodeId`s, which are scoped to that tab's document — dispatching
   // one anywhere else would act on an unrelated element in a different page.
   const [treeTabId, setTreeTabId] = useState<number | undefined>(undefined);
+  // A debugger operation is in flight. The service worker queues per tab, so a
+  // second request is correct-but-slow rather than harmful — but leaving the
+  // buttons live invites a double-click that reads the tree twice or dispatches
+  // an action twice, both of which land in the dogfood numbers.
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     void chrome.runtime
@@ -63,24 +68,31 @@ export function DogfoodPanel() {
   }
 
   async function loadTree() {
+    if (busy) return;
     const tabId = await activeTabId();
     if (tabId === undefined) return setStatus("no active tab");
+    setBusy(true);
     setStatus("attaching debugger + reading…");
-    const r = (await chrome.runtime.sendMessage({
-      type: "NATIVE_READ",
-      tabId,
-    })) as { ok?: boolean; error?: string; nodes?: NativeNode[] };
-    if (!r?.ok) {
-      setNodes([]);
-      setTreeTabId(undefined);
-      return setStatus(`read failed: ${r?.error ?? "unknown"}`);
+    try {
+      const r = (await chrome.runtime.sendMessage({
+        type: "NATIVE_READ",
+        tabId,
+      })) as { ok?: boolean; error?: string; nodes?: NativeNode[] };
+      if (!r?.ok) {
+        setNodes([]);
+        setTreeTabId(undefined);
+        return setStatus(`read failed: ${r?.error ?? "unknown"}`);
+      }
+      setNodes(r.nodes ?? []);
+      setTreeTabId(tabId);
+      setStatus(`read ${r.nodes?.length ?? 0} nodes`);
+    } finally {
+      setBusy(false);
     }
-    setNodes(r.nodes ?? []);
-    setTreeTabId(tabId);
-    setStatus(`read ${r.nodes?.length ?? 0} nodes`);
   }
 
   async function act(node: NativeNode) {
+    if (busy) return;
     // Dispatch against the tab the tree came from, and refuse if the user has
     // since switched away: these ids only mean something in that document, so
     // acting on the new active tab would click a different page's element.
@@ -97,18 +109,23 @@ export function DogfoodPanel() {
       ? prompt(`Type into "${node.name || node.role}":`)
       : undefined;
     if (isText && value === null) return; // cancelled
-    const r = (await chrome.runtime.sendMessage({
-      type: "NATIVE_ACT",
-      tabId,
-      nodeId: node.id,
-      action: isText ? "type" : "click",
-      ...(isText ? { value } : {}),
-    })) as { success?: boolean; error?: string };
-    setStatus(
-      r?.success
-        ? `acted on ${node.role}`
-        : `act failed: ${r?.error ?? "unknown"}`,
-    );
+    setBusy(true);
+    try {
+      const r = (await chrome.runtime.sendMessage({
+        type: "NATIVE_ACT",
+        tabId,
+        nodeId: node.id,
+        action: isText ? "type" : "click",
+        ...(isText ? { value } : {}),
+      })) as { success?: boolean; error?: string };
+      setStatus(
+        r?.success
+          ? `acted on ${node.role}`
+          : `act failed: ${r?.error ?? "unknown"}`,
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function copyReport() {
@@ -134,8 +151,8 @@ export function DogfoodPanel() {
           <input type="checkbox" checked={enabled} onChange={toggle} /> native
           mode
         </label>
-        <button onClick={loadTree} disabled={!enabled}>
-          Load native tree
+        <button onClick={loadTree} disabled={!enabled || busy}>
+          {busy ? "working…" : "Load native tree"}
         </button>
         <button onClick={copyReport}>Copy dogfood report</button>
         <button onClick={clearLog}>Clear log</button>
@@ -150,6 +167,7 @@ export function DogfoodPanel() {
                 <button
                   style="text-align:left;width:100%;white-space:pre"
                   onClick={() => act(n)}
+                  disabled={busy}
                 >
                   {label}
                 </button>
