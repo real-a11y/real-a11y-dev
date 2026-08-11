@@ -11,11 +11,6 @@
       "sourcePath": "website/guide/accessibility-snapshots.md"
     },
     {
-      "name": "core",
-      "url": "http://localhost:4173/packages/core",
-      "sourcePath": "website/packages/core.md"
-    },
-    {
       "name": "inspector",
       "url": "http://localhost:4173/packages/inspector",
       "sourcePath": "website/packages/inspector.md"
