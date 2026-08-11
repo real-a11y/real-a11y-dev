@@ -87,7 +87,7 @@ Subscribes to the semantic tree for a given DOM element. Re-renders whenever the
 ```tsx
 import { useRef } from "react";
 import { useSemanticTree } from "@real-a11y-dev/react";
-import { findByRole } from "@real-a11y-dev/core";
+import { findByRole } from "@real-a11y-dev/testing";
 
 function FocusAnnouncer({ rootRef }) {
   const tree = useSemanticTree(rootRef, { mode: "a11y" });
@@ -208,7 +208,7 @@ Production builds: the `DEV` branch is dead-code-eliminated and `@real-a11y-dev/
 ```tsx
 import { useRef, useEffect } from "react";
 import { useSemanticTree } from "@real-a11y-dev/react";
-import { findAllByRole } from "@real-a11y-dev/core";
+import { findAllByRole } from "@real-a11y-dev/testing";
 
 function A11yBadge({ rootRef }) {
   const tree = useSemanticTree(rootRef);
@@ -233,11 +233,15 @@ function A11yBadge({ rootRef }) {
 
 ## TypeScript
 
-All hooks and components are fully typed. Import types from `@real-a11y-dev/core` for tree node types:
+All hooks and components are fully typed, and the tree node types come from this package — it re-exports them, so there is nothing extra to install:
 
 ```ts
-import type { ExtractionResult, SemanticNode } from "@real-a11y-dev/core";
+import type { ExtractionResult, SemanticNode } from "@real-a11y-dev/react";
 ```
+
+::: tip Where the query helpers live
+`findByRole` and `findAllByRole` are re-exported by [`@real-a11y-dev/testing`](/packages/testing), which is where the tree-query vocabulary is published. The extraction engine that defines them is bundled rather than installed, so it has no import path of its own.
+:::
 
 ---
 

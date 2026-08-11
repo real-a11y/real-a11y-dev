@@ -1,6 +1,6 @@
 # @real-a11y-dev/audit
 
-The audit engine for [Semantic Navigator](https://real-a11y.dev) — the one place an accessibility *finding* is defined and detected. It holds the `Finding` data model, the rule set, `collectFindings` (non-throwing), and the `assert*` primitives (throwing), depending on nothing but [`@real-a11y-dev/core`](https://real-a11y.dev/packages/core).
+The audit engine for [Semantic Navigator](https://real-a11y.dev) — the one place an accessibility *finding* is defined and detected. It holds the `Finding` data model, the rule set, `collectFindings` (non-throwing), and the `assert*` primitives (throwing), depending on nothing but [`@real-a11y-dev/core`](../core).
 
 > **Internal package — not published to npm.** It is bundled into
 > [`@real-a11y-dev/testing`](../testing), the `real-a11y` CLI, the MCP server,
@@ -107,4 +107,4 @@ The node count separates *"this page has none"* from *"nothing was read"*. The r
 
 ## Design
 
-`collectFindings` is deliberately separate from anything that renders it. `@real-a11y-dev/testing` wraps these helpers as Vitest/Jest matchers, the `real-a11y audit` CLI command prints them, and the MCP `audit_page` tool returns them to an agent — but a rule is written **once**, here, and every surface reports it. [`@real-a11y-dev/core`](https://real-a11y.dev/packages/core) stays dependency-free; this package layers the rules on top of core's extracted tree, so consumers who only need extraction don't pay for the audit engine.
+`collectFindings` is deliberately separate from anything that renders it. `@real-a11y-dev/testing` wraps these helpers as Vitest/Jest matchers, the `real-a11y audit` CLI command prints them, and the MCP `audit_page` tool returns them to an agent — but a rule is written **once**, here, and every surface reports it. [`@real-a11y-dev/core`](../core) stays dependency-free; this package layers the rules on top of core's extracted tree, so consumers who only need extraction don't pay for the audit engine.

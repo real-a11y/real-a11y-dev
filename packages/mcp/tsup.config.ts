@@ -29,6 +29,10 @@ export default defineConfig({
       // `export { A11ySession, BrowserSession, ... } from "@real-a11y-dev/browser"`),
       // so with browser private this is the published home for that API.
       "@real-a11y-dev/browser",
+      // `core` is the deepest of them: the browser types re-exported above are
+      // themselves written in terms of its `A11yNode`/`A11yTree`, so leaving it
+      // out would resolve one layer and leave the next dangling.
+      "@real-a11y-dev/core",
     ],
   },
   sourcemap: true,
@@ -52,6 +56,7 @@ export default defineConfig({
     "@real-a11y-dev/serialize",
     "@real-a11y-dev/snapshot",
     "@real-a11y-dev/browser",
+    "@real-a11y-dev/core",
   ],
   banner: { js: "" },
 });

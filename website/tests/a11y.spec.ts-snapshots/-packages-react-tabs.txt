@@ -23,7 +23,6 @@ link "Panel features"
 button "Chrome Extension"
 link "Overview & Install"
 button "Packages"
-link "@real-a11y-dev/core"
 link "@real-a11y-dev/inspector"
 generic
 link "@real-a11y-dev/testing"
@@ -75,6 +74,7 @@ button "Copy Code"
 generic
 button "Copy Code"
 generic
+link "@real-a11y-dev/testing"
 link "examples/react-app/"
 link "Next.js recipe"
 link "Panel features reference"

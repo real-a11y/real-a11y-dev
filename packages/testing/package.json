@@ -82,9 +82,6 @@
     "pretest:e2e": "pnpm --filter \"@real-a11y-dev/testing...\" build",
     "test:e2e": "playwright test --config=playwright.config.ts"
   },
-  "dependencies": {
-    "@real-a11y-dev/core": "workspace:*"
-  },
   "peerDependencies": {
     "playwright": ">=1.49.0 <2"
   },
@@ -97,6 +94,7 @@
     "@playwright/test": "^1.61.1",
     "@real-a11y-dev/audit": "workspace:*",
     "@real-a11y-dev/browser": "workspace:*",
+    "@real-a11y-dev/core": "workspace:*",
     "@real-a11y-dev/serialize": "workspace:*",
     "@real-a11y-dev/validate": "workspace:*",
     "@types/node": "^22.0.0",

@@ -55,7 +55,7 @@ numberTabStops(serializeTabSequence(document.body));
 ```
 
 Each function accepts a DOM root **or** a pre-extracted tree from
-[`@real-a11y-dev/core`](https://real-a11y.dev/packages/core), so it works in
+[`@real-a11y-dev/core`](../core), so it works in
 jsdom, a real browser, and the extension panel without re-extracting. With a
 pre-extracted tree it also runs in **plain Node** — no DOM globals needed — so
 trees produced outside a DOM runtime (a deserialized snapshot, a browser tree
@@ -70,7 +70,7 @@ safe to commit and diff.
 ## `serializeTreeDiff(diff, options?)`
 
 Renders a `TreeDiff` from core's
-[`diffTrees`](https://real-a11y.dev/packages/core#difftrees-before-after) — what
+[`diffTrees`](https://real-a11y.dev/guide/core-concepts#tree-diffing) — what
 **one interaction changed**, as a committable change list:
 
 ```ts

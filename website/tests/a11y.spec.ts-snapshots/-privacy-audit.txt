@@ -43,8 +43,6 @@ complementary
       paragraph "Overview & Install"
     button "Packages"
       heading "Packages" (level 2)
-    link "@real-a11y-dev/core"
-      paragraph "@real-a11y-dev/core"
     link "@real-a11y-dev/inspector"
       paragraph "@real-a11y-dev/inspector"
     link "@real-a11y-dev/testing"
@@ -151,8 +149,7 @@ main
         cell "Detect iframe load events to merge subtree data from cross-origin frames"
   paragraph "No other permissions are requested."
   heading "npm packages" (level 2)
-  paragraph "The , , , , and packages are pure libraries. They:"
-    code "@real-a11y-dev/core"
+  paragraph "The , , , and packages are pure libraries — as is the extraction engine bundled inside each of them. They:"
     code "@real-a11y-dev/inspector"
     code "@real-a11y-dev/testing"
     code "@real-a11y-dev/react"

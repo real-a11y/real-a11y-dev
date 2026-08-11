@@ -55,4 +55,4 @@ That same `real-a11y audit` command pairs these ARIA-conformance checks with the
 
 ## Design
 
-[`@real-a11y-dev/core`](https://real-a11y.dev/packages/core) stays dependency-free; this package layers the `aria-query`-backed rules on top of core's tree, so consumers who only need extraction don't pay for the rules.
+[`@real-a11y-dev/core`](../core) stays dependency-free; this package layers the `aria-query`-backed rules on top of core's tree, so consumers who only need extraction don't pay for the rules.

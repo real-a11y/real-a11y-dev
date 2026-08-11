@@ -5,87 +5,6 @@
         {
           "subpath": ".",
           "types": [
-            "A11yInfo",
-            "ActionRequest",
-            "ActionResult",
-            "ActionType",
-            "ControlsIndex",
-            "CssPathAdapter",
-            "DomInfo",
-            "DomSemanticNode",
-            "ExtractionResult",
-            "FindByRoleOptions",
-            "InteractionInfo",
-            "LinearizeOptions",
-            "LiveTreeExtractorOptions",
-            "NativeAXNode",
-            "NodeChange",
-            "NodeUIState",
-            "OutlineEntry",
-            "Picker",
-            "PickerOptions",
-            "QueryInput",
-            "RawNativeAXNode",
-            "RoleFilter",
-            "SemanticNavigatorConfig",
-            "SemanticNode",
-            "TreeChange",
-            "TreeDiff",
-            "TreeMutation",
-            "TreeProducerKind",
-            "TreeSource",
-            "TreeViewMode"
-          ],
-          "values": [
-            "ACTION_LABELS",
-            "ActionDispatcher",
-            "DOM_ELEMENT_ADAPTER",
-            "DomObserver",
-            "ElementRefMap",
-            "FocusManager",
-            "LiveTreeExtractor",
-            "NATIVE_AX_DROP_ROLES",
-            "NATIVE_AX_DROP_UNLESS_NAMED",
-            "NATIVE_AX_NAME_SOURCE_ROLES",
-            "NATIVE_AX_ROLE_MAP",
-            "NATIVE_AX_VOCABULARY_VERSION",
-            "ROLE_FILTER_GROUPS",
-            "ROLE_FILTER_LABELS",
-            "applySearchFilter",
-            "buildControlsIndex",
-            "buildCssPath",
-            "createPicker",
-            "diffTrees",
-            "extractA11yTree",
-            "extractDomTree",
-            "findAllByRole",
-            "findByRole",
-            "getElementRefs",
-            "getHeadingLevel",
-            "getImplicitRole",
-            "getNodeId",
-            "getOutline",
-            "getPrimaryAction",
-            "getTabSequence",
-            "isHiddenFromAT",
-            "isSensitiveField",
-            "isValidCssId",
-            "linearize",
-            "mapNativeAXRole",
-            "normalizeNativeAX",
-            "resetIdCounter",
-            "searchTree",
-            "serializeNativeAX"
-          ]
-        }
-      ],
-      "name": "@real-a11y-dev/core"
-    },
-    {
-      "entries": [
-        {
-          "subpath": ".",
-          "types": [
             "ActionRequest",
             "ActionResult",
             "InspectorInstance",
@@ -2523,9 +2442,7 @@
       "name": "@real-a11y-dev/cli",
       "private": false,
       "version": "0.1.0-beta.4",
-      "workspaceDeps": [
-        "@real-a11y-dev/core"
-      ]
+      "workspaceDeps": []
     },
     {
       "bin": [],
@@ -2535,7 +2452,7 @@
         "."
       ],
       "name": "@real-a11y-dev/core",
-      "private": false,
+      "private": true,
       "version": "0.1.0-beta.13",
       "workspaceDeps": []
     },
@@ -2589,9 +2506,7 @@
       "name": "@real-a11y-dev/mcp",
       "private": false,
       "version": "0.1.0-beta.4",
-      "workspaceDeps": [
-        "@real-a11y-dev/core"
-      ]
+      "workspaceDeps": []
     },
     {
       "bin": [],
@@ -2604,7 +2519,6 @@
       "private": false,
       "version": "0.1.0-beta.13",
       "workspaceDeps": [
-        "@real-a11y-dev/core",
         "@real-a11y-dev/inspector"
       ]
     },
@@ -2665,7 +2579,6 @@
       "private": false,
       "version": "0.1.0-beta.14",
       "workspaceDeps": [
-        "@real-a11y-dev/core",
         "@real-a11y-dev/testing"
       ]
     },
@@ -2682,9 +2595,7 @@
       "name": "@real-a11y-dev/testing",
       "private": false,
       "version": "0.1.0-beta.14",
-      "workspaceDeps": [
-        "@real-a11y-dev/core"
-      ]
+      "workspaceDeps": []
     },
     {
       "bin": [],

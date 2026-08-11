@@ -20,6 +20,7 @@ export default defineConfig({
       "@real-a11y-dev/serialize",
       "@real-a11y-dev/snapshot",
       "@real-a11y-dev/browser",
+      "@real-a11y-dev/core",
     ],
   },
   sourcemap: true,
@@ -39,6 +40,7 @@ export default defineConfig({
     "@real-a11y-dev/serialize",
     "@real-a11y-dev/snapshot",
     "@real-a11y-dev/browser",
+    "@real-a11y-dev/core",
   ],
   banner: { js: "" },
 });

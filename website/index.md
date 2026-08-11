@@ -24,7 +24,7 @@ features:
     linkText: Install the extension
   - icon: 🌳
     title: One engine, every context
-    details: "@real-a11y-dev/core extracts the full semantic tree from any DOM — roles, accessible names, focus state, modal context, live regions. Every other package is just a different lens on that tree."
+    details: "One extraction engine reads the full semantic tree from any DOM — roles, accessible names, focus state, modal context, live regions. Every package is a different lens on that tree."
   - icon: 🧪
     title: Test what users actually experience
     details: "@real-a11y-dev/testing gives you auditSnapshot(), assertHeadingOrder(), assertNoUnlabeledInteractive(), and a fluent flow() chain — all powered by the real accessibility tree, not synthetic mocks."

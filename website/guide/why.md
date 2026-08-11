@@ -57,4 +57,4 @@ The same extraction logic runs in jsdom (Vitest), in a real browser (Playwright)
 Shadow DOM isolation is the default. The embed panel can't break your app's layout; your app's styles can't break the panel. Every configuration that could cause a side effect (hover highlights, scroll-into-view, focus theft) is opt-in.
 
 **5. Framework-agnostic core.**
-`@real-a11y-dev/core` has zero non-standard dependencies. The React, Storybook, CLI, and MCP packages are wrappers — the extraction engine is the same code.
+The extraction engine has zero non-standard dependencies. The React, Storybook, CLI, and MCP packages are wrappers around it — bundled, not installed separately, and the same code in every one.

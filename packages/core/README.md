@@ -4,11 +4,35 @@ Tree extraction, data model, and interaction engine for [Semantic Navigator](htt
 
 This package has zero UI dependencies. It handles DOM traversal, accessibility tree computation, role mapping, interaction dispatching, DOM observation, and search.
 
-## Installation
-
-```bash
-npm install @real-a11y-dev/core
-```
+> **Internal package — not published to npm.** Every published package bundles
+> it: the inspector, the React integration, the Storybook addon, the testing
+> helpers, the CLI and the MCP server all carry the engine inside them, at the
+> exact version they were tested against. There is nothing to install and
+> nothing to import by this name. The examples below are written from inside
+> the workspace, for anyone working on the engine itself.
+>
+> It was published up to `0.1.0-beta.13` before becoming internal — the first
+> package on npm, and the last to go. Nineteen of its sixty-nine names keep a
+> published home:
+>
+> - [`@real-a11y-dev/testing`](../testing) re-exports the query and diff
+>   vocabulary — `findByRole`, `findAllByRole`, `diffTrees`, `getOutline`,
+>   `getTabSequence`, `linearize`, `ROLE_FILTER_GROUPS`, with `SemanticNode`,
+>   `ExtractionResult`, `TreeDiff`, `NodeChange`, `OutlineEntry`, `RoleFilter`,
+>   `FindByRoleOptions`, `ActionType` and `ActionResult`.
+> - [`@real-a11y-dev/react`](../react) and
+>   [`@real-a11y-dev/inspector`](../inspector) re-export the node, action and
+>   config types their own signatures name — `SemanticNode`,
+>   `ExtractionResult`, `TreeViewMode`, `ActionRequest`, `ActionResult`, and
+>   `SemanticNavigatorConfig` on the inspector.
+>
+> The other fifty have **no drop-in replacement**, and the two that will be
+> missed are `extractA11yTree` and `extractDomTree`. Building your own
+> published tooling directly on the engine was a supported path and is not one
+> any more: the route is a surface that carries it — `real-a11y` for the shell
+> and CI (`--format json`, `-o`), the MCP tools for an agent, `attach(page)`
+> from `@real-a11y-dev/testing/playwright` for a Playwright suite, or
+> `createInspector` / `<SemanticNavigator />` for a UI.
 
 ## API
 

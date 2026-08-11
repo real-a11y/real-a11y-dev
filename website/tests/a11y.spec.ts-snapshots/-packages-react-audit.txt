@@ -43,8 +43,6 @@ complementary
       paragraph "Overview & Install"
     button "Packages"
       heading "Packages" (level 2)
-    link "@real-a11y-dev/core"
-      paragraph "@real-a11y-dev/core"
     link "@real-a11y-dev/inspector"
       paragraph "@real-a11y-dev/inspector"
     link "@real-a11y-dev/testing"
@@ -402,10 +400,15 @@ main
   code
   separator
   heading "TypeScript" (level 2)
-  paragraph "All hooks and components are fully typed. Import types from for tree node types:"
-    code "@real-a11y-dev/core"
+  paragraph "All hooks and components are fully typed, and the tree node types come from this package — it re-exports them, so there is nothing extra to install:"
   button "Copy Code"
   code
+  paragraph "Where the query helpers live"
+  paragraph "and are re-exported by , which is where the tree-query vocabulary is published. The extraction engine that defines them is bundled rather than installed, so it has no import path of its own."
+    code "findByRole"
+    code "findAllByRole"
+    link "@real-a11y-dev/testing"
+      code "@real-a11y-dev/testing"
   separator
   heading "See it running" (level 2)
   list

@@ -43,8 +43,6 @@ complementary
       paragraph "Overview & Install"
     button "Packages"
       heading "Packages" (level 2)
-    link "@real-a11y-dev/core"
-      paragraph "@real-a11y-dev/core"
     link "@real-a11y-dev/inspector"
       paragraph "@real-a11y-dev/inspector"
     link "@real-a11y-dev/testing"
@@ -151,9 +149,8 @@ main
     code "A11yAssertionError"
   paragraph "Shadow DOM isolation is the default. The embed panel can't break your app's layout; your app's styles can't break the panel. Every configuration that could cause a side effect (hover highlights, scroll-into-view, focus theft) is opt-in."
     strong "4. No CSS side effects by default."
-  paragraph "has zero non-standard dependencies. The React, Storybook, CLI, and MCP packages are wrappers — the extraction engine is the same code."
+  paragraph "The extraction engine has zero non-standard dependencies. The React, Storybook, CLI, and MCP packages are wrappers around it — bundled, not installed separately, and the same code in every one."
     strong "5. Framework-agnostic core."
-    code "@real-a11y-dev/core"
 contentinfo
   link "Edit this page on GitHub"
   paragraph "Last updated:"

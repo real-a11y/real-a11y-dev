@@ -73,7 +73,7 @@ export function App() {
 ```tsx
 // examples/react-app/src/IssuesBadge.tsx
 import { useSemanticTree } from "@real-a11y-dev/react";
-import { findAllByRole } from "@real-a11y-dev/core";
+import { findAllByRole } from "@real-a11y-dev/testing";
 
 export function IssuesBadge({ rootRef }) {
   const tree = useSemanticTree(rootRef);

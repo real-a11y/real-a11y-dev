@@ -22,10 +22,17 @@ export default defineConfig({
     "@real-a11y-dev/audit",
     "@real-a11y-dev/serialize",
     "@real-a11y-dev/browser",
+    "@real-a11y-dev/core",
   ],
   dts: {
     resolve: [
       "@real-a11y-dev/validate",
+      // `core` is PRIVATE too now, and unlike the others its types are all over
+      // this package's surface — `SemanticNode`, `ExtractionResult`, `TreeDiff`
+      // and `NodeChange` are what these helpers take and return, in `capture`,
+      // `diff`, `change-spec` and `dispatch`. Nothing useful would be left of
+      // the published types without this.
+      "@real-a11y-dev/core",
       // `testing` re-exports audit's `Finding` / `A11yRule` / `ALL_RULES` and
       // serialize's `SerializeOptions` / `extract` — with both private, those
       // are now the ONLY published home for that vocabulary, so the

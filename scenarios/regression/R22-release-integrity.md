@@ -25,7 +25,7 @@ Publishing is irreversible; every check here is cheap and every miss is permanen
    number is correct (see the last paragraph). **Read the
    group out of `.changeset/config.json`'s `linked` array — do not use a list from
    memory or from this file.** It loses a name every time a package goes internal
-   (ten originally; six after `ui`, `serialize`, `audit` and `snapshot` left), and a
+   (ten originally; four after `ui`, `serialize`, `audit`, `snapshot` and `core` left), and a
    remembered count makes you either fail a good release or "fix" it by re-adding a
    private package to `linked` — which recreates the mixed-changeset group that
    breaks `changeset version` outright
@@ -41,12 +41,14 @@ Publishing is irreversible; every check here is cheap and every miss is permanen
    stale one). After `changeset pre exit` it must not — the stable owns `latest`
 7. Cross-package consistency: anything bundling a changed package is re-released, so
    none ships a stale engine. For a **private** dependency changesets cannot do this
-   for you — `ui` and `validate` have no version to cascade from, and they are
-   `devDependencies` of the packages that publish them besides — so a fix in
-   `packages/ui` or `packages/validate` bumps nothing at all unless the changeset
-   names the consumers itself: `inspector` and `storybook-addon` for `ui`,
-   `testing` for `validate`, plus the extension (which holds `ui` as a runtime
-   dependency) on its own track
+   for you — a private package has no version to cascade from, and it is a
+   `devDependency` of everything that publishes it besides — so a fix in
+   `packages/core`, `packages/ui` or `packages/validate` bumps nothing at all
+   unless the changeset names the consumers itself. `core` is now the widest
+   case: a one-line fix in the engine reaches every published package, so a
+   changeset naming fewer than all six ships the fix into some tarballs and not
+   others. The extension (which holds `core` and `ui` as runtime dependencies)
+   is on its own track and needs its own bump
 8. Confirm the tag you're about to push matches the versions just written
 
 ## Expected
@@ -65,6 +67,7 @@ Publishing is irreversible; every check here is cheap and every miss is permanen
 
   | private | a changeset must name |
   | --- | --- |
+  | `core` | `testing`, `inspector`, `react`, `storybook-addon`, `cli`, `mcp` — i.e. everything |
   | `audit`, `serialize` | `testing`, `browser`, `cli`, `mcp` |
   | `snapshot` | `cli`, `mcp` |
   | `semantic-navigator-ui` | `inspector`, `storybook-addon` (+ the extension, own track) |
@@ -74,9 +77,9 @@ Publishing is irreversible; every check here is cheap and every miss is permanen
 ## Why this exists
 
 The independence of `cli`/`mcp` from the linked family (3) is the trap: seeing
-`cli 0.1.0-beta.1` next to `core 0.1.0-beta.11` looks like a mistake and isn't.
-Someone "fixing" that alignment would publish nine packages for no reason and break
-the linked group's contract.
+`cli 0.1.0-beta.4` next to `testing 0.1.0-beta.14` looks like a mistake and isn't.
+Someone "fixing" that alignment would publish packages for no reason and break the
+linked group's contract.
 
 Step 7 is the one with the longest tail — a bundler shipping a stale engine produces
 bugs already fixed upstream, reported against a version that contains the fix.

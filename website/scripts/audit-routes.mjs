@@ -30,7 +30,6 @@ export const ROUTES = [
   "/guide/troubleshooting",
 
   // Packages
-  "/packages/core",
   "/packages/testing",
   "/packages/testing/snapshots",
   "/packages/testing/assertions",
