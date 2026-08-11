@@ -92,11 +92,22 @@ export function useVirtualTree(
       // Defer the observer's re-measure by one frame: updateViewport sets state
       // and relayouts the observed node, re-firing the observer in the same
       // frame — the benign "ResizeObserver loop completed with undelivered
-      // notifications" warning that clutters the extension's Errors panel. A rAF
-      // hop breaks the loop; updateViewport already no-ops once the node is gone.
+      // notifications" warning that clutters the extension's Errors panel.
+      //
+      // The pending frame MUST be cancelled on teardown. `disconnect()` stops
+      // further callbacks but does not cancel a frame already queued, and that
+      // frame outliving the component is not harmless: it calls updateViewport,
+      // which sets state, which makes Preact schedule its own post-paint work —
+      // and if the host (a test environment, a closing panel) has torn down by
+      // then, that work throws on globals which no longer exist. Cancelling
+      // here is what keeps the hook from leaving an async tail behind it.
+      let rafId = 0;
       let ro: ResizeObserver | undefined;
       if (typeof ResizeObserver !== "undefined") {
-        ro = new ResizeObserver(() => requestAnimationFrame(updateViewport));
+        ro = new ResizeObserver(() => {
+          cancelAnimationFrame(rafId);
+          rafId = requestAnimationFrame(updateViewport);
+        });
         ro.observe(node);
       }
 
@@ -104,6 +115,7 @@ export function useVirtualTree(
       window.addEventListener("resize", onWindowResize);
 
       teardownRef.current = () => {
+        cancelAnimationFrame(rafId);
         ro?.disconnect();
         window.removeEventListener("resize", onWindowResize);
       };
