@@ -96,6 +96,31 @@ describe("normalizeUrl", () => {
     expect(normalizeUrl("about:blank")).toBe("about:blank");
     expect(normalizeUrl("not-a-url")).toBe("not-a-url");
   });
+
+  it("keeps the search but still strips the hash under keepQuery", () => {
+    expect(
+      normalizeUrl("https://example.com/path?q=hello#section", {
+        keepQuery: true,
+      }),
+    ).toBe("https://example.com/path?q=hello");
+  });
+
+  it("keeps urls differing only by query distinct under keepQuery", () => {
+    const opts = { keepQuery: true };
+    expect(normalizeUrl("https://example.com/embed?id=1", opts)).not.toBe(
+      normalizeUrl("https://example.com/embed?id=2", opts),
+    );
+    // ...which is exactly what the default (lenient) form cannot do.
+    expect(normalizeUrl("https://example.com/embed?id=1")).toBe(
+      normalizeUrl("https://example.com/embed?id=2"),
+    );
+  });
+
+  it("still strips a trailing slash under keepQuery", () => {
+    expect(
+      normalizeUrl("https://example.com/docs/?a=1", { keepQuery: true }),
+    ).toBe("https://example.com/docs?a=1");
+  });
 });
 
 describe("urlsMatch", () => {
@@ -145,6 +170,45 @@ describe("urlsMatch", () => {
     expect(urlsMatch("https://example.com/a", "https://example.com/b")).toBe(
       false,
     );
+  });
+
+  it("separates same-path embeds by query under matchQuery", () => {
+    const frameUrl = "https://embed.test/e?id=1";
+    // Lenient (default) comparison cannot tell the two srcs apart...
+    expect(urlsMatch("https://embed.test/e?id=2", frameUrl)).toBe(true);
+    // ...the strict one does.
+    expect(
+      urlsMatch("https://embed.test/e?id=2", frameUrl, undefined, {
+        matchQuery: true,
+      }),
+    ).toBe(false);
+    expect(
+      urlsMatch("https://embed.test/e?id=1", frameUrl, undefined, {
+        matchQuery: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("resolves a relative src before comparing under matchQuery", () => {
+    expect(
+      urlsMatch(
+        "/embed/widget?id=7",
+        "https://example.com/embed/widget?id=7",
+        "https://example.com/host",
+        { matchQuery: true },
+      ),
+    ).toBe(true);
+  });
+
+  it("still ignores the hash under matchQuery", () => {
+    expect(
+      urlsMatch(
+        "https://example.com/a?q=1#top",
+        "https://example.com/a?q=1",
+        undefined,
+        { matchQuery: true },
+      ),
+    ).toBe(true);
   });
 });
 
