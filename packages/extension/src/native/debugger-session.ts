@@ -86,6 +86,8 @@ export class NativeDebuggerSession {
   private attachStore: StorageArea;
   /** Serializes the attach-map read-modify-write (same reason as DogfoodLog). */
   private tail: Promise<unknown> = Promise.resolve();
+  /** One in-flight operation chain per tab — see `runExclusive`. */
+  private opTails = new Map<number, Promise<void>>();
 
   /**
    * @param storage        durable area for the dogfood log (chrome.storage.local).
@@ -153,6 +155,37 @@ export class NativeDebuggerSession {
    * `command-failed` and never touches the reattach metric.
    */
   async withDebugger<T>(
+    tabId: number,
+    fn: (t: CdpTransport) => Promise<T>,
+  ): Promise<{ outcome: AttachOutcome; value?: T }> {
+    // One operation per tab at a time. Chrome allows a single debugger client
+    // per target, so two overlapping operations collide with each other: the
+    // second attach is refused with "Another debugger is already attached" —
+    // indistinguishable from DevTools holding the tab, so it would be scored as
+    // a `conflict` and inflate one of the three headline metrics with a
+    // self-inflicted collision. The first operation's teardown would also
+    // detach out from under the second. Queueing removes both.
+    return this.runExclusive(tabId, () => this.attachAndRun(tabId, fn));
+  }
+
+  /** Serialize per tab; operations on different tabs still run concurrently. */
+  private runExclusive<T>(tabId: number, task: () => Promise<T>): Promise<T> {
+    const previous = this.opTails.get(tabId) ?? Promise.resolve();
+    const run = previous.then(task, task);
+    const settled = run.then(
+      () => {},
+      () => {},
+    );
+    this.opTails.set(tabId, settled);
+    // Drop the entry once this is the last queued operation, so a long-lived
+    // worker doesn't accumulate one promise per tab it ever touched.
+    void settled.then(() => {
+      if (this.opTails.get(tabId) === settled) this.opTails.delete(tabId);
+    });
+    return run;
+  }
+
+  private async attachAndRun<T>(
     tabId: number,
     fn: (t: CdpTransport) => Promise<T>,
   ): Promise<{ outcome: AttachOutcome; value?: T }> {
