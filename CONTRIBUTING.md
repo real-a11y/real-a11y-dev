@@ -44,10 +44,6 @@ published/internal split with the reasoning behind every seam.
 
 ```
 packages/
-├── core/              # @real-a11y-dev/core — the extraction engine everything is built on:
-│                      #   tree walk, role map, accessible-name computation, action
-│                      #   dispatch, DOM observer, stable ids, queries. No UI, no deps.
-│
 │                      # Surfaces — a library you import or a command you run
 ├── cli/               # @real-a11y-dev/cli — the `real-a11y` shell command (bin only)
 ├── mcp/               # @real-a11y-dev/mcp — MCP server for AI agents (bin `real-a11y-mcp`)
@@ -57,6 +53,10 @@ packages/
 ├── storybook-addon/   # @real-a11y-dev/storybook-addon — per-story tree panel
 │
 │                      # Engine internals — bundled into the surfaces above
+├── core/              # private — the extraction engine everything is built on: tree walk,
+│                      #   role map, accessible-name computation, action dispatch, DOM
+│                      #   observer, stable ids, queries. No UI, no deps. Every surface
+│                      #   above bundles it
 ├── audit/             # private — the `Finding` model, the a11y rules, `collectFindings`, `assert*`
 ├── serialize/         # private — deterministic text serialization (tree / outline / tab sequence)
 ├── snapshot/          # private — fingerprints, `a11y-snapshot.json`, the diff, baselines (Node-only)
