@@ -2,7 +2,7 @@
   {
     "name": "@real-a11y-dev/core (esm)",
     "path": "packages/core/dist/index.js",
-    "limit": "13.4 KB",
+    "limit": "13.6 KB",
     "gzip": true
   },
   {
@@ -16,7 +16,7 @@
   {
     "name": "@real-a11y-dev/inspector (esm)",
     "path": "packages/inspector/dist/index.js",
-    "limit": "33.2 KB",
+    "limit": "33.5 KB",
     "gzip": true
   },
   {
@@ -62,7 +62,7 @@
   {
     "name": "@real-a11y-dev/browser (page-bundle IIFE)",
     "path": "packages/browser/dist/page-bundle.iife.global.js",
-    "limit": "10 KB",
+    "limit": "10.3 KB",
     "gzip": true
   }
 ]

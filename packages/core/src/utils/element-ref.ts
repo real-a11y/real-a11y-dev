@@ -6,6 +6,19 @@
 const MIN_SWEEP_THRESHOLD = 64;
 
 /**
+ * Shape tag for the realm-wide instance of this class — see
+ * `realm-singleton.ts`. It lives HERE, next to the contract it describes, so
+ * that changing the class and forgetting the tag takes deliberate effort
+ * rather than remembering a note in another file.
+ *
+ * Bump it whenever a caller could tell the difference: a method added, removed
+ * or renamed, or a change to what an existing one returns. Two engine versions
+ * that disagree then keep separate maps instead of one version calling a method
+ * the other never had.
+ */
+export const ELEMENT_REF_MAP_SHAPE = "ElementRefMap@1";
+
+/**
  * GC-safe element reference map.
  * Uses WeakRef so DOM elements can be garbage collected
  * even if the tree store still holds a reference to the node ID.

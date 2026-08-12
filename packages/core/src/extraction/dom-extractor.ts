@@ -1,6 +1,7 @@
 import type { SemanticNode, ExtractionResult, ActionType } from "../types.js";
-import { ElementRefMap } from "../utils/element-ref.js";
+import { ElementRefMap, ELEMENT_REF_MAP_SHAPE } from "../utils/element-ref.js";
 import { getNodeId } from "../utils/id-generator.js";
+import { realmSingleton } from "../utils/realm-singleton.js";
 
 import {
   safeChildren,
@@ -1107,12 +1108,23 @@ function getAriaStates(element: Element): Record<string, string | boolean> {
   return states;
 }
 
-/** The element reference map — shared across extractions */
-const elementRefs = new ElementRefMap();
-
-/** Get the shared element reference map */
+/**
+ * Get the element reference map — shared across extractions, and across every
+ * copy of this package in the realm.
+ *
+ * The second half is load-bearing. `dispatch()` in `@real-a11y-dev/testing`
+ * turns a node id back into a live `Element` through this map, and the
+ * extraction that filled it usually happened in a different package. Every
+ * published package bundles its own copy of the engine, so a per-module map
+ * means the reader looks in one object and the writer wrote to another: the
+ * lookup misses and the action silently does nothing.
+ */
 export function getElementRefs(): ElementRefMap {
-  return elementRefs;
+  return realmSingleton(
+    "element-refs",
+    ELEMENT_REF_MAP_SHAPE,
+    () => new ElementRefMap(),
+  );
 }
 
 /**
@@ -1150,7 +1162,7 @@ function focusedNodeId(
 ): string | undefined {
   const el = resolveFocusedElement(root.ownerDocument);
   if (!el) return undefined;
-  const id = elementRefs.findId(el);
+  const id = getElementRefs().findId(el);
   return id && nodes.has(id) ? id : undefined;
 }
 
@@ -1398,7 +1410,7 @@ export interface ExtractDomTreeOptions {
  * rest — including future unknown clobbering — degrading to "skip this node"
  * instead of losing the whole tree.
  *
- * Nothing here mutates `nodes` / `elementRefs`; the caller commits the node
+ * Nothing here mutates `nodes` / the element ref map; the caller commits the node
  * only on success, so a caught element never leaves a half-built node behind.
  */
 function buildNode(
@@ -1544,7 +1556,7 @@ function walk(
 
   // Commit the finished node. Neither map write can throw, so a node that was
   // built successfully is never orphaned by a later failure.
-  elementRefs.set(id, element);
+  getElementRefs().set(id, element);
   nodes.set(id, node);
 
   // Media elements are leaves: their light-DOM children are unrendered
