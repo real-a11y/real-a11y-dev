@@ -225,9 +225,8 @@ CONTRIBUTING covers the normal flow. Two things it doesn't:
   extension's version like any other package's — bump afterwards and the manifest
   is stale, so `surface:check` fails inside the release gate. Recovery is nasty
   because `changeset version` is not idempotent and a second run silently bumps
-  an extra beta. (The `release` skill lists this as step 3, _after_ versioning;
-  that ordering cost a recovery cycle on beta.13 and the skill has not been
-  corrected yet.)
+  an extra beta — which cost a recovery cycle on beta.13. The `release` skill's
+  step 2 is the full version of this, including the surgical repair.
 - **Release before privatizing a package.** In prerelease mode a changeset entry
   lands in the changelog of the packages it names; privatize first and that
   changelog stops being published, so the entry is silently lost.
