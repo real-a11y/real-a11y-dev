@@ -97,13 +97,34 @@ export function mergeFrameTrees(opts: {
   // tree) and its depth would fall back to the parent's frame-local depth.
   // Sorting by hierarchy depth guarantees a frame's parent is always merged
   // first, regardless of announce order.
+  //
+  // Frames Chrome still reports are ordered ahead of ones it doesn't, so a
+  // live frame always picks its <iframe> before a stale tree can. `frames`
+  // is not pruned when an <iframe> ELEMENT is removed — the background drops
+  // a frame only when it NAVIGATES, and a deleted iframe never navigates — so
+  // a page that swaps an embed for an equal-src one (ad refresh, widget
+  // re-mount) leaves the dead frame's tree in the map. It is absent from
+  // `frameInfoMap`, which means frameHierarchyDepth walks a chain it isn't in
+  // and returns 0: without this tie-break it would sort ahead of every live
+  // child frame, claim the iframe, and leave the live frame that actually
+  // hosts the document attached to nothing and so invisible.
+  const isLive = (id: number) => (opts.frameInfoMap.has(id) ? 0 : 1);
   const childFrameIds = Array.from(opts.frames.keys())
     .filter((id) => id !== 0)
     .sort(
       (a, b) =>
+        isLive(a) - isLive(b) ||
         frameHierarchyDepth(a, opts.frameInfoMap) -
-        frameHierarchyDepth(b, opts.frameInfoMap),
+          frameHierarchyDepth(b, opts.frameInfoMap),
     );
+
+  // <iframe> nodes already handed to a frame, as merged (prefixed) node ids.
+  // An <iframe> element hosts exactly one frame, so once one child frame has
+  // attached under it no other may. Without this, any two frames the URL
+  // comparison cannot tell apart — the same widget embedded twice, differing
+  // only by query string or not at all — both matched the FIRST such iframe
+  // and piled into it, leaving the second iframe rendered empty.
+  const claimedIframes = new Set<string>();
 
   for (const childFrameId of childFrameIds) {
     const childTree = opts.frames.get(childFrameId);
@@ -118,36 +139,57 @@ export function mergeFrameTrees(opts: {
 
     // Find the iframe node in the parent that points at this child frame.
     const parentFrameUrl = parentTree.frameUrl;
-    let iframeNodeId: string | null = null;
-    let iframeDepth = 0;
 
-    for (const [nodeId, node] of parentTree.nodes) {
-      if (node.dom!.tagName === "iframe") {
-        const src = node.dom!.attributes.src || "";
-        if (urlsMatch(src, childTree.frameUrl, parentFrameUrl)) {
-          iframeNodeId = prefixNodeId(parentFrameId, nodeId);
-          const parentNode = nodes.get(iframeNodeId);
-          iframeDepth = parentNode?.depth ?? node.depth;
-          break;
-        }
-      }
-    }
-
-    // Fallback: if URL matching failed, attach to the first un-attached
-    // <iframe> in the parent. Beats dropping the subframe entirely.
-    if (!iframeNodeId && frameInfo) {
+    /**
+     * First unclaimed <iframe> in the parent satisfying `predicate`, as its
+     * merged id plus the depth to nest the child frame under. `predicate` also
+     * receives the already-merged copy of the node, which is where the
+     * post-attachment `childIds` live.
+     */
+    const findIframe = (
+      predicate: (
+        node: SemanticNode,
+        mergedNode: SemanticNode | undefined,
+      ) => boolean,
+    ): { id: string; depth: number } | null => {
       for (const [nodeId, node] of parentTree.nodes) {
-        if (node.dom!.tagName === "iframe") {
-          const prefId = prefixNodeId(parentFrameId, nodeId);
-          const parentNode = nodes.get(prefId);
-          if (parentNode && parentNode.childIds.length === 0) {
-            iframeNodeId = prefId;
-            iframeDepth = parentNode.depth;
-            break;
-          }
-        }
+        if (node.dom!.tagName !== "iframe") continue;
+        const prefId = prefixNodeId(parentFrameId, nodeId);
+        if (claimedIframes.has(prefId)) continue;
+        const mergedNode = nodes.get(prefId);
+        if (!predicate(node, mergedNode)) continue;
+        return { id: prefId, depth: mergedNode?.depth ?? node.depth };
       }
-    }
+      return null;
+    };
+
+    const srcOf = (node: SemanticNode) => node.dom!.attributes.src || "";
+
+    const match =
+      // 1. Exact match, query string included. The only pass that can tell
+      //    apart sibling embeds whose urls differ solely by query.
+      findIframe((node) =>
+        urlsMatch(srcOf(node), childTree.frameUrl, parentFrameUrl, {
+          matchQuery: true,
+        }),
+      ) ??
+      // 2. Query-stripped match, as before — tolerates a frame url the page
+      //    rewrote with params the markup's `src` never had.
+      findIframe((node) =>
+        urlsMatch(srcOf(node), childTree.frameUrl, parentFrameUrl),
+      ) ??
+      // 3. Fallback: first un-attached <iframe> in the parent. Beats dropping
+      //    the subframe entirely.
+      (frameInfo
+        ? findIframe(
+            (_node, mergedNode) =>
+              mergedNode !== undefined && mergedNode.childIds.length === 0,
+          )
+        : null);
+
+    const iframeNodeId = match?.id ?? null;
+    const iframeDepth = match?.depth ?? 0;
+    if (iframeNodeId) claimedIframes.add(iframeNodeId);
 
     const prefix = childFrameId;
     const depthOffset = iframeNodeId ? iframeDepth + 1 : 0;

@@ -221,6 +221,160 @@ describe("mergeFrameTrees", () => {
     expect(result!.nodes.get("ifr")!.childIds).toContain("f5-c-root");
   });
 
+  describe("multiple same-path <iframe>s in one parent", () => {
+    // Ad units, YouTube consent frames and social widgets are routinely
+    // embedded several times on a page, differing only by query string — or
+    // not at all. Each frame must land under its OWN iframe.
+
+    it("distinguishes sibling frames whose urls differ only by query string", () => {
+      const top = makeFrame(0, "https://top.test/", [
+        ["root", makeNode("root", { childIds: ["ifr-1", "ifr-2"] })],
+        [
+          "ifr-1",
+          makeNode("ifr-1", {
+            tagName: "iframe",
+            attrs: { src: "https://embed.test/e?id=1" },
+            parentId: "root",
+            depth: 1,
+          }),
+        ],
+        [
+          "ifr-2",
+          makeNode("ifr-2", {
+            tagName: "iframe",
+            attrs: { src: "https://embed.test/e?id=2" },
+            parentId: "root",
+            depth: 1,
+          }),
+        ],
+      ]);
+      const frameOne = makeFrame(5, "https://embed.test/e?id=1", [
+        ["c-root", makeNode("c-root")],
+      ]);
+      const frameTwo = makeFrame(6, "https://embed.test/e?id=2", [
+        ["c-root", makeNode("c-root")],
+      ]);
+
+      const result = mergeFrameTrees({
+        frames: new Map([
+          [0, top],
+          [5, frameOne],
+          [6, frameTwo],
+        ]),
+        frameInfoMap: new Map<number, FrameInfo>([
+          [5, { parentFrameId: 0, url: "https://embed.test/e?id=1" }],
+          [6, { parentFrameId: 0, url: "https://embed.test/e?id=2" }],
+        ]),
+      });
+
+      // The query string is what tells the two embeds apart, so each frame
+      // must attach to the iframe whose src carries ITS id.
+      expect(result!.nodes.get("f5-c-root")!.parentId).toBe("ifr-1");
+      expect(result!.nodes.get("f6-c-root")!.parentId).toBe("ifr-2");
+      expect(result!.nodes.get("ifr-1")!.childIds).toEqual(["f5-c-root"]);
+      expect(result!.nodes.get("ifr-2")!.childIds).toEqual(["f6-c-root"]);
+    });
+
+    it("does not attach two frames to the same <iframe> when srcs are identical", () => {
+      // Same ad unit embedded twice with a byte-identical src: nothing in the
+      // url can tell them apart, so the merge must at least hand each frame a
+      // distinct, not-yet-claimed iframe rather than piling both onto the first.
+      const top = makeFrame(0, "https://top.test/", [
+        ["root", makeNode("root", { childIds: ["ifr-1", "ifr-2"] })],
+        [
+          "ifr-1",
+          makeNode("ifr-1", {
+            tagName: "iframe",
+            attrs: { src: "https://ads.test/unit" },
+            parentId: "root",
+            depth: 1,
+          }),
+        ],
+        [
+          "ifr-2",
+          makeNode("ifr-2", {
+            tagName: "iframe",
+            attrs: { src: "https://ads.test/unit" },
+            parentId: "root",
+            depth: 1,
+          }),
+        ],
+      ]);
+      const frameOne = makeFrame(5, "https://ads.test/unit", [
+        ["c-root", makeNode("c-root")],
+      ]);
+      const frameTwo = makeFrame(6, "https://ads.test/unit", [
+        ["c-root", makeNode("c-root")],
+      ]);
+
+      const result = mergeFrameTrees({
+        frames: new Map([
+          [0, top],
+          [5, frameOne],
+          [6, frameTwo],
+        ]),
+        frameInfoMap: new Map<number, FrameInfo>([
+          [5, { parentFrameId: 0, url: "https://ads.test/unit" }],
+          [6, { parentFrameId: 0, url: "https://ads.test/unit" }],
+        ]),
+      });
+
+      expect(result!.nodes.get("ifr-1")!.childIds).toEqual(["f5-c-root"]);
+      expect(result!.nodes.get("ifr-2")!.childIds).toEqual(["f6-c-root"]);
+      expect(result!.nodes.get("f5-c-root")!.parentId).toBe("ifr-1");
+      expect(result!.nodes.get("f6-c-root")!.parentId).toBe("ifr-2");
+    });
+  });
+
+  it("lets the live frame claim the <iframe> when a stale tree for the same url lingers", () => {
+    // The caller's `frames` map is not pruned when an <iframe> ELEMENT is
+    // removed: the background only drops a frame when it navigates, and a
+    // deleted iframe never navigates. So after a page swaps an embed out for
+    // an equal-src one (ad refresh, widget re-mount), a dead frame tree sits
+    // alongside the live one, and only the live frame appears in
+    // `frameInfoMap` (which is built from Chrome's getAllFrames).
+    //
+    // The dead frame must not be the one that claims the iframe: it has no
+    // frameInfo, so frameHierarchyDepth walks a chain it isn't in and returns
+    // 0, which would otherwise sort it ahead of every live child frame.
+    const top = makeFrame(0, "https://top.test/", [
+      ["root", makeNode("root", { childIds: ["ifr"] })],
+      [
+        "ifr",
+        makeNode("ifr", {
+          tagName: "iframe",
+          attrs: { src: "https://ads.test/unit" },
+          parentId: "root",
+          depth: 1,
+        }),
+      ],
+    ]);
+    const staleFrame = makeFrame(5, "https://ads.test/unit", [
+      ["c-root", makeNode("c-root")],
+    ]);
+    const liveFrame = makeFrame(9, "https://ads.test/unit", [
+      ["c-root", makeNode("c-root")],
+    ]);
+
+    const result = mergeFrameTrees({
+      frames: new Map([
+        [0, top],
+        [5, staleFrame],
+        [9, liveFrame],
+      ]),
+      // Only frame 9 is still reported by Chrome.
+      frameInfoMap: new Map<number, FrameInfo>([
+        [9, { parentFrameId: 0, url: "https://ads.test/unit" }],
+      ]),
+    });
+
+    // The live frame's content is what the user must see under the iframe.
+    expect(result!.nodes.get("ifr")!.childIds).toEqual(["f9-c-root"]);
+    expect(result!.nodes.get("f9-c-root")!.parentId).toBe("ifr");
+    // The stale subtree stays addressable for routing but hangs off nothing.
+    expect(result!.nodes.get("f5-c-root")!.parentId).toBeNull();
+  });
+
   it("keeps an unattached subframe's nodes in the result with parentId=null on root", () => {
     // Top frame has no <iframe> at all — degenerate case where Chrome
     // reports a subframe but the DOM walker missed it. We still return the

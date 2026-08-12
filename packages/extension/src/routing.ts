@@ -37,12 +37,23 @@ export function parseNodeId(prefixedId: string): {
  * trailing slash so two references to the same document compare equal.
  * Returns the input unchanged when it can't be meaningfully normalized
  * (non-http(s) schemes like `about:blank`, `chrome:`, or non-URL strings).
+ *
+ * `keepQuery` retains the search string. Dropping the query is what lets a
+ * `src` match a frame url the page rewrote with cache-busting or tracking
+ * params, but it also makes `/embed?id=1` and `/embed?id=2` — the usual shape
+ * of the same widget embedded twice — indistinguishable. Callers that need to
+ * tell such siblings apart compare with the query first and only then fall
+ * back to the lenient form.
  */
-export function normalizeUrl(url: string): string {
+export function normalizeUrl(
+  url: string,
+  opts: { keepQuery?: boolean } = {},
+): string {
   try {
     const u = new URL(url);
     if (u.protocol !== "http:" && u.protocol !== "https:") return url;
-    return (u.origin + u.pathname).replace(/\/$/, "");
+    const base = (u.origin + u.pathname).replace(/\/$/, "");
+    return opts.keepQuery ? base + u.search : base;
   } catch {
     return url;
   }
@@ -52,21 +63,27 @@ export function normalizeUrl(url: string): string {
  * True if an `<iframe src>` refers to the same document as a frame whose
  * url we already know.  Handles relative-to-parent `src` attributes when
  * `parentUrl` is supplied.
+ *
+ * With `matchQuery`, the search string is part of the comparison — a strict
+ * pass for telling apart embeds that differ only by query.
  */
 export function urlsMatch(
   iframeSrc: string,
   frameUrl: string,
   parentUrl?: string,
+  opts: { matchQuery?: boolean } = {},
 ): boolean {
   if (!iframeSrc || iframeSrc === "about:blank") return false;
+
+  const norm = (u: string) => normalizeUrl(u, { keepQuery: opts.matchQuery });
 
   try {
     const resolvedSrc = parentUrl
       ? new URL(iframeSrc, parentUrl).href
       : iframeSrc;
-    return normalizeUrl(resolvedSrc) === normalizeUrl(frameUrl);
+    return norm(resolvedSrc) === norm(frameUrl);
   } catch {
-    return normalizeUrl(iframeSrc) === normalizeUrl(frameUrl);
+    return norm(iframeSrc) === norm(frameUrl);
   }
 }
 

@@ -44,6 +44,19 @@
   script sent back was recorded and never delivered, and nothing retried,
   because a content script re-announces only when its own DOM next mutates. A
   request the panel itself sent is now proof enough of a panel to answer it.
+- Give each `<iframe>` on a page its own subtree when several embed the same
+  document. Matching a frame to its `<iframe>` compared urls with the query
+  string stripped and never recorded which iframes were already spoken for, so
+  the usual shape of a repeated embed — ad units, consent frames and social
+  widgets differing only by `?id=1` / `?id=2`, or by nothing at all — had every
+  frame match the FIRST such iframe and pile in under it, while the second
+  iframe rendered empty. Matching now tries the url with its query string
+  before falling back to the query-stripped comparison, and an `<iframe>` a
+  frame has attached under is no longer offered to any other frame, in the
+  fallback pass as well as the url ones. Frames Chrome still reports pick
+  their `<iframe>` first, so a page that swaps an embed for an equal-address
+  one — an ad refresh, a widget re-mount — shows the live document rather than
+  the tree left behind by the one it replaced.
 
 ## 0.1.11
 
