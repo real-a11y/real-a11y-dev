@@ -37,6 +37,16 @@ const COPIES = [
  * This is the only honest way to test the property. Importing the module twice
  * normally returns the cached instance, which is precisely the situation that
  * was never broken.
+ *
+ * **Read the limitation before trusting these.** `?copy=N` forces a second
+ * instance of the module you name, and of nothing it imports: both copies below
+ * import `./realm-singleton.js` WITHOUT a query, so they share one registry
+ * module. That is enough to catch the regression this PR fixes — module-scope
+ * state in `id-generator` / `dom-extractor` — but it does not exercise the part
+ * that makes the fix work in a real bundle, where each copy of the engine
+ * carries its own `realm-singleton` too. `describe("two copies of the REGISTRY
+ * module")` below covers that half deliberately; without it this suite would
+ * pass just as happily against a plain module-scope `new Map()`.
  */
 function loadCopy(n: 1 | 2) {
   return COPIES[n - 1]!();
@@ -78,6 +88,54 @@ describe("realmSingleton", () => {
     expect(realmSingleton("zero", make)).toBe(0);
     // A `get() ?? create()` implementation would rebuild every call here.
     expect(built).toBe(1);
+  });
+});
+
+describe("two copies of the REGISTRY module", () => {
+  beforeEach(() => {
+    resetRealmSingletons();
+  });
+
+  // This is the half that proves the mechanism rather than the symptom.
+  //
+  // In a real install every published package inlines the whole engine, so
+  // there are as many `realm-singleton` modules as there are packages. Nothing
+  // in JS module scope can span them — only something realm-wide can, which is
+  // why the store hangs off `globalThis` under a `Symbol.for` key rather than
+  // living in a `const` up in this file.
+  //
+  // Devin caught that the engine-copy tests above could not tell the two apart:
+  // they import the registry unqueried, so they share one instance and would
+  // pass against a plain module-scope Map. These cases close that gap.
+  it("resolves the same store from two instances of itself", async () => {
+    const here = await import("./realm-singleton.js");
+    // @ts-expect-error loader query — a second instance of THIS module
+    const other = (await import("./realm-singleton.js?copy=2")) as typeof here;
+
+    expect(other).not.toBe(here);
+
+    const token = { made: "by the first instance" };
+    const first = here.realmSingleton("cross-module-probe", () => token);
+    const second = other.realmSingleton("cross-module-probe", () => ({
+      made: "by the second instance",
+    }));
+
+    // A module-scope `const store = new Map()` fails right here: the second
+    // instance would find an empty map and build its own object.
+    expect(second).toBe(first);
+    expect(second).toBe(token);
+  });
+
+  it("clears across instances, so test isolation is real", async () => {
+    const here = await import("./realm-singleton.js");
+    // @ts-expect-error loader query — a second instance of THIS module
+    const other = (await import("./realm-singleton.js?copy=2")) as typeof here;
+
+    const before = here.realmSingleton("clear-probe", () => ({}));
+    other.resetRealmSingletons();
+    const after = here.realmSingleton("clear-probe", () => ({}));
+
+    expect(after).not.toBe(before);
   });
 });
 
