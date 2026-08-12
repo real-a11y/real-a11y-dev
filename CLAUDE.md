@@ -17,16 +17,16 @@ An accessibility inspection toolchain. It builds a semantic tree of a page and
 gives you ways to read, diff, assert on and act through it — a matcher, a panel,
 a command, a server, a browser extension.
 
-Seven of the sixteen packages are published — `cli`, `core`, `inspector`, `mcp`,
-`react`, `storybook-addon`, `testing` — and the other nine ship bundled inside
-them. CONTRIBUTING's _Project structure_ carries the annotated map and the
-reasoning for each seam; each `package.json`'s `private` field is the authority.
+Six of the sixteen packages are published — `cli`, `inspector`, `mcp`, `react`,
+`storybook-addon`, `testing` — and the other ten ship bundled inside them.
+CONTRIBUTING's _Project structure_ carries the annotated map and the reasoning
+for each seam; each `package.json`'s `private` field is the authority.
 
-> `core` is on its way to internal (#325), which lands the "six published
-> packages" plan. Until it merges, treat `core` as published.
-
-Everything depends on `core`, so most real changes are cross-package. Check
-consumers before assuming a change is contained.
+Everything depends on `core`, which is itself internal, so most real changes are
+cross-package **and** invisible to semver: `core` has no published version of its
+own, yet its code ships inside all six. The package with no version number is the
+one whose changes reach furthest — reason about consumer impact, not about
+`core`'s own bump.
 
 ## Two producers build the tree
 
@@ -151,11 +151,14 @@ Verify by reading module **specifiers**, not type names — `dts.resolve` inline
 declaration text, so grepping for `SemanticNode` proves nothing either way:
 
 ```bash
-pnpm build && grep -rlE "(from|import\(|reference types=) *[\"']@real-a11y-dev/(browser|audit|serialize|snapshot|validate|session-registry|semantic-navigator-ui)" packages/{cli,core,inspector,mcp,react,storybook-addon,testing}/dist --include="*.d.ts" --include="*.d.cts"
+pnpm build && grep -rlE "(from|import\(|reference types=) *[\"']@real-a11y-dev/(core|browser|audit|serialize|snapshot|validate|session-registry|semantic-navigator-ui)" packages/{cli,inspector,mcp,react,storybook-addon,testing}/dist --include="*.d.ts" --include="*.d.cts"
 ```
 
 Expect no output. Any hit is a package whose `dts.resolve` is missing a name.
-Two things make this report false positives if you shortcut them:
+Both halves of that command have to move together whenever a package is
+privatised — the pattern lists the internal packages, the directory list the
+published ones, and a name left in the wrong half silently stops checking
+anything. Two more things make it report false positives if you shortcut them:
 
 - **Build first.** A `dist/` older than the `tsup.config.ts` that fixed it will
   keep reporting the bug you already fixed.
@@ -164,8 +167,6 @@ Two things make this report false positives if you shortcut them:
   another private package freely — nobody can install either one, so there is no
   reader to break. `snapshot` does exactly this today and is not a defect.
 
-When #325 lands, move `core` out of the directory list and into the pattern.
-
 Related: **tsup externalizes only `dependencies`.** Moving a package to
 `devDependencies` makes esbuild walk into it, which is how `core` was once
 silently inlined into `cli` and `mcp`. Declare what you actually want inlined
@@ -173,26 +174,33 @@ rather than relying on where a dep happens to sit.
 
 ## `core` runs as more than one copy
 
-`inspector` and the extension bundle the engine rather than importing it, so
-**two or more copies of `core` loaded at once is the normal case**, and it gets
-more common as packages go internal.
+Now that `core` is internal, every published package that uses it bundles its own
+copy rather than importing a shared one — so **two or more copies of `core`
+loaded at once is the normal case**, not an edge case. An app using `react` and
+`testing` together has two.
 
 Consequence: **module-scope state in `core` is a bug.** Two copies each get their
 own, and anything keyed across them stops matching — a node id minted by one copy
 resolves to nothing in another, so `dispatch()` returns having done nothing and
 _nothing errors_.
 
-Two such singletons are still on `main` — `elementRefs` in
-`core/src/extraction/dom-extractor.ts` and the counter in
-`core/src/utils/id-generator.ts`. #326 moves both into a realm-wide registry keyed
-by `Symbol.for()`, which returns the identical symbol to every copy in the realm.
-Realm rather than process is deliberate: an iframe or worker gets its own store,
-matching the DOM it describes. That key carries a **shape** tag, bumped only when
-what is stored changes and **never per release** — a per-release bump would stop
-two betas in one app from sharing, which is the bug it exists to prevent.
+So state that has to survive a package boundary goes through
+`realmSingleton()` in `core/src/utils/realm-singleton.ts`, which hangs one store
+off `globalThis` under `Symbol.for("@real-a11y-dev/core.realm-singletons.v1")` —
+the same symbol for every copy of the code in the realm. The element ref map and
+the node-id counter are the two that already use it.
 
-Until that lands, do not add more module-scope state, and treat any id or ref
-that has to survive a package boundary as suspect.
+Two things about that key are deliberate:
+
+- **Realm, not process.** An iframe or a worker gets its own store, which matches
+  the DOM it describes — `Element` identity doesn't cross those either.
+- **The `v1` is a _shape_ tag, not a version.** Bump it when what's in the store
+  changes shape, so copies that disagree fall back to one store each rather than
+  corrupting a shared one. Never bump it per release: that would stop two betas
+  in one app from sharing a map, which is the bug this exists to prevent.
+
+New shared state in `core` goes in that registry. Reaching for module scope
+instead compiles, passes its unit tests, and fails only across a bundle boundary.
 
 ## When a size-limit budget may go up
 
