@@ -30,8 +30,9 @@ export default defineConfig({
       // so with browser private this is the published home for that API.
       "@real-a11y-dev/browser",
       // `core` is the deepest of them: the browser types re-exported above are
-      // themselves written in terms of its `A11yNode`/`A11yTree`, so leaving it
-      // out would resolve one layer and leave the next dangling.
+      // themselves written in terms of its `ExtractionResult` and
+      // `SemanticNode`, so leaving it out would resolve one layer and leave the
+      // next dangling.
       "@real-a11y-dev/core",
     ],
   },
