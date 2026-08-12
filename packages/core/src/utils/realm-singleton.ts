@@ -82,8 +82,29 @@ function registry(): Registry {
  * Values this copy had to keep to itself because the realm-wide slot was
  * already filled by an incompatible version. Module scope is exactly right
  * here — one per copy of this module is the point.
+ *
+ * Keyed by key AND shape. Keying by `key` alone looks sufficient — a slot has
+ * one shape per copy of this module, by construction — but it makes the helper
+ * quietly wrong the moment that stops holding: with the realm slot taken,
+ * `(k, "s@2")` and `(k, "s@3")` would both resolve to whichever asked first,
+ * so the second gets an object of the wrong shape and no error says so. That
+ * is the failure this whole file exists to prevent; it should not be
+ * reintroduced one level down.
  */
 const privateFallback = new Map<string, unknown>();
+
+/**
+ * Join the pair with a separator that cannot occur in either half.
+ *
+ * A space or a colon would not do: both are legal inside a key or a shape tag,
+ * so `("a b", "c")` and `("a", "b c")` would produce the same string. U+241F is
+ * the PRINTABLE glyph for the unit separator, chosen over a raw control byte
+ * because an actual control character in source makes the whole file read as
+ * binary to grep, diff and code review — a poor trade for one delimiter.
+ */
+function fallbackKey(key: string, shape: string): string {
+  return `${key}\u241F${shape}`;
+}
 
 /**
  * Get the realm-wide value for `key`, creating it on first use.
@@ -115,8 +136,9 @@ export function realmSingleton<T>(
     // `has`, not a truthiness or `undefined` check — the shared path already
     // has a test proving a legitimately falsy value must not be rebuilt, and
     // the fallback path deserves the same care.
-    if (!privateFallback.has(key)) privateFallback.set(key, create());
-    return privateFallback.get(key) as T;
+    const mine = fallbackKey(key, shape);
+    if (!privateFallback.has(mine)) privateFallback.set(mine, create());
+    return privateFallback.get(mine) as T;
   }
 
   const value = create();

@@ -253,3 +253,33 @@ describe("two copies of the engine in one realm", () => {
     expect(two.ids.getNodeId(el)).toBe(one.ids.getNodeId(el));
   });
 });
+
+describe("fallback keying", () => {
+  beforeEach(() => {
+    resetRealmSingletons();
+  });
+
+  // Found by the /code-review pass on this PR. With the realm slot taken, a
+  // fallback keyed by `key` alone hands the SECOND shape's object to the third
+  // — an object of the wrong shape, returned with no error, which is the exact
+  // failure this file exists to prevent.
+  it("gives a third shape its own value, not the second one's", () => {
+    realmSingleton("k", "s@1", () => ({ who: "one" }));
+    const two = realmSingleton("k", "s@2", () => ({ who: "two" }));
+    const three = realmSingleton("k", "s@3", () => ({ who: "three" }));
+
+    expect(two.who).toBe("two");
+    expect(three.who).toBe("three");
+    expect(three).not.toBe(two);
+  });
+
+  it("cannot be confused by a separator inside a key or shape", () => {
+    realmSingleton("occupied", "taken", () => ({}));
+
+    const a = realmSingleton("occupied", "a b", () => ({ id: "a b" }));
+    const b = realmSingleton("occupied", "a", () => ({ id: "a" }));
+
+    expect(a.id).toBe("a b");
+    expect(b.id).toBe("a");
+  });
+});
