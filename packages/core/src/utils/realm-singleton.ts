@@ -34,19 +34,40 @@
  * its own registry, which matches the DOM it is describing — `Element`
  * identity does not cross those either.
  *
- * ## The version in the key
+ * ## Two versions, and why the shape tag is checked rather than trusted
  *
- * `v1` is a compatibility tag, not this package's version. Copies only share
- * state when they agree on its SHAPE. Change what lives in the store — a field,
- * a class contract — and bump this; mismatched copies then fall back to one
- * store each, which is today's degraded behaviour rather than silent
- * corruption. Do NOT bump it for an ordinary release: that would stop
- * `0.1.0-beta.15` and `0.1.0-beta.16` sharing a map inside one app, which is
- * the exact bug this file exists to prevent.
+ * Copies may share state only when they agree on its SHAPE. An app can easily
+ * hold two engine versions at once — `testing@0.1.0-beta.15` next to
+ * `inspector@0.1.0-beta.20` — and whichever loads first creates the object the
+ * other one then uses.
+ *
+ * So each slot carries a shape tag, supplied by the caller and declared NEXT TO
+ * the type it describes. On a mismatch this hands back a copy-local instance
+ * instead of the shared one: the two copies stop seeing each other's nodes,
+ * which is the pre-registry behaviour, and nobody reads a field or calls a
+ * method the other version never had.
+ *
+ * That last part is the reason it is enforced rather than documented. The first
+ * draft of this file left the tag in the registry key, one file away from the
+ * shapes it governed, with a comment asking the next author to bump it. Adding
+ * a field to `IdState` and forgetting would have meant `undefined` leaking into
+ * ids, or `refs.<method> is not a function` in production — the review of this
+ * PR called that out, and a comment is not a mechanism.
+ *
+ * The `v1` in the key is a different thing: the format of the ENVELOPE below
+ * (`{shape, value}`). Bump it only if that changes, never for a release — that
+ * would stop two betas in one app sharing a map, which is the bug this file
+ * exists to prevent.
  */
 const REGISTRY = Symbol.for("@real-a11y-dev/core.realm-singletons.v1");
 
-type Registry = Map<string, unknown>;
+/** What a slot holds: the value, plus the shape its author promised. */
+interface Slot {
+  shape: string;
+  value: unknown;
+}
+
+type Registry = Map<string, Slot>;
 
 function registry(): Registry {
   const holder = globalThis as typeof globalThis & {
@@ -58,19 +79,49 @@ function registry(): Registry {
 }
 
 /**
+ * Values this copy had to keep to itself because the realm-wide slot was
+ * already filled by an incompatible version. Module scope is exactly right
+ * here — one per copy of this module is the point.
+ */
+const privateFallback = new Map<string, unknown>();
+
+/**
  * Get the realm-wide value for `key`, creating it on first use.
  *
  * `create` runs at most once per realm no matter how many copies of this
  * package call it — the second caller gets the first caller's object, which is
  * the entire point.
  *
+ * When another copy already filled the slot under a DIFFERENT `shape`, this
+ * returns a copy-local value instead. Degraded (the two copies no longer see
+ * each other's state) but safe, and it cannot be silently wrong the way reading
+ * a foreign object's missing field would be.
+ *
  * @param key stable identifier for the slot, unique within this package
+ * @param shape bump when the stored value's shape changes; declare it beside the type
  * @param create builds the value; must be side-effect free beyond constructing it
  */
-export function realmSingleton<T>(key: string, create: () => T): T {
+export function realmSingleton<T>(
+  key: string,
+  shape: string,
+  create: () => T,
+): T {
   const store = registry();
-  if (!store.has(key)) store.set(key, create());
-  return store.get(key) as T;
+  const slot = store.get(key);
+
+  if (slot) {
+    if (slot.shape === shape) return slot.value as T;
+
+    // `has`, not a truthiness or `undefined` check — the shared path already
+    // has a test proving a legitimately falsy value must not be rebuilt, and
+    // the fallback path deserves the same care.
+    if (!privateFallback.has(key)) privateFallback.set(key, create());
+    return privateFallback.get(key) as T;
+  }
+
+  const value = create();
+  store.set(key, { shape, value });
+  return value;
 }
 
 /**
@@ -79,8 +130,15 @@ export function realmSingleton<T>(key: string, create: () => T): T {
  * For tests that need isolation between cases. Production code has no reason
  * to call this: throwing away the ref map orphans every id already handed out.
  *
+ * Clears the copy-local fallbacks too, or a test that exercised a shape
+ * mismatch would leak its private value into the next case — but only THIS
+ * copy's, since a fallback map is per-module by construction. Calling this from
+ * one copy cannot reach another copy's fallbacks. Test-only, and fallbacks only
+ * exist when versions disagree, so that gap has no production reach.
+ *
  * @internal
  */
 export function resetRealmSingletons(): void {
   registry().clear();
+  privateFallback.clear();
 }

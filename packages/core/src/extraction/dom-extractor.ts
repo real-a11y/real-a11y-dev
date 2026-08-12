@@ -1,5 +1,5 @@
 import type { SemanticNode, ExtractionResult, ActionType } from "../types.js";
-import { ElementRefMap } from "../utils/element-ref.js";
+import { ElementRefMap, ELEMENT_REF_MAP_SHAPE } from "../utils/element-ref.js";
 import { getNodeId } from "../utils/id-generator.js";
 import { realmSingleton } from "../utils/realm-singleton.js";
 
@@ -1120,7 +1120,11 @@ function getAriaStates(element: Element): Record<string, string | boolean> {
  * lookup misses and the action silently does nothing.
  */
 export function getElementRefs(): ElementRefMap {
-  return realmSingleton("element-refs", () => new ElementRefMap());
+  return realmSingleton(
+    "element-refs",
+    ELEMENT_REF_MAP_SHAPE,
+    () => new ElementRefMap(),
+  );
 }
 
 /**

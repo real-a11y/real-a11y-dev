@@ -64,16 +64,16 @@ describe("realmSingleton", () => {
       return { v: built };
     };
 
-    const a = realmSingleton("t", make);
-    const b = realmSingleton("t", make);
+    const a = realmSingleton("t", "s@1", make);
+    const b = realmSingleton("t", "s@1", make);
 
     expect(a).toBe(b);
     expect(built).toBe(1);
   });
 
   it("keeps separate keys separate", () => {
-    expect(realmSingleton("a", () => ({}))).not.toBe(
-      realmSingleton("b", () => ({})),
+    expect(realmSingleton("a", "s@1", () => ({}))).not.toBe(
+      realmSingleton("b", "s@1", () => ({})),
     );
   });
 
@@ -84,10 +84,66 @@ describe("realmSingleton", () => {
       return 0;
     };
 
-    expect(realmSingleton("zero", make)).toBe(0);
-    expect(realmSingleton("zero", make)).toBe(0);
+    expect(realmSingleton("zero", "s@1", make)).toBe(0);
+    expect(realmSingleton("zero", "s@1", make)).toBe(0);
     // A `get() ?? create()` implementation would rebuild every call here.
     expect(built).toBe(1);
+  });
+});
+
+describe("shape guard", () => {
+  beforeEach(() => {
+    resetRealmSingletons();
+  });
+
+  // The review of this PR asked what happens when two engine VERSIONS disagree
+  // about what lives in a slot. Before the guard the second one silently got
+  // the first one's object and read fields that were never written.
+  it("does not hand a slot to a copy that expects a different shape", () => {
+    const v1 = realmSingleton("shared", "counter+ids@1", () => ({
+      counter: 0,
+    }));
+    const v2 = realmSingleton("shared", "counter+ids@2", () => ({
+      counter: 0,
+      prefix: "sn",
+    }));
+
+    expect(v2).not.toBe(v1);
+    // The newer copy sees the field its own version defines, rather than
+    // `undefined` leaking in from the older object.
+    expect(v2.prefix).toBe("sn");
+  });
+
+  it("keeps giving the SAME fallback to the mismatched copy", () => {
+    realmSingleton("shared", "shape@1", () => ({ id: "first" }));
+
+    const a = realmSingleton("shared", "shape@2", () => ({ id: "second" }));
+    const b = realmSingleton("shared", "shape@2", () => ({ id: "second" }));
+
+    // Degraded — it does not see the other version's state — but still a
+    // singleton from its own point of view, so ids stay stable within it.
+    expect(b).toBe(a);
+  });
+
+  it("leaves the first copy's slot untouched", () => {
+    const original = realmSingleton("shared", "shape@1", () => ({ v: 1 }));
+    realmSingleton("shared", "shape@2", () => ({ v: 2 }));
+
+    expect(realmSingleton("shared", "shape@1", () => ({ v: 99 }))).toBe(
+      original,
+    );
+  });
+
+  it("clears the fallbacks too, or one case leaks into the next", () => {
+    realmSingleton("shared", "shape@1", () => ({ v: 1 }));
+    const strandedFirst = realmSingleton("shared", "shape@2", () => ({ v: 2 }));
+
+    resetRealmSingletons();
+
+    realmSingleton("shared", "shape@1", () => ({ v: 1 }));
+    expect(realmSingleton("shared", "shape@2", () => ({ v: 2 }))).not.toBe(
+      strandedFirst,
+    );
   });
 });
 
@@ -115,8 +171,8 @@ describe("two copies of the REGISTRY module", () => {
     expect(other).not.toBe(here);
 
     const token = { made: "by the first instance" };
-    const first = here.realmSingleton("cross-module-probe", () => token);
-    const second = other.realmSingleton("cross-module-probe", () => ({
+    const first = here.realmSingleton("cross-module-probe", "s@1", () => token);
+    const second = other.realmSingleton("cross-module-probe", "s@1", () => ({
       made: "by the second instance",
     }));
 
@@ -131,9 +187,9 @@ describe("two copies of the REGISTRY module", () => {
     // @ts-expect-error loader query — a second instance of THIS module
     const other = (await import("./realm-singleton.js?copy=2")) as typeof here;
 
-    const before = here.realmSingleton("clear-probe", () => ({}));
+    const before = here.realmSingleton("clear-probe", "s@1", () => ({}));
     other.resetRealmSingletons();
-    const after = here.realmSingleton("clear-probe", () => ({}));
+    const after = here.realmSingleton("clear-probe", "s@1", () => ({}));
 
     expect(after).not.toBe(before);
   });

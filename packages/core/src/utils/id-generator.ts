@@ -16,8 +16,17 @@ interface IdState {
   ids: WeakMap<Node, string>;
 }
 
+/**
+ * Shape tag for the realm-wide `IdState` — see `realm-singleton.ts`. Declared
+ * directly under the interface so that adding a field without bumping it is a
+ * visible omission rather than an invisible one. Get it wrong in the safe
+ * direction and two engine versions merely stop sharing ids; get it wrong in
+ * the other and one of them reads a field the other never wrote.
+ */
+const ID_STATE_SHAPE = "counter+ids@1";
+
 function state(): IdState {
-  return realmSingleton<IdState>("id-generator", () => ({
+  return realmSingleton<IdState>("id-generator", ID_STATE_SHAPE, () => ({
     counter: 0,
     ids: new WeakMap<Node, string>(),
   }));
