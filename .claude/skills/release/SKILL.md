@@ -31,8 +31,8 @@ push the tags that trigger the publish workflows.
   `semantic-navigator-ui`, `inspector`, `react`, `storybook-addon`, `testing`.
   `validate`, `mcp`, and `cli` version independently.
 - **The Chrome extension is changesets-ignored** (`.changeset/config.json`
-  `ignore`). Bump its version by hand; it ships to the Chrome Web Store, never
-  npm.
+  `ignore`). Bump its version by hand, **before** `version-packages` — see
+  step 2. It ships to the Chrome Web Store, never npm.
 - **Internal deps are `workspace:*`.** pnpm rewrites them to the **exact**
   version at publish time, so a release is coherent by construction
   (e.g. `mcp@x` → `testing@<exact>`). Never hand-edit internal dep ranges.
@@ -67,7 +67,51 @@ git checkout -b release/<label> origin/main   # e.g. release/beta.10
 Release from `main`, not from a feature branch — the bump must reflect exactly
 what's merged.
 
-### 2. Version the packages
+### 2. Bump the extension — **before** versioning (only if shipping it)
+
+The extension is changesets-ignored, so bump it manually in **both** files (they
+must match; `prebuild` also syncs the manifest from package.json):
+
+- `packages/extension/package.json` → new version
+- `packages/extension/public/manifest.json` → same version
+
+Chrome Web Store versions are plain `MAJOR.MINOR.PATCH` (no `-beta`).
+
+**Do this before step 3, and don't let the order get tidied back.** It reads
+like a footnote to the npm release, so it wants to sit after it — but
+changesets-ignored is not the same as invisible to the tooling.
+`version-packages` runs `surface:extract` immediately after `changeset version`,
+and the manifest records **every** package's version, the extension's included:
+
+```bash
+node -e "for (const p of require('./docs/surface.json').packages) if (p.name.includes('extension')) console.log(p.name, p.version)"
+# → @real-a11y-dev/semantic-navigator-extension 0.1.11
+```
+
+Bump after that extract and `docs/surface.json` keeps the old number.
+`surface:check` re-extracts and compares byte for byte, so the release fails its
+own gate in step 4 with `docs/surface.json is out of date` — a generic
+stale-manifest message that says nothing about the extension.
+
+**The obvious repair is the trap.** Re-running `pnpm version-packages` to refresh
+the manifest runs `changeset version` a second time, and it is not idempotent:
+you ship `beta.N+2` where you meant `beta.N+1`, with nothing to warn you. That
+cost a recovery cycle on `beta.13`; `beta.14` went clean by bumping here first.
+If you do land in it, re-run only the tail of the chain — the build is already
+done, and these three are deterministic:
+
+```bash
+pnpm surface:extract && pnpm surface:snapshot && pnpm surface:apply
+```
+
+Not `surface:extract` alone, which is what the failure message suggests: it
+clears the gate, but `docs/surface.released.json` is a frozen **copy** of the
+manifest, so it would keep the pre-bump extension version in the one file whose
+job is to record what this release shipped.
+
+### 3. Version the packages
+
+Extension bumped already (step 2), if this release ships it.
 
 ```bash
 npx changeset status            # read-only preview of what will bump
@@ -92,6 +136,11 @@ refreshes the lockfile — in that order, which is load-bearing (see CONTRIBUTIN
 > ```bash
 > git checkout -- packages/ .changeset/ docs/ website/ pnpm-lock.yaml
 > ```
+>
+> **That reset takes the step 2 extension bump with it** — both files live under
+> `packages/` and nothing is committed until step 5. Redo the bump before
+> re-running, or the re-run extracts the old extension version and you land in
+> the stale-manifest failure step 2 exists to avoid.
 
 Calling `changeset version` directly still produces a correct-_looking_ release
 — it tags and publishes fine. What you get is a stale manifest (the version
@@ -109,16 +158,6 @@ Then **inspect before trusting it**:
 - `docs/surface.released.json` is in the diff. Its diff against the previous
   release is the list of capabilities becoming installable — worth reading as a
   release note in its own right.
-
-### 3. Bump the extension (only if shipping it)
-
-The extension is changesets-ignored, so bump it manually in **both** files (they
-must match; `prebuild` also syncs the manifest from package.json):
-
-- `packages/extension/package.json` → new version
-- `packages/extension/public/manifest.json` → same version
-
-Chrome Web Store versions are plain `MAJOR.MINOR.PATCH` (no `-beta`).
 
 ### 4. Gates
 
