@@ -1,6 +1,6 @@
 {
   "name": "@real-a11y-dev/testing",
-  "version": "0.1.0-beta.14",
+  "version": "0.1.0-beta.15",
   "description": "Accessibility audit and interaction-flow helpers for the Semantic Navigator tree (Vitest, Jest, Playwright)",
   "license": "MIT",
   "author": "Juan Crisostomo (Real A11y)",

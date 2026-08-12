@@ -8,7 +8,7 @@
   landed the change; versions match `package.json`/`public/manifest.json`.
 -->
 
-## Unreleased
+## 0.1.12
 
 ### Patch Changes
 
@@ -26,7 +26,7 @@
   for a content script that has not finished loading. Only a "receiving end
   does not exist" error is reported that way: a `lastError` for a tab that no
   longer exists stays a plain failure, so a re-extract queued just before the
-  user closed the tab cannot claim the page was restricted.
+  user closed the tab cannot claim the page was restricted. ([#322])
 
 - Stop the panel showing the previous page's tree after you navigate. A tree
   only ever reached the panel because some frame announced one, so
@@ -36,14 +36,14 @@
   counter, so its rows resolve to unrelated elements on the new page and stay
   clickable. Every top-frame navigation now tells the panel to drop what it
   holds; an ordinary page repopulates it within moments, and one that cannot
-  offers **Load tree**, which says so.
+  offers **Load tree**, which says so. ([#322])
 - Stop the panel waiting on "Connecting to page…" forever after Chrome has
   restarted the extension's service worker. The merge that publishes a tree
   refused to run without a connected side-panel port — which a worker revived
   by the panel's own request does not yet have — so the tree the content
   script sent back was recorded and never delivered, and nothing retried,
   because a content script re-announces only when its own DOM next mutates. A
-  request the panel itself sent is now proof enough of a panel to answer it.
+  request the panel itself sent is now proof enough of a panel to answer it. ([#322])
 - Give each `<iframe>` on a page its own subtree when several embed the same
   document. Matching a frame to its `<iframe>` compared urls with the query
   string stripped and never recorded which iframes were already spoken for, so
@@ -56,7 +56,7 @@
   fallback pass as well as the url ones. Frames Chrome still reports pick
   their `<iframe>` first, so a page that swaps an embed for an equal-address
   one — an ad refresh, a widget re-mount — shows the live document rather than
-  the tree left behind by the one it replaced.
+  the tree left behind by the one it replaced. ([#324])
 
 ## 0.1.11
 
@@ -239,3 +239,5 @@ Earlier releases predate this changelog.
 [#308]: https://github.com/real-a11y/real-a11y-dev/pull/308
 [#315]: https://github.com/real-a11y/real-a11y-dev/pull/315
 [#317]: https://github.com/real-a11y/real-a11y-dev/pull/317
+[#322]: https://github.com/real-a11y/real-a11y-dev/pull/322
+[#324]: https://github.com/real-a11y/real-a11y-dev/pull/324

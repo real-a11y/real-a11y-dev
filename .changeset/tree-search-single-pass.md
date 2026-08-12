@@ -1,5 +1,4 @@
 ---
-"@real-a11y-dev/core": patch
 "@real-a11y-dev/inspector": patch
 ---
 

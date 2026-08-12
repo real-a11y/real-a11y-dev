@@ -69,6 +69,7 @@
     "collect-findings",
     "core-native-ax-vocabulary",
     "core-normalize-accessible-names",
+    "core-realm-singletons",
     "deps-prettier-format",
     "describedby-target-interactive-content",
     "dialog-scope-hijack",
@@ -124,6 +125,7 @@
     "playwright-nav-iframe-bundle",
     "portal-overlay-empty-announcer",
     "privatize-browser",
+    "privatize-core",
     "privatize-engine-packages",
     "privatize-validate-and-ui",
     "producer-support-from-the-command-table",
@@ -157,6 +159,7 @@
     "ui-diff-mode",
     "ui-slider-keyboard-decrement",
     "validate-package",
+    "virtual-tree-raf-teardown",
     "virtual-tree-resizeobserver-loop",
     "virtualize-tree-panel"
   ]

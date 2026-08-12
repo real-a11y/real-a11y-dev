@@ -6,7 +6,7 @@ area: Packaging
 type: Automated
 priority: P0
 status: Active
-validFrom: "every published package, all versions. Currently: testing/storybook-addon 0.1.0-beta.14, core/inspector/react 0.1.0-beta.13, cli/mcp 0.1.0-beta.4 — the linked cohort is no longer one number, since `linked` aligns only the packages a given release actually moves. Several packages have gone PRIVATE and are no longer packed — a tarball for any of them is itself the failure. Read that set from `private: true` in each `packages/*/package.json`, never from this line: it has been wrong twice, and it grows every time a package goes internal."
+validFrom: "every published package, all versions. Currently: testing/inspector/react/storybook-addon 0.1.0-beta.15, cli/mcp 0.1.0-beta.5 — the linked four landed on one number this release because all four moved, which is NOT a rule: `linked` aligns only the packages a given release actually moves, and beta.14 left two of them behind. `core` is gone from this line because it is no longer published at all. Several packages have gone PRIVATE and are no longer packed — a tarball for any of them is itself the failure. Read that set from `private: true` in each `packages/*/package.json`, never from this line: it has been wrong twice, and it grows every time a package goes internal."
 validUntil: ""
 expected: "Every import/require resolves; types found; bins executable; zero MODULE_NOT_FOUND"
 twin: D1
