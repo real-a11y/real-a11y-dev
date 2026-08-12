@@ -33,23 +33,64 @@ pnpm test
 
 ### Project structure
 
+`packages/` holds sixteen packages (plus one shared Vitest setup file), and the
+distinction worth carrying while you read them is which ones anybody can
+install. A package marked **private** below never reaches a registry — its code
+still ships, bundled *into* whichever published package carries it, so there is
+nothing to `npm install` and no version to pin. Each `package.json`'s `private`
+field is the authority; the
+[architecture guide](./website/guide/architecture.md) carries the current
+published/internal split with the reasoning behind every seam.
+
 ```
 packages/
-├── core/              # @real-a11y-dev/core — tree extraction, data model, interaction engine
-├── ui/                # @real-a11y-dev/semantic-navigator-ui — Preact tree components
-├── extension/         # Chrome extension (Side Panel + Content Script) — "Semantic Navigator"
+├── core/              # @real-a11y-dev/core — the extraction engine everything is built on:
+│                      #   tree walk, role map, accessible-name computation, action
+│                      #   dispatch, DOM observer, stable ids, queries. No UI, no deps.
+│
+│                      # Surfaces — a library you import or a command you run
+├── cli/               # @real-a11y-dev/cli — the `real-a11y` shell command (bin only)
+├── mcp/               # @real-a11y-dev/mcp — MCP server for AI agents (bin `real-a11y-mcp`)
+├── testing/           # @real-a11y-dev/testing — audit/interaction helpers (Vitest/Jest/Playwright)
 ├── inspector/         # @real-a11y-dev/inspector — framework-agnostic tree panel (Shadow DOM embed)
 ├── react/             # @real-a11y-dev/react — React wrapper + hooks
-├── testing/           # @real-a11y-dev/testing — audit/interaction helpers (Vitest/Jest/Playwright)
-└── storybook-addon/   # @real-a11y-dev/storybook-addon — per-story tree panel
+├── storybook-addon/   # @real-a11y-dev/storybook-addon — per-story tree panel
+│
+│                      # Engine internals — bundled into the surfaces above
+├── audit/             # private — the `Finding` model, the a11y rules, `collectFindings`, `assert*`
+├── serialize/         # private — deterministic text serialization (tree / outline / tab sequence)
+├── snapshot/          # private — fingerprints, `a11y-snapshot.json`, the diff, baselines (Node-only)
+├── browser/           # private — the Playwright `BrowserSession` + the injected page bundle
+├── session-registry/  # private — named sessions shared by the CLI daemon and the MCP server
+├── validate/          # private — ARIA semantics validation, `aria-query`-backed
+├── ui/                # private — @real-a11y-dev/semantic-navigator-ui — Preact tree components
+│
+│                      # Apps and fixtures — never on a registry either
+├── extension/         # private — the Chrome extension (Side Panel + Content Script),
+│                      #   "Semantic Navigator" — ships through the Chrome Web Store
+├── example-patterns/  # private — APG component fixtures shared by the example apps
+│
+└── vitest.setup.jsdom.ts   # not a package — shared jsdom setup for the suites
+                            #   that render Preact (ui, inspector, react,
+                            #   storybook-addon, extension)
 ```
 
-Dependency graph:
-- `extension → ui → core`
+Dependency graph. Every arrow is a workspace dependency; an arrow into a private
+package is **bundled** rather than installed — tsup's `noExternal` inlines the
+JS and `dts.resolve` inlines the declarations, which is why no published `.d.ts`
+names one:
+
+- `cli → browser, snapshot, session-registry, audit, serialize → core`
+- `mcp →` the same five `→ core` — the CLI and the server share one engine, so a
+  snapshot captured by either diffs against the other byte for byte
+- `testing → browser, audit, serialize, validate → core` (headless — no `ui` dep)
 - `inspector → ui → core`
 - `react → inspector → ui → core`
 - `storybook-addon → ui → core` (+ `testing`)
-- `testing → core` (headless — no `ui` dep)
+- `extension → ui, serialize → core`
+- Among the internals: `browser → audit, serialize`, `snapshot → audit,
+  serialize`, `session-registry → snapshot`. `validate` has no internal
+  dependency at all, and neither does `core`.
 
 ## Development workflow
 
@@ -356,7 +397,22 @@ pnpm changeset
 
 Notes:
 
-- All `@real-a11y-dev/*` packages are **linked** — they bump together so consumers see a consistent version across `core`, `ui`, `inspector`, `react`, `testing`, and `storybook-addon`.
+- **Some packages are linked, not all of them.** `.changeset/config.json`
+  defines a single `linked` group — the libraries a consumer installs side by
+  side — so they bump together and nobody ends up holding two of them on skewed
+  versions. `cli` and `mcp` are published and deliberately outside it: they are
+  things you run, released on their own cadence, and a CLI fix has no business
+  bumping the React wrapper. Read the `linked` array itself for the membership
+  rather than a list written here — it moves as packages go internal, and this
+  line claiming "all of them" outlived the truth of it by several releases.
+- **A change to a private package still needs a changeset — naming a
+  consumer.** Internal packages are bundled into published ones, so a fix in
+  `audit` or `browser` reaches npm inside `testing`, `cli`, and `mcp`: it is
+  user-visible and it needs a changelog entry. Changesets cannot version a
+  private package (`privatePackages.version` is `false`), so name the published
+  package(s) that carry the change. A changeset naming only the private package
+  is accepted and then silently ignored — the `changeset` CI job checks that one
+  exists, not that it names the right thing.
 - The extension, website, and examples are ignored — no changeset is needed for them.
 - Docs-only or tooling-only PRs don't need a changeset.
 
