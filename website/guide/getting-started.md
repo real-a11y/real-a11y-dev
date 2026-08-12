@@ -5,7 +5,7 @@ description: Install any Real A11y package and get accessibility insights in 30 
 
 # Getting Started
 
-Real A11y is a suite of packages built around a single engine: `@real-a11y-dev/core`. Each package is independently installable — use just the ones you need.
+Real A11y is a suite of packages built around a single extraction engine. The engine itself is internal — it ships inside each package rather than being installed on its own — so what you pick is the surface that fits your workflow. Each is independently installable; use just the ones you need.
 
 ## Pick your entry point
 
@@ -18,14 +18,13 @@ Real A11y is a suite of packages built around a single engine: `@real-a11y-dev/c
 | Add an A11y tree panel to every Storybook story | [`@real-a11y-dev/storybook-addon`](/packages/storybook-addon) | **dev** |
 | Run accessibility audits from the shell / CI (no code) | [`@real-a11y-dev/cli`](/packages/cli) | **dev** |
 | Give an AI agent accessibility audit tools | [`@real-a11y-dev/mcp`](/packages/mcp) | run via `npx` |
-| Build your own tooling on the extraction engine | [`@real-a11y-dev/core`](/packages/core) | depends (see below) |
 
 ::: tip Install as a dev dependency by default
 Real A11y is a **developer-time audit suite**, not runtime infrastructure. Install everything under `devDependencies` (`-D` / `--save-dev`) and gate any UI it renders on a development build flag. That way the tree extractor, Preact renderer, and accessibility heuristics never reach your production bundle.
 
 See [Keep it out of production](#keep-it-out-of-production) below for the gating patterns.
 
-The only time you want a **runtime** dependency is if you're building your own *published* tooling on top of `@real-a11y-dev/core` (e.g. another testing library or an audit service) — then `core` belongs in your regular `dependencies` or, better, `peerDependencies`.
+There is no runtime-dependency case left to make. The extraction engine used to be installable on its own, for people building published tooling on top of it; it is internal now, and each package bundles the exact version it was tested against. If you are building tooling of your own, drive a surface — `real-a11y --format json`, or the MCP tools — rather than importing the engine.
 :::
 
 ---
@@ -229,7 +228,6 @@ That's it. A **Semantic Navigator** panel appears next to Controls and A11y for 
 
 | Package | Node | Browser / Runtime |
 |---|---|---|
-| `@real-a11y-dev/core` | ≥ 20 | Any modern browser, jsdom |
 | `@real-a11y-dev/inspector` | ≥ 20 | Modern browser (Shadow DOM required) |
 | `@real-a11y-dev/testing` | ≥ 20 | jsdom or real browser |
 | `@real-a11y-dev/react` | ≥ 20 | React ≥ 18, modern browser |
@@ -330,7 +328,6 @@ This ships the inspector into the production bundle (as a separate chunk) — ac
 
 | Package | Safe in prod? | Notes |
 |---|---|---|
-| `@real-a11y-dev/core` | ✅ small, no UI | Only if you *use* it at runtime (most apps don't). ~8 KB gzipped. |
 | `@real-a11y-dev/inspector` | ⚠ gate it | Ships Preact + tree view. ~40 KB gzipped total. |
 | `@real-a11y-dev/react` | ⚠ gate it | Transitively includes `@real-a11y-dev/inspector`. |
 | `@real-a11y-dev/testing` | ❌ dev-only | Test helpers — `-D`. |

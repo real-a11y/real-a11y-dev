@@ -43,8 +43,6 @@ complementary
       paragraph "Overview & Install"
     button "Packages"
       heading "Packages" (level 2)
-    link "@real-a11y-dev/core"
-      paragraph "@real-a11y-dev/core"
     link "@real-a11y-dev/inspector"
       paragraph "@real-a11y-dev/inspector"
     link "@real-a11y-dev/testing"
@@ -111,13 +109,6 @@ main
         columnheader "Playwright"
     rowgroup
       row
-        cell "@real-a11y-dev/core"
-          code "@real-a11y-dev/core"
-        cell "≥ 20"
-        cell "—"
-        cell "—"
-        cell "—"
-      row
         cell "@real-a11y-dev/inspector"
           code "@real-a11y-dev/inspector"
         cell "≥ 20"
@@ -166,12 +157,11 @@ main
         cell "—"
         cell "—"
         cell "≥ 1.49 (optional)"
-  paragraph "and have no runtime peers — they use standard DOM APIs. takes any root, so your test runner and component renderer are entirely your choice."
-    code "@real-a11y-dev/core"
+  paragraph "has no runtime peers — it uses standard DOM APIs, and the extraction engine it bundles has none either. takes any root, so your test runner and component renderer are entirely your choice."
     code "@real-a11y-dev/inspector"
     code "@real-a11y-dev/testing"
     code "Element"
-  paragraph "Playwright is an peer of and — install it () only when you audit real URLs: the CLI's , , , , and commands, or the MCP server's browser tools. Static and DOM-root usage needs nothing extra. Note both packages peer on (not ) and pin it to , so Playwright 2.x emits a peer warning — whereas 's peer is and accepts any version."
+  paragraph "Playwright is an peer of and — install it () only when you audit real URLs: the CLI's , , , , and commands, or the MCP server's browser tools. Static and DOM-root usage needs nothing extra. Note both packages peer on (not ) and pin it to , so Playwright 2.x emits a peer warning — pins the same range — it used to accept any version, inheriting nothing but a while the browser driver was a real dependency of it, and states the range directly now that the driver is bundled."
     strong "optional"
     code "@real-a11y-dev/cli"
     code "@real-a11y-dev/mcp"
@@ -185,7 +175,8 @@ main
     code "@playwright/test"
     code ">=1.49 <2"
     code "@real-a11y-dev/testing"
-    code "playwright: "*""
+    code ">=1.49 <2"
+    code "*"
   separator
   heading "Companion libraries" (level 2)
   paragraph "Real A11y packages don't declare these as peers, but most users install at least one of them alongside . The versions below are what works cleanly with React 19 — pinning older versions surfaces peer errors that Real A11y-related but aren't."

@@ -66,6 +66,7 @@ function privateHomes(manifest) {
 export async function checkApiImports(repoRoot, manifest) {
   const index = surfaceIndex(manifest);
   const privates = privateHomes(manifest);
+  const privateReadmes = new Set(privates.values());
   if (index.size === 0) {
     return [
       {
@@ -111,6 +112,15 @@ export async function checkApiImports(repoRoot, manifest) {
         if (owner) {
           const [name, home] = owner;
           if (relPath === home) continue; // its own README: internal by design
+          // ANOTHER private package's README is internal by the same argument.
+          // Nobody installs `serialize`, so its README is workspace
+          // documentation for whoever maintains it, and showing that maintainer
+          // the real `@real-a11y-dev/core` import is the point. The rule this
+          // enforces is "a snippet a READER cannot run"; there is no reader
+          // here who could run any of it. Privatizing `core` is what surfaced
+          // the gap — private-to-private references only became possible once
+          // the engine itself went internal.
+          if (privateReadmes.has(relPath)) continue;
           problems.push({
             where: relPath,
             message:

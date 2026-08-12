@@ -181,7 +181,7 @@ Three forms:
 
 Calling `expectChanges` before any action throws. A `ChangeSpec` / `string` failure ends with the full rendered diff, so "what *did* change?" is always answered.
 
-Under the hood both styles are core's [`diffTrees`](/packages/core#difftrees-before-after) rendered by `serializeTreeDiff` — an **in-realm** comparison keyed on node identity (a live before/after in one document), distinct from the [CLI's](/packages/cli) cross-process artifact diff.
+Under the hood both styles are the engine's [`diffTrees`](/guide/core-concepts#tree-diffing) rendered by `serializeTreeDiff` — an **in-realm** comparison keyed on node identity (a live before/after in one document), distinct from the [CLI's](/packages/cli) cross-process artifact diff.
 
 ## `flow(root, options?)`
 

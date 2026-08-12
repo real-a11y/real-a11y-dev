@@ -1,6 +1,6 @@
 # @real-a11y-dev/snapshot
 
-The Real A11y **snapshot engine** — deterministic finding fingerprints, the diffable `a11y-snapshot.json` artifact, the findings/views/unified diff, and baselines. Node-only, pure data. It depends on nothing but [`@real-a11y-dev/audit`](../audit), [`@real-a11y-dev/serialize`](../serialize), and [`@real-a11y-dev/core`](https://real-a11y.dev/packages/core).
+The Real A11y **snapshot engine** — deterministic finding fingerprints, the diffable `a11y-snapshot.json` artifact, the findings/views/unified diff, and baselines. Node-only, pure data. It depends on nothing but [`@real-a11y-dev/audit`](../audit), [`@real-a11y-dev/serialize`](../serialize), and [`@real-a11y-dev/core`](../core).
 
 > **Internal package — not published to npm.** It is bundled into the
 > `real-a11y` CLI and the MCP server, the only two surfaces this engine reaches
@@ -109,4 +109,4 @@ The read/serialize helpers take and return data; the file writes stay with the c
 
 ## Design
 
-Everything here is **Node-only and browserless** — `node:crypto` for fingerprints, plain data structures for artifacts and diffs. The extraction that produces findings happens elsewhere (in the page, via [`@real-a11y-dev/core`](https://real-a11y.dev/packages/core) + [`@real-a11y-dev/audit`](../audit)); this package only ever operates on the results. That split is deliberate: the snapshot engine can run anywhere Node runs, and the page bundle stays free of Node.
+Everything here is **Node-only and browserless** — `node:crypto` for fingerprints, plain data structures for artifacts and diffs. The extraction that produces findings happens elsewhere (in the page, via [`@real-a11y-dev/core`](../core) + [`@real-a11y-dev/audit`](../audit)); this package only ever operates on the results. That split is deliberate: the snapshot engine can run anywhere Node runs, and the page bundle stays free of Node.

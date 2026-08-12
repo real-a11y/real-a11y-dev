@@ -43,8 +43,6 @@ complementary
       paragraph "Overview & Install"
     button "Packages"
       heading "Packages" (level 2)
-    link "@real-a11y-dev/core"
-      paragraph "@real-a11y-dev/core"
     link "@real-a11y-dev/inspector"
       paragraph "@real-a11y-dev/inspector"
     link "@real-a11y-dev/testing"

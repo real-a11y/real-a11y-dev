@@ -5,7 +5,6 @@
   "fixed": [],
   "linked": [
     [
-      "@real-a11y-dev/core",
       "@real-a11y-dev/inspector",
       "@real-a11y-dev/react",
       "@real-a11y-dev/storybook-addon",

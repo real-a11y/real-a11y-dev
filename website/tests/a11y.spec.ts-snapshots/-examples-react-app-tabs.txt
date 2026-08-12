@@ -23,7 +23,6 @@ link "Panel features"
 button "Chrome Extension"
 link "Overview & Install"
 button "Packages"
-link "@real-a11y-dev/core"
 link "@real-a11y-dev/inspector"
 generic
 link "@real-a11y-dev/testing"

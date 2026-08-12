@@ -6,7 +6,7 @@ area: Testing
 type: Automated
 priority: P1
 status: Active
-validFrom: "testing ≥ 0.1.0-beta.11. Pairs with R2 — attw covers the types side of the dual-package hazard, step 9 here covers the runtime side. `numberTabStops`, `assertRules` and `formatFindings` join the list when `serialize` and `audit` go private: this scenario is the only thing standing between a re-export being dropped and the capability disappearing with no error anywhere."
+validFrom: "testing ≥ 0.1.0-beta.11. Pairs with R2 — attw covers the types side of the dual-package hazard, step 9 here covers the runtime side. `numberTabStops`, `assertRules` and `formatFindings` join the list when `serialize` and `audit` go private: this scenario is the only thing standing between a re-export being dropped and the capability disappearing with no error anywhere. That load roughly doubled when `core` went private too — the query and diff helpers this scenario already checks (`findByRole`, `findAllByRole`, `linearize`, `getOutline`, `getTabSequence`, `diffTrees`) are now the ONLY published home for that vocabulary, so a dropped re-export here does not degrade an import path, it deletes the capability from npm. Run it against a packed tarball, not the workspace, or the workspace resolution hides exactly the failure it is looking for."
 validUntil: ""
 expected: "findByRole, findAllByRole, linearize, getOutline, getTabSequence, diffTrees, extract, capture, a11yDiff, dispatch, waitForMutations all resolve and behave"
 covers:

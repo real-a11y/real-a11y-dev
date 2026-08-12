@@ -250,7 +250,10 @@ export default defineConfig({
     nav: [
       { text: "Guide", link: "/guide/getting-started" },
       { text: "Recipes", link: "/recipes/nextjs" },
-      { text: "Packages", link: "/packages/core" },
+      // Was `/packages/core` until core went internal. The nav needs a landing
+      // page that is both published and the likeliest first stop; the CLI is
+      // the one you can run without installing anything.
+      { text: "Packages", link: "/packages/cli" },
       {
         // `noindex` keeps `next` out of search, but a direct link still lands
         // someone here with no way to tell which copy they are reading. Until
@@ -318,7 +321,6 @@ export default defineConfig({
       {
         text: "Packages",
         items: [
-          { text: "@real-a11y-dev/core", link: "/packages/core" },
           { text: "@real-a11y-dev/inspector", link: "/packages/inspector" },
           {
             text: "@real-a11y-dev/testing",

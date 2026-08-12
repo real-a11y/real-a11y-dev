@@ -43,8 +43,6 @@ complementary
       paragraph "Overview & Install"
     button "Packages"
       heading "Packages" (level 2)
-    link "@real-a11y-dev/core"
-      paragraph "@real-a11y-dev/core"
     link "@real-a11y-dev/inspector"
       paragraph "@real-a11y-dev/inspector"
     link "@real-a11y-dev/testing"
@@ -318,7 +316,7 @@ main
     code "ChangeSpec"
     code "string"
     emphasis "did"
-  paragraph "Under the hood both styles are core's rendered by — an comparison keyed on node identity (a live before/after in one document), distinct from the cross-process artifact diff."
+  paragraph "Under the hood both styles are the engine's rendered by — an comparison keyed on node identity (a live before/after in one document), distinct from the cross-process artifact diff."
     link "diffTrees"
       code "diffTrees"
     code "serializeTreeDiff"

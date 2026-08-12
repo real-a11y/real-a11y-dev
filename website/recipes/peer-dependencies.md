@@ -11,7 +11,6 @@ Real A11y is a lean dev-time audit suite. It relies on a small set of peers you 
 
 | Real A11y package | Node | React | Storybook | Playwright |
 |---|---|---|---|---|
-| `@real-a11y-dev/core` | ≥ 20 | — | — | — |
 | `@real-a11y-dev/inspector` | ≥ 20 | — | — | — |
 | `@real-a11y-dev/react` | ≥ 20 | ≥ 18 | — | — |
 | `@real-a11y-dev/testing` | ≥ 20 | — | — | — |
@@ -20,9 +19,9 @@ Real A11y is a lean dev-time audit suite. It relies on a small set of peers you 
 | `@real-a11y-dev/cli` | ≥ 20 | — | — | ≥ 1.49 (optional) |
 | `@real-a11y-dev/mcp` | ≥ 20 | — | — | ≥ 1.49 (optional) |
 
-`@real-a11y-dev/core` and `@real-a11y-dev/inspector` have no runtime peers — they use standard DOM APIs. `@real-a11y-dev/testing` takes any `Element` root, so your test runner and component renderer are entirely your choice.
+`@real-a11y-dev/inspector` has no runtime peers — it uses standard DOM APIs, and the extraction engine it bundles has none either. `@real-a11y-dev/testing` takes any `Element` root, so your test runner and component renderer are entirely your choice.
 
-Playwright is an **optional** peer of `@real-a11y-dev/cli` and `@real-a11y-dev/mcp` — install it (`npm i -D playwright`) only when you audit real URLs: the CLI's `audit`, `inspect`, `snapshot`, `tree`, and `login` commands, or the MCP server's browser tools. Static and DOM-root usage needs nothing extra. Note both packages peer on `playwright` (not `@playwright/test`) and pin it to `>=1.49 <2`, so Playwright 2.x emits a peer warning — whereas `@real-a11y-dev/testing`'s peer is `playwright: "*"` and accepts any version.
+Playwright is an **optional** peer of `@real-a11y-dev/cli` and `@real-a11y-dev/mcp` — install it (`npm i -D playwright`) only when you audit real URLs: the CLI's `audit`, `inspect`, `snapshot`, `tree`, and `login` commands, or the MCP server's browser tools. Static and DOM-root usage needs nothing extra. Note both packages peer on `playwright` (not `@playwright/test`) and pin it to `>=1.49 <2`, so Playwright 2.x emits a peer warning — `@real-a11y-dev/testing` pins the same `>=1.49 <2` range — it used to accept any version, inheriting nothing but a `*` while the browser driver was a real dependency of it, and states the range directly now that the driver is bundled.
 
 ---
 

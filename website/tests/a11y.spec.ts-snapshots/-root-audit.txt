@@ -21,7 +21,7 @@ link "Chrome extension: Install the extension"
     paragraph "Install the extension"
 article
   heading "One engine, every context" (level 2)
-  paragraph "@real-a11y-dev/core extracts the full semantic tree from any DOM — roles, accessible names, focus state, modal context, live regions. Every other package is just a different lens on that tree."
+  paragraph "One extraction engine reads the full semantic tree from any DOM — roles, accessible names, focus state, modal context, live regions. Every package is a different lens on that tree."
 article
   heading "Test what users actually experience" (level 2)
   paragraph "@real-a11y-dev/testing gives you auditSnapshot(), assertHeadingOrder(), assertNoUnlabeledInteractive(), and a fluent flow() chain — all powered by the real accessibility tree, not synthetic mocks."

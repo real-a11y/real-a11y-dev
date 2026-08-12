@@ -11,7 +11,19 @@ const allCSS = JSON.stringify(themesCSS + "\n" + treeCSS);
 export default defineConfig({
   entry: ["src/index.ts"],
   format: ["esm", "cjs"],
-  dts: true,
+  // The `noExternal` below was only ever half the job. Both packages there are
+  // PRIVATE, so the declarations have to be inlined as well — `dts: true` alone
+  // emits `from "@real-a11y-dev/core"`, which npm cannot resolve.
+  //
+  // `core` needs it today: `index.ts` imports `SemanticNode`, `TreeViewMode`,
+  // `ActionRequest`, `ActionResult`, `ExtractionResult` and
+  // `SemanticNavigatorConfig` from it, and several reach the mount options.
+  // `semantic-navigator-ui` is latent — nothing from it surfaces right now —
+  // but it has been private since #301 and the pairing is what keeps the day
+  // one does surface from being a silent `any`.
+  dts: {
+    resolve: ["@real-a11y-dev/core", "@real-a11y-dev/semantic-navigator-ui"],
+  },
   sourcemap: true,
   clean: true,
   treeshake: true,

@@ -43,8 +43,6 @@ complementary
       paragraph "Overview & Install"
     button "Packages"
       heading "Packages" (level 2)
-    link "@real-a11y-dev/core"
-      paragraph "@real-a11y-dev/core"
     link "@real-a11y-dev/inspector"
       paragraph "@real-a11y-dev/inspector"
     link "@real-a11y-dev/testing"
@@ -97,8 +95,7 @@ navigation "On this page"
       link "Next steps"
 main
   heading "Getting Started" (level 1)
-  paragraph "Real A11y is a suite of packages built around a single engine: . Each package is independently installable — use just the ones you need."
-    code "@real-a11y-dev/core"
+  paragraph "Real A11y is a suite of packages built around a single extraction engine. The engine itself is internal — it ships inside each package rather than being installed on its own — so what you pick is the surface that fits your workflow. Each is independently installable; use just the ones you need."
   heading "Pick your entry point" (level 2)
   table
     rowgroup
@@ -157,12 +154,6 @@ main
             code "@real-a11y-dev/mcp"
         cell "run via npx"
           code "npx"
-      row
-        cell "Build your own tooling on the extraction engine"
-        cell "@real-a11y-dev/core"
-          link "@real-a11y-dev/core"
-            code "@real-a11y-dev/core"
-        cell "depends (see below)"
   paragraph "Install as a dev dependency by default"
   paragraph "Real A11y is a , not runtime infrastructure. Install everything under ( / ) and gate any UI it renders on a development build flag. That way the tree extractor, Preact renderer, and accessibility heuristics never reach your production bundle."
     strong "developer-time audit suite"
@@ -171,13 +162,8 @@ main
     code "--save-dev"
   paragraph "See below for the gating patterns."
     link "Keep it out of production"
-  paragraph "The only time you want a dependency is if you're building your own tooling on top of (e.g. another testing library or an audit service) — then belongs in your regular or, better, ."
-    strong "runtime"
-    emphasis "published"
-    code "@real-a11y-dev/core"
-    code "core"
-    code "dependencies"
-    code "peerDependencies"
+  paragraph "There is no runtime-dependency case left to make. The extraction engine used to be installable on its own, for people building published tooling on top of it; it is internal now, and each package bundles the exact version it was tested against. If you are building tooling of your own, drive a surface — , or the MCP tools — rather than importing the engine."
+    code "real-a11y --format json"
   separator
   heading "Quick install" (level 2)
   paragraph "All packages are installed as dev dependencies below. This is the right default for apps."
@@ -255,11 +241,6 @@ main
         columnheader "Browser / Runtime"
     rowgroup
       row
-        cell "@real-a11y-dev/core"
-          code "@real-a11y-dev/core"
-        cell "≥ 20"
-        cell "Any modern browser, jsdom"
-      row
         cell "@real-a11y-dev/inspector"
           code "@real-a11y-dev/inspector"
         cell "≥ 20"
@@ -327,12 +308,6 @@ main
         columnheader "Safe in prod?"
         columnheader "Notes"
     rowgroup
-      row
-        cell "@real-a11y-dev/core"
-          code "@real-a11y-dev/core"
-        cell "✅ small, no UI"
-        cell "Only if you use it at runtime (most apps don't). ~8 KB gzipped."
-          emphasis "use"
       row
         cell "@real-a11y-dev/inspector"
           code "@real-a11y-dev/inspector"

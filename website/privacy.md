@@ -41,7 +41,7 @@ No other permissions are requested.
 
 ## npm packages
 
-The `@real-a11y-dev/core`, `@real-a11y-dev/inspector`, `@real-a11y-dev/testing`, `@real-a11y-dev/react`, and `@real-a11y-dev/storybook-addon` packages are pure libraries. They:
+The `@real-a11y-dev/inspector`, `@real-a11y-dev/testing`, `@real-a11y-dev/react`, and `@real-a11y-dev/storybook-addon` packages are pure libraries — as is the extraction engine bundled inside each of them. They:
 
 - Run where you run them (browser, Node, jsdom, Playwright).
 - Make no network requests.

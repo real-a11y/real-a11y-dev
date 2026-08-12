@@ -20,13 +20,22 @@ const PEER_EXTERNALS = [
 
 export default defineConfig([
   // ── Public re-export (constants only) ──────────────────────────────────────
+  // This entry used to list `@real-a11y-dev/core` as EXTERNAL, which was right
+  // while core was published and is wrong now that it isn't: npm cannot resolve
+  // a private package, in the JS or in the types. Both halves move together.
+  //
+  // It is not defensive here. `index.ts` re-exports `TreeMode` and
+  // `TreeUpdatePayload` from `constants.ts`, and both are written in terms of
+  // core's `TreeViewMode` (`TreeMode` IS `TreeViewMode`) — so the emitted
+  // `index.d.ts` names core directly on the package's public surface.
   {
     entry: { index: "src/index.ts" },
     format: ["esm", "cjs"],
-    dts: true,
+    dts: { resolve: ["@real-a11y-dev/core"] },
     sourcemap: true,
     clean: false,
-    external: [...PEER_EXTERNALS, "@real-a11y-dev/core", "preact"],
+    noExternal: ["@real-a11y-dev/core"],
+    external: [...PEER_EXTERNALS, "preact"],
   },
 
   // ── Preview (runs inside the story iframe) ─────────────────────────────────
@@ -35,7 +44,10 @@ export default defineConfig([
   {
     entry: { preview: "src/preview.ts" },
     format: ["esm", "cjs"],
-    dts: true,
+    // core is private, so its declarations are inlined too. `testing` is not —
+    // it is published, so npm resolves it and `dts` leaves the reference alone
+    // even though the JS is bundled.
+    dts: { resolve: ["@real-a11y-dev/core"] },
     sourcemap: true,
     clean: false,
     noExternal: ["@real-a11y-dev/core", "@real-a11y-dev/testing"],
@@ -56,14 +68,17 @@ export default defineConfig([
   {
     entry: { manager: "src/manager.tsx" },
     format: ["esm", "cjs"],
-    // `dts.resolve` alongside the `noExternal` below: the UI package is PRIVATE,
-    // so if its types ever reached the emitted declarations they would arrive as
-    // `from "@real-a11y-dev/semantic-navigator-ui"` — unresolvable on npm, and
-    // silently `any` under `skipLibCheck: true`. That cannot happen today:
-    // `manager.tsx` exports nothing (it only calls `addons.register`), so
-    // `manager.d.ts` is an empty `export {}` with or without this option. It is
-    // insurance for the day this entry grows an export, not a bug it prevented.
-    dts: { resolve: ["@real-a11y-dev/semantic-navigator-ui"] },
+    // `dts.resolve` alongside the `noExternal` below: both packages there are
+    // PRIVATE, so if their types ever reached the emitted declarations they
+    // would arrive as `from "@real-a11y-dev/semantic-navigator-ui"` (or
+    // `/core`) — unresolvable on npm, and silently `any` under
+    // `skipLibCheck: true`. That cannot happen today: `manager.tsx` exports
+    // nothing (it only calls `addons.register`), so `manager.d.ts` is an empty
+    // `export {}` with or without this option. It is insurance for the day this
+    // entry grows an export, not a bug it prevented.
+    dts: {
+      resolve: ["@real-a11y-dev/semantic-navigator-ui", "@real-a11y-dev/core"],
+    },
     sourcemap: true,
     clean: false,
     noExternal: [

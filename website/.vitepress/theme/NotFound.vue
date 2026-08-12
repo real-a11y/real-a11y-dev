@@ -11,7 +11,7 @@
       <ul class="NotFound__links">
         <li><a href="/">Back to home</a></li>
         <li><a href="/guide/getting-started">Start the guide</a></li>
-        <li><a href="/packages/core">Browse packages</a></li>
+        <li><a href="/packages/cli">Browse packages</a></li>
         <li><a href="/recipes/nextjs">Framework recipes</a></li>
         <li>
           <a

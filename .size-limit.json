@@ -22,28 +22,21 @@
   {
     "name": "@real-a11y-dev/react (esm)",
     "path": "packages/react/dist/index.js",
-    "limit": "3 KB",
+    "limit": "11.3 KB",
     "gzip": true,
-    "ignore": [
-      "react",
-      "react-dom",
-      "@real-a11y-dev/inspector",
-      "@real-a11y-dev/core"
-    ]
+    "ignore": ["react", "react-dom", "@real-a11y-dev/inspector"]
   },
   {
     "name": "@real-a11y-dev/testing (esm)",
     "path": "packages/testing/dist/index.js",
-    "limit": "5.4 KB",
-    "gzip": true,
-    "ignore": ["@real-a11y-dev/core"]
+    "limit": "14.4 KB",
+    "gzip": true
   },
   {
     "name": "@real-a11y-dev/testing/matchers (esm)",
     "path": "packages/testing/dist/matchers.js",
-    "limit": "18.5 KB",
-    "gzip": true,
-    "ignore": ["@real-a11y-dev/core"]
+    "limit": "25 KB",
+    "gzip": true
   },
   {
     "name": "@real-a11y-dev/storybook-addon (manager)",
