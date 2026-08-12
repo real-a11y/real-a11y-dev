@@ -85,10 +85,11 @@ and the manifest records **every** package's version, the extension's included:
 
 ```bash
 node -e "for (const p of require('./docs/surface.json').packages) if (p.name.includes('extension')) console.log(p.name, p.version)"
-# → @real-a11y-dev/semantic-navigator-extension 0.1.11
+# → @real-a11y-dev/semantic-navigator-extension 0.1.12
 ```
 
-Bump after that extract and `docs/surface.json` keeps the old number.
+The number is whatever the last release set; that it is there **at all** is the
+point. Bump after that extract and `docs/surface.json` keeps the old one.
 `surface:check` re-extracts and compares byte for byte, so the release fails its
 own gate in step 4 with `docs/surface.json is out of date` — a generic
 stale-manifest message that says nothing about the extension.
