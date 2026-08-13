@@ -26,6 +26,16 @@ const ACTABLE = new Set([
 
 type NativeNode = { id: string; role: string; name: string; depth: number };
 
+/**
+ * How long to let the page react before re-reading the tree after an action.
+ * Long enough for microtask/animation-frame batching and a typical menu
+ * transition; short enough that the panel still feels immediate. A crude timer
+ * rather than a quiescence signal on purpose — this is a dev harness, and
+ * plumbing a MutationObserver through CDP would cost more than the verdict
+ * needs. Its limit (slow, fetch-driven re-renders) is called out in DOGFOOD.md.
+ */
+const SETTLE_MS = 250;
+
 async function activeTabId(): Promise<number | undefined> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   return tab?.id;
@@ -163,6 +173,14 @@ export function DogfoodPanel() {
       // here is built from, so the tree goes stale the instant it works —
       // session 1 lost 17 of 18 clicks to exactly that, each one dispatched
       // against an id the page had already discarded.
+      //
+      // Settle first: dispatch returns when the in-page function returns, which
+      // is *before* the page has reacted. Reading immediately can capture the
+      // pre-action DOM and call it fresh — the same staleness, now with a
+      // reassuring status line. This covers microtask/rAF batching and short
+      // CSS transitions; it does NOT cover a fetch-driven re-render, which
+      // stays a known limitation to watch during the dogfood.
+      await new Promise((r) => setTimeout(r, SETTLE_MS));
       const count = await readTreeInto(tabId);
       setStatus(
         count === null

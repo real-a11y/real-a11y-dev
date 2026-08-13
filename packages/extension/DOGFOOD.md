@@ -56,6 +56,10 @@ is a good test — its media controls are the thing only native mode can see).
    valid for the next one — you should not need to reload by hand between
    clicks. If you navigate the page, or switch tabs, the panel drops the tree
    and says so rather than dispatching against ids the document no longer has.
+   The re-read waits a short beat for the page to react, which covers batching
+   and menu transitions but **not** a slow fetch-driven re-render — if a click
+   ever seems to act on the previous state of the page, that is the case to
+   note, and re-reading by hand will confirm it.
 4. Use it across normal sessions for ~2 weeks. Leave DevTools open sometimes.
 
 Everything is instrumented to `chrome.storage.local` (content-free — event kinds,
