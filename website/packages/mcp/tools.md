@@ -74,7 +74,7 @@ Click a tool for its parameters.
 
 | Tool | Purpose |
 | --- | --- |
-| [`checkpoint_tree`](#checkpoint-tree) | Capture the current tree as an interaction-diff baseline (page-bound). |
+| [`checkpoint_tree`](#checkpoint-tree) | Capture the current tree as an interaction-diff baseline. |
 | [`diff_tree`](#diff-tree) | Diff the tree since `checkpoint_tree` — what an interaction changed. |
 
 <!-- surface:end mcp-tools-tree-checkpoints -->
@@ -268,7 +268,7 @@ An agent calls this to review one element type without pulling the whole tree:
 
 Give the agent the CLI's snapshot + diff power mid-session: capture the page's findings under a name, change something (deploy, feature toggle, DOM edit), then ask what's **new / changed / fixed** — with the same `v1:` fingerprint identity the CI a11y-diff bot uses. Checkpoints are held in memory (LRU-capped at 20) and **survive navigation by design**, so you can checkpoint one deploy and diff another — and they survive the [idle timeout](#real-a11y-mcp-session-idle-timeout-ms) closing the browser, because that workflow routinely spans more than 15 minutes. `close_browser` clears the store.
 
-These capture the accessibility _problems_. To capture the tree _structure_ and diff what an interaction changed, see [tree checkpoints](#tree-checkpoints) — which are bound to the page instance and do not survive navigation.
+These capture the accessibility _problems_. To capture the tree _structure_ and diff what an interaction changed, see [tree checkpoints](#tree-checkpoints) — which survive navigation as data, but report a replaced document rather than diffing across one.
 
 ### `checkpoint_findings`
 
@@ -424,7 +424,7 @@ The payoff is the loop: [`checkpoint_tree`](#checkpoint-tree) first, act, then [
 
 _Acts on the page · targets by role + accessible name · Chromium only._
 
-Dispatch a **real** click against the matched element. It can submit forms, toggle state, and **navigate** — and navigation discards the page's tree checkpoint, so re-checkpoint after any click that changes the page instance.
+Dispatch a **real** click against the matched element. It can submit forms, toggle state, and **navigate** — if it does, [`diff_tree`](#diff-tree) reports that the document was replaced instead of a diff, and you re-checkpoint.
 
 An agent calls this to open the dialog it is about to audit, expand a disclosure, or demonstrate that an unlabeled-but-reachable button actually does something:
 

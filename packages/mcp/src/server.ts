@@ -30,6 +30,7 @@ import {
   buildSnapshotPage,
   parseSnapshotArtifact,
   projectNativeTree,
+  redactUrl,
   serializeArtifact,
   SnapshotFormatError,
   viewsOfPage,
@@ -1087,9 +1088,16 @@ export function buildServer(
         // node identity it was written in did not, so there is nothing left to
         // compare against. Saying so beats reporting the whole page added.
         if (outcome.kind === "replaced") {
+          // Drop it: it described the old document, and keeping it would make
+          // every later diff report this same navigation — hiding the change
+          // the agent actually asked about behind a stale answer.
+          rec.treeCheckpoint = undefined;
+          // Redact like every other URL this server prints. A click can land on
+          // a one-time token or a userinfo URL, and this string goes straight
+          // into an agent's context.
           return text(
             `The page navigated (or reloaded), so the checkpoint describes a document that no longer exists — no diff available.\n` +
-              `Was: ${outcome.from}\nNow: ${outcome.to}\n` +
+              `Was: ${redactUrl(outcome.from)}\nNow: ${redactUrl(outcome.to)}\n` +
               `Call checkpoint_tree again to start a new comparison.`,
           );
         }
@@ -1215,7 +1223,7 @@ export function buildServer(
     {
       title: "Click an element (by role + name)",
       description:
-        "Dispatch a REAL click against the element matched by role + accessible name in Chromium's accessibility tree — the same view get_semantic_tree prints. Targeting is deliberately role+name only: if a control can't be reached that way, assistive technology can't reach it either, and that is itself an accessibility finding. For the full story call checkpoint_tree FIRST, then this, then diff_tree — the diff answers 'what did that click change for a screen reader?'. THE CLICK IS REAL: it can submit forms, toggle state, and NAVIGATE — navigation discards the page's tree checkpoint. If several nodes match, the error lists them; pass nth to pick one. Chromium only. See also type_text and focus_element.",
+        "Dispatch a REAL click against the element matched by role + accessible name in Chromium's accessibility tree — the same view get_semantic_tree prints. Targeting is deliberately role+name only: if a control can't be reached that way, assistive technology can't reach it either, and that is itself an accessibility finding. For the full story call checkpoint_tree FIRST, then this, then diff_tree — the diff answers 'what did that click change for a screen reader?'. THE CLICK IS REAL: it can submit forms, toggle state, and NAVIGATE — if it navigates, diff_tree reports the document was replaced rather than a diff, and you re-checkpoint. If several nodes match, the error lists them; pass nth to pick one. Chromium only. See also type_text and focus_element.",
       inputSchema: {
         role: actRole,
         name: actName,

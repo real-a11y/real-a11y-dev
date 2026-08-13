@@ -1614,7 +1614,6 @@ describe("act tools (click_element / type_text / focus_element)", () => {
   });
 
   it("steers to checkpoint_tree when no tree checkpoint exists, to diff_tree when one does", async () => {
-    session.responses.checkpointTree = "Tree checkpoint captured — 6 node(s).";
     const client = await connect(session);
 
     const before = await client.callTool({
@@ -1623,10 +1622,7 @@ describe("act tools (click_element / type_text / focus_element)", () => {
     });
     expect(textOf(before)).toMatch(/checkpoint_tree before acting/);
 
-    await client.callTool({
-      name: "checkpoint_tree",
-      arguments: { rootSelector: "body" },
-    });
+    await client.callTool({ name: "checkpoint_tree", arguments: {} });
     const after = await client.callTool({
       name: "click_element",
       arguments: { role: "button", name: "Go" },

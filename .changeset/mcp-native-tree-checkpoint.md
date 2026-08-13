@@ -13,3 +13,5 @@ The captured tree also moves out of the page and into the server. Previously a n
 Both tools lose their `rootSelector` parameter. Chromium's accessibility tree is whole-document, so there is nothing for a selector to scope; a parameter that silently did nothing would be worse than none at all. `get_tab_order` keeps `rootSelector` — it is the one tool still built on the in-page walk, because tab _sequence_ is layout work the AX tree does not expose.
 
 **Migration:** delete `rootSelector` from `checkpoint_tree` and `diff_tree` calls. If you were scoping a diff to a region, diff the whole document instead and read the region's part of it — the diff is per-node, so a narrower scope changed what was compared, not how the result was reported.
+
+The exported `SessionRecord` also changes shape: `treeCheckpointRoot: string | undefined` (the root the in-page checkpoint used) becomes `treeCheckpoint: NativeCheckpoint | undefined` (the captured tree itself). This is only visible to embedders driving the server with a custom `SessionManager`; the field is server-owned state, so the migration is to stop referencing the old name rather than to populate the new one.
