@@ -54,7 +54,7 @@ npm install -D @real-a11y-dev/storybook-addon
 
 ```sh [pnpm]
 pnpm add -D @real-a11y-dev/inspector
-pnpm add -D @real-a11y-dev/testing
+pnpm add -D @real-a11y-dev/testing vitest jsdom
 pnpm add -D @real-a11y-dev/testing @playwright/test
 pnpm add -D @real-a11y-dev/react
 pnpm add -D @real-a11y-dev/storybook-addon
@@ -62,7 +62,7 @@ pnpm add -D @real-a11y-dev/storybook-addon
 
 ```sh [yarn]
 yarn add -D @real-a11y-dev/inspector
-yarn add -D @real-a11y-dev/testing
+yarn add -D @real-a11y-dev/testing vitest jsdom
 yarn add -D @real-a11y-dev/testing @playwright/test
 yarn add -D @real-a11y-dev/react
 yarn add -D @real-a11y-dev/storybook-addon

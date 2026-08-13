@@ -56,7 +56,11 @@ main
 
 ```ts
 import { render } from "@testing-library/react";
-import { assertHeadingOrder } from "@real-a11y-dev/testing";
+import {
+  auditSnapshot,
+  assertNoUnlabeledInteractive,
+  assertHeadingOrder,
+} from "@real-a11y-dev/testing";
 import { LoginForm } from "./LoginForm";
 
 test("login form is fully labeled", () => {

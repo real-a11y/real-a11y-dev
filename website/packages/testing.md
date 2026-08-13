@@ -118,7 +118,7 @@ this package changes.
 ### Adding the `expect` matchers
 
 The [matchers](/packages/testing/matchers) need one setup file, registered with
-your runner (`setupFiles` in Vitest, `setupFilesAfterEach` in Jest):
+your runner (`setupFiles` in Vitest, `setupFilesAfterEnv` in Jest):
 
 ```ts
 import { expect } from "vitest"; // or "@jest/globals"
