@@ -34,10 +34,16 @@ once on markup that should fail:
 4. Register the matchers from `@real-a11y-dev/testing/matchers` (and the
    `/matchers/vitest` entry) and exercise: `toHaveNoUnlabeledInteractive`,
    `toHaveValidLandmarks`, `toHaveValidHeadingOrder`, `toHaveLabeledDialogs`,
-   `toHaveTabSequence`
+   `toHaveTabSequence`. The remaining two — `toBeValidA11yTree` and
+   `toMatchA11yContract` — are **R34**, which is where their behaviour lives;
+   here just confirm all seven register
 5. Each matcher **negated** (`.not`) on markup where that reads true
-6. Feed a matcher something that isn't an element
+6. Feed a matcher something that isn't an element — then feed the **same** value
+   to the bare `assert*` function behind it, and compare. That gap is **R33**
 7. Read a failure message as if you'd never seen the codebase
+8. `assertNoUnlabeledInteractive` on the three icon-button shapes that ship in
+   real products: an `<svg>` child, a glyph or emoji as the button's text
+   (`⬇`, `🗑`), and `title=` with no other name
 
 ## Expected
 
@@ -49,9 +55,15 @@ once on markup that should fail:
 - **5** — negation reports sensibly; a matcher that only works positively is
   half-built
 - **6** — throws on bad input rather than silently passing. A matcher that quietly
-  accepts `undefined` reports every page as clean
+  accepts `undefined` reports every page as clean. The matcher half of this
+  passes today; the `assert*` half does not, which is the whole reason R33 exists
 - **7** — the message says what's wrong, where, and ideally what to do. These are
   read by people who did not write the rule
+- **8** — the `<svg>` case is caught. The glyph and `title=` cases are **not**,
+  and both are correct per accname: `⬇` is a non-empty name, and `title` is the
+  last-resort name source. Record the verdict rather than assuming it — the
+  table above says this assertion "fails on an icon-only `<button>`", and for
+  the most common icon-only shape in real products it does not
 
 ## Why this exists
 
