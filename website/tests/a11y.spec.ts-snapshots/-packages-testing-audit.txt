@@ -156,7 +156,7 @@ main
   paragraph "The need one setup file, registered with your runner ( in Vitest, in Jest):"
     link "matchers"
     code "setupFiles"
-    code "setupFilesAfterEach"
+    code "setupFilesAfterEnv"
   button "Copy Code"
   code
   paragraph "Auditing a instead of jsdom? That path skips all of the above — see the . Peer-version specifics for React, Testing Library and Playwright live in ."
