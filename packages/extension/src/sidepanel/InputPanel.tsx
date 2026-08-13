@@ -7,8 +7,11 @@ import type { SelectOption } from "../types.js";
  * Everything inside the panel that Tab can reach. Its controls are only ever
  * enabled or disabled — never hidden — so matching on the selector alone is
  * enough; there is nothing here that needs a visibility check.
+ *
+ * Exported so the tests walk the same set the trap does, rather than keeping a
+ * copy that silently drifts if this is ever narrowed.
  */
-const FOCUSABLE_SELECTOR =
+export const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
@@ -17,15 +20,22 @@ const FOCUSABLE_SELECTOR =
  * into the toolbar rendered behind the panel while the screen reader still
  * believes it is inside a modal.
  *
- * Bound as a DOM listener on the dialog root rather than as a JSX `onKeyDown`:
- * the wrapper is a plain `role="dialog"` container, and hanging key handlers
- * on it is what `jsx-a11y/no-noninteractive-element-interactions` exists to
- * catch. Keydown bubbles here from whichever control has focus either way.
+ * Bound as a DOM listener rather than as a JSX `onKeyDown`: the wrapper is a
+ * plain `role="dialog"` container, and hanging key handlers on it is what
+ * `jsx-a11y/no-noninteractive-element-interactions` exists to catch.
+ *
+ * It listens on the *document*, not on the dialog root, because focus can sit
+ * outside the dialog while it is open: clicking the hint line or the panel's
+ * own padding — neither of which is focusable — blurs to `<body>` in Chrome,
+ * and a root listener never sees the Tab that follows. From there the old
+ * binding let focus land on the toolbar behind a panel still claiming to be
+ * modal. Anything outside the dialog is pulled back to its first control.
  */
 function useFocusTrap(ref: RefObject<HTMLDivElement>) {
   useEffect(() => {
     const root = ref.current;
     if (!root) return;
+    const doc = root.ownerDocument;
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "Tab") return;
@@ -37,9 +47,14 @@ function useFocusTrap(ref: RefObject<HTMLDivElement>) {
 
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
-      const active = root.ownerDocument.activeElement;
+      const active = doc.activeElement;
 
-      if (e.shiftKey && active === first) {
+      if (!active || !root.contains(active)) {
+        // Focus has fallen out of the dialog entirely — bring it back rather
+        // than letting Tab resume from wherever it landed.
+        e.preventDefault();
+        first.focus();
+      } else if (e.shiftKey && active === first) {
         e.preventDefault();
         last.focus();
       } else if (!e.shiftKey && active === last) {
@@ -48,8 +63,8 @@ function useFocusTrap(ref: RefObject<HTMLDivElement>) {
       }
     };
 
-    root.addEventListener("keydown", onKeyDown);
-    return () => root.removeEventListener("keydown", onKeyDown);
+    doc.addEventListener("keydown", onKeyDown);
+    return () => doc.removeEventListener("keydown", onKeyDown);
   }, [ref]);
 }
 

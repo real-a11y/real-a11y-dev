@@ -2,7 +2,7 @@ import { render, h } from "preact";
 import { act } from "preact/test-utils";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
-import { InputPanel } from "./InputPanel.js";
+import { InputPanel, FOCUSABLE_SELECTOR } from "./InputPanel.js";
 import type { InputPanelState } from "./InputPanel.js";
 
 /**
@@ -24,6 +24,7 @@ const TEXT_STATE: InputPanelState = {
   nodeId: "n1",
   label: "Email address",
   value: "hello",
+  placeholder: "you@example.com",
 };
 
 const SELECT_STATE: InputPanelState = {
@@ -86,9 +87,7 @@ function close(): void {
 
 function focusables(): HTMLElement[] {
   return Array.from(
-    container.querySelectorAll<HTMLElement>(
-      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-    ),
+    container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
   );
 }
 
@@ -132,6 +131,7 @@ describe("InputPanel accessible name", () => {
       "label.sn-input-panel-label",
     );
 
+    expect(input!.getAttribute("placeholder")).toBe("");
     expect(label!.getAttribute("for")).toBe(input!.id);
     expect(label!.textContent).toBe("Email address");
   });
@@ -183,6 +183,21 @@ describe("InputPanel focus containment", () => {
 
     expect(event.defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(last);
+  });
+
+  it("pulls focus back in when Tab is pressed from outside the dialog", () => {
+    // Clicking the hint line or the panel's own padding — neither focusable —
+    // blurs to <body> in Chrome. Tab from there used to walk into the toolbar
+    // behind a panel that still advertised itself as modal.
+    open(TEXT_STATE);
+
+    (document.activeElement as HTMLElement | null)?.blur();
+    expect(container.contains(document.activeElement)).toBe(false);
+
+    const event = pressTab(document.body);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(focusables()[0]);
   });
 
   it("keeps Tab inside the select dialog too", () => {
