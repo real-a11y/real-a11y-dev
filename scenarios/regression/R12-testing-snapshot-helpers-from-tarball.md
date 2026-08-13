@@ -29,6 +29,8 @@ Packaging faults only show from the tarball.
 6. Focus a control, then `auditSnapshot(root, { markFocus: true })`
 7. Same with nothing focused
 8. `tabSequenceSnapshot` inside a stored snapshot artifact vs printed to a terminal
+9. Focus a control and pass **no option at all**, then focus one and pass
+   `{ markFocus: false }`
 
 ## Expected
 
@@ -40,6 +42,10 @@ Packaging faults only show from the tarball.
 - **6** — `[focused]` on exactly the focused node
 - **7** — no `[focused]` marker at all. It must never point at a default
 - **8** — unnumbered in the artifact, numbered for the terminal
+- **9** — `markFocus` is **default-on**, so no-option marks focus and only
+  `markFocus: false` suppresses it. Step 6 on its own cannot tell a working
+  option from an ignored one — both produce the marker — so 9 is the step that
+  actually exercises the flag
 
 ## Why this exists
 
