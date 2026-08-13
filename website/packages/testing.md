@@ -11,9 +11,127 @@ Headless accessibility audit helpers for Vitest, Jest, and Playwright. No browse
 
 ## Install
 
-```sh
-npm install -D @real-a11y-dev/testing
+This package brings **no test runner and no DOM of its own** — it audits a DOM
+you already have. So install it next to a runner and a DOM implementation:
+
+::: code-group
+
+```sh [Vitest]
+npm install -D @real-a11y-dev/testing vitest jsdom
 ```
+
+```sh [Jest]
+npm install -D @real-a11y-dev/testing jest jest-environment-jsdom
+```
+
+:::
+
+Nothing else is required. `@testing-library/react` appears throughout these docs
+because it is the common way to get a container, but it is **optional** — any
+`Element` works as an audit root, including one you built by hand.
+
+## Your first passing test
+
+Two files, no framework. Copy both and it runs.
+
+::: code-group
+
+```ts [vitest.config.ts]
+import { defineConfig } from "vitest/config";
+
+export default defineConfig({
+  test: {
+    // Required. Without it the helpers get no `document` and every test fails
+    // with `document is not defined`.
+    environment: "jsdom",
+  },
+});
+```
+
+```ts [a11y.test.ts]
+import { expect, test } from "vitest";
+import { auditSnapshot, assertNoUnlabeledInteractive } from "@real-a11y-dev/testing";
+
+test("the sign-in form is labeled", () => {
+  document.body.innerHTML = `
+    <main>
+      <h1>Sign in</h1>
+      <label>Email <input name="email" /></label>
+      <button>Continue</button>
+    </main>
+  `;
+  const root = document.querySelector("main")!;
+
+  assertNoUnlabeledInteractive(root);
+  expect(auditSnapshot(root)).toMatchSnapshot();
+});
+```
+
+:::
+
+```sh
+npx vitest run
+```
+
+The committed snapshot is the accessibility tree, not a DOM dump:
+
+```
+main
+  heading "Sign in" (level 1)
+  textbox "Email"
+  button "Continue"
+```
+
+Delete the `<label>` wrapper and `assertNoUnlabeledInteractive` throws naming
+the offender; rename the button and the snapshot diff is one line.
+
+### The same, in Jest
+
+`jest.config.js` needs the environment for the same reason:
+
+```js
+module.exports = { testEnvironment: "jsdom" };
+```
+
+The assertions are identical. The one difference that will stop you: **Jest does
+not parse TypeScript on its own.** A `.ts` test fails with a Babel parse error
+until you add `ts-jest` or `babel-jest`, so the transform-free quick-start is a
+`.js` file:
+
+```js
+// a11y.test.js
+const { auditSnapshot, assertNoUnlabeledInteractive } = require("@real-a11y-dev/testing");
+
+test("the sign-in form is labeled", () => {
+  document.body.innerHTML = `<main><h1>Sign in</h1><label>Email <input /></label><button>Continue</button></main>`;
+  const root = document.querySelector("main");
+
+  assertNoUnlabeledInteractive(root);
+  expect(auditSnapshot(root)).toMatchSnapshot();
+});
+```
+
+Same tree, same snapshot. Keeping your tests in TypeScript is fine — add
+`ts-jest` and its preset the way you would for any Jest project; nothing about
+this package changes.
+
+### Adding the `expect` matchers
+
+The [matchers](/packages/testing/matchers) need one setup file, registered with
+your runner (`setupFiles` in Vitest, `setupFilesAfterEnv` in Jest):
+
+```ts
+import { expect } from "vitest"; // or "@jest/globals"
+import { registerA11yMatchers } from "@real-a11y-dev/testing/matchers";
+import "@real-a11y-dev/testing/matchers/vitest"; // Vitest only — types
+
+registerA11yMatchers(expect);
+```
+
+Auditing a **real browser page** instead of jsdom? That path skips all of the
+above — see the [Playwright adapter](/packages/testing/playwright). Peer-version
+specifics for React, Testing Library and Playwright live in
+[Peer dependencies](/recipes/peer-dependencies).
 
 ## What's in the box
 
