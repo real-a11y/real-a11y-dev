@@ -94,6 +94,8 @@ navigation "On this page"
     listitem
       link "Install"
     listitem
+      link "Your first passing test"
+    listitem
       link "What's in the box"
     listitem
       link "Which do I reach for?"
@@ -110,8 +112,57 @@ main
       strong "in your test suite"
   paragraph "Headless accessibility audit helpers for Vitest, Jest, and Playwright. No browser required for the core helpers — they work in jsdom."
   heading "Install" (level 2)
+  paragraph "This package brings — it audits a DOM you already have. So install it next to a runner and a DOM implementation:"
+    strong "no test runner and no DOM of its own"
+  radio "Vitest"
+  radio "Jest"
   button "Copy Code"
   code
+  paragraph "Nothing else is required. appears throughout these docs because it is the common way to get a container, but it is — any works as an audit root, including one you built by hand."
+    code "@testing-library/react"
+    strong "optional"
+    code "Element"
+  heading "Your first passing test" (level 2)
+  paragraph "Two files, no framework. Copy both and it runs."
+  radio "vitest.config.ts"
+  radio "a11y.test.ts"
+  button "Copy Code"
+  code
+  button "Copy Code"
+  code
+  paragraph "The committed snapshot is the accessibility tree, not a DOM dump:"
+  button "Copy Code"
+  code
+  paragraph "Delete the wrapper and throws naming the offender; rename the button and the snapshot diff is one line."
+    code "<label>"
+    code "assertNoUnlabeledInteractive"
+  heading "The same, in Jest" (level 3)
+  paragraph "needs the environment for the same reason:"
+    code "jest.config.js"
+  button "Copy Code"
+  code
+  paragraph "The assertions are identical. The one difference that will stop you: A test fails with a Babel parse error until you add or , so the transform-free quick-start is a file:"
+    strong "Jest does not parse TypeScript on its own."
+    code ".ts"
+    code "ts-jest"
+    code "babel-jest"
+    code ".js"
+  button "Copy Code"
+  code
+  paragraph "Same tree, same snapshot. Keeping your tests in TypeScript is fine — add and its preset the way you would for any Jest project; nothing about this package changes."
+    code "ts-jest"
+  heading "Adding the expect matchers" (level 3)
+    code "expect"
+  paragraph "The need one setup file, registered with your runner ( in Vitest, in Jest):"
+    link "matchers"
+    code "setupFiles"
+    code "setupFilesAfterEach"
+  button "Copy Code"
+  code
+  paragraph "Auditing a instead of jsdom? That path skips all of the above — see the . Peer-version specifics for React, Testing Library and Playwright live in ."
+    strong "real browser page"
+    link "Playwright adapter"
+    link "Peer dependencies"
   heading "What's in the box" (level 2)
   table
     rowgroup

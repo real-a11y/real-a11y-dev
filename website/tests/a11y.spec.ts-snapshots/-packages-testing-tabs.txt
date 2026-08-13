@@ -51,11 +51,31 @@ link "Accessible Names"
 link "Architecture"
 link "Troubleshooting"
 link "Install"
+link "Your first passing test"
 link "What's in the box"
 link "Which do I reach for?"
 link "See it running"
+radio "Vitest"
+radio "Jest"
 button "Copy Code"
 generic
+radio "vitest.config.ts"
+radio "a11y.test.ts"
+button "Copy Code"
+generic
+button "Copy Code"
+generic
+button "Copy Code"
+generic
+button "Copy Code"
+generic
+button "Copy Code"
+generic
+link "matchers"
+button "Copy Code"
+generic
+link "Playwright adapter"
+link "Peer dependencies"
 table
 link "Snapshots →"
 link "Assertions →"

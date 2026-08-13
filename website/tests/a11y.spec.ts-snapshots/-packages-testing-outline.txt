@@ -10,6 +10,9 @@
   h2 On this page
 h1 @real-a11y-dev/testing
   h2 Install
+  h2 Your first passing test
+    h3 The same, in Jest
+    h3 Adding the expect matchers
   h2 What's in the box
   h2 Which do I reach for?
   h2 See it running
