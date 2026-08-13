@@ -540,11 +540,29 @@ const RULES = [
     id: "review-policy",
     tier: "high",
     title: "Review or branch policy",
-    why: "CODEOWNERS, the PR templates and this repo's agent skills decide who — or what — has to look at the next change. Weakening them is the one edit that makes every future edit less reviewed, and `.claude/skills/pr/SKILL.md` is where an agent's authority to merge without a human is granted.",
+    why: "CODEOWNERS, the PR templates and this repo's agent skills decide who — or what — has to look at the next change. Weakening them is the one edit that makes every future edit less reviewed, and `.claude/skills/pr/SKILL.md` is where an agent's authority to merge without a human is granted. `CLAUDE.md` is that same authority in a different file: it is loaded into every agent session here and carries the merge rule itself (\"🟢 low — an agent may merge it\"), so widening that sentence hands agents the pull requests a human was meant to see.",
     match: (f) =>
       any(
         f.files,
         /^(\.github\/(CODEOWNERS|PULL_REQUEST_TEMPLATE|dependabot\.yml)|\.claude\/)/,
+      ).concat(
+        // Its own alternation because the anchor is different: `CLAUDE.md` is
+        // matched by BASENAME, not by a root prefix, so a nested one — which
+        // Claude Code loads for the subtree it sits in, with the same force —
+        // grades the same as the root file. Only the root one exists today.
+        //
+        // It graded 🟡 medium as an unrecognised path until #328 put it on main,
+        // which meant the file that tells every agent here when it may merge
+        // without a human got LESS review than `.claude/`, and a PR editing only
+        // it read as "the rubric has never heard of this" rather than as policy.
+        //
+        // Case-INSENSITIVE, for the reason the `breaking` rule below is: on a
+        // case-insensitive checkout (macOS and Windows, git's default
+        // `core.ignorecase`) a `git mv CLAUDE.md Claude.md` still loads for every
+        // agent — the read resolves — while a case-sensitive pattern quietly
+        // stops matching. A rule switched off by a capitalisation slip is the
+        // failure mode that already cost this file a `Feat!:` escape.
+        any(f.files, /(^|\/)CLAUDE\.md$/i),
       ),
   },
   {
@@ -867,6 +885,12 @@ const CI_INERT = [
   /^\.github\/(ISSUE_TEMPLATE\/|PULL_REQUEST_TEMPLATE)/,
   /^\.github\/(CODEOWNERS|FUNDING\.yml|dependabot\.yml)$/,
   /^\.claude\//,
+  // Same bucket as `.claude/`, and for the same reason: agent instruction is
+  // 🔴 high to review and asserted by no test. Both halves of the taxonomy have
+  // to name it — leaving it out here would run the full matrix, e2e included,
+  // on a PR that edits one paragraph of prose. Cased like the rule above so the
+  // two halves cannot disagree about what the same path is.
+  /(^|\/)CLAUDE\.md$/i,
   /^scenarios\//,
   /^\.vscode\//,
   /^\.idea\//,
