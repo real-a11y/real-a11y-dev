@@ -2,19 +2,61 @@
 
 Headless accessibility audit helpers for [Real A11y](https://real-a11y.dev) — snapshots, structural assertions, and a fluent interaction flow. Works in Vitest / Jest (jsdom) out of the box; a Playwright adapter ships as a separate entry point.
 
+This package brings **no test runner and no DOM of its own** — it audits a DOM you already have. Install it next to a runner and a DOM implementation:
+
 ```sh
-npm install -D @real-a11y-dev/testing
+npm install -D @real-a11y-dev/testing vitest jsdom
+# Jest: npm install -D @real-a11y-dev/testing jest jest-environment-jsdom
 ```
+
+Jest also needs `testEnvironment: "jsdom"`, and does not parse TypeScript on its own — a `.ts` test needs `ts-jest` or `babel-jest`, so the transform-free path is a `.js` test. Full walkthrough: [real-a11y.dev/packages/testing](https://real-a11y.dev/packages/testing#your-first-passing-test).
 
 ## Quick start
 
+Two files, no framework — copy both and it runs.
+
+```ts
+// vitest.config.ts — `environment` is required, or the helpers get no
+// `document` and every test fails with `document is not defined`.
+import { defineConfig } from "vitest/config";
+
+export default defineConfig({ test: { environment: "jsdom" } });
+```
+
+```ts
+// a11y.test.ts
+import { expect, test } from "vitest";
+import { auditSnapshot, assertNoUnlabeledInteractive } from "@real-a11y-dev/testing";
+
+test("the sign-in form is labeled", () => {
+  document.body.innerHTML = `
+    <main>
+      <h1>Sign in</h1>
+      <label>Email <input name="email" /></label>
+      <button>Continue</button>
+    </main>
+  `;
+  const root = document.querySelector("main")!;
+
+  assertNoUnlabeledInteractive(root);
+  expect(auditSnapshot(root)).toMatchSnapshot();
+});
+```
+
+`npx vitest run`. The committed snapshot is the accessibility tree, not a DOM dump:
+
+```
+main
+  heading "Sign in" (level 1)
+  textbox "Email"
+  button "Continue"
+```
+
+`@testing-library/react` is **optional** — any `Element` works as an audit root — but it is the usual way to get a container:
+
 ```ts
 import { render } from "@testing-library/react";
-import {
-  auditSnapshot,
-  assertNoUnlabeledInteractive,
-  assertHeadingOrder,
-} from "@real-a11y-dev/testing";
+import { assertHeadingOrder } from "@real-a11y-dev/testing";
 import { LoginForm } from "./LoginForm";
 
 test("login form is fully labeled", () => {

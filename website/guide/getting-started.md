@@ -39,8 +39,8 @@ All packages are installed as dev dependencies below. This is the right default 
 # Framework-agnostic embed (dev panel)
 npm install -D @real-a11y-dev/inspector
 
-# Testing helpers (Vitest / Jest)
-npm install -D @real-a11y-dev/testing
+# Testing helpers — bring your own runner + DOM (see /packages/testing)
+npm install -D @real-a11y-dev/testing vitest jsdom
 
 # Playwright E2E adapter (needs @playwright/test as peer)
 npm install -D @real-a11y-dev/testing @playwright/test
