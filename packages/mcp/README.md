@@ -65,7 +65,7 @@ query or fragment — the diff tools say so and drop the advisory structural
 summary, which across unrelated routes describes a rewrite rather than a
 regression. Findings still match by fingerprint.
 
-**Tree checkpoints** — capture the tree, interact, then see exactly what an interaction changed for a screen reader. Bound to the page instance (do not survive navigation).
+**Tree checkpoints** — capture the tree, interact, then see exactly what an interaction changed for a screen reader. Held outside the page, so a navigation is reported as a replaced document rather than silently losing the baseline.
 
 | Tool | Purpose |
 | --- | --- |

@@ -16,7 +16,11 @@ import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ALL_RULES, listByRole } from "@real-a11y-dev/audit";
 import type { A11yRule, Finding, RoleFilter } from "@real-a11y-dev/audit";
-import { resolveTarget } from "@real-a11y-dev/browser";
+import {
+  captureNativeCheckpoint,
+  diffNativeCheckpoint,
+  resolveTarget,
+} from "@real-a11y-dev/browser";
 import type { A11ySession, TargetCandidate } from "@real-a11y-dev/browser";
 import { numberTabStops } from "@real-a11y-dev/serialize";
 import { SessionRegistryError } from "@real-a11y-dev/session-registry";
@@ -93,11 +97,12 @@ function packageVersion(): string {
 /**
  * A CSS scope for the in-page walk.
  *
- * Only the tools still built on that walk take it: `get_tab_order` (tab
- * SEQUENCE is layout work Chromium's AX tree doesn't expose) and the tree
- * checkpoints. Everything else reads Chromium's own accessibility tree, which
- * is whole-document — there is nothing for a selector to scope, and a parameter
- * that silently did nothing would be worse than none at all.
+ * Only `get_tab_order` still takes it: tab SEQUENCE is layout work Chromium's
+ * AX tree doesn't expose, so that one view is still an in-page walk. Everything
+ * else — the tree checkpoints included, as of the native migration — reads
+ * Chromium's own accessibility tree, which is whole-document: there is nothing
+ * for a selector to scope, and a parameter that silently did nothing would be
+ * worse than none at all.
  */
 const rootSelector = z
   .string()
@@ -130,7 +135,7 @@ function text(body: string, hint?: string) {
 
 // The three levers that survive the migration, named once so a tool can't
 // advertise one it doesn't take.
-/** Tools still built on the in-page walk: `get_tab_order`, the tree checkpoints. */
+/** The one tool still built on the in-page walk: `get_tab_order`. */
 const SCOPE_HINT = "Pass a narrower `rootSelector` to scope the walk.";
 /** Anything whose bulk is findings. Narrows the findings, never the tree. */
 const RULES_HINT = "Pass a `rules` subset to report fewer findings.";
@@ -394,8 +399,8 @@ export function buildServer(
   );
 
   // ── Sessions ─────────────────────────────────────────────────────────────
-  // Page-coupled state (the browser session, the last opened URL, the
-  // tree-checkpoint root) lives in a SessionRecord owned by the manager;
+  // Per-session state (the browser session, the last opened URL, the tree
+  // checkpoint) lives in a SessionRecord owned by the manager;
   // tools reach it only through `withSession`, which is what makes the
   // per-session single-flight guarantee structural. Findings checkpoints
   // deliberately SURVIVE navigation (cross-deploy diffs) AND the idle
@@ -539,9 +544,12 @@ export function buildServer(
           viewport,
         });
         rec.openedUrl = info.url;
-        // Navigation replaces the page bundle, which wipes the in-page tree
-        // checkpoint — drop the remembered root so server state stays honest.
-        rec.treeCheckpointRoot = undefined;
+        // An explicit navigation makes the checkpoint meaningless: its node ids
+        // belong to the document just replaced. Dropping it here means the next
+        // diff_tree says "checkpoint first" rather than reporting a whole-page
+        // change — the same honesty diffNativeCheckpoint gives an *unexpected*
+        // navigation, applied to the one we asked for.
+        rec.treeCheckpoint = undefined;
         const emu = device
           ? ` [${device}]`
           : viewport
@@ -1033,8 +1041,8 @@ export function buildServer(
     {
       title: "Checkpoint the tree (for an interaction diff)",
       description:
-        "Capture the CURRENT accessibility tree in the page as a comparison point. Then interact — click, type, open a dialog — and call diff_tree to see exactly which nodes were added, removed, or changed, and where focus moved. Unlike checkpoint_findings (which stores findings and survives navigation), a tree checkpoint is bound to THIS page instance and is discarded when the page navigates.",
-      inputSchema: { rootSelector, session: sessionParam },
+        "Capture the CURRENT accessibility tree as a comparison point. Then interact — click, type, open a dialog — and call diff_tree to see exactly which nodes were added, removed, or changed, and where focus moved. Reads the whole document with the same native producer the act tools target, so the diff speaks one vocabulary. If a step navigates, diff_tree says the document was replaced rather than reporting the entire page as changed.",
+      inputSchema: { session: sessionParam },
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -1042,14 +1050,13 @@ export function buildServer(
         openWorldHint: false,
       },
     },
-    async ({ rootSelector, session }) =>
+    async ({ session }) =>
       withSession(session, async (rec) => {
-        const out = await rec.session.call<string>(
-          "checkpointTree",
-          rootSelector,
+        const tree = await rec.session.nativeTree();
+        rec.treeCheckpoint = captureNativeCheckpoint(tree, pageUrl(rec));
+        return text(
+          `Tree checkpoint captured — ${tree.nodes.size} node(s). Interact, then call diff_tree.`,
         );
-        rec.treeCheckpointRoot = rootSelector;
-        return text(out, SCOPE_HINT);
       }),
   );
 
@@ -1059,30 +1066,38 @@ export function buildServer(
       title: "Diff the tree since the checkpoint",
       annotations: READ_ONLY,
       description:
-        "Diff the CURRENT accessibility tree against the one captured by checkpoint_tree: nodes added, removed, or changed, plus a focus move. This is the interaction diff — the precise answer to 'what did that click actually change for a screen reader?'. Re-extracts with the root the checkpoint used unless you override it.",
-      inputSchema: {
-        rootSelector: z
-          .string()
-          .optional()
-          .describe(
-            "CSS root for the re-extraction. Defaults to the root the checkpoint was captured with.",
-          ),
-        session: sessionParam,
-      },
+        "Diff the CURRENT accessibility tree against the one captured by checkpoint_tree: nodes added, removed, or changed, plus a focus move. This is the interaction diff — the precise answer to 'what did that click actually change for a screen reader?'.",
+      inputSchema: { session: sessionParam },
     },
-    async ({ rootSelector, session }) =>
+    async ({ session }) =>
       withSession(session, async (rec) => {
-        // Like-for-like: re-extract from the checkpoint's root unless overridden,
-        // so the diff can't silently widen to <body> and invent added nodes.
-        const root = rootSelector ?? rec.treeCheckpointRoot ?? "body";
-        try {
-          return text(
-            await rec.session.call<string>("diffSinceCheckpoint", root),
-            SCOPE_HINT,
+        const checkpoint = rec.treeCheckpoint;
+        if (!checkpoint) {
+          return errText(
+            "No tree checkpoint in this session — call checkpoint_tree first, then interact, then diff_tree.",
           );
-        } catch (err) {
-          return errText(err instanceof Error ? err.message : String(err));
         }
+        const outcome = diffNativeCheckpoint(
+          checkpoint,
+          await rec.session.nativeTree(),
+          pageUrl(rec),
+        );
+        // A navigation is a real outcome of a real click, not a failure. The
+        // checkpoint itself survived — it lives here, not in the page — but the
+        // node identity it was written in did not, so there is nothing left to
+        // compare against. Saying so beats reporting the whole page added.
+        if (outcome.kind === "replaced") {
+          return text(
+            `The page navigated (or reloaded), so the checkpoint describes a document that no longer exists — no diff available.\n` +
+              `Was: ${outcome.from}\nNow: ${outcome.to}\n` +
+              `Call checkpoint_tree again to start a new comparison.`,
+          );
+        }
+        return text(
+          outcome.changed
+            ? outcome.rendered
+            : "No tree changes since the checkpoint.",
+        );
       }),
   );
 
@@ -1178,7 +1193,7 @@ export function buildServer(
 
   // The diff loop is the payoff of acting at all — steer every success to it.
   const diffSteer = (rec: SessionRecord) =>
-    rec.treeCheckpointRoot !== undefined
+    rec.treeCheckpoint !== undefined
       ? " Call diff_tree to see what this changed."
       : " Tip: call checkpoint_tree before acting, then diff_tree after, to see exactly what an action changed for a screen reader.";
 

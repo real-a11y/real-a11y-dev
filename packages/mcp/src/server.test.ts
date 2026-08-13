@@ -96,8 +96,16 @@ class FakeSession implements A11ySession {
 }
 
 /** Build a flat native ExtractionResult: a `main` root with these children. */
+/**
+ * @param idBase when given, nodes get realistic backend-derived ids
+ *   (`ax-dom-<n>` from this base) instead of the opaque `c<i>` the other tests
+ *   use. Only these ids count as document identity — `documentWasReplaced`
+ *   filters to them deliberately — so a test about navigation has to mint them,
+ *   and two trees are "different documents" iff their bases do not overlap.
+ */
 function nativeTree(
   children: { role: string; name?: string; level?: string }[],
+  idBase?: number,
 ): FakeSession["nativeTreeResponse"] {
   const a11y = (role: string, name = "", level?: string) => ({
     role,
@@ -107,12 +115,15 @@ function nativeTree(
     properties: level ? { level } : {},
     isExposedToAT: true,
   });
-  const ids = children.map((_, i) => `c${i}`);
+  const ids = children.map((_, i) =>
+    idBase === undefined ? `c${i}` : `ax-dom-${idBase + i}`,
+  );
+  const rootId = idBase === undefined ? "root" : "ax-root";
   const entries = [
     [
-      "root",
+      rootId,
       {
-        id: "root",
+        id: rootId,
         parentId: null,
         childIds: ids,
         depth: 0,
@@ -123,7 +134,7 @@ function nativeTree(
       ids[i],
       {
         id: ids[i],
-        parentId: "root",
+        parentId: rootId,
         childIds: [],
         depth: 1,
         a11y: a11y(c.role, c.name, c.level),
@@ -132,7 +143,7 @@ function nativeTree(
   ];
   return {
     nodes: new Map(entries as never),
-    rootId: "root",
+    rootId,
     source: { producer: "native" },
   } as FakeSession["nativeTreeResponse"];
 }
@@ -1090,48 +1101,69 @@ describe("checkpoints", () => {
     expect(diff).toMatch(/0 new, 0 fixed/);
   });
 
-  it("diff_tree re-extracts with the root the tree checkpoint used", async () => {
-    session.responses.checkpointTree = "Tree checkpoint captured — 12 node(s).";
-    session.responses.diffSinceCheckpoint = '+ button "Save"';
+  it("diffs against the native tree captured at the checkpoint", async () => {
+    // The checkpoint lives in Node now, so the diff is computed here from two
+    // native trees rather than delegated to an in-page bundle.
     const client = await connect(session);
-    await client.callTool({
-      name: "checkpoint_tree",
-      arguments: { rootSelector: "[role=dialog]" },
-    });
-    // No rootSelector on the diff — it must reuse the captured root rather than
-    // silently widening to <body> and reporting the rest of the page as added.
-    const res = await client.callTool({
-      name: "diff_tree",
-      arguments: {},
-    });
-    const call = session.calls
-      .filter((c) => c.fn === "diffSinceCheckpoint")
-      .at(-1);
-    expect(call?.rootSelector).toBe("[role=dialog]");
-    expect(textOf(res)).toContain('+ button "Save"');
+    session.nativeTreeResponse = nativeTree([{ role: "button", name: "Open" }]);
+    await client.callTool({ name: "checkpoint_tree", arguments: {} });
+
+    session.nativeTreeResponse = nativeTree([
+      { role: "button", name: "Open" },
+      { role: "dialog", name: "Settings" },
+    ]);
+    const res = await client.callTool({ name: "diff_tree", arguments: {} });
+
+    expect(textOf(res)).toContain("Settings");
+    // Nothing may reach the in-page checkpoint bundle any more.
+    expect(session.calls.some((c) => c.fn === "diffSinceCheckpoint")).toBe(
+      false,
+    );
+    expect(session.calls.some((c) => c.fn === "checkpointTree")).toBe(false);
   });
 
-  it("a tree checkpoint does not survive navigation", async () => {
-    session.responses.checkpointTree = "Tree checkpoint captured — 3 node(s).";
+  it("reports a replaced document instead of a whole-page diff", async () => {
+    // Native ids are per-document, so a navigation shares none of them. The
+    // old in-page checkpoint could only vanish; this must say what happened.
     const client = await connect(session);
-    await client.callTool({
-      name: "checkpoint_tree",
-      arguments: { rootSelector: "[role=dialog]" },
-    });
-    // Navigating replaces the page bundle, wiping the in-page tree; the server
-    // must forget the captured root too rather than reusing a stale one.
+    session.nativeTreeResponse = nativeTree(
+      [{ role: "button", name: "Go" }],
+      1,
+    );
+    await client.callTool({ name: "checkpoint_tree", arguments: {} });
+
+    // No backend id in common — which is what a replaced document looks like,
+    // Chromium having reallocated every one of them.
+    session.nativeTreeResponse = nativeTree(
+      [{ role: "heading", name: "Somewhere else" }],
+      900,
+    );
+    session.url = "https://example.com/other";
+    const res = await client.callTool({ name: "diff_tree", arguments: {} });
+
+    const out = textOf(res);
+    expect(out).toMatch(/navigated \(or reloaded\)/i);
+    expect(out).toContain("https://example.com/other");
+    expect(out).not.toMatch(/^\+ /m); // not a whole-page "everything added" diff
+  });
+
+  it("diff_tree without a checkpoint says so instead of guessing", async () => {
+    const client = await connect(session);
+    const res = await client.callTool({ name: "diff_tree", arguments: {} });
+    expect(textOf(res)).toMatch(/call checkpoint_tree first/i);
+  });
+
+  it("an explicit navigation drops the checkpoint", async () => {
+    const client = await connect(session);
+    session.nativeTreeResponse = nativeTree([{ role: "button", name: "Go" }]);
+    await client.callTool({ name: "checkpoint_tree", arguments: {} });
     await client.callTool({
       name: "open_page",
       arguments: { url: "https://example.com/other" },
     });
-    await client.callTool({
-      name: "diff_tree",
-      arguments: {},
-    });
-    const call = session.calls
-      .filter((c) => c.fn === "diffSinceCheckpoint")
-      .at(-1);
-    expect(call?.rootSelector).toBe("body");
+    const res = await client.callTool({ name: "diff_tree", arguments: {} });
+    // Not "the whole page changed" — the checkpoint is simply gone.
+    expect(textOf(res)).toMatch(/call checkpoint_tree first/i);
   });
 
   it("re-exporting an imported DOM-era checkpoint keeps its tabs view", async () => {

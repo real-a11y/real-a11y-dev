@@ -9,7 +9,7 @@ The Real A11y MCP server exposes **twenty tools** to an MCP client (Claude Code,
 
 Every page tool takes an optional **`session`** — a name (1–32 characters from `A–Z a–z 0–9 _ -`) selecting an independent live page with its own findings checkpoints and tree checkpoint. Omit it everywhere and the server behaves as a single-page tool (the `default` session). A typical run is [`open_page`](#open-page) → an audit or view tool ([`audit_page`](#audit-page), [`inspect_page`](#inspect-page), or a `get_*` view) → [`close_browser`](#close-browser). To interact, the loop is [`checkpoint_tree`](#checkpoint-tree) → an [act tool](#act) ([`click_element`](#click-element), [`type_text`](#type-text), [`focus_element`](#focus-element)) → [`diff_tree`](#diff-tree). Calls within one session are **serialized automatically** (a second call waits its turn instead of racing the first's navigation); different sessions run in parallel, each in its own browser. Sessions launch lazily on first use, are capped by [`REAL_A11Y_MCP_MAX_SESSIONS`](#real-a11y-mcp-max-sessions), and close on the [idle timeout](#real-a11y-mcp-session-idle-timeout-ms) or [`close_browser`](#close-browser). The `session` name selects a page context only — auth stays [operator-configured](#environment) and identical across sessions, never a tool parameter.
 
-Every read is built from **Chromium's own accessibility tree**, read over CDP. There is no `producer` parameter: each surface has exactly one correct producer, so there is nothing to choose. That tree is whole-document, so the audit and view tools take no `rootSelector` — the exceptions are [`get_tab_order`](#get-tab-order) and the tree checkpoints, which run in the page, where a selector means something. Tool output is capped at **40,000 characters**; a larger page is truncated with a note naming the lever that tool actually has — a `rules` subset, a narrower `rootSelector` where one applies, or a smaller sibling read such as [`get_heading_outline`](#get-heading-outline). [`export_checkpoint`](#export-checkpoint) is the one exception: a JSON artifact can't be truncated and stay parseable, so it fails instead.
+Every read is built from **Chromium's own accessibility tree**, read over CDP. There is no `producer` parameter: each surface has exactly one correct producer, so there is nothing to choose. That tree is whole-document, so the audit and view tools take no `rootSelector` — the one exception is [`get_tab_order`](#get-tab-order), which runs in the page, where a selector means something. Tool output is capped at **40,000 characters**; a larger page is truncated with a note naming the lever that tool actually has — a `rules` subset, a narrower `rootSelector` where one applies, or a smaller sibling read such as [`get_heading_outline`](#get-heading-outline). [`export_checkpoint`](#export-checkpoint) is the one exception: a JSON artifact can't be truncated and stay parseable, so it fails instead.
 
 Server behavior is configured entirely through [environment variables](#environment) — saved-login sessions, origin pinning, `file://` access, CDP attach. Credentials are never tool parameters, so session tokens stay out of the agent's context. On startup the server validates that configuration and **refuses to start** on a malformed storage-state file or an invalid origin (see [Environment](#environment)).
 
@@ -380,17 +380,17 @@ Parameters:
 
 Where the [findings checkpoints](#findings-checkpoints) answer _"what accessibility problems changed?"_, these answer _"what did that interaction change?"_ — the precise structural delta of a click, a keypress, or a dialog opening.
 
-The two are deliberately different in lifetime. A snapshot checkpoint is pure data and **survives navigation**. A tree checkpoint holds the extracted tree **inside the page** — its node identities are bound to that page instance — so it is **discarded the moment the page navigates**. Capture, interact, diff, all within one page load.
+Both are pure data held outside the page, so neither dies with it. They differ in what a navigation costs them: a snapshot checkpoint **survives** one, while a tree checkpoint's node identities belong to the document it was captured from — Chromium reallocates every one of them when the document is replaced. So the checkpoint outlives the navigation, but the comparison does not, and [`diff_tree`](#diff-tree) reports **the document was replaced** rather than a diff claiming the whole page changed. Capture, interact, diff — then re-capture if you navigated.
+
+Both tools read Chromium's own accessibility tree, the same producer the [act tools](#act) target, so an action and the diff describing it speak one vocabulary.
 
 ### `checkpoint_tree`
 
-_Captures the current tree in the page as a comparison point._
+_Captures the current tree as a comparison point._
 
 Capture the current accessibility tree as the baseline for an interaction diff. Then interact with the page and call [`diff_tree`](#diff-tree). Re-capturing re-baselines.
 
-Parameters:
-
-- **`rootSelector`** — string — optional (default `"body"`) — CSS selector for the extraction root.
+Whole-document, like every other native read — there is no `rootSelector` to scope it.
 
 ### `diff_tree`
 
@@ -398,11 +398,11 @@ _Read-only · diffs the live tree against the checkpoint._
 
 Diff the current accessibility tree against the one captured by `checkpoint_tree`: which nodes were **added**, **removed**, or **changed**, plus a `focus:` line when focus moved. This is what makes an interaction's effect legible — e.g. that opening a dialog added a `dialog` node _and_ moved focus into it, or that a "Load more" button appended twelve links but left focus stranded.
 
-Parameters:
+Takes no parameters beyond `session`: it re-reads the whole document and compares it against the captured tree.
 
-- **`rootSelector`** — string — optional — CSS root for the re-extraction. **Defaults to the root the checkpoint was captured with**, so the diff stays like-for-like instead of silently widening to `body` and reporting the rest of the page as added.
+If the page navigated or reloaded in between, this says so — naming where the page started and where it ended up — instead of emitting a diff in which every node was removed and every node added. Call `checkpoint_tree` again to start a new comparison.
 
-Errors if no checkpoint exists on the current page — including after a navigation, which discards it.
+Errors if no checkpoint exists for the session yet.
 
 ## Act
 

@@ -13,7 +13,7 @@
  * credentials.
  */
 
-import type { A11ySession } from "@real-a11y-dev/browser";
+import type { A11ySession, NativeCheckpoint } from "@real-a11y-dev/browser";
 import {
   SessionRegistry,
   SessionRegistryError,
@@ -50,14 +50,21 @@ export const DEFAULT_SESSION = "default";
  * One named session: the browser session plus the page-coupled server state
  * that used to live as `buildServer` closure variables. The checkpoint store
  * is INJECTED, not owned: findings checkpoints outlive the browser (see
- * `McpSessionManager.checkpoints`), while `openedUrl` and the tree-checkpoint
- * root are bound to the live page and die with the record.
+ * `McpSessionManager.checkpoints`), while `openedUrl` and the tree checkpoint
+ * are bound to this record and die with it.
  */
 export class SessionRecord {
   /** Where `open_page` last put this session; `pageUrl()` fallback only. */
   openedUrl = "";
-  /** Root the in-page tree checkpoint was captured with, if any. */
-  treeCheckpointRoot: string | undefined;
+  /**
+   * The tree checkpoint, if one has been captured.
+   *
+   * It holds the captured tree HERE, in Node, rather than in the page — which
+   * is what lets it survive a navigation well enough to say so. The in-page
+   * checkpoint it replaced could only vanish, leaving `diff_tree` unable to
+   * distinguish "nothing changed" from "the document went away".
+   */
+  treeCheckpoint: NativeCheckpoint | undefined;
 
   constructor(
     readonly session: A11ySession,
@@ -307,7 +314,7 @@ export function singleSessionManager(session: A11ySession): SessionManager {
     // next use, so this frees resources without taking ownership.
     await session.close();
     record.checkpoints.clear();
-    record.treeCheckpointRoot = undefined;
+    record.treeCheckpoint = undefined;
     record.openedUrl = "";
     used = false;
     return true;
