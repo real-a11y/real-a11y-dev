@@ -53,10 +53,26 @@ npm view @real-a11y-dev/<pkg> --json | head -30
 
 ## 2. Use the existing harness — do not rebuild it
 
-A working harness for **D5 / `@real-a11y-dev/testing`** already exists as a
-sibling of your `real-a11y` checkout, at **`real-a11y-dogfood-testing`**. It is
-deliberately not in this repo: inside the workspace, pnpm would resolve the
-package by path and the session would test nothing.
+Harnesses live **outside this repo** — deliberately, because inside the
+workspace pnpm resolves the package by path and the session tests nothing. That
+also means nothing in this repo can verify the names below or keep them current,
+so **start by listing the parent directory of your checkout** and reading what
+is actually there:
+
+```bash
+# siblings of the MAIN checkout — correct from a worktree too, where a
+# plain `ls ..` would list .claude/worktrees instead
+ls "$(git rev-parse --path-format=absolute --git-common-dir)/../.."
+```
+
+As of the beta.15 run, **D5 / `@real-a11y-dev/testing`** is served by
+`real-a11y-dogfood-testing`, and other rows have their own scratch apps
+(`real-a11y-mcp-host`, `real-a11y-live-tree-extractor`, …). Those are names, not
+guarantees: nobody maintains an index of which scenario each one serves, so if
+the listing disagrees with this paragraph, trust the listing.
+
+**Never rebuild one you didn't look for.** A second harness silently forks the
+setup that previous sessions recorded their results against.
 
 It holds a small support-portal app — an accessible page, an un-migrated legacy
 page with real defects, a page served with a genuine CSP response header, an
@@ -77,17 +93,11 @@ Two conventions in it that will confuse you if nobody says them:
   message _is_ the product, so "does this read to someone who never saw the
   codebase" only stays honest if a change to it shows up in a diff.
 
-**Before building anything for another `D*` row, go looking.** Other harnesses
-and scratch apps live as siblings of the checkout too (`real-a11y-mcp-host`,
-`real-a11y-live-tree-extractor`, …), and nobody maintains an index of which
-scenario each one serves — so `ls` the parent directory and read what is there
-rather than assuming a package has none. Rebuilding one silently forks the setup
-that previous sessions recorded their results against.
-
-When a package genuinely has no harness, build the app _real_ — realistic markup
-with the defects real products ship, not a fixture soup. The defects you invent
-are what the assertions get judged against, and a fixture containing only the
-failure mode you already have in mind confirms what you assumed.
+When the listing shows a row genuinely has no harness, build the app _real_ —
+realistic markup with the defects real products ship, not a fixture soup. The
+defects you invent are what the assertions get judged against, and a fixture
+containing only the failure mode you already have in mind confirms what you
+assumed instead of testing it.
 
 ## 3. When something looks wrong: minimize, then verify
 
@@ -208,11 +218,24 @@ and **a human merges**. Follow the `pr` skill from there.
 ## Traps that have each cost a session
 
 - **`pnpm format:check` failing on files you never touched.** Almost always a
-  local artifact, never `--no-verify`. See
-  `.claude/skills/pr/SKILL.md` and the three causes — untracked file, prettier
-  version drift, or working-tree CRLF. For the CRLF one the git blob is already
-  clean, so `git add --renormalize` staging _nothing_ is the confirmation, not a
-  failure; the fix is `rm <paths> && git checkout HEAD -- <paths>`.
+  local artifact, and never a reason to reach for `--no-verify`. Discriminate by
+  **which file it names**, in this order:
+
+  1. **Untracked** (`git status --short` shows `??`) — `prettier --check .`
+     walks the working tree, so a local, un-gitignored file gets linted and
+     fails only on your machine. Move it aside for the push; don't reformat or
+     delete someone's local config.
+  2. **A few lines differ** in `pnpm exec prettier <f> | diff <f> -` — the
+     worktree's installed prettier drifted from the pin. `pnpm install`. Use
+     `pnpm exec`, not `npx`, or you reproduce the bug instead of diagnosing it.
+  3. **Every line differs** (`1,444c1,444`) — working-tree CRLF. The git blob is
+     already clean, so `git add --renormalize` staging _nothing_ is the
+     confirmation, not a failure. Fix with
+     `rm <paths> && git checkout HEAD -- <paths>`; nothing to commit.
+
+  Confirm which before acting — the three look identical from the error message
+  alone, and only (3) is fixed by a re-checkout.
+
 - **Counting CR bytes in Git Bash lies.** `grep -c $'\r'` reports a hit on every
   line of a pure-LF file, and `git show` applies eol conversion on output. Count
   bytes in PowerShell: `([IO.File]::ReadAllBytes($f) | ? {$_ -eq 13}).Count`.
