@@ -44,6 +44,16 @@ type NativeMessage =
   | { type: "NATIVE_DOGFOOD_REPORT" }
   | { type: "NATIVE_DOGFOOD_CLEAR" };
 
+/** The tab's current URL, or undefined if it can't be read. Best-effort: it
+ *  only drives a staleness check, so a miss degrades to "don't refuse". */
+async function tabUrl(tabId: number): Promise<string | undefined> {
+  try {
+    return (await chrome.tabs.get(tabId)).url;
+  } catch {
+    return undefined;
+  }
+}
+
 function isNativeMessage(m: unknown): m is NativeMessage {
   return (
     typeof m === "object" &&
@@ -118,6 +128,12 @@ export function registerNativeMode(): void {
             sendResponse({
               ok: true,
               serialized: value.serialized,
+              // The document this tree describes. Native node ids encode
+              // Chromium `backendDOMNodeId`s, which a navigation invalidates
+              // wholesale — the panel compares this before acting so it can
+              // refuse a dispatch against ids that no longer mean anything.
+              // Not recorded in the dogfood log, which stays content-free.
+              url: await tabUrl(message.tabId),
               // Only structural fields — never page-derived secrets beyond the
               // accessible name the tree already shows.
               nodes: value.nodes.map((n) => ({

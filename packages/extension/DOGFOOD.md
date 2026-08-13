@@ -52,6 +52,10 @@ is a good test — its media controls are the thing only native mode can see).
 3. **Load native tree** — attaches the debugger (you'll see Chrome's
    "…is debugging this browser" banner), reads the tree, and lists it. Interactive
    rows are buttons; click one to dispatch a click (or type into a text field).
+   The tree **re-reads itself after every successful action**, so the ids stay
+   valid for the next one — you should not need to reload by hand between
+   clicks. If you navigate the page, or switch tabs, the panel drops the tree
+   and says so rather than dispatching against ids the document no longer has.
 4. Use it across normal sessions for ~2 weeks. Leave DevTools open sometimes.
 
 Everything is instrumented to `chrome.storage.local` (content-free — event kinds,

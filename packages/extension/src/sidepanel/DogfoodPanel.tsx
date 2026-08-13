@@ -31,6 +31,15 @@ async function activeTabId(): Promise<number | undefined> {
   return tab?.id;
 }
 
+/** Best-effort current URL for a tab; undefined means "can't tell". */
+async function tabUrl(tabId: number): Promise<string | undefined> {
+  try {
+    return (await chrome.tabs.get(tabId)).url;
+  } catch {
+    return undefined;
+  }
+}
+
 export function DogfoodPanel() {
   const [enabled, setEnabled] = useState(false);
   const [nodes, setNodes] = useState<NativeNode[]>([]);
@@ -39,6 +48,9 @@ export function DogfoodPanel() {
   // `backendDOMNodeId`s, which are scoped to that tab's document — dispatching
   // one anywhere else would act on an unrelated element in a different page.
   const [treeTabId, setTreeTabId] = useState<number | undefined>(undefined);
+  // The document the tree was read from. A navigation invalidates every id in
+  // it, so this is what makes "stale" detectable rather than silent.
+  const [treeUrl, setTreeUrl] = useState<string | undefined>(undefined);
   // A debugger operation is in flight. The service worker queues per tab, so a
   // second request is correct-but-slow rather than harmful — but leaving the
   // buttons live invites a double-click that reads the tree twice or dispatches
@@ -61,10 +73,37 @@ export function DogfoodPanel() {
     setStatus(
       next ? "native mode on — Load tree to attach" : "native mode off",
     );
-    if (!next) {
-      setNodes([]);
-      setTreeTabId(undefined);
+    if (!next) forgetTree();
+  }
+
+  /** Read the tree into state. Returns the node count, or null on failure.
+   *  Does not touch `busy` — callers own that, so an action can refresh
+   *  without releasing the lock in between. */
+  async function readTreeInto(tabId: number): Promise<number | null> {
+    const r = (await chrome.runtime.sendMessage({
+      type: "NATIVE_READ",
+      tabId,
+    })) as {
+      ok?: boolean;
+      error?: string;
+      nodes?: NativeNode[];
+      url?: string;
+    };
+    if (!r?.ok) {
+      forgetTree();
+      setStatus(`read failed: ${r?.error ?? "unknown"}`);
+      return null;
     }
+    setNodes(r.nodes ?? []);
+    setTreeTabId(tabId);
+    setTreeUrl(r.url);
+    return r.nodes?.length ?? 0;
+  }
+
+  function forgetTree() {
+    setNodes([]);
+    setTreeTabId(undefined);
+    setTreeUrl(undefined);
   }
 
   async function loadTree() {
@@ -74,18 +113,8 @@ export function DogfoodPanel() {
     setBusy(true);
     setStatus("attaching debugger + reading…");
     try {
-      const r = (await chrome.runtime.sendMessage({
-        type: "NATIVE_READ",
-        tabId,
-      })) as { ok?: boolean; error?: string; nodes?: NativeNode[] };
-      if (!r?.ok) {
-        setNodes([]);
-        setTreeTabId(undefined);
-        return setStatus(`read failed: ${r?.error ?? "unknown"}`);
-      }
-      setNodes(r.nodes ?? []);
-      setTreeTabId(tabId);
-      setStatus(`read ${r.nodes?.length ?? 0} nodes`);
+      const count = await readTreeInto(tabId);
+      if (count !== null) setStatus(`read ${count} nodes`);
     } finally {
       setBusy(false);
     }
@@ -99,11 +128,19 @@ export function DogfoodPanel() {
     if (treeTabId === undefined) return setStatus("load a tree first");
     const current = await activeTabId();
     if (current !== treeTabId) {
-      setNodes([]);
-      setTreeTabId(undefined);
+      forgetTree();
       return setStatus("active tab changed — reload the native tree");
     }
     const tabId = treeTabId;
+    // A navigation replaces the document, and with it every backendDOMNodeId
+    // these ids are built from — so acting now would target whatever happens
+    // to hold that id in the new page, or nothing at all. Refuse rather than
+    // dispatch into the dark. (Undefined URL = can't tell; don't block.)
+    const nowUrl = await tabUrl(tabId);
+    if (treeUrl && nowUrl && nowUrl !== treeUrl) {
+      forgetTree();
+      return setStatus("page navigated — reload the native tree");
+    }
     const isText = node.role === "textbox" || node.role === "combobox";
     const value = isText
       ? prompt(`Type into "${node.name || node.role}":`)
@@ -118,10 +155,19 @@ export function DogfoodPanel() {
         action: isText ? "type" : "click",
         ...(isText ? { value } : {}),
       })) as { success?: boolean; error?: string };
+      if (!r?.success) {
+        return setStatus(`act failed: ${r?.error ?? "unknown"}`);
+      }
+      // Re-read before the next action. A click that opens a menu, expands a
+      // row or re-renders a list invalidates the backendDOMNodeIds every id
+      // here is built from, so the tree goes stale the instant it works —
+      // session 1 lost 17 of 18 clicks to exactly that, each one dispatched
+      // against an id the page had already discarded.
+      const count = await readTreeInto(tabId);
       setStatus(
-        r?.success
-          ? `acted on ${node.role}`
-          : `act failed: ${r?.error ?? "unknown"}`,
+        count === null
+          ? `acted on ${node.role} — could not refresh the tree`
+          : `acted on ${node.role} — tree refreshed (${count} nodes)`,
       );
     } finally {
       setBusy(false);
