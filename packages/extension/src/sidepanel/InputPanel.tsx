@@ -1,6 +1,78 @@
-import { useState, useRef, useEffect, useCallback } from "preact/hooks";
+import type { RefObject } from "preact";
+import { useState, useRef, useEffect, useCallback, useId } from "preact/hooks";
 
 import type { SelectOption } from "../types.js";
+
+/**
+ * Everything inside the panel that Tab can reach. Its controls are only ever
+ * enabled or disabled — never hidden — so matching on the selector alone is
+ * enough; there is nothing here that needs a visibility check.
+ */
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * `aria-modal` tells assistive tech that everything behind the dialog is
+ * inert, so Tab has to actually honour that. Without this, focus walks out
+ * into the toolbar rendered behind the panel while the screen reader still
+ * believes it is inside a modal.
+ *
+ * Bound as a DOM listener on the dialog root rather than as a JSX `onKeyDown`:
+ * the wrapper is a plain `role="dialog"` container, and hanging key handlers
+ * on it is what `jsx-a11y/no-noninteractive-element-interactions` exists to
+ * catch. Keydown bubbles here from whichever control has focus either way.
+ */
+function useFocusTrap(ref: RefObject<HTMLDivElement>) {
+  useEffect(() => {
+    const root = ref.current;
+    if (!root) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+
+      const focusable = Array.from(
+        root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+      );
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = root.ownerDocument.activeElement;
+
+      if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    root.addEventListener("keydown", onKeyDown);
+    return () => root.removeEventListener("keydown", onKeyDown);
+  }, [ref]);
+}
+
+/**
+ * The panel unmounts on submit and on cancel while it still contains focus,
+ * which drops DOM focus to `<body>` and leaves a keyboard user Tabbing back
+ * from the top of the panel. Return focus to whatever opened it instead — the
+ * tree container, the filtered list or the tab sequence, depending on the view
+ * the interaction started from.
+ *
+ * Must be called before any hook that moves focus into the dialog, so that it
+ * captures the opener rather than the dialog's own initial focus target.
+ */
+function useRestoreFocusOnClose() {
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    return () => {
+      // The opener can be gone by the time the panel closes — a re-extraction
+      // replaces tree rows — and a detached element cannot take focus.
+      if (opener?.isConnected) opener.focus();
+    };
+  }, []);
+}
 
 export interface InputPanelState {
   type: "text" | "select";
@@ -49,6 +121,11 @@ function TextInput({
 }) {
   const [value, setValue] = useState(state.value);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const fieldId = useId();
+
+  useRestoreFocusOnClose();
+  useFocusTrap(dialogRef);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -69,10 +146,19 @@ function TextInput({
   );
 
   return (
-    <div class="sn-input-panel" role="dialog" aria-label={state.label}>
-      <label class="sn-input-panel-label">{state.label}</label>
+    <div
+      ref={dialogRef}
+      class="sn-input-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-label={state.label}
+    >
+      <label class="sn-input-panel-label" for={fieldId}>
+        {state.label}
+      </label>
       <input
         ref={inputRef}
+        id={fieldId}
         class="sn-input-panel-field"
         type={state.inputType === "password" ? "password" : "text"}
         value={value}
@@ -113,6 +199,10 @@ function SelectPicker({
     currentIndex >= 0 ? currentIndex : 0,
   );
   const listRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useRestoreFocusOnClose();
+  useFocusTrap(dialogRef);
 
   useEffect(() => {
     listRef.current?.focus();
@@ -160,7 +250,13 @@ function SelectPicker({
   );
 
   return (
-    <div class="sn-input-panel" role="dialog" aria-label={state.label}>
+    <div
+      ref={dialogRef}
+      class="sn-input-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-label={state.label}
+    >
       <div class="sn-input-panel-label">{state.label}</div>
       <div
         ref={listRef}
