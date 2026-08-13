@@ -1,12 +1,15 @@
 import {
   buildCssPath,
+  describeTreeInput,
   DOM_ELEMENT_ADAPTER,
   extractA11yTree,
   findAllByRole,
   getElementRefs,
   getOutline,
+  isExtractionResult,
   linearize,
   ROLE_FILTER_GROUPS,
+  treeInputError,
   type ExtractionResult,
   type SemanticNode,
 } from "@real-a11y-dev/core";
@@ -93,12 +96,46 @@ const LANDMARK_SELECTOR =
  * an `ExtractionResult`, where referencing `Element` throws `ReferenceError`.
  * Guard on `typeof Element` first — in Node the global is absent and the only
  * possible input is an already-extracted tree.
+ *
+ * The non-Element branch is CHECKED, not cast. It used to be
+ * `root as ExtractionResult`, which meant `assertNoUnlabeledInteractive(42)`
+ * walked an empty tree, found nothing, and passed — reporting a clean page for
+ * an argument that was never a page. Silence is the worst available outcome
+ * for an assertion library: a suite full of them looks green forever.
  */
-function toTree(root: Element | ExtractionResult): ExtractionResult {
-  const isElement = typeof Element !== "undefined" && root instanceof Element;
-  return isElement
-    ? extractA11yTree(root as Element)
-    : (root as ExtractionResult);
+function toTree(
+  root: Element | ExtractionResult,
+  fn: string,
+): ExtractionResult {
+  if (typeof Element !== "undefined" && root instanceof Element) {
+    return extractA11yTree(root);
+  }
+  if (isExtractionResult(root)) return root;
+  throw treeInputError(fn, root);
+}
+
+/**
+ * Reject rule ids that aren't real.
+ *
+ * An unknown id matches no rule, so it produces no findings and the assertion
+ * passes — "no findings" and "no rules ran" are the same observable outcome.
+ * `A11yRule` protects a TypeScript caller writing a literal, but not a list
+ * built from a config file, a CLI flag, or plain JavaScript, and a typo there
+ * silently deletes the check it was meant to run.
+ */
+function requireRules(rules: readonly A11yRule[], fn: string): void {
+  if (!Array.isArray(rules)) {
+    throw new TypeError(
+      `${fn}: expected an array of rule ids, received ${describeTreeInput(rules)}`,
+    );
+  }
+  const unknown = rules.filter((rule) => !ALL_RULES.includes(rule));
+  if (unknown.length) {
+    const listed = unknown.map((rule) => JSON.stringify(rule)).join(", ");
+    throw new TypeError(
+      `${fn}: unknown rule ${listed}. Known rules: ${ALL_RULES.join(", ")}`,
+    );
+  }
 }
 
 /**
@@ -162,7 +199,8 @@ export function collectFindings(
   root: Element | ExtractionResult,
   rules: readonly A11yRule[] = ALL_RULES,
 ): Finding[] {
-  const tree = toTree(root);
+  requireRules(rules, "collectFindings");
+  const tree = toTree(root, "collectFindings");
   const want = new Set(rules);
   const findings: Finding[] = [];
 
@@ -349,7 +387,7 @@ export function listByRole(
 ): string {
   const roles = ROLE_FILTER_GROUPS[filter];
   if (!roles) return `(unknown filter "${filter}")`;
-  const tree = toTree(root);
+  const tree = toTree(root, "listByRole");
   const lines: string[] = [];
   // Counted here rather than from `linearize(tree).length` so the denominator is
   // exactly the set that was tested — if the walk ever starts skipping nodes,
@@ -373,8 +411,16 @@ export function listByRole(
     : nothingMatched(filter, roles, scanned);
 }
 
-/** Format findings into the multi-line message the `assert*` helpers throw. */
+/**
+ * Format findings into the multi-line message the `assert*` helpers throw.
+ *
+ * An empty list reads as an outcome, not a heading with nothing under it:
+ * `assert*` only calls this when something failed, but direct callers render
+ * clean pages too, and "Found 0 accessibility issues:" left a dangling colon
+ * promising a list that never came.
+ */
 export function formatFindings(findings: Finding[]): string {
+  if (!findings.length) return "No accessibility issues found.";
   const noun = findings.length === 1 ? "issue" : "issues";
   const lines = findings.map((f) => {
     const where = f.locator
@@ -395,7 +441,23 @@ export function assertRules(
   root: Element | ExtractionResult,
   rules: readonly A11yRule[],
 ): void {
-  const findings = collectFindings(root, rules);
+  assertRulesAs(root, rules, "assertRules");
+}
+
+/**
+ * Shared body, carrying the name of the function the caller actually called so
+ * a rejected argument names `assertNoUnlabeledInteractive` rather than the
+ * helper underneath it. Input problems throw `TypeError`, never
+ * {@link A11yAssertionError} — a caller catching the latter is handling "this
+ * page has issues", and a wrong argument is not that.
+ */
+function assertRulesAs(
+  root: Element | ExtractionResult,
+  rules: readonly A11yRule[],
+  fn: string,
+): void {
+  requireRules(rules, fn);
+  const findings = collectFindings(toTree(root, fn), rules);
   if (findings.length) {
     throw new A11yAssertionError(formatFindings(findings));
   }
@@ -406,14 +468,18 @@ export function assertRules(
  * Throws an {@link A11yAssertionError} listing the offenders.
  */
 export function assertNoUnlabeledInteractive(root: Element): void {
-  assertRules(root, ["no-unlabeled-interactive"]);
+  assertRulesAs(
+    root,
+    ["no-unlabeled-interactive"],
+    "assertNoUnlabeledInteractive",
+  );
 }
 
 /**
  * Heading structure sanity check: exactly one `h1` and no skipped levels.
  */
 export function assertHeadingOrder(root: Element): void {
-  assertRules(root, ["heading-order"]);
+  assertRulesAs(root, ["heading-order"], "assertHeadingOrder");
 }
 
 /**
@@ -421,7 +487,7 @@ export function assertHeadingOrder(root: Element): void {
  * a visible title child).
  */
 export function assertDialogsLabeled(root: Element): void {
-  assertRules(root, ["dialog-labeled"]);
+  assertRulesAs(root, ["dialog-labeled"], "assertDialogsLabeled");
 }
 
 /**
@@ -429,7 +495,7 @@ export function assertDialogsLabeled(root: Element): void {
  * most once at the top level.
  */
 export function assertLandmarkStructure(root: Element): void {
-  assertRules(root, ["landmark-structure"]);
+  assertRulesAs(root, ["landmark-structure"], "assertLandmarkStructure");
 }
 
 export { A11yAssertionError };

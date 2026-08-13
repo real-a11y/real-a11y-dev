@@ -56,7 +56,8 @@ once on markup that should fail:
   half-built
 - **6** — throws on bad input rather than silently passing. A matcher that quietly
   accepts `undefined` reports every page as clean. The matcher half of this
-  passes today; the `assert*` half does not, which is the whole reason R33 exists
+  always passed; the `assert*` half did not until the release after
+  0.1.0-beta.15, which is the whole reason R33 exists — both halves reject now
 - **7** — the message says what's wrong, where, and ideally what to do. These are
   read by people who did not write the rule
 - **8** — the `<svg>` case is caught. The glyph and `title=` cases are **not**,

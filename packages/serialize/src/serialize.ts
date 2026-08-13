@@ -4,7 +4,13 @@ import type {
   SemanticNode,
   TreeDiff,
 } from "@real-a11y-dev/core";
-import { linearize, getOutline, getTabSequence } from "@real-a11y-dev/core";
+import {
+  getOutline,
+  getTabSequence,
+  isExtractionResult,
+  linearize,
+  treeInputError,
+} from "@real-a11y-dev/core";
 
 import { extract } from "./extract.js";
 
@@ -83,9 +89,22 @@ function isDomRoot(input: SerializeInput): input is Element {
   return typeof Element !== "undefined" && input instanceof Element;
 }
 
-/** Resolve an input to a tree, extracting from the DOM only when needed. */
-function toTree(input: SerializeInput, mode: "a11y" | "dom" = "a11y") {
-  return isDomRoot(input) ? extract(input, mode) : input;
+/**
+ * Resolve an input to a tree, extracting from the DOM only when needed.
+ *
+ * The non-Element branch is CHECKED. Returning `input` unexamined meant
+ * `serializeTree(42)` produced `""` — and an empty string committed through
+ * `toMatchSnapshot()` is a test that passes forever while asserting nothing,
+ * which is a worse failure than a crash and far harder to notice.
+ */
+function toTree(
+  input: SerializeInput,
+  mode: "a11y" | "dom" = "a11y",
+  fn = "serialize",
+): ExtractionResult {
+  if (isDomRoot(input)) return extract(input, mode);
+  if (isExtractionResult(input)) return input;
+  throw treeInputError(fn, input);
 }
 
 /**
@@ -139,7 +158,7 @@ export function serializeTree(
 ): string {
   const { mode = "a11y", includeGeneric = false, markFocus = true } = options;
   const redact = ensureGlobalFlags(options.redact);
-  const tree = toTree(input, mode);
+  const tree = toTree(input, mode, "serializeTree");
   const focusedId = markFocus ? tree.focusedId : undefined;
 
   const printed = linearize(tree).filter(
@@ -166,7 +185,7 @@ export function serializeOutline(
 ): string {
   const { markFocus = true } = options;
   const redact = ensureGlobalFlags(options.redact);
-  const tree = toTree(input);
+  const tree = toTree(input, "a11y", "serializeOutline");
   const focusedId = markFocus ? tree.focusedId : undefined;
   const entries = getOutline(tree);
   if (entries.length === 0) return "(no headings)";
@@ -201,7 +220,7 @@ export function serializeTabSequence(
 ): string {
   const { markFocus = true } = options;
   const redact = ensureGlobalFlags(options.redact);
-  const tree = toTree(input);
+  const tree = toTree(input, "a11y", "serializeTabSequence");
   const focusedId = markFocus ? tree.focusedId : undefined;
   const seq = getTabSequence(tree);
   if (seq.length === 0) return "(nothing focusable)";

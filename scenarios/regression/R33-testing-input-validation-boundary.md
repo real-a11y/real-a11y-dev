@@ -6,7 +6,7 @@ area: Testing
 type: Automated
 priority: P0
 status: Active
-validFrom: "testing ≥ 0.1.0-beta.15. The matcher layer already guards (requireElement in packages/testing/src/matchers.ts); this row is about every OTHER published entry point, which does not."
+validFrom: "testing ≥ 0.1.0-beta.15 for the row; the guard itself ships in the FIRST release after 0.1.0-beta.15. The matcher layer always guarded (requireElement in packages/testing/src/matchers.ts) — this row is about every OTHER published entry point, which did not. Running it against 0.1.0-beta.15 or earlier reproduces the defect rather than failing the test: there, the assert*/collectFindings/serialize* calls pass silently and auditSnapshot returns an empty string. That is the old behaviour, not a fail."
 validUntil: ""
 expected: "every published entry point rejects a non-Element, non-tree argument instead of reporting a clean page"
 twin: D5
@@ -36,21 +36,27 @@ For each value in `undefined`, `null`, `"<button></button>"`, `42`, `true`, `{}`
 
 ## Expected
 
-- **1/2/5** — a thrown error that names the argument problem. Today **1** passes
-  silently and **2** throws `A11yAssertionError: Missing <main>` — a real error
-  with a message about the wrong subject entirely, which sends the reader to
-  look at their markup
+- **1/2/5** — a `TypeError` naming the function called and the type received:
+  `assertNoUnlabeledInteractive: expected a DOM Element or an extracted a11y
+  tree, received number`. It must be a `TypeError`, **never** an
+  `A11yAssertionError` — code catching the latter is handling "this page has
+  issues", and a wrong argument is not that
 - **3** — rejects, rather than returning `heading-order` + `landmark-structure`
   findings **about a number**
-- **4** — rejects. Today it returns `""`, and step **8** is why that matters: a
-  committed empty snapshot is a permanently green test asserting nothing
-- **6** — the matcher rejects (`expected a DOM Element, received number`). The
-  gap between **6** and **1** is the finding: the guard exists, one layer up
-- **7** — an unrecognised rule id is an error. Today it matches no rules, so the
-  assertion passes having checked nothing — a typo silently deletes a check
-- `undefined`/`null` throw today, but as a raw
-  `TypeError: Cannot read properties of undefined (reading 'nodes')` rather than
-  an actionable message
+- **4** — rejects. Step **8** is why that matters: an empty string committed
+  through `toMatchSnapshot()` is a permanently green test asserting nothing
+- **6** — the matcher rejects too, and always did. **6** vs **1** was the whole
+  finding: the guard existed one layer up, so testing only the matcher tested
+  the half that already worked
+- **7** — an unrecognised rule id is an error listing the valid ids. Matching no
+  rules and passing is indistinguishable from checking nothing, so a typo
+  silently deleted a check
+- **`undefined`/`null`** get the same actionable message, not the raw
+  `TypeError: Cannot read properties of undefined (reading 'nodes')`
+- The message names the received **type** and never its value — what arrives
+  here by mistake is often page text or a token
+- A tree that crossed a realm (iframe, worker, a second bundled copy of the
+  engine) still passes: the check is structural, not `instanceof`
 
 ## Why this exists
 

@@ -77,6 +77,11 @@ export {
 export { getNodeId, resetIdCounter } from "./utils/id-generator.js";
 export { buildControlsIndex } from "./utils/controls-index.js";
 export type { ControlsIndex } from "./utils/controls-index.js";
+export {
+  isExtractionResult,
+  describeTreeInput,
+  treeInputError,
+} from "./utils/tree-input.js";
 
 // Native AX vocabulary — the ONE normalization of Chromium's CDP
 // `Accessibility.getFullAXTree` payload into engine vocabulary. Pure (no
