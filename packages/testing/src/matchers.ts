@@ -172,6 +172,16 @@ function toValidatedNodes(tree: Tree): Map<string, ValidatedNode> {
       role: n.a11y.role,
       name: n.a11y.name,
       attrs,
+      // An authored `role=` means the author owns the ARIA contract for this
+      // node; anything else got its role from the element, and the user agent
+      // owns it. `dom` is absent on native-produced trees, where the producer
+      // has already resolved semantics — treat those as implicit too, since
+      // the alternative is inventing violations for markup we cannot inspect.
+      //
+      // Trimmed because `role=""` and `role="  "` both fall back to the
+      // element's own semantics in every user agent — usually a template that
+      // interpolated an empty variable — so neither is an authored role.
+      implicitRole: !n.dom?.attributes?.role?.trim(),
     });
   }
   return out;
