@@ -6,7 +6,7 @@ banner
     link "Guide"
     link "Recipes"
     link "Packages"
-    button "v0.1 · Beta"
+    button "v0.1.0-beta.15"
   switch "Switch to dark theme"
   link "github"
 complementary
