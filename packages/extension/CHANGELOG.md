@@ -8,6 +8,23 @@
   landed the change; versions match `package.json`/`public/manifest.json`.
 -->
 
+## Unreleased
+
+### Patch Changes
+
+- Stop the DOM/A11Y/TAB toggle wiping the panel. Switching view mode ran the
+  teardown written for tab switches, so every toggle dropped the tree, the
+  selection and the scope and showed "Connecting to page…" until the
+  re-extraction arrived — and it arrived without any of them, because the
+  state-preserving merge reads the previous tree and that had just been
+  emptied. Only a tab change tears the panel down now; a mode switch tells the
+  content script to re-extract and the new tree replaces the old one in place,
+  keeping expand/collapse, selection and scope wherever the two views agree on
+  a node. Where they don't — a generic wrapper selected in DOM view is not in
+  the a11y tree — the selection is dropped rather than left pointing at
+  nothing, which is what used to leave the tree ignoring every arrow key.
+  ([#334])
+
 ## 0.1.12
 
 ### Patch Changes
@@ -241,3 +258,4 @@ Earlier releases predate this changelog.
 [#317]: https://github.com/real-a11y/real-a11y-dev/pull/317
 [#322]: https://github.com/real-a11y/real-a11y-dev/pull/322
 [#324]: https://github.com/real-a11y/real-a11y-dev/pull/324
+[#334]: https://github.com/real-a11y/real-a11y-dev/pull/334

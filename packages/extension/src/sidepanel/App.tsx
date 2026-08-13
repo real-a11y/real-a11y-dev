@@ -134,6 +134,19 @@ function isFieldStateSuccess(
 
 export function App() {
   const [viewMode, setViewMode] = useState<TreeViewMode>("a11y");
+  // Read by `sendTreeRequest` instead of closing over `viewMode`, so that
+  // callback — and `requestTree`/`reExtract`/`handleActivate` built on it —
+  // keeps a stable identity when the mode changes. It is a dependency of the
+  // tab-change effect below, whose teardown belongs to tab switches alone: a
+  // view-mode toggle that re-ran it wiped the tree, the selection and the
+  // scope and dropped the panel to "Connecting to page..." until the
+  // re-extraction landed. A ref rather than a dependency because the mode is
+  // an input to a request, never a reason to re-send one — SET_VIEW_MODE
+  // already makes the content script re-extract.
+  const viewModeRef = useRef<TreeViewMode>(viewMode);
+  useEffect(() => {
+    viewModeRef.current = viewMode;
+  }, [viewMode]);
   const [nodes, setNodes] = useState<Map<string, SemanticNode>>(new Map());
   const [rootId, setRootId] = useState<string>("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -280,7 +293,7 @@ export function App() {
   const sendTreeRequest = useCallback(
     (applyVerdict: boolean) => {
       sendToBoundTab(
-        { type: "REQUEST_TREE", payload: { viewMode } },
+        { type: "REQUEST_TREE", payload: { viewMode: viewModeRef.current } },
         (response: unknown) => {
           // Read lastError even though the reply carries the verdict: an
           // unread one logs "Unchecked runtime.lastError" to the panel
@@ -301,7 +314,7 @@ export function App() {
         },
       );
     },
-    [sendToBoundTab, viewMode],
+    [sendToBoundTab],
   );
 
   /** The user asked for the tree. Its answer decides what they are shown. */
@@ -328,6 +341,10 @@ export function App() {
   // and the content script being reachable). Instead we clear the stale
   // tree so the user sees the empty state, and they hit the refresh
   // button to load the new tab's tree explicitly.
+  //
+  // Only `myTabId` may re-run this. `requestTree` is in the deps as well but
+  // is identity-stable by construction (see `viewModeRef`) — the teardown
+  // below describes leaving a tab, and nothing else is allowed to trigger it.
   const hasRequestedInitial = useRef(false);
   useEffect(() => {
     if (myTabId === null) return;
@@ -454,6 +471,14 @@ export function App() {
         setPageUnreachable(false);
         // Reset scope if scoped node no longer exists in tree
         setScopedRootId((prev) => (prev && !nodeMap.has(prev) ? null : prev));
+        // Same for the selection, and for the same reason. A selection that
+        // survives into a tree without it is worse than none: no row carries
+        // `aria-selected`, `aria-activedescendant` points at nothing, and
+        // `useTreeKeyboard` can't find an index to move from — so every key
+        // is dead until the user clicks a row. It goes stale exactly where
+        // the two views disagree, which is where switching them is useful:
+        // a generic wrapper picked in DOM view is pruned from the a11y tree.
+        setSelectedId((prev) => (prev && !nodeMap.has(prev) ? null : prev));
         if (message.type === "TREE_DATA" && "pageTitle" in message.payload) {
           setPageTitle(message.payload.pageTitle || "");
           setPageUrl(message.payload.pageUrl || "");
@@ -526,8 +551,8 @@ export function App() {
 
     chrome.runtime.onMessage.addListener(handler);
 
-    // No initial REQUEST_TREE here — the [myTabId, viewMode] effect above
-    // sends one as soon as we know which tab we're bound to.
+    // No initial REQUEST_TREE here — the myTabId effect above sends one as
+    // soon as we know which tab we're bound to.
 
     return () => {
       chrome.runtime.onMessage.removeListener(handler);
