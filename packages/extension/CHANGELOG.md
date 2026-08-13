@@ -12,6 +12,19 @@
 
 ### Patch Changes
 
+- Make the inline input panel usable from the keyboard and from a screen
+  reader. Its text field had no accessible name of its own — the visible label
+  was never associated with it, so the only name was whatever placeholder the
+  page happened to supply, and fields without one announced as a bare "edit
+  text". Neither the text nor the select variant claimed `aria-modal`, and Tab
+  really did walk out of the dialog into the toolbar rendered behind it. And
+  because submit and cancel unmount the panel while it still holds focus, DOM
+  focus fell to `<body>`, leaving a keyboard user to Tab back from the top of
+  the panel. The label is associated with the field, both variants are modal
+  and hold Tab inside — including when focus has fallen out onto the panel's
+  own non-focusable padding — and closing the panel returns focus to whatever
+  opened it. ([#343])
+
 - Stop the DOM/A11Y/TAB toggle wiping the panel. Switching view mode ran the
   teardown written for tab switches, so every toggle dropped the tree, the
   selection and the scope and showed "Connecting to page…" until the
@@ -259,3 +272,4 @@ Earlier releases predate this changelog.
 [#322]: https://github.com/real-a11y/real-a11y-dev/pull/322
 [#324]: https://github.com/real-a11y/real-a11y-dev/pull/324
 [#334]: https://github.com/real-a11y/real-a11y-dev/pull/334
+[#343]: https://github.com/real-a11y/real-a11y-dev/pull/343
