@@ -178,7 +178,9 @@ main
     listitem "The subtree is or ."
       code "display: none"
       code "aria-hidden="true""
-    listitem "You're passing a root that doesn't contain the expected elements (e.g. a portaled modal that mounts elsewhere in the DOM)."
+    listitem "You're passing a root that doesn't contain the expected elements (e.g. a portaled modal that mounts elsewhere in the DOM). Note that scoping to a subtree does reliably exclude portaled content — see for why, and what to do instead."
+      strong "not"
+      link "My snapshot contains the whole page"
   paragraph "If the tab order be empty on a given route (a 404, a splash screen with no interactive content), suppress the assertion for that route rather than the whole suite."
     emphasis "should"
   separator
@@ -197,8 +199,13 @@ main
       link "toMatchA11yContract"
         code "toMatchA11yContract"
     listitem "Or render the component with no app-level toaster/announcer mounted, which is usually a test-setup change rather than a product one."
-  paragraph "A root that is is never widened — extraction returns exactly what you passed. That matters because widening a detached root would replace it outright rather than adding to it, and an audit of the wrong subtree reports no findings, which reads as a clean component."
+  paragraph "A root that is is never widened — extraction returns exactly what you passed. That covers a fixture, a component inspected before mount, and a root inside a shadow root. It matters because widening one of those replaces it outright rather than adding to it, and an audit of the wrong subtree reports no findings, which reads as a clean component."
     strong "not in the document"
+    code "createElement"
+  paragraph "The trade is worth knowing: If you render into an unappended container — Vue Test Utils and Enzyme both do — and the component teleports a dialog to , that dialog is outside your root and stays outside it. Assert on it by passing a root that contains it (), or mount into the document first."
+    strong "a detached root therefore never sees teleported content either."
+    code "document.body"
+    code "document.body"
   separator
   heading "React hydration mismatch when rendering the panel" (level 2)
   paragraph "If you drop into an SSR-rendered component tree, the server renders the wrapper but no inspector content — the inspector mounts on the client. That's fine. Hydration warnings typically come from sources in the same tree; the panel itself is hydration-safe."

@@ -64,6 +64,7 @@ button "Copy Code"
 generic
 button "Copy Code"
 generic
+link "My snapshot contains the whole page"
 button "Copy Code"
 generic
 link "toMatchA11yContract"
