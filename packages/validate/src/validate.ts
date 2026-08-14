@@ -25,6 +25,27 @@ export interface ValidatedNode {
   role: string;
   name: string;
   attrs: Record<string, string | boolean>;
+  /**
+   * The role came from the element (`<select>` → combobox), not an authored
+   * `role=`. Governs STRUCTURE — the nesting exemption and the invalid-role
+   * check, since only an authored role can be invalid ARIA.
+   *
+   * Absent fails closed: treated as authored.
+   */
+  implicitRole?: boolean;
+  /**
+   * ARIA attributes the user agent supplies, so the author owes nothing and a
+   * required-attribute check must not fire. Per-attribute, because an element
+   * can supply one state and still owe another.
+   *
+   * Absent fails closed: treated as supplying nothing.
+   *
+   * Kept separate from {@link ValidatedNode.implicitRole} because "is the role
+   * authored" and "does the UA supply this state" diverge — `<input
+   * type="checkbox" role="switch">` is authored, non-redundant, and still has
+   * UA-supplied checkedness.
+   */
+  uaSuppliedAttrs?: readonly string[];
 }
 
 export interface NodeIssue {
@@ -56,19 +77,46 @@ const INTERACTIVE = new Set([
   // structure, not a nested-control error.
 ]);
 
+/**
+ * `ancestor>child` role pairs where an interactive-inside-interactive nesting
+ * is the element's own required structure rather than an authoring mistake —
+ * and so only exempt when BOTH sides got their role from the element.
+ *
+ * Exactly one entry, and deliberately not more: `<select>` owning `<option>`.
+ * `<optgroup>` sits between them as a non-interactive `group`, so the walk
+ * still resolves an option's nearest interactive ancestor to the select.
+ *
+ * `listbox>option` was here for `<select multiple>` and was **unreachable** —
+ * the key is only built inside `INTERACTIVE.has(ancestor.role)` and `listbox`
+ * is not in that set, so the lookup could never see it. Adding `listbox` to
+ * `INTERACTIVE` to make it reachable would change what the nesting rule flags
+ * everywhere; a `<select multiple>` needs no exemption today because its
+ * options simply climb past it. Kept out until something actually needs it,
+ * with a paired test, rather than left as a promise the code doesn't keep.
+ */
+const NATIVE_STRUCTURAL_NESTING = new Set(["combobox>option"]);
+
 /** Per-node spec issues — drives the red/green dot and the inspector list. */
 export function validateNode(
   n: ValidatedNode,
   nodesById: NodeMap,
 ): NodeIssue[] {
   const issues: NodeIssue[] = [];
-  if (!isValidRole(n.role)) {
+  // Only an AUTHORED role can be an invalid ARIA role. An implicit one is
+  // engine vocabulary — `<video controls>` extracts as `video`, which is not
+  // in the ARIA role set — and reporting it told the user their browser's own
+  // element was broken. It also returned early, so no other rule ran on those
+  // nodes: a page containing a `<video>` could not use the matcher at all.
+  if (!n.implicitRole && !isValidRole(n.role)) {
     issues.push({
       severity: "error",
       message: `"${n.role}" is not a valid ARIA role`,
     });
     return issues;
   }
+  // Engine vocabulary has no ARIA schema to check against, so the remaining
+  // per-node rules would all read as "missing" against an empty spec.
+  if (!isValidRole(n.role)) return issues;
   const meta = roleMeta(n.role);
 
   if (meta.accessibleNameRequired && !n.name.trim()) {
@@ -78,10 +126,21 @@ export function validateNode(
     });
   }
 
+  // Required ARIA attributes are the AUTHOR's obligation — but only for the
+  // ones no user agent supplies. `<input type="checkbox">` has checkedness
+  // whether or not anyone wrote `aria-checked`, and a `<select>` has its popup
+  // whether or not anyone wrote `aria-controls`, so demanding them reported
+  // correct HTML as broken. See `uaSuppliedAttrs`, which is per-attribute
+  // precisely because an element can supply one state and still owe another.
   const required = attributesForRole(n.role).filter((a) => a.required);
   for (const a of required) {
+    if (n.uaSuppliedAttrs?.includes(a.name)) continue;
     const v = n.attrs[a.name];
-    if (v === undefined || v === "" || v === false) {
+    // `false` is a PRESENT value, not an absent one. `aria-expanded="false"`
+    // is a collapsed combobox and `aria-checked="false"` an unchecked box —
+    // the ordinary states. Counting them as missing made the most common
+    // shape of correct authored markup unsatisfiable.
+    if (v === undefined || v === "") {
       issues.push({ severity: "error", message: `missing required ${a.name}` });
     }
   }
@@ -133,6 +192,25 @@ export function validateTree(nodes: NodeMap): Map<string, NodeIssue[]> {
       let ancestor = node.parentId ? nodes.get(node.parentId) : null;
       while (ancestor) {
         if (INTERACTIVE.has(ancestor.role)) {
+          // `<select><option>` is combobox > option — the nesting IS how a
+          // select is built, so flagging it told people to break correct
+          // markup. The exemption is deliberately a named pair list rather
+          // than "both roles are native": blanket-exempting native nesting
+          // would also swallow `<button><a href>`, which is a real bug (and
+          // invalid HTML), so no correct document would ever reach it.
+          const nativeStructure =
+            node.implicitRole &&
+            ancestor.implicitRole &&
+            NATIVE_STRUCTURAL_NESTING.has(`${ancestor.role}>${node.role}`);
+          // An exempt pair must not END the walk, only skip this rung. The
+          // `option` in `<div role="button"><select><option>` is legitimately
+          // nested in its select — and illegitimately nested in the button
+          // above it, which nothing would ever test if we stopped here. Every
+          // entry added to the pair list widens what a `break` could swallow.
+          if (nativeStructure) {
+            ancestor = ancestor.parentId ? nodes.get(ancestor.parentId) : null;
+            continue;
+          }
           add(node.id, {
             severity: "error",
             message: `interactive "${node.role}" is nested inside "${ancestor.role}" — nested controls aren't operable by assistive tech`,

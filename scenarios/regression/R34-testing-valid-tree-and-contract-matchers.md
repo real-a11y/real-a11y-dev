@@ -6,7 +6,7 @@ area: Testing
 type: Automated
 priority: P1
 status: Active
-validFrom: "testing ≥ 0.1.0-beta.15. `toBeValidA11yTree` is backed by `validate`, which is PRIVATE and bundled — there is no validate version to pin, so assert against `@real-a11y-dev/testing` only. `toMatchA11yContract` is backed by `verifyContract` in packages/testing/src/contract.ts, deliberately INTERNAL to this package until a second consumer appears. The shipped JSDoc claims it comes from `serialize`; that is stale, and it is what this row was first written from."
+validFrom: "testing ≥ 0.1.0-beta.15 for the row; the user-agent-supplied-state split ships in the FIRST release after 0.1.0-beta.15. Running steps 1–3 against 0.1.0-beta.15 or earlier reproduces the defect rather than failing the test — there a bare `select` reports six violations, and a correct authored combobox or slider reports a missing required attribute with no markup that clears it. That is the old behaviour, not a fail. `toBeValidA11yTree` is backed by `validate`, which is PRIVATE and bundled — there is no validate version to pin, so assert against `@real-a11y-dev/testing` only. `toMatchA11yContract` is backed by `verifyContract` in packages/testing/src/contract.ts, deliberately INTERNAL to this package until a second consumer appears. The shipped JSDoc claims it comes from `serialize`; that is stale, and it is what this row was first written from."
 validUntil: ""
 expected: "toBeValidA11yTree flags authored-ARIA mistakes and NOT native HTML; toMatchA11yContract matches by containment, is strict on demand, and never passes vacuously"
 twin: D5
