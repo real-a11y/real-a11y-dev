@@ -1,6 +1,6 @@
 h1 Real A11yAccessibility tooling that works in the real world
-  h2 Chrome extension
   h2 One engine, every context
+  h2 Chrome extension
   h2 Test what users actually experience
   h2 Audit from the shell and CI
   h2 Accessibility for AI agents

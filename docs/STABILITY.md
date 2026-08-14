@@ -16,7 +16,7 @@ Most `@real-a11y-dev/*` packages are linked: they bump together so consumers see
 
 ## Public vs. internal API
 
-The distinction below is about **symbols**. There is a package-level version of it too: a workspace package may be internal, meaning it is never published and is bundled into the packages that use it. Nothing it exports is public, whatever its JSDoc says, and the [root README](../README.md#internal) lists which packages those are.
+The distinction below is about **symbols**. There is a package-level version of it too: a workspace package may be internal, meaning it is never published and is bundled into the packages that use it. Nothing it exports is public, whatever its JSDoc says, and the [architecture guide](https://real-a11y.dev/guide/architecture) lists which packages those are, with the published home of every name that has one.
 
 **Public** — anything exported from a package's `dist/index.{js,d.ts}` (or a documented sub-entry like `@real-a11y-dev/testing/playwright`). Typed by the published `.d.ts`. Covered by the version contract above.
 

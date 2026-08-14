@@ -154,6 +154,11 @@ main
             code "@real-a11y-dev/mcp"
         cell "run via npx"
           code "npx"
+      row
+        cell "Explore any page in the browser — no code, nothing to install"
+        cell "Chrome extension"
+          link "Chrome extension"
+        cell "—"
   paragraph "Install as a dev dependency by default"
   paragraph "Real A11y is a , not runtime infrastructure. Install everything under ( / ) and gate any UI it renders on a development build flag. That way the tree extractor, Preact renderer, and accessibility heuristics never reach your production bundle."
     strong "developer-time audit suite"

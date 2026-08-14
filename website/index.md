@@ -17,14 +17,14 @@ hero:
       link: /guide/chrome-extension
 
 features:
+  - icon: 🌳
+    title: One engine, every context
+    details: "The full semantic tree as plain data — roles, accessible names, focus state, modal context, live regions. Every package is a different lens on the same tree."
   - icon: 🧩
     title: Chrome extension
     details: "Open the side panel on any website and explore its DOM, A11y, and TAB views live. Highlights elements on the page as you navigate the tree. No code, no setup."
     link: /guide/chrome-extension
     linkText: Install the extension
-  - icon: 🌳
-    title: One engine, every context
-    details: "One extraction engine reads the full semantic tree from any DOM — roles, accessible names, focus state, modal context, live regions. Every package is a different lens on that tree."
   - icon: 🧪
     title: Test what users actually experience
     details: "@real-a11y-dev/testing gives you auditSnapshot(), assertHeadingOrder(), assertNoUnlabeledInteractive(), and a fluent flow() chain — all powered by the real accessibility tree, not synthetic mocks."
