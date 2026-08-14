@@ -6,7 +6,7 @@ area: MCP
 type: Automated
 priority: P1
 status: Active
-validFrom: "mcp ≥ 0.1.0-beta.1. The MCP tree checkpoint stays in-page for now; the native Node-side checkpoint lands with the MCP native-only migration (see R26 for the CLI side). Step 7's a/b split is from mcp ≥ 0.1.0-beta.2 — before that, a diff across any two pages printed the structural summary regardless, so on an earlier release expect 7a to dump a large advisory section and treat that as the old behaviour, not a fail. The operation-naming headers in (3)/(6) are also mcp ≥ 0.1.0-beta.2; earlier releases print `Checkpoint diff …` for both. From mcp ≥ 0.1.0-beta.2 a page also carries an identity separate from its checkpoint LABEL, which changes what 7a's FINDINGS do (see its Expected) and stops import from rewriting what it stores (5)."
+validFrom: "mcp ≥ 0.1.0-beta.1. The MCP tree checkpoint is Node-side and native from mcp ≥ 0.1.0-beta.6 (it was in-page, and DOM-producer, on ≤ 0.1.0-beta.5); see R26 for the CLI side, which moved first. Step 9's Expected carries both shapes. Step 7's a/b split is from mcp ≥ 0.1.0-beta.2 — before that, a diff across any two pages printed the structural summary regardless, so on an earlier release expect 7a to dump a large advisory section and treat that as the old behaviour, not a fail. The operation-naming headers in (3)/(6) are also mcp ≥ 0.1.0-beta.2; earlier releases print `Checkpoint diff …` for both. From mcp ≥ 0.1.0-beta.2 a page also carries an identity separate from its checkpoint LABEL, which changes what 7a's FINDINGS do (see its Expected) and stops import from rewriting what it stores (5)."
 validUntil: ""
 expected: "checkpoint → change page → diff reports exactly the introduced delta; export→import round-trips losslessly and unmodified; each diff's header names which operation ran and what it read; a diff across two different routes reports them as separate pages and suppresses the structural summary, while a diff across two deploys of one route compares them normally"
 covers:
@@ -39,7 +39,7 @@ differently.
    - **a.** a different **route** (`/pricing` → `/careers`)
    - **b.** a different **deploy of the same route** (prod host → preview host)
 
-**Tree checkpoint (bound to the page instance):**
+**Tree checkpoint (Node-side; outlives the page):**
 
 8. `checkpoint_tree` → click something → `diff_tree`
 9. `checkpoint_tree` → navigate → `diff_tree`
@@ -78,8 +78,11 @@ differently.
     Only the origin differs, and prod-vs-preview is the headline cross-deploy
     workflow
 - **8** — the tree diff names what the interaction changed
-- **9** — a clean, explicit error — the tree checkpoint is bound to the page
-  instance and does not survive navigation
+- **9** — from mcp ≥ 0.1.0-beta.6, a report that the page navigated or reloaded,
+  naming where it started and where it ended up, and telling you to re-checkpoint
+  — NOT a diff claiming the whole page changed. On mcp ≤ 0.1.0-beta.5 this was
+  instead a clean error, because the checkpoint lived in the page and the
+  navigation destroyed it; either shape passes on its own release.
 - **10** — tells the agent to `checkpoint_tree` first
 
 ## Why this exists

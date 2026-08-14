@@ -65,7 +65,7 @@ query or fragment — the diff tools say so and drop the advisory structural
 summary, which across unrelated routes describes a rewrite rather than a
 regression. Findings still match by fingerprint.
 
-**Tree checkpoints** — capture the tree, interact, then see exactly what an interaction changed for a screen reader. Bound to the page instance (do not survive navigation).
+**Tree checkpoints** — capture the tree, interact, then see exactly what an interaction changed for a screen reader. Held outside the page, so a navigation is reported as a replaced document rather than silently losing the baseline.
 
 | Tool | Purpose |
 | --- | --- |
@@ -80,7 +80,7 @@ targeting gap. The loop: `checkpoint_tree` → act → `diff_tree`. Chromium onl
 
 | Tool | Purpose |
 | --- | --- |
-| `click_element` | Dispatch a real click at the matched node. Can submit and navigate — navigation discards the tree checkpoint. |
+| `click_element` | Dispatch a real click at the matched node. Can submit and navigate — if it navigates, `diff_tree` says so instead of diffing. |
 | `type_text` | Replace a text field's value (input/change events fire, so framework-controlled inputs register it). The result never echoes the typed text. |
 | `focus_element` | Move real keyboard focus; reports whether the target is a text field so a `type_text` can follow. |
 

@@ -136,7 +136,7 @@ main
       code "close_browser"
     code "session"
     link "operator-configured"
-  paragraph "Every read is built from , read over CDP. There is no parameter: each surface has exactly one correct producer, so there is nothing to choose. That tree is whole-document, so the audit and view tools take no — the exceptions are and the tree checkpoints, which run in the page, where a selector means something. Tool output is capped at ; a larger page is truncated with a note naming the lever that tool actually has — a subset, a narrower where one applies, or a smaller sibling read such as . is the one exception: a JSON artifact can't be truncated and stay parseable, so it fails instead."
+  paragraph "Every read is built from , read over CDP. There is no parameter: each surface has exactly one correct producer, so there is nothing to choose. That tree is whole-document, so the audit and view tools take no — the one exception is , which runs in the page, where a selector means something. Tool output is capped at ; a larger page is truncated with a note naming the lever that tool actually has — a subset, a narrower where one applies, or a smaller sibling read such as . is the one exception: a JSON artifact can't be truncated and stay parseable, so it fails instead."
     strong "Chromium's own accessibility tree"
     code "producer"
     code "rootSelector"
@@ -276,7 +276,7 @@ main
         cell "checkpoint_tree"
           link "checkpoint_tree"
             code "checkpoint_tree"
-        cell "Capture the current tree as an interaction-diff baseline (page-bound)."
+        cell "Capture the current tree as an interaction-diff baseline."
       row
         cell "diff_tree"
           link "diff_tree"
@@ -600,7 +600,7 @@ main
     strong "survive navigation by design"
     link "idle timeout"
     code "close_browser"
-  paragraph "These capture the accessibility . To capture the tree and diff what an interaction changed, see — which are bound to the page instance and do not survive navigation."
+  paragraph "These capture the accessibility . To capture the tree and diff what an interaction changed, see — which survive navigation as data, but report a replaced document rather than diffing across one."
     emphasis "problems"
     emphasis "structure"
     link "tree checkpoints"
@@ -740,23 +740,22 @@ main
     link "findings checkpoints"
     emphasis ""what accessibility problems changed?""
     emphasis ""what did that interaction change?""
-  paragraph "The two are deliberately different in lifetime. A snapshot checkpoint is pure data and . A tree checkpoint holds the extracted tree — its node identities are bound to that page instance — so it is . Capture, interact, diff, all within one page load."
-    strong "survives navigation"
-    strong "inside the page"
-    strong "discarded the moment the page navigates"
+  paragraph "Both are pure data held outside the page, so neither dies with it. They differ in what a navigation costs them: a snapshot checkpoint one, while a tree checkpoint's node identities belong to the document it was captured from — Chromium reallocates every one of them when the document is replaced. So the checkpoint outlives the navigation, but the comparison does not, and reports rather than a diff claiming the whole page changed. Capture, interact, diff — then re-capture if you navigated."
+    strong "survives"
+    link "diff_tree"
+      code "diff_tree"
+    strong "the document was replaced"
+  paragraph "Both tools read Chromium's own accessibility tree, the same producer the target, so an action and the diff describing it speak one vocabulary."
+    link "act tools"
   heading "checkpoint_tree" (level 3)
     code "checkpoint_tree"
   paragraph
-    emphasis "Captures the current tree in the page as a comparison point."
+    emphasis "Captures the current tree as a comparison point."
   paragraph "Capture the current accessibility tree as the baseline for an interaction diff. Then interact with the page and call . Re-capturing re-baselines."
     link "diff_tree"
       code "diff_tree"
-  paragraph "Parameters:"
-  list
-    listitem "— string — optional (default ) — CSS selector for the extraction root."
-      strong
-        code "rootSelector"
-      code ""body""
+  paragraph "Whole-document, like every other native read — there is no to scope it."
+    code "rootSelector"
   heading "diff_tree" (level 3)
     code "diff_tree"
   paragraph
@@ -769,14 +768,11 @@ main
     code "focus:"
     code "dialog"
     emphasis "and"
-  paragraph "Parameters:"
-  list
-    listitem "— string — optional — CSS root for the re-extraction. , so the diff stays like-for-like instead of silently widening to and reporting the rest of the page as added."
-      strong
-        code "rootSelector"
-      strong "Defaults to the root the checkpoint was captured with"
-      code "body"
-  paragraph "Errors if no checkpoint exists on the current page — including after a navigation, which discards it."
+  paragraph "Takes no parameters beyond : it re-reads the whole document and compares it against the captured tree."
+    code "session"
+  paragraph "If the page navigated or reloaded in between, this says so — naming where the page started and where it ended up — instead of emitting a diff in which every node was removed and every node added. Call again to start a new comparison."
+    code "checkpoint_tree"
+  paragraph "Errors if no checkpoint exists for the session yet."
   heading "Act" (level 2)
   paragraph "The write side of the same tree every read tool uses: dispatch a real click, replace a text field's value, or move real keyboard focus — over CDP, against the node matched in . Chromium only."
     strong "Chromium's own accessibility tree"
@@ -819,9 +815,11 @@ main
     code "click_element"
   paragraph
     emphasis "Acts on the page · targets by role + accessible name · Chromium only."
-  paragraph "Dispatch a click against the matched element. It can submit forms, toggle state, and — and navigation discards the page's tree checkpoint, so re-checkpoint after any click that changes the page instance."
+  paragraph "Dispatch a click against the matched element. It can submit forms, toggle state, and — if it does, reports that the document was replaced instead of a diff, and you re-checkpoint."
     strong "real"
     strong "navigate"
+    link "diff_tree"
+      code "diff_tree"
   paragraph "An agent calls this to open the dialog it is about to audit, expand a disclosure, or demonstrate that an unlabeled-but-reachable button actually does something:"
   button "Copy Code"
   code
