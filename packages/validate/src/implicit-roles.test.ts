@@ -1,15 +1,17 @@
 /**
- * Native semantics are not the author's obligation.
+ * Two different questions, deliberately kept apart.
  *
- * `aria-query` genuinely requires `aria-checked` on checkbox, `aria-expanded`
- * + `aria-controls` on combobox, `aria-selected` on option — and that is right
- * for an AUTHORED role, where nothing else supplies them. Applied to a native
- * `<select>` or `<input type="checkbox">` it reported correct, preferable HTML
- * as broken. Found running the published package from npm (scenario R34).
+ * `uaSuppliedAttrs` answers "does the USER AGENT supply this state?" and
+ * governs required attributes. `implicitRole` answers "did the role come from
+ * the element?" and governs structure. Keying both on the `role=` attribute —
+ * the first attempt — was wrong: `<input type="checkbox" role="switch">` is the
+ * ARIA-APG canonical switch, with an authored, non-redundant role AND
+ * UA-supplied checkedness at the same time.
  *
- * Every case here is paired: the same semantics native and hand-authored, with
- * opposite verdicts. That pairing is the point — a fix that silenced both would
- * pass a one-sided test while deleting the rule.
+ * `aria-query` genuinely requires `aria-checked` on checkbox, `aria-expanded` +
+ * `aria-controls` on combobox and `aria-selected` on option — right for an
+ * authored role where nothing else supplies them, wrong for a native control.
+ * Found running the published package from npm (scenario R34).
  */
 import { describe, it, expect } from "vitest";
 
@@ -18,12 +20,7 @@ import { validateNode, validateTree, type ValidatedNode } from "./validate.js";
 function node(
   partial: Partial<ValidatedNode> & { id: string; role: string },
 ): ValidatedNode {
-  return {
-    parentId: null,
-    name: "",
-    attrs: {},
-    ...partial,
-  };
+  return { parentId: null, name: "", attrs: {}, ...partial };
 }
 
 function mapOf(...nodes: ValidatedNode[]): Map<string, ValidatedNode> {
@@ -36,65 +33,83 @@ function errorsFor(n: ValidatedNode, nodes = mapOf(n)): string[] {
     .map((i) => i.message);
 }
 
-describe("required ARIA attributes are the author's obligation", () => {
+describe("required attributes follow the USER AGENT, not the role attribute", () => {
   const CASES: Array<[string, string, string]> = [
     ["checkbox", "aria-checked", "an <input type=checkbox>"],
     ["radio", "aria-checked", "an <input type=radio>"],
-    ["switch", "aria-checked", "a native switch"],
     ["option", "aria-selected", "an <option>"],
     ["combobox", "aria-expanded", "a <select>"],
+    ["slider", "aria-valuenow", "an <input type=range>"],
   ];
 
   for (const [role, attr, native] of CASES) {
     it(`${native} is not asked for ${attr}`, () => {
-      const n = node({ id: "n", role, name: "Label", implicitRole: true });
+      const n = node({
+        id: "n",
+        role,
+        name: "Label",
+        uaSuppliedAttrs: [attr],
+      });
       expect(errorsFor(n)).not.toContain(`missing required ${attr}`);
     });
 
-    it(`an authored role="${role}" still is`, () => {
+    it(`a hand-built role="${role}" still is`, () => {
       const n = node({ id: "n", role, name: "Label" });
       expect(errorsFor(n)).toContain(`missing required ${attr}`);
     });
   }
 
-  it("an unchecked native checkbox is fine — absent is not the same as missing", () => {
-    // The extractor records states sparsely, so an unchecked box carries no
-    // `checked` at all. Under the old rule a CHECKED box passed and an
-    // UNCHECKED one failed, which is exactly backwards from a user's view.
+  it("an authored role on a native control is still exempt — role=switch", () => {
+    // The case the attribute-based check could not express: ARIA-APG's
+    // canonical switch. The role is authored and NOT redundant, so it cannot
+    // be deleted — and the browser still supplies checkedness.
     const unchecked = node({
-      id: "a",
-      role: "checkbox",
+      id: "n",
+      role: "switch",
       name: "Weekends",
-      implicitRole: true,
-    });
-    const checked = node({
-      id: "b",
-      role: "checkbox",
-      name: "Weekends",
-      implicitRole: true,
-      attrs: { "aria-checked": true },
+      uaSuppliedAttrs: ["aria-checked"],
     });
     expect(errorsFor(unchecked)).toEqual([]);
-    expect(errorsFor(checked)).toEqual([]);
   });
 
-  it("an authored role that DOES supply the attribute passes", () => {
+  it("an element can supply one state and still owe another", () => {
+    // Per-attribute, not a single boolean: a native <select> supplies expanded
+    // and controls, but an author who writes role="combobox" on a <div> owes
+    // both. Here only one is supplied.
+    const n = node({
+      id: "n",
+      role: "combobox",
+      name: "Status",
+      uaSuppliedAttrs: ["aria-expanded"],
+    });
+    expect(errorsFor(n)).toContain("missing required aria-controls");
+    expect(errorsFor(n)).not.toContain("missing required aria-expanded");
+  });
+
+  it("absent uaSuppliedAttrs fails CLOSED", () => {
+    // An adapter that cannot inspect the element must keep reporting, not
+    // silently disable the rule.
+    const n = node({ id: "n", role: "checkbox", name: "Ship it" });
+    expect(errorsFor(n)).toContain("missing required aria-checked");
+  });
+
+  it("a supplied attribute the role does not require changes nothing", () => {
     const n = node({
       id: "n",
       role: "checkbox",
-      name: "Weekends",
-      attrs: { "aria-checked": "false" },
+      name: "W",
+      uaSuppliedAttrs: ["aria-valuenow"],
     });
-    expect(errorsFor(n)).toEqual([]);
+    expect(errorsFor(n)).toContain("missing required aria-checked");
   });
 
   it("a name is still required either way — that one is nobody's freebie", () => {
-    const native = node({ id: "n", role: "combobox", implicitRole: true });
-    const authored = node({ id: "n", role: "combobox" });
+    const native = node({
+      id: "n",
+      role: "combobox",
+      uaSuppliedAttrs: ["aria-expanded", "aria-controls"],
+    });
     expect(errorsFor(native)).toContain(
-      'role "combobox" requires an accessible name',
-    );
-    expect(errorsFor(authored)).toContain(
       'role "combobox" requires an accessible name',
     );
   });
@@ -127,7 +142,24 @@ describe("native nesting is structure, not a mistake", () => {
     expect(nestingErrors(nodes)).toEqual([]);
   });
 
-  it("an authored combobox owning an authored option still is", () => {
+  it("a REDUNDANT authored role is still native structure", () => {
+    // `<select role="combobox">` — the adapter resolves this to implicit,
+    // because nothing about the user agent changed. Design systems spread
+    // `role` through props and hit this by construction.
+    const nodes = mapOf(
+      node({ id: "sel", role: "combobox", name: "Status", implicitRole: true }),
+      node({
+        id: "opt",
+        role: "option",
+        name: "Open",
+        parentId: "sel",
+        implicitRole: true,
+      }),
+    );
+    expect(nestingErrors(nodes)).toEqual([]);
+  });
+
+  it("a hand-built combobox owning a hand-built option still is", () => {
     const nodes = mapOf(
       node({ id: "sel", role: "combobox", name: "Status" }),
       node({ id: "opt", role: "option", name: "Open", parentId: "sel" }),
@@ -158,9 +190,8 @@ describe("native nesting is structure, not a mistake", () => {
   });
 
   it("a genuinely broken native nesting is still caught (<button><a href>)", () => {
-    // Both implicit, but this is not required structure — it is a real bug the
-    // exemption must not swallow. Nesting a link inside a button is invalid
-    // HTML too, so no correct document reaches this shape.
+    // Both native, but not required structure — a real bug the exemption must
+    // not swallow, which is why it is a named pair list.
     const nodes = mapOf(
       node({ id: "btn", role: "button", name: "Save", implicitRole: true }),
       node({
@@ -171,8 +202,6 @@ describe("native nesting is structure, not a mistake", () => {
         implicitRole: true,
       }),
     );
-    // Two rules fire here, and both are right: the nesting itself, and
-    // button's presentational children swallowing the link.
     expect(nestingErrors(nodes)).toContain(
       'interactive "link" is nested inside "button" — nested controls aren\'t operable by assistive tech',
     );
@@ -180,9 +209,7 @@ describe("native nesting is structure, not a mistake", () => {
 });
 
 describe("the builder's authored model is unchanged", () => {
-  it("a node with no implicitRole field behaves exactly as before", () => {
-    // The builder constructs authored roles by definition and never sets the
-    // flag; absent must mean authored, or this change silently weakens it.
+  it("a node with neither field behaves exactly as before", () => {
     const n = node({ id: "n", role: "checkbox", name: "Ship it" });
     expect(errorsFor(n)).toContain("missing required aria-checked");
   });

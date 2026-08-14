@@ -40,10 +40,35 @@ describe("native HTML is valid without author-supplied ARIA", () => {
     ).toBeValidA11yTree();
   });
 
-  it("a table named by its caption", () => {
+  it("an <input type=range>", () => {
+    expect(
+      mount(`<label>Volume <input type="range" min="0" max="10"></label>`),
+    ).toBeValidA11yTree();
+  });
+
+  it("a REDUNDANT authored role does not bring the wall back", () => {
+    // Design systems spread `role` through props, so this shape is common and
+    // nothing about the user agent changed. Keying on the attribute reported
+    // three violations here while the identical markup without it passed.
     expect(
       mount(
-        `<table><caption>Open tickets</caption><tbody><tr><td>NW-1</td></tr></tbody></table>`,
+        `<label>S <select role="combobox"><option>A</option></select></label>`,
+      ),
+    ).toBeValidA11yTree();
+    expect(
+      mount(`<label><input type="checkbox" role="checkbox"> W</label>`),
+    ).toBeValidA11yTree();
+  });
+
+  it("role=switch on a native checkbox — the case with no remedy", () => {
+    // ARIA-APG's canonical switch. The role is authored and NOT redundant, so
+    // it cannot be deleted, and the browser still supplies checkedness.
+    expect(
+      mount(`<label><input type="checkbox" role="switch"> Weekends</label>`),
+    ).toBeValidA11yTree();
+    expect(
+      mount(
+        `<label><input type="checkbox" role="switch" checked> Weekends</label>`,
       ),
     ).toBeValidA11yTree();
   });
@@ -53,8 +78,28 @@ describe("native HTML is valid without author-supplied ARIA", () => {
       mount(`
         <label>Status <select><option>All</option><option>Open</option></select></label>
         <label><input type="checkbox"> Only unassigned</label>
-        <table><caption>Open tickets</caption><tbody><tr><td>NW-1</td></tr></tbody></table>
       `),
+    ).toBeValidA11yTree();
+  });
+});
+
+describe("an authored role can actually be satisfied", () => {
+  // Required props were read only from `a11y.states`/`properties`, a fixed set
+  // that can never contain aria-controls or aria-valuenow — so correct
+  // authored markup could not go green no matter what the author wrote.
+  it("a fully-specified authored combobox passes", () => {
+    expect(
+      mount(
+        `<div role="combobox" aria-label="Status" aria-expanded="false" aria-controls="lb"></div><ul id="lb" role="listbox" aria-label="Options"></ul>`,
+      ),
+    ).toBeValidA11yTree();
+  });
+
+  it("a fully-specified authored slider passes", () => {
+    expect(
+      mount(
+        `<div role="slider" aria-label="Vol" aria-valuenow="3" aria-valuemin="0" aria-valuemax="10" tabindex="0"></div>`,
+      ),
     ).toBeValidA11yTree();
   });
 });
@@ -87,7 +132,7 @@ describe("real problems are still caught in native markup", () => {
     ).not.toBeValidA11yTree();
   });
 
-  it("a table with no caption and no label", () => {
+  it("an unnamed table", () => {
     expect(
       mount(`<table><tbody><tr><td>NW-1</td></tr></tbody></table>`),
     ).not.toBeValidA11yTree();

@@ -766,19 +766,6 @@ function computeRawAccessibleName(
       return getAccessibleTextContent(summary, visited, styleCache).trim();
   }
 
-  // 4c. Table — accessible name comes from its direct <caption> child
-  //     (HTML-AAM). Without this a captioned table reads as unnamed, which is
-  //     both wrong to a screen-reader user and reported as an ARIA violation:
-  //     aria-query marks `table` accessibleNameRequired, so a perfectly good
-  //     `<table><caption>` was flagged for missing the name its caption
-  //     already supplies. `figure`/`figcaption` is deliberately NOT here —
-  //     a figcaption is the figure's *description* path, not its name.
-  if (tag === "table") {
-    const caption = element.querySelector(":scope > caption");
-    if (caption)
-      return getAccessibleTextContent(caption, visited, styleCache).trim();
-  }
-
   // 5. Button-like inputs (submit/reset/button) take their name from the
   //    `value` attribute (HTML-AAM). For any other input the value is the
   //    user's DATA, not a name — an unlabeled text field must read as unnamed
@@ -1028,6 +1015,13 @@ export const KEY_ATTRIBUTES = [
   "aria-required",
   "aria-controls",
   "aria-haspopup",
+  // Range values. Required props on slider/scrollbar/meter/progressbar, and
+  // carried by nothing else: `A11yInfo.properties` is `{level, captions}`, so
+  // without these an authored slider could not be reported as satisfied no
+  // matter what the author wrote.
+  "aria-valuenow",
+  "aria-valuemin",
+  "aria-valuemax",
   "alt",
   "title",
   "for",

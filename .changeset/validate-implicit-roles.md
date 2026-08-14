@@ -1,58 +1,49 @@
 ---
 "@real-a11y-dev/testing": minor
-"@real-a11y-dev/inspector": patch
-"@real-a11y-dev/react": patch
-"@real-a11y-dev/storybook-addon": patch
 "@real-a11y-dev/cli": patch
 "@real-a11y-dev/mcp": patch
 ---
 
-Stop reporting native HTML as broken ARIA.
+Stop reporting native HTML as broken ARIA — and let authored ARIA actually be
+satisfied.
 
-`toBeValidA11yTree()` judged every node by the rules for an **authored** role.
+`toBeValidA11yTree()` judged every node by the rules for an authored role.
 `aria-query` genuinely marks `aria-checked` required on checkbox,
 `aria-expanded` + `aria-controls` on combobox and `aria-selected` on option —
-correct when someone wrote `role="combobox"`, because nothing else supplies
-them. Applied to a `<select>`, it produced six violations on markup that is not
-merely valid but preferable:
+correct when someone wrote `role="combobox"` on a `<div>`, because nothing else
+supplies them. Applied to a `<select>` it produced six violations on markup
+that is not merely valid but preferable, including `option` nested inside
+`combobox`, which is exactly how a `<select>` is built.
 
-```
-✖ option "A" — missing required aria-selected
-✖ combobox — missing required aria-controls
-✖ combobox — missing required aria-expanded
-✖ option "A" — interactive "option" is nested inside "combobox"
-```
+The discriminator is **"does the user agent supply this state?"**, not "did
+somebody type a `role=` attribute". Those diverge on ordinary markup:
 
-The nesting line was the sharpest: `option` inside `combobox` is exactly how a
-`<select>` is built, so the advice was to break correct markup.
+- `<select role="combobox">` is redundant, changes nothing about the browser,
+  and design systems produce it by spreading `role` through props.
+- `<input type="checkbox" role="switch">` is the ARIA-APG canonical switch,
+  where the role is neither redundant nor deletable — and checkedness is still
+  UA-supplied.
 
-`ValidatedNode` gains an optional `implicitRole`, set by the adapter when the
-role came from the element rather than a `role=` attribute. When it is set,
-required-ARIA-attribute checks are skipped — the user agent already exposes
-that state — and `combobox`/`listbox` owning `option` is treated as structure.
-The exemption is a named pair list rather than "any native nesting", so
-`<button><a href>` is still reported.
+`ValidatedNode` gains `uaSuppliedAttrs` (per-attribute, since an element can
+supply one state and still owe another) governing required attributes, and
+`implicitRole` governing structure. Both are optional and absent fails
+**closed**, so an adapter that cannot inspect the element keeps reporting rather
+than silently disabling the rule.
 
-Nothing is weakened for authored ARIA: `role="checkbox"` without `aria-checked`
-is still an error, and a mixed pair (one authored side) is still reported.
-Absent `implicitRole` means authored, so any consumer that authors roles by
-construction keeps its current behaviour. `@real-a11y-dev/testing` is the only
-package that uses the validator today.
+Three fixes make authored ARIA satisfiable at all — previously it could not go
+green no matter what the author wrote:
 
-Two related fixes fall out of the same finding, and these DO reach every
-package that renders a tree — hence the patch bumps on `inspector`, `react`,
-`storybook-addon`, `cli` and `mcp`, none of which use the validator but all of
-which show accessible names:
+- Required attributes are now read from the element's recorded attributes when
+  the extracted state map doesn't carry them. `aria-controls` and
+  `aria-valuenow` live in neither `A11yInfo.states` (a fixed 10-entry set) nor
+  `properties` (`{level, captions}`), so a correct authored combobox or slider
+  reported a violation with no remedy available.
+- `aria-valuenow` / `aria-valuemin` / `aria-valuemax` are now recorded, for the
+  same reason — nothing else carried them.
+- A **`false`** value counts as present, not missing. `aria-expanded="false"` is
+  a collapsed combobox and `aria-checked="false"` an unchecked box: the ordinary
+  states, and previously unsatisfiable.
 
-- An **unchecked** native checkbox was flagged while a **checked** one passed,
-  because states are recorded sparsely and "absent" was read as "missing".
-- A `<table>` is now named by its `<caption>` per HTML-AAM. It previously read
-  as unnamed — wrong to a screen-reader user, and reported as a violation since
-  `table` is `accessibleNameRequired`. An explicit `aria-label` still wins, and
-  the `caption` node is now dropped from the tree the way `legend`/`summary`
-  already are, so the words appear once as the table's name rather than twice.
-  **A committed snapshot containing a captioned table will change**: the
-  `caption` line goes away and the `table` line gains the name.
-
-Real problems are still caught: an unnamed `<select>`, a table with neither
-caption nor label, and a link nested inside a button all still fail.
+Real problems are still caught: an unnamed `<select>`, an unnamed `<table>`, a
+link nested inside a button, an invalid role, and any hand-built role that omits
+a state no user agent supplies.

@@ -2,21 +2,14 @@ import type { ExtractionResult, SemanticNode } from "../types.js";
 
 import { extractDomTree } from "./dom-extractor.js";
 
-// legend/summary/label/caption: the element's text is consumed as the
-// accessible name of the fieldset/details/form control/table, so the element
-// itself and its text carriers are dropped — otherwise the same words appear
-// twice in the tree, once as the owner's name and once as a child node, which
-// is noise in a snapshot people commit. Interactive descendants are promoted
-// to the parent — a link or button nested in any of them is keyboard-reachable
-// and must stay in the tree (<legend>Payment <a href="/help">(help)</a></legend>,
+// legend/summary/label: the element's text is consumed as the accessible name
+// of the fieldset/details/form control, so the element itself and its text
+// carriers are dropped. Interactive descendants are promoted to the parent —
+// a link or button nested in any of them is keyboard-reachable and must stay
+// in the tree (<legend>Payment <a href="/help">(help)</a></legend>,
 // <summary>Details <button>Copy</button></summary>,
-// <label>Text<input /></label>, <caption>Q3 <a href="/export">export</a></caption>).
-const SUPPRESS_KEEP_INTERACTIVE = new Set([
-  "legend",
-  "summary",
-  "label",
-  "caption",
-]);
+// <label>Text<input /></label>).
+const SUPPRESS_KEEP_INTERACTIVE = new Set(["legend", "summary", "label"]);
 
 // Identify which nodes to keep in the a11y tree
 function keepNode(node: SemanticNode, rootId: string): boolean {

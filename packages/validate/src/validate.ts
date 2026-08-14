@@ -39,8 +39,24 @@ export interface ValidatedNode {
    * Optional, and absent means authored. That keeps the builder — whose model
    * is authored roles by construction — behaving exactly as before, and makes
    * this something an adapter opts into when it knows the difference.
+   *
+   * This governs STRUCTURE only (see `NATIVE_STRUCTURAL_NESTING`). Required
+   * attributes are governed by {@link ValidatedNode.uaSuppliedAttrs}, because
+   * "is the role authored" and "does the user agent supply this state" are
+   * different questions and diverge on real markup — `<input type="checkbox"
+   * role="switch">` has an authored, non-redundant role and UA-supplied
+   * checkedness at the same time.
    */
   implicitRole?: boolean;
+  /**
+   * ARIA attribute names the user agent supplies for this element, so the
+   * author owes nothing and a required-attribute check must not fire.
+   *
+   * Absent means "supplies nothing", which is the right default: it fails
+   * CLOSED, so an adapter that cannot inspect the element still reports
+   * missing required attributes rather than silently disabling the rule.
+   */
+  uaSuppliedAttrs?: readonly string[];
 }
 
 export interface NodeIssue {
@@ -109,20 +125,22 @@ export function validateNode(
     });
   }
 
-  // Required ARIA attributes are the AUTHOR's obligation. A native element
-  // already exposes them through the user agent — `<input type="checkbox">`
-  // has checkedness whether or not anyone wrote `aria-checked` — so requiring
-  // them here reports correct HTML as broken. See `implicitRole`.
-  if (!n.implicitRole) {
-    const required = attributesForRole(n.role).filter((a) => a.required);
-    for (const a of required) {
-      const v = n.attrs[a.name];
-      if (v === undefined || v === "" || v === false) {
-        issues.push({
-          severity: "error",
-          message: `missing required ${a.name}`,
-        });
-      }
+  // Required ARIA attributes are the AUTHOR's obligation — but only for the
+  // ones no user agent supplies. `<input type="checkbox">` has checkedness
+  // whether or not anyone wrote `aria-checked`, and a `<select>` has its popup
+  // whether or not anyone wrote `aria-controls`, so demanding them reported
+  // correct HTML as broken. See `uaSuppliedAttrs`, which is per-attribute
+  // precisely because an element can supply one state and still owe another.
+  const required = attributesForRole(n.role).filter((a) => a.required);
+  for (const a of required) {
+    if (n.uaSuppliedAttrs?.includes(a.name)) continue;
+    const v = n.attrs[a.name];
+    // `false` is a PRESENT value, not an absent one. `aria-expanded="false"`
+    // is a collapsed combobox and `aria-checked="false"` an unchecked box —
+    // the ordinary states. Counting them as missing made the most common
+    // shape of correct authored markup unsatisfiable.
+    if (v === undefined || v === "") {
+      issues.push({ severity: "error", message: `missing required ${a.name}` });
     }
   }
 

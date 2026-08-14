@@ -122,57 +122,6 @@ describe("extractA11yTree", () => {
     expect(fieldset!.a11y.name).toBe("Credentials");
   });
 
-  it("names a table from its caption (HTML-AAM)", () => {
-    const root = createPage(`
-      <table>
-        <caption>Open support tickets</caption>
-        <tbody><tr><td>NW-4192</td></tr></tbody>
-      </table>
-    `);
-
-    const table = Array.from(extractA11yTree(root).nodes.values()).find(
-      (n) => n.a11y.role === "table",
-    );
-    expect(table).toBeDefined();
-    // Before this, a captioned table read as unnamed — wrong to a screen
-    // reader, and reported as an ARIA violation since `table` is
-    // accessibleNameRequired.
-    expect(table!.a11y.name).toBe("Open support tickets");
-
-    // The caption node itself is dropped, like legend/summary — otherwise the
-    // same words appear twice, once as the table's name and once as a child.
-    const nodes = Array.from(extractA11yTree(root).nodes.values());
-    expect(nodes.find((n) => n.dom?.tagName === "caption")).toBeUndefined();
-  });
-
-  it("keeps an interactive descendant of a caption", () => {
-    const root = createPage(`
-      <table>
-        <caption>Q3 results <a href="/export">export</a></caption>
-        <tbody><tr><td>NW-1</td></tr></tbody>
-      </table>
-    `);
-
-    const nodes = Array.from(extractA11yTree(root).nodes.values());
-    expect(nodes.find((n) => n.dom?.tagName === "caption")).toBeUndefined();
-    // The link is keyboard-reachable and must survive the suppression.
-    expect(nodes.find((n) => n.a11y.role === "link")?.a11y.name).toBe("export");
-  });
-
-  it("prefers an explicit label over the caption", () => {
-    const root = createPage(`
-      <table aria-label="Escalations">
-        <caption>Open support tickets</caption>
-        <tbody><tr><td>NW-4192</td></tr></tbody>
-      </table>
-    `);
-
-    const table = Array.from(extractA11yTree(root).nodes.values()).find(
-      (n) => n.a11y.role === "table",
-    );
-    expect(table!.a11y.name).toBe("Escalations");
-  });
-
   it("preserves interactive descendants inside a legend or summary", () => {
     // The legend/summary text is consumed as the fieldset/details accessible
     // name, so the text carriers are dropped — but a link or button nested

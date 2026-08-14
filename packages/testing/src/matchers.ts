@@ -159,6 +159,68 @@ function toHaveTabSequence(
 
 /** Adapt a core `SemanticNode` tree to the validator's minimal node shape,
  *  reconstructing `aria-*` attribute names from the split states/properties. */
+/**
+ * ARIA states the **user agent** supplies for an element, whatever role the
+ * author wrote on it.
+ *
+ * This is the question that decides the required-attribute contract, and it is
+ * NOT "did somebody type a `role=` attribute". The two diverge on ordinary
+ * markup: `<input type="checkbox" role="switch">` is the ARIA-APG canonical
+ * switch, where the role is neither redundant nor deletable — and the browser
+ * still exposes checkedness. Keying on the attribute demanded `aria-checked`
+ * there with no remedy available.
+ *
+ * `aria-controls` on a `<select>` is here for the opposite reason: the UA owns
+ * the popup and exposes no controls relationship, so there is nothing for an
+ * author to write.
+ */
+function uaSuppliedAttrs(
+  tag: string | undefined,
+  type: string | undefined,
+): readonly string[] {
+  if (tag === "input" && (type === "checkbox" || type === "radio"))
+    return ["aria-checked"];
+  if (tag === "input" && type === "range") return ["aria-valuenow"];
+  if (tag === "option") return ["aria-selected"];
+  if (tag === "select") return ["aria-expanded", "aria-controls"];
+  if (tag === "details") return ["aria-expanded"];
+  if (tag === "progress" || tag === "meter") return ["aria-valuenow"];
+  return [];
+}
+
+/**
+ * Enough of the implicit-role map to tell whether an authored `role=` is
+ * REDUNDANT — `<select role="combobox">` names the role the element already
+ * had, so nothing about the user agent changed and the node is still native.
+ * Without this, spreading `role` through design-system props reintroduced the
+ * whole wall of violations.
+ */
+function implicitRoleFor(
+  tag: string | undefined,
+  type: string | undefined,
+  attrs: Record<string, string>,
+): string | undefined {
+  switch (tag) {
+    case "select":
+      return attrs.multiple !== undefined ? "listbox" : "combobox";
+    case "option":
+      return "option";
+    case "button":
+      return "button";
+    case "a":
+      return attrs.href !== undefined ? "link" : undefined;
+    case "table":
+      return "table";
+    case "input":
+      if (type === "checkbox") return "checkbox";
+      if (type === "radio") return "radio";
+      if (type === "range") return "slider";
+      return undefined;
+    default:
+      return undefined;
+  }
+}
+
 function toValidatedNodes(tree: Tree): Map<string, ValidatedNode> {
   const out = new Map<string, ValidatedNode>();
   for (const [id, n] of tree.nodes) {
@@ -166,22 +228,34 @@ function toValidatedNodes(tree: Tree): Map<string, ValidatedNode> {
     for (const [k, v] of Object.entries(n.a11y.states)) attrs[`aria-${k}`] = v;
     for (const [k, v] of Object.entries(n.a11y.properties))
       attrs[`aria-${k}`] = v;
+
+    const domAttrs = n.dom?.attributes ?? {};
+    // `states` is a fixed 10-entry set and `properties` is `{level, captions}`,
+    // so required props like `aria-controls` and `aria-valuenow` could NEVER
+    // appear — an authored combobox or slider was unsatisfiable no matter what
+    // the author wrote. Fill from the recorded attributes, without letting them
+    // override a computed state.
+    for (const [k, v] of Object.entries(domAttrs)) {
+      if (k.startsWith("aria-") && attrs[k] === undefined) attrs[k] = v;
+    }
+
+    const tag = n.dom?.tagName?.toLowerCase();
+    const type = domAttrs.type?.toLowerCase();
+    // `role=""` and `role="  "` both fall back to the element's own semantics
+    // in every user agent, and a role list resolves to its first token.
+    const authored = domAttrs.role?.trim().split(/\s+/)[0];
+
     out.set(id, {
       id,
       parentId: n.parentId,
       role: n.a11y.role,
       name: n.a11y.name,
       attrs,
-      // An authored `role=` means the author owns the ARIA contract for this
-      // node; anything else got its role from the element, and the user agent
-      // owns it. `dom` is absent on native-produced trees, where the producer
-      // has already resolved semantics — treat those as implicit too, since
-      // the alternative is inventing violations for markup we cannot inspect.
-      //
-      // Trimmed because `role=""` and `role="  "` both fall back to the
-      // element's own semantics in every user agent — usually a template that
-      // interpolated an empty variable — so neither is an authored role.
-      implicitRole: !n.dom?.attributes?.role?.trim(),
+      // Native structure, for the nesting rule. A redundant authored role
+      // still counts: `<select role="combobox"><option>` is a select.
+      implicitRole:
+        !authored || authored === implicitRoleFor(tag, type, domAttrs),
+      uaSuppliedAttrs: uaSuppliedAttrs(tag, type),
     });
   }
   return out;
