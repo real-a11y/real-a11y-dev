@@ -9,7 +9,7 @@
  * is "no", and never touches the production side-panel App.
  */
 
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 
 import {
   blockedBy,
@@ -86,18 +86,29 @@ export function DogfoodPanel() {
       .then((r: { enabled?: boolean }) => setEnabled(r?.enabled === true));
   }, []);
 
-  /** Re-ask what native can do here. Cheap (no attach), so it runs on mount,
-   *  on toggle, and whenever the user switches or navigates a tab. */
+  /**
+   * Re-ask what native can do here. Cheap (no attach), so it runs on mount, on
+   * toggle, and whenever the user switches or navigates a tab.
+   *
+   * Sequenced: these fire from three sources that can overlap, and the replies
+   * are not ordered. A late answer for the tab you just left would otherwise
+   * stick — disabling the controls on a page where native works, which is the
+   * exact friction this is meant to remove.
+   */
+  const capabilityRequest = useRef(0);
   async function refreshCapability(): Promise<TabCapability | undefined> {
+    const token = ++capabilityRequest.current;
+    const stale = () => token !== capabilityRequest.current;
     const tabId = await activeTabId();
     if (tabId === undefined) {
-      setCapability(undefined);
+      if (!stale()) setCapability(undefined);
       return undefined;
     }
     const cap = (await chrome.runtime.sendMessage({
       type: "NATIVE_CAPABILITY",
       tabId,
     })) as TabCapability;
+    if (stale()) return undefined;
     setCapability(cap);
     return cap;
   }
@@ -108,8 +119,14 @@ export function DogfoodPanel() {
     // navigation; both change the answer, and a stale "native unavailable"
     // banner is exactly the friction this PR exists to remove.
     const onActivated = () => void refreshCapability();
-    const onUpdated = (_id: number, change: chrome.tabs.OnUpdatedInfo) => {
-      if (change.url) void refreshCapability();
+    const onUpdated = (id: number, change: chrome.tabs.OnUpdatedInfo) => {
+      if (!change.url) return;
+      void (async () => {
+        // onUpdated fires for EVERY tab, not just the visible one — a background
+        // tab finishing a redirect would otherwise re-answer for a page the user
+        // isn't looking at.
+        if (id === (await activeTabId())) await refreshCapability();
+      })();
     };
     chrome.tabs.onActivated.addListener(onActivated);
     chrome.tabs.onUpdated.addListener(onUpdated);
@@ -307,7 +324,11 @@ export function DogfoodPanel() {
         </label>
         <button
           onClick={loadTree}
-          disabled={!enabled || busy || capability?.native === false}
+          disabled={
+            !enabled ||
+            busy ||
+            (capability?.native === false && !capability.retryable)
+          }
         >
           {busy ? "working…" : "Load native tree"}
         </button>
