@@ -109,9 +109,11 @@
 
 /* ---- Toolbar ---- */
 .sn-toolbar {
+  --sn-toolbar-gap: 8px;
+
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sn-toolbar-gap);
   padding: 8px 12px;
   background: var(--sn-bg-toolbar);
   border-bottom: 1px solid var(--sn-border);
@@ -140,6 +142,12 @@
   color: var(--sn-text-muted);
   font-size: 11px;
   white-space: nowrap;
+}
+
+/* Mounted while empty (see .sn-action-feedback). A zero-width flex item still
+   earns a toolbar `gap`; cancel it so the search input keeps its width. */
+.sn-search-count:empty {
+  margin-inline-start: calc(-1 * var(--sn-toolbar-gap));
 }
 
 .sn-toggle-group {
@@ -793,11 +801,20 @@
    user's cursor ended up over the wrong row two clicks later. Absolute
    positioning anchored to .sn-root keeps the tree static; the bar
    briefly covers the last row or two while it's visible (~2s). */
+/* Live region: stays mounted (empty = zero-height) so an arriving message is
+   a content change. Paint and flash live on the inner element, which mounts
+   with the text so the flash still replays. */
 .sn-action-feedback {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.sn-action-feedback-text {
+  display: block;
   padding: 4px 12px;
   background: var(--sn-accent);
   color: #ffffff;
@@ -805,8 +822,6 @@
   font-size: 12px;
   font-weight: 600;
   text-align: center;
-  z-index: 10;
-  pointer-events: none;
   animation: sn-flash 0.15s ease;
 }
 
@@ -1080,6 +1095,12 @@
   max-height: 120px;
   overflow-y: auto;
   flex-shrink: 0;
+}
+
+/* Mounted while empty (see .sn-action-feedback); collapse it to nothing. */
+.sn-live-log:empty {
+  padding: 0;
+  border-top: none;
 }
 
 .sn-live-entry {

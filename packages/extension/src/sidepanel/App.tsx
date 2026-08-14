@@ -1229,11 +1229,13 @@ export function App() {
           value={query}
           onInput={(e) => updateQuery((e.target as HTMLInputElement).value)}
         />
-        {(query || roleFilter) && (
-          <span class="sn-search-count" aria-live="polite">
-            {matchCount} match{matchCount !== 1 ? "es" : ""}
-          </span>
-        )}
+        {/* Mounted before there is a count to report: a live region that
+            arrives already holding its text is not announced by most screen
+            reader / browser pairs. Only the text swaps. */}
+        <span class="sn-search-count" aria-live="polite">
+          {(query || roleFilter) &&
+            `${matchCount} match${matchCount !== 1 ? "es" : ""}`}
+        </span>
 
         <div class="sn-toggle-group" role="group" aria-label="Tree view mode">
           <button
@@ -1442,12 +1444,17 @@ export function App() {
         </div>
       )}
 
-      {/* Action feedback bar */}
-      {lastAction && (
-        <div class="sn-action-feedback" role="status" aria-live="assertive">
-          {lastAction}
-        </div>
-      )}
+      {/* Action feedback bar, mounted before there is a message — see the
+          search count above. The explicit `aria-live` is deliberate and
+          overrides what `role="status"` implies: this bar carries failures
+          ("Failed: …", "Clipboard blocked …") that are pulled back out of the
+          DOM after 2.5s, and a polite announcement can still be queued behind
+          the live-relay log when they go. */}
+      <div class="sn-action-feedback" role="status" aria-live="assertive">
+        {lastAction && (
+          <span class="sn-action-feedback-text">{lastAction}</span>
+        )}
+      </div>
 
       {/* Inline input panel for text / select interactions */}
       {inputState && (
@@ -1940,20 +1947,20 @@ export function App() {
         </>
       )}
 
-      {/* Live region announcements */}
-      {liveAnnouncements.length > 0 && (
-        <div class="sn-live-log" role="log" aria-label="Live announcements">
-          {liveAnnouncements.map((a) => (
-            <div
-              key={a.id}
-              class={`sn-live-entry ${a.level === "assertive" ? "sn-live-entry--assertive" : ""}`}
-            >
-              <span class="sn-live-role">{a.role}</span>
-              <span class="sn-live-text">{a.text}</span>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Live region announcements, mounted before the first one arrives —
+          see the search count above. Relaying the page's live regions through
+          one that is not itself announced defeats the whole feature. */}
+      <div class="sn-live-log" role="log" aria-label="Live announcements">
+        {liveAnnouncements.map((a) => (
+          <div
+            key={a.id}
+            class={`sn-live-entry ${a.level === "assertive" ? "sn-live-entry--assertive" : ""}`}
+          >
+            <span class="sn-live-role">{a.role}</span>
+            <span class="sn-live-text">{a.text}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
