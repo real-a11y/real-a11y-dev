@@ -75,7 +75,7 @@ If your page legitimately has multiple h1s (rare — usually an anti-pattern), t
 - The root is wrapped in `[inert]`, which removes the whole subtree from the focus order (Chrome, Safari, Firefox all honor this).
 - Every focusable element has `tabindex="-1"` — some design systems over-use this to disable default focus.
 - The subtree is `display: none` or `aria-hidden="true"`.
-- You're passing a root that doesn't contain the expected elements (e.g. a portaled modal that mounts elsewhere in the DOM).
+- You're passing a root that doesn't contain the expected elements (e.g. a portaled modal that mounts elsewhere in the DOM). Note that scoping to a subtree does **not** reliably exclude portaled content — see [My snapshot contains the whole page](#my-snapshot-contains-the-whole-page-not-the-component-i-passed) for why, and what to do instead.
 
 If the tab order *should* be empty on a given route (a 404, a splash screen with no interactive content), suppress the assertion for that route rather than the whole suite.
 
@@ -109,9 +109,17 @@ component test. If that is happening:
   usually a test-setup change rather than a product one.
 
 A root that is **not in the document** is never widened — extraction returns
-exactly what you passed. That matters because widening a detached root would
-replace it outright rather than adding to it, and an audit of the wrong subtree
-reports no findings, which reads as a clean component.
+exactly what you passed. That covers a `createElement` fixture, a component
+inspected before mount, and a root inside a shadow root. It matters because
+widening one of those replaces it outright rather than adding to it, and an
+audit of the wrong subtree reports no findings, which reads as a clean
+component.
+
+The trade is worth knowing: **a detached root therefore never sees teleported
+content either.** If you render into an unappended container — Vue Test Utils
+and Enzyme both do — and the component teleports a dialog to `document.body`,
+that dialog is outside your root and stays outside it. Assert on it by passing
+a root that contains it (`document.body`), or mount into the document first.
 
 ---
 
