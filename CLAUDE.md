@@ -126,8 +126,10 @@ than once:
   blocks your push while passing CI. Confirm it fails on `origin/main` too before
   concluding your change caused it — then fix the test, don't skip the hook.
 - **The website e2e / a11y baselines**, which have their own suite and their own
-  regeneration gotchas (networkidle wait; commit new pages first so `lastUpdated`
-  is right; a sidebar change moves every page's baseline).
+  regeneration gotchas (capture is gated on _hydration_, never `networkidle` —
+  see `gotoHydrated` in `website/tests/a11y.spec.ts` for why the difference
+  silently strips the tree; commit new pages first so `lastUpdated` is right; a
+  sidebar change moves every page's baseline).
 
 ## Private packages: `noExternal` and `dts.resolve` are one change
 
