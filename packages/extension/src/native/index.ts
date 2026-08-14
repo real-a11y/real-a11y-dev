@@ -13,6 +13,12 @@
 
 import { isTrustedSender } from "../routing.js";
 
+import {
+  classifyAttachError,
+  classifyTabUrl,
+  type NativeUnavailableReason,
+  type TabCapability,
+} from "./capability.js";
 import { NativeDebuggerSession } from "./debugger-session.js";
 import {
   dispatchNative,
@@ -33,6 +39,7 @@ async function nativeModeEnabled(): Promise<boolean> {
 type NativeMessage =
   | { type: "NATIVE_FLAG_GET" }
   | { type: "NATIVE_FLAG_SET"; enabled: boolean }
+  | { type: "NATIVE_CAPABILITY"; tabId: number }
   | { type: "NATIVE_READ"; tabId: number }
   | {
       type: "NATIVE_ACT";
@@ -52,6 +59,30 @@ async function tabUrl(tabId: number): Promise<string | undefined> {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * What native can do on this tab, without attaching. An unreadable URL is a
+ * `no-url` refusal rather than an optimistic attempt: `chrome.tabs.get` fails
+ * on exactly the tabs the debugger also can't have (gone, or privileged), so
+ * attempting anyway buys a banner flash and the same answer.
+ */
+async function capabilityOf(tabId: number): Promise<TabCapability> {
+  return classifyTabUrl(await tabUrl(tabId));
+}
+
+/**
+ * Record an unavailable-native event and return the fields the panel needs to
+ * explain it. The reason is a static code from a closed set — the whole point
+ * of classifying is that neither the log nor the panel ever carries Chrome's
+ * own message, which can quote page or DevTools state (R6).
+ */
+async function refuse(
+  log: import("./dogfood.js").DogfoodLog,
+  reason: NativeUnavailableReason,
+): Promise<{ reason: NativeUnavailableReason }> {
+  await log.record({ kind: "unavailable", at: Date.now(), reason });
+  return { reason };
 }
 
 function isNativeMessage(m: unknown): m is NativeMessage {
@@ -91,9 +122,22 @@ export function registerNativeMode(): void {
           case "NATIVE_FLAG_GET":
             sendResponse({ enabled: await nativeModeEnabled() });
             return;
-          case "NATIVE_FLAG_SET":
+          case "NATIVE_FLAG_SET": {
             await chrome.storage.local.set({ [FLAG_KEY]: message.enabled });
-            sendResponse({ enabled: message.enabled });
+            // Turning it off must drop the capability, not merely stop offering
+            // it. `debugger` cannot be optional, so there is no permission to
+            // revoke — "off" can only mean "not attached", and an attachment
+            // stranded by an MV3 suspend would otherwise keep the banner up on
+            // a tab the user just switched native off for.
+            const detached = message.enabled ? 0 : await session.detachAll();
+            sendResponse({ enabled: message.enabled, detached });
+            return;
+          }
+          case "NATIVE_CAPABILITY":
+            // Pre-flight only — no attach, so asking the question never costs a
+            // banner flash. The panel calls this to decide whether to offer the
+            // native controls at all.
+            sendResponse(await capabilityOf(message.tabId));
             return;
           case "NATIVE_DOGFOOD_REPORT":
             sendResponse({ report: await log.report(Date.now()) });
@@ -107,12 +151,38 @@ export function registerNativeMode(): void {
               sendResponse({ ok: false, error: "native mode is off" });
               return;
             }
+            // Pre-flight before attaching: a `chrome://` tab would otherwise
+            // flash the banner on its way to a bare "attach-failed", which
+            // reads as a bug in the extension rather than a Chrome rule.
+            const capability = await capabilityOf(message.tabId);
+            if (!capability.native) {
+              sendResponse({
+                ok: false,
+                error: "unavailable",
+                ...(await refuse(log, capability.reason!)),
+              });
+              return;
+            }
             const { outcome, value } = await withRecovery(
               session,
               message.tabId,
               (t) => readNativeTree(t),
             );
             if (!outcome.ok || !value) {
+              // An attach that failed anyway — the pre-flight list is a
+              // heuristic over a Chrome policy that shifts between versions, so
+              // this is the authoritative answer and gets recorded the same way.
+              if (
+                outcome.error === "conflict" ||
+                outcome.error === "attach-failed"
+              ) {
+                sendResponse({
+                  ok: false,
+                  error: "unavailable",
+                  ...(await refuse(log, classifyAttachError(outcome.error))),
+                });
+                return;
+              }
               sendResponse({
                 ok: false,
                 error: outcome.error ?? "read failed",
@@ -161,9 +231,21 @@ export function registerNativeMode(): void {
                   message.value,
                 ),
             );
+            const unavailable =
+              !outcome.ok &&
+              (outcome.error === "conflict" ||
+                outcome.error === "attach-failed")
+                ? await refuse(log, classifyAttachError(outcome.error))
+                : undefined;
             const result = outcome.ok
               ? (value ?? { success: false, error: "no result" })
-              : { success: false, error: outcome.error ?? "act failed" };
+              : {
+                  success: false,
+                  error: unavailable
+                    ? "unavailable"
+                    : (outcome.error ?? "act failed"),
+                  ...unavailable,
+                };
             await log.record({
               kind: "act",
               at: Date.now(),

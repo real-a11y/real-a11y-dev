@@ -26,6 +26,7 @@ export type DogfoodEventKind =
   | "reattach-ok" // recovered after an unsolicited detach
   | "reattach-failed" // could not recover
   | "conflict" // attach refused — another debugger already attached
+  | "unavailable" // native can't run on this tab (see `reason`)
   | "read" // read the native tree (with node counts)
   | "act"; // dispatched an action (kind + success only)
 
@@ -33,7 +34,11 @@ export interface DogfoodEvent {
   kind: DogfoodEventKind;
   /** ms since epoch — injected by the caller (SW has Date.now). */
   at: number;
-  /** For detach: a static CDP reason ("target_closed", "canceled_by_user", …). */
+  /**
+   * For detach: a static CDP reason ("target_closed", "canceled_by_user", …).
+   * For `unavailable`: a `NativeUnavailableReason` code. Both are closed sets
+   * of static strings — never Chrome's message text, which can quote the page.
+   */
   reason?: string;
   /** For read: raw AX node count / kept node count. */
   rawCount?: number;
@@ -64,10 +69,20 @@ interface DogfoodCounters {
   reattachOk: number;
   reattachFailed: number;
   conflict: number;
+  unavailable: number;
   read: number;
   act: number;
   /** Total time attached across all detach events, ms. */
   attachedMs: number;
+  /**
+   * `unavailable` split by reason code — "how often was native unavailable, and
+   * why" is a capability question the raw log can't answer once it rolls past
+   * CAP, and it is the one the ship/no-ship decision needs: a fleet that is
+   * mostly `devtools-conflict` argues for better conflict handling, one that is
+   * mostly `browser-ui` argues that users simply live on pages native can never
+   * reach. Keys are the closed reason set, so this stays content-free.
+   */
+  unavailableByReason: Record<string, number>;
 }
 
 const ZERO_COUNTERS: DogfoodCounters = {
@@ -77,19 +92,30 @@ const ZERO_COUNTERS: DogfoodCounters = {
   reattachOk: 0,
   reattachFailed: 0,
   conflict: 0,
+  unavailable: 0,
   read: 0,
   act: 0,
   attachedMs: 0,
+  unavailableByReason: {},
 };
 
+/** The counter fields that are plain tallies — i.e. everything a `+= 1` may
+ *  target. Excludes `unavailableByReason`, which is a map and is updated
+ *  separately; deriving this rather than writing it out keeps the two in step
+ *  if another non-numeric counter is ever added. */
+type TallyField = {
+  [K in keyof DogfoodCounters]: DogfoodCounters[K] extends number ? K : never;
+}[keyof DogfoodCounters];
+
 // Map an event kind to its counter field (camelCased; the kebab kinds differ).
-const COUNTER_FIELD: Record<DogfoodEventKind, keyof DogfoodCounters> = {
+const COUNTER_FIELD: Record<DogfoodEventKind, TallyField> = {
   attach: "attach",
   detach: "detach",
   "detach-unsolicited": "detachUnsolicited",
   "reattach-ok": "reattachOk",
   "reattach-failed": "reattachFailed",
   conflict: "conflict",
+  unavailable: "unavailable",
   read: "read",
   act: "act",
 };
@@ -136,6 +162,10 @@ export class DogfoodLog {
       ) {
         counters.attachedMs += event.attachedMs;
       }
+      if (event.kind === "unavailable" && event.reason) {
+        counters.unavailableByReason[event.reason] =
+          (counters.unavailableByReason[event.reason] ?? 0) + 1;
+      }
 
       await this.storage.set({ [KEY]: trimmed, [COUNTERS_KEY]: counters });
     });
@@ -150,9 +180,15 @@ export class DogfoodLog {
   async counters(): Promise<DogfoodCounters> {
     const got = await this.storage.get(COUNTERS_KEY);
     const raw = got[COUNTERS_KEY];
+    const stored = raw as Partial<DogfoodCounters> | undefined;
     return {
       ...ZERO_COUNTERS,
-      ...(raw as Partial<DogfoodCounters> | undefined),
+      ...stored,
+      // Spreading a stored snapshot written before this field existed leaves it
+      // `undefined`, not the ZERO default — a plain spread only fills in keys
+      // the later object omits entirely. Rebuild it explicitly, and copy rather
+      // than alias so a mutation can't write through into the stored object.
+      unavailableByReason: { ...(stored?.unavailableByReason ?? {}) },
     };
   }
 
@@ -173,7 +209,7 @@ export class DogfoodLog {
     const lines = [
       "Real A11y — extension native (chrome.debugger) dogfood report",
       `generated: ${new Date(now).toISOString()}`,
-      `events: ${c.attach + c.detach + c.detachUnsolicited + c.reattachOk + c.reattachFailed + c.conflict + c.read + c.act}` +
+      `events: ${c.attach + c.detach + c.detachUnsolicited + c.reattachOk + c.reattachFailed + c.conflict + c.unavailable + c.read + c.act}` +
         ` (raw log shows most recent ${Math.min(events.length, CAP)})`,
       "",
       "— Banner tolerance —",
@@ -186,6 +222,12 @@ export class DogfoodLog {
       "",
       "— DevTools conflict —",
       `  attach refused (another debugger attached): ${c.conflict}`,
+      "",
+      "— Capability —",
+      `  native unavailable: ${c.unavailable}`,
+      ...Object.entries(c.unavailableByReason)
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([reason, n]) => `    ${reason}: ${n}`),
       "",
       "— Usage —",
       `  tree reads: ${c.read}   actions dispatched: ${c.act}`,

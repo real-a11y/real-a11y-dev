@@ -11,6 +11,13 @@
 
 import { useEffect, useState } from "preact/hooks";
 
+import {
+  blockedBy,
+  explainUnavailable,
+  type NativeUnavailableReason,
+  type TabCapability,
+} from "../native/capability.js";
+
 // Roles worth offering a one-click action for during a dogfood session.
 const ACTABLE = new Set([
   "button",
@@ -66,6 +73,12 @@ export function DogfoodPanel() {
   // buttons live invites a double-click that reads the tree twice or dispatches
   // an action twice, both of which land in the dogfood numbers.
   const [busy, setBusy] = useState(false);
+  // What native can do on the active tab, or undefined while unknown. Asked
+  // before attaching, so a `chrome://` tab is named as such instead of costing
+  // a banner flash and an "attach-failed".
+  const [capability, setCapability] = useState<TabCapability | undefined>(
+    undefined,
+  );
 
   useEffect(() => {
     void chrome.runtime
@@ -73,17 +86,64 @@ export function DogfoodPanel() {
       .then((r: { enabled?: boolean }) => setEnabled(r?.enabled === true));
   }, []);
 
+  /** Re-ask what native can do here. Cheap (no attach), so it runs on mount,
+   *  on toggle, and whenever the user switches or navigates a tab. */
+  async function refreshCapability(): Promise<TabCapability | undefined> {
+    const tabId = await activeTabId();
+    if (tabId === undefined) {
+      setCapability(undefined);
+      return undefined;
+    }
+    const cap = (await chrome.runtime.sendMessage({
+      type: "NATIVE_CAPABILITY",
+      tabId,
+    })) as TabCapability;
+    setCapability(cap);
+    return cap;
+  }
+
+  useEffect(() => {
+    void refreshCapability();
+    // Chrome fires these for the active-tab switch and for same-tab
+    // navigation; both change the answer, and a stale "native unavailable"
+    // banner is exactly the friction this PR exists to remove.
+    const onActivated = () => void refreshCapability();
+    const onUpdated = (_id: number, change: chrome.tabs.OnUpdatedInfo) => {
+      if (change.url) void refreshCapability();
+    };
+    chrome.tabs.onActivated.addListener(onActivated);
+    chrome.tabs.onUpdated.addListener(onUpdated);
+    return () => {
+      chrome.tabs.onActivated.removeListener(onActivated);
+      chrome.tabs.onUpdated.removeListener(onUpdated);
+    };
+  }, []);
+
   async function toggle() {
     const next = !enabled;
-    await chrome.runtime.sendMessage({
+    const r = (await chrome.runtime.sendMessage({
       type: "NATIVE_FLAG_SET",
       enabled: next,
-    });
+    })) as { detached?: number };
     setEnabled(next);
+    if (next) {
+      const cap = await refreshCapability();
+      setStatus(
+        cap && !cap.native
+          ? `native unavailable here — ${explainUnavailable(cap.reason!)}`
+          : "native mode on — Load tree to attach",
+      );
+      return;
+    }
+    forgetTree();
+    // Report the detach, because it is the only observable proof the capability
+    // is actually gone: normally nothing was attached and the count is 0, but a
+    // banner still up after switching off is the case worth naming.
     setStatus(
-      next ? "native mode on — Load tree to attach" : "native mode off",
+      r?.detached
+        ? `native mode off — detached from ${r.detached} tab(s)`
+        : "native mode off",
     );
-    if (!next) forgetTree();
   }
 
   /** Read the tree into state. Returns the node count, or null on failure.
@@ -96,12 +156,21 @@ export function DogfoodPanel() {
     })) as {
       ok?: boolean;
       error?: string;
+      reason?: NativeUnavailableReason;
       nodes?: NativeNode[];
       url?: string;
     };
     if (!r?.ok) {
       forgetTree();
-      setStatus(`read failed: ${r?.error ?? "unknown"}`);
+      // A capability refusal is not a failure to report as one — it is Chrome's
+      // rule, and the useful output is what to do about it. The generic branch
+      // stays for the genuine failures (a CDP command that broke mid-read).
+      if (r?.reason) {
+        setCapability(blockedBy(r.reason));
+        setStatus(`native unavailable — ${explainUnavailable(r.reason)}`);
+      } else {
+        setStatus(`read failed: ${r?.error ?? "unknown"}`);
+      }
       return null;
     }
     setNodes(r.nodes ?? []);
@@ -120,6 +189,14 @@ export function DogfoodPanel() {
     if (busy) return;
     const tabId = await activeTabId();
     if (tabId === undefined) return setStatus("no active tab");
+    // Ask fresh rather than trusting the cached answer: the tab may have
+    // navigated since the last event, and this costs no attach.
+    const cap = await refreshCapability();
+    if (cap && !cap.native) {
+      return setStatus(
+        `native unavailable — ${explainUnavailable(cap.reason!)}`,
+      );
+    }
     setBusy(true);
     setStatus("attaching debugger + reading…");
     try {
@@ -164,8 +241,21 @@ export function DogfoodPanel() {
         nodeId: node.id,
         action: isText ? "type" : "click",
         ...(isText ? { value } : {}),
-      })) as { success?: boolean; error?: string };
+      })) as {
+        success?: boolean;
+        error?: string;
+        reason?: NativeUnavailableReason;
+      };
       if (!r?.success) {
+        // Same split as the read path: a capability refusal (DevTools grabbed
+        // the tab between the read and this click) gets the remedy, not a bare
+        // error code.
+        if (r?.reason) {
+          setCapability(blockedBy(r.reason));
+          return setStatus(
+            `native unavailable — ${explainUnavailable(r.reason)}`,
+          );
+        }
         return setStatus(`act failed: ${r?.error ?? "unknown"}`);
       }
       // Re-read before the next action. A click that opens a menu, expands a
@@ -215,12 +305,28 @@ export function DogfoodPanel() {
           <input type="checkbox" checked={enabled} onChange={toggle} /> native
           mode
         </label>
-        <button onClick={loadTree} disabled={!enabled || busy}>
+        <button
+          onClick={loadTree}
+          disabled={!enabled || busy || capability?.native === false}
+        >
           {busy ? "working…" : "Load native tree"}
         </button>
         <button onClick={copyReport}>Copy dogfood report</button>
         <button onClick={clearLog}>Clear log</button>
       </div>
+      {capability && !capability.native && (
+        <div style="margin:6px 0;padding:4px 6px;border-left:3px solid #b45309;background:#fef3c7">
+          <strong>native unavailable here</strong> —{" "}
+          {explainUnavailable(capability.reason!)}
+          {capability.domFallback && (
+            <>
+              {" "}
+              The tab-order view is DOM-based and is unaffected either way — it
+              never used native.
+            </>
+          )}
+        </div>
+      )}
       <div style="opacity:0.8">{status}</div>
       {nodes.length > 0 && (
         <div style="max-height:220px;overflow:auto;margin-top:6px;font-family:ui-monospace,monospace">

@@ -239,6 +239,44 @@ export class NativeDebuggerSession {
   }
 
   /**
+   * Detach from every tab this session still holds — the revoke path.
+   *
+   * Turning native mode off has to actually drop the capability, not just stop
+   * offering it: `debugger` cannot be an optional permission (spike-confirmed),
+   * so there is no `chrome.permissions.remove` to call and "revoked" can only
+   * mean "not attached". Normally nothing is attached — `withDebugger` detaches
+   * in `finally` — but an MV3 suspend mid-operation can leave a live attachment
+   * whose `finally` never ran, and that keeps the banner up on a tab the user
+   * believes they just turned native off for.
+   *
+   * Reads the attach map from storage rather than memory for the same reason
+   * the map lives there at all: the suspend that strands an attachment is
+   * exactly the event that destroys the memory recording it.
+   *
+   * @returns how many tabs were detached.
+   */
+  async detachAll(): Promise<number> {
+    const attached = await this.enqueue(async () => {
+      const map = await this.readAttached();
+      await this.writeAttached({});
+      return map;
+    });
+    const entries = Object.entries(attached);
+    for (const [id, startedAt] of entries) {
+      const tabId = Number(id);
+      // Claimed above, so onDetach can no longer record this one — logging it
+      // here is what keeps the attach/detach pairs balanced in the report.
+      await this.log.record({
+        kind: "detach",
+        at: Date.now(),
+        attachedMs: Date.now() - startedAt,
+      });
+      await chrome.debugger.detach({ tabId }).catch(() => {});
+    }
+    return entries.length;
+  }
+
+  /**
    * @param connectionLost the operation failed because the debuggee went away,
    *   so this teardown is cleaning up after a drop rather than ending a healthy
    *   session. It must still be recorded as **unsolicited**: claiming the entry

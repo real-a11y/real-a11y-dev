@@ -218,3 +218,45 @@ describe("NativeDebuggerSession attach bookkeeping", () => {
     expect(attach.data["dogfood.attachedTabs"]).toEqual({});
   });
 });
+
+describe("detachAll (the revoke path)", () => {
+  it("drops attachments stranded by a suspend, and says how many", async () => {
+    // `debugger` cannot be an optional permission, so there is nothing to
+    // revoke — "native off" can only mean "not attached". The case that
+    // matters is an attachment whose `finally` never ran because MV3 tore the
+    // worker down mid-operation: it survives in storage, and its banner
+    // survives on the tab.
+    const chromeStub = stubChrome();
+    void chromeStub;
+    const log = new FakeStorage();
+    const attach = new FakeStorage();
+    attach.data["dogfood.attachedTabs"] = {
+      3: Date.now() - 1000,
+      9: Date.now(),
+    };
+    const session = new NativeDebuggerSession(log, attach);
+
+    expect(await session.detachAll()).toBe(2);
+    await settle();
+
+    const detach = (globalThis as unknown as { chrome: typeof chrome }).chrome
+      .debugger.detach as ReturnType<typeof vi.fn>;
+    expect(detach.mock.calls.map((c) => c[0])).toEqual([
+      { tabId: 3 },
+      { tabId: 9 },
+    ]);
+    // Logged as deliberate, and the map is emptied so a later onDetach for the
+    // same tab cannot double-count it as unsolicited.
+    expect(kinds(log)).toEqual(["detach", "detach"]);
+    expect(attach.data["dogfood.attachedTabs"]).toEqual({});
+  });
+
+  it("is a no-op when nothing is attached", async () => {
+    stubChrome();
+    const log = new FakeStorage();
+    const session = new NativeDebuggerSession(log, new FakeStorage());
+    expect(await session.detachAll()).toBe(0);
+    await settle();
+    expect(kinds(log)).toEqual([]);
+  });
+});

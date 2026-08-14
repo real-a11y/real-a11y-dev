@@ -60,7 +60,19 @@ is a good test — its media controls are the thing only native mode can see).
    and menu transitions but **not** a slow fetch-driven re-render — if a click
    ever seems to act on the previous state of the page, that is the case to
    note, and re-reading by hand will confirm it.
-4. Use it across normal sessions for ~2 weeks. Leave DevTools open sometimes.
+4. **On a page native can't reach** — a `chrome://` tab, the Web Store, a
+   `file://` URL, or any tab with DevTools open — the panel says so **before**
+   attaching, names the reason, and disables **Load native tree** instead of
+   flashing the banner on its way to a bare failure. Where the DOM producer
+   still works (a DevTools conflict), it points you at it; where Chrome blocks
+   every extension surface (`chrome://`, the Web Store), it says _that_ rather
+   than sending you to a panel which will also never load.
+5. **Switching native mode off detaches.** `debugger` cannot be an optional
+   permission, so "revoked" can only mean "not attached" — unticking the box
+   drops any live attachment and reports how many tabs it detached from. Normally
+   that is zero; a non-zero count means an MV3 suspend had stranded an attachment
+   (and its banner), which is worth noting in your report.
+6. Use it across normal sessions for ~2 weeks. Leave DevTools open sometimes.
 
 Everything is instrumented to `chrome.storage.local` (content-free — event kinds,
 timings, counts; never page text or typed values).
@@ -68,7 +80,7 @@ timings, counts; never page text or typed values).
 ## Report back
 
 **Copy dogfood report** puts a summary + raw log on your clipboard. Paste it into
-the RFC PR H thread. The three questions it answers:
+the RFC PR H thread. The RFC's three questions, plus the one that frames them:
 
 - **Banner tolerance** — attach count + total time attached. Did the banner
   actually bother you during deliberate audit sessions?
@@ -81,6 +93,12 @@ the RFC PR H thread. The three questions it answers:
   the debugger can never attach to (`chrome://`, the Web Store), does not.
 - **DevTools conflict** — how often attach was refused because DevTools (or
   another debugger) held the tab.
+- **Capability** — how often native was unavailable at all, split by reason.
+  This is the fourth number and it reframes the other three: a run that is mostly
+  `devtools-conflict` says the problem is conflict handling, while one that is
+  mostly `browser-ui` says users simply spend their time on pages native can
+  never reach — and no amount of engineering changes that. The split is kept as
+  an uncapped counter, so it stays true after the raw log rolls.
 
 Add your qualitative read alongside the numbers. That verdict decides whether
 extension-native ships (and, per the RFC, whether the Electron desktop shell is
