@@ -110,7 +110,7 @@ import { createInspector } from "@real-a11y-dev/inspector";
 const sn = createInspector({
   root: document.getElementById("app")!,
   container: document.getElementById("sn-panel")!,
-  mode: "a11y",
+  viewMode: "a11y", // "dom" | "a11y" | "tab"
   // Shadow DOM isolation is on by default — no CSS conflicts.
 });
 
@@ -288,7 +288,7 @@ export function DevA11y({ rootRef, ...props }) {
 export async function mountDevInspector(root: HTMLElement, container: HTMLElement) {
   if (process.env.NODE_ENV === "production") return; // erased in prod builds
   const { createInspector } = await import("@real-a11y-dev/inspector");
-  createInspector({ root, container, mode: "a11y" }).mount();
+  createInspector({ root, container, viewMode: "a11y" }).mount();
 }
 ```
 
