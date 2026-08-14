@@ -1325,17 +1325,66 @@ function findPortalOverlay(doc: Document, root: Element): Element | null {
   // (cookie banner, Radix Popover) is additive like any other overlay — it is
   // included here so it pivots to body and joins the tree, rather than
   // hijacking the scope the way findActiveModal used to.
+  // `~=` matches a whitespace-separated TOKEN, because `role` is a token list.
+  // With `=` an exact match, `role="status announcer"` was invisible here —
+  // the selector is only a cheap candidate filter, and `countsAsOverlay` makes
+  // the precise call on the first token (which is the one that wins).
+  //
+  // KNOWN ASYMMETRY: findActiveModal() above still matches `role` exactly, so
+  // `<div role="dialog x" aria-modal="true">` reaches this path (additive
+  // pivot to body) but not the modal path (exclusive scope), and gets the
+  // weaker treatment. Left alone deliberately — widening the modal selector
+  // changes the most aggressive scoping rule in the system, which does not
+  // belong in a fix about detached roots.
   const overlays = doc.querySelectorAll(
-    '[role="menu"], [role="menubar"], [role="listbox"], [role="tooltip"], ' +
-      '[role="status"], [role="alert"], [role="log"], [aria-live], ' +
-      '[role="dialog"], [role="alertdialog"]',
+    '[role~="menu"], [role~="menubar"], [role~="listbox"], [role~="tooltip"], ' +
+      '[role~="status"], [role~="alert"], [role~="log"], [aria-live], ' +
+      '[role~="dialog"], [role~="alertdialog"]',
   );
   for (const el of overlays) {
-    if (!root.contains(el) && isActuallyVisible(el) && hasOverlayContent(el)) {
-      return body;
-    }
+    if (root.contains(el)) continue;
+    if (!countsAsOverlay(el)) continue;
+    if (isActuallyVisible(el) && hasOverlayContent(el)) return body;
   }
   return null;
+}
+
+/** Overlay roles that are containers, not announcements. */
+const OVERLAY_ROLES = new Set([
+  "menu",
+  "menubar",
+  "listbox",
+  "tooltip",
+  "dialog",
+  "alertdialog",
+]);
+
+/** Roles that are live regions by default (implicit `aria-live`). */
+const IMPLICIT_LIVE_ROLES = new Set(["status", "alert", "log"]);
+
+/**
+ * Does this element actually behave as an overlay/live region?
+ *
+ * The selector matches `[aria-live]` by ATTRIBUTE PRESENCE, so
+ * `aria-live="off"` — which declares the element explicitly inert — pivoted
+ * the whole extraction. Component kits ship exactly that shell: a permanent
+ * announcer mounted at body level with live updates switched off until they
+ * are needed.
+ *
+ * An explicit `aria-live` also wins over a role's implicit politeness, so
+ * `<div role="status" aria-live="off">` is not a live region either. A
+ * container role (menu, dialog…) is unaffected — it is an overlay because of
+ * what it is, not because it announces.
+ */
+function countsAsOverlay(el: Element): boolean {
+  // A role list resolves to its first valid token, the same way
+  // `getImplicitRole` reads it.
+  const role = el.getAttribute("role")?.trim().toLowerCase().split(/\s+/)[0];
+  if (role && OVERLAY_ROLES.has(role)) return true;
+
+  const live = el.getAttribute("aria-live")?.trim().toLowerCase();
+  if (live) return live !== "off";
+  return role ? IMPLICIT_LIVE_ROLES.has(role) : false;
 }
 
 /**
@@ -1356,6 +1405,20 @@ function findPortalOverlay(doc: Document, root: Element): Element | null {
 export function resolveEffectiveRoot(root: Element): Element {
   const doc = root.ownerDocument;
   if (!doc) return root;
+
+  // A root outside the document can only LOSE content by pivoting. Every
+  // pivot target — a modal, or `body` — is reached from the document, and a
+  // detached root is in none of them, so the "superset" the pivot assumes is
+  // actually a disjoint tree: the caller's own subtree disappears and the
+  // audit describes markup they never passed. `collectFindings` then returned
+  // *no findings* for a component with real ones, because it had audited
+  // somebody else's DOM.
+  //
+  // This guards both paths deliberately. `findActiveModal` never looked at
+  // `root` at all, so an open modal anywhere in the document hijacked a
+  // detached root as readily as a portal did.
+  if (!root.isConnected) return root;
+
   const activeModal = findActiveModal(doc);
   if (activeModal) return activeModal;
   return findPortalOverlay(doc, root) ?? root;

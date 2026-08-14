@@ -6,7 +6,7 @@ area: Testing
 type: Automated
 priority: P0
 status: Active
-validFrom: "testing ≥ 0.1.0-beta.15. The behaviour lives in `resolveEffectiveRoot` (packages/core/src/extraction/dom-extractor.ts), but `core` is PRIVATE and bundled — there is no core version to pin or install, so assert against `@real-a11y-dev/testing` only. The same pivot reaches users through `inspector` and `react`, which bundle their own copy."
+validFrom: "testing ≥ 0.1.0-beta.15 for the row; the detached-root guard and the aria-live=off correction ship in the FIRST release after 0.1.0-beta.15. Running steps 2–4 against 0.1.0-beta.15 or earlier reproduces the defect rather than failing the test — there a detached root is replaced outright and an inert announcer pivots the whole extraction. That is the old behaviour, not a fail. Step 1 is a KNOWN OPEN GAP at every version so far, not a regression. The behaviour lives in `resolveEffectiveRoot` (packages/core/src/extraction/dom-extractor.ts), but `core` is PRIVATE and bundled — there is no core version to pin or install, so assert against `@real-a11y-dev/testing` only. The same pivot reaches users through `inspector` and `react`, which bundle their own copy."
 validUntil: ""
 expected: "a portal pivot never DROPS the caller's own subtree, and an ordinary in-page live region does not silently turn a component audit into a whole-page audit"
 covers:
@@ -41,20 +41,27 @@ form status, a save confirmation — as a **sibling** of the element under test:
 
 ## Expected
 
-- **1** — the snapshot contains the component. Pivoting an ATTACHED root to
-  `document.body` is loss-free (body is a superset) but it silently converts a
-  component snapshot into a whole-page snapshot, so it must be **visible**:
-  either don't pivot for a non-portalled sibling, or say the scope moved
-- **2** — the caller's subtree must **never disappear**. `document.body` is not
-  a superset of a detached root, so pivoting there returns a tree with nothing
-  in common with what was passed. Today this is silent
+- **1** — the snapshot still contains the whole page, and that is the **known
+  remaining gap**, not a pass. Pivoting an ATTACHED root is loss-free (the
+  document is a superset) but silently turns a component snapshot into a
+  page snapshot, because "outside the root" cannot tell an ordinary in-page
+  live region from a portal. Documented under Troubleshooting; narrowing the
+  trigger is a design decision that is still open
+- **2** — the caller's subtree must **never disappear**, and no longer does: a
+  root that is not in the document is never pivoted, on either path. Check the
+  MODAL path too — it ignored `root` entirely and runs first, so an open dialog
+  hijacked a detached root as readily as a portal did
 - **3** — must not report headings the root does not contain, and must not come
-  back **clean** because it audited a different, well-formed part of the page
-- **4** — `aria-live="off"` explicitly declares itself inert; it must not
-  trigger a pivot. The selector matches attribute presence
+  back **clean** because it audited a different, well-formed part of the page.
+  This is the damage that made 2 worth fixing first: no findings reads as a
+  clean component
+- **4** — `aria-live="off"` declares itself inert and must not trigger a pivot,
+  nor must `role="status" aria-live="off"` (an explicit value wins over a
+  role's implicit politeness). A CONTAINER role — menu, dialog — is unaffected:
+  it is an overlay because of what it is, not because it announces
 - **5** — this is the case the feature exists for, and it must keep working
 - **6** — the same element must not produce two different snapshots because of
-  markup outside it
+  markup outside it. Detached: satisfied. Attached: see 1
 - **7** — a `rootSelector` is an explicit instruction, and should be the hardest
   thing in the system to override silently
 

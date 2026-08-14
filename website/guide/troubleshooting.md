@@ -81,6 +81,40 @@ If the tab order *should* be empty on a given route (a 404, a splash screen with
 
 ---
 
+## My snapshot contains the whole page, not the component I passed
+
+Extraction **widens to the whole document** when a portal-mounted overlay sits
+outside the root you passed — a dropdown, a tooltip, an open dialog, or a live
+region such as a toast. That is deliberate: a menu rendered through a React
+Portal is a sibling of `<body>`, not of its trigger, and a tree that stopped at
+your root would omit the thing the user is looking at.
+
+The catch is that the check is "is it outside the root", which cannot tell a
+portal from an **ordinary in-page live region**. A `<p role="status">4 tickets</p>`
+elsewhere on the page is enough:
+
+```ts
+const { container } = render(<Filters />);
+expect(auditSnapshot(container)).toMatchSnapshot(); // ← may be the whole page
+```
+
+Nothing is lost — the document contains your root — but the committed snapshot
+becomes a page snapshot, so unrelated changes elsewhere start breaking a
+component test. If that is happening:
+
+- Assert with [`toMatchA11yContract`](/packages/testing/matchers) instead of a
+  full snapshot. It is containment-matched, so it holds the part you care about
+  and ignores everything the pivot dragged in.
+- Or render the component with no app-level toaster/announcer mounted, which is
+  usually a test-setup change rather than a product one.
+
+A root that is **not in the document** is never widened — extraction returns
+exactly what you passed. That matters because widening a detached root would
+replace it outright rather than adding to it, and an audit of the wrong subtree
+reports no findings, which reads as a clean component.
+
+---
+
 ## React hydration mismatch when rendering the panel
 
 If you drop `<SemanticNavigator />` into an SSR-rendered component tree, the server renders the wrapper `<div>` but no inspector content — the inspector mounts on the client. That's fine. Hydration warnings typically come from **other** sources in the same tree; the panel itself is hydration-safe.
