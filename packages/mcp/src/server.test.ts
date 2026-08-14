@@ -34,9 +34,12 @@ class FakeSession implements A11ySession {
   /** Stands in for a redirect: where the page LANDED, if that differs from what
    *  was requested. Real `open` returns the post-navigation URL. */
   openResult: { title: string; url: string } | null = null;
+  /** Makes `open` reject, to exercise the escaping-error path. */
+  openError: Error | null = null;
 
   async open(url: string, options?: OpenOptions) {
     this.opened.push({ url, options });
+    if (this.openError) throw this.openError;
     const landed = this.openResult ?? { title: "Fake Title", url };
     this.url = landed.url;
     return landed;
@@ -327,6 +330,27 @@ describe("MCP server wiring", () => {
     expect(out).not.toContain("code=abc");
     expect(out).toContain("access_token=%5BREDACTED%5D");
     expect(out).toContain("code=%5BREDACTED%5D");
+  });
+
+  it("redacts URLs in an error that escapes as a protocol exception", async () => {
+    // A failed open must not leak what a successful one redacts. Playwright
+    // quotes the full target URL in a navigation failure, and that message is
+    // relayed to the client verbatim — so the fragment would arrive intact.
+    const failing = new FakeSession();
+    failing.openError = new Error(
+      "page.goto: net::ERR_ABORTED at https://app.example.com/cb#access_token=ya29.SECRET",
+    );
+    const client = await connect(failing);
+    // The SDK turns a thrown handler error into an isError result rather than a
+    // rejection — either way its message reaches the agent's context.
+    const res = (await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://app.example.com/login" },
+    })) as { isError?: boolean };
+    expect(res.isError).toBe(true);
+    const out = textOf(res as never);
+    expect(out).not.toContain("ya29.SECRET");
+    expect(out).toContain("access_token=%5BREDACTED%5D");
   });
 
   it("doesn't claim headless over a CDP attach, where the flag is inert", async () => {

@@ -31,6 +31,7 @@ import {
   parseSnapshotArtifact,
   projectNativeTree,
   redactUrl,
+  redactUrlsIn,
   serializeArtifact,
   SnapshotFormatError,
   viewsOfPage,
@@ -431,6 +432,14 @@ export function buildServer(
     if (err instanceof SessionRegistryError) {
       return errText(err.hint ? `${err.message} — ${err.hint}` : err.message);
     }
+    // Anything else escapes as a protocol error, and the SDK relays its message
+    // to the client verbatim. Playwright quotes the full target URL in a
+    // navigation failure — `page.goto: net::ERR_ABORTED at https://…#token=…` —
+    // so a failed open leaks what a successful one now redacts. The CLI already
+    // guards its equivalent path with `redactUrlsIn`; this is the MCP side of
+    // the same boundary. The message is rewritten in place so the error keeps
+    // its class and stack.
+    if (err instanceof Error) err.message = redactUrlsIn(err.message);
     throw err;
   };
   const withSession = async <R>(
@@ -562,7 +571,8 @@ export function buildServer(
         return text(
           // `info.url` is where the page LANDED, not what was asked for — a
           // redirect chain ends here, and an OAuth one ends with the token in
-          // the fragment. It is the one URL this server printed raw.
+          // the fragment. The failure path leaks the same URL through
+          // Playwright's message; `sessionErrText` redacts that one.
           `Opened ${redactUrl(info.url)}${emu}\nTitle: ${info.title || "(untitled)"}` +
             `\nBrowser: ${browserMode}` +
             (authenticated

@@ -98,6 +98,45 @@ describe("redactUrl", () => {
     expect(redactUrl("https://h/p#a&b")).toBe("https://h/p#a&b");
   });
 
+  it("still redacts when a LATER value contains a '?'", () => {
+    // `?` is legal and unencoded inside a fragment, so splitting on the first
+    // one is not safe: an OAuth `state=/dash?tab=1` puts a `?` after the token,
+    // and treating everything before it as an un-scanned "route" would print
+    // the token in full — defeating the whole fix.
+    const out = redactUrl(
+      "https://app.example.com/cb#access_token=ya29.SECRET&state=/dash?tab=1",
+    );
+    expect(out).not.toContain("ya29.SECRET");
+    expect(out).toContain("access_token=%5BREDACTED%5D");
+    // The non-secret value survives, `?` and all.
+    expect(out).toContain("state=%2Fdash%3Ftab%3D1");
+
+    expect(
+      redactUrl("https://h/cb#access_token=ya29.SECRET?foo"),
+    ).not.toContain("ya29.SECRET");
+  });
+
+  it("keeps a bare trailing '#'", () => {
+    // The hash getter reports an empty fragment as "" and the setter reads ""
+    // as "remove it", so an unconditional round-trip would drop it.
+    expect(redactUrl("https://example.com/p#")).toBe("https://example.com/p#");
+  });
+
+  it("does not invent a value for a valueless secret key", () => {
+    // `#a=1&token` has no token to redact; handing it a fabricated
+    // `[REDACTED]` would report a secret that was never there.
+    expect(redactUrl("https://h/p#a=1&token")).toBe("https://h/p#a=1&token");
+    expect(redactUrl("https://h/p#token=")).toBe("https://h/p#token=");
+  });
+
+  it("redacts every occurrence of a repeated secret key", () => {
+    // Rebuilding with append rather than set(): set() collapses repeats into
+    // one, which would silently drop the second value from the output.
+    expect(redactUrl("https://h/p#token=a&token=b")).toBe(
+      "https://h/p#token=%5BREDACTED%5D&token=%5BREDACTED%5D",
+    );
+  });
+
   it("redactUrlsIn scrubs URLs embedded in free text (Playwright messages)", () => {
     expect(
       redactUrlsIn("page.goto: net::ERR at https://u:p@h/x?token=abc failed"),

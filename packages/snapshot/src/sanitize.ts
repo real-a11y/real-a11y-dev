@@ -89,22 +89,36 @@ const SECRET_PARAM_RE =
 function redactFragment(hash: string): string {
   if (hash === "" || hash === "#") return hash;
   const body = hash.slice(1);
+
+  // A hash router puts its route before the `?` (`#/cb?code=…`), and that
+  // prefix is not parameters — but `?` is legal and unencoded *inside* a
+  // fragment value too, so a bare `indexOf("?")` split is not safe: an OAuth
+  // `state=/dash?tab=1` would put the `?` AFTER the token and leave the token
+  // in the un-scanned prefix. Only treat the prefix as a route when it holds no
+  // `=` or `&` — i.e. when it cannot itself be carrying a parameter.
   const queryAt = body.indexOf("?");
-  const path = queryAt === -1 ? "" : body.slice(0, queryAt);
-  const pairs = queryAt === -1 ? body : body.slice(queryAt + 1);
+  const isRoute = queryAt !== -1 && !/[=&]/.test(body.slice(0, queryAt));
+  const path = isRoute ? body.slice(0, queryAt) : "";
+  const pairs = isRoute ? body.slice(queryAt + 1) : body;
+
   // No `=` or `&` means an anchor or a route, not parameters. Leave it alone.
   if (!/[=&]/.test(pairs)) return hash;
 
-  const params = new URLSearchParams(pairs);
+  // Rebuilt by appending rather than `set()`, which collapses repeated keys
+  // into one — and a valueless key (`#a=1&token`) is left alone rather than
+  // handed a fabricated `[REDACTED]` it never had.
+  const rebuilt = new URLSearchParams();
   let redacted = false;
-  for (const key of [...new Set(params.keys())]) {
-    if (SECRET_PARAM_RE.test(key)) {
-      params.set(key, "[REDACTED]");
+  for (const [key, value] of new URLSearchParams(pairs)) {
+    if (value !== "" && SECRET_PARAM_RE.test(key)) {
+      rebuilt.append(key, "[REDACTED]");
       redacted = true;
+    } else {
+      rebuilt.append(key, value);
     }
   }
   if (!redacted) return hash;
-  return `#${path}${queryAt === -1 ? "" : "?"}${params.toString()}`;
+  return `#${path}${isRoute ? "?" : ""}${rebuilt.toString()}`;
 }
 
 /**
@@ -124,7 +138,11 @@ export function redactUrl(raw: string): string {
   for (const key of keys) {
     if (SECRET_PARAM_RE.test(key)) url.searchParams.set(key, "[REDACTED]");
   }
-  url.hash = redactFragment(url.hash);
+  // Assign only on a real change: the getter reports an empty fragment as "",
+  // and the setter reads "" as "remove it", so an unconditional round-trip
+  // would silently drop a bare trailing `#`.
+  const hash = redactFragment(url.hash);
+  if (hash !== url.hash) url.hash = hash;
   return sanitizeText(url.toString(), { singleLine: true });
 }
 
