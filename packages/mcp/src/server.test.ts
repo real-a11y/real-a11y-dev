@@ -1153,17 +1153,63 @@ describe("checkpoints", () => {
     expect(textOf(res)).toMatch(/call checkpoint_tree first/i);
   });
 
-  it("an explicit navigation drops the checkpoint", async () => {
+  it("an explicit navigation reports a replaced document, like any other", async () => {
+    // `open_page` must not special-case itself. The detection is backend-id
+    // overlap, which cannot tell which tool moved the page — so an explicit
+    // navigation and a click that happened to navigate have to read the same.
+    // Clearing the checkpoint here instead would make the explicit case the
+    // only one that answers "call checkpoint_tree first".
     const client = await connect(session);
-    session.nativeTreeResponse = nativeTree([{ role: "button", name: "Go" }]);
+    session.nativeTreeResponse = nativeTree(
+      [{ role: "button", name: "Go" }],
+      1,
+    );
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/" },
+    });
     await client.callTool({ name: "checkpoint_tree", arguments: {} });
+
+    session.nativeTreeResponse = nativeTree(
+      [{ role: "heading", name: "Other" }],
+      900,
+    );
     await client.callTool({
       name: "open_page",
       arguments: { url: "https://example.com/other" },
     });
-    const res = await client.callTool({ name: "diff_tree", arguments: {} });
-    // Not "the whole page changed" — the checkpoint is simply gone.
-    expect(textOf(res)).toMatch(/call checkpoint_tree first/i);
+    const out = textOf(
+      await client.callTool({ name: "diff_tree", arguments: {} }),
+    );
+    expect(out).toMatch(/navigated \(or reloaded\)/i);
+    expect(out).toContain("https://example.com/other");
+  });
+
+  it("diff_tree is idempotent across a replaced document", async () => {
+    // `diff_tree` is annotated readOnly + idempotent. Consuming the checkpoint
+    // on the replaced-document branch would break that promise in the way that
+    // costs most: a client retrying after a transport hiccup would get "call
+    // checkpoint_tree first" instead of the report it was retrying for.
+    const client = await connect(session);
+    session.nativeTreeResponse = nativeTree(
+      [{ role: "button", name: "Go" }],
+      1,
+    );
+    await client.callTool({ name: "checkpoint_tree", arguments: {} });
+
+    session.nativeTreeResponse = nativeTree(
+      [{ role: "heading", name: "Other" }],
+      900,
+    );
+    session.url = "https://example.com/other";
+    const first = textOf(
+      await client.callTool({ name: "diff_tree", arguments: {} }),
+    );
+    const second = textOf(
+      await client.callTool({ name: "diff_tree", arguments: {} }),
+    );
+    expect(second).toEqual(first);
+    expect(second).toMatch(/navigated \(or reloaded\)/i);
   });
 
   it("re-exporting an imported DOM-era checkpoint keeps its tabs view", async () => {

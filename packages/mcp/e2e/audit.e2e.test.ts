@@ -309,10 +309,16 @@ describe("MCP end-to-end against a real browser", () => {
     expect(diff).not.toContain("(no changes)");
   });
 
-  it("invalidates the tree checkpoint on navigation", async () => {
-    // A tree checkpoint is bound to the page instance: navigating replaces the
-    // bundle (and its module state), so the diff must fail loudly, not compare
-    // against a stale or silently-empty baseline.
+  it("reports a replaced document rather than diffing across a navigation", async () => {
+    // The checkpoint is Node-side data, so it SURVIVES the navigation — but
+    // the node identities in it belong to the document Chromium just threw
+    // away. Reporting that is the whole point: a diff would otherwise claim
+    // every node was removed and every node added.
+    //
+    // This runs the navigation through `open_page` on purpose. The detection
+    // is `documentWasReplaced`'s backend-id overlap, which knows nothing about
+    // which tool moved the page, and an explicit navigation is the one an
+    // earlier revision special-cased into a bare "no checkpoint" error.
     await client.callTool({
       name: "open_page",
       arguments: { url: dataUrl("<!doctype html><main><h1>A</h1></main>") },
@@ -322,12 +328,17 @@ describe("MCP end-to-end against a real browser", () => {
       name: "open_page",
       arguments: { url: dataUrl("<!doctype html><main><h1>B</h1></main>") },
     });
-    const res = await client.callTool({
-      name: "diff_tree",
-      arguments: {},
-    });
-    expect(res.isError).toBe(true);
-    expect(textOf(res)).toMatch(/No tree checkpoint/);
+    const res = await client.callTool({ name: "diff_tree", arguments: {} });
+    expect(res.isError).toBeFalsy();
+    expect(textOf(res)).toMatch(/navigated \(or reloaded\)/);
+    expect(textOf(res)).toMatch(/Call checkpoint_tree again/);
+
+    // Read-only and idempotent, as annotated: calling again returns the same
+    // report, not "call checkpoint_tree first". A client that retries must not
+    // lose the answer by asking for it twice.
+    const again = await client.callTool({ name: "diff_tree", arguments: {} });
+    expect(again.isError).toBeFalsy();
+    expect(textOf(again)).toEqual(textOf(res));
   });
 
   // ── producer: "native" (Chromium's own tree over CDP) ────────────────────

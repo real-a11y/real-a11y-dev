@@ -545,12 +545,15 @@ export function buildServer(
           viewport,
         });
         rec.openedUrl = info.url;
-        // An explicit navigation makes the checkpoint meaningless: its node ids
-        // belong to the document just replaced. Dropping it here means the next
-        // diff_tree says "checkpoint first" rather than reporting a whole-page
-        // change — the same honesty diffNativeCheckpoint gives an *unexpected*
-        // navigation, applied to the one we asked for.
-        rec.treeCheckpoint = undefined;
+        // The tree checkpoint is deliberately NOT dropped here. It is now
+        // Node-side data, and `diffNativeCheckpoint` detects a replaced
+        // document on its own — from zero overlap in the backend ids, not from
+        // the URL. Letting it do that keeps one answer for every navigation:
+        // an explicit `open_page` and a click that happened to navigate both
+        // report where the checkpoint was captured and where the page is now.
+        // Clearing it here would make the explicit case the one that says
+        // "checkpoint first" instead, which is the shape README, the tools
+        // page and R10's step 9 all promise is gone.
         const emu = device
           ? ` [${device}]`
           : viewport
@@ -1088,16 +1091,24 @@ export function buildServer(
         // node identity it was written in did not, so there is nothing left to
         // compare against. Saying so beats reporting the whole page added.
         if (outcome.kind === "replaced") {
-          // Drop it: it described the old document, and keeping it would make
-          // every later diff report this same navigation — hiding the change
-          // the agent actually asked about behind a stale answer.
-          rec.treeCheckpoint = undefined;
-          // Redact like every other URL this server prints. A click can land on
-          // a one-time token or a userinfo URL, and this string goes straight
-          // into an agent's context.
+          // The checkpoint is NOT consumed here. `diff_tree` is annotated
+          // read-only and idempotent, and a client that retries it — after a
+          // transport hiccup, or simply twice — must get the same answer
+          // rather than "call checkpoint_tree first", which would drop the
+          // one piece of information the retry was after.
+          //
+          // That obliges wording that stays true on the second call as much as
+          // the first: the checkpoint's own address never moves, and "the page
+          // is now" is read fresh each time, so a further navigation reads as
+          // the new address rather than as a second event being announced.
+          //
+          // Redact like every other URL this server prints. A click can land
+          // on a one-time token or a userinfo URL, and this string goes
+          // straight into an agent's context.
           return text(
             `The page navigated (or reloaded), so the checkpoint describes a document that no longer exists — no diff available.\n` +
-              `Was: ${redactUrl(outcome.from)}\nNow: ${redactUrl(outcome.to)}\n` +
+              `Checkpoint captured on: ${redactUrl(outcome.from)}\n` +
+              `The page is now: ${redactUrl(outcome.to)}\n` +
               `Call checkpoint_tree again to start a new comparison.`,
           );
         }
