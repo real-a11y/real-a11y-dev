@@ -113,11 +113,6 @@ describe("required attributes follow the USER AGENT, not the role attribute", ()
       'role "combobox" requires an accessible name',
     );
   });
-
-  it("an invalid role is still invalid, native or not", () => {
-    const n = node({ id: "n", role: "combobocks", implicitRole: true });
-    expect(errorsFor(n)).toContain('"combobocks" is not a valid ARIA role');
-  });
 });
 
 describe("native nesting is structure, not a mistake", () => {
@@ -208,9 +203,81 @@ describe("native nesting is structure, not a mistake", () => {
   });
 });
 
-describe("the builder's authored model is unchanged", () => {
-  it("a node with neither field behaves exactly as before", () => {
-    const n = node({ id: "n", role: "checkbox", name: "Ship it" });
+describe("a present `false` is present, not missing", () => {
+  // Pinned here, where the rule lives. The predicate used to count `false` as
+  // absent, so `aria-expanded="false"` — a collapsed combobox, the ordinary
+  // state — was unsatisfiable. This file hand-builds `attrs`, so it can hold
+  // the boolean the real adapter emits; the downstream matcher test cannot.
+  it("an explicit false satisfies a required attribute", () => {
+    const n = node({
+      id: "n",
+      role: "checkbox",
+      name: "Weekends",
+      attrs: { "aria-checked": false },
+      uaSuppliedAttrs: [],
+    });
+    expect(errorsFor(n)).toEqual([]);
+  });
+
+  it("an empty string is still missing", () => {
+    const n = node({
+      id: "n",
+      role: "checkbox",
+      name: "Weekends",
+      attrs: { "aria-checked": "" },
+      uaSuppliedAttrs: [],
+    });
     expect(errorsFor(n)).toContain("missing required aria-checked");
+  });
+});
+
+describe("engine vocabulary is not an invalid ARIA role", () => {
+  // `<video controls>` extracts as `video`, which is not an ARIA role. Only an
+  // AUTHORED role can be invalid; reporting the element's own vocabulary told
+  // the user their browser was broken, and it returned early so no other rule
+  // ran on the node either.
+  it("an implicit non-ARIA role is not reported", () => {
+    const n = node({
+      id: "n",
+      role: "video",
+      name: "Clip",
+      implicitRole: true,
+    });
+    expect(errorsFor(n)).toEqual([]);
+  });
+
+  it("an authored one still is", () => {
+    const n = node({ id: "n", role: "combobocks", name: "x" });
+    expect(errorsFor(n)).toContain('"combobocks" is not a valid ARIA role');
+  });
+});
+
+describe("an exempt native pair does not end the ancestor walk", () => {
+  it("the option is still judged against the button above its select", () => {
+    // `<div role="button"><label><select><option>` — the option's nesting in
+    // the select is legitimate, its nesting in the button is not, and nothing
+    // would ever test the button if the exempt rung stopped the climb.
+    const nodes = mapOf(
+      node({ id: "btn", role: "button", name: "Wrap" }),
+      node({
+        id: "sel",
+        role: "combobox",
+        name: "Status",
+        parentId: "btn",
+        implicitRole: true,
+      }),
+      node({
+        id: "opt",
+        role: "option",
+        name: "Open",
+        parentId: "sel",
+        implicitRole: true,
+      }),
+    );
+    const byNode = validateTree(nodes);
+    const optIssues = (byNode.get("opt") ?? []).map((i) => i.message);
+    expect(optIssues).toContain(
+      'interactive "option" is nested inside "button" — nested controls aren\'t operable by assistive tech',
+    );
   });
 });

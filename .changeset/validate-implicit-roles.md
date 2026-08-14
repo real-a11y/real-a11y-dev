@@ -1,7 +1,8 @@
 ---
 "@real-a11y-dev/testing": minor
-"@real-a11y-dev/cli": patch
-"@real-a11y-dev/mcp": patch
+"@real-a11y-dev/inspector": patch
+"@real-a11y-dev/react": patch
+"@real-a11y-dev/storybook-addon": patch
 ---
 
 Stop reporting native HTML as broken ARIA — and let authored ARIA actually be
@@ -44,6 +45,21 @@ green no matter what the author wrote:
   a collapsed combobox and `aria-checked="false"` an unchecked box: the ordinary
   states, and previously unsatisfiable.
 
+Two more from the same class:
+
+- **Engine vocabulary is no longer reported as an invalid ARIA role.** A
+  `<video controls>` extracts as `video`, which is not in the ARIA role set, and
+  the check returned early — so no other rule ran on the node either and a page
+  containing a `<video>` could not use the matcher at all. Only an _authored_
+  role can be invalid ARIA.
+- **An exempt native pair no longer ends the ancestor walk.** In
+  `<div role="button"><select><option>`, the option is legitimately inside its
+  select and illegitimately inside the button, which was never tested.
+
 Real problems are still caught: an unnamed `<select>`, an unnamed `<table>`, a
-link nested inside a button, an invalid role, and any hand-built role that omits
-a state no user agent supplies.
+link nested inside a button, an authored bogus role, and any hand-built role
+that omits a state no user agent supplies.
+
+The patch bumps are the three packages that bundle `core`'s **DOM** producer,
+which is what `KEY_ATTRIBUTES` feeds. `cli` and `mcp` build their trees with the
+native producer, which keeps its own attribute allowlist, so they are untouched.

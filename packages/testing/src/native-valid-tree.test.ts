@@ -16,6 +16,27 @@ function mount(html: string): HTMLElement {
   return document.querySelector("main")!;
 }
 
+/**
+ * The violation messages, not just "did it fail".
+ *
+ * `.not.toBeValidA11yTree()` passes on ANY error, so a fixture that also emits
+ * an unrelated one cannot tell the nesting rule from a missing name — mutation
+ * testing showed this file surviving the nesting rule being deleted, widened,
+ * and losing its `implicitRole` guard, all while staying green.
+ */
+function violations(root: Element): string[] {
+  try {
+    expect(root).toBeValidA11yTree();
+    return [];
+  } catch (error) {
+    return (error as Error).message
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.startsWith("✖"))
+      .map((l) => l.replace(/^✖\s*/, ""));
+  }
+}
+
 describe("native HTML is valid without author-supplied ARIA", () => {
   it("a bare <select> with options", () => {
     expect(
@@ -121,7 +142,57 @@ describe("authored ARIA still owes the contract", () => {
     const root = mount(
       `<div role="combobox" aria-label="S" aria-expanded="false" aria-controls="x"><div role="option">A</div></div>`,
     );
-    expect(root).not.toBeValidA11yTree();
+    // Named, not just "some error" — the fixture also emits a real
+    // `aria-selected` violation, so `.not` alone proves nothing about nesting.
+    expect(violations(root)).toContain(
+      'option "A" — interactive "option" is nested inside "combobox" — nested controls aren\'t operable by assistive tech',
+    );
+  });
+});
+
+describe("the nesting rule and its exemption, asserted by message", () => {
+  it("a native <select><option> emits NO nesting violation", () => {
+    const root = mount(
+      `<label>Status <select><option>Open</option></select></label>`,
+    );
+    expect(violations(root).filter((v) => v.includes("nested inside"))).toEqual(
+      [],
+    );
+  });
+
+  it("a link inside a button emits one, by name", () => {
+    const root = mount(`<button>Save <a href="/help">Help</a></button>`);
+    expect(violations(root)).toContain(
+      'link "Help" — interactive "link" is nested inside "button" — nested controls aren\'t operable by assistive tech',
+    );
+  });
+
+  it("an exempt pair does not hide a real ancestor violation", () => {
+    // The `break`-vs-`continue` case: the option is legitimately inside its
+    // select and illegitimately inside the button wrapping it.
+    const root = mount(
+      `<div role="button" tabindex="0" aria-label="Wrap"><label>Status <select><option>Open</option></select></label></div>`,
+    );
+    expect(violations(root)).toContain(
+      'option "Open" — interactive "option" is nested inside "button" — nested controls aren\'t operable by assistive tech',
+    );
+  });
+});
+
+describe("engine vocabulary is not reported as invalid ARIA", () => {
+  it("a <video controls> page can use the matcher at all", () => {
+    // `video` is not an ARIA role. Reporting it returned early, so no other
+    // rule ran on the node — a page with a <video> was unusable.
+    expect(
+      mount(`<video controls src="x.mp4" aria-label="Clip"></video>`),
+    ).toBeValidA11yTree();
+  });
+
+  it("an authored bogus role is still reported", () => {
+    // Each line is `role "name" — message`, so match the message within it.
+    expect(
+      violations(mount(`<div role="combobocks">x</div>`)).join("\n"),
+    ).toContain('"combobocks" is not a valid ARIA role');
   });
 });
 
