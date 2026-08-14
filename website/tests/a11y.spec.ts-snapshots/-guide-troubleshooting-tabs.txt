@@ -49,6 +49,7 @@ link "My audit returned nothing"
 link "Snapshot flaps between runs or between local and CI"
 link "Heading outline has no h1"
 link "Tab sequence is empty"
+link "My snapshot contains the whole page, not the component I passed"
 link "React hydration mismatch when rendering the panel"
 link "Tests pass in jsdom but fail in Playwright (or vice versa)"
 link "A11yAssertionError with a message I don't understand"
@@ -63,6 +64,9 @@ button "Copy Code"
 generic
 button "Copy Code"
 generic
+button "Copy Code"
+generic
+link "toMatchA11yContract"
 button "Copy Code"
 generic
 link "@real-a11y-dev/testing"
