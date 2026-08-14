@@ -31,10 +31,15 @@ class FakeSession implements A11ySession {
   opened: { url: string; options?: OpenOptions }[] = [];
   closed = 0;
 
+  /** Stands in for a redirect: where the page LANDED, if that differs from what
+   *  was requested. Real `open` returns the post-navigation URL. */
+  openResult: { title: string; url: string } | null = null;
+
   async open(url: string, options?: OpenOptions) {
     this.opened.push({ url, options });
-    this.url = url;
-    return { title: "Fake Title", url };
+    const landed = this.openResult ?? { title: "Fake Title", url };
+    this.url = landed.url;
+    return landed;
   }
 
   /** Where the fake page "is" — set by open(), and settable directly to stand
@@ -299,6 +304,29 @@ describe("MCP server wiring", () => {
     );
     expect(visible).toMatch(/headful/);
     expect(visible).not.toMatch(/REAL_A11Y_MCP_HEADFUL/);
+  });
+
+  it("redacts the URL open_page landed on", async () => {
+    // `info.url` is the LANDING url, not the requested one — a redirect chain
+    // ends there, and an OAuth one ends with the token in the fragment. This
+    // was the single place in the server that printed a URL raw while every
+    // other one went through redactUrl.
+    const redirected = new FakeSession();
+    redirected.openResult = {
+      title: "Callback",
+      url: "https://app.example.com/cb?code=abc#access_token=ya29.secret",
+    };
+    const client = await connect(redirected);
+    const out = textOf(
+      (await client.callTool({
+        name: "open_page",
+        arguments: { url: "https://app.example.com/login" },
+      })) as never,
+    );
+    expect(out).not.toContain("ya29.secret");
+    expect(out).not.toContain("code=abc");
+    expect(out).toContain("access_token=%5BREDACTED%5D");
+    expect(out).toContain("code=%5BREDACTED%5D");
   });
 
   it("doesn't claim headless over a CDP attach, where the flag is inert", async () => {

@@ -560,7 +560,10 @@ export function buildServer(
             ? ` [${viewport.width}×${viewport.height}]`
             : "";
         return text(
-          `Opened ${info.url}${emu}\nTitle: ${info.title || "(untitled)"}` +
+          // `info.url` is where the page LANDED, not what was asked for — a
+          // redirect chain ends here, and an OAuth one ends with the token in
+          // the fragment. It is the one URL this server printed raw.
+          `Opened ${redactUrl(info.url)}${emu}\nTitle: ${info.title || "(untitled)"}` +
             `\nBrowser: ${browserMode}` +
             (authenticated
               ? "\n(authenticated session: storage state loaded)"

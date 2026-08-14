@@ -65,7 +65,52 @@ export function sanitizeText(
 const SECRET_PARAM_RE =
   /^(?:token|key|secret|sig|signature|auth|jwt|session|access[-_]?token|id[-_]?token|api[-_]?key|code|x-amz-[\w-]+)$/i;
 
-/** Strip userinfo and redact secret-looking query params from a URL for display. */
+/**
+ * Redact secret-looking pairs out of a URL fragment, leaving ordinary
+ * fragments untouched.
+ *
+ * The fragment is where OAuth's implicit flow puts its tokens — a redirect
+ * lands on `…/callback#access_token=ya29.…&token_type=bearer`, and the
+ * fragment never reaches the server, so it is *only* ever visible client-side,
+ * which is exactly where this toolchain reads it. It is easy to assume the
+ * query-string pass covers this; it does not, because `searchParams` stops at
+ * the `#`.
+ *
+ * Most fragments are not secrets, though — `#installation`, `#/dashboard/users`
+ * — and blanking those would make every printed URL less useful for the sake of
+ * a case that announces itself. So this only rewrites a fragment that actually
+ * parses as key/value pairs, and only the keys {@link SECRET_PARAM_RE} names.
+ * A hash router carrying its own query (`#/cb?code=…`) is handled by splitting
+ * on the first `?`.
+ *
+ * Untouched fragments are returned verbatim rather than re-serialized, so a
+ * plain anchor cannot pick up percent-encoding on the way through.
+ */
+function redactFragment(hash: string): string {
+  if (hash === "" || hash === "#") return hash;
+  const body = hash.slice(1);
+  const queryAt = body.indexOf("?");
+  const path = queryAt === -1 ? "" : body.slice(0, queryAt);
+  const pairs = queryAt === -1 ? body : body.slice(queryAt + 1);
+  // No `=` or `&` means an anchor or a route, not parameters. Leave it alone.
+  if (!/[=&]/.test(pairs)) return hash;
+
+  const params = new URLSearchParams(pairs);
+  let redacted = false;
+  for (const key of [...new Set(params.keys())]) {
+    if (SECRET_PARAM_RE.test(key)) {
+      params.set(key, "[REDACTED]");
+      redacted = true;
+    }
+  }
+  if (!redacted) return hash;
+  return `#${path}${queryAt === -1 ? "" : "?"}${params.toString()}`;
+}
+
+/**
+ * Strip userinfo and redact secret-looking parameters from a URL for display —
+ * in the query string **and** in the fragment.
+ */
 export function redactUrl(raw: string): string {
   let url: URL;
   try {
@@ -79,6 +124,7 @@ export function redactUrl(raw: string): string {
   for (const key of keys) {
     if (SECRET_PARAM_RE.test(key)) url.searchParams.set(key, "[REDACTED]");
   }
+  url.hash = redactFragment(url.hash);
   return sanitizeText(url.toString(), { singleLine: true });
 }
 

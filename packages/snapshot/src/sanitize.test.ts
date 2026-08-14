@@ -60,6 +60,44 @@ describe("redactUrl", () => {
     expect(redactUrl("not a url")).toBe("not a url");
   });
 
+  it("redacts secrets in the FRAGMENT, where the implicit flow puts them", () => {
+    // `searchParams` stops at the `#`, so the query pass above never saw this.
+    // An OAuth implicit redirect lands exactly here, and because the fragment
+    // is never sent to the server it is only ever visible client-side — which
+    // is where this toolchain reads it.
+    expect(
+      redactUrl("https://app.example.com/cb#access_token=ya29.secret"),
+    ).toBe("https://app.example.com/cb#access_token=%5BREDACTED%5D");
+    // Mixed pairs: only the secret-looking key goes.
+    expect(redactUrl("https://h/cb#state=xyz&id_token=eyJ0")).toBe(
+      "https://h/cb#state=xyz&id_token=%5BREDACTED%5D",
+    );
+  });
+
+  it("leaves ordinary fragments untouched, byte for byte", () => {
+    // Blanking every fragment would make printed URLs worse for the sake of a
+    // case that announces itself with `k=v`. And an untouched fragment must not
+    // pick up percent-encoding on the way through.
+    for (const url of [
+      "https://real-a11y.dev/guide#installation",
+      "https://app.example.com/#/dashboard/users",
+      "https://h/p?q=1#a-b_c.d~e",
+    ]) {
+      expect(redactUrl(url)).toBe(url);
+    }
+  });
+
+  it("handles a hash router carrying its own query", () => {
+    expect(redactUrl("https://app.example.com/#/cb?code=abc&next=/home")).toBe(
+      "https://app.example.com/#/cb?code=%5BREDACTED%5D&next=%2Fhome",
+    );
+  });
+
+  it("does not treat a fragment without pairs as parameters", () => {
+    // `&` alone is not a key/value pair; nothing matches, so nothing is rewritten.
+    expect(redactUrl("https://h/p#a&b")).toBe("https://h/p#a&b");
+  });
+
   it("redactUrlsIn scrubs URLs embedded in free text (Playwright messages)", () => {
     expect(
       redactUrlsIn("page.goto: net::ERR at https://u:p@h/x?token=abc failed"),
