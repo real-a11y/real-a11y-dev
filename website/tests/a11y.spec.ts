@@ -20,7 +20,7 @@
 // from the same module instead of drifting.
 
 import AxeBuilder from "@axe-core/playwright";
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { attach } from "@real-a11y-dev/testing/playwright";
 
 import { AXE_TAGS, ROUTES, THEMES } from "../scripts/audit-routes.mjs";
@@ -126,12 +126,10 @@ for (const theme of THEMES) {
 
     for (const route of ROUTES) {
       test(route, async ({ page }) => {
-        // `networkidle` waits for 500ms of no network activity — VitePress's
-        // Vue hydration sets `document.title` and `<html lang>` reactively,
-        // so `waitUntil: "load"` would catch the page mid-hydration and
-        // intermittently see empty title / missing lang / orphaned main.
-        // `networkidle` is the standard fix for "axe sees a transient DOM."
-        await page.goto(route, { waitUntil: "networkidle" });
+        // Axe must see the hydrated DOM: pre-hydration it reports a critical
+        // `button-name` against the still-unnamed theme switch. See
+        // `gotoHydrated` for why `networkidle` did not guarantee that.
+        await gotoHydrated(page, route);
 
         const results = await new AxeBuilder({ page })
           .withTags([...AXE_TAGS])
@@ -160,15 +158,49 @@ function redactTimes(audit: string): string {
   return audit.replace(/time "[^"]*"/g, 'time "[redacted]"');
 }
 
+// Navigate, then block until VitePress has actually hydrated.
+//
+// `networkidle` used to stand in for this, and it cannot: it reports that
+// the network went quiet, which is not the same claim as "the client-side
+// render ran". The two come apart precisely when an asset request fails or
+// is dropped — the network then goes quiet *sooner*, `networkidle` resolves
+// *faster*, and everything downstream reads the server-rendered DOM as
+// though it were the finished page. Nothing throws.
+//
+// That server-rendered DOM is materially different from the real one, in
+// exactly the places this file asserts on:
+//
+//   - the theme switch has NO accessible name. `VPSwitchAppearance` seeds
+//     `switchTitle` as `ref('')` and fills it from a `watchPostEffect`,
+//     which never runs during SSR — so the shipped HTML carries a bare,
+//     valueless `title` attribute (deliberate: the server cannot know
+//     `isDark` without a hydration mismatch).
+//   - the "On this page" outline is empty; its items are built in
+//     `onMounted`.
+//
+// Consequences, both observed: `--update-snapshots` bakes that stripped
+// tree in as the new baseline — which then passes forever, because it is a
+// strict subset of the real one, silently blinding the gate to the content
+// it stopped recording. And axe reports a critical `button-name` violation
+// against the unnamed switch, which reads as a real regression.
+//
+// So gate on the hydrated state itself. The switch's title going non-empty
+// *is* the hydration boundary, and the navbar puts it on all 42 routes.
+// `toHaveAttribute` polls, so this converts a silent bad capture into a
+// loud, obvious failure.
+async function gotoHydrated(page: Page, route: string): Promise<void> {
+  await page.goto(route, { waitUntil: "load" });
+  await expect(page.locator(".VPSwitchAppearance").first()).toHaveAttribute(
+    "title",
+    /\S/,
+    { timeout: 15_000 },
+  );
+}
+
 test.describe("a11y tree snapshot", () => {
   for (const route of ROUTES) {
     test(route, async ({ page }) => {
-      await page.goto(route, { waitUntil: "load" });
-      // VitePress computes the "On this page" outline aside client-side
-      // after `load`; wait for the network to settle so the hydrated DOM
-      // (and that aside) is present before snapshotting. Without this the
-      // tree/outline/tab snapshots race the aside on long pages.
-      await page.waitForLoadState("networkidle");
+      await gotoHydrated(page, route);
       const sn = await attach(page);
       const audit = redactTimes(await sn.auditSnapshot());
       expect(audit).toMatchSnapshot(`${slugFor(route)}.audit.txt`);
@@ -179,8 +211,7 @@ test.describe("a11y tree snapshot", () => {
 test.describe("heading outline snapshot", () => {
   for (const route of ROUTES) {
     test(route, async ({ page }) => {
-      await page.goto(route, { waitUntil: "load" });
-      await page.waitForLoadState("networkidle");
+      await gotoHydrated(page, route);
       const sn = await attach(page);
       const outline = await sn.outlineSnapshot();
       expect(outline).toMatchSnapshot(`${slugFor(route)}.outline.txt`);
@@ -191,8 +222,7 @@ test.describe("heading outline snapshot", () => {
 test.describe("tab sequence snapshot", () => {
   for (const route of ROUTES) {
     test(route, async ({ page }) => {
-      await page.goto(route, { waitUntil: "load" });
-      await page.waitForLoadState("networkidle");
+      await gotoHydrated(page, route);
       const sn = await attach(page);
       const tabs = await sn.tabSequenceSnapshot();
       expect(tabs).toMatchSnapshot(`${slugFor(route)}.tabs.txt`);
@@ -222,8 +252,7 @@ test.describe("home feature cards", () => {
   test("every linked card has an explicit accessible name", async ({
     page,
   }) => {
-    await page.goto("/", { waitUntil: "load" });
-    await page.waitForLoadState("networkidle");
+    await gotoHydrated(page, "/");
 
     const links = page.locator("a.VPFeature");
     const count = await links.count();
