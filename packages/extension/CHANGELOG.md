@@ -12,6 +12,19 @@
 
 ### Patch Changes
 
+- Announce the panel's own live regions. The search match count, the action
+  feedback bar and the relayed live-announcement log were each mounted
+  together with the text they were meant to announce, and a live region has to
+  already be in the accessibility tree when its contents change — one that
+  enters the DOM with its text inside it is not announced by most screen
+  reader / browser pairs. So the panel whose whole job is surfacing a page's
+  live regions was silently dropping all three of its own. All three
+  containers now stay mounted and only their contents swap. The action bar's
+  paint and its flash move to an inner element that mounts with the text, so
+  the flash still replays per message rather than firing once at start-up, and
+  the containers collapse to nothing while empty — including cancelling the
+  toolbar gap the empty match count would otherwise still earn. ([#350])
+
 - Make the inline input panel usable from the keyboard and from a screen
   reader. Its text field had no accessible name of its own — the visible label
   was never associated with it, so the only name was whatever placeholder the
@@ -273,3 +286,4 @@ Earlier releases predate this changelog.
 [#324]: https://github.com/real-a11y/real-a11y-dev/pull/324
 [#334]: https://github.com/real-a11y/real-a11y-dev/pull/334
 [#343]: https://github.com/real-a11y/real-a11y-dev/pull/343
+[#350]: https://github.com/real-a11y/real-a11y-dev/pull/350
