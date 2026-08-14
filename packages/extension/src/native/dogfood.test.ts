@@ -4,7 +4,9 @@ import { DogfoodLog } from "./dogfood.js";
 
 // In-memory storage area matching the chrome.storage.local subset DogfoodLog uses.
 class FakeStorage {
-  private data: Record<string, unknown> = {};
+  // Public so a test can seed a pre-existing snapshot (see the
+  // counters-written-before-the-field-existed case).
+  data: Record<string, unknown> = {};
   async get(key: string) {
     return key in this.data ? { [key]: this.data[key] } : {};
   }
@@ -108,5 +110,43 @@ describe("DogfoodLog", () => {
     expect(report).toContain("actions dispatched: 1");
     // Content-free: only kinds/reasons/counts, never a typed value.
     expect(report).not.toMatch(/password|secret|@/);
+  });
+});
+
+describe("capability instrumentation", () => {
+  it("tallies unavailable events by reason, uncapped", async () => {
+    // "How often was native unavailable, and why" is the capability question
+    // the raw log stops answering once it rolls past CAP — and the answer
+    // changes what the verdict should be: mostly `devtools-conflict` argues
+    // for better conflict handling, mostly `browser-ui` argues users simply
+    // live where native can never reach.
+    const storage = new FakeStorage();
+    const log = new DogfoodLog(storage);
+    for (const reason of ["browser-ui", "devtools-conflict", "browser-ui"]) {
+      await log.record({ kind: "unavailable", at: 1, reason });
+    }
+    const c = await log.counters();
+    expect(c.unavailable).toBe(3);
+    expect(c.unavailableByReason).toEqual({
+      "browser-ui": 2,
+      "devtools-conflict": 1,
+    });
+
+    const report = await log.report(0);
+    expect(report).toContain("native unavailable: 3");
+    expect(report).toContain("browser-ui: 2");
+  });
+
+  it("survives counters written before the field existed", async () => {
+    // A dogfooder mid-exercise has a stored snapshot with no
+    // `unavailableByReason`. A plain spread leaves it undefined, and the next
+    // record() would throw on it — losing the log they had already gathered.
+    const storage = new FakeStorage();
+    storage.data["dogfood.nativeCounters"] = { attach: 4, read: 2 };
+    const log = new DogfoodLog(storage);
+    await log.record({ kind: "unavailable", at: 1, reason: "web-store" });
+    const c = await log.counters();
+    expect(c.attach).toBe(4);
+    expect(c.unavailableByReason).toEqual({ "web-store": 1 });
   });
 });
