@@ -256,24 +256,71 @@ export class NativeDebuggerSession {
    * @returns how many tabs were detached.
    */
   async detachAll(): Promise<number> {
-    const attached = await this.enqueue(async () => {
-      const map = await this.readAttached();
-      await this.writeAttached({});
-      return map;
-    });
-    const entries = Object.entries(attached);
-    for (const [id, startedAt] of entries) {
+    const attached = await this.enqueue(() => this.readAttached());
+    let detached = 0;
+    for (const [id, startedAt] of Object.entries(attached)) {
       const tabId = Number(id);
-      // Claimed above, so onDetach can no longer record this one — logging it
-      // here is what keeps the attach/detach pairs balanced in the report.
-      await this.log.record({
-        kind: "detach",
-        at: Date.now(),
-        attachedMs: Date.now() - startedAt,
-      });
-      await chrome.debugger.detach({ tabId }).catch(() => {});
+      // Through the per-tab queue, NOT around it. Tearing down an operation
+      // that is mid-flight makes its CDP call throw, which `withDebugger`
+      // classifies as `connection-lost` and `withRecovery` then RETRIES — so
+      // switching native off during a read would re-attach immediately after,
+      // put the banner back, and book a `reattach-ok` that never happened.
+      // Queueing waits for the operation instead; its own `finally` detaches,
+      // and this then finds nothing left to do.
+      if (
+        await this.runExclusive(tabId, () =>
+          this.detachIfLive(tabId, Date.now() - startedAt),
+        )
+      ) {
+        detached++;
+      }
     }
-    return entries.length;
+    return detached;
+  }
+
+  /**
+   * Detach one tab for the revoke path, reporting whether it was really live.
+   *
+   * The difference from {@link detach} is that this one does NOT trust the
+   * bookkeeping. An entry can outlive its attachment — a drop Chrome never
+   * reported, or an `onDetach` that lost the race with a worker teardown — and
+   * such an entry is arbitrarily old. Logging it as an ordinary detach would
+   * add hours to "total time attached", which is the banner-tolerance number
+   * the ship/no-ship decision reads, and would report "detached from 1 tab(s)"
+   * to a user whose banner was never up.
+   *
+   * So the CDP call decides: it resolving is the only evidence the attachment
+   * was live. If it rejects, the entry is recorded as an unsolicited detach of
+   * unknown duration — true, and with no `attachedMs` to inflate the dwell
+   * total — rather than as a clean detach or as nothing at all.
+   */
+  private async detachIfLive(
+    tabId: number,
+    attachedMs: number,
+  ): Promise<boolean> {
+    const claimed = await this.enqueue(async () => {
+      const attached = await this.readAttached();
+      if (attached[tabId] === undefined) return false;
+      delete attached[tabId];
+      await this.writeAttached(attached);
+      return true;
+    });
+    if (!claimed) return false;
+
+    const live = await chrome.debugger
+      .detach({ tabId })
+      .then(() => true)
+      .catch(() => false);
+    await this.log.record(
+      live
+        ? { kind: "detach", at: Date.now(), attachedMs }
+        : {
+            kind: "detach-unsolicited",
+            at: Date.now(),
+            reason: "stale-bookkeeping",
+          },
+    );
+    return live;
   }
 
   /**

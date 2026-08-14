@@ -26,7 +26,11 @@ describe("classifyTabUrl", () => {
       "http://localhost:5173/app?x=1#y",
       "https://youtube.com/watch?v=abc",
     ]) {
-      expect(classifyTabUrl(url)).toEqual({ native: true, domFallback: true });
+      expect(classifyTabUrl(url)).toEqual({
+        native: true,
+        domFallback: true,
+        retryable: true,
+      });
     }
   });
 
@@ -72,6 +76,12 @@ describe("classifyTabUrl", () => {
       "view-source",
     );
     expect(classifyTabUrl("file:///Users/x/page.html").reason).toBe("file-url");
+    // ...but only by default: with "Allow access to file URLs" both producers
+    // work, so refusing regardless would fail closed and would put a bogus
+    // `file-url` row in the capability split for a correctly-configured setup.
+    expect(
+      classifyTabUrl("file:///Users/x/page.html", { fileAccess: true }).native,
+    ).toBe(true);
   });
 
   it("reports an absent URL as no-url rather than guessing", () => {
@@ -148,6 +158,37 @@ describe("explainUnavailable", () => {
     for (const reason of ALL_REASONS) {
       if (blockedBy(reason).domFallback) continue;
       expect(explainUnavailable(reason)).not.toMatch(/DOM tree below/i);
+    }
+  });
+});
+
+describe("retryable", () => {
+  it("is true exactly for the refusals that asking again can clear", () => {
+    // The DevTools conflict is the reason this field exists: its documented
+    // remedy is "close DevTools and try again", so a panel that disables the
+    // button on it puts the remedy out of reach.
+    expect(blockedBy("devtools-conflict").retryable).toBe(true);
+    expect(blockedBy("no-url").retryable).toBe(true);
+    expect(blockedBy("attach-refused").retryable).toBe(true);
+
+    // These are properties of the address and cannot change without a
+    // navigation, which re-runs the pre-flight by itself.
+    for (const reason of [
+      "browser-ui",
+      "extension-page",
+      "web-store",
+      "view-source",
+      "file-url",
+    ] as const) {
+      expect(blockedBy(reason).retryable).toBe(false);
+    }
+  });
+
+  it("marks every post-hoc attach failure retryable", () => {
+    // classifyAttachError only ever produces these two, and both come from an
+    // attach that could go differently next time.
+    for (const error of ["conflict", "attach-failed", undefined]) {
+      expect(blockedBy(classifyAttachError(error)).retryable).toBe(true);
     }
   });
 });

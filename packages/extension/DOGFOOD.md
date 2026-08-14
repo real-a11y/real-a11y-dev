@@ -60,13 +60,23 @@ is a good test — its media controls are the thing only native mode can see).
    and menu transitions but **not** a slow fetch-driven re-render — if a click
    ever seems to act on the previous state of the page, that is the case to
    note, and re-reading by hand will confirm it.
-4. **On a page native can't reach** — a `chrome://` tab, the Web Store, a
-   `file://` URL, or any tab with DevTools open — the panel says so **before**
-   attaching, names the reason, and disables **Load native tree** instead of
-   flashing the banner on its way to a bare failure. Where the DOM producer
-   still works (a DevTools conflict), it points you at it; where Chrome blocks
-   every extension surface (`chrome://`, the Web Store), it says _that_ rather
-   than sending you to a panel which will also never load.
+4. **On a page native can't reach**, the panel names the reason instead of
+   reporting a bare failure. Two different moments, because they are two
+   different kinds of answer:
+   - **Before attaching**, from the URL alone — a `chrome://` tab, the Web
+     Store, an extension page, `view-source:`, or a `file://` URL without
+     "Allow access to file URLs". These can't change until you navigate, so
+     **Load native tree** is disabled and no banner ever flashes.
+   - **On the attach**, for anything the URL can't predict — most importantly
+     **DevTools holding the tab**. The button stays live for these: the remedy
+     is "close DevTools and try again", and disabling it would put that remedy
+     out of reach.
+
+   Where the DOM producer still works (a DevTools conflict), the message points
+   you at it; where Chrome blocks every extension surface (`chrome://`, the Web
+   Store), it says _that_ rather than sending you to a panel which will also
+   never load.
+
 5. **Switching native mode off detaches.** `debugger` cannot be an optional
    permission, so "revoked" can only mean "not attached" — unticking the box
    drops any live attachment and reports how many tabs it detached from. Normally

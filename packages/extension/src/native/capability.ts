@@ -50,9 +50,25 @@ export interface TabCapability {
    * refusal leave the DOM producer genuinely working.
    */
   domFallback: boolean;
+  /**
+   * Trying again on this same tab could succeed, so the panel must keep the
+   * controls live.
+   *
+   * A DevTools conflict is the case this exists for: it is the one reason the
+   * remedy is "close DevTools and try again", and disabling the button on it
+   * makes that remedy unreachable — the user closes DevTools and has no way to
+   * ask again short of switching tabs. Structural refusals (`chrome://`, the
+   * Web Store) stay true until the tab navigates, which re-runs the pre-flight
+   * on its own.
+   */
+  retryable: boolean;
 }
 
-const ATTACHABLE: TabCapability = { native: true, domFallback: true };
+const ATTACHABLE: TabCapability = {
+  native: true,
+  domFallback: true,
+  retryable: true,
+};
 
 /**
  * Whether the DOM content-script producer still works, per reason — the single
@@ -76,10 +92,38 @@ const DOM_FALLBACK: Record<NativeUnavailableReason, boolean> = {
   "attach-refused": true,
 };
 
+/**
+ * Whether asking again on the same tab could give a different answer — the
+ * single source of truth for {@link TabCapability.retryable}.
+ *
+ * The three `true` entries are the ones that depend on something outside the
+ * URL: another client holding the tab, a tab we could not read, and a refusal
+ * Chrome did not explain. Everything else is a property of the address itself
+ * and cannot change without a navigation.
+ */
+const RETRYABLE: Record<NativeUnavailableReason, boolean> = {
+  "browser-ui": false,
+  "extension-page": false,
+  "web-store": false,
+  "view-source": false,
+  // Turning on "Allow access to file URLs" changes this answer, but only via a
+  // settings page — not by pressing the button again, and the extension is
+  // reloaded when it changes.
+  "file-url": false,
+  "no-url": true,
+  "devtools-conflict": true,
+  "attach-refused": true,
+};
+
 /** The capability a refusal implies, from the reason alone. Used by the panel
  *  for a reason that arrived over messaging, where the URL is not in hand. */
 export function blockedBy(reason: NativeUnavailableReason): TabCapability {
-  return { native: false, reason, domFallback: DOM_FALLBACK[reason] };
+  return {
+    native: false,
+    reason,
+    domFallback: DOM_FALLBACK[reason],
+    retryable: RETRYABLE[reason],
+  };
 }
 
 /**
@@ -90,7 +134,10 @@ export function blockedBy(reason: NativeUnavailableReason): TabCapability {
  * `about:` space is browser UI (Chrome rewrites `about:settings` and friends to
  * `chrome://`, so what remains here is rare, but it is not a page).
  */
-export function classifyTabUrl(url: string | undefined): TabCapability {
+export function classifyTabUrl(
+  url: string | undefined,
+  opts: { fileAccess?: boolean } = {},
+): TabCapability {
   if (!url) return blockedBy("no-url");
 
   let parsed: URL;
@@ -111,7 +158,15 @@ export function classifyTabUrl(url: string | undefined): TabCapability {
       : blockedBy("browser-ui");
   }
   if (scheme === "view-source:") return blockedBy("view-source");
-  if (scheme === "file:") return blockedBy("file-url");
+  // `file://` is not blocked outright — it is blocked *by default*. With "Allow
+  // access to file URLs" on, both producers work, so refusing unconditionally
+  // would fail closed against this module's own policy and would put a bogus
+  // `file-url` entry in the capability split for a dogfooder whose setup is
+  // fine. The caller supplies the answer (`isAllowedFileSchemeAccess`), which
+  // this module cannot read without taking a chrome dependency.
+  if (scheme === "file:") {
+    return opts.fileAccess ? ATTACHABLE : blockedBy("file-url");
+  }
 
   // Every browser's own UI scheme, not just Chrome's: the dogfood build loads
   // unpacked in Chromium forks too, and `edge://settings` is as blocked there

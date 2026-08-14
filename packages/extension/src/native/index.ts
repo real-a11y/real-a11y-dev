@@ -68,7 +68,23 @@ async function tabUrl(tabId: number): Promise<string | undefined> {
  * attempting anyway buys a banner flash and the same answer.
  */
 async function capabilityOf(tabId: number): Promise<TabCapability> {
-  return classifyTabUrl(await tabUrl(tabId));
+  return classifyTabUrl(await tabUrl(tabId), {
+    // `file://` is blocked by default, not outright: with "Allow access to file
+    // URLs" on, both producers work there. Ask rather than assume, so a
+    // dogfooder who enabled it isn't refused — and doesn't get a `file-url`
+    // entry in the capability split that misrepresents their setup.
+    fileAccess: await fileSchemeAccess(),
+  });
+}
+
+/** Whether the user granted "Allow access to file URLs". Absent on old builds
+ *  and in tests, where the safe answer is the restrictive one. */
+async function fileSchemeAccess(): Promise<boolean> {
+  try {
+    return await chrome.extension.isAllowedFileSchemeAccess();
+  } catch {
+    return false;
+  }
 }
 
 /**
