@@ -89,7 +89,7 @@ describe("redactUrl", () => {
 
   it("handles a hash router carrying its own query", () => {
     expect(redactUrl("https://app.example.com/#/cb?code=abc&next=/home")).toBe(
-      "https://app.example.com/#/cb?code=%5BREDACTED%5D&next=%2Fhome",
+      "https://app.example.com/#/cb?code=%5BREDACTED%5D&next=/home",
     );
   });
 
@@ -109,7 +109,7 @@ describe("redactUrl", () => {
     expect(out).not.toContain("ya29.SECRET");
     expect(out).toContain("access_token=%5BREDACTED%5D");
     // The non-secret value survives, `?` and all.
-    expect(out).toContain("state=%2Fdash%3Ftab%3D1");
+    expect(out).toContain("state=/dash?tab=1");
 
     expect(
       redactUrl("https://h/cb#access_token=ya29.SECRET?foo"),
@@ -201,5 +201,56 @@ describe("projectFindings / projectSnapshot", () => {
       outline: "",
       tabOrder: "",
     });
+  });
+});
+
+describe("redactUrl — fragments the pair scan cannot tokenize", () => {
+  // These all leaked through an earlier revision that returned the fragment
+  // verbatim whenever no pair matched. The lesson is the shape of the fix, not
+  // the individual inputs: "nothing matched" must never mean "print it raw",
+  // because it really means "we and the app disagree about where this splits".
+  const SECRET = "ya29.SECRET";
+
+  it("redacts after a SECOND '#' — the hash-routed implicit-flow landing", () => {
+    // A hash-routed SPA's callback is itself a fragment, so the IdP's response
+    // is appended after another `#`. The URL parser calls all of it one
+    // fragment, so the token sits inside what looks like a key.
+    const out = redactUrl(
+      `https://app.example.com/#/callback#access_token=${SECRET}&token_type=Bearer`,
+    );
+    expect(out).not.toContain(SECRET);
+  });
+
+  it("redacts when a '?' precedes the secret", () => {
+    expect(
+      redactUrl(`https://h/cb#state=1?access_token=${SECRET}`),
+    ).not.toContain(SECRET);
+  });
+
+  it("drops the fragment when the '=' itself is percent-encoded", () => {
+    // Nothing tokenizes as a pair here, so there is no value to replace —
+    // the only safe answer is to print none of it.
+    const out = redactUrl(`https://h/cb#access_token%3D${SECRET}&state=1`);
+    expect(out).not.toContain(SECRET);
+    expect(out).toContain("%5BREDACTED%5D");
+  });
+
+  it("redacts a percent-encoded key name", () => {
+    expect(redactUrl(`https://h/cb#access%5Ftoken=${SECRET}`)).not.toContain(
+      SECRET,
+    );
+  });
+
+  it("still leaves genuinely ordinary fragments alone", () => {
+    // The backstop must not be so eager that it eats normal pages.
+    for (const url of [
+      "https://real-a11y.dev/guide#installation",
+      "https://app.example.com/#/dashboard/users",
+      "https://h/p#a=1&token",
+      "https://h/p#token=",
+      "https://h/p#a&b",
+    ]) {
+      expect(redactUrl(url)).toBe(url);
+    }
   });
 });

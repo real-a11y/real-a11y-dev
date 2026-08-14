@@ -62,8 +62,48 @@ export function sanitizeText(
  * params are replaced, never printed — preview URLs with tokens end up in
  * reports, CI logs, and PR comments otherwise.
  */
-const SECRET_PARAM_RE =
-  /^(?:token|key|secret|sig|signature|auth|jwt|session|access[-_]?token|id[-_]?token|api[-_]?key|code|x-amz-[\w-]+)$/i;
+const SECRET_KEYS =
+  "token|key|secret|sig|signature|auth|jwt|session|access[-_]?token|id[-_]?token|api[-_]?key|code|x-amz-[\\w-]+";
+
+const SECRET_PARAM_RE = new RegExp(`^(?:${SECRET_KEYS})$`, "i");
+
+/**
+ * A secret-looking key followed by an assignment, ANYWHERE in a fragment —
+ * after a second `#`, after a `/`, or written with a percent-encoded `=`.
+ *
+ * This is the backstop, and it exists because the per-pair pass below can only
+ * redact what it manages to tokenize the same way the app did. Where the two
+ * disagree, "no pair matched" must not be allowed to mean "print it verbatim";
+ * this catches the leftovers so the fragment can be dropped wholesale instead.
+ * Built from the same key list as `SECRET_PARAM_RE` so the two cannot drift.
+ *
+ * The trailing `[^#?&]` requires a non-empty value — `#token=` has nothing to
+ * leak — and the negative lookahead keeps an already-redacted fragment from
+ * re-triggering it. The placeholder is written pre-encoded so a fragment reads
+ * the same as the query half, which `URLSearchParams` encodes for us.
+ */
+const SECRET_IN_FRAGMENT_RE = new RegExp(
+  `(?:^|[#?&/])(?:${SECRET_KEYS})(?:=|%3D)(?!%5BREDACTED%5D)[^#?&]`,
+  "i",
+);
+
+/**
+ * One `key=value` inside a fragment. `#`, `?` and `&` all act as separators:
+ * a fragment is opaque to the URL parser, so an app may use any of them, and a
+ * hash-routed SPA that completes an implicit flow produces a *second* `#`
+ * (`…/#/callback#access_token=…`) which is a separator in every sense but the
+ * parser's.
+ */
+const FRAGMENT_PAIR_RE = /(^|[#?&])([^#?&=]+)=([^#?&]*)/g;
+
+/** decodeURIComponent that yields the raw text rather than throwing on `%zz`. */
+function decodeSafe(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
 
 /**
  * Redact secret-looking pairs out of a URL fragment, leaving ordinary
@@ -78,47 +118,45 @@ const SECRET_PARAM_RE =
  *
  * Most fragments are not secrets, though — `#installation`, `#/dashboard/users`
  * — and blanking those would make every printed URL less useful for the sake of
- * a case that announces itself. So this only rewrites a fragment that actually
- * parses as key/value pairs, and only the keys {@link SECRET_PARAM_RE} names.
- * A hash router carrying its own query (`#/cb?code=…`) is handled by splitting
- * on the first `?`.
+ * a case that announces itself. So pairs are rewritten **in place**: only a
+ * matched value changes, and every other byte, separators and encoding
+ * included, survives exactly as it arrived.
  *
- * Untouched fragments are returned verbatim rather than re-serialized, so a
- * plain anchor cannot pick up percent-encoding on the way through.
+ * A fragment is opaque to the URL parser, so there is no authority on how it
+ * splits. `#`, `?` and `&` are therefore all treated as separators — a
+ * hash-routed SPA completing an implicit flow lands on `…/#/callback#access_token=…`,
+ * where the second `#` separates in every sense except the parser's.
+ *
+ * Anything the pair scan cannot tokenize falls to {@link SECRET_IN_FRAGMENT_RE},
+ * which drops the whole fragment. That direction is deliberate: an earlier
+ * revision returned the fragment verbatim whenever no pair matched, which meant
+ * any tokenization the app and this code disagreed about printed the token in
+ * full — the exact bug this function exists to prevent.
  */
 function redactFragment(hash: string): string {
   if (hash === "" || hash === "#") return hash;
   const body = hash.slice(1);
 
-  // A hash router puts its route before the `?` (`#/cb?code=…`), and that
-  // prefix is not parameters — but `?` is legal and unencoded *inside* a
-  // fragment value too, so a bare `indexOf("?")` split is not safe: an OAuth
-  // `state=/dash?tab=1` would put the `?` AFTER the token and leave the token
-  // in the un-scanned prefix. Only treat the prefix as a route when it holds no
-  // `=` or `&` — i.e. when it cannot itself be carrying a parameter.
-  const queryAt = body.indexOf("?");
-  const isRoute = queryAt !== -1 && !/[=&]/.test(body.slice(0, queryAt));
-  const path = isRoute ? body.slice(0, queryAt) : "";
-  const pairs = isRoute ? body.slice(queryAt + 1) : body;
+  const rebuilt = body.replace(
+    FRAGMENT_PAIR_RE,
+    (match, separator: string, key: string, value: string) => {
+      // A valueless key (`#a=1&token`) has nothing to leak; handing it a
+      // fabricated `[REDACTED]` would report a secret that was never there.
+      if (value === "") return match;
+      // Decode for the test only — `#access%5Ftoken=…` is the same key — while
+      // the original spelling is what gets written back.
+      return SECRET_PARAM_RE.test(decodeSafe(key))
+        ? `${separator}${key}=%5BREDACTED%5D`
+        : match;
+    },
+  );
 
-  // No `=` or `&` means an anchor or a route, not parameters. Leave it alone.
-  if (!/[=&]/.test(pairs)) return hash;
+  // Fail closed: a secret-shaped key is still legible, so the pair scan and
+  // whatever produced this fragment disagree about where it splits. Rewriting
+  // it precisely is not possible; printing it is not acceptable.
+  if (SECRET_IN_FRAGMENT_RE.test(rebuilt)) return "#%5BREDACTED%5D";
 
-  // Rebuilt by appending rather than `set()`, which collapses repeated keys
-  // into one — and a valueless key (`#a=1&token`) is left alone rather than
-  // handed a fabricated `[REDACTED]` it never had.
-  const rebuilt = new URLSearchParams();
-  let redacted = false;
-  for (const [key, value] of new URLSearchParams(pairs)) {
-    if (value !== "" && SECRET_PARAM_RE.test(key)) {
-      rebuilt.append(key, "[REDACTED]");
-      redacted = true;
-    } else {
-      rebuilt.append(key, value);
-    }
-  }
-  if (!redacted) return hash;
-  return `#${path}${isRoute ? "?" : ""}${rebuilt.toString()}`;
+  return rebuilt === body ? hash : `#${rebuilt}`;
 }
 
 /**
