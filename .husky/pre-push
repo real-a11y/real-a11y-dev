@@ -1,11 +1,38 @@
-# Run the full verify gate (build + typecheck + tests) before allowing a push.
-# Catches CI failures locally so the pipeline doesn't fail on review-time
-# issues (missing types, JSX config, broken tests).
+# Fast, build-free checks only. Everything heavier — the build, typecheck, the
+# test suites, surface:check, the website build and the bundle-size budgets —
+# runs in CI, in the "Verify" and "Size limit" steps of
+# `.github/workflows/test.yml`.
 #
-# Skip in emergencies with `git push --no-verify`.
-pnpm verify
-
-# Bundle-size budget gate (mirrors CI). `verify` already built the public
-# packages, so size-limit reads fresh dist/ output — no rebuild needed.
-# Budgets live in .size-limit.json.
-pnpm size-limit
+# Know exactly when that is: `test.yml` triggers on pull requests targeting
+# main and on pushes to main — NOT on a push to a feature branch. So while no
+# pull request is open, a push is covered by this hook and nothing else. That
+# is the real trade here; nothing below used to be checked *only* locally, but
+# it is now checked *later*, and not at all until you open the pull request.
+#
+# This hook is deliberately small for two reasons, and the first one is not a
+# preference:
+#
+#   1. A long hook breaks the push outright. git connects to the remote and
+#      reads the ref advertisement *before* running pre-push — that is how this
+#      hook receives refs on stdin. So everything below runs while the server's
+#      receive-pack sits idle, and past its timeout the push dies with SIGPIPE
+#      (exit 141) with every check green. `pnpm verify` is ~2 min warm and ~7
+#      min cold, which was reliably over the line. SSH keepalives do not help:
+#      they keep the transport alive, not the server's receive-pack.
+#
+#   2. `pnpm verify` runs the whole test suite on the developer's machine, but
+#      CI's verify matrix is ubuntu + macos only. A Windows-fragile test (a
+#      tight timing bound, usually) therefore blocks the push locally while
+#      passing CI — see issue #162.
+#
+# Both checks below run without a build, which is what keeps them fast:
+# eslint here is deliberately non-type-checked (see eslint.config.mjs), and
+# prettier reads source. surface:check and typecheck are NOT in this set —
+# both need built workspace packages, which is the expensive part.
+#
+# Before pushing anything substantial, run the real gate yourself:
+#   pnpm verify && pnpm size-limit
+#
+# Skip this hook in emergencies with `git push --no-verify`.
+pnpm format:check
+pnpm lint

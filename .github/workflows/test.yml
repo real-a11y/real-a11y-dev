@@ -166,10 +166,14 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      # Single gate: build → typecheck → format:check → lint → test.
-      # Mirrors the local `pre-push` hook so "passes locally" guarantees
-      # "passes CI" — and any check we add to `pnpm verify` automatically
-      # extends CI without touching this workflow.
+      # Single gate: build → typecheck → format:check → lint → test. Any check
+      # added to `pnpm verify` extends CI without touching this workflow.
+      #
+      # This is a strict SUPERSET of the local `pre-push` hook, which runs only
+      # the build-free checks (`format:check`, `lint`) so that it cannot outlast
+      # the push's connection to the remote — see `.husky/pre-push` for why.
+      # So "passes locally" does NOT imply "passes CI": this step is the
+      # authority, and it is the only place the build, typecheck and tests run.
       - name: Verify
         run: pnpm verify
 
