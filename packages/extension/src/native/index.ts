@@ -153,6 +153,13 @@ export function registerNativeMode(): void {
             // Pre-flight only — no attach, so asking the question never costs a
             // banner flash. The panel calls this to decide whether to offer the
             // native controls at all.
+            //
+            // Deliberately NOT gated on `nativeModeEnabled()`, unlike the two
+            // handlers below. It exercises no `debugger` capability, and the
+            // panel needs the answer while the flag is still off — that is what
+            // lets the toggle report "native unavailable here" the moment it is
+            // ticked, instead of after a failed read. It returns only the
+            // reason enum, never the URL it classified.
             sendResponse(await capabilityOf(message.tabId));
             return;
           case "NATIVE_DOGFOOD_REPORT":
@@ -183,6 +190,7 @@ export function registerNativeMode(): void {
               session,
               message.tabId,
               (t) => readNativeTree(t),
+              nativeModeEnabled,
             );
             if (!outcome.ok || !value) {
               // An attach that failed anyway — the pre-flight list is a
@@ -246,6 +254,7 @@ export function registerNativeMode(): void {
                   message.action,
                   message.value,
                 ),
+              nativeModeEnabled,
             );
             const unavailable =
               !outcome.ok &&
@@ -301,10 +310,27 @@ export async function withRecovery<T>(
   session: NativeDebuggerSession,
   tabId: number,
   fn: (t: import("./native-core.js").CdpTransport) => Promise<T>,
+  /**
+   * Re-checked immediately before EACH attach. The flag is read once when a
+   * message arrives, but two chrome round-trips (the capability pre-flight)
+   * happen before the attach — long enough for the dogfooder to untick the box.
+   * Without this, the revoke would run `detachAll` against an empty map, report
+   * "detached from 0 tabs", and then this attach would raise the banner on a
+   * panel that had just said native mode was off. The retry needs it for the
+   * same reason: a recovery that re-attaches after the switch is off is exactly
+   * the behaviour "off" is supposed to preclude.
+   */
+  stillEnabled: () => Promise<boolean> = async () => true,
 ): Promise<{ outcome: { ok: boolean; error?: string }; value?: T }> {
+  if (!(await stillEnabled())) {
+    return { outcome: { ok: false, error: "native mode is off" } };
+  }
   const first = await runGuarded(session, tabId, fn);
   if (first.outcome.ok || first.outcome.error === "conflict") return first;
 
+  if (!(await stillEnabled())) {
+    return { outcome: { ok: false, error: "native mode is off" } };
+  }
   const retry = await runGuarded(session, tabId, fn);
   // Only a mid-operation drop (we WERE attached, then lost it) is a lifecycle
   // recovery worth measuring. A fresh attach failure is a page/permission
