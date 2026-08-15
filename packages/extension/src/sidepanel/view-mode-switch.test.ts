@@ -1,11 +1,18 @@
-import type { SemanticNode } from "@real-a11y-dev/core";
 import { render, h } from "preact";
 import { act } from "preact/test-utils";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
-import type { ContentToPanel, PanelToContent } from "../types.js";
+import type { ContentToPanel } from "../types.js";
 
 import { App } from "./App.js";
+import type { ChromeMock } from "./panel-harness.js";
+import {
+  TAB_ID,
+  TREE,
+  installChromeMock,
+  stubMatchMedia,
+  treeData,
+} from "./panel-harness.js";
 
 /**
  * Switching the DOM/A11Y/TAB view mode must not put the panel through the
@@ -14,124 +21,12 @@ import { App } from "./App.js";
  * to page..." screen until the re-extraction came back.
  */
 
-const EXTENSION_ID = "test-extension-id";
-const TAB_ID = 7;
-
-interface ChromeMock {
-  sent: PanelToContent[];
-  emit: (message: ContentToPanel) => void;
-}
-
-function installChromeMock(): ChromeMock {
-  type Listener = (
-    message: ContentToPanel,
-    sender: chrome.runtime.MessageSender,
-  ) => void;
-  const listeners: Listener[] = [];
-  const sent: PanelToContent[] = [];
-
-  const runtime = {
-    id: EXTENSION_ID,
-    lastError: undefined,
-    getManifest: () => ({ version: "0.0.0-test" }),
-    connect: () => ({
-      onDisconnect: { addListener: () => {} },
-      disconnect: () => {},
-    }),
-    sendMessage: (
-      message: PanelToContent,
-      responseCallback?: (response: unknown) => void,
-    ) => {
-      sent.push(message);
-      // An ordinary reachable page: `isUnreachablePageResponse` reads
-      // `unreachable`, and leaving it unset is what such a page replies.
-      responseCallback?.({ success: true });
-    },
-    onMessage: {
-      addListener: (fn: Listener) => listeners.push(fn),
-      removeListener: (fn: Listener) => {
-        const i = listeners.indexOf(fn);
-        if (i !== -1) listeners.splice(i, 1);
-      },
-    },
-  };
-
-  (globalThis as unknown as { chrome: unknown }).chrome = { runtime };
-
-  return {
-    sent,
-    emit: (message) => {
-      // The panel's trust gate reads `sender.id`; the routing gate reads
-      // `sender.tab?.id` alongside the message's own `tabId`.
-      const sender = {
-        id: EXTENSION_ID,
-        tab: { id: TAB_ID },
-      } as unknown as chrome.runtime.MessageSender;
-      for (const fn of [...listeners]) fn(message, sender);
-    },
-  };
-}
-
-function node(
-  id: string,
-  parentId: string | null,
-  depth: number,
-  role: string,
-  name: string,
-  childIds: string[] = [],
-): [string, SemanticNode] {
-  return [
-    id,
-    {
-      id,
-      parentId,
-      childIds,
-      depth,
-      a11y: { role, name, description: "", states: {}, properties: {} },
-      dom: { tagName: "div", attributes: {}, textContent: name },
-      interaction: {
-        actions: [],
-        isEditable: false,
-        focusable: role === "button",
-      },
-      ui: { expanded: true, selected: false, matchesFilter: true },
-    } as unknown as SemanticNode,
-  ];
-}
-
-const TREE: [string, SemanticNode][] = [
-  node("n1", null, 0, "document", "Page", ["n2"]),
-  node("n2", "n1", 1, "group", "Toolbar", ["n3", "n4"]),
-  node("n3", "n2", 2, "button", "Save"),
-  node("n4", "n2", 2, "button", "Cancel"),
-];
-
-function treeData(): ContentToPanel {
-  return {
-    type: "TREE_DATA",
-    tabId: TAB_ID,
-    payload: {
-      nodes: TREE.map(([id, n]) => [id, structuredClone(n)]),
-      rootId: "n1",
-      pageTitle: "Test page",
-      pageUrl: "https://example.test/",
-    },
-  } as unknown as ContentToPanel;
-}
-
 describe("view-mode switching", () => {
   let container: HTMLDivElement;
   let chromeMock: ChromeMock;
 
   beforeEach(() => {
-    // jsdom ships no matchMedia; App reads it for the light/dark theme class.
-    window.matchMedia = ((query: string) =>
-      ({
-        matches: false,
-        media: query,
-        addEventListener: () => {},
-        removeEventListener: () => {},
-      }) as unknown as MediaQueryList) as typeof window.matchMedia;
+    stubMatchMedia();
     chromeMock = installChromeMock();
     container = document.createElement("div");
     document.body.appendChild(container);
