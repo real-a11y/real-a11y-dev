@@ -1,14 +1,14 @@
 ---
 id: R35
 suite: regression
-scenario: "Extraction — a pivot may only ever WIDEN, never replace the root you passed"
+scenario: "Extraction — a pivot may only ever WIDEN the root you passed, with one deliberate exception: an open modal"
 area: Testing
 type: Automated
 priority: P0
 status: Active
 validFrom: "testing ≥ 0.1.0-beta.15 for the row; the detached-root guard and the aria-live=off correction ship in the FIRST release after 0.1.0-beta.15. Running steps 2–4 against 0.1.0-beta.15 or earlier reproduces the defect rather than failing the test — there a detached root is replaced outright and an inert announcer pivots the whole extraction. That is the old behaviour, not a fail. Step 1 is a KNOWN OPEN GAP at every version so far, not a regression. The behaviour lives in `resolveEffectiveRoot` (packages/core/src/extraction/dom-extractor.ts), but `core` is PRIVATE and bundled — there is no core version to pin or install, so assert against `@real-a11y-dev/testing` only. The same pivot reaches users through `inspector` and `react`, which bundle their own copy."
 validUntil: ""
-expected: "a pivot never DROPS the caller's own subtree — detached, shadow-rooted and ancestor-live-region cases all return the root passed. Step 1 is a KNOWN OPEN GAP: an ordinary in-page live region beside an attached root still widens to the whole document, and there is no scope-moved signal; it is documented rather than fixed"
+expected: "a pivot never DROPS the caller's own subtree — detached, shadow-rooted and ancestor-live-region cases all return the root passed. ONE deliberate exception: an open modal scopes EXCLUSIVELY, including over a root that is merely its sibling, because aria-modal states that everything outside it is inert and an AT user cannot reach that root at all. Step 1 is a KNOWN OPEN GAP: an ordinary in-page live region beside an attached root still widens to the whole document, and there is no scope-moved signal; it is documented rather than fixed"
 covers:
   - packages.@real-a11y-dev/core
   - packages.@real-a11y-dev/testing
@@ -48,11 +48,13 @@ form status, a save confirmation — as a **sibling** of the element under test:
 6. An **ancestor** live region: `<main aria-live="polite">` wrapping the root,
    which is the SPA route-announcer pattern Next.js, Remix and React Router
    ship
-7. A genuinely portal-mounted overlay — a dropdown rendered to `document.body`
+7. An **open modal**, twice: one that contains the root, and one that is merely
+   its sibling. Then the same sibling modal against a detached root
+8. A genuinely portal-mounted overlay — a dropdown rendered to `document.body`
    by a portal while its trigger sits inside the root
-8. The same root, audited twice: once with the live region present, once with it
+9. The same root, audited twice: once with the live region present, once with it
    removed
-9. `attach(page, { rootSelector: "main" })` on a page with a toast viewport
+10. `attach(page, { rootSelector: "main" })` on a page with a toast viewport
 
 ## Expected
 
@@ -82,12 +84,19 @@ form status, a save confirmation — as a **sibling** of the element under test:
 - **6** — an ANCESTOR is not a portal by any definition. Getting this wrong
   pivoted every component root on an SPA permanently — not only while a toast
   was up — because the route announcer wraps the entire app
-- **7** — this is the case the feature exists for, and it must keep working
-- **8** — the same element must not produce two different snapshots because of
+- **7** — the modal wins in BOTH attached shapes, and the sibling one drops the
+  root's own content. That is the deliberate exception, not a defect:
+  `aria-modal` states that everything outside is inert, so an AT user cannot
+  reach that root at all and reporting on it would describe something
+  unreachable. Against a DETACHED root it must not win — there is no "behind"
+  relationship to model, and the result would share nothing with what was
+  passed
+- **8** — this is the case the feature exists for, and it must keep working
+- **9** — the same element must not produce two different snapshots because of
   markup outside it. Detached, shadow and ancestor: satisfied. Sibling live
-  region on an attached root: see 1
-- **9** — a `rootSelector` is an explicit instruction, and should be the hardest
-  thing in the system to override silently
+  region on an attached root: see 1. Sibling modal: see 7
+- **10** — a `rootSelector` is an explicit instruction, and should be the
+  hardest thing in the system to override silently
 
 ## Why this exists
 
