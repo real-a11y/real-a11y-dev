@@ -116,7 +116,11 @@ Step 7 was one case ("navigate elsewhere, diff still works") until
 mcp 0.1.0-beta.2 split it in two. The diff tools now compare the two sides'
 addresses: a different path/query/fragment prints `NOTE: different page` and drops
 the structural summary, while a difference in host/port/scheme alone changes
-nothing. A checkpoint also now records the LIVE url rather than whatever
+nothing. From cli/mcp ≥ 0.1.0-beta.6 those addresses are compared **after**
+fragment redaction, so two pages differing only in a deny-listed fragment value
+(`#code=A` vs `#code=B`) now read as the SAME page and the note is suppressed —
+the values are both `[REDACTED]`. Their routes still separate them, which is why
+the redactor truncates rather than replacing the whole fragment. A checkpoint also now records the LIVE url rather than whatever
 `open_page` landed on, so a `click_element` that navigates before
 `checkpoint_findings` is recorded honestly — without that, 7a could not be detected
 at all, since both sides carried the opened address.
