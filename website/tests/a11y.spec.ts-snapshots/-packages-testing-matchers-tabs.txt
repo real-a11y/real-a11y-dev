@@ -83,6 +83,8 @@ button "Copy Code"
 generic
 button "Copy Code"
 generic
+button "Copy Code"
+generic
 link "tabSequenceSnapshot"
 button "Copy Code"
 generic
