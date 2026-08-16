@@ -105,6 +105,27 @@ expect(container).toBeValidA11yTree();
 expect(brokenContainer).not.toBeValidA11yTree();
 ```
 
+**It judges what you authored, not what the platform gives you.** A role that comes from the element rather than a `role=` attribute is never reported as an invalid role, and an ARIA state the browser supplies never counts as a missing required attribute — so native controls pass without you writing the ARIA the spec nominally requires:
+
+```ts
+// Passes. `combobox` is the element's own role, and the browser supplies the
+// aria-expanded / aria-controls that an authored combobox would owe.
+<select aria-label="Status"><option>One</option></select>
+
+// Passes. Browser-supplied checkedness, so no aria-checked needed.
+<input type="checkbox" aria-label="Agree">
+
+// Fails — missing required aria-controls, aria-expanded.
+// The role is authored, so the attributes are yours to supply.
+<div role="combobox">One</div>
+```
+
+Note what is *not* exempted: the `<select>` above still needs an accessible name. Dropping `aria-label` fails with `role "combobox" requires an accessible name`, because a label is an authoring obligation no user agent can invent.
+
+The distinction is per-attribute rather than per-element, since an element can supply one state and still owe another — `<input type="checkbox" role="switch">` has an authored role *and* browser-supplied checkedness, and passes.
+
+The same rule is why `<video controls>` no longer fails: its extracted role is engine vocabulary rather than an ARIA role, and only an authored role can be invalid ARIA.
+
 Unlike the four matchers above, this one doesn't wrap an `assert*` function — it runs the semantic tree through `@real-a11y-dev/validate` and fails only on `severity: "error"` issues.
 
 ## `toHaveTabSequence(expected)`
