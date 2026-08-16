@@ -1,4 +1,15 @@
 {
+  // `skipLibCheck: true` matches tsconfig.base.json and the Jest example, and
+  // is deliberate rather than copied. Turning it off is what surfaces the
+  // TS2320 augmentation-collision class — but only on TypeScript 7, and this
+  // repo is on 5.x, where it reports nothing. So today it would buy no coverage
+  // while making the root `typecheck` fail on any third-party `.d.ts` error in
+  // React, jsdom, testing-library or vitest, on every dependency bump.
+  //
+  // What this example DOES guard is that `./matchers/vitest` resolves and types
+  // the matchers: delete the import from `src/setup.ts` and this fails with
+  // TS2339. The collision itself is scenarios/regression/R36, which is manual
+  // for exactly this reason.
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
@@ -9,6 +20,7 @@
     "noEmit": true,
     "esModuleInterop": true,
     "isolatedModules": true,
+    "skipLibCheck": true,
     "types": ["vitest/globals"]
   },
   "include": ["src", "vitest.config.ts"]
