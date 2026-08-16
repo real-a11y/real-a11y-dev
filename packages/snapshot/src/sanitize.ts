@@ -190,8 +190,17 @@ function redactFragment(hash: string): string {
 }
 
 /**
- * Strip userinfo and redact secret-looking parameters from a URL for display —
- * in the query string **and** in the fragment.
+ * Strip userinfo and redact secret-looking parameters from a URL for display.
+ *
+ * The two halves are not equally thorough, and the difference is worth knowing
+ * before trusting one to behave like the other. The **fragment** is scanned by
+ * this module's own tokenizer, which treats `#?&/;,` as separators, accepts
+ * `%3D` as an assignment, and falls closed on anything it cannot read as pairs.
+ * The **query** is handled by `URLSearchParams`, so it sees only `&` and a
+ * literal `=`, and has no backstop: `?access_token%3D…` and `?a=1;access_token=…`
+ * still print in full. Extending the fragment's treatment to the query is
+ * deliberate follow-up work, not an oversight — it is a wider behaviour change
+ * than this fix, and the query half is unchanged from before it.
  */
 export function redactUrl(raw: string): string {
   let url: URL;

@@ -15,7 +15,15 @@ Anything that still cannot be read as pairs, yet plainly carries a secret-shaped
 
 Separately, the MCP `open_page` result printed `Opened <url>` unredacted, and the page-controlled `Title:` beside it unsanitized — a page could set `document.title` to inject a terminal escape sequence and forge extra result lines, including a second `Opened <url>` an agent cannot distinguish from the real one. Both now go through the boundary.
 
-On the URL half: It matters more than it looks: the URL it prints is where the page **landed**, so it is the end of a redirect chain, and an OAuth redirect chain ends with the token. The matching failure path leaked it too — Playwright quotes the full target URL in a navigation error, and that message is relayed to the agent verbatim — so escaping errors now go through the same redactor the CLI already applied to its equivalent path.
+The URL half matters more than it looks: what it prints is where the page **landed**, so it is the end of a redirect chain, and an OAuth redirect chain ends with the token. The matching failure path leaked it too — Playwright quotes the full target URL in a navigation error, and that message is relayed to the agent verbatim — so escaping errors now go through the same redactor the CLI already applied to its equivalent path.
+
+## What this does not cover
+
+The **query** half is unchanged: it is still `URLSearchParams`-based, so it sees
+only `&` and a literal `=`, and it has no fail-closed backstop. `?access_token%3D…`
+and `?a=1;access_token=…` still print in full. Extending the fragment's tokenizer
+to the query is follow-up work — it is a wider behaviour change than this fix,
+and nothing here made the query half worse.
 
 ## One caveat worth knowing
 
