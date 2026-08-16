@@ -254,3 +254,26 @@ describe("redactUrl — fragments the pair scan cannot tokenize", () => {
     }
   });
 });
+
+describe("redactUrl — regressions in the fragment scanner itself", () => {
+  it("redacts a base64-padded token without losing the fragment", () => {
+    // The value class excludes `=` so one pair cannot swallow the next, which
+    // left padding outside the rewrite: the stray `=` then re-armed the
+    // backstop against the scan's OWN output and cost the whole fragment —
+    // taking the route, and the page identity derived from it, with it.
+    expect(
+      redactUrl(
+        "https://app.example.com/cb#access_token=eyJhbGciOiJIUzI1NiJ9.abc=",
+      ),
+    ).toBe("https://app.example.com/cb#access_token=%5BREDACTED%5D");
+  });
+
+  it("does not cut a fragment at an index measured against different text", () => {
+    // The decoded pass re-encodes `[REDACTED]`, which GROWS the string, so its
+    // match index does not map onto the raw one. Cutting `rebuilt` at that
+    // offset put the secret on the printed side of the cut.
+    const out = redactUrl("https://h/p#a=b=[REDACTED][REDACTED].%6Bey=X/tail");
+    expect(out).not.toContain("X/tail");
+    expect(out).toContain("%5BREDACTED%5D");
+  });
+});

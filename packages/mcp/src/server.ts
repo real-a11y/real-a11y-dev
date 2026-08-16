@@ -132,6 +132,18 @@ function bounded(body: string, hint?: string): string {
   );
 }
 
+/**
+ * A page-supplied title, made safe to print. Sanitized because `document.title`
+ * is page-controlled — an escape sequence or a newline in it could forge result
+ * lines — and capped because it is unbounded: a multi-megabyte title would
+ * flood the agent's context on every open_page.
+ */
+const TITLE_CAP = 300;
+function pageTitle(raw: string): string {
+  const clean = sanitizeText(raw, { singleLine: true }).slice(0, TITLE_CAP);
+  return clean || "(untitled)";
+}
+
 function text(body: string, hint?: string) {
   return { content: [{ type: "text" as const, text: bounded(body, hint) }] };
 }
@@ -588,7 +600,7 @@ export function buildServer(
           // what kills the forgery half, so it matters as much as the escape
           // stripping. The question was never which URLs print raw — it is
           // which page-realm strings do.
-          `Opened ${redactUrl(info.url)}${emu}\nTitle: ${sanitizeText(info.title, { singleLine: true }) || "(untitled)"}` +
+          `Opened ${redactUrl(info.url)}${emu}\nTitle: ${pageTitle(info.title)}` +
             `\nBrowser: ${browserMode}` +
             (authenticated
               ? "\n(authenticated session: storage state loaded)"

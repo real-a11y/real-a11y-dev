@@ -79,9 +79,12 @@ const SECRET_PARAM_RE = new RegExp(`^(?:${SECRET_KEYS})$`, "i");
  *
  * Values exclude `=` as well, so a value cannot swallow a following pair —
  * `#a=b&c=d=access_token=…` used to tokenize as one `c` whose value ate the
- * token, which no amount of separator-widening would have caught.
+ * token, which no amount of separator-widening would have caught. The `={0,2}`
+ * tail is base64 padding: without it a padded token left a stray `=` outside
+ * the rewrite, which re-armed the backstop against the scan's own output and
+ * cost the whole fragment.
  */
-const FRAGMENT_PAIR_RE = /(^|[#?&/;,])([^#?&/;,=]+)(=|%3D)([^#?&/;,=]*)/g;
+const FRAGMENT_PAIR_RE = /(^|[#?&/;,])([^#?&/;,=]+)(=|%3D)([^#?&/;,=]*={0,2})/g;
 
 /**
  * The backstop: a secret-shaped key followed by an assignment that the pair
@@ -174,17 +177,25 @@ function redactFragment(hash: string): string {
   // passes: `#access%5Ftoken%3D…` tokenizes as no pair (no literal `=`) and
   // reads as no secret key (no literal `_`). Re-encoding the placeholder first
   // keeps one spelling in the lookahead.
+  const raw = SECRET_IN_FRAGMENT_RE.exec(rebuilt);
+  if (raw) {
+    // Cut back to the last separator before the match, keeping the route in
+    // front of it — page identity is derived from this, and replacing the whole
+    // fragment collapses distinct hash routes onto one id.
+    let cut = -1;
+    for (const ch of "#?&/;,")
+      cut = Math.max(cut, rebuilt.lastIndexOf(ch, raw.index));
+    return `#${rebuilt.slice(0, cut + 1)}%5BREDACTED%5D`;
+  }
+  // The decoded pass catches keys the raw text hides (`#%74oken%3D…`), but its
+  // indices do not map onto `rebuilt` — re-encoding the placeholder even grows
+  // the string — so there is no route to keep here that could be trusted.
+  // Drop the whole fragment rather than cut at an offset that means something
+  // else, which is how a secret ended up on the printed side of the cut.
   const decoded = decodeSafe(rebuilt)
     .split("[REDACTED]")
     .join("%5BREDACTED%5D");
-  const leftover =
-    SECRET_IN_FRAGMENT_RE.exec(rebuilt) ?? SECRET_IN_FRAGMENT_RE.exec(decoded);
-  if (leftover) {
-    const at = leftover.index;
-    let cut = -1;
-    for (const ch of "#?&/;,") cut = Math.max(cut, rebuilt.lastIndexOf(ch, at));
-    return `#${rebuilt.slice(0, cut + 1)}%5BREDACTED%5D`;
-  }
+  if (SECRET_IN_FRAGMENT_RE.test(decoded)) return "#%5BREDACTED%5D";
 
   return rebuilt === body ? hash : `#${rebuilt}`;
 }
