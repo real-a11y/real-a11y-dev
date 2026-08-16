@@ -26,11 +26,7 @@ describe("classifyTabUrl", () => {
       "http://localhost:5173/app?x=1#y",
       "https://youtube.com/watch?v=abc",
     ]) {
-      expect(classifyTabUrl(url)).toEqual({
-        native: true,
-        domFallback: true,
-        retryable: true,
-      });
+      expect(classifyTabUrl(url)).toEqual({ native: true, domFallback: true });
     }
   });
 
@@ -84,9 +80,27 @@ describe("classifyTabUrl", () => {
     ).toBe(true);
   });
 
-  it("reports an absent URL as no-url rather than guessing", () => {
+  it("reports an unreadable URL as no-url, but an uncommitted one as attachable", () => {
+    // `chrome.tabs.get` returns `url: ""` for a tab mid-navigation — a
+    // successful call about an ordinary page. Refusing it fails closed on the
+    // one case that fixes itself, and files a bogus row in the split.
     expect(classifyTabUrl(undefined).reason).toBe("no-url");
-    expect(classifyTabUrl("").reason).toBe("no-url");
+    expect(classifyTabUrl("").native).toBe(true);
+  });
+
+  it("keeps about:blank attachable when it carries a fragment or query", () => {
+    // Chrome produces `about:blank#blocked` itself. Slicing the raw url instead
+    // of reading pathname sent these to `browser-ui` — the only reason that is
+    // both non-retryable and claims no DOM fallback.
+    for (const url of [
+      "about:blank#x",
+      "about:blank?a=1",
+      "about:srcdoc#y",
+      "about:BLANK",
+    ]) {
+      expect(classifyTabUrl(url).native).toBe(true);
+    }
+    expect(classifyTabUrl("about:settings").reason).toBe("browser-ui");
   });
 
   it("lets an unparseable URL through to the attach", () => {
@@ -110,11 +124,10 @@ describe("domFallback", () => {
     ] as const) {
       expect(blockedBy(reason).domFallback).toBe(false);
     }
-    for (const reason of [
-      "no-url",
-      "devtools-conflict",
-      "attach-refused",
-    ] as const) {
+    // `no-url` means chrome.tabs.get threw — the tab is gone or privileged, so
+    // the content script is no better off there either.
+    expect(blockedBy("no-url").domFallback).toBe(false);
+    for (const reason of ["devtools-conflict", "attach-refused"] as const) {
       expect(blockedBy(reason).domFallback).toBe(true);
     }
   });
@@ -158,37 +171,6 @@ describe("explainUnavailable", () => {
     for (const reason of ALL_REASONS) {
       if (blockedBy(reason).domFallback) continue;
       expect(explainUnavailable(reason)).not.toMatch(/DOM tree below/i);
-    }
-  });
-});
-
-describe("retryable", () => {
-  it("is true exactly for the refusals that asking again can clear", () => {
-    // The DevTools conflict is the reason this field exists: its documented
-    // remedy is "close DevTools and try again", so a panel that disables the
-    // button on it puts the remedy out of reach.
-    expect(blockedBy("devtools-conflict").retryable).toBe(true);
-    expect(blockedBy("no-url").retryable).toBe(true);
-    expect(blockedBy("attach-refused").retryable).toBe(true);
-
-    // These are properties of the address and cannot change without a
-    // navigation, which re-runs the pre-flight by itself.
-    for (const reason of [
-      "browser-ui",
-      "extension-page",
-      "web-store",
-      "view-source",
-      "file-url",
-    ] as const) {
-      expect(blockedBy(reason).retryable).toBe(false);
-    }
-  });
-
-  it("marks every post-hoc attach failure retryable", () => {
-    // classifyAttachError only ever produces these two, and both come from an
-    // attach that could go differently next time.
-    for (const error of ["conflict", "attach-failed", undefined]) {
-      expect(blockedBy(classifyAttachError(error)).retryable).toBe(true);
     }
   });
 });

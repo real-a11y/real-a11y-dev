@@ -65,12 +65,15 @@ is a good test — its media controls are the thing only native mode can see).
    different kinds of answer:
    - **Before attaching**, from the URL alone — a `chrome://` tab, the Web
      Store, an extension page, `view-source:`, or a `file://` URL without
-     "Allow access to file URLs". These can't change until you navigate, so
-     **Load native tree** is disabled and no banner ever flashes.
+     "Allow access to file URLs". An amber panel names the reason as soon as you
+     land there, and no banner ever flashes.
    - **On the attach**, for anything the URL can't predict — most importantly
-     **DevTools holding the tab**. The button stays live for these: the remedy
-     is "close DevTools and try again", and disabling it would put that remedy
-     out of reach.
+     **DevTools holding the tab**.
+
+   **Load native tree** stays enabled in both cases. That is deliberate: the
+   refusal is only counted when you actually press it, so a disabled button
+   would keep most of the reason codes out of the Capability split entirely.
+   Pressing costs nothing — the service worker refuses before it attaches.
 
    Where the DOM producer still works (a DevTools conflict), the message points
    you at it; where Chrome blocks every extension surface (`chrome://`, the Web
@@ -79,9 +82,12 @@ is a good test — its media controls are the thing only native mode can see).
 
 5. **Switching native mode off detaches.** `debugger` cannot be an optional
    permission, so "revoked" can only mean "not attached" — unticking the box
-   drops any live attachment and reports how many tabs it detached from. Normally
-   that is zero; a non-zero count means an MV3 suspend had stranded an attachment
-   (and its banner), which is worth noting in your report.
+   drops any live attachment and reports the count, **including zero**.
+   Zero is the normal answer and is not a problem: a suspend that strands
+   bookkeeping has usually already dropped the attachment itself, so there is
+   nothing left to detach and the report records it as `detach-stale` rather
+   than as a suspend. A **non-zero** count is the one to note — it means a
+   genuinely live attachment, and its banner, outlived the switch.
 6. Use it across normal sessions for ~2 weeks. Leave DevTools open sometimes.
 
 Everything is instrumented to `chrome.storage.local` (content-free — event kinds,
@@ -103,6 +109,10 @@ the RFC PR H thread. The RFC's three questions, plus the one that frames them:
   the debugger can never attach to (`chrome://`, the Web Store), does not.
 - **DevTools conflict** — how often attach was refused because DevTools (or
   another debugger) held the tab.
+- **Recovery abandoned** — a drop that was never retried because native mode
+  went off mid-operation. It is separated from `reattach failed` on purpose:
+  nothing was attempted, so counting it as a failure would overstate the risk,
+  and counting it as nothing would leave a drop with no verdict at all.
 - **Capability** — how often native was unavailable at all, split by reason.
   This is the fourth number and it reframes the other three: a run that is mostly
   `devtools-conflict` says the problem is conflict handling, while one that is
