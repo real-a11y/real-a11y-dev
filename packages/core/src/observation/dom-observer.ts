@@ -1,5 +1,6 @@
 import {
   ARIA_STATE_ATTRIBUTES,
+  containsOverlaySignal,
   KEY_ATTRIBUTES,
 } from "../extraction/dom-extractor.js";
 import type { TreeChange } from "../types.js";
@@ -452,10 +453,10 @@ export class DomObserver {
 //
 // Plain analytics divs / script-injected widgets don't carry these
 // roles, so they don't trigger spurious re-extracts.
-const PORTAL_OVERLAY_SELECTOR =
-  '[aria-modal="true"], dialog, [role="dialog"], [role="alertdialog"], ' +
-  '[role="menu"], [role="menubar"], [role="listbox"], [role="tooltip"], ' +
-  '[role="status"], [role="alert"], [role="log"], [aria-live]';
+// The rule itself lives in `containsOverlaySignal` (extraction/dom-extractor).
+// It used to be a hand-copied selector string here, in live-tree-extractor and
+// in the extractor — three copies, and a fix applied to one silently did
+// nothing on the other two.
 
 /**
  * True if `node` looks like a portal-mounted overlay container — that
@@ -471,6 +472,5 @@ function isPortalOverlayContainer(
   if (node.nodeType !== 1 /* ELEMENT_NODE */) return false;
   const el = node as Element;
   if (internalIds.has(el.getAttribute("id") ?? "")) return false;
-  if (el.matches?.(PORTAL_OVERLAY_SELECTOR)) return true;
-  return !!el.querySelector?.(PORTAL_OVERLAY_SELECTOR);
+  return containsOverlaySignal(el);
 }

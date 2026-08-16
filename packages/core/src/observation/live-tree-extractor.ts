@@ -1,5 +1,6 @@
 import { buildA11yTree } from "../extraction/a11y-extractor.js";
 import {
+  containsOverlaySignal,
   extractDomTree,
   getDescendantText,
   getElementRefs,
@@ -59,10 +60,9 @@ const SCOPE_ATTRS = new Set([
   "inert",
 ]);
 
-const PORTAL_OVERLAY_SELECTOR =
-  '[aria-modal="true"], dialog, [role="dialog"], [role="alertdialog"], ' +
-  '[role="menu"], [role="menubar"], [role="listbox"], [role="tooltip"], ' +
-  '[role="status"], [role="alert"], [role="log"], [aria-live]';
+// The rule itself lives in `containsOverlaySignal` (extraction/dom-extractor),
+// shared with dom-observer — it was three hand-copied selector strings, and
+// only one of them ever got fixed.
 
 /**
  * Stateful extractor that can patch the previous DOM tree map with only the
@@ -423,10 +423,7 @@ export class LiveTreeExtractor {
       if (n.nodeType !== 1 /* ELEMENT_NODE */) return false;
       const el = n as Element;
 
-      if (
-        el.matches?.(PORTAL_OVERLAY_SELECTOR) ||
-        el.querySelector?.(PORTAL_OVERLAY_SELECTOR)
-      ) {
+      if (containsOverlaySignal(el)) {
         return true;
       }
 

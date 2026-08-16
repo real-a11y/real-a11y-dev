@@ -1325,17 +1325,118 @@ function findPortalOverlay(doc: Document, root: Element): Element | null {
   // (cookie banner, Radix Popover) is additive like any other overlay — it is
   // included here so it pivots to body and joins the tree, rather than
   // hijacking the scope the way findActiveModal used to.
-  const overlays = doc.querySelectorAll(
-    '[role="menu"], [role="menubar"], [role="listbox"], [role="tooltip"], ' +
-      '[role="status"], [role="alert"], [role="log"], [aria-live], ' +
-      '[role="dialog"], [role="alertdialog"]',
-  );
+  const overlays = doc.querySelectorAll(OVERLAY_CANDIDATE_SELECTOR);
   for (const el of overlays) {
-    if (!root.contains(el) && isActuallyVisible(el) && hasOverlayContent(el)) {
-      return body;
-    }
+    // Outside the root means ELSEWHERE, not "above". An ancestor is not a
+    // portal by any definition, and treating it as one made every component
+    // root on an SPA pivot permanently: the route announcers Next.js, Remix
+    // and React Router ship are typically an `aria-live` wrapper around the
+    // whole app, so it matched on every extraction rather than only while a
+    // toast was up.
+    if (root.contains(el) || el.contains(root)) continue;
+    if (!countsAsOverlay(el)) continue;
+    if (isActuallyVisible(el) && hasOverlayContent(el)) return body;
   }
   return null;
+}
+
+/**
+ * Candidate elements for the overlay scan.
+ *
+ * Deliberately broad: `countsAsOverlay` makes the real decision in JS, so the
+ * selector only has to be a superset. Enumerating the ten role clauses made
+ * the engine re-read `role` on every element in the document — measured 5.4×
+ * slower on a 3,104-element page than this — and it is the shape that drifted,
+ * since the same list existed in three files and only one of them was updated.
+ * Exported so the observers share it rather than keeping their own copy.
+ */
+export const OVERLAY_CANDIDATE_SELECTOR = "[role], [aria-live]";
+
+/** Overlay roles that are containers, not announcements. */
+const OVERLAY_ROLES = new Set([
+  "menu",
+  "menubar",
+  "listbox",
+  "tooltip",
+  "dialog",
+  "alertdialog",
+]);
+
+/** Roles that are live regions by default (implicit `aria-live`). */
+const IMPLICIT_LIVE_ROLES = new Set(["status", "alert", "log"]);
+
+/**
+ * Does this element actually behave as an overlay or live region?
+ *
+ * `aria-live` is an ALLOWLIST, not `!== "off"`. A denylist admitted the common
+ * hand-written spellings of "switched off" — `none`, `false`, `0`, and typos
+ * like `polit` — pivoting the whole extraction for elements whose author meant
+ * the opposite. An absent, empty or invalid value falls through to the role's
+ * implicit politeness, which is what ARIA specifies and what makes
+ * `<div aria-live>` and `<div aria-live="">` behave like the roleless divs
+ * they are.
+ *
+ * The role is read with `getImplicitRole`'s exact parse — first token, no case
+ * folding — so the pivot and the extracted tree always agree about what an
+ * element is. That inherits first-token-not-first-VALID-token
+ * (`role="toast status"` resolves to `toast`), which is a real gap but belongs
+ * in `getImplicitRole`, where fixing it corrects the whole engine at once
+ * instead of adding a third role-parsing convention here.
+ *
+ * Case matters and is not folded: CSS matches `role` values case-sensitively,
+ * so `[role]` candidates arriving here already agree with the tree. Folding
+ * made `<div role="MENU" aria-live="off">` an overlay — it hit the container
+ * check before the `off` check — so an element got opposite scoping depending
+ * on an unrelated attribute.
+ */
+export function countsAsOverlay(el: Element): boolean {
+  const role = el.getAttribute("role")?.trim().split(/\s+/)[0];
+  if (role && OVERLAY_ROLES.has(role)) return true;
+
+  // `aria-live` values ARE case-insensitive tokens, unlike `role` above.
+  const live = el.getAttribute("aria-live")?.trim().toLowerCase();
+  if (live === "polite" || live === "assertive") return true;
+  if (live === "off") return false;
+  return role ? IMPLICIT_LIVE_ROLES.has(role) : false;
+}
+
+/**
+ * The observers' candidate selector — the overlay set plus the two modal
+ * signals, which extraction handles separately in `findActiveModal` but which
+ * a mutation observer still has to wake for.
+ */
+const OVERLAY_SIGNAL_SELECTOR = `${OVERLAY_CANDIDATE_SELECTOR}, [aria-modal="true"], dialog`;
+
+/** An element that is itself an overlay signal. */
+function isOverlaySignal(el: Element): boolean {
+  return (
+    el.matches?.('[aria-modal="true"], dialog') === true || countsAsOverlay(el)
+  );
+}
+
+/**
+ * Does this node, or anything in its subtree, carry an overlay signal worth a
+ * full re-extract?
+ *
+ * Shared with the observers so the rule lives in ONE place. It previously
+ * existed as a hand-copied selector string in three files, and a fix applied
+ * to one of them silently did nothing on the other two: a `role="status
+ * announcer"` toast pivoted a one-shot `auditSnapshot` while never waking the
+ * inspector, the extension, or a live MCP session — the same DOM producing two
+ * different trees depending on which path ran.
+ *
+ * The candidate selector is broad, so the `countsAsOverlay` filter is what
+ * keeps the observers' original property intact: a plain `<div role="region">`
+ * analytics widget mounting at body level still triggers nothing.
+ */
+export function containsOverlaySignal(el: Element): boolean {
+  if (isOverlaySignal(el)) return true;
+  const candidates = el.querySelectorAll?.(OVERLAY_SIGNAL_SELECTOR);
+  if (!candidates) return false;
+  for (const candidate of candidates) {
+    if (isOverlaySignal(candidate)) return true;
+  }
+  return false;
 }
 
 /**
@@ -1356,9 +1457,41 @@ function findPortalOverlay(doc: Document, root: Element): Element | null {
 export function resolveEffectiveRoot(root: Element): Element {
   const doc = root.ownerDocument;
   if (!doc) return root;
+
+  // A pivot may only ever WIDEN. Both targets — an open modal, or `body` —
+  // are elements in the document with no necessary relationship to `root`, so
+  // an unrelated one produces a disjoint tree: the caller's own subtree
+  // disappears and the audit describes markup they never passed.
+  // `collectFindings` then returns *no findings* for a component with real
+  // ones, because it audited somebody else's DOM.
+  //
+  // Expressed as containment rather than `isConnected`, which was only a proxy
+  // for it and missed two shapes of the same loss:
+  //
+  //   - a root inside a SHADOW root. `isConnected` is shadow-including but the
+  //     walk is not (`safeChildren` reads light-DOM `children`), so a web
+  //     component audited at its shadow subtree lost all of its content to any
+  //     light-DOM toast — while reading as "connected", so the guard was a
+  //     no-op for it.
+  //   - an ANCESTOR live region, handled in `findPortalOverlay`: "outside the
+  //     root" was reading as "portal-mounted elsewhere" and quietly accepting
+  //     anything above it too.
+  //
+  // A modal keeps precedence and keeps scoping EXCLUSIVELY, including over a
+  // root that is merely its sibling: content behind a modal is inert to AT, so
+  // "the page is showing a dialog" is the honest answer for anything on that
+  // page. That is deliberate and covered by dom-extractor.test.ts.
+  //
+  // It cannot apply to a root the DOCUMENT does not contain, though. There is
+  // no "behind" relationship to model — the root is not on the page at all —
+  // so the result would simply share nothing with what the caller passed.
+  // `doc.contains` is not shadow-including, which is what makes it cover the
+  // shadow case as well as the detached one.
   const activeModal = findActiveModal(doc);
-  if (activeModal) return activeModal;
-  return findPortalOverlay(doc, root) ?? root;
+  if (activeModal && doc.contains(root)) return activeModal;
+
+  const overlayScope = findPortalOverlay(doc, root);
+  return overlayScope?.contains(root) ? overlayScope : root;
 }
 
 /**
