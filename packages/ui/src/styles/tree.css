@@ -724,7 +724,7 @@
 }
 
 /* Brief background flash applied to a row after a cross-link jump lands on it. */
-@keyframes sn-flash {
+@keyframes sn-node-flash {
   0% {
     background: var(--sn-accent);
     color: #ffffff;
@@ -735,7 +735,7 @@
 }
 
 .sn-node--flash {
-  animation: sn-flash 700ms ease-out;
+  animation: sn-node-flash 700ms ease-out;
 }
 
 /* Action activate button (Enter symbol) */
