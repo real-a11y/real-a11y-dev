@@ -169,7 +169,7 @@ test("login form is fully labeled", () => {
 });
 ```
 
-Those are the **function-style** helpers — zero setup. Prefer the jest-axe-style `expect` matchers? Register them once in a setup file and the same checks read as native matchers (Vitest **and** Jest):
+Those are the **function-style** helpers — zero setup. Prefer the jest-axe-style `expect` matchers? Register them once in a setup file — `registerA11yMatchers(expect)` plus a types-only import naming your runner ([`./matchers/vitest`, `./matchers/jest` or `./matchers/jest-globals`](/packages/testing/matchers#setup)) — and the same checks read as native matchers under Vitest **and** Jest:
 
 ```ts
 import { a11ySnapshot } from "@real-a11y-dev/testing/matchers";

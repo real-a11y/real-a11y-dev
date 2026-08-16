@@ -78,7 +78,11 @@ describe("presentational elements drop from the a11y tree", () => {
     const { nodes } = extractA11yTree(root);
     const allNodes = [...nodes.values()];
 
-    expect(allNodes.find((n) => n.dom.tagName === "img")).toBeUndefined();
+    // `dom` is an OPTIONAL facet — only the DOM producer fills it, and a
+    // native tree has no light-DOM element to hang it on. Reaching for
+    // `n.dom.tagName` unguarded is the mistake this example would otherwise
+    // be teaching.
+    expect(allNodes.find((n) => n.dom?.tagName === "img")).toBeUndefined();
     expect(allNodes.find((n) => n.a11y.role === "heading")).toBeDefined();
   });
 });

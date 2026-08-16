@@ -53,6 +53,7 @@ So a tree authored by hand validates as written, while a tree extracted from a l
 
 ```ts
 import { registerA11yMatchers } from "@real-a11y-dev/testing/matchers";
+import "@real-a11y-dev/testing/matchers/vitest"; // types; ./matchers/jest under Jest
 registerA11yMatchers(expect);
 
 expect(container).toBeValidA11yTree();

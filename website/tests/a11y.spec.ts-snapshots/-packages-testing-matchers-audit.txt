@@ -431,7 +431,7 @@ main
     listitem "of a stable surface and accept the churn. Contracts are the deliberate middle ground: more intentional than a snapshot (a failure always means something you chose to care about), more expressive than a rule (it knows your design, which no rule engine can infer)."
       strong "A snapshot when you want total coverage"
   heading "Vitest vs Jest type augmentation" (level 2)
-  paragraph "The matcher signatures are identical; only the type wiring differs:"
+  paragraph "The matcher signatures are identical, and so is the wiring — one runtime call, one types-only import, differing only in which runner you name:"
   table
     rowgroup
       row
@@ -449,8 +449,32 @@ main
         cell "Type augmentation"
         cell "import "@real-a11y-dev/testing/matchers/vitest""
           code "import "@real-a11y-dev/testing/matchers/vitest""
-        cell "none — global jest.Matchers augmentation ships with the import"
-          code "jest.Matchers"
+        cell "import "@real-a11y-dev/testing/matchers/jest""
+          code "import "@real-a11y-dev/testing/matchers/jest""
+  paragraph ", and they have separate type surfaces. If you rather than using the global that declares, import instead — augments and does not reach it. splits its own augmentation the same way."
+    strong "Jest has two s"
+      code "expect"
+    code "import { expect } from "@jest/globals""
+    code "@types/jest"
+    code "@real-a11y-dev/testing/matchers/jest-globals"
+    code "./matchers/jest"
+    code "jest.Matchers"
+    code "@testing-library/jest-dom"
+  paragraph "Each is a separate entry point because a type augmentation you cannot opt out of is a type augmentation that lands in projects that did not want it. Jest's used to ship unconditionally from — a global merge needs no module resolution, so it looked free. It was not: Vitest's extends , which extends , so a Vitest user importing received every matcher name twice, from two augmentations that disagreed about what the matchers return. Under on TypeScript 7 that is one per matcher, reported against a file inside ; on TypeScript 5.x, or under the default , it is silent — and silent is not healthy, it is the Jest declaration quietly winning the merge."
+    code "./matchers"
+    code "namespace jest"
+    code "Assertion"
+    code "JestAssertion"
+    code "jest.Matchers"
+    code "./matchers"
+    code "skipLibCheck: false"
+    code "TS2320"
+    code "node_modules"
+    code "skipLibCheck: true"
+  paragraph "Importing more than one entry is redundant but harmless. That is true because the augmentations now agree that every matcher returns , which is what Vitest and Jest both say about their own; making them agree is the fix, and keeping them separate is what stops a consumer carrying the other runner's types at all."
+    code "void"
+  paragraph "None of these entries ships runtime code — importing one is a types-only statement, and remains what actually installs the matchers."
+    code "registerA11yMatchers(expect)"
   heading "See it running" (level 2)
   list
     listitem "— (simple) and (a full a11y gate + -driven modal)"

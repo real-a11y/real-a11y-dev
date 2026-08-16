@@ -305,8 +305,12 @@ function toBeValidA11yTree(received: unknown): MatcherResult {
 /**
  * Assert a DOM root (extracted on the spot) or an already-serialized tree
  * string SATISFIES an authored a11y contract — containment by default (extra
- * nodes allowed), `{ strict: true }` for exact equality. Backed by
- * `verifyContract` in `@real-a11y-dev/serialize`.
+ * nodes allowed), `{ strict: true }` for exact equality.
+ *
+ * Backed by `verifyContract` in `./contract.ts`, which is INTERNAL to this
+ * package: the engine is framework-agnostic (text in, verdict out) so it can
+ * be lifted into a shared package when a second consumer appears — a CLI
+ * `verify` verb — rather than committing to a placement now.
  */
 function toMatchA11yContract(
   received: unknown,
@@ -399,10 +403,18 @@ interface ExpectApi {
  * Call once from a test setup file:
  *
  * ```ts
- * import { expect } from "vitest"; // or "@jest/globals"
+ * import { expect } from "vitest";
  * import { registerA11yMatchers } from "@real-a11y-dev/testing/matchers";
+ * import "@real-a11y-dev/testing/matchers/vitest"; // types
  * registerA11yMatchers(expect);
  * ```
+ *
+ * The types are a SEPARATE, opt-in import, one per runner — `./matchers/vitest`
+ * for Vitest, `./matchers/jest` for Jest's global `expect`, and
+ * `./matchers/jest-globals` if you `import { expect } from "@jest/globals"`,
+ * which has its own type surface a `namespace jest` merge does not reach.
+ * Import the one matching your runner; importing more than one is redundant
+ * but harmless.
  */
 export function registerA11yMatchers(expect: ExpectApi): void {
   expect.extend(a11yMatchers);
@@ -411,11 +423,17 @@ export function registerA11yMatchers(expect: ExpectApi): void {
 
 // ─── type augmentation ───────────────────────────────────────────────────────
 //
-// The matcher signatures, shared by every framework's augmentation. Jest's
-// augmentation lives here (a global `namespace jest` merge needs no module
-// resolution). Vitest's lives in the opt-in `./matchers/vitest` entry, because
-// `declare module "vitest"` would force a Jest-only consumer — who has no
-// `vitest` installed — to resolve a module that isn't there.
+// The matcher signatures, shared by every framework's augmentation. Neither
+// augmentation lives here: Vitest's is `./matchers/vitest`, Jest's is
+// `./matchers/jest`, and a consumer imports the one matching their runner.
+//
+// Vitest's was always opt-in — `declare module "vitest"` would force a
+// Jest-only consumer, who has no `vitest` installed, to resolve a module that
+// isn't there. Jest's needs no module resolution, so it sat here as an
+// unconditional `declare global` and looked free. It wasn't: Vitest's
+// `Assertion` extends `JestAssertion`, so importing `./matchers` at all put
+// these names on the jest global, the `vitest` augmentation put them there
+// again, and TypeScript could not prove the two signatures identical (TS2320).
 
 export interface A11yMatchers<R = unknown> {
   /** Every interactive node has a non-empty accessible name. */
@@ -438,10 +456,4 @@ export interface A11yMatchers<R = unknown> {
   toMatchA11yContract(contract: string, options?: VerifyContractOptions): R;
 }
 
-declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
-  namespace jest {
-    // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- declaration-merge into Jest's matcher types
-    interface Matchers<R> extends A11yMatchers<R> {}
-  }
-}
+// No `declare global` here — see the note above `A11yMatchers`.

@@ -121,12 +121,16 @@ The [matchers](/packages/testing/matchers) need one setup file, registered with
 your runner (`setupFiles` in Vitest, `setupFilesAfterEnv` in Jest):
 
 ```ts
-import { expect } from "vitest"; // or "@jest/globals"
+import { expect } from "vitest";
 import { registerA11yMatchers } from "@real-a11y-dev/testing/matchers";
-import "@real-a11y-dev/testing/matchers/vitest"; // Vitest only — types
+import "@real-a11y-dev/testing/matchers/vitest"; // types
 
 registerA11yMatchers(expect);
 ```
+
+The second import is types-only, and there is one per runner: `./matchers/vitest`,
+`./matchers/jest` for Jest's global `expect`, and `./matchers/jest-globals` if you
+`import { expect } from "@jest/globals"` — [which is a different type surface](/packages/testing/matchers#vitest-vs-jest-type-augmentation).
 
 Auditing a **real browser page** instead of jsdom? That path skips all of the
 above — see the [Playwright adapter](/packages/testing/playwright). Peer-version

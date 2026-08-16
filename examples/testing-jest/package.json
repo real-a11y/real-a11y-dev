@@ -4,7 +4,8 @@
   "version": "0.0.0",
   "description": "Minimal Jest + ts-jest example proving @real-a11y-dev/testing matchers register under Jest",
   "scripts": {
-    "test": "jest"
+    "test": "jest",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@real-a11y-dev/core": "workspace:*",

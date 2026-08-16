@@ -1,6 +1,7 @@
 // Minimal proof that `@real-a11y-dev/testing/matchers` works under Jest:
-// the matchers register via `expect.extend`, the global `jest.Matchers` type
-// augmentation applies, and the snapshot serializer renders the semantic tree.
+// the matchers register via `expect.extend`, the `./matchers/jest` type
+// augmentation applies (imported once from `src/setup.ts`), and the snapshot
+// serializer renders the semantic tree.
 //
 // This mirrors a slice of the Vitest example — the runtime matchers are
 // framework-agnostic, so this exists to guard the *Jest* registration and

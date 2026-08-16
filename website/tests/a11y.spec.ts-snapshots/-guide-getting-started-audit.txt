@@ -213,9 +213,14 @@ main
   heading "Testing (Vitest / Jest)" (level 3)
   button "Copy Code"
   code
-  paragraph "Those are the helpers — zero setup. Prefer the jest-axe-style matchers? Register them once in a setup file and the same checks read as native matchers (Vitest Jest):"
+  paragraph "Those are the helpers — zero setup. Prefer the jest-axe-style matchers? Register them once in a setup file — plus a types-only import naming your runner () — and the same checks read as native matchers under Vitest Jest:"
     strong "function-style"
     code "expect"
+    code "registerA11yMatchers(expect)"
+    link "./matchers/vitest, ./matchers/jest or ./matchers/jest-globals"
+      code "./matchers/vitest"
+      code "./matchers/jest"
+      code "./matchers/jest-globals"
     strong "and"
   button "Copy Code"
   code

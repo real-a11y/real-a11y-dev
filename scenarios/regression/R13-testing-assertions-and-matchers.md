@@ -6,7 +6,7 @@ area: Testing
 type: Automated
 priority: P0
 status: Active
-validFrom: "testing ≥ 0.1.0-beta.11. Exercise both matcher entry points: ./matchers and ./matchers/vitest. The engine behind these lives in `audit`, which is now PRIVATE and bundled — so assert against `@real-a11y-dev/testing` only; there is no `audit` version to pin, and importing it is the failure."
+validFrom: "testing ≥ 0.1.0-beta.11. Exercise every matcher entry point: ./matchers, ./matchers/vitest, and — from the FIRST release after 0.1.0-beta.15 — ./matchers/jest and ./matchers/jest-globals, neither of which existed before that (Jest's augmentation shipped unconditionally from ./matchers, and never covered the `@jest/globals` shape at all). Their TYPES are R36; this row is runtime behaviour. The engine behind these lives in `audit`, which is now PRIVATE and bundled — so assert against `@real-a11y-dev/testing` only; there is no `audit` version to pin, and importing it is the failure."
 validUntil: ""
 expected: "each assert* passes on good markup and throws A11yAssertionError naming the offender on bad; matchers register and read well"
 twin: D5
@@ -31,8 +31,10 @@ once on markup that should fail:
 1. Each assertion on good markup
 2. Each assertion on bad markup — read the **message**, not just the throw
 3. `assertRules(root, [...])` with a rule subset
-4. Register the matchers from `@real-a11y-dev/testing/matchers` (and the
-   `/matchers/vitest` entry) and exercise: `toHaveNoUnlabeledInteractive`,
+4. Register the matchers from `@real-a11y-dev/testing/matchers` (plus the
+   types-only entry for the runner in hand — `/matchers/vitest`,
+   `/matchers/jest` or `/matchers/jest-globals`) and exercise:
+   `toHaveNoUnlabeledInteractive`,
    `toHaveValidLandmarks`, `toHaveValidHeadingOrder`, `toHaveLabeledDialogs`,
    `toHaveTabSequence`. The remaining two — `toBeValidA11yTree` and
    `toMatchA11yContract` — are **R34**, which is where their behaviour lives;
@@ -51,7 +53,9 @@ once on markup that should fail:
 - **2** — throws `A11yAssertionError` **naming the offending element** — role, tag,
   and locator. "Assertion failed" is a failure of this test even though the
   assertion technically fired
-- **4** — all register and pass/fail correctly under both Vitest and Jest
+- **4** — all register and pass/fail correctly under both Vitest and Jest. None
+  of the three types-only entries may do anything at runtime: importing one
+  must not change a single result here
 - **5** — negation reports sensibly; a matcher that only works positively is
   half-built
 - **6** — throws on bad input rather than silently passing. A matcher that quietly
