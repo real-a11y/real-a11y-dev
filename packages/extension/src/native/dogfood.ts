@@ -23,8 +23,10 @@ export type DogfoodEventKind =
   | "attach" // we attached the debugger to a tab (banner appears)
   | "detach" // we detached deliberately (banner clears)
   | "detach-unsolicited" // chrome.debugger.onDetach fired without our asking
+  | "detach-stale" // revoke cleanup over bookkeeping Chrome had already dropped
   | "reattach-ok" // recovered after an unsolicited detach
   | "reattach-failed" // could not recover
+  | "reattach-abandoned" // a drop we never retried (native mode went off)
   | "conflict" // attach refused — another debugger already attached
   | "unavailable" // native can't run on this tab (see `reason`)
   | "read" // read the native tree (with node counts)
@@ -66,8 +68,10 @@ interface DogfoodCounters {
   attach: number;
   detach: number;
   detachUnsolicited: number;
+  detachStale: number;
   reattachOk: number;
   reattachFailed: number;
+  reattachAbandoned: number;
   conflict: number;
   unavailable: number;
   read: number;
@@ -89,8 +93,10 @@ const ZERO_COUNTERS: DogfoodCounters = {
   attach: 0,
   detach: 0,
   detachUnsolicited: 0,
+  detachStale: 0,
   reattachOk: 0,
   reattachFailed: 0,
+  reattachAbandoned: 0,
   conflict: 0,
   unavailable: 0,
   read: 0,
@@ -112,8 +118,10 @@ const COUNTER_FIELD: Record<DogfoodEventKind, TallyField> = {
   attach: "attach",
   detach: "detach",
   "detach-unsolicited": "detachUnsolicited",
+  "detach-stale": "detachStale",
   "reattach-ok": "reattachOk",
   "reattach-failed": "reattachFailed",
+  "reattach-abandoned": "reattachAbandoned",
   conflict: "conflict",
   unavailable: "unavailable",
   read: "read",
@@ -209,7 +217,11 @@ export class DogfoodLog {
     const lines = [
       "Real A11y — extension native (chrome.debugger) dogfood report",
       `generated: ${new Date(now).toISOString()}`,
-      `events: ${c.attach + c.detach + c.detachUnsolicited + c.reattachOk + c.reattachFailed + c.conflict + c.unavailable + c.read + c.act}` +
+      // Folded over COUNTER_FIELD rather than hand-summed. That map is
+      // `Record<DogfoodEventKind, …>`, so the compiler forces a new kind to be
+      // registered there — a hand-written sum is the one place it would not,
+      // and it would under-report in silence.
+      `events: ${Object.values(COUNTER_FIELD).reduce((n, field) => n + c[field], 0)}` +
         ` (raw log shows most recent ${Math.min(events.length, CAP)})`,
       "",
       "— Banner tolerance —",
@@ -219,6 +231,8 @@ export class DogfoodLog {
       "— MV3 service-worker lifecycle —",
       `  unsolicited detaches (SW suspended / target gone): ${c.detachUnsolicited}`,
       `  reattach recovered: ${c.reattachOk}   failed: ${c.reattachFailed}`,
+      "",
+      `  recovery abandoned (native mode switched off mid-drop): ${c.reattachAbandoned}`,
       "",
       "— DevTools conflict —",
       `  attach refused (another debugger attached): ${c.conflict}`,

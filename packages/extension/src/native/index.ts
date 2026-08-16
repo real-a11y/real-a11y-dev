@@ -20,6 +20,7 @@ import {
   type TabCapability,
 } from "./capability.js";
 import { NativeDebuggerSession } from "./debugger-session.js";
+import type { DogfoodLog } from "./dogfood.js";
 import {
   dispatchNative,
   readNativeTree,
@@ -94,7 +95,7 @@ async function fileSchemeAccess(): Promise<boolean> {
  * own message, which can quote page or DevTools state (R6).
  */
 async function refuse(
-  log: import("./dogfood.js").DogfoodLog,
+  log: DogfoodLog,
   reason: NativeUnavailableReason,
 ): Promise<{ reason: NativeUnavailableReason }> {
   await log.record({ kind: "unavailable", at: Date.now(), reason });
@@ -119,6 +120,10 @@ export function registerNativeMode(): void {
   const session = new NativeDebuggerSession(
     chrome.storage.local,
     chrome.storage.session ?? chrome.storage.local,
+    // The flag is enforced INSIDE the attach transaction, not by the callers.
+    // That is what makes it atomic against `detachAll`, and it is why no
+    // message handler re-checks it before dispatching.
+    nativeModeEnabled,
   );
   const log = session.dogfoodLog();
 
@@ -170,46 +175,17 @@ export function registerNativeMode(): void {
             sendResponse({ ok: true });
             return;
           case "NATIVE_READ": {
-            if (!(await nativeModeEnabled())) {
-              sendResponse({ ok: false, error: "native mode is off" });
-              return;
-            }
-            // Pre-flight before attaching: a `chrome://` tab would otherwise
-            // flash the banner on its way to a bare "attach-failed", which
-            // reads as a bug in the extension rather than a Chrome rule.
-            const capability = await capabilityOf(message.tabId);
-            if (!capability.native) {
-              sendResponse({
-                ok: false,
-                error: "unavailable",
-                ...(await refuse(log, capability.reason!)),
-              });
-              return;
-            }
             const { outcome, value } = await withRecovery(
               session,
               message.tabId,
               (t) => readNativeTree(t),
-              nativeModeEnabled,
+              log,
             );
             if (!outcome.ok || !value) {
-              // An attach that failed anyway — the pre-flight list is a
-              // heuristic over a Chrome policy that shifts between versions, so
-              // this is the authoritative answer and gets recorded the same way.
-              if (
-                outcome.error === "conflict" ||
-                outcome.error === "attach-failed"
-              ) {
-                sendResponse({
-                  ok: false,
-                  error: "unavailable",
-                  ...(await refuse(log, classifyAttachError(outcome.error))),
-                });
-                return;
-              }
               sendResponse({
                 ok: false,
                 error: outcome.error ?? "read failed",
+                ...(outcome.reason ? { reason: outcome.reason } : {}),
               });
               return;
             }
@@ -240,10 +216,6 @@ export function registerNativeMode(): void {
             return;
           }
           case "NATIVE_ACT": {
-            if (!(await nativeModeEnabled())) {
-              sendResponse({ success: false, error: "native mode is off" });
-              return;
-            }
             const { outcome, value } = await withRecovery(
               session,
               message.tabId,
@@ -254,23 +226,23 @@ export function registerNativeMode(): void {
                   message.action,
                   message.value,
                 ),
-              nativeModeEnabled,
+              log,
             );
-            const unavailable =
-              !outcome.ok &&
-              (outcome.error === "conflict" ||
-                outcome.error === "attach-failed")
-                ? await refuse(log, classifyAttachError(outcome.error))
-                : undefined;
-            const result = outcome.ok
-              ? (value ?? { success: false, error: "no result" })
-              : {
-                  success: false,
-                  error: unavailable
-                    ? "unavailable"
-                    : (outcome.error ?? "act failed"),
-                  ...unavailable,
-                };
+            if (!outcome.ok) {
+              // Nothing was dispatched, so nothing is recorded as an `act`.
+              // Counting these would both overstate "actions dispatched" and
+              // depress the act success ratio with failures already counted
+              // under Capability — the same incident moving two numbers in
+              // opposite directions. NATIVE_READ has always returned first on
+              // its non-dispatch paths; this now matches it.
+              sendResponse({
+                success: false,
+                error: outcome.error ?? "act failed",
+                ...(outcome.reason ? { reason: outcome.reason } : {}),
+              });
+              return;
+            }
+            const result = value ?? { success: false, error: "no result" };
             await log.record({
               kind: "act",
               at: Date.now(),
@@ -291,57 +263,103 @@ export function registerNativeMode(): void {
 }
 
 /**
- * Run an operation, retrying once, and record a reattach ONLY when the
- * connection dropped mid-operation — the classic MV3 suspend/wake, which is the
- * lifecycle signal PR H measures.
+ * The single funnel every native operation passes through: capability
+ * pre-flight, attach with one retry, and the reattach accounting.
  *
- * That drop does not surface as an attach failure: it surfaces as a THROW from
- * the CDP call inside `withDebugger` (only the transport throws — `dispatchNative`
- * swallows its own errors into structured results), which `runGuarded` tags
- * `connection-lost`. Only that case records `reattach-ok`/`reattach-failed`.
+ * The pre-flight lives HERE rather than in each message handler. Copied per
+ * case it drifted immediately — `NATIVE_READ` had one and `NATIVE_ACT` did not,
+ * so the same blocked page reported `browser-ui` for a read and
+ * `attach-refused` for a click, skewing the very split the verdict is read
+ * from, and burning two attach round-trips to do it. A third native message
+ * would have needed a third copy.
  *
- * A plain `attach-failed` (attach never succeeded — a `chrome://`/Web-Store page
- * or a debugger-forbidden tab) is retried best-effort but NOT recorded: it is a
- * permanent/page failure, not a service-worker lifecycle recovery, and counting
- * it would inflate the "reattach failed" number the ship/no-ship decision rests
- * on. A `conflict` (DevTools attached) is not retried — it won't clear on its own.
+ * Recording the refusal here is also what makes the Capability metric real: the
+ * panel no longer pre-empts the call, so every refusal — URL-derived or
+ * attach-derived — reaches the log through one writer.
+ *
+ * The native-mode flag is NOT checked here. It is enforced inside
+ * `NativeDebuggerSession.attach()`, on the same storage queue the revoke uses,
+ * which is the only placement that makes "switched off" and "attached"
+ * mutually exclusive rather than merely usually-ordered.
  */
 export async function withRecovery<T>(
   session: NativeDebuggerSession,
   tabId: number,
   fn: (t: import("./native-core.js").CdpTransport) => Promise<T>,
-  /**
-   * Re-checked immediately before EACH attach. The flag is read once when a
-   * message arrives, but two chrome round-trips (the capability pre-flight)
-   * happen before the attach — long enough for the dogfooder to untick the box.
-   * Without this, the revoke would run `detachAll` against an empty map, report
-   * "detached from 0 tabs", and then this attach would raise the banner on a
-   * panel that had just said native mode was off. The retry needs it for the
-   * same reason: a recovery that re-attaches after the switch is off is exactly
-   * the behaviour "off" is supposed to preclude.
-   */
-  stillEnabled: () => Promise<boolean> = async () => true,
-): Promise<{ outcome: { ok: boolean; error?: string }; value?: T }> {
-  if (!(await stillEnabled())) {
-    return { outcome: { ok: false, error: "native mode is off" } };
+  log?: DogfoodLog,
+): Promise<{
+  outcome: { ok: boolean; error?: string; reason?: NativeUnavailableReason };
+  value?: T;
+}> {
+  // Cheap, and it costs no attach — so a `chrome://` tab is named without ever
+  // flashing the banner on its way to a bare failure.
+  const capability = await capabilityOf(tabId);
+  if (!capability.native) {
+    return {
+      outcome: {
+        ok: false,
+        error: "unavailable",
+        ...(log
+          ? await refuse(log, capability.reason!)
+          : { reason: capability.reason! }),
+      },
+    };
   }
-  const first = await runGuarded(session, tabId, fn);
-  if (first.outcome.ok || first.outcome.error === "conflict") return first;
 
-  if (!(await stillEnabled())) {
-    return { outcome: { ok: false, error: "native mode is off" } };
+  const first = await runGuarded(session, tabId, fn);
+  if (first.outcome.ok) return first;
+  // A conflict won't clear on its own, and `disabled` means the user switched
+  // native off — retrying either would be re-attaching against the answer.
+  if (
+    first.outcome.error === "conflict" ||
+    first.outcome.error === "disabled"
+  ) {
+    return await classify(first, log);
   }
+
   const retry = await runGuarded(session, tabId, fn);
   // Only a mid-operation drop (we WERE attached, then lost it) is a lifecycle
   // recovery worth measuring. A fresh attach failure is a page/permission
   // problem, not an MV3 suspend/wake, so it must not touch the reattach metric.
   if (first.outcome.error === "connection-lost") {
     await session.dogfoodLog().record({
-      kind: retry.outcome.ok ? "reattach-ok" : "reattach-failed",
+      // A drop was already booked as `detach-unsolicited` upstream, so it needs
+      // a verdict or the ledger carries a debit with no matching credit. When
+      // the retry was refused because native went off, neither `ok` nor
+      // `failed` is true — nothing was attempted — so it gets its own kind
+      // rather than overstating a failure.
+      kind:
+        retry.outcome.error === "disabled"
+          ? "reattach-abandoned"
+          : retry.outcome.ok
+            ? "reattach-ok"
+            : "reattach-failed",
       at: Date.now(),
     });
   }
-  return retry;
+  return await classify(retry, log);
+}
+
+/**
+ * Turn an attach-level failure into the capability vocabulary the panel speaks,
+ * recording it on the way. The URL pre-flight is a heuristic over a Chrome
+ * policy that shifts between versions, so the attach itself stays
+ * authoritative — and its answer is counted the same way.
+ */
+async function classify<T>(
+  result: { outcome: { ok: boolean; error?: string }; value?: T },
+  log?: DogfoodLog,
+): Promise<{
+  outcome: { ok: boolean; error?: string; reason?: NativeUnavailableReason };
+  value?: T;
+}> {
+  const { outcome } = result;
+  if (outcome.error !== "conflict" && outcome.error !== "attach-failed") {
+    return result;
+  }
+  const reason = classifyAttachError(outcome.error);
+  if (log) await refuse(log, reason);
+  return { outcome: { ok: false, error: "unavailable", reason } };
 }
 
 /**
