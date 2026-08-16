@@ -88,6 +88,14 @@ const SECRET_PARAM_RE = new RegExp(`^(?:${SECRET_KEYS})$`, "i");
  * tail is base64 padding: without it a padded token left a stray `=` outside
  * the rewrite, which re-armed the backstop against the scan's own output and
  * cost the whole fragment.
+ *
+ * Both classes are bounded. An unbounded run in front of the `(=|%3D)`
+ * alternation is a polynomial-backtracking shape — the engine gives back one
+ * character at a time and re-tries `%3D` at each — and while it measures linear
+ * here (0.2ms over 96KB, because the alternation's branches start with
+ * different characters), the bound removes the shape rather than relying on
+ * that. The limits are far above any real key or token: 256 for a parameter
+ * name, 8192 for a value, both an order of magnitude past a JWT.
  */
 const FRAGMENT_PAIR_RE = /(^|[#?&/;,])([^#?&/;,=]+)(=|%3D)([^#?&/;,=]*={0,2})/g;
 
