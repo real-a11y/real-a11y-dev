@@ -63,7 +63,12 @@ export function sanitizeText(
  * reports, CI logs, and PR comments otherwise.
  */
 const SECRET_KEYS =
-  "token|key|secret|sig|signature|auth|jwt|session|access[-_]?token|id[-_]?token|api[-_]?key|code|x-amz-[\\w-]+";
+  // `x-amz-` names are bounded rather than `+`: an unbounded greedy run has to
+  // give back one character at a time when the assignment does not follow, which
+  // is quadratic in the length of the run and is what CodeQL flags as polynomial.
+  // Real AWS sigv4 parameters are far short of this (`x-amz-security-token` is
+  // the longest at 20), so the bound changes nothing a caller can observe.
+  "token|key|secret|sig|signature|auth|jwt|session|access[-_]?token|id[-_]?token|api[-_]?key|code|x-amz-[\\w-]{1,64}";
 
 const SECRET_PARAM_RE = new RegExp(`^(?:${SECRET_KEYS})$`, "i");
 
