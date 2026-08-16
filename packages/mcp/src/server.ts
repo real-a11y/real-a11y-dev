@@ -32,6 +32,7 @@ import {
   projectNativeTree,
   redactUrl,
   redactUrlsIn,
+  sanitizeText,
   serializeArtifact,
   SnapshotFormatError,
   viewsOfPage,
@@ -432,6 +433,13 @@ export function buildServer(
     if (err instanceof SessionRegistryError) {
       return errText(err.hint ? `${err.message} — ${err.hint}` : err.message);
     }
+    // Non-Error throws reach the SDK's `String(error)` fallback raw, so they
+    // need the same treatment as an Error's message.
+    if (!(err instanceof Error)) {
+      throw new Error(
+        redactUrlsIn(sanitizeText(String(err), { singleLine: true })),
+      );
+    }
     // Anything else escapes as a protocol error, and the SDK relays its message
     // to the client verbatim. Playwright quotes the full target URL in a
     // navigation failure — `page.goto: net::ERR_ABORTED at https://…#token=…` —
@@ -439,7 +447,7 @@ export function buildServer(
     // guards its equivalent path with `redactUrlsIn`; this is the MCP side of
     // the same boundary. The message is rewritten in place so the error keeps
     // its class and stack.
-    if (err instanceof Error) err.message = redactUrlsIn(err.message);
+    err.message = sanitizeText(redactUrlsIn(err.message), { singleLine: true });
     throw err;
   };
   const withSession = async <R>(
@@ -573,7 +581,14 @@ export function buildServer(
           // redirect chain ends here, and an OAuth one ends with the token in
           // the fragment. The failure path leaks the same URL through
           // Playwright's message; `sessionErrText` redacts that one.
-          `Opened ${redactUrl(info.url)}${emu}\nTitle: ${info.title || "(untitled)"}` +
+          // `info.title` is `document.title` — page-controlled, straight from
+          // the page realm. Redacting the URL beside it and leaving this raw
+          // let a page inject an OSC-8 terminal hyperlink and forge extra
+          // result lines, including a second `Opened <url>`. `singleLine` is
+          // what kills the forgery half, so it matters as much as the escape
+          // stripping. The question was never which URLs print raw — it is
+          // which page-realm strings do.
+          `Opened ${redactUrl(info.url)}${emu}\nTitle: ${sanitizeText(info.title, { singleLine: true }) || "(untitled)"}` +
             `\nBrowser: ${browserMode}` +
             (authenticated
               ? "\n(authenticated session: storage state loaded)"

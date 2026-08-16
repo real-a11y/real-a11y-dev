@@ -68,33 +68,45 @@ const SECRET_KEYS =
 const SECRET_PARAM_RE = new RegExp(`^(?:${SECRET_KEYS})$`, "i");
 
 /**
- * A secret-looking key followed by an assignment, ANYWHERE in a fragment —
- * after a second `#`, after a `/`, or written with a percent-encoded `=`.
+ * One `key=value` inside a fragment.
  *
- * This is the backstop, and it exists because the per-pair pass below can only
- * redact what it manages to tokenize the same way the app did. Where the two
- * disagree, "no pair matched" must not be allowed to mean "print it verbatim";
- * this catches the leftovers so the fragment can be dropped wholesale instead.
- * Built from the same key list as `SECRET_PARAM_RE` so the two cannot drift.
+ * A fragment is opaque to the URL parser, so nothing decides authoritatively
+ * how it splits — the *app* does. `#`, `?`, `&`, `/`, `;` and `,` are therefore
+ * all separators here: a hash-routed SPA finishing an implicit flow produces a
+ * second `#`, a route segment separates with `/`, and Angular Router's matrix
+ * parameters use `;` and land in the fragment under `HashLocationStrategy`.
+ * The assignment may be a literal `=` or a percent-encoded `%3D`.
  *
- * The trailing `[^#?&]` requires a non-empty value — `#token=` has nothing to
- * leak — and the negative lookahead keeps an already-redacted fragment from
- * re-triggering it. The placeholder is written pre-encoded so a fragment reads
- * the same as the query half, which `URLSearchParams` encodes for us.
+ * Values exclude `=` as well, so a value cannot swallow a following pair —
+ * `#a=b&c=d=access_token=…` used to tokenize as one `c` whose value ate the
+ * token, which no amount of separator-widening would have caught.
  */
-const SECRET_IN_FRAGMENT_RE = new RegExp(
-  `(?:^|[#?&/])(?:${SECRET_KEYS})(?:=|%3D)(?!%5BREDACTED%5D)[^#?&]`,
-  "i",
-);
+const FRAGMENT_PAIR_RE = /(^|[#?&/;,])([^#?&/;,=]+)(=|%3D)([^#?&/;,=]*)/g;
 
 /**
- * One `key=value` inside a fragment. `#`, `?` and `&` all act as separators:
- * a fragment is opaque to the URL parser, so an app may use any of them, and a
- * hash-routed SPA that completes an implicit flow produces a *second* `#`
- * (`…/#/callback#access_token=…`) which is a separator in every sense but the
- * parser's.
+ * The backstop: a secret-shaped key followed by an assignment that the pair
+ * scan did not rewrite.
+ *
+ * The boundary is a NEGATED class rather than a list of separators. Enumerating
+ * them is what made this leak repeatedly — every round closed one character and
+ * the next exotic one was a fresh hole — so this asks only that the key not run
+ * on from other key text.
+ *
+ * The lookahead must be anchored to the WHOLE remaining value: a bare
+ * `(?!%5BREDACTED%5D)` is satisfied by a *prefix*, so a page could disarm this
+ * by prefixing its token with the placeholder. It is still load-bearing and
+ * must not simply be deleted — without it the backstop matches the pair scan's
+ * own output and collapses every successfully-redacted fragment.
+ *
+ * Only the encoded spelling appears: the decoded pass re-encodes the
+ * placeholder before testing, which keeps a `\[` escape out of a template
+ * literal — where it silently degrades to a character class.
  */
-const FRAGMENT_PAIR_RE = /(^|[#?&])([^#?&=]+)=([^#?&]*)/g;
+const SECRET_IN_FRAGMENT_RE = new RegExp(
+  `(?:^|[^A-Za-z0-9_-])(?:${SECRET_KEYS})(?:=|%3D)` +
+    `(?!%5BREDACTED%5D(?:[#?&/;,]|$))[^#?&]`,
+  "i",
+);
 
 /** decodeURIComponent that yields the raw text rather than throwing on `%zz`. */
 function decodeSafe(value: string): string {
@@ -134,27 +146,45 @@ function decodeSafe(value: string): string {
  * full — the exact bug this function exists to prevent.
  */
 function redactFragment(hash: string): string {
-  if (hash === "" || hash === "#") return hash;
+  if (hash === "") return hash;
   const body = hash.slice(1);
 
   const rebuilt = body.replace(
     FRAGMENT_PAIR_RE,
-    (match, separator: string, key: string, value: string) => {
+    (match, separator: string, key: string, assign: string, value: string) => {
       // A valueless key (`#a=1&token`) has nothing to leak; handing it a
       // fabricated `[REDACTED]` would report a secret that was never there.
       if (value === "") return match;
-      // Decode for the test only — `#access%5Ftoken=…` is the same key — while
-      // the original spelling is what gets written back.
-      return SECRET_PARAM_RE.test(decodeSafe(key))
-        ? `${separator}${key}=%5BREDACTED%5D`
-        : match;
+      // `decodeURIComponent` is the identity without a `%`, so only pay for it
+      // when one is present — `#access%5Ftoken=…` is the same key.
+      const secret =
+        SECRET_PARAM_RE.test(key) ||
+        (key.includes("%") && SECRET_PARAM_RE.test(decodeSafe(key)));
+      return secret ? `${separator}${key}${assign}%5BREDACTED%5D` : match;
     },
   );
 
-  // Fail closed: a secret-shaped key is still legible, so the pair scan and
-  // whatever produced this fragment disagree about where it splits. Rewriting
-  // it precisely is not possible; printing it is not acceptable.
-  if (SECRET_IN_FRAGMENT_RE.test(rebuilt)) return "#%5BREDACTED%5D";
+  // Fail closed on anything the scan could not tokenize — but keep the route.
+  // Replacing the whole fragment erases it, and page identity is derived from
+  // the redacted URL: for a hash-routed SPA every route lives at pathname `/`,
+  // so two distinct pages collapse onto one id and the artifact writer throws
+  // naming the same URL twice. Cutting back to the last separator keeps the
+  // fail-closed property without the identity loss.
+  // Tested decoded as well as raw, because the two encodings defeat opposite
+  // passes: `#access%5Ftoken%3D…` tokenizes as no pair (no literal `=`) and
+  // reads as no secret key (no literal `_`). Re-encoding the placeholder first
+  // keeps one spelling in the lookahead.
+  const decoded = decodeSafe(rebuilt)
+    .split("[REDACTED]")
+    .join("%5BREDACTED%5D");
+  const leftover =
+    SECRET_IN_FRAGMENT_RE.exec(rebuilt) ?? SECRET_IN_FRAGMENT_RE.exec(decoded);
+  if (leftover) {
+    const at = leftover.index;
+    let cut = -1;
+    for (const ch of "#?&/;,") cut = Math.max(cut, rebuilt.lastIndexOf(ch, at));
+    return `#${rebuilt.slice(0, cut + 1)}%5BREDACTED%5D`;
+  }
 
   return rebuilt === body ? hash : `#${rebuilt}`;
 }
