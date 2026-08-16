@@ -2083,8 +2083,9 @@ main
       code "a11y.config.json"
       link "redact"
         code "redact"
-    listitem "This is especially important with , because a long-lived page may contain tokens, PII, or signed URLs in query parameters. Redact them at the source so they never reach the daemon log or a committed artifact."
+    listitem "This is especially important with , because a long-lived page may contain tokens, PII, or signed URLs in query parameters (an OAuth implicit-flow redirect lands there). Redact them at the source so they never reach the daemon log or a committed artifact."
       code "--session"
+      strong "or in the fragment"
   heading "Daemon log" (level 3)
   list
     listitem "Each session writes diagnostics to . It may contain URLs and command names; it is owned by the same user and is removed when the session is stopped."
