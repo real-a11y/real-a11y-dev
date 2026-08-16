@@ -19,6 +19,7 @@
   name wins in CSS, so the jumped-to row translated a full row height up from
   below over 700ms instead of tinting and fading in place. The node flash is now
   `@keyframes sn-node-flash`, leaving the slide-up to its two intended callers.
+  ([#354])
 
 - Announce the panel's own live regions. The search match count, the action
   feedback bar and the relayed live-announcement log were each mounted
@@ -295,3 +296,4 @@ Earlier releases predate this changelog.
 [#334]: https://github.com/real-a11y/real-a11y-dev/pull/334
 [#343]: https://github.com/real-a11y/real-a11y-dev/pull/343
 [#350]: https://github.com/real-a11y/real-a11y-dev/pull/350
+[#354]: https://github.com/real-a11y/real-a11y-dev/pull/354
