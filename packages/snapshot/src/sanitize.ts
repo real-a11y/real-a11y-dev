@@ -97,7 +97,8 @@ const SECRET_PARAM_RE = new RegExp(`^(?:${SECRET_KEYS})$`, "i");
  * that. The limits are far above any real key or token: 256 for a parameter
  * name, 8192 for a value, both an order of magnitude past a JWT.
  */
-const FRAGMENT_PAIR_RE = /(^|[#?&/;,])([^#?&/;,=]+)(=|%3D)([^#?&/;,=]*={0,2})/g;
+const FRAGMENT_PAIR_RE =
+  /(^|[#?&/;,])([^#?&/;,=]{1,256})(=|%3D)([^#?&/;,=]{0,8192}={0,2})/g;
 
 /**
  * The backstop: a secret-shaped key followed by an assignment that the pair
@@ -124,13 +125,30 @@ const SECRET_IN_FRAGMENT_RE = new RegExp(
   "i",
 );
 
-/** decodeURIComponent that yields the raw text rather than throwing on `%zz`. */
+/**
+ * Decode every well-formed escape run, leaving malformed ones as literal text.
+ *
+ * Decoding the whole string at once fails open catastrophically: one stray `%`
+ * anywhere in a fragment — `#zoom=50%`, a `%zz`, or any escape run that is not
+ * valid UTF-8 such as `%FF` or a lone surrogate — makes `decodeURIComponent`
+ * throw, and returning the input unchanged silently degrades the decoded view
+ * into a second copy of the raw one. That view is load-bearing, not defence in
+ * depth: `#/callback%3Faccess_token%3D<token>` tokenizes as an innocuous key,
+ * so the decoded pass is the only thing that sees it. A single `&ref=100%`
+ * appended to such a URL printed the token in full.
+ *
+ * Per-run decoding cannot be cancelled by an unrelated byte. Each iteration
+ * consumes a whole `%XX` run and a failure just ends that run, so it is linear
+ * with no ambiguous backtracking.
+ */
 function decodeSafe(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
+  return value.replace(/(?:%[0-9A-Fa-f]{2})+/g, (run) => {
+    try {
+      return decodeURIComponent(run);
+    } catch {
+      return run;
+    }
+  });
 }
 
 /**

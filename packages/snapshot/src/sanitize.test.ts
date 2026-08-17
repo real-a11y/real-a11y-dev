@@ -356,3 +356,35 @@ describe("redactUrlsIn — punctuation must not truncate before the fragment", (
     expect(redactUrlsIn("see (https://x/#a) ok")).toBe("see (https://x/#a) ok");
   });
 });
+
+describe("redactUrl — a malformed escape must not cancel the decoded view", () => {
+  const T = "ya29.a0AfB_byT0kEnS3cr3t";
+
+  it("keeps redacting when the fragment holds an undecodable byte", () => {
+    // Decoding the whole fragment at once failed open: one stray `%` made
+    // `decodeURIComponent` throw, and returning the input unchanged degraded
+    // the decoded view into a copy of the raw one. That view is the ONLY thing
+    // that sees `#/callback%3Faccess_token%3D…`, so a `&ref=100%` appended to
+    // such a URL printed the token in full.
+    for (const url of [
+      `https://app.test/cb#/callback%3Faccess_token%3D${T}&ref=100%`, // bare %
+      `https://app.test/cb#access%5Ftoken%3D${T}==&u=%FF`, // invalid UTF-8
+      `https://app.test/cb#%ED%A0%80&access%5Ftoken%3D${T}==`, // lone surrogate, prepended
+      `https://app.test/cb#access%5Ftoken%3D${T}&x=%zz`, // invalid hex
+    ]) {
+      expect(redactUrl(url)).not.toContain(T);
+    }
+    expect(
+      redactUrlsIn(
+        `net::ERR at https://app.test/cb#/callback%3Faccess_token%3D${T}&ref=100%`,
+      ),
+    ).not.toContain(T);
+  });
+
+  it("still leaves an ordinary fragment with a percent sign alone", () => {
+    // Dropping the fragment whenever decoding throws would blank every
+    // `#zoom=50%` and destroy the hash-route identity the cut exists to keep.
+    expect(redactUrl("https://h/p#zoom=50%")).toBe("https://h/p#zoom=50%");
+    expect(redactUrl("https://h/p#a=100%&b=2")).toBe("https://h/p#a=100%&b=2");
+  });
+});
