@@ -266,7 +266,25 @@ export function redactUrl(raw: string): string {
 const URL_IN_TEXT_RE = /\b(?:https?|wss?|file|ftp|sftp):\/\/[^\s"<>]+/g;
 
 /** Sentence punctuation that trails a URL in prose rather than belonging to it. */
-const TRAILING_PUNCTUATION = /[).,;:'\]]+$/;
+const TRAILING_PUNCTUATION = new Set([")", ".", ",", ";", ":", "'", "]"]);
+
+/**
+ * How much of `value`'s tail is prose punctuation rather than URL.
+ *
+ * A scan rather than `/[).,;:'\]]+$/`: an anchored `X+$` is the textbook
+ * polynomial-backtracking shape, since every start position rescans to the end,
+ * and this runs over error text an attacker can influence. Counting backwards
+ * is linear and needs no engine.
+ */
+function trailingPunctuation(value: string): number {
+  let n = 0;
+  while (
+    n < value.length &&
+    TRAILING_PUNCTUATION.has(value[value.length - 1 - n])
+  )
+    n++;
+  return n;
+}
 
 /**
  * Redact every http(s) URL embedded in free text — Playwright error messages
@@ -280,9 +298,10 @@ export function redactUrlsIn(text: string): string {
     // the fragment and left the token unscanned, exactly as `]` did. They are
     // matched and then trimmed back off instead, so `(https://x/#a)` in prose
     // does not swallow its closing paren.
-    const trailing = TRAILING_PUNCTUATION.exec(match)?.[0] ?? "";
-    const url = trailing ? match.slice(0, -trailing.length) : match;
-    return redactUrl(url) + trailing;
+    const n = trailingPunctuation(match);
+    return n === 0
+      ? redactUrl(match)
+      : redactUrl(match.slice(0, -n)) + match.slice(-n);
   });
 }
 
