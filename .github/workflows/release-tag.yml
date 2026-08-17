@@ -52,7 +52,7 @@ jobs:
       contents: write # push tags
       actions: write # dispatch publish.yml / extension-release.yml
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # The squash commit on main, not the PR head — that is what the tags
           # have to point at. fetch-depth: 0 brings the existing tags along so
