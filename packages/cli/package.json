@@ -47,7 +47,7 @@
     "test:e2e": "vitest run --config vitest.e2e.config.ts"
   },
   "dependencies": {
-    "@puppeteer/browsers": "^3.0.6"
+    "@puppeteer/browsers": "^3.2.0"
   },
   "peerDependencies": {
     "playwright": ">=1.49.0 <2"
@@ -65,7 +65,7 @@
     "@real-a11y-dev/session-registry": "workspace:*",
     "@real-a11y-dev/snapshot": "workspace:*",
     "@types/node": "^22.0.0",
-    "playwright": "^1.61.1",
+    "playwright": "^1.62.1",
     "tsup": "^8.3.0",
     "typescript": "^5.6.0",
     "vitest": "^3.2.7"
