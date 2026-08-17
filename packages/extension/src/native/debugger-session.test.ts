@@ -349,9 +349,10 @@ describe("detachAll (the revoke path)", () => {
     await revoke;
     await settle();
 
-    // Either the revoke detached it, or the attach never happened. What must
-    // NOT happen is an attachment surviving with the flag off.
-    expect(attachStore.data["dogfood.attachedTabs"]).toEqual({});
+    // Either the revoke detached it, or the attach undid itself. What must NOT
+    // happen is an attachment surviving with the flag off — and "never written"
+    // satisfies that as much as "written then emptied", so both shapes pass.
+    expect(attachStore.data["dogfood.attachedTabs"] ?? {}).toEqual({});
   });
 
   it("is a no-op when nothing is attached", async () => {
