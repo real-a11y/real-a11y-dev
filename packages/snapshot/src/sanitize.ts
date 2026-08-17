@@ -190,6 +190,21 @@ function redactFragment(hash: string): string {
   // passes: `#access%5Ftoken%3D…` tokenizes as no pair (no literal `=`) and
   // reads as no secret key (no literal `_`). Re-encoding the placeholder first
   // keeps one spelling in the lookahead.
+  // The decoded view runs FIRST, and drops the whole fragment on a hit.
+  //
+  // The raw pass below cuts back to the last separator before ITS match and
+  // prints everything in front of that cut — which is only safe if the decoded
+  // view is clean. When a fragment holds both a percent-hidden secret and a
+  // later raw-visible trigger, the raw pass fires on the later one, the cut
+  // lands after the hidden secret, and returning here meant the decoded pass
+  // never ran. The effect was anti-monotonic: appending a second secret-shaped
+  // pair made the first one PRINT. Same class as the index bug fixed above —
+  // this was its sibling, left open.
+  const decoded = decodeSafe(rebuilt)
+    .split("[REDACTED]")
+    .join("%5BREDACTED%5D");
+  if (SECRET_IN_FRAGMENT_RE.test(decoded)) return "#%5BREDACTED%5D";
+
   const raw = SECRET_IN_FRAGMENT_RE.exec(rebuilt);
   if (raw) {
     // Cut back to the last separator before the match, keeping the route in
@@ -200,15 +215,6 @@ function redactFragment(hash: string): string {
       cut = Math.max(cut, rebuilt.lastIndexOf(ch, raw.index));
     return `#${rebuilt.slice(0, cut + 1)}%5BREDACTED%5D`;
   }
-  // The decoded pass catches keys the raw text hides (`#%74oken%3D…`), but its
-  // indices do not map onto `rebuilt` — re-encoding the placeholder even grows
-  // the string — so there is no route to keep here that could be trusted.
-  // Drop the whole fragment rather than cut at an offset that means something
-  // else, which is how a secret ended up on the printed side of the cut.
-  const decoded = decodeSafe(rebuilt)
-    .split("[REDACTED]")
-    .join("%5BREDACTED%5D");
-  if (SECRET_IN_FRAGMENT_RE.test(decoded)) return "#%5BREDACTED%5D";
 
   return rebuilt === body ? hash : `#${rebuilt}`;
 }
@@ -249,12 +255,18 @@ export function redactUrl(raw: string): string {
 
 // Schemes beyond http(s), because the MCP error path relays Playwright's text
 // verbatim and `open_page` accepts any URL zod's `.url()` allows. `ws://` is the
-// one that matters most: a CDP endpoint's browser GUID is a full-capability
-// token, and MCP attaches over one via REAL_A11Y_MCP_CDP. `]` stays IN the
+// one that matters most: MCP attaches over a CDP endpoint via
+// REAL_A11Y_MCP_CDP, and such a URL can carry a token in its query or
+// fragment. Note this does NOT cover a secret in a PATH segment — a browser
+// GUID at `/devtools/browser/<guid>` still prints, because `redactUrl`
+// rewrites parameters only. `]` stays IN the
 // character class so an IPv6 authority (`https://[::1]:3000/…`) is not cut at
 // the bracket — which truncated the URL before its fragment and left the tail
 // unscanned.
-const URL_IN_TEXT_RE = /\b(?:https?|wss?|file|ftp|sftp):\/\/[^\s"'<>)]+/g;
+const URL_IN_TEXT_RE = /\b(?:https?|wss?|file|ftp|sftp):\/\/[^\s"<>]+/g;
+
+/** Sentence punctuation that trails a URL in prose rather than belonging to it. */
+const TRAILING_PUNCTUATION = /[).,;:'\]]+$/;
 
 /**
  * Redact every http(s) URL embedded in free text — Playwright error messages
@@ -262,7 +274,16 @@ const URL_IN_TEXT_RE = /\b(?:https?|wss?|file|ftp|sftp):\/\/[^\s"'<>)]+/g;
  * messages flow into reports, annotations, and CI logs.
  */
 export function redactUrlsIn(text: string): string {
-  return text.replace(URL_IN_TEXT_RE, (match) => redactUrl(match));
+  return text.replace(URL_IN_TEXT_RE, (match) => {
+    // `'` and `)` are outside the WHATWG fragment percent-encode set, so a URL
+    // keeps them verbatim — excluding them from the match truncated it before
+    // the fragment and left the token unscanned, exactly as `]` did. They are
+    // matched and then trimmed back off instead, so `(https://x/#a)` in prose
+    // does not swallow its closing paren.
+    const trailing = TRAILING_PUNCTUATION.exec(match)?.[0] ?? "";
+    const url = trailing ? match.slice(0, -trailing.length) : match;
+    return redactUrl(url) + trailing;
+  });
 }
 
 const RULE_SET: ReadonlySet<string> = new Set(ALL_RULES);

@@ -301,3 +301,58 @@ describe("redactUrlsIn — schemes beyond http(s)", () => {
     ).not.toContain(S);
   });
 });
+
+describe("redactUrl — appending to a fragment must never un-redact it", () => {
+  const T = "ya29.a0AfB_LIVE_TOKEN";
+
+  it("consults the decoded view before trusting the raw cut", () => {
+    // The raw backstop cuts back to the last separator before ITS match and
+    // prints what is in front. That is only safe once the decoded view is
+    // clean: with a percent-hidden secret AND a later raw-visible trigger, the
+    // raw pass fired on the later one, the cut landed after the hidden secret,
+    // and returning meant the decoded pass never ran.
+    for (const url of [
+      `https://app.test/cb#redirect=https%3A%2F%2Fidp.test%2F%23access_token%3D${T}&sig=YWJj=ZGVm`,
+      `https://app.test/cb#access_token%253D${T}&id_token=eyJhbGc=iOiJ`,
+      `https://app.test/cb#a=b|access%5Ftoken=${T}&c=d|token=x`,
+    ]) {
+      expect(redactUrl(url)).not.toContain(T);
+    }
+  });
+
+  it("is monotonic: a suffix cannot reveal a byte redacted without it", () => {
+    // The property, stated directly — the failure above was anti-monotonic,
+    // which is the shape that makes this class hard to spot by sampling.
+    const base = `https://app.test/cb#access_token%253D${T}`;
+    for (const suffix of [
+      "",
+      "&sig=a=b",
+      "&c=d|token=x",
+      "&access_token=AAA==BBB",
+    ]) {
+      expect(redactUrl(base + suffix)).not.toContain(T);
+    }
+  });
+});
+
+describe("redactUrlsIn — punctuation must not truncate before the fragment", () => {
+  const T = "ya29.a0AfB_LIVE_TOKEN";
+
+  it("scans past ' and ) inside a URL", () => {
+    // Both are outside the WHATWG fragment percent-encode set, so a URL keeps
+    // them verbatim — excluding them cut the match before the fragment and
+    // left the token unscanned, exactly as `]` did.
+    expect(
+      redactUrlsIn(
+        `at https://app.test/cb#state=/wiki/Page_(draft)&access_token=${T}`,
+      ),
+    ).not.toContain(T);
+    expect(
+      redactUrlsIn(`at https://app.test/cb#state=o'brien&access_token=${T}`),
+    ).not.toContain(T);
+  });
+
+  it("still gives prose back its closing parenthesis", () => {
+    expect(redactUrlsIn("see (https://x/#a) ok")).toBe("see (https://x/#a) ok");
+  });
+});
