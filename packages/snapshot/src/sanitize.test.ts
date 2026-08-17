@@ -277,3 +277,27 @@ describe("redactUrl — regressions in the fragment scanner itself", () => {
     expect(out).toContain("%5BREDACTED%5D");
   });
 });
+
+describe("redactUrlsIn — schemes beyond http(s)", () => {
+  const S = "ya29.SECRET";
+  it("redacts a ws:// CDP endpoint, whose GUID is a capability token", () => {
+    // MCP attaches over CDP via REAL_A11Y_MCP_CDP, and a failed connect relays
+    // Playwright's message verbatim. That browser GUID is full control of the
+    // browser, not just an address.
+    const out = redactUrlsIn(
+      `connectOverCDP failed at ws://127.0.0.1:9222/devtools/browser/abc#access_token=${S}`,
+    );
+    expect(out).not.toContain(S);
+  });
+
+  it("redacts file:// and does not cut an IPv6 authority at the bracket", () => {
+    expect(
+      redactUrlsIn(`at file:///tmp/cb.html#access_token=${S}`),
+    ).not.toContain(S);
+    // `]` had to stay inside the character class: excluding it truncated the
+    // match before the fragment and left the tail unscanned.
+    expect(
+      redactUrlsIn(`at https://[::1]:3000/cb#access_token=${S}`),
+    ).not.toContain(S);
+  });
+});

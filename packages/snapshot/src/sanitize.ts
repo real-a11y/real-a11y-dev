@@ -247,7 +247,14 @@ export function redactUrl(raw: string): string {
   return sanitizeText(url.toString(), { singleLine: true });
 }
 
-const URL_IN_TEXT_RE = /\bhttps?:\/\/[^\s"'<>)\]]+/g;
+// Schemes beyond http(s), because the MCP error path relays Playwright's text
+// verbatim and `open_page` accepts any URL zod's `.url()` allows. `ws://` is the
+// one that matters most: a CDP endpoint's browser GUID is a full-capability
+// token, and MCP attaches over one via REAL_A11Y_MCP_CDP. `]` stays IN the
+// character class so an IPv6 authority (`https://[::1]:3000/…`) is not cut at
+// the bracket — which truncated the URL before its fragment and left the tail
+// unscanned.
+const URL_IN_TEXT_RE = /\b(?:https?|wss?|file|ftp|sftp):\/\/[^\s"'<>)]+/g;
 
 /**
  * Redact every http(s) URL embedded in free text — Playwright error messages

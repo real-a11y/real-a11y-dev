@@ -422,8 +422,17 @@ export function buildServer(
   // timeout closing the browser (the store lives outside the record, see
   // `SessionManager.checkpoints`); the one thing that discards them is
   // close_browser.
+  // Every client-visible error goes through here, so the boundary lives here
+  // rather than at each thrower: `import_checkpoint` and the session refusals
+  // build through it too, and a redaction that only guards the paths someone
+  // remembered is the shape this PR keeps finding.
   const errText = (msg: string) => ({
-    content: [{ type: "text" as const, text: msg }],
+    content: [
+      {
+        type: "text" as const,
+        text: bounded(sanitizeText(redactUrlsIn(msg), { singleLine: true })),
+      },
+    ],
     isError: true as const,
   });
   // No zod `.regex()` here on purpose: the SDK enforces the schema BEFORE the
