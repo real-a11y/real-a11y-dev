@@ -250,24 +250,38 @@ export class NativeDebuggerSession {
    * already false.
    */
   private async attach(tabId: number): Promise<AttachOutcome> {
-    return this.enqueue(async () => {
-      if (!(await this.isEnabled())) return { ok: false, error: "disabled" };
-      try {
-        await chrome.debugger.attach({ tabId }, PROTOCOL);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (isDebuggerConflict(msg)) {
-          await this.log.record({ kind: "conflict", at: Date.now() });
-          return { ok: false, error: "conflict" };
-        }
-        return { ok: false, error: "attach-failed" };
+    // Cheap pre-check, outside the mutex — the authoritative one is below.
+    if (!(await this.isEnabled())) return { ok: false, error: "disabled" };
+    try {
+      await chrome.debugger.attach({ tabId }, PROTOCOL);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (isDebuggerConflict(msg)) {
+        await this.log.record({ kind: "conflict", at: Date.now() });
+        return { ok: false, error: "conflict" };
       }
+      return { ok: false, error: "attach-failed" };
+    }
+    // Re-check and record as ONE transaction on the storage queue, which is the
+    // queue `detachAll` snapshots on — so an attach either lands in the map
+    // before the revoke reads it, or finds the flag already false and undoes
+    // itself. The CDP call above stays OUTSIDE: this mutex is shared with
+    // `detach`, `detachIfLive` and the `onDetach` recorder, and holding it
+    // across a round-trip let a slow attach on one tab block another tab's
+    // teardown and stall the revoke that was trying to stop it.
+    const kept = await this.enqueue(async () => {
+      if (!(await this.isEnabled())) return false;
       const attached = await this.readAttached();
       attached[tabId] = Date.now();
       await this.writeAttached(attached);
-      await this.log.record({ kind: "attach", at: Date.now() });
-      return { ok: true };
+      return true;
     });
+    if (!kept) {
+      await chrome.debugger.detach({ tabId }).catch(() => {});
+      return { ok: false, error: "disabled" };
+    }
+    await this.log.record({ kind: "attach", at: Date.now() });
+    return { ok: true };
   }
 
   /**
@@ -360,10 +374,28 @@ export class NativeDebuggerSession {
     // drop, and folding it into the MV3 headline counter would inflate the one
     // number DOGFOOD.md calls the main engineering risk. No `attachedMs`
     // either — the entry's age is not time a banner was up.
+    if (!isConnectionLost(failure)) {
+      // The attachment is plausibly still live, so putting the entry back is
+      // what keeps a later revoke — or `onDetach` — able to see it. Deleting it
+      // and reporting nothing is the silent orphan this method exists to avoid.
+      await this.enqueue(async () => {
+        const attached = await this.readAttached();
+        if (attached[tabId] === undefined) {
+          attached[tabId] = Date.now() - attachedMs;
+          await this.writeAttached(attached);
+        }
+      });
+      await this.log.record({
+        kind: "detach-stale",
+        at: Date.now(),
+        reason: "detach-refused",
+      });
+      return false;
+    }
     await this.log.record({
       kind: "detach-stale",
       at: Date.now(),
-      reason: isConnectionLost(failure) ? "already-gone" : "detach-refused",
+      reason: "already-gone",
     });
     return false;
   }

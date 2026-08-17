@@ -244,6 +244,7 @@ export function DogfoodPanel() {
 
   async function act(node: NativeNode) {
     if (busy) return;
+    const token = capabilityRequest.current;
     // Dispatch against the tab the tree came from, and refuse if the user has
     // since switched away: these ids only mean something in that document, so
     // acting on the new active tab would click a different page's element.
@@ -286,10 +287,8 @@ export function DogfoodPanel() {
         // the tab between the read and this click) gets the remedy, not a bare
         // error code.
         if (r?.reason) {
-          setCapability(blockedBy(r.reason));
-          return setStatus(
-            `native unavailable — ${explainUnavailable(r.reason)}`,
-          );
+          noteRefusal(r.reason, token);
+          return;
         }
         return setStatus(`act failed: ${r?.error ?? "unknown"}`);
       }
@@ -315,6 +314,11 @@ export function DogfoodPanel() {
       // identical call the same way.
       if (count !== null) {
         setStatus(`acted on ${node.role} — tree refreshed (${count} nodes)`);
+      } else if (capabilityRequest.current !== token) {
+        // `readTreeInto`'s refusal branch is itself token-gated, so when the
+        // click navigated the page (bumping the token) nothing set a status —
+        // leaving an empty tree under a stale "read N nodes" line.
+        setStatus(`acted on ${node.role} — the page changed; reload the tree`);
       }
     } finally {
       setBusy(false);
