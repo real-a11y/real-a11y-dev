@@ -46,8 +46,10 @@ export default defineConfig({
 // jest.setup.ts
 import { registerA11yMatchers } from "@real-a11y-dev/testing/matchers";
 
-// `expect` is the Jest global. No separate type import needed — the matchers
-// ship a global `jest.Matchers` augmentation.
+import "@real-a11y-dev/testing/matchers/jest"; // types-only augmentation
+
+// `expect` is the Jest global. If you import it from "@jest/globals" instead,
+// import "…/matchers/jest-globals" — see below.
 registerA11yMatchers(expect);
 ```
 
@@ -296,12 +298,20 @@ The most important thing to internalize: `toBeValidA11yTree()` and `toMatchA11yC
 
 ## Vitest vs Jest type augmentation
 
-The matcher signatures are identical; only the type wiring differs:
+The matcher signatures are identical, and so is the wiring — one runtime call, one types-only import, differing only in which runner you name:
 
 | Aspect | Vitest | Jest |
 |---|---|---|
 | Runtime registration | `registerA11yMatchers(expect)` | `registerA11yMatchers(expect)` |
-| Type augmentation | `import "@real-a11y-dev/testing/matchers/vitest"` | none — global `jest.Matchers` augmentation ships with the import |
+| Type augmentation | `import "@real-a11y-dev/testing/matchers/vitest"` | `import "@real-a11y-dev/testing/matchers/jest"` |
+
+**Jest has two `expect`s**, and they have separate type surfaces. If you `import { expect } from "@jest/globals"` rather than using the global that `@types/jest` declares, import `@real-a11y-dev/testing/matchers/jest-globals` instead — `./matchers/jest` augments `jest.Matchers` and does not reach it. `@testing-library/jest-dom` splits its own augmentation the same way.
+
+Each is a separate entry point because a type augmentation you cannot opt out of is a type augmentation that lands in projects that did not want it. Jest's used to ship unconditionally from `./matchers` — a global `namespace jest` merge needs no module resolution, so it looked free. It was not: Vitest's `Assertion` extends `JestAssertion`, which extends `jest.Matchers`, so a Vitest user importing `./matchers` received every matcher name twice, from two augmentations that disagreed about what the matchers return. Under `skipLibCheck: false` on TypeScript 7 that is one `TS2320` per matcher, reported against a file inside `node_modules`; on TypeScript 5.x, or under the default `skipLibCheck: true`, it is silent — and silent is not healthy, it is the Jest declaration quietly winning the merge.
+
+Importing more than one entry is redundant but harmless. That is true because the augmentations now agree that every matcher returns `void`, which is what Vitest and Jest both say about their own; making them agree is the fix, and keeping them separate is what stops a consumer carrying the other runner's types at all.
+
+None of these entries ships runtime code — importing one is a types-only statement, and `registerA11yMatchers(expect)` remains what actually installs the matchers.
 
 ## See it running
 

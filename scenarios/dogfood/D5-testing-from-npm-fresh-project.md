@@ -15,6 +15,7 @@ twin:
   - R15
   - R33
   - R34
+  - R36
 covers:
   - packages.@real-a11y-dev/testing
 notion: "https://app.notion.com/p/3aa1c354b0b5816e80fbe1e24385353b"

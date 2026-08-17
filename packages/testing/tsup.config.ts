@@ -8,6 +8,8 @@ export default defineConfig({
     "src/playwright.ts",
     "src/matchers.ts",
     "src/matchers-vitest.ts",
+    "src/matchers-jest.ts",
+    "src/matchers-jest-globals.ts",
   ],
   format: ["esm", "cjs"],
   // `@real-a11y-dev/validate` is a PRIVATE workspace package — npm can never

@@ -64,6 +64,22 @@
       },
       "import": "./dist/matchers-vitest.js",
       "require": "./dist/matchers-vitest.cjs"
+    },
+    "./matchers/jest": {
+      "types": {
+        "import": "./dist/matchers-jest.d.ts",
+        "require": "./dist/matchers-jest.d.cts"
+      },
+      "import": "./dist/matchers-jest.js",
+      "require": "./dist/matchers-jest.cjs"
+    },
+    "./matchers/jest-globals": {
+      "types": {
+        "import": "./dist/matchers-jest-globals.d.ts",
+        "require": "./dist/matchers-jest-globals.d.cts"
+      },
+      "import": "./dist/matchers-jest-globals.js",
+      "require": "./dist/matchers-jest-globals.cjs"
     }
   },
   "files": [
@@ -83,14 +99,19 @@
     "test:e2e": "playwright test --config=playwright.config.ts"
   },
   "peerDependencies": {
+    "@jest/expect": ">=29 <31",
     "playwright": ">=1.49.0 <2"
   },
   "peerDependenciesMeta": {
+    "@jest/expect": {
+      "optional": true
+    },
     "playwright": {
       "optional": true
     }
   },
   "devDependencies": {
+    "@jest/expect": "^29.7.0",
     "@playwright/test": "^1.61.1",
     "@real-a11y-dev/audit": "workspace:*",
     "@real-a11y-dev/browser": "workspace:*",

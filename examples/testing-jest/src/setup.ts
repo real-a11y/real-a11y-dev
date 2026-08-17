@@ -2,10 +2,11 @@
 // once for the whole suite. Wired in via `setupFilesAfterEnv` in
 // jest.config.cjs.
 //
-// Unlike Vitest, Jest needs no separate type-augmentation import: the matchers
-// module ships a global `namespace jest { interface Matchers }` augmentation, so
-// importing it here is enough for `expect(el).toHaveValidLandmarks()` to type.
+// Two imports, exactly as the Vitest example has: the runtime registration, and
+// a types-only augmentation naming this runner. `./matchers/jest` is what makes
+// `expect(el).toHaveValidLandmarks()` type-check.
 import { registerA11yMatchers } from "@real-a11y-dev/testing/matchers";
+import "@real-a11y-dev/testing/matchers/jest";
 
 // `expect` is the Jest global provided in the test environment.
 registerA11yMatchers(expect);

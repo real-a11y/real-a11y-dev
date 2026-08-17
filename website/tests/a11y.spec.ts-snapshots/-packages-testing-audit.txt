@@ -159,6 +159,13 @@ main
     code "setupFilesAfterEnv"
   button "Copy Code"
   code
+  paragraph "The second import is types-only, and there is one per runner: , for Jest's global , and if you — ."
+    code "./matchers/vitest"
+    code "./matchers/jest"
+    code "expect"
+    code "./matchers/jest-globals"
+    code "import { expect } from "@jest/globals""
+    link "which is a different type surface"
   paragraph "Auditing a instead of jsdom? That path skips all of the above — see the . Peer-version specifics for React, Testing Library and Playwright live in ."
     strong "real browser page"
     link "Playwright adapter"

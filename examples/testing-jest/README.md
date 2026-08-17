@@ -10,9 +10,9 @@ Jest-specific registration and typing path).
 
 - Registering the matchers with `registerA11yMatchers(expect)` in a Jest
   `setupFilesAfterEnv` file ([`src/setup.ts`](./src/setup.ts))
-- The matchers typed on Jest's `expect` via the package's global
-  `jest.Matchers` augmentation — **no separate type import needed** (Vitest
-  needs `import "@real-a11y-dev/testing/matchers/vitest"`; Jest does not)
+- The matchers typed on Jest's `expect` via
+  `import "@real-a11y-dev/testing/matchers/jest"` — a types-only augmentation,
+  the exact mirror of the Vitest example's `…/matchers/vitest` line
 - `toHaveValidLandmarks`, `toHaveNoUnlabeledInteractive`, `toHaveTabSequence`
 - The `a11ySnapshot()` serializer feeding `toMatchSnapshot()` with semantic
   (role + name) output

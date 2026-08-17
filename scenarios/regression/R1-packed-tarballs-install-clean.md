@@ -43,8 +43,8 @@ Then, in a scratch project outside the repo:
 2. Import each package's `.` entry as **ESM**
 3. `require()` each as **CJS**
 4. Import each **subpath** export — `@real-a11y-dev/testing/playwright`,
-   `/matchers`, `/matchers/vitest`, the UI's `styles`, and any others in the
-   exports maps
+   `/matchers`, `/matchers/vitest`, `/matchers/jest`, `/matchers/jest-globals`,
+   the UI's `styles`, and any others in the exports maps
 5. Resolve types for every entry (`tsc --noEmit` on a file importing each),
    **with `skipLibCheck: false`** — see below, the default hides the fault this
    step exists to find
@@ -66,6 +66,14 @@ Then, in a scratch project outside the repo:
   `TS2307`
 - Bins are executable and exit `0` on `--version`
 - Zero `MODULE_NOT_FOUND`, zero unexported-path errors
+- **`skipLibCheck: false` here buys you `TS2307` and nothing else.** The three
+  matcher augmentation subpaths can be broken in a way this row cannot see: two
+  of them declaring the same matcher with different signatures is `TS2320`, and
+  TypeScript **5.x does not report that at all** — it took TypeScript 7 to
+  surface the one that shipped. So a green run of step 5 is evidence about
+  unresolvable specifiers, not about the declaration surface as a whole. **R36**
+  is the row that pins the version and the runner shapes; this one should not be
+  read as covering it
 
 ## Why this exists
 

@@ -190,6 +190,16 @@
           "subpath": "./matchers/vitest",
           "types": [],
           "values": []
+        },
+        {
+          "subpath": "./matchers/jest",
+          "types": [],
+          "values": []
+        },
+        {
+          "subpath": "./matchers/jest-globals",
+          "types": [],
+          "values": []
         }
       ],
       "name": "@real-a11y-dev/testing"
@@ -2580,6 +2590,8 @@
       "exports": [
         ".",
         "./matchers",
+        "./matchers/jest",
+        "./matchers/jest-globals",
         "./matchers/vitest",
         "./playwright"
       ],
