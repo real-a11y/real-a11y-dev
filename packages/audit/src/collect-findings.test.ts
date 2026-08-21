@@ -35,6 +35,89 @@ describe("collectFindings — no-unlabeled-interactive", () => {
     expect(findings).toHaveLength(2);
     expect(findings.map((f) => f.role).sort()).toEqual(["button", "link"]);
   });
+
+  it("passes a glyph, emoji, or title-only button (accname is non-empty)", () => {
+    for (const html of [
+      `<button>⬇</button>`,
+      `<button>🗑</button>`,
+      `<button title="Download CSV"></button>`,
+    ]) {
+      expect(
+        collectFindings(mount(html), ["no-unlabeled-interactive"]),
+      ).toEqual([]);
+    }
+  });
+});
+
+describe("collectFindings — label-title-only", () => {
+  it("flags an input whose only label is title", () => {
+    const root = mount(`<input title="Email">`);
+    const findings = collectFindings(root, ["label-title-only"]);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({
+      rule: "label-title-only",
+      severity: "warning",
+      tagName: "input",
+    });
+  });
+
+  it("flags aria-describedby-only the same way axe does", () => {
+    const root = mount(
+      `<span id="hint">Email</span><input aria-describedby="hint">`,
+    );
+    const findings = collectFindings(root, ["label-title-only"]);
+    expect(findings).toHaveLength(1);
+  });
+
+  it("passes a <label>, aria-label, or aria-labelledby", () => {
+    expect(
+      collectFindings(mount(`<label>Email <input></label>`), [
+        "label-title-only",
+      ]),
+    ).toEqual([]);
+    expect(
+      collectFindings(mount(`<label for="e">Email</label><input id="e">`), [
+        "label-title-only",
+      ]),
+    ).toEqual([]);
+    expect(
+      collectFindings(mount(`<input aria-label="Email" title="also">`), [
+        "label-title-only",
+      ]),
+    ).toEqual([]);
+    expect(
+      collectFindings(
+        mount(`<span id="n">Email</span><input aria-labelledby="n" title="t">`),
+        ["label-title-only"],
+      ),
+    ).toEqual([]);
+  });
+
+  it("does not flag placeholder-only, title-only buttons, or glyph buttons", () => {
+    expect(
+      collectFindings(mount(`<input placeholder="Email">`), [
+        "label-title-only",
+      ]),
+    ).toEqual([]);
+    expect(
+      collectFindings(mount(`<button title="Download CSV"></button>`), [
+        "label-title-only",
+      ]),
+    ).toEqual([]);
+    expect(
+      collectFindings(mount(`<button>⬇</button>`), ["label-title-only"]),
+    ).toEqual([]);
+  });
+
+  it("skips input types that do not take a visible label", () => {
+    for (const type of ["hidden", "image", "button", "submit", "reset"]) {
+      expect(
+        collectFindings(mount(`<input type="${type}" title="x">`), [
+          "label-title-only",
+        ]),
+      ).toEqual([]);
+    }
+  });
 });
 
 describe("collectFindings — heading-order", () => {

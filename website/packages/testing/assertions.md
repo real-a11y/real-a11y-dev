@@ -27,7 +27,7 @@ Each `Finding` carries:
 | Field | Meaning |
 | --- | --- |
 | `rule` | Which rule fired — one of `ALL_RULES` (below). |
-| `severity` | `"error"` blocks use (unlabeled controls, unlabeled dialogs); `"warning"` is triage-later (heading order, duplicate landmarks, images missing alt). |
+| `severity` | `"error"` blocks use (unlabeled controls, unlabeled dialogs); `"warning"` is triage-later (heading order, duplicate landmarks, images missing alt, form controls labeled only by `title`). |
 | `message` | Self-contained description of the problem. |
 | `role` / `name` / `tagName` | The offending node, when the finding is node-scoped. |
 | `locator` | Best-effort CSS selector path, so the element is findable. |
@@ -39,8 +39,8 @@ The full rule set `collectFindings` runs by default:
 
 ```ts
 ALL_RULES;
-// ["no-unlabeled-interactive", "image-alt", "heading-order",
-//  "dialog-labeled", "landmark-structure"]
+// ["no-unlabeled-interactive", "label-title-only", "image-alt",
+//  "heading-order", "dialog-labeled", "landmark-structure"]
 ```
 
 Pass a subset as the second argument to run only some. The four `assert*` helpers below are thin wrappers over `collectFindings` for one rule each.
@@ -59,7 +59,7 @@ console.log(listByRole(document.body, "image"));
 
 ## `assertNoUnlabeledInteractive(root)`
 
-Throws if any interactive element (button, link, textbox, combobox, checkbox, radio, etc.) has an empty accessible name.
+Throws if any interactive element (button, link, textbox, combobox, checkbox, radio, etc.) has an empty accessible name. A glyph, emoji, or `title=` on a button is a **non-empty** name (what a screen reader announces) and does **not** fail this assertion — same as axe-core `button-name`. Form controls labeled only by `title` are a separate warning, `label-title-only`, via `collectFindings` / `assertRules`, not this helper.
 
 ```ts
 import { assertNoUnlabeledInteractive } from "@real-a11y-dev/testing";

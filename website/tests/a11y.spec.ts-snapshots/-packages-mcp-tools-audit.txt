@@ -452,13 +452,14 @@ main
     code "audit_page"
   paragraph
     emphasis "Read-only · whole-document · the primary tool."
-  paragraph "Run the accessibility rules against the current page and return every violation — unlabeled interactive controls, images missing alt text, skipped/missing/duplicate heading levels, unlabeled dialogs, and broken landmark structure. Findings come back grouped and counted (so "17 unlabeled links" is one row, each with its CSS locator) plus a machine-readable JSON block."
+  paragraph "Run the accessibility rules against the current page and return every violation — unlabeled interactive controls, form controls labeled only by title or aria-describedby, images missing alt text, skipped/missing/duplicate heading levels, unlabeled dialogs, and broken landmark structure. Findings come back grouped and counted (so "17 unlabeled links" is one row, each with its CSS locator) plus a machine-readable JSON block."
   paragraph "Parameters:"
   list
-    listitem "— array of | | | | — optional — a subset of rules to run. Omit to run all."
+    listitem "— array of | | | | | — optional — a subset of rules to run. Omit to run all."
       strong
         code "rules"
       code ""no-unlabeled-interactive""
+      code ""label-title-only""
       code ""image-alt""
       code ""heading-order""
       code ""dialog-labeled""

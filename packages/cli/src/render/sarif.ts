@@ -29,6 +29,7 @@ import type { SnapshotArtifact } from "@real-a11y-dev/snapshot";
  *  rule-level default; the per-result `level` still carries the actual one. */
 const RULE_LEVEL: Record<string, "error" | "warning"> = {
   "no-unlabeled-interactive": "error",
+  "label-title-only": "warning",
   "image-alt": "warning",
   "heading-order": "warning",
   "dialog-labeled": "error",
@@ -38,6 +39,8 @@ const RULE_LEVEL: Record<string, "error" | "warning"> = {
 const RULE_DESCRIPTION: Record<string, string> = {
   "no-unlabeled-interactive":
     "Interactive elements must have an accessible name.",
+  "label-title-only":
+    "Form controls should not be labeled only by title or aria-describedby.",
   "image-alt": "Images must have alternative text (or be marked decorative).",
   "heading-order":
     "Headings must start at h1 and not skip levels; exactly one h1.",

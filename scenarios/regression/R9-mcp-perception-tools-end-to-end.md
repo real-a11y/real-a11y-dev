@@ -43,7 +43,10 @@ Against a page seeding a known violation:
 ## Expected
 
 - **2** — reports the seeded violation, grouped and counted, each with a CSS
-  locator
+  locator. `tools/list`'s `audit_page` description (mcp ≥ 0.1.0-beta.6) names
+  form controls labeled only by title as a **best-practice** extra, not as
+  unnamed; earlier descriptions said every finding is "what AT would announce
+  as broken"
 - **3** — findings + tree + outline from **one** extraction, so the sections cannot
   disagree
 - **4** — a non-empty tree. There is one producer now: Chromium's own,

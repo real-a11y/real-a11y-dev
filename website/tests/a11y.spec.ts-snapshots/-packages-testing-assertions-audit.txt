@@ -150,9 +150,10 @@ main
       row
         cell "severity"
           code "severity"
-        cell ""error" blocks use (unlabeled controls, unlabeled dialogs); "warning" is triage-later (heading order, duplicate landmarks, images missing alt)."
+        cell ""error" blocks use (unlabeled controls, unlabeled dialogs); "warning" is triage-later (heading order, duplicate landmarks, images missing alt, form controls labeled only by title)."
           code ""error""
           code ""warning""
+          code "title"
       row
         cell "message"
           code "message"
@@ -195,7 +196,15 @@ main
   code
   heading "assertNoUnlabeledInteractive(root)" (level 2)
     code "assertNoUnlabeledInteractive(root)"
-  paragraph "Throws if any interactive element (button, link, textbox, combobox, checkbox, radio, etc.) has an empty accessible name."
+  paragraph "Throws if any interactive element (button, link, textbox, combobox, checkbox, radio, etc.) has an empty accessible name. A glyph, emoji, or on a button is a name (what a screen reader announces) and does fail this assertion — same as axe-core . Form controls labeled only by are a separate warning, , via / , not this helper."
+    code "title="
+    strong "non-empty"
+    strong "not"
+    code "button-name"
+    code "title"
+    code "label-title-only"
+    code "collectFindings"
+    code "assertRules"
   button "Copy Code"
   code
   paragraph "Error message example:"

@@ -44,6 +44,7 @@ class A11yAssertionError extends Error {
 /** The audit rules `collectFindings` knows how to run. */
 export type A11yRule =
   | "no-unlabeled-interactive"
+  | "label-title-only"
   | "image-alt"
   | "heading-order"
   | "dialog-labeled"
@@ -52,11 +53,70 @@ export type A11yRule =
 /** Every rule, in the order they run. */
 export const ALL_RULES: readonly A11yRule[] = [
   "no-unlabeled-interactive",
+  "label-title-only",
   "image-alt",
   "heading-order",
   "dialog-labeled",
   "landmark-structure",
 ];
+
+/** `input` types axe's `label-matches` excludes — they don't take a visible `<label>`. */
+const INPUT_TYPES_WITHOUT_LABEL = new Set([
+  "hidden",
+  "image",
+  "button",
+  "submit",
+  "reset",
+]);
+
+/**
+ * True when a form control's only "label" is `title` and/or `aria-describedby`
+ * — axe-core's `label-title-only` (best-practice). A SR still announces
+ * `title` as the name; this rule does not call that unlabeled.
+ *
+ * Buttons are out of scope, matching axe: `title` on a `<button>` passes
+ * `button-name` / `no-unlabeled-interactive` and is not this check.
+ */
+function isTitleOnlyFormControl(node: SemanticNode): boolean {
+  const dom = node.dom;
+  if (!dom) return false;
+  const tag = dom.tagName;
+  if (tag !== "input" && tag !== "select" && tag !== "textarea") return false;
+  const type = (dom.attributes["type"] ?? "text").toLowerCase();
+  if (tag === "input" && INPUT_TYPES_WITHOUT_LABEL.has(type)) return false;
+
+  const el = getElementRefs().get(node.id);
+  if (el) {
+    if (el.getAttribute("aria-label")?.trim()) return false;
+    if (el.getAttribute("aria-labelledby")?.trim()) return false;
+    if (hasAssociatedLabelText(el)) return false;
+    return !!(
+      el.getAttribute("title")?.trim() ||
+      el.getAttribute("aria-describedby")?.trim()
+    );
+  }
+
+  // Native trees have no live element. `title` and `aria-label` are
+  // KEY_ATTRIBUTES; `aria-labelledby` is not. Flag only when the computed
+  // name is exactly the title (a labelledby name that differs is safe).
+  if (dom.attributes["aria-label"]?.trim()) return false;
+  const title = dom.attributes["title"]?.trim();
+  return !!title && node.a11y.name.trim() === title;
+}
+
+function hasAssociatedLabelText(el: Element): boolean {
+  const labels =
+    "labels" in el
+      ? (el as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement)
+          .labels
+      : null;
+  if (labels) {
+    for (const lab of labels) {
+      if (lab.textContent?.trim()) return true;
+    }
+  }
+  return false;
+}
 
 /**
  * A single accessibility problem found by {@link collectFindings}.
@@ -219,6 +279,24 @@ export function collectFindings(
         message: tag
           ? `Unlabeled interactive element: ${node.a11y.role} <${tag}>`
           : `Unlabeled interactive element: ${node.a11y.role}`,
+        ...locate(node),
+      });
+    }
+  }
+
+  if (want.has("label-title-only")) {
+    for (const node of linearize(tree)) {
+      if (!isTitleOnlyFormControl(node)) continue;
+      const tag = node.dom?.tagName;
+      findings.push({
+        rule: "label-title-only",
+        severity: "warning",
+        role: node.a11y.role,
+        ...(node.a11y.name ? { name: node.a11y.name } : {}),
+        ...(tag ? { tagName: tag } : {}),
+        message: tag
+          ? `Form element <${tag}> is labeled only by title or aria-describedby — add a visible <label>, aria-label, or aria-labelledby.`
+          : `Form element is labeled only by title or aria-describedby — add a visible <label>, aria-label, or aria-labelledby.`,
         ...locate(node),
       });
     }

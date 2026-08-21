@@ -58,7 +58,8 @@ Point a real MCP client (Claude Code, Claude Desktop, Cursor) at the **published
 - **7** — the diff reports the real delta between two live pages
 - **9** — the agent picks a sensible sequence **from the tool descriptions alone**. If it
   flails, calls tools in the wrong order, or gives up, the descriptions are the finding — not
-  the agent
+  the agent. From mcp ≥ 0.1.0-beta.6, `audit_page`'s description distinguishes empty-name
+  (AT unnamed) from `label-title-only` (axe best-practice; title still is a name)
 
 ## Why this exists
 

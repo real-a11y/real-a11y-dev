@@ -1757,12 +1757,13 @@ main
   heading "--rules <ids>" (level 3)
     code "--rules <ids>"
   list
-    listitem "comma-separated ids · all five · audit, inspect, snapshot"
+    listitem "comma-separated ids · all six · audit, inspect, snapshot"
       strong "Type:"
       strong "Default:"
       strong "Commands:"
-  paragraph "Run only a subset of the rules. Valid ids: , , , , . An unknown id is a hard error."
+  paragraph "Run only a subset of the rules. Valid ids: , , , , , . An unknown id is a hard error."
     code "no-unlabeled-interactive"
+    code "label-title-only"
     code "image-alt"
     code "heading-order"
     code "dialog-labeled"

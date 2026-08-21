@@ -47,6 +47,9 @@ differently.
 
 ## Expected
 
+- `checkpoint_findings` / `inspect_page` / `audit_page` share one `rules` enum.
+  From mcp ≥ 0.1.0-beta.6 it includes `label-title-only`; earlier servers reject
+  that id
 - **3** — exactly the introduced delta: one fixed, one new. Not a re-listing of
   everything. From mcp ≥ 0.1.0-beta.2 the header also names the operation and the
   checkpoint it read: `Live page vs. saved checkpoint "<name>": …`

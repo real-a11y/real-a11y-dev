@@ -286,8 +286,11 @@ main
     strong "Playwright MCP"
   heading "Limitations" (level 2)
   list
-    listitem "It runs five rules today — unlabeled interactive elements, images missing alt text, heading order, dialog labeling, and landmark structure — plus the full semantic tree. It is not a complete WCAG or axe-core suite; it is semantic-tree-based and tuned to "what a screen reader announces." For contrast, focus visibility, and other rendered/interactive checks, pair it with and manual testing."
+    listitem "It runs six rules today — unlabeled interactive elements, form controls labeled only by / , images missing alt text, heading order, dialog labeling, and landmark structure — plus the full semantic tree. It is not a complete WCAG or axe-core suite; it is semantic-tree-based and tuned to "what a screen reader announces," with as the one axe-aligned best-practice extra. For contrast, focus visibility, and other rendered/interactive checks, pair it with and manual testing."
       strong "Scope."
+      code "title"
+      code "aria-describedby"
+      code "label-title-only"
       link "axe-core"
     listitem "The tree is a reimplementation of accessible-name / role computation, not the browser's native accessibility tree. It is tuned to match what assistive tech announces, but can diverge on edge cases."
       strong "Fidelity follows the engine."
