@@ -16,7 +16,7 @@
   non-empty, matching HTML-AAM. Hidden captions no longer silence the
   unnamed-table violation, and a caption that did not supply the name (because
   `aria-label` already did) stays in the tree. A click on a node whose element
-  has been detached now fails instead of reporting success.
+  has been detached now fails instead of reporting success. ([#357])
 
 - Give the page header's close-tab button back its keyboard focus ring. Its
   `:focus-visible` rule painted `outline: 2px solid var(--sn-focus-ring)`, and
