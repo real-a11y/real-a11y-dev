@@ -88,7 +88,7 @@ function isTitleOnlyFormControl(node: SemanticNode): boolean {
   const el = getElementRefs().get(node.id);
   if (el) {
     if (el.getAttribute("aria-label")?.trim()) return false;
-    if (el.getAttribute("aria-labelledby")?.trim()) return false;
+    if (labelledByResolvesToText(el)) return false;
     if (hasAssociatedLabelText(el)) return false;
     return !!(
       el.getAttribute("title")?.trim() ||
@@ -96,12 +96,36 @@ function isTitleOnlyFormControl(node: SemanticNode): boolean {
     );
   }
 
-  // Native trees have no live element. `title` and `aria-label` are
-  // KEY_ATTRIBUTES; `aria-labelledby` is not. Flag only when the computed
-  // name is exactly the title (a labelledby name that differs is safe).
+  // Native trees have no live element, so labelledby IDs cannot be resolved.
+  // Chromium already did that work: a name that is not the title and not the
+  // placeholder came from a `<label>` / labelledby / aria-label. Description
+  // is how AX exposes aria-describedby (title becomes description only when
+  // some other source already supplied the name — those pass via the name
+  // check above).
   if (dom.attributes["aria-label"]?.trim()) return false;
-  const title = dom.attributes["title"]?.trim();
-  return !!title && node.a11y.name.trim() === title;
+  const title = (dom.attributes["title"] ?? "").trim();
+  const placeholder = (dom.attributes["placeholder"] ?? "").trim();
+  const name = node.a11y.name.trim();
+  const namedFromControl =
+    name !== "" && name !== title && name !== placeholder;
+  if (namedFromControl) return false;
+  return !!(
+    title ||
+    node.a11y.description.trim() ||
+    dom.attributes["aria-describedby"]?.trim()
+  );
+}
+
+/** True when at least one `aria-labelledby` id points at an element with text. */
+function labelledByResolvesToText(el: Element): boolean {
+  const raw = el.getAttribute("aria-labelledby");
+  if (!raw?.trim()) return false;
+  const doc = el.ownerDocument;
+  if (!doc) return false;
+  for (const id of raw.trim().split(/\s+/)) {
+    if (doc.getElementById(id)?.textContent?.trim()) return true;
+  }
+  return false;
 }
 
 function hasAssociatedLabelText(el: Element): boolean {

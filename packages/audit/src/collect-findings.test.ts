@@ -93,6 +93,31 @@ describe("collectFindings — label-title-only", () => {
     ).toEqual([]);
   });
 
+  it("flags title when aria-labelledby does not resolve to text", () => {
+    expect(
+      collectFindings(
+        mount(`<input aria-labelledby="missing" title="Email">`),
+        ["label-title-only"],
+      ),
+    ).toHaveLength(1);
+    expect(
+      collectFindings(
+        mount(
+          `<span id="empty"></span><input aria-labelledby="empty" title="Email">`,
+        ),
+        ["label-title-only"],
+      ),
+    ).toHaveLength(1);
+    expect(
+      collectFindings(
+        mount(
+          `<span id="n">Email</span><input aria-labelledby="missing n" title="t">`,
+        ),
+        ["label-title-only"],
+      ),
+    ).toEqual([]);
+  });
+
   it("does not flag placeholder-only, title-only buttons, or glyph buttons", () => {
     expect(
       collectFindings(mount(`<input placeholder="Email">`), [
@@ -386,8 +411,15 @@ describe("collectFindings — locators on a pre-extracted tree", () => {
   function nativeNode(
     id: string,
     role: string,
-    dom?: { tagName: string; locator?: string },
+    over?: {
+      tagName?: string;
+      locator?: string;
+      name?: string;
+      description?: string;
+      attributes?: Record<string, string>;
+    },
   ): SemanticNode {
+    const { tagName, locator, name, description, attributes } = over ?? {};
     return {
       id,
       parentId: id === "ax-1" ? null : "ax-1",
@@ -400,17 +432,17 @@ describe("collectFindings — locators on a pre-extracted tree", () => {
       // accident. A native AX node in this tree is exposed; say so.
       a11y: {
         role,
-        name: "",
-        description: "",
+        name: name ?? "",
+        description: description ?? "",
         states: {},
         properties: {},
         isExposedToAT: true,
       },
-      ...(dom
+      ...(tagName
         ? {
             dom: {
-              tagName: dom.tagName,
-              attributes: {},
+              tagName,
+              attributes: attributes ?? {},
               textContent: null,
               // Required on `DomInfo` and omitted here. The `as SemanticNode`
               // below was what let it through — a cast on a fixture asserts the
@@ -418,7 +450,7 @@ describe("collectFindings — locators on a pre-extracted tree", () => {
               // fixture exists to be was the one thing nothing verified.
               descendantText: "",
               isHidden: false,
-              ...(dom.locator ? { locator: dom.locator } : {}),
+              ...(locator ? { locator } : {}),
             },
           }
         : {}),
@@ -476,5 +508,57 @@ describe("collectFindings — locators on a pre-extracted tree", () => {
     );
     expect(findings[0].locator).toBe("#help");
     expect(findings[0].context).toBeUndefined();
+  });
+
+  it("flags title-only and describedby-only form controls without a live element", () => {
+    expect(
+      collectFindings(
+        nativeTree([
+          nativeNode("ax-in", "textbox", {
+            tagName: "input",
+            name: "Email",
+            attributes: { title: "Email" },
+          }),
+        ]),
+        ["label-title-only"],
+      ),
+    ).toHaveLength(1);
+    expect(
+      collectFindings(
+        nativeTree([
+          nativeNode("ax-in", "textbox", {
+            tagName: "input",
+            description: "Email",
+            attributes: { "aria-describedby": "hint" },
+          }),
+        ]),
+        ["label-title-only"],
+      ),
+    ).toHaveLength(1);
+    expect(
+      collectFindings(
+        nativeTree([
+          nativeNode("ax-in", "textbox", {
+            tagName: "input",
+            name: "Email",
+            description: "hint",
+            attributes: { title: "hint" },
+          }),
+        ]),
+        ["label-title-only"],
+      ),
+    ).toEqual([]);
+    expect(
+      collectFindings(
+        nativeTree([
+          nativeNode("ax-in", "textbox", {
+            tagName: "input",
+            name: "Email",
+            attributes: { "aria-label": "Email", title: "Email" },
+          }),
+        ]),
+        ["label-title-only"],
+      ),
+    ).toEqual([]);
   });
 });

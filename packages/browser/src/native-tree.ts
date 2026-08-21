@@ -67,6 +67,8 @@ const DOM_ATTR_ALLOWLIST = new Set([
   "alt",
   "title",
   "placeholder",
+  "aria-label",
+  "aria-describedby",
   "name",
   "for",
   "controls",
