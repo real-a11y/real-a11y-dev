@@ -127,6 +127,8 @@ The first `role="dialog"` or `role="alertdialog"` in document order is treated a
 
 `expectTree` re-serializes the tree with **default options** (no `redact`, `mode: "a11y"`, generic nodes flattened). A snapshot captured via `auditSnapshot(root, { redact: [...] })` or `{ mode: "dom" }` will not match. For redacted or DOM-mode comparisons, use `.expect((tree) => { … })` and call `serializeTree`/`auditSnapshot` yourself.
 
+A mismatch names the **first differing line** (with a couple of lines of context). It does not dump both full trees.
+
 ## Asserting what an interaction changed
 
 The differentiator over element-querying: assert the **effect** of an interaction on the whole tree — options appearing, `aria-expanded` flipping, focus moving — not just one element's final state. Two styles, same underlying diff.
@@ -179,7 +181,7 @@ Three forms:
 - **`string`** — trim-compared against the `serializeTreeDiff` output, like `expectTree`. Includes the `focus:` line. (This whole-diff text form compares literally — unlike the `ChangeSpec` name match, it is **not** typography-folded, so it stays a faithful snapshot.)
 - **`(diff) => void`** — the escape hatch; throw to fail.
 
-Calling `expectChanges` before any action throws. A `ChangeSpec` / `string` failure ends with the full rendered diff, so "what *did* change?" is always answered.
+Calling `expectChanges` before any action throws. A `ChangeSpec` failure ends with the rendered diff, so "what *did* change?" is always answered. A string-form mismatch, like `expectTree`, names the first differing line instead of dumping both full texts.
 
 Under the hood both styles are the engine's [`diffTrees`](/guide/core-concepts#tree-diffing) rendered by `serializeTreeDiff` — an **in-realm** comparison keyed on node identity (a live before/after in one document), distinct from the [CLI's](/packages/cli) cross-process artifact diff.
 

@@ -252,6 +252,8 @@ main
     code ".expect((tree) => { … })"
     code "serializeTree"
     code "auditSnapshot"
+  paragraph "A mismatch names the (with a couple of lines of context). It does not dump both full trees."
+    strong "first differing line"
   heading "Asserting what an interaction changed" (level 2)
   paragraph "The differentiator over element-querying: assert the of an interaction on the whole tree — options appearing, flipping, focus moving — not just one element's final state. Two styles, same underlying diff."
     strong "effect"
@@ -311,11 +313,11 @@ main
     listitem "— the escape hatch; throw to fail."
       strong
         code "(diff) => void"
-  paragraph "Calling before any action throws. A / failure ends with the full rendered diff, so "what change?" is always answered."
+  paragraph "Calling before any action throws. A failure ends with the rendered diff, so "what change?" is always answered. A string-form mismatch, like , names the first differing line instead of dumping both full texts."
     code "expectChanges"
     code "ChangeSpec"
-    code "string"
     emphasis "did"
+    code "expectTree"
   paragraph "Under the hood both styles are the engine's rendered by — an comparison keyed on node identity (a live before/after in one document), distinct from the cross-process artifact diff."
     link "diffTrees"
       code "diffTrees"

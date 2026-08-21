@@ -34,7 +34,9 @@ notion: "https://app.notion.com/p/3aa1c354b0b58162a033c8231ca8d360"
 - **4** — verbs run in order, each seeing the previous one's effect
 - **5** — the chain runs **exactly once**. A second `await` must not re-dispatch —
   re-running a submit is a real-world foot-gun
-- **6/7** — mismatches name the **first differing line**, not a wall of diff
+- **6/7** — mismatches name the **first differing line**, not a wall of
+  diff. They must not dump the full expected and actual trees after
+  that pointer (`--- expected` / `--- actual`)
 - **8** — the flow settles before asserting. It debounces (~200ms) for exactly this
 - **9** — an actionable failure naming what it looked for, not a null dereference
 - **10** — each message is usable by someone who didn't write the test

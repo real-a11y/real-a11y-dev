@@ -38,6 +38,14 @@ function violations(root: Element): string[] {
 }
 
 describe("native HTML is valid without author-supplied ARIA", () => {
+  it("a table named by its caption", () => {
+    expect(
+      mount(
+        `<table><caption>Q3 results</caption><tbody><tr><td>NW-1</td></tr></tbody></table>`,
+      ),
+    ).toBeValidA11yTree();
+  });
+
   it("a bare <select> with options", () => {
     expect(
       mount(

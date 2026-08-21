@@ -4,6 +4,7 @@ import {
   extractDomTree,
   getDescendantText,
   getElementRefs,
+  htmlAamNameOwner,
   isNameBarrierRole,
   isNameFromContentHost,
   resolveEffectiveRoot,
@@ -456,6 +457,9 @@ export class LiveTreeExtractor {
    * from the inner text, so re-extracting only the innermost would leave the
    * outer host's name stale — we climb to the outermost, stopping at a
    * name-barrier role, which halts content-name propagation to ancestors.
+   * HTML-AAM owner→child edges (`fieldset`/`legend`, `details`/`summary`,
+   * `table`/`caption`) are included even though the owner is not a
+   * name-from-content host; without that the climb stops at the child.
    * Falls back to `el` when no enclosing host exists.
    */
   private nameRelevantAncestor(el: Element): Element {
@@ -467,8 +471,12 @@ export class LiveTreeExtractor {
       node !== this.root.ownerDocument?.body &&
       node !== this.root.ownerDocument?.documentElement
     ) {
-      if (isNameFromContentHost(node)) outermostHost = node;
-      if (isNameBarrierRole(getImplicitRole(node))) break;
+      const owner = htmlAamNameOwner(node);
+      if (owner) outermostHost = owner;
+      else if (isNameFromContentHost(node)) outermostHost = node;
+      // A name-source child is often itself a barrier (`caption`). Don't stop
+      // there when its owner still needs the re-extract.
+      if (!owner && isNameBarrierRole(getImplicitRole(node))) break;
       node = node.parentElement;
     }
     return outermostHost ?? el;

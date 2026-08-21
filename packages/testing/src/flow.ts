@@ -71,9 +71,10 @@ function describeFirstDiff(expected: string, actual: string): string {
 }
 
 /**
- * Build the Error for a serialized-snapshot mismatch: the caller's heading, the
- * first-difference pointer, then the full expected/actual blocks for copy-paste
- * snapshot updates. Shared by `expectTree` and `expectChanges` so the two read
+ * Build the Error for a serialized-snapshot mismatch: the caller's heading and
+ * the first-difference pointer. The two full trees used to follow; on a real
+ * page that is thousands of lines and the useful part scrolls away. Shared by
+ * `expectTree` and the string form of `expectChanges` so the two read
  * identically.
  */
 function mismatchError(
@@ -82,11 +83,7 @@ function mismatchError(
   actual: string,
 ): Error {
   const pointer = describeFirstDiff(expected, actual);
-  return new Error(
-    heading +
-      (pointer ? `\n\n${pointer}` : "") +
-      `\n\n--- expected\n${expected}\n--- actual\n${actual}`,
-  );
+  return new Error(heading + (pointer ? `\n\n${pointer}` : ""));
 }
 
 export class FlowChain implements PromiseLike<void> {
@@ -221,8 +218,9 @@ export class FlowChain implements PromiseLike<void> {
    *   (mirrors `expectTree`; includes the `focus:` line).
    * - **predicate** — `(diff) => void`, the escape hatch (throw to fail).
    *
-   * Throws if no action has run yet. A `ChangeSpec`/`string` failure ends with
-   * the full rendered diff, so "what DID change?" is always answered.
+   * Throws if no action has run yet. A `ChangeSpec` failure ends with the
+   * rendered diff, so "what DID change?" is always answered. A string-form
+   * mismatch names the first differing line, like `expectTree`.
    */
   expectChanges(
     expected: string | ChangeSpec | ((diff: TreeDiff) => void),

@@ -2,13 +2,7 @@ import type { ExtractionResult, SemanticNode } from "../types.js";
 
 import { extractDomTree } from "./dom-extractor.js";
 
-// legend/summary/label: the element's text is consumed as the accessible name
-// of the fieldset/details/form control, so the element itself and its text
-// carriers are dropped. Interactive descendants are promoted to the parent —
-// a link or button nested in any of them is keyboard-reachable and must stay
-// in the tree (<legend>Payment <a href="/help">(help)</a></legend>,
-// <summary>Details <button>Copy</button></summary>,
-// <label>Text<input /></label>).
+// See SUPPRESS_KEEP_INTERACTIVE.
 const SUPPRESS_KEEP_INTERACTIVE = new Set(["legend", "summary", "label"]);
 
 // Identify which nodes to keep in the a11y tree
@@ -42,7 +36,7 @@ function keepNode(node: SemanticNode, rootId: string): boolean {
 
 /**
  * True if `nodeId`'s subtree contains at least one interactive element
- * (self-inclusive). Used inside legend/summary/label handling to drop
+ * (self-inclusive). Used inside SUPPRESS_KEEP_INTERACTIVE handling to drop
  * decorative/text-only descendants whose content is already consumed as the
  * container's accessible name.
  */
@@ -59,6 +53,26 @@ function hasInteractiveDescendant(
   return false;
 }
 
+/**
+ * A caption is suppressed only when it actually supplied the table's name.
+ * Keying on the tag alone deletes "Open support tickets" from
+ * `<table aria-label="Escalations"><caption>Open support tickets</caption>`
+ * — the words are on screen, Chrome keeps a caption node, and a heading or
+ * `img alt` inside would vanish from heading-order / missing-alt audits.
+ */
+function captionSuppliedTableName(
+  node: SemanticNode,
+  domNodes: Map<string, SemanticNode>,
+): boolean {
+  if (node.dom?.tagName !== "caption" || !node.parentId) return false;
+  const parent = domNodes.get(node.parentId);
+  if (parent?.dom?.tagName !== "table") return false;
+  const attrs = parent.dom.attributes;
+  if (attrs["aria-label"] || attrs["aria-labelledby"]) return false;
+  const captionName = node.a11y.name?.trim();
+  return !!captionName && parent.a11y.name === captionName;
+}
+
 // Second pass: build the filtered tree with correct parent/child relationships
 function processNode(
   nodeId: string,
@@ -73,19 +87,12 @@ function processNode(
 
   if (!node.a11y.isExposedToAT) return [];
 
-  // legend/summary/label: suppress the element itself but promote its
-  // children. For wrapping labels (<label>Text<input /></label>), the form
-  // control inside must still appear in the a11y tree with its accessible name
-  // already computed from the label's text content in dom-extractor.ts; the
-  // same holds for a link or button nested in a <legend> or <summary>, which
-  // stays keyboard-reachable regardless of the name computation.
-  //
-  // Only promote subtrees that lead to an interactive descendant. A text
-  // carrier inside a label (<label><span>Email</span><input /></label>)
-  // would otherwise surface as a standalone `generic "Email"` node —
-  // redundant with the container's computed accessible name, and not what
-  // a screen reader announces.
-  if (SUPPRESS_KEEP_INTERACTIVE.has(node.dom!.tagName)) {
+  // See SUPPRESS_KEEP_INTERACTIVE. Caption is gated separately: it is only
+  // suppressed when it actually supplied the table's name.
+  if (
+    SUPPRESS_KEEP_INTERACTIVE.has(node.dom!.tagName) ||
+    captionSuppliedTableName(node, domNodes)
+  ) {
     const promotedIds: string[] = [];
     for (const childId of node.childIds) {
       if (!hasInteractiveDescendant(childId, domNodes)) continue;

@@ -291,9 +291,8 @@ describe("flow", () => {
       expect(err.message).toContain("First difference at line 3:");
       expect(err.message).toMatch(/- .*button "Nope"/); // expected
       expect(err.message).toMatch(/\+ .*button "Go"/); // actual
-      // The full blocks are still there for copy-paste snapshot updates.
-      expect(err.message).toContain("--- expected");
-      expect(err.message).toContain("--- actual");
+      expect(err.message).not.toContain("--- expected");
+      expect(err.message).not.toContain("--- actual");
     });
   });
 

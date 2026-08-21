@@ -567,6 +567,33 @@ export function isNameFromContentHost(element: Element): boolean {
 }
 
 /**
+ * HTML-AAM owner → name-source child. These owners are not name-from-content
+ * hosts, so a mutation inside the child would otherwise stop at the child
+ * (often a name-barrier role) and never re-extract the owner.
+ *
+ * `legend`/`summary`/`caption` map to `fieldset`/`details`/`table`. A caption
+ * only names the table when it is `HTMLTableElement.caption` (the first
+ * caption, direct child).
+ */
+const NAME_SOURCE_CHILD_TO_OWNER: Readonly<Record<string, string>> = {
+  legend: "fieldset",
+  summary: "details",
+  caption: "table",
+};
+
+/** The element whose accessible name is computed from `element`, if any. */
+export function htmlAamNameOwner(element: Element): Element | null {
+  const ownerTag = NAME_SOURCE_CHILD_TO_OWNER[element.tagName.toLowerCase()];
+  if (!ownerTag) return null;
+  const parent = element.parentElement;
+  if (!parent || parent.tagName.toLowerCase() !== ownerTag) return null;
+  if (element.tagName.toLowerCase() === "caption") {
+    return (parent as HTMLTableElement).caption === element ? parent : null;
+  }
+  return parent;
+}
+
+/**
  * True if `role` acts as a name-from-content barrier — text inside an element
  * with this role does not bubble up to name an ancestor.
  */
@@ -764,6 +791,22 @@ function computeRawAccessibleName(
     const summary = element.querySelector(":scope > summary");
     if (summary)
       return getAccessibleTextContent(summary, visited, styleCache).trim();
+  }
+
+  // 4c. Table — HTML-AAM names it from `HTMLTableElement.caption`. Hidden
+  // captions must not name it (accname §4.3.2 step 2A); an empty caption
+  // must fall through so `title` can still win.
+  if (tag === "table") {
+    const caption = (element as HTMLTableElement).caption;
+    if (caption) {
+      const hidden =
+        caption.getAttribute("aria-hidden") === "true" ||
+        isSubtreeHidden(caption, getCachedComputedStyle(caption, styleCache));
+      if (!hidden) {
+        const t = getAccessibleTextContent(caption, visited, styleCache).trim();
+        if (t) return t;
+      }
+    }
   }
 
   // 5. Button-like inputs (submit/reset/button) take their name from the

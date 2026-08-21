@@ -94,6 +94,16 @@ export class ActionDispatcher {
     if (!element) {
       return { success: false, error: "Element no longer in DOM" };
     }
+    // The ref map holds the Element object even after it is detached —
+    // replacing `document.body.innerHTML` leaves a node that still exists,
+    // still accepts events, and is invisible to the page. Dispatching on it
+    // reports success for a click that could not have had an effect.
+    if (!element.isConnected) {
+      return {
+        success: false,
+        error: "Element is disconnected from the document",
+      };
+    }
 
     // Any handler can throw — a native setter's brand check on the wrong
     // element type, or a page's own event listener throwing during one of our

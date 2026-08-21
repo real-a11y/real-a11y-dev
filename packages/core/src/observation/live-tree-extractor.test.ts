@@ -429,6 +429,61 @@ describe("LiveTreeExtractor", () => {
     observer.stop();
   });
 
+  it("updates a table name when its caption text changes", async () => {
+    document.body.innerHTML = `<main><table><caption>Q3 results</caption><tbody><tr><td>x</td></tr></tbody></table></main>`;
+
+    const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
+    let lastChange: TreeChange | undefined;
+    const observer = new DomObserver(
+      document.body,
+      (change) => {
+        lastChange = change;
+      },
+      50,
+    );
+    observer.start();
+
+    document.querySelector("caption")!.textContent = "Q4 results";
+    await vi.advanceTimersByTimeAsync(100);
+
+    const result = live.refresh(lastChange);
+    const expected = extractA11yTree(document.body);
+    expect(result.nodes).toEqual(expected.nodes);
+    const table = [...result.nodes.values()].find(
+      (n) => n.a11y.role === "table",
+    );
+    expect(table?.a11y.name).toBe("Q4 results");
+
+    observer.stop();
+  });
+
+  it("updates a fieldset name when its legend text changes", async () => {
+    document.body.innerHTML = `<main><fieldset><legend>Old</legend><input aria-label="x" /></fieldset></main>`;
+
+    const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
+    let lastChange: TreeChange | undefined;
+    const observer = new DomObserver(
+      document.body,
+      (change) => {
+        lastChange = change;
+      },
+      50,
+    );
+    observer.start();
+
+    document.querySelector("legend")!.textContent = "New";
+    await vi.advanceTimersByTimeAsync(100);
+
+    const result = live.refresh(lastChange);
+    expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+    const group = [...result.nodes.values()].find(
+      (n) => n.a11y.role === "group",
+    );
+    expect(group?.a11y.name).toBe("New");
+
+    observer.stop();
+  });
+
   it("refreshes an aria-labelledby referrer when text changes inside a name host", async () => {
     document.body.innerHTML = `<main><h3><span id="lbl">Old</span></h3><button aria-labelledby="lbl">x</button></main>`;
 
