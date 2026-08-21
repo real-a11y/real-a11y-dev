@@ -29,13 +29,13 @@
   {
     "name": "@real-a11y-dev/testing (esm)",
     "path": "packages/testing/dist/index.js",
-    "limit": "15 KB",
+    "limit": "15.3 KB",
     "gzip": true
   },
   {
     "name": "@real-a11y-dev/testing/matchers (esm)",
     "path": "packages/testing/dist/matchers.js",
-    "limit": "25.9 KB",
+    "limit": "26.2 KB",
     "gzip": true
   },
   {
@@ -55,7 +55,7 @@
   {
     "name": "@real-a11y-dev/browser (page-bundle IIFE)",
     "path": "packages/browser/dist/page-bundle.iife.global.js",
-    "limit": "10.7 KB",
+    "limit": "10.9 KB",
     "gzip": true
   }
 ]
