@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { pageIdOf } from "./page-id.js";
 import {
   projectFinding,
   projectFindings,
@@ -214,44 +215,67 @@ describe("redactUrl — fragments the pair scan cannot tokenize", () => {
   it("redacts after a SECOND '#' — the hash-routed implicit-flow landing", () => {
     // A hash-routed SPA's callback is itself a fragment, so the IdP's response
     // is appended after another `#`. The URL parser calls all of it one
-    // fragment, so the token sits inside what looks like a key.
-    const out = redactUrl(
-      `https://app.example.com/#/callback#access_token=${SECRET}&token_type=Bearer`,
+    // fragment, so the token sits inside what looks like a key. The route and
+    // the non-secret pair must survive — blanking the whole fragment would
+    // also hide the secret, and that is the design this suite is meant to
+    // reject.
+    expect(
+      redactUrl(
+        `https://app.example.com/#/callback#access_token=${SECRET}&token_type=Bearer`,
+      ),
+    ).toBe(
+      "https://app.example.com/#/callback#access_token=%5BREDACTED%5D&token_type=Bearer",
     );
-    expect(out).not.toContain(SECRET);
   });
 
   it("redacts when a '?' precedes the secret", () => {
-    expect(
-      redactUrl(`https://h/cb#state=1?access_token=${SECRET}`),
-    ).not.toContain(SECRET);
-  });
-
-  it("drops the fragment when the '=' itself is percent-encoded", () => {
-    // Nothing tokenizes as a pair here, so there is no value to replace —
-    // the only safe answer is to print none of it.
-    const out = redactUrl(`https://h/cb#access_token%3D${SECRET}&state=1`);
-    expect(out).not.toContain(SECRET);
-    expect(out).toContain("%5BREDACTED%5D");
-  });
-
-  it("redacts a percent-encoded key name", () => {
-    expect(redactUrl(`https://h/cb#access%5Ftoken=${SECRET}`)).not.toContain(
-      SECRET,
+    expect(redactUrl(`https://h/cb#state=1?access_token=${SECRET}`)).toBe(
+      "https://h/cb#state=1?access_token=%5BREDACTED%5D",
     );
   });
 
-  it("still leaves genuinely ordinary fragments alone", () => {
-    // The backstop must not be so eager that it eats normal pages.
-    for (const url of [
-      "https://real-a11y.dev/guide#installation",
-      "https://app.example.com/#/dashboard/users",
-      "https://h/p#a=1&token",
-      "https://h/p#token=",
-      "https://h/p#a&b",
-    ]) {
-      expect(redactUrl(url)).toBe(url);
-    }
+  it("redacts in place when the '=' itself is percent-encoded", () => {
+    // `%3D` is an assignment, so this tokenizes as a pair. The non-secret
+    // `state` must survive — dropping the whole fragment would also pass a
+    // `not.toContain(SECRET)` check.
+    expect(redactUrl(`https://h/cb#access_token%3D${SECRET}&state=1`)).toBe(
+      "https://h/cb#access_token%3D%5BREDACTED%5D&state=1",
+    );
+  });
+
+  it("redacts a percent-encoded key name", () => {
+    expect(redactUrl(`https://h/cb#access%5Ftoken=${SECRET}`)).toBe(
+      "https://h/cb#access%5Ftoken=%5BREDACTED%5D",
+    );
+  });
+
+  it("redacts after ';' and ',' — the separators outside #?&/", () => {
+    // Angular Router matrix params use `;` under HashLocationStrategy.
+    // `,` is the same class. Absence-only would pass if we blanked the
+    // fragment; the route / other pairs must stay.
+    expect(redactUrl(`https://h/cb#/callback;code=${SECRET};state=1`)).toBe(
+      "https://h/cb#/callback;code=%5BREDACTED%5D;state=1",
+    );
+    expect(redactUrl(`https://h/cb#state=1;access_token=${SECRET}`)).toBe(
+      "https://h/cb#state=1;access_token=%5BREDACTED%5D",
+    );
+    expect(redactUrl(`https://h/cb#a=1,token=${SECRET}`)).toBe(
+      "https://h/cb#a=1,token=%5BREDACTED%5D",
+    );
+  });
+
+  it("keeps distinct hash routes as distinct page ids after redaction", () => {
+    // page identity is derived from the redacted URL. A whole-fragment drop
+    // would collapse every hash-routed SPA onto `/#%5BREDACTED%5D`.
+    const orders = redactUrl("https://app.example.com/#/orders/code=US");
+    const invoices = redactUrl("https://app.example.com/#/invoices/code=EU");
+    expect(orders).toBe("https://app.example.com/#/orders/code=%5BREDACTED%5D");
+    expect(invoices).toBe(
+      "https://app.example.com/#/invoices/code=%5BREDACTED%5D",
+    );
+    expect(pageIdOf(orders)).toBe("/#/orders/code=%5BREDACTED%5D");
+    expect(pageIdOf(invoices)).toBe("/#/invoices/code=%5BREDACTED%5D");
+    expect(pageIdOf(orders)).not.toBe(pageIdOf(invoices));
   });
 });
 
