@@ -242,6 +242,83 @@ describe("extractA11yTree", () => {
     expect(pw).toBeDefined();
   });
 
+  it("names a table from its caption and suppresses the caption node", () => {
+    const root = createPage(`
+      <table>
+        <caption>Q3 results</caption>
+        <tbody><tr><td>NW-1</td></tr></tbody>
+      </table>
+    `);
+    const { nodes } = extractA11yTree(root);
+    const allNodes = Array.from(nodes.values());
+    const table = allNodes.find((n) => n.a11y.role === "table");
+    expect(table?.a11y.name).toBe("Q3 results");
+    expect(allNodes.find((n) => n.dom?.tagName === "caption")).toBeUndefined();
+  });
+
+  it("does not name a table from a hidden caption", () => {
+    for (const caption of [
+      `<caption hidden>Ghost</caption>`,
+      `<caption style="display:none">Hidden</caption>`,
+      `<caption aria-hidden="true">Ghost</caption>`,
+    ]) {
+      const root = createPage(
+        `<table>${caption}<tbody><tr><td>NW-1</td></tr></tbody></table>`,
+      );
+      const table = Array.from(extractA11yTree(root).nodes.values()).find(
+        (n) => n.a11y.role === "table",
+      );
+      expect(table?.a11y.name).toBe("");
+    }
+  });
+
+  it("falls through an empty caption so title can still name the table", () => {
+    const named = createPage(`
+      <table title="Quarterly"><tbody><tr><td>x</td></tr></tbody></table>
+    `);
+    const emptyCaption = createPage(`
+      <table title="Quarterly"><caption></caption><tbody><tr><td>x</td></tr></tbody></table>
+    `);
+    const nameOf = (root: Element) =>
+      Array.from(extractA11yTree(root).nodes.values()).find(
+        (n) => n.a11y.role === "table",
+      )?.a11y.name;
+    expect(nameOf(named)).toBe("Quarterly");
+    expect(nameOf(emptyCaption)).toBe("Quarterly");
+  });
+
+  it("keeps the caption's words when a higher-precedence name wins", () => {
+    const cases: { html: string; tableName: string }[] = [
+      {
+        tableName: "Escalations",
+        html: `<table aria-label="Escalations">
+          <caption><h2>Open support tickets</h2></caption>
+          <tbody><tr><td>NW-1</td></tr></tbody>
+        </table>`,
+      },
+      // labelledby is not on `dom.attributes` (not a KEY_ATTRIBUTE). The
+      // names match on purpose: without reading the live element, this
+      // looks like "caption supplied the name" and the heading vanishes.
+      {
+        tableName: "Open support tickets",
+        html: `<span id="tbl">Open support tickets</span>
+          <table aria-labelledby="tbl">
+            <caption><h2>Open support tickets</h2></caption>
+            <tbody><tr><td>NW-1</td></tr></tbody>
+          </table>`,
+      },
+    ];
+    for (const { html, tableName } of cases) {
+      const { nodes } = extractA11yTree(createPage(html));
+      const allNodes = Array.from(nodes.values());
+      const table = allNodes.find((n) => n.a11y.role === "table");
+      expect(table?.a11y.name).toBe(tableName);
+      expect(allNodes.some((n) => n.a11y.name === "Open support tickets")).toBe(
+        true,
+      );
+    }
+  });
+
   // role="presentation" / role="none" / <img alt=""> — the element drops out
   // of the a11y tree per ARIA spec, even when it has text content that would
   // otherwise count as an accessible name. Regression test for the panel

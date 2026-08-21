@@ -293,6 +293,18 @@ describe("ActionDispatcher", () => {
       expect(result.error).toMatch(/no longer in DOM/i);
     });
 
+    it("returns an error when the resolved element is disconnected", () => {
+      const el = document.createElement("button");
+      document.body.appendChild(el);
+      refs.set("n1", el);
+      document.body.innerHTML = "";
+
+      expect(el.isConnected).toBe(false);
+      const result = dispatcher.dispatch({ nodeId: "n1", action: "click" });
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/disconnected/i);
+    });
+
     it("writes into a contenteditable custom textbox without throwing (ProseMirror/Lexical shape)", () => {
       // The extractor assigns `type` to ARIA textboxes, which in real apps are
       // usually contenteditable <div>s. The old handleType called the native
