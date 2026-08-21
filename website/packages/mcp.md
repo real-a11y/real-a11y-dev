@@ -230,10 +230,12 @@ server above. Same underlying engine, different jobs.
 
 ## Limitations
 
-- **Scope.** It runs five rules today — unlabeled interactive elements, images
-  missing alt text, heading order, dialog labeling, and landmark structure — plus
-  the full semantic tree. It is not a complete WCAG or axe-core suite; it is
-  semantic-tree-based and tuned to "what a screen reader announces." For contrast,
+- **Scope.** It runs six rules today — unlabeled interactive elements, form
+  controls labeled only by `title` / `aria-describedby`, images missing alt
+  text, heading order, dialog labeling, and landmark structure — plus the full
+  semantic tree. It is not a complete WCAG or axe-core suite; it is
+  semantic-tree-based and tuned to "what a screen reader announces," with
+  `label-title-only` as the one axe-aligned best-practice extra. For contrast,
   focus visibility, and other rendered/interactive checks, pair it with
   [axe-core](https://github.com/dequelabs/axe-core) and manual testing.
 - **Fidelity follows the engine.** The tree is a reimplementation of

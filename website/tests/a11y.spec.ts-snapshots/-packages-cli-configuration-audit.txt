@@ -482,15 +482,16 @@ main
     code "--md"
   heading "rules" (level 3)
     code "rules"
-  paragraph "— flag · default: all five rules · applies to , ,"
+  paragraph "— flag · default: all six rules · applies to , ,"
     strong
       code "rules: string[]"
     code "--rules"
     code "audit"
     code "inspect"
     code "snapshot"
-  paragraph "Restrict the run to a subset of the semantic-tree rules. Valid ids: , , , , — an unknown id is a load error."
+  paragraph "Restrict the run to a subset of the semantic-tree rules. Valid ids: , , , , , — an unknown id is a load error."
     code "no-unlabeled-interactive"
+    code "label-title-only"
     code "image-alt"
     code "heading-order"
     code "dialog-labeled"

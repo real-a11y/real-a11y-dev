@@ -160,7 +160,7 @@ describe("rejects rule ids that are not real", () => {
 
   it("lists the known rules so the typo is fixable from the message", () => {
     expect(() => collectFindings(violating(), ["nope" as A11yRule])).toThrow(
-      /Known rules: no-unlabeled-interactive, image-alt, heading-order, dialog-labeled, landmark-structure/,
+      /Known rules: no-unlabeled-interactive, label-title-only, image-alt, heading-order, dialog-labeled, landmark-structure/,
     );
   });
 

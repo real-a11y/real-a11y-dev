@@ -35,6 +35,114 @@ describe("collectFindings — no-unlabeled-interactive", () => {
     expect(findings).toHaveLength(2);
     expect(findings.map((f) => f.role).sort()).toEqual(["button", "link"]);
   });
+
+  it("passes a glyph, emoji, or title-only button (accname is non-empty)", () => {
+    for (const html of [
+      `<button>⬇</button>`,
+      `<button>🗑</button>`,
+      `<button title="Download CSV"></button>`,
+    ]) {
+      expect(
+        collectFindings(mount(html), ["no-unlabeled-interactive"]),
+      ).toEqual([]);
+    }
+  });
+});
+
+describe("collectFindings — label-title-only", () => {
+  it("flags an input whose only label is title", () => {
+    const root = mount(`<input title="Email">`);
+    const findings = collectFindings(root, ["label-title-only"]);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({
+      rule: "label-title-only",
+      severity: "warning",
+      tagName: "input",
+    });
+  });
+
+  it("flags aria-describedby-only the same way axe does", () => {
+    const root = mount(
+      `<span id="hint">Email</span><input aria-describedby="hint">`,
+    );
+    const findings = collectFindings(root, ["label-title-only"]);
+    expect(findings).toHaveLength(1);
+  });
+
+  it("passes a <label>, aria-label, or aria-labelledby", () => {
+    expect(
+      collectFindings(mount(`<label>Email <input></label>`), [
+        "label-title-only",
+      ]),
+    ).toEqual([]);
+    expect(
+      collectFindings(mount(`<label for="e">Email</label><input id="e">`), [
+        "label-title-only",
+      ]),
+    ).toEqual([]);
+    expect(
+      collectFindings(mount(`<input aria-label="Email" title="also">`), [
+        "label-title-only",
+      ]),
+    ).toEqual([]);
+    expect(
+      collectFindings(
+        mount(`<span id="n">Email</span><input aria-labelledby="n" title="t">`),
+        ["label-title-only"],
+      ),
+    ).toEqual([]);
+  });
+
+  it("flags title when aria-labelledby does not resolve to text", () => {
+    expect(
+      collectFindings(
+        mount(`<input aria-labelledby="missing" title="Email">`),
+        ["label-title-only"],
+      ),
+    ).toHaveLength(1);
+    expect(
+      collectFindings(
+        mount(
+          `<span id="empty"></span><input aria-labelledby="empty" title="Email">`,
+        ),
+        ["label-title-only"],
+      ),
+    ).toHaveLength(1);
+    expect(
+      collectFindings(
+        mount(
+          `<span id="n">Email</span><input aria-labelledby="missing n" title="t">`,
+        ),
+        ["label-title-only"],
+      ),
+    ).toEqual([]);
+  });
+
+  it("does not flag placeholder-only, title-only buttons, or glyph buttons", () => {
+    expect(
+      collectFindings(mount(`<input placeholder="Email">`), [
+        "label-title-only",
+      ]),
+    ).toEqual([]);
+    expect(
+      collectFindings(mount(`<button title="Download CSV"></button>`), [
+        "label-title-only",
+      ]),
+    ).toEqual([]);
+    expect(
+      collectFindings(mount(`<button>⬇</button>`), ["label-title-only"]),
+    ).toEqual([]);
+  });
+
+  it("skips input types that do not take a visible label", () => {
+    for (const type of ["hidden", "image", "button", "submit", "reset"]) {
+      expect(
+        collectFindings(mount(`<input type="${type}" title="x">`), [
+          "label-title-only",
+        ]),
+      ).toEqual([]);
+    }
+  });
 });
 
 describe("collectFindings — heading-order", () => {
@@ -303,8 +411,15 @@ describe("collectFindings — locators on a pre-extracted tree", () => {
   function nativeNode(
     id: string,
     role: string,
-    dom?: { tagName: string; locator?: string },
+    over?: {
+      tagName?: string;
+      locator?: string;
+      name?: string;
+      description?: string;
+      attributes?: Record<string, string>;
+    },
   ): SemanticNode {
+    const { tagName, locator, name, description, attributes } = over ?? {};
     return {
       id,
       parentId: id === "ax-1" ? null : "ax-1",
@@ -317,17 +432,17 @@ describe("collectFindings — locators on a pre-extracted tree", () => {
       // accident. A native AX node in this tree is exposed; say so.
       a11y: {
         role,
-        name: "",
-        description: "",
+        name: name ?? "",
+        description: description ?? "",
         states: {},
         properties: {},
         isExposedToAT: true,
       },
-      ...(dom
+      ...(tagName
         ? {
             dom: {
-              tagName: dom.tagName,
-              attributes: {},
+              tagName,
+              attributes: attributes ?? {},
               textContent: null,
               // Required on `DomInfo` and omitted here. The `as SemanticNode`
               // below was what let it through — a cast on a fixture asserts the
@@ -335,7 +450,7 @@ describe("collectFindings — locators on a pre-extracted tree", () => {
               // fixture exists to be was the one thing nothing verified.
               descendantText: "",
               isHidden: false,
-              ...(dom.locator ? { locator: dom.locator } : {}),
+              ...(locator ? { locator } : {}),
             },
           }
         : {}),
@@ -393,5 +508,57 @@ describe("collectFindings — locators on a pre-extracted tree", () => {
     );
     expect(findings[0].locator).toBe("#help");
     expect(findings[0].context).toBeUndefined();
+  });
+
+  it("flags title-only and describedby-only form controls without a live element", () => {
+    expect(
+      collectFindings(
+        nativeTree([
+          nativeNode("ax-in", "textbox", {
+            tagName: "input",
+            name: "Email",
+            attributes: { title: "Email" },
+          }),
+        ]),
+        ["label-title-only"],
+      ),
+    ).toHaveLength(1);
+    expect(
+      collectFindings(
+        nativeTree([
+          nativeNode("ax-in", "textbox", {
+            tagName: "input",
+            description: "Email",
+            attributes: { "aria-describedby": "hint" },
+          }),
+        ]),
+        ["label-title-only"],
+      ),
+    ).toHaveLength(1);
+    expect(
+      collectFindings(
+        nativeTree([
+          nativeNode("ax-in", "textbox", {
+            tagName: "input",
+            name: "Email",
+            description: "hint",
+            attributes: { title: "hint" },
+          }),
+        ]),
+        ["label-title-only"],
+      ),
+    ).toEqual([]);
+    expect(
+      collectFindings(
+        nativeTree([
+          nativeNode("ax-in", "textbox", {
+            tagName: "input",
+            name: "Email",
+            attributes: { "aria-label": "Email", title: "Email" },
+          }),
+        ]),
+        ["label-title-only"],
+      ),
+    ).toEqual([]);
   });
 });

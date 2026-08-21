@@ -45,6 +45,16 @@ describe("allowlistAttributes (R1 redaction gate)", () => {
       "leak",
     ]);
     expect(attrs).toEqual({ type: "email", id: "field" });
+    expect(
+      allowlistAttributes([
+        "aria-label",
+        "Email",
+        "aria-describedby",
+        "hint",
+        "value",
+        EMAIL_SECRET,
+      ]),
+    ).toEqual({ "aria-label": "Email", "aria-describedby": "hint" });
     expect(Object.values(attrs)).not.toContain(EMAIL_SECRET);
   });
 });

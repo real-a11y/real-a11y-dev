@@ -162,11 +162,11 @@ The reason the server exists. Both tools report violations a screen reader would
 
 *Read-only · whole-document · the primary tool.*
 
-Run the accessibility rules against the current page and return every violation — unlabeled interactive controls, images missing alt text, skipped/missing/duplicate heading levels, unlabeled dialogs, and broken landmark structure. Findings come back grouped and counted (so "17 unlabeled links" is one row, each with its CSS locator) plus a machine-readable JSON block.
+Run the accessibility rules against the current page and return every violation — unlabeled interactive controls, form controls labeled only by title or aria-describedby, images missing alt text, skipped/missing/duplicate heading levels, unlabeled dialogs, and broken landmark structure. Findings come back grouped and counted (so "17 unlabeled links" is one row, each with its CSS locator) plus a machine-readable JSON block.
 
 Parameters:
 
-- **`rules`** — array of `"no-unlabeled-interactive"` \| `"image-alt"` \| `"heading-order"` \| `"dialog-labeled"` \| `"landmark-structure"` — optional — a subset of rules to run. Omit to run all.
+- **`rules`** — array of `"no-unlabeled-interactive"` \| `"label-title-only"` \| `"image-alt"` \| `"heading-order"` \| `"dialog-labeled"` \| `"landmark-structure"` — optional — a subset of rules to run. Omit to run all.
 
 Audits **Chromium's own accessibility tree**, read over CDP, so it reaches structure no in-page walk can — most visibly a `<video controls>`'s user-agent-shadow media controls. Findings carry CSS locators, so that reach costs nothing in actionability. Whole-document; Chromium only.
 

@@ -991,12 +991,12 @@ Which rules run, and what fails the build.
 
 ### `--rules <ids>`
 
-- **Type:** comma-separated ids · **Default:** all five · **Commands:** audit,
+- **Type:** comma-separated ids · **Default:** all six · **Commands:** audit,
   inspect, snapshot
 
 Run only a subset of the rules. Valid ids: `no-unlabeled-interactive`,
-`image-alt`, `heading-order`, `dialog-labeled`, `landmark-structure`. An unknown
-id is a hard error.
+`label-title-only`, `image-alt`, `heading-order`, `dialog-labeled`,
+`landmark-structure`. An unknown id is a hard error.
 
 ```sh
 real-a11y audit http://localhost:3000 --rules no-unlabeled-interactive,image-alt

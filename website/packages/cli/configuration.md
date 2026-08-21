@@ -214,9 +214,9 @@ Output format. **Validated per command**, so a global default only has to be val
 
 ### `rules`
 
-**`rules: string[]`** — flag `--rules` · default: all five rules · applies to `audit`, `inspect`, `snapshot`
+**`rules: string[]`** — flag `--rules` · default: all six rules · applies to `audit`, `inspect`, `snapshot`
 
-Restrict the run to a subset of the semantic-tree rules. Valid ids: `no-unlabeled-interactive`, `image-alt`, `heading-order`, `dialog-labeled`, `landmark-structure` — an unknown id is a load error.
+Restrict the run to a subset of the semantic-tree rules. Valid ids: `no-unlabeled-interactive`, `label-title-only`, `image-alt`, `heading-order`, `dialog-labeled`, `landmark-structure` — an unknown id is a load error.
 
 ```json
 { "defaults": { "rules": ["no-unlabeled-interactive", "image-alt"] } }

@@ -124,7 +124,7 @@ Your snapshot *policy* — which pages, which rules, what to fail on — lives i
     "http://localhost:3000/about",
     { "name": "Login", "url": "http://localhost:3000/login" }
   ],
-  "rules": ["no-unlabeled-interactive", "image-alt", "heading-order", "dialog-labeled", "landmark-structure"],
+  "rules": ["no-unlabeled-interactive", "label-title-only", "image-alt", "heading-order", "dialog-labeled", "landmark-structure"],
   "failOn": "error"
 }
 ```
@@ -177,7 +177,7 @@ The config is strict and **fail-closed** — an unknown or typo'd key is a hard 
 | Key | Required | Description |
 |---|---|---|
 | `urls` | ✅ (or `A11Y_PAGES`) | The routes to audit. Each entry is a URL **string**, or an object `{ url, id?, name?, rootSelector?, sourcePath? }`. `id` is the diff join key and defaults to the URL's path, so base and PR pair across hosts and ports on their own; `name` is a display label you can change freely; `rootSelector` scopes the audit to a subtree; `sourcePath` is the repo file findings anchor to for SARIF (see [the Security tab](#findings-in-the-security-tab-sarif)). Formerly `pages` — still accepted. |
-| `rules` | | Subset of the five rules — `no-unlabeled-interactive`, `image-alt`, `heading-order`, `dialog-labeled`, `landmark-structure`. Omit to run all. |
+| `rules` | | Subset of the six rules — `no-unlabeled-interactive`, `label-title-only`, `image-alt`, `heading-order`, `dialog-labeled`, `landmark-structure`. Omit to run all. |
 | `failOn` | | `error` \| `warning` \| `never`. |
 | `device` | | Device to emulate, e.g. `"iPhone 13"` — audit the mobile layout. |
 | `defaults` | | Set any CLI flag once for every command (`device`, `waitUntil`, `rules`, …) — see the [CLI reference](/packages/cli#configure-once). |
@@ -478,7 +478,7 @@ The JSON — not the Markdown — is what you feed into `diff`. Reach for `--md`
 | ARIA state silently cleared | ✅ (structural tree diff) |
 | **Tab order changed** | ❌ **not measured** — see below |
 
-The five rules surface as **findings** (new / changed / fixed); shape-only shifts that don't trip a rule — a landmark or heading change, a role swap, a reordered outline — surface as advisory **plain-language statements** per page, with the raw tree / outline line diffs inline beneath them (`--format json` exposes both, as `pages[].structural` and `pages[].views`).
+The six rules surface as **findings** (new / changed / fixed); shape-only shifts that don't trip a rule — a landmark or heading change, a role swap, a reordered outline — surface as advisory **plain-language statements** per page, with the raw tree / outline line diffs inline beneath them (`--format json` exposes both, as `pages[].structural` and `pages[].views`).
 
 ### Tab order is not part of this gate
 

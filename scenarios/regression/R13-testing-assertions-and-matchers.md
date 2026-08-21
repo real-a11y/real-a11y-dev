@@ -23,7 +23,7 @@ once on markup that should fail:
 
 | Assertion                        | Fails on                                                       |
 | -------------------------------- | -------------------------------------------------------------- |
-| `assertNoUnlabeledInteractive`   | an icon-only `<button>`                                        |
+| `assertNoUnlabeledInteractive`   | an empty-name control (icon `<svg>` with no name). Glyph / emoji text and `title=` on a **button** pass — accname is non-empty, same as axe `button-name` |
 | `assertHeadingOrder`             | a page whose first heading is `<h2>`, and one that skips h2→h4 |
 | `assertDialogsLabeled`           | `role="dialog"` with no accessible name                         |
 | `assertLandmarkStructure`        | no `<main>`, and two `<main>`s                                  |
@@ -64,11 +64,11 @@ once on markup that should fail:
   0.1.0-beta.15, which is the whole reason R33 exists — both halves reject now
 - **7** — the message says what's wrong, where, and ideally what to do. These are
   read by people who did not write the rule
-- **8** — the `<svg>` case is caught. The glyph and `title=` cases are **not**,
-  and both are correct per accname: `⬇` is a non-empty name, and `title` is the
-  last-resort name source. Record the verdict rather than assuming it — the
-  table above says this assertion "fails on an icon-only `<button>`", and for
-  the most common icon-only shape in real products it does not
+- **8** — the `<svg>` case is caught. The glyph and `title=` **button** cases
+  are **not**, matching axe `button-name`. A form `<input title="…">` with no
+  `<label>` is `label-title-only` (warning), not this assertion — that rule is
+  **R37**. The table above used to say this assertion "fails on an icon-only
+  `<button>`"; that is only true for an empty name.
 
 ## Why this exists
 

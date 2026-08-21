@@ -36,7 +36,7 @@ over CDP — whole-document, and reaching structure no in-page walk can — exce
 
 | Tool | Purpose |
 | --- | --- |
-| `audit_page` | **Flagship.** Every accessibility violation — unlabeled controls, missing alt, heading gaps, unlabeled dialogs, broken landmarks — grouped, each with a CSS locator + severity. |
+| `audit_page` | **Flagship.** Findings — empty-name controls, `label-title-only` (form `title`/`aria-describedby` only), missing alt, heading gaps, unlabeled dialogs, broken landmarks — grouped, each with a CSS locator + severity. |
 | `inspect_page` | Findings **plus** semantic tree and heading outline — all from **one** read, so they can't disagree. Prefer on dynamic pages. |
 
 **Views**
