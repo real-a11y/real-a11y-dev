@@ -12,6 +12,14 @@
 
 ### Patch Changes
 
+- Give the page header's close-tab button back its keyboard focus ring. Its
+  `:focus-visible` rule painted `outline: 2px solid var(--sn-focus-ring)`, and
+  no stylesheet declares `--sn-focus-ring` — every other focus rule uses
+  `--sn-border-focus`. An undefined custom property is invalid at
+  computed-value time, so the `outline` declaration was discarded and fell back
+  to `none`, suppressing the browser's own ring as well. Keyboard users had no
+  indication the ✕ was focused. ([#356])
+
 - Fix the row highlight that plays after a cross-link jump. The shared
   `tree.css` declared `@keyframes sn-flash` twice — once as the accent-background
   flash for `.sn-node--flash`, and again further down as the slide-up used by the
@@ -297,3 +305,4 @@ Earlier releases predate this changelog.
 [#343]: https://github.com/real-a11y/real-a11y-dev/pull/343
 [#350]: https://github.com/real-a11y/real-a11y-dev/pull/350
 [#354]: https://github.com/real-a11y/real-a11y-dev/pull/354
+[#356]: https://github.com/real-a11y/real-a11y-dev/pull/356

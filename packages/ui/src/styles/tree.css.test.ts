@@ -10,6 +10,11 @@ const css = readFileSync(
   "utf8",
 );
 
+const themes = readFileSync(
+  fileURLToPath(new URL("./themes.css", import.meta.url)),
+  "utf8",
+);
+
 /**
  * Every `@keyframes <name>` block in the stylesheet, in source order, as
  * `[name, body]`. A later block with the same name shadows the earlier one —
@@ -52,6 +57,36 @@ function effectiveKeyframes(name: string): string {
   expect(matching.length, `no @keyframes ${name}`).toBeGreaterThan(0);
   return matching[matching.length - 1]![1];
 }
+
+describe("tree.css custom properties", () => {
+  it("resolves every custom property it reads without a fallback", () => {
+    // An undefined custom property is invalid at computed-value time: the whole
+    // declaration is thrown away and the property falls back to its inherited
+    // or initial value. For `outline` that means `none`, which suppresses the
+    // UA's own :focus-visible ring too — a focus indicator that silently
+    // disappears rather than merely looking wrong.
+    // A declaration always opens a statement, so require `{`, `;` or
+    // whitespace in front of the `--`. Without that guard a BEM-ish selector
+    // like `.sn-node--flash:hover` reads as a declaration of `--flash` and
+    // would vouch for a name nothing defines.
+    const declaration = /(?:^|[;{\s])(--[\w-]+)\s*:/g;
+    const declared = new Set<string>();
+    for (const source of [themes, css]) {
+      for (const [, name] of [...source.matchAll(declaration)]) {
+        declared.add(name!);
+      }
+    }
+
+    // `var(--x)` only — `var(--x, fallback)` survives an undefined name.
+    const unresolved = [
+      ...new Set(
+        [...css.matchAll(/var\(\s*(--[\w-]+)\s*\)/g)].map(([, name]) => name!),
+      ),
+    ].filter((name) => !declared.has(name));
+
+    expect(unresolved).toEqual([]);
+  });
+});
 
 describe("tree.css animations", () => {
   it("declares each @keyframes name exactly once", () => {
