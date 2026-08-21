@@ -1,6 +1,6 @@
 import type { ExtractionResult, SemanticNode } from "../types.js";
 
-import { extractDomTree } from "./dom-extractor.js";
+import { extractDomTree, getElementRefs } from "./dom-extractor.js";
 
 // See SUPPRESS_KEEP_INTERACTIVE.
 const SUPPRESS_KEEP_INTERACTIVE = new Set(["legend", "summary", "label"]);
@@ -67,8 +67,14 @@ function captionSuppliedTableName(
   if (node.dom?.tagName !== "caption" || !node.parentId) return false;
   const parent = domNodes.get(node.parentId);
   if (parent?.dom?.tagName !== "table") return false;
-  const attrs = parent.dom.attributes;
-  if (attrs["aria-label"] || attrs["aria-labelledby"]) return false;
+  // `aria-labelledby` is not in KEY_ATTRIBUTES, so it never appears on
+  // `dom.attributes`. `aria-label` does. Read labelledby from the live
+  // element or a matching-name labelledby table would look identical to
+  // "caption supplied the name" and the caption (and any heading / img
+  // inside it) would be deleted.
+  if (parent.dom.attributes["aria-label"]) return false;
+  const tableEl = getElementRefs().get(parent.id);
+  if (tableEl?.hasAttribute("aria-labelledby")) return false;
   const captionName = node.a11y.name?.trim();
   return !!captionName && parent.a11y.name === captionName;
 }

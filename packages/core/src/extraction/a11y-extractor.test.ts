@@ -288,19 +288,35 @@ describe("extractA11yTree", () => {
   });
 
   it("keeps the caption's words when a higher-precedence name wins", () => {
-    const root = createPage(`
-      <table aria-label="Escalations">
-        <caption><h2>Open support tickets</h2></caption>
-        <tbody><tr><td>NW-1</td></tr></tbody>
-      </table>
-    `);
-    const { nodes } = extractA11yTree(root);
-    const allNodes = Array.from(nodes.values());
-    const table = allNodes.find((n) => n.a11y.role === "table");
-    expect(table?.a11y.name).toBe("Escalations");
-    expect(allNodes.some((n) => n.a11y.name === "Open support tickets")).toBe(
-      true,
-    );
+    const cases: { html: string; tableName: string }[] = [
+      {
+        tableName: "Escalations",
+        html: `<table aria-label="Escalations">
+          <caption><h2>Open support tickets</h2></caption>
+          <tbody><tr><td>NW-1</td></tr></tbody>
+        </table>`,
+      },
+      // labelledby is not on `dom.attributes` (not a KEY_ATTRIBUTE). The
+      // names match on purpose: without reading the live element, this
+      // looks like "caption supplied the name" and the heading vanishes.
+      {
+        tableName: "Open support tickets",
+        html: `<span id="tbl">Open support tickets</span>
+          <table aria-labelledby="tbl">
+            <caption><h2>Open support tickets</h2></caption>
+            <tbody><tr><td>NW-1</td></tr></tbody>
+          </table>`,
+      },
+    ];
+    for (const { html, tableName } of cases) {
+      const { nodes } = extractA11yTree(createPage(html));
+      const allNodes = Array.from(nodes.values());
+      const table = allNodes.find((n) => n.a11y.role === "table");
+      expect(table?.a11y.name).toBe(tableName);
+      expect(allNodes.some((n) => n.a11y.name === "Open support tickets")).toBe(
+        true,
+      );
+    }
   });
 
   // role="presentation" / role="none" / <img alt=""> — the element drops out
