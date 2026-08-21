@@ -117,7 +117,7 @@ An agent calls this before any other tool, e.g. to open a signup flow's mobile l
 { "url": "https://example.com/signup", "waitUntil": "networkidle", "settleMs": 500, "device": "iPhone 13" }
 ```
 
-The reply reports the resolved URL, the page title, any device/viewport emulation, and the **browser mode** — headless is the default, so without that line a human watching for a window concludes the browser never opened; over a CDP attach it reports the attach instead, since the window belongs to the browser it joined.
+The reply reports the resolved URL — **redacted**, like every URL this server prints, since a redirect chain can end on a one-time token — the page title, sanitized because it is page-controlled, any device/viewport emulation, and the **browser mode** — headless is the default, so without that line a human watching for a window concludes the browser never opened; over a CDP attach it reports the attach instead, since the window belongs to the browser it joined.
 
 The tool description also states the **session** state, because an agent that can't tell whether it's looking at a logged-out page will either try to log in or misreport what it audited. Three cases:
 

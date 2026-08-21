@@ -377,7 +377,8 @@ main
   paragraph "An agent calls this before any other tool, e.g. to open a signup flow's mobile layout before auditing it:"
   button "Copy Code"
   code
-  paragraph "The reply reports the resolved URL, the page title, any device/viewport emulation, and the — headless is the default, so without that line a human watching for a window concludes the browser never opened; over a CDP attach it reports the attach instead, since the window belongs to the browser it joined."
+  paragraph "The reply reports the resolved URL — , like every URL this server prints, since a redirect chain can end on a one-time token — the page title, sanitized because it is page-controlled, any device/viewport emulation, and the — headless is the default, so without that line a human watching for a window concludes the browser never opened; over a CDP attach it reports the attach instead, since the window belongs to the browser it joined."
+    strong "redacted"
     strong "browser mode"
   paragraph "The tool description also states the state, because an agent that can't tell whether it's looking at a logged-out page will either try to log in or misreport what it audited. Three cases:"
     strong "session"

@@ -64,6 +64,16 @@ holds anyway.
 
 ## Expected
 
+- **Fragment-bearing URLs, from cli/mcp ≥ 0.1.0-beta.6.** Page identity is
+  derived from the *redacted* URL including its fragment, and the redactor now
+  reaches into fragments. A page whose fragment carries a deny-listed key —
+  including as an ordinary route segment, `#/orders/code=US` — therefore gets a
+  new id and will NOT join a baseline captured before that release. Re-baseline
+  it. Two such routes must still be **distinct** from each other: the route in
+  front of the suspect key is preserved precisely so they do not collapse onto
+  one id, which would surface as a hard `SnapshotFormatError` naming the same
+  URL twice.
+
 - **2** — the same count suppressed as (1), and exit `0`. **This is the whole row.**
   A rename is a change to how a page is _described_; a baseline records debt accepted
   for a page. If renaming un-suppresses, the file silently stops gating and the

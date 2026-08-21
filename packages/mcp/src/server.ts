@@ -31,6 +31,8 @@ import {
   parseSnapshotArtifact,
   projectNativeTree,
   redactUrl,
+  redactUrlsIn,
+  sanitizeText,
   serializeArtifact,
   SnapshotFormatError,
   viewsOfPage,
@@ -128,6 +130,18 @@ function bounded(body: string, hint?: string): string {
     body.slice(0, MAX_OUTPUT_CHARS) +
     `\n\n… output truncated at ${MAX_OUTPUT_CHARS} chars.${hint ? ` ${hint}` : ""}`
   );
+}
+
+/**
+ * A page-supplied title, made safe to print. Sanitized because `document.title`
+ * is page-controlled — an escape sequence or a newline in it could forge result
+ * lines — and capped because it is unbounded: a multi-megabyte title would
+ * flood the agent's context on every open_page.
+ */
+const TITLE_CAP = 300;
+function pageTitle(raw: string): string {
+  const clean = sanitizeText(raw, { singleLine: true }).slice(0, TITLE_CAP);
+  return clean || "(untitled)";
 }
 
 function text(body: string, hint?: string) {
@@ -408,8 +422,17 @@ export function buildServer(
   // timeout closing the browser (the store lives outside the record, see
   // `SessionManager.checkpoints`); the one thing that discards them is
   // close_browser.
+  // Every client-visible error goes through here, so the boundary lives here
+  // rather than at each thrower: `import_checkpoint` and the session refusals
+  // build through it too, and a redaction that only guards the paths someone
+  // remembered is the shape this PR keeps finding.
   const errText = (msg: string) => ({
-    content: [{ type: "text" as const, text: msg }],
+    content: [
+      {
+        type: "text" as const,
+        text: bounded(sanitizeText(redactUrlsIn(msg), { singleLine: true })),
+      },
+    ],
     isError: true as const,
   });
   // No zod `.regex()` here on purpose: the SDK enforces the schema BEFORE the
@@ -431,6 +454,21 @@ export function buildServer(
     if (err instanceof SessionRegistryError) {
       return errText(err.hint ? `${err.message} — ${err.hint}` : err.message);
     }
+    // Non-Error throws reach the SDK's `String(error)` fallback raw, so they
+    // need the same treatment as an Error's message.
+    if (!(err instanceof Error)) {
+      throw new Error(
+        redactUrlsIn(sanitizeText(String(err), { singleLine: true })),
+      );
+    }
+    // Anything else escapes as a protocol error, and the SDK relays its message
+    // to the client verbatim. Playwright quotes the full target URL in a
+    // navigation failure — `page.goto: net::ERR_ABORTED at https://…#token=…` —
+    // so a failed open leaks what a successful one now redacts. The CLI already
+    // guards its equivalent path with `redactUrlsIn`; this is the MCP side of
+    // the same boundary. The message is rewritten in place so the error keeps
+    // its class and stack.
+    err.message = sanitizeText(redactUrlsIn(err.message), { singleLine: true });
     throw err;
   };
   const withSession = async <R>(
@@ -560,7 +598,18 @@ export function buildServer(
             ? ` [${viewport.width}×${viewport.height}]`
             : "";
         return text(
-          `Opened ${info.url}${emu}\nTitle: ${info.title || "(untitled)"}` +
+          // `info.url` is where the page LANDED, not what was asked for — a
+          // redirect chain ends here, and an OAuth one ends with the token in
+          // the fragment. The failure path leaks the same URL through
+          // Playwright's message; `sessionErrText` redacts that one.
+          // `info.title` is `document.title` — page-controlled, straight from
+          // the page realm. Redacting the URL beside it and leaving this raw
+          // let a page inject an OSC-8 terminal hyperlink and forge extra
+          // result lines, including a second `Opened <url>`. `singleLine` is
+          // what kills the forgery half, so it matters as much as the escape
+          // stripping. The question was never which URLs print raw — it is
+          // which page-realm strings do.
+          `Opened ${redactUrl(info.url)}${emu}\nTitle: ${pageTitle(info.title)}` +
             `\nBrowser: ${browserMode}` +
             (authenticated
               ? "\n(authenticated session: storage state loaded)"

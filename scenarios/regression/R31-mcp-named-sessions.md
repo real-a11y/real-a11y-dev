@@ -40,7 +40,14 @@ covers:
 
 ## Expected
 
-- **2** — two separate browser pages are live; each session's `open_page` reply names its own URL.
+- **2** — two separate browser pages are live; each session's `open_page` reply
+  names its own URL, **redacted** — from mcp ≥ 0.1.0-beta.6 the landing URL goes
+  through the same redactor every other printed URL uses, so a secret-looking
+  parameter reads `[REDACTED]` in the query *and* in the fragment. The `Title:`
+  line beside it is sanitized for the same reason: it is page-controlled, and a
+  page that puts an escape sequence or a newline in `document.title` must not be
+  able to forge a second `Opened <url>` line. On earlier releases both printed
+  raw; either shape passes on its own release.
 - **3** — `alpha` lists 1 checkpoint; `beta` lists none (checkpoints are per session).
 - **4** — `alpha`'s tree shows the post-click state; `beta`'s tree is unchanged (isolation).
 - **5** — both sessions listed with name, redacted URL, and timestamps.

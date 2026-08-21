@@ -1267,7 +1267,8 @@ feature makes the trust boundary explicit:
 - `a11y.config.json` [`redact`](/packages/cli/configuration#redact) patterns are applied to URLs and text
   before anything is written or printed — snapshots, diffs, reports, and stdout.
 - This is especially important with `--session`, because a long-lived page may
-  contain tokens, PII, or signed URLs in query parameters. Redact them at the
+  contain tokens, PII, or signed URLs in query parameters **or in the fragment**
+  (an OAuth implicit-flow redirect lands there). Redact them at the
   source so they never reach the daemon log or a committed artifact.
 
 ### Daemon log
