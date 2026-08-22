@@ -143,7 +143,7 @@ main
     code "npx"
     code "playwright install"
     code "real-a11y install"
-  paragraph "A global  does not pull the Playwright peer. Install it in that same layout () and run .  and browser commands share one resolver, so a printed Playwright version means  can load the driver."
+  paragraph "A global does not pull the Playwright peer. Install it in that same layout () and run . and browser commands share one resolver, so a printed Playwright version means can load the driver."
     code "npm i -g @real-a11y-dev/cli"
     code "npm i -g playwright"
     code "real-a11y install"

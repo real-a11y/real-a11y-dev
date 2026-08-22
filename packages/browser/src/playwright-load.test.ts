@@ -7,8 +7,9 @@ describe("loadPlaywright", () => {
     const entry = resolvePlaywrightEntry();
     expect(entry).toEqual(expect.stringMatching(/playwright/));
     const playwright = await loadPlaywright();
-    expect(playwright.chromium).toBeDefined();
+    expect(typeof playwright.chromium.launch).toBe("function");
     expect(playwright.devices["iPhone 13"]).toBeDefined();
+    expect(entry).toMatch(/index\.mjs$/);
   });
 
   it("throws ERR_MODULE_NOT_FOUND from a URL that cannot see playwright", async () => {
