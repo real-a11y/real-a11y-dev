@@ -61,13 +61,31 @@ export async function loadPlaywright(
     err.code = "ERR_MODULE_NOT_FOUND";
     throw err;
   }
-  const loaded = (await import(pathToFileURL(entry).href)) as
-    typeof Playwright | { default: typeof Playwright };
-  const mod = "chromium" in loaded && loaded.chromium ? loaded : loaded.default;
-  if (!mod?.chromium) {
+  const loaded: unknown = await import(pathToFileURL(entry).href);
+  const mod = playwrightNamespace(loaded);
+  if (!mod) {
     throw new Error(
       `Playwright resolved at ${entry} but has no chromium export`,
     );
   }
   return mod;
+}
+
+function playwrightNamespace(loaded: unknown): typeof Playwright | undefined {
+  if (!loaded || typeof loaded !== "object") return undefined;
+  const rec = loaded as Record<string, unknown>;
+  if (hasChromium(rec)) return rec as unknown as typeof Playwright;
+  if (hasChromium(rec.default)) {
+    return rec.default as unknown as typeof Playwright;
+  }
+  return undefined;
+}
+
+function hasChromium(value: unknown): boolean {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    "chromium" in value &&
+    value.chromium != null
+  );
 }
