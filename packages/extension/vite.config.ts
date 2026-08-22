@@ -8,12 +8,22 @@ import { defineConfig } from "vite";
 
 const isContentScript = process.env.BUILD_TARGET === "content";
 
+// `DOGFOOD=1` builds the DEV-ONLY `chrome.debugger` native mode (RFC PR H) into
+// a separate `dist-dogfood/` output. `__DOGFOOD__` is inlined at build time so
+// the native/ module is dead-code-eliminated from the (default) store build —
+// the shipped extension never carries the `debugger` capability. The dogfood
+// manifest (with the extra permission) is written by scripts/dogfood-manifest.mjs.
+const isDogfood = process.env.DOGFOOD === "1";
+const outDir = isDogfood ? "dist-dogfood" : "dist";
+const define = { __DOGFOOD__: JSON.stringify(isDogfood) };
+
 export default defineConfig(
   isContentScript
     ? {
         // Build 1: Content script (IIFE, self-contained)
+        define,
         build: {
-          outDir: "dist",
+          outDir,
           emptyOutDir: false,
           copyPublicDir: false,
           lib: {
@@ -38,8 +48,9 @@ export default defineConfig(
     : {
         // Build 2: Side panel + background (ES modules)
         base: "./",
+        define,
         build: {
-          outDir: "dist",
+          outDir,
           emptyOutDir: true,
           copyPublicDir: true,
           rollupOptions: {
