@@ -681,9 +681,12 @@ export class BrowserSession implements A11ySession {
   private async ensurePage(
     emu: { device?: string; viewport?: { width: number; height: number } } = {},
   ): Promise<Page> {
-    // playwright is a peer dep; import lazily so importing the server API
+    // playwright is a peer dep; load lazily so importing the server API
     // (types, buildServer) never requires playwright to be installed.
-    const { chromium, devices } = await import("playwright");
+    // createRequire + file URL, not bare `import("playwright")` — see
+    // playwright-load.ts (NODE_PATH / a sibling global must match --version).
+    const { loadPlaywright } = await import("./playwright-load.js");
+    const { chromium, devices } = await loadPlaywright();
 
     // CDP: attach to the running browser's context. Device emulation can't be
     // applied to an already-open browser, so reject it explicitly.

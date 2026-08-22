@@ -8,7 +8,7 @@ priority: P0
 status: Active
 validFrom: "cli ≥ 0.1.0-beta.5 (measured on Windows + Volta). The website's local `npm i -D cli playwright` path is a different layout and is not this row."
 validUntil: ""
-expected: "After npm i -g @real-a11y-dev/cli@beta, a browser command either runs, or the missing-Playwright hint's exact commands make the next audit run. --version prints not installed whenever import('playwright') from the CLI package would throw."
+expected: "After npm i -g @real-a11y-dev/cli@beta, a browser command either runs, or the missing-Playwright hint's exact commands make the next audit run. --version prints not installed whenever createRequire from the CLI package cannot resolve playwright."
 twin: R38
 covers:
   - packages.@real-a11y-dev/cli
@@ -18,10 +18,10 @@ notion: "https://app.notion.com/p/3c41c354b0b5815b97f0e8b6f3a13dc8"
 
 ## Steps
 
-From a machine that does **not** already have `playwright` resolvable from the
-CLI package — empty cwd, no leftover global that Node ESM can see. A Volta
-leftover that only `createRequire` / `NODE_PATH` can see does **not** count as
-installed; that is the lie this row exists to catch.
+From a machine that does **not** already have `playwright` resolvable via
+`createRequire` from the CLI package — empty cwd, no leftover global on
+`NODE_PATH`. `--version` and `audit` must agree; a version number while
+`audit` cannot load the driver is the lie this row exists to catch.
 
 ```bash
 npm i -g @real-a11y-dev/cli@beta
@@ -36,19 +36,21 @@ Then try the obvious unblock, still as a **global** user:
 2. Follow whatever hint the error printed, **as a global-install user** — do not
    silently switch to `npm i -D` in a project unless the hint says that **and**
    it actually unblocks the global binary
-3. Compare `--version`'s playwright field with whether `import("playwright")`
-   from the installed CLI package's `dist/` would succeed
+3. Compare `--version`'s playwright field with whether `createRequire` from the
+   installed CLI package's `dist/` can `resolve("playwright")`. Bare
+   `import("playwright")` is not the resolver — it ignores `NODE_PATH`
 
 ## Expected
 
 - After `npm i -g @real-a11y-dev/cli@beta` alone, a browser command either runs,
   or fails exit `2` with a hint whose **exact commands** make the next `audit`
-  run in that same layout
-- `--version` prints `playwright not installed` whenever `import("playwright")`
-  from the CLI package would throw. A version number here while `audit` fails
-  is a fail of this row
-- `npm i -g playwright` either unblocks the global binary, or the hint must not
-  pretend a global user can fix this with a local `-D` install
+  run in that same layout. The hint for this layout is
+  `npm i -g playwright && real-a11y install`, not a local `-D`
+- `--version` prints `playwright not installed` whenever `createRequire` from
+  the CLI package cannot resolve `playwright`. A version number here while
+  `audit` fails is a fail of this row
+- `npm i -g playwright` unblocks the global binary (`audit` loads the driver).
+  Chrome still needs `real-a11y install` if it is not already cached
 
 ## Why this exists
 
@@ -67,3 +69,7 @@ is the global one-liner D2 used to claim, so a fix cannot hide behind "use `-D`"
 
 D2 still walks audit + views against the live site; it now does that via the
 published-docs install. This row owns the `npm i -g` claim. Twin: R38.
+
+`--version` and `audit` now share `createRequire` (`packages/cli/src/playwright-resolve.ts`,
+`packages/browser/src/playwright-load.ts`). Bare `import("playwright")` remaining
+in a comment or a one-off script is not the contract.

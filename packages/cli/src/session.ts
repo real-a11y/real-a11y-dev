@@ -27,6 +27,10 @@ import {
 
 import { registerCleanup } from "./cleanup.js";
 import { CliError } from "./exit.js";
+import {
+  missingPlaywrightHint,
+  readPlaywrightVersion,
+} from "./playwright-resolve.js";
 import { assertFinalUrl } from "./url-gate.js";
 
 export interface ProxyConfig {
@@ -58,14 +62,6 @@ export function proxyFromEnv(): ProxyConfig | undefined {
   } catch {
     return { server: raw, ...(bypass ? { bypass } : {}) };
   }
-}
-
-function isPlaywrightNotInstalled(err: unknown): boolean {
-  return (
-    err instanceof Error &&
-    (err as NodeJS.ErrnoException).code === "ERR_MODULE_NOT_FOUND" &&
-    err.message.includes("playwright")
-  );
 }
 
 export interface SessionFlags {
@@ -104,18 +100,13 @@ export interface SessionFlags {
 export async function createSession(
   flags: SessionFlags,
 ): Promise<BrowserSession> {
-  try {
-    // Chromium doesn't honor proxy env vars on its own; map them to the
-    // launch option so corporate-network CI works without extra flags.
-    await import("playwright");
-  } catch (err) {
-    if (isPlaywrightNotInstalled(err)) {
-      throw new CliError(
-        "Playwright is required to drive a browser, but it isn't installed.",
-        "npm i -D playwright && npx real-a11y install",
-      );
-    }
-    throw err;
+  // Same createRequire walk as `--version`. Do not preflight with
+  // `import("playwright")` — ESM ignores NODE_PATH, which is the D2 lie.
+  if (!readPlaywrightVersion()) {
+    throw new CliError(
+      "Playwright is required to drive a browser, but it isn't installed.",
+      missingPlaywrightHint(flags.cwd ?? process.cwd()),
+    );
   }
   const { BrowserSession, resolveChromeExecutable } =
     await import("@real-a11y-dev/browser");

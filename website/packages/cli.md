@@ -44,6 +44,8 @@ npx real-a11y install
 
 `real-a11y install` downloads [Chrome for Testing](https://developer.chrome.com/blog/chrome-for-testing) — Google's versioned, non-auto-updating Chrome build — into the CLI's own cache and uses it for every launched session from then on. Run it once; re-runs are instant no-ops. `npx playwright install chromium` still works too, but `real-a11y install` sidesteps a real pitfall: `npx` resolves its own copy of Playwright, and Playwright's browser binaries are revision-locked to it, so a mismatched global Playwright can leave you with "Executable doesn't exist" even after `playwright install` — a problem that doesn't exist when the browser is a `real-a11y install`-managed download instead.
 
+A global `npm i -g @real-a11y-dev/cli` does not pull the Playwright peer. Install it in that same layout (`npm i -g playwright`) and run `real-a11y install`. `--version` and browser commands share one resolver, so a printed Playwright version means `audit` can load the driver.
+
 The package publishes on the `beta` dist-tag until `0.1.0`, so pin `@beta` (or
 an exact version). While pre-mode is on, `latest` and `beta` both point at the
 current prerelease (`npm view @real-a11y-dev/cli dist-tags`); after `0.1.0`,

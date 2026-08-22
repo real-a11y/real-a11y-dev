@@ -10,26 +10,21 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { createRequire } from "node:module";
 import { dirname } from "node:path";
 
 import { parseOpenOptions, type CommandFn } from "../args.js";
 import { CliError, EXIT } from "../exit.js";
 import { writeFileAtomic } from "../output.js";
+import { readPlaywrightVersion } from "../playwright-resolve.js";
 import { createSession, openPage } from "../session.js";
 import { normalizeTarget } from "../url-gate.js";
 
 /** Playwright ≥1.51 captures IndexedDB; older versions silently ignore the flag. */
 function playwrightSupportsIndexedDB(): boolean {
-  try {
-    const require = createRequire(import.meta.url);
-    const version = (require("playwright/package.json") as { version: string })
-      .version;
-    const [major, minor] = version.split(".").map((n) => Number(n));
-    return major > 1 || (major === 1 && minor >= 51);
-  } catch {
-    return false;
-  }
+  const version = readPlaywrightVersion();
+  if (!version) return false;
+  const [major, minor] = version.split(".").map((n) => Number(n));
+  return major > 1 || (major === 1 && minor >= 51);
 }
 
 /** Warn when the credential file sits inside a git repo and isn't ignored. */

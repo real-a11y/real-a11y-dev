@@ -29,6 +29,7 @@ import { DaemonTransportError } from "./daemon/client.js";
 import { ALLOWED_ENV_OVERRIDES } from "./daemon/env-allowlist.js";
 import { ensureDaemonClient, defaultSessionName } from "./daemon/spawn.js";
 import { CliError, EXIT, formatCliError } from "./exit.js";
+import { readPlaywrightVersion } from "./playwright-resolve.js";
 
 /**
  * `--root` used to be on nearly every command; now it is on `tabs` alone.
@@ -59,7 +60,8 @@ function readVersion(spec: string): string | undefined {
 
 function versionLine(): string {
   const cli = readVersion("../package.json") ?? "unknown";
-  const playwright = readVersion("playwright/package.json");
+  // Same createRequire walk as loadPlaywright() — never a bare ESM import.
+  const playwright = readPlaywrightVersion();
   return `real-a11y ${cli} (playwright ${playwright ?? "not installed"})\n`;
 }
 

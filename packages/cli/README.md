@@ -31,6 +31,9 @@ landmark roots at that instead (`main`); the ordinary `<header>` / `<main>` /
 > `@beta`: pin `@beta` or an exact version while the family is in pre-release.
 > `latest` currently tracks the same prerelease (`npm view @real-a11y-dev/cli dist-tags`);
 > after `0.1.0` it will be the stable channel.
+>
+> A global `npm i -g @real-a11y-dev/cli` does not pull the Playwright peer.
+> Add `npm i -g playwright` in that same layout, then `real-a11y install`.
 
 ## Audit — a CI gate with no extra flags
 
