@@ -6,6 +6,14 @@
   auto-generated changelog. When you bump the extension's version at
   release time, add the matching entry here. Entries reference the PR that
   landed the change; versions match `package.json`/`public/manifest.json`.
+
+  This file records what reached USERS. Changes confined to the dev-only
+  dogfood build (`pnpm build:dogfood`, everything behind the `__DOGFOOD__`
+  constant) get NO entry: that code is dead-code-eliminated from the store
+  bundle, so an entry here would describe a feature nobody on the listing
+  can reach. Those changes are tracked by their PRs and `DOGFOOD.md`.
+  Anything that changes the shipped bundle does need an entry, even if it
+  also touches dogfood code.
 -->
 
 ## Unreleased
