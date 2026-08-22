@@ -8,7 +8,7 @@ priority: P0
 status: Active
 validFrom: "cli ≥ 0.1.0-beta.5"
 validUntil: ""
-expected: "CLI tarball installed without playwright: --version says not installed iff import('playwright') from that package would throw; audit runs or the hint's exact commands unblock this layout"
+expected: "CLI tarball installed without playwright: --version says not installed iff createRequire from that package cannot resolve playwright; audit runs or the hint's exact commands unblock this layout"
 twin: D12
 covers:
   - packages.@real-a11y-dev/cli
@@ -37,15 +37,16 @@ In a scratch dir outside the repo:
 4. If it fails missing Playwright, run the hint's exact commands in **this**
    layout and re-audit
 5. From a one-line script using `createRequire` on the installed CLI's
-   `dist/index.js` and `import("playwright")` from that same file: they must
-   agree
+   `dist/index.js`: `require.resolve("playwright")` must succeed iff
+   `--version` printed a Playwright version. Bare `import("playwright")` is
+   not the resolver
 
 ## Expected
 
-- `--version` prints `playwright not installed` when ESM `import("playwright")`
-  from the CLI package throws
+- `--version` prints `playwright not installed` when `createRequire` from the
+  CLI package cannot resolve `playwright`
 - `audit` either runs, or the hint's exact commands make it run in this install
-  layout
+  layout. A global tarball's hint is `npm i -g playwright && real-a11y install`
 - A version number on `--version` while `audit` exits `2` missing Playwright is
   a fail
 
