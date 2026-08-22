@@ -26,7 +26,10 @@ versions.
 5. Check the stated **counts** — "Fourteen commands", "twenty tools" — against reality
 6. Check the recipes (Next.js, Storybook + React 19, peer dependencies, CI diff bot) still
    describe what ships
-7. Check version-pinned snippets (`@beta`, exact versions) resolve
+7. Check version-pinned snippets (`@beta`, exact versions) resolve. Any
+   sentence that says `latest` is unpublished must match
+   `npm view @real-a11y-dev/<pkg> dist-tags` that day — D1 already asserts both
+   tags move while pre-mode is on
 8. Note anything documented that no longer exists, and anything shipping that isn't documented
 9. For every block that shows **output** — a tree, an audit report, a diff — run the command
    above it and compare. Not "does it look right": compare
@@ -37,6 +40,8 @@ versions.
 - Every documented name, flag and tool exists; no documented flag is an unimplemented error
 - Counts match reality
 - Nothing shipped is undocumented, and nothing documented is unshipped
+- **7** — a sentence that says `latest` is unpublished is false while pre-mode
+  keeps both tags moving; check `npm view … dist-tags`, not the paragraph
 - **9** — every shown output matches what the command prints. A block that is merely
   plausible is the failure mode here: it reads as verified by someone, and never was
 
