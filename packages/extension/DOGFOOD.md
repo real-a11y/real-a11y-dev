@@ -60,7 +60,35 @@ is a good test — its media controls are the thing only native mode can see).
    and menu transitions but **not** a slow fetch-driven re-render — if a click
    ever seems to act on the previous state of the page, that is the case to
    note, and re-reading by hand will confirm it.
-4. Use it across normal sessions for ~2 weeks. Leave DevTools open sometimes.
+4. **On a page native can't reach**, the panel names the reason instead of
+   reporting a bare failure. Two different moments, because they are two
+   different kinds of answer:
+   - **Before attaching**, from the URL alone — a `chrome://` tab, the Web
+     Store, an extension page, `view-source:`, or a `file://` URL without
+     "Allow access to file URLs". An amber panel names the reason as soon as you
+     land there, and no banner ever flashes.
+   - **On the attach**, for anything the URL can't predict — most importantly
+     **DevTools holding the tab**.
+
+   **Load native tree** stays enabled in both cases. That is deliberate: the
+   refusal is only counted when you actually press it, so a disabled button
+   would keep most of the reason codes out of the Capability split entirely.
+   Pressing costs nothing — the service worker refuses before it attaches.
+
+   Where the DOM producer still works (a DevTools conflict), the message points
+   you at it; where Chrome blocks every extension surface (`chrome://`, the Web
+   Store), it says _that_ rather than sending you to a panel which will also
+   never load.
+
+5. **Switching native mode off detaches.** `debugger` cannot be an optional
+   permission, so "revoked" can only mean "not attached" — unticking the box
+   drops any live attachment and reports the count, **including zero**.
+   Zero is the normal answer and is not a problem: a suspend that strands
+   bookkeeping has usually already dropped the attachment itself, so there is
+   nothing left to detach and the report records it as `detach-stale` rather
+   than as a suspend. A **non-zero** count is the one to note — it means a
+   genuinely live attachment, and its banner, outlived the switch.
+6. Use it across normal sessions for ~2 weeks. Leave DevTools open sometimes.
 
 Everything is instrumented to `chrome.storage.local` (content-free — event kinds,
 timings, counts; never page text or typed values).
@@ -68,7 +96,7 @@ timings, counts; never page text or typed values).
 ## Report back
 
 **Copy dogfood report** puts a summary + raw log on your clipboard. Paste it into
-the RFC PR H thread. The three questions it answers:
+the RFC PR H thread. The RFC's three questions, plus the one that frames them:
 
 - **Banner tolerance** — attach count + total time attached. Did the banner
   actually bother you during deliberate audit sessions?
@@ -81,6 +109,16 @@ the RFC PR H thread. The three questions it answers:
   the debugger can never attach to (`chrome://`, the Web Store), does not.
 - **DevTools conflict** — how often attach was refused because DevTools (or
   another debugger) held the tab.
+- **Recovery abandoned** — a drop that was never retried because native mode
+  went off mid-operation. It is separated from `reattach failed` on purpose:
+  nothing was attempted, so counting it as a failure would overstate the risk,
+  and counting it as nothing would leave a drop with no verdict at all.
+- **Capability** — how often native was unavailable at all, split by reason.
+  This is the fourth number and it reframes the other three: a run that is mostly
+  `devtools-conflict` says the problem is conflict handling, while one that is
+  mostly `browser-ui` says users simply spend their time on pages native can
+  never reach — and no amount of engineering changes that. The split is kept as
+  an uncapped counter, so it stays true after the raw log rolls.
 
 Add your qualitative read alongside the numbers. That verdict decides whether
 extension-native ships (and, per the RFC, whether the Electron desktop shell is

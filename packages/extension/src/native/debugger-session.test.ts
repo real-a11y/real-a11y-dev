@@ -218,3 +218,149 @@ describe("NativeDebuggerSession attach bookkeeping", () => {
     expect(attach.data["dogfood.attachedTabs"]).toEqual({});
   });
 });
+
+describe("detachAll (the revoke path)", () => {
+  it("drops a live attachment stranded by a suspend, and counts it", async () => {
+    // `debugger` cannot be an optional permission, so there is nothing to
+    // revoke — "native off" can only mean "not attached". The case that
+    // matters is an attachment whose `finally` never ran because MV3 tore the
+    // worker down mid-operation: it survives in storage, and its banner
+    // survives on the tab.
+    stubChrome();
+    const log = new FakeStorage();
+    const attach = new FakeStorage();
+    attach.data["dogfood.attachedTabs"] = {
+      3: Date.now() - 1000,
+      9: Date.now(),
+    };
+    const session = new NativeDebuggerSession(log, attach);
+
+    expect(await session.detachAll()).toBe(2);
+    await settle();
+
+    const detach = (globalThis as unknown as { chrome: typeof chrome }).chrome
+      .debugger.detach as ReturnType<typeof vi.fn>;
+    expect(detach.mock.calls.map((c) => c[0])).toEqual([
+      { tabId: 3 },
+      { tabId: 9 },
+    ]);
+    expect(kinds(log)).toEqual(["detach", "detach"]);
+    expect(attach.data["dogfood.attachedTabs"]).toEqual({});
+  });
+
+  it("does not bill stale bookkeeping to the banner-dwell metric", async () => {
+    // An entry can outlive its attachment. Logging it as a clean detach would
+    // add its age — potentially hours — to "total time attached", which is the
+    // banner-tolerance number the ship/no-ship decision reads, and would tell
+    // the user we detached from a tab whose banner was never up.
+    stubChrome();
+    const g = globalThis as unknown as { chrome: typeof chrome };
+    (g.chrome.debugger.detach as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("Debugger is not attached to the tab with id: 3."),
+    );
+    const log = new FakeStorage();
+    const attach = new FakeStorage();
+    attach.data["dogfood.attachedTabs"] = { 3: Date.now() - 6 * 3600_000 };
+    const session = new NativeDebuggerSession(log, attach);
+
+    expect(await session.detachAll()).toBe(0); // nothing was really attached
+    await settle();
+
+    const events = (log.data["dogfood.nativeLog"] ?? []) as DogfoodEvent[];
+    expect(events).toHaveLength(1);
+    // A distinct kind, NOT detach-unsolicited: revoke cleanup over an entry
+    // Chrome had already dropped is neither a suspend nor a target-gone drop,
+    // and folding it into that counter inflates the MV3 headline number.
+    expect(events[0].kind).toBe("detach-stale");
+    expect(events[0].reason).toBe("already-gone");
+    // The point: no duration, so six stranded hours can't reach the total.
+    expect(events[0].attachedMs).toBeUndefined();
+    expect(attach.data["dogfood.attachedTabs"]).toEqual({});
+  });
+
+  it("waits for an in-flight operation instead of tearing it down", async () => {
+    // Detaching around the per-tab queue makes a live CDP call throw, which is
+    // classified `connection-lost` and RETRIED — so switching native off during
+    // a read would re-attach right after, put the banner back, and book a
+    // reattach that never happened.
+    //
+    // The assertion that matters is `detached === 0`. An earlier version of
+    // this test awaited the revoke only AFTER releasing the operation, so
+    // nothing was ever in flight across it: a `detachAll` that ran *around*
+    // `runExclusive` instead of inside it passed unchanged, and the test that
+    // was the sole guard for this regression guarded nothing.
+    stubChrome();
+    const log = new FakeStorage();
+    const attach = new FakeStorage();
+    const session = new NativeDebuggerSession(log, attach);
+
+    let releaseOp: () => void = () => {};
+    const opDone = new Promise<void>((r) => (releaseOp = r));
+    let revoke: Promise<number> | undefined;
+    const op = session.withDebugger(4, async () => {
+      revoke = session.detachAll(); // issued while this operation holds the tab
+      // Give the revoke every chance to barge through before we finish.
+      for (let i = 0; i < 20; i++) await Promise.resolve();
+      await opDone;
+      return "ok";
+    });
+
+    releaseOp();
+    await op;
+    // 0 means it queued behind the operation and found nothing left to do.
+    // 1 would mean it detached the tab out from under a live CDP call.
+    expect(await revoke).toBe(0);
+    await settle();
+    expect(kinds(log)).toEqual(["attach", "detach"]);
+    expect(attach.data["dogfood.attachedTabs"]).toEqual({});
+  });
+
+  it("cannot miss an attach that is still in flight", async () => {
+    // The revoke reads the attach map on the storage queue; the attach writes
+    // it there too. Before the enabled-check moved inside that transaction, an
+    // attach parked in the CDP call was in neither the map nor refused — so
+    // detachAll reported 0 and the banner went up *after* the panel said off.
+    let releaseAttach: () => void = () => {};
+    const attaching = new Promise<void>((r) => (releaseAttach = r));
+    stubChrome();
+    const g = globalThis as unknown as { chrome: typeof chrome };
+    (g.chrome.debugger.attach as ReturnType<typeof vi.fn>).mockImplementation(
+      async () => {
+        await attaching;
+      },
+    );
+
+    const log = new FakeStorage();
+    const attachStore = new FakeStorage();
+    let enabled = true;
+    const session = new NativeDebuggerSession(
+      log,
+      attachStore,
+      async () => enabled,
+    );
+
+    const op = session.withDebugger(7, async () => "ok");
+    for (let i = 0; i < 10; i++) await Promise.resolve(); // parked in attach
+
+    enabled = false; // the user unticks the box mid-attach
+    const revoke = session.detachAll();
+    releaseAttach();
+    await op;
+    await revoke;
+    await settle();
+
+    // Either the revoke detached it, or the attach undid itself. What must NOT
+    // happen is an attachment surviving with the flag off — and "never written"
+    // satisfies that as much as "written then emptied", so both shapes pass.
+    expect(attachStore.data["dogfood.attachedTabs"] ?? {}).toEqual({});
+  });
+
+  it("is a no-op when nothing is attached", async () => {
+    stubChrome();
+    const log = new FakeStorage();
+    const session = new NativeDebuggerSession(log, new FakeStorage());
+    expect(await session.detachAll()).toBe(0);
+    await settle();
+    expect(kinds(log)).toEqual([]);
+  });
+});
