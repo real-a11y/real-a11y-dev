@@ -143,12 +143,16 @@ main
     code "npx"
     code "playwright install"
     code "real-a11y install"
-  paragraph "The package publishes on the dist-tag until , so pin (or an exact version) — an unpinned resolves the tag, which isn't published yet and fails with "No matching version found.""
+  paragraph "The package publishes on the dist-tag until , so pin (or an exact version). While pre-mode is on, and both point at the current prerelease (); after , is stable and stays the prerelease channel."
     code "beta"
     code "0.1.0"
     code "@beta"
-    code "@real-a11y-dev/cli"
     code "latest"
+    code "beta"
+    code "npm view @real-a11y-dev/cli dist-tags"
+    code "0.1.0"
+    code "latest"
+    code "@beta"
   heading "Your first audit" (level 2)
   button "Copy Code"
   code

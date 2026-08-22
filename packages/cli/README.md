@@ -28,9 +28,9 @@ heading and two paragraphs side by side. A page whose content all sits inside on
 landmark roots at that instead (`main`); the ordinary `<header>` / `<main>` /
 `<footer>` page has three top-level regions, so it roots at `document` too.
 
-> `@beta`: the package publishes on the `beta` dist-tag while the Real A11y
-> family is in pre-release — unpinned `npx @real-a11y-dev/cli` won't resolve
-> until `0.1.0`.
+> `@beta`: pin `@beta` or an exact version while the family is in pre-release.
+> `latest` currently tracks the same prerelease (`npm view @real-a11y-dev/cli dist-tags`);
+> after `0.1.0` it will be the stable channel.
 
 ## Audit — a CI gate with no extra flags
 
