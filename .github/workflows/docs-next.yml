@@ -96,16 +96,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # pnpm version is read from `packageManager` in package.json.
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
       # Deliberately `node-version-file` rather than the hardcoded `20` the
       # other workflows use. `.nvmrc` is `20`, so there is no behavioural
       # difference today — this is the form the others should converge on, not
       # an inconsistency to "fix" back.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -152,7 +152,7 @@ jobs:
 
       - name: Upload the built channel
         if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: docs-next-dist
           path: website/.vitepress/dist
@@ -170,13 +170,13 @@ jobs:
       url: https://next.real-a11y.dev
     steps:
       - name: Download the built channel
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: docs-next-dist
           path: dist
 
       - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
