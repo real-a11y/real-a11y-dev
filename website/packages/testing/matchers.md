@@ -1,6 +1,6 @@
 ---
 title: "Matchers — @real-a11y-dev/testing"
-description: Custom expect matchers for Vitest and Jest — toHaveNoUnlabeledInteractive, toHaveValidHeadingOrder, toHaveTabSequence, toMatchA11yContract — plus the a11ySnapshot serializer.
+description: Custom expect matchers for Vitest and Jest — toHaveNoUnlabeledInteractive, toHaveValidHeadingOrder, toHaveTabSequence, toMatchA11yContract — plus the boxedTreeSnapshot serializer.
 ---
 
 # Matchers
@@ -193,7 +193,7 @@ a11y contract not satisfied: matched 5/7 nodes.
   ✖ button "Sign in": not found under form (matched line 7), after textbox "Password" (line 10).
 ```
 
-**Received** can be a DOM Element (extracted on the spot) **or an already-serialized tree string** (a committed `auditSnapshot` artifact). Names fold typographic punctuation like `toHaveTabSequence` does, so a contract typed with plain quotes matches curly-quote labels. A contract may carry `#` comments and a `---` frontmatter block (e.g. a source URL) — both are ignored for matching.
+**Received** can be a DOM Element (extracted on the spot) **or an already-serialized tree string** (a committed `treeSnapshot` artifact). Names fold typographic punctuation like `toHaveTabSequence` does, so a contract typed with plain quotes matches curly-quote labels. A contract may carry `#` comments and a `---` frontmatter block (e.g. a source URL) — both are ignored for matching.
 
 **`{ strict: true }`** switches to exact tree equality — the contract behaves like a committed snapshot baseline (and, unlike containment, compares names byte-exact). Use it only where you truly render a component in isolation and nothing else should be present.
 
@@ -207,14 +207,14 @@ expect(inIsolation).toMatchA11yContract(contract, { strict: true });
 
 Because a serialized string is accepted, the same contract can be checked against a **committed snapshot artifact** — not only a live test render.
 
-## `a11ySnapshot(root, options?)` — snapshot serializer
+## `boxedTreeSnapshot(root, options?)` — snapshot serializer
 
 Wrap a DOM root (or a pre-extracted tree) so `toMatchSnapshot()` / `toMatchInlineSnapshot()` render the **semantic tree** instead of a DOM dump — fully native to each framework's snapshot tooling (`-u`/`--update`, obsolete detection all work).
 
 ```ts
-import { a11ySnapshot } from "@real-a11y-dev/testing/matchers";
+import { boxedTreeSnapshot } from "@real-a11y-dev/testing/matchers";
 
-expect(a11ySnapshot(container)).toMatchSnapshot();
+expect(boxedTreeSnapshot(container)).toMatchSnapshot();
 ```
 
 ```
@@ -225,11 +225,11 @@ main
     button "Sign in"
 ```
 
-It accepts the same options as `auditSnapshot` — including [`redact`](/packages/testing/snapshots#using-redact) to mask dynamic text (timestamps, IDs, prices) so the snapshot stays stable in CI:
+It accepts the same options as `treeSnapshot` — including [`redact`](/packages/testing/snapshots#using-redact) to mask dynamic text (timestamps, IDs, prices) so the snapshot stays stable in CI:
 
 ```ts
 expect(
-  a11ySnapshot(container, { redact: [/\d{4}-\d{2}-\d{2}/g] }),
+  boxedTreeSnapshot(container, { redact: [/\d{4}-\d{2}-\d{2}/g] }),
 ).toMatchSnapshot();
 ```
 
@@ -237,19 +237,19 @@ See [`redact`](/packages/testing/snapshots#using-redact) for the full pattern re
 
 `registerA11yMatchers` registers the serializer for you. To register it on its own (e.g. via a framework's `snapshotSerializers` config), it's exported as `a11ySnapshotSerializer`.
 
-### `a11ySnapshot` vs `auditSnapshot`
+### `boxedTreeSnapshot` vs `treeSnapshot`
 
 Both render the **same tree** — under the hood they call the same serializer with the same options (`mode`, `redact`, `includeGeneric`). The only difference is what they hand back, and therefore how the framework treats it:
 
-- [`auditSnapshot()`](/packages/testing/snapshots#auditsnapshot-root-options) returns a **plain string**. The value your test holds *is* the tree, so you can assert on it directly — `expect(s).toContain('button "Save"')`, `expect(s1).toBe(s2)` — log it, or write it to a file. It needs no setup.
-- `a11ySnapshot()` returns an **opaque boxed value** that the registered serializer renders at snapshot time. It does nothing on its own, but it keeps `toMatchSnapshot()` / `toMatchInlineSnapshot()` fully native — and crucially, **inline snapshots stay readable**: the tree is rendered as-is instead of escaped into a quoted string literal.
+- [`treeSnapshot()`](/packages/testing/snapshots#treesnapshot-root-options) returns a **plain string**. The value your test holds *is* the tree, so you can assert on it directly — `expect(s).toContain('button "Save"')`, `expect(s1).toBe(s2)` — log it, or write it to a file. It needs no setup.
+- `boxedTreeSnapshot()` returns an **opaque boxed value** that the registered serializer renders at snapshot time. It does nothing on its own, but it keeps `toMatchSnapshot()` / `toMatchInlineSnapshot()` fully native — and crucially, **inline snapshots stay readable**: the tree is rendered as-is instead of escaped into a quoted string literal.
 
-| Reach for `auditSnapshot` when… | Reach for `a11ySnapshot` when… |
+| Reach for `treeSnapshot` when… | Reach for `boxedTreeSnapshot` when… |
 |---|---|
 | You want the string itself — substring assertions, comparing two trees, writing a CI artifact | You're committing the tree with `toMatchSnapshot()` / `toMatchInlineSnapshot()` |
 | You don't want to register a serializer | You want clean, unquoted output — especially for **inline** snapshots |
 
-When in doubt: `auditSnapshot` for "I need the string," `a11ySnapshot` for "I'm storing a snapshot of the tree."
+When in doubt: `treeSnapshot` for "I need the string," `boxedTreeSnapshot` for "I'm storing a snapshot of the tree."
 
 ### Modal scoping in snapshots
 
@@ -259,7 +259,7 @@ Because the snapshot reflects the extracted a11y tree, an open dialog **scopes**
 
 Three of these matchers assert about the same tree but answer different questions, so it's worth being precise about when each earns its place.
 
-| Dimension | Rule-based<br/>`toBeValidA11yTree`, `toHaveNoUnlabeledInteractive`, … | Contract<br/>`toMatchA11yContract` | Snapshot<br/>`a11ySnapshot` + `toMatchSnapshot` |
+| Dimension | Rule-based<br/>`toBeValidA11yTree`, `toHaveNoUnlabeledInteractive`, … | Contract<br/>`toMatchA11yContract` | Snapshot<br/>`boxedTreeSnapshot` + `toMatchSnapshot` |
 |---|---|---|---|
 | Asks | "Is this markup **legal**?" | "Is this the markup I **meant**?" | "Did **anything** change?" |
 | Source of truth | ARIA rules | A spec you author | The last recording |

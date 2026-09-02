@@ -6,7 +6,7 @@
 // This mirrors a slice of the Vitest example — the runtime matchers are
 // framework-agnostic, so this exists to guard the *Jest* registration and
 // typing path specifically, not to re-test the matcher logic.
-import { a11ySnapshot } from "@real-a11y-dev/testing/matchers";
+import { boxedTreeSnapshot } from "@real-a11y-dev/testing/matchers";
 
 function mount(html: string): Element {
   document.body.innerHTML = "";
@@ -63,7 +63,7 @@ describe("assertion matchers under Jest", () => {
   });
 });
 
-describe("a11ySnapshot serializer under Jest", () => {
+describe("boxedTreeSnapshot serializer under Jest", () => {
   it("renders the semantic tree into toMatchSnapshot()", () => {
     const root = mount(`
       <main>
@@ -74,6 +74,6 @@ describe("a11ySnapshot serializer under Jest", () => {
         </form>
       </main>
     `);
-    expect(a11ySnapshot(root)).toMatchSnapshot();
+    expect(boxedTreeSnapshot(root)).toMatchSnapshot();
   });
 });

@@ -62,7 +62,7 @@ describe("DOM ↔ native parity (corpus)", () => {
       // DOM producer (page-bundle) and native producer (CDP), both serialized
       // to the same `role "name"` shape with no focus marker (native carries
       // none, so a marker on the DOM side would read as a spurious divergence).
-      const domTree = await session.call<string>("auditSnapshot", "body", [
+      const domTree = await session.call<string>("treeSnapshot", "body", [
         { markFocus: false },
       ]);
       const native = await session.nativeTree();

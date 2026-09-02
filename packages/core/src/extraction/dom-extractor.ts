@@ -1464,7 +1464,7 @@ function isOverlaySignal(el: Element): boolean {
  * Shared with the observers so the rule lives in ONE place. It previously
  * existed as a hand-copied selector string in three files, and a fix applied
  * to one of them silently did nothing on the other two: a `role="status
- * announcer"` toast pivoted a one-shot `auditSnapshot` while never waking the
+ * announcer"` toast pivoted a one-shot `treeSnapshot` while never waking the
  * inspector, the extension, or a live MCP session — the same DOM producing two
  * different trees depending on which path ran.
  *

@@ -7,7 +7,7 @@ Demonstrates `@real-a11y-dev/testing/playwright` — the `attach()` adapter — 
 ## What it shows
 
 - `attach(page)` injecting the audit engine into a real browser page
-- `auditSnapshot()` producing a stable string for snapshot tests
+- `treeSnapshot()` producing a stable string for snapshot tests
 - `outlineSnapshot()` verifying heading structure
 - `tabSequenceSnapshot()` verifying tab order
 - All four assertions (`assertHeadingOrder`, `assertNoUnlabeledInteractive`, `assertLandmarkStructure`, `assertDialogsLabeled`) passing on a well-structured page
@@ -88,7 +88,7 @@ test("rootSelector narrows the audit to a subtree", async ({ page }) => {
   await page.goto(fixtureUrl("fixture.html"));
   const sn = await attach(page, { rootSelector: "form" });
 
-  const snapshot = await sn.auditSnapshot();
+  const snapshot = await sn.treeSnapshot();
   expect(snapshot).toContain("Send message");    // inside the form
   expect(snapshot).not.toContain("Test fixture"); // page h1 is outside the form
 });
@@ -97,23 +97,23 @@ test("rootSelector narrows the audit to a subtree", async ({ page }) => {
 ## Snapshot test
 
 ```ts
-test("auditSnapshot is stable across multiple calls", async ({ page }) => {
+test("treeSnapshot is stable across multiple calls", async ({ page }) => {
   await page.goto(fixtureUrl("fixture.html"));
   const sn = await attach(page);
 
-  const snap1 = await sn.auditSnapshot();
-  const snap2 = await sn.auditSnapshot();
+  const snap1 = await sn.treeSnapshot();
+  const snap2 = await sn.treeSnapshot();
   expect(snap1).toBe(snap2); // deterministic — same DOM, same string
 });
 ```
 
-Commit `auditSnapshot()` output with `toMatchSnapshot()` to catch unintended accessibility regressions in CI:
+Commit `treeSnapshot()` output with `toMatchSnapshot()` to catch unintended accessibility regressions in CI:
 
 ```ts
 test("page a11y tree matches snapshot", async ({ page }) => {
   await page.goto("/dashboard");
   const sn = await attach(page, { rootSelector: "main" });
-  expect(await sn.auditSnapshot()).toMatchSnapshot();
+  expect(await sn.treeSnapshot()).toMatchSnapshot();
   // Playwright stores snapshot in: e2e/snapshots/test-name-chromium.txt
 });
 ```
@@ -125,7 +125,7 @@ Test (Node)                          Browser page
 ──────────                           ────────────
 attach(page)
   → readBundle() (cached)
-  → page.addScriptTag(bundle)   ──▶  window.__realA11y__ = { auditSnapshot, … }
+  → page.addScriptTag(bundle)   ──▶  window.__realA11y__ = { treeSnapshot, … }
   → returns handle
 
 sn.assertHeadingOrder()

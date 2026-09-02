@@ -24,7 +24,7 @@ link "Chrome extension: Install the extension"
     paragraph "Install the extension"
 article
   heading "Test what users actually experience" (level 2)
-  paragraph "@real-a11y-dev/testing gives you auditSnapshot(), assertHeadingOrder(), assertNoUnlabeledInteractive(), and a fluent flow() chain — all powered by the real accessibility tree, not synthetic mocks."
+  paragraph "@real-a11y-dev/testing gives you treeSnapshot(), assertHeadingOrder(), assertNoUnlabeledInteractive(), and a fluent flow() chain — all powered by the real accessibility tree, not synthetic mocks."
 link "Audit from the shell and CI: Explore the CLI"
   article
     heading "Audit from the shell and CI" (level 2)

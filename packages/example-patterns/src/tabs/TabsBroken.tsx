@@ -8,7 +8,7 @@ import type { TabsExampleProps } from "./types.js";
 //   1. NO role="tablist" / role="tab" / role="tabpanel". The list
 //      renders as a plain `<div>` of `<button>`s, the panels as
 //      `<div>`s. The semantic tree shows them as a generic group of
-//      buttons, not a tablist — `auditSnapshot()` will miss the tab
+//      buttons, not a tablist — `treeSnapshot()` will miss the tab
 //      relationship entirely.
 //
 //   2. NO aria-controls + aria-selected. Even if a screen-reader user

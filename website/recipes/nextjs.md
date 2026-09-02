@@ -216,7 +216,7 @@ test("home page structural audits", async ({ page }) => {
   await sn.assertNoUnlabeledInteractive();
   await sn.assertLandmarkStructure();
 
-  expect(await sn.auditSnapshot()).toMatchSnapshot("home-audit.txt");
+  expect(await sn.treeSnapshot()).toMatchSnapshot("home-audit.txt");
 });
 ```
 

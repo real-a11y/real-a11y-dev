@@ -1,11 +1,11 @@
 // SIMPLE: the custom `expect` matchers from `@real-a11y-dev/testing/matchers`.
 //
-// These wrap the same checks as the `assertX` functions and `auditSnapshot`,
+// These wrap the same checks as the `assertX` functions and `treeSnapshot`,
 // but read as native assertions — `.not` negation and failure messages come
 // for free. Registration happens once in `./setup.ts`.
 import { describe, it, expect, afterEach } from "vitest";
 
-import { a11ySnapshot } from "@real-a11y-dev/testing/matchers";
+import { boxedTreeSnapshot } from "@real-a11y-dev/testing/matchers";
 
 import { fixture, cleanup } from "./fixtures.js";
 
@@ -92,7 +92,7 @@ describe("toHaveTabSequence", () => {
   });
 });
 
-describe("a11ySnapshot serializer", () => {
+describe("boxedTreeSnapshot serializer", () => {
   it("renders the semantic tree (not the DOM) into toMatchSnapshot()", () => {
     const root = fixture(`
       <main>
@@ -105,6 +105,6 @@ describe("a11ySnapshot serializer", () => {
     `);
     // Because the serializer is registered, this snapshot is roles + names,
     // not an HTML dump — readable and resistant to non-semantic markup churn.
-    expect(a11ySnapshot(root)).toMatchSnapshot();
+    expect(boxedTreeSnapshot(root)).toMatchSnapshot();
   });
 });

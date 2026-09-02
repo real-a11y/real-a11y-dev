@@ -139,7 +139,7 @@ npx real-a11y snapshot --output base.json
 
 Add the snapshot artifacts (`base.json`, `pr.json`) to `.gitignore` — they're build outputs, not fixtures.
 
-> **The `attach()` testing helpers still exist.** `@real-a11y-dev/testing/playwright` — `attach()` plus `auditSnapshot()`/`outlineSnapshot()`/`tabSequenceSnapshot()` — is the in-test surface for assertions inside your Playwright suite (see [Combine with assertions](#combine-with-assertions)). For *structural CI diffing*, point at the CLI: one command captures every page's findings and views into a diffable artifact, and `real-a11y diff` does the finding-aware comparison for you.
+> **The `attach()` testing helpers still exist.** `@real-a11y-dev/testing/playwright` — `attach()` plus `treeSnapshot()`/`outlineSnapshot()`/`tabSequenceSnapshot()` — is the in-test surface for assertions inside your Playwright suite (see [Combine with assertions](#combine-with-assertions)). For *structural CI diffing*, point at the CLI: one command captures every page's findings and views into a diffable artifact, and `real-a11y diff` does the finding-aware comparison for you.
 
 ### 3. Add the workflow
 

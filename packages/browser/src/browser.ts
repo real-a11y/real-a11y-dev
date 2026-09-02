@@ -515,7 +515,7 @@ export class BrowserSession implements A11ySession {
               tree,
               rules && rules.length ? rules : undefined,
             ),
-            tree: ra.auditSnapshot(tree, { includeGeneric }),
+            tree: ra.treeSnapshot(tree, { includeGeneric }),
             outline: ra.outlineSnapshot(tree),
             tabOrder: ra.tabSequenceSnapshot(tree),
           };

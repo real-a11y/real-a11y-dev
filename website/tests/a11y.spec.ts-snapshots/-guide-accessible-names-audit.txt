@@ -206,7 +206,7 @@ main
   separator
   heading "Debugging an unexpected name" (level 2)
   paragraph "When shows a name you didn't expect:"
-    code "auditSnapshot()"
+    code "treeSnapshot()"
   list
     listitem "on the element or an ancestor — #1 and #2 override everything else."
       strong "Check for /"
@@ -232,7 +232,7 @@ main
   paragraph "Real A11y's assertions (, ) and snapshots () all surface the accessible name as the primary identifier — because that's what the user hears, and that's what your tests should lock in."
     code "assertNoUnlabeledInteractive"
     code "assertDialogsLabeled"
-    code "auditSnapshot"
+    code "treeSnapshot"
 contentinfo
   link "Edit this page on GitHub"
   paragraph "Last updated:"

@@ -5,7 +5,7 @@
 //
 // 2. Three structural snapshots run once per route via
 //    `@real-a11y-dev/testing`:
-//      - `auditSnapshot()` — the a11y tree (roles + names, indented)
+//      - `treeSnapshot()` — the a11y tree (roles + names, indented)
 //      - `outlineSnapshot()` — the heading outline ("level N → name")
 //      - `tabSequenceSnapshot()` — focusable elements in tab order
 //    Drift fails the test; intentional changes are accepted by
@@ -202,7 +202,7 @@ test.describe("a11y tree snapshot", () => {
     test(route, async ({ page }) => {
       await gotoHydrated(page, route);
       const sn = await attach(page);
-      const audit = redactTimes(await sn.auditSnapshot());
+      const audit = redactTimes(await sn.treeSnapshot());
       expect(audit).toMatchSnapshot(`${slugFor(route)}.audit.txt`);
     });
   }
@@ -240,7 +240,7 @@ test.describe("tab sequence snapshot", () => {
 // shipped, and a screen reader announced "link" three times with nothing to
 // tell the Chrome extension from the CLI from the MCP server.
 //
-// `auditSnapshot()` runs in the page, and the in-page walk is more permissive
+// `treeSnapshot()` runs in the page, and the in-page walk is more permissive
 // than Chromium: it happily concatenated the whole card into a ~300-character
 // name, so the baseline looked populated the entire time the page was broken.
 // Only the native tree — Chromium's own, which is what assistive tech gets —

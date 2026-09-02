@@ -10,7 +10,7 @@ import { defineConfig } from "tsup";
 // ordered by `build`, make the dependency real instead of implied.
 //
 // Injected into the page by BrowserSession and the testing Playwright adapter.
-// Sets window.__realA11y__ = { auditSnapshot, … }. Emitted as
+// Sets window.__realA11y__ = { treeSnapshot, … }. Emitted as
 // dist/page-bundle.iife.global.js (tsup appends `.global` when globalName is
 // set) — the filename still matters: it is what the main config reads.
 export default defineConfig({

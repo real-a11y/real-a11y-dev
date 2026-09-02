@@ -125,7 +125,7 @@ The first `role="dialog"` or `role="alertdialog"` in document order is treated a
 
 ### `expectTree` — caveat
 
-`expectTree` re-serializes the tree with **default options** (no `redact`, `mode: "a11y"`, generic nodes flattened). A snapshot captured via `auditSnapshot(root, { redact: [...] })` or `{ mode: "dom" }` will not match. For redacted or DOM-mode comparisons, use `.expect((tree) => { … })` and call `serializeTree`/`auditSnapshot` yourself.
+`expectTree` re-serializes the tree with **default options** (no `redact`, `mode: "a11y"`, generic nodes flattened). A snapshot captured via `treeSnapshot(root, { redact: [...] })` or `{ mode: "dom" }` will not match. For redacted or DOM-mode comparisons, use `.expect((tree) => { … })` and call `serializeTree`/`treeSnapshot` yourself.
 
 A mismatch names the **first differing line** (with a couple of lines of context). It does not dump both full trees.
 
@@ -155,7 +155,7 @@ test("opening the country picker", () => {
 });
 ```
 
-`a11yDiff` returns a boxed value that renders through the **same snapshot serializer** as `auditSnapshot` — register it once (`registerA11yMatchers` from [`/matchers`](/packages/testing/matchers)) and `toMatchSnapshot()` / `toMatchInlineSnapshot()` print the change list verbatim. `before` must be a pre-captured tree (extracting it at assert time would diff the tree against itself); `after` can be a live `Element`, captured for you. A `focus:` line appears only when both sides carry focus context (both `capture()`d).
+`a11yDiff` returns a boxed value that renders through the **same snapshot serializer** as `boxedTreeSnapshot` — register it once (`registerA11yMatchers` from [`/matchers`](/packages/testing/matchers)) and `toMatchSnapshot()` / `toMatchInlineSnapshot()` print the change list verbatim. `before` must be a pre-captured tree (extracting it at assert time would diff the tree against itself); `after` can be a live `Element`, captured for you. A `focus:` line appears only when both sides carry focus context (both `capture()`d).
 
 ### Style B — `flow().expectChanges` (fluent, structured)
 

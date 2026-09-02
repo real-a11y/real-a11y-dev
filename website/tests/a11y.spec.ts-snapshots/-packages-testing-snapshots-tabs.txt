@@ -50,7 +50,7 @@ link "Authenticated Pages"
 link "Accessible Names"
 link "Architecture"
 link "Troubleshooting"
-link "auditSnapshot(root, options?)"
+link "treeSnapshot(root, options?)"
 link "outlineSnapshot(root, options?)"
 link "tabSequenceSnapshot(root, options?)"
 link "Focus marker"
@@ -59,7 +59,7 @@ link "See also"
 link "@real-a11y-dev/testing"
 link "Matchers"
 link "matchers"
-link "a11ySnapshot vs auditSnapshot"
+link "boxedTreeSnapshot vs treeSnapshot"
 button "Copy Code"
 generic
 table
@@ -78,7 +78,7 @@ button "Copy Code"
 generic
 button "Copy Code"
 generic
-link "a11ySnapshot"
+link "boxedTreeSnapshot"
 link "Playwright adapter"
 button "Copy Code"
 generic

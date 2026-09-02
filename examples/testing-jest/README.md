@@ -14,7 +14,7 @@ Jest-specific registration and typing path).
   `import "@real-a11y-dev/testing/matchers/jest"` — a types-only augmentation,
   the exact mirror of the Vitest example's `…/matchers/vitest` line
 - `toHaveValidLandmarks`, `toHaveNoUnlabeledInteractive`, `toHaveTabSequence`
-- The `a11ySnapshot()` serializer feeding `toMatchSnapshot()` with semantic
+- The `boxedTreeSnapshot()` serializer feeding `toMatchSnapshot()` with semantic
   (role + name) output
 
 Resolution note: this package is CommonJS (no `"type": "module"`), so it loads

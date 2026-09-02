@@ -19,7 +19,7 @@
  */
 
 export {
-  serializeTree as auditSnapshot,
+  serializeTree as treeSnapshot,
   serializeOutline as outlineSnapshot,
   serializeTabSequence as tabSequenceSnapshot,
 } from "@real-a11y-dev/serialize";

@@ -50,7 +50,7 @@ export default defineConfig({
 
 ```ts [a11y.test.ts]
 import { expect, test } from "vitest";
-import { auditSnapshot, assertNoUnlabeledInteractive } from "@real-a11y-dev/testing";
+import { treeSnapshot, assertNoUnlabeledInteractive } from "@real-a11y-dev/testing";
 
 test("the sign-in form is labeled", () => {
   document.body.innerHTML = `
@@ -63,7 +63,7 @@ test("the sign-in form is labeled", () => {
   const root = document.querySelector("main")!;
 
   assertNoUnlabeledInteractive(root);
-  expect(auditSnapshot(root)).toMatchSnapshot();
+  expect(treeSnapshot(root)).toMatchSnapshot();
 });
 ```
 
@@ -100,14 +100,14 @@ until you add `ts-jest` or `babel-jest`, so the transform-free quick-start is a
 
 ```js
 // a11y.test.js
-const { auditSnapshot, assertNoUnlabeledInteractive } = require("@real-a11y-dev/testing");
+const { treeSnapshot, assertNoUnlabeledInteractive } = require("@real-a11y-dev/testing");
 
 test("the sign-in form is labeled", () => {
   document.body.innerHTML = `<main><h1>Sign in</h1><label>Email <input /></label><button>Continue</button></main>`;
   const root = document.querySelector("main");
 
   assertNoUnlabeledInteractive(root);
-  expect(auditSnapshot(root)).toMatchSnapshot();
+  expect(treeSnapshot(root)).toMatchSnapshot();
 });
 ```
 
@@ -143,7 +143,7 @@ specifics for React, Testing Library and Playwright live in
 |---|---|---|
 | **Snapshots** | Deterministic strings of the a11y tree, heading outline, and tab order — diff-friendly, safe to commit. | [Snapshots →](/packages/testing/snapshots) |
 | **Assertions** | `assert*` functions that throw descriptive errors on broken structure. | [Assertions →](/packages/testing/assertions) |
-| **Matchers** | The same checks as ergonomic `expect` matchers, plus the `a11ySnapshot()` serializer. Vitest + Jest. | [Matchers →](/packages/testing/matchers) |
+| **Matchers** | The same checks as ergonomic `expect` matchers, plus the `boxedTreeSnapshot()` serializer. Vitest + Jest. | [Matchers →](/packages/testing/matchers) |
 | **Flow API** | Fluent interaction chains that assert about the tree after each step. | [Flow API →](/packages/testing/flow) |
 | **Playwright adapter** | Run every helper against a real browser page via `attach(page)`. | [Playwright →](/packages/testing/playwright) |
 
@@ -151,7 +151,7 @@ New to the idea of snapshotting the accessibility tree? Start with the concept: 
 
 ## Which do I reach for?
 
-- **Catch regressions in CI** → [Snapshots](/packages/testing/snapshots) (`auditSnapshot`, `outlineSnapshot`, `tabSequenceSnapshot`, plus `numberTabStops` for a human-read listing) committed with `toMatchSnapshot()`. For **headless page-set audits** of a deployed site — no test suite — reach for [`@real-a11y-dev/cli`](/packages/cli)'s `snapshot` / `diff` instead.
+- **Catch regressions in CI** → [Snapshots](/packages/testing/snapshots) (`treeSnapshot`, `outlineSnapshot`, `tabSequenceSnapshot`, plus `numberTabStops` for a human-read listing) committed with `toMatchSnapshot()`. For **headless page-set audits** of a deployed site — no test suite — reach for [`@real-a11y-dev/cli`](/packages/cli)'s `snapshot` / `diff` instead.
 - **Assert a specific invariant** ("one `<h1>`", "no unlabeled buttons") → [Assertions](/packages/testing/assertions) or, for `expect` style, [Matchers](/packages/testing/matchers). `assertRules` runs an arbitrary subset of the rule set, and `formatFindings` renders findings for your own reporting.
 - **Test an interaction** (open a menu, submit a form, dismiss a modal) → [Flow API](/packages/testing/flow).
 - **Assert what an interaction _changed_** (options appeared, `aria-expanded` flipped, focus moved) → [`capture` + `a11yDiff` or `flow().expectChanges`](/packages/testing/flow#asserting-what-an-interaction-changed).

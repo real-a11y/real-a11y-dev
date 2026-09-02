@@ -113,7 +113,7 @@ main
     listitem "injecting the audit engine into a real browser page"
       code "attach(page)"
     listitem "producing a stable string for snapshot tests"
-      code "auditSnapshot()"
+      code "treeSnapshot()"
     listitem "verifying heading structure"
       code "outlineSnapshot()"
     listitem "verifying tab order"
@@ -175,7 +175,7 @@ main
   button "Copy Code"
   code
   paragraph "Commit output with to catch unintended accessibility regressions in CI:"
-    code "auditSnapshot()"
+    code "treeSnapshot()"
     code "toMatchSnapshot()"
   button "Copy Code"
   code

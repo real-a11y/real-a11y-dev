@@ -15,7 +15,7 @@ import type { TabsExampleProps } from "./types.js";
 //
 // Inspecting this with `@real-a11y-dev/inspector` shows a clean
 // `tablist > tab*` structure with all the right roles and chips.
-// Auditing with `@real-a11y-dev/testing`'s `auditSnapshot()`
+// Auditing with `@real-a11y-dev/testing`'s `treeSnapshot()`
 // produces a stable tree of named tabs + the active panel.
 export function TabsCorrect({
   defaultValue,

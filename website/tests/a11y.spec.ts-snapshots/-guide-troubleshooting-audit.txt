@@ -134,7 +134,7 @@ main
   separator
   heading "Snapshot flaps between runs or between local and CI" (level 2)
   paragraph "is deterministic, but it surfaces text that isn't. Common culprits:"
-    code "auditSnapshot()"
+    code "treeSnapshot()"
   list
     listitem "— "2 hours ago", "Updated: 2026-04-23T14:00"."
       strong "Timestamps / relative times"
@@ -153,7 +153,7 @@ main
   button "Copy Code"
   code
   paragraph "The same option is on the Playwright adapter: ."
-    code "sn.auditSnapshot({ redact: [...] })"
+    code "sn.treeSnapshot({ redact: [...] })"
   separator
   heading "Heading outline has no h1" (level 2)
     code "h1"

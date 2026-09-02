@@ -112,7 +112,7 @@ wrong tree" ended at:
 document.body.innerHTML = '<p role="status">4 tickets</p>';
 const root = document.createElement("div");
 root.innerHTML = "<button>Save</button>";
-auditSnapshot(root); // → 'status "4 tickets"' — the button is absent
+treeSnapshot(root); // → 'status "4 tickets"' — the button is absent
 ```
 
 Same bug, but now it is reviewable, and the minimal form revealed the actual

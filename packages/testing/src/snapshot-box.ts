@@ -4,7 +4,7 @@
  * it verbatim through the registered pretty-format plugin, instead of the
  * framework's default object dump.
  *
- * Lives on its own (not in `matchers.ts`) so `a11yDiff` and `a11ySnapshot` can
+ * Lives on its own (not in `matchers.ts`) so `a11yDiff` and `boxedTreeSnapshot` can
  * both produce boxes the SAME serializer renders, without the diff/capture API
  * pulling in the jest matcher augmentation or `@real-a11y-dev/validate`.
  */
@@ -25,7 +25,7 @@ export function boxSnapshot(text: string): A11ySnapshotBox {
  * pretty-format plugin recognised by both Jest and Vitest. Registered via
  * `registerA11yMatchers` (from `@real-a11y-dev/testing/matchers`) or each
  * framework's `snapshotSerializers` config. Renders any {@link boxSnapshot} —
- * whether it came from `a11ySnapshot` (a tree) or `a11yDiff` (a change list).
+ * whether it came from `boxedTreeSnapshot` (a tree) or `a11yDiff` (a change list).
  */
 export const a11ySnapshotSerializer = {
   test(val: unknown): val is A11ySnapshotBox {

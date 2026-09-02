@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 
-import { registerA11yMatchers, a11ySnapshot } from "./matchers.js";
+import { registerA11yMatchers, boxedTreeSnapshot } from "./matchers.js";
 
 beforeAll(() => {
   registerA11yMatchers(expect);
@@ -134,10 +134,10 @@ describe("toHaveTabSequence", () => {
   });
 });
 
-describe("a11ySnapshot serializer", () => {
+describe("boxedTreeSnapshot serializer", () => {
   it("renders the deterministic tree via the native snapshot path", () => {
     const root = mount(`<main><h1>Hi</h1><button>Go</button></main>`);
-    expect(a11ySnapshot(root)).toMatchInlineSnapshot(`
+    expect(boxedTreeSnapshot(root)).toMatchInlineSnapshot(`
       main
         heading "Hi" (level 1)
         button "Go"
@@ -146,7 +146,7 @@ describe("a11ySnapshot serializer", () => {
 
   it("forwards serialize options (redaction)", () => {
     const root = mount(`<h1>Order #12345</h1>`);
-    const out = a11ySnapshot(root, { redact: [/#\d+/g] });
+    const out = boxedTreeSnapshot(root, { redact: [/#\d+/g] });
     expect(a11ySnapshotSerializerText(out)).not.toContain("#12345");
   });
 });

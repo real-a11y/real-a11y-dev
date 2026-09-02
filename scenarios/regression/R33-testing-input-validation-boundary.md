@@ -6,7 +6,7 @@ area: Testing
 type: Automated
 priority: P0
 status: Active
-validFrom: "testing ≥ 0.1.0-beta.15 for the row; the guard itself ships in the FIRST release after 0.1.0-beta.15. The matcher layer always guarded (requireElement in packages/testing/src/matchers.ts) — this row is about every OTHER published entry point, which did not. Running it against 0.1.0-beta.15 or earlier reproduces the defect rather than failing the test: there, the assert*/collectFindings/serialize* calls pass silently and auditSnapshot returns an empty string. That is the old behaviour, not a fail."
+validFrom: "testing ≥ 0.1.0-beta.15 for the row; the guard itself ships in the FIRST release after 0.1.0-beta.15. The matcher layer always guarded (requireElement in packages/testing/src/matchers.ts) — this row is about every OTHER published entry point, which did not. Running it against 0.1.0-beta.15 or earlier reproduces the defect rather than failing the test: there, the assert*/collectFindings/serialize* calls pass silently and treeSnapshot returns an empty string. That is the old behaviour, not a fail."
 validUntil: ""
 expected: "every published entry point rejects a non-Element, non-tree argument instead of reporting a clean page"
 twin: D5
@@ -25,14 +25,14 @@ For each value in `undefined`, `null`, `"<button></button>"`, `42`, `true`, `{}`
 1. `assertNoUnlabeledInteractive(value)` and `assertDialogsLabeled(value)`
 2. `assertHeadingOrder(value)` and `assertLandmarkStructure(value)`
 3. `collectFindings(value)` — and read the findings it returns
-4. `auditSnapshot(value)` / `outlineSnapshot(value)` / `tabSequenceSnapshot(value)`
+4. `treeSnapshot(value)` / `outlineSnapshot(value)` / `tabSequenceSnapshot(value)`
 5. `assertRules(value, ALL_RULES)`
 6. The same value through the **matcher** form, for comparison
 7. `assertRules(violatingRoot, ["landmark_structure"])` — a rule id that does
    not exist, on a page that genuinely violates `landmark-structure`. The page
    has to be a violating one: on a clean page the step passes either way and
    proves nothing
-8. Commit `expect(auditSnapshot(value)).toMatchSnapshot()` and re-run it
+8. Commit `expect(treeSnapshot(value)).toMatchSnapshot()` and re-run it
 
 ## Expected
 

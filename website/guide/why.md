@@ -48,7 +48,7 @@ And it isn't only for humans: the same structural audits are exposed to AI codin
 The same extraction logic runs in jsdom (Vitest), in a real browser (Playwright), inside the Storybook preview iframe, in the interactive tree panel, from the shell (the `real-a11y` CLI), and inside an MCP server for AI agents. There's no "jsdom mode" with different behavior.
 
 **2. Deterministic output.**
-`auditSnapshot()` produces a stable string — same DOM, same string, every time, on every machine. No timestamps, no generated IDs, no ordering surprises. Safe to commit to version control.
+`treeSnapshot()` produces a stable string — same DOM, same string, every time, on every machine. No timestamps, no generated IDs, no ordering surprises. Safe to commit to version control.
 
 **3. Fail loudly with context.**
 `assertNoUnlabeledInteractive()` doesn't return `true/false`. It throws an `A11yAssertionError` with the specific element, its location in the tree, and a fix suggestion — because you're reading a test failure message at 2am and you need the answer, not a boolean.

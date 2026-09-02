@@ -2,13 +2,13 @@
 // state change driven by `flow()`.
 //
 // This is closer to how you'd actually use the library: a handful of matchers
-// act as a single "accessibility gate" over a rendered screen, an a11ySnapshot
+// act as a single "accessibility gate" over a rendered screen, a boxedTreeSnapshot
 // guards the semantic structure against regressions, and after an interaction
 // opens a dialog we re-assert that the new state is still accessible.
 import { describe, it, expect, afterEach } from "vitest";
 
 import { flow } from "@real-a11y-dev/testing";
-import { a11ySnapshot } from "@real-a11y-dev/testing/matchers";
+import { boxedTreeSnapshot } from "@real-a11y-dev/testing/matchers";
 
 import { fixture, cleanup } from "./fixtures.js";
 
@@ -92,7 +92,7 @@ describe("account page — accessibility gate", () => {
     // The account ID is dynamic — redact it so the snapshot stays stable
     // across runs while still capturing the full role/name structure.
     expect(
-      a11ySnapshot(root, {
+      boxedTreeSnapshot(root, {
         redact: [/[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}/gi],
       }),
     ).toMatchSnapshot();
@@ -131,6 +131,6 @@ describe("account page — after opening the confirm dialog", () => {
 
     // The snapshot captures the scoped tree (dialog only) — a precise
     // regression artifact for the modal state.
-    expect(a11ySnapshot(root)).toMatchSnapshot();
+    expect(boxedTreeSnapshot(root)).toMatchSnapshot();
   });
 });

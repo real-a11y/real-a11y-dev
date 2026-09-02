@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { auditSnapshot, waitForMutations } from "@real-a11y-dev/testing";
+import { treeSnapshot, waitForMutations } from "@real-a11y-dev/testing";
 
 import { fixture, cleanup } from "./fixtures.js";
 
@@ -48,7 +48,7 @@ describe("waitForMutations — content that updates over time", () => {
     await settled;
 
     // The settled tree reflects BOTH updates, not just the first.
-    const tree = auditSnapshot(root);
+    const tree = treeSnapshot(root);
     expect(tree).toContain("Draft saved");
     expect(tree).toContain("Synced to cloud");
   });
@@ -73,7 +73,7 @@ describe("waitForMutations — content that updates over time", () => {
 
     await settled; // resolved at the deadline, not hung
 
-    const tree = auditSnapshot(root);
+    const tree = treeSnapshot(root);
     expect(tree).toContain("token");
     expect(feed.querySelectorAll("p").length).toBeGreaterThan(1);
   });

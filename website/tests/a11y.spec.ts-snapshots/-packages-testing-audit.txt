@@ -194,9 +194,9 @@ main
       row
         cell "Matchers"
           strong "Matchers"
-        cell "The same checks as ergonomic expect matchers, plus the a11ySnapshot() serializer. Vitest + Jest."
+        cell "The same checks as ergonomic expect matchers, plus the boxedTreeSnapshot() serializer. Vitest + Jest."
           code "expect"
-          code "a11ySnapshot()"
+          code "boxedTreeSnapshot()"
         cell "Matchers →"
           link "Matchers →"
       row
@@ -220,7 +220,7 @@ main
     listitem "→ (, , , plus for a human-read listing) committed with . For of a deployed site — no test suite — reach for 's / instead."
       strong "Catch regressions in CI"
       link "Snapshots"
-      code "auditSnapshot"
+      code "treeSnapshot"
       code "outlineSnapshot"
       code "tabSequenceSnapshot"
       code "numberTabStops"

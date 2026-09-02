@@ -52,7 +52,7 @@ function sideOf(input: A11yCapture | ExtractionResult | Element): Side {
  *
  * Requires the a11y snapshot serializer to be registered (via
  * `registerA11yMatchers` from `@real-a11y-dev/testing/matchers`, as for
- * `a11ySnapshot`).
+ * `boxedTreeSnapshot`).
  */
 export function a11yDiff(
   before: A11yCapture | ExtractionResult,

@@ -13,7 +13,7 @@ export default defineConfig({
   // step looks for `website/playwright-report/`).
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
   // Drop the default `-{platform}` suffix from snapshot file names. The
-  // `auditSnapshot()` output is platform-stable (same Chromium, identical
+  // `treeSnapshot()` output is platform-stable (same Chromium, identical
   // tree shape — theme/contrast/font-rendering don't enter the tree),
   // so committing one baseline per shape works on every contributor OS.
   // This template is the documented Playwright default minus the

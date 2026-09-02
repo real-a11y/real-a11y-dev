@@ -305,9 +305,9 @@ main
       row
         cell "@real-a11y-dev/testing"
           code "@real-a11y-dev/testing"
-        cell "attach(page, { rootSelector: "form" }) for Playwright; auditSnapshot(form, …) for jsdom — see the testing reference"
+        cell "attach(page, { rootSelector: "form" }) for Playwright; treeSnapshot(form, …) for jsdom — see the testing reference"
           code "attach(page, { rootSelector: "form" })"
-          code "auditSnapshot(form, …)"
+          code "treeSnapshot(form, …)"
           link "the testing reference"
   heading "Dialog auto-scope" (level 3)
   paragraph "When the page opens a or , the panel automatically scopes into it. A "Dialog: …" indicator appears with the dialog's accessible name. This is what a screen reader user effectively gets — the rest of the page becomes inert and the dialog is the only thing they can navigate. Verifying that auto-scope works correctly (proper labeling, focus trap, escape to close) is one of the highest-value audits the panel enables."

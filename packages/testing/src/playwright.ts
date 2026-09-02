@@ -78,13 +78,13 @@ export interface AttachOptions {
   tree?: "dom" | "native";
 }
 
-export interface AuditSnapshotOptions {
+export interface TreeSnapshotOptions {
   /** `"a11y"` (default) or `"dom"` tree extraction mode. */
   mode?: "a11y" | "dom";
   /**
    * Regex patterns whose matches are replaced with `[REDACTED]` in accessible
    * names — keeps snapshots deterministic across runs. Mirrors the jsdom
-   * `auditSnapshot` option; the adapter marshals each `RegExp` across the
+   * `treeSnapshot` option; the adapter marshals each `RegExp` across the
    * `page.evaluate()` boundary (a `RegExp` can't be serialised directly) and
    * reconstructs it inside the page.
    */
@@ -95,7 +95,7 @@ export interface AuditSnapshotOptions {
 
 export interface SemanticNavigatorPageHandle {
   /** Serialised A11y (or DOM) tree — deterministic, safe to snapshot. */
-  auditSnapshot(options?: AuditSnapshotOptions): Promise<string>;
+  treeSnapshot(options?: TreeSnapshotOptions): Promise<string>;
   /** Indented heading outline (h1..h6) in document order. */
   outlineSnapshot(): Promise<string>;
   /** Focusable elements in computed tab order, numbered. */
@@ -126,7 +126,7 @@ export interface SemanticNavigatorPageHandle {
  *   await page.goto("/");
  *   const sn = await attach(page);
  *   await sn.assertHeadingOrder();
- *   expect(await sn.auditSnapshot()).toMatchSnapshot();
+ *   expect(await sn.treeSnapshot()).toMatchSnapshot();
  * });
  * ```
  *
@@ -253,7 +253,7 @@ export async function attach(
   }
 
   return {
-    auditSnapshot(opts: AuditSnapshotOptions = {}) {
+    treeSnapshot(opts: TreeSnapshotOptions = {}) {
       const { mode, redact, includeGeneric } = opts;
       // `RegExp` doesn't survive `page.evaluate()` serialisation — it arrives
       // as an empty `{}`. Marshal each pattern to a plain `{ source, flags }`
@@ -263,7 +263,7 @@ export async function attach(
         flags: re.flags,
       }));
 
-      type AuditArg = {
+      type TreeArg = {
         selector: string;
         mode?: "a11y" | "dom";
         redact?: { source: string; flags: string }[];
@@ -272,7 +272,7 @@ export async function attach(
 
       return page.evaluate(
         (arg) => {
-          const a = arg as AuditArg;
+          const a = arg as TreeArg;
           const ra = (globalThis as Record<string, unknown>)
             .__realA11y__ as Record<
             string,
@@ -300,14 +300,14 @@ export async function attach(
             options.includeGeneric = a.includeGeneric;
           if (a.redact)
             options.redact = a.redact.map((r) => new RegExp(r.source, r.flags));
-          return ra.auditSnapshot(root, options) as string;
+          return ra.treeSnapshot(root, options) as string;
         },
         {
           selector: rootSelector,
           mode,
           redact: redactParts,
           includeGeneric,
-        } satisfies AuditArg,
+        } satisfies TreeArg,
       );
     },
     outlineSnapshot() {
@@ -360,7 +360,7 @@ async function attachNative(
   const getTree = () => nativeTree(nativePage);
 
   return {
-    async auditSnapshot(opts: AuditSnapshotOptions = {}) {
+    async treeSnapshot(opts: TreeSnapshotOptions = {}) {
       // `mode` is a DOM-producer concept (a11y vs raw-tag view); the native tree
       // is Chromium's own a11y tree, so it is ignored here.
       return serializeTree(await getTree(), {

@@ -130,7 +130,7 @@ If #1 resolves to a non-empty string, #2–#5 are ignored — even if #2 looks "
 
 ## Debugging an unexpected name
 
-When `auditSnapshot()` shows a name you didn't expect:
+When `treeSnapshot()` shows a name you didn't expect:
 
 1. **Check for `aria-label` / `aria-labelledby`** on the element or an ancestor — #1 and #2 override everything else.
 2. **Follow the `aria-labelledby` chain.** The referenced IDs might be missing, hidden, or pointing at the wrong element.
@@ -144,4 +144,4 @@ When `auditSnapshot()` shows a name you didn't expect:
 
 The accessible name is the only piece of text a screen reader user has to distinguish one element from another. Two buttons labeled `"Edit"` in a list of items are indistinguishable — not because the user is confused, but because from their perspective *there is no more information*.
 
-Real A11y's assertions (`assertNoUnlabeledInteractive`, `assertDialogsLabeled`) and snapshots (`auditSnapshot`) all surface the accessible name as the primary identifier — because that's what the user hears, and that's what your tests should lock in.
+Real A11y's assertions (`assertNoUnlabeledInteractive`, `assertDialogsLabeled`) and snapshots (`treeSnapshot`) all surface the accessible name as the primary identifier — because that's what the user hears, and that's what your tests should lock in.
