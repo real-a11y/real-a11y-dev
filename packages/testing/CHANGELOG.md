@@ -1,5 +1,296 @@
 # @real-a11y-dev/testing
 
+## 0.1.0-beta.16
+
+### Minor Changes
+
+- 69a9f90: Reject input that isn't a tree, instead of reporting it as a clean page.
+
+  Every entry point that accepts `Element | ExtractionResult` resolved the second
+  branch with an unchecked cast, so anything that wasn't an `Element` — a number,
+  a string, `{}`, a `Date` — became an empty tree. The rules then found nothing
+  and the assertion **passed**:
+
+  ```js
+  assertNoUnlabeledInteractive(42); // passed silently
+  collectFindings(42); // 2 findings, about the number
+  assertLandmarkStructure(42); // threw "Missing <main>" — about the number
+  auditSnapshot(42); // ""  ← committed, this is a permanently green test
+  ```
+
+  The matcher layer already guarded this (`expected a DOM Element, received
+number`); the `assert*`, `collectFindings`, `listByRole` and `serialize*`
+  layers did not. They now throw a `TypeError` naming the function called and the
+  type received:
+
+  ```
+  assertNoUnlabeledInteractive: expected a DOM Element or an extracted a11y tree, received number
+  ```
+
+  It is a `TypeError`, never an `A11yAssertionError` — code catching the latter is
+  handling "this page has issues", and a wrong argument is not that. The message
+  names the received **type** and never its value, since what lands there by
+  mistake is often page text or a token.
+
+  Unknown rule ids are rejected the same way. `A11yRule` protects a TypeScript
+  caller writing a literal, but a list built from a config file, a CLI flag or
+  plain JavaScript reached the runtime unchecked, matched no rules, and passed
+  having checked nothing — a typo silently deleted the check:
+
+  ```js
+  assertRules(page, ["landmark_structure"]); // passed; the real id is landmark-structure
+  // now: unknown rule "landmark_structure". Known rules: no-unlabeled-interactive, …
+  ```
+
+  `formatFindings([])` now reads `No accessibility issues found.` rather than
+  `Found 0 accessibility issues:` with nothing under it.
+
+  **Breaking change.** A call that previously passed can now throw. In every case
+  the call was already not testing anything — a suite that goes red here was
+  green while asserting nothing — but it is a behaviour change and can surface as
+  a newly failing test. Genuine inputs are unaffected: a DOM `Element` and a real
+  `ExtractionResult` (including a native tree from CDP) behave exactly as before.
+  The tree check is structural rather than `instanceof`, so a tree that crossed a
+  realm — an iframe, a worker, a second bundled copy of the engine — still passes.
+
+- 5b58757: Add `label-title-only`, an axe-aligned warning for form controls whose only label is `title` or `aria-describedby`.
+
+  `no-unlabeled-interactive` still fails only on an empty accessible name — glyph buttons and `title=` on a `<button>` pass, matching axe `button-name`. Placeholder-only inputs are out of scope for the new rule, matching axe. The new id is selectable via `collectFindings` / `--rules` / `audit_page`; `assertNoUnlabeledInteractive` is unchanged.
+
+- 562d600: Make every matcher type augmentation opt-in, adding `./matchers/jest` and `./matchers/jest-globals`
+
+  `@real-a11y-dev/testing/matchers` shipped an unconditional
+  `declare global { namespace jest }`. Jest consumers got the matcher types for
+  free — and Vitest consumers got them whether they wanted them or not, because
+  Vitest's `Assertion` extends `JestAssertion`, which extends `jest.Matchers`. So
+  a Vitest project that imported `./matchers` and `./matchers/vitest`, as the docs
+  instruct, declared every matcher name twice from two augmentations TypeScript
+  could not prove identical:
+
+  ```
+  error TS2320: Interface 'Assertion<T>' cannot simultaneously extend types
+  'JestAssertion<T>' and 'A11yMatchers<T>'.
+  ```
+
+  One error per matcher, reported against a file inside `node_modules`. Two
+  things kept it quiet: it needs `skipLibCheck: false`, and it needs TypeScript 7
+  — 5.x does not report it on the same project and the same package.
+
+  The underlying cause was a type-parameter mix-up in the Vitest entry, which is
+  fixed too: `A11yMatchers`' parameter is the matcher's RETURN type, and the entry
+  was passing it the SUBJECT type, so the matchers were declared returning
+  `HTMLElement` on our side and `void` on Vitest's, which inherits
+  `jest.Matchers<void, T>`. "Not identical" was a correct diagnosis. They agree on
+  `void` now — matching what both runners say about their own matchers — so
+  loading more than one entry is redundant rather than an error.
+
+  Jest's augmentation now lives in its own entry, mirroring `./matchers/vitest`.
+  There are two, because Jest has two `expect`s with separate type surfaces:
+
+  - **`./matchers/jest`** — the global `expect`, typed by `@types/jest`
+  - **`./matchers/jest-globals`** — `import { expect } from "@jest/globals"`,
+    typed by `@jest/expect`. The old unconditional global never covered this
+    shape at all, so this half is a gap closed rather than one opened
+
+  None of the three ships runtime code; `registerA11yMatchers(expect)` is still
+  what installs the matchers.
+
+  ## Breaking change
+
+  **Anyone whose matcher types came from the free global must add one import** —
+  alongside the `registerA11yMatchers` call in their setup file:
+
+  ```ts
+  import { registerA11yMatchers } from "@real-a11y-dev/testing/matchers";
+  import "@real-a11y-dev/testing/matchers/jest"; // ← add this
+  // …or "…/matchers/jest-globals" if you import `expect` from "@jest/globals"
+  // …or "…/matchers/vitest" on Vitest
+
+  registerA11yMatchers(expect);
+  ```
+
+  That is every Jest + TypeScript user, and also **Vitest users who never
+  imported `./matchers/vitest`** — the removed jest global reached Vitest's
+  `Assertion` through `JestAssertion`, so those projects type-checked without it
+  and will now report `TS2339` on each matcher. Vitest setups that already carry
+  the documented `./matchers/vitest` line need no change and lose the TS2320
+  errors.
+
+  In every case the matchers still RUN — registration is unchanged and no
+  behaviour moved. Only the types are affected.
+
+  One more type-level change, which no call site should notice: matchers typed
+  through `./matchers/vitest` now return `void` rather than the subject type.
+
+- fdaf6d6: Rename the tree-string helper to `treeSnapshot` and the boxed matcher helper to `boxedTreeSnapshot`.
+
+  `auditSnapshot` was a leftover name from before the tree / findings split — it serializes the semantic tree, not an audit. `a11ySnapshot` named the boxed `toMatchSnapshot()` wrapper after the product concept, colliding with that family. The three string views are now `treeSnapshot` / `outlineSnapshot` / `tabSequenceSnapshot`, matching the CLI (`tree` / `outline` / `tabs`). The Playwright handle method and `TreeSnapshotOptions` follow. The in-page bundle export is `treeSnapshot` too.
+
+  **Breaking change.** `auditSnapshot`, `a11ySnapshot`, and `AuditSnapshotOptions` are removed (beta). `a11ySnapshotSerializer` is unchanged — it also renders `a11yDiff` boxes.
+
+  **Migration.** `auditSnapshot(root)` → `treeSnapshot(root)`; `sn.auditSnapshot()` → `sn.treeSnapshot()`; `a11ySnapshot(root)` from `/matchers` → `boxedTreeSnapshot(root)`.
+
+- 19e0fe8: Stop reporting native HTML as broken ARIA — and let authored ARIA actually be
+  satisfied.
+
+  `toBeValidA11yTree()` judged every node by the rules for an authored role.
+  `aria-query` genuinely marks `aria-checked` required on checkbox,
+  `aria-expanded` + `aria-controls` on combobox and `aria-selected` on option —
+  correct when someone wrote `role="combobox"` on a `<div>`, because nothing else
+  supplies them. Applied to a `<select>` it produced six violations on markup
+  that is not merely valid but preferable, including `option` nested inside
+  `combobox`, which is exactly how a `<select>` is built.
+
+  The discriminator is **"does the user agent supply this state?"**, not "did
+  somebody type a `role=` attribute". Those diverge on ordinary markup:
+
+  - `<select role="combobox">` is redundant, changes nothing about the browser,
+    and design systems produce it by spreading `role` through props.
+  - `<input type="checkbox" role="switch">` is the ARIA-APG canonical switch,
+    where the role is neither redundant nor deletable — and checkedness is still
+    UA-supplied.
+
+  `ValidatedNode` gains `uaSuppliedAttrs` (per-attribute, since an element can
+  supply one state and still owe another) governing required attributes, and
+  `implicitRole` governing structure. Both are optional and absent fails
+  **closed**, so an adapter that cannot inspect the element keeps reporting rather
+  than silently disabling the rule.
+
+  Three fixes make authored ARIA satisfiable at all — previously it could not go
+  green no matter what the author wrote:
+
+  - Required attributes are now read from the element's recorded attributes when
+    the extracted state map doesn't carry them. `aria-controls` and
+    `aria-valuenow` live in neither `A11yInfo.states` (a fixed 10-entry set) nor
+    `properties` (`{level, captions}`), so a correct authored combobox or slider
+    reported a violation with no remedy available.
+  - `aria-valuenow` / `aria-valuemin` / `aria-valuemax` are now recorded, for the
+    same reason — nothing else carried them.
+  - A **`false`** value counts as present, not missing. `aria-expanded="false"` is
+    a collapsed combobox and `aria-checked="false"` an unchecked box: the ordinary
+    states, and previously unsatisfiable.
+
+  Two more from the same class:
+
+  - **Engine vocabulary is no longer reported as an invalid ARIA role.** A
+    `<video controls>` extracts as `video`, which is not in the ARIA role set, and
+    the check returned early — so no other rule ran on the node either and a page
+    containing a `<video>` could not use the matcher at all. Only an _authored_
+    role can be invalid ARIA.
+  - **An exempt native pair no longer ends the ancestor walk.** In
+    `<div role="button"><select><option>`, the option is legitimately inside its
+    select and illegitimately inside the button, which was never tested.
+
+  Real problems are still caught: an unnamed `<select>`, an unnamed `<table>`, a
+  link nested inside a button, an authored bogus role, and any hand-built role
+  that omits a state no user agent supplies.
+
+  The patch bumps are the three packages that bundle `core`'s **DOM** producer,
+  which is what `KEY_ATTRIBUTES` feeds. `cli` and `mcp` build their trees with the
+  native producer, which keeps its own attribute allowlist, so they are untouched.
+
+### Patch Changes
+
+- 56d5eb2: `--version` and browser commands now resolve Playwright the same way (`createRequire`, which sees `NODE_PATH` and a sibling global). `npm i -g playwright` unblocks a global CLI; `--version` no longer prints a version while `audit` cannot load the driver. The missing-Playwright hint names `npm i -g playwright` when the CLI is not in the current project's `node_modules`.
+- e24f436: Never widen extraction away from a root that isn't in the document.
+
+  Extraction widens to the whole document when a portal-mounted overlay sits
+  outside the root — so a React-portalled menu joins the tree with its trigger.
+  For an **attached** root that is loss-free: the document contains it, so
+  widening only adds.
+
+  For a root the document does **not** contain it is not. The document is then a
+  disjoint tree, so the caller's own subtree disappeared and the audit described
+  markup they never passed. That covers two shapes: a detached root, and a root
+  inside a **shadow root** — `isConnected` is shadow-including while the walk
+  reads light-DOM `children`, so a web component audited at its shadow subtree
+  lost all of its content to any light-DOM toast.
+
+  ```js
+  document.body.innerHTML = '<p role="status">4 tickets</p>';
+  const root = document.createElement("div");
+  root.innerHTML = "<button>Save</button>";
+
+  auditSnapshot(root); // → 'status "4 tickets"' — the button is absent
+  collectFindings(root); // → []  ← reads as a clean component
+  ```
+
+  That last line is the damage: an audit that reports nothing because it ran
+  against somebody else's DOM. Detached roots are ordinary — a jsdom fixture
+  built with `createElement`, or a component inspected before mount.
+
+  Both widening paths are fixed, not just the portal one: the modal path never
+  looked at the root at all, so an open dialog anywhere in the document hijacked
+  a detached or shadow-rooted root just as readily, and it runs first. A modal
+  still scopes **exclusively** over a root the document contains, including a
+  sibling one — content behind a modal is inert to AT, and that is deliberate.
+
+  An **ancestor** live region is no longer treated as a portal either. "Outside
+  the root" was accepting anything above it too, so the route announcer that
+  Next.js, Remix and React Router wrap around the whole app matched on every
+  extraction — pivoting every component root on the page permanently, not just
+  while a toast was up.
+
+  Three narrower corrections in the same check:
+
+  - **`aria-live` is an allowlist.** It matched the attribute's _presence_, and
+    component kits ship exactly that shell — a permanent body-level announcer
+    with updates switched off until needed. `polite`/`assertive` pivot; `off`
+    does not; anything absent, empty or invalid falls through to the role's
+    implicit politeness, per ARIA. `!== "off"` was a denylist, so `none`,
+    `false`, `0` and a typo'd `polit` — the hand-written spellings of "switched
+    off" — all pivoted. An explicit value also beats a role's implicit
+    politeness, so `<div role="status" aria-live="off">` is inert too.
+  - **A `role` token list is read as a list**, and case is **not** folded. The
+    selector matched `role` exactly, so `role="status announcer"` was invisible;
+    it now decides on the first token, the same parse `getImplicitRole` uses, so
+    the pivot and the extracted tree always agree about what an element is.
+    Folding made `<div role="MENU" aria-live="off">` an overlay — it matched the
+    container check before the `off` check — giving one element opposite scoping
+    depending on an unrelated attribute.
+  - **The rule lives in one place now.** The same selector existed as a
+    hand-copied string in three files; the fix landing in one of them meant a
+    `role="status announcer"` toast pivoted a one-shot `auditSnapshot` while
+    never waking the inspector, the extension or a live MCP session — the same
+    DOM producing two different trees depending on which path ran.
+
+  Unchanged: an attached root still widens for a genuine portal, and still scopes
+  exclusively to an open modal. The remaining sharp edge — an _ordinary_ in-page
+  live region widening an attached root, since "outside the root" cannot tell it
+  from a portal — is now documented under Troubleshooting rather than silent.
+
+- 2c525d7: fix: name tables from `<caption>`, refuse dispatch on a disconnected node, and stop `expectTree` dumping both full trees.
+
+  A `<table>` with a `<caption>` was extracted as unnamed, which is wrong per HTML-AAM and reported as an ARIA violation. The caption now supplies the name when it is visible and non-empty; a hidden or empty caption falls through (so `title` can still win); and when `aria-label` / `aria-labelledby` already names the table, the caption's words stay in the tree instead of being deleted. The live extractor learns the same owner→child edges for `fieldset`/`legend` and `details`/`summary`, so a caption edit no longer leaves a stale table name.
+
+  `dispatch` now fails when the resolved element is disconnected — replacing `document.body.innerHTML` used to leave a detached node that still accepted events and returned `{ success: true }`.
+
+  `flow.expectTree` (and the string form of `expectChanges`) keep the first-difference pointer and drop the two full-tree dumps that followed it.
+
+- d687614: Document a quick-start that actually reaches a passing test.
+
+  The install line was `npm install -D @real-a11y-dev/testing` and stopped there.
+  That package brings no test runner and no DOM, so following the docs from an
+  empty directory got you a dependency and no way to run anything — the two
+  load-bearing pieces, a runner plus `jsdom`, and `environment: "jsdom"` in the
+  config, were stated nowhere. The first example then used
+  `@testing-library/react` without saying it was optional, making the smallest
+  working setup look much heavier than it is.
+
+  The README (and `real-a11y.dev/packages/testing`) now carry a two-file
+  walkthrough — config plus one test, no framework — that goes from `npm init` to
+  a green run, with the exact tree it prints. Verified by following it literally
+  in a fresh project rather than from memory.
+
+  Also corrected: the Jest path needs `testEnvironment: "jsdom"`, and Jest does
+  not parse TypeScript on its own — a `.ts` test dies in the Babel parser until
+  `ts-jest` or `babel-jest` is added, so the transform-free quick-start is a `.js`
+  test. That is the kind of omission this change exists to remove, so it is
+  spelled out rather than implied.
+
+  A patch release so the corrected README reaches npm, which is where most people
+  meet this package first.
+
 ## 0.1.0-beta.15
 
 ### Minor Changes

@@ -1,5 +1,186 @@
 # @real-a11y-dev/storybook-addon
 
+## 0.1.0-beta.16
+
+### Minor Changes
+
+- 5b58757: Add `label-title-only`, an axe-aligned warning for form controls whose only label is `title` or `aria-describedby`.
+
+  `no-unlabeled-interactive` still fails only on an empty accessible name — glyph buttons and `title=` on a `<button>` pass, matching axe `button-name`. Placeholder-only inputs are out of scope for the new rule, matching axe. The new id is selectable via `collectFindings` / `--rules` / `audit_page`; `assertNoUnlabeledInteractive` is unchanged.
+
+### Patch Changes
+
+- 2f811cb: Point the close-tab button's focus ring at a custom property that exists. The
+  shared `tree.css` these packages bundle styled `.sn-close-tab-btn:focus-visible`
+  with `outline: 2px solid var(--sn-focus-ring)`, but no stylesheet in the repo
+  ever declared `--sn-focus-ring` — every other `:focus-visible` rule uses
+  `--sn-border-focus`. An undefined custom property is invalid at computed-value
+  time, so the whole `outline` declaration was discarded and the property fell
+  back to `none`, suppressing the browser's own focus ring along with the intended
+  one. The control the rule applies to is rendered by the extension's page header,
+  so the visible fix lands there, but the broken declaration shipped in every
+  bundle of the stylesheet. `tree.css.test.ts` now fails if any `var(--…)` in the
+  stylesheet names a property that is declared nowhere and has no fallback.
+- e24f436: Never widen extraction away from a root that isn't in the document.
+
+  Extraction widens to the whole document when a portal-mounted overlay sits
+  outside the root — so a React-portalled menu joins the tree with its trigger.
+  For an **attached** root that is loss-free: the document contains it, so
+  widening only adds.
+
+  For a root the document does **not** contain it is not. The document is then a
+  disjoint tree, so the caller's own subtree disappeared and the audit described
+  markup they never passed. That covers two shapes: a detached root, and a root
+  inside a **shadow root** — `isConnected` is shadow-including while the walk
+  reads light-DOM `children`, so a web component audited at its shadow subtree
+  lost all of its content to any light-DOM toast.
+
+  ```js
+  document.body.innerHTML = '<p role="status">4 tickets</p>';
+  const root = document.createElement("div");
+  root.innerHTML = "<button>Save</button>";
+
+  auditSnapshot(root); // → 'status "4 tickets"' — the button is absent
+  collectFindings(root); // → []  ← reads as a clean component
+  ```
+
+  That last line is the damage: an audit that reports nothing because it ran
+  against somebody else's DOM. Detached roots are ordinary — a jsdom fixture
+  built with `createElement`, or a component inspected before mount.
+
+  Both widening paths are fixed, not just the portal one: the modal path never
+  looked at the root at all, so an open dialog anywhere in the document hijacked
+  a detached or shadow-rooted root just as readily, and it runs first. A modal
+  still scopes **exclusively** over a root the document contains, including a
+  sibling one — content behind a modal is inert to AT, and that is deliberate.
+
+  An **ancestor** live region is no longer treated as a portal either. "Outside
+  the root" was accepting anything above it too, so the route announcer that
+  Next.js, Remix and React Router wrap around the whole app matched on every
+  extraction — pivoting every component root on the page permanently, not just
+  while a toast was up.
+
+  Three narrower corrections in the same check:
+
+  - **`aria-live` is an allowlist.** It matched the attribute's _presence_, and
+    component kits ship exactly that shell — a permanent body-level announcer
+    with updates switched off until needed. `polite`/`assertive` pivot; `off`
+    does not; anything absent, empty or invalid falls through to the role's
+    implicit politeness, per ARIA. `!== "off"` was a denylist, so `none`,
+    `false`, `0` and a typo'd `polit` — the hand-written spellings of "switched
+    off" — all pivoted. An explicit value also beats a role's implicit
+    politeness, so `<div role="status" aria-live="off">` is inert too.
+  - **A `role` token list is read as a list**, and case is **not** folded. The
+    selector matched `role` exactly, so `role="status announcer"` was invisible;
+    it now decides on the first token, the same parse `getImplicitRole` uses, so
+    the pivot and the extracted tree always agree about what an element is.
+    Folding made `<div role="MENU" aria-live="off">` an overlay — it matched the
+    container check before the `off` check — giving one element opposite scoping
+    depending on an unrelated attribute.
+  - **The rule lives in one place now.** The same selector existed as a
+    hand-copied string in three files; the fix landing in one of them meant a
+    `role="status announcer"` toast pivoted a one-shot `auditSnapshot` while
+    never waking the inspector, the extension or a live MCP session — the same
+    DOM producing two different trees depending on which path ran.
+
+  Unchanged: an attached root still widens for a genuine portal, and still scopes
+  exclusively to an open modal. The remaining sharp edge — an _ordinary_ in-page
+  live region widening an attached root, since "outside the root" cannot tell it
+  from a portal — is now documented under Troubleshooting rather than silent.
+
+- 2c525d7: fix: name tables from `<caption>`, refuse dispatch on a disconnected node, and stop `expectTree` dumping both full trees.
+
+  A `<table>` with a `<caption>` was extracted as unnamed, which is wrong per HTML-AAM and reported as an ARIA violation. The caption now supplies the name when it is visible and non-empty; a hidden or empty caption falls through (so `title` can still win); and when `aria-label` / `aria-labelledby` already names the table, the caption's words stay in the tree instead of being deleted. The live extractor learns the same owner→child edges for `fieldset`/`legend` and `details`/`summary`, so a caption edit no longer leaves a stale table name.
+
+  `dispatch` now fails when the resolved element is disconnected — replacing `document.body.innerHTML` used to leave a detached node that still accepted events and returned `{ success: true }`.
+
+  `flow.expectTree` (and the string form of `expectChanges`) keep the first-difference pointer and drop the two full-tree dumps that followed it.
+
+- 43364f5: Internal stylesheet change, no behaviour change for these packages. The shared
+  `tree.css` they bundle gains collapse rules for live-region containers that are
+  mounted while still empty (`.sn-search-count:empty`, `.sn-live-log:empty`) and
+  splits the action-feedback bar's paint onto an inner `.sn-action-feedback-text`
+  so its flash still replays. Only the Chrome extension renders those containers
+  today, so nothing these packages render changes; the inspector's size budget
+  moves 33.5 kB → 33.8 kB to cover the added rules.
+- c26c0a1: Fix the row highlight that plays after a cross-link jump. The shared `tree.css`
+  these packages bundle declared `@keyframes sn-flash` twice — once as the
+  accent-background flash for `.sn-node--flash`, and again further down as the
+  slide-up used by the action-feedback bar and the live-announcement log. The last
+  declaration of a name wins in CSS, so the row that a cross-link chip jumped to
+  translated a full row height up from below over 700ms instead of tinting and
+  fading in place. The node flash is now `@keyframes sn-node-flash`, leaving the
+  slide-up to its two intended callers.
+- 19e0fe8: Stop reporting native HTML as broken ARIA — and let authored ARIA actually be
+  satisfied.
+
+  `toBeValidA11yTree()` judged every node by the rules for an authored role.
+  `aria-query` genuinely marks `aria-checked` required on checkbox,
+  `aria-expanded` + `aria-controls` on combobox and `aria-selected` on option —
+  correct when someone wrote `role="combobox"` on a `<div>`, because nothing else
+  supplies them. Applied to a `<select>` it produced six violations on markup
+  that is not merely valid but preferable, including `option` nested inside
+  `combobox`, which is exactly how a `<select>` is built.
+
+  The discriminator is **"does the user agent supply this state?"**, not "did
+  somebody type a `role=` attribute". Those diverge on ordinary markup:
+
+  - `<select role="combobox">` is redundant, changes nothing about the browser,
+    and design systems produce it by spreading `role` through props.
+  - `<input type="checkbox" role="switch">` is the ARIA-APG canonical switch,
+    where the role is neither redundant nor deletable — and checkedness is still
+    UA-supplied.
+
+  `ValidatedNode` gains `uaSuppliedAttrs` (per-attribute, since an element can
+  supply one state and still owe another) governing required attributes, and
+  `implicitRole` governing structure. Both are optional and absent fails
+  **closed**, so an adapter that cannot inspect the element keeps reporting rather
+  than silently disabling the rule.
+
+  Three fixes make authored ARIA satisfiable at all — previously it could not go
+  green no matter what the author wrote:
+
+  - Required attributes are now read from the element's recorded attributes when
+    the extracted state map doesn't carry them. `aria-controls` and
+    `aria-valuenow` live in neither `A11yInfo.states` (a fixed 10-entry set) nor
+    `properties` (`{level, captions}`), so a correct authored combobox or slider
+    reported a violation with no remedy available.
+  - `aria-valuenow` / `aria-valuemin` / `aria-valuemax` are now recorded, for the
+    same reason — nothing else carried them.
+  - A **`false`** value counts as present, not missing. `aria-expanded="false"` is
+    a collapsed combobox and `aria-checked="false"` an unchecked box: the ordinary
+    states, and previously unsatisfiable.
+
+  Two more from the same class:
+
+  - **Engine vocabulary is no longer reported as an invalid ARIA role.** A
+    `<video controls>` extracts as `video`, which is not in the ARIA role set, and
+    the check returned early — so no other rule ran on the node either and a page
+    containing a `<video>` could not use the matcher at all. Only an _authored_
+    role can be invalid ARIA.
+  - **An exempt native pair no longer ends the ancestor walk.** In
+    `<div role="button"><select><option>`, the option is legitimately inside its
+    select and illegitimately inside the button, which was never tested.
+
+  Real problems are still caught: an unnamed `<select>`, an unnamed `<table>`, a
+  link nested inside a button, an authored bogus role, and any hand-built role
+  that omits a state no user agent supplies.
+
+  The patch bumps are the three packages that bundle `core`'s **DOM** producer,
+  which is what `KEY_ATTRIBUTES` feeds. `cli` and `mcp` build their trees with the
+  native producer, which keeps its own attribute allowlist, so they are untouched.
+
+- Updated dependencies [69a9f90]
+- Updated dependencies [56d5eb2]
+- Updated dependencies [e24f436]
+- Updated dependencies [2c525d7]
+- Updated dependencies [5b58757]
+- Updated dependencies [562d600]
+- Updated dependencies [fdaf6d6]
+- Updated dependencies [d687614]
+- Updated dependencies [19e0fe8]
+  - @real-a11y-dev/testing@0.1.0-beta.16
+
 ## 0.1.0-beta.15
 
 ### Minor Changes

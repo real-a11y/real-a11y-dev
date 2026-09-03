@@ -2445,7 +2445,7 @@
       "exports": [],
       "name": "@real-a11y-dev/cli",
       "private": false,
-      "version": "0.1.0-beta.5",
+      "version": "0.1.0-beta.6",
       "workspaceDeps": []
     },
     {
@@ -2479,7 +2479,7 @@
       "exports": [],
       "name": "@real-a11y-dev/semantic-navigator-extension",
       "private": true,
-      "version": "0.1.12",
+      "version": "0.1.13",
       "workspaceDeps": [
         "@real-a11y-dev/core",
         "@real-a11y-dev/semantic-navigator-ui",
@@ -2495,7 +2495,7 @@
       ],
       "name": "@real-a11y-dev/inspector",
       "private": false,
-      "version": "0.1.0-beta.15",
+      "version": "0.1.0-beta.16",
       "workspaceDeps": []
     },
     {
@@ -2509,7 +2509,7 @@
       ],
       "name": "@real-a11y-dev/mcp",
       "private": false,
-      "version": "0.1.0-beta.5",
+      "version": "0.1.0-beta.6",
       "workspaceDeps": []
     },
     {
@@ -2521,7 +2521,7 @@
       ],
       "name": "@real-a11y-dev/react",
       "private": false,
-      "version": "0.1.0-beta.15",
+      "version": "0.1.0-beta.16",
       "workspaceDeps": [
         "@real-a11y-dev/inspector"
       ]
@@ -2581,7 +2581,7 @@
       ],
       "name": "@real-a11y-dev/storybook-addon",
       "private": false,
-      "version": "0.1.0-beta.15",
+      "version": "0.1.0-beta.16",
       "workspaceDeps": [
         "@real-a11y-dev/testing"
       ]
@@ -2600,7 +2600,7 @@
       ],
       "name": "@real-a11y-dev/testing",
       "private": false,
-      "version": "0.1.0-beta.15",
+      "version": "0.1.0-beta.16",
       "workspaceDeps": []
     },
     {
