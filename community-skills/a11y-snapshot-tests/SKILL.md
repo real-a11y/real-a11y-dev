@@ -33,7 +33,10 @@ Vitest **requires** `environment: "jsdom"` or every helper fails with
 
 ```ts
 import { expect, test } from "vitest";
-import { treeSnapshot, assertNoUnlabeledInteractive } from "@real-a11y-dev/testing";
+import {
+  treeSnapshot,
+  assertNoUnlabeledInteractive,
+} from "@real-a11y-dev/testing";
 
 test("the sign-in form is labeled", () => {
   document.body.innerHTML = `

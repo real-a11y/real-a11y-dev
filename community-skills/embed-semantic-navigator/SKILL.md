@@ -16,9 +16,9 @@ https://real-a11y.dev/guide/getting-started#keep-it-out-of-production
 
 ## Choose the package
 
-| Stack | Package |
-| --- | --- |
-| React | `@real-a11y-dev/react` |
+| Stack               | Package                    |
+| ------------------- | -------------------------- |
+| React               | `@real-a11y-dev/react`     |
 | Any other / vanilla | `@real-a11y-dev/inspector` |
 
 Install as a **devDependency**. Do not ship the panel to end users.
@@ -35,7 +35,9 @@ production builds drop it.
 import { lazy, Suspense, useRef } from "react";
 
 const SemanticNavigator = lazy(() =>
-  import("@real-a11y-dev/react").then((m) => ({ default: m.SemanticNavigator })),
+  import("@real-a11y-dev/react").then((m) => ({
+    default: m.SemanticNavigator,
+  })),
 );
 
 export function DevA11yPanel() {
