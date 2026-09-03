@@ -1,0 +1,19 @@
+# .VPSkipLink
+(no headings)
+
+# header.VPNav
+(no headings)
+
+# aside.VPSidebar
+  h2 Introduction
+  h2 Reading the Tree
+  h2 Chrome Extension
+  h2 Packages
+    h3 @real-a11y-dev/testing
+    h3 @real-a11y-dev/mcp
+    h3 @real-a11y-dev/cli
+  h2 Recipes
+  h2 Reference
+
+# .VPFooter
+(no headings)
