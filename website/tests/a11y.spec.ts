@@ -3,17 +3,19 @@
 // 1. Axe runs across every route × theme combination; any WCAG 2 / 2.1 /
 //    2.2 AA violation (or axe best-practice) fails the build.
 //
-// 2. Three structural snapshots run once per route via
-//    `@real-a11y-dev/testing`:
-//      - `treeSnapshot()` — the a11y tree (roles + names, indented)
-//      - `outlineSnapshot()` — the heading outline ("level N → name")
-//      - `tabSequenceSnapshot()` — focusable elements in tab order
-//    Drift fails the test; intentional changes are accepted by
-//    re-running with `--update-snapshots` and committing the
-//    regenerated baselines. They live under
-//    `tests/a11y.spec.ts-snapshots/` and are reviewable in the PR diff
-//    like any other source change. Per-shape isolation means a tab-order
-//    regression doesn't mask a tree-shape regression in the same run.
+// 2. Structural snapshots via `@real-a11y-dev/testing`, split so a chrome
+//    edit (version banner, sidebar label, footer) does not rewrite every
+//    page baseline:
+//      - per-route `#VPContent` — article, "On this page", prev/next.
+//        Home has no `<main>`; the skip link targets this id.
+//      - one chrome suite from `/guide/getting-started` — skip link,
+//        header, sidebar, footer, concatenated (querySelector is one
+//        element; there is no shared wrapper).
+//    Each side records `treeSnapshot()`, `outlineSnapshot()`, and
+//    `tabSequenceSnapshot()`. Drift fails the test; accept intentional
+//    changes with `--update-snapshots`. Baselines live under
+//    `tests/a11y.spec.ts-snapshots/`. Per-shape isolation means a
+//    tab-order regression doesn't mask a tree-shape regression.
 //
 // The route list / theme list / axe tag set live in
 // `website/scripts/audit-routes.mjs` so future ad-hoc scripts import
@@ -147,15 +149,49 @@ for (const theme of THEMES) {
   });
 }
 
-// Snapshots: per route only. Structural shape doesn't depend on
-// `prefers-color-scheme` for a static docs site, so doubling by theme
-// would just duplicate the same content.
+// Snapshots: structural shape doesn't depend on `prefers-color-scheme`
+// for a static docs site, so doubling by theme would just duplicate
+// the same content.
 // VitePress renders the file's git mtime into a `<time>` element on
 // every doc page ("Last updated: 4/25/26, 7:01 PM"). The text changes
 // every time the docs rebuild — so we redact the content before
 // snapshotting. Anything inside `time "..."` becomes a placeholder.
 function redactTimes(audit: string): string {
   return audit.replace(/time "[^"]*"/g, 'time "[redacted]"');
+}
+
+// Page body (skip-to-content target). Home is `.VPHome` inside this;
+// doc pages put the aside TOC + `<main>` + pager here. Chrome lives
+// outside it.
+const PAGE_ROOT = "#VPContent";
+
+// One representative doc route that has header + sidebar. Home does
+// not render `aside.VPSidebar`.
+const CHROME_ROUTE = "/guide/getting-started";
+
+// Shared chrome. No single wrapper — concatenate one attach per root.
+const CHROME_ROOTS = [
+  ".VPSkipLink",
+  "header.VPNav",
+  "aside.VPSidebar",
+  ".VPFooter",
+] as const;
+
+type ChromeShape = "tree" | "outline" | "tabs";
+
+async function chromeSnapshot(page: Page, shape: ChromeShape): Promise<string> {
+  const sections: string[] = [];
+  for (const selector of CHROME_ROOTS) {
+    const sn = await attach(page, { rootSelector: selector });
+    const body =
+      shape === "tree"
+        ? redactTimes(await sn.treeSnapshot())
+        : shape === "outline"
+          ? await sn.outlineSnapshot()
+          : await sn.tabSequenceSnapshot();
+    sections.push(`# ${selector}\n${body}`);
+  }
+  return sections.join("\n\n");
 }
 
 // Navigate, then block until VitePress has actually hydrated.
@@ -201,7 +237,7 @@ test.describe("a11y tree snapshot", () => {
   for (const route of ROUTES) {
     test(route, async ({ page }) => {
       await gotoHydrated(page, route);
-      const sn = await attach(page);
+      const sn = await attach(page, { rootSelector: PAGE_ROOT });
       const audit = redactTimes(await sn.treeSnapshot());
       expect(audit).toMatchSnapshot(`${slugFor(route)}.audit.txt`);
     });
@@ -212,7 +248,7 @@ test.describe("heading outline snapshot", () => {
   for (const route of ROUTES) {
     test(route, async ({ page }) => {
       await gotoHydrated(page, route);
-      const sn = await attach(page);
+      const sn = await attach(page, { rootSelector: PAGE_ROOT });
       const outline = await sn.outlineSnapshot();
       expect(outline).toMatchSnapshot(`${slugFor(route)}.outline.txt`);
     });
@@ -223,11 +259,34 @@ test.describe("tab sequence snapshot", () => {
   for (const route of ROUTES) {
     test(route, async ({ page }) => {
       await gotoHydrated(page, route);
-      const sn = await attach(page);
+      const sn = await attach(page, { rootSelector: PAGE_ROOT });
       const tabs = await sn.tabSequenceSnapshot();
       expect(tabs).toMatchSnapshot(`${slugFor(route)}.tabs.txt`);
     });
   }
+});
+
+test.describe("chrome snapshot", () => {
+  test("tree", async ({ page }) => {
+    await gotoHydrated(page, CHROME_ROUTE);
+    expect(await chromeSnapshot(page, "tree")).toMatchSnapshot(
+      "chrome.audit.txt",
+    );
+  });
+
+  test("outline", async ({ page }) => {
+    await gotoHydrated(page, CHROME_ROUTE);
+    expect(await chromeSnapshot(page, "outline")).toMatchSnapshot(
+      "chrome.outline.txt",
+    );
+  });
+
+  test("tabs", async ({ page }) => {
+    await gotoHydrated(page, CHROME_ROUTE);
+    expect(await chromeSnapshot(page, "tabs")).toMatchSnapshot(
+      "chrome.tabs.txt",
+    );
+  });
 });
 
 // The home page's linked feature cards must carry an explicit accessible
