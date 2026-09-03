@@ -61,6 +61,9 @@ same way dogfood sessions do.
 5. Link from `https://real-a11y.dev` getting-started / MCP pages (“Agent skills”).
 6. Stop editing drafts in this monorepo once the public repo is the canonical tree
    (or keep a sync script — prefer one canonical home).
+7. If `community-skills/` remains in this monorepo as a mirror, add it to
+   `LOW_SHAPED` in `scripts/pr-risk.mjs` (inert prose, same class as `docs/` /
+   `examples/`) in a dedicated PR — touching `scripts/` is high-risk on its own.
 
 ## Out of scope for v1
 
