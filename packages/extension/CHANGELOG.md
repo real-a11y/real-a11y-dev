@@ -10,6 +10,8 @@
 
 ## Unreleased
 
+## 0.1.13
+
 ### Patch Changes
 
 - Name a `<table>` from its `<caption>` when the caption is visible and

@@ -1,5 +1,182 @@
 # @real-a11y-dev/mcp
 
+## 0.1.0-beta.6
+
+### Minor Changes
+
+- 69a9f90: Reject input that isn't a tree, instead of reporting it as a clean page.
+
+  Every entry point that accepts `Element | ExtractionResult` resolved the second
+  branch with an unchecked cast, so anything that wasn't an `Element` — a number,
+  a string, `{}`, a `Date` — became an empty tree. The rules then found nothing
+  and the assertion **passed**:
+
+  ```js
+  assertNoUnlabeledInteractive(42); // passed silently
+  collectFindings(42); // 2 findings, about the number
+  assertLandmarkStructure(42); // threw "Missing <main>" — about the number
+  auditSnapshot(42); // ""  ← committed, this is a permanently green test
+  ```
+
+  The matcher layer already guarded this (`expected a DOM Element, received
+number`); the `assert*`, `collectFindings`, `listByRole` and `serialize*`
+  layers did not. They now throw a `TypeError` naming the function called and the
+  type received:
+
+  ```
+  assertNoUnlabeledInteractive: expected a DOM Element or an extracted a11y tree, received number
+  ```
+
+  It is a `TypeError`, never an `A11yAssertionError` — code catching the latter is
+  handling "this page has issues", and a wrong argument is not that. The message
+  names the received **type** and never its value, since what lands there by
+  mistake is often page text or a token.
+
+  Unknown rule ids are rejected the same way. `A11yRule` protects a TypeScript
+  caller writing a literal, but a list built from a config file, a CLI flag or
+  plain JavaScript reached the runtime unchecked, matched no rules, and passed
+  having checked nothing — a typo silently deleted the check:
+
+  ```js
+  assertRules(page, ["landmark_structure"]); // passed; the real id is landmark-structure
+  // now: unknown rule "landmark_structure". Known rules: no-unlabeled-interactive, …
+  ```
+
+  `formatFindings([])` now reads `No accessibility issues found.` rather than
+  `Found 0 accessibility issues:` with nothing under it.
+
+  **Breaking change.** A call that previously passed can now throw. In every case
+  the call was already not testing anything — a suite that goes red here was
+  green while asserting nothing — but it is a behaviour change and can surface as
+  a newly failing test. Genuine inputs are unaffected: a DOM `Element` and a real
+  `ExtractionResult` (including a native tree from CDP) behave exactly as before.
+  The tree check is structural rather than `instanceof`, so a tree that crossed a
+  realm — an iframe, a worker, a second bundled copy of the engine — still passes.
+
+- 5b58757: Add `label-title-only`, an axe-aligned warning for form controls whose only label is `title` or `aria-describedby`.
+
+  `no-unlabeled-interactive` still fails only on an empty accessible name — glyph buttons and `title=` on a `<button>` pass, matching axe `button-name`. Placeholder-only inputs are out of scope for the new rule, matching axe. The new id is selectable via `collectFindings` / `--rules` / `audit_page`; `assertNoUnlabeledInteractive` is unchanged.
+
+- bd39293: feat(mcp): `checkpoint_tree` / `diff_tree` now read Chromium's native accessibility tree, the same producer the act tools target.
+
+  They were the last two tools still on the in-page DOM walk, which meant an interaction diff was written in a different vocabulary from the action that caused it — you clicked `button "Attach"` and read a diff in which that node is `textbox "Attach"`. Now there is one producer end to end.
+
+  The captured tree also moves out of the page and into the server. Previously a navigation destroyed the checkpoint and `diff_tree` could only report an error; now the checkpoint survives, and because native node ids belong to the document that issued them, `diff_tree` can tell you the page **navigated or reloaded** — naming where it started and where it ended up — instead of emitting a diff in which every node was removed and every node added.
+
+  ## Breaking change
+
+  Both tools lose their `rootSelector` parameter. Chromium's accessibility tree is whole-document, so there is nothing for a selector to scope; a parameter that silently did nothing would be worse than none at all. `get_tab_order` keeps `rootSelector` — it is the one tool still built on the in-page walk, because tab _sequence_ is layout work the AX tree does not expose.
+
+  **Migration:** delete `rootSelector` from `checkpoint_tree` and `diff_tree` calls. If you were scoping a diff to a region, diff the whole document instead and read the region's part of it — the diff is per-node, so a narrower scope changed what was compared, not how the result was reported.
+
+  The exported `SessionRecord` also changes shape: `treeCheckpointRoot: string | undefined` (the root the in-page checkpoint used) becomes `treeCheckpoint: NativeCheckpoint | undefined` (the captured tree itself). This is only visible to embedders driving the server with a custom `SessionManager`; the field is server-owned state, so the migration is to stop referencing the old name rather than to populate the new one.
+
+### Patch Changes
+
+- 56d5eb2: `--version` and browser commands now resolve Playwright the same way (`createRequire`, which sees `NODE_PATH` and a sibling global). `npm i -g playwright` unblocks a global CLI; `--version` no longer prints a version while `audit` cannot load the driver. The missing-Playwright hint names `npm i -g playwright` when the CLI is not in the current project's `node_modules`.
+- e24f436: Never widen extraction away from a root that isn't in the document.
+
+  Extraction widens to the whole document when a portal-mounted overlay sits
+  outside the root — so a React-portalled menu joins the tree with its trigger.
+  For an **attached** root that is loss-free: the document contains it, so
+  widening only adds.
+
+  For a root the document does **not** contain it is not. The document is then a
+  disjoint tree, so the caller's own subtree disappeared and the audit described
+  markup they never passed. That covers two shapes: a detached root, and a root
+  inside a **shadow root** — `isConnected` is shadow-including while the walk
+  reads light-DOM `children`, so a web component audited at its shadow subtree
+  lost all of its content to any light-DOM toast.
+
+  ```js
+  document.body.innerHTML = '<p role="status">4 tickets</p>';
+  const root = document.createElement("div");
+  root.innerHTML = "<button>Save</button>";
+
+  auditSnapshot(root); // → 'status "4 tickets"' — the button is absent
+  collectFindings(root); // → []  ← reads as a clean component
+  ```
+
+  That last line is the damage: an audit that reports nothing because it ran
+  against somebody else's DOM. Detached roots are ordinary — a jsdom fixture
+  built with `createElement`, or a component inspected before mount.
+
+  Both widening paths are fixed, not just the portal one: the modal path never
+  looked at the root at all, so an open dialog anywhere in the document hijacked
+  a detached or shadow-rooted root just as readily, and it runs first. A modal
+  still scopes **exclusively** over a root the document contains, including a
+  sibling one — content behind a modal is inert to AT, and that is deliberate.
+
+  An **ancestor** live region is no longer treated as a portal either. "Outside
+  the root" was accepting anything above it too, so the route announcer that
+  Next.js, Remix and React Router wrap around the whole app matched on every
+  extraction — pivoting every component root on the page permanently, not just
+  while a toast was up.
+
+  Three narrower corrections in the same check:
+
+  - **`aria-live` is an allowlist.** It matched the attribute's _presence_, and
+    component kits ship exactly that shell — a permanent body-level announcer
+    with updates switched off until needed. `polite`/`assertive` pivot; `off`
+    does not; anything absent, empty or invalid falls through to the role's
+    implicit politeness, per ARIA. `!== "off"` was a denylist, so `none`,
+    `false`, `0` and a typo'd `polit` — the hand-written spellings of "switched
+    off" — all pivoted. An explicit value also beats a role's implicit
+    politeness, so `<div role="status" aria-live="off">` is inert too.
+  - **A `role` token list is read as a list**, and case is **not** folded. The
+    selector matched `role` exactly, so `role="status announcer"` was invisible;
+    it now decides on the first token, the same parse `getImplicitRole` uses, so
+    the pivot and the extracted tree always agree about what an element is.
+    Folding made `<div role="MENU" aria-live="off">` an overlay — it matched the
+    container check before the `off` check — giving one element opposite scoping
+    depending on an unrelated attribute.
+  - **The rule lives in one place now.** The same selector existed as a
+    hand-copied string in three files; the fix landing in one of them meant a
+    `role="status announcer"` toast pivoted a one-shot `auditSnapshot` while
+    never waking the inspector, the extension or a live MCP session — the same
+    DOM producing two different trees depending on which path ran.
+
+  Unchanged: an attached root still widens for a genuine portal, and still scopes
+  exclusively to an open modal. The remaining sharp edge — an _ordinary_ in-page
+  live region widening an attached root, since "outside the root" cannot tell it
+  from a portal — is now documented under Troubleshooting rather than silent.
+
+- 2c525d7: fix: name tables from `<caption>`, refuse dispatch on a disconnected node, and stop `expectTree` dumping both full trees.
+
+  A `<table>` with a `<caption>` was extracted as unnamed, which is wrong per HTML-AAM and reported as an ARIA violation. The caption now supplies the name when it is visible and non-empty; a hidden or empty caption falls through (so `title` can still win); and when `aria-label` / `aria-labelledby` already names the table, the caption's words stay in the tree instead of being deleted. The live extractor learns the same owner→child edges for `fieldset`/`legend` and `details`/`summary`, so a caption edit no longer leaves a stale table name.
+
+  `dispatch` now fails when the resolved element is disconnected — replacing `document.body.innerHTML` used to leave a detached node that still accepted events and returned `{ success: true }`.
+
+  `flow.expectTree` (and the string form of `expectChanges`) keep the first-difference pointer and drop the two full-tree dumps that followed it.
+
+- 0c85710: fix: redact secrets in a URL's **fragment**, and stop `open_page` printing its landing URL raw.
+
+  Every URL these tools print goes through one redactor, which stripped userinfo and replaced secret-looking **query** parameters. It never looked past the `#`. That is precisely where OAuth's implicit flow puts its tokens — a redirect lands on `…/callback#access_token=ya29.…&token_type=bearer` — and because a fragment is never sent to the server, it is _only_ ever visible client-side, which is where this toolchain reads it. So a token in the query was redacted and the same token in the fragment was printed in full, into agent context, CLI output, saved artifacts, reports and CI logs.
+
+  Ordinary fragments are left exactly as they were: `#installation` and `#/dashboard/users` are useful and are not secrets. Pairs are rewritten **in place**, so only a matched value changes and every other byte — separators, existing encoding, a bare trailing `#` — survives as it arrived.
+
+  A fragment is opaque to the URL parser, so nothing decides authoritatively how it splits — the _app_ does. `#`, `?`, `&`, `/`, `;` and `,` are all treated as separators, and the assignment may be `=` or `%3D`. That covers the shape this is most likely to meet in the wild (a hash-routed SPA completing an implicit flow lands on `…/#/callback#access_token=…`, where the second `#` separates in every sense except the parser's) and Angular Router's matrix parameters, which use `;` inside the fragment.
+
+  Anything that still cannot be read as pairs, yet plainly carries a secret-shaped key, is truncated from the last separator before it — **the route in front of it is kept**. That matters beyond readability: page identity is derived from the redacted URL, and for a hash-routed SPA every route lives at pathname `/`, so discarding the whole fragment collapsed distinct pages onto one id.
+
+  Separately, the MCP `open_page` result printed `Opened <url>` unredacted, and the page-controlled `Title:` beside it unsanitized — a page could set `document.title` to inject a terminal escape sequence and forge extra result lines, including a second `Opened <url>` an agent cannot distinguish from the real one. Both now go through the boundary.
+
+  The URL half matters more than it looks: what it prints is where the page **landed**, so it is the end of a redirect chain, and an OAuth redirect chain ends with the token. The matching failure path leaked it too — Playwright quotes the full target URL in a navigation error, and that message is relayed to the agent verbatim — so escaping errors now go through the same redactor the CLI already applied to its equivalent path.
+
+  ## What this does not cover
+
+  The **query** half is unchanged: it is still `URLSearchParams`-based, so it sees
+  only `&` and a literal `=`, and it has no fail-closed backstop. `?access_token%3D…`
+  and `?a=1;access_token=…` still print in full. Extending the fragment's tokenizer
+  to the query is follow-up work — it is a wider behaviour change than this fix,
+  and nothing here made the query half worse.
+
+  ## One caveat worth knowing
+
+  A page's identity is derived from its redacted URL, fragment included. A stored baseline or checkpoint whose fragment contains a deny-listed key — `#…code=…`, `#…token=…`, `#…key=…`, including as a _route_ segment like `#/orders/code=US` — therefore gets a new identity and will not join against a fresh capture. Re-baseline it. Note that `code` and `key` are ordinary route words, so this reaches some URLs that never carried a secret; a page that re-keys silently reports its whole committed baseline as new findings, which is the failure worth watching for.
+
+  An ordinary `#anchor` is byte-identical to before and joins as it always did. And the flip side is the point: an artifact whose fragment held a real token was previously storing that token on disk, which is the worse half of this bug.
+
 ## 0.1.0-beta.5
 
 ### Minor Changes

@@ -140,7 +140,6 @@
             "assertLandmarkStructure",
             "assertNoUnlabeledInteractive",
             "assertRules",
-            "auditSnapshot",
             "capture",
             "collectFindings",
             "diffTrees",
@@ -159,6 +158,7 @@
             "serializeTree",
             "serializeTreeDiff",
             "tabSequenceSnapshot",
+            "treeSnapshot",
             "waitForMutations"
           ]
         },
@@ -166,9 +166,9 @@
           "subpath": "./playwright",
           "types": [
             "AttachOptions",
-            "AuditSnapshotOptions",
             "PlaywrightPage",
-            "SemanticNavigatorPageHandle"
+            "SemanticNavigatorPageHandle",
+            "TreeSnapshotOptions"
           ],
           "values": [
             "attach"
@@ -181,13 +181,23 @@
           ],
           "values": [
             "a11yMatchers",
-            "a11ySnapshot",
             "a11ySnapshotSerializer",
+            "boxedTreeSnapshot",
             "registerA11yMatchers"
           ]
         },
         {
           "subpath": "./matchers/vitest",
+          "types": [],
+          "values": []
+        },
+        {
+          "subpath": "./matchers/jest",
+          "types": [],
+          "values": []
+        },
+        {
+          "subpath": "./matchers/jest-globals",
           "types": [],
           "values": []
         }
@@ -1715,7 +1725,7 @@
           "openWorldHint": false,
           "readOnlyHint": true
         },
-        "description": "Run accessibility audits against the current page and return every violation — unlabeled interactive controls, skipped heading levels or missing/duplicate h1, unlabeled dialogs, and broken landmark structure. Reports what real assistive tech would announce as broken. This is the primary tool. Audits Chromium's own accessibility tree, so it reaches structure no in-page walk can (a `<video controls>`'s user-agent-shadow media controls); findings carry CSS locators. Whole-document. Chromium only.",
+        "description": "Run accessibility audits against the current page and return every violation — unlabeled interactive controls, form controls labeled only by title or aria-describedby, skipped heading levels or missing/duplicate h1, unlabeled dialogs, and broken landmark structure. Empty-name findings are what assistive tech would announce as unnamed; label-title-only is the axe-core best-practice extra (title still is a name). This is the primary tool. Audits Chromium's own accessibility tree, so it reaches structure no in-page walk can (a `<video controls>`'s user-agent-shadow media controls); findings carry CSS locators. Whole-document. Chromium only.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "additionalProperties": false,
@@ -1725,6 +1735,7 @@
               "items": {
                 "enum": [
                   "no-unlabeled-interactive",
+                  "label-title-only",
                   "image-alt",
                   "heading-order",
                   "dialog-labeled",
@@ -1768,6 +1779,7 @@
               "items": {
                 "enum": [
                   "no-unlabeled-interactive",
+                  "label-title-only",
                   "image-alt",
                   "heading-order",
                   "dialog-labeled",
@@ -1798,16 +1810,11 @@
           "openWorldHint": false,
           "readOnlyHint": false
         },
-        "description": "Capture the CURRENT accessibility tree in the page as a comparison point. Then interact — click, type, open a dialog — and call diff_tree to see exactly which nodes were added, removed, or changed, and where focus moved. Unlike checkpoint_findings (which stores findings and survives navigation), a tree checkpoint is bound to THIS page instance and is discarded when the page navigates.",
+        "description": "Capture the CURRENT accessibility tree as a comparison point. Then interact — click, type, open a dialog — and call diff_tree to see exactly which nodes were added, removed, or changed, and where focus moved. Reads the whole document with the same native producer the act tools target, so the diff speaks one vocabulary. If a step navigates, diff_tree says the document was replaced rather than reporting the entire page as changed.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "additionalProperties": false,
           "properties": {
-            "rootSelector": {
-              "default": "body",
-              "description": "CSS selector for the extraction root. Defaults to 'body'.",
-              "type": "string"
-            },
             "session": {
               "default": "default",
               "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
@@ -1826,7 +1833,7 @@
           "openWorldHint": true,
           "readOnlyHint": false
         },
-        "description": "Dispatch a REAL click against the element matched by role + accessible name in Chromium's accessibility tree — the same view get_semantic_tree prints. Targeting is deliberately role+name only: if a control can't be reached that way, assistive technology can't reach it either, and that is itself an accessibility finding. For the full story call checkpoint_tree FIRST, then this, then diff_tree — the diff answers 'what did that click change for a screen reader?'. THE CLICK IS REAL: it can submit forms, toggle state, and NAVIGATE — navigation discards the page's tree checkpoint. If several nodes match, the error lists them; pass nth to pick one. Chromium only. See also type_text and focus_element.",
+        "description": "Dispatch a REAL click against the element matched by role + accessible name in Chromium's accessibility tree — the same view get_semantic_tree prints. Targeting is deliberately role+name only: if a control can't be reached that way, assistive technology can't reach it either, and that is itself an accessibility finding. For the full story call checkpoint_tree FIRST, then this, then diff_tree — the diff answers 'what did that click change for a screen reader?'. THE CLICK IS REAL: it can submit forms, toggle state, and NAVIGATE — if it navigates, diff_tree reports the document was replaced rather than a diff, and you re-checkpoint. If several nodes match, the error lists them; pass nth to pick one. Chromium only. See also type_text and focus_element.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "additionalProperties": false,
@@ -1958,15 +1965,11 @@
           "openWorldHint": false,
           "readOnlyHint": true
         },
-        "description": "Diff the CURRENT accessibility tree against the one captured by checkpoint_tree: nodes added, removed, or changed, plus a focus move. This is the interaction diff — the precise answer to 'what did that click actually change for a screen reader?'. Re-extracts with the root the checkpoint used unless you override it.",
+        "description": "Diff the CURRENT accessibility tree against the one captured by checkpoint_tree: nodes added, removed, or changed, plus a focus move. This is the interaction diff — the precise answer to 'what did that click actually change for a screen reader?'.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "additionalProperties": false,
           "properties": {
-            "rootSelector": {
-              "description": "CSS root for the re-extraction. Defaults to the root the checkpoint was captured with.",
-              "type": "string"
-            },
             "session": {
               "default": "default",
               "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
@@ -2183,6 +2186,7 @@
               "items": {
                 "enum": [
                   "no-unlabeled-interactive",
+                  "label-title-only",
                   "image-alt",
                   "heading-order",
                   "dialog-labeled",
@@ -2441,7 +2445,7 @@
       "exports": [],
       "name": "@real-a11y-dev/cli",
       "private": false,
-      "version": "0.1.0-beta.5",
+      "version": "0.1.0-beta.6",
       "workspaceDeps": []
     },
     {
@@ -2475,7 +2479,7 @@
       "exports": [],
       "name": "@real-a11y-dev/semantic-navigator-extension",
       "private": true,
-      "version": "0.1.12",
+      "version": "0.1.13",
       "workspaceDeps": [
         "@real-a11y-dev/core",
         "@real-a11y-dev/semantic-navigator-ui",
@@ -2491,7 +2495,7 @@
       ],
       "name": "@real-a11y-dev/inspector",
       "private": false,
-      "version": "0.1.0-beta.15",
+      "version": "0.1.0-beta.16",
       "workspaceDeps": []
     },
     {
@@ -2505,7 +2509,7 @@
       ],
       "name": "@real-a11y-dev/mcp",
       "private": false,
-      "version": "0.1.0-beta.5",
+      "version": "0.1.0-beta.6",
       "workspaceDeps": []
     },
     {
@@ -2517,7 +2521,7 @@
       ],
       "name": "@real-a11y-dev/react",
       "private": false,
-      "version": "0.1.0-beta.15",
+      "version": "0.1.0-beta.16",
       "workspaceDeps": [
         "@real-a11y-dev/inspector"
       ]
@@ -2577,7 +2581,7 @@
       ],
       "name": "@real-a11y-dev/storybook-addon",
       "private": false,
-      "version": "0.1.0-beta.15",
+      "version": "0.1.0-beta.16",
       "workspaceDeps": [
         "@real-a11y-dev/testing"
       ]
@@ -2589,12 +2593,14 @@
       "exports": [
         ".",
         "./matchers",
+        "./matchers/jest",
+        "./matchers/jest-globals",
         "./matchers/vitest",
         "./playwright"
       ],
       "name": "@real-a11y-dev/testing",
       "private": false,
-      "version": "0.1.0-beta.15",
+      "version": "0.1.0-beta.16",
       "workspaceDeps": []
     },
     {
