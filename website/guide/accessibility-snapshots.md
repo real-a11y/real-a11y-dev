@@ -44,7 +44,7 @@ Real A11y snapshots the same tree three ways, so you pick the grain that fits th
 
 | Snapshot | Captures | Catches |
 |---|---|---|
-| **Tree** ([`auditSnapshot`](/packages/testing/snapshots#auditsnapshot-root-options)) | Full role + name structure | Missing labels, wrong roles, structural drift |
+| **Tree** ([`treeSnapshot`](/packages/testing/snapshots#treesnapshot-root-options)) | Full role + name structure | Missing labels, wrong roles, structural drift |
 | **Outline** ([`outlineSnapshot`](/packages/testing/snapshots#outlinesnapshot-root-options)) | Heading hierarchy only | Missing `<h1>`, skipped levels |
 | **Tab order** ([`tabSequenceSnapshot`](/packages/testing/snapshots#tabsequencesnapshot-root-options)) | Focus sequence | Focus traps, illogical tab order, positive-`tabindex` surprises |
 
@@ -54,7 +54,7 @@ The same DOM always produces the same string — no timestamps, generated IDs, o
 
 ```ts
 expect(
-  a11ySnapshot(container, { redact: [/\d+ (minutes?|hours?) ago/] }),
+  treeSnapshot(container, { redact: [/\d+ (minutes?|hours?) ago/] }),
 ).toMatchSnapshot();
 ```
 
@@ -80,7 +80,7 @@ An accessibility snapshot is the serialized form of the tree you can also *see* 
 ## Start snapshotting
 
 - **From the shell** → the [`real-a11y` CLI](/packages/cli) (`real-a11y tree <url>`, or `real-a11y snapshot` for a whole page set)
-- **In Vitest / Jest** → [Snapshots reference](/packages/testing/snapshots), or the ergonomic [`a11ySnapshot()` matcher](/packages/testing/matchers#a11ysnapshot-root-options-—-snapshot-serializer)
+- **In Vitest / Jest** → [Snapshots reference](/packages/testing/snapshots), or the ergonomic [`boxedTreeSnapshot()` matcher](/packages/testing/matchers#boxedtreesnapshot-root-options-—-snapshot-serializer)
 - **In Playwright** → [the `attach()` adapter](/packages/testing/playwright)
 - **In CI** → the [CI Diff Bot recipe](/guide/ci-diff-bot) posts findings-aware diffs on every PR
 - **Comparing it to axe, visual testing, or Playwright?** → [How Accessibility Snapshots Compare](/guide/accessibility-snapshots-comparisons)

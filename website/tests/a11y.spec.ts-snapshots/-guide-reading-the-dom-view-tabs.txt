@@ -52,7 +52,7 @@ link "How it relates to the other views"
 link "Chrome extension"
 link "React component"
 link "Storybook addon"
-link "auditSnapshot()"
+link "treeSnapshot()"
 table
 link "Edit this page on GitHub"
 link "Previous pageUnderstanding the Views"

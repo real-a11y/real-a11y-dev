@@ -15,7 +15,7 @@ Deterministic text serialization of the [Semantic Navigator](https://real-a11y.d
 > published home for the serializers: `serializeTree`, `serializeTreeDiff`,
 > `extract`, `SerializeOptions` and `TreeDiffSerializeOptions` keep their names,
 > while `serializeOutline` and `serializeTabSequence` arrive as
-> `outlineSnapshot` and `tabSequenceSnapshot` (with `auditSnapshot` aliasing
+> `outlineSnapshot` and `tabSequenceSnapshot` (with `treeSnapshot` aliasing
 > `serializeTree`), and `numberTabStops` keeps its name too. Only
 > `foldTypography` and the `SerializeInput` type are not re-exported, and those
 > two have no published replacement.

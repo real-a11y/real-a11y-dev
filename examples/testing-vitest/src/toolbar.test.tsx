@@ -3,7 +3,7 @@ import * as React from "react";
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 import { ToolbarCorrect, ToolbarBroken } from "@real-a11y-dev/example-patterns";
-import { auditSnapshot } from "@real-a11y-dev/testing";
+import { treeSnapshot } from "@real-a11y-dev/testing";
 
 afterEach(cleanup);
 
@@ -18,7 +18,7 @@ describe("APG Toolbar — correct vs broken", () => {
     const { container } = render(
       <ToolbarCorrect label="Text formatting" items={items} />,
     );
-    const tree = auditSnapshot(container);
+    const tree = treeSnapshot(container);
     expect(tree).toContain('toolbar "Text formatting"');
     expect(tree).toContain('button "Bold"');
   });
@@ -27,7 +27,7 @@ describe("APG Toolbar — correct vs broken", () => {
     const { container } = render(
       <ToolbarBroken label="Text formatting" items={items} />,
     );
-    const tree = auditSnapshot(container);
+    const tree = treeSnapshot(container);
     expect(tree).not.toContain("toolbar");
     expect(tree).toContain('button "Bold"');
   });

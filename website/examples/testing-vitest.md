@@ -6,7 +6,7 @@ Demonstrates `@real-a11y-dev/testing` in a Vitest + jsdom test suite — snapsho
 
 ## What it shows
 
-- `auditSnapshot()` as a Vitest snapshot
+- `treeSnapshot()` as a Vitest snapshot
 - `assertNoUnlabeledInteractive()` in a form component test
 - `assertHeadingOrder()` checking page-level heading structure
 - `assertLandmarkStructure()` verifying `main`/`header`/`footer`
@@ -29,13 +29,13 @@ pnpm --filter @real-a11y-dev/example-testing test
 ```ts
 // examples/testing-vitest/src/snapshot.test.ts
 import { render } from "@testing-library/react";
-import { auditSnapshot, assertNoUnlabeledInteractive } from "@real-a11y-dev/testing";
+import { treeSnapshot, assertNoUnlabeledInteractive } from "@real-a11y-dev/testing";
 import { LoginForm } from "./LoginForm";
 
 describe("LoginForm accessibility", () => {
   it("matches the a11y tree snapshot", () => {
     const { container } = render(<LoginForm />);
-    expect(auditSnapshot(container)).toMatchSnapshot();
+    expect(treeSnapshot(container)).toMatchSnapshot();
   });
 
   it("has no unlabeled interactive elements", () => {

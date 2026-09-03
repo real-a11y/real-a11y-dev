@@ -1,7 +1,7 @@
 ---
 id: R12
 suite: regression
-scenario: "Testing pkg — snapshot helpers from the installed tarball (auditSnapshot / outlineSnapshot / tabSequenceSnapshot + redact + markFocus)"
+scenario: "Testing pkg — snapshot helpers from the installed tarball (treeSnapshot / outlineSnapshot / tabSequenceSnapshot + redact + markFocus)"
 area: Testing
 type: Automated
 priority: P0
@@ -20,13 +20,13 @@ notion: "https://app.notion.com/p/3aa1c354b0b58149822cfd48d6539dbb"
 Install the **packed tarball** into a scratch project — not a workspace link.
 Packaging faults only show from the tarball.
 
-1. `auditSnapshot(root)` on a fixed fixture, twice in the same run
+1. `treeSnapshot(root)` on a fixed fixture, twice in the same run
 2. Same, across two separate runs
 3. `outlineSnapshot(root)`
 4. `tabSequenceSnapshot(root)`
-5. `auditSnapshot(root, { redact: [/secret-\w+/g] })` where the string occurs
+5. `treeSnapshot(root, { redact: [/secret-\w+/g] })` where the string occurs
    **several** times, in a name, in text, and in an attribute
-6. Focus a control, then `auditSnapshot(root, { markFocus: true })`
+6. Focus a control, then `treeSnapshot(root, { markFocus: true })`
 7. Same with nothing focused
 8. `tabSequenceSnapshot` inside a stored snapshot artifact vs printed to a terminal
 9. Focus a control and pass **no option at all**, then focus one and pass

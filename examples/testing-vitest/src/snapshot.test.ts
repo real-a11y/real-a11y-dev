@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import {
-  auditSnapshot,
+  treeSnapshot,
   outlineSnapshot,
   tabSequenceSnapshot,
 } from "@real-a11y-dev/testing";
@@ -8,7 +8,7 @@ import { fixture, cleanup } from "./fixtures.js";
 
 afterEach(cleanup);
 
-describe("auditSnapshot", () => {
+describe("treeSnapshot", () => {
   it("captures the full a11y tree of a form", () => {
     const root = fixture(`
       <main>
@@ -30,7 +30,7 @@ describe("auditSnapshot", () => {
 
     // Use toMatchSnapshot() so Vitest writes the canonical value on first run.
     // The output includes all roles, names, and heading levels.
-    const snapshot = auditSnapshot(root);
+    const snapshot = treeSnapshot(root);
     expect(snapshot).toContain('heading "Sign in"');
     expect(snapshot).toContain('form "Sign-in form"');
     expect(snapshot).toContain('button "Sign in"');
@@ -45,7 +45,7 @@ describe("auditSnapshot", () => {
         <a href="/about">About</a>
       </nav>
     `);
-    const snapshot = auditSnapshot(root, { mode: "dom" });
+    const snapshot = treeSnapshot(root, { mode: "dom" });
     expect(snapshot).toContain("nav");
     expect(snapshot).toContain("a");
   });
@@ -54,7 +54,7 @@ describe("auditSnapshot", () => {
     const root = fixture(`
       <p>Order ID: 8f3a-2b91-cc40</p>
     `);
-    const snapshot = auditSnapshot(root, {
+    const snapshot = treeSnapshot(root, {
       redact: [/[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}/gi],
     });
     // The implementation uppercases the placeholder: [REDACTED]

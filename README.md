@@ -49,13 +49,13 @@ npx real-a11y audit https://example.com
 
 ```ts
 import { expect, test } from "vitest";
-import { auditSnapshot, assertNoUnlabeledInteractive } from "@real-a11y-dev/testing";
+import { treeSnapshot, assertNoUnlabeledInteractive } from "@real-a11y-dev/testing";
 
 test("the sign-in form is labeled", () => {
   const root = document.querySelector("main")!;
 
   assertNoUnlabeledInteractive(root);
-  expect(auditSnapshot(root)).toMatchSnapshot();
+  expect(treeSnapshot(root)).toMatchSnapshot();
 });
 ```
 

@@ -34,7 +34,7 @@ test("page heading structure", async ({ page }) => {
   await sn.assertDialogsLabeled();
 
   // Snapshots — deterministic strings, safe to commit
-  expect(await sn.auditSnapshot()).toMatchSnapshot();
+  expect(await sn.treeSnapshot()).toMatchSnapshot();
   expect(await sn.outlineSnapshot()).toMatchSnapshot();
   expect(await sn.tabSequenceSnapshot()).toMatchSnapshot();
 });
@@ -67,7 +67,7 @@ test("native tree sees the media controls", async ({ page }) => {
   // Same handle, same assertions — over Chromium's a11y tree.
   await sn.assertHeadingOrder();
   await sn.assertLandmarkStructure();
-  expect(await sn.auditSnapshot()).toMatchSnapshot();
+  expect(await sn.treeSnapshot()).toMatchSnapshot();
 });
 ```
 
@@ -78,7 +78,7 @@ Native mode is **read-only and whole-document** for now:
 - `tabSequenceSnapshot()` **throws** — a native tree carries no focus/interaction data, so tab order can't be computed. Use `{ tree: "dom" }` for tab-sequence snapshots.
 - `rootSelector` scoping is **not supported** — omit it (the default `"body"` audits the whole document); passing any other selector throws up front rather than silently ignoring it.
 
-Everything else — `auditSnapshot()`, `outlineSnapshot()`, and every `assert*` method — works identically. Both producers normalize to the *same* tree model, so a snapshot's `role "name"` grammar is the same and the two trees are directly comparable.
+Everything else — `treeSnapshot()`, `outlineSnapshot()`, and every `assert*` method — works identically. Both producers normalize to the *same* tree model, so a snapshot's `role "name"` grammar is the same and the two trees are directly comparable.
 
 ## Testing that assertions fail on broken pages
 
@@ -110,31 +110,31 @@ Keep a small "broken" fixture checked into your test repo with one of each patte
 
 ## Determinism
 
-`auditSnapshot()`, `outlineSnapshot()`, and `tabSequenceSnapshot()` return the **same string** for the same DOM — on every run, on every machine. No timestamps, no generated IDs, no ordering surprises:
+`treeSnapshot()`, `outlineSnapshot()`, and `tabSequenceSnapshot()` return the **same string** for the same DOM — on every run, on every machine. No timestamps, no generated IDs, no ordering surprises:
 
 ```ts
-test("auditSnapshot is stable across repeated calls", async ({ page }) => {
+test("treeSnapshot is stable across repeated calls", async ({ page }) => {
   await page.goto("/home");
   const sn = await attach(page);
 
-  const snap1 = await sn.auditSnapshot();
-  const snap2 = await sn.auditSnapshot();
+  const snap1 = await sn.treeSnapshot();
+  const snap2 = await sn.treeSnapshot();
   expect(snap1).toBe(snap2);
 });
 ```
 
-That's the property that makes `expect(await sn.auditSnapshot()).toMatchSnapshot()` safe to use in CI without flakes. If you have genuinely variable content (timestamps, locale-dependent copy), redact it — see below.
+That's the property that makes `expect(await sn.treeSnapshot()).toMatchSnapshot()` safe to use in CI without flakes. If you have genuinely variable content (timestamps, locale-dependent copy), redact it — see below.
 
 ## Redacting variable content
 
-`auditSnapshot()` takes the same [`redact`](/packages/testing/snapshots#using-redact) option as the jsdom helper — an array of `RegExp` whose matches become `[REDACTED]` in accessible names:
+`treeSnapshot()` takes the same [`redact`](/packages/testing/snapshots#using-redact) option as the jsdom helper — an array of `RegExp` whose matches become `[REDACTED]` in accessible names:
 
 ```ts
 test("home page structure", async ({ page }) => {
   await page.goto("/home");
   const sn = await attach(page);
   expect(
-    await sn.auditSnapshot({
+    await sn.treeSnapshot({
       redact: [
         /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/g, // ISO timestamps
         /\d+ (seconds?|minutes?|hours?) ago/g, // relative times
@@ -153,7 +153,7 @@ Test (Node)                          Browser page
 ──────────                           ────────────
 attach(page)
   → readBundle() (cached)
-  → page.addScriptTag(bundle)   ──▶  window.__realA11y__ = { auditSnapshot, … }
+  → page.addScriptTag(bundle)   ──▶  window.__realA11y__ = { treeSnapshot, … }
   → returns handle
 
 sn.assertHeadingOrder()

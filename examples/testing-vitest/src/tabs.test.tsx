@@ -9,7 +9,7 @@ import {
   TabsBroken,
   type TabsExampleProps,
 } from "@real-a11y-dev/example-patterns";
-import { auditSnapshot, tabSequenceSnapshot } from "@real-a11y-dev/testing";
+import { treeSnapshot, tabSequenceSnapshot } from "@real-a11y-dev/testing";
 
 afterEach(cleanup);
 
@@ -34,7 +34,7 @@ describe("APG Tabs — correct vs broken", () => {
       />,
     );
 
-    const tree = auditSnapshot(container);
+    const tree = treeSnapshot(container);
     expect(tree).toContain('tablist "Documentation sections"');
     expect(tree).toContain('tab "Overview"');
     expect(tree).toContain('tab "Install"');
@@ -55,7 +55,7 @@ describe("APG Tabs — correct vs broken", () => {
       <TabsBroken defaultValue="overview" panels={panels} />,
     );
 
-    const tree = auditSnapshot(container);
+    const tree = treeSnapshot(container);
     // The broken variant emits plain buttons with no role/aria-controls.
     // No `tablist` / `tab` / `tabpanel` anywhere in the audit output.
     expect(tree).not.toContain("tablist");

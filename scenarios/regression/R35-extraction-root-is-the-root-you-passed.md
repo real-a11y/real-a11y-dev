@@ -26,7 +26,7 @@ form status, a save confirmation — as a **sibling** of the element under test:
 <div id="component"><button>Save</button></div>
 ```
 
-1. `auditSnapshot(document.getElementById("component"))`
+1. `treeSnapshot(document.getElementById("component"))`
 2. The same, with the root **detached** (never appended to the document) —
    the React Testing Library shape before mount, and the jsdom fixture shape
 3. `outlineSnapshot(root)` and `collectFindings(root)` in the same state
@@ -137,7 +137,7 @@ the fix, not a regression:
 document.body.innerHTML = '<p role="status">4 tickets</p>';
 const root = document.createElement("div");
 root.innerHTML = "<button>Save</button>";
-auditSnapshot(root); // beta.15: 'status "4 tickets"' — the button is absent
+treeSnapshot(root); // beta.15: 'status "4 tickets"' — the button is absent
 // after:    'button "Save"'
 ```
 

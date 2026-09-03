@@ -155,7 +155,7 @@ function TreeDebugger({ rootRef }) {
 ### Testing (Vitest / Jest)
 
 ```ts
-import { auditSnapshot, assertNoUnlabeledInteractive } from "@real-a11y-dev/testing";
+import { treeSnapshot, assertNoUnlabeledInteractive } from "@real-a11y-dev/testing";
 import { render } from "@testing-library/react";
 
 test("login form is fully labeled", () => {
@@ -165,21 +165,21 @@ test("login form is fully labeled", () => {
   assertNoUnlabeledInteractive(container);
 
   // Deterministic string snapshot of the A11y tree — great for CI.
-  expect(auditSnapshot(container)).toMatchSnapshot();
+  expect(treeSnapshot(container)).toMatchSnapshot();
 });
 ```
 
 Those are the **function-style** helpers — zero setup. Prefer the jest-axe-style `expect` matchers? Register them once in a setup file — `registerA11yMatchers(expect)` plus a types-only import naming your runner ([`./matchers/vitest`, `./matchers/jest` or `./matchers/jest-globals`](/packages/testing/matchers#setup)) — and the same checks read as native matchers under Vitest **and** Jest:
 
 ```ts
-import { a11ySnapshot } from "@real-a11y-dev/testing/matchers";
+import { boxedTreeSnapshot } from "@real-a11y-dev/testing/matchers";
 
 test("login form is fully labeled", () => {
   const { container } = render(<LoginForm />);
 
   expect(container).toHaveNoUnlabeledInteractive();
   expect(container).toHaveValidHeadingOrder();
-  expect(a11ySnapshot(container)).toMatchSnapshot();
+  expect(boxedTreeSnapshot(container)).toMatchSnapshot();
 });
 ```
 
@@ -203,7 +203,7 @@ test("home page accessibility", async ({ page }) => {
   await sn.assertLandmarkStructure();
 
   // Deterministic snapshot — commit to version control
-  expect(await sn.auditSnapshot()).toMatchSnapshot();
+  expect(await sn.treeSnapshot()).toMatchSnapshot();
 });
 ```
 

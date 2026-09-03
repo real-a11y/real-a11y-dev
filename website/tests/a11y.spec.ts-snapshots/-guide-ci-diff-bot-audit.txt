@@ -220,7 +220,7 @@ main
         code "attach()"
       code "@real-a11y-dev/testing/playwright"
       code "attach()"
-      code "auditSnapshot()"
+      code "treeSnapshot()"
       code "outlineSnapshot()"
       code "tabSequenceSnapshot()"
       link "Combine with assertions"

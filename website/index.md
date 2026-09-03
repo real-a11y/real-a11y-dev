@@ -27,7 +27,7 @@ features:
     linkText: Install the extension
   - icon: 🧪
     title: Test what users actually experience
-    details: "@real-a11y-dev/testing gives you auditSnapshot(), assertHeadingOrder(), assertNoUnlabeledInteractive(), and a fluent flow() chain — all powered by the real accessibility tree, not synthetic mocks."
+    details: "@real-a11y-dev/testing gives you treeSnapshot(), assertHeadingOrder(), assertNoUnlabeledInteractive(), and a fluent flow() chain — all powered by the real accessibility tree, not synthetic mocks."
   - icon: ⌨️
     title: Audit from the shell and CI
     details: "@real-a11y-dev/cli — the real-a11y command audits any URL from the shell with per-instance locators and CI-grade exit codes. snapshot + diff then track accessibility regressions across a PR, findings-aware."

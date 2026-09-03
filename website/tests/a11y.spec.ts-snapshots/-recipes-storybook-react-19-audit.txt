@@ -147,7 +147,7 @@ main
   button "Copy Code"
   code
   paragraph "For accessibility-specific CI coverage on Storybook stories, pair it with the Playwright adapter — load the built Storybook and run against each story's iframe. That's more setup than most projects need; for per-story audits the panel itself + manual review is usually enough."
-    code "auditSnapshot()"
+    code "treeSnapshot()"
   separator
   heading "Known constraints" (level 2)
   list

@@ -23,24 +23,24 @@ test.describe("good fixture", () => {
   test("attach() injects the bundle and returns a handle", async ({ page }) => {
     const sn = await attach(page);
     expect(sn).toBeDefined();
-    expect(typeof sn.auditSnapshot).toBe("function");
+    expect(typeof sn.treeSnapshot).toBe("function");
     expect(typeof sn.assertHeadingOrder).toBe("function");
   });
 
-  test("auditSnapshot returns a non-empty string", async ({ page }) => {
+  test("treeSnapshot returns a non-empty string", async ({ page }) => {
     const sn = await attach(page);
-    const snapshot = await sn.auditSnapshot();
+    const snapshot = await sn.treeSnapshot();
     expect(typeof snapshot).toBe("string");
     expect(snapshot.length).toBeGreaterThan(0);
     expect(snapshot).toContain("Test fixture");
     expect(snapshot).toContain("Contact form");
   });
 
-  test("auditSnapshot in dom mode uses role names for semantic elements", async ({
+  test("treeSnapshot in dom mode uses role names for semantic elements", async ({
     page,
   }) => {
     const sn = await attach(page);
-    const snapshot = await sn.auditSnapshot({ mode: "dom" });
+    const snapshot = await sn.treeSnapshot({ mode: "dom" });
     // DOM mode still serializes using ARIA role names (banner, main, contentinfo)
     // derived from the element's implicit role — not raw tag names.
     expect(snapshot).toContain("banner"); // <header>
@@ -95,25 +95,25 @@ test.describe("good fixture", () => {
 
   test("rootSelector narrows the audit to a subtree", async ({ page }) => {
     const sn = await attach(page, { rootSelector: "form" });
-    const snapshot = await sn.auditSnapshot();
+    const snapshot = await sn.treeSnapshot();
     // Form contents visible
     expect(snapshot).toContain("Send message");
     // Page-level heading not in form subtree
     expect(snapshot).not.toContain("Test fixture");
   });
 
-  test("auditSnapshot is stable across multiple calls", async ({ page }) => {
+  test("treeSnapshot is stable across multiple calls", async ({ page }) => {
     const sn = await attach(page);
-    const snap1 = await sn.auditSnapshot();
-    const snap2 = await sn.auditSnapshot();
+    const snap1 = await sn.treeSnapshot();
+    const snap2 = await sn.treeSnapshot();
     expect(snap1).toBe(snap2);
   });
 
-  test("auditSnapshot redacts matching accessible names", async ({ page }) => {
+  test("treeSnapshot redacts matching accessible names", async ({ page }) => {
     // Proves a RegExp survives the marshalling across the page.evaluate()
     // boundary and redaction runs inside the page.
     const sn = await attach(page);
-    const snapshot = await sn.auditSnapshot({ redact: [/Test fixture/g] });
+    const snapshot = await sn.treeSnapshot({ redact: [/Test fixture/g] });
     expect(snapshot).not.toContain("Test fixture");
     expect(snapshot).toContain("[REDACTED]");
   });
@@ -131,11 +131,11 @@ test.describe("native tree", () => {
     await page.goto(fixtureUrl("fixture-native.html"));
   });
 
-  test("auditSnapshot returns the document tree with landmarks and headings", async ({
+  test("treeSnapshot returns the document tree with landmarks and headings", async ({
     page,
   }) => {
     const sn = await attach(page, { tree: "native" });
-    const snapshot = await sn.auditSnapshot();
+    const snapshot = await sn.treeSnapshot();
     expect(snapshot.length).toBeGreaterThan(0);
     // Whole-document native trees synthesize a `document` root.
     expect(snapshot).toContain("document");
@@ -149,8 +149,8 @@ test.describe("native tree", () => {
   }) => {
     const nativeSnap = await (
       await attach(page, { tree: "native" })
-    ).auditSnapshot();
-    const domSnap = await (await attach(page)).auditSnapshot();
+    ).treeSnapshot();
+    const domSnap = await (await attach(page)).treeSnapshot();
 
     // The <video controls>' scrubber lives in a closed UA shadow root. Native
     // sees it; the DOM walk stops at the <video> element.
@@ -250,7 +250,7 @@ test.describe("contenteditable rich-text widgets", () => {
     page,
   }) => {
     const sn = await attach(page);
-    const snapshot = await sn.auditSnapshot();
+    const snapshot = await sn.treeSnapshot();
     expect(snapshot).toContain('textbox "Message to general"');
   });
 
@@ -258,7 +258,7 @@ test.describe("contenteditable rich-text widgets", () => {
     page,
   }) => {
     const sn = await attach(page);
-    const snapshot = await sn.auditSnapshot();
+    const snapshot = await sn.treeSnapshot();
     expect(snapshot).toContain('combobox "Search"');
   });
 
@@ -266,7 +266,7 @@ test.describe("contenteditable rich-text widgets", () => {
     page,
   }) => {
     const sn = await attach(page);
-    const snapshot = await sn.auditSnapshot();
+    const snapshot = await sn.treeSnapshot();
     expect(snapshot).toContain('combobox "State"');
   });
 });
@@ -283,7 +283,7 @@ test.describe("strict CSP page", () => {
     // what makes auditing a production-like deployment possible at all.
     await page.goto(fixtureUrl("fixture-csp.html"));
     const sn = await attach(page);
-    const snapshot = await sn.auditSnapshot();
+    const snapshot = await sn.treeSnapshot();
     expect(snapshot).toContain("CSP page");
   });
 });
@@ -293,11 +293,11 @@ test.describe("rootSelector that matches nothing", () => {
     await page.goto(fixtureUrl("fixture.html"));
   });
 
-  test("auditSnapshot rejects instead of silently auditing the whole body", async ({
+  test("treeSnapshot rejects instead of silently auditing the whole body", async ({
     page,
   }) => {
     const sn = await attach(page, { rootSelector: "#does-not-exist" });
-    await expect(sn.auditSnapshot()).rejects.toThrow(/#does-not-exist/);
+    await expect(sn.treeSnapshot()).rejects.toThrow(/#does-not-exist/);
   });
 
   test("assertions reject instead of running against the whole body", async ({
@@ -323,7 +323,7 @@ test.describe("iframe content", () => {
     // the frame's content. This is the documented false-pass risk.
     const sn = await attach(page);
     await sn.assertNoUnlabeledInteractive(); // clean at the host level
-    const snapshot = await sn.auditSnapshot();
+    const snapshot = await sn.treeSnapshot();
     expect(snapshot).toContain("View cart");
     // The iframe itself appears (named by its title), but its *contents* don't.
     expect(snapshot).not.toContain("Payment details"); // the frame's <h1>
@@ -339,7 +339,7 @@ test.describe("iframe content", () => {
     await expect(inner.assertNoUnlabeledInteractive()).rejects.toThrow(
       /unlabeled/i,
     );
-    expect(await inner.auditSnapshot()).toContain("Payment details");
+    expect(await inner.treeSnapshot()).toContain("Payment details");
   });
 });
 
@@ -351,12 +351,12 @@ test.describe("navigation", () => {
   }) => {
     await page.goto(fixtureUrl("fixture.html"));
     const sn = await attach(page);
-    expect(await sn.auditSnapshot()).toContain("Test fixture");
+    expect(await sn.treeSnapshot()).toContain("Test fixture");
 
     // The bundle lives on window and a navigation wipes it. attach() registered
     // an init script, so the new document re-injects it — no re-attach needed.
     await page.goto(fixtureUrl("fixture-iframe-host.html"));
-    const after = await sn.auditSnapshot();
+    const after = await sn.treeSnapshot();
     expect(after).toContain("Store");
     expect(after).not.toContain("Test fixture");
   });

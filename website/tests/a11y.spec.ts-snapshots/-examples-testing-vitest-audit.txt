@@ -101,7 +101,7 @@ main
   heading "What it shows" (level 2)
   list
     listitem "as a Vitest snapshot"
-      code "auditSnapshot()"
+      code "treeSnapshot()"
     listitem "in a form component test"
       code "assertNoUnlabeledInteractive()"
     listitem "checking page-level heading structure"

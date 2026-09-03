@@ -140,7 +140,6 @@
             "assertLandmarkStructure",
             "assertNoUnlabeledInteractive",
             "assertRules",
-            "auditSnapshot",
             "capture",
             "collectFindings",
             "diffTrees",
@@ -159,6 +158,7 @@
             "serializeTree",
             "serializeTreeDiff",
             "tabSequenceSnapshot",
+            "treeSnapshot",
             "waitForMutations"
           ]
         },
@@ -166,9 +166,9 @@
           "subpath": "./playwright",
           "types": [
             "AttachOptions",
-            "AuditSnapshotOptions",
             "PlaywrightPage",
-            "SemanticNavigatorPageHandle"
+            "SemanticNavigatorPageHandle",
+            "TreeSnapshotOptions"
           ],
           "values": [
             "attach"
@@ -181,8 +181,8 @@
           ],
           "values": [
             "a11yMatchers",
-            "a11ySnapshot",
             "a11ySnapshotSerializer",
+            "boxedTreeSnapshot",
             "registerA11yMatchers"
           ]
         },

@@ -9,7 +9,7 @@
   h2 Reference
   h2 On this page
 h1 Snapshots
-  h2 auditSnapshot(root, options?)
+  h2 treeSnapshot(root, options?)
     h3 Using redact
       h4 Without redact — the snapshot flakes
       h4 With redact — stable structure, masked text

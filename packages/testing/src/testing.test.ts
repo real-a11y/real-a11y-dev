@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 
 import {
-  auditSnapshot,
+  treeSnapshot,
   outlineSnapshot,
   tabSequenceSnapshot,
   assertNoUnlabeledInteractive,
@@ -30,7 +30,7 @@ async function captureError(p: PromiseLike<unknown>): Promise<Error> {
   throw new Error("expected the flow to reject, but it resolved");
 }
 
-describe("auditSnapshot", () => {
+describe("treeSnapshot", () => {
   it("serializes a small tree deterministically", () => {
     const root = mount(`
       <main>
@@ -38,7 +38,7 @@ describe("auditSnapshot", () => {
         <button>Go</button>
       </main>
     `);
-    const out = auditSnapshot(root);
+    const out = treeSnapshot(root);
     expect(out).toContain(`main`);
     expect(out).toContain(`heading "Title" (level 1)`);
     expect(out).toContain(`button "Go"`);
@@ -46,7 +46,7 @@ describe("auditSnapshot", () => {
 
   it("redacts sensitive text when asked", () => {
     const root = mount(`<h1>Order #12345 placed</h1>`);
-    const out = auditSnapshot(root, { redact: [/#\d+/g] });
+    const out = treeSnapshot(root, { redact: [/#\d+/g] });
     expect(out).not.toContain("#12345");
     expect(out).toContain("[REDACTED]");
   });

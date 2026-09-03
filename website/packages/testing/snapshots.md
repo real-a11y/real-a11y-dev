@@ -1,6 +1,6 @@
 ---
 title: "Snapshots — @real-a11y-dev/testing"
-description: Deterministic string snapshots of the accessibility tree — auditSnapshot, outlineSnapshot, tabSequenceSnapshot — plus redact patterns for stable CI.
+description: Deterministic string snapshots of the accessibility tree — treeSnapshot, outlineSnapshot, tabSequenceSnapshot — plus redact patterns for stable CI.
 ---
 
 # Snapshots
@@ -9,18 +9,18 @@ Deterministic string representations of the accessibility tree. Safe to commit �
 
 Part of [`@real-a11y-dev/testing`](/packages/testing). For the ergonomic `expect(...).toMatchSnapshot()` form, see [Matchers](/packages/testing/matchers).
 
-## `auditSnapshot(root, options?)`
+## `treeSnapshot(root, options?)`
 
 Returns a formatted string of the full semantic tree.
 
-> Using the [matchers](/packages/testing/matchers) entry? `a11ySnapshot()` renders the **same tree** with cleaner snapshot tooling. `auditSnapshot` returns a raw string you can assert on or write to a file; `a11ySnapshot` returns a serializer-boxed value for native `toMatchSnapshot()`. See [`a11ySnapshot` vs `auditSnapshot`](/packages/testing/matchers#a11ysnapshot-vs-auditsnapshot).
+> Using the [matchers](/packages/testing/matchers) entry? `boxedTreeSnapshot()` renders the **same tree** with cleaner snapshot tooling. `treeSnapshot` returns a raw string you can assert on or write to a file; `boxedTreeSnapshot` returns a serializer-boxed value for native `toMatchSnapshot()`. See [`boxedTreeSnapshot` vs `treeSnapshot`](/packages/testing/matchers#boxedtreesnapshot-vs-treesnapshot).
 
 ```ts
-import { auditSnapshot } from "@real-a11y-dev/testing";
+import { treeSnapshot } from "@real-a11y-dev/testing";
 
 test("login form structure", () => {
   render(<LoginForm />);
-  expect(auditSnapshot(document.body)).toMatchSnapshot();
+  expect(treeSnapshot(document.body)).toMatchSnapshot();
 });
 ```
 
@@ -56,7 +56,7 @@ A relative timestamp in an `aria-label` changes between runs, so the committed s
 
 ```ts
 // rendered: <button aria-label="Saved 2 minutes ago">
-expect(auditSnapshot(container)).toMatchSnapshot();
+expect(treeSnapshot(container)).toMatchSnapshot();
 ```
 
 ```
@@ -69,7 +69,7 @@ button "Saved 5 minutes ago"     ← CI at 10:03   →  snapshot mismatch ✗
 ```ts
 // rendered: <button aria-label="Saved 2 minutes ago">
 expect(
-  auditSnapshot(container, {
+  treeSnapshot(container, {
     redact: [/\d+ (seconds?|minutes?|hours?) ago/],
   }),
 ).toMatchSnapshot();
@@ -86,10 +86,10 @@ You still catch real regressions — if the button lost its label the name would
 Most flakes come from a handful of sources. Pass a regex for each noisy bit:
 
 ```ts
-import { auditSnapshot } from "@real-a11y-dev/testing";
+import { treeSnapshot } from "@real-a11y-dev/testing";
 
 expect(
-  auditSnapshot(container, {
+  treeSnapshot(container, {
     redact: [
       // ISO 8601 timestamps        →  2026-04-23T14:03:12Z
       /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}Z?)?/,
@@ -122,7 +122,7 @@ export const COMMON_REDACTS = [
 ];
 
 // anywhere a snapshot is taken
-expect(auditSnapshot(container, { redact: COMMON_REDACTS })).toMatchSnapshot();
+expect(treeSnapshot(container, { redact: COMMON_REDACTS })).toMatchSnapshot();
 ```
 
 ::: tip How `redact` works — and two gotchas
@@ -132,7 +132,7 @@ expect(auditSnapshot(container, { redact: COMMON_REDACTS })).toMatchSnapshot();
 - **Redact the narrowest thing that's actually volatile.** Masking a whole name blinds the snapshot to real regressions in it — remove the clock, not the label.
 :::
 
-> Available everywhere snapshots are: `auditSnapshot` and the [`a11ySnapshot`](/packages/testing/matchers#a11ysnapshot-root-options-—-snapshot-serializer) matcher in jsdom, and the [Playwright adapter](/packages/testing/playwright#redacting-variable-content) — which marshals each `RegExp` across the browser boundary for you.
+> Available everywhere snapshots are: `treeSnapshot` and the [`boxedTreeSnapshot`](/packages/testing/matchers#boxedtreesnapshot-root-options-—-snapshot-serializer) matcher in jsdom, and the [Playwright adapter](/packages/testing/playwright#redacting-variable-content) — which marshals each `RegExp` across the browser boundary for you.
 
 ## `outlineSnapshot(root, options?)`
 
@@ -188,7 +188,7 @@ It's on by default. The marker appears **only when something inside the tree act
 render(<SignIn />);
 screen.getByLabelText("Email").focus();
 
-expect(auditSnapshot(document.body)).toMatchInlineSnapshot(`
+expect(treeSnapshot(document.body)).toMatchInlineSnapshot(`
   main
     heading "Sign in" (level 1)
     form "Sign-in form"
@@ -217,7 +217,7 @@ If focus had instead fallen to the destructive **Delete** button — or nowhere 
 Pass `markFocus: false` for marker-free output — e.g. when comparing against a tree from a source that has no concept of focus:
 
 ```ts
-auditSnapshot(document.body, { markFocus: false });
+treeSnapshot(document.body, { markFocus: false });
 ```
 
 ### Upgrading an existing suite
@@ -230,8 +230,8 @@ All three helpers return the **same string** for the same DOM — on every run, 
 
 ## See also
 
-- [Matchers](/packages/testing/matchers) — `a11ySnapshot()` serializer so `expect(el).toMatchSnapshot()` renders the tree directly
+- [Matchers](/packages/testing/matchers) — `boxedTreeSnapshot()` serializer so `expect(el).toMatchSnapshot()` renders the tree directly
 - [Playwright adapter](/packages/testing/playwright) — the same snapshots against a real browser
 - [CI Diff Bot recipe](/guide/ci-diff-bot) — running [`@real-a11y-dev/cli`](/packages/cli)'s `snapshot` / `diff` in a PR workflow
 
-> **In-suite vs. headless.** The serializers on this page (`auditSnapshot` / `outlineSnapshot` / `tabSequenceSnapshot`) produce strings inside your test run, committed with `toMatchSnapshot()`. For a headless page-set audit of a deployed site — no test suite — use [`@real-a11y-dev/cli`](/packages/cli)'s identically-named `snapshot` command (a whole page set → one JSON artifact) and `diff`.
+> **In-suite vs. headless.** The serializers on this page (`treeSnapshot` / `outlineSnapshot` / `tabSequenceSnapshot`) produce strings inside your test run, committed with `toMatchSnapshot()`. For a headless page-set audit of a deployed site — no test suite — use [`@real-a11y-dev/cli`](/packages/cli)'s identically-named `snapshot` command (a whole page set → one JSON artifact) and `diff`.

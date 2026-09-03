@@ -26,7 +26,7 @@ pnpm --filter @real-a11y-dev/testing test:e2e
 
 1. `attach(page)` on an ordinary page
 2. `attach(page)` on a page with a **strict CSP** (`script-src 'self'`)
-3. Snapshot helpers through the handle: audit, tree, outline, tab sequence
+3. Snapshot helpers through the handle: tree, outline, tab sequence
 4. The assertions through the handle
 5. `await page.goto(<another url>)`, then reuse the **same** handle
 6. `attach(frame)` on a `Frame` — audit the iframe's own content
@@ -34,7 +34,7 @@ pnpm --filter @real-a11y-dev/testing test:e2e
 8. `nativeTree()` through the handle
 9. Type a sentinel into a field, then take every snapshot the handle offers
 10. Reach the bundle **directly**, the way a Trusted-Types page has to: evaluate the
-    IIFE, then call `globalThis.__realA11y__.auditSnapshot(document.body)` and one
+    IIFE, then call `globalThis.__realA11y__.treeSnapshot(document.body)` and one
     `assert*` helper without going through `attach()`. Also confirm
     `__realA11y__.listByRole` is **absent**
 

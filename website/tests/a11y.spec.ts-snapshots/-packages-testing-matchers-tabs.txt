@@ -55,7 +55,7 @@ link "Assertion matchers"
 link "toBeValidA11yTree()"
 link "toHaveTabSequence(expected)"
 link "toMatchA11yContract(contract, options?)"
-link "a11ySnapshot(root, options?) — snapshot serializer"
+link "boxedTreeSnapshot(root, options?) — snapshot serializer"
 link "Rules, contracts, and snapshots — which to reach for"
 link "Vitest vs Jest type augmentation"
 link "See it running"
@@ -102,7 +102,7 @@ link "redact"
 button "Copy Code"
 generic
 link "redact"
-link "auditSnapshot()"
+link "treeSnapshot()"
 table
 table
 button "Copy Code"

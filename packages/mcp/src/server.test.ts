@@ -572,8 +572,8 @@ describe("MCP server wiring", () => {
     expect(out).toContain('heading "Player"');
     expect(out).toContain("button"); // the unlabeled button node
     expect(session.calls.some((c) => c.fn === "nativeTree")).toBe(true);
-    // Not the in-page auditSnapshot DOM path.
-    expect(session.calls.some((c) => c.fn === "auditSnapshot")).toBe(false);
+    // Not the in-page treeSnapshot DOM path.
+    expect(session.calls.some((c) => c.fn === "treeSnapshot")).toBe(false);
   });
 
   it("get_heading_outline derives the outline from the native tree", async () => {
@@ -782,11 +782,10 @@ describe("MCP server wiring", () => {
       }),
     );
     expect(withGeneric).toContain("generic");
-    expect(session.calls.some((c) => c.fn === "auditSnapshot")).toBe(false);
+    expect(session.calls.some((c) => c.fn === "treeSnapshot")).toBe(false);
   });
 
   it("get_semantic_tree shows a placeholder for an empty tree", async () => {
-    session.responses.auditSnapshot = "";
     const client = await connect(session);
     const res = await client.callTool({
       name: "get_semantic_tree",

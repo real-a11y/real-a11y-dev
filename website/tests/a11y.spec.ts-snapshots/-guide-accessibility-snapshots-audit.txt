@@ -153,10 +153,10 @@ main
         columnheader "Catches"
     rowgroup
       row
-        cell "Tree ( auditSnapshot )"
+        cell "Tree ( treeSnapshot )"
           strong "Tree"
-          link "auditSnapshot"
-            code "auditSnapshot"
+          link "treeSnapshot"
+            code "treeSnapshot"
         cell "Full role + name structure"
         cell "Missing labels, wrong roles, structural drift"
       row
@@ -215,8 +215,8 @@ main
     listitem "→ , or the ergonomic"
       strong "In Vitest / Jest"
       link "Snapshots reference"
-      link "a11ySnapshot() matcher"
-        code "a11ySnapshot()"
+      link "boxedTreeSnapshot() matcher"
+        code "boxedTreeSnapshot()"
     listitem "→"
       strong "In Playwright"
       link "the attach() adapter"

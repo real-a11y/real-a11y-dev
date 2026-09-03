@@ -26,7 +26,7 @@ If the tree genuinely is empty but you expect content, open the Chrome extension
 
 ## Snapshot flaps between runs or between local and CI
 
-`auditSnapshot()` is deterministic, but it surfaces text that isn't. Common culprits:
+`treeSnapshot()` is deterministic, but it surfaces text that isn't. Common culprits:
 
 - **Timestamps / relative times** — "2 hours ago", "Updated: 2026-04-23T14:00".
 - **User-generated content** — names, emails, IDs.
@@ -37,10 +37,10 @@ If the tree genuinely is empty but you expect content, open the Chrome extension
 Use the `redact` option to replace the noisy patterns with `[redacted]`:
 
 ```ts
-import { auditSnapshot } from "@real-a11y-dev/testing";
+import { treeSnapshot } from "@real-a11y-dev/testing";
 
 expect(
-  auditSnapshot(container, {
+  treeSnapshot(container, {
     redact: [
       /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/,       // ISO timestamps
       /\b\d+ (minutes?|hours?|days?) ago\b/, // relative times
@@ -50,7 +50,7 @@ expect(
 ).toMatchSnapshot();
 ```
 
-The same option is on the Playwright adapter: `sn.auditSnapshot({ redact: [...] })`.
+The same option is on the Playwright adapter: `sn.treeSnapshot({ redact: [...] })`.
 
 ---
 
@@ -95,7 +95,7 @@ elsewhere on the page is enough:
 
 ```ts
 const { container } = render(<Filters />);
-expect(auditSnapshot(container)).toMatchSnapshot(); // ← may be the whole page
+expect(treeSnapshot(container)).toMatchSnapshot(); // ← may be the whole page
 ```
 
 Nothing is lost — the document contains your root — but the committed snapshot
@@ -154,7 +154,7 @@ The error message includes the **element type**, the **location in the tree** (p
 try {
   assertNoUnlabeledInteractive(container);
 } catch (err) {
-  console.log(auditSnapshot(container));
+  console.log(treeSnapshot(container));
   throw err;
 }
 ```

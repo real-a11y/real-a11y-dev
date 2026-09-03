@@ -26,7 +26,7 @@ export default defineConfig({ test: { environment: "jsdom" } });
 ```ts
 // a11y.test.ts
 import { expect, test } from "vitest";
-import { auditSnapshot, assertNoUnlabeledInteractive } from "@real-a11y-dev/testing";
+import { treeSnapshot, assertNoUnlabeledInteractive } from "@real-a11y-dev/testing";
 
 test("the sign-in form is labeled", () => {
   document.body.innerHTML = `
@@ -39,7 +39,7 @@ test("the sign-in form is labeled", () => {
   const root = document.querySelector("main")!;
 
   assertNoUnlabeledInteractive(root);
-  expect(auditSnapshot(root)).toMatchSnapshot();
+  expect(treeSnapshot(root)).toMatchSnapshot();
 });
 ```
 
@@ -57,7 +57,7 @@ main
 ```ts
 import { render } from "@testing-library/react";
 import {
-  auditSnapshot,
+  treeSnapshot,
   assertNoUnlabeledInteractive,
   assertHeadingOrder,
 } from "@real-a11y-dev/testing";
@@ -67,7 +67,7 @@ test("login form is fully labeled", () => {
   const { container } = render(<LoginForm />);
   assertNoUnlabeledInteractive(container);
   assertHeadingOrder(container);
-  expect(auditSnapshot(container)).toMatchSnapshot();
+  expect(treeSnapshot(container)).toMatchSnapshot();
 });
 ```
 
@@ -117,7 +117,7 @@ test("home page a11y", async ({ page }) => {
   const sn = await attach(page);
   await sn.assertHeadingOrder();
   await sn.assertNoUnlabeledInteractive();
-  expect(await sn.auditSnapshot()).toMatchSnapshot();
+  expect(await sn.treeSnapshot()).toMatchSnapshot();
 });
 ```
 

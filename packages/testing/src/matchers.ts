@@ -8,8 +8,8 @@
 //      failure with the assertion's own message, and `.not` works for free.
 //
 //   2. A *snapshot serializer* (not a custom snapshot matcher). Wrapping the
-//      tree in `a11ySnapshot(el)` and registering the serializer means plain
-//      `expect(a11ySnapshot(el)).toMatchSnapshot()` /
+//      tree in `boxedTreeSnapshot(el)` and registering the serializer means plain
+//      `expect(boxedTreeSnapshot(el)).toMatchSnapshot()` /
 //      `.toMatchInlineSnapshot()` stay fully native to each framework's
 //      snapshot tooling — `-u`/`--update` and obsolete-snapshot detection
 //      keep working, with no reach into private snapshot-state internals.
@@ -380,7 +380,7 @@ export const a11yMatchers = {
  * the framework's default DOM-element dump. (`a11yDiff` produces the same box
  * shape for a change list — one serializer renders both.)
  */
-export function a11ySnapshot(
+export function boxedTreeSnapshot(
   root: Element | Tree,
   options?: SerializeOptions,
 ): A11ySnapshotBox {

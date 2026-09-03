@@ -3,7 +3,7 @@ import * as React from "react";
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { DialogCorrect, DialogBroken } from "@real-a11y-dev/example-patterns";
-import { auditSnapshot } from "@real-a11y-dev/testing";
+import { treeSnapshot } from "@real-a11y-dev/testing";
 
 afterEach(cleanup);
 
@@ -22,7 +22,7 @@ describe("APG Dialog — correct vs broken", () => {
     );
     fireEvent.click(getByText("Open"));
 
-    const tree = auditSnapshot(document.body);
+    const tree = treeSnapshot(document.body);
     expect(tree).toContain('dialog "Delete account"');
   });
 
@@ -38,7 +38,7 @@ describe("APG Dialog — correct vs broken", () => {
     );
     fireEvent.click(getByText("Open"));
 
-    const tree = auditSnapshot(document.body);
+    const tree = treeSnapshot(document.body);
     // No `dialog` line at all — the open panel reads as a generic
     // group with a heading + paragraph + buttons in regular flow.
     expect(tree).not.toContain('dialog "Delete account"');

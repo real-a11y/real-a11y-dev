@@ -4,7 +4,7 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 import { SliderCorrect, SliderBroken } from "@real-a11y-dev/example-patterns";
 import {
-  auditSnapshot,
+  treeSnapshot,
   dispatch,
   findByRole,
   waitForMutations,
@@ -32,7 +32,7 @@ describe("APG Slider — correct vs broken", () => {
     const { container } = render(
       <SliderCorrect label="Volume" defaultValue={50} />,
     );
-    const tree = auditSnapshot(container);
+    const tree = treeSnapshot(container);
     // Radix places `role="slider"` on the thumb element. The
     // `aria-label` lives on the Root (role="group") rather than
     // flowing through to the thumb, so we assert on the role
@@ -44,7 +44,7 @@ describe("APG Slider — correct vs broken", () => {
     const { container } = render(
       <SliderBroken label="Volume" defaultValue={50} />,
     );
-    const tree = auditSnapshot(container);
+    const tree = treeSnapshot(container);
     expect(tree).not.toContain("slider");
   });
 });

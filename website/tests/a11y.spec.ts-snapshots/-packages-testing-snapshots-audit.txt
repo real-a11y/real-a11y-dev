@@ -92,7 +92,7 @@ navigation "On this page"
   heading "On this page" (level 2)
   list
     listitem
-      link "auditSnapshot(root, options?)"
+      link "treeSnapshot(root, options?)"
     listitem
       link "outlineSnapshot(root, options?)"
     listitem
@@ -111,20 +111,20 @@ main
       code "@real-a11y-dev/testing"
     code "expect(...).toMatchSnapshot()"
     link "Matchers"
-  heading "auditSnapshot(root, options?)" (level 2)
-    code "auditSnapshot(root, options?)"
+  heading "treeSnapshot(root, options?)" (level 2)
+    code "treeSnapshot(root, options?)"
   paragraph "Returns a formatted string of the full semantic tree."
   blockquote
     paragraph "Using the entry? renders the with cleaner snapshot tooling. returns a raw string you can assert on or write to a file; returns a serializer-boxed value for native . See ."
       link "matchers"
-      code "a11ySnapshot()"
+      code "boxedTreeSnapshot()"
       strong "same tree"
-      code "auditSnapshot"
-      code "a11ySnapshot"
+      code "treeSnapshot"
+      code "boxedTreeSnapshot"
       code "toMatchSnapshot()"
-      link "a11ySnapshot vs auditSnapshot"
-        code "a11ySnapshot"
-        code "auditSnapshot"
+      link "boxedTreeSnapshot vs treeSnapshot"
+        code "boxedTreeSnapshot"
+        code "treeSnapshot"
   button "Copy Code"
   code
   paragraph
@@ -232,9 +232,9 @@ main
       strong "Redact the narrowest thing that's actually volatile."
   blockquote
     paragraph "Available everywhere snapshots are: and the matcher in jsdom, and the — which marshals each across the browser boundary for you."
-      code "auditSnapshot"
-      link "a11ySnapshot"
-        code "a11ySnapshot"
+      code "treeSnapshot"
+      link "boxedTreeSnapshot"
+        code "boxedTreeSnapshot"
       link "Playwright adapter"
       code "RegExp"
   heading "outlineSnapshot(root, options?)" (level 2)
@@ -310,7 +310,7 @@ main
   list
     listitem "— serializer so renders the tree directly"
       link "Matchers"
-      code "a11ySnapshot()"
+      code "boxedTreeSnapshot()"
       code "expect(el).toMatchSnapshot()"
     listitem "— the same snapshots against a real browser"
       link "Playwright adapter"
@@ -323,7 +323,7 @@ main
   blockquote
     paragraph "The serializers on this page ( / / ) produce strings inside your test run, committed with . For a headless page-set audit of a deployed site — no test suite — use 's identically-named command (a whole page set → one JSON artifact) and ."
       strong "In-suite vs. headless."
-      code "auditSnapshot"
+      code "treeSnapshot"
       code "outlineSnapshot"
       code "tabSequenceSnapshot"
       code "toMatchSnapshot()"

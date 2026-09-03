@@ -1,9 +1,10 @@
 // Serialization / snapshots — the canonical text format lives in
 // @real-a11y-dev/serialize; re-exported here under this package's
-// snapshot-flavored names so the testing API is unchanged.
+// snapshot-flavored names (`treeSnapshot` / `outlineSnapshot` /
+// `tabSequenceSnapshot`) so the testing API reads as the three views.
 export {
   serializeTree,
-  serializeTree as auditSnapshot,
+  serializeTree as treeSnapshot,
   serializeOutline as outlineSnapshot,
   serializeTabSequence as tabSequenceSnapshot,
   serializeTreeDiff,
@@ -22,7 +23,7 @@ export type {
 
 // Interaction diff (assert what an interaction changed) — capture the tree
 // before, diff against a fresh capture after. `a11yDiff`'s box renders through
-// the same serializer as `a11ySnapshot` (register via `registerA11yMatchers`).
+// the same serializer as `boxedTreeSnapshot` (register via `registerA11yMatchers`).
 export { capture } from "./capture.js";
 export type { A11yCapture } from "./capture.js";
 export { a11yDiff } from "./diff.js";

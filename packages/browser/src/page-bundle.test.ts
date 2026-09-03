@@ -30,7 +30,7 @@ const CONSUMERS: Record<string, string> = {
   // BrowserSession.snapshot() — one extraction, four views, in a single evaluate.
   extractA11yTree: "browser.ts snapshot()",
   collectFindings: "browser.ts snapshot()",
-  auditSnapshot: "browser.ts snapshot() + testing/playwright auditSnapshot()",
+  treeSnapshot: "browser.ts snapshot() + testing/playwright treeSnapshot()",
   outlineSnapshot: "browser.ts snapshot() + testing/playwright evalFn()",
   tabSequenceSnapshot: "browser.ts snapshot() + testing/playwright evalFn()",
 

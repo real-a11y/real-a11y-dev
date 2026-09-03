@@ -105,7 +105,7 @@ Storybook's addon build is deterministic; include Storybook in your regular CI j
 - run: npm run build-storybook
 ```
 
-For accessibility-specific CI coverage on Storybook stories, pair it with the Playwright adapter — load the built Storybook and run `auditSnapshot()` against each story's iframe. That's more setup than most projects need; for per-story audits the panel itself + manual review is usually enough.
+For accessibility-specific CI coverage on Storybook stories, pair it with the Playwright adapter — load the built Storybook and run `treeSnapshot()` against each story's iframe. That's more setup than most projects need; for per-story audits the panel itself + manual review is usually enough.
 
 ---
 
