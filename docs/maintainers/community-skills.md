@@ -10,8 +10,38 @@ maintainer skills under `.claude/skills/` (`pr`, `release`, `dogfood`, …).
 | --- | --- |
 | Home | New public repo **`real-a11y/skills`** (not this monorepo’s skill discovery paths) |
 | Slice | **Workflow-oriented** skills that pick the right package, not one skill per npm package |
-| Install | `npx skills add real-a11y/skills` (skills.sh / agentskills.io) once the repo exists |
+| Install | `npx skills add real-a11y/skills --skill '*' --yes` once the repo exists |
 | Staging | Drafts live in [`community-skills/`](../../community-skills/) in this monorepo until the public repo is cut |
+
+## Sync contract — skills ↔ docs ↔ code
+
+Same split the rest of the repo uses. **Do not generate skills from the
+manifest or from website markdown.**
+
+| Layer | Role | Gate |
+| --- | --- | --- |
+| Code | Source of truth for what exists | extract → `docs/surface.json` |
+| Docs | How to use it (hand-written prose) | `pnpm surface:check` (names, samples, anchors, …) |
+| Community skills | Agent workflows over those packages | `pnpm surface:check` ghost CLI/MCP names in `community-skills/**/SKILL.md` |
+| Plan | What a PR must update | `pnpm surface:plan` / `docs-currency` maps surface diffs → website pages **and** skill files |
+| Dogfood | Does the published path still work? | `scenarios/dogfood/D*` (especially D2–D5, D7, D9–D12); D8 for prose/output |
+
+Practical rules:
+
+1. A public-surface change updates website markdown **and** the matching skill in
+   the **same PR** (or the sticky docs-currency comment will keep naming the
+   skill as untouched).
+2. Skills may only cite shipped CLI commands and MCP tools — inventing a name
+   fails `surface:check` the same way a ghost tool in `mcp/tools.md` does.
+3. Skills must track **published docs** for steps and install lines, not
+   monorepo internals. Gaps in the docs are findings, not things to paper over
+   in the skill.
+
+Implementation:
+
+- Blocking: [`scripts/surface/check/skills.mjs`](../../scripts/surface/check/skills.mjs) (wired into `surface:check` → `pnpm verify`)
+- Advisory: `SKILL_RULES` in [`scripts/surface/plan/obligations.mjs`](../../scripts/surface/plan/obligations.mjs)
+- CI refresh: `community-skills/**` on [`.github/workflows/docs-currency.yml`](../../.github/workflows/docs-currency.yml)
 
 ## Why a separate repo
 
@@ -21,6 +51,8 @@ maintainer skills under `.claude/skills/` (`pr`, `release`, `dogfood`, …).
   would load consumer workflows into agents working *on* Real A11y — wrong altitude.
 - Versioning and release cadence for skills can lag or lead npm betas without
   coupling to `version-packages`.
+- Until that repo is cut, **this monorepo stays the sync source of truth** so
+  `surface:check` / `surface:plan` can see skills next to code and docs.
 
 ## Skill series (v1)
 
@@ -39,37 +71,26 @@ Chrome extension (no npm install) is covered only as a router tip in
 `choose-real-a11y-surface`, with a link to the extension guide — not a separate
 skill in v1.
 
-## Source of truth
-
-Skills must track **published docs**, not monorepo internals:
-
-- Package guides: `https://real-a11y.dev/packages/{cli,mcp,testing,react,inspector,storybook-addon}`
-- Dogfood pitfalls: `scenarios/dogfood/D*.md` (especially D2–D5, D7, D9–D12)
-- Surface picker: root `README.md` “Pick your surface”
-
-When a public surface changes, update the matching skill in the same PR that
-updates website markdown (or open a follow-up in `real-a11y/skills` immediately
-after). Skills that invent setup steps not in the published docs will fail the
-same way dogfood sessions do.
-
 ## Publishing checklist (cut `real-a11y/skills`)
 
 1. Create the empty public repo under the `real-a11y` org (human / org admin).
-2. Copy `community-skills/` contents to the repo root (each skill folder + README).
+2. Prefer Netlify-shaped layout: `skills/<name>/SKILL.md` at the public repo root,
+   with install `npx skills add real-a11y/skills --skill '*' --yes`. Keep a sync
+   path from this monorepo’s `community-skills/` (script or CI) so
+   `surface:check` still runs against the monorepo copy.
 3. Add MIT `LICENSE`, keep skill `name` matching folder names.
-4. Tag `v0.1.0`; confirm install: `npx skills add real-a11y/skills`.
+4. Tag `v0.1.0`; confirm the install one-liner.
 5. Link from `https://real-a11y.dev` getting-started / MCP pages (“Agent skills”).
-6. Stop editing drafts in this monorepo once the public repo is the canonical tree
-   (or keep a sync script — prefer one canonical home).
-7. If `community-skills/` remains in this monorepo as a mirror, add it to
-   `LOW_SHAPED` in `scripts/pr-risk.mjs` (inert prose, same class as `docs/` /
-   `examples/`) in a dedicated PR — touching `scripts/` is high-risk on its own.
+6. Prefer **one canonical authoring home** (this monorepo) and publish a mirror,
+   rather than editing both by hand.
+7. Classify `community-skills/` in `LOW_SHAPED` in `scripts/pr-risk.mjs` once the
+   tree is settled (dedicated PR — `scripts/` is high-risk on its own). Note:
+   this PR already touches `scripts/surface/` for the sync gates.
 
 ## Out of scope for v1
 
 - Maintainer skills (`pr`, `release`, `dogfood`) — stay private to this repo.
 - Packaging skills as npm packages via skillpm.
-- Claude Code plugin marketplace bundle (MCP + skills + hooks) — nice follow-up
-  once the skills repo exists.
-- Auto-generating skills from `docs/surface.json` — keep hand-written workflows;
-  the surface manifest still gates docs currency for the packages themselves.
+- Claude Code / Cursor plugin marketplace bundle (MCP + skills + hooks) — follow
+  Netlify’s `context-and-tools` packaging after the skills repo exists.
+- Auto-generating skill bodies from `docs/surface.json` or website markdown.

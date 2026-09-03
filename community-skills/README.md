@@ -11,7 +11,7 @@ paths are for maintainer workflows.
 ## Install (once published)
 
 ```bash
-npx skills add real-a11y/skills
+npx skills add real-a11y/skills --skill '*' --yes
 ```
 
 Or clone and link a single skill into your project:
@@ -21,6 +21,10 @@ Or clone and link a single skill into your project:
 mkdir -p .agents/skills
 cp -R path/to/skills/audit-a-page .agents/skills/
 ```
+
+Skills stay in sync with code and website docs via this monorepo’s surface
+pipeline (`pnpm surface:check` / `pnpm surface:plan`) — see
+[docs/maintainers/community-skills.md](../docs/maintainers/community-skills.md).
 
 ## Skills
 

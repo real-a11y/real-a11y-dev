@@ -142,6 +142,119 @@ const RULES = [
   },
 ];
 
+/**
+ * Community Agent Skills that move with a surface change.
+ *
+ * Same shape as RULES, but skill paths are optional files: until
+ * `community-skills/` exists, an obligation that names a missing skill is
+ * dropped (see `skillExists`), the same way `pageExists` drops missing package
+ * pages. Skills are workflows — map capability / package moves, not every flag.
+ *
+ * Unlike RULES (first match wins), every matching skill rule applies: a
+ * `testing` package change must update both the snapshot-tests skill and the
+ * surface router.
+ */
+const SKILL_RULES = [
+  {
+    match: /^cli\.commands\.(click|type|focus|interact)(\.|$)/,
+    skills: ["community-skills/a11y-act-loop/SKILL.md"],
+    why: "the act-loop skill walks role+name click/type/focus and --session",
+  },
+  {
+    match: /^cli\.commands\.(snapshot|diff)(\.|$)/,
+    skills: ["community-skills/gate-ci-a11y/SKILL.md"],
+    why: "the CI-gate skill owns snapshot → diff and baselines",
+  },
+  {
+    match:
+      /^cli\.commands\.(audit|inspect|tree|outline|tabs|list|install|login)(\.|$)/,
+    skills: ["community-skills/audit-a-page/SKILL.md"],
+    why: "the audit-a-page skill walks the CLI audit and view commands",
+  },
+  {
+    match: /^cli\.(exitCodes|commands\.)/,
+    skills: [
+      "community-skills/audit-a-page/SKILL.md",
+      "community-skills/gate-ci-a11y/SKILL.md",
+    ],
+    why: "CLI exit codes and command surface feed the audit and CI skills",
+  },
+  {
+    match:
+      /^mcp\.tools\.(click_element|type_text|focus_element|checkpoint_tree|diff_tree)(\.|$)/,
+    skills: ["community-skills/a11y-act-loop/SKILL.md"],
+    why: "the act-loop skill is the MCP checkpoint → act → diff workflow",
+  },
+  {
+    match: /^mcp\.tools\./,
+    skills: [
+      "community-skills/audit-a-page/SKILL.md",
+      "community-skills/wire-up-mcp/SKILL.md",
+    ],
+    why: "audit/setup skills cite MCP tool names and the smoke sequence",
+  },
+  {
+    match: /^env\.REAL_A11Y_MCP_/,
+    skills: ["community-skills/wire-up-mcp/SKILL.md"],
+    why: "MCP env vars are the wire-up skill's auth and browser contract",
+  },
+  {
+    match: /^packages\.@real-a11y-dev\/testing(\.|$)/,
+    skills: ["community-skills/a11y-snapshot-tests/SKILL.md"],
+    why: "the testing skill teaches @real-a11y-dev/testing install and APIs",
+  },
+  {
+    match: /^api\.@real-a11y-dev\/testing(\.|$)/,
+    skills: ["community-skills/a11y-snapshot-tests/SKILL.md"],
+    why: "exported testing symbols are what the snapshot-tests skill shows",
+  },
+  {
+    match: /^packages\.@real-a11y-dev\/storybook-addon(\.|$)/,
+    skills: ["community-skills/a11y-in-storybook/SKILL.md"],
+    why: "the Storybook skill is the only consumer workflow for the addon",
+  },
+  {
+    match: /^packages\.@real-a11y-dev\/(react|inspector)(\.|$)/,
+    skills: ["community-skills/embed-semantic-navigator/SKILL.md"],
+    why: "the embed skill chooses react vs inspector and keeps the panel out of prod",
+  },
+  {
+    match: /^api\.@real-a11y-dev\/(react|inspector)(\.|$)/,
+    skills: ["community-skills/embed-semantic-navigator/SKILL.md"],
+    why: "exported panel APIs are what the embed skill shows in use",
+  },
+  {
+    match: /^packages\.@real-a11y-dev\/(cli|mcp)(\.|$)/,
+    skills: ["community-skills/choose-real-a11y-surface/SKILL.md"],
+    why: "the router skill's surface table names the installable packages",
+  },
+  {
+    match:
+      /^packages\.@real-a11y-dev\/(testing|react|inspector|storybook-addon)(\.|$)/,
+    skills: ["community-skills/choose-real-a11y-surface/SKILL.md"],
+    why: "the router skill's surface table names the installable packages",
+  },
+];
+
+function skillExists(repoRoot, skill) {
+  return existsSync(join(repoRoot, skill));
+}
+
+/**
+ * Pull in every community skill that maps to this change path.
+ * No-ops when `community-skills/` is absent (skillExists).
+ */
+function requireSkills(require_, repoRoot, change) {
+  for (const rule of SKILL_RULES) {
+    if (!rule.match.test(change.path)) continue;
+    for (const skill of rule.skills) {
+      if (skillExists(repoRoot, skill)) {
+        require_(skill, change.what, rule.why);
+      }
+    }
+  }
+}
+
 /** `api.@real-a11y-dev/testing/playwright.attach` → `website/packages/testing.md`. */
 function apiPage(path) {
   const specifier = path.slice("api.".length).split(".")[0];
@@ -271,6 +384,10 @@ export function requiredDocs(changes, repoRoot) {
   };
 
   for (const change of changes) {
+    // Community skills are a third consumer of the inventory — apply on every
+    // change path before the docs rules' early continues can skip them.
+    requireSkills(require_, repoRoot, change);
+
     // Whether a package is publicly installable is its own, much larger,
     // obligation. Three events change it: a brand-new published package, a
     // private one that is now published, and a published one that is now
