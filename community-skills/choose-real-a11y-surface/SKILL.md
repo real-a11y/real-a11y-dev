@@ -19,7 +19,7 @@ public install surfaces — never suggest installing internal packages
 | User wants…                                        | Surface          | Install                                                                    |
 | -------------------------------------------------- | ---------------- | -------------------------------------------------------------------------- |
 | Audit a URL from the shell / CI / PR diff          | CLI              | `npm i -D @real-a11y-dev/cli@beta playwright` then `npx real-a11y install` |
-| Assert / snapshot a11y in Vitest, Jest, Playwright | Testing          | `npm i -D @real-a11y-dev/testing` (+ runner + jsdom)                       |
+| Assert / snapshot a11y in Vitest, Jest, Playwright | Testing          | `npm i -D @real-a11y-dev/testing@beta` (+ runner + jsdom)                  |
 | Give an AI agent audit + tree + act tools          | MCP              | `npx -y @real-a11y-dev/mcp` (client MCP config)                            |
 | Embed a live tree panel (any framework)            | Inspector        | `npm i -D @real-a11y-dev/inspector@beta`                                   |
 | Same panel as React component + hooks              | React            | `npm i -D @real-a11y-dev/react@beta`                                       |

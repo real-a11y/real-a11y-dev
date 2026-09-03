@@ -35,8 +35,8 @@ npx real-a11y audit http://localhost:3000
 
 ## PR regression (snapshot → diff)
 
-1. On the base ref: `real-a11y snapshot <url> --out base.json` (or configured set)
-2. On the PR ref: `real-a11y snapshot <url> --out pr.json`
+1. On the base ref: `real-a11y snapshot <url> --output base.json` (or configured set)
+2. On the PR ref: `real-a11y snapshot <url> --output pr.json`
 3. `real-a11y diff base.json pr.json` — fails on **new** regressions
 4. Use `--format md` for PR comments; optional `--explain` for structural hints
    (advisory only — do not treat as a hard signal alone)

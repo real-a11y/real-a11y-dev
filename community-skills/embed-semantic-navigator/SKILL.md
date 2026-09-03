@@ -40,16 +40,28 @@ const SemanticNavigator = lazy(() =>
   })),
 );
 
-export function DevA11yPanel() {
-  const root = useRef<HTMLElement>(null);
-  if (!import.meta.env.DEV) return null;
+export function DevAuditOverlay({ children }: { children: React.ReactNode }) {
+  // Vite: `import.meta.env.DEV`. Webpack/Next: `process.env.NODE_ENV !== "production"`.
+  if (!import.meta.env.DEV) return <>{children}</>;
+
+  const rootRef = useRef<HTMLDivElement>(null);
+
   return (
-    <Suspense fallback={null}>
-      <SemanticNavigator root={root} mode="a11y" />
-    </Suspense>
+    <div ref={rootRef}>
+      {children}
+      <Suspense fallback={null}>
+        <SemanticNavigator root={rootRef} mode="a11y" floating />
+      </Suspense>
+    </div>
   );
 }
 ```
+
+`root` is required and must point at the audited subtree — a ref that is never
+attached to a DOM node leaves the panel empty. Wrap the app (or pass the same
+ref you already hang on `<main>`).
+
+Use as `<DevAuditOverlay><App /></DevAuditOverlay>`.
 
 Also available: `useSemanticTree`, `useActiveModal`. Prefer floating props for
 overlays; inline layout for split-pane debugging.
