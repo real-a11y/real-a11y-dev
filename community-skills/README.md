@@ -3,10 +3,11 @@
 Workflow skills that teach coding agents how to use the published
 [`@real-a11y-dev`](https://www.npmjs.com/org/real-a11y-dev) packages.
 
-This folder is the **staging tree** for the public repo `real-a11y/skills`.
-Until that repo exists, treat these files as drafts. Do **not** copy them into
-`.claude/skills/` or `.cursor/skills/` inside the Real A11y monorepo — those
-paths are for maintainer workflows.
+This folder is the **staging tree** for the public repo
+[`real-a11y/skills`](https://github.com/real-a11y/skills). Export the Netlify-
+shaped layout with `scripts/export-community-skills.sh`. Do **not** copy these
+folders into `.claude/skills/` or `.cursor/skills/` inside the Real A11y
+monorepo — those paths are for maintainer workflows.
 
 ## Install (once published)
 
