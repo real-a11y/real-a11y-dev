@@ -36,10 +36,11 @@ The panel stays idle until the tab is opened (lazy extract). If it says
 
 ## Verify the static build
 
-Dev can succeed while `build-storybook` fails on package `exports`. Always run:
+Dev can succeed while the static Storybook build fails on package `exports`.
+Always run the project’s Storybook build script (not a bare `npx` binary):
 
 ```sh
-npx build-storybook
+npm run build-storybook
 ```
 
 React 19 + Storybook: follow https://real-a11y.dev/recipes/storybook-react-19

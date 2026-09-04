@@ -70,8 +70,10 @@ the session:
      with storage state)
 
 `REAL_A11Y_MCP_CDP` (attach to an existing browser) and storage-state are
-**mutually exclusive**. A bad storage-state path or missing origins should fail
-at server startup — do not work around that.
+**mutually exclusive**. A bad storage-state path or an **invalid** origins value
+refuses to start — do not work around that. Loading storage-state **without**
+`REAL_A11Y_MCP_ALLOWED_ORIGINS` only prints a startup warning; still set the pin
+— without it, redirects can leave trusted origins.
 
 `file://` is blocked by default; only enable if the docs’ allow-file flag is
 appropriate for the user’s threat model.

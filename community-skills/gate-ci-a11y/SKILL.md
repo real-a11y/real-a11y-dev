@@ -48,13 +48,18 @@ Capture baselines in a **fresh** session if you also use `--session` for acts.
 
 ## Adopting on existing debt
 
-Use baseline suppression so only new issues fail the build:
+Use baseline suppression on **`real-a11y snapshot`** (not `audit`) so only new
+issues fail the build:
 
-- `--update-baseline` to record current findings
-- `--baseline … --fail-on error` so suppressed items still report but don’t fail
+```sh
+npx real-a11y snapshot --config a11y.config.json --update-baseline
+npx real-a11y snapshot --config a11y.config.json \
+  --baseline .a11y-baseline.json --fail-on error
+```
 
-Re-baseline after intentional a11y fixes or after locator/fingerprint format
-changes called out in release notes.
+`--baseline` is also valid on `diff`. Suppressed items still report but don’t
+fail. Re-baseline after intentional a11y fixes or after locator/fingerprint
+format changes called out in release notes.
 
 ## Artifacts
 
