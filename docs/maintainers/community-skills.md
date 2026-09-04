@@ -81,14 +81,13 @@ skill in v1.
    `surface:check` still runs against the monorepo copy.
 3. Add MIT `LICENSE`, keep skill `name` matching folder names.
 4. Tag `v0.1.0`; confirm the install one-liner.
-5. Link from `https://real-a11y.dev` getting-started / MCP pages (“Agent skills”) —
-   the guide page already exists (`website/guide/agent-skills.md`); flip the
-   install warning to the live one-liner when the repo is public.
+5. Flip stable docs to the live install one-liner is already done on `main`;
+   cut `real-a11y/skills` **before or with** the release that promotes this
+   guide to [real-a11y.dev](https://real-a11y.dev) (stable docs deploy only on
+   npm publish). `next.real-a11y.dev` will show the page from `main` earlier.
 6. Prefer **one canonical authoring home** (this monorepo) and publish a mirror,
    rather than editing both by hand.
-7. Classify `community-skills/` in `LOW_SHAPED` in `scripts/pr-risk.mjs` once the
-   tree is settled (dedicated PR — `scripts/` is high-risk on its own). Note:
-   this PR already touches `scripts/surface/` for the sync gates.
+7. `community-skills/` is already in `LOW_SHAPED` in this PR’s `scripts/pr-risk.mjs`.
 
 ## Out of scope for v1
 

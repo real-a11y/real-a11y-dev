@@ -1,6 +1,6 @@
 ---
 title: Agent Skills
-description: Workflow skills that teach coding agents how to use the published Real A11y packages — install via skills.sh once real-a11y/skills ships.
+description: Workflow skills that teach coding agents how to use the published Real A11y packages — install with npx skills add real-a11y/skills.
 ---
 
 # Agent Skills
@@ -30,23 +30,9 @@ surfaces (CLI, testing, Storybook, embeds).
 
 ## Install
 
-::: warning Public skills repo not cut yet
-The Netlify-style install one-liner targets a dedicated public repository that
-is not published yet. Do not install skills from the Real A11y monorepo — that
-checkout only exposes maintainer workflows, not these consumer ones.
-:::
-
-**When the public skills repo ships:**
-
 ```sh
 npx skills add real-a11y/skills --skill '*' --yes
 ```
-
-**Until then (preview):** copy the skill folders from
-[`community-skills/`](https://github.com/real-a11y/real-a11y-dev/tree/main/community-skills)
-on `main` into your project’s agent skills directory (for example
-`.agents/skills/` or `.cursor/skills/`). Each folder is one skill; the folder
-name must match the `name` in its `SKILL.md`.
 
 Pin `@beta` (or an exact version) on any `@real-a11y-dev/*` package the skill
 installs while the family is in public beta. Keep packages under

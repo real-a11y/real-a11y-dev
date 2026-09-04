@@ -62,21 +62,8 @@ main
           code "@real-a11y-dev/react"
           code "inspector"
   heading "Install" (level 2)
-  paragraph "Public skills repo not cut yet"
-  paragraph "The Netlify-style install one-liner targets a dedicated public repository that is not published yet. Do not install skills from the Real A11y monorepo — that checkout only exposes maintainer workflows, not these consumer ones."
-  paragraph
-    strong "When the public skills repo ships:"
   button "Copy Code"
   code
-  paragraph "copy the skill folders from on into your project’s agent skills directory (for example or ). Each folder is one skill; the folder name must match the in its ."
-    strong "Until then (preview):"
-    link "community-skills/"
-      code "community-skills/"
-    code "main"
-    code ".agents/skills/"
-    code ".cursor/skills/"
-    code "name"
-    code "SKILL.md"
   paragraph "Pin (or an exact version) on any package the skill installs while the family is in public beta. Keep packages under ."
     code "@beta"
     code "@real-a11y-dev/*"
