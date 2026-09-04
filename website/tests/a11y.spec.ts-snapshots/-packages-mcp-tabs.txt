@@ -15,6 +15,7 @@ button "Copy Code"
 generic
 button "Copy Code"
 generic
+link "Agent Skills"
 link "/packages/mcp/tools"
 link "tools reference"
 button "Copy Code"

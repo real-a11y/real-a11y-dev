@@ -95,6 +95,12 @@ Once it's connected, ask in plain language — the assistant picks the tools:
 Because it drives a real browser, JS-heavy SPAs render fully, and any URL the
 browser can reach works — public sites, a **local dev server**, or staging.
 
+::: tip Agent Skills — workflows on top of the tools
+MCP gives the agent **tools**. [Agent Skills](/guide/agent-skills) give it the
+**workflows** (wire-up, audit loop, act-then-diff, CI gate, …). Install both
+when you want an assistant to use Real A11y without inventing the sequence.
+:::
+
 ::: tip Every tool + parameters → [/packages/mcp/tools](/packages/mcp/tools)
 This is a guide. For the full tool reference — all twenty tools, their
 parameters, and when to reach for each — see the

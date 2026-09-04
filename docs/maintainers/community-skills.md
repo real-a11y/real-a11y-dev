@@ -12,6 +12,7 @@ maintainer skills under `.claude/skills/` (`pr`, `release`, `dogfood`, …).
 | Slice | **Workflow-oriented** skills that pick the right package, not one skill per npm package |
 | Install | `npx skills add real-a11y/skills --skill '*' --yes` once the repo exists |
 | Staging | Drafts live in [`community-skills/`](../../community-skills/) in this monorepo until the public repo is cut |
+| Public docs | [`website/guide/agent-skills.md`](../../website/guide/agent-skills.md) — linked from getting-started + MCP |
 
 ## Sync contract — skills ↔ docs ↔ code
 
@@ -80,7 +81,9 @@ skill in v1.
    `surface:check` still runs against the monorepo copy.
 3. Add MIT `LICENSE`, keep skill `name` matching folder names.
 4. Tag `v0.1.0`; confirm the install one-liner.
-5. Link from `https://real-a11y.dev` getting-started / MCP pages (“Agent skills”).
+5. Link from `https://real-a11y.dev` getting-started / MCP pages (“Agent skills”) —
+   the guide page already exists (`website/guide/agent-skills.md`); flip the
+   install warning to the live one-liner when the repo is public.
 6. Prefer **one canonical authoring home** (this monorepo) and publish a mirror,
    rather than editing both by hand.
 7. Classify `community-skills/` in `LOW_SHAPED` in `scripts/pr-risk.mjs` once the

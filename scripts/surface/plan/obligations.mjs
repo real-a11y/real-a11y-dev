@@ -49,6 +49,7 @@ const PUBLISHED_PACKAGE_DOCS = [
   "website/privacy.md",
   "website/guide/architecture.md",
   "website/guide/getting-started.md",
+  "website/guide/agent-skills.md",
   "website/guide/why.md",
   ".github/PULL_REQUEST_TEMPLATE.md",
   ".changeset/config.json",

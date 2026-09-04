@@ -12,6 +12,7 @@ export const ROUTES = [
 
   // Guide
   "/guide/getting-started",
+  "/guide/agent-skills",
   "/guide/why",
   "/guide/core-concepts",
   "/guide/accessibility-snapshots",
