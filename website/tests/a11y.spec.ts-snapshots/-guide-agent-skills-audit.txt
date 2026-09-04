@@ -98,6 +98,8 @@ main
     code "docs/maintainers/community-skills.md"
 contentinfo
   link "Edit this page on GitHub"
+  paragraph "Last updated:"
+    time "[redacted]"
   navigation "Pager"
     link "Previous pageGetting Started"
     link "Next pageCore Concepts"
