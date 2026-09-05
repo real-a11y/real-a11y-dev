@@ -18,6 +18,7 @@ Real A11y is a suite of packages built around a single extraction engine. The en
 | Add an A11y tree panel to every Storybook story | [`@real-a11y-dev/storybook-addon`](/packages/storybook-addon) | **dev** |
 | Run accessibility audits from the shell / CI (no code) | [`@real-a11y-dev/cli`](/packages/cli) | **dev** |
 | Give an AI agent accessibility audit tools | [`@real-a11y-dev/mcp`](/packages/mcp) | run via `npx` |
+| Teach a coding agent Real A11y workflows (Agent Skills) | [Agent Skills guide](/guide/agent-skills) | project skills dir |
 | Explore any page in the browser — no code, nothing to install | [Chrome extension](/guide/chrome-extension) | — |
 
 ::: tip Install as a dev dependency by default

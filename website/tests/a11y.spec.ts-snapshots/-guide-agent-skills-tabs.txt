@@ -1,0 +1,14 @@
+link "Skills (v1)"
+link "Install"
+link "MCP + skills together"
+link "Keeping skills current"
+link "Agent Skills"
+link "MCP server"
+table
+button "Copy Code"
+generic
+link "Connect it to your client"
+link "real-a11y.dev"
+link "Edit this page on GitHub"
+link "Previous pageGetting Started"
+link "Next pageCore Concepts"
