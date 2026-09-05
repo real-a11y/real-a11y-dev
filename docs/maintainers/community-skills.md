@@ -74,30 +74,25 @@ skill in v1.
 
 ## Publishing checklist (cut `real-a11y/skills`)
 
-1. ~~Create the empty public repo under the `real-a11y` org~~ — done:
-   https://github.com/real-a11y/skills (currently empty).
-2. Seed it with Netlify-shaped layout via
+1. ~~Create the public repo under the `real-a11y` org~~ — done:
+   https://github.com/real-a11y/skills
+2. ~~Seed Netlify-shaped layout~~ (`skills/<name>/SKILL.md` + README + LICENSE) —
+   done. Re-export from this monorepo with
    [`scripts/export-community-skills.sh`](../../scripts/export-community-skills.sh)
-   (needs write access to that repo — cloud agents do not have it today):
-
-   ```bash
-   DEST=$(scripts/export-community-skills.sh)
-   cd "$DEST"
-   git init -b main && git add . && git commit -m "feat: initial Real A11y agent skills"
-   git remote add origin https://github.com/real-a11y/skills.git
-   git push -u origin main
-   ```
-
+   when skill bodies change (cloud agents still lack write access to that repo).
 3. Prefer keeping `skills/<name>/SKILL.md` in the public repo; keep a sync path
    from this monorepo’s `community-skills/` (script or CI) so `surface:check`
-   still runs against the monorepo copy.
-4. Tag `v0.1.0`; confirm `npx skills add real-a11y/skills --skill '*' --yes`.
-5. Cut the public repo **before or with** the npm release that promotes the
-   Agent Skills guide to [real-a11y.dev](https://real-a11y.dev).
+   still runs against the monorepo copy. **Mirror automation is still TODO.**
+4. Tag `v0.1.0` on `real-a11y/skills` (optional but useful for dogfood notes).
+5. Confirm `npx skills add real-a11y/skills --skill '*' --yes` still installs all
+   eight skills after each mirror push.
+6. Land the monorepo PR that adds `community-skills/` + website guide, then cut
+   the public mirror **before or with** the npm release that promotes the Agent
+   Skills guide to [real-a11y.dev](https://real-a11y.dev).
    `next.real-a11y.dev` shows the page from `main` earlier.
-6. Prefer **one canonical authoring home** (this monorepo) and publish a mirror,
+7. Prefer **one canonical authoring home** (this monorepo) and publish a mirror,
    rather than editing both by hand.
-7. `community-skills/` is already in `LOW_SHAPED` in this PR’s `scripts/pr-risk.mjs`.
+8. `community-skills/` is in `LOW_SHAPED` in `scripts/pr-risk.mjs`.
 
 ## Out of scope for v1
 
