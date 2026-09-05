@@ -26,9 +26,13 @@ if [[ ! -d "$SRC" ]]; then
   exit 1
 fi
 
+# Replace the generated skills tree so renames/deletes do not leave stale dirs.
+rm -rf "$DEST/skills"
 mkdir -p "$DEST/skills"
 for d in "$SRC"/*/; do
   name="$(basename "$d")"
+  # Skip non-skill dirs / loose files (e.g. README*.md at the staging root).
+  [[ -f "$d/SKILL.md" ]] || continue
   mkdir -p "$DEST/skills/$name"
   cp "$d/SKILL.md" "$DEST/skills/$name/"
 done

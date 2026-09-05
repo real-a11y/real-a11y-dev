@@ -205,7 +205,8 @@ const SKILL_RULES = [
     why: "the testing skill teaches @real-a11y-dev/testing install and APIs",
   },
   {
-    match: /^api\.@real-a11y-dev\/testing(\.|$)/,
+    // Subpath entry points too: api.@real-a11y-dev/testing/playwright.attach
+    match: /^api\.@real-a11y-dev\/testing(?:\/[^.]+)*(\.|$)/,
     skills: ["community-skills/a11y-snapshot-tests/SKILL.md"],
     why: "exported testing symbols are what the snapshot-tests skill shows",
   },
@@ -220,7 +221,7 @@ const SKILL_RULES = [
     why: "the embed skill chooses react vs inspector and keeps the panel out of prod",
   },
   {
-    match: /^api\.@real-a11y-dev\/(react|inspector)(\.|$)/,
+    match: /^api\.@real-a11y-dev\/(react|inspector)(?:\/[^.]+)*(\.|$)/,
     skills: ["community-skills/embed-semantic-navigator/SKILL.md"],
     why: "exported panel APIs are what the embed skill shows in use",
   },

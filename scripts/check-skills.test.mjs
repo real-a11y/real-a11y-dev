@@ -79,4 +79,33 @@ Use \`get_native_tree\` then \`real-a11y compare-producers\`
       /compare-producers/,
     );
   });
+
+  it("fails on bare (non-backtick) ghost MCP tool names in frontmatter/prose", async () => {
+    const root = await withSkills({
+      "community-skills/bare/SKILL.md": `---
+name: bare
+description: >-
+  Call removed_page then audit_page without backticks.
+---
+# Bare
+After open_page, prefer removed_page over audit_page.
+`,
+    });
+    const problems = await checkSkills(root, MANIFEST);
+    const msg = problems.map((p) => p.message).join("\n");
+    assert.match(msg, /removed_page/);
+    // Shipped tools mentioned bare must not be reported as ghosts.
+    assert.doesNotMatch(msg, /\bopen_page\b/);
+    assert.doesNotMatch(msg, /\baudit_page\b/);
+  });
+
+  it("ignores unrelated snake_case that is not toolish", async () => {
+    const root = await withSkills({
+      "community-skills/ok/SKILL.md": `---
+description: Edit claude_desktop_config and storage_state, then audit_page.
+---
+`,
+    });
+    assert.deepEqual(await checkSkills(root, MANIFEST), []);
+  });
 });

@@ -19,6 +19,24 @@ const SKILLS_DIR = "community-skills";
 const MCP_TOOL_SPAN = /`([a-z]+_[a-z_]+)`/g;
 
 /**
+ * Bare snake_case that looks like an MCP tool (frontmatter + prose).
+ * Suffixes cover this package's tool naming; kept as a fixed set so a full
+ * removal of e.g. every `*_page` tool still flags leftover skill cites.
+ */
+const MCP_TOOLISH_BARE =
+  /\b([a-z]+(?:_[a-z]+)*(?:_page|_tree|_element|_elements|_findings|_browser|_text|_outline|_order|_checkpoint|_checkpoints|_sessions))\b/g;
+
+/** Collect MCP tool name cites from backticks and toolish bare identifiers. */
+function mcpToolRefs(text) {
+  return [
+    ...new Set([
+      ...[...text.matchAll(MCP_TOOL_SPAN)].map((m) => m[1]),
+      ...[...text.matchAll(MCP_TOOLISH_BARE)].map((m) => m[1]),
+    ]),
+  ];
+}
+
+/**
  * CLI invocations a skill might write. Matches `real-a11y audit`,
  * `npx real-a11y audit`, and code spans that open with the bin.
  */
@@ -87,9 +105,7 @@ export async function checkSkills(repoRoot, manifest) {
   for (const file of files) {
     const text = await readFile(resolve(repoRoot, file), "utf8");
 
-    const ghostTools = [
-      ...new Set([...text.matchAll(MCP_TOOL_SPAN)].map((m) => m[1])),
-    ].filter((n) => !tools.has(n));
+    const ghostTools = mcpToolRefs(text).filter((n) => !tools.has(n));
     if (ghostTools.length) {
       fail(
         file,
