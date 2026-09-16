@@ -74,6 +74,76 @@ describe("readNativeTree", () => {
     expect(res.serialized).toContain('button "Save"');
     expect(findNative(res.nodes, "button", "Save")?.id).toBe("ax-dom-30");
   });
+
+  it("attaches states/properties — the enrichment normalizeNativeAX doesn't do", async () => {
+    // core's normalizeNativeAX only reads role/name/tree-shape, so a bare
+    // property list would never surface `expanded`, `level`, etc. at all —
+    // this is the enrichment layered on top, mirroring browser's axFacets.
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 10,
+        role: { value: "RootWebArea" },
+        childIds: ["2", "3"],
+      },
+      {
+        nodeId: "2",
+        backendDOMNodeId: 20,
+        role: { value: "button" },
+        name: { value: "Billing Address" },
+        properties: [
+          { name: "expanded", value: { value: true } },
+          { name: "hasPopup", value: { value: "listbox" } },
+        ],
+      },
+      {
+        nodeId: "3",
+        backendDOMNodeId: 30,
+        role: { value: "heading" },
+        name: { value: "Personal Information" },
+        properties: [{ name: "level", value: { value: 2 } }],
+      },
+    ];
+    const t = new FakeTransport((method) =>
+      method === "Accessibility.getFullAXTree" ? { nodes: raw } : {},
+    );
+    const res = await readNativeTree(t);
+
+    const button = findNative(res.nodes, "button", "Billing Address");
+    expect(button?.states).toEqual({ expanded: true });
+    expect(button?.properties).toEqual({ hasPopup: "listbox" });
+
+    const heading = findNative(res.nodes, "heading", "Personal Information");
+    expect(heading?.states).toEqual({});
+    expect(heading?.properties).toEqual({ level: "2" });
+  });
+
+  it("never surfaces valuenow/valuetext — R1", async () => {
+    // These two AX properties ARE the user's current input for a value-bearing
+    // control (spinbutton, slider). Letting them through the enrichment would
+    // carry a field value into the dogfood panel — the exact thing R1 forbids.
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 10,
+        role: { value: "slider" },
+        name: { value: "Volume" },
+        properties: [
+          { name: "valuenow", value: { value: 42 } },
+          { name: "valuetext", value: { value: "42%" } },
+          { name: "valuemin", value: { value: 0 } },
+        ],
+      },
+    ];
+    const t = new FakeTransport((method) =>
+      method === "Accessibility.getFullAXTree" ? { nodes: raw } : {},
+    );
+    const res = await readNativeTree(t);
+    const slider = findNative(res.nodes, "slider", "Volume");
+    expect(slider?.properties).toEqual({ valuemin: "0" });
+    expect(slider?.properties).not.toHaveProperty("valuenow");
+    expect(slider?.properties).not.toHaveProperty("valuetext");
+  });
 });
 
 describe("dispatchNative", () => {

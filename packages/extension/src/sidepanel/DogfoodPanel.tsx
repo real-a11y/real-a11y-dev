@@ -51,7 +51,35 @@ export function isTypableRole(role: string): boolean {
   return role === "textbox";
 }
 
-type NativeNode = { id: string; role: string; name: string; depth: number };
+type NativeNode = {
+  id: string;
+  role: string;
+  name: string;
+  depth: number;
+  states?: Record<string, string | boolean>;
+  properties?: Record<string, string>;
+};
+
+/**
+ * Render a node's states/properties the way the production DOM/A11Y tree
+ * view does — a trailing ` state` for a bare boolean-true (`expanded`,
+ * `disabled`, …), `state=value` for anything else (`level=2`, a tristate
+ * `pressed=mixed`), `false` omitted entirely (states default false and
+ * listing every negative would swamp the row). Comparable at a glance against
+ * the DOM tree's own annotations on the same widget — the whole point of
+ * running both side by side during the dogfood.
+ */
+export function formatFacets(n: NativeNode): string {
+  const parts: string[] = [];
+  for (const [key, value] of Object.entries(n.states ?? {})) {
+    if (value === false) continue;
+    parts.push(value === true ? key : `${key}=${value}`);
+  }
+  for (const [key, value] of Object.entries(n.properties ?? {})) {
+    parts.push(`${key}=${value}`);
+  }
+  return parts.length > 0 ? ` [${parts.join(" ")}]` : "";
+}
 
 /**
  * How long to let the page react before re-reading the tree after an action.
@@ -453,7 +481,7 @@ export function DogfoodPanel() {
       {nodes.length > 0 && (
         <div style="max-height:220px;overflow:auto;margin-top:6px;font-family:ui-monospace,monospace">
           {nodes.map((n) => {
-            const label = `${"  ".repeat(n.depth)}${n.role}${n.name ? ` "${n.name}"` : ""}`;
+            const label = `${"  ".repeat(n.depth)}${n.role}${n.name ? ` "${n.name}"` : ""}${formatFacets(n)}`;
             return ACTABLE.has(n.role) ? (
               <div key={n.id}>
                 <button

@@ -123,3 +123,39 @@ the RFC PR H thread. The RFC's three questions, plus the one that frames them:
 Add your qualitative read alongside the numbers. That verdict decides whether
 extension-native ships (and, per the RFC, whether the Electron desktop shell is
 ever built).
+
+## Findings from real-use dogfooding
+
+Bugs and gaps a real session turned up, distinct from the four instrumented
+questions above — those are quantitative signals the report exports on its
+own; this is the qualitative "something was wrong" log a number can't capture.
+Kept here rather than only in the PR thread so it survives past any one PR's
+review — a fix round's own summary describes what changed in that diff, not
+what a person actually ran into holding the tree next to a page.
+
+- **Select-only combobox opened a text prompt instead of its dropdown.**
+  ARIA overloads `combobox` across two shapes — an editable autocomplete
+  input, and the APG "Combobox (Select-Only)" pattern (a `<select>`-equivalent
+  with nowhere to type) — and the panel's `isText` heuristic couldn't tell
+  them apart from role alone, so acting on the latter opened a browser
+  `prompt()` and then dispatched a `type` the page had nowhere to put. The
+  dispatch mechanism itself was already correct — `pageType` refused with
+  `not-a-text-field` — the bug was entirely the panel deciding to ask in the
+  first place. Fixed: only `textbox` prompts; every combobox shape gets a
+  click, which opens a select-only one and focuses an editable one for typing
+  at the keyboard. (`packages/extension/src/sidepanel/DogfoodPanel.tsx`,
+  `isTypableRole`.)
+- **The native tree showed no state/property attributes at all** —
+  `aria-expanded`, `aria-level`, and friends were invisible, where the same
+  widget's DOM/A11Y tree view (left panel) showed them right next to the row.
+  Root cause: `core`'s shared `normalizeNativeAX` — the one place both the
+  extension and `@real-a11y-dev/browser`'s CLI/MCP native producer get their
+  structure from — deliberately stays a pure structural normalizer (role,
+  name, tree shape only); `browser` layers its own `axFacets` enrichment on
+  top for the richer AX→a11y mapping, and the extension's dev-only
+  `native-core.ts` never had the equivalent layer. Fixed by mirroring that
+  enrichment locally, the same "deliberate mirror, not an import" pattern
+  already used here for click/type — `browser` carries Playwright, no good in
+  an MV3 worker, and `core` stays pure by design (R4).
+  (`packages/extension/src/native/native-core.ts`, `axFacets`/
+  `EnrichedNativeNode`.)

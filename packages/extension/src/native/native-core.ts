@@ -10,11 +10,17 @@
  * `normalizeNativeAX` — the one versioned module (RFC R4); this file adds only
  * the transport plumbing, mirroring the browser producer.
  *
- * The **read** path is genuinely shared through that core module. The **action**
- * path is not, and cannot be: those functions cross into the page as source
- * text, so they are a deliberate, tested mirror of `browser`'s `page-actions.ts`
- * rather than an import — see the block comment above `pageClick` for why, and
- * the tests that pin the behaviour.
+ * The **structural** read (which nodes survive, sibling order, role map, name
+ * promotion) is genuinely shared through that core module. The **states /
+ * properties** enrichment on top of it (`expanded`, `checked`, `level`, …) is
+ * not, for the same reason the **action** path isn't: `normalizeNativeAX`
+ * stays a pure structural normalizer by design (R4), so this mirrors
+ * `browser`'s `axFacets` rather than growing a second enrichment path in
+ * core — see the block comment above {@link EnrichedNativeNode}. The action
+ * functions cross into the page as source text, so they are a deliberate,
+ * tested mirror of `browser`'s `page-actions.ts` rather than an import — see
+ * the block comment above `pageClick` for why, and the tests that pin the
+ * behaviour.
  *
  * Redaction discipline (R1) matches the browser side: a value typed into a
  * field never crosses back out — the in-page function returns only a structural
@@ -24,9 +30,113 @@
 import {
   normalizeNativeAX,
   serializeNativeAX,
+  type A11yInfo,
   type NativeAXNode,
   type RawNativeAXNode,
 } from "@real-a11y-dev/core";
+
+/**
+ * The full CDP `Accessibility.AXNode` shape, a superset of core's structural
+ * {@link RawNativeAXNode} — core only reads `role`/`name`/tree-shape fields,
+ * but Chromium always sends `properties` (`expanded`, `checked`, `level`, …)
+ * on the wire regardless of which subset a caller's type asks for.
+ *
+ * **Deliberate mirror** of `@real-a11y-dev/browser`'s `RawAXNode`/`axFacets`
+ * (`native-tree.ts`). The structural read stays genuinely shared through
+ * `normalizeNativeAX` — this is the same "richer AX→a11y mapping" `browser`
+ * layers on top of that shared base, duplicated here for the reason the file
+ * header already gives for the action functions: `browser` carries
+ * Playwright, no good in an MV3 worker, and core stays a pure structural
+ * normalizer by design (R4) rather than growing a second enrichment path.
+ */
+interface RawAXNode extends RawNativeAXNode {
+  properties?: Array<{ name: string; value?: { value?: unknown } }>;
+}
+
+/**
+ * AX property names that map to boolean/stateful `a11y.states`. Kept in
+ * lockstep with `browser`'s `STATE_PROPS` — the shared ARIA-derived keys
+ * (`checked`, `expanded`, `pressed`, `selected`, `disabled`, `required`,
+ * `invalid`) match what the DOM producer writes, so cross-producer dogfood
+ * comparison reads the same vocabulary.
+ */
+const STATE_PROPS = new Set([
+  "focusable",
+  "focused",
+  "editable",
+  "settable",
+  "checked",
+  "expanded",
+  "pressed",
+  "selected",
+  "disabled",
+  "readonly",
+  "required",
+  "multiline",
+  "invalid",
+  "modal",
+  "busy",
+]);
+
+/**
+ * AX property names that map to descriptive `a11y.properties` (strings).
+ *
+ * R1: `valuenow` / `valuetext` are deliberately EXCLUDED, matching `browser`.
+ * For a value-bearing control (`spinbutton`, `slider`, a numeric `<input>`)
+ * those ARE the user's current input — surfacing them would carry a field
+ * value into the dogfood panel, the exact thing the redaction gate forbids.
+ * `valuemin` / `valuemax` are authored bounds, not user data, so they stay.
+ */
+const DETAIL_PROPS = new Set([
+  "level",
+  "valuemin",
+  "valuemax",
+  "hasPopup",
+  "keyshortcuts",
+  "roledescription",
+  "orientation",
+  "autocomplete",
+]);
+
+/** The id `normalizeNativeAX` assigns a raw node, so a normalized node can be
+ *  looked back up to its raw AX node for states/properties. Kept in lockstep
+ *  with core's own `idOf` — asserted by this file's tests. */
+function nativeIdOf(raw: RawAXNode): string {
+  return typeof raw.backendDOMNodeId === "number"
+    ? `ax-dom-${raw.backendDOMNodeId}`
+    : `ax-${raw.nodeId}`;
+}
+
+/** Split an AX node's `properties` into `states` (bool/stateful) and
+ *  `properties` (descriptive strings). Field values are never read here (R1). */
+function axFacets(raw: RawAXNode): Pick<A11yInfo, "states" | "properties"> {
+  const states: A11yInfo["states"] = {};
+  const properties: A11yInfo["properties"] = {};
+  for (const p of raw.properties ?? []) {
+    const v = p.value?.value;
+    if (v === undefined || v === null || typeof v === "object") continue;
+    if (STATE_PROPS.has(p.name)) {
+      // Chromium sends some states as booleans and some as "true"/"false"
+      // strings; normalize the latter so native states read like DOM ones
+      // (a tristate like aria-pressed="mixed" stays a string).
+      states[p.name] =
+        typeof v === "boolean"
+          ? v
+          : v === "true"
+            ? true
+            : v === "false"
+              ? false
+              : String(v);
+    } else if (DETAIL_PROPS.has(p.name)) {
+      properties[p.name] = String(v);
+    }
+  }
+  return { states, properties };
+}
+
+/** A normalized native node with the states/properties enrichment attached. */
+export type EnrichedNativeNode = NativeAXNode &
+  Pick<A11yInfo, "states" | "properties">;
 
 /** The single capability the native path needs from any CDP transport. */
 export interface CdpTransport {
@@ -34,8 +144,8 @@ export interface CdpTransport {
 }
 
 export interface NativeTreeResult {
-  /** Normalized nodes (shared core vocabulary), document order. */
-  nodes: NativeAXNode[];
+  /** Normalized nodes (shared core vocabulary) plus states/properties, document order. */
+  nodes: EnrichedNativeNode[];
   /** Indented `role "name"` serialization, identical grammar to the DOM tree. */
   serialized: string;
   /** Raw AX node count before normalization — a dogfood size signal. */
@@ -47,12 +157,25 @@ export async function readNativeTree(
   transport: CdpTransport,
 ): Promise<NativeTreeResult> {
   await transport.send("Accessibility.enable");
-  const full = await transport.send<{ nodes: RawNativeAXNode[] }>(
+  const full = await transport.send<{ nodes: RawAXNode[] }>(
     "Accessibility.getFullAXTree",
   );
   const nodes = normalizeNativeAX(full.nodes);
+  // The structural walk (which nodes survive, roles, names, tree shape) is
+  // the genuinely shared part — `normalizeNativeAX` doesn't read `properties`
+  // at all, so this enrichment pass is additive, not a duplicate of it. One
+  // pass over the raw list, keyed by the same id `normalizeNativeAX` assigns,
+  // rather than a per-node lookup.
+  const rawById = new Map(full.nodes.map((raw) => [nativeIdOf(raw), raw]));
+  const enriched: EnrichedNativeNode[] = nodes.map((node) => {
+    const raw = rawById.get(node.id);
+    const { states, properties } = raw
+      ? axFacets(raw)
+      : { states: {}, properties: {} };
+    return { ...node, states, properties };
+  });
   return {
-    nodes,
+    nodes: enriched,
     serialized: serializeNativeAX(nodes),
     rawCount: full.nodes.length,
   };
@@ -319,11 +442,11 @@ async function runInPage(
 }
 
 /** First normalized node matching role + optional accessible-name substring. */
-export function findNative(
-  nodes: NativeAXNode[],
+export function findNative<T extends NativeAXNode>(
+  nodes: T[],
   role: string,
   nameIncludes?: string,
-): NativeAXNode | undefined {
+): T | undefined {
   return nodes.find(
     (n) =>
       n.role === role &&

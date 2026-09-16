@@ -204,13 +204,20 @@ export function registerNativeMode(): void {
               // refuse a dispatch against ids that no longer mean anything.
               // Not recorded in the dogfood log, which stays content-free.
               url: await tabUrl(message.tabId),
-              // Only structural fields — never page-derived secrets beyond the
-              // accessible name the tree already shows.
+              // Structural fields plus the state/property enrichment
+              // `readNativeTree` attaches (`expanded`, `checked`, `level`, …)
+              // — never page-derived secrets beyond the accessible name the
+              // tree already shows. `axFacets`'s own allowlist (DETAIL_PROPS)
+              // already excludes `valuenow`/`valuetext`, the two AX
+              // properties that would carry a value-bearing control's current
+              // input (R1), so nothing extra needs filtering here.
               nodes: value.nodes.map((n) => ({
                 id: n.id,
                 role: n.role,
                 name: n.name,
                 depth: n.depth,
+                states: n.states,
+                properties: n.properties,
               })),
             });
             return;

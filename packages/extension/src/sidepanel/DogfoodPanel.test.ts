@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { isTypableRole } from "./DogfoodPanel.js";
+import { isTypableRole, formatFacets } from "./DogfoodPanel.js";
 
 /**
  * ARIA overloads `combobox` across two shapes the native tree's flat
@@ -12,6 +12,41 @@ import { isTypableRole } from "./DogfoodPanel.js";
  * dogfooder had already answered a modal for nothing when what they wanted
  * was to click the combobox open. Only `textbox` is unambiguously editable.
  */
+describe("formatFacets", () => {
+  // core's normalizeNativeAX (the shared, structural, version-pinned module)
+  // never populated states/properties at all — expanded, level and friends
+  // were invisible in native mode even though the same widget's DOM/A11Y tree
+  // view showed them right next to it. This is the enrichment that closes
+  // that gap, formatted the same way TreeNode.tsx badges a DOM node's states
+  // (bare key for true, key=value otherwise, false omitted) so the two trees
+  // read comparably side by side during the dogfood.
+  const base = { id: "1", role: "button", name: "Billing Address", depth: 0 };
+
+  it("renders nothing for a node with no states or properties", () => {
+    expect(formatFacets(base)).toBe("");
+  });
+
+  it("renders a bare key for a true boolean state", () => {
+    expect(formatFacets({ ...base, states: { expanded: true } })).toBe(
+      " [expanded]",
+    );
+  });
+
+  it("omits a false state entirely rather than printing expanded=false", () => {
+    expect(formatFacets({ ...base, states: { expanded: false } })).toBe("");
+  });
+
+  it("renders key=value for a non-boolean state (a tristate) and a property", () => {
+    expect(
+      formatFacets({
+        ...base,
+        states: { pressed: "mixed" },
+        properties: { level: "2" },
+      }),
+    ).toBe(" [pressed=mixed level=2]");
+  });
+});
+
 describe("isTypableRole", () => {
   it("treats a textbox as typable", () => {
     expect(isTypableRole("textbox")).toBe(true);
