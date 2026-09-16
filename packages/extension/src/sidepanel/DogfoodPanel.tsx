@@ -31,6 +31,26 @@ const ACTABLE = new Set([
   "combobox",
 ]);
 
+/**
+ * Roles where "act" means typing text, as opposed to a click.
+ *
+ * Deliberately `textbox` only, NOT `combobox`. ARIA overloads `combobox`
+ * across two shapes this panel cannot tell apart from role+name+depth alone:
+ * an EDITABLE combobox (autocomplete text input) and a SELECT-ONLY combobox
+ * — the ARIA APG "Combobox (Select-Only)" pattern, a non-editable trigger
+ * that behaves like a `<select>`. Prompting for text on the latter opens a
+ * browser `prompt()` dialog and then dispatches a `type` action the page has
+ * nowhere to put — `pageType` correctly refuses with `not-a-text-field`, but
+ * the dogfooder is left having answered a modal for nothing, when what they
+ * wanted was to click it open. A click is the right default for both shapes:
+ * it opens/focuses a select-only combobox exactly like a real click would,
+ * and focuses an editable one so the dogfooder can type at their own
+ * keyboard afterward — same as any other click target in a real session.
+ */
+export function isTypableRole(role: string): boolean {
+  return role === "textbox";
+}
+
 type NativeNode = { id: string; role: string; name: string; depth: number };
 
 /**
@@ -317,7 +337,7 @@ export function DogfoodPanel() {
       forgetTree();
       return setStatus("page navigated — reload the native tree");
     }
-    const isText = node.role === "textbox" || node.role === "combobox";
+    const isText = isTypableRole(node.role);
     const value = isText
       ? prompt(`Type into "${node.name || node.role}":`)
       : undefined;
