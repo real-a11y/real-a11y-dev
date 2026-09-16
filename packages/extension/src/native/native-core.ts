@@ -490,22 +490,60 @@ export function pageType(this: Element, text: string): Marker {
  * `input`/`textarea`/`select` are read — a custom `role="textbox"`
  * contenteditable widget is out of scope here the same way it's out of scope
  * there.
+ *
+ * Reads `value`/`type` via each class's OWN property descriptor
+ * (`Object.getOwnPropertyDescriptor(...).get.call(el)`) rather than
+ * `el.value`/`el.type` directly, and `autocomplete` via
+ * `Element.prototype.getAttribute.call(el, ...)` rather than
+ * `el.getAttribute(...)` — the same defense `pageType` already applies to
+ * its setter, for the same class of reason: an instance-level property
+ * (`el.type = "text"`, shadowing the real one) or a careless page-side
+ * reassignment is the easy, realistic way a sensitivity check like this one
+ * gets fooled, and pinning to the prototype's own accessor closes it. It
+ * does NOT close a page that redefines the prototype accessor itself before
+ * this function ever runs — chrome.debugger attaches after the page has
+ * already loaded and may have already run arbitrary code, so no read that
+ * happens at that point can un-patch an already-patched prototype. That
+ * residual is not new here: `core`'s `isSensitiveField` — the DOM
+ * producer's own, already-shipped redaction this mirrors, reachable today
+ * via the production side panel's field-state read — has no pinning at
+ * all. This closes the easy case relative to that baseline; it does not
+ * claim to be adversarially bulletproof, and shouldn't be read as such.
  */
 export function pageReadValue(this: Element): {
   value?: string;
   redacted?: boolean;
 } {
   const el = this;
-  if (!el || !el.tagName) return {};
-  const tag = el.tagName.toLowerCase();
-  if (tag !== "input" && tag !== "textarea" && tag !== "select") return {};
+  if (!el) return {};
 
-  const value = (
-    el as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-  ).value;
+  let value: string;
+  let type: string | undefined;
+  if (el instanceof HTMLInputElement) {
+    value = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.get!.call(el) as string;
+    type = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "type",
+    )!.get!.call(el) as string;
+  } else if (el instanceof HTMLTextAreaElement) {
+    value = Object.getOwnPropertyDescriptor(
+      HTMLTextAreaElement.prototype,
+      "value",
+    )!.get!.call(el) as string;
+  } else if (el instanceof HTMLSelectElement) {
+    value = Object.getOwnPropertyDescriptor(
+      HTMLSelectElement.prototype,
+      "value",
+    )!.get!.call(el) as string;
+  } else {
+    return {};
+  }
   if (!value) return {};
 
-  if (tag === "input" && (el as HTMLInputElement).type === "password") {
+  if (type === "password") {
     return { redacted: true };
   }
   const SENSITIVE_AUTOCOMPLETE_TOKENS = [
@@ -518,7 +556,7 @@ export function pageReadValue(this: Element): {
     "cc-exp-month",
     "cc-exp-year",
   ];
-  const autocomplete = el.getAttribute("autocomplete");
+  const autocomplete = Element.prototype.getAttribute.call(el, "autocomplete");
   if (autocomplete) {
     for (const token of autocomplete.toLowerCase().split(/\s+/)) {
       if (SENSITIVE_AUTOCOMPLETE_TOKENS.indexOf(token) !== -1) {

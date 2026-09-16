@@ -243,6 +243,27 @@ what a person actually ran into holding the tree next to a page.
   demonstrated — both `<select>` shapes resolve too: a single-select reports
   role `combobox` and a multi-select reports `listbox` in real Chromium, and
   both correctly read back their selected option's value.
+
+  A `/security-review` pass then found the first version of `pageReadValue`
+  read `.type` / `.getAttribute("autocomplete")` directly — accessors the
+  inspected page's own JS realm controls, so a page (its own code, or a
+  compromised third-party script on it) could shadow an instance property to
+  make a password or `cc-number` field misreport as ordinary text and defeat
+  the redaction gate. Fixed by pinning both reads to each class's own
+  property descriptor (`Object.getOwnPropertyDescriptor(...).get.call(el)`,
+  `Element.prototype.getAttribute.call(el, ...)`) — the same defense
+  `pageType` already applies to its setter, for the same reason. This closes
+  the realistic case (an instance-level override). It does **not** close a
+  page that redefines the _prototype's_ accessor before this function ever
+  runs — `chrome.debugger` attaches after the page has already loaded and
+  may have already run arbitrary code, so no in-page read at that point can
+  un-patch an already-patched prototype; closing that would need capturing
+  pristine accessors at `document_start`, before any page script runs, which
+  this build doesn't do. That residual isn't new: `core`'s `isSensitiveField`
+  — the already-shipped DOM producer redaction this mirrors, reachable today
+  via the production side panel's field-state read — has no pinning at all,
+  so this closes a real gap relative to that baseline without claiming to be
+  adversarially bulletproof.
   (`packages/extension/src/native/native-core.ts`, `pageReadValue`/
   `VALUE_BEARING_ROLES`; `packages/extension/src/sidepanel/DogfoodPanel.tsx`,
   `formatValue`.)

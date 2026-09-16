@@ -490,6 +490,46 @@ describe("in-page actions — read value", () => {
     document.body.appendChild(el);
     expect(on(pageReadValue, el)).toEqual({});
   });
+
+  /**
+   * Found by `/security-review`: reading `.type`/`.getAttribute` directly
+   * trusts accessors the inspected page's own JS realm controls — a page
+   * could shadow an instance property to make a password/`cc-number` field
+   * misreport as ordinary text, defeating the redaction gate. Pinning to
+   * each class's own property descriptor (matching `pageType`'s existing
+   * defense for its setter) closes the realistic case: an instance-level
+   * override, which is what a page shadowing its own element's properties
+   * actually looks like. It does not close a page that redefines the
+   * PROTOTYPE'S accessor before this function ever runs — no in-page read
+   * can un-patch an already-patched prototype — but that residual is not
+   * new: `core`'s `isSensitiveField`, the already-shipped DOM producer
+   * redaction this mirrors, has no pinning at all today.
+   */
+  it("resists an instance-level property lying about a sensitive field's type", () => {
+    const el = document.createElement("input");
+    el.type = "password";
+    el.value = "hunter2";
+    document.body.appendChild(el);
+    // A shadowed own property, not the real setter — the realistic
+    // tampering case, and what pinning to the prototype's descriptor
+    // defends against.
+    Object.defineProperty(el, "type", { value: "text", configurable: true });
+    const result = on(pageReadValue, el);
+    expect(result).toEqual({ redacted: true });
+    expect(JSON.stringify(result)).not.toContain("hunter2");
+  });
+
+  it("resists an instance-level getAttribute lying about a sensitive autocomplete token", () => {
+    const el = document.createElement("input");
+    el.type = "text";
+    el.autocomplete = "cc-number";
+    el.value = "4111111111111111";
+    document.body.appendChild(el);
+    (el as unknown as { getAttribute: () => null }).getAttribute = () => null;
+    const result = on(pageReadValue, el);
+    expect(result).toEqual({ redacted: true });
+    expect(JSON.stringify(result)).not.toContain("4111111111111111");
+  });
 });
 
 describe("in-page action source", () => {
