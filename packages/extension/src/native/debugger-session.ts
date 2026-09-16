@@ -46,7 +46,13 @@ function transportFor(tabId: number): CdpTransport {
  * The message is only inspected here and never surfaced (R6).
  */
 export function isConnectionLost(message: string | undefined): boolean {
-  return /detached|not attached|target closed|no target with given id|tab was closed/i.test(
+  // `no (target|tab) with given id` — Chrome phrases this per target type, and
+  // the `{ tabId }` form this module always uses yields the TAB wording ("No tab
+  // with given id 7."). Matching only the `target` spelling meant a closed tab
+  // fell through to the "plausibly still attached" branch in `detachIfLive`,
+  // which puts the entry back: the map then never cleared and every later revoke
+  // re-reported the same dead tab as `detach-refused`.
+  return /detached|not attached|target closed|no (?:target|tab) with given id|tab was closed/i.test(
     message ?? "",
   );
 }
@@ -252,15 +258,34 @@ export class NativeDebuggerSession {
   private async attach(tabId: number): Promise<AttachOutcome> {
     // Cheap pre-check, outside the mutex — the authoritative one is below.
     if (!(await this.isEnabled())) return { ok: false, error: "disabled" };
+    // True when Chrome refused because WE already hold the tab, so the existing
+    // attachment is reused rather than replaced.
+    let reused = false;
     try {
       await chrome.debugger.attach({ tabId }, PROTOCOL);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (isDebuggerConflict(msg)) {
-        await this.log.record({ kind: "conflict", at: Date.now() });
-        return { ok: false, error: "conflict" };
+        // "Another debugger is already attached" does not say WHO. `runExclusive`
+        // only serializes within one worker generation, so after an MV3 suspend
+        // the in-memory queue is empty while our own attachment — and its entry
+        // in `chrome.storage.session` — can still be live. Scoring that as a
+        // DevTools conflict inflates one of the three headline metrics with a
+        // self-collision, which is the same class of bug the per-tab queue was
+        // added to fix, one generation up. Our own bookkeeping is the only
+        // available discriminator.
+        const ours = await this.enqueue(
+          async () => (await this.readAttached())[tabId] !== undefined,
+        );
+        if (!ours) {
+          await this.log.record({ kind: "conflict", at: Date.now() });
+          return { ok: false, error: "conflict" };
+        }
+        // It is our attachment and it is live, so the operation can just use it.
+        reused = true;
+      } else {
+        return { ok: false, error: "attach-failed" };
       }
-      return { ok: false, error: "attach-failed" };
     }
     // Re-check and record as ONE transaction on the storage queue, which is the
     // queue `detachAll` snapshots on — so an attach either lands in the map
@@ -272,7 +297,11 @@ export class NativeDebuggerSession {
     const kept = await this.enqueue(async () => {
       if (!(await this.isEnabled())) return false;
       const attached = await this.readAttached();
-      attached[tabId] = Date.now();
+      // On reuse keep the ORIGINAL timestamp: the banner has been up since that
+      // moment, and restarting the clock would under-report the dwell total the
+      // ship/no-ship call reads. A fresh attach has no entry to keep.
+      if (!(reused && attached[tabId] !== undefined))
+        attached[tabId] = Date.now();
       await this.writeAttached(attached);
       return true;
     });
@@ -280,7 +309,10 @@ export class NativeDebuggerSession {
       await chrome.debugger.detach({ tabId }).catch(() => {});
       return { ok: false, error: "disabled" };
     }
-    await this.log.record({ kind: "attach", at: Date.now() });
+    // A reused attachment is not a new attach session — the banner never came
+    // down — so recording one would inflate both the session count and, through
+    // it, the average dwell.
+    if (!reused) await this.log.record({ kind: "attach", at: Date.now() });
     return { ok: true };
   }
 

@@ -73,6 +73,13 @@ export function DogfoodPanel() {
   // buttons live invites a double-click that reads the tree twice or dispatches
   // an action twice, both of which land in the dogfood numbers.
   const [busy, setBusy] = useState(false);
+  // The guard that actually excludes a second press, held in a ref because it
+  // has to be read AND set synchronously. `busy` drives the disabled attribute,
+  // but `setBusy(true)` only lands after the awaits that resolve the active tab,
+  // so two fast clicks both cleared `if (busy)` before either set it — the exact
+  // double read / double dispatch the state above exists to prevent, landing
+  // twice in the counts this build produces.
+  const inFlight = useRef(false);
   // What native can do on the active tab, or undefined while unknown. Asked
   // before attaching, so a `chrome://` tab is named as such instead of costing
   // a banner flash and an "attach-failed".
@@ -213,6 +220,11 @@ export function DogfoodPanel() {
     setNodes(r.nodes ?? []);
     setTreeTabId(tabId);
     setTreeUrl(r.url);
+    // A successful read is proof the refusal that produced any standing banner
+    // no longer holds — most visibly after closing DevTools and re-reading,
+    // which otherwise rendered a full native tree under an amber "native
+    // unavailable here — close DevTools" explanation contradicting it.
+    setCapability(undefined);
     return r.nodes?.length ?? 0;
   }
 
@@ -223,7 +235,17 @@ export function DogfoodPanel() {
   }
 
   async function loadTree() {
-    if (busy) return;
+    if (inFlight.current) return;
+    inFlight.current = true;
+    try {
+      await runLoadTree();
+    } finally {
+      inFlight.current = false;
+    }
+  }
+
+  async function runLoadTree() {
+    const token = capabilityRequest.current;
     const tabId = await activeTabId();
     if (tabId === undefined) return setStatus("no active tab");
     // Deliberately no pre-flight here. The service worker runs one before it
@@ -237,13 +259,29 @@ export function DogfoodPanel() {
     try {
       const count = await readTreeInto(tabId);
       if (count !== null) setStatus(`read ${count} nodes`);
+      // `readTreeInto`'s refusal branch is token-gated, so a tab switch during
+      // the read leaves it having set no status at all. Without this the panel
+      // sat on "attaching debugger + reading…" forever, describing an operation
+      // that had already finished. `act` already has the equivalent branch.
+      else if (capabilityRequest.current !== token) {
+        setStatus("active tab changed — try again");
+      }
     } finally {
       setBusy(false);
     }
   }
 
   async function act(node: NativeNode) {
-    if (busy) return;
+    if (inFlight.current) return;
+    inFlight.current = true;
+    try {
+      await runAct(node);
+    } finally {
+      inFlight.current = false;
+    }
+  }
+
+  async function runAct(node: NativeNode) {
     const token = capabilityRequest.current;
     // Dispatch against the tab the tree came from, and refuse if the user has
     // since switched away: these ids only mean something in that document, so

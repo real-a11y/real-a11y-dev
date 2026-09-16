@@ -12,10 +12,26 @@ import "./empty-state.css";
 declare const __DOGFOOD__: boolean;
 const dogfood = typeof __DOGFOOD__ !== "undefined" && __DOGFOOD__;
 
+// In the dogfood build the panel and the App share `#root`, which is
+// `height:100%; overflow:hidden`. Rendered as plain siblings the panel's height
+// is ADDED to an already-full, non-scrollable box, so it clips the bottom of the
+// App by exactly its own height — worst when expanded, which is what DOGFOOD.md
+// tells the dogfooder to do. A flex column gives the panel its natural height
+// and lets the App take the remainder (`min-height:0` so it may shrink below its
+// content and scroll internally, as `.sn-root` expects).
+//
+// The store build renders `<App />` alone, exactly as it did before native mode
+// existed — no wrapper, no Fragment.
 render(
-  <>
-    {dogfood && <DogfoodPanel />}
+  dogfood ? (
+    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      <DogfoodPanel />
+      <div style={{ flex: "1 1 auto", minHeight: 0 }}>
+        <App />
+      </div>
+    </div>
+  ) : (
     <App />
-  </>,
+  ),
   document.getElementById("root")!,
 );

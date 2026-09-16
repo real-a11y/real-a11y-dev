@@ -50,6 +50,12 @@ describe("isConnectionLost", () => {
       "Debugger is not attached to the tab with id: 7.",
       "Target closed.",
       "No target with given id found",
+      // Chrome phrases this per target type, and `{ tabId }` — the only form
+      // this module uses — yields the TAB wording. Matching only the `target`
+      // spelling sent a closed tab down `detachIfLive`'s "plausibly still
+      // attached" branch, which puts the entry BACK: the map never cleared and
+      // every later revoke re-reported the same dead tab.
+      "No tab with given id 7.",
     ]) {
       expect(isConnectionLost(msg)).toBe(true);
     }
@@ -100,6 +106,54 @@ describe("NativeDebuggerSession attach bookkeeping", () => {
     expect(after).toBeDefined();
     // And the entry is consumed, so it can't be double-counted.
     expect(attach.data["dogfood.attachedTabs"]).toEqual({});
+  });
+
+  it("does not score its own surviving attachment as a DevTools conflict", async () => {
+    // `runExclusive` only serializes within ONE worker generation. After an MV3
+    // suspend the in-memory queue is empty while our own attachment — and its
+    // storage entry — can still be live, so the next attach is refused with
+    // "Another debugger is already attached". Chrome does not say WHO, and
+    // scoring it as DevTools inflated one of the three headline metrics with a
+    // self-collision. Our own bookkeeping is the discriminator.
+    stubChrome();
+    const g = globalThis as unknown as { chrome: typeof chrome };
+    (g.chrome.debugger.attach as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("Another debugger is already attached to the tab with id: 5."),
+    );
+    const log = new FakeStorage();
+    const attach = new FakeStorage();
+    const attachedAt = Date.now() - 30_000;
+    attach.data["dogfood.attachedTabs"] = { 5: attachedAt };
+    const session = new NativeDebuggerSession(log, attach);
+
+    const { outcome, value } = await session.withDebugger(5, async () => "ok");
+
+    // The operation runs against the attachment we already hold.
+    expect(outcome.ok).toBe(true);
+    expect(value).toBe("ok");
+    // No conflict recorded, and no second `attach` session either — the banner
+    // never came down, so counting a new one would inflate the dwell average.
+    expect(kinds(log)).not.toContain("conflict");
+    expect(kinds(log)).not.toContain("attach");
+  });
+
+  it("still reports a real DevTools conflict", async () => {
+    // The other side of the discriminator: no entry of ours for this tab, so
+    // the refusal really is somebody else holding it.
+    stubChrome();
+    const g = globalThis as unknown as { chrome: typeof chrome };
+    (g.chrome.debugger.attach as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("Another debugger is already attached to the tab with id: 5."),
+    );
+    const log = new FakeStorage();
+    const attach = new FakeStorage();
+    const session = new NativeDebuggerSession(log, attach);
+
+    const { outcome } = await session.withDebugger(5, async () => "ok");
+
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error).toBe("conflict");
+    expect(kinds(log)).toContain("conflict");
   });
 
   it("ignores a detach for a tab it never attached to", async () => {
@@ -246,6 +300,31 @@ describe("detachAll (the revoke path)", () => {
     ]);
     expect(kinds(log)).toEqual(["detach", "detach"]);
     expect(attach.data["dogfood.attachedTabs"]).toEqual({});
+  });
+
+  it("clears the entry for a tab that has been closed", async () => {
+    // The leak this regex gap caused: a closed tab's rejection went to the
+    // "plausibly still attached" branch, which restores the entry. Nothing ever
+    // removed it again, so the map grew a permanent dead entry and each revoke
+    // re-reported it as `detach-refused` — noise in the capability split, and a
+    // `detachAll` that could never reach a clean state.
+    stubChrome();
+    const g = globalThis as unknown as { chrome: typeof chrome };
+    (g.chrome.debugger.detach as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("No tab with given id 7."),
+    );
+    const log = new FakeStorage();
+    const attach = new FakeStorage();
+    attach.data["dogfood.attachedTabs"] = { 7: Date.now() - 5_000 };
+    const session = new NativeDebuggerSession(log, attach);
+
+    expect(await session.detachAll()).toBe(0); // it was already gone
+    await settle();
+
+    // The entry is GONE, not restored — a second revoke has nothing to redo.
+    expect(attach.data["dogfood.attachedTabs"]).toEqual({});
+    const events = (log.data["dogfood.nativeLog"] ?? []) as DogfoodEvent[];
+    expect(events.map((e) => e.reason)).toEqual(["already-gone"]);
   });
 
   it("does not bill stale bookkeeping to the banner-dwell metric", async () => {

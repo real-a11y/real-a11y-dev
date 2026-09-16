@@ -28,6 +28,13 @@
   changes — the extension builds from `vite.config.ts`, which never read this.
   ([#380])
 
+- Internal, no behaviour change: the background message router now leaves
+  `NATIVE_*` messages to the dev-only native listener instead of letting them
+  reach its catch-all fallback. The store build never sends such a message, so
+  nothing user-facing changes — recorded here only because the guard is real
+  code in the shipped bundle rather than dogfood-only
+  ([#229](https://github.com/real-a11y/real-a11y-dev/pull/229)).
+
 ## 0.1.13
 
 ### Patch Changes
