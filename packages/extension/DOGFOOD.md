@@ -237,7 +237,12 @@ what a person actually ran into holding the tree next to a page.
   sense. **Verified end-to-end in a real headed Chromium**: a plain text
   field's typed value surfaces, a password field and a `cc-number`
   autocomplete field both redact even though their raw value is present in
-  the CDP response Chromium itself sends, and an empty field shows nothing.
+  the CDP response Chromium itself sends, an empty field shows nothing, and
+  — closing a gap a `/code-review` pass flagged, since `VALUE_BEARING_ROLES`
+  is a role-string guess rather than something the existing fixture corpus
+  demonstrated — both `<select>` shapes resolve too: a single-select reports
+  role `combobox` and a multi-select reports `listbox` in real Chromium, and
+  both correctly read back their selected option's value.
   (`packages/extension/src/native/native-core.ts`, `pageReadValue`/
   `VALUE_BEARING_ROLES`; `packages/extension/src/sidepanel/DogfoodPanel.tsx`,
   `formatValue`.)

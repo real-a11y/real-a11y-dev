@@ -496,11 +496,22 @@ describe("in-page action source", () => {
   it("serializes to self-contained source for Runtime.callFunctionOn", () => {
     // Each is shipped as source text, so nothing may reference a module-scope
     // binding — that would be a ReferenceError in the page, not a build error.
-    for (const src of Object.values(IN_PAGE_ACTION_SOURCE)) {
+    // pageReadValue is checked the same way, even though it isn't a
+    // NativeAction / IN_PAGE_ACTION_SOURCE entry: it crosses into the page as
+    // source text exactly like the three actions do (Runtime.callFunctionOn,
+    // readFieldValue), so the same constraint applies and the same class of
+    // mistake (e.g. hoisting SENSITIVE_AUTOCOMPLETE_TOKENS to module scope)
+    // would otherwise only surface as a runtime ReferenceError in the page.
+    for (const src of [
+      ...Object.values(IN_PAGE_ACTION_SOURCE),
+      String(pageReadValue),
+    ]) {
       expect(src).toMatch(/^function/);
       expect(src).not.toContain("import");
     }
     // The composite list must live inside the click body, not hoisted.
     expect(IN_PAGE_ACTION_SOURCE.click).toContain("treeitem");
+    // The sensitive-token list must live inside pageReadValue's own body too.
+    expect(String(pageReadValue)).toContain("cc-number");
   });
 });
