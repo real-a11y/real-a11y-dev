@@ -35,8 +35,10 @@ Current projects:
 | Dogfood follow-ups — 0.1.0-beta.1         | `https://app.notion.com/p/3a81c354b0b5816bb2bff81fd574ca0b` |
 | Phase 2: session daemon                   | `https://app.notion.com/p/3b01c354b0b581b690dbc4c790a406a6` |
 
-Re-read them with `notion-fetch` on the Projects data source rather than trusting
-this table after a reorganisation.
+Re-query them with `notion-query-data-sources` in `rows` mode against the Projects
+data source rather than trusting this table after a reorganisation. Not
+`notion-fetch` — on a data source that returns the **schema**, not the rows, so it
+hands you no project URLs at all.
 
 ## Conventions
 
