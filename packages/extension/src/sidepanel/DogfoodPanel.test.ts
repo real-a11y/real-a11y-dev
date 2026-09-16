@@ -2,7 +2,12 @@ import { describe, it, expect } from "vitest";
 
 import { pageClick } from "../native/native-core.js";
 
-import { ACTABLE, isTypableRole, formatFacets } from "./DogfoodPanel.js";
+import {
+  ACTABLE,
+  isTypableRole,
+  formatFacets,
+  formatValue,
+} from "./DogfoodPanel.js";
 
 /**
  * ARIA overloads `combobox` across two shapes the native tree's flat
@@ -46,6 +51,33 @@ describe("formatFacets", () => {
         properties: { level: "2" },
       }),
     ).toBe(" [pressed=mixed level=2]");
+  });
+});
+
+/**
+ * The native tree originally withheld every field's current value outright —
+ * R1's blanket exclusion of `valuenow`/`valuetext`. That under-served the
+ * product's actual purpose: Screen Curtain mode has the user rely entirely on
+ * the accessible tree, which for a value-bearing control means confirming
+ * what they just typed. `formatValue` renders the read-back
+ * `native-core.ts`'s `pageReadValue` now attaches, the same `= "value"`
+ * convention the DOM/A11Y tree view uses.
+ */
+describe("formatValue", () => {
+  const base = { id: "1", role: "textbox", name: "Name:", depth: 0 };
+
+  it("renders nothing for a node with no value", () => {
+    expect(formatValue(base)).toBe("");
+  });
+
+  it("renders the value quoted, right after the name", () => {
+    expect(formatValue({ ...base, value: "456465" })).toBe(' = "456465"');
+  });
+
+  it("renders a redacted marker the same way, never the raw secret", () => {
+    expect(formatValue({ ...base, value: "[redacted]" })).toBe(
+      ' = "[redacted]"',
+    );
   });
 });
 

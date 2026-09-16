@@ -81,11 +81,17 @@ const STATE_PROPS = new Set([
 /**
  * AX property names that map to descriptive `a11y.properties` (strings).
  *
- * R1: `valuenow` / `valuetext` are deliberately EXCLUDED, matching `browser`.
- * For a value-bearing control (`spinbutton`, `slider`, a numeric `<input>`)
- * those ARE the user's current input — surfacing them would carry a field
- * value into the dogfood panel, the exact thing the redaction gate forbids.
- * `valuemin` / `valuemax` are authored bounds, not user data, so they stay.
+ * R1: `valuenow` / `valuetext` stay EXCLUDED here, matching `browser` — this
+ * is Chromium's own CDP payload, and it cannot be trusted to have already
+ * redacted a sensitive field: it masks passwords but not, e.g. a `cc-number`
+ * field on a plain `type="text"` input (the exact caveat `browser`'s own R1
+ * header documents). `pageReadValue` below is where field values are
+ * surfaced instead, precisely because it classifies sensitivity itself,
+ * in-page, against the live element — the RFC's own requirement for when
+ * values are "genuinely needed": "capture MUST classify sensitivity
+ * in-page." Piping these two CDP properties through untouched would bypass
+ * that classification entirely. `valuemin` / `valuemax` are authored bounds,
+ * not user data, so they stay.
  */
 const DETAIL_PROPS = new Set([
   "level",
@@ -134,9 +140,32 @@ function axFacets(raw: RawAXNode): Pick<A11yInfo, "states" | "properties"> {
   return { states, properties };
 }
 
-/** A normalized native node with the states/properties enrichment attached. */
+/**
+ * Roles whose backing DOM element could be an `<input>`/`<textarea>`/
+ * `<select>` — the read-side counterpart of DOM producer's own tag check in
+ * `getKeyAttributes` (`core/src/extraction/dom-extractor.ts`), approximated
+ * from role since the AX tree carries no tag name. Matches
+ * `core/src/extraction/role-map.ts`'s own input-type → role table
+ * (`textbox`, `searchbox`, `spinbutton`, `slider`) plus `<select>`'s
+ * single/multiple split (`combobox`/`listbox`). A node with one of these
+ * roles but a non-native backing element (e.g. a custom `role="textbox"`
+ * contenteditable div) resolves to "no value" from `pageReadValue`'s own tag
+ * check — same as DOM producer's own badge, which likewise only reads
+ * `.value` for these three tags.
+ */
+const VALUE_BEARING_ROLES = new Set([
+  "textbox",
+  "searchbox",
+  "combobox",
+  "listbox",
+  "spinbutton",
+  "slider",
+]);
+
+/** A normalized native node with the states/properties enrichment attached,
+ *  plus a redacted field value where `pageReadValue` found one. */
 export type EnrichedNativeNode = NativeAXNode &
-  Pick<A11yInfo, "states" | "properties">;
+  Pick<A11yInfo, "states" | "properties"> & { value?: string };
 
 /** The single capability the native path needs from any CDP transport. */
 export interface CdpTransport {
@@ -174,6 +203,25 @@ export async function readNativeTree(
       : { states: {}, properties: {} };
     return { ...node, states, properties };
   });
+
+  // Field-value read-back (see `pageReadValue`) — resolved only for candidate
+  // roles, concurrently, so a form-heavy page costs one round of parallel CDP
+  // calls rather than N sequential ones stacked onto the tree read.
+  await transport.send("DOM.enable");
+  await Promise.all(
+    enriched.map(async (node) => {
+      if (!VALUE_BEARING_ROLES.has(node.role)) return;
+      const backendNodeId = backendNodeIdFrom(node.id);
+      if (backendNodeId === null) return;
+      const { value, redacted } = await readFieldValue(
+        transport,
+        backendNodeId,
+      );
+      if (redacted) node.value = "[redacted]";
+      else if (value) node.value = value;
+    }),
+  );
+
   return {
     nodes: enriched,
     serialized: serializeNativeAX(nodes),
@@ -413,6 +461,75 @@ export function pageType(this: Element, text: string): Marker {
   return { ok: false, reason: "not-a-text-field" };
 }
 
+/**
+ * Read-back for the dogfood panel's field-value display.
+ *
+ * The native tree originally withheld every field's current value outright —
+ * no read path existed, `valuenow`/`valuetext` excluded from `axFacets`
+ * above. That blanket redaction under-served the product's actual purpose:
+ * Semantic Navigator's Screen Curtain mode has a user rely entirely on the
+ * accessible tree to perceive the page, which for a value-bearing control
+ * means confirming what they just typed — the same read-back a screen reader
+ * gives for free. Withholding it made native mode strictly worse than DOM
+ * mode for the one workflow native mode exists to dogfood.
+ *
+ * This adds it back with the SAME redaction the DOM producer already applies
+ * (`isSensitiveField` in `core/src/extraction/dom-extractor.ts`), inlined
+ * rather than imported for the reason every other in-page function in this
+ * file gives: serialized as source text for `Runtime.callFunctionOn`, so no
+ * imports or module-scope references survive the trip. The RFC's own R1 text
+ * anticipated exactly this case: "When live field values are genuinely
+ * needed later, capture MUST classify sensitivity in-page" — this is that
+ * classification, not a reversal of R1. Chromium's own CDP payload cannot be
+ * trusted to have already redacted the field for us (see `DETAIL_PROPS`'s
+ * comment above), so classification happens here, against the live element,
+ * before anything crosses back out.
+ *
+ * Matches `getKeyAttributes`'s own behaviour exactly, not just its intent: an
+ * empty field gets no value at all (not even a redacted marker), and only
+ * `input`/`textarea`/`select` are read — a custom `role="textbox"`
+ * contenteditable widget is out of scope here the same way it's out of scope
+ * there.
+ */
+export function pageReadValue(this: Element): {
+  value?: string;
+  redacted?: boolean;
+} {
+  const el = this;
+  if (!el || !el.tagName) return {};
+  const tag = el.tagName.toLowerCase();
+  if (tag !== "input" && tag !== "textarea" && tag !== "select") return {};
+
+  const value = (
+    el as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+  ).value;
+  if (!value) return {};
+
+  if (tag === "input" && (el as HTMLInputElement).type === "password") {
+    return { redacted: true };
+  }
+  const SENSITIVE_AUTOCOMPLETE_TOKENS = [
+    "current-password",
+    "new-password",
+    "one-time-code",
+    "cc-number",
+    "cc-csc",
+    "cc-exp",
+    "cc-exp-month",
+    "cc-exp-year",
+  ];
+  const autocomplete = el.getAttribute("autocomplete");
+  if (autocomplete) {
+    for (const token of autocomplete.toLowerCase().split(/\s+/)) {
+      if (SENSITIVE_AUTOCOMPLETE_TOKENS.indexOf(token) !== -1) {
+        return { redacted: true };
+      }
+    }
+  }
+
+  return { value };
+}
+
 /* eslint-enable @typescript-eslint/no-this-alias */
 
 /** The in-page source for each action, as `Runtime.callFunctionOn` wants it. */
@@ -439,6 +556,43 @@ async function runInPage(
     },
   );
   return res.result?.value;
+}
+
+/** The in-page source for the field-value read-back — same calling
+ *  convention as `IN_PAGE_ACTION_SOURCE` above, but not itself a
+ *  `NativeAction`: it runs during the tree walk, not on user dispatch. */
+const IN_PAGE_READ_VALUE_SOURCE = String(pageReadValue);
+
+/**
+ * Resolve one node's backing element to its live field value, redacted per
+ * `pageReadValue`. Returns `{}` for anything that doesn't resolve — a failed
+ * resolve during a read-only enrichment pass has nothing useful to do with a
+ * per-node failure, so it degrades to "no value" rather than surfacing an
+ * error for what is, for most nodes, an expected miss (most roles aren't
+ * value-bearing at all).
+ */
+async function readFieldValue(
+  transport: CdpTransport,
+  backendNodeId: number,
+): Promise<{ value?: string; redacted?: boolean }> {
+  try {
+    const resolved = await transport.send<{ object?: { objectId?: string } }>(
+      "DOM.resolveNode",
+      { backendNodeId },
+    );
+    const objectId = resolved.object?.objectId;
+    if (!objectId) return {};
+    const res = await transport.send<{
+      result?: { value?: { value?: string; redacted?: boolean } };
+    }>("Runtime.callFunctionOn", {
+      objectId,
+      functionDeclaration: IN_PAGE_READ_VALUE_SOURCE,
+      returnByValue: true,
+    });
+    return res.result?.value ?? {};
+  } catch {
+    return {};
+  }
 }
 
 /** First normalized node matching role + optional accessible-name substring. */

@@ -113,7 +113,21 @@ type NativeNode = {
   depth: number;
   states?: Record<string, string | boolean>;
   properties?: Record<string, string>;
+  /** The field's live value, redacted to `"[redacted]"` for a sensitive
+   *  field by `pageReadValue` (native-core.ts) — never the raw secret. */
+  value?: string;
 };
+
+/**
+ * Render a node's current value the way the DOM/A11Y tree view shows it —
+ * `= "value"` right after the accessible name. Absent entirely for a node
+ * with no value (not just an empty string): `pageReadValue` only sets
+ * `n.value` for a non-empty, resolved field, so "no badge" already means
+ * "nothing to show" without a separate check here.
+ */
+export function formatValue(n: NativeNode): string {
+  return n.value !== undefined ? ` = ${JSON.stringify(n.value)}` : "";
+}
 
 /**
  * Render a node's states the way the production DOM/A11Y tree view's
@@ -544,7 +558,7 @@ export function DogfoodPanel() {
       {nodes.length > 0 && (
         <div style="max-height:220px;overflow:auto;margin-top:6px;font-family:ui-monospace,monospace">
           {nodes.map((n) => {
-            const label = `${"  ".repeat(n.depth)}${n.role}${n.name ? ` "${n.name}"` : ""}${formatFacets(n)}`;
+            const label = `${"  ".repeat(n.depth)}${n.role}${n.name ? ` "${n.name}"` : ""}${formatValue(n)}${formatFacets(n)}`;
             return ACTABLE.has(n.role) ? (
               <div key={n.id}>
                 <button

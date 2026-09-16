@@ -205,12 +205,15 @@ export function registerNativeMode(): void {
               // Not recorded in the dogfood log, which stays content-free.
               url: await tabUrl(message.tabId),
               // Structural fields plus the state/property enrichment
-              // `readNativeTree` attaches (`expanded`, `checked`, `level`, …)
-              // — never page-derived secrets beyond the accessible name the
-              // tree already shows. `axFacets`'s own allowlist (DETAIL_PROPS)
-              // already excludes `valuenow`/`valuetext`, the two AX
-              // properties that would carry a value-bearing control's current
-              // input (R1), so nothing extra needs filtering here.
+              // `readNativeTree` attaches (`expanded`, `checked`, `level`, …).
+              // `axFacets`'s own allowlist (DETAIL_PROPS) excludes
+              // `valuenow`/`valuetext`, the two AX properties that would
+              // carry a value-bearing control's current input straight from
+              // Chromium's own (incompletely-redacted) CDP payload — `value`
+              // is a SEPARATE field, populated by `pageReadValue`'s own
+              // in-page sensitivity classification (R1: password fields and
+              // sensitive autocomplete tokens arrive as "[redacted]", never
+              // the live text), not a bypass of that exclusion.
               nodes: value.nodes.map((n) => ({
                 id: n.id,
                 role: n.role,
@@ -218,6 +221,7 @@ export function registerNativeMode(): void {
                 depth: n.depth,
                 states: n.states,
                 properties: n.properties,
+                value: n.value,
               })),
             });
             return;

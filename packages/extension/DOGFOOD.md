@@ -196,3 +196,48 @@ what a person actually ran into holding the tree next to a page.
   current gap" reason as `slider`/`spinbutton`/`cell`.
   (`packages/extension/src/sidepanel/DogfoodPanel.tsx`, `ACTABLE`/
   `isTypableRole`.)
+
+- **The native tree showed no current field value at all** — a textbox read
+  as `textbox "Name:"` with nothing to confirm what was actually typed,
+  where the DOM/A11Y tree view (left panel) showed `textbox "Name:" =
+"456465"` right next to it. This was flagged as a bug at first, but it
+  wasn't one: R1's blanket exclusion of `valuenow`/`valuetext` was working
+  exactly as designed. What was actually wrong is that the design didn't fit
+  the product it was gating — Semantic Navigator's whole point in Screen
+  Curtain mode is that the user relies entirely on the accessible tree to
+  perceive the page, and for a value-bearing control that means confirming
+  what was just typed, the same read-back a screen reader gives for free.
+  Withholding it made native mode strictly worse than DOM mode for the one
+  workflow native mode exists to dogfood.
+
+  Fixed by adding a value read-back, deliberately not by loosening the
+  `valuenow`/`valuetext` exclusion above — Chromium's own CDP payload can't
+  be trusted to have already redacted a sensitive field (it masks passwords
+  but not, say, a `cc-number` field on a plain `type="text"` input), so
+  piping those two properties through untouched would have bypassed
+  classification entirely. Instead: a new in-page function
+  (`pageReadValue`), mirroring the DOM producer's own `isSensitiveField`
+  redaction (`core/src/extraction/dom-extractor.ts`) rather than importing
+  it — same "deliberate mirror, not an import" constraint as `pageClick`/
+  `pageType`, since it runs as source text over CDP. A password field or a
+  field with a sensitive `autocomplete` token (`cc-number`, `new-password`,
+  …) reports `"[redacted]"`; everything else reports its live value; an
+  empty field reports nothing at all, matching the DOM producer's own badge
+  exactly. Resolved only for roles that could plausibly back an
+  `input`/`textarea`/`select` element (`textbox`, `searchbox`, `combobox`,
+  `listbox`, `spinbutton`, `slider`), concurrently, so a form-heavy page
+  costs one round of parallel CDP calls rather than stacking N sequential
+  ones onto the tree read. The RFC's own R1 text anticipated this exact
+  case: "When live field values are genuinely needed later, capture MUST
+  classify sensitivity in-page" — this is that classification.
+
+  Deliberately scoped to the extension only, not `@real-a11y-dev/browser`'s
+  native producer (CLI/MCP): that surface serves automation/testing output,
+  often written to files or logs, where withholding live input still makes
+  sense. **Verified end-to-end in a real headed Chromium**: a plain text
+  field's typed value surfaces, a password field and a `cc-number`
+  autocomplete field both redact even though their raw value is present in
+  the CDP response Chromium itself sends, and an empty field shows nothing.
+  (`packages/extension/src/native/native-core.ts`, `pageReadValue`/
+  `VALUE_BEARING_ROLES`; `packages/extension/src/sidepanel/DogfoodPanel.tsx`,
+  `formatValue`.)

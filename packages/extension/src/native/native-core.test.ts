@@ -7,6 +7,7 @@ import {
   findNative,
   IN_PAGE_ACTION_SOURCE,
   pageClick,
+  pageReadValue,
   pageType,
   readNativeTree,
   type CdpTransport,
@@ -143,6 +144,67 @@ describe("readNativeTree", () => {
     expect(slider?.properties).toEqual({ valuemin: "0" });
     expect(slider?.properties).not.toHaveProperty("valuenow");
     expect(slider?.properties).not.toHaveProperty("valuetext");
+  });
+
+  it("attaches a field value for a value-bearing role via the in-page read-back", async () => {
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 10,
+        role: { value: "textbox" },
+        name: { value: "Name:" },
+      },
+    ];
+    const t = new FakeTransport((method) => {
+      if (method === "Accessibility.getFullAXTree") return { nodes: raw };
+      if (method === "DOM.resolveNode") return { object: { objectId: "obj" } };
+      if (method === "Runtime.callFunctionOn") {
+        return { result: { value: { value: "456465" } } };
+      }
+      return {};
+    });
+    const res = await readNativeTree(t);
+    expect(findNative(res.nodes, "textbox", "Name:")?.value).toBe("456465");
+  });
+
+  it("carries a redacted marker through instead of a value", async () => {
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 10,
+        role: { value: "textbox" },
+        name: { value: "Password" },
+      },
+    ];
+    const t = new FakeTransport((method) => {
+      if (method === "Accessibility.getFullAXTree") return { nodes: raw };
+      if (method === "DOM.resolveNode") return { object: { objectId: "obj" } };
+      if (method === "Runtime.callFunctionOn") {
+        return { result: { value: { redacted: true } } };
+      }
+      return {};
+    });
+    const res = await readNativeTree(t);
+    expect(findNative(res.nodes, "textbox", "Password")?.value).toBe(
+      "[redacted]",
+    );
+  });
+
+  it("never resolves a node whose role isn't value-bearing — no wasted round trip", async () => {
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 10,
+        role: { value: "button" },
+        name: { value: "Save" },
+      },
+    ];
+    const t = new FakeTransport((method) =>
+      method === "Accessibility.getFullAXTree" ? { nodes: raw } : {},
+    );
+    const res = await readNativeTree(t);
+    expect(findNative(res.nodes, "button", "Save")?.value).toBeUndefined();
+    expect(t.calls.some((c) => c.method === "DOM.resolveNode")).toBe(false);
   });
 });
 
@@ -354,6 +416,79 @@ describe("in-page actions — type", () => {
     document.body.appendChild(el);
     const marker = on(pageType, el, "hunter2");
     expect(JSON.stringify(marker)).not.toContain("hunter2");
+  });
+});
+
+describe("in-page actions — read value", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("reads a plain text input's value", () => {
+    const el = document.createElement("input");
+    el.value = "456465";
+    document.body.appendChild(el);
+    expect(on(pageReadValue, el)).toEqual({ value: "456465" });
+  });
+
+  it("reads a textarea and a select the same way", () => {
+    const textarea = document.createElement("textarea");
+    textarea.value = "hello";
+    document.body.appendChild(textarea);
+    expect(on(pageReadValue, textarea)).toEqual({ value: "hello" });
+
+    const select = document.createElement("select");
+    const option = document.createElement("option");
+    option.value = "fr";
+    option.textContent = "France";
+    select.appendChild(option);
+    select.value = "fr";
+    document.body.appendChild(select);
+    expect(on(pageReadValue, select)).toEqual({ value: "fr" });
+  });
+
+  it("returns nothing for an empty field — no value, not even a redacted marker", () => {
+    const el = document.createElement("input");
+    document.body.appendChild(el);
+    expect(on(pageReadValue, el)).toEqual({});
+  });
+
+  it("redacts a password field instead of returning the typed secret (R1)", () => {
+    const el = document.createElement("input");
+    el.type = "password";
+    el.value = "hunter2";
+    document.body.appendChild(el);
+    const result = on(pageReadValue, el);
+    expect(result).toEqual({ redacted: true });
+    expect(JSON.stringify(result)).not.toContain("hunter2");
+  });
+
+  it("redacts a text-type field with a sensitive autocomplete token (R1)", () => {
+    const el = document.createElement("input");
+    el.type = "text";
+    el.autocomplete = "cc-number";
+    el.value = "4111111111111111";
+    document.body.appendChild(el);
+    const result = on(pageReadValue, el);
+    expect(result).toEqual({ redacted: true });
+    expect(JSON.stringify(result)).not.toContain("4111111111111111");
+  });
+
+  it("does not treat a normal autocomplete token as sensitive", () => {
+    const el = document.createElement("input");
+    el.autocomplete = "given-name";
+    el.value = "Ada";
+    document.body.appendChild(el);
+    expect(on(pageReadValue, el)).toEqual({ value: "Ada" });
+  });
+
+  it("returns nothing for a non-field element — a custom contenteditable widget is out of scope here", () => {
+    const el = document.createElement("div");
+    el.setAttribute("role", "textbox");
+    el.setAttribute("contenteditable", "true");
+    el.textContent = "typed text";
+    document.body.appendChild(el);
+    expect(on(pageReadValue, el)).toEqual({});
   });
 });
 
