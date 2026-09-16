@@ -267,3 +267,23 @@ markdown **in the same PR**; that's what keeps the docs from drifting.
 
 Do not reference the improvement audit or its finding numbers in a PR title or
 body — a bare `#N` mislinks to an unrelated PR. Describe the bug on its own terms.
+
+## Agent skills
+
+Configuration the `mattpocock-skills` engineering skills read. These files
+describe existing conventions; they do not add process.
+
+### Issue tracker
+
+Tickets live in the **Tasks** database in Notion, reached with the `notion-*` MCP
+tools — not in GitHub Issues. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical triage roles are options on a `Triage` select property on the
+Tasks data source. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one root `CONTEXT.md` plus `docs/adr/`, both created lazily. See
+`docs/agents/domain.md`.
