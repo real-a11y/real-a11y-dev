@@ -61,13 +61,21 @@ type NativeNode = {
 };
 
 /**
- * Render a node's states/properties the way the production DOM/A11Y tree
- * view does — a trailing ` state` for a bare boolean-true (`expanded`,
- * `disabled`, …), `state=value` for anything else (`level=2`, a tristate
- * `pressed=mixed`), `false` omitted entirely (states default false and
- * listing every negative would swamp the row). Comparable at a glance against
- * the DOM tree's own annotations on the same widget — the whole point of
- * running both side by side during the dogfood.
+ * Render a node's states the way the production DOM/A11Y tree view's
+ * `renderBadges` does (`packages/ui/src/components/TreeNode.tsx`) — a bare
+ * key for a true boolean (`expanded`, `disabled`, …), `key=value` for
+ * anything else (a tristate `pressed=mixed`), `false` omitted entirely
+ * (states default false and listing every negative would swamp the row).
+ * That half is genuinely comparable at a glance against the DOM tree's own
+ * badges on the same widget.
+ *
+ * `properties` is deliberately NOT held to the same parity: the production
+ * view surfaces only `level` (`renderA11yLabel`); this shows all of them
+ * (`hasPopup`, `orientation`, `roledescription`, …). That is by design for a
+ * debug surface whose purpose is finding out what native fidelity actually
+ * contains — an AX property the DOM producer never computes at all is signal
+ * for this exercise, not noise to hide for symmetry with a panel built for a
+ * different job.
  */
 export function formatFacets(n: NativeNode): string {
   const parts: string[] = [];
