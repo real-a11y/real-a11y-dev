@@ -24,12 +24,16 @@ means — not for process or traps, which stay where they are.
 
 ## File structure
 
+**Neither `CONTEXT.md` nor `docs/adr/` exists yet.** This is the shape they take
+once `/domain-modeling` creates them, and the filenames below are illustrative
+placeholders — there are no ADRs in this repo to cite.
+
 ```
 /
 ├── CONTEXT.md
 ├── docs/adr/
-│   ├── 0001-two-producers-build-the-tree.md
-│   └── 0002-internal-packages-bundle-core.md
+│   ├── 0001-<decision>.md
+│   └── 0002-<decision>.md
 └── packages/
 ```
 
@@ -48,5 +52,7 @@ inventing language the project doesn't use (reconsider) or there's a real gap
 If your output contradicts an existing ADR, surface it explicitly rather than
 silently overriding:
 
-> _Contradicts ADR-0007 (native normalization lives in core), but worth reopening
-> because…_
+> _Contradicts ADR-00NN (its title), but worth reopening because…_
+
+Cite an ADR only after reading it. Naming a plausible-sounding number you haven't
+opened invents precedent, which is worse than having none.
