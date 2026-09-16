@@ -87,7 +87,7 @@ describe("isTypableRole", () => {
  * branches (`core/src/extraction/dom-extractor.ts`).
  */
 describe("ACTABLE", () => {
-  it("recognizes every role the DOM producer's getActions treats as clickable", () => {
+  it("recognizes every role the DOM producer's getActions treats as clickable that isn't also a plain native element's implicit role", () => {
     for (const role of [
       "button",
       "link",
@@ -95,15 +95,12 @@ describe("ACTABLE", () => {
       "radio",
       "switch",
       "combobox",
-      "listbox",
-      "option",
       "menuitem",
       "menuitemcheckbox",
       "menuitemradio",
       "tab",
       "treeitem",
       "gridcell",
-      "row",
     ]) {
       expect(ACTABLE.has(role)).toBe(true);
     }
@@ -116,6 +113,23 @@ describe("ACTABLE", () => {
 
   it("excludes bare cell — pageClick redirects it for safety, but getActions never treats it as actionable", () => {
     expect(ACTABLE.has("cell")).toBe(false);
+  });
+
+  /**
+   * `row`, `listbox`, and `option` each have a getActions click branch, but
+   * they are also the IMPLICIT ARIA role of a plain native element (`<tr>`,
+   * `<select multiple>`, `<option>` — `core/src/extraction/role-map.ts`),
+   * which Chromium's own AX tree reports identically with no ARIA authoring.
+   * getActions only reaches those branches off the element's LITERAL `role`
+   * attribute (a plain `<tr>` never has one), so a native-tree node — which
+   * carries only a role string, no tag — can't tell a real table row/select/
+   * option apart from a custom ARIA-authored one. Offering CLICK on every
+   * table row and native dropdown would misfire far more than it would help.
+   */
+  it("excludes row/listbox/option — indistinguishable from a plain native element on a role-only tree", () => {
+    expect(ACTABLE.has("row")).toBe(false);
+    expect(ACTABLE.has("listbox")).toBe(false);
+    expect(ACTABLE.has("option")).toBe(false);
   });
 
   /**
@@ -135,9 +149,7 @@ describe("ACTABLE", () => {
       "menuitem",
       "menuitemcheckbox",
       "menuitemradio",
-      "option",
       "tab",
-      "row",
       "gridcell",
     ];
     for (const role of wrapperComposites) {

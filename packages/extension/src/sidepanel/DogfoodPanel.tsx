@@ -30,12 +30,12 @@ import {
  * class of bug: the widget IS actionable, the panel just never learned it.
  *
  * Every wrapper-composite role here (`treeitem`, `menuitemcheckbox`,
- * `menuitemradio`, `option`, `row`, `gridcell` — `tab`/`menuitem` were
- * already present) is also in `pageClick`'s own `composite` redirect list
- * below, so the dispatch mechanism was already correct for all of them; only
- * the panel's own allowlist was behind. `nativeIdOf`-lockstep note applies
- * the same way here — kept in step by hand, asserted by the test that
- * stringifies `pageClick` and checks each composite role appears in it.
+ * `menuitemradio`, `gridcell` — `tab`/`menuitem` were already present) is
+ * also in `pageClick`'s own `composite` redirect list below, so the dispatch
+ * mechanism was already correct for all of them; only the panel's own
+ * allowlist was behind. `nativeIdOf`-lockstep note applies the same way
+ * here — kept in step by hand, asserted by the test that stringifies
+ * `pageClick` and checks each composite role appears in it.
  *
  * Deliberately excludes `slider` / `spinbutton`: the DOM producer gives them
  * `increment`/`decrement` (arrow-key stepping), never `click` — a custom
@@ -47,6 +47,25 @@ import {
  * (present in `pageClick`'s composite list for redirect-safety, but the DOM
  * producer itself never treats a plain table cell as actionable — only
  * `gridcell`/`columnheader`/`rowheader` are).
+ *
+ * Deliberately excludes `row`, `listbox`, `option` too, despite `getActions`
+ * having a click branch for each: unlike the wrapper-composite roles above,
+ * these three are also the IMPLICIT ARIA role of a plain native element —
+ * `<tr>` → `row`, `<select multiple>` → `listbox`, `<option>` → `option`
+ * (`core/src/extraction/role-map.ts`), and Chromium's own AX tree computes
+ * the identical implicit role via HTML-AAM, with no ARIA authoring needed.
+ * `getActions` only fires those three branches off the ELEMENT'S LITERAL
+ * `role` ATTRIBUTE (`element.getAttribute("role")`, not the computed role),
+ * and `tag === "select"` is checked earlier in its if/else-if chain — so a
+ * plain `<tr>` or native `<select multiple>`/`<option>` never reaches those
+ * branches at all; only an explicitly `role="row"`/`"listbox"`/`"option"`
+ * custom widget does. A native-tree node carries no tag, only the role
+ * string, so it cannot tell a plain `<tr>` apart from a `role="row"` ARIA
+ * grid row. Offering CLICK on every table row and native `<select>`/
+ * `<option>` (virtually any page with a data table or dropdown) would fire a
+ * synthetic pointer sequence nothing is listening for — same "worse than the
+ * current gap" call as `slider`/`spinbutton` above, not a fix for the
+ * (rarer) custom-widget case.
  */
 export const ACTABLE = new Set([
   "button",
@@ -58,11 +77,8 @@ export const ACTABLE = new Set([
   "menuitem",
   "menuitemcheckbox",
   "menuitemradio",
-  "option",
-  "listbox",
   "treeitem",
   "gridcell",
-  "row",
   "textbox",
   "searchbox",
   "combobox",

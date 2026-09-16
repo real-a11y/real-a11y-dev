@@ -169,14 +169,30 @@ what a person actually ran into holding the tree next to a page.
   which had fallen behind what the DOM producer's `getActions`
   (`core/src/extraction/dom-extractor.ts`) already treats as clickable.
   Cross-checked every ARIA role `getActions` gives a click-family action
-  against `ACTABLE` and closed the whole gap in one pass rather than just the
-  reported role: added `menuitemcheckbox`, `menuitemradio`, `option`,
-  `listbox`, `treeitem`, `gridcell`, `row` (deliberately not `slider` /
-  `spinbutton`, which `getActions` gives `increment`/`decrement` rather than
-  `click` — `dispatchNative`'s `NativeAction` union has no increment/decrement
-  yet, so offering a button there would dispatch the wrong action; and not
-  bare `cell`, which is in `pageClick`'s redirect list for safety only and is
-  never itself actionable per `getActions`). Also added `searchbox` to
-  `isTypableRole`, the one other role `getActions` gives `focus, type` that
-  the panel had missed. (`packages/extension/src/sidepanel/DogfoodPanel.tsx`,
-  `ACTABLE`/`isTypableRole`.)
+  against `ACTABLE` rather than just the reported role: added
+  `menuitemcheckbox`, `menuitemradio`, `treeitem`, `gridcell` (deliberately
+  not `slider` / `spinbutton`, which `getActions` gives `increment`/
+  `decrement` rather than `click` — `dispatchNative`'s `NativeAction` union
+  has no increment/decrement yet, so offering a button there would dispatch
+  the wrong action; and not bare `cell`, which is in `pageClick`'s redirect
+  list for safety only and is never itself actionable per `getActions`).
+  Also added `searchbox` to `isTypableRole`, the one other role `getActions`
+  gives `focus, type` that the panel had missed.
+
+  A first pass also added `row`, `listbox`, and `option` — reverted one
+  `/code-review` round later. `getActions` does give all three a click
+  branch, but each is also the _implicit_ ARIA role of a plain native
+  element (`<tr>` → `row`, `<select multiple>` → `listbox`, `<option>` →
+  `option` — `core/src/extraction/role-map.ts`), which Chromium's own AX
+  tree reports identically with no ARIA authoring at all. `getActions` only
+  reaches those three branches off the element's _literal_ `role` attribute
+  (`tag === "select"` is even checked earlier in its chain), so a plain
+  `<tr>`/native `<select>`/`<option>` never gets those actions from the DOM
+  producer — only an explicitly `role="row"`/`"listbox"`/`"option"` custom
+  widget does. A native-tree node carries only a role string, no tag, so it
+  can't draw that distinction; offering CLICK on every table row and native
+  dropdown (virtually any page with a data table or `<select>`) would misfire
+  far more often than it would help. Left out for the same "worse than the
+  current gap" reason as `slider`/`spinbutton`/`cell`.
+  (`packages/extension/src/sidepanel/DogfoodPanel.tsx`, `ACTABLE`/
+  `isTypableRole`.)
