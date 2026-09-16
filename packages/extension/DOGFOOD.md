@@ -159,3 +159,24 @@ what a person actually ran into holding the tree next to a page.
   an MV3 worker, and `core` stays pure by design (R4).
   (`packages/extension/src/native/native-core.ts`, `axFacets`/
   `EnrichedNativeNode`.)
+- **Menu items showed no CLICK button on the native tree.** A `menuitemradio`
+  row in the ARIA APG menubar-editor pattern (and by extension
+  `menuitemcheckbox`) got a CLICK button in the DOM/A11Y tree view but not
+  here, even though the dispatch mechanism itself was already correct —
+  `pageClick`'s `composite` redirect list already special-cases
+  `menuitemcheckbox`/`menuitemradio`/`option`/`treeitem`/`row`/`gridcell`/`cell`
+  wrapper roles. The gap was entirely the panel's own `ACTABLE` allowlist,
+  which had fallen behind what the DOM producer's `getActions`
+  (`core/src/extraction/dom-extractor.ts`) already treats as clickable.
+  Cross-checked every ARIA role `getActions` gives a click-family action
+  against `ACTABLE` and closed the whole gap in one pass rather than just the
+  reported role: added `menuitemcheckbox`, `menuitemradio`, `option`,
+  `listbox`, `treeitem`, `gridcell`, `row` (deliberately not `slider` /
+  `spinbutton`, which `getActions` gives `increment`/`decrement` rather than
+  `click` — `dispatchNative`'s `NativeAction` union has no increment/decrement
+  yet, so offering a button there would dispatch the wrong action; and not
+  bare `cell`, which is in `pageClick`'s redirect list for safety only and is
+  never itself actionable per `getActions`). Also added `searchbox` to
+  `isTypableRole`, the one other role `getActions` gives `focus, type` that
+  the panel had missed. (`packages/extension/src/sidepanel/DogfoodPanel.tsx`,
+  `ACTABLE`/`isTypableRole`.)

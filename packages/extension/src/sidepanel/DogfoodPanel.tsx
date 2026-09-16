@@ -18,8 +18,37 @@ import {
   type TabCapability,
 } from "../native/capability.js";
 
-// Roles worth offering a one-click action for during a dogfood session.
-const ACTABLE = new Set([
+/**
+ * Roles worth offering a one-click action for during a dogfood session.
+ *
+ * Sourced from the DOM producer's own role→action mapping (`getActions` in
+ * `core/src/extraction/dom-extractor.ts`, the "ARIA role-based actions"
+ * branch) — the authoritative answer to "is this role actionable" in this
+ * codebase, since it drives `interaction.isInteractive` for the DOM/A11Y
+ * tree view rendered right alongside this panel. A role missing here after
+ * DOM's own list carries it is exactly the "not interactive on native tree"
+ * class of bug: the widget IS actionable, the panel just never learned it.
+ *
+ * Every wrapper-composite role here (`treeitem`, `menuitemcheckbox`,
+ * `menuitemradio`, `option`, `row`, `gridcell` — `tab`/`menuitem` were
+ * already present) is also in `pageClick`'s own `composite` redirect list
+ * below, so the dispatch mechanism was already correct for all of them; only
+ * the panel's own allowlist was behind. `nativeIdOf`-lockstep note applies
+ * the same way here — kept in step by hand, asserted by the test that
+ * stringifies `pageClick` and checks each composite role appears in it.
+ *
+ * Deliberately excludes `slider` / `spinbutton`: the DOM producer gives them
+ * `increment`/`decrement` (arrow-key stepping), never `click` — a custom
+ * ARIA slider listens for ArrowLeft/ArrowRight and does nothing useful on a
+ * synthetic click, per that file's own comment. `dispatchNative`'s
+ * `NativeAction` union has no increment/decrement at all yet, so offering a
+ * button here would dispatch the wrong action rather than a missing one —
+ * worse than the current gap, not a fix for it. Also excludes bare `cell`
+ * (present in `pageClick`'s composite list for redirect-safety, but the DOM
+ * producer itself never treats a plain table cell as actionable — only
+ * `gridcell`/`columnheader`/`rowheader` are).
+ */
+export const ACTABLE = new Set([
   "button",
   "link",
   "checkbox",
@@ -27,28 +56,38 @@ const ACTABLE = new Set([
   "switch",
   "tab",
   "menuitem",
+  "menuitemcheckbox",
+  "menuitemradio",
+  "option",
+  "listbox",
+  "treeitem",
+  "gridcell",
+  "row",
   "textbox",
+  "searchbox",
   "combobox",
 ]);
 
 /**
  * Roles where "act" means typing text, as opposed to a click.
  *
- * Deliberately `textbox` only, NOT `combobox`. ARIA overloads `combobox`
- * across two shapes this panel cannot tell apart from role+name+depth alone:
- * an EDITABLE combobox (autocomplete text input) and a SELECT-ONLY combobox
- * — the ARIA APG "Combobox (Select-Only)" pattern, a non-editable trigger
- * that behaves like a `<select>`. Prompting for text on the latter opens a
- * browser `prompt()` dialog and then dispatches a `type` action the page has
- * nowhere to put — `pageType` correctly refuses with `not-a-text-field`, but
- * the dogfooder is left having answered a modal for nothing, when what they
- * wanted was to click it open. A click is the right default for both shapes:
- * it opens/focuses a select-only combobox exactly like a real click would,
- * and focuses an editable one so the dogfooder can type at their own
- * keyboard afterward — same as any other click target in a real session.
+ * `textbox` and `searchbox` — the two roles the DOM producer's own
+ * `getActions` gives `focus, type` — NOT `combobox`. ARIA overloads
+ * `combobox` across two shapes this panel cannot tell apart from
+ * role+name+depth alone: an EDITABLE combobox (autocomplete text input) and
+ * a SELECT-ONLY combobox — the ARIA APG "Combobox (Select-Only)" pattern, a
+ * non-editable trigger that behaves like a `<select>`. Prompting for text on
+ * the latter opens a browser `prompt()` dialog and then dispatches a `type`
+ * action the page has nowhere to put — `pageType` correctly refuses with
+ * `not-a-text-field`, but the dogfooder is left having answered a modal for
+ * nothing, when what they wanted was to click it open. A click is the right
+ * default for both shapes: it opens/focuses a select-only combobox exactly
+ * like a real click would, and focuses an editable one so the dogfooder can
+ * type at their own keyboard afterward — same as any other click target in
+ * a real session.
  */
 export function isTypableRole(role: string): boolean {
-  return role === "textbox";
+  return role === "textbox" || role === "searchbox";
 }
 
 type NativeNode = {

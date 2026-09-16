@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 
-import { isTypableRole, formatFacets } from "./DogfoodPanel.js";
+import { pageClick } from "../native/native-core.js";
+
+import { ACTABLE, isTypableRole, formatFacets } from "./DogfoodPanel.js";
 
 /**
  * ARIA overloads `combobox` across two shapes the native tree's flat
@@ -52,6 +54,10 @@ describe("isTypableRole", () => {
     expect(isTypableRole("textbox")).toBe(true);
   });
 
+  it("treats a searchbox as typable — same focus,type actions as textbox", () => {
+    expect(isTypableRole("searchbox")).toBe(true);
+  });
+
   it("does not treat a combobox as typable — it may be select-only", () => {
     expect(isTypableRole("combobox")).toBe(false);
   });
@@ -67,6 +73,76 @@ describe("isTypableRole", () => {
       "menuitem",
     ]) {
       expect(isTypableRole(role)).toBe(false);
+    }
+  });
+});
+
+/**
+ * "Menu items are not interactive on native tree" — `menuitemradio` rows in
+ * the ARIA APG menubar-editor example show a CLICK button in the DOM/A11Y
+ * tree view but not here, because `ACTABLE` (this panel's own allowlist)
+ * hadn't caught up with what the DOM producer's `getActions` already
+ * recognizes and `pageClick`'s composite-redirect list already dispatches
+ * correctly. These roles come straight from `getActions`'s ARIA role-based
+ * branches (`core/src/extraction/dom-extractor.ts`).
+ */
+describe("ACTABLE", () => {
+  it("recognizes every role the DOM producer's getActions treats as clickable", () => {
+    for (const role of [
+      "button",
+      "link",
+      "checkbox",
+      "radio",
+      "switch",
+      "combobox",
+      "listbox",
+      "option",
+      "menuitem",
+      "menuitemcheckbox",
+      "menuitemradio",
+      "tab",
+      "treeitem",
+      "gridcell",
+      "row",
+    ]) {
+      expect(ACTABLE.has(role)).toBe(true);
+    }
+  });
+
+  it("excludes slider/spinbutton — the DOM producer gives them increment/decrement, not click", () => {
+    expect(ACTABLE.has("slider")).toBe(false);
+    expect(ACTABLE.has("spinbutton")).toBe(false);
+  });
+
+  it("excludes bare cell — pageClick redirects it for safety, but getActions never treats it as actionable", () => {
+    expect(ACTABLE.has("cell")).toBe(false);
+  });
+
+  /**
+   * Every wrapper-composite role in ACTABLE must also be one `pageClick`
+   * redirects past the wrapper to its inner control — otherwise offering a
+   * CLICK button here would dispatch a click on the wrong element. Asserted
+   * by stringifying `pageClick` (it is serialized as source text for
+   * `Runtime.callFunctionOn`, so its own composite list is a plain string
+   * literal in the function body) rather than importing a shared constant,
+   * since the two lists are deliberately hand-kept-in-step, not derived from
+   * one source — same pattern as `nativeIdOf`.
+   */
+  it("keeps its wrapper-composite roles in lockstep with pageClick's redirect list", () => {
+    const source = pageClick.toString();
+    const wrapperComposites = [
+      "treeitem",
+      "menuitem",
+      "menuitemcheckbox",
+      "menuitemradio",
+      "option",
+      "tab",
+      "row",
+      "gridcell",
+    ];
+    for (const role of wrapperComposites) {
+      expect(ACTABLE.has(role)).toBe(true);
+      expect(source).toContain(`"${role}"`);
     }
   });
 });
