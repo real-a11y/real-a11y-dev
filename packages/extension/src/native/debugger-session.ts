@@ -17,6 +17,16 @@ import type { CdpTransport } from "./native-core.js";
 
 const PROTOCOL = "1.3";
 
+/**
+ * Bound on the liveness probe `attach()` sends before trusting a reused
+ * session (see there). It runs inside the promise `detachAll` waits on, so an
+ * unbounded probe against a wedged tab — blocked on a synchronous `alert()`,
+ * say — would let turning native mode off hang right along with it. A timeout
+ * is treated as "can't tell" (falls through to the conservative branch),
+ * never as proof the connection is gone.
+ */
+const PROBE_TIMEOUT_MS = 2000;
+
 /** "Another debugger is already attached…" — the DevTools-conflict class. */
 export function isDebuggerConflict(message: string | undefined): boolean {
   return /already attached/i.test(message ?? "");
@@ -316,12 +326,36 @@ export class NativeDebuggerSession {
         // cleanup it actually is. A live probe is the only way to tell the two
         // apart — cheap and side-effect-free, since we hit `Runtime.evaluate`
         // every real read anyway.
-        const alive =
-          hasEntry &&
-          (await chrome.debugger
+        //
+        // Bounded: this call sits inside the promise `detachAll` waits on (see
+        // `attach`'s wrapper), so an unbounded probe against a tab whose
+        // renderer is wedged — blocked on a synchronous `alert()`, say — would
+        // let turning native mode off hang right along with it.
+        const probe = await Promise.race([
+          chrome.debugger
             .sendCommand({ tabId }, "Runtime.evaluate", { expression: "1" })
-            .then(() => true)
-            .catch(() => false));
+            .then(() => ({ ok: true as const })),
+          new Promise<{ ok: false; msg: undefined }>((resolve) =>
+            setTimeout(
+              () => resolve({ ok: false, msg: undefined }),
+              PROBE_TIMEOUT_MS,
+            ),
+          ),
+        ]).catch((err: unknown) => ({
+          ok: false as const,
+          msg: err instanceof Error ? err.message : String(err),
+        }));
+        // Only a message that specifically says we are not attached proves the
+        // entry lied. Anything else — a timeout, a mid-navigation hiccup with no
+        // execution context yet, an unrelated protocol error — is the PROBE
+        // failing for its own reason, not proof the connection is gone. Treating
+        // it as proof would turn one bad `Runtime.evaluate` into a permanent
+        // lockout: the entry gets cleared, the next attach hits the same
+        // "already attached" with nothing left to reuse, and every attempt after
+        // reports a conflict that was never real. Matches this file's existing
+        // rule elsewhere: anything unrecognized falls through conservatively
+        // rather than inventing a drop.
+        const alive = hasEntry && (probe.ok || !isConnectionLost(probe.msg));
         if (!alive) {
           if (hasEntry) {
             // The entry lied. Clear it as stale bookkeeping — the connection

@@ -182,10 +182,13 @@ describe("NativeDebuggerSession attach bookkeeping", () => {
     (g.chrome.debugger.attach as ReturnType<typeof vi.fn>).mockRejectedValue(
       new Error("Another debugger is already attached to the tab with id: 5."),
     );
-    // The liveness probe fails: whoever holds the tab now, it isn't us.
+    // The liveness probe fails with the SAME wording that proves a genuine
+    // drop elsewhere in this file: whoever holds the tab now, it isn't us.
     (
       g.chrome.debugger.sendCommand as ReturnType<typeof vi.fn>
-    ).mockRejectedValue(new Error("Not allowed"));
+    ).mockRejectedValue(
+      new Error("Debugger is not attached to the tab with id: 5."),
+    );
     const log = new FakeStorage();
     const attach = new FakeStorage();
     attach.data["dogfood.attachedTabs"] = { 5: Date.now() - 30_000 };
@@ -206,6 +209,83 @@ describe("NativeDebuggerSession attach bookkeeping", () => {
     expect(kinds(log)).not.toContain("detach-unsolicited");
     expect(kinds(log)).not.toContain("detach");
     expect(attach.data["dogfood.attachedTabs"]).toEqual({});
+  });
+
+  it("keeps trusting a live entry when the probe fails for an unrelated reason", async () => {
+    // Only a message that specifically says we are not attached proves the
+    // entry lied. A probe that fails for some OTHER reason — mid-navigation
+    // with no execution context yet, a transient protocol hiccup, a timeout —
+    // is not proof the connection is gone. Treating it as proof would turn one
+    // bad `Runtime.evaluate` into a permanent lockout: the entry gets cleared
+    // here, and every attach after this one hits "already attached" with
+    // nothing left in the map to reuse, reporting a conflict that was never
+    // real — forever, since nothing ever repopulates the entry for a tab we
+    // genuinely still hold.
+    stubChrome();
+    const g = globalThis as unknown as { chrome: typeof chrome };
+    (g.chrome.debugger.attach as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("Another debugger is already attached to the tab with id: 5."),
+    );
+    (
+      g.chrome.debugger.sendCommand as ReturnType<typeof vi.fn>
+    ).mockRejectedValue(new Error("Cannot find context with specified id"));
+    const log = new FakeStorage();
+    const attach = new FakeStorage();
+    const attachedAt = Date.now() - 30_000;
+    attach.data["dogfood.attachedTabs"] = { 5: attachedAt };
+    const session = new NativeDebuggerSession(log, attach);
+
+    const { outcome, value } = await session.withDebugger(5, async () => "ok");
+
+    expect(outcome.ok).toBe(true);
+    expect(value).toBe("ok");
+    expect(kinds(log)).not.toContain("conflict");
+    expect(kinds(log)).not.toContain("detach-stale");
+    // The completed operation detaches normally in its `finally` — same as any
+    // reused session — and bills the FULL preserved dwell, not a fresh one
+    // starting from this probe.
+    const events = (log.data["dogfood.nativeLog"] ?? []) as DogfoodEvent[];
+    const detach = events.find((e) => e.kind === "detach");
+    expect(detach?.attachedMs).toBeGreaterThanOrEqual(29_000);
+    expect(attach.data["dogfood.attachedTabs"]).toEqual({});
+  });
+
+  it("does not let a wedged probe block the revoke path", async () => {
+    // The probe sits inside the promise `detachAll` waits on. Without a bound,
+    // a tab whose renderer is stuck on a synchronous `alert()` would make
+    // turning native mode off hang for as long as the page stays wedged.
+    vi.useFakeTimers();
+    try {
+      stubChrome();
+      const g = globalThis as unknown as { chrome: typeof chrome };
+      (g.chrome.debugger.attach as ReturnType<typeof vi.fn>).mockRejectedValue(
+        new Error(
+          "Another debugger is already attached to the tab with id: 5.",
+        ),
+      );
+      // Never resolves — models a wedged renderer.
+      (
+        g.chrome.debugger.sendCommand as ReturnType<typeof vi.fn>
+      ).mockImplementation(() => new Promise(() => {}));
+      const log = new FakeStorage();
+      const attach = new FakeStorage();
+      const attachedAt = Date.now() - 30_000;
+      attach.data["dogfood.attachedTabs"] = { 5: attachedAt };
+      const session = new NativeDebuggerSession(log, attach);
+
+      const op = session.withDebugger(5, async () => "ok");
+      await vi.advanceTimersByTimeAsync(2_000);
+      const { outcome, value } = await op;
+
+      // A timeout is "can't tell", not "proof it's gone" — same conservative
+      // branch as any other inconclusive probe, so the reused session still
+      // gets to run rather than reporting a bogus conflict.
+      expect(outcome.ok).toBe(true);
+      expect(value).toBe("ok");
+      expect(kinds(log)).not.toContain("conflict");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("ignores a detach for a tab it never attached to", async () => {
