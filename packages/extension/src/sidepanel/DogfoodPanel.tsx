@@ -190,11 +190,19 @@ export function DogfoodPanel() {
     );
   }
 
-  /** Read the tree into state. Returns the node count, or null on failure.
+  /** Read the tree into state. Returns the node count, or null on failure —
+   *  including a discarded, superseded response (see below).
    *  Does not touch `busy` — callers own that, so an action can refresh
-   *  without releasing the lock in between. */
-  async function readTreeInto(tabId: number): Promise<number | null> {
-    const token = capabilityRequest.current;
+   *  without releasing the lock in between.
+   *
+   *  @param token the caller's `capabilityRequest.current` at the moment it
+   *  decided to read — NOT re-captured in here. The round trip below is where
+   *  a tab switch actually happens, so the token has to be the one from
+   *  BEFORE it, or the check after can't see a switch that occurred during. */
+  async function readTreeInto(
+    tabId: number,
+    token: number,
+  ): Promise<number | null> {
     const r = (await chrome.runtime.sendMessage({
       type: "NATIVE_READ",
       tabId,
@@ -205,6 +213,13 @@ export function DogfoodPanel() {
       nodes?: NativeNode[];
       url?: string;
     };
+    // The read is async, and the user may have switched tabs (or toggled the
+    // flag) while it was in flight — `capabilityRequest` bumps on every such
+    // change. Applying either outcome now would be wrong: a late SUCCESS would
+    // show tab A's tree, and clear tab B's capability warning, under a panel
+    // that has already moved on to tab B; a late FAILURE would overwrite that
+    // same warning with a refusal about a tab nobody is looking at.
+    if (token !== capabilityRequest.current) return null;
     if (!r?.ok) {
       forgetTree();
       // A capability refusal is not a failure to report as one — it is Chrome's
@@ -257,7 +272,7 @@ export function DogfoodPanel() {
     setBusy(true);
     setStatus("attaching debugger + reading…");
     try {
-      const count = await readTreeInto(tabId);
+      const count = await readTreeInto(tabId, token);
       if (count !== null) setStatus(`read ${count} nodes`);
       // `readTreeInto`'s refusal branch is token-gated, so a tab switch during
       // the read leaves it having set no status at all. Without this the panel
@@ -343,7 +358,7 @@ export function DogfoodPanel() {
       // CSS transitions; it does NOT cover a fetch-driven re-render, which
       // stays a known limitation to watch during the dogfood.
       await new Promise((r) => setTimeout(r, SETTLE_MS));
-      const count = await readTreeInto(tabId);
+      const count = await readTreeInto(tabId, token);
       // Only overwrite the status when the re-read actually succeeded. On
       // failure `readTreeInto` has already put the useful thing there — if
       // DevTools was opened during the settle wait, that is the conflict

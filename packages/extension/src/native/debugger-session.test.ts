@@ -27,6 +27,10 @@ function stubChrome() {
     debugger: {
       attach: vi.fn(async () => {}),
       detach: vi.fn(async () => {}),
+      // The liveness probe `attach()` sends before trusting a reuse. Resolving
+      // by default matches a genuinely live session; individual tests override
+      // it to model a stale one.
+      sendCommand: vi.fn(async () => ({})),
       onDetach: { addListener: (fn: DetachListener) => listeners.push(fn) },
     },
   };
@@ -135,6 +139,15 @@ describe("NativeDebuggerSession attach bookkeeping", () => {
     // never came down, so counting a new one would inflate the dwell average.
     expect(kinds(log)).not.toContain("conflict");
     expect(kinds(log)).not.toContain("attach");
+    // And the eventual detach bills the FULL dwell — since 30s ago, not since
+    // this operation started a moment ago. `detach()` derives it from the map's
+    // own timestamp rather than a duration computed locally, which is what
+    // makes this correct: crediting only this operation's slice would
+    // undercount the banner-tolerance number by however long the attachment
+    // survived the (simulated) worker restart that preceded it.
+    const events = (log.data["dogfood.nativeLog"] ?? []) as DogfoodEvent[];
+    const detach = events.find((e) => e.kind === "detach");
+    expect(detach?.attachedMs).toBeGreaterThanOrEqual(29_000);
   });
 
   it("still reports a real DevTools conflict", async () => {
@@ -154,6 +167,45 @@ describe("NativeDebuggerSession attach bookkeeping", () => {
     expect(outcome.ok).toBe(false);
     expect(outcome.error).toBe("conflict");
     expect(kinds(log)).toContain("conflict");
+  });
+
+  it("does not reuse a stale entry that now belongs to someone else", async () => {
+    // Bookkeeping proves we attached at SOME point, not that we still hold the
+    // tab now. An unreported drop — the SW suspended mid-attachment and missed
+    // `onDetach` — can leave a stale entry while Chrome's real attachment now
+    // belongs to DevTools. Treating the entry alone as proof would dispatch
+    // `fn()` against a connection we don't have, whose failure `withRecovery`
+    // would then retry as a genuine mid-operation drop rather than the
+    // stale-bookkeeping cleanup it actually is.
+    stubChrome();
+    const g = globalThis as unknown as { chrome: typeof chrome };
+    (g.chrome.debugger.attach as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("Another debugger is already attached to the tab with id: 5."),
+    );
+    // The liveness probe fails: whoever holds the tab now, it isn't us.
+    (
+      g.chrome.debugger.sendCommand as ReturnType<typeof vi.fn>
+    ).mockRejectedValue(new Error("Not allowed"));
+    const log = new FakeStorage();
+    const attach = new FakeStorage();
+    attach.data["dogfood.attachedTabs"] = { 5: Date.now() - 30_000 };
+    const session = new NativeDebuggerSession(log, attach);
+
+    const { outcome, value } = await session.withDebugger(5, async () => "ok");
+
+    // Reported as the real conflict it is — not a false success against a
+    // session we don't hold.
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error).toBe("conflict");
+    expect(value).toBeUndefined();
+    expect(kinds(log)).toContain("conflict");
+    // The stale entry is cleared as bookkeeping cleanup, not a lifecycle
+    // event — it never touches `detach-unsolicited`/`reattach-*`, which is the
+    // MV3 headline metric this distinction protects.
+    expect(kinds(log)).toContain("detach-stale");
+    expect(kinds(log)).not.toContain("detach-unsolicited");
+    expect(kinds(log)).not.toContain("detach");
+    expect(attach.data["dogfood.attachedTabs"]).toEqual({});
   });
 
   it("ignores a detach for a tab it never attached to", async () => {
@@ -432,6 +484,56 @@ describe("detachAll (the revoke path)", () => {
     // happen is an attachment surviving with the flag off — and "never written"
     // satisfies that as much as "written then emptied", so both shapes pass.
     expect(attachStore.data["dogfood.attachedTabs"] ?? {}).toEqual({});
+  });
+
+  it("does not resolve before an in-flight attach has settled", async () => {
+    // The ORDER matters, not just the final state the previous test checks: if
+    // `detachAll()` resolved before the pending attach settled, the panel could
+    // report "native mode off — detached from 0 tab(s)" a beat before Chrome
+    // even shows the "…is debugging this browser" banner for the attach that
+    // was already on its way — a report that was true when it went out and
+    // false a moment later reads the same to the user as one that was just
+    // wrong.
+    let releaseAttach: () => void = () => {};
+    const attaching = new Promise<void>((r) => (releaseAttach = r));
+    stubChrome();
+    const g = globalThis as unknown as { chrome: typeof chrome };
+    (g.chrome.debugger.attach as ReturnType<typeof vi.fn>).mockImplementation(
+      async () => {
+        await attaching;
+      },
+    );
+
+    const log = new FakeStorage();
+    const attachStore = new FakeStorage();
+    let enabled = true;
+    const session = new NativeDebuggerSession(
+      log,
+      attachStore,
+      async () => enabled,
+    );
+
+    const order: string[] = [];
+    const op = session
+      .withDebugger(7, async () => "ok")
+      .then((r) => {
+        order.push("attach-settled");
+        return r;
+      });
+    for (let i = 0; i < 10; i++) await Promise.resolve(); // parked in attach
+
+    enabled = false; // the user unticks the box mid-attach
+    const revoke = session.detachAll().then((n) => {
+      order.push("revoke-resolved");
+      return n;
+    });
+    // Give the revoke every chance to resolve before the attach does.
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+    releaseAttach();
+    await op;
+    await revoke;
+
+    expect(order).toEqual(["attach-settled", "revoke-resolved"]);
   });
 
   it("is a no-op when nothing is attached", async () => {
