@@ -353,13 +353,15 @@ role="combobox">` (Google's search box, YouTube's, and most real-world
 
   Round 4 was working with role+name+depth alone, which genuinely couldn't
   resolve the ambiguity. It no longer has to: the native tree's own
-  `editable` state (added once field values were surfaced) is precisely
-  Chromium's own answer to "does this AX node accept typed text" — present
-  (e.g. `"plaintext"`) for a native input or contenteditable-backed
-  combobox, absent for a select-only trigger. Confirmed against both shapes
-  side by side in a real headed Chromium. Fixed by having `isTypableRole`
-  consult it for `combobox` specifically (every other typable role ignores
-  `states` entirely — none of them have this ambiguity to resolve).
+  `editable` state — part of the states/properties enrichment every node
+  already carries, not something the later value read-back added — is
+  precisely Chromium's own answer to "does this AX node accept typed text"
+  — present (e.g. `"plaintext"`) for a native input or contenteditable-
+  backed combobox, absent for a select-only trigger. Confirmed against
+  both shapes side by side in a real headed Chromium. Fixed by having
+  `isTypableRole` consult it for `combobox` specifically (every other
+  typable role ignores `states` entirely — none of them have this
+  ambiguity to resolve).
 
   **Verified end-to-end in a real headed Chromium**, against a page
   mirroring an actual search box's markup: the editable combobox reports
@@ -368,3 +370,37 @@ role="combobox">` (Google's search box, YouTube's, and most real-world
   no `editable` state and still correctly dispatches a click, confirming
   the fix doesn't regress round 4's original case.
   (`packages/extension/src/sidepanel/DogfoodPanel.tsx`, `isTypableRole`.)
+
+- **Error messages (and any other `aria-describedby` help text) were
+  entirely invisible on the native tree.** An invalid form field — role
+  `combobox`, `aria-invalid="true"`, `aria-describedby` pointing at a
+  helper span reading "Ingresa tu e-mail." — showed the error text right
+  next to it in the DOM/A11Y tree view, but the native tree showed nothing
+  beyond `[invalid ...]`: the state was there, the message wasn't. Not a
+  formatting gap like `expanded`/`collapsed` — `EnrichedNativeNode` never
+  carried a `description` facet at all, so there was nothing to format.
+
+  Root cause and fix mirror the value read-back finding's shape, but the
+  data itself needed no new redaction gate: an accessible description is
+  Chromium's own `aria-describedby`/`aria-description` resolution — a
+  top-level AX `description` field, not one of the `properties` array
+  `axFacets` already reads `states`/`properties` from — and it's
+  page-authored help/error text, not user input, so R1 doesn't apply to it
+  the way it does to a field's value. `@real-a11y-dev/browser`'s own
+  native producer (the CLI/MCP surface) already reads this exact field
+  with no redaction gate; this mirrors an already-shipped, already-reviewed
+  piece of enrichment rather than adding a new class of data flow.
+  `axFacets` now also returns `description`, cleaned the same way
+  `browser`'s own `cleanText` does; the panel renders it right after the
+  name (`— "message"`, truncated at 80 characters), matching where and how
+  `App.tsx` shows it.
+
+  **Verified end-to-end in a real headed Chromium**, against a page
+  mirroring the actual reported markup (a visually-hidden "Error" span
+  plus a visible helper span, both inside the `aria-describedby` target):
+  the native tree now reports the full concatenated description text on
+  the invalid field, and a field with no `aria-describedby` correctly
+  reports an empty one.
+  (`packages/extension/src/native/native-core.ts`, `axFacets`;
+  `packages/extension/src/sidepanel/DogfoodPanel.tsx`,
+  `formatDescription`.)

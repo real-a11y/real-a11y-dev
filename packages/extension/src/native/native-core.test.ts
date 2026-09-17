@@ -120,6 +120,53 @@ describe("readNativeTree", () => {
     expect(heading?.properties).toEqual({ level: "2" });
   });
 
+  /**
+   * Live dogfood finding: "error messages not visible on native tree" — an
+   * invalid form field's `aria-describedby`-linked error text ("Ingresa tu
+   * e-mail.") showed up in the DOM/A11Y tree view but was entirely absent
+   * from the native tree, because `EnrichedNativeNode` never carried a
+   * `description` field at all. Unlike `states`/`properties`, this is a
+   * top-level AX `description` field, not one of the `properties` array —
+   * `browser`'s own native producer (`native-tree.ts`) already reads it
+   * from exactly this shape, with no redaction gate: it's page-authored
+   * help/error text, not user input (R1 only concerns typed field values).
+   */
+  it("attaches the accessible description from the raw AX node's top-level description field", async () => {
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 10,
+        role: { value: "combobox" },
+        name: { value: "E-mail" },
+        description: { value: "  Ingresa tu e-mail.  " },
+      },
+    ];
+    const t = new FakeTransport((method) =>
+      method === "Accessibility.getFullAXTree" ? { nodes: raw } : {},
+    );
+    const res = await readNativeTree(t);
+    const field = findNative(res.nodes, "combobox", "E-mail");
+    // Cleaned the same way browser's own cleanText does — collapsed
+    // whitespace, trimmed.
+    expect(field?.description).toBe("Ingresa tu e-mail.");
+  });
+
+  it("gives an empty description, not undefined, when the raw node has none", async () => {
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 10,
+        role: { value: "button" },
+        name: { value: "Save" },
+      },
+    ];
+    const t = new FakeTransport((method) =>
+      method === "Accessibility.getFullAXTree" ? { nodes: raw } : {},
+    );
+    const res = await readNativeTree(t);
+    expect(findNative(res.nodes, "button", "Save")?.description).toBe("");
+  });
+
   it("never surfaces valuenow/valuetext — R1", async () => {
     // These two AX properties ARE the user's current input for a value-bearing
     // control (spinbutton, slider). Letting them through the enrichment would

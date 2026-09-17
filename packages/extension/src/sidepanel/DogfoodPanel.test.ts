@@ -8,6 +8,7 @@ import {
   isSteppableRole,
   formatFacets,
   formatValue,
+  formatDescription,
 } from "./DogfoodPanel.js";
 
 /**
@@ -102,6 +103,37 @@ describe("formatValue", () => {
     expect(formatValue({ ...base, value: "[redacted]" })).toBe(
       ' = "[redacted]"',
     );
+  });
+});
+
+/**
+ * Live dogfood finding: "error messages not visible on native tree" — an
+ * invalid form field's `aria-describedby` error text showed up in the
+ * DOM/A11Y tree view but not here, because `EnrichedNativeNode` never
+ * carried a `description` at all (a gap in `native-core.ts`'s enrichment,
+ * not a display bug in this formatter — see its own test file).
+ */
+describe("formatDescription", () => {
+  const base = { id: "1", role: "combobox", name: "E-mail", depth: 0 };
+
+  it("renders nothing for a node with no description", () => {
+    expect(formatDescription(base)).toBe("");
+  });
+
+  it("renders nothing for an empty-string description", () => {
+    expect(formatDescription({ ...base, description: "" })).toBe("");
+  });
+
+  it("renders the description quoted, with an em dash separator", () => {
+    expect(
+      formatDescription({ ...base, description: "Ingresa tu e-mail." }),
+    ).toBe(' — "Ingresa tu e-mail."');
+  });
+
+  it("truncates a long description at 80 characters with an ellipsis, matching production", () => {
+    const long = "x".repeat(120);
+    const result = formatDescription({ ...base, description: long });
+    expect(result).toBe(` — "${"x".repeat(80)}…"`);
   });
 });
 

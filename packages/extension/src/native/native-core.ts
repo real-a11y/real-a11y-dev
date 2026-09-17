@@ -51,6 +51,7 @@ import {
  */
 interface RawAXNode extends RawNativeAXNode {
   properties?: Array<{ name: string; value?: { value?: unknown } }>;
+  description?: { value?: string };
 }
 
 /**
@@ -113,9 +114,24 @@ function nativeIdOf(raw: RawAXNode): string {
     : `ax-${raw.nodeId}`;
 }
 
+/** Collapse internal whitespace and trim — matches `@real-a11y-dev/browser`'s
+ *  own `cleanText`, kept in lockstep by hand for the reason every other
+ *  mirrored piece of this file is: `browser` carries Playwright. */
+function cleanText(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
 /** Split an AX node's `properties` into `states` (bool/stateful) and
- *  `properties` (descriptive strings). Field values are never read here (R1). */
-function axFacets(raw: RawAXNode): Pick<A11yInfo, "states" | "properties"> {
+ *  `properties` (descriptive strings), plus the accessible description —
+ *  Chromium's own `aria-describedby`/`aria-description` resolution, a
+ *  top-level AX field alongside `name`/`value`, not one of `properties`.
+ *  Field VALUES are never read here (R1) — a description is page-authored
+ *  help/error text, not user input, the same distinction `browser`'s own
+ *  producer already draws (`native-tree.ts` surfaces it with no redaction
+ *  gate at all). */
+function axFacets(
+  raw: RawAXNode,
+): Pick<A11yInfo, "states" | "properties" | "description"> {
   const states: A11yInfo["states"] = {};
   const properties: A11yInfo["properties"] = {};
   for (const p of raw.properties ?? []) {
@@ -137,7 +153,10 @@ function axFacets(raw: RawAXNode): Pick<A11yInfo, "states" | "properties"> {
       properties[p.name] = String(v);
     }
   }
-  return { states, properties };
+  const description = raw.description?.value
+    ? cleanText(String(raw.description.value))
+    : "";
+  return { states, properties, description };
 }
 
 /**
@@ -162,10 +181,13 @@ const VALUE_BEARING_ROLES = new Set([
   "slider",
 ]);
 
-/** A normalized native node with the states/properties enrichment attached,
- *  plus a redacted field value where `pageReadValue` found one. */
+/** A normalized native node with the states/properties/description
+ *  enrichment attached, plus a redacted field value where `pageReadValue`
+ *  found one. */
 export type EnrichedNativeNode = NativeAXNode &
-  Pick<A11yInfo, "states" | "properties"> & { value?: string };
+  Pick<A11yInfo, "states" | "properties" | "description"> & {
+    value?: string;
+  };
 
 /** The single capability the native path needs from any CDP transport. */
 export interface CdpTransport {
@@ -198,10 +220,10 @@ export async function readNativeTree(
   const rawById = new Map(full.nodes.map((raw) => [nativeIdOf(raw), raw]));
   const enriched: EnrichedNativeNode[] = nodes.map((node) => {
     const raw = rawById.get(node.id);
-    const { states, properties } = raw
+    const { states, properties, description } = raw
       ? axFacets(raw)
-      : { states: {}, properties: {} };
-    return { ...node, states, properties };
+      : { states: {}, properties: {}, description: "" };
+    return { ...node, states, properties, description };
   });
 
   // Field-value read-back (see `pageReadValue`) — resolved only for candidate

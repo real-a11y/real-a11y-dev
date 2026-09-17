@@ -213,7 +213,11 @@ export function registerNativeMode(): void {
               // is a SEPARATE field, populated by `pageReadValue`'s own
               // in-page sensitivity classification (R1: password fields and
               // sensitive autocomplete tokens arrive as "[redacted]", never
-              // the live text), not a bypass of that exclusion.
+              // the live text), not a bypass of that exclusion. `description`
+              // is Chromium's own `aria-describedby`/`aria-description`
+              // resolution — page-authored help/error text, not user input,
+              // so it carries no R1 concern (same distinction `browser`'s own
+              // native producer already draws for it).
               nodes: value.nodes.map((n) => ({
                 id: n.id,
                 role: n.role,
@@ -222,6 +226,7 @@ export function registerNativeMode(): void {
                 states: n.states,
                 properties: n.properties,
                 value: n.value,
+                description: n.description,
               })),
             });
             return;

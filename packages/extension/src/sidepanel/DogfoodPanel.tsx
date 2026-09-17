@@ -111,14 +111,16 @@ export const ACTABLE = new Set([
  * these `focus, type`, and always defaulting to click here left them
  * strictly worse to act on than the DOM/A11Y tree view right next to them.
  *
- * The native tree's own `editable` state (added when values were surfaced —
- * see `pageReadValue`'s enrichment) is precisely Chromium's own answer to
- * "does this AX node accept typed text": present (e.g. `"plaintext"`) for a
- * native input or contenteditable-backed combobox, absent for a select-only
- * trigger — confirmed against both shapes in a real headed Chromium. That
- * makes the ambiguity actually resolvable now, so `combobox` consults it
- * instead of guessing; every other typable role ignores `states` entirely,
- * since none of them have this ambiguity to resolve.
+ * The native tree's own `editable` state — part of the states/properties
+ * enrichment `axFacets` (`native-core.ts`) attaches to every node, not
+ * something the later value read-back added — is precisely Chromium's own
+ * answer to "does this AX node accept typed text": present (e.g.
+ * `"plaintext"`) for a native input or contenteditable-backed combobox,
+ * absent for a select-only trigger — confirmed against both shapes in a
+ * real headed Chromium. That makes the ambiguity actually resolvable now,
+ * so `combobox` consults it instead of guessing; every other typable role
+ * ignores `states` entirely, since none of them have this ambiguity to
+ * resolve.
  */
 export function isTypableRole(
   role: string,
@@ -155,7 +157,36 @@ type NativeNode = {
   /** The field's live value, redacted to `"[redacted]"` for a sensitive
    *  field by `pageReadValue` (native-core.ts) — never the raw secret. */
   value?: string;
+  /** The node's accessible description — Chromium's own
+   *  `aria-describedby`/`aria-description` resolution. Empty string, not
+   *  undefined, when there is none (matches `A11yInfo.description`). */
+  description?: string;
 };
+
+/**
+ * Render a node's accessible description the way the production DOM/A11Y
+ * tree view shows it (`App.tsx`'s `node.a11y.description` block) — right
+ * after the name, truncated to 80 characters with an ellipsis for a longer
+ * one. Live dogfood finding: an invalid form field's error message (e.g. a
+ * `role="combobox"` email input with `aria-describedby` pointing at an
+ * "Ingresa tu e-mail." helper span) showed up in the DOM/A11Y tree right
+ * next to the field but was entirely invisible on the native tree — not a
+ * formatting gap like `expanded`/`collapsed`, a whole facet
+ * `EnrichedNativeNode` never carried at all. `browser`'s own native
+ * producer (CLI/MCP) already surfaces this from the same CDP payload — a
+ * top-level AX `description` field, not one of the `properties` array
+ * `axFacets` reads states/properties from — so this mirrors an
+ * already-shipped, already-reviewed piece of enrichment rather than adding
+ * a new one from scratch.
+ */
+export function formatDescription(n: NativeNode): string {
+  if (!n.description) return "";
+  const text =
+    n.description.length > 80
+      ? n.description.slice(0, 80) + "…"
+      : n.description;
+  return ` — ${JSON.stringify(text)}`;
+}
 
 /**
  * Render a node's current value the way the DOM/A11Y tree view shows it —
@@ -632,7 +663,7 @@ export function DogfoodPanel() {
       {nodes.length > 0 && (
         <div style="max-height:220px;overflow:auto;margin-top:6px;font-family:ui-monospace,monospace">
           {nodes.map((n) => {
-            const label = `${"  ".repeat(n.depth)}${n.role}${n.name ? ` "${n.name}"` : ""}${formatValue(n)}${formatFacets(n)}`;
+            const label = `${"  ".repeat(n.depth)}${n.role}${n.name ? ` "${n.name}"` : ""}${formatDescription(n)}${formatValue(n)}${formatFacets(n)}`;
             const actable = ACTABLE.has(n.role);
             const steppable = isSteppableRole(n.role);
             if (!actable && !steppable) {
