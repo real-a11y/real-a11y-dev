@@ -52,8 +52,13 @@ async function findTestTsx(dir) {
   let entries;
   try {
     entries = await readdir(dir, { withFileTypes: true });
-  } catch {
-    return [];
+  } catch (error) {
+    // A package with no `src` is simply not a subject. Anything else — EACCES,
+    // a broken symlink, an interrupted install — would make this walk find no
+    // suites and the check pass green on a package it could not actually read,
+    // which is the silent pass this file exists to prevent.
+    if (error.code === "ENOENT") return [];
+    throw error;
   }
   const found = [];
   for (const entry of entries) {
