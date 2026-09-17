@@ -93,6 +93,20 @@ is a good test — its media controls are the thing only native mode can see).
 Everything is instrumented to `chrome.storage.local` (content-free — event kinds,
 timings, counts; never page text or typed values).
 
+### The production panel's own NATIVE toggle
+
+The dogfood build's real side panel (below the amber debug widget above) now
+also has a **DOM / NATIVE** toggle in its own toolbar — a real expand/collapse
+tree instead of the debug widget's flat list, reusing the same InputPanel the
+DOM producer uses for typing into a field. It's a second, separate way to
+exercise native mode from this SAME build, added after the three gating
+questions above were already answered; it carries no instrumentation of its
+own and isn't part of the report this file asks for. Reachable only once the
+DOM producer has connected on the current tab (the toggle lives in the panel's
+main toolbar, past its own "Connecting to page…" state) — a known, deliberate
+scope cut, not a bug, since every page the DOM producer can't reach is also
+one native itself can't attach to.
+
 ## Report back
 
 **Copy dogfood report** puts a summary + raw log on your clipboard. Paste it into

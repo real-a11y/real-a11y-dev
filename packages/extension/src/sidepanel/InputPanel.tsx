@@ -97,6 +97,16 @@ export interface InputPanelState {
   inputType?: string;
   placeholder?: string;
   options?: SelectOption[];
+  /**
+   * Which producer's node `nodeId` resolves against — the DOM tree's own
+   * per-frame ids, or a native tree's `ax-dom-<backendNodeId>` ids (dev-only
+   * dogfood build). Absent means `"dom"`, the only producer that opened this
+   * panel before native mode existed — every pre-existing call site is still
+   * correct with no changes. `App.tsx`'s submit handler reads this to decide
+   * which wire message (`DISPATCH_ACTION` vs `NATIVE_ACT`) a submission
+   * becomes; this component itself never branches on it.
+   */
+  source?: "dom" | "native";
 }
 
 interface InputPanelProps {
