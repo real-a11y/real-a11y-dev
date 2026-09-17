@@ -44,7 +44,10 @@ import {
   type TabCapability,
 } from "../native/capability.js";
 import { isTypableRole, type NativeNode } from "../native/native-actions.js";
-import type { NativeAction } from "../native/native-core.js";
+import {
+  NATIVE_REDACTED_VALUE,
+  type NativeAction,
+} from "../native/native-core.js";
 import {
   isTrustedSender,
   isUnreachablePageResponse,
@@ -234,6 +237,17 @@ export function App() {
   // `capabilityRequest`, one counter shared across both message types since
   // both answer "does this reply still describe the tab we're looking at".
   const nativeOpToken = useRef(0);
+  // Excludes a second native read/act from starting while one is already in
+  // flight. Has to be a ref, not state driving a `disabled` attribute alone:
+  // `setNativeBusy(true)` only lands after the first `await` inside the
+  // guarded functions below, so two fast clicks (or a click plus a keyboard
+  // Enter) both read this as false before either sets it — the same double-
+  // dispatch DogfoodPanel's own `inFlight` ref exists to prevent, and for the
+  // identical reason (see its own comment). ALWAYS cleared unconditionally in
+  // a `finally`, never token-gated like `nativeBusy` below: unlike that
+  // display flag, a stale token here must not leave this permanently stuck
+  // true, or no native action could ever dispatch again.
+  const nativeInFlight = useRef(false);
   // Auto-load the native tree once per transition into native mode (mirrors
   // the DOM producer's own `hasRequestedInitial` restraint below — a later
   // tab switch while already in native mode clears the tree and waits for an
@@ -944,8 +958,13 @@ export function App() {
   }, [producer, myTabId, refreshNativeCapability]);
 
   /** Read the native tree into state. Mirrors DogfoodPanel's readTreeInto,
-   *  minus its own flat-list bookkeeping — NativeTreeView owns expand state. */
-  const loadNativeTree = useCallback(async (tabId: number) => {
+   *  minus its own flat-list bookkeeping — NativeTreeView owns expand state.
+   *
+   *  UNGUARDED by `nativeInFlight` — `dispatchNativeAction`'s own re-read
+   *  step calls this directly (not the guarded `loadNativeTree` below) so
+   *  that its own held guard doesn't make its post-action re-read a silent
+   *  no-op. Never call this one from anywhere else; call `loadNativeTree`. */
+  const loadNativeTreeCore = useCallback(async (tabId: number) => {
     if (!dogfood) return;
     const token = nativeOpToken.current;
     setNativeBusy(true);
@@ -989,6 +1008,22 @@ export function App() {
     }
   }, []);
 
+  /** Guarded entry point for a user- or effect-triggered read (refresh
+   *  button, auto-load). Excludes a second read/act while one is in flight —
+   *  see `nativeInFlight`'s own declaration. */
+  const loadNativeTree = useCallback(
+    async (tabId: number) => {
+      if (!dogfood || nativeInFlight.current) return;
+      nativeInFlight.current = true;
+      try {
+        await loadNativeTreeCore(tabId);
+      } finally {
+        nativeInFlight.current = false;
+      }
+    },
+    [loadNativeTreeCore],
+  );
+
   // Auto-load once per transition into native mode — see hasAutoLoadedNative's
   // declaration for why this deliberately does NOT also fire on a later tab
   // switch while already in native mode.
@@ -1016,66 +1051,78 @@ export function App() {
    *  page has already discarded. */
   const dispatchNativeAction = useCallback(
     async (nodeId: string, action: NativeAction, value?: string) => {
-      if (!dogfood) return;
-      const token = nativeOpToken.current;
-      if (nativeTreeTabId === undefined) {
-        setNativeStatus("load a tree first");
-        return;
-      }
-      const tabId = nativeTreeTabId;
-      // A navigation replaces the document, and with it every
-      // backendDOMNodeId this tree's ids are built from — refuse rather than
-      // dispatch into the dark. Same check DogfoodPanel's runAct makes;
-      // undefined either side (URL unreadable, or no baseline yet) means
-      // "can't tell" and does not block. Best-effort only: it catches an
-      // ordinary same-tab navigation, not every way a document can change.
-      const nowUrl = await chrome.tabs
-        .get(tabId)
-        .then((t) => t.url)
-        .catch(() => undefined);
-      if (nativeTreeUrl && nowUrl && nowUrl !== nativeTreeUrl) {
-        setNativeNodes(new Map());
-        setNativeRootId("");
-        setNativeTreeTabId(undefined);
-        setNativeTreeUrl(undefined);
-        setNativeStatus("page navigated — reload the native tree");
-        return;
-      }
-      setNativeBusy(true);
+      if (!dogfood || nativeInFlight.current) return;
+      nativeInFlight.current = true;
       try {
-        const r = (await chrome.runtime.sendMessage({
-          type: "NATIVE_ACT",
-          tabId,
-          nodeId,
-          action,
-          ...(value !== undefined ? { value } : {}),
-        })) as {
-          success?: boolean;
-          error?: string;
-          reason?: NativeUnavailableReason;
-        };
-        if (token !== nativeOpToken.current) return;
-        if (!r?.success) {
-          if (r?.reason) {
-            setNativeCapability(blockedBy(r.reason));
-            setNativeStatus(
-              `native unavailable — ${explainUnavailable(r.reason)}`,
-            );
-          } else {
-            setNativeStatus(`act failed: ${r?.error ?? "unknown"}`);
-          }
+        const token = nativeOpToken.current;
+        if (nativeTreeTabId === undefined) {
+          setNativeStatus("load a tree first");
           return;
         }
-        setLastAction(`Native: ${action} on ${nodeId}`);
-        setTimeout(() => setLastAction(null), 2000);
-        await new Promise((res) => setTimeout(res, NATIVE_SETTLE_MS));
-        if (token !== nativeOpToken.current) return;
-        await loadNativeTree(tabId);
+        const tabId = nativeTreeTabId;
+        // A navigation replaces the document, and with it every
+        // backendDOMNodeId this tree's ids are built from — refuse rather
+        // than dispatch into the dark. Same check DogfoodPanel's runAct
+        // makes; undefined either side (URL unreadable, or no baseline yet)
+        // means "can't tell" and does not block. Best-effort only: it
+        // catches an ordinary same-tab navigation, not every way a document
+        // can change (a same-URL reload isn't caught by the URL compare
+        // below — the token re-check right after is what catches THAT: the
+        // PAGE_NAVIGATED handler bumps it unconditionally, same-URL or not).
+        const nowUrl = await chrome.tabs
+          .get(tabId)
+          .then((t) => t.url)
+          .catch(() => undefined);
+        if (token !== nativeOpToken.current) return; // invalidated during the lookup
+        if (nativeTreeUrl && nowUrl && nowUrl !== nativeTreeUrl) {
+          setNativeNodes(new Map());
+          setNativeRootId("");
+          setNativeTreeTabId(undefined);
+          setNativeTreeUrl(undefined);
+          setNativeStatus("page navigated — reload the native tree");
+          return;
+        }
+        setNativeBusy(true);
+        try {
+          const r = (await chrome.runtime.sendMessage({
+            type: "NATIVE_ACT",
+            tabId,
+            nodeId,
+            action,
+            ...(value !== undefined ? { value } : {}),
+          })) as {
+            success?: boolean;
+            error?: string;
+            reason?: NativeUnavailableReason;
+          };
+          if (token !== nativeOpToken.current) return;
+          if (!r?.success) {
+            if (r?.reason) {
+              setNativeCapability(blockedBy(r.reason));
+              setNativeStatus(
+                `native unavailable — ${explainUnavailable(r.reason)}`,
+              );
+            } else {
+              setNativeStatus(`act failed: ${r?.error ?? "unknown"}`);
+            }
+            return;
+          }
+          setLastAction(`Native: ${action} on ${nodeId}`);
+          setTimeout(() => setLastAction(null), 2000);
+          await new Promise((res) => setTimeout(res, NATIVE_SETTLE_MS));
+          if (token !== nativeOpToken.current) return;
+          // The unguarded core, not `loadNativeTree` — this function already
+          // holds `nativeInFlight`, so calling the guarded wrapper here
+          // would see it held and silently skip the re-read.
+          await loadNativeTreeCore(tabId);
+        } finally {
+          if (token === nativeOpToken.current) setNativeBusy(false);
+        }
       } finally {
-        if (token === nativeOpToken.current) setNativeBusy(false);
+        nativeInFlight.current = false;
       }
     },
-    [nativeTreeTabId, nativeTreeUrl, loadNativeTree],
+    [nativeTreeTabId, nativeTreeUrl, loadNativeTreeCore],
   );
 
   const handleNativeActivate = useCallback(
@@ -1092,14 +1139,27 @@ export function App() {
       // point of this integration over DogfoodPanel's crude `prompt()`. No
       // GET_FIELD_STATE round trip needed: unlike the DOM path, a native
       // node's value/placeholder are already loaded eagerly at read time.
+      //
+      // NEVER prefill with the redaction sentinel itself. A sensitive
+      // field's `value` on the wire IS the literal string
+      // NATIVE_REDACTED_VALUE, not the real value (R1) — InputPanel has no
+      // way to tell "the page's real value happens to be this text" apart
+      // from "this is the marker, not data", so a submit with no edit would
+      // silently dispatch the word "[redacted]" over the user's real value.
+      // Opening empty instead means only a value the user actually typed can
+      // ever be submitted — and blockEmptySubmit (below) closes the other
+      // half: an unedited (still empty) submit must not blank the real
+      // value either, since that's just as silent and just as destructive.
+      const isRedacted = node.value === NATIVE_REDACTED_VALUE;
       if (isTypableRole(node.role, node.states)) {
         setInputState({
           type: "text",
           nodeId: node.id,
           label: node.name || node.role,
-          value: node.value ?? "",
+          value: isRedacted ? "" : (node.value ?? ""),
           placeholder: node.placeholder,
           source: "native",
+          blockEmptySubmit: isRedacted,
         });
         return;
       }
@@ -1112,6 +1172,10 @@ export function App() {
     (nodeId: string, value: string) => {
       if (inputState?.source === "native") {
         setInputState(null);
+        // See InputPanelState.blockEmptySubmit's own doc — a redacted field
+        // opened empty; submitting it still-empty is "didn't type anything",
+        // not "clear the field", so it's a no-op rather than a dispatch.
+        if (inputState.blockEmptySubmit && value === "") return;
         void dispatchNativeAction(nodeId, "type", value);
         return;
       }

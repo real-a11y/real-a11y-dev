@@ -120,18 +120,27 @@ export function NativeTreeView({
     return map;
   }, [nodes]);
 
-  const visibleIds = useMemo(() => {
+  // `visiblePositions` records each row's aria-posinset/aria-setsize within
+  // its visible sibling group — mirrors App.tsx's own identical computation
+  // for the DOM tree. Virtualization keeps only the windowed rows in the
+  // DOM, so a screen reader needs these explicit set markers to perceive the
+  // tree's full size and a row's position in it (WAI-ARIA TreeView); without
+  // them a virtualized native row is indistinguishable from a plain child.
+  const { visibleIds, visiblePositions } = useMemo(() => {
     const ids: string[] = [];
-    function walk(id: string) {
+    const positions = new Map<string, { posinset: number; setsize: number }>();
+    function walk(id: string, posinset: number, setsize: number) {
       const node = nodes.get(id);
       if (!node) return;
       ids.push(id);
+      positions.set(id, { posinset, setsize });
       if (expanded.has(id)) {
-        for (const childId of node.childIds ?? []) walk(childId);
+        const children = node.childIds ?? [];
+        children.forEach((childId, i) => walk(childId, i + 1, children.length));
       }
     }
-    if (rootId) walk(rootId);
-    return ids;
+    if (rootId) walk(rootId, 1, 1);
+    return { visibleIds: ids, visiblePositions: positions };
   }, [nodes, rootId, expanded]);
 
   const { startIndex, endIndex, totalHeight, offset, onScroll, scrollToIndex } =
@@ -140,7 +149,19 @@ export function NativeTreeView({
   useEffect(() => {
     if (!selectedId) return;
     const index = visibleIds.indexOf(selectedId);
-    if (index !== -1) scrollToIndex(index, "nearest");
+    if (index === -1) {
+      // The selected id is gone from the current tree (a refresh dropped it,
+      // or its parent collapsed away). Leaving `selectedId` pointing at a
+      // node no longer in `visibleIds` doesn't just skip this scroll — every
+      // branch of handleKeyDown below bails out the same way on a -1 index,
+      // so the WHOLE keyboard interface goes dead until the user clicks a
+      // row with the mouse. Clearing it instead drops into handleKeyDown's
+      // "no selection" branch, which re-selects the first visible row on the
+      // next Arrow/Home press.
+      setSelectedId(null);
+      return;
+    }
+    scrollToIndex(index, "nearest");
   }, [selectedId, visibleIds, scrollToIndex]);
 
   const toggle = useCallback((id: string) => {
@@ -227,11 +248,16 @@ export function NativeTreeView({
         }
         case "Enter": {
           e.preventDefault();
+          // Navigation/expand stay responsive while busy (no dispatch, no
+          // conflict with an in-flight NATIVE_ACT) — only the activation
+          // itself is held back, same as the action buttons' own `disabled`.
           if (primaryLabel(node)) {
-            onActivate(
-              node,
-              isSelectableRole(node.role) ? "select" : undefined,
-            );
+            if (!busy) {
+              onActivate(
+                node,
+                isSelectableRole(node.role) ? "select" : undefined,
+              );
+            }
           } else if ((node.childIds?.length ?? 0) > 0) {
             toggle(node.id);
           }
@@ -246,7 +272,7 @@ export function NativeTreeView({
         case "=": {
           if (isSteppableRole(node.role)) {
             e.preventDefault();
-            onActivate(node, "increment");
+            if (!busy) onActivate(node, "increment");
           }
           break;
         }
@@ -254,7 +280,7 @@ export function NativeTreeView({
         case "_": {
           if (isSteppableRole(node.role)) {
             e.preventDefault();
-            onActivate(node, "decrement");
+            if (!busy) onActivate(node, "decrement");
           }
           break;
         }
@@ -270,7 +296,16 @@ export function NativeTreeView({
         }
       }
     },
-    [visibleIds, selectedId, nodes, expanded, parentOf, toggle, onActivate],
+    [
+      visibleIds,
+      selectedId,
+      nodes,
+      expanded,
+      parentOf,
+      toggle,
+      onActivate,
+      busy,
+    ],
   );
 
   return (
@@ -309,10 +344,7 @@ export function NativeTreeView({
       </div>
 
       {capability && !capability.native && (
-        <div
-          role="status"
-          style="margin:6px 8px;padding:4px 6px;border-left:3px solid #b45309;background:#fef3c7;color:#7c2d12;font-size:12px"
-        >
+        <div role="status" class="sn-native-capability-banner">
           <strong>native unavailable here</strong> —{" "}
           {explainUnavailable(capability.reason!)}
         </div>
@@ -344,6 +376,7 @@ export function NativeTreeView({
             const selectAction = isSelectableRole(node.role)
               ? "select"
               : undefined;
+            const position = visiblePositions.get(id);
 
             return (
               <div
@@ -360,6 +393,8 @@ export function NativeTreeView({
                 aria-expanded={hasChildren ? expanded.has(id) : undefined}
                 aria-selected={isSelected}
                 aria-level={node.depth + 1}
+                aria-posinset={position?.posinset}
+                aria-setsize={position?.setsize}
                 data-node-id={id}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -421,6 +456,16 @@ export function NativeTreeView({
                         badges.push(`${key}=${value}`);
                       }
                     }
+                    // AX properties (heading level, hasPopup, orientation,
+                    // value bounds, …) — a separate collection from states on
+                    // the wire (native-core.ts's axFacets), and DogfoodPanel's
+                    // own formatFacets shows both. Always key=value; unlike
+                    // states, nothing here is a bare boolean flag.
+                    for (const [key, value] of Object.entries(
+                      node.properties ?? {},
+                    )) {
+                      badges.push(`${key}=${value}`);
+                    }
                     if (badges.length === 0) return null;
                     return (
                       <span class="sn-state-badges">
@@ -439,6 +484,7 @@ export function NativeTreeView({
                   <button
                     class="sn-action sn-action--visible"
                     tabIndex={-1}
+                    disabled={busy}
                     onClick={(e) => {
                       e.stopPropagation();
                       onActivate(node, selectAction);
@@ -454,6 +500,7 @@ export function NativeTreeView({
                     <button
                       class="sn-action sn-action--visible sn-action--step"
                       tabIndex={-1}
+                      disabled={busy}
                       aria-label={`Decrement "${node.name || node.role}"`}
                       title="Decrement"
                       onClick={(e) => {
@@ -466,6 +513,7 @@ export function NativeTreeView({
                     <button
                       class="sn-action sn-action--visible sn-action--step"
                       tabIndex={-1}
+                      disabled={busy}
                       aria-label={`Increment "${node.name || node.role}"`}
                       title="Increment"
                       onClick={(e) => {

@@ -36,6 +36,34 @@ import {
 } from "@real-a11y-dev/core";
 
 /**
+ * The sentinel a sensitive field's `value` arrives as on the wire — never the
+ * raw secret (R1). Exported so a consumer can tell "the real value happens
+ * to be this exact string" apart from "this is the redaction marker, not
+ * data" — `App.tsx`'s native-activate handler needs that distinction so it
+ * never offers this literal text back to the user as something to submit,
+ * which would silently overwrite their real value with the word itself.
+ *
+ * NOT referenced by `pageReadValue` below, even though that's conceptually
+ * where this sentinel is produced: that function is serialized via
+ * `String(fn)` for `Runtime.callFunctionOn` and must stay fully
+ * self-contained (no imports, no module-scope references — see its own
+ * docs), so it keeps its own inline `"[redacted]"` literal there instead.
+ * This constant is what everywhere ELSE that needs the sentinel imports,
+ * including this file's own (non-serialized) `readNativeTree`, which is
+ * where `pageReadValue`'s `redacted` flag actually becomes this value on a
+ * node — so there is exactly one second copy of the literal, not a third.
+ *
+ * Importing this one constant does not pull `pageReadValue`'s (or any other
+ * in-page action's) source text into a consumer's bundle — confirmed by
+ * building the store bundle with `App.tsx` importing this directly and
+ * grepping it for every other symbol unique to this file (`readNativeTree`,
+ * `dispatchNative`, `backendDOMNodeId`, `pageSelectOption`, …): none of them
+ * appear. Each is its own top-level binding, and esbuild's tree-shaking
+ * proves the unreferenced ones dead independently of this one being kept.
+ */
+export const NATIVE_REDACTED_VALUE = "[redacted]";
+
+/**
  * The full CDP `Accessibility.AXNode` shape, a superset of core's structural
  * {@link RawNativeAXNode} — core only reads `role`/`name`/tree-shape fields,
  * but Chromium always sends `properties` (`expanded`, `checked`, `level`, …)
@@ -324,7 +352,7 @@ export async function readNativeTree(
         transport,
         backendNodeId,
       );
-      if (redacted) node.value = "[redacted]";
+      if (redacted) node.value = NATIVE_REDACTED_VALUE;
       else if (value) node.value = value;
       if (placeholder) node.placeholder = placeholder;
     }),

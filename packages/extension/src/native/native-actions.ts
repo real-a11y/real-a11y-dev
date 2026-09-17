@@ -25,8 +25,9 @@ export type NativeNode = {
   childIds?: string[];
   states?: Record<string, string | boolean>;
   properties?: Record<string, string>;
-  /** The field's live value, redacted to `"[redacted]"` for a sensitive
-   *  field by `pageReadValue` (native-core.ts) — never the raw secret. */
+  /** The field's live value, redacted to `native-core.ts`'s
+   *  `NATIVE_REDACTED_VALUE` sentinel for a sensitive field by
+   *  `pageReadValue` — never the raw secret. */
   value?: string;
   /** The field's static placeholder hint — page-authored, never redacted.
    *  Present only for a value-bearing role that has one set. */
