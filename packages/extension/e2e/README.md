@@ -140,8 +140,9 @@ already installs, needs no Xvfb (see `--headless=new` above), and CI's `retries:
 2` from `playwright.config.ts` applies. It was kept advisory because its
 stability was measured locally (315/315 across `--repeat-each=5 --workers=4`)
 but not yet on an ubuntu runner; promoting it is dropping that one line once it
-has a green run history there. Like every step in that job, it runs only on pull
-requests targeting `main`.
+has a green run history there. Like every step in that job, it runs on pushes to
+`main` and on pull requests targeting `main` — so it does not run on a stacked
+PR until that PR's base is `main`.
 
 ## Gaps this suite found
 

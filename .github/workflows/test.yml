@@ -266,7 +266,8 @@ jobs:
       # Advisory FIRST, like the parity harness: the suite has been stable locally
       # but has no run history on an ubuntu runner yet. Drop `continue-on-error`
       # to make it a merge gate once it has run green here for a while — and
-      # update "CI wiring" in `packages/extension/e2e/README.md` when you do.
+      # update "CI as a merge gate" in `packages/extension/e2e/README.md` when you
+      # do.
       - name: Run extension native-tree e2e (advisory)
         continue-on-error: true
         run: pnpm --filter @real-a11y-dev/semantic-navigator-extension test:e2e
