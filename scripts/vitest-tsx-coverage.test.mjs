@@ -30,7 +30,8 @@
 // The subjects are the `.test.tsx` files actually on disk rather than
 // hypothetical paths, so this checks what is really there. A package with no
 // `.tsx` suites is not examined — there is nothing that could be silently
-// dropped. Today that means `extension`, `react` and `ui`.
+// dropped. Today that means `extension`, `react`, `ui` and
+// `examples/testing-vitest`.
 
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
@@ -43,7 +44,33 @@ import { promisify } from "node:util";
 
 const run = promisify(execFile);
 
-const PACKAGES = fileURLToPath(new URL("../packages", import.meta.url));
+/**
+ * Every workspace root that holds vitest suites CI runs. `examples/` counts:
+ * `examples/testing-vitest` has its own config, its own 19 `.tsx` suites, and
+ * its own CI step (`pnpm --filter @real-a11y-dev/example-testing test`), so a
+ * narrowed `include` there would go just as quiet as it did in `extension`.
+ */
+const ROOTS = ["packages", "examples"].map((dir) =>
+  fileURLToPath(new URL(`../${dir}`, import.meta.url)),
+);
+
+/** Every directory one level under a root, as [label, absolute path]. */
+async function workspaceDirs() {
+  const dirs = [];
+  for (const root of ROOTS) {
+    let entries;
+    try {
+      entries = await readdir(root, { withFileTypes: true });
+    } catch (error) {
+      if (error.code === "ENOENT") continue;
+      throw error;
+    }
+    for (const entry of entries) {
+      if (entry.isDirectory()) dirs.push([entry.name, join(root, entry.name)]);
+    }
+  }
+  return dirs;
+}
 
 /** Collection can be slow on a cold esbuild; generous, but not unbounded. */
 const LIST_TIMEOUT_MS = 180_000;
@@ -106,26 +133,17 @@ describe("vitest collects every .test.tsx file", () => {
   it("finds .tsx suites to check", async () => {
     // Guards the guard: if nothing is found, the case below passes vacuously
     // and this file would be watching nothing at all.
-    const packages = await readdir(PACKAGES, { withFileTypes: true });
     let total = 0;
-    for (const pkg of packages) {
-      if (!pkg.isDirectory()) continue;
-      total += (await findTestTsx(join(PACKAGES, pkg.name, "src"))).length;
+    for (const [, dir] of await workspaceDirs()) {
+      total += (await findTestTsx(join(dir, "src"))).length;
     }
-    assert.ok(
-      total > 0,
-      "no .test.tsx files found anywhere under packages/*/src",
-    );
+    assert.ok(total > 0, "no .test.tsx files found under any workspace src");
   });
 
   it("collects them in every package that has them", async (t) => {
-    const packages = await readdir(PACKAGES, { withFileTypes: true });
     const missed = [];
 
-    for (const pkg of packages) {
-      if (!pkg.isDirectory()) continue;
-      const dir = join(PACKAGES, pkg.name);
-
+    for (const [name, dir] of await workspaceDirs()) {
       const tsxTests = await findTestTsx(join(dir, "src"));
       if (tsxTests.length === 0) continue;
 
@@ -136,7 +154,7 @@ describe("vitest collects every .test.tsx file", () => {
         // Never swallowed into a pass: a package whose collection could not be
         // listed is a package this check is no longer watching.
         missed.push(
-          `${pkg.name}: could not list collected files — ${error.message}`,
+          `${name}: could not list collected files — ${error.message}`,
         );
         continue;
       }
@@ -145,12 +163,12 @@ describe("vitest collects every .test.tsx file", () => {
         const rel = relative(dir, test);
         if (!collected.has(rel)) {
           missed.push(
-            `${pkg.name}: ${rel.split(sep).join("/")} exists but vitest does not collect it`,
+            `${name}: ${rel.split(sep).join("/")} exists but vitest does not collect it`,
           );
         }
       }
       t.diagnostic(
-        `${pkg.name}: ${tsxTests.length} .tsx suite(s), ${collected.size} file(s) collected`,
+        `${name}: ${tsxTests.length} .tsx suite(s), ${collected.size} file(s) collected`,
       );
     }
 
