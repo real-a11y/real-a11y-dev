@@ -476,3 +476,39 @@ role="slider">` elements, not the `<div role="slider">` shape the
   by reproducing the failure first — now updates correctly too, with focus
   restored to the panel's last-clicked control afterward either way.
   (`packages/extension/src/native/native-core.ts`, `pageStep`.)
+
+## Automated coverage: the native-tree e2e suite
+
+Every finding logged above was found by hand and verified by a throwaway
+Playwright script under `/tmp` that was then discarded. `e2e/` is that
+verification made permanent: real APG-modeled fixture pages, driven against the
+actual built `dist-dogfood/` extension in a real Chromium, checked into the repo
+so the widget shapes that have already burned dogfood sessions get
+regression-checked on every dispatch change.
+
+```sh
+pnpm --filter @real-a11y-dev/semantic-navigator-extension test:e2e
+```
+
+`e2e/README.md` has the full scope — what is covered, what is deliberately not,
+and the four gaps building the suite surfaced. Two things from it belong here,
+because they are facts about this build rather than about the suite:
+
+- **`chrome.debugger.attach` does not collide with another CDP client on the
+  same tab.** Chromium allows more than one client per target, so the extension
+  attaches to a Playwright-controlled tab, dispatches, and Playwright keeps
+  driving that tab afterwards — no `devtools-conflict` is provoked. That refusal
+  reason is specific to **DevTools** holding the tab, not to CDP clients in
+  general, which is narrower than this runbook previously implied.
+- **The dogfood build loads, and its `chrome.debugger` works, under
+  `--headless=new`.** Headed Chromium is not a requirement for the native path.
+  (Passed as a raw `--headless=new` arg — Playwright's own `headless: true`
+  selects the old headless shell, which loads no extensions at all.)
+
+The claim these tests make is narrower than "the panel is covered end-to-end",
+and the note under _Notes for reviewers_ still stands for everything outside
+them: the suite pins **dispatch fidelity against specific widget shapes**, which
+is the class of failure rounds 4–15 kept producing. It does not make the panel's
+capability/attach lifecycle — suspend races, reattach accounting, revoke — any
+better covered than it was; that remains unit-tested logic plus the manual steps
+above.

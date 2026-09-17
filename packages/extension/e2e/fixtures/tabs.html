@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Tabs — APG fixture</title>
+  </head>
+  <body>
+    <h1>Tabs</h1>
+
+    <!--
+      Reconstruction of the W3C ARIA APG "Tabs with Automatic Activation"
+      (https://www.w3.org/WAI/ARIA/apg/patterns/tabs/examples/tabs-automatic/).
+
+      `app-shell.html` in `packages/browser/e2e/corpus/` already has a tablist,
+      but only for DOM↔native tree-shape parity — it is never dispatched into.
+      This one is about the click landing: selecting a tab must move
+      `aria-selected`, flip the panels' `hidden`, and be visible on a re-read of
+      the native tree.
+    -->
+
+    <div role="tablist" aria-label="Entertainment">
+      <button
+        role="tab"
+        id="tab-nils"
+        aria-selected="true"
+        aria-controls="panel-nils"
+      >
+        Nils Frahm
+      </button>
+      <button
+        role="tab"
+        id="tab-agnes"
+        aria-selected="false"
+        aria-controls="panel-agnes"
+        tabindex="-1"
+      >
+        Agnes Obel
+      </button>
+      <button
+        role="tab"
+        id="tab-joke"
+        aria-selected="false"
+        aria-controls="panel-joke"
+        tabindex="-1"
+      >
+        Joke Bot
+      </button>
+    </div>
+
+    <div role="tabpanel" id="panel-nils" aria-labelledby="tab-nils">
+      <p>Nils Frahm is a German musician.</p>
+    </div>
+    <div role="tabpanel" id="panel-agnes" aria-labelledby="tab-agnes" hidden>
+      <p>Agnes Obel is a Danish singer.</p>
+    </div>
+    <div role="tabpanel" id="panel-joke" aria-labelledby="tab-joke" hidden>
+      <p>Why did the chicken cross the road?</p>
+    </div>
+
+    <script>
+      document
+        .querySelector('[role="tablist"]')
+        .addEventListener("click", function (event) {
+          var tab = event.target.closest('[role="tab"]');
+          if (!tab) return;
+          this.querySelectorAll('[role="tab"]').forEach(function (other) {
+            var selected = other === tab;
+            other.setAttribute("aria-selected", String(selected));
+            other.tabIndex = selected ? 0 : -1;
+            document.getElementById(
+              other.getAttribute("aria-controls"),
+            ).hidden = !selected;
+          });
+        });
+    </script>
+  </body>
+</html>

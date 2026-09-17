@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Listbox (multi-select) — APG fixture</title>
+  </head>
+  <body>
+    <h1>Listbox — multi-select</h1>
+
+    <!--
+      Reconstruction of the W3C ARIA APG "Listbox" pattern's multi-select
+      example
+      (https://www.w3.org/WAI/ARIA/apg/patterns/listbox/examples/listbox-scrollable/),
+      plus the native `<select multiple>` that Chromium also reports as
+      `listbox`.
+
+      This fixture exists to DOCUMENT a limitation, not to drive a fix. The
+      `select` action mirrors the DOM producer's own `handleSelect`: it sets the
+      owning `<select>`'s `value`, which on a `<select multiple>` collapses the
+      selection to exactly one option. That is the DOM producer's behaviour too,
+      so it is a shared limitation rather than a native-path bug — but it was
+      entirely untested against a real multi-select, which is the part worth
+      fixing.
+    -->
+
+    <label for="toppings">Toppings</label>
+    <select id="toppings" multiple size="4">
+      <option value="cheese" selected>Cheese</option>
+      <option value="basil" selected>Basil</option>
+      <option value="olives">Olives</option>
+    </select>
+    <output id="toppings-echo">none</output>
+
+    <div id="colors-label">Favourite colours</div>
+    <ul
+      id="colors"
+      role="listbox"
+      aria-multiselectable="true"
+      aria-labelledby="colors-label"
+      tabindex="0"
+    >
+      <li role="option" id="color-red" aria-selected="true">Red</li>
+      <li role="option" id="color-blue" aria-selected="false">Blue</li>
+    </ul>
+
+    <script>
+      document
+        .getElementById("toppings")
+        .addEventListener("change", function () {
+          document.getElementById("toppings-echo").textContent = Array.from(
+            this.selectedOptions,
+          )
+            .map(function (option) {
+              return option.value;
+            })
+            .join(",");
+        });
+    </script>
+  </body>
+</html>

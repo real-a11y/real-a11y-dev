@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node", "chrome"],
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true
+  },
+  "include": ["e2e/**/*.ts", "playwright.config.ts"]
+}

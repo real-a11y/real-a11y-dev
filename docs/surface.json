@@ -1669,7 +1669,8 @@
       "name": "REAL_A11Y_CHROME_PATH",
       "packages": [
         "browser",
-        "cli"
+        "cli",
+        "extension"
       ]
     },
     {

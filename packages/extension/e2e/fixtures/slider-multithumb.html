@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Slider (Multi-Thumb) — APG fixture</title>
+  </head>
+  <body>
+    <h1>Slider (Multi-Thumb)</h1>
+
+    <!--
+      Reconstruction of the W3C ARIA APG "Slider (Multi-Thumb)" example
+      (https://www.w3.org/WAI/ARIA/apg/patterns/slider-multithumb/examples/slider-multithumb/):
+      a price-range slider drawn in SVG, with each thumb an
+      `<g role="slider" tabindex="0">` carrying its own aria-value* attributes
+      and a `<rect>`/`<text>` pair inside it.
+
+      The SVG shape is load-bearing, not decoration. Round 12 of PR #348 fixed
+      "sliders aren't interactable", verified it end-to-end in real Chromium
+      against a `<div role="slider">`, and shipped a fix that was still broken
+      here — so a `<div>` stand-in for this pattern is exactly the fixture that
+      does not catch the bug.
+    -->
+    <div id="range-label">Price Range</div>
+    <!-- Each thumb carries its own `aria-label`: the pattern requires the two
+         thumbs be distinguishable by name, and an `aria-labelledby` pointing at
+         the shared group label would give both the same one. -->
+    <svg width="380" height="70" id="range">
+      <rect x="20" y="28" width="340" height="6" fill="#cfd6e4"></rect>
+
+      <!--
+        Thumb A — the APG example's own handler shape: the listener is bound to
+        the `<g>` itself and works off that element, with no focus condition.
+      -->
+      <g
+        role="slider"
+        tabindex="0"
+        id="min-thumb"
+        aria-label="Minimum price"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow="25"
+        aria-valuetext="$25"
+      >
+        <rect x="76" y="18" width="18" height="26" fill="#2b5dd7"></rect>
+        <text x="85" y="62" text-anchor="middle" font-size="12">$25</text>
+      </g>
+
+      <!--
+        Thumb B — the shape found live in round 15: the same APG markup, but the
+        handler additionally gates on `document.activeElement === this`. A
+        reasonable assumption for hand-written widget code (a real user can only
+        reach the handler by tabbing to the thumb first), and the reason round
+        12's fix silently no-op'd: the events genuinely dispatched, the marker
+        reported success, and `aria-valuenow` never moved because the last real
+        focus was the panel's own button.
+      -->
+      <g
+        role="slider"
+        tabindex="0"
+        id="max-thumb"
+        aria-label="Maximum price"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow="75"
+        aria-valuetext="$75"
+      >
+        <rect x="246" y="18" width="18" height="26" fill="#2b5dd7"></rect>
+        <text x="255" y="62" text-anchor="middle" font-size="12">$75</text>
+      </g>
+    </svg>
+
+    <!-- Somewhere for focus to legitimately live before a dispatch, so a test
+         can prove the widget reacts without the thumb having been tabbed to. -->
+    <button id="elsewhere">Unrelated button</button>
+
+    <script>
+      function step(thumb, delta) {
+        var min = Number(thumb.getAttribute("aria-valuemin"));
+        var max = Number(thumb.getAttribute("aria-valuemax"));
+        var now = Number(thumb.getAttribute("aria-valuenow"));
+        var next = Math.min(max, Math.max(min, now + delta));
+        if (next === now) return;
+        thumb.setAttribute("aria-valuenow", String(next));
+        thumb.setAttribute("aria-valuetext", "$" + next);
+        thumb.querySelector("text").textContent = "$" + next;
+        var x = 20 + (next / 100) * 340;
+        thumb.querySelector("rect").setAttribute("x", String(x - 9));
+        thumb.querySelector("text").setAttribute("x", String(x));
+      }
+
+      function deltaFor(key) {
+        if (key === "ArrowRight" || key === "ArrowUp") return 1;
+        if (key === "ArrowLeft" || key === "ArrowDown") return -1;
+        return 0;
+      }
+
+      // Thumb A: APG's own shape — bound to the element, no focus condition.
+      var minThumb = document.getElementById("min-thumb");
+      minThumb.addEventListener("keydown", function (event) {
+        var delta = deltaFor(event.key);
+        if (!delta) return;
+        event.preventDefault();
+        step(this, delta);
+      });
+
+      // Thumb B: the focus-gated variant found in live dogfooding.
+      var maxThumb = document.getElementById("max-thumb");
+      maxThumb.addEventListener("keydown", function (event) {
+        if (document.activeElement !== this) return;
+        var delta = deltaFor(event.key);
+        if (!delta) return;
+        event.preventDefault();
+        step(this, delta);
+      });
+    </script>
+  </body>
+</html>

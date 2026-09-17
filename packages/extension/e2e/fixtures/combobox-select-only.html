@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Combobox (Select-Only) — APG fixture</title>
+  </head>
+  <body>
+    <h1>Combobox (Select-Only)</h1>
+
+    <!--
+      Reconstruction of the W3C ARIA APG "Select-Only Combobox"
+      (https://www.w3.org/WAI/ARIA/apg/patterns/combobox/examples/combobox-select-only/)
+      — the "Favorite Fruit" example. A NON-editable `<div role="combobox">`
+      trigger, not an input: it behaves like a `<select>` and there is nowhere
+      to type.
+
+      This is round 4's live finding: acting on it opened a browser `prompt()`
+      asking to type into it, then dispatched a `type` the page had nowhere to
+      put. `pageType` refused correctly (`not-a-text-field`); the bug was the
+      panel treating both ARIA combobox shapes as editable. Kept next to
+      `combobox-editable.html` deliberately — the pair is what pins the
+      distinction, and round 13's own fix had to not regress this one.
+    -->
+
+    <div id="favorite-label">Favorite Fruit</div>
+    <div
+      id="favorite"
+      role="combobox"
+      tabindex="0"
+      aria-controls="favorite-listbox"
+      aria-expanded="false"
+      aria-labelledby="favorite-label"
+    >
+      Apple
+    </div>
+    <ul
+      id="favorite-listbox"
+      role="listbox"
+      aria-labelledby="favorite-label"
+      hidden
+    >
+      <li role="option" aria-selected="true">Apple</li>
+      <li role="option" aria-selected="false">Banana</li>
+    </ul>
+    <output id="favorite-state">closed</output>
+
+    <script>
+      var trigger = document.getElementById("favorite");
+      trigger.addEventListener("click", function () {
+        var open = this.getAttribute("aria-expanded") !== "true";
+        this.setAttribute("aria-expanded", String(open));
+        document.getElementById("favorite-listbox").hidden = !open;
+        document.getElementById("favorite-state").textContent = open
+          ? "open"
+          : "closed";
+      });
+    </script>
+  </body>
+</html>

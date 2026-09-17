@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Spinbutton — APG fixture</title>
+  </head>
+  <body>
+    <h1>Spinbutton</h1>
+
+    <!--
+      Reconstruction of the W3C ARIA APG "Spinbutton" pattern
+      (https://www.w3.org/WAI/ARIA/apg/patterns/spinbutton/examples/datepicker-spinbuttons/),
+      whose example is a date picker built from three `role="spinbutton"`
+      elements, plus a native `<input type="number">` — the other shape
+      Chromium reports as `spinbutton`.
+
+      Spinbutton is the one role that is typable AND steppable at once
+      (`getActions` gives it `focus, type, increment, decrement`), so both
+      halves are exercised here.
+    -->
+
+    <div id="day-label">Day</div>
+    <div
+      role="spinbutton"
+      tabindex="0"
+      id="day"
+      aria-label="Day"
+      aria-valuemin="1"
+      aria-valuemax="31"
+      aria-valuenow="12"
+      aria-valuetext="12"
+    >
+      12
+    </div>
+
+    <label for="qty">Quantity</label>
+    <input id="qty" type="number" min="0" max="99" step="1" value="3" />
+    <output id="qty-out">3</output>
+
+    <script>
+      var day = document.getElementById("day");
+      day.addEventListener("keydown", function (event) {
+        var delta =
+          event.key === "ArrowUp" || event.key === "ArrowRight"
+            ? 1
+            : event.key === "ArrowDown" || event.key === "ArrowLeft"
+              ? -1
+              : 0;
+        if (!delta) return;
+        event.preventDefault();
+        var next = Math.min(
+          31,
+          Math.max(1, Number(this.getAttribute("aria-valuenow")) + delta),
+        );
+        this.setAttribute("aria-valuenow", String(next));
+        this.setAttribute("aria-valuetext", String(next));
+        this.textContent = String(next);
+      });
+
+      document.getElementById("qty").addEventListener("input", function () {
+        document.getElementById("qty-out").textContent = this.value;
+      });
+    </script>
+  </body>
+</html>

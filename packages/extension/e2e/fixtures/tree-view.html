@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Tree View — APG fixture</title>
+  </head>
+  <body>
+    <h1>Tree View</h1>
+
+    <!--
+      THREE shapes, because `pageClick`'s composite redirect treats them
+      differently and only one of them is the APG example.
+
+      1. "File System" — faithful reconstruction of the W3C ARIA APG "File
+         Directory Treeview"
+         (https://www.w3.org/WAI/ARIA/apg/patterns/treeview/examples/treeview-1a/):
+         folder items are `role="treeitem" aria-expanded` wrapping a `<span>`
+         label plus a nested `role="group"`, and LEAF items are plain text with
+         no inner control. This is the "well-formed ARIA matches nothing, the
+         wrapper is used unchanged" path `pageClick` documents.
+
+      2. "Bookmarks" — a flat tree whose `role="treeitem"` rows WRAP a real
+         `<a href>`. Not an APG example verbatim; it is the real-world wrapper
+         shape (VS Code's and GitHub's file trees are built this way) that put
+         `treeitem` in `pageClick`'s composite redirect list in the first place.
+         Labelled as such rather than passed off as APG markup.
+
+      3. "Archive" — a COLLAPSIBLE row whose own label is plain text but whose
+         SUBTREE contains links (a docs sidebar or file browser is usually built
+         this way). This one is here to pin a limitation this suite found: see
+         `archive-2024` below.
+    -->
+
+    <h2 id="fs-label">File System</h2>
+    <ul role="tree" aria-labelledby="fs-label">
+      <li role="treeitem" id="projects" aria-expanded="false">
+        <span class="label">Projects</span>
+        <ul role="group">
+          <li role="treeitem" id="proj-a">project-a.md</li>
+          <li role="treeitem" id="proj-b">project-b.md</li>
+        </ul>
+      </li>
+      <li role="treeitem" id="reports" aria-expanded="true">
+        <span class="label">Reports</span>
+        <ul role="group">
+          <li role="treeitem" id="q1">q1.pdf</li>
+        </ul>
+      </li>
+    </ul>
+
+    <h2 id="bm-label">Bookmarks</h2>
+    <ul role="tree" aria-labelledby="bm-label">
+      <li role="treeitem" id="bm-docs"><a href="#docs">Documentation</a></li>
+      <li role="treeitem" id="bm-specs"><a href="#specs">Specifications</a></li>
+    </ul>
+
+    <h2 id="ar-label">Archive</h2>
+    <ul role="tree" aria-labelledby="ar-label">
+      <li role="treeitem" id="archive-2024" aria-expanded="false">
+        <span class="label">2024</span>
+        <ul role="group">
+          <li role="treeitem" id="archive-jan"><a href="#jan">January</a></li>
+        </ul>
+      </li>
+    </ul>
+
+    <output id="tree-echo">none</output>
+    <output id="tree-toggled">none</output>
+
+    <script>
+      document.querySelectorAll('[role="tree"]').forEach(function (tree) {
+        tree.addEventListener("click", function (event) {
+          // Delegated, and keyed off the LINK where there is one — the shape
+          // that only works if `pageClick` redirects a composite wrapper down
+          // to its inner control.
+          var link = event.target.closest("a[href]");
+          if (link) {
+            event.preventDefault();
+            document.getElementById("tree-echo").textContent = link.textContent;
+            return;
+          }
+          var item = event.target.closest('[role="treeitem"]');
+          if (item && item.hasAttribute("aria-expanded")) {
+            item.setAttribute(
+              "aria-expanded",
+              String(item.getAttribute("aria-expanded") !== "true"),
+            );
+            document.getElementById("tree-toggled").textContent = item.id;
+          }
+        });
+      });
+    </script>
+  </body>
+</html>
