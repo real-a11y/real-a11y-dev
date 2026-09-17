@@ -37,15 +37,19 @@ import {
  * here — kept in step by hand, asserted by the test that stringifies
  * `pageClick` and checks each composite role appears in it.
  *
- * Deliberately excludes `slider` / `spinbutton`: the DOM producer gives them
- * `increment`/`decrement` (arrow-key stepping), never `click` — a custom
- * ARIA slider listens for ArrowLeft/ArrowRight and does nothing useful on a
- * synthetic click, per that file's own comment. `dispatchNative`'s
- * `NativeAction` union has no increment/decrement at all yet, so offering a
- * button here would dispatch the wrong action rather than a missing one —
- * worse than the current gap, not a fix for it. Also excludes bare `cell`
- * (present in `pageClick`'s composite list for redirect-safety, but the DOM
- * producer itself never treats a plain table cell as actionable — only
+ * Deliberately excludes `slider`: the DOM producer gives it `focus`,
+ * `increment`, `decrement` — never `click` or `type` — so it gets no wide
+ * button here at all, only the step buttons `isSteppableRole` renders
+ * separately below. Includes `spinbutton`, unlike `slider`: `getActions`
+ * gives it `focus, type, increment, decrement`, so it gets both the wide
+ * type-button (via `isTypableRole` below) and the step buttons. This split
+ * used to exclude both roles entirely — `dispatchNative`'s `NativeAction`
+ * union had no `increment`/`decrement` at all, so offering any button for
+ * either would have dispatched the wrong action rather than a missing one.
+ * That gap is closed (`pageStep` in `native-core.ts`); this list and
+ * `isTypableRole` were updated to match. Also excludes bare `cell` (present
+ * in `pageClick`'s composite list for redirect-safety, but the DOM producer
+ * itself never treats a plain table cell as actionable — only
  * `gridcell`/`columnheader`/`rowheader` are).
  *
  * Deliberately excludes `row`, `listbox`, `option` too, despite `getActions`
@@ -82,13 +86,14 @@ export const ACTABLE = new Set([
   "textbox",
   "searchbox",
   "combobox",
+  "spinbutton",
 ]);
 
 /**
  * Roles where "act" means typing text, as opposed to a click.
  *
- * `textbox` and `searchbox` — the two roles the DOM producer's own
- * `getActions` gives `focus, type` — NOT `combobox`. ARIA overloads
+ * `textbox`, `searchbox`, and `spinbutton` — the roles the DOM producer's
+ * own `getActions` gives `type` for — NOT `combobox`. ARIA overloads
  * `combobox` across two shapes this panel cannot tell apart from
  * role+name+depth alone: an EDITABLE combobox (autocomplete text input) and
  * a SELECT-ONLY combobox — the ARIA APG "Combobox (Select-Only)" pattern, a
@@ -100,10 +105,26 @@ export const ACTABLE = new Set([
  * default for both shapes: it opens/focuses a select-only combobox exactly
  * like a real click would, and focuses an editable one so the dogfooder can
  * type at their own keyboard afterward — same as any other click target in
- * a real session.
+ * a real session. `spinbutton` has no such ambiguity — a native
+ * `<input type="number">` or a custom ARIA spinbutton is always directly
+ * editable — so it's unconditionally typable, same as `textbox`/`searchbox`.
  */
 export function isTypableRole(role: string): boolean {
-  return role === "textbox" || role === "searchbox";
+  return role === "textbox" || role === "searchbox" || role === "spinbutton";
+}
+
+/**
+ * Roles that step by one unit via `increment`/`decrement` rather than (or in
+ * addition to) a click/type action — `slider` and `spinbutton`, the two
+ * roles the DOM producer's `getActions` gives those actions for. Rendered as
+ * a pair of step buttons alongside whatever `ACTABLE`/`isTypableRole` already
+ * offer for the role (nothing, for `slider`; a type button, for
+ * `spinbutton`), never instead of them — a spinbutton is both typable and
+ * steppable at once, matching `getActions`'s own `focus, type, increment,
+ * decrement` for it.
+ */
+export function isSteppableRole(role: string): boolean {
+  return role === "slider" || role === "spinbutton";
 }
 
 type NativeNode = {
@@ -150,6 +171,15 @@ export function formatValue(n: NativeNode): string {
  * `button "Personal Information"` here, with no `[collapsed]` at all, next
  * to the DOM/A11Y tree view's explicit `collapsed` badge on the same
  * button — this is the fix.
+ *
+ * That parity claim covers only the states `App.tsx` badges at all —
+ * `native-core.ts`'s `STATE_PROPS` carries several more (`focusable`,
+ * `focused`, `editable`, `settable`, `multiline`, `invalid`, `modal`) that
+ * production's renderer never shows a badge for, at any value. Those still
+ * fall through to the generic bare-key-for-true rule below, same as
+ * `properties`' own deliberate over-showing just below this comment — a
+ * native-only state is signal for this debug surface, not noise to hide for
+ * symmetry with a panel that never learned to show it.
  *
  * `properties` is deliberately NOT held to the same parity: the production
  * view surfaces only `level` (`renderA11yLabel`); this shows all of them
@@ -432,17 +462,20 @@ export function DogfoodPanel() {
     }
   }
 
-  async function act(node: NativeNode) {
+  async function act(node: NativeNode, action?: "increment" | "decrement") {
     if (inFlight.current) return;
     inFlight.current = true;
     try {
-      await runAct(node);
+      await runAct(node, action);
     } finally {
       inFlight.current = false;
     }
   }
 
-  async function runAct(node: NativeNode) {
+  async function runAct(
+    node: NativeNode,
+    stepAction?: "increment" | "decrement",
+  ) {
     const token = capabilityRequest.current;
     // Dispatch against the tab the tree came from, and refuse if the user has
     // since switched away: these ids only mean something in that document, so
@@ -463,7 +496,9 @@ export function DogfoodPanel() {
       forgetTree();
       return setStatus("page navigated — reload the native tree");
     }
-    const isText = isTypableRole(node.role);
+    // An explicit step action (from the −/+ buttons) always wins — a
+    // spinbutton is both typable and steppable, and stepping never prompts.
+    const isText = !stepAction && isTypableRole(node.role);
     const value = isText
       ? prompt(`Type into "${node.name || node.role}":`)
       : undefined;
@@ -474,7 +509,7 @@ export function DogfoodPanel() {
         type: "NATIVE_ACT",
         tabId,
         nodeId: node.id,
-        action: isText ? "type" : "click",
+        action: stepAction ?? (isText ? "type" : "click"),
         ...(isText ? { value } : {}),
       })) as {
         success?: boolean;
@@ -580,19 +615,48 @@ export function DogfoodPanel() {
         <div style="max-height:220px;overflow:auto;margin-top:6px;font-family:ui-monospace,monospace">
           {nodes.map((n) => {
             const label = `${"  ".repeat(n.depth)}${n.role}${n.name ? ` "${n.name}"` : ""}${formatValue(n)}${formatFacets(n)}`;
-            return ACTABLE.has(n.role) ? (
-              <div key={n.id}>
-                <button
-                  style="text-align:left;width:100%;white-space:pre"
-                  onClick={() => act(n)}
-                  disabled={busy || !enabled}
-                >
+            const actable = ACTABLE.has(n.role);
+            const steppable = isSteppableRole(n.role);
+            if (!actable && !steppable) {
+              return (
+                <div key={n.id} style="white-space:pre;padding:0 2px">
                   {label}
-                </button>
-              </div>
-            ) : (
-              <div key={n.id} style="white-space:pre;padding:0 2px">
-                {label}
+                </div>
+              );
+            }
+            return (
+              <div key={n.id} style="display:flex;gap:2px">
+                {actable ? (
+                  <button
+                    style="text-align:left;width:100%;white-space:pre"
+                    onClick={() => act(n)}
+                    disabled={busy || !enabled}
+                  >
+                    {label}
+                  </button>
+                ) : (
+                  <span style="white-space:pre;padding:0 2px;flex:1">
+                    {label}
+                  </span>
+                )}
+                {steppable && (
+                  <>
+                    <button
+                      title={`Decrement "${n.name || n.role}"`}
+                      onClick={() => act(n, "decrement")}
+                      disabled={busy || !enabled}
+                    >
+                      −
+                    </button>
+                    <button
+                      title={`Increment "${n.name || n.role}"`}
+                      onClick={() => act(n, "increment")}
+                      disabled={busy || !enabled}
+                    >
+                      +
+                    </button>
+                  </>
+                )}
               </div>
             );
           })}

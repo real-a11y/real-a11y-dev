@@ -5,6 +5,7 @@ import { pageClick } from "../native/native-core.js";
 import {
   ACTABLE,
   isTypableRole,
+  isSteppableRole,
   formatFacets,
   formatValue,
 } from "./DogfoodPanel.js";
@@ -113,6 +114,10 @@ describe("isTypableRole", () => {
     expect(isTypableRole("searchbox")).toBe(true);
   });
 
+  it("treats a spinbutton as typable — getActions gives it focus, type, increment, decrement", () => {
+    expect(isTypableRole("spinbutton")).toBe(true);
+  });
+
   it("does not treat a combobox as typable — it may be select-only", () => {
     expect(isTypableRole("combobox")).toBe(false);
   });
@@ -128,6 +133,28 @@ describe("isTypableRole", () => {
       "menuitem",
     ]) {
       expect(isTypableRole(role)).toBe(false);
+    }
+  });
+});
+
+/**
+ * Live dogfood finding: "slider controls are not interactable" — the W3C
+ * multi-thumb slider example's two `slider` thumbs had no way to act on
+ * them at all, matching `ACTABLE`'s own docstring at the time ("worse than
+ * the current gap, not a fix for it" — `dispatchNative` had no
+ * increment/decrement). Fixed by adding `pageStep` (`native-core.ts`) and
+ * wiring `increment`/`decrement` all the way through; `isSteppableRole`
+ * decides which roles get the panel's new step buttons.
+ */
+describe("isSteppableRole", () => {
+  it("treats slider and spinbutton as steppable", () => {
+    expect(isSteppableRole("slider")).toBe(true);
+    expect(isSteppableRole("spinbutton")).toBe(true);
+  });
+
+  it("does not treat an ordinary actable role as steppable", () => {
+    for (const role of ["button", "textbox", "checkbox", "combobox"]) {
+      expect(isSteppableRole(role)).toBe(false);
     }
   });
 });
@@ -161,9 +188,12 @@ describe("ACTABLE", () => {
     }
   });
 
-  it("excludes slider/spinbutton — the DOM producer gives them increment/decrement, not click", () => {
+  it("excludes slider — the DOM producer gives it increment/decrement, never click or type", () => {
     expect(ACTABLE.has("slider")).toBe(false);
-    expect(ACTABLE.has("spinbutton")).toBe(false);
+  });
+
+  it("includes spinbutton — the DOM producer gives it type as well as increment/decrement", () => {
+    expect(ACTABLE.has("spinbutton")).toBe(true);
   });
 
   it("excludes bare cell — pageClick redirects it for safety, but getActions never treats it as actionable", () => {

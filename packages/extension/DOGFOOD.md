@@ -292,3 +292,49 @@ what a person actually ran into holding the tree next to a page.
   close read, `checked`'s `"mixed"` tristate (rendered bare as `"mixed"`,
   not `checked=mixed`, matching `App.tsx` there too).
   (`packages/extension/src/sidepanel/DogfoodPanel.tsx`, `formatFacets`.)
+- **Slider controls were not interactable at all.** The W3C multi-thumb
+  slider example's thumbs showed up in the native tree with no way to act
+  on them — not a display gap like the findings above, an outright missing
+  capability. `ACTABLE` had deliberately excluded `slider`/`spinbutton`
+  from the start: the DOM producer's `getActions` gives them `increment`/
+  `decrement` (arrow-key stepping), never `click`, and `dispatchNative`'s
+  `NativeAction` union had no increment/decrement at all — offering a
+  button would have dispatched the wrong action, worse than the gap it
+  would claim to fix. That was correct triage at the time (round 7); this
+  is the round that closes it properly instead of leaving it open forever.
+
+  Added `pageStep(this: Element, delta: number)` to `native-core.ts`,
+  mirroring core's `ActionDispatcher.handleStep`/`dispatchArrowStep`
+  (`core/src/interaction/action-dispatcher.ts`) exactly: native
+  `stepUp()`/`stepDown()` for a real `<input type="range"|"number">` (with
+  a fallback to the keyboard path if that throws), else `ArrowRight`/
+  `ArrowLeft` dispatched directly on the element — custom ARIA sliders
+  (Radix, Headless UI, …) install their keyboard listener on the slider
+  itself, so this fires regardless of what currently holds focus, and
+  deliberately never calls `.focus()` first (that would steal focus from
+  the panel button just clicked, and worse, redirect the dogfooder's next
+  keystroke into the page's own tab order). One function taking a signed
+  delta, not two, matching `handleStep`'s own shape. `NativeAction` gained
+  `increment`/`decrement`, wired through `dispatchNative`/`SUPPORTED`/
+  `IN_PAGE_ACTION_SOURCE`.
+
+  On the panel side: `slider` stays out of `ACTABLE` (never gets a click/
+  type button — `getActions` never gives it one either) but a new
+  `isSteppableRole` renders a pair of `−`/`+` step buttons alongside
+  whatever `ACTABLE` already offers. `spinbutton` moved from "excluded
+  entirely" to genuinely correct: it's in `ACTABLE` now (a real `<input
+type="number">` or custom ARIA spinbutton is unambiguously typable, no
+  select-only-combobox-style ambiguity), `isTypableRole` too, and
+  `isSteppableRole` — so it gets a type button _and_ step buttons at once,
+  matching `getActions`'s own `focus, type, increment, decrement` for it.
+
+  **Verified end-to-end in a real headed Chromium**: a custom ARIA slider
+  (matching the W3C example's shape — a `role="slider"` div with its own
+  keydown listener) correctly increments via `NATIVE_ACT`, confirmed by
+  reading back the page's own `aria-valuenow` after dispatch; a native
+  `<input type="range">` decrements via the `stepUp`/`stepDown` path,
+  confirmed by reading its live `.value` — composing correctly with the
+  value read-back feature, which shows the post-step value on the next
+  tree read.
+  (`packages/extension/src/native/native-core.ts`, `pageStep`;
+  `packages/extension/src/sidepanel/DogfoodPanel.tsx`, `isSteppableRole`.)

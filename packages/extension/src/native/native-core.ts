@@ -230,7 +230,8 @@ export async function readNativeTree(
 }
 
 /** Actions the native backend can dispatch. Others are refused, not guessed. */
-export type NativeAction = "click" | "type" | "focus";
+export type NativeAction =
+  "click" | "type" | "focus" | "increment" | "decrement";
 
 export interface NativeDispatchResult {
   success: boolean;
@@ -249,7 +250,13 @@ export function backendNodeIdFrom(nodeId: string): number | null {
   return m ? Number(m[1]) : null;
 }
 
-const SUPPORTED = new Set<NativeAction>(["click", "type", "focus"]);
+const SUPPORTED = new Set<NativeAction>([
+  "click",
+  "type",
+  "focus",
+  "increment",
+  "decrement",
+]);
 
 /**
  * Dispatch a click / type / focus against a native node over any CDP transport.
@@ -568,6 +575,78 @@ export function pageReadValue(this: Element): {
   return { value };
 }
 
+/**
+ * Step a value-bearing control by one unit — native `stepUp()`/`stepDown()`
+ * for a real `<input type="range"|"number">`, else dispatch `ArrowRight`/
+ * `ArrowLeft` on the element itself. Mirrors core's `ActionDispatcher`'s
+ * `handleStep`/`dispatchArrowStep`
+ * (`core/src/interaction/action-dispatcher.ts`) exactly, inlined for the
+ * same reason every other in-page function here is: serialized as source
+ * text for `Runtime.callFunctionOn`, so no imports or module-scope
+ * references survive the trip. One function taking a signed `delta`, not
+ * two — matching `handleStep`'s own shape rather than duplicating the whole
+ * body per direction.
+ *
+ * Custom ARIA sliders (Radix, Headless UI, …) install their keyboard
+ * listener on the slider element itself, so dispatching directly on `this`
+ * fires the handler regardless of which element currently holds focus.
+ * Deliberately does NOT call `this.focus()` first — that would steal focus
+ * from the panel button the dogfooder just clicked, and, worse, on the
+ * *next* keystroke anywhere but back at the panel, advance focus to
+ * whatever follows the slider in the page's own tab order. Focus is
+ * restored in two stages, matching the DOM producer exactly: synchronously
+ * (covers a widget that moves focus to itself inside its own synchronous
+ * keydown handler) and via `setTimeout(0)` (covers a Radix-style widget
+ * that schedules the focus call through a state update + re-render,
+ * landing on a microtask/RAF boundary after this function has already
+ * returned).
+ */
+export function pageStep(this: Element, delta: number): Marker {
+  const el = this;
+  if (!el || !el.tagName) return { ok: false, reason: "not-element" };
+  const tag = el.tagName.toLowerCase();
+  if (tag === "input") {
+    const input = el as HTMLInputElement;
+    if (input.type === "range" || input.type === "number") {
+      try {
+        if (delta > 0) input.stepUp();
+        else input.stepDown();
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        return { ok: true };
+      } catch {
+        // stepUp/stepDown throw on an invalid configuration (e.g. already at
+        // a bound with no step) — fall through to the keyboard path below so
+        // the dogfooder still gets an attempt rather than a bare failure.
+      }
+    }
+  }
+
+  const previouslyFocused = document.activeElement as HTMLElement | null;
+  const key = delta > 0 ? "ArrowRight" : "ArrowLeft";
+  const init: KeyboardEventInit = {
+    key,
+    code: key,
+    keyCode: delta > 0 ? 39 : 37,
+    bubbles: true,
+    cancelable: true,
+  };
+  el.dispatchEvent(new KeyboardEvent("keydown", init));
+  el.dispatchEvent(new KeyboardEvent("keyup", init));
+  const restore = (): void => {
+    if (
+      previouslyFocused &&
+      document.activeElement !== previouslyFocused &&
+      previouslyFocused.isConnected
+    ) {
+      previouslyFocused.focus?.({ preventScroll: true });
+    }
+  };
+  restore();
+  setTimeout(restore, 0);
+  return { ok: true };
+}
+
 /* eslint-enable @typescript-eslint/no-this-alias */
 
 /** The in-page source for each action, as `Runtime.callFunctionOn` wants it. */
@@ -575,6 +654,8 @@ export const IN_PAGE_ACTION_SOURCE: Record<NativeAction, string> = {
   click: String(pageClick),
   focus: String(pageFocus),
   type: String(pageType),
+  increment: String(pageStep),
+  decrement: String(pageStep),
 };
 
 /** Run the action's in-page function; returns only a structural marker. */
@@ -591,6 +672,9 @@ async function runInPage(
       functionDeclaration: IN_PAGE_ACTION_SOURCE[action],
       returnByValue: true,
       ...(action === "type" ? { arguments: [{ value }] } : {}),
+      ...(action === "increment" || action === "decrement"
+        ? { arguments: [{ value: action === "increment" ? 1 : -1 }] }
+        : {}),
     },
   );
   return res.result?.value;

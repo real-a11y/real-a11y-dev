@@ -8,6 +8,7 @@ import {
   IN_PAGE_ACTION_SOURCE,
   pageClick,
   pageReadValue,
+  pageStep,
   pageType,
   readNativeTree,
   type CdpTransport,
@@ -529,6 +530,107 @@ describe("in-page actions — read value", () => {
     const result = on(pageReadValue, el);
     expect(result).toEqual({ redacted: true });
     expect(JSON.stringify(result)).not.toContain("4111111111111111");
+  });
+});
+
+/**
+ * Live dogfood finding: "slider controls are not interactable" — the W3C
+ * multi-thumb slider example's thumbs had no way to act on them at all.
+ * `pageStep` mirrors core's `ActionDispatcher.handleStep`/`dispatchArrowStep`
+ * (`core/src/interaction/action-dispatcher.ts`): native `stepUp()`/
+ * `stepDown()` for a real range/number input, else `ArrowRight`/`ArrowLeft`
+ * dispatched on the element itself (a custom ARIA slider installs its
+ * keyboard listener there, not wherever focus happens to be).
+ */
+describe("in-page actions — step", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("steps a native range input via stepUp/stepDown, not the keyboard path", () => {
+    const el = document.createElement("input");
+    el.type = "range";
+    el.min = "0";
+    el.max = "10";
+    el.value = "5";
+    document.body.appendChild(el);
+    const seen = record(el, ["input", "change"]);
+
+    expect(on(pageStep, el, 1)).toEqual({ ok: true });
+    expect(el.value).toBe("6");
+    expect(seen).toEqual(["input", "change"]);
+
+    expect(on(pageStep, el, -1)).toEqual({ ok: true });
+    expect(el.value).toBe("5");
+  });
+
+  it("steps a native number input the same way", () => {
+    const el = document.createElement("input");
+    el.type = "number";
+    el.value = "3";
+    document.body.appendChild(el);
+    expect(on(pageStep, el, 1)).toEqual({ ok: true });
+    expect(el.value).toBe("4");
+  });
+
+  it("dispatches ArrowRight/ArrowLeft on a custom ARIA slider", () => {
+    const el = document.createElement("div");
+    el.setAttribute("role", "slider");
+    el.setAttribute("tabindex", "0");
+    document.body.appendChild(el);
+    const seenKeys: string[] = [];
+    el.addEventListener("keydown", (e) =>
+      seenKeys.push(`down:${(e as KeyboardEvent).key}`),
+    );
+    el.addEventListener("keyup", (e) =>
+      seenKeys.push(`up:${(e as KeyboardEvent).key}`),
+    );
+
+    expect(on(pageStep, el, 1)).toEqual({ ok: true });
+    expect(seenKeys).toEqual(["down:ArrowRight", "up:ArrowRight"]);
+
+    seenKeys.length = 0;
+    expect(on(pageStep, el, -1)).toEqual({ ok: true });
+    expect(seenKeys).toEqual(["down:ArrowLeft", "up:ArrowLeft"]);
+  });
+
+  it("falls back to the keyboard path when stepUp/stepDown throws", () => {
+    // A range input with no step increment configured correctly (min > max)
+    // makes stepUp throw in real browsers; jsdom doesn't reject this
+    // construction, so simulate the throw directly to exercise the fallback.
+    const el = document.createElement("input");
+    el.type = "range";
+    document.body.appendChild(el);
+    el.stepUp = () => {
+      throw new Error("invalid state");
+    };
+    const seenKeys: string[] = [];
+    el.addEventListener("keydown", (e) =>
+      seenKeys.push((e as KeyboardEvent).key),
+    );
+
+    expect(on(pageStep, el, 1)).toEqual({ ok: true });
+    expect(seenKeys).toEqual(["ArrowRight"]);
+  });
+
+  it("does not steal focus from whatever was already focused", () => {
+    const button = document.createElement("button");
+    const slider = document.createElement("div");
+    slider.setAttribute("role", "slider");
+    document.body.appendChild(button);
+    document.body.appendChild(slider);
+    button.focus();
+    expect(document.activeElement).toBe(button);
+
+    on(pageStep, slider, 1);
+    expect(document.activeElement).toBe(button);
+  });
+
+  it("returns not-element for a null this", () => {
+    expect(on(pageStep, null as unknown as Element, 1)).toEqual({
+      ok: false,
+      reason: "not-element",
+    });
   });
 });
 
