@@ -90,27 +90,45 @@ export const ACTABLE = new Set([
 ]);
 
 /**
- * Roles where "act" means typing text, as opposed to a click.
+ * Is this node one where "act" means typing text, as opposed to a click?
  *
  * `textbox`, `searchbox`, and `spinbutton` — the roles the DOM producer's
- * own `getActions` gives `type` for — NOT `combobox`. ARIA overloads
- * `combobox` across two shapes this panel cannot tell apart from
- * role+name+depth alone: an EDITABLE combobox (autocomplete text input) and
- * a SELECT-ONLY combobox — the ARIA APG "Combobox (Select-Only)" pattern, a
- * non-editable trigger that behaves like a `<select>`. Prompting for text on
- * the latter opens a browser `prompt()` dialog and then dispatches a `type`
- * action the page has nowhere to put — `pageType` correctly refuses with
- * `not-a-text-field`, but the dogfooder is left having answered a modal for
- * nothing, when what they wanted was to click it open. A click is the right
- * default for both shapes: it opens/focuses a select-only combobox exactly
- * like a real click would, and focuses an editable one so the dogfooder can
- * type at their own keyboard afterward — same as any other click target in
- * a real session. `spinbutton` has no such ambiguity — a native
- * `<input type="number">` or a custom ARIA spinbutton is always directly
- * editable — so it's unconditionally typable, same as `textbox`/`searchbox`.
+ * own `getActions` gives `type` for — are unconditionally typable. `combobox`
+ * is not one of them, but it isn't unconditionally NOT typable either.
+ *
+ * ARIA overloads `combobox` across two shapes: an EDITABLE combobox
+ * (autocomplete text input) and a SELECT-ONLY combobox — the ARIA APG
+ * "Combobox (Select-Only)" pattern, a non-editable trigger that behaves like
+ * a `<select>`. When this function took only a role, role+name+depth alone
+ * genuinely couldn't tell them apart, so every combobox defaulted to a
+ * click — correct for the select-only case (round 4's original fix:
+ * prompting for text there opened a browser `prompt()` for nothing, since
+ * `pageType` would refuse it as `not-a-text-field`), but silently wrong for
+ * an editable one: on a NATIVE `<input role="combobox">` (Google's,
+ * YouTube's, and most real-world search boxes are built exactly this way),
+ * `getActions`'s `tag === "input"` branch fires before it ever reaches the
+ * ARIA `role === "combobox"` branch — so the DOM producer already gives
+ * these `focus, type`, and always defaulting to click here left them
+ * strictly worse to act on than the DOM/A11Y tree view right next to them.
+ *
+ * The native tree's own `editable` state (added when values were surfaced —
+ * see `pageReadValue`'s enrichment) is precisely Chromium's own answer to
+ * "does this AX node accept typed text": present (e.g. `"plaintext"`) for a
+ * native input or contenteditable-backed combobox, absent for a select-only
+ * trigger — confirmed against both shapes in a real headed Chromium. That
+ * makes the ambiguity actually resolvable now, so `combobox` consults it
+ * instead of guessing; every other typable role ignores `states` entirely,
+ * since none of them have this ambiguity to resolve.
  */
-export function isTypableRole(role: string): boolean {
-  return role === "textbox" || role === "searchbox" || role === "spinbutton";
+export function isTypableRole(
+  role: string,
+  states?: Record<string, string | boolean>,
+): boolean {
+  if (role === "textbox" || role === "searchbox" || role === "spinbutton") {
+    return true;
+  }
+  if (role === "combobox") return Boolean(states?.["editable"]);
+  return false;
 }
 
 /**
@@ -498,7 +516,7 @@ export function DogfoodPanel() {
     }
     // An explicit step action (from the −/+ buttons) always wins — a
     // spinbutton is both typable and steppable, and stepping never prompts.
-    const isText = !stepAction && isTypableRole(node.role);
+    const isText = !stepAction && isTypableRole(node.role, node.states);
     const value = isText
       ? prompt(`Type into "${node.name || node.role}":`)
       : undefined;

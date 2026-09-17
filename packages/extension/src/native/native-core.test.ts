@@ -1,5 +1,5 @@
 import type { RawNativeAXNode } from "@real-a11y-dev/core";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   backendNodeIdFrom,
@@ -276,6 +276,36 @@ describe("dispatchNative", () => {
     const res = await dispatchNative(t, "ax-dom-8", "click");
     expect(res.success).toBe(false);
     expect(res.error).not.toContain("secret@example.com");
+  });
+
+  /**
+   * Found by `/code-review`: every other `pageStep` test calls the
+   * exported function directly with an explicit numeric delta
+   * (`on(pageStep, el, 1)`), bypassing `runInPage`'s own
+   * `action === "increment" ? 1 : -1` mapping entirely — so nothing pinned
+   * that mapping itself. A swapped ternary there would silently turn every
+   * dogfood "increment" into a decrement with no test catching it.
+   */
+  it("passes delta 1 for increment and -1 for decrement as the CDP argument", async () => {
+    const incT = new FakeTransport(resolving("obj-inc", { ok: true }));
+    await dispatchNative(incT, "ax-dom-1", "increment");
+    const incCall = incT.calls.find(
+      (c) => c.method === "Runtime.callFunctionOn",
+    );
+    expect(
+      (incCall?.params as { arguments?: Array<{ value: number }> })
+        ?.arguments?.[0]?.value,
+    ).toBe(1);
+
+    const decT = new FakeTransport(resolving("obj-dec", { ok: true }));
+    await dispatchNative(decT, "ax-dom-1", "decrement");
+    const decCall = decT.calls.find(
+      (c) => c.method === "Runtime.callFunctionOn",
+    );
+    expect(
+      (decCall?.params as { arguments?: Array<{ value: number }> })
+        ?.arguments?.[0]?.value,
+    ).toBe(-1);
   });
 });
 
@@ -613,7 +643,7 @@ describe("in-page actions — step", () => {
     expect(seenKeys).toEqual(["ArrowRight"]);
   });
 
-  it("does not steal focus from whatever was already focused", () => {
+  it("does not steal focus when nothing focuses itself in response", () => {
     const button = document.createElement("button");
     const slider = document.createElement("div");
     slider.setAttribute("role", "slider");
@@ -624,6 +654,69 @@ describe("in-page actions — step", () => {
 
     on(pageStep, slider, 1);
     expect(document.activeElement).toBe(button);
+  });
+
+  /**
+   * Found by `/code-review`: the test above never exercises the restore
+   * logic at all — nothing in it ever moves focus away from `button`, so
+   * the assertion would pass identically even with both restore stages
+   * deleted. These two tests simulate the two cases the two-stage design
+   * exists for: a widget that focuses itself synchronously inside its own
+   * keydown handler (restore's synchronous call), and one that schedules
+   * the focus call for later — the Radix-style state-update-then-re-render
+   * pattern the docstring names (restore's `setTimeout(0)` call).
+   */
+  it("restores focus synchronously when the widget focuses itself inside its own keydown handler", () => {
+    const button = document.createElement("button");
+    const slider = document.createElement("div");
+    slider.setAttribute("role", "slider");
+    slider.tabIndex = 0;
+    document.body.appendChild(button);
+    document.body.appendChild(slider);
+    slider.addEventListener("keydown", () => slider.focus());
+    button.focus();
+
+    on(pageStep, slider, 1);
+    // No fake timers needed — this widget shape steals focus synchronously,
+    // inside dispatchEvent itself, so the synchronous restore() call right
+    // after must already have put it back before pageStep even returns.
+    expect(document.activeElement).toBe(button);
+  });
+
+  it("restores focus after a deferred (setTimeout-scheduled) focus steal", () => {
+    vi.useFakeTimers();
+    try {
+      const button = document.createElement("button");
+      const slider = document.createElement("div");
+      slider.setAttribute("role", "slider");
+      slider.tabIndex = 0;
+      document.body.appendChild(button);
+      document.body.appendChild(slider);
+      // Radix-style: the keydown handler doesn't focus synchronously, it
+      // schedules the focus call for a later tick (standing in for a state
+      // update + re-render landing on a microtask/RAF boundary).
+      slider.addEventListener("keydown", () => {
+        setTimeout(() => slider.focus(), 0);
+      });
+      button.focus();
+
+      on(pageStep, slider, 1);
+      // The widget's own deferred focus call hasn't run yet — nothing to
+      // restore from at this instant, so the synchronous restore is a no-op
+      // and focus is still on the button.
+      expect(document.activeElement).toBe(button);
+
+      // Both the widget's own scheduled focus() and pageStep's own
+      // setTimeout(restore, 0) are due at the same tick, in schedule order
+      // (widget's first, pageStep's restore second) — running due timers
+      // fires both within this one advance, ending back on the button.
+      // Without pageStep's deferred restore stage, this would leave focus
+      // stranded on the slider instead.
+      vi.advanceTimersByTime(0);
+      expect(document.activeElement).toBe(button);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("returns not-element for a null this", () => {

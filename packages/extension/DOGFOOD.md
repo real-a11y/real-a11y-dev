@@ -338,3 +338,33 @@ type="number">` or custom ARIA spinbutton is unambiguously typable, no
   tree read.
   (`packages/extension/src/native/native-core.ts`, `pageStep`;
   `packages/extension/src/sidepanel/DogfoodPanel.tsx`, `isSteppableRole`.)
+
+- **An editable combobox — a real search box — always dispatched a click,
+  never let the dogfooder type.** Round 4 decided every `combobox` gets a
+  click, never a type prompt, because role alone can't tell an editable
+  autocomplete input apart from the ARIA APG select-only trigger pattern —
+  correct for the select-only case, but it meant a NATIVE `<input
+role="combobox">` (Google's search box, YouTube's, and most real-world
+  search boxes are built exactly this way) always got a click too, even
+  though the DOM producer's own `getActions` gives it `focus, type`: its
+  `tag === "input"` branch fires before it ever reaches the ARIA
+  `role === "combobox"` branch, so role never even enters into the DOM
+  producer's own decision for this shape.
+
+  Round 4 was working with role+name+depth alone, which genuinely couldn't
+  resolve the ambiguity. It no longer has to: the native tree's own
+  `editable` state (added once field values were surfaced) is precisely
+  Chromium's own answer to "does this AX node accept typed text" — present
+  (e.g. `"plaintext"`) for a native input or contenteditable-backed
+  combobox, absent for a select-only trigger. Confirmed against both shapes
+  side by side in a real headed Chromium. Fixed by having `isTypableRole`
+  consult it for `combobox` specifically (every other typable role ignores
+  `states` entirely — none of them have this ambiguity to resolve).
+
+  **Verified end-to-end in a real headed Chromium**, against a page
+  mirroring an actual search box's markup: the editable combobox reports
+  an `editable` state and typing into it via `NATIVE_ACT` actually lands
+  the text in the input; a select-only combobox on the same page reports
+  no `editable` state and still correctly dispatches a click, confirming
+  the fix doesn't regress round 4's original case.
+  (`packages/extension/src/sidepanel/DogfoodPanel.tsx`, `isTypableRole`.)

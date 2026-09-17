@@ -118,11 +118,32 @@ describe("isTypableRole", () => {
     expect(isTypableRole("spinbutton")).toBe(true);
   });
 
-  it("does not treat a combobox as typable — it may be select-only", () => {
+  it("does not treat a combobox as typable with no states at all — it may be select-only", () => {
     expect(isTypableRole("combobox")).toBe(false);
   });
 
-  it("does not treat any other actable role as typable", () => {
+  it("does not treat a select-only combobox as typable — no editable state", () => {
+    expect(
+      isTypableRole("combobox", { focusable: true, expanded: false }),
+    ).toBe(false);
+  });
+
+  /**
+   * Live dogfood finding: "combobox when is editable does not work on
+   * native tree" — a native `<input role="combobox">` search box (Google's,
+   * YouTube's) always dispatched a click, same as a select-only combobox,
+   * because role alone can't tell the two shapes apart. The native tree's
+   * own `editable` state (added once field values were surfaced) is exactly
+   * Chromium's own answer to "is this a text field" — confirmed present for
+   * this shape and absent for the select-only one in a real headed Chromium.
+   */
+  it("treats an editable combobox as typable — the native tree's own editable state", () => {
+    expect(
+      isTypableRole("combobox", { editable: "plaintext", expanded: true }),
+    ).toBe(true);
+  });
+
+  it("does not treat any other actable role as typable, even with an editable state", () => {
     for (const role of [
       "button",
       "link",
@@ -133,6 +154,7 @@ describe("isTypableRole", () => {
       "menuitem",
     ]) {
       expect(isTypableRole(role)).toBe(false);
+      expect(isTypableRole(role, { editable: "plaintext" })).toBe(false);
     }
   });
 });

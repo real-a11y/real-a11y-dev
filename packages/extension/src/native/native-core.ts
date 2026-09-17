@@ -608,16 +608,28 @@ export function pageStep(this: Element, delta: number): Marker {
   if (tag === "input") {
     const input = el as HTMLInputElement;
     if (input.type === "range" || input.type === "number") {
+      // Only stepUp()/stepDown() go in the try, matching core's own
+      // handleStep exactly — dispatchEvent is never expected to throw (a
+      // listener's own exception is reported to the global error handler,
+      // not propagated back to the caller), so it stays outside the catch
+      // that exists for an invalid step configuration. Keeping it outside
+      // means a step can never double-fire: the native step already
+      // succeeded by the time these run, so nothing here should fall
+      // through to the keyboard path below.
+      let stepped = false;
       try {
         if (delta > 0) input.stepUp();
         else input.stepDown();
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-        input.dispatchEvent(new Event("change", { bubbles: true }));
-        return { ok: true };
+        stepped = true;
       } catch {
         // stepUp/stepDown throw on an invalid configuration (e.g. already at
         // a bound with no step) — fall through to the keyboard path below so
         // the dogfooder still gets an attempt rather than a bare failure.
+      }
+      if (stepped) {
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        return { ok: true };
       }
     }
   }
