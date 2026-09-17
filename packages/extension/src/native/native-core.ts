@@ -232,9 +232,14 @@ export interface NativeTreeResult {
  * synthetic `document` root adopts every parent-less node instead of
  * silently truncating every root but the first.
  *
- * Mutates `nodes` in place: pushes the synthetic root (if one was needed)
- * and rewrites every node's `depth` to be its real distance from the
- * returned root id, since wrapping shifts the former roots down a level.
+ * Mutates `nodes` in place: unshifts the synthetic root to the front (if one
+ * was needed) and rewrites every node's `depth` to be its real distance from
+ * the returned root id, since wrapping shifts the former roots down a level.
+ * Front, not back: every existing consumer of this array — the dogfood
+ * panel's flat depth-indented list (`DogfoodPanel.tsx`) today, any preorder-
+ * walking consumer tomorrow — renders/walks it in array order with no
+ * separate root lookup, so a root appended after its own descendants would
+ * render as an indented forest followed by its own root.
  */
 export function rootIdOf(nodes: EnrichedNativeNode[]): string {
   const byId = new Map(nodes.map((n) => [n.id, n]));
@@ -258,7 +263,7 @@ export function rootIdOf(nodes: EnrichedNativeNode[]): string {
       properties: {},
       description: "",
     };
-    nodes.push(synthetic);
+    nodes.unshift(synthetic);
     byId.set(rootId, synthetic);
   } else {
     return "";

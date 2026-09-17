@@ -379,6 +379,18 @@ describe("rootIdOf", () => {
   });
 
   /**
+   * Devin review finding on this PR: a consumer that renders/walks this
+   * array directly in order — `DogfoodPanel.tsx`'s flat depth-indented list
+   * today, no separate root lookup — needs the root FIRST. Appending it
+   * instead produced an indented forest followed by its own root.
+   */
+  it("puts the synthetic root at the front of the array, not the back", () => {
+    const nodes = [node("a"), node("b")];
+    rootIdOf(nodes);
+    expect(nodes[0]?.id).toBe("ax-root");
+  });
+
+  /**
    * Wrapping shifts every former root down a level — without recomputing
    * depth, a consumer indenting rows by `node.depth` would render the two
    * top-level landmarks at the SAME indentation as the synthetic root that
