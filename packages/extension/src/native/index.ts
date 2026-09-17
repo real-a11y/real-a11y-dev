@@ -193,7 +193,7 @@ export function registerNativeMode(): void {
               kind: "read",
               at: Date.now(),
               rawCount: value.rawCount,
-              keptCount: value.nodes.length,
+              keptCount: value.keptCount,
             });
             sendResponse({
               ok: true,

@@ -295,6 +295,12 @@ describe("readNativeTree", () => {
     );
     const res = await readNativeTree(t);
     expect(res.rootId).toBe("ax-root");
+    // keptCount is what Chromium actually produced (the heading + the
+    // button — RootWebArea is dropped by normalizeNativeAX) — NOT
+    // res.nodes.length, which is one higher because it also counts the
+    // synthetic "ax-root" wrapper rootIdOf pushed in.
+    expect(res.keptCount).toBe(2);
+    expect(res.nodes.length).toBe(3);
   });
 
   it("uses the single surviving node as rootId when there's only one", async () => {

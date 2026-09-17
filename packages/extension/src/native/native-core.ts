@@ -206,6 +206,12 @@ export interface NativeTreeResult {
   serialized: string;
   /** Raw AX node count before normalization — a dogfood size signal. */
   rawCount: number;
+  /** Node count Chromium actually produced, after normalization but before
+   *  `rootIdOf`'s synthetic root (if any) is pushed onto `nodes` — the other
+   *  half of the `rawCount`/`keptCount` dogfood size signal. `nodes.length`
+   *  itself is NOT this number on a multi-root page: it includes the
+   *  synthesized wrapper, which Chromium never produced. */
+  keptCount: number;
   /** The id of the tree's single root — see {@link rootIdOf}. Empty string
    *  for an empty tree. */
   rootId: string;
@@ -315,12 +321,14 @@ export async function readNativeTree(
   // properties/value/description never reach the plain-text output either)
   // — the synthetic root, if any, is a rendering/dispatch concern only.
   const serialized = serializeNativeAX(nodes);
+  const keptCount = enriched.length;
   const rootId = rootIdOf(enriched);
 
   return {
     nodes: enriched,
     serialized,
     rawCount: full.nodes.length,
+    keptCount,
     rootId,
   };
 }
