@@ -111,7 +111,14 @@ function globToRegExp(glob) {
  *                             treating it as absent is how this check would go
  *                             quiet on the package it is meant to be watching.
  */
-function readTestArray(configSource, keyName) {
+function readTestArray(rawSource, keyName) {
+  // Comments first, or a single apostrophe in one ("vitest's default") flips
+  // the scan into string mode and it never reaches the key — reported as
+  // `absent`, which reads as "vitest's default applies" and passes the package
+  // vacuously. A commented-out `test: { ... }` above the real one is the same
+  // hazard pointing the other way.
+  const configSource = stripComments(rawSource);
+
   const opener = /\btest\s*:\s*\{/.exec(configSource);
   if (!opener) return { kind: "absent" };
 
@@ -132,6 +139,24 @@ function readTestArray(configSource, keyName) {
       continue;
     }
     if (char === '"' || char === "'" || char === "`") {
+      // A quoted key (`"include": [...]`) is still the key. Without this the
+      // scan would treat it as an ordinary string and walk straight past.
+      const quoted = new RegExp(`^(["'])${keyName}\\1\\s*:`).exec(
+        configSource.slice(i),
+      );
+      if (depth === 1 && quoted) {
+        i += keyName.length + 1; // step onto the closing quote
+        const array = new RegExp(`^["']\\s*:\\s*\\[`).exec(
+          configSource.slice(i),
+        );
+        if (!array) return { kind: "unreadable" };
+        const body = readBracketed(configSource, i + array[0].length);
+        if (body === null) return { kind: "unreadable" };
+        return {
+          kind: "patterns",
+          patterns: [...body.matchAll(/["']([^"']*)["']/g)].map((m) => m[1]),
+        };
+      }
       quote = char;
       continue;
     }
@@ -190,6 +215,58 @@ function missedTsxSamples(include, exclude) {
       included === null || included.some((re) => re.test(path));
     return !matchesInclude || excluded.some((re) => re.test(path));
   });
+}
+
+/**
+ * Blank out `//` and `/* *\/` comments, leaving string literals and the
+ * source's length and line structure alone (comment bodies become spaces, so
+ * every offset still lines up).
+ *
+ * Regex literals are not tokenized. A `/` here is read as a comment opener
+ * only when followed by `/` or `*`, which no vitest config in this repo
+ * produces inside a regex; if one ever does, it shows up as a failing case
+ * rather than as a package silently skipped.
+ */
+function stripComments(source) {
+  let out = "";
+  let quote = null;
+
+  for (let i = 0; i < source.length; i++) {
+    const char = source[i];
+
+    if (quote !== null) {
+      out += char;
+      if (char === "\\") {
+        out += source[i + 1] ?? "";
+        i += 1;
+      } else if (char === quote) {
+        quote = null;
+      }
+      continue;
+    }
+    if (char === '"' || char === "'" || char === "`") {
+      quote = char;
+      out += char;
+      continue;
+    }
+    if (char === "/" && source[i + 1] === "/") {
+      while (i < source.length && source[i] !== "\n") {
+        out += " ";
+        i += 1;
+      }
+      out += "\n";
+      continue;
+    }
+    if (char === "/" && source[i + 1] === "*") {
+      const end = source.indexOf("*/", i + 2);
+      const stop = end === -1 ? source.length : end + 2;
+      for (; i < stop; i++) out += source[i] === "\n" ? "\n" : " ";
+      i -= 1;
+      continue;
+    }
+    out += char;
+  }
+  return out;
 }
 
 /** Text between an already-consumed `[` at `start` and its matching `]`. */
@@ -327,6 +404,62 @@ describe("reading test.include / test.exclude", () => {
       });
     `;
     assert.deepEqual(readTestArray(config, "include"), { kind: "absent" });
+  });
+
+  it("is not derailed by an apostrophe in a comment", () => {
+    // One `'` in a comment used to flip the scan into string mode, so it never
+    // reached `include:` and reported "absent" — vitest's default, which
+    // covers .tsx — passing a .ts-only package vacuously.
+    const config = `
+      export default defineConfig({
+        test: {
+          // Keep vitest's default environment.
+          include: ["src/**/*.test.ts"],
+        },
+      });
+    `;
+    assert.deepEqual(readTestArray(config, "include"), {
+      kind: "patterns",
+      patterns: ["src/**/*.test.ts"],
+    });
+  });
+
+  it("ignores a commented-out test block and reads the real one", () => {
+    // The opener took the first match anywhere, so a documented example in a
+    // comment was parsed instead — reporting a correct package as an offender.
+    const config = `
+      // test: { include: ["src/**/*.test.ts"] }
+      /* test: { include: ["also-not-this.ts"] } */
+      export default defineConfig({
+        test: { include: ["src/**/*.test.{ts,tsx}"] },
+      });
+    `;
+    assert.deepEqual(readTestArray(config, "include"), {
+      kind: "patterns",
+      patterns: ["src/**/*.test.{ts,tsx}"],
+    });
+  });
+
+  it("reads a quoted key", () => {
+    const config = `
+      export default defineConfig({
+        test: { "include": ["src/**/*.test.{ts,tsx}"] },
+      });
+    `;
+    assert.deepEqual(readTestArray(config, "include"), {
+      kind: "patterns",
+      patterns: ["src/**/*.test.{ts,tsx}"],
+    });
+  });
+
+  it("does not mistake a pattern that spells the key for the key", () => {
+    // `"exclude"` appears as a VALUE here; only the key position counts.
+    const config = `
+      export default defineConfig({
+        test: { include: ["src/**/*.test.{ts,tsx}", "src/exclude/*.test.tsx"] },
+      });
+    `;
+    assert.deepEqual(readTestArray(config, "exclude"), { kind: "absent" });
   });
 
   it("calls a present-but-unparseable key unreadable, not absent", () => {
