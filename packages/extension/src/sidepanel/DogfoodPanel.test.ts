@@ -24,9 +24,12 @@ describe("formatFacets", () => {
   // never populated states/properties at all — expanded, level and friends
   // were invisible in native mode even though the same widget's DOM/A11Y tree
   // view showed them right next to it. This is the enrichment that closes
-  // that gap, formatted the same way TreeNode.tsx badges a DOM node's states
-  // (bare key for true, key=value otherwise, false omitted) so the two trees
-  // read comparably side by side during the dogfood.
+  // that gap, formatted to match the production side panel's own badge
+  // renderer (`App.tsx`'s `states.disabled === true` / … block) so the two
+  // trees read comparably side by side during the dogfood: a bare key for
+  // most true booleans, false omitted for those — except `expanded`, which
+  // production shows either way (`"expanded"`/`"collapsed"`), and `checked`,
+  // whose `"mixed"` tristate renders bare rather than `checked=mixed`.
   const base = { id: "1", role: "button", name: "Billing Address", depth: 0 };
 
   it("renders nothing for a node with no states or properties", () => {
@@ -39,11 +42,31 @@ describe("formatFacets", () => {
     );
   });
 
-  it("omits a false state entirely rather than printing expanded=false", () => {
-    expect(formatFacets({ ...base, states: { expanded: false } })).toBe("");
+  it("omits an ordinary false state entirely rather than printing disabled=false", () => {
+    expect(formatFacets({ ...base, states: { disabled: false } })).toBe("");
   });
 
-  it("renders key=value for a non-boolean state (a tristate) and a property", () => {
+  /**
+   * Live dogfood finding: a collapsed accordion trigger button read as bare
+   * `button "Personal Information"` in the native tree, with no annotation
+   * at all, next to the DOM/A11Y tree view's explicit `collapsed` badge on
+   * the same button. `expanded` isn't an ordinary boolean state — production
+   * treats a collapsed disclosure as exactly as informative as an expanded
+   * one, so unlike every other boolean here, `false` is shown, not omitted.
+   */
+  it("renders 'collapsed' for expanded=false, matching production's own exception", () => {
+    expect(formatFacets({ ...base, states: { expanded: false } })).toBe(
+      " [collapsed]",
+    );
+  });
+
+  it("renders 'mixed' bare for a tristate checked, not checked=mixed", () => {
+    expect(formatFacets({ ...base, states: { checked: "mixed" } })).toBe(
+      " [mixed]",
+    );
+  });
+
+  it("renders key=value for a state production doesn't special-case, and a property", () => {
     expect(
       formatFacets({
         ...base,

@@ -130,13 +130,26 @@ export function formatValue(n: NativeNode): string {
 }
 
 /**
- * Render a node's states the way the production DOM/A11Y tree view's
- * `renderBadges` does (`packages/ui/src/components/TreeNode.tsx`) — a bare
- * key for a true boolean (`expanded`, `disabled`, …), `key=value` for
- * anything else (a tristate `pressed=mixed`), `false` omitted entirely
- * (states default false and listing every negative would swamp the row).
- * That half is genuinely comparable at a glance against the DOM tree's own
- * badges on the same widget.
+ * Render a node's states the way the production side panel's own badge
+ * renderer does (`packages/extension/src/sidepanel/App.tsx`, the
+ * `states.disabled === true` / … block just above its cross-link rendering)
+ * — a bare key for most true booleans (`disabled`, `pressed`, `selected`,
+ * `required`, `readonly`, `busy`), `false` omitted for those. `expanded` is
+ * the one deliberate exception: production shows it either way —
+ * `"expanded"` for `true`, `"collapsed"` for `false` — because a collapsed
+ * disclosure is exactly as informative as an expanded one, not the "default,
+ * unremarkable" case the blanket false-omission rule assumes for everything
+ * else. `checked` gets its own tristate exception: `"mixed"` is shown bare,
+ * not `checked=mixed`. Earlier revisions of this function treated `expanded`
+ * like any other boolean (false silently omitted) on the strength of an
+ * unverified claim that it matched `packages/ui/TreeNode.tsx`'s
+ * `renderBadges` — that component has no state-badge logic of its own at
+ * all (its only "expanded" is the tree row's own disclosure triangle, an
+ * unrelated UI-state concept); the actual production badge renderer, in
+ * `App.tsx`, was never checked. A collapsed accordion trigger read as bare
+ * `button "Personal Information"` here, with no `[collapsed]` at all, next
+ * to the DOM/A11Y tree view's explicit `collapsed` badge on the same
+ * button — this is the fix.
  *
  * `properties` is deliberately NOT held to the same parity: the production
  * view surfaces only `level` (`renderA11yLabel`); this shows all of them
@@ -149,6 +162,14 @@ export function formatValue(n: NativeNode): string {
 export function formatFacets(n: NativeNode): string {
   const parts: string[] = [];
   for (const [key, value] of Object.entries(n.states ?? {})) {
+    if (key === "expanded") {
+      parts.push(value === true ? "expanded" : "collapsed");
+      continue;
+    }
+    if (key === "checked" && value === "mixed") {
+      parts.push("mixed");
+      continue;
+    }
     if (value === false) continue;
     parts.push(value === true ? key : `${key}=${value}`);
   }

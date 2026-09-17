@@ -267,3 +267,28 @@ what a person actually ran into holding the tree next to a page.
   (`packages/extension/src/native/native-core.ts`, `pageReadValue`/
   `VALUE_BEARING_ROLES`; `packages/extension/src/sidepanel/DogfoodPanel.tsx`,
   `formatValue`.)
+
+- **A collapsed accordion trigger showed no state at all on the native
+  tree** — `button "Personal Information"` with nothing to say it was
+  collapsed, where the DOM/A11Y tree view (right panel) showed an explicit
+  `collapsed` badge on the same button. `expanded: true` had already been
+  fixed to surface (an earlier finding above), so this looked like the same
+  bug returning; it wasn't. Confirmed in a real headed Chromium first: the
+  raw CDP data for the collapsed button already carried `expanded: false`
+  correctly — `native-core.ts`'s enrichment layer was never the problem.
+  The bug was entirely in the panel's own `formatFacets`, which treats
+  `false` as "default, not worth a badge" for every boolean state — correct
+  for `disabled`/`pressed`/`selected`/etc., but wrong for `expanded`
+  specifically: the production side panel's own badge renderer
+  (`App.tsx`'s `states.disabled === true` / … block) deliberately shows
+  `expanded` either way, `"expanded"` or `"collapsed"`, because a collapsed
+  disclosure is exactly as informative as an expanded one. `formatFacets`'s
+  own docstring had claimed this matched `packages/ui/TreeNode.tsx`'s
+  `renderBadges` — that component turned out to have no state-badge logic
+  of its own at all (its only "expanded" is the tree row's own disclosure
+  triangle, an unrelated concept); the actual production renderer, in
+  `App.tsx`, had never been checked against. Fixed by special-casing
+  `expanded` (`"expanded"`/`"collapsed"`, both shown) and, found by the same
+  close read, `checked`'s `"mixed"` tristate (rendered bare as `"mixed"`,
+  not `checked=mixed`, matching `App.tsx` there too).
+  (`packages/extension/src/sidepanel/DogfoodPanel.tsx`, `formatFacets`.)
