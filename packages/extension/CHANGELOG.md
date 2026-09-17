@@ -10,6 +10,16 @@
 
 ## Unreleased
 
+- Collect `.tsx` test suites. The vitest `include` was `src/**/*.test.ts`, so a
+  suite written as `.tsx` was never picked up — and silently: vitest ran the
+  files it matched, reported them green, and said nothing about the one it
+  walked past. The panel is Preact and its components are `.tsx`, so every UI
+  test here had been written with `h()` calls to stay inside a `.ts` file.
+  The pattern now matches `ui`, `inspector`, `react` and `storybook-addon`,
+  with the automatic JSX runtime configured alongside it. No shipped code
+  changes — the extension builds from `vite.config.ts`, which never read this.
+  ([#380])
+
 ## 0.1.13
 
 ### Patch Changes
@@ -314,3 +324,4 @@ Earlier releases predate this changelog.
 [#350]: https://github.com/real-a11y/real-a11y-dev/pull/350
 [#354]: https://github.com/real-a11y/real-a11y-dev/pull/354
 [#356]: https://github.com/real-a11y/real-a11y-dev/pull/356
+[#380]: https://github.com/real-a11y/real-a11y-dev/pull/380
