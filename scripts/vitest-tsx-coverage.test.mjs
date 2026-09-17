@@ -1,588 +1,158 @@
-// A package that has `.tsx` sources must have a vitest `include` that collects
-// `.tsx` test files.
+// Every `.test.tsx` file in the tree must actually be collected by the package
+// that owns it.
 //
 //   pnpm test:scripts                                  all of them (and part of `pnpm verify`)
 //   node --test scripts/vitest-tsx-coverage.test.mjs   just this file
 //
-// WHY THIS IS A TEST AND NOT A CONVENTION. An `include` that misses a file
+// WHY THIS IS A TEST AND NOT A CONVENTION. A vitest `include` that misses a file
 // extension fails SILENTLY: vitest collects the files it matches, reports them
 // all green, and never mentions the suite it walked past. So a `Foo.test.tsx`
 // added to a package whose `include` says `.test.ts` is not a red test — it is
-// no test at all, and it stays that way until somebody reads the config. Every
-// other failure mode in this repo announces itself; this one does not, which is
-// why the invariant is asserted here instead of written down somewhere.
+// no test at all, and it stays that way until somebody reads the config. That
+// is what happened to `packages/extension`. Every other failure mode in this
+// repo announces itself; this one does not, which is why the invariant is
+// asserted here instead of written down somewhere.
 //
-// The invariant is one-directional on purpose. A package with `.tsx` sources
-// has to be able to hold `.tsx` tests. A package with none may include `.tsx`
-// anyway (`inspector` does) and that is not a defect.
+// WHY IT ASKS VITEST INSTEAD OF READING THE CONFIG. An earlier version of this
+// file scanned `vitest.config.ts` as text to decide what the patterns would
+// collect. Review found a fresh hole in that scanner three rounds running — an
+// apostrophe in a comment, a `coverage.include` mistaken for `test.include`, a
+// quoted key, `test.projects`, a config under a different filename — and every
+// one of them failed the same way the bug does: by quietly reporting that all
+// is well. A parser that can go quiet is the wrong instrument for catching
+// something whose whole danger is going quiet.
 //
-// Node's own test runner, and node core only — same constraint as
-// `pr-risk.test.mjs`, so this file stays runnable without `pnpm install`.
+// `vitest list --filesOnly` is the collection itself. It resolves the config
+// the way the real run does, so there is no second implementation to keep
+// correct and nothing left to model: comments, quoted keys, `projects`,
+// `exclude`, extended configs and alternate filenames are all simply handled.
+//
+// The subjects are the `.test.tsx` files actually on disk rather than
+// hypothetical paths, so this checks what is really there. A package with no
+// `.tsx` suites is not examined — there is nothing that could be silently
+// dropped. Today that means `extension`, `react` and `ui`.
 
 import assert from "node:assert/strict";
-import { readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { execFile } from "node:child_process";
+import { readdir } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { join, relative, sep } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+
+const run = promisify(execFile);
 
 const PACKAGES = fileURLToPath(new URL("../packages", import.meta.url));
 
-/** Paths a `.tsx` suite would realistically be written at. */
-const SAMPLE_TSX_TESTS = ["src/Widget.test.tsx", "src/panel/Widget.test.tsx"];
+/** Collection can be slow on a cold esbuild; generous, but not unbounded. */
+const LIST_TIMEOUT_MS = 180_000;
 
-function escapeLiteral(char) {
-  return /[.*+?^${}()|[\]\\]/.test(char) ? `\\${char}` : char;
-}
-
-/**
- * The slice of glob syntax these configs actually use: `**`, `*` and `{a,b}`.
- * Deliberately not a general matcher — it only has to answer "would this
- * pattern collect that path", and a wrong answer here shows up as a failing
- * case below rather than as a silently permissive check.
- */
-function globToSource(glob) {
-  let out = "";
-  for (let i = 0; i < glob.length; i++) {
-    const char = glob[i];
-    if (char === "*") {
-      if (glob[i + 1] === "*") {
-        if (glob[i + 2] === "/") {
-          // `**/` spans any number of directories, including none.
-          out += "(?:[^/]+/)*";
-          i += 2;
-        } else {
-          out += ".*";
-          i += 1;
-        }
-      } else {
-        out += "[^/]*";
-      }
-      continue;
-    }
-    if (char === "{") {
-      const end = glob.indexOf("}", i);
-      if (end !== -1) {
-        // Alternatives go back through the same conversion, so a wildcard
-        // inside a brace group (`{*.test.ts,*.test.tsx}`) stays a wildcard
-        // instead of being escaped into a literal `*`.
-        const alternatives = glob
-          .slice(i + 1, end)
-          .split(",")
-          .map(globToSource);
-        out += `(?:${alternatives.join("|")})`;
-        i = end;
-        continue;
-      }
-    }
-    out += escapeLiteral(char);
-  }
-  return out;
-}
-
-function globToRegExp(glob) {
-  return new RegExp(`^${globToSource(glob)}$`);
-}
-
-/**
- * The string literals in one of `test`'s own array keys — `include` or
- * `exclude`.
- *
- * Scanned rather than regexed, for two reasons that both bite in this repo's
- * own configs:
- *
- *   - `coverage.include` is spelled the same as `test.include`. Taking the
- *     first `include:` in the file could point this whole check at patterns
- *     that say nothing about which test files get collected — and a
- *     `coverage.include` of `["src/**"]` would make it pass vacuously, which
- *     is the one failure mode this file must not have.
- *   - `{` and `}` occur inside the patterns themselves (`*.test.{ts,tsx}`), so
- *     brace counting has to skip over quoted strings or it ends the block
- *     mid-pattern.
- *
- * Three outcomes, which the caller must keep apart:
- *
- *   `{ kind: "absent" }`      `test` declares no such key — vitest's default
- *                             applies, and the default `include` covers `.tsx`
- *                             while the default `exclude` (node_modules, dist,
- *                             build output) never matches a path under `src`.
- *   `{ kind: "patterns" }`    read successfully.
- *   `{ kind: "unreadable" }`  the key is there at `test`'s top level but its
- *                             array could not be read. Not the same as absent:
- *                             treating it as absent is how this check would go
- *                             quiet on the package it is meant to be watching.
- */
-function readTestArray(rawSource, keyName) {
-  // Comments first, or a single apostrophe in one ("vitest's default") flips
-  // the scan into string mode and it never reaches the key — reported as
-  // `absent`, which reads as "vitest's default applies" and passes the package
-  // vacuously. A commented-out `test: { ... }` above the real one is the same
-  // hazard pointing the other way.
-  const configSource = stripComments(rawSource);
-
-  const opener = /\btest\s*:\s*\{/.exec(configSource);
-  if (!opener) return { kind: "absent" };
-
-  const firstChar = keyName[0];
-  const keyPattern = new RegExp(`^${keyName}\\s*:`);
-
-  // Depth counts both braces and brackets, so the key is only recognised at
-  // the `test` block's own top level (depth 1) and never inside `coverage`.
-  let depth = 1;
-  let quote = null;
-
-  for (let i = opener.index + opener[0].length; i < configSource.length; i++) {
-    const char = configSource[i];
-
-    if (quote !== null) {
-      if (char === "\\") i += 1;
-      else if (char === quote) quote = null;
-      continue;
-    }
-    if (char === '"' || char === "'" || char === "`") {
-      // A quoted key (`"include": [...]`) is still the key. Without this the
-      // scan would treat it as an ordinary string and walk straight past.
-      const quoted = new RegExp(`^(["'])${keyName}\\1\\s*:`).exec(
-        configSource.slice(i),
-      );
-      if (depth === 1 && quoted) {
-        i += keyName.length + 1; // step onto the closing quote
-        const array = new RegExp(`^["']\\s*:\\s*\\[`).exec(
-          configSource.slice(i),
-        );
-        if (!array) return { kind: "unreadable" };
-        const body = readBracketed(configSource, i + array[0].length);
-        if (body === null) return { kind: "unreadable" };
-        return {
-          kind: "patterns",
-          patterns: [...body.matchAll(/["']([^"']*)["']/g)].map((m) => m[1]),
-        };
-      }
-      quote = char;
-      continue;
-    }
-    if (char === "{" || char === "[") {
-      depth += 1;
-      continue;
-    }
-    if (char === "}" || char === "]") {
-      depth -= 1;
-      if (depth === 0) return { kind: "absent" }; // end of the `test` block
-      continue;
-    }
-    if (depth !== 1 || char !== firstChar) continue;
-
-    const prev = configSource[i - 1];
-    if (prev !== undefined && /[\w$.]/.test(prev)) continue;
-    const rest = configSource.slice(i);
-    if (!keyPattern.test(rest)) continue;
-
-    // The key is here. From this point every exit says "unreadable" rather
-    // than "absent" — it exists, so failing to read it is a gap, not a default.
-    const array = new RegExp(`^${keyName}\\s*:\\s*\\[`).exec(rest);
-    if (!array) return { kind: "unreadable" };
-
-    const body = readBracketed(configSource, i + array[0].length);
-    if (body === null) return { kind: "unreadable" };
-    return {
-      kind: "patterns",
-      patterns: [...body.matchAll(/["']([^"']*)["']/g)].map((m) => m[1]),
-    };
-  }
-  return { kind: "absent" };
-}
-
-/**
- * Which of the sample `.tsx` paths vitest would NOT collect, given a package's
- * `test.include` and `test.exclude` as `readTestArray` returned them.
- *
- * Collection is include AND NOT exclude, so an exclusion can cancel a matching
- * include: `include: ["src/**\/*.test.{ts,tsx}"]` together with
- * `exclude: ["src/**\/*.test.tsx"]` collects no `.tsx` at all. Modelling only
- * the include side would call that config fine.
- *
- * An absent key means vitest's default, and both defaults are "no constraint"
- * for these paths: the default include covers `.tsx`, and the default exclude
- * (node_modules, dist, build output) matches nothing under `src`.
- */
-function missedTsxSamples(include, exclude) {
-  const included =
-    include.kind === "patterns" ? include.patterns.map(globToRegExp) : null;
-  const excluded =
-    exclude.kind === "patterns" ? exclude.patterns.map(globToRegExp) : [];
-
-  return SAMPLE_TSX_TESTS.filter((path) => {
-    const matchesInclude =
-      included === null || included.some((re) => re.test(path));
-    return !matchesInclude || excluded.some((re) => re.test(path));
-  });
-}
-
-/**
- * Blank out `//` and `/* *\/` comments, leaving string literals and the
- * source's length and line structure alone (comment bodies become spaces, so
- * every offset still lines up).
- *
- * Regex literals are not tokenized. A `/` here is read as a comment opener
- * only when followed by `/` or `*`, which no vitest config in this repo
- * produces inside a regex; if one ever does, it shows up as a failing case
- * rather than as a package silently skipped.
- */
-function stripComments(source) {
-  let out = "";
-  let quote = null;
-
-  for (let i = 0; i < source.length; i++) {
-    const char = source[i];
-
-    if (quote !== null) {
-      out += char;
-      if (char === "\\") {
-        out += source[i + 1] ?? "";
-        i += 1;
-      } else if (char === quote) {
-        quote = null;
-      }
-      continue;
-    }
-    if (char === '"' || char === "'" || char === "`") {
-      quote = char;
-      out += char;
-      continue;
-    }
-    if (char === "/" && source[i + 1] === "/") {
-      while (i < source.length && source[i] !== "\n") {
-        out += " ";
-        i += 1;
-      }
-      out += "\n";
-      continue;
-    }
-    if (char === "/" && source[i + 1] === "*") {
-      const end = source.indexOf("*/", i + 2);
-      const stop = end === -1 ? source.length : end + 2;
-      for (; i < stop; i++) out += source[i] === "\n" ? "\n" : " ";
-      i -= 1;
-      continue;
-    }
-    out += char;
-  }
-  return out;
-}
-
-/** Text between an already-consumed `[` at `start` and its matching `]`. */
-function readBracketed(source, start) {
-  let depth = 1;
-  let quote = null;
-  for (let i = start; i < source.length; i++) {
-    const char = source[i];
-    if (quote !== null) {
-      if (char === "\\") i += 1;
-      else if (char === quote) quote = null;
-      continue;
-    }
-    if (char === '"' || char === "'" || char === "`") quote = char;
-    else if (char === "[") depth += 1;
-    else if (char === "]") {
-      depth -= 1;
-      if (depth === 0) return source.slice(start, i);
-    }
-  }
-  return null;
-}
-
-async function hasTsxSource(dir) {
+async function findTestTsx(dir) {
   let entries;
   try {
     entries = await readdir(dir, { withFileTypes: true });
   } catch {
-    return false;
+    return [];
   }
+  const found = [];
   for (const entry of entries) {
-    if (entry.isDirectory()) {
-      if (await hasTsxSource(join(dir, entry.name))) return true;
-    } else if (entry.name.endsWith(".tsx")) {
-      return true;
-    }
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) found.push(...(await findTestTsx(path)));
+    else if (entry.name.endsWith(".test.tsx")) found.push(path);
   }
-  return false;
+  return found;
 }
 
-describe("glob matching", () => {
-  it("does not let a .ts-only pattern match a .tsx path", () => {
-    // The whole check rests on this: a permissive matcher would pass every
-    // package vacuously and guard nothing.
-    const tsOnly = globToRegExp("src/**/*.test.ts");
-    for (const path of SAMPLE_TSX_TESTS) {
-      assert.equal(tsOnly.test(path), false, `${path} must not match`);
-    }
-    assert.equal(tsOnly.test("src/panel/Widget.test.ts"), true);
-  });
+/**
+ * The test files vitest would collect in `packageDir`, as paths relative to it.
+ *
+ * Spawned as `node <vitest.mjs>` rather than through `node_modules/.bin`, which
+ * is a shell script on POSIX and a `.CMD` on Windows — this repo's `pre-push`
+ * hook runs the whole gate locally, so a Windows contributor runs this too.
+ */
+async function collectedTestFiles(packageDir) {
+  const require = createRequire(join(packageDir, "/"));
+  const vitestPkg = require.resolve("vitest/package.json");
+  const cli = join(vitestPkg, "..", require(vitestPkg).bin.vitest);
 
-  it("matches .tsx paths at any depth under a {ts,tsx} pattern", () => {
-    const both = globToRegExp("src/**/*.test.{ts,tsx}");
-    for (const path of [...SAMPLE_TSX_TESTS, "src/panel/Widget.test.ts"]) {
-      assert.equal(both.test(path), true, `${path} must match`);
-    }
-    assert.equal(both.test("src/Widget.tsx"), false);
-  });
+  const { stdout } = await run(
+    process.execPath,
+    [cli, "list", "--filesOnly"],
+    // CI=true keeps vitest non-interactive and unwatched.
+    {
+      cwd: packageDir,
+      timeout: LIST_TIMEOUT_MS,
+      env: { ...process.env, CI: "true" },
+    },
+  );
 
-  it("keeps wildcards inside a brace group working", () => {
-    // Escaping the `*` here would report a perfectly good pattern as an
-    // offender and break `pnpm verify` for whoever wrote it.
-    const grouped = globToRegExp("src/**/{*.test.ts,*.test.tsx}");
-    for (const path of [...SAMPLE_TSX_TESTS, "src/panel/Widget.test.ts"]) {
-      assert.equal(grouped.test(path), true, `${path} must match`);
-    }
-    assert.equal(grouped.test("src/Widget.tsx"), false);
-  });
-});
+  return new Set(
+    stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => /\.(test|spec)\.[cm]?[jt]sx?$/.test(line))
+      // vitest prints POSIX separators; normalise so Windows compares equal.
+      .map((line) => line.split("/").join(sep)),
+  );
+}
 
-describe("reading test.include / test.exclude", () => {
-  it("reads test.include, not a coverage.include that precedes it", () => {
-    // `coverage.include` is spelled the same. Taking the first `include:` in
-    // the file would point the check at patterns that say nothing about which
-    // test files get collected — and `["src/**"]` would make it pass
-    // vacuously, which is the one failure this file must not have.
-    const config = `
-      export default defineConfig({
-        test: {
-          environment: "jsdom",
-          coverage: { include: ["src/**"], exclude: ["src/**/*.d.ts"] },
-          include: ["src/**/*.test.ts"],
-        },
-      });
-    `;
-    assert.deepEqual(readTestArray(config, "include"), {
-      kind: "patterns",
-      patterns: ["src/**/*.test.ts"],
-    });
-    // And the nested `coverage.exclude` is not mistaken for `test.exclude`.
-    assert.deepEqual(readTestArray(config, "exclude"), { kind: "absent" });
-  });
-
-  it("reads test.include when it comes first", () => {
-    const config = `
-      export default defineConfig({
-        test: {
-          include: ["src/**/*.test.{ts,tsx}"],
-          coverage: { include: ["src/**"] },
-        },
-        esbuild: { jsx: "automatic" },
-      });
-    `;
-    assert.deepEqual(readTestArray(config, "include"), {
-      kind: "patterns",
-      patterns: ["src/**/*.test.{ts,tsx}"],
-    });
-  });
-
-  it("reads test.exclude alongside test.include", () => {
-    const config = `
-      export default defineConfig({
-        test: {
-          include: ["src/**/*.test.{ts,tsx}"],
-          exclude: ["src/**/*.test.tsx", "src/legacy/**"],
-        },
-      });
-    `;
-    assert.deepEqual(readTestArray(config, "exclude"), {
-      kind: "patterns",
-      patterns: ["src/**/*.test.tsx", "src/legacy/**"],
-    });
-  });
-
-  it("calls a key absent — not unreadable — when only coverage declares it", () => {
-    // The distinction matters: `coverage.include` does not replace vitest's
-    // default test collection, which already covers `.tsx`. Reporting this as
-    // a problem would fail `pnpm verify` for a perfectly good config.
-    const config = `
-      export default defineConfig({
-        test: {
-          environment: "jsdom",
-          coverage: { include: ["src/**"] },
-        },
-      });
-    `;
-    assert.deepEqual(readTestArray(config, "include"), { kind: "absent" });
-  });
-
-  it("is not derailed by an apostrophe in a comment", () => {
-    // One `'` in a comment used to flip the scan into string mode, so it never
-    // reached `include:` and reported "absent" — vitest's default, which
-    // covers .tsx — passing a .ts-only package vacuously.
-    const config = `
-      export default defineConfig({
-        test: {
-          // Keep vitest's default environment.
-          include: ["src/**/*.test.ts"],
-        },
-      });
-    `;
-    assert.deepEqual(readTestArray(config, "include"), {
-      kind: "patterns",
-      patterns: ["src/**/*.test.ts"],
-    });
-  });
-
-  it("ignores a commented-out test block and reads the real one", () => {
-    // The opener took the first match anywhere, so a documented example in a
-    // comment was parsed instead — reporting a correct package as an offender.
-    const config = `
-      // test: { include: ["src/**/*.test.ts"] }
-      /* test: { include: ["also-not-this.ts"] } */
-      export default defineConfig({
-        test: { include: ["src/**/*.test.{ts,tsx}"] },
-      });
-    `;
-    assert.deepEqual(readTestArray(config, "include"), {
-      kind: "patterns",
-      patterns: ["src/**/*.test.{ts,tsx}"],
-    });
-  });
-
-  it("reads a quoted key", () => {
-    const config = `
-      export default defineConfig({
-        test: { "include": ["src/**/*.test.{ts,tsx}"] },
-      });
-    `;
-    assert.deepEqual(readTestArray(config, "include"), {
-      kind: "patterns",
-      patterns: ["src/**/*.test.{ts,tsx}"],
-    });
-  });
-
-  it("does not mistake a pattern that spells the key for the key", () => {
-    // `"exclude"` appears as a VALUE here; only the key position counts.
-    const config = `
-      export default defineConfig({
-        test: { include: ["src/**/*.test.{ts,tsx}", "src/exclude/*.test.tsx"] },
-      });
-    `;
-    assert.deepEqual(readTestArray(config, "exclude"), { kind: "absent" });
-  });
-
-  it("calls a present-but-unparseable key unreadable, not absent", () => {
-    // Silently treating this as "no include, so vitest's default applies"
-    // would be this check going quiet on the package it is watching.
-    const config = `
-      const shared = ["src/**/*.test.ts"];
-      export default defineConfig({
-        test: { include: shared },
-      });
-    `;
-    assert.deepEqual(readTestArray(config, "include"), { kind: "unreadable" });
-  });
-});
-
-describe("what vitest would collect", () => {
-  const patterns = (...list) => ({ kind: "patterns", patterns: list });
-  const absent = { kind: "absent" };
-
-  it("accepts a {ts,tsx} include with no exclude", () => {
-    assert.deepEqual(
-      missedTsxSamples(patterns("src/**/*.test.{ts,tsx}"), absent),
-      [],
-    );
-  });
-
-  it("rejects a .ts-only include", () => {
-    assert.deepEqual(
-      missedTsxSamples(patterns("src/**/*.test.ts"), absent),
-      SAMPLE_TSX_TESTS,
-    );
-  });
-
-  it("rejects an exclude that cancels a matching include", () => {
-    // The config looks right on the include side and collects no .tsx at all.
-    assert.deepEqual(
-      missedTsxSamples(
-        patterns("src/**/*.test.{ts,tsx}"),
-        patterns("src/**/*.test.tsx"),
-      ),
-      SAMPLE_TSX_TESTS,
-    );
-  });
-
-  it("accepts an exclude that does not reach the .tsx suites", () => {
-    assert.deepEqual(
-      missedTsxSamples(
-        patterns("src/**/*.test.{ts,tsx}"),
-        patterns("src/legacy/**", "**/node_modules/**"),
-      ),
-      [],
-    );
-  });
-
-  it("accepts an absent include as vitest's default, which covers .tsx", () => {
-    assert.deepEqual(missedTsxSamples(absent, absent), []);
-  });
-});
-
-describe("vitest include patterns", () => {
-  it("collects .tsx tests in every package that has .tsx sources", async () => {
+describe("vitest collects every .test.tsx file", () => {
+  it("finds .tsx suites to check", async () => {
+    // Guards the guard: if nothing is found, the case below passes vacuously
+    // and this file would be watching nothing at all.
     const packages = await readdir(PACKAGES, { withFileTypes: true });
-    const offenders = [];
-    let checked = 0;
+    let total = 0;
+    for (const pkg of packages) {
+      if (!pkg.isDirectory()) continue;
+      total += (await findTestTsx(join(PACKAGES, pkg.name, "src"))).length;
+    }
+    assert.ok(
+      total > 0,
+      "no .test.tsx files found anywhere under packages/*/src",
+    );
+  });
+
+  it("collects them in every package that has them", async (t) => {
+    const packages = await readdir(PACKAGES, { withFileTypes: true });
+    const missed = [];
 
     for (const pkg of packages) {
       if (!pkg.isDirectory()) continue;
       const dir = join(PACKAGES, pkg.name);
 
-      let configSource;
+      const tsxTests = await findTestTsx(join(dir, "src"));
+      if (tsxTests.length === 0) continue;
+
+      let collected;
       try {
-        configSource = await readFile(join(dir, "vitest.config.ts"), "utf8");
-      } catch {
-        // No vitest config: nothing collects tests here at all, which is a
-        // different question from which extensions get collected.
+        collected = await collectedTestFiles(dir);
+      } catch (error) {
+        // Never swallowed into a pass: a package whose collection could not be
+        // listed is a package this check is no longer watching.
+        missed.push(
+          `${pkg.name}: could not list collected files — ${error.message}`,
+        );
         continue;
       }
 
-      if (!(await hasTsxSource(join(dir, "src")))) continue;
-
-      const include = readTestArray(configSource, "include");
-      const exclude = readTestArray(configSource, "exclude");
-
-      // Unreadable is not absent. A key that is there but unparseable means
-      // this check is no longer looking at the package it thinks it is — the
-      // same silent gap it exists to prevent, so it is reported, never skipped.
-      for (const [name, result] of [
-        ["include", include],
-        ["exclude", exclude],
-      ]) {
-        if (result.kind === "unreadable") {
-          offenders.push(
-            `${pkg.name}: has a vitest test.${name} but it could not be read — this check is not looking at it`,
+      for (const test of tsxTests) {
+        const rel = relative(dir, test);
+        if (!collected.has(rel)) {
+          missed.push(
+            `${pkg.name}: ${rel.split(sep).join("/")} exists but vitest does not collect it`,
           );
         }
       }
-      if (include.kind === "unreadable" || exclude.kind === "unreadable") {
-        continue;
-      }
-
-      checked += 1;
-      const missed = missedTsxSamples(include, exclude);
-
-      if (missed.length > 0) {
-        const shown = [
-          include.kind === "patterns"
-            ? `include ${JSON.stringify(include.patterns)}`
-            : "default include",
-          ...(exclude.kind === "patterns"
-            ? [`exclude ${JSON.stringify(exclude.patterns)}`]
-            : []),
-        ].join(" + ");
-        offenders.push(
-          `${pkg.name}: ${shown} would not collect ${missed.join(", ")}`,
-        );
-      }
+      t.diagnostic(
+        `${pkg.name}: ${tsxTests.length} .tsx suite(s), ${collected.size} file(s) collected`,
+      );
     }
 
-    assert.ok(checked > 0, "found no packages with .tsx sources to check");
     assert.deepEqual(
-      offenders,
+      missed,
       [],
-      `packages with .tsx sources whose vitest include skips .tsx tests:\n  ${offenders.join("\n  ")}`,
+      `.tsx test files that exist but never run:\n  ${missed.join("\n  ")}`,
     );
   });
 });
