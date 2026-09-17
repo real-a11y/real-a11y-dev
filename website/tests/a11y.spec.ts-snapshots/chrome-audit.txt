@@ -67,8 +67,8 @@ complementary
       heading "Recipes" (level 2)
     link "Next.js (App Router + React 19)"
       paragraph "Next.js (App Router + React 19)"
-    link "Storybook 8 + React 19"
-      paragraph "Storybook 8 + React 19"
+    link "Storybook + React 19"
+      paragraph "Storybook + React 19"
     link "Peer Dependencies"
       paragraph "Peer Dependencies"
     link "CI Diff Bot"

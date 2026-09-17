@@ -7,6 +7,7 @@ link "CI"
 link "Known constraints"
 button "Copy Code"
 generic
+link "the package page"
 button "Copy Code"
 generic
 button "Copy Code"

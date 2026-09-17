@@ -17,10 +17,10 @@ import {
   TreePanel,
   preserveExpandedState,
 } from "@real-a11y-dev/semantic-navigator-ui";
-import { addons, types } from "@storybook/manager-api";
 import { render, h } from "preact";
 import * as React from "react";
 import { useEffect, useRef, useState, useCallback } from "react";
+import { addons, types } from "storybook/manager-api";
 
 import {
   ADDON_ID,

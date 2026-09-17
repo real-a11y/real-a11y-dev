@@ -16,13 +16,16 @@ navigation "On this page"
     listitem
       link "Known constraints"
 main
-  heading "Storybook 8 + React 19" (level 1)
-  paragraph "supports Storybook 8.x with React 18 or React 19; its own suite runs on React 19. If you're on React 19 the Vite pipeline needs one small nudge — explained below."
+  heading "Storybook + React 19" (level 1)
+  paragraph "is tested against Storybook 9.x and 10.x with React 18 and React 19. If you hit at story render time, the Vite pipeline needs one small nudge — explained below."
     code "@real-a11y-dev/storybook-addon"
+    code "React is not defined"
   heading "Install" (level 2)
   button "Copy Code"
   code
-  paragraph "Peer dependencies (Storybook's own framework package + manager API + React) must already be installed in your project."
+  paragraph "Peer dependencies ( 9.x or 10.x, your framework package, and React) must already be installed in your project. Storybook 8 is not supported — see for why."
+    code "storybook"
+    link "the package page"
   heading "Register the addon" (level 2)
   button "Copy Code"
   code
@@ -30,7 +33,7 @@ main
     strong "Semantic Navigator"
   separator
   heading "React 19 — pin the JSX runtime" (level 2)
-  paragraph "Storybook externalizes for addon manager bundles but does externalize . When Vite's esbuild falls back to the classic JSX transform (which it does for some source files under React 19 + Storybook 8.6), story files emit calls that fail with — because automatic runtime is the default for React 19 projects and classic transform needs in scope."
+  paragraph "Storybook externalizes for addon manager bundles but does externalize — still true as of Storybook 11's manager globals map. When Vite's esbuild falls back to the classic JSX transform (which it does for some source files under React 19), story files emit calls that fail with — because automatic runtime is the default for React 19 projects and classic transform needs in scope."
     code "react"
     strong "not"
     code "react/jsx-runtime"
@@ -71,11 +74,17 @@ main
   separator
   heading "Known constraints" (level 2)
   list
-    listitem "is required. The addon's manager entry uses the v8 API."
-      strong "Storybook ≥ 8.0"
-      code "@storybook/manager-api"
+    listitem "is required. The addon's manager entry imports and its preview entry imports — the subpath exports Storybook 9 introduced when it folded the standalone packages into core. Those packages stopped publishing at 8.6 and has no equivalent subpath, so 8.x cannot be supported by the same build."
+      strong "Storybook 9.x or 10.x"
+      code "storybook/manager-api"
+      code "storybook/preview-api"
+      code "@storybook/*-api"
+      code "storybook@8"
+    listitem "is not in the peer range yet. The addon already type-checks, builds and passes its tests against ; the range widens when 11 ships stable."
+      strong "Storybook 11"
+      code "storybook@11.0.0-alpha.0"
     listitem "as a peer. React 19 works with the override above."
-      strong "React 18 or 19"
+      strong "React ≥ 18"
       code "viteFinal"
     listitem "If anything in your Storybook config transitively loads a second copy of React (some legacy addons do this), the manager will crash. Run — there should be exactly one resolution."
       strong "Mixed React versions on the page will fail."

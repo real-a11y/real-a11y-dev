@@ -46,10 +46,10 @@
     "ignore": [
       "react",
       "react-dom",
-      "@storybook/manager-api",
-      "@storybook/preview-api",
-      "@storybook/theming",
-      "storybook"
+      "storybook",
+      "storybook/manager-api",
+      "storybook/preview-api",
+      "storybook/theming"
     ]
   },
   {

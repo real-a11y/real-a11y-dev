@@ -1,6 +1,6 @@
 # Example: Storybook
 
-A Storybook 8 project with `@real-a11y-dev/storybook-addon` enabled — demonstrating the panel on real component stories.
+A Storybook 10 project with `@real-a11y-dev/storybook-addon` enabled — demonstrating the panel on real component stories.
 
 **Source:** [`examples/storybook/`](https://github.com/real-a11y/real-a11y-dev/tree/main/examples/storybook)
 
@@ -31,10 +31,9 @@ import type { StorybookConfig } from "@storybook/react-vite";
 
 const config: StorybookConfig = {
   stories: ["../src/**/*.stories.@(ts|tsx)"],
-  addons: [
-    "@storybook/addon-essentials",
-    "@real-a11y-dev/storybook-addon",
-  ],
+  // `@storybook/addon-essentials` is gone from Storybook 9 on — controls,
+  // actions, viewport and interactions ship in core. Only docs is still an addon.
+  addons: ["@storybook/addon-docs", "@real-a11y-dev/storybook-addon"],
   framework: { name: "@storybook/react-vite", options: {} },
 };
 

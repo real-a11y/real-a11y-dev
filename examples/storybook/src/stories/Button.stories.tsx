@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { fn } from "@storybook/test";
 import { Button } from "../Button.js";
+import { fn } from "storybook/test";
 
 /**
  * The Button component demonstrates the Semantic Navigator panel.

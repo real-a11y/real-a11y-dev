@@ -1,6 +1,6 @@
 # Storybook example — `@real-a11y-dev/storybook-addon`
 
-A minimal Storybook 8 project with the Real A11y addon enabled. Every story gets a per-story panel showing the semantic tree, heading outline, and tab sequence for its canvas.
+A minimal Storybook 10 project with the Real A11y addon enabled. Every story gets a per-story panel showing the semantic tree, heading outline, and tab sequence for its canvas.
 
 ## What this shows
 
@@ -33,4 +33,4 @@ pnpm --filter @real-a11y-dev/example-storybook build-storybook
 ## See also
 
 - [`@real-a11y-dev/storybook-addon` package docs](../../packages/storybook-addon)
-- Storybook 8 [addon authoring guide](https://storybook.js.org/docs/addons/introduction)
+- Storybook [addon authoring guide](https://storybook.js.org/docs/addons/introduction)

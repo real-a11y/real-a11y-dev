@@ -26,5 +26,5 @@ generic
 button "Copy Code"
 generic
 link "Edit this page on GitHub"
-link "Previous pageStorybook 8 + React 19"
+link "Previous pageStorybook + React 19"
 link "Next pageCI Diff Bot"

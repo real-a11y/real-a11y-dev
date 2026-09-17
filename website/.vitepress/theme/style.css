@@ -85,6 +85,19 @@
   --vp-code-line-diff-remove-color: hsl(0 50% 22%);
 }
 
+/* Inline `code` inside a tip/warning/danger callout. VitePress gives the
+ * callout a tinted code background but lets the code inherit the block's
+ * TEXT color — which is the status hue itself. On amber that is
+ * `#f59f0a` on `#faebbf`: 1.79:1, a serious AA failure that axe catches.
+ * It stayed latent only because no callout on this site happened to
+ * contain inline code until the storybook-addon page's peer-dependency
+ * warning did. Paint it with the normal body text color instead and keep
+ * the tinted background, so the code still reads as part of the callout.
+ * `--vp-c-text-1` flips on `.dark`, so this holds in both themes. */
+.vp-doc [class*="custom-block"] code {
+  color: var(--vp-c-text-1);
+}
+
 /* `@real-a11y-dev/design`'s `tokens.css` isn't strictly tokens — it
  * also applies `font-family: var(--font-display)` to
  * `body, h1, h2, h3, .font-display` directly. With DM Serif Display

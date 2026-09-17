@@ -45,7 +45,7 @@ const { channel, observerState, extractorState } = vi.hoisted(() => {
   };
 });
 
-vi.mock("@storybook/preview-api", () => ({
+vi.mock("storybook/preview-api", () => ({
   addons: { getChannel: () => channel },
 }));
 

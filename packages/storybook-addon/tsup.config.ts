@@ -8,15 +8,23 @@ const treeCSS = fs.readFileSync(path.join(stylesDir, "tree.css"), "utf-8");
 const themesCSS = fs.readFileSync(path.join(stylesDir, "themes.css"), "utf-8");
 const allCSS = JSON.stringify(themesCSS + "\n" + treeCSS);
 
-/** Peer deps that must NEVER be bundled. */
-const PEER_EXTERNALS = [
-  "react",
-  "react-dom",
-  "@storybook/manager-api",
-  "@storybook/preview-api",
-  "@storybook/theming",
-  "storybook",
-];
+/**
+ * Peer deps that must NEVER be bundled.
+ *
+ * Storybook 9 folded `@storybook/manager-api`, `@storybook/preview-api` and
+ * `@storybook/theming` into the `storybook` package as the subpath exports
+ * `storybook/manager-api`, `storybook/preview-api` and `storybook/theming`
+ * (the standalone packages stopped at 8.6 and are gone from 9 on).
+ *
+ * The RegExp is doing real work: tsup matches STRING externals by exact
+ * equality, so a bare `"storybook"` would leave `storybook/manager-api`
+ * unmatched and esbuild would happily inline Storybook's manager runtime —
+ * and the manager builder serves those specifiers as globals
+ * (`__STORYBOOK_API__` and friends), so a second inlined copy is a
+ * split-brain manager, not just weight. Matching the whole subpath family
+ * keeps that true for subpaths this addon has not imported yet.
+ */
+const PEER_EXTERNALS = ["react", "react-dom", /^storybook(\/|$)/];
 
 export default defineConfig([
   // ── Public re-export (constants only) ──────────────────────────────────────
