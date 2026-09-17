@@ -1,4 +1,4 @@
-import { defineConfig, devices } from "@playwright/test";
+import { defineConfig } from "@playwright/test";
 
 /**
  * Native-tree e2e suite — drives the built `dist-dogfood/` extension in a real
@@ -12,9 +12,14 @@ import { defineConfig, devices } from "@playwright/test";
  *    each worker launches its own Chromium with the unpacked extension, and the
  *    extension's `chrome.debugger` bookkeeping is per-browser. Files still run
  *    across workers.
- *  - **No `projects[].use` browser selection.** The harness calls
- *    `chromium.launchPersistentContext` itself — `--load-extension` has no
- *    equivalent through Playwright's own browser fixture.
+ *  - **The project carries no `use` block.** `packages/testing`'s spreads
+ *    `devices["Desktop Chrome"]`, which configures Playwright's own `page`
+ *    fixture — and nothing here uses that fixture. `--load-extension` has no
+ *    equivalent through it, so `harness.ts` calls
+ *    `chromium.launchPersistentContext` itself and every `use` key (userAgent,
+ *    viewport, and in some Playwright versions `channel`) would be silently
+ *    ignored. Copying the block across would have left config that reads as
+ *    load-bearing and is not.
  */
 export default defineConfig({
   testDir: "./e2e",
@@ -29,5 +34,5 @@ export default defineConfig({
   // default on a loaded CI box.
   timeout: 60_000,
 
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [{ name: "chromium" }],
 });
