@@ -526,3 +526,25 @@ is the class of failure rounds 4–15 kept producing. It does not make the panel
 capability/attach lifecycle — suspend races, reattach accounting, revoke — any
 better covered than it was; that remains unit-tested logic plus the manual steps
 above.
+
+`panel-ui-native.test.ts` covers a different dimension: the production side
+panel's own `NativeTreeView` — the real tree a dogfooder actually browses, not
+just the message channel or the dev-only `DogfoodPanel` debug widget. It exists
+because, unlike everything above, its two regressions were **not** caught by a
+manual dogfood session — both slipped past hands-on testing in this same PR and
+were only found on review:
+
+- `useVirtualTree`'s `containerRef` was never wired to the scrollable
+  container, which silently capped the rendered tree at the hook's fixed
+  ~10-row fallback window and left `scrollToIndex` a permanent no-op. Every
+  fixture used for manual verification stayed under that row count, so the cap
+  was never visually obvious — a page with a real, larger tree just quietly
+  lost everything past the tenth row.
+- A redacted field's retype panel opened with no `inputType` set, so a
+  password field's replacement value rendered in plaintext instead of masked.
+
+Both are exactly the shape of bug that looks fine in a quick manual pass and
+only shows up once something checks the actual rendered DOM against a tree
+deliberately built larger than the default virtualization window — which is
+what this file does, and why it is worth having as a committed test rather
+than another throwaway script.

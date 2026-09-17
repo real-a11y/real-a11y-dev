@@ -85,6 +85,11 @@ sidesteps the question entirely.
   message-level, because that is where dispatch fidelity lives; these exist
   because a message-level test cannot see a panel-wiring bug, which is exactly
   what round 7 was.
+- `panel-ui-native.test.ts` — UI-level too, but against the **production** side
+  panel's `NativeTreeView`, not the dev-only `DogfoodPanel` widget
+  `panel-ui.test.ts` covers. Pins two rendering/masking regressions a review
+  round caught that no dogfood session or message-level test could have — see
+  `DOGFOOD.md`'s "Automated coverage" section for what they were.
 
 ## Coverage
 

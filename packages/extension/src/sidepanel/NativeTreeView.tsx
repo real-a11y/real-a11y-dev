@@ -84,7 +84,6 @@ export function NativeTreeView({
 }: NativeTreeViewProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
   const treeRef = useRef<HTMLDivElement>(null);
 
   // Seed a sensible default the first time THIS root shows up — root plus its
@@ -143,8 +142,15 @@ export function NativeTreeView({
     return { visibleIds: ids, visiblePositions: positions };
   }, [nodes, rootId, expanded]);
 
-  const { startIndex, endIndex, totalHeight, offset, onScroll, scrollToIndex } =
-    useVirtualTree(visibleIds.length);
+  const {
+    containerRef,
+    startIndex,
+    endIndex,
+    totalHeight,
+    offset,
+    onScroll,
+    scrollToIndex,
+  } = useVirtualTree(visibleIds.length);
 
   useEffect(() => {
     if (!selectedId) return;

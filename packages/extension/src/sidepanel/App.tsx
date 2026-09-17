@@ -1159,6 +1159,15 @@ export function App() {
           value: isRedacted ? "" : (node.value ?? ""),
           placeholder: node.placeholder,
           source: "native",
+          // Mask the retyped replacement the same way InputPanel already
+          // masks a DOM password field (inputType, checked in InputPanel.tsx)
+          // — the wire only carries a redacted/not-redacted boolean (as the
+          // sentinel), never the raw `type` attribute that produced it (R1:
+          // it's not just type="password" — a sensitive-autocomplete text
+          // field redacts too), so this masks every redacted field's retype
+          // rather than trying to distinguish which specific rule fired.
+          // Erring toward masking more, never less.
+          inputType: isRedacted ? "password" : undefined,
           blockEmptySubmit: isRedacted,
         });
         return;
@@ -1241,8 +1250,17 @@ export function App() {
   // shortcut. Bound to the panel document so it fires whenever the panel
   // has focus. Page-level shortcuts are handled by the content script's
   // own Escape listener while pick mode is active.
+  //
+  // Gated on producer === "dom" like the toolbar button it mirrors — without
+  // this, muscle memory (or DevTools-inspector habit) could arm the content
+  // script's page-wide click interceptor while native is active, with
+  // nothing in the native tree UI showing it's on (the button and its
+  // aria-pressed state are hidden there) and no way to tell before the next
+  // click on the page gets silently captured as an element pick instead of
+  // a normal interaction.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (producer !== "dom") return;
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.shiftKey && (e.key === "C" || e.key === "c")) {
         e.preventDefault();
@@ -1251,7 +1269,7 @@ export function App() {
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [togglePickMode]);
+  }, [producer, togglePickMode]);
 
   // Modality flag — see useInputModality for the full rationale. Hover
   // handlers gate on isMouseModality() so keyboard-driven scroll doesn't
