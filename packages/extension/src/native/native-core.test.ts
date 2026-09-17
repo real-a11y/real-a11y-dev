@@ -1,5 +1,5 @@
 import type { RawNativeAXNode } from "@real-a11y-dev/core";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   backendNodeIdFrom,
