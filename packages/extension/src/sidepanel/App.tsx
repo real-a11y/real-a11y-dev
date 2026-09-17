@@ -415,7 +415,11 @@ export function App() {
     // invalidates the DOM one below — native ids are scoped to the document
     // they were read from. Bumping the token here (rather than only on an
     // explicit native reload) is what makes a reply from the tab just left
-    // recognizably stale to the guards in loadNativeTree/dispatchNativeAction.
+    // recognizably stale to the guards in loadNativeTree/dispatchNativeAction
+    // — and, since that guard is what leaves `nativeBusy` set on a stale
+    // reply (see loadNativeTree/dispatchNativeAction's own comments), this is
+    // also the one place responsible for clearing it back to false: nothing
+    // else is coming to do it for an operation this tab change just orphaned.
     nativeOpToken.current++;
     setNativeNodes(new Map());
     setNativeRootId("");
@@ -423,7 +427,14 @@ export function App() {
     setNativeTreeUrl(undefined);
     setNativeStatus("");
     setNativeCapability(undefined);
-    hasAutoLoadedNative.current = false;
+    setNativeBusy(false);
+    // Deliberately NOT resetting hasAutoLoadedNative here — this effect fires
+    // on EVERY tab change, including a plain tab switch while already in
+    // native mode, and resetting it here would immediately re-trigger the
+    // auto-load effect below on the new tab, silently re-attaching
+    // chrome.debugger with no user action. That flag only re-arms when the
+    // user actually leaves and re-enters native mode (see the producer effect
+    // right below the auto-load effect).
 
     if (!hasRequestedInitial.current) {
       hasRequestedInitial.current = true;
@@ -523,8 +534,12 @@ export function App() {
         setPageUrl("");
         // A navigation replaces the document, and with it every
         // backendDOMNodeId a native tree's ids are built from — see the
-        // myTabId effect's identical teardown for why this has to happen
-        // here too, not just on a tab switch.
+        // myTabId effect's identical teardown (including why hasAutoLoadedNative
+        // is deliberately NOT reset here) for why this has to happen here too,
+        // not just on a tab switch. Same reason for clearing nativeBusy: a
+        // NATIVE_READ/NATIVE_ACT in flight when the page navigates has its
+        // token orphaned by the bump above, so nothing else is coming to
+        // clear the busy flag its own finally block intentionally left set.
         nativeOpToken.current++;
         setNativeNodes(new Map());
         setNativeRootId("");
@@ -532,7 +547,7 @@ export function App() {
         setNativeTreeUrl(undefined);
         setNativeStatus("");
         setNativeCapability(undefined);
-        hasAutoLoadedNative.current = false;
+        setNativeBusy(false);
         return;
       }
 
@@ -900,7 +915,20 @@ export function App() {
   // while native is the active producer, so the capability banner tracks the
   // CURRENT tab. Mirrors DogfoodPanel's refreshCapability, driven by App's
   // own authoritative myTabId instead of polling chrome.tabs itself.
+  //
+  // Every native-action function below opens with `if (!dogfood) return;`.
+  // The Hook call itself (`useCallback(fn, deps)`) still has to run every
+  // render for Rules of Hooks to hold in both builds — only a function BODY
+  // can be build-time-conditional — but since `dogfood` collapses to the
+  // literal `false` in the store build, `if (!false) return` collapses to an
+  // unconditional `return`, and esbuild's own dead-code-after-return
+  // elimination (the same pass that already proves the `dogfood && <JSX>`
+  // blocks in the toolbar below are dead) strips everything after it —
+  // verified empirically: this is what gets the NATIVE_* message strings and
+  // this function's own literals out of the store bundle, not just the
+  // toggle and NativeTreeView's own file.
   const refreshNativeCapability = useCallback(async (tabId: number) => {
+    if (!dogfood) return;
     const token = nativeOpToken.current;
     const cap = (await chrome.runtime.sendMessage({
       type: "NATIVE_CAPABILITY",
@@ -918,6 +946,7 @@ export function App() {
   /** Read the native tree into state. Mirrors DogfoodPanel's readTreeInto,
    *  minus its own flat-list bookkeeping — NativeTreeView owns expand state. */
   const loadNativeTree = useCallback(async (tabId: number) => {
+    if (!dogfood) return;
     const token = nativeOpToken.current;
     setNativeBusy(true);
     setNativeStatus("reading native tree…");
@@ -970,12 +999,24 @@ export function App() {
     void loadNativeTree(myTabId);
   }, [producer, myTabId, loadNativeTree]);
 
+  // The ONLY place hasAutoLoadedNative re-arms: leaving native mode. Neither
+  // the myTabId effect (a tab switch) nor PAGE_NAVIGATED (a same-tab
+  // navigation) reset it — both fire while producer can still be "native",
+  // and resetting it there would race straight into the effect above,
+  // silently re-attaching chrome.debugger with no fresh user gesture. Only
+  // flipping producer back to "dom" and then to "native" again — a real,
+  // deliberate re-entry — earns the tree another free auto-load.
+  useEffect(() => {
+    if (producer === "dom") hasAutoLoadedNative.current = false;
+  }, [producer]);
+
   /** Dispatch one native action and, on success, settle + re-read — the same
    *  two-step DogfoodPanel's runAct uses, so a click that opens a menu or
    *  re-renders a list doesn't leave the tree showing backendDOMNodeIds the
    *  page has already discarded. */
   const dispatchNativeAction = useCallback(
     async (nodeId: string, action: NativeAction, value?: string) => {
+      if (!dogfood) return;
       const token = nativeOpToken.current;
       if (nativeTreeTabId === undefined) {
         setNativeStatus("load a tree first");
@@ -1042,6 +1083,7 @@ export function App() {
       node: NativeNode,
       explicitAction?: "increment" | "decrement" | "select",
     ) => {
+      if (!dogfood) return;
       if (explicitAction) {
         void dispatchNativeAction(node.id, explicitAction);
         return;
@@ -1778,7 +1820,7 @@ export function App() {
         />
       )}
 
-      {producer === "native" ? (
+      {dogfood && producer === "native" ? (
         /* ---- Native tree view (dev-only dogfood build) ---- */
         <NativeTreeView
           nodes={nativeNodes}

@@ -28,22 +28,6 @@
   changes — the extension builds from `vite.config.ts`, which never read this.
   ([#380])
 
-- Internal, no behaviour change: the side panel's `App.tsx` gained a
-  producer toggle and native-tree rendering/dispatch code for the dev-only
-  `chrome.debugger` dogfood build. The toggle itself, and the tree it would
-  render, ARE fully eliminated from the store build (both collapse behind the
-  build-time `__DOGFOOD__` constant the same way `main.tsx`'s dogfood panel
-  already does) — but unlike that panel, the new dispatch callbacks
-  (`loadNativeTree`, `dispatchNativeAction`, …) are declared with
-  `useCallback` at the component's top level so their Hook call stays
-  unconditional every render, which means their function BODIES (a handful of
-  `NATIVE_*` message-type strings, error copy) still ship as unreachable code
-  even though nothing can ever invoke them — the toggle that could reach
-  `producer: "native"` doesn't exist in this build. Same tradeoff, and same
-  reason it's recorded here, as the entry below: real bytes in the shipped
-  bundle, zero reachable behavior, and no `chrome.debugger` capability or
-  permission involved at any point.
-
 - Internal, no behaviour change: the background message router now leaves
   `NATIVE_*` messages to the dev-only native listener instead of letting them
   reach its catch-all fallback. The store build never sends such a message, so
