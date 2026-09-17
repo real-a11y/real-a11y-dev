@@ -404,3 +404,75 @@ role="combobox">` (Google's search box, YouTube's, and most real-world
   (`packages/extension/src/native/native-core.ts`, `axFacets`;
   `packages/extension/src/sidepanel/DogfoodPanel.tsx`,
   `formatDescription`.)
+
+- **A native `<select>`'s options had no way to act on them at all.**
+  Amazon's department dropdown (`<select>` with plain `<option>` children)
+  showed up on the native tree — Chromium normalizes it to `combobox` →
+  `menuListPopup` → `option` — but each `option` row had no action,
+  matching the DOM/A11Y tree view's own dedicated picker UI
+  (`InputPanel.tsx`'s `SelectPicker`) for the identical element, which the
+  native side had nothing equivalent to. `option` staying out of `ACTABLE`
+  was already correct (round 7's own docstring: a role-only tree can't tell
+  a real `<option>` apart from a custom `role="option"` widget), but a
+  generic `click` was never going to be the fix regardless — a synthetic
+  pointer sequence on a real `<option>` is a no-op, since the browser
+  renders an open `<select>`'s list as OS chrome, not DOM a click reaches.
+
+  Added a dedicated `select` action instead of stretching `click`: a new
+  in-page function, `pageSelectOption`, mirrors the DOM producer's own
+  `handleSelect` (`core/src/interaction/action-dispatcher.ts`) — set the
+  owning `<select>`'s `.value` and fire `change` — but verifies `this
+instanceof HTMLOptionElement` in-page, against the live element, before
+  doing anything. That check is what makes offering the button safe even
+  though the role-only ambiguity above is unresolved: a custom
+  `role="option"` widget now refuses cleanly (`not-an-option`) instead of
+  either misfiring a click or being silently excluded forever. `option`
+  still isn't added to `ACTABLE` — a new `isSelectableRole` predicate gates
+  a separate button with `select` semantics, not `click` ones.
+
+  **Verified end-to-end in a real headed Chromium**, against a page
+  mirroring Amazon's dropdown markup: `NATIVE_ACT select` on an `option`
+  node changes the owning `<select>`'s value and a real `change` listener
+  on it observes the dispatch, for two different target options in turn.
+  (`packages/extension/src/native/native-core.ts`, `pageSelectOption`;
+  `packages/extension/src/sidepanel/DogfoodPanel.tsx`,
+  `isSelectableRole`.)
+
+- **Sliders were still not interactable after the round that was supposed
+  to fix it.** The W3C multi-thumb slider example's thumbs (SVG `<g
+role="slider">` elements, not the `<div role="slider">` shape the
+  original fix's own real-Chromium test happened to use) reported
+  `NATIVE_ACT increment`/`decrement` as successful — the events genuinely
+  dispatched — while `aria-valuenow` never moved. Confirmed first that the
+  SVG shape itself wasn't the issue: a faithful reconstruction of the exact
+  reported markup, with a keydown listener bound directly to the `<g>` and
+  reacting to its own `event.target`, incremented correctly end-to-end.
+  The actual gap only showed up once the reconstruction's handler was
+  changed to match a real, common ARIA-widget pattern: gating on
+  `document.activeElement === this` — a reasonable assumption for
+  hand-written widget code, since a real user can only reach the handler
+  by having tabbed to the thumb first. `pageStep` deliberately never called
+  `.focus()` before dispatching (see the round-6 finding above) specifically
+  to avoid stealing focus from the panel button the dogfooder just clicked
+  — correct concern, but it meant any widget gating on real focus silently
+  ignored every dispatched key, with a marker that still reported success.
+
+  Fixed by calling `el.focus()` immediately before dispatch after all. This
+  is safe specifically because the very next thing `pageStep` does is the
+  two-stage restore that already existed for an unrelated reason (a widget
+  moving focus to itself as a side effect of handling the key) — that
+  restore doesn't care why focus moved, only that it isn't where it
+  started, so it undoes this call exactly the same way it undoes a
+  widget's own focus-stealing. This deliberately diverges from core's
+  `dispatchArrowStep` (`core/src/interaction/action-dispatcher.ts`), which
+  still doesn't call `.focus()` — that decision predates this finding, and
+  there's no report yet that the DOM producer's own equivalent has the same
+  gap; the fix lives here until (or unless) that changes.
+
+  **Verified end-to-end in a real headed Chromium**: the exact reported SVG
+  markup increments correctly (role reports literally `slider`, not
+  downgraded to `generic`/`group`, and `aria-valuenow` moves), and a
+  synthetic focus-gated slider — silently no-op before this fix, confirmed
+  by reproducing the failure first — now updates correctly too, with focus
+  restored to the panel's last-clicked control afterward either way.
+  (`packages/extension/src/native/native-core.ts`, `pageStep`.)

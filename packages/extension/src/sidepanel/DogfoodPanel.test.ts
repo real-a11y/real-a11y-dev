@@ -6,6 +6,7 @@ import {
   ACTABLE,
   isTypableRole,
   isSteppableRole,
+  isSelectableRole,
   formatFacets,
   formatValue,
   formatDescription,
@@ -209,6 +210,31 @@ describe("isSteppableRole", () => {
   it("does not treat an ordinary actable role as steppable", () => {
     for (const role of ["button", "textbox", "checkbox", "combobox"]) {
       expect(isSteppableRole(role)).toBe(false);
+    }
+  });
+});
+
+/**
+ * Live dogfood finding: "combobox options are not interactive" — Amazon's
+ * department dropdown is a real `<select>`; Chromium normalizes it to
+ * `combobox` → `menuListPopup` → `option`, and each `option` row had no
+ * action at all. `option` stays out of `ACTABLE` on purpose (see its own
+ * docstring — a role-only tree can't tell a real `<option>` apart from a
+ * custom `role="option"` widget), but a generic click was never going to
+ * fix it anyway: a synthetic pointer sequence on a real `<option>` is a
+ * no-op, since the open list is OS chrome. `isSelectableRole` gates a
+ * dedicated `select` action instead, verified in-page against the live
+ * element (`native-core.ts`'s `pageSelectOption`) rather than guessed from
+ * the role string.
+ */
+describe("isSelectableRole", () => {
+  it("treats option as selectable", () => {
+    expect(isSelectableRole("option")).toBe(true);
+  });
+
+  it("does not treat an ordinary actable or steppable role as selectable", () => {
+    for (const role of ["button", "combobox", "listbox", "slider", "row"]) {
+      expect(isSelectableRole(role)).toBe(false);
     }
   });
 });

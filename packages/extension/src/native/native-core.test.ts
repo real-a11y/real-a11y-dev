@@ -8,6 +8,7 @@ import {
   IN_PAGE_ACTION_SOURCE,
   pageClick,
   pageReadValue,
+  pageSelectOption,
   pageStep,
   pageType,
   readNativeTree,
@@ -353,6 +354,21 @@ describe("dispatchNative", () => {
       (decCall?.params as { arguments?: Array<{ value: number }> })
         ?.arguments?.[0]?.value,
     ).toBe(-1);
+  });
+
+  /**
+   * Live dogfood finding: "combobox options are not interactive" — a native
+   * `<select>`'s `option` children had no action at all. `select` resolves
+   * and dispatches exactly like `click`/`increment` do — this pins that the
+   * new action reaches `runInPage` through the same path, not a special one.
+   */
+  it("dispatches a select action via resolveNode + callFunctionOn", async () => {
+    const t = new FakeTransport(resolving("obj-opt", { ok: true }));
+    const res = await dispatchNative(t, "ax-dom-77", "select");
+    expect(res).toEqual({ success: true });
+    expect(
+      t.calls.find((c) => c.method === "Runtime.callFunctionOn")?.params,
+    ).toMatchObject({ functionDeclaration: String(pageSelectOption) });
   });
 });
 
@@ -730,6 +746,40 @@ describe("in-page actions — step", () => {
     expect(document.activeElement).toBe(button);
   });
 
+  /**
+   * Live dogfood finding: "still unable to interact with the sliders" — the
+   * W3C multi-thumb slider example's thumbs still didn't move after round
+   * 12's fix. Its keydown handler (and a real share of hand-written ARIA
+   * widgets generally) gates on `document.activeElement === this`, a
+   * reasonable assumption for widget code a real user can only reach by
+   * having tabbed there first. Without a real `.focus()` call, `pageStep`
+   * reported `{ ok: true }` — the events genuinely dispatched — while the
+   * widget silently ignored them because it never saw itself as focused.
+   */
+  it("focuses the element first so a widget that gates its handler on real focus still reacts", () => {
+    const button = document.createElement("button");
+    const slider = document.createElement("div");
+    slider.setAttribute("role", "slider");
+    slider.tabIndex = 0;
+    document.body.appendChild(button);
+    document.body.appendChild(slider);
+    let valueNow = 100;
+    slider.addEventListener("keydown", (e) => {
+      if (document.activeElement !== slider) return; // the real-world guard
+      if ((e as KeyboardEvent).key === "ArrowRight") valueNow += 1;
+    });
+    button.focus();
+    expect(document.activeElement).toBe(button);
+
+    expect(on(pageStep, slider, 1)).toEqual({ ok: true });
+
+    expect(valueNow).toBe(101);
+    // The two-stage restore already in place undoes our own upfront focus()
+    // call the same way it undoes a widget stealing focus as a side effect —
+    // so the dogfooder's panel button ends up with focus back, same as before.
+    expect(document.activeElement).toBe(button);
+  });
+
   it("restores focus after a deferred (setTimeout-scheduled) focus steal", () => {
     vi.useFakeTimers();
     try {
@@ -768,6 +818,65 @@ describe("in-page actions — step", () => {
 
   it("returns not-element for a null this", () => {
     expect(on(pageStep, null as unknown as Element, 1)).toEqual({
+      ok: false,
+      reason: "not-element",
+    });
+  });
+});
+
+/**
+ * Live dogfood finding: "combobox options are not interactive" — Amazon's
+ * department dropdown is a real `<select>`; Chromium normalizes it to
+ * `combobox` → `menuListPopup` → `option`, and each `option` row had no
+ * native-tree action at all. A generic `click` was never the fix — a
+ * synthetic pointer sequence on a real `<option>` is a no-op, since the open
+ * list is OS chrome — so this is a dedicated action that sets the owning
+ * `<select>`'s value and fires `change`, exactly like the DOM/A11Y tree
+ * view's own `handleSelect` (`core/src/interaction/action-dispatcher.ts`).
+ */
+describe("in-page actions — select", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("sets the owning select's value and fires change", () => {
+    document.body.innerHTML = `
+      <select id="dept">
+        <option value="all">All</option>
+        <option value="electronics">Electronics</option>
+      </select>
+    `;
+    const select = document.getElementById("dept") as HTMLSelectElement;
+    const option = select.options[1];
+    const changes = record(select, ["change"]);
+
+    const result = on(pageSelectOption, option);
+
+    expect(result).toEqual({ ok: true });
+    expect(select.value).toBe("electronics");
+    expect(changes).toEqual(["change"]);
+  });
+
+  it('refuses a non-option element instead of guessing — a custom role="option" widget', () => {
+    document.body.innerHTML = `<div role="option">Fake option</div>`;
+    const el = document.querySelector('[role="option"]')!;
+    expect(on(pageSelectOption, el)).toEqual({
+      ok: false,
+      reason: "not-an-option",
+    });
+  });
+
+  it("refuses an option with no select ancestor", () => {
+    document.body.innerHTML = `<option value="orphan">Orphan</option>`;
+    const option = document.querySelector("option")!;
+    expect(on(pageSelectOption, option)).toEqual({
+      ok: false,
+      reason: "no-select-ancestor",
+    });
+  });
+
+  it("returns not-element for a null this", () => {
+    expect(on(pageSelectOption, null as unknown as Element)).toEqual({
       ok: false,
       reason: "not-element",
     });

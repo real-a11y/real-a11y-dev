@@ -70,6 +70,18 @@ import {
  * synthetic pointer sequence nothing is listening for — same "worse than the
  * current gap" call as `slider`/`spinbutton` above, not a fix for the
  * (rarer) custom-widget case.
+ *
+ * `option` still isn't added here, but it isn't stuck at "no action" either
+ * — see `isSelectableRole` below. A generic CLICK stays wrong for it even
+ * once the ambiguity above is resolved: a synthetic pointer sequence on a
+ * real `<option>` is a no-op, because the open list is OS chrome, not DOM a
+ * click reaches. `isSelectableRole` offers a dedicated `select` action
+ * instead, verified in-page against the live element (`this instanceof
+ * HTMLOptionElement` in `native-core.ts`'s `pageSelectOption`) rather than
+ * guessed from the role string — the one place this codebase actually can
+ * tell a real `<option>` apart from a custom `role="option"` widget, unlike
+ * `row`/`listbox` above, which stay excluded with no such per-dispatch check
+ * to lean on.
  */
 export const ACTABLE = new Set([
   "button",
@@ -145,6 +157,23 @@ export function isTypableRole(
  */
 export function isSteppableRole(role: string): boolean {
   return role === "slider" || role === "spinbutton";
+}
+
+/**
+ * Live dogfood finding: "combobox options are not interactive" — Amazon's
+ * department dropdown is a real `<select>`; Chromium normalizes it to
+ * `combobox` → `menuListPopup` → `option` on the native tree, and each
+ * `option` row had no action at all, next to the DOM/A11Y tree view's own
+ * picker UI (`InputPanel.tsx`'s `SelectPicker`) for the identical element.
+ * `option` is deliberately absent from `ACTABLE` (see its own docstring) —
+ * this is not a reversal of that, it's the dedicated action that exclusion
+ * was always missing: `native-core.ts`'s `pageSelectOption` verifies
+ * `instanceof HTMLOptionElement` in-page before doing anything, so a row
+ * that turns out to be a custom `role="option"` widget refuses cleanly
+ * rather than misfiring.
+ */
+export function isSelectableRole(role: string): boolean {
+  return role === "option";
 }
 
 type NativeNode = {
@@ -511,7 +540,10 @@ export function DogfoodPanel() {
     }
   }
 
-  async function act(node: NativeNode, action?: "increment" | "decrement") {
+  async function act(
+    node: NativeNode,
+    action?: "increment" | "decrement" | "select",
+  ) {
     if (inFlight.current) return;
     inFlight.current = true;
     try {
@@ -523,7 +555,7 @@ export function DogfoodPanel() {
 
   async function runAct(
     node: NativeNode,
-    stepAction?: "increment" | "decrement",
+    explicitAction?: "increment" | "decrement" | "select",
   ) {
     const token = capabilityRequest.current;
     // Dispatch against the tab the tree came from, and refuse if the user has
@@ -545,9 +577,10 @@ export function DogfoodPanel() {
       forgetTree();
       return setStatus("page navigated — reload the native tree");
     }
-    // An explicit step action (from the −/+ buttons) always wins — a
-    // spinbutton is both typable and steppable, and stepping never prompts.
-    const isText = !stepAction && isTypableRole(node.role, node.states);
+    // An explicit action (from the −/+ step buttons, or a "Select" option
+    // row) always wins — a spinbutton is both typable and steppable, and
+    // neither stepping nor selecting an option ever prompts.
+    const isText = !explicitAction && isTypableRole(node.role, node.states);
     const value = isText
       ? prompt(`Type into "${node.name || node.role}":`)
       : undefined;
@@ -558,7 +591,7 @@ export function DogfoodPanel() {
         type: "NATIVE_ACT",
         tabId,
         nodeId: node.id,
-        action: stepAction ?? (isText ? "type" : "click"),
+        action: explicitAction ?? (isText ? "type" : "click"),
         ...(isText ? { value } : {}),
       })) as {
         success?: boolean;
@@ -666,7 +699,8 @@ export function DogfoodPanel() {
             const label = `${"  ".repeat(n.depth)}${n.role}${n.name ? ` "${n.name}"` : ""}${formatDescription(n)}${formatValue(n)}${formatFacets(n)}`;
             const actable = ACTABLE.has(n.role);
             const steppable = isSteppableRole(n.role);
-            if (!actable && !steppable) {
+            const selectable = isSelectableRole(n.role);
+            if (!actable && !steppable && !selectable) {
               return (
                 <div key={n.id} style="white-space:pre;padding:0 2px">
                   {label}
@@ -679,6 +713,14 @@ export function DogfoodPanel() {
                   <button
                     style="text-align:left;width:100%;white-space:pre"
                     onClick={() => act(n)}
+                    disabled={busy || !enabled}
+                  >
+                    {label}
+                  </button>
+                ) : selectable ? (
+                  <button
+                    style="text-align:left;width:100%;white-space:pre"
+                    onClick={() => act(n, "select")}
                     disabled={busy || !enabled}
                   >
                     {label}

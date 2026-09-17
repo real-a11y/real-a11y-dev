@@ -253,7 +253,7 @@ export async function readNativeTree(
 
 /** Actions the native backend can dispatch. Others are refused, not guessed. */
 export type NativeAction =
-  "click" | "type" | "focus" | "increment" | "decrement";
+  "click" | "type" | "focus" | "increment" | "decrement" | "select";
 
 export interface NativeDispatchResult {
   success: boolean;
@@ -278,6 +278,7 @@ const SUPPORTED = new Set<NativeAction>([
   "focus",
   "increment",
   "decrement",
+  "select",
 ]);
 
 /**
@@ -609,19 +610,34 @@ export function pageReadValue(this: Element): {
  * two — matching `handleStep`'s own shape rather than duplicating the whole
  * body per direction.
  *
- * Custom ARIA sliders (Radix, Headless UI, …) install their keyboard
- * listener on the slider element itself, so dispatching directly on `this`
- * fires the handler regardless of which element currently holds focus.
- * Deliberately does NOT call `this.focus()` first — that would steal focus
- * from the panel button the dogfooder just clicked, and, worse, on the
- * *next* keystroke anywhere but back at the panel, advance focus to
- * whatever follows the slider in the page's own tab order. Focus is
- * restored in two stages, matching the DOM producer exactly: synchronously
- * (covers a widget that moves focus to itself inside its own synchronous
- * keydown handler) and via `setTimeout(0)` (covers a Radix-style widget
- * that schedules the focus call through a state update + re-render,
- * landing on a microtask/RAF boundary after this function has already
- * returned).
+ * Custom ARIA sliders (Radix, Headless UI, the W3C APG examples themselves)
+ * install their keyboard listener on the slider element itself, so
+ * dispatching there reaches the handler regardless of which element
+ * currently holds focus — but a real, common share of them additionally
+ * gate the handler on `document.activeElement === this` (a reasonable
+ * assumption for hand-written widget code: a real user can only reach the
+ * handler by having tabbed to the thumb first). Live dogfood finding:
+ * "still unable to interact with the sliders" on the W3C multi-thumb
+ * example — this function's marker reported `{ ok: true }` (the events
+ * genuinely dispatched) while `aria-valuenow` never moved, because the
+ * dogfooder's last real focus was the panel button, not the thumb. This
+ * DIVERGES from core's `dispatchArrowStep`, which still doesn't call
+ * `.focus()` first (see its own comment) — that decision predates this
+ * finding and core has no report against it yet; the fix belongs here
+ * until (or unless) the same gap is confirmed on the DOM producer too.
+ *
+ * `el.focus()` up front is safe specifically because the very next thing
+ * this function does is the two-stage restore that already existed for a
+ * different reason (a widget that moves focus to ITSELF as a side effect of
+ * handling the key) — that restore doesn't care why focus moved, only that
+ * it isn't where it started, so it undoes our own upfront call exactly the
+ * same way. Restored in two stages, matching the DOM producer exactly:
+ * synchronously (covers a widget that moves focus to itself inside its own
+ * synchronous keydown handler, or nothing moving it at all, in which case
+ * this undoes our own `.focus()` call) and via `setTimeout(0)` (covers a
+ * Radix-style widget that schedules its OWN focus call through a state
+ * update + re-render, landing on a microtask/RAF boundary after this
+ * function has already returned).
  */
 export function pageStep(this: Element, delta: number): Marker {
   const el = this;
@@ -657,6 +673,7 @@ export function pageStep(this: Element, delta: number): Marker {
   }
 
   const previouslyFocused = document.activeElement as HTMLElement | null;
+  (el as HTMLElement).focus?.({ preventScroll: true });
   const key = delta > 0 ? "ArrowRight" : "ArrowLeft";
   const init: KeyboardEventInit = {
     key,
@@ -681,6 +698,36 @@ export function pageStep(this: Element, delta: number): Marker {
   return { ok: true };
 }
 
+/**
+ * Choose a native `<option>` the way the DOM producer's own `handleSelect`
+ * does for the `<select>` it belongs to — set the select's value and fire
+ * `change` — rather than clicking it. Live dogfood finding: a native
+ * `<select>`'s options (Chromium normalizes it to `combobox` →
+ * `menuListPopup` → `option` on the native tree, e.g. Amazon's department
+ * dropdown) showed up on the tree but had no way to act on them, matching
+ * `ACTABLE`'s own long-standing exclusion of `option` — a synthetic click on
+ * a real `<option>` is a no-op, since the browser renders the open list as
+ * OS chrome, not DOM the click model reaches. This is a DEDICATED action,
+ * not a `click` alias: `this instanceof HTMLOptionElement` is checked
+ * in-page, against the live element, at dispatch time — the one place this
+ * codebase can tell a real `<option>` apart from a custom
+ * `role="option"` widget (impossible from the native tree's role-only data
+ * alone, the reason `ACTABLE` stayed silent on it). A custom widget refuses
+ * cleanly (`not-an-option`) rather than misfiring a wrong action.
+ */
+export function pageSelectOption(this: Element): Marker {
+  const el = this;
+  if (!el || !el.tagName) return { ok: false, reason: "not-element" };
+  if (!(el instanceof HTMLOptionElement)) {
+    return { ok: false, reason: "not-an-option" };
+  }
+  const select = el.closest("select");
+  if (!select) return { ok: false, reason: "no-select-ancestor" };
+  select.value = el.value;
+  select.dispatchEvent(new Event("change", { bubbles: true }));
+  return { ok: true };
+}
+
 /* eslint-enable @typescript-eslint/no-this-alias */
 
 /** The in-page source for each action, as `Runtime.callFunctionOn` wants it. */
@@ -690,6 +737,7 @@ export const IN_PAGE_ACTION_SOURCE: Record<NativeAction, string> = {
   type: String(pageType),
   increment: String(pageStep),
   decrement: String(pageStep),
+  select: String(pageSelectOption),
 };
 
 /** Run the action's in-page function; returns only a structural marker. */
