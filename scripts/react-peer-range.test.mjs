@@ -108,6 +108,24 @@ describe("React peer ranges", () => {
       "no published package declares a react/react-dom peer — this test is " +
         "checking nothing; fix the discovery above rather than deleting it",
     );
+
+    // `react` and `react-dom` move as a pair, and the range test below only
+    // visits the peers a manifest actually has — so dropping one KEY (a bad
+    // merge resolution, say) would leave the other still matching, discovery
+    // still non-empty, and `pnpm verify` still green, while the package
+    // publishes with no react-dom peer at all. Assert the pair instead.
+    for (const { name, peers } of packages) {
+      const missing = REACT_PEERS.filter((peer) => !(peer in peers));
+      assert.deepEqual(
+        missing,
+        [],
+        `${name} declares ${JSON.stringify(Object.keys(peers))} but not ` +
+          `${JSON.stringify(missing)}. A published package that peers on one ` +
+          `of react / react-dom peers on both. If a react-only package is ` +
+          `genuinely wanted, narrow REACT_PEERS deliberately — don't let a ` +
+          `dropped key pass as one.`,
+      );
+    }
   });
 
   it("enumerate majors rather than opening at one end", () => {
