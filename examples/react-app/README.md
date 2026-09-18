@@ -1,6 +1,6 @@
 # React app example — `@real-a11y-dev/react`
 
-A small React 18 app using the `<SemanticNavigator />` component and the `useSemanticTree` / `useActiveModal` hooks.
+A small React 19 app using the `<SemanticNavigator />` component and the `useSemanticTree` / `useActiveModal` hooks.
 
 ## What this shows
 
