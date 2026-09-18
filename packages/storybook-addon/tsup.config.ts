@@ -16,13 +16,15 @@ const allCSS = JSON.stringify(themesCSS + "\n" + treeCSS);
  * `storybook/manager-api`, `storybook/preview-api` and `storybook/theming`
  * (the standalone packages stopped at 8.6 and are gone from 9 on).
  *
- * The RegExp is doing real work: tsup matches STRING externals by exact
- * equality, so a bare `"storybook"` would leave `storybook/manager-api`
- * unmatched and esbuild would happily inline Storybook's manager runtime —
- * and the manager builder serves those specifiers as globals
- * (`__STORYBOOK_API__` and friends), so a second inlined copy is a
- * split-brain manager, not just weight. Matching the whole subpath family
- * keeps that true for subpaths this addon has not imported yet.
+ * The RegExp states the subpath family outright. A bare `"storybook"` would
+ * also work today — tsup resolves string externals through bundle-require's
+ * `match`, which prefix-matches (`id === p || id.startsWith(p + "/")`) rather
+ * than comparing exactly — but that is an undocumented internal of a build
+ * dependency, and the failure mode if it ever changes is silent rather than
+ * loud: esbuild would inline Storybook's manager runtime, which the manager
+ * builder already serves as globals (`__STORYBOOK_API__` and friends), so the
+ * addon would run against its own second copy of the API instead of the
+ * host's. Being explicit costs nothing and does not depend on that behaviour.
  */
 const PEER_EXTERNALS = ["react", "react-dom", /^storybook(\/|$)/];
 

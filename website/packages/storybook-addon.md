@@ -15,7 +15,7 @@ A Storybook panel that shows the semantic tree, heading outline, and tab sequenc
 npm install -D @real-a11y-dev/storybook-addon
 ```
 
-**Peer dependencies:** `storybook` (9.x or 10.x), `react ^18.0.0 || ^19.0.0`, `react-dom ^18.0.0 || ^19.0.0`.
+**Peer dependencies:** `storybook` (9.x, 10.x or 11.x), `react ^18.0.0 || ^19.0.0`, `react-dom ^18.0.0 || ^19.0.0`.
 
 ::: warning Storybook 8 is not supported
 Storybook 9 folded `@storybook/manager-api`, `@storybook/preview-api` and
@@ -25,9 +25,18 @@ standalone packages stopped publishing at 8.6, and `storybook@8` has no
 equivalent subpath — so no single build can serve both. On Storybook 8, stay on
 `@real-a11y-dev/storybook-addon@0.1.0-beta.16`.
 
-Storybook 11 is not in the peer range yet. The addon's code is already 11-ready
-(it type-checks, builds and passes its tests against `storybook@11.0.0-alpha.0`),
-but the range widens once 11 is stable rather than on the strength of an alpha.
+Storybook 11 **is** in the peer range, as `^11.0.0-0`. The `-0` is load-bearing:
+`11.0.0-alpha.0` is the only 11.x published so far, and a plain `^11.0.0` does
+not match a prerelease — the range would have excluded every Storybook 11 that
+actually exists. The addon type-checks, builds and passes its tests against that
+alpha, and an advisory CI job re-runs that check against `storybook@next` so a
+breaking change in 11 surfaces here rather than in your install.
+
+Be precise about what that verifies: `tsc` resolves Storybook 11's own
+`manager-api` and `preview-api` declarations and checks every API the addon
+uses against them, and the build resolves those same specifiers as externals.
+The unit tests mock `storybook/preview-api`, so their passing is not evidence
+about 11 at runtime. Treat 11 support as provisional while 11 is in alpha.
 :::
 
 ---
