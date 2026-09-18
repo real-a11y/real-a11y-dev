@@ -5,7 +5,7 @@ description: The one viteFinal tweak needed to make the Real A11y Storybook addo
 
 # Storybook 8 + React 19
 
-`@real-a11y-dev/storybook-addon` is tested against Storybook 8.x with React 18 and React 19. If you're on React 19 the Vite pipeline needs one small nudge — explained below.
+`@real-a11y-dev/storybook-addon` supports Storybook 8.x with React 18 or React 19; its own suite runs on React 19. If you're on React 19 the Vite pipeline needs one small nudge — explained below.
 
 ## Install
 

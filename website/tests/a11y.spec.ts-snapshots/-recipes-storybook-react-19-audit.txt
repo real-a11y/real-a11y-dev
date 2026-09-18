@@ -17,7 +17,7 @@ navigation "On this page"
       link "Known constraints"
 main
   heading "Storybook 8 + React 19" (level 1)
-  paragraph "is tested against Storybook 8.x with React 18 and React 19. If you're on React 19 the Vite pipeline needs one small nudge — explained below."
+  paragraph "supports Storybook 8.x with React 18 or React 19; its own suite runs on React 19. If you're on React 19 the Vite pipeline needs one small nudge — explained below."
     code "@real-a11y-dev/storybook-addon"
   heading "Install" (level 2)
   button "Copy Code"

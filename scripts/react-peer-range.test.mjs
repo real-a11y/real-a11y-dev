@@ -54,6 +54,23 @@ const CARET_COMPARATOR = /^\^\d+\.\d+\.\d+$/;
 /** Peers that name React itself, as opposed to a React-adjacent library. */
 const REACT_PEERS = ["react", "react-dom"];
 
+/**
+ * The published packages that peer on React, by name.
+ *
+ * Named rather than counted so the guard below survives a package losing its
+ * `peerDependencies` altogether: discovery skips a manifest with no React peer,
+ * so a count alone is satisfied by whichever package still has one, and the
+ * package that lost its peers publishes unconstrained — strictly worse than the
+ * `>=18` this file exists to prevent.
+ *
+ * A new published React package belongs here, added deliberately, the same way
+ * a new major belongs in CANONICAL_RANGE.
+ */
+const EXPECTED_REACT_PACKAGES = [
+  "@real-a11y-dev/react",
+  "@real-a11y-dev/storybook-addon",
+];
+
 const PACKAGES_DIR = fileURLToPath(new URL("../packages", import.meta.url));
 
 /**
@@ -103,10 +120,14 @@ describe("React peer ranges", () => {
     // A rename of `packages/` is NOT that case and needs no guard: only the
     // per-manifest ENOENT is swallowed above, so `readdir` on a directory that
     // is not there rejects and fails this loudly.
-    assert.ok(
-      packages.length > 0,
-      "no published package declares a react/react-dom peer — this test is " +
-        "checking nothing; fix the discovery above rather than deleting it",
+    assert.deepEqual(
+      packages.map(({ name }) => name).sort(),
+      [...EXPECTED_REACT_PACKAGES].sort(),
+      "the set of published packages declaring a react/react-dom peer has " +
+        "changed. A package that LOST its peers publishes unconstrained, which " +
+        "is worse than the open range this file exists to prevent — restore " +
+        "them. A genuinely new React package belongs in " +
+        "EXPECTED_REACT_PACKAGES; a package that went private belongs out of it.",
     );
 
     // `react` and `react-dom` move as a pair, and the range test below only
