@@ -95,10 +95,14 @@ describe("React peer ranges", () => {
   it("are declared by the packages we expect to declare them", async () => {
     const packages = await publishedReactPackages();
 
-    // A rename of `packages/`, or every React package going private, would
-    // leave the assertions below iterating an empty list and reporting green.
-    // This file would then be checking nothing, silently — the exact failure
-    // mode it was written to prevent.
+    // Every React package going private, or the peers being renamed away,
+    // would leave the assertions below iterating an empty list and reporting
+    // green. This file would then be checking nothing, silently — the exact
+    // failure mode it was written to prevent.
+    //
+    // A rename of `packages/` is NOT that case and needs no guard: only the
+    // per-manifest ENOENT is swallowed above, so `readdir` on a directory that
+    // is not there rejects and fails this loudly.
     assert.ok(
       packages.length > 0,
       "no published package declares a react/react-dom peer — this test is " +
