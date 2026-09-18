@@ -184,7 +184,7 @@ main
         cell "@real-a11y-dev/react"
           code "@real-a11y-dev/react"
         cell "≥ 20"
-        cell "React ≥ 18, modern browser"
+        cell "React 18 or 19, modern browser"
       row
         cell "@real-a11y-dev/storybook-addon"
           code "@real-a11y-dev/storybook-addon"

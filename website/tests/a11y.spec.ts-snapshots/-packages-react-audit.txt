@@ -36,8 +36,8 @@ main
   code
   paragraph ","
     strong "Peer dependencies:"
-    code "react >= 18"
-    code "react-dom >= 18"
+    code "react ^18.0.0 || ^19.0.0"
+    code "react-dom ^18.0.0 || ^19.0.0"
   paragraph "Install as a dev dependency"
   paragraph "bundles a tree extractor and a Preact-based renderer (~40 KB gzipped). It's a developer audit tool, not runtime infrastructure — keep it in and gate on a build flag so it never ships to end users."
     code "@real-a11y-dev/react"
@@ -333,7 +333,7 @@ main
   heading "See it running" (level 2)
   list
     listitem "— : split-panel layout with a mode toggle, driving a live "issues" badge, and with an announcer."
-      strong "Vite + React 18"
+      strong "Vite + React 19"
       link "examples/react-app/"
         code "examples/react-app/"
       code "useSemanticTree"

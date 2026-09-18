@@ -75,7 +75,7 @@ main
       strong "Storybook ≥ 8.0"
       code "@storybook/manager-api"
     listitem "as a peer. React 19 works with the override above."
-      strong "React ≥ 18"
+      strong "React 18 or 19"
       code "viteFinal"
     listitem "If anything in your Storybook config transitively loads a second copy of React (some legacy addons do this), the manager will crash. Run — there should be exactly one resolution."
       strong "Mixed React versions on the page will fail."
