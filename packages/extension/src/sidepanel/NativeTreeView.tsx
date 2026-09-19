@@ -481,6 +481,23 @@ export function NativeTreeView({
                 onClick={(e) => {
                   e.stopPropagation();
                   setSelectedId(id);
+                  // A mouse click on the row never moves real DOM focus (the
+                  // row itself is tabIndex=-1; only the `.sn-tree` container
+                  // is focusable, per the roving-focus/aria-activedescendant
+                  // pattern above) — so without this, `.sn-tree:focus-visible
+                  // .sn-node--selected`'s outline never has a `:focus-visible`
+                  // container to key off, and the selected row shows no focus
+                  // ring at all. Mirrors App.tsx's DOM-tree `handleSelect`,
+                  // which calls the identical `treeRef.current?.focus()`.
+                  treeRef.current?.focus();
+                }}
+                onDblClick={(e) => {
+                  e.stopPropagation();
+                  if (label) {
+                    if (!busy) onActivate(node, selectAction);
+                  } else if (hasChildren) {
+                    toggle(id);
+                  }
                 }}
               >
                 <span class="sn-indent">
