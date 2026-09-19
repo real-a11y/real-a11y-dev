@@ -183,7 +183,11 @@ const ROLE_MAP: Record<string, RoleResolver> = {
   fieldset: "group",
   figcaption: "generic",
   figure: "figure",
-  footer: (el) => (isLandmarkContext(el) ? "contentinfo" : "generic"),
+  // header/footer scoped to body are landmarks; inside main or sectioning
+  // content HTML-AAM maps them to the ARIA 1.3 sectionheader/sectionfooter
+  // roles (what Chromium exposes too). The a11y view still flattens a bare
+  // one — see SECTION_HEADER_FOOTER_ROLES in a11y-extractor.ts.
+  footer: (el) => (isLandmarkContext(el) ? "contentinfo" : "sectionfooter"),
   form: "form",
   h1: "heading",
   h2: "heading",
@@ -191,7 +195,7 @@ const ROLE_MAP: Record<string, RoleResolver> = {
   h4: "heading",
   h5: "heading",
   h6: "heading",
-  header: (el) => (isLandmarkContext(el) ? "banner" : "generic"),
+  header: (el) => (isLandmarkContext(el) ? "banner" : "sectionheader"),
   hgroup: "group",
   hr: "separator",
   html: "document",

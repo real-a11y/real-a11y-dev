@@ -101,6 +101,28 @@ describe("getImplicitRole", () => {
     expect(getImplicitRole(el("<div>Content</div>"))).toBe("generic");
   });
 
+  describe("<header>/<footer>", () => {
+    it("maps to banner/contentinfo when scoped to body", () => {
+      expect(getImplicitRole(el("<header>Site</header>"))).toBe("banner");
+      expect(getImplicitRole(el("<footer>Site</footer>"))).toBe("contentinfo");
+    });
+
+    it.each(["main", "article", "aside", "nav", "section"])(
+      "maps to sectionheader/sectionfooter inside <%s>",
+      (container) => {
+        const root = el(
+          `<${container}><div><header>H</header><footer>F</footer></div></${container}>`,
+        );
+        expect(getImplicitRole(root.querySelector("header")!)).toBe(
+          "sectionheader",
+        );
+        expect(getImplicitRole(root.querySelector("footer")!)).toBe(
+          "sectionfooter",
+        );
+      },
+    );
+  });
+
   describe("<th>", () => {
     function th(tableHtml: string, selector = "th"): Element {
       return el(tableHtml).querySelector(selector)!;
