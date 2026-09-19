@@ -19,13 +19,18 @@
  * like one tool, not two — only the row's internal JSX differs, not its
  * visual language.
  *
- * Self-contained: owns its own expand/collapse set, selection, keyboard nav
- * and virtualization. `App.tsx` owns only the data (the last successful
- * `NATIVE_READ`), the capability banner inputs, and what an activation
- * DISPATCHES (`onActivate`) — the same division `TabSequenceView`/
- * `FilteredList` already use for the DOM producer's alternate views.
+ * Self-contained: owns its own expand/collapse set, selection, keyboard nav,
+ * search/role-filter (`native-search.ts`) and virtualization. `App.tsx` owns
+ * only the data (the last successful `NATIVE_READ`), the capability banner
+ * inputs, and what an activation DISPATCHES (`onActivate`) — the same
+ * division `TabSequenceView`/`FilteredList` already use for the DOM
+ * producer's alternate views. Search/filter state stays local rather than
+ * lifted to `App.tsx` for the same reason: it's a native-only view concern,
+ * and it naturally resets when the user switches back to the DOM producer
+ * and this component unmounts.
  */
 
+import { ROLE_FILTER_LABELS, type RoleFilter } from "@real-a11y-dev/core";
 import { useVirtualTree } from "@real-a11y-dev/semantic-navigator-ui";
 import {
   useCallback,
@@ -47,6 +52,11 @@ import {
   isTypableRole,
   type NativeNode,
 } from "../native/native-actions.js";
+import { searchNativeTree } from "../native/native-search.js";
+
+const ROLE_FILTER_KEYS = Object.keys(ROLE_FILTER_LABELS) as Array<
+  Exclude<RoleFilter, null>
+>;
 
 export interface NativeTreeViewProps {
   nodes: Map<string, NativeNode>;
@@ -84,7 +94,10 @@ export function NativeTreeView({
 }: NativeTreeViewProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>(null);
   const treeRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Seed a sensible default the first time THIS root shows up — root plus its
   // immediate children expanded, so the page's landmark structure is visible
@@ -119,28 +132,50 @@ export function NativeTreeView({
     return map;
   }, [nodes]);
 
+  const hasFilter = query.trim().length > 0 || roleFilter !== null;
+
+  // Same shape as `applySearchFilter`'s result for the DOM producer, minus
+  // the mutation — see `native-search.ts` for why. Only actually walks
+  // `nodes` when a filter is active (`searchNativeTree` short-circuits to an
+  // empty result otherwise), so an untouched search box costs nothing here.
+  const search = useMemo(
+    () => searchNativeTree(nodes, parentOf, query, roleFilter),
+    [nodes, parentOf, query, roleFilter],
+  );
+
   // `visiblePositions` records each row's aria-posinset/aria-setsize within
   // its visible sibling group — mirrors App.tsx's own identical computation
   // for the DOM tree. Virtualization keeps only the windowed rows in the
   // DOM, so a screen reader needs these explicit set markers to perceive the
   // tree's full size and a row's position in it (WAI-ARIA TreeView); without
   // them a virtualized native row is indistinguishable from a plain child.
+  //
+  // A filter restricts the walk to matches and their ancestors — same design
+  // as the DOM producer's own tree (App.tsx's `visibleNodeIds`): descending
+  // still requires `expanded`, so a match under a collapsed ancestor stays
+  // hidden until the user expands it by hand. That is a real limitation
+  // there too (both producers seed only two levels open by default — see
+  // this file's own layout-effect comment, and `dom-extractor.ts`'s
+  // `expanded: depth < 2`) rather than something native does worse.
   const { visibleIds, visiblePositions } = useMemo(() => {
     const ids: string[] = [];
     const positions = new Map<string, { posinset: number; setsize: number }>();
     function walk(id: string, posinset: number, setsize: number) {
       const node = nodes.get(id);
       if (!node) return;
+      if (hasFilter && !search.visibleIds.has(id)) return;
       ids.push(id);
       positions.set(id, { posinset, setsize });
       if (expanded.has(id)) {
-        const children = node.childIds ?? [];
+        const children = (node.childIds ?? []).filter(
+          (childId) => !hasFilter || search.visibleIds.has(childId),
+        );
         children.forEach((childId, i) => walk(childId, i + 1, children.length));
       }
     }
     if (rootId) walk(rootId, 1, 1);
     return { visibleIds: ids, visiblePositions: positions };
-  }, [nodes, rootId, expanded]);
+  }, [nodes, rootId, expanded, hasFilter, search]);
 
   const {
     containerRef,
@@ -201,6 +236,16 @@ export function NativeTreeView({
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
+      // Mirrors the DOM producer's own `/`-focuses-search shortcut
+      // (`useTreeKeyboard`'s `onFocusSearch`) — checked first and
+      // unconditionally on `visibleIds`/`selectedId`, so it works even
+      // against an empty or not-yet-loaded tree.
+      if (e.key === "/" && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
+
       if (visibleIds.length === 0) return;
 
       if (!selectedId) {
@@ -317,6 +362,23 @@ export function NativeTreeView({
   return (
     <>
       <div class="sn-toolbar" role="toolbar" aria-label="Native tree controls">
+        <input
+          ref={searchInputRef}
+          class="sn-search"
+          type="search"
+          placeholder="Search nodes..."
+          aria-label="Search native tree nodes"
+          value={query}
+          onInput={(e) => setQuery((e.target as HTMLInputElement).value)}
+        />
+        {/* Mounted before there is a count to report — see App.tsx's
+            identical DOM-producer span for why: a live region that arrives
+            already holding text is not announced by most screen
+            reader/browser pairs. */}
+        <span class="sn-search-count" aria-live="polite">
+          {hasFilter &&
+            `${search.directIds.size} match${search.directIds.size !== 1 ? "es" : ""}`}
+        </span>
         <button
           class="sn-toolbar-btn"
           onClick={onRefresh}
@@ -347,6 +409,20 @@ export function NativeTreeView({
         <span class="sn-page-url" aria-live="polite">
           {status}
         </span>
+      </div>
+
+      <div class="sn-filters" role="toolbar" aria-label="Filter by role">
+        {ROLE_FILTER_KEYS.map((key) => (
+          <button
+            key={key}
+            class="sn-filter-btn"
+            aria-pressed={roleFilter === key}
+            disabled={nodes.size === 0}
+            onClick={() => setRoleFilter(roleFilter === key ? null : key)}
+          >
+            {ROLE_FILTER_LABELS[key]}
+          </button>
+        ))}
       </div>
 
       {capability && !capability.native && (
@@ -541,7 +617,9 @@ export function NativeTreeView({
                 ? "Native unavailable on this page"
                 : nodes.size === 0
                   ? "No native tree loaded yet — hit refresh"
-                  : "Empty tree"}
+                  : hasFilter
+                    ? `No matches${query ? ` for "${query}"` : ""}`
+                    : "Empty tree"}
             </div>
           )}
         </div>
