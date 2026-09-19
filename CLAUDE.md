@@ -117,8 +117,8 @@ website build → surface:check-built. What it leaves out has bitten this repo m
 than once:
 
 - **Every `test:e2e` suite.** Root `test` runs each package's `test`, not
-  `test:e2e`. The CI `e2e` job separately runs `testing`, `mcp`, `cli`, and
-  `browser` (advisory). After any change to CLI output, a renderer, an MCP tool
+  `test:e2e`. The CI `e2e` job separately runs `testing`, `mcp`, `cli`, and —
+  both advisory — `browser` and `extension`. After any change to CLI output, a renderer, an MCP tool
   schema, or the injected page bundle, run the relevant suite by hand —
   otherwise CI's `e2e` job is where you find out.
 - **Windows.** The `verify` matrix is ubuntu + macos only. Because `pre-push`

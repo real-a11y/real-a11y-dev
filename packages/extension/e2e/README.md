@@ -132,10 +132,17 @@ exclusion rather than attempting to close it: a test asserting click-dispatch on
 `row` would be asserting against an already-rejected design decision, not a bug.
 See `ACTABLE`'s docstring in `DogfoodPanel.tsx` and round 7/8 in `DOGFOOD.md`.
 
-**CI wiring**, per the plan's own non-goals. The suite runs locally and is
-treated the way `browser`'s advisory e2e is today. The two blockers the plan
-named for CI — headless support and file-serving — are both resolved above, so
-wiring it in is now a workflow change rather than a research question.
+**CI as a merge gate.** The suite runs in the `e2e` job of
+`.github/workflows/test.yml`, after the `browser` parity harness, as an
+**advisory** step (`continue-on-error: true`): a failure shows in the job log
+but does not fail the job or block a merge. It reuses the Chromium that job
+already installs, needs no Xvfb (see `--headless=new` above), and CI's `retries:
+2` from `playwright.config.ts` applies. It was kept advisory because its
+stability was measured locally (315/315 across `--repeat-each=5 --workers=4`)
+but not yet on an ubuntu runner; promoting it is dropping that one line once it
+has a green run history there. Like every step in that job, it runs on pushes to
+`main` and on pull requests targeting `main` — so it does not run on a stacked
+PR until that PR's base is `main`.
 
 ## Gaps this suite found
 

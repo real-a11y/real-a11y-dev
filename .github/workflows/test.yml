@@ -205,8 +205,9 @@ jobs:
       - name: Packaging checks
         run: pnpm packaging:check
 
-  # Playwright e2e for @real-a11y-dev/testing's `attach()` API and the
-  # @real-a11y-dev/mcp server (both drive a real browser). Single OS + Node
+  # Playwright e2e for @real-a11y-dev/testing's `attach()` API, the
+  # @real-a11y-dev/mcp server and CLI, plus two advisory suites (native-vs-DOM
+  # parity, and the extension's native-tree dispatch). Single OS + Node
   # combo — the e2e suites test our adapters, not Node/OS portability, and the
   # `test` matrix already covers those for the libraries themselves.
   e2e:
@@ -253,6 +254,23 @@ jobs:
       - name: Run native-vs-DOM parity harness (advisory)
         continue-on-error: true
         run: pnpm --filter @real-a11y-dev/browser test:e2e
+
+      # Extension native-tree e2e — loads the unpacked `dist-dogfood/` build into
+      # the same Chromium installed above (one @playwright/test version across the
+      # workspace) and dispatches through `chrome.debugger` against W3C APG
+      # fixtures. Needs no Xvfb: the harness passes `--headless=new` as a raw arg,
+      # which loads MV3 extensions, and serves its fixtures over loopback itself.
+      # `pretest:e2e` runs `build:dogfood`, NOT the store `build` the step above
+      # ran — the store build dead-code-eliminates the native path entirely.
+      #
+      # Advisory FIRST, like the parity harness: the suite has been stable locally
+      # but has no run history on an ubuntu runner yet. Drop `continue-on-error`
+      # to make it a merge gate once it has run green here for a while — and
+      # update "CI as a merge gate" in `packages/extension/e2e/README.md` when you
+      # do.
+      - name: Run extension native-tree e2e (advisory)
+        continue-on-error: true
+        run: pnpm --filter @real-a11y-dev/semantic-navigator-extension test:e2e
 
       - name: Upload Playwright report on failure
         if: failure()
