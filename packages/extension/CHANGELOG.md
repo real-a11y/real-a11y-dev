@@ -18,6 +18,21 @@
 
 ## Unreleased
 
+- **Native mode graduates from the dev-only dogfood build into the shipped
+  extension.** Reading Chromium's own accessibility tree over `chrome.debugger`
+  — full fidelity, including UA-shadow content (media controls, etc.) the DOM
+  producer can't see — is now a real, user-facing feature, off by default. The
+  manifest now requests `debugger`, `tabs` and `storage` as required
+  permissions (`chrome.debugger` cannot be requested optionally), so **this
+  update re-prompts every existing user for the extra permissions** — nothing
+  changes for anyone who doesn't turn the feature on. To use it: open the side
+  panel, click "Enable native mode…", and accept the one-time in-panel notice
+  about what it does and the "…is debugging this browser" banner Chrome shows
+  while it's attached. The setting persists across restarts; turning it back
+  off immediately detaches. The dev-only dogfood build and its `DogfoodPanel`
+  diagnostics widget are unchanged and continue to exist separately for
+  internal telemetry — see `DOGFOOD.md`. ([#386])
+
 - Collect `.tsx` test suites. The vitest `include` was `src/**/*.test.ts`, so a
   suite written as `.tsx` was never picked up — and silently: vitest ran the
   files it matched, reported them green, and said nothing about the one it
@@ -340,3 +355,4 @@ Earlier releases predate this changelog.
 [#354]: https://github.com/real-a11y/real-a11y-dev/pull/354
 [#356]: https://github.com/real-a11y/real-a11y-dev/pull/356
 [#380]: https://github.com/real-a11y/real-a11y-dev/pull/380
+[#386]: https://github.com/real-a11y/real-a11y-dev/pull/386

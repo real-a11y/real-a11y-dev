@@ -173,12 +173,14 @@ async function launchDogfoodExtension(): Promise<
   await panel.goto(
     `chrome-extension://${extensionId}/src/sidepanel/index.html`,
   );
-  // Native mode is off by default and gated twice over (build constant plus
-  // runtime flag). Flipping the flag here is what the dogfooder's own toggle
-  // does; `attach()` enforces it inside its storage transaction, so every
-  // later `NATIVE_READ`/`NATIVE_ACT` in this worker sees it.
+  // Native mode is off by default, gated by the user-facing runtime setting
+  // (`settings.nativeModeEnabled` in `chrome.storage.local` —
+  // `packages/extension/src/native/index.ts`'s `FLAG_KEY`). Flipping it here
+  // is what the "Enable native mode…" toggle does; `attach()` enforces it
+  // inside its storage transaction, so every later `NATIVE_READ`/`NATIVE_ACT`
+  // in this worker sees it.
   await panel.evaluate(() =>
-    chrome.storage.local.set({ "devFlags.nativeMode": true }),
+    chrome.storage.local.set({ "settings.nativeModeEnabled": true }),
   );
 
   return {

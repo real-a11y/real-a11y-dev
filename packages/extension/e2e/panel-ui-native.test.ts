@@ -6,8 +6,9 @@
  * (`panel-ui.test.ts`), never the production tree the toolbar's NATIVE
  * toggle switches to.
  *
- * Both tests pin a real bug a review round caught that no test would have —
- * proof this gap was worth closing rather than assumed:
+ * Every test here pins a real bug a review round (or, for the last two, a
+ * user's own hands-on pass) caught that no test would have — proof each gap
+ * was worth closing rather than assumed:
  *
  *  - `useVirtualTree`'s `containerRef` went unwired in `NativeTreeView.tsx`,
  *    which silently capped the rendered tree at the hook's fixed ~10-row
@@ -18,6 +19,15 @@
  *    `inputType` set, so a retyped replacement for a password field rendered
  *    in plaintext — masking only ever applied to the DOM producer's own
  *    password fields before this.
+ *  - Native rows had no `onDblClick` at all (the DOM tree's own row does),
+ *    so double-clicking a native row silently did nothing where the DOM
+ *    producer would activate it.
+ *  - A mouse click on a native row never moved real DOM focus onto `.sn-tree`
+ *    (only `aria-activedescendant` updated), so the selected row's
+ *    `:focus-visible` outline — keyed off the *container's* focus state —
+ *    never appeared. The DOM tree's own `handleSelect` calls
+ *    `treeRef.current?.focus()` after selecting; `NativeTreeView`'s row
+ *    `onClick` never did.
  */
 
 import { expect, test, type NativeHarness } from "./harness";
@@ -132,4 +142,39 @@ test("a redacted field's retype panel never shows the real value, and masks it",
   await nav.panel.getByRole("button", { name: "Refresh native tree" }).click();
   await expect(pwRow).toContainText("[redacted]");
   await expect(pwRow).not.toContainText("newpass456");
+});
+
+test("double-clicking a row activates it, same as the DOM tree's own row", async ({
+  nav,
+}) => {
+  const page = await showNative(nav, "native-panel.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+
+  const lastRow = nav.panel.getByRole("treeitem", { name: "Item 16" });
+  await expect(lastRow).toBeVisible();
+
+  // The row body, not its "Click (Enter)" action button — a plain
+  // double-click anywhere on the row is what the DOM tree's own row
+  // already honors (App.tsx's `onDblClick`).
+  await lastRow.dblclick({ position: { x: 5, y: 5 } });
+  await expect(page.locator("#item-16")).toHaveAttribute(
+    "data-clicked",
+    "true",
+  );
+});
+
+test("clicking a row gives the tree its own focus-visible outline", async ({
+  nav,
+}) => {
+  await showNative(nav, "native-panel.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+
+  const row = nav.panel.getByRole("treeitem", { name: "Item 16" });
+  await expect(row).toBeVisible();
+  await row.click({ position: { x: 5, y: 5 } });
+
+  // `.sn-tree:focus-visible .sn-node--selected` is the only thing that
+  // paints the outline — real DOM focus has to land on the container for
+  // it to ever apply.
+  await expect(nav.panel.locator(".sn-tree")).toBeFocused();
 });
