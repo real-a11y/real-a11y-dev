@@ -161,7 +161,35 @@ function makeHarness() {
 
   const noopEvent = () => ({ addListener: () => {} });
 
+  // Minimal in-memory StorageArea — background.ts now registers native mode
+  // unconditionally (the capability ships in every build; a separate
+  // runtime setting, not this stub, keeps it off by default), which
+  // constructs a NativeDebuggerSession needing `chrome.storage.local`/
+  // `.session` to exist even though nothing in this file's own tests
+  // exercises native mode itself.
+  function fakeStorageArea() {
+    const data: Record<string, unknown> = {};
+    return {
+      get: (k: string) => Promise.resolve(k in data ? { [k]: data[k] } : {}),
+      set: (i: Record<string, unknown>) => {
+        Object.assign(data, i);
+        return Promise.resolve();
+      },
+    };
+  }
+
   const chromeMock = {
+    storage: { local: fakeStorageArea(), session: fakeStorageArea() },
+    // NativeDebuggerSession's constructor registers `onDetach` unconditionally
+    // now that `registerNativeMode()` always runs; this file's tests never
+    // attach a debugger themselves, so `attach`/`detach`/`sendCommand` just
+    // need to exist and resolve, not do anything realistic.
+    debugger: {
+      onDetach: noopEvent(),
+      attach: () => Promise.resolve(),
+      detach: () => Promise.resolve(),
+      sendCommand: () => Promise.resolve({}),
+    },
     runtime: {
       id: EXTENSION_ID,
       lastError: undefined as undefined | { message: string },

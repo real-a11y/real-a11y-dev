@@ -22,14 +22,18 @@ import {
   removeFrame,
 } from "./tab-state.js";
 
-// `chrome.debugger` native mode (RFC PR H) is a DEV-ONLY dogfood. `__DOGFOOD__`
-// is a build-time constant — false in the store build, so this branch (and the
-// entire native/ module + its `debugger` use) is dead-code-eliminated; the
-// shipped extension never carries the capability. See BUILD_TARGET=dogfood.
-declare const __DOGFOOD__: boolean;
-if (typeof __DOGFOOD__ !== "undefined" && __DOGFOOD__) {
-  registerNativeMode();
-}
+// `chrome.debugger` native mode (RFC PR H) ships in every build now that the
+// manifest carries `debugger`/`tabs`/`storage` as required permissions (see
+// `public/manifest.json`) — the capability itself is always registered.
+// What stays off by default is a separate, runtime, user-facing setting
+// (`native/index.ts`'s own storage-backed flag): `registerNativeMode()` wires
+// the message handlers, but every one of them refuses to touch
+// `chrome.debugger` until that setting is explicitly turned on — see
+// `NativeDebuggerSession.attach()`'s own gate. `__DOGFOOD__` (still a
+// build-time constant, see `vite.config.ts`) now only decides whether the
+// dev-only `DogfoodPanel` debug widget renders (`sidepanel/main.tsx`); it no
+// longer gates this module at all.
+registerNativeMode();
 
 // ---- Per-tab frame state ----
 // Pure state-machine helpers live in ./tab-state, the merge algorithm in
