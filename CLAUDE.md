@@ -106,25 +106,33 @@ If a package fails to build in a worktree with implicit-`any` or dts errors in
 code you never touched, its deps aren't materialized: run `pnpm install` **in the
 worktree**.
 
-Both git hooks are real gates: `pre-commit` runs lint-staged, `pre-push` runs
-`pnpm verify` **and** `pnpm size-limit`. Do not reach for `--no-verify` — every
-time it has looked like the answer here, the failure was real.
+Both git hooks are real gates, but neither is the full one: `pre-commit` runs
+lint-staged, and `pre-push` runs `pnpm format:check` and `pnpm lint` — only the
+build-free checks, because a longer hook outlasts the push's connection to the
+remote and kills it with every check green (`.husky/pre-push` has the details).
+So **the gate is yours to run: `pnpm verify` and `pnpm size-limit`, before you
+push anything substantial.** A green push proves formatting and lint, nothing
+more, and on a feature branch with no PR open yet nothing else has run either —
+`test.yml` triggers on PRs to main and pushes to main, not on your branch.
+Do not reach for `--no-verify` either — every time it has looked like the answer
+here, the failure was real.
 
 ## What `pnpm verify` does not cover
 
 `verify` is build → typecheck → format:check → lint → surface:check → test →
-website build → surface:check-built. What it leaves out has bitten this repo more
-than once:
+test:scripts → website build → surface:check-built. What it leaves out has bitten
+this repo more than once:
 
 - **Every `test:e2e` suite.** Root `test` runs each package's `test`, not
   `test:e2e`. The CI `e2e` job separately runs `testing`, `mcp`, `cli`, and —
   both advisory — `browser` and `extension`. After any change to CLI output, a renderer, an MCP tool
   schema, or the injected page bundle, run the relevant suite by hand —
   otherwise CI's `e2e` job is where you find out.
-- **Windows.** The `verify` matrix is ubuntu + macos only. Because `pre-push`
-  runs `verify` locally, a Windows-fragile test (usually a tight timing bound)
-  blocks your push while passing CI. Confirm it fails on `origin/main` too before
-  concluding your change caused it — then fix the test, don't skip the hook.
+- **Windows.** The `verify` matrix is ubuntu + macos only, so a Windows-fragile
+  test (usually a tight timing bound) fails for you and passes CI. The hook will
+  not show you this one — it runs no tests — so you meet it when you run `verify`
+  yourself. Confirm it fails on `origin/main` too before concluding your change
+  caused it, then fix the test rather than routing around the gate.
 - **The website e2e / a11y baselines**, which have their own suite and their own
   regeneration gotchas (networkidle wait; commit new pages first so `lastUpdated`
   is right; a sidebar change moves every page's baseline).

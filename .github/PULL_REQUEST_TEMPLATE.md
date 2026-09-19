@@ -79,7 +79,7 @@ Cutting a release or adding a package? There are tailored templates:
        confirm the change renders (check the console and dark mode too). -->
 
 - [ ] The steps above run clean on a fresh checkout of this branch
-- [ ] `pnpm verify` passes (build + typecheck + format + lint + test — the gate CI and the pre-push hook run)
+- [ ] `pnpm verify` passes (build + typecheck + format + lint + test — the gate CI runs; the pre-push hook does not, so run it yourself)
 - [ ] Added / updated tests where appropriate
 
 ## Changesets & release
