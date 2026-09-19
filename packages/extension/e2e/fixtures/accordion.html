@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Accordion / Disclosure — APG fixture</title>
+  </head>
+  <body>
+    <h1>Accordion</h1>
+
+    <!--
+      Reconstruction of the W3C ARIA APG "Accordion"
+      (https://www.w3.org/WAI/ARIA/apg/patterns/accordion/examples/accordion/):
+      each section header is an `<h3>` wrapping a `<button aria-expanded
+      aria-controls>`, with a `role="region"` panel below it.
+
+      Round 11's live finding came from exactly this: a COLLAPSED trigger showed
+      no state at all on the native tree (`button "Personal Information"`, and
+      nothing more), where the DOM/A11Y tree view showed a `collapsed` badge.
+      The CDP payload had `expanded: false` all along — the panel's
+      `formatFacets` treated `false` as "default, not worth a badge".
+
+      There is no `toggle` action on the native path, and none is wanted: a
+      disclosure trigger IS a button, and a click on it is the whole
+      interaction. A native `<details>`/`<summary>` sits below for the other
+      shape the pattern takes, where the browser owns the toggling.
+    -->
+
+    <h3>
+      <button
+        id="personal-trigger"
+        aria-expanded="false"
+        aria-controls="personal-panel"
+      >
+        Personal Information
+      </button>
+    </h3>
+    <div
+      id="personal-panel"
+      role="region"
+      aria-labelledby="personal-trigger"
+      hidden
+    >
+      <p>Name and contact details.</p>
+    </div>
+
+    <h3>
+      <button
+        id="billing-trigger"
+        aria-expanded="true"
+        aria-controls="billing-panel"
+      >
+        Billing Address
+      </button>
+    </h3>
+    <div id="billing-panel" role="region" aria-labelledby="billing-trigger">
+      <p>Where the invoice goes.</p>
+    </div>
+
+    <details id="shipping">
+      <summary>Shipping Address</summary>
+      <p>Where the parcel goes.</p>
+    </details>
+
+    <script>
+      document
+        .querySelectorAll("button[aria-expanded]")
+        .forEach(function (trigger) {
+          trigger.addEventListener("click", function () {
+            var open = this.getAttribute("aria-expanded") !== "true";
+            this.setAttribute("aria-expanded", String(open));
+            document.getElementById(this.getAttribute("aria-controls")).hidden =
+              !open;
+          });
+        });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Listbox (native select) — APG fixture</title>
+  </head>
+  <body>
+    <h1>Listbox — native &lt;select&gt;</h1>
+
+    <!--
+      The shape behind round 15's first finding: a real `<select>` (the report
+      was Amazon's department dropdown), which Chromium normalizes on the
+      native tree to `combobox` → `menuListPopup` → `option`.
+
+      Each `option` row had no action at all. A generic click was never going
+      to fix it — an open native `<select>` renders as OS chrome, not DOM a
+      synthetic pointer sequence reaches — so `select`/`pageSelectOption` is a
+      dedicated action, gated in-page on `this instanceof HTMLOptionElement`.
+
+      That in-page check is the only place the role-only native tree can tell a
+      real `<option>` from a custom `role="option"` widget, so the custom
+      widget below is here to pin the refusal, not as an aspiration.
+    -->
+
+    <label for="department">Department</label>
+    <select id="department">
+      <option value="all">All Departments</option>
+      <option value="books">Books</option>
+      <option value="music">Music</option>
+    </select>
+    <output id="department-echo">none</output>
+
+    <div id="custom-label">Custom listbox (not a real select)</div>
+    <ul id="custom-listbox" role="listbox" aria-labelledby="custom-label">
+      <li role="option" id="custom-first" aria-selected="true">First</li>
+      <li role="option" id="custom-second" aria-selected="false">Second</li>
+    </ul>
+
+    <script>
+      document
+        .getElementById("department")
+        .addEventListener("change", function () {
+          // A real `change` listener, so a test can prove the page observed the
+          // selection rather than just reading back the value we set.
+          document.getElementById("department-echo").textContent = this.value;
+        });
+    </script>
+  </body>
+</html>

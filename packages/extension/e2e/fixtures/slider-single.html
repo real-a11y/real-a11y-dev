@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Slider (single-thumb) — APG fixture</title>
+  </head>
+  <body>
+    <h1>Slider</h1>
+
+    <!--
+      Reconstruction of the W3C ARIA APG "Slider" pattern
+      (https://www.w3.org/WAI/ARIA/apg/patterns/slider/examples/slider-temperature/
+      and .../slider-color-viewer/), which the APG demonstrates in BOTH shapes:
+
+        1. a custom `<div role="slider">` thumb inside a rail, keyboard-driven;
+        2. a native `<input type="range">`, which gets `role="slider"` for free.
+
+      Both are here because `pageStep` takes materially different paths for
+      them — `stepUp()`/`stepDown()` for the native input, an ArrowRight/Left
+      dispatch for the custom widget — and the two have failed independently.
+    -->
+
+    <div id="temp-label">Temperature</div>
+    <div id="temp-rail">
+      <div
+        role="slider"
+        tabindex="0"
+        id="temp-thumb"
+        aria-label="Temperature"
+        aria-valuemin="50"
+        aria-valuemax="100"
+        aria-valuenow="68"
+        aria-valuetext="68 degrees"
+      ></div>
+    </div>
+    <output id="temp-out">68</output>
+
+    <label for="rgb-red">Red</label>
+    <input id="rgb-red" type="range" min="0" max="255" step="1" value="128" />
+    <output id="rgb-out">128</output>
+
+    <script>
+      var thumb = document.getElementById("temp-thumb");
+      thumb.addEventListener("keydown", function (event) {
+        var delta =
+          event.key === "ArrowRight" || event.key === "ArrowUp"
+            ? 1
+            : event.key === "ArrowLeft" || event.key === "ArrowDown"
+              ? -1
+              : 0;
+        if (!delta) return;
+        event.preventDefault();
+        var min = Number(this.getAttribute("aria-valuemin"));
+        var max = Number(this.getAttribute("aria-valuemax"));
+        var next = Math.min(
+          max,
+          Math.max(min, Number(this.getAttribute("aria-valuenow")) + delta),
+        );
+        this.setAttribute("aria-valuenow", String(next));
+        this.setAttribute("aria-valuetext", next + " degrees");
+        document.getElementById("temp-out").textContent = String(next);
+      });
+
+      // A native range's own `input` event — what `stepUp()` alone would NOT
+      // fire, and what `pageStep` dispatches by hand right after stepping.
+      var red = document.getElementById("rgb-red");
+      red.addEventListener("input", function () {
+        document.getElementById("rgb-out").textContent = this.value;
+      });
+    </script>
+  </body>
+</html>

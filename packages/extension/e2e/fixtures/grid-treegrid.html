@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Grid and Treegrid — APG fixture</title>
+  </head>
+  <body>
+    <h1>Grid and Treegrid</h1>
+
+    <!--
+      Reconstruction of the W3C ARIA APG "Grid"
+      (https://www.w3.org/WAI/ARIA/apg/patterns/grid/examples/data-grids/) and
+      "Treegrid"
+      (https://www.w3.org/WAI/ARIA/apg/patterns/treegrid/examples/treegrid-1/)
+      patterns, plus a plain HTML `<table>`.
+
+      The point of this fixture is the ROLE BOUNDARY, which is a deliberate
+      design decision the suite should pin rather than a gap to close:
+
+        - `gridcell` IS actionable. The DOM producer gives it a click, and the
+          panel followed in round 7.
+        - `row` is NOT, and neither is a plain `cell`. Both are also the
+          IMPLICIT role of a plain native element (`<tr>`, `<td>`), which
+          Chromium computes identically via HTML-AAM — and a native-tree node
+          carries only a role string, no tag. Round 7's first pass added `row`
+          to `ACTABLE` and round 8 reverted it, because offering CLICK on every
+          table row of every page with a data table would misfire far more than
+          it would help.
+
+      Closing that is an already-rejected design decision, not a bug fix. The
+      plain `<table>` below is what makes the reversal testable at all: it is
+      the shape that would have been harmed.
+    -->
+
+    <div role="grid" aria-label="Transactions" id="transactions">
+      <div role="row">
+        <span role="columnheader">Date</span>
+        <span role="columnheader">Amount</span>
+      </div>
+      <div role="row" id="tx-1">
+        <span role="gridcell" id="tx-1-date" tabindex="-1">2026-01-04</span>
+        <span role="gridcell" id="tx-1-amount" tabindex="-1">12.40</span>
+      </div>
+    </div>
+
+    <div role="treegrid" aria-label="Threads" id="threads">
+      <div role="row" id="thread-1" aria-level="1" aria-expanded="false">
+        <span role="gridcell" id="thread-1-subject" tabindex="-1"
+          >Release notes</span
+        >
+      </div>
+    </div>
+
+    <table>
+      <caption>
+        Plain table
+      </caption>
+      <tbody>
+        <tr id="plain-row">
+          <td id="plain-cell">Nothing here is actionable</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <output id="grid-echo">none</output>
+
+    <script>
+      document
+        .getElementById("transactions")
+        .addEventListener("click", function (event) {
+          var cell = event.target.closest('[role="gridcell"]');
+          if (cell) document.getElementById("grid-echo").textContent = cell.id;
+        });
+      document
+        .getElementById("threads")
+        .addEventListener("click", function (event) {
+          var cell = event.target.closest('[role="gridcell"]');
+          if (cell) document.getElementById("grid-echo").textContent = cell.id;
+        });
+    </script>
+  </body>
+</html>

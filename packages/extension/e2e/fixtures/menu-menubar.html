@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Menu and Menubar — APG fixture</title>
+  </head>
+  <body>
+    <h1>Menu and Menubar</h1>
+
+    <!--
+      Reconstruction of the W3C ARIA APG "Menubar" example
+      (https://www.w3.org/WAI/ARIA/apg/patterns/menubar/examples/menubar-editor/)
+      — the editor menubar, which is where round 7's live finding came from:
+      `menuitemradio` rows showed a CLICK button in the DOM/A11Y tree view but
+      not on the native tree, because the panel's `ACTABLE` allowlist had
+      fallen behind the DOM producer's own `getActions`.
+
+      Two things make this fixture worth having beyond the role list. First, the
+      whole `menuitem` family is here (`menuitem`, `menuitemcheckbox`,
+      `menuitemradio`), because the gap was per-role. Second, the font-family
+      items are WRAPPER composites — the clickable element is nested inside the
+      `role="menuitemradio"`, and the handler is delegated from an ancestor, so
+      dispatching on the wrapper only works through `pageClick`'s own composite
+      redirect. A flat menu item would exercise neither.
+    -->
+
+    <ul role="menubar" aria-label="Text Formatting">
+      <li role="none">
+        <span role="menuitem" id="font-menu" aria-haspopup="true" tabindex="0"
+          >Font</span
+        >
+        <ul role="menu" aria-label="Font">
+          <li role="menuitemradio" id="serif" aria-checked="true">
+            <span class="item-label">Serif</span>
+          </li>
+          <li role="menuitemradio" id="sans" aria-checked="false">
+            <span class="item-label">Sans-serif</span>
+          </li>
+        </ul>
+      </li>
+      <li role="none">
+        <span role="menuitem" id="style-menu" aria-haspopup="true" tabindex="0"
+          >Style</span
+        >
+        <ul role="menu" aria-label="Style">
+          <li role="menuitemcheckbox" id="bold" aria-checked="false">Bold</li>
+          <li role="menuitemcheckbox" id="italic" aria-checked="false">
+            Italic
+          </li>
+        </ul>
+      </li>
+      <li role="none">
+        <span role="menuitem" id="about" tabindex="-1">About</span>
+      </li>
+    </ul>
+
+    <output id="menu-echo">none</output>
+
+    <script>
+      // Delegated from the menubar, the way the APG example wires it — a
+      // handler bound to each item directly would not exercise the composite
+      // redirect at all.
+      document
+        .querySelector('[role="menubar"]')
+        .addEventListener("click", function (event) {
+          var item = event.target.closest(
+            '[role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"]',
+          );
+          if (!item) return;
+          var role = item.getAttribute("role");
+          if (role === "menuitemradio") {
+            item
+              .closest('[role="menu"]')
+              .querySelectorAll('[role="menuitemradio"]')
+              .forEach(function (sibling) {
+                sibling.setAttribute("aria-checked", String(sibling === item));
+              });
+          } else if (role === "menuitemcheckbox") {
+            item.setAttribute(
+              "aria-checked",
+              String(item.getAttribute("aria-checked") !== "true"),
+            );
+          }
+          document.getElementById("menu-echo").textContent = item.id;
+        });
+    </script>
+  </body>
+</html>

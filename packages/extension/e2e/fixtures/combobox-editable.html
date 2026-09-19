@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Combobox (Editable) — APG fixture</title>
+  </head>
+  <body>
+    <h1>Combobox (Editable)</h1>
+
+    <!--
+      Reconstruction of the W3C ARIA APG "Editable Combobox with List
+      Autocomplete"
+      (https://www.w3.org/WAI/ARIA/apg/patterns/combobox/examples/combobox-autocomplete-list/):
+      a native `<input role="combobox">` with `aria-autocomplete="list"`
+      controlling a `role="listbox"` popup.
+
+      Round 13's live finding was that this shape always dispatched a click and
+      never let the dogfooder type — round 4 had made every combobox a click,
+      correct for the select-only pattern next door but wrong here. The fix
+      reads the native tree's own `editable` state, which Chromium sets for a
+      native input. The test asserts on that state as well as on the dispatch,
+      because the state is what the panel's `isTypableRole` actually branches
+      on.
+    -->
+
+    <label id="fruit-label" for="fruit">Choose a fruit</label>
+    <input
+      id="fruit"
+      type="text"
+      role="combobox"
+      aria-controls="fruit-listbox"
+      aria-expanded="false"
+      aria-autocomplete="list"
+      aria-labelledby="fruit-label"
+    />
+    <ul id="fruit-listbox" role="listbox" aria-labelledby="fruit-label" hidden>
+      <li role="option" id="opt-apple">Apple</li>
+      <li role="option" id="opt-banana">Banana</li>
+      <li role="option" id="opt-cherry">Cherry</li>
+    </ul>
+    <output id="fruit-echo"></output>
+
+    <script>
+      var input = document.getElementById("fruit");
+      var listbox = document.getElementById("fruit-listbox");
+      input.addEventListener("input", function () {
+        // What an autocomplete combobox does with typed text: filter, open,
+        // and reflect. `pageType` dispatches a real `input` event, so an
+        // assertion on the echo proves the page actually received the text
+        // rather than the value merely being set behind its back.
+        document.getElementById("fruit-echo").textContent = this.value;
+        var query = this.value.toLowerCase();
+        var any = false;
+        listbox.querySelectorAll('[role="option"]').forEach(function (option) {
+          var match = option.textContent.toLowerCase().indexOf(query) === 0;
+          option.hidden = !match;
+          any = any || match;
+        });
+        listbox.hidden = !(query && any);
+        this.setAttribute("aria-expanded", String(!listbox.hidden));
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Checkbox, Radio Group, Switch — APG fixture</title>
+  </head>
+  <body>
+    <h1>Checkbox, Radio Group and Switch</h1>
+
+    <!--
+      Three APG patterns whose fixtures are trivial and whose dispatch is a
+      plain click, grouped into one file rather than three near-identical ones.
+
+        - Checkbox (Tri-State):
+          https://www.w3.org/WAI/ARIA/apg/patterns/checkbox/examples/checkbox-mixed/
+        - Radio Group:
+          https://www.w3.org/WAI/ARIA/apg/patterns/radio/examples/radio/
+        - Switch:
+          https://www.w3.org/WAI/ARIA/apg/patterns/switch/examples/switch/
+
+      The tri-state checkbox earns its place beyond the click: round 11 fixed
+      `checked: "mixed"` rendering, and `mixed` is the one checked value that is
+      a STRING rather than a boolean on the wire — the case a two-state fixture
+      cannot reach.
+    -->
+
+    <div id="condiments-label">Sandwich Condiments</div>
+    <div
+      role="checkbox"
+      id="all-condiments"
+      tabindex="0"
+      aria-checked="mixed"
+      aria-controls="lettuce tomato"
+      aria-labelledby="condiments-label"
+    >
+      All condiments
+    </div>
+    <div role="checkbox" id="lettuce" tabindex="0" aria-checked="true">
+      Lettuce
+    </div>
+    <div role="checkbox" id="tomato" tabindex="0" aria-checked="false">
+      Tomato
+    </div>
+
+    <input type="checkbox" id="native-check" />
+    <label for="native-check">Native checkbox</label>
+
+    <div role="radiogroup" aria-label="Pizza crust" id="crust">
+      <div role="radio" id="crust-thin" tabindex="0" aria-checked="true">
+        Thin
+      </div>
+      <div role="radio" id="crust-deep" tabindex="-1" aria-checked="false">
+        Deep dish
+      </div>
+    </div>
+
+    <span id="notify-label">Notifications</span>
+    <button
+      role="switch"
+      id="notify"
+      aria-checked="false"
+      aria-labelledby="notify-label"
+    >
+      <span aria-hidden="true">off</span>
+    </button>
+
+    <script>
+      function toggleCheckbox(el) {
+        // `mixed` resolves to checked on activation, per the APG example.
+        el.setAttribute(
+          "aria-checked",
+          String(el.getAttribute("aria-checked") !== "true"),
+        );
+      }
+
+      ["all-condiments", "lettuce", "tomato"].forEach(function (id) {
+        document.getElementById(id).addEventListener("click", function () {
+          toggleCheckbox(this);
+        });
+      });
+
+      document
+        .getElementById("crust")
+        .addEventListener("click", function (event) {
+          var radio = event.target.closest('[role="radio"]');
+          if (!radio) return;
+          this.querySelectorAll('[role="radio"]').forEach(function (other) {
+            var checked = other === radio;
+            other.setAttribute("aria-checked", String(checked));
+            other.tabIndex = checked ? 0 : -1;
+          });
+        });
+
+      document.getElementById("notify").addEventListener("click", function () {
+        var on = this.getAttribute("aria-checked") !== "true";
+        this.setAttribute("aria-checked", String(on));
+        this.querySelector("span").textContent = on ? "on" : "off";
+      });
+    </script>
+  </body>
+</html>

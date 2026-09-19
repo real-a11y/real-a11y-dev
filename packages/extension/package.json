@@ -10,9 +10,11 @@
     "build:dogfood": "node scripts/sync-manifest-version.mjs && cross-env DOGFOOD=1 vite build && cross-env DOGFOOD=1 BUILD_TARGET=content vite build && node scripts/dogfood-manifest.mjs",
     "dev": "vite build --watch",
     "package": "pnpm build && node scripts/zip-for-cws.mjs",
-    "typecheck": "node scripts/sync-manifest-version.mjs --check && tsc --noEmit",
+    "typecheck": "node scripts/sync-manifest-version.mjs --check && tsc --noEmit && tsc --noEmit -p tsconfig.e2e.json",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "pretest:e2e": "pnpm build:dogfood",
+    "test:e2e": "playwright test --config=playwright.config.ts"
   },
   "dependencies": {
     "@real-a11y-dev/core": "workspace:*",
@@ -21,8 +23,10 @@
     "preact": "^10.29.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@preact/preset-vite": "^2.10.6",
     "@types/chrome": "^0.2.6",
+    "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "^3.2.7",
     "cross-env": "^10.1.0",
     "jsdom": "^29.1.1",

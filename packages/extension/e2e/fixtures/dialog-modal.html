@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Dialog (Modal) — APG fixture</title>
+  </head>
+  <body>
+    <h1>Dialog (Modal)</h1>
+
+    <!--
+      Reconstruction of the W3C ARIA APG "Dialog (Modal)"
+      (https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/examples/dialog/),
+      using a native `<dialog>` with `showModal()` — the shape that makes the
+      focus trap and Escape-to-close the browser's job rather than the page's.
+
+      This one is in the suite for a specific reason. Mechanically a dialog is
+      nothing but buttons, and a click on the trigger will always report
+      success. What a click CANNOT tell you is whether the rest of the page went
+      inert behind it — and that is exactly the "looks fine, isn't" shape round
+      15's slider half warns about. So the assertions go past the click: they
+      check the tree the dogfooder is now reading really is the dialog's, and
+      that a dispatch aimed at a node behind the modal is inert.
+    -->
+
+    <button id="open-dialog">Add delivery address</button>
+    <output id="dialog-echo">none</output>
+    <button id="background-button">Background action</button>
+
+    <dialog id="address-dialog" aria-labelledby="dialog-title">
+      <h2 id="dialog-title">Add delivery address</h2>
+      <label for="street">Street</label>
+      <input id="street" type="text" />
+      <button id="dialog-save">Save</button>
+      <button id="dialog-cancel">Cancel</button>
+    </dialog>
+
+    <script>
+      var dialog = document.getElementById("address-dialog");
+      document
+        .getElementById("open-dialog")
+        .addEventListener("click", function () {
+          dialog.showModal();
+        });
+      document
+        .getElementById("dialog-cancel")
+        .addEventListener("click", function () {
+          dialog.close();
+        });
+      document
+        .getElementById("dialog-save")
+        .addEventListener("click", function () {
+          document.getElementById("dialog-echo").textContent =
+            "saved:" + document.getElementById("street").value;
+          dialog.close();
+        });
+      document
+        .getElementById("background-button")
+        .addEventListener("click", function () {
+          // If this ever runs while the modal is open, the modal is not modal.
+          document.getElementById("dialog-echo").textContent = "background!";
+        });
+    </script>
+  </body>
+</html>
