@@ -30,7 +30,10 @@ import type {
 } from "playwright";
 
 import { CdpActionBackend } from "./cdp-action-backend.js";
-import { nativeTree as computeNativeTree } from "./native-tree.js";
+import {
+  nativeAXView,
+  nativeTree as computeNativeTree,
+} from "./native-tree.js";
 
 /**
  * The injected IIFE page-bundle, as SOURCE TEXT — lazily, and cached.
@@ -111,65 +114,6 @@ export function assertOpenableUrl(url: string): void {
         ? " (set REAL_A11Y_MCP_ALLOW_FILE=1 to permit file://)."
         : "."),
   );
-}
-
-/** A subset of a Chromium CDP `Accessibility.AXNode`. */
-interface AXNode {
-  nodeId: string;
-  parentId?: string;
-  childIds?: string[];
-  role?: { value?: string };
-  name?: { value?: string };
-  ignored?: boolean;
-}
-
-// Native roles that are structural noise vs. our custom tree: text runs and
-// generic wrappers the custom serializer collapses into names / drops.
-const NATIVE_DROP = new Set([
-  "StaticText",
-  "InlineTextBox",
-  "LineBreak",
-  "LabelText",
-  "generic",
-  "none",
-  "presentation",
-  "RootWebArea",
-]);
-// Blink AX role → the ARIA role our custom tree uses, where they differ.
-const NATIVE_ROLE_MAP: Record<string, string> = { image: "img" };
-
-/**
- * Reconstruct Chromium's native accessibility tree from a flat `getFullAXTree`
- * node list and serialize it in the same `role "name"` shape our custom tree
- * uses — so the two are comparable. Returns the indented tree plus a flat list
- * of role+name pairs (for order/indent-insensitive diffing).
- */
-function serializeNativeAX(nodes: AXNode[]): { tree: string; pairs: string[] } {
-  const byId = new Map(nodes.map((n) => [n.nodeId, n]));
-  const roots = nodes.filter((n) => !n.parentId);
-  const treeLines: string[] = [];
-  const pairs: string[] = [];
-
-  const walk = (node: AXNode, depth: number): void => {
-    const role = node.role?.value ?? "";
-    const drop = node.ignored || NATIVE_DROP.has(role);
-    let childDepth = depth;
-    if (!drop && role) {
-      const mapped = NATIVE_ROLE_MAP[role] ?? role;
-      const name = (node.name?.value ?? "").replace(/\s+/g, " ").trim();
-      const pair = name ? `${mapped} "${name}"` : mapped;
-      treeLines.push(`${"  ".repeat(depth)}${pair}`);
-      pairs.push(pair);
-      childDepth = depth + 1;
-    }
-    for (const cid of node.childIds ?? []) {
-      const child = byId.get(cid);
-      if (child) walk(child, childDepth);
-    }
-  };
-
-  for (const root of roots) walk(root, 0);
-  return { tree: treeLines.join("\n"), pairs };
 }
 
 let cachedExpr: string | undefined;
@@ -542,8 +486,8 @@ export class BrowserSession implements A11ySession {
         await client.send("Accessibility.enable");
         const { nodes } = (await client.send(
           "Accessibility.getFullAXTree",
-        )) as { nodes: AXNode[] };
-        return serializeNativeAX(nodes);
+        )) as { nodes: Parameters<typeof nativeAXView>[0] };
+        return nativeAXView(nodes);
       } finally {
         await client.detach().catch(() => {});
       }
