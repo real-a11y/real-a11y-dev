@@ -293,7 +293,8 @@ ship with the next release without their own changeset.)
 ## 6. Verify
 
 ```bash
-pnpm verify   # build + typecheck + format:check + lint + surface:check + test + website build + surface:check-built
+pnpm verify       # build + typecheck + format:check + lint + surface:check + test + test:scripts + website build + surface:check-built
+pnpm size-limit   # the bundle budgets — blocking in CI, and `verify` does NOT run them
 ```
 
 **If you touched any `website/*.md`, also regenerate the a11y baselines** — a
@@ -319,7 +320,10 @@ End the body with:
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
 ```
 
-Push triggers the pre-push hook (runs `pnpm verify`) — don't `--no-verify`.
+Push triggers the pre-push hook, but it is not the gate: the pre-push hook runs
+`pnpm format:check` and `pnpm lint` only. Step 6 — both commands, `size-limit`
+included — is what actually checks this branch, so don't skip it on the strength
+of a green push, and don't `--no-verify` either.
 
 ## 8. Open the PR — NORMAL, not draft
 

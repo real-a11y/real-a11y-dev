@@ -42,12 +42,16 @@ const RUBRIC = fileURLToPath(new URL("./pr-risk.mjs", import.meta.url));
 /**
  * The environment with git's repo-location variables STRIPPED.
  *
- * `pnpm verify` runs from the `pre-push` hook, and git exports `GIT_DIR` and
- * `GIT_INDEX_FILE` into a hook's environment. Those beat `cwd` — so every
- * `git init` here silently addressed the real repository instead of its own
- * temp directory, and the whole suite died on `fatal: this operation must be run
- * in a work tree`. Green from a plain shell, red from the hook that gates the
- * push: the one place a fixture must not inherit ambient state.
+ * This bit once, and the mechanism has not gone anywhere. `pnpm verify` ran from
+ * the `pre-push` hook, git exports `GIT_DIR` and `GIT_INDEX_FILE` into a hook's
+ * environment, and those beat `cwd` — so every `git init` here silently
+ * addressed the real repository instead of its own temp directory, and the whole
+ * suite died on `fatal: this operation must be run in a work tree`. Green from a
+ * plain shell, red from the hook: the one place a fixture must not inherit
+ * ambient state. The hook is `format:check` and `lint` only now, so it no longer
+ * reaches these tests — but anything invoked from a hook, or a shell that
+ * exports these by hand, reproduces it exactly, and the failure mode is a
+ * fixture writing to the real repository.
  *
  * The identity pairs go too. `GIT_AUTHOR_NAME` and friends outrank the `-c`
  * flags below, so a contributor who exports them would otherwise author these
