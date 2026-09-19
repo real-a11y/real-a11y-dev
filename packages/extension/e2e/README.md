@@ -90,6 +90,12 @@ sidesteps the question entirely.
   `panel-ui.test.ts` covers. Pins two rendering/masking regressions a review
   round caught that no dogfood session or message-level test could have — see
   `DOGFOOD.md`'s "Automated coverage" section for what they were.
+- `panel-ui-native-search.test.ts` — `NativeTreeView`'s search box and
+  role-filter pills (`native-search.ts`): a query narrowing to matches and
+  their ancestors, the empty-state for no matches, a role pill combined with
+  a query, and the `/`-focuses-search shortcut. `native-search.test.ts` (in
+  `src/native/`) covers the matching logic itself at the unit level; this
+  file is only for what a unit test can't see — the actual toolbar wiring.
 
 ## Coverage
 
