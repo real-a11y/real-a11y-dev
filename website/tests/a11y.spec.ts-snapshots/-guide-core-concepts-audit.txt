@@ -190,5 +190,5 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous pageGetting Started"
+    link "Previous pageAgent Skills"
     link "Next pageAccessibility Snapshots"

@@ -35,7 +35,7 @@ features:
     linkText: Explore the CLI
   - icon: 🤖
     title: Accessibility for AI agents
-    details: "@real-a11y-dev/mcp — a Model Context Protocol server that hands the semantic tree and audits to AI agents over stdio. Point any MCP client at it and the agent can reason about what assistive tech actually perceives."
+    details: "@real-a11y-dev/mcp hands the semantic tree and audits to AI agents. Pair it with Agent Skills for the workflows (wire-up, audit, act-then-diff) so the assistant does not invent the sequence."
     link: /packages/mcp
     linkText: Explore the MCP server
   - icon: ⚛️

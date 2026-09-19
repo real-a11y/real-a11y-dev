@@ -764,6 +764,10 @@ const LOW_SHAPED = [
   ],
   [/^packages\/[^/]+\/(README|CHANGELOG)\.md$/, "package docs"],
   [/^docs\/(?!surface).*\.md$/, "internal docs"],
+  [
+    /^community-skills\//,
+    "community Agent Skills drafts (staging for real-a11y/skills)",
+  ],
   [/^examples\//, "examples"],
   [/\.(test|spec)\.[cm]?[jt]sx?$/, "tests"],
   [/^packages\/[^/]+\/src\/__(tests|fixtures|snapshots)__\//, "test fixtures"],

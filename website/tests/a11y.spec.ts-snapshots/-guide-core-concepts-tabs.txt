@@ -17,5 +17,5 @@ link "Accessible Names"
 button "Copy Code"
 generic
 link "Edit this page on GitHub"
-link "Previous pageGetting Started"
+link "Previous pageAgent Skills"
 link "Next pageAccessibility Snapshots"

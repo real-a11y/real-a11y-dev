@@ -30,6 +30,9 @@ on:
       # been done. A stale nag is worse than none: it is the thing that teaches
       # people the comment isn't worth reading.
       - "scenarios/**"
+      # Same reason for community Agent Skills: a follow-up that only edits
+      # `community-skills/**` must clear the sticky "untouched skill" nag.
+      - "community-skills/**"
 
 permissions:
   contents: read
