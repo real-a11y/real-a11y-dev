@@ -80,6 +80,16 @@ describe("extractA11yTree", () => {
       expect(main.childIds).toContain(heading.id);
     });
 
+    it("does not name one from its loose text (name from author only)", () => {
+      const { nodes } = extractA11yTree(
+        createPage(
+          `<article><header>By Ada · <time>May 1</time></header><p>Body</p></article>`,
+        ),
+      );
+      const roles = Array.from(nodes.values()).map((n) => n.a11y.role);
+      expect(roles).not.toContain("sectionheader");
+    });
+
     it("keeps a named one", () => {
       expect(
         roleOf(
