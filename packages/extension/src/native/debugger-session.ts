@@ -17,6 +17,16 @@ import type { CdpTransport } from "./native-core.js";
 
 const PROTOCOL = "1.3";
 
+/**
+ * Bound on the liveness probe `attach()` sends before trusting a reused
+ * session (see there). It runs inside the promise `detachAll` waits on, so an
+ * unbounded probe against a wedged tab — blocked on a synchronous `alert()`,
+ * say — would let turning native mode off hang right along with it. A timeout
+ * is treated as "can't tell" (falls through to the conservative branch),
+ * never as proof the connection is gone.
+ */
+const PROBE_TIMEOUT_MS = 2000;
+
 /** "Another debugger is already attached…" — the DevTools-conflict class. */
 export function isDebuggerConflict(message: string | undefined): boolean {
   return /already attached/i.test(message ?? "");
@@ -46,7 +56,13 @@ function transportFor(tabId: number): CdpTransport {
  * The message is only inspected here and never surfaced (R6).
  */
 export function isConnectionLost(message: string | undefined): boolean {
-  return /detached|not attached|target closed|no target with given id|tab was closed/i.test(
+  // `no (target|tab) with given id` — Chrome phrases this per target type, and
+  // the `{ tabId }` form this module always uses yields the TAB wording ("No tab
+  // with given id 7."). Matching only the `target` spelling meant a closed tab
+  // fell through to the "plausibly still attached" branch in `detachIfLive`,
+  // which puts the entry back: the map then never cleared and every later revoke
+  // re-reported the same dead tab as `detach-refused`.
+  return /detached|not attached|target closed|no (?:target|tab) with given id|tab was closed/i.test(
     message ?? "",
   );
 }
@@ -58,7 +74,13 @@ export interface AttachOutcome {
    * it (a lifecycle event worth measuring); `command-failed` means the CDP
    * call failed while the connection held (not a lifecycle event).
    */
-  error?: "conflict" | "attach-failed" | "connection-lost" | "command-failed";
+  error?:
+    | "conflict"
+    | "attach-failed"
+    | "connection-lost"
+    | "command-failed"
+    /** Native mode was switched off before this attach could happen. */
+    | "disabled";
 }
 
 interface StorageArea {
@@ -88,6 +110,22 @@ export class NativeDebuggerSession {
   private tail: Promise<unknown> = Promise.resolve();
   /** One in-flight operation chain per tab — see `runExclusive`. */
   private opTails = new Map<number, Promise<void>>();
+  /**
+   * One in-flight `attach()` call per tab, tracked so `detachAll` can wait for
+   * it. The `chrome.debugger.attach` call inside `attach()` runs OUTSIDE the
+   * storage mutex on purpose (holding it across that round-trip let a slow
+   * attach on one tab block another tab's teardown) — but that means a revoke
+   * reading the map for its snapshot has no other way to observe an attach
+   * that hasn't landed yet. See `attach` and `detachAll`.
+   */
+  private pendingAttaches = new Map<number, Promise<void>>();
+
+  /**
+   * Is native mode still on? Consulted INSIDE the attach's storage transaction,
+   * which is what makes "switch it off" and "attach" mutually exclusive rather
+   * than merely usually-ordered — see {@link attach}.
+   */
+  private isEnabled: () => Promise<boolean>;
 
   /**
    * @param storage        durable area for the dogfood log (chrome.storage.local).
@@ -95,10 +133,16 @@ export class NativeDebuggerSession {
    *                       Production passes `chrome.storage.session` — it
    *                       survives worker restarts but not a browser restart,
    *                       which is exactly the lifetime of a debugger attach.
+   * @param isEnabled      the runtime native-mode flag, re-read per attach.
    */
-  constructor(storage: StorageArea, attachStorage: StorageArea = storage) {
+  constructor(
+    storage: StorageArea,
+    attachStorage: StorageArea = storage,
+    isEnabled: () => Promise<boolean> = async () => true,
+  ) {
     this.log = new DogfoodLog(storage);
     this.attachStore = attachStorage;
+    this.isEnabled = isEnabled;
     // MV3: the debugger detaches when the SW suspends, when DevTools opens on
     // the tab, or when the tab closes. Record it as the lifecycle signal.
     chrome.debugger.onDetach.addListener((source, reason) => {
@@ -191,7 +235,6 @@ export class NativeDebuggerSession {
   ): Promise<{ outcome: AttachOutcome; value?: T }> {
     const attach = await this.attach(tabId);
     if (!attach.ok) return { outcome: attach };
-    const startedAt = Date.now();
     // `finally` runs on paths where neither assignment has happened yet, so it
     // reads this optionally; only an explicit `connection-lost` marks the
     // teardown as a drop, which is the conservative default.
@@ -208,34 +251,289 @@ export class NativeDebuggerSession {
       };
     } finally {
       // A book-keeping failure here must not discard an already-successful
-      // result, nor turn it into a spurious retry of a page action.
-      await this.detach(
-        tabId,
-        Date.now() - startedAt,
-        outcome?.error === "connection-lost",
-      ).catch(() => {});
+      // result, nor turn it into a spurious retry of a page action. `detach`
+      // derives the dwell duration from the map's own timestamp rather than a
+      // duration measured here, which is what makes a reused session's total
+      // banner time correct rather than just this operation's slice of it.
+      await this.detach(tabId, outcome?.error === "connection-lost").catch(
+        () => {},
+      );
     }
     return outcome.ok ? { outcome, value } : { outcome };
   }
 
+  /**
+   * Attach, and record it, as ONE transaction on the storage queue.
+   *
+   * The enabled-check lives in here rather than in the caller because the
+   * caller cannot make it atomic. `detachAll` reads the attach map on this same
+   * queue, so an attach that is merely *checked* upstream can still be in
+   * flight when the revoke takes its snapshot: it is in neither the map nor
+   * refused, and its banner goes up after the panel has said native is off.
+   * Sharing the queue removes the window rather than narrowing it — an attach
+   * either lands in the map before the revoke reads it, or finds the flag
+   * already false.
+   */
   private async attach(tabId: number): Promise<AttachOutcome> {
+    const result = this.attachTracked(tabId);
+    // Registered for the FULL call, including the post-CDP-call transaction
+    // below — not just the `chrome.debugger.attach` round-trip — since a
+    // revoke racing the transaction is the same hazard as one racing the CDP
+    // call itself. Settles even on rejection so a failed attach doesn't wedge
+    // `detachAll` forever waiting on it.
+    const settled = result.then(
+      () => {},
+      () => {},
+    );
+    this.pendingAttaches.set(tabId, settled);
+    void settled.then(() => {
+      if (this.pendingAttaches.get(tabId) === settled) {
+        this.pendingAttaches.delete(tabId);
+      }
+    });
+    return result;
+  }
+
+  private async attachTracked(tabId: number): Promise<AttachOutcome> {
+    // Cheap pre-check, outside the mutex — the authoritative one is below.
+    if (!(await this.isEnabled())) return { ok: false, error: "disabled" };
+    // True when Chrome refused because WE already hold the tab, so the existing
+    // attachment is reused rather than replaced.
+    let reused = false;
     try {
       await chrome.debugger.attach({ tabId }, PROTOCOL);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (isDebuggerConflict(msg)) {
-        await this.log.record({ kind: "conflict", at: Date.now() });
-        return { ok: false, error: "conflict" };
+        // "Another debugger is already attached" does not say WHO. `runExclusive`
+        // only serializes within one worker generation, so after an MV3 suspend
+        // the in-memory queue is empty while our own attachment — and its entry
+        // in `chrome.storage.session` — can still be live. Scoring that as a
+        // DevTools conflict inflates one of the three headline metrics with a
+        // self-collision, which is the same class of bug the per-tab queue was
+        // added to fix, one generation up.
+        const hasEntry = await this.enqueue(
+          async () => (await this.readAttached())[tabId] !== undefined,
+        );
+        // The entry alone is NOT proof: it means we attached at some point, not
+        // that we still hold the tab now. An unreported drop — the SW suspended
+        // mid-attachment and missed the `onDetach` event — can leave a stale
+        // entry while Chrome's real attachment now belongs to someone else, e.g.
+        // DevTools opening on the tab in the interim. Reusing on bookkeeping
+        // alone would dispatch `fn()` against a session we don't actually hold;
+        // its command would fail as `connection-lost`, and `withRecovery` would
+        // retry it as a genuine mid-operation drop rather than the stale-entry
+        // cleanup it actually is. A live probe is the only way to tell the two
+        // apart — cheap and side-effect-free, since we hit `Runtime.evaluate`
+        // every real read anyway.
+        //
+        // Bounded: this call sits inside the promise `detachAll` waits on (see
+        // `attach`'s wrapper), so an unbounded probe against a tab whose
+        // renderer is wedged — blocked on a synchronous `alert()`, say — would
+        // let turning native mode off hang right along with it.
+        const probe = await Promise.race([
+          chrome.debugger
+            .sendCommand({ tabId }, "Runtime.evaluate", { expression: "1" })
+            .then(() => ({ ok: true as const })),
+          new Promise<{ ok: false; msg: undefined }>((resolve) =>
+            setTimeout(
+              () => resolve({ ok: false, msg: undefined }),
+              PROBE_TIMEOUT_MS,
+            ),
+          ),
+        ]).catch((err: unknown) => ({
+          ok: false as const,
+          msg: err instanceof Error ? err.message : String(err),
+        }));
+        // Only a message that specifically says we are not attached proves the
+        // entry lied. Anything else — a timeout, a mid-navigation hiccup with no
+        // execution context yet, an unrelated protocol error — is the PROBE
+        // failing for its own reason, not proof the connection is gone. Treating
+        // it as proof would turn one bad `Runtime.evaluate` into a permanent
+        // lockout: the entry gets cleared, the next attach hits the same
+        // "already attached" with nothing left to reuse, and every attempt after
+        // reports a conflict that was never real. Matches this file's existing
+        // rule elsewhere: anything unrecognized falls through conservatively
+        // rather than inventing a drop.
+        const alive = hasEntry && (probe.ok || !isConnectionLost(probe.msg));
+        if (!alive) {
+          if (hasEntry) {
+            // The entry lied. Clear it as stale bookkeeping — the connection
+            // was never really ours to lose here — rather than let it survive
+            // to confuse the next attach attempt too.
+            await this.enqueue(async () => {
+              const attached = await this.readAttached();
+              delete attached[tabId];
+              await this.writeAttached(attached);
+            });
+            await this.log.record({
+              kind: "detach-stale",
+              at: Date.now(),
+              reason: "stale-conflict",
+            });
+          }
+          await this.log.record({ kind: "conflict", at: Date.now() });
+          return { ok: false, error: "conflict" };
+        }
+        // It is our attachment and it is live, so the operation can just use it.
+        reused = true;
+      } else {
+        return { ok: false, error: "attach-failed" };
       }
-      return { ok: false, error: "attach-failed" };
     }
-    await this.enqueue(async () => {
+    // Re-check and record as ONE transaction on the storage queue, which is the
+    // queue `detachAll` snapshots on — so an attach either lands in the map
+    // before the revoke reads it, or finds the flag already false and undoes
+    // itself. The CDP call above stays OUTSIDE: this mutex is shared with
+    // `detach`, `detachIfLive` and the `onDetach` recorder, and holding it
+    // across a round-trip let a slow attach on one tab block another tab's
+    // teardown and stall the revoke that was trying to stop it.
+    const kept = await this.enqueue(async () => {
+      if (!(await this.isEnabled())) return false;
       const attached = await this.readAttached();
-      attached[tabId] = Date.now();
+      // On reuse keep the ORIGINAL timestamp: the banner has been up since that
+      // moment, and restarting the clock would under-report the dwell total the
+      // ship/no-ship call reads. A fresh attach has no entry to keep.
+      if (!(reused && attached[tabId] !== undefined))
+        attached[tabId] = Date.now();
       await this.writeAttached(attached);
+      return true;
     });
-    await this.log.record({ kind: "attach", at: Date.now() });
+    if (!kept) {
+      await chrome.debugger.detach({ tabId }).catch(() => {});
+      return { ok: false, error: "disabled" };
+    }
+    // A reused attachment is not a new attach session — the banner never came
+    // down — so recording one would inflate both the session count and, through
+    // it, the average dwell.
+    if (!reused) await this.log.record({ kind: "attach", at: Date.now() });
     return { ok: true };
+  }
+
+  /**
+   * Detach from every tab this session still holds — the revoke path.
+   *
+   * Turning native mode off has to actually drop the capability, not just stop
+   * offering it: `debugger` cannot be an optional permission (spike-confirmed),
+   * so there is no `chrome.permissions.remove` to call and "revoked" can only
+   * mean "not attached". Normally nothing is attached — `withDebugger` detaches
+   * in `finally` — but an MV3 suspend mid-operation can leave a live attachment
+   * whose `finally` never ran, and that keeps the banner up on a tab the user
+   * believes they just turned native off for.
+   *
+   * Reads the attach map from storage rather than memory for the same reason
+   * the map lives there at all: the suspend that strands an attachment is
+   * exactly the event that destroys the memory recording it.
+   *
+   * @returns how many tabs were detached.
+   */
+  async detachAll(): Promise<number> {
+    // Wait out anything already mid-attach before taking the snapshot below.
+    // Each attach re-checks the enabled flag before landing in the map (see
+    // `attach`), so by the time this proceeds, every attach that was in
+    // flight WHEN THE REVOKE WAS CALLED has already either landed (and will
+    // be picked up in the read below) or found the flag false and undone
+    // itself — so the count this returns, and the report the panel builds
+    // from it, are never stale by the time either goes out. Snapshotting the
+    // map BEFORE this wait would miss the point: it's exactly the entries an
+    // in-flight attach hasn't written yet that this closes the gap on.
+    await Promise.all([...this.pendingAttaches.values()]);
+    const attached = await this.enqueue(() => this.readAttached());
+    let detached = 0;
+    for (const [id, startedAt] of Object.entries(attached)) {
+      const tabId = Number(id);
+      // Through the per-tab queue, NOT around it. Tearing down an operation
+      // that is mid-flight makes its CDP call throw, which `withDebugger`
+      // classifies as `connection-lost` and `withRecovery` then RETRIES — so
+      // switching native off during a read would re-attach immediately after,
+      // put the banner back, and book a `reattach-ok` that never happened.
+      // Queueing waits for the operation instead; its own `finally` detaches,
+      // and this then finds nothing left to do.
+      if (
+        await this.runExclusive(tabId, () =>
+          this.detachIfLive(tabId, Date.now() - startedAt),
+        )
+      ) {
+        detached++;
+      }
+    }
+    return detached;
+  }
+
+  /**
+   * Detach one tab for the revoke path, reporting whether it was really live.
+   *
+   * The difference from {@link detach} is that this one does NOT trust the
+   * bookkeeping. An entry can outlive its attachment — a drop Chrome never
+   * reported, or an `onDetach` that lost the race with a worker teardown — and
+   * such an entry is arbitrarily old. Logging it as an ordinary detach would
+   * add hours to "total time attached", which is the banner-tolerance number
+   * the ship/no-ship decision reads, and would report "detached from 1 tab(s)"
+   * to a user whose banner was never up.
+   *
+   * So the CDP call decides: it resolving is the only evidence the attachment
+   * was live. If it rejects, the entry is recorded as an unsolicited detach of
+   * unknown duration — true, and with no `attachedMs` to inflate the dwell
+   * total — rather than as a clean detach or as nothing at all.
+   */
+  private async detachIfLive(
+    tabId: number,
+    attachedMs: number,
+  ): Promise<boolean> {
+    const claimed = await this.enqueue(async () => {
+      const attached = await this.readAttached();
+      if (attached[tabId] === undefined) return false;
+      delete attached[tabId];
+      await this.writeAttached(attached);
+      return true;
+    });
+    if (!claimed) return false;
+
+    // Resolving proves the attachment was live. A rejection proves only that
+    // THIS call failed — so classify it rather than assuming the bookkeeping
+    // was stale: `isConnectionLost` is the same conservative test used for a
+    // mid-operation drop, and anything outside that family means the tab is
+    // plausibly still attached, which is worth reporting rather than silently
+    // orphaning.
+    const failure = await chrome.debugger
+      .detach({ tabId })
+      .then(() => undefined)
+      .catch((err: unknown) =>
+        err instanceof Error ? err.message : String(err),
+      );
+    if (failure === undefined) {
+      await this.log.record({ kind: "detach", at: Date.now(), attachedMs });
+      return true;
+    }
+    // `detach-stale`, NOT `detach-unsolicited`: revoke-time cleanup over an
+    // entry Chrome had already dropped is neither a suspend nor a target-gone
+    // drop, and folding it into the MV3 headline counter would inflate the one
+    // number DOGFOOD.md calls the main engineering risk. No `attachedMs`
+    // either — the entry's age is not time a banner was up.
+    if (!isConnectionLost(failure)) {
+      // The attachment is plausibly still live, so putting the entry back is
+      // what keeps a later revoke — or `onDetach` — able to see it. Deleting it
+      // and reporting nothing is the silent orphan this method exists to avoid.
+      await this.enqueue(async () => {
+        const attached = await this.readAttached();
+        if (attached[tabId] === undefined) {
+          attached[tabId] = Date.now() - attachedMs;
+          await this.writeAttached(attached);
+        }
+      });
+      await this.log.record({
+        kind: "detach-stale",
+        at: Date.now(),
+        reason: "detach-refused",
+      });
+      return false;
+    }
+    await this.log.record({
+      kind: "detach-stale",
+      at: Date.now(),
+      reason: "already-gone",
+    });
+    return false;
   }
 
   /**
@@ -247,21 +545,26 @@ export class NativeDebuggerSession {
    *   "unsolicited detaches: 0" beside "reattach recovered: N" is exactly the
    *   contradiction that hides the MV3 signal this dogfood measures.
    */
-  private async detach(
-    tabId: number,
-    attachedMs: number,
-    connectionLost = false,
-  ): Promise<void> {
+  private async detach(tabId: number, connectionLost = false): Promise<void> {
     // Claim the entry atomically: if onDetach already took it, that drop was
     // unsolicited and is its to record — this teardown must not double-count.
-    const wasAttached = await this.enqueue(async () => {
+    // The stored timestamp is also the SOURCE OF TRUTH for dwell, not a
+    // duration the caller computed: a reused session (attach() found its own
+    // surviving attachment and kept the map's ORIGINAL timestamp rather than
+    // resetting it) has been up since well before this operation started, and
+    // a caller-local `Date.now() - startedAt` would report only this one
+    // operation's slice of that — undercounting the banner-tolerance number by
+    // however long the attachment survived the worker restart that preceded it.
+    const startedAt = await this.enqueue(async () => {
       const attached = await this.readAttached();
-      if (attached[tabId] === undefined) return false;
+      const v = attached[tabId];
+      if (v === undefined) return undefined;
       delete attached[tabId];
       await this.writeAttached(attached);
-      return true;
+      return v;
     });
-    if (!wasAttached) return;
+    if (startedAt === undefined) return;
+    const attachedMs = Date.now() - startedAt;
     await this.log.record(
       connectionLost
         ? {
