@@ -9,5 +9,6 @@ h1 Reading the A11y View
     h3 Images with no name
     h3 ARIA states that don't match reality
     h3 Elements that should be in the tree but aren't
+    h3 A <header> or <footer> that isn't there
   h2 Reading a well-structured tree
   h2 Quick sanity checks
