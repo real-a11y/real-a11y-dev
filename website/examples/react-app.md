@@ -1,6 +1,6 @@
 # Example: React App
 
-A Vite + React 18 application demonstrating `@real-a11y-dev/react` hooks and the `<SemanticNavigator />` component.
+A Vite + React 19 application demonstrating `@real-a11y-dev/react` hooks and the `<SemanticNavigator />` component.
 
 **Source:** [`examples/react-app/`](https://github.com/real-a11y/real-a11y-dev/tree/main/examples/react-app)
 

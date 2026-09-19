@@ -15,7 +15,7 @@ A Storybook 8 panel that shows the semantic tree, heading outline, and tab seque
 npm install -D @real-a11y-dev/storybook-addon
 ```
 
-**Peer dependencies:** `storybook >= 8`, `react >= 18`, `react-dom >= 18`, `@storybook/manager-api >= 8`, `@storybook/preview-api >= 8`, and `@storybook/theming >= 8` (optional)
+**Peer dependencies:** `storybook >= 8`, `react ^18.0.0 || ^19.0.0`, `react-dom ^18.0.0 || ^19.0.0`, `@storybook/manager-api >= 8`, `@storybook/preview-api >= 8`, and `@storybook/theming >= 8` (optional)
 
 ---
 

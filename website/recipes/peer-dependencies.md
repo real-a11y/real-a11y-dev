@@ -12,10 +12,10 @@ Real A11y is a lean dev-time audit suite. It relies on a small set of peers you 
 | Real A11y package | Node | React | Storybook | Playwright |
 |---|---|---|---|---|
 | `@real-a11y-dev/inspector` | ≥ 20 | — | — | — |
-| `@real-a11y-dev/react` | ≥ 20 | ≥ 18 | — | — |
+| `@real-a11y-dev/react` | ≥ 20 | 18 or 19 | — | — |
 | `@real-a11y-dev/testing` | ≥ 20 | — | — | — |
 | `@real-a11y-dev/testing/playwright` | ≥ 20 | — | — | ≥ 1.49 |
-| `@real-a11y-dev/storybook-addon` | ≥ 20 | ≥ 18 | ≥ 8.0 | — |
+| `@real-a11y-dev/storybook-addon` | ≥ 20 | 18 or 19 | ≥ 8.0 | — |
 | `@real-a11y-dev/cli` | ≥ 20 | — | — | ≥ 1.49 (optional) |
 | `@real-a11y-dev/mcp` | ≥ 20 | — | — | ≥ 1.49 (optional) |
 
@@ -69,7 +69,7 @@ The addon's manager imports from `@storybook/manager-api` v8. Storybook 7 or ear
 
 ## `@real-a11y-dev/react` — React version
 
-Any React ≥ 18 works. On React 19 specifically, the inspector's floating-panel mode is SSR-safe (it gates the portal behind a client-mount effect), but you still need `"use client"` at the consumer boundary — see the [Next.js recipe](/recipes/nextjs) for the full pattern.
+React 18 and React 19 are both supported — the peer range is `^18.0.0 || ^19.0.0`. A future React 20 therefore fails the peer check at install time (an `ERESOLVE` error on npm, like the `@testing-library/react` case above; a warning on pnpm and Yarn) instead of resolving silently against a major the package has never been built against. On React 19 specifically, the inspector's floating-panel mode is SSR-safe (it gates the portal behind a client-mount effect), but you still need `"use client"` at the consumer boundary — see the [Next.js recipe](/recipes/nextjs) for the full pattern.
 
 ## `@real-a11y-dev/testing/playwright` — browser install
 

@@ -9,7 +9,7 @@ navigation "On this page"
       link "Key code"
 main
   heading "Example: React App" (level 1)
-  paragraph "A Vite + React 18 application demonstrating hooks and the component."
+  paragraph "A Vite + React 19 application demonstrating hooks and the component."
     code "@real-a11y-dev/react"
     code "<SemanticNavigator />"
   paragraph

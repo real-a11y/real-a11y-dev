@@ -15,7 +15,7 @@ Native React integration — hooks and a component. Built on `useSyncExternalSto
 npm install -D @real-a11y-dev/react
 ```
 
-**Peer dependencies:** `react >= 18`, `react-dom >= 18`
+**Peer dependencies:** `react ^18.0.0 || ^19.0.0`, `react-dom ^18.0.0 || ^19.0.0`
 
 ::: tip Install as a dev dependency
 `@real-a11y-dev/react` bundles a tree extractor and a Preact-based renderer (~40 KB gzipped). It's a developer audit tool, not runtime infrastructure — keep it in `devDependencies` and gate `<SemanticNavigator />` on a build flag so it never ships to end users.
@@ -247,7 +247,7 @@ import type { ExtractionResult, SemanticNode } from "@real-a11y-dev/react";
 
 ## See it running
 
-- **Vite + React 18** — [`examples/react-app/`](/examples/react-app): split-panel layout with a mode toggle, `useSemanticTree` driving a live "issues" badge, and `useActiveModal` with an `aria-live` announcer.
+- **Vite + React 19** — [`examples/react-app/`](/examples/react-app): split-panel layout with a mode toggle, `useSemanticTree` driving a live "issues" badge, and `useActiveModal` with an `aria-live` announcer.
 - **Next.js (App Router + React 19)** — the [Next.js recipe](/recipes/nextjs) covers the client-component and SSR-gating patterns specific to Next.
 
 ---
