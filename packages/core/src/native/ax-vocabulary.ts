@@ -92,6 +92,10 @@ export const NATIVE_AX_EXPOSING_PROPERTIES: ReadonlySet<string> = new Set([
   "roledescription",
   "live",
   "errormessage",
+  // Global states `aria-busy` / `aria-disabled` — the DOM side keeps on the
+  // same two (`a11y.states.busy`, the `aria-disabled` key attribute).
+  "busy",
+  "disabled",
 ]);
 
 /**

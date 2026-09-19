@@ -317,6 +317,23 @@ describe("sectionheader / sectionfooter (drop when bare)", () => {
     ).toBe(["main", "  sectionfooter", '    heading "Title"'].join("\n"));
   });
 
+  it("does not let a dropped byline name the ancestor it flattened into", () => {
+    const nodes = normalizeNativeAX([
+      raw("1", "main", { childIds: ["2"] }),
+      raw("2", "sectionheader", { parentId: "1", childIds: ["3"] }),
+      raw("3", "StaticText", { parentId: "2", name: "By Ada" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe("main");
+  });
+
+  it("keeps a busy one", () => {
+    expect(
+      tree("sectionheader", {
+        properties: [{ name: "busy", value: { value: true } }],
+      }),
+    ).toBe(["main", "  sectionheader", '    heading "Title"'].join("\n"));
+  });
+
   it("keeps one carrying an exposing ARIA property", () => {
     expect(
       tree("sectionheader", {

@@ -117,6 +117,15 @@ describe("extractA11yTree", () => {
       ).toHaveLength(1);
     });
 
+    it("keeps a busy one (aria-busy)", () => {
+      expect(
+        roleOf(
+          `<main><header aria-busy="true"><h2>T</h2></header></main>`,
+          (r) => r === "sectionheader",
+        ),
+      ).toHaveLength(1);
+    });
+
     it("keeps one with a description (aria-describedby)", () => {
       // Attached: describedby resolves its target through the document.
       const page = createPage(
