@@ -187,6 +187,16 @@ describe("slots", () => {
     ).toBeTruthy();
   });
 
+  it.each([
+    ["hidden", `<slot hidden></slot>`],
+    ["aria-hidden", `<slot aria-hidden="true"></slot>`],
+    ["display:none", `<slot style="display:none"></slot>`],
+  ])("drops the assignment of a %s slot — it renders nothing", (_, markup) => {
+    page.innerHTML = `<x-box><button>Delete</button></x-box>`;
+    shadow(page.querySelector("x-box")!, markup);
+    expect(find(extractDomTree(page), "button")).toBeUndefined();
+  });
+
   it("forwards a slot through a nested host", () => {
     page.innerHTML = `<x-outer><a href="/x">Forwarded</a></x-outer>`;
     const outer = shadow(
@@ -266,6 +276,33 @@ describe("description-target folding respects tree scope", () => {
       ),
     ).toBe(true);
     // The component's own hint is still folded into its input's description.
+    expect(find(tree, "textbox", "Coupon")?.a11y.description).toBe(
+      "Case sensitive",
+    );
+    expect(
+      nodes(tree).some((n) => n.dom?.textContent === "Case sensitive"),
+    ).toBe(false);
+  });
+
+  it("keeps a target whose only referrer is an unslotted (unrendered) child", () => {
+    page.innerHTML = `<p id="hint">Visible help</p><x-box><input aria-label="Q" aria-describedby="hint"></x-box>`;
+    // No <slot>: the input is never rendered, so its reference reaches nobody.
+    shadow(page.querySelector("x-box")!, `<p>Box body</p>`);
+    const tree = extractDomTree(page);
+    expect(nodes(tree).some((n) => n.dom?.textContent === "Visible help")).toBe(
+      true,
+    );
+  });
+
+  it("folds a target that another tree merely labels", () => {
+    page.innerHTML = `<button aria-labelledby="hint">Go</button><x-input></x-input>`;
+    shadow(
+      page.querySelector("x-input")!,
+      `<input aria-label="Coupon" aria-describedby="hint"><span id="hint">Case sensitive</span>`,
+    );
+    const tree = extractDomTree(page);
+    // The page's labelledby names a DIFFERENT tree's id; it must not keep the
+    // component's own hint as standalone content beside the description.
     expect(find(tree, "textbox", "Coupon")?.a11y.description).toBe(
       "Case sensitive",
     );

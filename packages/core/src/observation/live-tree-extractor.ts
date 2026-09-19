@@ -367,9 +367,9 @@ export class LiveTreeExtractor {
         .split(/\s+/)
         .filter(Boolean);
       for (const id of ids) {
-        if (!this.labelTargetIds.has(id)) {
-          this.descriptionTargetIds.add(id);
-        }
+        // Candidate ids only — tree scope, and the labelledby carve-out, are
+        // applied per element in `buildNode` (see extractDomTree).
+        this.descriptionTargetIds.add(id);
         this.addReferrer(id, el);
       }
     }

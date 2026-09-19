@@ -15,7 +15,7 @@
  * hosts stay leaves, as before.
  */
 
-import { safeChildNodes, safeShadowRoot } from "./clobber-safe.js";
+import { safeChildNodes, safeHidden, safeShadowRoot } from "./clobber-safe.js";
 
 const ELEMENT_NODE = 1;
 const DOCUMENT_NODE = 9;
@@ -30,6 +30,23 @@ function isSlot(node: Node): node is HTMLSlotElement {
 }
 
 /**
+ * A hidden slot renders nothing THROUGH it — `hidden`, `display:none` or
+ * `aria-hidden` on the slot takes the whole distributed subtree with it,
+ * wherever that content's own markup lives. The slot itself never becomes a
+ * node (it is transparent), so the walk can't prune it later; this is the one
+ * chance to drop the assignment. Deliberately a local read, not
+ * `isSubtreeHidden`: `role-map` imports this module.
+ */
+function slotHidesItsAssignment(slot: HTMLSlotElement): boolean {
+  if (safeHidden(slot) || slot.getAttribute("aria-hidden") === "true") {
+    return true;
+  }
+  const style =
+    typeof getComputedStyle === "function" ? getComputedStyle(slot) : null;
+  return style?.display === "none" || style?.visibility === "hidden";
+}
+
+/**
  * Child nodes in the flat tree. A `<slot>` is transparent (it renders like
  * `display: contents`): it is replaced by its flattened assignment, which
  * already falls back to the slot's own children when nothing is assigned and
@@ -40,10 +57,37 @@ export function flatChildNodes(node: Node): Node[] {
     node.nodeType === ELEMENT_NODE ? safeShadowRoot(node as Element) : null;
   const out: Node[] = [];
   for (const child of safeChildNodes(shadow ?? node)) {
-    if (isSlot(child)) out.push(...child.assignedNodes({ flatten: true }));
-    else out.push(child);
+    if (isSlot(child)) {
+      if (!slotHidesItsAssignment(child)) {
+        out.push(...child.assignedNodes({ flatten: true }));
+      }
+    } else out.push(child);
   }
   return out;
+}
+
+/**
+ * True if `element` is rendered at all: every shadow host above it actually
+ * distributes it through a slot. A light child no slot takes is not rendered,
+ * so it must not act as an IDREF referrer — folding a visible description
+ * target for a reference nobody can reach loses page content.
+ */
+export function isRenderedInFlatTree(element: Element): boolean {
+  let node: Element | null = element;
+  while (node) {
+    const parent: Element | null = node.parentElement;
+    if (parent && safeShadowRoot(parent) && !node.assignedSlot) return false;
+    if (parent) {
+      node = parent;
+      continue;
+    }
+    const root: Node = node.getRootNode();
+    node =
+      root.nodeType === DOCUMENT_FRAGMENT_NODE
+        ? ((root as ShadowRoot).host ?? null)
+        : null;
+  }
+  return true;
 }
 
 /** Element children in the flat tree. */

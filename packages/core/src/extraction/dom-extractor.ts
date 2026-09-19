@@ -9,6 +9,7 @@ import {
   flatChildNodes,
   flatChildren,
   idScope,
+  isRenderedInFlatTree,
 } from "./flat-tree.js";
 import {
   getCachedComputedStyle,
@@ -25,6 +26,9 @@ import {
  * under it: the panel mounts in an open shadow root, which the flat-tree walk
  * would otherwise read as page content — and in `mount: "light"` the panel's
  * UI was already in the light DOM.
+ *
+ * @internal Shared between `core` and this project's own panels. Both are
+ * internal packages; no published surface re-exports it.
  */
 export const PANEL_HOST_ATTRIBUTE = "data-real-a11y-panel";
 
@@ -1748,17 +1752,36 @@ function buildNode(
 }
 
 /**
- * True if something in `element`'s own tree (its document, shadow root, or —
- * detached — its subtree root) lists `id` in `aria-describedby`.
+ * True if `element` is folded into somebody's description: a RENDERED element
+ * in its own tree (its document, shadow root, or — detached — its subtree
+ * root) lists `id` in `aria-describedby`, and none labels it.
+ *
+ * All three qualifiers earn their place, because the id sets collected up
+ * front are page-wide while ids are scoped per tree:
+ *
+ * - **own tree** — a component's internal `id="hint"` must not fold an
+ *   unrelated `#hint` in the page.
+ * - **rendered** — an unslotted light child of a shadow host is not rendered,
+ *   so its reference reaches nobody and must not cost the page a visible node.
+ * - **none labels it** — the `labelTargetIds` exclusion is page-wide too, so a
+ *   labelledby in ANOTHER tree would otherwise keep this target, printing its
+ *   text both as a description and as standalone content.
  */
 function isDescribedInOwnTree(element: Element, id: string): boolean {
   const scope = element.getRootNode() as Document | ShadowRoot | Element;
-  if (typeof scope.querySelector !== "function") return true;
+  if (typeof scope.querySelectorAll !== "function") return true;
   const escaped =
     typeof CSS !== "undefined" && typeof CSS.escape === "function"
       ? CSS.escape(id)
       : id.replace(/["\\]/g, "\\$&");
-  return scope.querySelector(`[aria-describedby~="${escaped}"]`) !== null;
+  const referrers = (attr: string): Element[] =>
+    Array.from(scope.querySelectorAll(`[${attr}~="${escaped}"]`)).filter(
+      isRenderedInFlatTree,
+    );
+  return (
+    referrers("aria-describedby").length > 0 &&
+    referrers("aria-labelledby").length === 0
+  );
 }
 
 function walk(
@@ -1827,34 +1850,20 @@ export function extractDomTree(
   if (!isPartial || !options.descriptionTargetIds) {
     effectiveRoot = resolveEffectiveRoot(root);
 
-    // Pre-collect aria-labelledby targets so we don't accidentally hide them.
-    // (Elements that are labelledby targets are visible content — they label something.)
-    // One deep scan serves both passes: finding shadow hosts walks every
-    // element, so don't pay for it twice.
-    const referrers = deepQuerySelectorAll(
-      effectiveRoot,
-      "[aria-labelledby], [aria-describedby]",
-    );
-    const labelTargetIds = new Set<string>();
-    for (const el of referrers) {
-      for (const id of (el.getAttribute("aria-labelledby") || "")
-        .split(/\s+/)
-        .filter(Boolean)) {
-        labelTargetIds.add(id);
-      }
-    }
-
-    // Pre-collect aria-describedby targets.
-    // These elements' text is shown inline on the referencing element as a description.
-    // Hide them from the tree to avoid redundancy — unless they're also labelledby targets.
+    // Pre-collect aria-describedby targets: their text is shown inline on the
+    // referencing element as a description, so a node of their own would be
+    // redundant. This is a CANDIDATE set — ids here are page-wide, while a
+    // reference is scoped to one tree — and `isDescribedInOwnTree` decides per
+    // element. That includes the "also a labelledby target" carve-out (such a
+    // target is visible content that labels something), which is likewise only
+    // true within one tree.
+    const referrers = deepQuerySelectorAll(effectiveRoot, "[aria-describedby]");
     const freshDescriptionTargetIds = new Set<string>();
     for (const el of referrers) {
       for (const id of (el.getAttribute("aria-describedby") || "")
         .split(/\s+/)
         .filter(Boolean)) {
-        if (!labelTargetIds.has(id)) {
-          freshDescriptionTargetIds.add(id);
-        }
+        freshDescriptionTargetIds.add(id);
       }
     }
     descriptionTargetIds = freshDescriptionTargetIds;
