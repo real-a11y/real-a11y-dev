@@ -149,4 +149,30 @@ describe("searchNativeTree", () => {
     const result = searchNativeTree(nodes, buildParentOf(nodes), "", "image");
     expect(result.directIds.size).toBe(0);
   });
+
+  it("keeps a landmark visible when it directly matches the role filter but the query match is only in its subtree", () => {
+    const nodes = buildTree();
+    // "section" (role "region", in the landmark group) directly satisfies
+    // the role filter; "learn" only matches its descendant "link". Neither
+    // node alone satisfies both filters at once — combining the two filters
+    // into one same-node AND (rather than each filter independently pulling
+    // in its own ancestors, then intersecting) would hide "section"
+    // entirely, disagreeing with the DOM producer's own `applySearchFilter`
+    // on the identical shape.
+    const result = searchNativeTree(
+      nodes,
+      buildParentOf(nodes),
+      "learn",
+      "landmark",
+    );
+    expect(result.visibleIds.has("section")).toBe(true);
+    expect(result.visibleIds.has("main")).toBe(true);
+    // The link itself matched the query but is not itself a landmark and is
+    // not an ancestor of one, so it stays hidden — same asymmetry as the DOM
+    // producer's own combined filter.
+    expect(result.visibleIds.has("link")).toBe(false);
+    // No single node directly satisfies both filters, so the reported match
+    // count is zero even though the tree isn't empty.
+    expect(result.directIds.size).toBe(0);
+  });
 });

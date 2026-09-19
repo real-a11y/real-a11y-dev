@@ -77,11 +77,20 @@ const EMPTY_RESULT: NativeSearchResult = {
 };
 
 /**
- * Search + role-filter a native tree. AND-combined when both are active,
- * exactly like `applySearchFilter` for the DOM producer. Returns the empty
- * result (both sets empty) when neither filter is active — the caller
- * distinguishes "no filter" from "filter with the id set" the same way the
- * DOM producer's toolbar does (`query || roleFilter`).
+ * Search + role-filter a native tree, matching `applySearchFilter`'s actual
+ * combination semantics for the DOM producer — which is looser than a plain
+ * per-node AND. Each filter gets its own ancestor-inclusive visibility set
+ * (a node is "search-visible" if IT OR A DESCENDANT matches the query, and
+ * "role-visible" if IT OR A DESCENDANT matches the role filter), and a node
+ * is visible only if both sets include it. That lets a landmark stay visible
+ * because it directly matches a role filter while a query match sits deeper
+ * in its subtree, even though the landmark itself never matched the query —
+ * collapsing the two into a single "does this exact node match both"
+ * predicate would hide that landmark and disagree with the DOM producer on
+ * the same page. `directIds` (the match count) stays strict, though: a node
+ * only counts there if it directly satisfies both filters itself, not by
+ * inheriting a descendant's match — mirrors `applySearchFilter`'s own
+ * `directSearchMatch && directRoleMatch`.
  */
 export function searchNativeTree(
   nodes: Map<string, NativeNode>,
@@ -94,19 +103,41 @@ export function searchNativeTree(
   if (!hasQuery && !hasRoleFilter) return EMPTY_RESULT;
 
   const lowerQuery = query.toLowerCase();
+
+  const queryDirectIds = new Set<string>();
+  const queryVisibleIds = new Set<string>();
+  if (hasQuery) {
+    for (const [id, node] of nodes) {
+      if (matchesQuery(node, lowerQuery)) {
+        queryDirectIds.add(id);
+        queryVisibleIds.add(id);
+        addAncestors(parentOf, id, queryVisibleIds);
+      }
+    }
+  }
+
+  const roleVisibleIds = new Set<string>();
+  if (hasRoleFilter) {
+    for (const [id, node] of nodes) {
+      if (matchesRoleFilter(node, roleFilter)) {
+        roleVisibleIds.add(id);
+        addAncestors(parentOf, id, roleVisibleIds);
+      }
+    }
+  }
+
   const directIds = new Set<string>();
   const visibleIds = new Set<string>();
-
   for (const [id, node] of nodes) {
-    const queryMatch = hasQuery ? matchesQuery(node, lowerQuery) : true;
-    const roleMatch = hasRoleFilter
+    const searchVisible = hasQuery ? queryVisibleIds.has(id) : true;
+    const roleVisible = hasRoleFilter ? roleVisibleIds.has(id) : true;
+    if (searchVisible && roleVisible) visibleIds.add(id);
+
+    const directSearchMatch = hasQuery ? queryDirectIds.has(id) : true;
+    const directRoleMatch = hasRoleFilter
       ? matchesRoleFilter(node, roleFilter)
       : true;
-    if (queryMatch && roleMatch) {
-      directIds.add(id);
-      visibleIds.add(id);
-      addAncestors(parentOf, id, visibleIds);
-    }
+    if (directSearchMatch && directRoleMatch) directIds.add(id);
   }
 
   return { directIds, visibleIds };
