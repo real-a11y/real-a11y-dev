@@ -13,6 +13,7 @@ h1 Semantic Navigator
     h3 Cross-link chips on disclosure pairs
     h3 Manual refresh on tab switch — ↻ toolbar button
     h3 Pages the extension can't inspect
+    h3 Native mode — Chromium's own accessibility tree
     h3 BETA pill in the panel header
   h2 Reading the tree, scoping, filtering, focus tracking
   h2 Install
