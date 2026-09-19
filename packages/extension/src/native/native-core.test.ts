@@ -12,7 +12,10 @@ import {
   pageStep,
   pageType,
   readNativeTree,
+  rootIdOf,
+  SYNTHETIC_ROOT_ID,
   type CdpTransport,
+  type EnrichedNativeNode,
 } from "./native-core.js";
 
 // A scripted fake CDP transport — records every call, returns programmed
@@ -254,6 +257,163 @@ describe("readNativeTree", () => {
     const res = await readNativeTree(t);
     expect(findNative(res.nodes, "button", "Save")?.value).toBeUndefined();
     expect(t.calls.some((c) => c.method === "DOM.resolveNode")).toBe(false);
+  });
+
+  /**
+   * A real page's `<header>`/`<main>`/`<footer>` layout is the ordinary case,
+   * not an edge case: `normalizeNativeAX` drops `RootWebArea`, so a plain
+   * multi-landmark page yields several parent-less nodes with no single
+   * `rootId` a tree UI can render from — the dogfood panel never needed one
+   * (a flat depth-indented list has no root concept at all), but a real
+   * expand/collapse tree does. See `rootIdOf`'s own tests for the pure
+   * logic; this pins that `readNativeTree` actually wires it through.
+   */
+  it("synthesizes a rootId when Chromium's tree has more than one parent-less node", async () => {
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 10,
+        role: { value: "RootWebArea" },
+        childIds: ["2", "3"],
+      },
+      {
+        nodeId: "2",
+        parentId: "1",
+        backendDOMNodeId: 20,
+        role: { value: "heading" },
+        name: { value: "Hi" },
+      },
+      {
+        nodeId: "3",
+        parentId: "1",
+        backendDOMNodeId: 30,
+        role: { value: "button" },
+        name: { value: "Save" },
+      },
+    ];
+    const t = new FakeTransport((method) =>
+      method === "Accessibility.getFullAXTree" ? { nodes: raw } : {},
+    );
+    const res = await readNativeTree(t);
+    expect(res.rootId).toBe(SYNTHETIC_ROOT_ID);
+    // keptCount is what Chromium actually produced (the heading + the
+    // button — RootWebArea is dropped by normalizeNativeAX) — NOT
+    // res.nodes.length, which is one higher because it also counts the
+    // synthetic "ax-root" wrapper rootIdOf pushed in.
+    expect(res.keptCount).toBe(2);
+    expect(res.nodes.length).toBe(3);
+    // Pins the fix for a real regression this PR introduced and its own
+    // review caught: `DogfoodPanel.tsx`'s flat list has no rootId concept,
+    // so it filters the wire's `nodes` by this id rather than rendering the
+    // synthetic root as an extra, unlabeled "document" row. That filter
+    // has to land back on exactly `keptCount` — Chromium's real node count —
+    // or the panel's own "read N nodes" status silently drifts from it again.
+    expect(res.nodes.filter((n) => n.id !== SYNTHETIC_ROOT_ID).length).toBe(
+      res.keptCount,
+    );
+  });
+
+  it("uses the single surviving node as rootId when there's only one", async () => {
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 10,
+        role: { value: "RootWebArea" },
+        childIds: ["2"],
+      },
+      {
+        nodeId: "2",
+        parentId: "1",
+        backendDOMNodeId: 20,
+        role: { value: "main" },
+        name: { value: "" },
+      },
+    ];
+    const t = new FakeTransport((method) =>
+      method === "Accessibility.getFullAXTree" ? { nodes: raw } : {},
+    );
+    const res = await readNativeTree(t);
+    expect(res.rootId).toBe("ax-dom-20");
+  });
+});
+
+/** Minimal `EnrichedNativeNode` fixture — only the fields `rootIdOf` reads. */
+function node(
+  id: string,
+  childIds: string[] = [],
+  depth = 0,
+): EnrichedNativeNode {
+  return {
+    id,
+    role: "generic",
+    name: "",
+    depth,
+    backendDOMNodeId: null,
+    childIds,
+    states: {},
+    properties: {},
+    description: "",
+  };
+}
+
+/**
+ * Live dogfood finding: rounds up to this point never needed a `rootId` at
+ * all — the dogfood panel renders a flat depth-indented list. Restoring a
+ * real tree structure for the production panel integration needs one, the
+ * same way the DOM producer always has exactly one root. Mirrors
+ * `@real-a11y-dev/browser`'s own `native-tree.ts` root-synthesis exactly.
+ */
+describe("rootIdOf", () => {
+  it("returns the single node's id when there's exactly one root", () => {
+    const nodes = [node("a", ["b"]), node("b", [], 1)];
+    expect(rootIdOf(nodes)).toBe("a");
+  });
+
+  it("returns empty string for an empty tree", () => {
+    expect(rootIdOf([])).toBe("");
+  });
+
+  it("synthesizes an ax-root wrapper adopting every parent-less node", () => {
+    const nodes = [node("a"), node("b")];
+    const rootId = rootIdOf(nodes);
+    expect(rootId).toBe(SYNTHETIC_ROOT_ID);
+    const synthetic = nodes.find((n) => n.id === SYNTHETIC_ROOT_ID);
+    expect(synthetic?.role).toBe("document");
+    expect(synthetic?.childIds).toEqual(["a", "b"]);
+  });
+
+  it("pushes the synthetic root into the array so a consumer can find it by id", () => {
+    const nodes = [node("a"), node("b")];
+    rootIdOf(nodes);
+    expect(nodes).toHaveLength(3);
+  });
+
+  /**
+   * Devin review finding on this PR: a consumer that renders/walks this
+   * array directly in order — `DogfoodPanel.tsx`'s flat depth-indented list
+   * today, no separate root lookup — needs the root FIRST. Appending it
+   * instead produced an indented forest followed by its own root.
+   */
+  it("puts the synthetic root at the front of the array, not the back", () => {
+    const nodes = [node("a"), node("b")];
+    rootIdOf(nodes);
+    expect(nodes[0]?.id).toBe(SYNTHETIC_ROOT_ID);
+  });
+
+  /**
+   * Wrapping shifts every former root down a level — without recomputing
+   * depth, a consumer indenting rows by `node.depth` would render the two
+   * top-level landmarks at the SAME indentation as the synthetic root that
+   * now contains them, and their own children one level too shallow.
+   */
+  it("recomputes depth for every node relative to the real root after wrapping", () => {
+    const nodes = [node("a", ["a1"], 0), node("a1", [], 1), node("b", [], 0)];
+    rootIdOf(nodes);
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    expect(byId.get(SYNTHETIC_ROOT_ID)?.depth).toBe(0);
+    expect(byId.get("a")?.depth).toBe(1);
+    expect(byId.get("a1")?.depth).toBe(2);
+    expect(byId.get("b")?.depth).toBe(1);
   });
 });
 
@@ -545,6 +705,61 @@ describe("in-page actions — read value", () => {
     const el = document.createElement("input");
     document.body.appendChild(el);
     expect(on(pageReadValue, el)).toEqual({});
+  });
+
+  /**
+   * Live need for the production panel integration: acting on a native
+   * typable field opens the same `InputPanel` text modal the DOM path uses,
+   * which shows a placeholder hint. Placeholder is page-authored, not user
+   * input (same distinction `description` already draws — R1 only concerns
+   * a field's live VALUE), so unlike `value` it is never redacted and is
+   * returned even when the field is empty — exactly the case a placeholder
+   * hint matters most for.
+   */
+  it("returns a placeholder for an empty field", () => {
+    const el = document.createElement("input");
+    el.placeholder = "you@example.com";
+    document.body.appendChild(el);
+    expect(on(pageReadValue, el)).toEqual({ placeholder: "you@example.com" });
+  });
+
+  it("returns both value and placeholder together for a filled field", () => {
+    const el = document.createElement("input");
+    el.placeholder = "you@example.com";
+    el.value = "ada@example.com";
+    document.body.appendChild(el);
+    expect(on(pageReadValue, el)).toEqual({
+      value: "ada@example.com",
+      placeholder: "you@example.com",
+    });
+  });
+
+  it("returns the placeholder alongside a redacted marker — it is not user input", () => {
+    const el = document.createElement("input");
+    el.type = "password";
+    el.placeholder = "Password";
+    el.value = "hunter2";
+    document.body.appendChild(el);
+    const result = on(pageReadValue, el);
+    expect(result).toEqual({ redacted: true, placeholder: "Password" });
+    expect(JSON.stringify(result)).not.toContain("hunter2");
+  });
+
+  it("reads a textarea's placeholder the same way", () => {
+    const el = document.createElement("textarea");
+    el.placeholder = "Leave a comment";
+    document.body.appendChild(el);
+    expect(on(pageReadValue, el)).toEqual({ placeholder: "Leave a comment" });
+  });
+
+  it("omits placeholder for a select — it has no such attribute", () => {
+    const select = document.createElement("select");
+    const option = document.createElement("option");
+    option.value = "fr";
+    select.appendChild(option);
+    select.value = "fr";
+    document.body.appendChild(select);
+    expect(on(pageReadValue, select)).toEqual({ value: "fr" });
   });
 
   it("redacts a password field instead of returning the typed secret (R1)", () => {

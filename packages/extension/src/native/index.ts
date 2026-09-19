@@ -193,7 +193,7 @@ export function registerNativeMode(): void {
               kind: "read",
               at: Date.now(),
               rawCount: value.rawCount,
-              keptCount: value.nodes.length,
+              keptCount: value.keptCount,
             });
             sendResponse({
               ok: true,
@@ -204,6 +204,12 @@ export function registerNativeMode(): void {
               // refuse a dispatch against ids that no longer mean anything.
               // Not recorded in the dogfood log, which stays content-free.
               url: await tabUrl(message.tabId),
+              // The id of the tree's one root (a synthesized wrapper when
+              // Chromium's own tree has more than one parent-less node —
+              // see `rootIdOf` in native-core.ts) — what a real expand/
+              // collapse tree UI needs to render from, unlike the dogfood
+              // panel's flat depth-indented list, which never needed one.
+              rootId: value.rootId,
               // Structural fields plus the state/property enrichment
               // `readNativeTree` attaches (`expanded`, `checked`, `level`, …).
               // `axFacets`'s own allowlist (DETAIL_PROPS) excludes
@@ -217,15 +223,20 @@ export function registerNativeMode(): void {
               // is Chromium's own `aria-describedby`/`aria-description`
               // resolution — page-authored help/error text, not user input,
               // so it carries no R1 concern (same distinction `browser`'s own
-              // native producer already draws for it).
+              // native producer already draws for it). `placeholder` is the
+              // same kind of page-authored, non-redacted text. `childIds` is
+              // what lets a consumer render an actual tree instead of a flat
+              // depth-indented list.
               nodes: value.nodes.map((n) => ({
                 id: n.id,
                 role: n.role,
                 name: n.name,
                 depth: n.depth,
+                childIds: n.childIds,
                 states: n.states,
                 properties: n.properties,
                 value: n.value,
+                placeholder: n.placeholder,
                 description: n.description,
               })),
             });

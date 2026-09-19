@@ -187,6 +187,11 @@ const VALUE_BEARING_ROLES = new Set([
 export type EnrichedNativeNode = NativeAXNode &
   Pick<A11yInfo, "states" | "properties" | "description"> & {
     value?: string;
+    /** The field's static placeholder hint (`<input>`/`<textarea>` only) —
+     *  page-authored text, not user input, so unlike `value` it is never
+     *  redacted. Present only for a value-bearing role that actually has
+     *  one set. */
+    placeholder?: string;
   };
 
 /** The single capability the native path needs from any CDP transport. */
@@ -201,6 +206,86 @@ export interface NativeTreeResult {
   serialized: string;
   /** Raw AX node count before normalization — a dogfood size signal. */
   rawCount: number;
+  /** Node count Chromium actually produced, after normalization but before
+   *  `rootIdOf`'s synthetic root (if any) is pushed onto `nodes` — the other
+   *  half of the `rawCount`/`keptCount` dogfood size signal. `nodes.length`
+   *  itself is NOT this number on a multi-root page: it includes the
+   *  synthesized wrapper, which Chromium never produced. */
+  keptCount: number;
+  /** The id of the tree's single root — see {@link rootIdOf}. Empty string
+   *  for an empty tree. */
+  rootId: string;
+}
+
+/**
+ * Find or synthesize the tree's single root, and reconcile `depth` to match.
+ *
+ * Mirrors `@real-a11y-dev/browser`'s `native-tree.ts` exactly (same
+ * deliberate-mirror reason every other piece of this file has: that package
+ * carries Playwright). `normalizeNativeAX` drops the `RootWebArea` and
+ * generic/ignored html/body wrappers, so any ordinary page whose body has
+ * more than one kept child — a plain `<header>`/`<main>`/`<footer>` layout,
+ * not just a cross-frame payload — yields multiple parent-less nodes. The
+ * DOM producer always has exactly one root; a consumer that wants to render
+ * this as one tree (rather than the dogfood panel's flat depth-indented
+ * list, which never needed a root at all) needs the same guarantee, so a
+ * synthetic `document` root adopts every parent-less node instead of
+ * silently truncating every root but the first.
+ *
+ * Mutates `nodes` in place: unshifts the synthetic root to the front (if one
+ * was needed) and rewrites every node's `depth` to be its real distance from
+ * the returned root id, since wrapping shifts the former roots down a level.
+ * Front, not back: every existing consumer of this array — the dogfood
+ * panel's flat depth-indented list (`DogfoodPanel.tsx`) today, any preorder-
+ * walking consumer tomorrow — renders/walks it in array order with no
+ * separate root lookup, so a root appended after its own descendants would
+ * render as an indented forest followed by its own root.
+ */
+/**
+ * The synthetic root's id — exported so a consumer that must NOT treat it as
+ * a real AX node (the dogfood panel's flat list, which has no rootId concept
+ * to render relative to and would otherwise show a page-produced-nothing-
+ * like-this "document" row on every multi-root page) can filter it out by
+ * identity rather than duplicating this string as a second magic literal.
+ */
+export const SYNTHETIC_ROOT_ID = "ax-root";
+
+export function rootIdOf(nodes: EnrichedNativeNode[]): string {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const hasParent = new Set<string>();
+  for (const n of nodes) for (const c of n.childIds) hasParent.add(c);
+  const roots = nodes.filter((n) => !hasParent.has(n.id));
+
+  let rootId: string;
+  if (roots.length === 1) {
+    rootId = roots[0]!.id;
+  } else if (roots.length > 1) {
+    rootId = SYNTHETIC_ROOT_ID;
+    const synthetic: EnrichedNativeNode = {
+      id: rootId,
+      role: "document",
+      name: "",
+      depth: 0,
+      backendDOMNodeId: null,
+      childIds: roots.map((r) => r.id),
+      states: {},
+      properties: {},
+      description: "",
+    };
+    nodes.unshift(synthetic);
+    byId.set(rootId, synthetic);
+  } else {
+    return "";
+  }
+
+  const setDepth = (id: string, depth: number): void => {
+    const node = byId.get(id);
+    if (!node) return;
+    node.depth = depth;
+    for (const childId of node.childIds) setDepth(childId, depth + 1);
+  };
+  setDepth(rootId, 0);
+  return rootId;
 }
 
 /** Read + normalize the whole native AX tree over any CDP transport. */
@@ -235,19 +320,30 @@ export async function readNativeTree(
       if (!VALUE_BEARING_ROLES.has(node.role)) return;
       const backendNodeId = backendNodeIdFrom(node.id);
       if (backendNodeId === null) return;
-      const { value, redacted } = await readFieldValue(
+      const { value, redacted, placeholder } = await readFieldValue(
         transport,
         backendNodeId,
       );
       if (redacted) node.value = "[redacted]";
       else if (value) node.value = value;
+      if (placeholder) node.placeholder = placeholder;
     }),
   );
 
+  // `serializeNativeAX(nodes)` runs on the pre-wrap list, matching every
+  // other pre-enrichment field it already serializes from (states/
+  // properties/value/description never reach the plain-text output either)
+  // — the synthetic root, if any, is a rendering/dispatch concern only.
+  const serialized = serializeNativeAX(nodes);
+  const keptCount = enriched.length;
+  const rootId = rootIdOf(enriched);
+
   return {
     nodes: enriched,
-    serialized: serializeNativeAX(nodes),
+    serialized,
     rawCount: full.nodes.length,
+    keptCount,
+    rootId,
   };
 }
 
@@ -543,12 +639,23 @@ export function pageType(this: Element, text: string): Marker {
 export function pageReadValue(this: Element): {
   value?: string;
   redacted?: boolean;
+  placeholder?: string;
 } {
   const el = this;
   if (!el) return {};
 
   let value: string;
   let type: string | undefined;
+  // Placeholder is page-authored hint text, not user input — same distinction
+  // `description` already draws (R1 only concerns a field's live VALUE) — so
+  // it is read and returned unconditionally below, including for a redacted
+  // or empty field: it's the one thing worth showing an empty sensitive
+  // field's placeholder for. Only `<input>`/`<textarea>` have a native
+  // `placeholder`; `<select>` has none. Read via the prototype's own
+  // descriptor, the same defense `value`/`type` already get below, for the
+  // same reason: a page-side instance shadow is the easy, realistic way an
+  // unpinned read gets fooled.
+  let placeholder: string | undefined;
   if (el instanceof HTMLInputElement) {
     value = Object.getOwnPropertyDescriptor(
       HTMLInputElement.prototype,
@@ -558,10 +665,18 @@ export function pageReadValue(this: Element): {
       HTMLInputElement.prototype,
       "type",
     )!.get!.call(el) as string;
+    placeholder = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "placeholder",
+    )!.get!.call(el) as string;
   } else if (el instanceof HTMLTextAreaElement) {
     value = Object.getOwnPropertyDescriptor(
       HTMLTextAreaElement.prototype,
       "value",
+    )!.get!.call(el) as string;
+    placeholder = Object.getOwnPropertyDescriptor(
+      HTMLTextAreaElement.prototype,
+      "placeholder",
     )!.get!.call(el) as string;
   } else if (el instanceof HTMLSelectElement) {
     value = Object.getOwnPropertyDescriptor(
@@ -571,10 +686,12 @@ export function pageReadValue(this: Element): {
   } else {
     return {};
   }
-  if (!value) return {};
+  const placeholderResult = placeholder ? { placeholder } : {};
+
+  if (!value) return placeholderResult;
 
   if (type === "password") {
-    return { redacted: true };
+    return { redacted: true, ...placeholderResult };
   }
   const SENSITIVE_AUTOCOMPLETE_TOKENS = [
     "current-password",
@@ -590,12 +707,12 @@ export function pageReadValue(this: Element): {
   if (autocomplete) {
     for (const token of autocomplete.toLowerCase().split(/\s+/)) {
       if (SENSITIVE_AUTOCOMPLETE_TOKENS.indexOf(token) !== -1) {
-        return { redacted: true };
+        return { redacted: true, ...placeholderResult };
       }
     }
   }
 
-  return { value };
+  return { value, ...placeholderResult };
 }
 
 /**
@@ -778,7 +895,7 @@ const IN_PAGE_READ_VALUE_SOURCE = String(pageReadValue);
 async function readFieldValue(
   transport: CdpTransport,
   backendNodeId: number,
-): Promise<{ value?: string; redacted?: boolean }> {
+): Promise<{ value?: string; redacted?: boolean; placeholder?: string }> {
   try {
     const resolved = await transport.send<{ object?: { objectId?: string } }>(
       "DOM.resolveNode",
@@ -787,7 +904,9 @@ async function readFieldValue(
     const objectId = resolved.object?.objectId;
     if (!objectId) return {};
     const res = await transport.send<{
-      result?: { value?: { value?: string; redacted?: boolean } };
+      result?: {
+        value?: { value?: string; redacted?: boolean; placeholder?: string };
+      };
     }>("Runtime.callFunctionOn", {
       objectId,
       functionDeclaration: IN_PAGE_READ_VALUE_SOURCE,
