@@ -1389,23 +1389,23 @@ export function App() {
   // it (see the toolbar's own comment below): reaching for native before the
   // DOM producer has proven the tab is even reachable would default into a
   // capability check with nothing to fall back to yet.
+  //
+  // Deliberately no pre-flight NATIVE_CAPABILITY check here — neither the
+  // manual NATIVE toggle nor the consent banner's own "Enable native mode…"
+  // flow does one either; both just flip `producer` and let the existing
+  // `refreshNativeCapability` effect (triggered by that same producer change,
+  // just above) and the auto-load effect's NATIVE_READ failure path surface
+  // an unavailable page. A pre-flight check here would run a second,
+  // redundant NATIVE_CAPABILITY round trip on top of that one — and an
+  // in-flight `.then()` could resolve after the user manually disabled
+  // native mode in the interim and flip `producer` back on anyway, since
+  // nothing here re-checks `nativeModeEnabled` before applying its result.
+  // Matching the existing entry points sidesteps both problems.
   useEffect(() => {
     if (!nativeModeEnabled || !connected || myTabId === null) return;
     if (hasAppliedNativeDefault.current) return;
     hasAppliedNativeDefault.current = true;
-    const tabId = myTabId;
-    const token = nativeOpToken.current;
-    void chrome.runtime
-      .sendMessage({ type: "NATIVE_CAPABILITY", tabId })
-      .then((cap: TabCapability) => {
-        if (token !== nativeOpToken.current) return; // tab changed mid-check
-        if (cap.native) setProducer("native");
-      })
-      .catch(() => {
-        // Capability check failed to round-trip — stay on DOM, same as any
-        // other unreachable-background case. Not worth a status message for
-        // a check the user never asked for.
-      });
+    setProducer("native");
   }, [nativeModeEnabled, connected, myTabId]);
 
   /** Dispatch one native action and, on success, settle + re-read — the same
