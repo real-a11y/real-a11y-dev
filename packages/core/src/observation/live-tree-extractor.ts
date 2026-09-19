@@ -10,6 +10,7 @@ import {
   resolveEffectiveRoot,
   resolveFocusedElement,
 } from "../extraction/dom-extractor.js";
+import { deepQuerySelectorAll } from "../extraction/flat-tree.js";
 import { getImplicitRole } from "../extraction/role-map.js";
 import type { ExtractionResult, SemanticNode, TreeChange } from "../types.js";
 import { getNodeId } from "../utils/id-generator.js";
@@ -346,7 +347,7 @@ export class LiveTreeExtractor {
 
     const effectiveRoot = this.effectiveRoot ?? this.root;
 
-    for (const el of effectiveRoot.querySelectorAll("[aria-labelledby]")) {
+    for (const el of deepQuerySelectorAll(effectiveRoot, "[aria-labelledby]")) {
       const ids = (el.getAttribute("aria-labelledby") || "")
         .split(/\s+/)
         .filter(Boolean);
@@ -356,7 +357,10 @@ export class LiveTreeExtractor {
       }
     }
 
-    for (const el of effectiveRoot.querySelectorAll("[aria-describedby]")) {
+    for (const el of deepQuerySelectorAll(
+      effectiveRoot,
+      "[aria-describedby]",
+    )) {
       const ids = (el.getAttribute("aria-describedby") || "")
         .split(/\s+/)
         .filter(Boolean);

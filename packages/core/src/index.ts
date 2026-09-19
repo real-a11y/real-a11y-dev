@@ -36,6 +36,7 @@ export {
   extractDomTree,
   getElementRefs,
   isSensitiveField,
+  PANEL_HOST_ATTRIBUTE,
 } from "./extraction/dom-extractor.js";
 export { extractA11yTree } from "./extraction/a11y-extractor.js";
 export {

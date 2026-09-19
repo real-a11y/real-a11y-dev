@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Corpus — web components (open shadow roots and slots)</title>
+  </head>
+  <body>
+    <!-- SkipTo.js shape: the whole control lives in an open shadow root. -->
+    <skip-to></skip-to>
+
+    <main>
+      <h1>Components</h1>
+
+      <!-- Slotted light content renders at the slot's position; the unslotted
+           <button> is never rendered, so neither producer may show it. -->
+      <x-card>
+        <a href="/docs">Read the docs</a>
+        <button slot="nope">Unrendered</button>
+      </x-card>
+
+      <!-- IDREFs resolve inside the shadow root, not against the document
+           (which has its own, wrong, #lbl). -->
+      <span id="lbl" hidden>Wrong label</span>
+      <x-field></x-field>
+
+      <!-- Nested hosts, with a slot forwarded through the inner one. -->
+      <x-outer><a href="/forwarded">Forwarded link</a></x-outer>
+    </main>
+
+    <script>
+      const define = (name, html) =>
+        customElements.define(
+          name,
+          class extends HTMLElement {
+            constructor() {
+              super();
+              this.attachShadow({ mode: "open" }).innerHTML = html;
+            }
+          },
+        );
+      define(
+        "skip-to",
+        '<div><button aria-label="Skip To Content, shortcut Alt + 0">Skip To Content</button></div>',
+      );
+      define(
+        "x-card",
+        '<h2>Card title</h2><slot></slot><button type="button">Close card</button>',
+      );
+      define(
+        "x-field",
+        '<span id="lbl">Email address</span><input type="email" aria-labelledby="lbl">',
+      );
+      define("x-inner", '<nav aria-label="Inner"><slot></slot></nav>');
+      define("x-outer", "<x-inner><slot></slot></x-inner>");
+    </script>
+  </body>
+</html>

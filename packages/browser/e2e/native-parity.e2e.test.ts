@@ -37,7 +37,10 @@ const PARITY_FLOOR = 0.8;
 
 /** Corpus of fixture pages. Grow this — iframes, portals, virtualized lists,
  *  contenteditable — per the RFC backlog; each new page tightens the gate. */
-const CORPUS = [{ name: "app-shell", file: "app-shell.html" }] as const;
+const CORPUS = [
+  { name: "app-shell", file: "app-shell.html" },
+  { name: "web-components", file: "web-components.html" },
+] as const;
 
 function dataUrl(html: string): string {
   return "data:text/html," + encodeURIComponent(html);
@@ -114,4 +117,34 @@ describe("nativeAX() ↔ nativeTree() (one native vocabulary)", () => {
       expect([...pairs].sort()).toEqual(fromTree.sort());
     });
   }
+});
+
+// The DOM producer walks the flat tree through open shadow roots and slots,
+// as Chromium does. Before that, every node below came from native only.
+describe("web components reach the DOM producer", () => {
+  it("extracts shadow content, slotted content and shadow-scoped IDREFs", async () => {
+    const html = readFileSync(
+      join(here, "corpus", "web-components.html"),
+      "utf8",
+    );
+    await session.open(dataUrl(html));
+    const domTree = await session.call<string>("treeSnapshot", "body", [
+      { markFocus: false },
+    ]);
+    const nativeTree = serializeTree(await session.nativeTree(), {
+      markFocus: false,
+    });
+
+    for (const tree of [domTree, nativeTree]) {
+      expect(tree).toContain('button "Skip To Content, shortcut Alt + 0"');
+      expect(tree).toContain('heading "Card title"');
+      expect(tree).toContain('link "Read the docs"');
+      expect(tree).toContain('button "Close card"');
+      expect(tree).toContain('textbox "Email address"');
+      expect(tree).toContain('navigation "Inner"');
+      expect(tree).toContain('link "Forwarded link"');
+      expect(tree).not.toContain("Unrendered");
+      expect(tree).not.toContain("Wrong label");
+    }
+  });
 });
