@@ -31,7 +31,7 @@
   while it's attached. The setting persists across restarts; turning it back
   off immediately detaches. The dev-only dogfood build and its `DogfoodPanel`
   diagnostics widget are unchanged and continue to exist separately for
-  internal telemetry — see `DOGFOOD.md`. ([#TODO])
+  internal telemetry — see `DOGFOOD.md`. ([#386])
 
 - Collect `.tsx` test suites. The vitest `include` was `src/**/*.test.ts`, so a
   suite written as `.tsx` was never picked up — and silently: vitest ran the
@@ -355,3 +355,4 @@ Earlier releases predate this changelog.
 [#354]: https://github.com/real-a11y/real-a11y-dev/pull/354
 [#356]: https://github.com/real-a11y/real-a11y-dev/pull/356
 [#380]: https://github.com/real-a11y/real-a11y-dev/pull/380
+[#386]: https://github.com/real-a11y/real-a11y-dev/pull/386
