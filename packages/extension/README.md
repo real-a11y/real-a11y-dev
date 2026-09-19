@@ -48,7 +48,7 @@ Web Page
 | `sidePanel`     | Register and open the Side Panel UI                                                                                                                             |
 | `webNavigation` | Detect SPA route changes so the tree refreshes when the page does                                                                                               |
 | `debugger`      | Powers native mode (below): reads and acts on Chromium's own accessibility tree over CDP. Required by the manifest for every install — `chrome.debugger` cannot be an optional Chrome permission — but inert until a user explicitly turns native mode on. |
-| `tabs`          | Resolves which tab's accessibility tree to attach to when native mode is on                                                                                    |
+| `tabs`          | Resolves which tab's accessibility tree to attach to when native mode is on — Chrome has no way to grant `tabs` scoped to a single tab, so this is technically broader than that use needs (it could read the URL/title of any open tab); the code only ever acts on a tab id the side panel already supplied, never enumerates others |
 | `storage`       | Persists the native-mode setting and short-lived attach bookkeeping locally on the device                                                                      |
 
 The content script is declared in the manifest with `<all_urls>` and `all_frames: true` so the tree is ready the moment the user opens the side panel. No data leaves your browser; the extension makes no network requests.
