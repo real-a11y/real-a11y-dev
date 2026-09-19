@@ -62,6 +62,6 @@
     "@types/aria-query": "^5.0.4",
     "tsup": "^8.3.0",
     "typescript": "^5.6.0",
-    "vitest": "^3.2.7"
+    "vitest": "^4.1.11"
   }
 }
