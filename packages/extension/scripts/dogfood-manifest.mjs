@@ -1,8 +1,12 @@
-// Overlay the DEV-ONLY dogfood permissions onto the copied manifest in
-// `dist-dogfood/` (RFC PR H). Runs after the `DOGFOOD=1` vite build, which
-// copies the clean `public/manifest.json`. This adds the `debugger` (and
-// `tabs`) permission the native mode needs — kept OUT of the store build's
-// `public/manifest.json` so the published listing never requests it.
+// Mark the copied manifest in `dist-dogfood/` as the dogfood build. Runs after
+// the `DOGFOOD=1` vite build, which copies `public/manifest.json` verbatim —
+// that manifest already carries `debugger`/`tabs`/`storage` (native mode ships
+// in every build now, gated by a runtime setting, not a build-time permission
+// split), so this script no longer needs to add them itself. What it still
+// does: rename the build so it's unmistakable in chrome://extensions, and
+// additionally bundle `DogfoodPanel`, the internal telemetry/diagnostics UI
+// for the dogfooding exercise (see `__DOGFOOD__` in vite.config.ts) — that
+// panel is the one thing this build has that the store build doesn't.
 //
 // The build output is meant to be loaded UNPACKED for dogfooding; it is never
 // submitted to the Chrome Web Store.
@@ -19,13 +23,6 @@ const pkg = JSON.parse(
 const manifestPath = resolve(pkgRoot, "dist-dogfood/manifest.json");
 
 const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
-
-// Powerful permission — this is exactly why the build is dev-only and unpacked.
-const permissions = new Set(manifest.permissions ?? []);
-permissions.add("debugger"); // read/dispatch the native AX tree over CDP
-permissions.add("tabs"); // resolve the active tab id to attach to
-permissions.add("storage"); // dogfood instrumentation log (chrome.storage.local)
-manifest.permissions = [...permissions];
 
 // Make it unmistakable in chrome://extensions that this is the dev build.
 manifest.name = `${manifest.name} (native dogfood)`;
