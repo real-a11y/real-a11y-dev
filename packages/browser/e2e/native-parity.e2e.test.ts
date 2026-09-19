@@ -91,3 +91,27 @@ describe("DOM ↔ native parity (corpus)", () => {
     });
   }
 });
+
+describe("nativeAX() ↔ nativeTree() (one native vocabulary)", () => {
+  // Both read the same `getFullAXTree`; both must normalize it with core's
+  // shared vocabulary. `nativeAX()` once carried a private copy of the tables
+  // that drifted (dropped named generics, unmapped Video/Audio), so the two
+  // native views of one page disagreed about what was on it.
+  for (const page of CORPUS) {
+    it(`agree on every node of "${page.name}"`, async () => {
+      const html = readFileSync(join(here, "corpus", page.file), "utf8");
+      await session.open(dataUrl(html));
+
+      const { tree, pairs } = await session.nativeAX();
+      const native = await session.nativeTree();
+      const fromTree = [...native.nodes.values()]
+        .filter((n) => n.id !== "ax-root")
+        .map((n) =>
+          n.a11y.name ? `${n.a11y.role} "${n.a11y.name}"` : n.a11y.role,
+        );
+
+      expect(pairs).toEqual(tree.split("\n").map((l) => l.trim()));
+      expect([...pairs].sort()).toEqual(fromTree.sort());
+    });
+  }
+});

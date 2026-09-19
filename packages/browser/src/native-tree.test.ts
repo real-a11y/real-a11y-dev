@@ -10,7 +10,11 @@ import { serializeTree } from "@real-a11y-dev/serialize";
 import { describe, expect, it } from "vitest";
 
 import payload from "./__fixtures__/native-ax-payload.json";
-import { allowlistAttributes, buildNativeTree } from "./native-tree.js";
+import {
+  allowlistAttributes,
+  buildNativeTree,
+  nativeAXView,
+} from "./native-tree.js";
 
 const EMAIL_SECRET = "secret-user@example.com";
 const PASSWORD_SECRET = "hunter2-SECRET";
@@ -199,6 +203,79 @@ describe("buildNativeTree — R1: unlabeled field value must not leak via the na
   it("keeps an authored (labeled) control's name", () => {
     const labeled = buildNativeTree(raw).nodes.get("ax-dom-200");
     expect(labeled?.a11y.name).toBe("Email");
+  });
+
+  it("applies the same redaction to nativeAXView (nativeAX())", () => {
+    const { tree, pairs } = nativeAXView(raw);
+    expect(tree).toBe('main\n  textbox\n  textbox "Email"');
+    expect(pairs).toEqual(["main", "textbox", 'textbox "Email"']);
+    expect(JSON.stringify(pairs)).not.toContain(TYPED_SECRET);
+  });
+});
+
+describe("nativeAXView — the shared vocabulary, not a private copy", () => {
+  const node = (
+    nodeId: string,
+    role: string,
+    opts: { parentId?: string; childIds?: string[]; name?: string } = {},
+  ) => ({
+    nodeId,
+    parentId: opts.parentId,
+    childIds: opts.childIds ?? [],
+    role: { value: role },
+    ...(opts.name !== undefined ? { name: { value: opts.name } } : {}),
+  });
+
+  it("keeps a named generic and flattens a bare one", () => {
+    const { tree } = nativeAXView([
+      node("1", "RootWebArea", { childIds: ["2", "4"] }),
+      node("2", "generic", {
+        parentId: "1",
+        childIds: ["3"],
+        name: "YouTube Video Player",
+      }),
+      node("3", "button", { parentId: "2", name: "Play" }),
+      node("4", "generic", { parentId: "1", childIds: ["5"] }),
+      node("5", "button", { parentId: "4", name: "Mute" }),
+    ]);
+    expect(tree).toBe(
+      'generic "YouTube Video Player"\n  button "Play"\nbutton "Mute"',
+    );
+  });
+
+  it("maps Blink's Video/Audio/image roles to the engine's", () => {
+    const { pairs } = nativeAXView([
+      node("1", "RootWebArea", { childIds: ["2", "3", "4"] }),
+      node("2", "Video", { parentId: "1" }),
+      node("3", "Audio", { parentId: "1" }),
+      node("4", "image", { parentId: "1", name: "Logo" }),
+    ]);
+    expect(pairs).toEqual(["video", "audio", 'img "Logo"']);
+  });
+
+  it("promotes a leaf's name from a dropped StaticText child", () => {
+    const { pairs } = nativeAXView([
+      node("1", "RootWebArea", { childIds: ["2"] }),
+      node("2", "listitem", { parentId: "1", childIds: ["3"] }),
+      node("3", "StaticText", { parentId: "2", name: "Alpha" }),
+    ]);
+    expect(pairs).toEqual(['listitem "Alpha"']);
+  });
+
+  it("agrees with buildNativeTree on the recorded payload, and leaks no secret", () => {
+    const { tree, pairs } = nativeAXView(rawNodes);
+    // `pairs` is exactly the tree's lines with indentation stripped.
+    expect(pairs).toEqual(tree.split("\n").map((l) => l.trim()));
+    // Same survivors and names as the ExtractionResult producer (minus the
+    // document root buildNativeTree synthesizes when there are several roots).
+    const built = [...build().nodes.values()]
+      .filter((n) => n.id !== "ax-root")
+      .map((n) =>
+        n.a11y.name ? `${n.a11y.role} "${n.a11y.name}"` : n.a11y.role,
+      );
+    expect([...pairs].sort()).toEqual([...built].sort());
+    expect(tree).not.toContain(EMAIL_SECRET);
+    expect(tree).not.toContain(PASSWORD_SECRET);
   });
 });
 

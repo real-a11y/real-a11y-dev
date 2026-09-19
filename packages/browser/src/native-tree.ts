@@ -38,8 +38,10 @@
 
 import {
   normalizeNativeAX,
+  serializeNativeAX,
   buildCssPath,
   type CssPathAdapter,
+  type NativeAXNode,
   type RawNativeAXNode,
   type SemanticNode,
   type ExtractionResult,
@@ -167,6 +169,56 @@ function nativeIdOf(raw: RawAXNode): string {
 
 function cleanText(text: string): string {
   return text.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * A normalized node's name with the R1 redaction applied.
+ *
+ * Core's name-promotion pulls text from dropped `StaticText` descendants when
+ * a node has no name of its own. For a value-bearing control with no AUTHORED
+ * name, that descendant is the field's *typed value* (Chromium represents an
+ * unlabeled input's value as a StaticText child), so a promoted name would
+ * leak the value. Detect the promotion (own AX name empty) for those roles and
+ * drop the name. An authored name (own AX name present) is never promoted, so
+ * it is kept untouched.
+ */
+function redactedName(nn: NativeAXNode, raw: RawAXNode | undefined): string {
+  const authoredName = raw ? cleanText(String(raw.name?.value ?? "")) : "";
+  const hasAxValue =
+    raw?.value?.value !== undefined &&
+    raw?.value?.value !== null &&
+    String(raw.value.value) !== "";
+  const nameWasPromoted = !authoredName && nn.name !== "";
+  const redactPromotedValue =
+    nameWasPromoted && (VALUE_BEARING_ROLES.has(nn.role) || hasAxValue);
+  return redactPromotedValue ? "" : nn.name;
+}
+
+/**
+ * The flat, text-only view of Chromium's native tree that
+ * `BrowserSession.nativeAX()` returns: indented `role "name"` lines (the same
+ * shape the DOM producer's serializer prints, so the two are comparable) plus
+ * the same lines as a flat list of role+name pairs, for order- and
+ * indent-insensitive diffing.
+ *
+ * Vocabulary comes from core's shared `normalizeNativeAX`, and names pass the
+ * same R1 redaction as {@link buildNativeTree} — so this view and the
+ * `ExtractionResult` one can never disagree about what is on a page.
+ */
+export function nativeAXView(rawNodes: RawAXNode[]): {
+  tree: string;
+  pairs: string[];
+} {
+  const rawById = new Map<string, RawAXNode>();
+  for (const raw of rawNodes) rawById.set(nativeIdOf(raw), raw);
+  const nodes = normalizeNativeAX(rawNodes).map((nn) => ({
+    ...nn,
+    name: redactedName(nn, rawById.get(nn.id)),
+  }));
+  return {
+    tree: serializeNativeAX(nodes),
+    pairs: nodes.map((n) => (n.name ? `${n.role} "${n.name}"` : n.role)),
+  };
 }
 
 /**
@@ -353,27 +405,9 @@ export function buildNativeTree(
       ? axFacets(raw)
       : { states: {}, properties: {} };
 
-    // R1 (redaction): core's name-promotion pulls text from dropped
-    // `StaticText` descendants when a node has no name of its own. For a
-    // value-bearing control with no AUTHORED name, that descendant is the
-    // field's *typed value* (Chromium represents an unlabeled input's value as
-    // a StaticText child), so a promoted name would leak the value into
-    // `a11y.name`. Detect the promotion (own AX name empty) for those roles and
-    // drop the name. An authored name (own AX name present) is never promoted,
-    // so it is kept untouched.
-    const authoredName = raw ? cleanText(String(raw.name?.value ?? "")) : "";
-    const hasAxValue =
-      raw?.value?.value !== undefined &&
-      raw?.value?.value !== null &&
-      String(raw.value.value) !== "";
-    const nameWasPromoted = !authoredName && nn.name !== "";
-    const redactPromotedValue =
-      nameWasPromoted && (VALUE_BEARING_ROLES.has(nn.role) || hasAxValue);
-    const name = redactPromotedValue ? "" : nn.name;
-
     const a11y: A11yInfo = {
       role: nn.role,
-      name,
+      name: redactedName(nn, raw),
       description: raw?.description?.value
         ? cleanText(String(raw.description.value))
         : "",
