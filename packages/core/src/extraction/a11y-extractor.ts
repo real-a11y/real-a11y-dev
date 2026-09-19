@@ -5,29 +5,6 @@ import { extractDomTree, getElementRefs } from "./dom-extractor.js";
 // See SUPPRESS_KEEP_INTERACTIVE.
 const SUPPRESS_KEEP_INTERACTIVE = new Set(["legend", "summary", "label"]);
 
-/**
- * HTML-AAM's header/footer-in-sectioning-content roles. Its mapping note says
- * user agents MAY leave them unexposed when the element has no accessible
- * name, isn't focusable and carries no other global ARIA attribute — the same
- * shape as a bare `generic`, so the a11y view flattens them under exactly
- * those conditions. The native normalizer applies the matching rule
- * (`NATIVE_AX_DROP_WHEN_BARE`) so both producers agree.
- */
-const SECTION_HEADER_FOOTER_ROLES = new Set(["sectionheader", "sectionfooter"]);
-
-/**
- * "Carries another global ARIA attribute" as far as the node records it:
- * `dom.attributes` holds only KEY_ATTRIBUTES (so no `aria-describedby`), but a
- * describedby reference surfaces as a computed description instead.
- */
-function hasGlobalAriaAttribute(node: SemanticNode): boolean {
-  if (node.a11y.description) return true;
-  const attributes = node.dom?.attributes ?? {};
-  return Object.keys(attributes).some(
-    (name) => name.startsWith("aria-") && name !== "aria-hidden",
-  );
-}
-
 // Identify which nodes to keep in the a11y tree
 function keepNode(node: SemanticNode, rootId: string): boolean {
   if (!node.a11y.isExposedToAT) return false;
@@ -42,28 +19,33 @@ function keepNode(node: SemanticNode, rootId: string): boolean {
     return node.interaction!.isInteractive;
   }
 
-  if (SECTION_HEADER_FOOTER_ROLES.has(node.a11y.role)) {
-    return (
-      !!node.a11y.name ||
-      node.interaction!.isFocusable ||
-      hasGlobalAriaAttribute(node) ||
-      node.id === rootId
-    );
-  }
+  // HTML-AAM's header/footer-in-sectioning-content roles. Its mapping note
+  // says user agents MAY leave them unexposed when the element has no
+  // accessible name, isn't focusable and carries no other global ARIA
+  // attribute — so they flatten like a bare `generic`, with those extra keep
+  // conditions below. The native normalizer applies the matching rule
+  // (`NATIVE_AX_DROP_WHEN_BARE`) so both producers agree.
+  const role = node.a11y.role;
+  const sectioned = role === "sectionheader" || role === "sectionfooter";
 
   // Keep nodes with meaningful roles (not generic)
-  if (node.a11y.role !== "generic") return true;
+  if (!sectioned && role !== "generic") return true;
 
-  // Keep generic nodes that have an accessible name
-  if (node.a11y.name) return true;
+  // Keep named or interactive generics, and the root
+  if (node.a11y.name || node.interaction!.isInteractive || node.id === rootId)
+    return true;
 
-  // Keep generic nodes that are interactive
-  if (node.interaction!.isInteractive) return true;
-
-  // Keep the root
-  if (node.id === rootId) return true;
-
-  return false;
+  // "Another global ARIA attribute", as far as the node records it:
+  // `dom.attributes` holds only KEY_ATTRIBUTES (no `aria-describedby`), but a
+  // describedby reference surfaces as a computed description instead.
+  return (
+    sectioned &&
+    (node.interaction!.isFocusable ||
+      !!node.a11y.description ||
+      Object.keys(node.dom?.attributes ?? {}).some(
+        (name) => name.startsWith("aria-") && name !== "aria-hidden",
+      ))
+  );
 }
 
 /**
