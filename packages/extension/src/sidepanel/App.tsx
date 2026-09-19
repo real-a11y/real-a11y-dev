@@ -58,7 +58,11 @@ import type { ContentToPanel, PanelToContent } from "../types.js";
 import { buildExportMarkdown, ALL_VIEWS } from "./export.js";
 import type { ExportView } from "./export.js";
 import { FilteredList } from "./FilteredList.js";
-import { InputPanel } from "./InputPanel.js";
+import {
+  InputPanel,
+  useFocusTrap,
+  useRestoreFocusOnClose,
+} from "./InputPanel.js";
 import type { InputPanelState } from "./InputPanel.js";
 import { NativeTreeView } from "./NativeTreeView.js";
 import { TabSequenceView } from "./TabSequenceView.js";
@@ -148,6 +152,77 @@ function isFieldStateSuccess(
   return isSuccessResponse(response);
 }
 
+/**
+ * The one-time consent step before native mode's setting flips on. A separate
+ * component (not inline JSX in App) so its own mount/unmount is what drives
+ * `useFocusTrap`/`useRestoreFocusOnClose` — those hooks key off first-mount
+ * effects, which only fires at the right moment when the banner itself is
+ * what mounts and unmounts, not a `showNativeConsent` boolean toggling inside
+ * an already-mounted `App`. Mirrors `InputPanel.tsx`'s `TextInput`/
+ * `SelectPicker` shape for the identical reason.
+ */
+function NativeConsentBanner({
+  onEnable,
+  onCancel,
+}: {
+  onEnable: () => void;
+  onCancel: () => void;
+}) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const enableRef = useRef<HTMLButtonElement>(null);
+
+  useRestoreFocusOnClose();
+  useFocusTrap(dialogRef);
+
+  useEffect(() => {
+    enableRef.current?.focus();
+  }, []);
+
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onCancel();
+      }
+    },
+    [onCancel],
+  );
+
+  return (
+    <div
+      ref={dialogRef}
+      class="sn-native-consent-banner"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Enable native mode"
+    >
+      <p>
+        <strong>Native mode</strong> reads Chromium's own accessibility tree
+        over the <code>debugger</code> API — full fidelity, including UA-shadow
+        content the DOM producer can't see. While it's attached, Chrome shows
+        its own "is debugging this browser" notice.
+      </p>
+      <div class="sn-native-consent-actions">
+        <button
+          ref={enableRef}
+          class="sn-toolbar-btn"
+          onClick={onEnable}
+          onKeyDown={handleKeyDown}
+        >
+          Enable
+        </button>
+        <button
+          class="sn-toolbar-btn"
+          onClick={onCancel}
+          onKeyDown={handleKeyDown}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function App() {
   const [viewMode, setViewMode] = useState<TreeViewMode>("a11y");
   // Read by `sendTreeRequest` instead of closing over `viewMode`, so that
@@ -211,7 +286,12 @@ export function App() {
       .sendMessage({ type: "NATIVE_FLAG_GET" })
       .then((r: { enabled?: boolean }) =>
         setNativeModeEnabledState(r?.enabled === true),
-      );
+      )
+      .catch(() => {
+        // Service worker not woken yet / context torn down mid-reload —
+        // leave the setting at its default (off); the toggle just stays
+        // available to try again.
+      });
   }, []);
 
   /** Flips the persisted setting. Turning it off also drops any live
@@ -219,10 +299,17 @@ export function App() {
    *  DOM — leaving `producer` at "native" with the capability just revoked
    *  would strand the panel on a tree it can no longer refresh. */
   const setNativeMode = useCallback(async (next: boolean) => {
-    await chrome.runtime.sendMessage({
-      type: "NATIVE_FLAG_SET",
-      enabled: next,
-    });
+    try {
+      await chrome.runtime.sendMessage({
+        type: "NATIVE_FLAG_SET",
+        enabled: next,
+      });
+    } catch {
+      // Message never reached the service worker — nothing was persisted,
+      // so leave the UI as it was rather than claiming a flip that didn't
+      // happen.
+      return;
+    }
     setNativeModeEnabledState(next);
     setShowNativeConsent(false);
     if (!next) {
@@ -1677,24 +1764,44 @@ export function App() {
             producer-scoped control below reads `producer` to decide whether
             it applies — introducing a THIRD "not yet decided" state for all of
             them would cost far more than the one small entry-point button
-            below costs to add. */}
+            below costs to add.
+
+            The "Disable" button alongside it is the only in-panel way back to
+            off once enabled — without it, a user who opted in has no way to
+            revoke the setting short of chrome://extensions, which contradicts
+            CHANGELOG.md's own "turning it back off immediately detaches".
+            No consent step to turn it off: revoking is the safe direction,
+            same as DogfoodPanel's own checkbox. */}
         {nativeModeEnabled ? (
-          <div class="sn-toggle-group" role="group" aria-label="Tree producer">
-            <button
-              class="sn-toggle-btn"
-              aria-pressed={producer === "dom"}
-              onClick={() => setProducer("dom")}
+          <>
+            <div
+              class="sn-toggle-group"
+              role="group"
+              aria-label="Tree producer"
             >
-              DOM
-            </button>
+              <button
+                class="sn-toggle-btn"
+                aria-pressed={producer === "dom"}
+                onClick={() => setProducer("dom")}
+              >
+                DOM
+              </button>
+              <button
+                class="sn-toggle-btn"
+                aria-pressed={producer === "native"}
+                onClick={() => setProducer("native")}
+              >
+                NATIVE
+              </button>
+            </div>
             <button
-              class="sn-toggle-btn"
-              aria-pressed={producer === "native"}
-              onClick={() => setProducer("native")}
+              class="sn-toolbar-btn"
+              onClick={() => void setNativeMode(false)}
+              title="Turn off native mode and detach the debugger"
             >
-              NATIVE
+              Disable native mode
             </button>
-          </div>
+          </>
         ) : (
           <button
             class="sn-toolbar-btn"
@@ -1706,34 +1813,12 @@ export function App() {
         )}
 
         {showNativeConsent && (
-          <div
-            class="sn-native-consent-banner"
-            role="dialog"
-            aria-label="Enable native mode"
-          >
-            <p>
-              <strong>Native mode</strong> reads Chromium's own accessibility
-              tree over the <code>debugger</code> API — full fidelity, including
-              UA-shadow content the DOM producer can't see. While it's attached,
-              Chrome shows its own "is debugging this browser" notice.
-            </p>
-            <div class="sn-native-consent-actions">
-              <button
-                class="sn-toolbar-btn"
-                onClick={() =>
-                  void setNativeMode(true).then(() => setProducer("native"))
-                }
-              >
-                Enable
-              </button>
-              <button
-                class="sn-toolbar-btn"
-                onClick={() => setShowNativeConsent(false)}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
+          <NativeConsentBanner
+            onEnable={() =>
+              void setNativeMode(true).then(() => setProducer("native"))
+            }
+            onCancel={() => setShowNativeConsent(false)}
+          />
         )}
 
         {producer === "dom" && (
