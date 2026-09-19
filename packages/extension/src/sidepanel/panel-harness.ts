@@ -40,7 +40,19 @@ export function installChromeMock(): ChromeMock {
       sent.push(message);
       // An ordinary reachable page: `isUnreachablePageResponse` reads
       // `unreachable`, and leaving it unset is what such a page replies.
-      responseCallback?.({ success: true });
+      const response = { success: true };
+      if (responseCallback) {
+        responseCallback(response);
+        return undefined;
+      }
+      // MV3's real `chrome.runtime.sendMessage` is polymorphic — callback
+      // form when one is passed, Promise form otherwise (used by, e.g.,
+      // App.tsx's own NATIVE_* calls and its NATIVE_FLAG_GET fetch-on-mount).
+      // `{ success: true }` carries no `enabled`/tree data, so every such
+      // caller sees the same "off"/"empty" default a real disconnected reply
+      // would — existing tests that never touch native state keep behaving
+      // exactly as before this mock supported the Promise form at all.
+      return Promise.resolve(response);
     },
     onMessage: {
       addListener: (fn: Listener) => listeners.push(fn),
