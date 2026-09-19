@@ -16,6 +16,7 @@ import {
   mapNativeAXRole,
   NATIVE_AX_DROP_ROLES,
   NATIVE_AX_DROP_UNLESS_NAMED,
+  NATIVE_AX_DROP_WHEN_BARE,
   NATIVE_AX_VOCABULARY_VERSION,
 } from "./ax-vocabulary.js";
 
@@ -244,5 +245,83 @@ describe("named container preservation (generic)", () => {
         "\n",
       ),
     );
+  });
+});
+
+// HTML-AAM: <header>/<footer> inside main or sectioning content map to
+// sectionheader/sectionfooter, which user agents MAY leave unexposed when
+// bare. Chromium exposes them; we drop the bare ones so native agrees with
+// the DOM producer's a11y view, and keep any that carry information.
+describe("sectionheader / sectionfooter (drop when bare)", () => {
+  const raw = (
+    nodeId: string,
+    role: string,
+    opts: {
+      parentId?: string;
+      childIds?: string[];
+      name?: string;
+      properties?: RawNativeAXNode["properties"];
+    } = {},
+  ): RawNativeAXNode => ({
+    nodeId,
+    role: { value: role },
+    ...(opts.name !== undefined ? { name: { value: opts.name } } : {}),
+    ...(opts.parentId !== undefined ? { parentId: opts.parentId } : {}),
+    ...(opts.childIds !== undefined ? { childIds: opts.childIds } : {}),
+    ...(opts.properties !== undefined ? { properties: opts.properties } : {}),
+  });
+
+  const tree = (
+    role: string,
+    extra: { name?: string; properties?: RawNativeAXNode["properties"] },
+  ) =>
+    serializeNativeAX(
+      normalizeNativeAX([
+        raw("1", "main", { childIds: ["2"] }),
+        raw("2", role, { parentId: "1", childIds: ["3"], ...extra }),
+        raw("3", "heading", { parentId: "2", name: "Title" }),
+      ]),
+    );
+
+  it("lists both roles in the vocabulary", () => {
+    expect(NATIVE_AX_DROP_WHEN_BARE.has("sectionheader")).toBe(true);
+    expect(NATIVE_AX_DROP_WHEN_BARE.has("sectionfooter")).toBe(true);
+  });
+
+  it.each(["sectionheader", "sectionfooter"])(
+    "drops a bare %s and flattens its children",
+    (role) => {
+      expect(tree(role, {})).toBe(["main", '  heading "Title"'].join("\n"));
+    },
+  );
+
+  it("drops one whose focusable property is false", () => {
+    expect(
+      tree("sectionheader", {
+        properties: [{ name: "focusable", value: { value: false } }],
+      }),
+    ).toBe(["main", '  heading "Title"'].join("\n"));
+  });
+
+  it("keeps a named one", () => {
+    expect(tree("sectionheader", { name: "Post meta" })).toBe(
+      ["main", '  sectionheader "Post meta"', '    heading "Title"'].join("\n"),
+    );
+  });
+
+  it("keeps a focusable one", () => {
+    expect(
+      tree("sectionfooter", {
+        properties: [{ name: "focusable", value: { value: true } }],
+      }),
+    ).toBe(["main", "  sectionfooter", '    heading "Title"'].join("\n"));
+  });
+
+  it("keeps one carrying an exposing ARIA property", () => {
+    expect(
+      tree("sectionheader", {
+        properties: [{ name: "describedby", value: { value: [] } }],
+      }),
+    ).toBe(["main", "  sectionheader", '    heading "Title"'].join("\n"));
   });
 });

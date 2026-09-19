@@ -57,6 +57,83 @@ describe("extractA11yTree", () => {
     expect(mainNode.childIds).toContain(btn!.id);
   });
 
+  describe("sectionheader / sectionfooter (header/footer in sectioning content)", () => {
+    function roleOf(html: string, predicate: (role: string) => boolean) {
+      const { nodes } = extractA11yTree(createPage(html));
+      return Array.from(nodes.values()).filter((n) => predicate(n.a11y.role));
+    }
+
+    it("flattens a bare one — the heading lands directly under main", () => {
+      const { nodes } = extractA11yTree(
+        createPage(`
+          <main>
+            <header><h1>Title</h1></header>
+            <footer><p><a href="/x">More</a></p></footer>
+          </main>
+        `),
+      );
+      const all = Array.from(nodes.values());
+      expect(all.map((n) => n.a11y.role)).not.toContain("sectionheader");
+      expect(all.map((n) => n.a11y.role)).not.toContain("sectionfooter");
+      const main = all.find((n) => n.a11y.role === "main")!;
+      const heading = all.find((n) => n.a11y.role === "heading")!;
+      expect(main.childIds).toContain(heading.id);
+    });
+
+    it("keeps a named one", () => {
+      expect(
+        roleOf(
+          `<article><header title="Post meta"><p>x</p></header></article>`,
+          (r) => r === "sectionheader",
+        ),
+      ).toHaveLength(1);
+    });
+
+    it("keeps a focusable one", () => {
+      expect(
+        roleOf(
+          `<section><footer tabindex="0"><p>x</p></footer></section>`,
+          (r) => r === "sectionfooter",
+        ),
+      ).toHaveLength(1);
+    });
+
+    it("keeps one carrying another global ARIA attribute", () => {
+      expect(
+        roleOf(
+          `<main><header aria-controls="p"><h2>T</h2></header><p id="p">x</p></main>`,
+          (r) => r === "sectionheader",
+        ),
+      ).toHaveLength(1);
+    });
+
+    it("keeps one with a description (aria-describedby)", () => {
+      // Attached: describedby resolves its target through the document.
+      const page = createPage(
+        `<main><header aria-describedby="d"><h2>T</h2></header><p id="d">desc</p></main>`,
+      );
+      document.body.appendChild(page);
+      try {
+        const { nodes } = extractA11yTree(page);
+        const kept = Array.from(nodes.values()).filter(
+          (n) => n.a11y.role === "sectionheader",
+        );
+        expect(kept).toHaveLength(1);
+      } finally {
+        page.remove();
+      }
+    });
+
+    it("leaves body-scoped banner/contentinfo landmarks alone", () => {
+      const roles = roleOf(
+        `<header><p>Site</p></header><footer><p>Legal</p></footer>`,
+        () => true,
+      ).map((n) => n.a11y.role);
+      expect(roles).toContain("banner");
+      expect(roles).toContain("contentinfo");
+    });
+  });
+
   it("suppresses label element but promotes wrapped form controls", () => {
     const root = createPage(`
       <form aria-label="Contact form">
