@@ -241,6 +241,15 @@ export interface NativeTreeResult {
  * separate root lookup, so a root appended after its own descendants would
  * render as an indented forest followed by its own root.
  */
+/**
+ * The synthetic root's id — exported so a consumer that must NOT treat it as
+ * a real AX node (the dogfood panel's flat list, which has no rootId concept
+ * to render relative to and would otherwise show a page-produced-nothing-
+ * like-this "document" row on every multi-root page) can filter it out by
+ * identity rather than duplicating this string as a second magic literal.
+ */
+export const SYNTHETIC_ROOT_ID = "ax-root";
+
 export function rootIdOf(nodes: EnrichedNativeNode[]): string {
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const hasParent = new Set<string>();
@@ -251,7 +260,7 @@ export function rootIdOf(nodes: EnrichedNativeNode[]): string {
   if (roots.length === 1) {
     rootId = roots[0]!.id;
   } else if (roots.length > 1) {
-    rootId = "ax-root";
+    rootId = SYNTHETIC_ROOT_ID;
     const synthetic: EnrichedNativeNode = {
       id: rootId,
       role: "document",

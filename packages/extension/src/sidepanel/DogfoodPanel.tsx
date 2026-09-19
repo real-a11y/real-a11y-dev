@@ -24,6 +24,7 @@ import {
   isSelectableRole,
   type NativeNode,
 } from "../native/native-actions.js";
+import { SYNTHETIC_ROOT_ID } from "../native/native-core.js";
 
 export {
   ACTABLE,
@@ -326,7 +327,17 @@ export function DogfoodPanel() {
       }
       return null;
     }
-    setNodes(r.nodes ?? []);
+    // `rootIdOf` (native-core.ts) unshifts a synthetic "document" root onto
+    // the wire's `nodes` array on any multi-root page — the common case, not
+    // an edge case, since `normalizeNativeAX` drops `RootWebArea` and an
+    // ordinary <header>/<main>/<footer> layout already has more than one
+    // parent-less node. A real tree UI (rootId + childIds) needs that
+    // synthetic node present to render from; this flat depth-indented list
+    // has no rootId concept at all and would otherwise show an extra,
+    // unlabeled "document" row — a node Chromium never actually produced —
+    // at the top of essentially every real page dogfooded.
+    const nodes = (r.nodes ?? []).filter((n) => n.id !== SYNTHETIC_ROOT_ID);
+    setNodes(nodes);
     setTreeTabId(tabId);
     setTreeUrl(r.url);
     // A successful read is proof the refusal that produced any standing banner
@@ -334,7 +345,7 @@ export function DogfoodPanel() {
     // which otherwise rendered a full native tree under an amber "native
     // unavailable here — close DevTools" explanation contradicting it.
     setCapability(undefined);
-    return r.nodes?.length ?? 0;
+    return nodes.length;
   }
 
   function forgetTree() {

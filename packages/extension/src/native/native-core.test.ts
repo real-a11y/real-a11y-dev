@@ -13,6 +13,7 @@ import {
   pageType,
   readNativeTree,
   rootIdOf,
+  SYNTHETIC_ROOT_ID,
   type CdpTransport,
   type EnrichedNativeNode,
 } from "./native-core.js";
@@ -294,13 +295,22 @@ describe("readNativeTree", () => {
       method === "Accessibility.getFullAXTree" ? { nodes: raw } : {},
     );
     const res = await readNativeTree(t);
-    expect(res.rootId).toBe("ax-root");
+    expect(res.rootId).toBe(SYNTHETIC_ROOT_ID);
     // keptCount is what Chromium actually produced (the heading + the
     // button — RootWebArea is dropped by normalizeNativeAX) — NOT
     // res.nodes.length, which is one higher because it also counts the
     // synthetic "ax-root" wrapper rootIdOf pushed in.
     expect(res.keptCount).toBe(2);
     expect(res.nodes.length).toBe(3);
+    // Pins the fix for a real regression this PR introduced and its own
+    // review caught: `DogfoodPanel.tsx`'s flat list has no rootId concept,
+    // so it filters the wire's `nodes` by this id rather than rendering the
+    // synthetic root as an extra, unlabeled "document" row. That filter
+    // has to land back on exactly `keptCount` — Chromium's real node count —
+    // or the panel's own "read N nodes" status silently drifts from it again.
+    expect(res.nodes.filter((n) => n.id !== SYNTHETIC_ROOT_ID).length).toBe(
+      res.keptCount,
+    );
   });
 
   it("uses the single surviving node as rootId when there's only one", async () => {
@@ -366,8 +376,8 @@ describe("rootIdOf", () => {
   it("synthesizes an ax-root wrapper adopting every parent-less node", () => {
     const nodes = [node("a"), node("b")];
     const rootId = rootIdOf(nodes);
-    expect(rootId).toBe("ax-root");
-    const synthetic = nodes.find((n) => n.id === "ax-root");
+    expect(rootId).toBe(SYNTHETIC_ROOT_ID);
+    const synthetic = nodes.find((n) => n.id === SYNTHETIC_ROOT_ID);
     expect(synthetic?.role).toBe("document");
     expect(synthetic?.childIds).toEqual(["a", "b"]);
   });
@@ -387,7 +397,7 @@ describe("rootIdOf", () => {
   it("puts the synthetic root at the front of the array, not the back", () => {
     const nodes = [node("a"), node("b")];
     rootIdOf(nodes);
-    expect(nodes[0]?.id).toBe("ax-root");
+    expect(nodes[0]?.id).toBe(SYNTHETIC_ROOT_ID);
   });
 
   /**
@@ -400,7 +410,7 @@ describe("rootIdOf", () => {
     const nodes = [node("a", ["a1"], 0), node("a1", [], 1), node("b", [], 0)];
     rootIdOf(nodes);
     const byId = new Map(nodes.map((n) => [n.id, n]));
-    expect(byId.get("ax-root")?.depth).toBe(0);
+    expect(byId.get(SYNTHETIC_ROOT_ID)?.depth).toBe(0);
     expect(byId.get("a")?.depth).toBe(1);
     expect(byId.get("a1")?.depth).toBe(2);
     expect(byId.get("b")?.depth).toBe(1);
