@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Native panel — production UI fixture</title>
+  </head>
+  <body>
+    <h1>Native panel fixture</h1>
+
+    <!--
+      Exercises two production-side-panel-only paths that no other committed
+      e2e suite touches — everything else in e2e/ drives the message channel
+      or the dev-only DogfoodPanel widget, never NativeTreeView.tsx or
+      App.tsx's handleNativeActivate. Both bugs below were real, caught only
+      by review, not by any test:
+
+      1. NativeTreeView's virtualization (useVirtualTree's containerRef was
+         never wired to the scrollable container) — silently capped the tree
+         at ~10 rendered rows and made scrollToIndex a permanent no-op,
+         regardless of how many nodes the tree actually had. 16 flat buttons,
+         nested one level under the section below (so "Expand all" is
+         required to reveal them), comfortably exceeds that fallback window.
+      2. A native field whose value is redacted (see the password input)
+         must never show its real value in the retype UI, and the retype
+         must be masked like a DOM password field.
+    -->
+
+    <h2>Sensitive field</h2>
+    <label for="pw">Password</label>
+    <input
+      id="pw"
+      type="password"
+      value="hunter2"
+      autocomplete="current-password"
+    />
+
+    <!--
+      Nothing follows this section in the DOM — Item 16 must be the actual
+      last node in the whole page's accessible tree, not just the last child
+      of its own section, so pressing End lands on it rather than on some
+      later, unrelated node.
+    -->
+    <section aria-label="Items">
+      <button id="item-1">Item 1</button>
+      <button id="item-2">Item 2</button>
+      <button id="item-3">Item 3</button>
+      <button id="item-4">Item 4</button>
+      <button id="item-5">Item 5</button>
+      <button id="item-6">Item 6</button>
+      <button id="item-7">Item 7</button>
+      <button id="item-8">Item 8</button>
+      <button id="item-9">Item 9</button>
+      <button id="item-10">Item 10</button>
+      <button id="item-11">Item 11</button>
+      <button id="item-12">Item 12</button>
+      <button id="item-13">Item 13</button>
+      <button id="item-14">Item 14</button>
+      <button id="item-15">Item 15</button>
+      <button id="item-16">Item 16</button>
+    </section>
+
+    <script>
+      // A `data-` flag on the button itself, not a trailing `<output>` —
+      // anything after the section would become the tree's real last node
+      // instead of Item 16.
+      document.getElementById("item-16").addEventListener("click", (e) => {
+        e.currentTarget.dataset.clicked = "true";
+      });
+    </script>
+  </body>
+</html>

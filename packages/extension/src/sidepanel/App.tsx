@@ -38,6 +38,17 @@ import {
 
 import type { FieldState } from "../field-state.js";
 import {
+  blockedBy,
+  explainUnavailable,
+  type NativeUnavailableReason,
+  type TabCapability,
+} from "../native/capability.js";
+import { isTypableRole, type NativeNode } from "../native/native-actions.js";
+import {
+  NATIVE_REDACTED_VALUE,
+  type NativeAction,
+} from "../native/native-core.js";
+import {
   isTrustedSender,
   isUnreachablePageResponse,
   shouldPanelAcceptMessage,
@@ -49,7 +60,26 @@ import type { ExportView } from "./export.js";
 import { FilteredList } from "./FilteredList.js";
 import { InputPanel } from "./InputPanel.js";
 import type { InputPanelState } from "./InputPanel.js";
+import { NativeTreeView } from "./NativeTreeView.js";
 import { TabSequenceView } from "./TabSequenceView.js";
+
+/**
+ * Native mode (RFC PR H/#229) is a dev-only dogfood build — a build-time
+ * constant the store build's bundler replaces with a literal `false`, so this
+ * whole branch (and anything it gates below) is dead-code-eliminated from the
+ * shipped extension. Same idiom as `background.ts`/`main.tsx`; none of the
+ * modules imported above touch `chrome.debugger` themselves (that stays
+ * inside `native/index.ts` + `native/debugger-session.ts`, registered only in
+ * `background.ts`'s own `__DOGFOOD__` branch) — this gate is about not
+ * showing a "NATIVE" control that would silently hang for every store user,
+ * not about keeping the capability out of the bundle a second time.
+ */
+declare const __DOGFOOD__: boolean;
+const dogfood = typeof __DOGFOOD__ !== "undefined" && __DOGFOOD__;
+
+/** How long to let the page react before re-reading the native tree after an
+ *  action — same rationale and value as `DogfoodPanel.tsx`'s `SETTLE_MS`. */
+const NATIVE_SETTLE_MS = 250;
 
 /**
  * Map HTML tag names to a human-readable display role when the ARIA role
@@ -176,6 +206,53 @@ export function App() {
     Array<{ id: number; text: string; level: string; role: string }>
   >([]);
   const announcementId = useRef(0);
+
+  // ---- Native producer (dev-only dogfood build, #229) ----
+  // Which tree the panel is currently showing. Only ever leaves "dom" when
+  // `dogfood` is true — the toggle that flips it is itself gated on that
+  // flag below, so this stays "dom" for the lifetime of a store-build panel.
+  const [producer, setProducer] = useState<"dom" | "native">("dom");
+  const [nativeNodes, setNativeNodes] = useState<Map<string, NativeNode>>(
+    new Map(),
+  );
+  const [nativeRootId, setNativeRootId] = useState<string>("");
+  const [nativeStatus, setNativeStatus] = useState<string>("");
+  const [nativeBusy, setNativeBusy] = useState(false);
+  const [nativeCapability, setNativeCapability] = useState<
+    TabCapability | undefined
+  >(undefined);
+  // The tab/document the CURRENT native tree describes — native node ids
+  // encode Chromium `backendDOMNodeId`s, scoped to that document, so acting
+  // against a stale pair would click an unrelated element. Same staleness
+  // guard `DogfoodPanel.tsx` uses, adapted to App's own tab-binding.
+  const [nativeTreeTabId, setNativeTreeTabId] = useState<number | undefined>(
+    undefined,
+  );
+  const [nativeTreeUrl, setNativeTreeUrl] = useState<string | undefined>(
+    undefined,
+  );
+  // Bumped whenever the bound tab changes (see the myTabId effect below).
+  // Read-gates a NATIVE_READ/NATIVE_CAPABILITY reply against a tab switch
+  // that happened while it was in flight — same purpose as DogfoodPanel's
+  // `capabilityRequest`, one counter shared across both message types since
+  // both answer "does this reply still describe the tab we're looking at".
+  const nativeOpToken = useRef(0);
+  // Excludes a second native read/act from starting while one is already in
+  // flight. Has to be a ref, not state driving a `disabled` attribute alone:
+  // `setNativeBusy(true)` only lands after the first `await` inside the
+  // guarded functions below, so two fast clicks (or a click plus a keyboard
+  // Enter) both read this as false before either sets it — the same double-
+  // dispatch DogfoodPanel's own `inFlight` ref exists to prevent, and for the
+  // identical reason (see its own comment). ALWAYS cleared unconditionally in
+  // a `finally`, never token-gated like `nativeBusy` below: unlike that
+  // display flag, a stale token here must not leave this permanently stuck
+  // true, or no native action could ever dispatch again.
+  const nativeInFlight = useRef(false);
+  // Auto-load the native tree once per transition into native mode (mirrors
+  // the DOM producer's own `hasRequestedInitial` restraint below — a later
+  // tab switch while already in native mode clears the tree and waits for an
+  // explicit refresh rather than re-attaching automatically).
+  const hasAutoLoadedNative = useRef(false);
 
   const treeRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -348,6 +425,31 @@ export function App() {
   const hasRequestedInitial = useRef(false);
   useEffect(() => {
     if (myTabId === null) return;
+    // A new bound tab invalidates any native tree in hand the same way it
+    // invalidates the DOM one below — native ids are scoped to the document
+    // they were read from. Bumping the token here (rather than only on an
+    // explicit native reload) is what makes a reply from the tab just left
+    // recognizably stale to the guards in loadNativeTree/dispatchNativeAction
+    // — and, since that guard is what leaves `nativeBusy` set on a stale
+    // reply (see loadNativeTree/dispatchNativeAction's own comments), this is
+    // also the one place responsible for clearing it back to false: nothing
+    // else is coming to do it for an operation this tab change just orphaned.
+    nativeOpToken.current++;
+    setNativeNodes(new Map());
+    setNativeRootId("");
+    setNativeTreeTabId(undefined);
+    setNativeTreeUrl(undefined);
+    setNativeStatus("");
+    setNativeCapability(undefined);
+    setNativeBusy(false);
+    // Deliberately NOT resetting hasAutoLoadedNative here — this effect fires
+    // on EVERY tab change, including a plain tab switch while already in
+    // native mode, and resetting it here would immediately re-trigger the
+    // auto-load effect below on the new tab, silently re-attaching
+    // chrome.debugger with no user action. That flag only re-arms when the
+    // user actually leaves and re-enters native mode (see the producer effect
+    // right below the auto-load effect).
+
     if (!hasRequestedInitial.current) {
       hasRequestedInitial.current = true;
       requestTree();
@@ -444,6 +546,22 @@ export function App() {
         setPageUnreachable(false);
         setPageTitle("");
         setPageUrl("");
+        // A navigation replaces the document, and with it every
+        // backendDOMNodeId a native tree's ids are built from — see the
+        // myTabId effect's identical teardown (including why hasAutoLoadedNative
+        // is deliberately NOT reset here) for why this has to happen here too,
+        // not just on a tab switch. Same reason for clearing nativeBusy: a
+        // NATIVE_READ/NATIVE_ACT in flight when the page navigates has its
+        // token orphaned by the bump above, so nothing else is coming to
+        // clear the busy flag its own finally block intentionally left set.
+        nativeOpToken.current++;
+        setNativeNodes(new Map());
+        setNativeRootId("");
+        setNativeTreeTabId(undefined);
+        setNativeTreeUrl(undefined);
+        setNativeStatus("");
+        setNativeCapability(undefined);
+        setNativeBusy(false);
         return;
       }
 
@@ -806,8 +924,270 @@ export function App() {
     [nodes, handleToggle, sendToBoundTab, reExtract],
   );
 
+  // ---- Native producer actions (dev-only dogfood build) ----
+  // Cheap pre-flight (no attach) — refreshed whenever the bound tab changes
+  // while native is the active producer, so the capability banner tracks the
+  // CURRENT tab. Mirrors DogfoodPanel's refreshCapability, driven by App's
+  // own authoritative myTabId instead of polling chrome.tabs itself.
+  //
+  // Every native-action function below opens with `if (!dogfood) return;`.
+  // The Hook call itself (`useCallback(fn, deps)`) still has to run every
+  // render for Rules of Hooks to hold in both builds — only a function BODY
+  // can be build-time-conditional — but since `dogfood` collapses to the
+  // literal `false` in the store build, `if (!false) return` collapses to an
+  // unconditional `return`, and esbuild's own dead-code-after-return
+  // elimination (the same pass that already proves the `dogfood && <JSX>`
+  // blocks in the toolbar below are dead) strips everything after it —
+  // verified empirically: this is what gets the NATIVE_* message strings and
+  // this function's own literals out of the store bundle, not just the
+  // toggle and NativeTreeView's own file.
+  const refreshNativeCapability = useCallback(async (tabId: number) => {
+    if (!dogfood) return;
+    const token = nativeOpToken.current;
+    const cap = (await chrome.runtime.sendMessage({
+      type: "NATIVE_CAPABILITY",
+      tabId,
+    })) as TabCapability;
+    if (token !== nativeOpToken.current) return; // superseded by a tab switch
+    setNativeCapability(cap);
+  }, []);
+
+  useEffect(() => {
+    if (!dogfood || producer !== "native" || myTabId === null) return;
+    void refreshNativeCapability(myTabId);
+  }, [producer, myTabId, refreshNativeCapability]);
+
+  /** Read the native tree into state. Mirrors DogfoodPanel's readTreeInto,
+   *  minus its own flat-list bookkeeping — NativeTreeView owns expand state.
+   *
+   *  UNGUARDED by `nativeInFlight` — `dispatchNativeAction`'s own re-read
+   *  step calls this directly (not the guarded `loadNativeTree` below) so
+   *  that its own held guard doesn't make its post-action re-read a silent
+   *  no-op. Never call this one from anywhere else; call `loadNativeTree`. */
+  const loadNativeTreeCore = useCallback(async (tabId: number) => {
+    if (!dogfood) return;
+    const token = nativeOpToken.current;
+    setNativeBusy(true);
+    setNativeStatus("reading native tree…");
+    try {
+      const r = (await chrome.runtime.sendMessage({
+        type: "NATIVE_READ",
+        tabId,
+      })) as {
+        ok?: boolean;
+        error?: string;
+        reason?: NativeUnavailableReason;
+        nodes?: NativeNode[];
+        rootId?: string;
+        url?: string;
+      };
+      if (token !== nativeOpToken.current) return; // tab switched mid-flight
+      if (!r?.ok) {
+        setNativeNodes(new Map());
+        setNativeRootId("");
+        if (r?.reason) {
+          setNativeCapability(blockedBy(r.reason));
+          setNativeStatus(
+            `native unavailable — ${explainUnavailable(r.reason)}`,
+          );
+        } else {
+          setNativeStatus(`read failed: ${r?.error ?? "unknown"}`);
+        }
+        return;
+      }
+      setNativeNodes(new Map((r.nodes ?? []).map((n) => [n.id, n])));
+      setNativeRootId(r.rootId ?? "");
+      setNativeTreeTabId(tabId);
+      setNativeTreeUrl(r.url);
+      // A successful read is proof any standing refusal no longer holds —
+      // same reasoning as DogfoodPanel's identical line.
+      setNativeCapability(undefined);
+      setNativeStatus(`${r.nodes?.length ?? 0} nodes`);
+    } finally {
+      if (token === nativeOpToken.current) setNativeBusy(false);
+    }
+  }, []);
+
+  /** Guarded entry point for a user- or effect-triggered read (refresh
+   *  button, auto-load). Excludes a second read/act while one is in flight —
+   *  see `nativeInFlight`'s own declaration. */
+  const loadNativeTree = useCallback(
+    async (tabId: number) => {
+      if (!dogfood || nativeInFlight.current) return;
+      nativeInFlight.current = true;
+      try {
+        await loadNativeTreeCore(tabId);
+      } finally {
+        nativeInFlight.current = false;
+      }
+    },
+    [loadNativeTreeCore],
+  );
+
+  // Auto-load once per transition into native mode — see hasAutoLoadedNative's
+  // declaration for why this deliberately does NOT also fire on a later tab
+  // switch while already in native mode.
+  useEffect(() => {
+    if (!dogfood || producer !== "native" || myTabId === null) return;
+    if (hasAutoLoadedNative.current) return;
+    hasAutoLoadedNative.current = true;
+    void loadNativeTree(myTabId);
+  }, [producer, myTabId, loadNativeTree]);
+
+  // The ONLY place hasAutoLoadedNative re-arms: leaving native mode. Neither
+  // the myTabId effect (a tab switch) nor PAGE_NAVIGATED (a same-tab
+  // navigation) reset it — both fire while producer can still be "native",
+  // and resetting it there would race straight into the effect above,
+  // silently re-attaching chrome.debugger with no fresh user gesture. Only
+  // flipping producer back to "dom" and then to "native" again — a real,
+  // deliberate re-entry — earns the tree another free auto-load.
+  useEffect(() => {
+    if (producer === "dom") hasAutoLoadedNative.current = false;
+  }, [producer]);
+
+  /** Dispatch one native action and, on success, settle + re-read — the same
+   *  two-step DogfoodPanel's runAct uses, so a click that opens a menu or
+   *  re-renders a list doesn't leave the tree showing backendDOMNodeIds the
+   *  page has already discarded. */
+  const dispatchNativeAction = useCallback(
+    async (nodeId: string, action: NativeAction, value?: string) => {
+      if (!dogfood || nativeInFlight.current) return;
+      nativeInFlight.current = true;
+      try {
+        const token = nativeOpToken.current;
+        if (nativeTreeTabId === undefined) {
+          setNativeStatus("load a tree first");
+          return;
+        }
+        const tabId = nativeTreeTabId;
+        // A navigation replaces the document, and with it every
+        // backendDOMNodeId this tree's ids are built from — refuse rather
+        // than dispatch into the dark. Same check DogfoodPanel's runAct
+        // makes; undefined either side (URL unreadable, or no baseline yet)
+        // means "can't tell" and does not block. Best-effort only: it
+        // catches an ordinary same-tab navigation, not every way a document
+        // can change (a same-URL reload isn't caught by the URL compare
+        // below — the token re-check right after is what catches THAT: the
+        // PAGE_NAVIGATED handler bumps it unconditionally, same-URL or not).
+        const nowUrl = await chrome.tabs
+          .get(tabId)
+          .then((t) => t.url)
+          .catch(() => undefined);
+        if (token !== nativeOpToken.current) return; // invalidated during the lookup
+        if (nativeTreeUrl && nowUrl && nowUrl !== nativeTreeUrl) {
+          setNativeNodes(new Map());
+          setNativeRootId("");
+          setNativeTreeTabId(undefined);
+          setNativeTreeUrl(undefined);
+          setNativeStatus("page navigated — reload the native tree");
+          return;
+        }
+        setNativeBusy(true);
+        try {
+          const r = (await chrome.runtime.sendMessage({
+            type: "NATIVE_ACT",
+            tabId,
+            nodeId,
+            action,
+            ...(value !== undefined ? { value } : {}),
+          })) as {
+            success?: boolean;
+            error?: string;
+            reason?: NativeUnavailableReason;
+          };
+          if (token !== nativeOpToken.current) return;
+          if (!r?.success) {
+            if (r?.reason) {
+              setNativeCapability(blockedBy(r.reason));
+              setNativeStatus(
+                `native unavailable — ${explainUnavailable(r.reason)}`,
+              );
+            } else {
+              setNativeStatus(`act failed: ${r?.error ?? "unknown"}`);
+            }
+            return;
+          }
+          setLastAction(`Native: ${action} on ${nodeId}`);
+          setTimeout(() => setLastAction(null), 2000);
+          await new Promise((res) => setTimeout(res, NATIVE_SETTLE_MS));
+          if (token !== nativeOpToken.current) return;
+          // The unguarded core, not `loadNativeTree` — this function already
+          // holds `nativeInFlight`, so calling the guarded wrapper here
+          // would see it held and silently skip the re-read.
+          await loadNativeTreeCore(tabId);
+        } finally {
+          if (token === nativeOpToken.current) setNativeBusy(false);
+        }
+      } finally {
+        nativeInFlight.current = false;
+      }
+    },
+    [nativeTreeTabId, nativeTreeUrl, loadNativeTreeCore],
+  );
+
+  const handleNativeActivate = useCallback(
+    (
+      node: NativeNode,
+      explicitAction?: "increment" | "decrement" | "select",
+    ) => {
+      if (!dogfood) return;
+      if (explicitAction) {
+        void dispatchNativeAction(node.id, explicitAction);
+        return;
+      }
+      // Typable fields reuse the SAME InputPanel the DOM producer uses — the
+      // point of this integration over DogfoodPanel's crude `prompt()`. No
+      // GET_FIELD_STATE round trip needed: unlike the DOM path, a native
+      // node's value/placeholder are already loaded eagerly at read time.
+      //
+      // NEVER prefill with the redaction sentinel itself. A sensitive
+      // field's `value` on the wire IS the literal string
+      // NATIVE_REDACTED_VALUE, not the real value (R1) — InputPanel has no
+      // way to tell "the page's real value happens to be this text" apart
+      // from "this is the marker, not data", so a submit with no edit would
+      // silently dispatch the word "[redacted]" over the user's real value.
+      // Opening empty instead means only a value the user actually typed can
+      // ever be submitted — and blockEmptySubmit (below) closes the other
+      // half: an unedited (still empty) submit must not blank the real
+      // value either, since that's just as silent and just as destructive.
+      const isRedacted = node.value === NATIVE_REDACTED_VALUE;
+      if (isTypableRole(node.role, node.states)) {
+        setInputState({
+          type: "text",
+          nodeId: node.id,
+          label: node.name || node.role,
+          value: isRedacted ? "" : (node.value ?? ""),
+          placeholder: node.placeholder,
+          source: "native",
+          // Mask the retyped replacement the same way InputPanel already
+          // masks a DOM password field (inputType, checked in InputPanel.tsx)
+          // — the wire only carries a redacted/not-redacted boolean (as the
+          // sentinel), never the raw `type` attribute that produced it (R1:
+          // it's not just type="password" — a sensitive-autocomplete text
+          // field redacts too), so this masks every redacted field's retype
+          // rather than trying to distinguish which specific rule fired.
+          // Erring toward masking more, never less.
+          inputType: isRedacted ? "password" : undefined,
+          blockEmptySubmit: isRedacted,
+        });
+        return;
+      }
+      void dispatchNativeAction(node.id, "click");
+    },
+    [dispatchNativeAction],
+  );
+
   const handleInputSubmit = useCallback(
     (nodeId: string, value: string) => {
+      if (inputState?.source === "native") {
+        setInputState(null);
+        // See InputPanelState.blockEmptySubmit's own doc — a redacted field
+        // opened empty; submitting it still-empty is "didn't type anything",
+        // not "clear the field", so it's a no-op rather than a dispatch.
+        if (inputState.blockEmptySubmit && value === "") return;
+        void dispatchNativeAction(nodeId, "type", value);
+        return;
+      }
       const node = nodes.get(nodeId);
       const actionType = inputState?.type === "select" ? "select" : "type";
 
@@ -828,7 +1208,7 @@ export function App() {
       );
       setInputState(null);
     },
-    [nodes, inputState, sendToBoundTab, reExtract],
+    [nodes, inputState, sendToBoundTab, reExtract, dispatchNativeAction],
   );
 
   const handleInputCancel = useCallback(() => {
@@ -870,8 +1250,17 @@ export function App() {
   // shortcut. Bound to the panel document so it fires whenever the panel
   // has focus. Page-level shortcuts are handled by the content script's
   // own Escape listener while pick mode is active.
+  //
+  // Gated on producer === "dom" like the toolbar button it mirrors — without
+  // this, muscle memory (or DevTools-inspector habit) could arm the content
+  // script's page-wide click interceptor while native is active, with
+  // nothing in the native tree UI showing it's on (the button and its
+  // aria-pressed state are hidden there) and no way to tell before the next
+  // click on the page gets silently captured as an element pick instead of
+  // a normal interaction.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (producer !== "dom") return;
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.shiftKey && (e.key === "C" || e.key === "c")) {
         e.preventDefault();
@@ -880,7 +1269,7 @@ export function App() {
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [togglePickMode]);
+  }, [producer, togglePickMode]);
 
   // Modality flag — see useInputModality for the full rationale. Hover
   // handlers gate on isMouseModality() so keyboard-driven scroll doesn't
@@ -1220,61 +1609,97 @@ export function App() {
 
       {/* Toolbar */}
       <div class="sn-toolbar" role="toolbar" aria-label="Tree controls">
-        <input
-          ref={searchInputRef}
-          class="sn-search"
-          type="search"
-          placeholder="Search nodes..."
-          aria-label="Search tree nodes"
-          value={query}
-          onInput={(e) => updateQuery((e.target as HTMLInputElement).value)}
-        />
+        {producer === "dom" && (
+          <input
+            ref={searchInputRef}
+            class="sn-search"
+            type="search"
+            placeholder="Search nodes..."
+            aria-label="Search tree nodes"
+            value={query}
+            onInput={(e) => updateQuery((e.target as HTMLInputElement).value)}
+          />
+        )}
         {/* Mounted before there is a count to report: a live region that
             arrives already holding its text is not announced by most screen
             reader / browser pairs. Only the text swaps. */}
-        <span class="sn-search-count" aria-live="polite">
-          {(query || roleFilter) &&
-            `${matchCount} match${matchCount !== 1 ? "es" : ""}`}
-        </span>
+        {producer === "dom" && (
+          <span class="sn-search-count" aria-live="polite">
+            {(query || roleFilter) &&
+              `${matchCount} match${matchCount !== 1 ? "es" : ""}`}
+          </span>
+        )}
 
-        <div class="sn-toggle-group" role="group" aria-label="Tree view mode">
-          <button
-            class="sn-toggle-btn"
-            aria-pressed={viewMode === "dom"}
-            onClick={() => handleViewModeChange("dom")}
-          >
-            DOM
-          </button>
-          <button
-            class="sn-toggle-btn"
-            aria-pressed={viewMode === "a11y"}
-            onClick={() => handleViewModeChange("a11y")}
-          >
-            A11Y
-          </button>
-          <button
-            class="sn-toggle-btn"
-            aria-pressed={viewMode === "tab"}
-            onClick={() => handleViewModeChange("tab")}
-          >
-            TAB
-          </button>
-        </div>
+        {/* Producer toggle — dev-only dogfood build. Reaching NATIVE requires
+            the DOM producer to have connected once first (this toolbar lives
+            past the `!connected` early return above) — a deliberate scope
+            cut, not a capability gap: every page Chrome actually blocks the
+            content script on (chrome://, the Web Store, an extension page)
+            blocks native's attach for the identical reason (capability.ts's
+            DOM_FALLBACK table), so the two producers' reachability already
+            coincides in practice. Wider capability-surfacing UX is later
+            work (RFC PR H's "done enough for C" checklist), not this slice. */}
+        {dogfood && (
+          <div class="sn-toggle-group" role="group" aria-label="Tree producer">
+            <button
+              class="sn-toggle-btn"
+              aria-pressed={producer === "dom"}
+              onClick={() => setProducer("dom")}
+            >
+              DOM
+            </button>
+            <button
+              class="sn-toggle-btn"
+              aria-pressed={producer === "native"}
+              onClick={() => setProducer("native")}
+            >
+              NATIVE
+            </button>
+          </div>
+        )}
 
-        <button
-          class="sn-pick-btn"
-          aria-pressed={pickModeOn}
-          onClick={togglePickMode}
-          title={
-            pickModeOn
-              ? "Pick mode ON — click an element in the page to select it in the tree (Esc to cancel)"
-              : "Pick an element in the page (Ctrl/Cmd+Shift+C)"
-          }
-          aria-label="Pick element in page"
-        >
-          {/* Crosshair-on-cursor glyph mirroring DevTools' picker icon. */}
-          {"⦿"}
-        </button>
+        {producer === "dom" && (
+          <div class="sn-toggle-group" role="group" aria-label="Tree view mode">
+            <button
+              class="sn-toggle-btn"
+              aria-pressed={viewMode === "dom"}
+              onClick={() => handleViewModeChange("dom")}
+            >
+              DOM
+            </button>
+            <button
+              class="sn-toggle-btn"
+              aria-pressed={viewMode === "a11y"}
+              onClick={() => handleViewModeChange("a11y")}
+            >
+              A11Y
+            </button>
+            <button
+              class="sn-toggle-btn"
+              aria-pressed={viewMode === "tab"}
+              onClick={() => handleViewModeChange("tab")}
+            >
+              TAB
+            </button>
+          </div>
+        )}
+
+        {producer === "dom" && (
+          <button
+            class="sn-pick-btn"
+            aria-pressed={pickModeOn}
+            onClick={togglePickMode}
+            title={
+              pickModeOn
+                ? "Pick mode ON — click an element in the page to select it in the tree (Esc to cancel)"
+                : "Pick an element in the page (Ctrl/Cmd+Shift+C)"
+            }
+            aria-label="Pick element in page"
+          >
+            {/* Crosshair-on-cursor glyph mirroring DevTools' picker icon. */}
+            {"⦿"}
+          </button>
+        )}
 
         <button
           class="sn-curtain-btn"
@@ -1285,114 +1710,126 @@ export function App() {
           {curtainOn ? "Curtain ON" : "Curtain"}
         </button>
 
-        <button
-          class="sn-focus-tracker-btn"
-          aria-pressed={focusTrackerOn}
-          onClick={toggleFocusTracker}
-          title={
-            focusTrackerOn
-              ? "Focus sync ON — click to disable (useful on focus-heavy pages)"
-              : "Focus sync OFF — click to enable"
-          }
-        >
-          {focusTrackerOn ? "Focus sync" : "Focus OFF"}
-        </button>
-
-        <button
-          class="sn-toolbar-btn"
-          onClick={() => {
-            // requestTree stamps myTabId (via sendToBoundTab) so this doesn't
-            // race the background's activeTabId update — without that, hitting
-            // refresh right after a tab switch would route to the wrong tab.
-            requestTree();
-            setLastAction("Tree refreshed");
-            setTimeout(() => setLastAction(null), 1500);
-          }}
-          aria-label="Refresh tree"
-          title="Refresh tree"
-        >
-          {"\u21BB"}
-        </button>
-
-        <button
-          class="sn-toolbar-btn"
-          onClick={handleExpandAll}
-          disabled={viewMode === "tab"}
-          aria-label="Expand all"
-          title="Expand all"
-        >
-          +
-        </button>
-        <button
-          class="sn-toolbar-btn"
-          onClick={handleCollapseAll}
-          disabled={viewMode === "tab"}
-          aria-label="Collapse all"
-          title="Collapse all"
-        >
-          -
-        </button>
-
-        <div class="sn-export" ref={exportRef}>
+        {producer === "dom" && (
           <button
-            class="sn-toolbar-btn sn-export-btn"
-            aria-haspopup="true"
-            aria-expanded={exportMenuOpen}
-            onClick={() => setExportMenuOpen((o) => !o)}
-            title="Copy the tree as Markdown — paste into a bug report"
+            class="sn-focus-tracker-btn"
+            aria-pressed={focusTrackerOn}
+            onClick={toggleFocusTracker}
+            title={
+              focusTrackerOn
+                ? "Focus sync ON — click to disable (useful on focus-heavy pages)"
+                : "Focus sync OFF — click to enable"
+            }
           >
-            {"Copy ▾"}
+            {focusTrackerOn ? "Focus sync" : "Focus OFF"}
           </button>
-          {exportMenuOpen && (
-            <div class="sn-export-menu" aria-label="Copy which view">
-              <button
-                class="sn-export-item"
-                onClick={() => doExport(ALL_VIEWS)}
-              >
-                Everything
-              </button>
-              <button
-                class="sn-export-item"
-                onClick={() => doExport(["tree"] as ExportView[])}
-              >
-                {viewMode === "dom" ? "DOM tree" : "A11y tree"}
-              </button>
-              <button
-                class="sn-export-item"
-                onClick={() => doExport(["outline"] as ExportView[])}
-              >
-                Headings
-              </button>
-              <button
-                class="sn-export-item"
-                onClick={() => doExport(["tab"] as ExportView[])}
-              >
-                Tab sequence
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
+        )}
 
-      {/* Role filters — disabled in tab sequence view */}
-      <div class="sn-filters" role="toolbar" aria-label="Filter by role">
-        {(
-          Object.keys(ROLE_FILTER_LABELS) as Array<Exclude<RoleFilter, null>>
-        ).map((key) => (
+        {producer === "dom" && (
           <button
-            key={key}
-            class="sn-filter-btn"
-            aria-pressed={roleFilter === key}
+            class="sn-toolbar-btn"
+            onClick={() => {
+              // requestTree stamps myTabId (via sendToBoundTab) so this doesn't
+              // race the background's activeTabId update — without that, hitting
+              // refresh right after a tab switch would route to the wrong tab.
+              requestTree();
+              setLastAction("Tree refreshed");
+              setTimeout(() => setLastAction(null), 1500);
+            }}
+            aria-label="Refresh tree"
+            title="Refresh tree"
+          >
+            {"\u21BB"}
+          </button>
+        )}
+
+        {producer === "dom" && (
+          <button
+            class="sn-toolbar-btn"
+            onClick={handleExpandAll}
             disabled={viewMode === "tab"}
-            onClick={() => setRoleFilter(roleFilter === key ? null : key)}
+            aria-label="Expand all"
+            title="Expand all"
           >
-            {ROLE_FILTER_LABELS[key]}
+            +
           </button>
-        ))}
+        )}
+        {producer === "dom" && (
+          <button
+            class="sn-toolbar-btn"
+            onClick={handleCollapseAll}
+            disabled={viewMode === "tab"}
+            aria-label="Collapse all"
+            title="Collapse all"
+          >
+            -
+          </button>
+        )}
+
+        {producer === "dom" && (
+          <div class="sn-export" ref={exportRef}>
+            <button
+              class="sn-toolbar-btn sn-export-btn"
+              aria-haspopup="true"
+              aria-expanded={exportMenuOpen}
+              onClick={() => setExportMenuOpen((o) => !o)}
+              title="Copy the tree as Markdown — paste into a bug report"
+            >
+              {"Copy ▾"}
+            </button>
+            {exportMenuOpen && (
+              <div class="sn-export-menu" aria-label="Copy which view">
+                <button
+                  class="sn-export-item"
+                  onClick={() => doExport(ALL_VIEWS)}
+                >
+                  Everything
+                </button>
+                <button
+                  class="sn-export-item"
+                  onClick={() => doExport(["tree"] as ExportView[])}
+                >
+                  {viewMode === "dom" ? "DOM tree" : "A11y tree"}
+                </button>
+                <button
+                  class="sn-export-item"
+                  onClick={() => doExport(["outline"] as ExportView[])}
+                >
+                  Headings
+                </button>
+                <button
+                  class="sn-export-item"
+                  onClick={() => doExport(["tab"] as ExportView[])}
+                >
+                  Tab sequence
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Dialog scope indicator */}
-      {isDialogScoped && (
+      {/* Role filters — DOM producer only; disabled in tab sequence view */}
+      {producer === "dom" && (
+        <div class="sn-filters" role="toolbar" aria-label="Filter by role">
+          {(
+            Object.keys(ROLE_FILTER_LABELS) as Array<Exclude<RoleFilter, null>>
+          ).map((key) => (
+            <button
+              key={key}
+              class="sn-filter-btn"
+              aria-pressed={roleFilter === key}
+              disabled={viewMode === "tab"}
+              onClick={() => setRoleFilter(roleFilter === key ? null : key)}
+            >
+              {ROLE_FILTER_LABELS[key]}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Dialog scope indicator — DOM producer only */}
+      {producer === "dom" && isDialogScoped && (
         <div class="sn-dialog-indicator" role="status">
           <span class="sn-dialog-label">
             Dialog: {rootNode?.a11y.name || "Modal"}
@@ -1407,8 +1844,8 @@ export function App() {
         </div>
       )}
 
-      {/* Scope breadcrumb (when user scoped to a subtree) */}
-      {scopedRootId && (
+      {/* Scope breadcrumb (when user scoped to a subtree) — DOM producer only */}
+      {producer === "dom" && scopedRootId && (
         <div class="sn-scope-bar">
           <button
             class="sn-scope-exit"
@@ -1465,7 +1902,20 @@ export function App() {
         />
       )}
 
-      {viewMode === "tab" ? (
+      {dogfood && producer === "native" ? (
+        /* ---- Native tree view (dev-only dogfood build) ---- */
+        <NativeTreeView
+          nodes={nativeNodes}
+          rootId={nativeRootId}
+          busy={nativeBusy}
+          capability={nativeCapability}
+          status={nativeStatus}
+          onRefresh={() => {
+            if (myTabId !== null) void loadNativeTree(myTabId);
+          }}
+          onActivate={handleNativeActivate}
+        />
+      ) : viewMode === "tab" ? (
         /* ---- Tab sequence view ---- */
         <TabSequenceView
           nodes={nodes}

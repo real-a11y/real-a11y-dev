@@ -71,6 +71,23 @@
   border-color: hsl(28 40% 40%);
 }
 
+/* Native producer's "can't attach here" banner (dev-only dogfood build,
+   NativeTreeView.tsx). Same amber warning hue as .sn-beta-pill above. */
+.sn-native-capability-banner {
+  margin: 6px 8px;
+  padding: 4px 6px;
+  border-left: 3px solid hsl(28 70% 45%);
+  background: hsl(28 95% 92%);
+  color: hsl(28 70% 25%);
+  font-size: 12px;
+}
+
+.sn-theme-dark .sn-native-capability-banner {
+  border-left-color: hsl(28 40% 45%);
+  background: hsl(28 35% 18%);
+  color: hsl(28 90% 82%);
+}
+
 .sn-page-url {
   font-family: var(--sn-font-mono);
   font-size: 10px;

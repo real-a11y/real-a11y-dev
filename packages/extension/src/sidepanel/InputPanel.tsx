@@ -97,6 +97,25 @@ export interface InputPanelState {
   inputType?: string;
   placeholder?: string;
   options?: SelectOption[];
+  /**
+   * Which producer's node `nodeId` resolves against — the DOM tree's own
+   * per-frame ids, or a native tree's `ax-dom-<backendNodeId>` ids (dev-only
+   * dogfood build). Absent means `"dom"`, the only producer that opened this
+   * panel before native mode existed — every pre-existing call site is still
+   * correct with no changes. `App.tsx`'s submit handler reads this to decide
+   * which wire message (`DISPATCH_ACTION` vs `NATIVE_ACT`) a submission
+   * becomes; this component itself never branches on it.
+   */
+  source?: "dom" | "native";
+  /**
+   * Set only when `value` was substituted empty for a native field whose
+   * real value is redacted (R1) — see `App.tsx`'s `handleNativeActivate`.
+   * Submitting with NO edit (still empty) is a no-op instead of a dispatch:
+   * without this, a click-through submit would silently blank the user's
+   * real, still-live value on the page for a field they never touched. A
+   * typed replacement (any non-empty value) always submits normally.
+   */
+  blockEmptySubmit?: boolean;
 }
 
 interface InputPanelProps {
