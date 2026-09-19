@@ -85,6 +85,30 @@
   --vp-code-line-diff-remove-color: hsl(0 50% 22%);
 }
 
+/* Inline `code` inside a WARNING or DANGER callout. VitePress gives the
+ * callout a tinted code background but lets the code inherit the block's
+ * TEXT color — which is the status hue itself. On amber that is
+ * `#f59f0a` on `#faebbf`: 1.79:1, a serious AA failure that axe catches.
+ * Paint it with the normal body text color instead and keep the tinted
+ * background, so the code still reads as part of the callout.
+ * `--vp-c-text-1` flips on `.dark`, so this holds in both themes.
+ *
+ * Scoped to these two rather than every `custom-block`, because they are the
+ * hues this file replaces (`--vp-c-warning-1` / `--vp-c-danger-1` above).
+ * `tip` keeps VitePress's own green, which passes — and inline code in tips
+ * is not new: `packages/react.md`'s "Where the query helpers live" tip has
+ * carried some since long before this rule existed.
+ *
+ * `:not(a code)` keeps a code-labelled LINK looking like a link. Without it
+ * this rule outranks `.vp-doc a code` on specificity and flattens
+ * `` [`@real-a11y-dev/testing`](…) `` to body text, removing the only visual
+ * affordance that it is clickable — an accessibility regression traded for an
+ * accessibility fix. */
+.vp-doc .custom-block.warning code:not(a code),
+.vp-doc .custom-block.danger code:not(a code) {
+  color: var(--vp-c-text-1);
+}
+
 /* `@real-a11y-dev/design`'s `tokens.css` isn't strictly tokens — it
  * also applies `font-family: var(--font-display)` to
  * `body, h1, h2, h3, .font-display` directly. With DM Serif Display

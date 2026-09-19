@@ -20,7 +20,7 @@ import {
   getElementRefs,
 } from "@real-a11y-dev/core";
 import type { TreeChange, DomSemanticNode } from "@real-a11y-dev/core";
-import { addons } from "@storybook/preview-api";
+import { addons } from "storybook/preview-api";
 
 import {
   EVENTS,

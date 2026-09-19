@@ -65,7 +65,26 @@ npm install -D @playwright/test@^1.51.1
 
 ## `@real-a11y-dev/storybook-addon` — Storybook version
 
-The addon's manager imports from `@storybook/manager-api` v8. Storybook 7 or earlier won't work. Storybook ≥ 8.0 is required.
+The addon's manager imports `storybook/manager-api` and its preview imports
+`storybook/preview-api`. Those subpaths arrived in **Storybook 9**, when the
+standalone `@storybook/manager-api`, `@storybook/preview-api` and
+`@storybook/theming` packages were folded into `storybook` itself — they stopped
+publishing at 8.6, and `storybook@8` exposes no equivalent subpath. So the
+supported range is **Storybook 9.x, 10.x or 11.x**; 8 and earlier will not work,
+and there is no build that can serve both sides of that split.
+
+The 11 half of that range is written `^11.0.0-0`, not `^11.0.0`. Storybook 11 is
+still prerelease — `11.0.0-alpha.0` is the only 11.x published — and npm ranges
+exclude prereleases unless the range itself names one, so `^11.0.0` would have
+matched nothing you can currently install. Support for 11 is verified against
+that alpha — `tsc` checks the addon against Storybook 11's own declarations —
+and re-checked by an advisory CI job. The unit tests mock the Storybook API, so
+they are not part of that evidence. Treat 11 support as provisional until 11
+ships stable.
+
+Note that a **single** `storybook` dependency is all you need now: if
+your project still carries `@storybook/manager-api` or `@storybook/preview-api`
+from a Storybook 8 setup, remove them.
 
 ## `@real-a11y-dev/react` — React version
 

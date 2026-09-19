@@ -13,7 +13,7 @@ navigation "On this page"
       link "What to look for in the panel"
 main
   heading "Example: Storybook" (level 1)
-  paragraph "A Storybook 8 project with enabled — demonstrating the panel on real component stories."
+  paragraph "A Storybook 10 project with enabled — demonstrating the panel on real component stories."
     code "@real-a11y-dev/storybook-addon"
   paragraph
     strong "Source:"

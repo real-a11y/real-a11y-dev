@@ -417,6 +417,60 @@ jobs:
           pnpm typecheck
           pnpm test
 
+  # Storybook 11 is in the addon's peer range as `^11.0.0-0` while 11 is still
+  # prerelease, so this job is what keeps that promise honest: it installs
+  # `storybook@next` and re-runs the addon's type-check, build and tests against
+  # it. The package's own devDependency deliberately stays on the stable latest,
+  # so `verify` gates on the stable path and this job carries the prerelease
+  # risk on its own.
+  #
+  # Advisory by being absent from the `test` aggregate below, NOT by
+  # `continue-on-error`: that flag reports the check green even when the job
+  # fails, which would have hidden exactly the break this job exists to find.
+  # Left out of the aggregate instead, so an upstream alpha breaking shows up
+  # red here without blocking an unrelated PR. Add it to the aggregate when 11
+  # ships stable and the `-0` comes off the range.
+  storybook-next:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the addon's workspace dependencies
+        run: pnpm --filter "@real-a11y-dev/storybook-addon^..." build
+
+      - name: Install storybook@next
+        run: |
+          pnpm --filter @real-a11y-dev/storybook-addon add -D storybook@next
+          # Assert `next` is still a Storybook 11. Without this, a dist-tag move
+          # makes this job a silent duplicate of `verify` that keeps reporting
+          # green while covering nothing.
+          node -e "
+            const v = require('./packages/storybook-addon/node_modules/storybook/package.json').version;
+            console.log('storybook@next =', v);
+            if (!/^11\./.test(v)) {
+              console.error('::error::storybook@next is ' + v + ', not 11.x — this job no longer covers Storybook 11.');
+              process.exit(1);
+            }
+          "
+
+      - name: Type-check, build and test against it
+        run: |
+          pnpm --filter @real-a11y-dev/storybook-addon typecheck
+          pnpm --filter @real-a11y-dev/storybook-addon build
+          pnpm --filter @real-a11y-dev/storybook-addon test
+
   # Require a changeset whenever a *published* package's source changes, so a
   # release's changelog and version bump never silently go missing. We check
   # the PR's own diff rather than `changeset status`: the packages are `linked`

@@ -1,11 +1,11 @@
 ---
-title: Storybook 8 + React 19
-description: The one viteFinal tweak needed to make the Real A11y Storybook addon work cleanly with Storybook 8 + React 19 projects. Fixes React-not-defined errors.
+title: Storybook + React 19
+description: The one viteFinal tweak some Storybook + React 19 projects need to make the Real A11y Storybook addon work cleanly. Fixes React-not-defined errors.
 ---
 
-# Storybook 8 + React 19
+# Storybook + React 19
 
-`@real-a11y-dev/storybook-addon` supports Storybook 8.x with React 18 or React 19; its own suite runs on React 19. If you're on React 19 the Vite pipeline needs one small nudge — explained below.
+`@real-a11y-dev/storybook-addon` supports Storybook 9.x, 10.x and 11.x with React 18 or React 19; its own suite runs on React 19. If you hit `React is not defined` at story render time, the Vite pipeline needs one small nudge — explained below.
 
 ## Install
 
@@ -13,7 +13,9 @@ description: The one viteFinal tweak needed to make the Real A11y Storybook addo
 npm install -D @real-a11y-dev/storybook-addon
 ```
 
-Peer dependencies (Storybook's own framework package + manager API + React) must already be installed in your project.
+Peer dependencies (`storybook` 9.x or 10.x, your framework package, and React)
+must already be installed in your project. Storybook 8 is not supported — see
+[the package page](/packages/storybook-addon#install) for why.
 
 ## Register the addon
 
@@ -23,10 +25,7 @@ import type { StorybookConfig } from "@storybook/react-vite";
 
 const config: StorybookConfig = {
   stories: ["../src/**/*.stories.@(ts|tsx)"],
-  addons: [
-    "@storybook/addon-essentials",
-    "@real-a11y-dev/storybook-addon",
-  ],
+  addons: ["@real-a11y-dev/storybook-addon"],
   framework: {
     name: "@storybook/react-vite",
     options: {},
@@ -42,7 +41,7 @@ A **Semantic Navigator** panel appears next to Controls and A11y for every story
 
 ## React 19 — pin the JSX runtime
 
-Storybook externalizes `react` for addon manager bundles but does **not** externalize `react/jsx-runtime`. When Vite's esbuild falls back to the classic JSX transform (which it does for some source files under React 19 + Storybook 8.6), story files emit `React.createElement(...)` calls that fail with `ReferenceError: React is not defined` — because automatic runtime is the default for React 19 projects and classic transform needs `React` in scope.
+Storybook externalizes `react` for addon manager bundles but does **not** externalize `react/jsx-runtime` — still true as of Storybook 11's manager globals map. When Vite's esbuild falls back to the classic JSX transform (which it does for some source files under React 19), story files emit `React.createElement(...)` calls that fail with `ReferenceError: React is not defined` — because automatic runtime is the default for React 19 projects and classic transform needs `React` in scope.
 
 The one-line fix lives in `.storybook/main.ts`:
 
@@ -53,10 +52,7 @@ import { mergeConfig } from "vite"; // [!code ++]
 
 const config: StorybookConfig = {
   stories: ["../src/**/*.stories.@(ts|tsx)"],
-  addons: [
-    "@storybook/addon-essentials",
-    "@real-a11y-dev/storybook-addon",
-  ],
+  addons: ["@real-a11y-dev/storybook-addon"],
   framework: {
     name: "@storybook/react-vite",
     options: {},
@@ -111,6 +107,7 @@ For accessibility-specific CI coverage on Storybook stories, pair it with the Pl
 
 ## Known constraints
 
-- **Storybook ≥ 8.0** is required. The addon's manager entry uses the `@storybook/manager-api` v8 API.
+- **Storybook 9.x, 10.x or 11.x** is required. The addon's manager entry imports `storybook/manager-api` and its preview entry imports `storybook/preview-api` — the subpath exports Storybook 9 introduced when it folded the standalone `@storybook/*-api` packages into core. Those packages stopped publishing at 8.6 and `storybook@8` has no equivalent subpath, so 8.x cannot be supported by the same build.
+- **Storybook 11** is in the peer range as `^11.0.0-0` (the `-0` is required for the range to match `11.0.0-alpha.0`, the only 11.x published so far). The addon type-checks and builds against that alpha — `tsc` reads Storybook 11's own `manager-api`/`preview-api` declarations — and an advisory CI job keeps re-checking against `storybook@next`. The unit tests mock the Storybook API, so they carry no 11 signal. Provisional while 11 is in alpha.
 - **React 18 or 19** as a peer. React 19 works with the `viteFinal` override above.
 - **Mixed React versions on the page will fail.** If anything in your Storybook config transitively loads a second copy of React (some legacy addons do this), the manager will crash. Run `npm ls react` — there should be exactly one resolution.

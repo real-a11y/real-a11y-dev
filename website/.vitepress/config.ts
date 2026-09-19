@@ -457,7 +457,7 @@ export default defineConfig({
         items: [
           { text: "Next.js (App Router + React 19)", link: "/recipes/nextjs" },
           {
-            text: "Storybook 8 + React 19",
+            text: "Storybook + React 19",
             link: "/recipes/storybook-react-19",
           },
           { text: "Peer Dependencies", link: "/recipes/peer-dependencies" },

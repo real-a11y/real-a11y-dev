@@ -1,5 +1,5 @@
   h2 On this page
-h1 Storybook 8 + React 19
+h1 Storybook + React 19
   h2 Install
   h2 Register the addon
   h2 React 19 — pin the JSX runtime

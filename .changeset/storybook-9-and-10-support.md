@@ -1,0 +1,5 @@
+---
+"@real-a11y-dev/storybook-addon": minor
+---
+
+Support Storybook 9 and 10; drop Storybook 8. The manager entry now imports `storybook/manager-api` and the preview entry `storybook/preview-api`, replacing `@storybook/manager-api` and `@storybook/preview-api`. Storybook 9 folded those packages — along with `@storybook/theming` — into the `storybook` package as subpath exports; the standalone packages stopped publishing at 8.6, so the addon was broken on Storybook 9 and 10 as well as unready for 11. `storybook@8` exposes no equivalent subpath, so one build cannot serve both sides of that split: the peer range becomes `storybook: ^9.0.0 || ^10.0.0` and the `@storybook/manager-api`, `@storybook/preview-api` and `@storybook/theming` peers are gone. A single `storybook` dependency is now all a consumer needs — remove those three if a Storybook 8 setup left them behind. Storybook 11 is handled in a separate changeset in this same release, which adds it to the range as `^11.0.0-0`. Projects that must stay on Storybook 8 should pin `@real-a11y-dev/storybook-addon@0.1.0-beta.16`.
