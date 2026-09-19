@@ -150,6 +150,20 @@ describe("searchNativeTree", () => {
     expect(result.directIds.size).toBe(0);
   });
 
+  it("trims surrounding whitespace from the query before matching", () => {
+    const nodes = buildTree();
+    // `hasQuery` already trims to decide whether a filter is active at all;
+    // matching itself has to trim too, or a leading/trailing space (easy to
+    // type by accident) makes an otherwise-valid search return nothing.
+    const result = searchNativeTree(
+      nodes,
+      buildParentOf(nodes),
+      "  welcome  ",
+      null,
+    );
+    expect(result.directIds).toEqual(new Set(["heading"]));
+  });
+
   it("keeps a landmark visible when it directly matches the role filter but the query match is only in its subtree", () => {
     const nodes = buildTree();
     // "section" (role "region", in the landmark group) directly satisfies

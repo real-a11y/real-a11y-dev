@@ -102,7 +102,7 @@ export function searchNativeTree(
   const hasRoleFilter = roleFilter !== null;
   if (!hasQuery && !hasRoleFilter) return EMPTY_RESULT;
 
-  const lowerQuery = query.toLowerCase();
+  const lowerQuery = query.trim().toLowerCase();
 
   const queryDirectIds = new Set<string>();
   const queryVisibleIds = new Set<string>();
