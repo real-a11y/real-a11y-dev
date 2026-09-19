@@ -448,6 +448,18 @@ export function App() {
   // tab switch while already in native mode clears the tree and waits for an
   // explicit refresh rather than re-attaching automatically).
   const hasAutoLoadedNative = useRef(false);
+  // RFC PR H's "native as default on attachable pages" (execution plan PR 5):
+  // fires exactly ONCE per panel session, the first time the DOM producer
+  // connects while the user already has native mode enabled — never again
+  // after that, on purpose. This is deliberately narrower than "default on
+  // every attachable page": re-checking on every later tab switch or
+  // navigation would re-open exactly the silent-reattach hole
+  // `hasAutoLoadedNative`'s own comment above describes fixing (the debugger
+  // banner reappearing with no fresh user gesture). A session's first connect
+  // is the one moment a default can stand in for that gesture — the user
+  // opened the panel on an already-opted-in browser; every subsequent tab or
+  // page is a fresh moment that still asks for one.
+  const hasAppliedNativeDefault = useRef(false);
 
   const treeRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -1370,6 +1382,31 @@ export function App() {
     },
     [loadNativeTreeCore],
   );
+
+  // The default itself (see `hasAppliedNativeDefault`'s own declaration for
+  // the one-shot-per-session scoping rationale). Gated on `connected`, not
+  // just `myTabId`, for the same reason the producer toggle itself waits for
+  // it (see the toolbar's own comment below): reaching for native before the
+  // DOM producer has proven the tab is even reachable would default into a
+  // capability check with nothing to fall back to yet.
+  useEffect(() => {
+    if (!nativeModeEnabled || !connected || myTabId === null) return;
+    if (hasAppliedNativeDefault.current) return;
+    hasAppliedNativeDefault.current = true;
+    const tabId = myTabId;
+    const token = nativeOpToken.current;
+    void chrome.runtime
+      .sendMessage({ type: "NATIVE_CAPABILITY", tabId })
+      .then((cap: TabCapability) => {
+        if (token !== nativeOpToken.current) return; // tab changed mid-check
+        if (cap.native) setProducer("native");
+      })
+      .catch(() => {
+        // Capability check failed to round-trip — stay on DOM, same as any
+        // other unreachable-background case. Not worth a status message for
+        // a check the user never asked for.
+      });
+  }, [nativeModeEnabled, connected, myTabId]);
 
   /** Dispatch one native action and, on success, settle + re-read — the same
    *  two-step DogfoodPanel's runAct uses, so a click that opens a menu or

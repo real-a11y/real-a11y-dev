@@ -107,6 +107,16 @@
   diagnostics widget are unchanged and continue to exist separately for
   internal telemetry — see `DOGFOOD.md`. ([#386])
 
+- **Native mode now defaults to on for the first page in a session, once
+  you've opted in.** Previously, every fresh side-panel session started on
+  the DOM tree even after enabling native mode, requiring a "NATIVE" click
+  each time. Now, if native mode is on, the panel attaches automatically the
+  first time it connects to an attachable page in that session — no click
+  needed. This is deliberately narrower than "every attachable page": a later
+  tab switch or same-tab navigation in that same session still never
+  auto-reattaches, exactly as before, so the "…is debugging this browser"
+  banner never reappears without a gesture you made that session. ([#TODO])
+
 - Collect `.tsx` test suites. The vitest `include` was `src/**/*.test.ts`, so a
   suite written as `.tsx` was never picked up — and silently: vitest ran the
   files it matched, reported them green, and said nothing about the one it
