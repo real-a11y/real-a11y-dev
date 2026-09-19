@@ -115,7 +115,7 @@
   needed. This is deliberately narrower than "every attachable page": a later
   tab switch or same-tab navigation in that same session still never
   auto-reattaches, exactly as before, so the "…is debugging this browser"
-  banner never reappears without a gesture you made that session. ([#TODO])
+  banner never reappears without a gesture you made that session. ([#390])
 
 - Collect `.tsx` test suites. The vitest `include` was `src/**/*.test.ts`, so a
   suite written as `.tsx` was never picked up — and silently: vitest ran the
@@ -441,5 +441,6 @@ Earlier releases predate this changelog.
 [#380]: https://github.com/real-a11y/real-a11y-dev/pull/380
 [#386]: https://github.com/real-a11y/real-a11y-dev/pull/386
 [#389]: https://github.com/real-a11y/real-a11y-dev/pull/389
+[#390]: https://github.com/real-a11y/real-a11y-dev/pull/390
 [#398]: https://github.com/real-a11y/real-a11y-dev/pull/398
 [#399]: https://github.com/real-a11y/real-a11y-dev/pull/399
