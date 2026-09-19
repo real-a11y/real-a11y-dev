@@ -1657,10 +1657,16 @@ function buildNode(
     // panel, audits, serialization). When the subtree holds a control the user
     // can actually reach, keep it: the description text being duplicated on the
     // referencing element is a far smaller cost than losing a control.
+    //
+    // The id set is page-wide but ids are scoped per tree: a component's
+    // shadow-internal `id="hint"` must not suppress an unrelated `#hint` in
+    // the page. So a target is only folded when a referrer in its OWN tree
+    // points at it.
     const ownId = element.getAttribute("id");
     if (
       ownId &&
       descriptionTargetIds.has(ownId) &&
+      isDescribedInOwnTree(element, ownId) &&
       !hasInteractiveContent(element, styleCache)
     ) {
       return null;
@@ -1741,6 +1747,20 @@ function buildNode(
   }
 }
 
+/**
+ * True if something in `element`'s own tree (its document, shadow root, or —
+ * detached — its subtree root) lists `id` in `aria-describedby`.
+ */
+function isDescribedInOwnTree(element: Element, id: string): boolean {
+  const scope = element.getRootNode() as Document | ShadowRoot | Element;
+  if (typeof scope.querySelector !== "function") return true;
+  const escaped =
+    typeof CSS !== "undefined" && typeof CSS.escape === "function"
+      ? CSS.escape(id)
+      : id.replace(/["\\]/g, "\\$&");
+  return scope.querySelector(`[aria-describedby~="${escaped}"]`) !== null;
+}
+
 function walk(
   element: Element,
   parentId: string | null,
@@ -1809,8 +1829,14 @@ export function extractDomTree(
 
     // Pre-collect aria-labelledby targets so we don't accidentally hide them.
     // (Elements that are labelledby targets are visible content — they label something.)
+    // One deep scan serves both passes: finding shadow hosts walks every
+    // element, so don't pay for it twice.
+    const referrers = deepQuerySelectorAll(
+      effectiveRoot,
+      "[aria-labelledby], [aria-describedby]",
+    );
     const labelTargetIds = new Set<string>();
-    for (const el of deepQuerySelectorAll(effectiveRoot, "[aria-labelledby]")) {
+    for (const el of referrers) {
       for (const id of (el.getAttribute("aria-labelledby") || "")
         .split(/\s+/)
         .filter(Boolean)) {
@@ -1822,10 +1848,7 @@ export function extractDomTree(
     // These elements' text is shown inline on the referencing element as a description.
     // Hide them from the tree to avoid redundancy — unless they're also labelledby targets.
     const freshDescriptionTargetIds = new Set<string>();
-    for (const el of deepQuerySelectorAll(
-      effectiveRoot,
-      "[aria-describedby]",
-    )) {
+    for (const el of referrers) {
       for (const id of (el.getAttribute("aria-describedby") || "")
         .split(/\s+/)
         .filter(Boolean)) {

@@ -251,6 +251,37 @@ describe("IDREFs are scoped to the shadow tree", () => {
   });
 });
 
+describe("description-target folding respects tree scope", () => {
+  it("does not drop a page element that shares an id with a component's internal hint", () => {
+    page.innerHTML = `<div id="hint"><p>Shipping is free over $50</p></div><x-input></x-input>`;
+    shadow(
+      page.querySelector("x-input")!,
+      `<input aria-label="Coupon" aria-describedby="hint"><span id="hint">Case sensitive</span>`,
+    );
+    const tree = extractDomTree(page);
+    // The page's own #hint is referenced by nothing in the document: keep it.
+    expect(
+      nodes(tree).some(
+        (n) => n.dom?.textContent === "Shipping is free over $50",
+      ),
+    ).toBe(true);
+    // The component's own hint is still folded into its input's description.
+    expect(find(tree, "textbox", "Coupon")?.a11y.description).toBe(
+      "Case sensitive",
+    );
+    expect(
+      nodes(tree).some((n) => n.dom?.textContent === "Case sensitive"),
+    ).toBe(false);
+  });
+
+  it("still folds a document-level target in a detached subtree", () => {
+    const detached = document.createElement("div");
+    detached.innerHTML = `<input aria-label="Password" aria-describedby="pw"><p id="pw">8+ characters</p>`;
+    const tree = extractDomTree(detached);
+    expect(find(tree, "paragraph")).toBeUndefined();
+  });
+});
+
 describe("landmark scoping reads flat-tree ancestors", () => {
   it("does not make a header inside a component within <main> a banner", () => {
     page.innerHTML = `<main><x-page-header></x-page-header></main>`;

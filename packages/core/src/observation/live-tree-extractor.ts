@@ -347,7 +347,12 @@ export class LiveTreeExtractor {
 
     const effectiveRoot = this.effectiveRoot ?? this.root;
 
-    for (const el of deepQuerySelectorAll(effectiveRoot, "[aria-labelledby]")) {
+    // One deep scan serves both passes (see extractDomTree).
+    const referrers = deepQuerySelectorAll(
+      effectiveRoot,
+      "[aria-labelledby], [aria-describedby]",
+    );
+    for (const el of referrers) {
       const ids = (el.getAttribute("aria-labelledby") || "")
         .split(/\s+/)
         .filter(Boolean);
@@ -357,10 +362,7 @@ export class LiveTreeExtractor {
       }
     }
 
-    for (const el of deepQuerySelectorAll(
-      effectiveRoot,
-      "[aria-describedby]",
-    )) {
+    for (const el of referrers) {
       const ids = (el.getAttribute("aria-describedby") || "")
         .split(/\s+/)
         .filter(Boolean);
