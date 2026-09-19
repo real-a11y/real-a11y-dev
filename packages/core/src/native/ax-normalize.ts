@@ -110,6 +110,10 @@ function promoteNameFromDroppedDescendants(
   for (const childId of node.childIds ?? []) {
     const child = byId.get(childId);
     if (!child || isKept(child)) continue;
+    // A dropped sectionheader/sectionfooter is name-from-author only: its
+    // loose text (a byline) must not name the ancestor it flattened into —
+    // the DOM producer never names anything from it either.
+    if (NATIVE_AX_DROP_WHEN_BARE.has(child.role?.value ?? "")) continue;
     if (NATIVE_AX_NAME_SOURCE_ROLES.has(child.role?.value ?? "")) {
       const text = collapseWhitespace(child.name?.value ?? "");
       if (text) return text;
