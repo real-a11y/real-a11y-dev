@@ -37,6 +37,15 @@
  *    settle window and re-checks, looping (bounded by
  *    `MAX_NAV_RECOVERY_HOPS`) until a full settle window passes with no
  *    further navigation.
+ *  - Native rows had no `onDblClick` at all (the DOM tree's own row does),
+ *    so double-clicking a native row silently did nothing where the DOM
+ *    producer would activate it.
+ *  - A mouse click on a native row never moved real DOM focus onto `.sn-tree`
+ *    (only `aria-activedescendant` updated), so the selected row's
+ *    `:focus-visible` outline — keyed off the *container's* focus state —
+ *    never appeared. The DOM tree's own `handleSelect` calls
+ *    `treeRef.current?.focus()` after selecting; `NativeTreeView`'s row
+ *    `onClick` never did.
  */
 
 import { expect, test, type NativeHarness } from "./harness";
@@ -205,4 +214,39 @@ test("activating a link that redirects onward still recovers on the final page",
   await expect(
     nav.panel.getByRole("treeitem", { name: "Tree View" }),
   ).toBeVisible({ timeout: 10_000 });
+});
+
+test("double-clicking a row activates it, same as the DOM tree's own row", async ({
+  nav,
+}) => {
+  const page = await showNative(nav, "native-panel.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+
+  const lastRow = nav.panel.getByRole("treeitem", { name: "Item 16" });
+  await expect(lastRow).toBeVisible();
+
+  // The row body, not its "Click (Enter)" action button — a plain
+  // double-click anywhere on the row is what the DOM tree's own row
+  // already honors (App.tsx's `onDblClick`).
+  await lastRow.dblclick({ position: { x: 5, y: 5 } });
+  await expect(page.locator("#item-16")).toHaveAttribute(
+    "data-clicked",
+    "true",
+  );
+});
+
+test("clicking a row gives the tree its own focus-visible outline", async ({
+  nav,
+}) => {
+  await showNative(nav, "native-panel.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+
+  const row = nav.panel.getByRole("treeitem", { name: "Item 16" });
+  await expect(row).toBeVisible();
+  await row.click({ position: { x: 5, y: 5 } });
+
+  // `.sn-tree:focus-visible .sn-node--selected` is the only thing that
+  // paints the outline — real DOM focus has to land on the container for
+  // it to ever apply.
+  await expect(nav.panel.locator(".sn-tree")).toBeFocused();
 });
