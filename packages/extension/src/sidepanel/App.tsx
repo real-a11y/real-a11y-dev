@@ -2004,15 +2004,6 @@ export function App() {
           </button>
         )}
 
-        {showNativeConsent && (
-          <NativeConsentBanner
-            onEnable={() =>
-              void setNativeMode(true).then(() => setProducer("native"))
-            }
-            onCancel={() => setShowNativeConsent(false)}
-          />
-        )}
-
         {producer === "dom" && (
           <div class="sn-toggle-group" role="group" aria-label="Tree view mode">
             <button
@@ -2162,6 +2153,19 @@ export function App() {
           </div>
         )}
       </div>
+
+      {/* Block-level, NOT a toolbar flex child: its paragraph of consent text
+          would otherwise squeeze every other toolbar control (search box,
+          curtain, refresh, zoom, copy) into a cramped, wrapped mess. Same
+          placement pattern as NativeTreeView's own capability banner. */}
+      {showNativeConsent && (
+        <NativeConsentBanner
+          onEnable={() =>
+            void setNativeMode(true).then(() => setProducer("native"))
+          }
+          onCancel={() => setShowNativeConsent(false)}
+        />
+      )}
 
       {/* Role filters — DOM producer only; disabled in tab sequence view */}
       {producer === "dom" && (
