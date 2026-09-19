@@ -40,7 +40,7 @@ It also offers an opt-in **native mode**, off by default: reading Chromium's own
 | `sidePanel` | The extension's UI is a persistent side panel                                                                                                                       |
 | `webNavigation` | Detect iframe load events to merge subtree data from cross-origin frames                                                                                        |
 | `debugger`  | Powers native mode: reads and acts on Chromium's own accessibility tree over CDP. Requested by every install because `chrome.debugger` cannot be an optional Chrome permission, but native mode itself is off until you explicitly enable it in the side panel. |
-| `tabs`      | Resolves which tab's accessibility tree to attach to when native mode is on                                                                                        |
+| `tabs`      | Resolves which tab's accessibility tree to attach to when native mode is on. This is a broader grant than that use needs — Chrome does not let an extension request `tabs` scoped to a single tab, and it technically permits reading the URL/title of every open tab, not only the one native mode is attached to. The code only ever reads the tab id the side panel already gave it; it never enumerates other tabs. |
 | `storage`   | Persists the native-mode on/off setting, and short-lived attach bookkeeping while it's on, locally on your device                                                  |
 
 ## npm packages
