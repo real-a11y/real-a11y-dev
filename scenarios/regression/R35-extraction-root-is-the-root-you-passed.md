@@ -81,9 +81,12 @@ form status, a save confirmation — as a **sibling** of the element under test:
   it is an overlay because of what it is, not because it announces
 - **5** — the shadow-rooted root comes back unchanged. This is the one
   `isConnected` could never catch: it is shadow-including and reports the root
-  as connected, while the walk reads light-DOM `children` and cannot cross the
-  boundary, so widening replaced a web component's whole subtree with the host
-  page
+  as connected, while `doc.contains` is not, so widening replaced a web
+  component's whole subtree with the host page. (Up to testing 0.1.0-beta.16
+  the walk also read light-DOM `children` only and could not cross the
+  boundary at all. From the first release after that it follows open shadow
+  roots — see R39 — but the pivot guard is unchanged and still returns the
+  root.)
 - **6** — an ANCESTOR is not a portal by any definition. Getting this wrong
   pivoted every component root on an SPA permanently — not only while a toast
   was up — because the route announcer wraps the entire app

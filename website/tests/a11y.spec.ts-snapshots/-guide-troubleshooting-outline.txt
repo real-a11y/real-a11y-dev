@@ -5,6 +5,7 @@ h1 Troubleshooting
   h2 Heading outline has no h1
   h2 Tab sequence is empty
   h2 My snapshot contains the whole page, not the component I passed
+  h2 Content inside a web component is missing or stale
   h2 React hydration mismatch when rendering the panel
   h2 Tests pass in jsdom but fail in Playwright (or vice versa)
   h2 A11yAssertionError with a message I don't understand
