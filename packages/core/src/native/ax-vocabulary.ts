@@ -21,7 +21,7 @@
  */
 
 /** Bump on any table/rule change that alters normalized output. */
-export const NATIVE_AX_VOCABULARY_VERSION = 2;
+export const NATIVE_AX_VOCABULARY_VERSION = 3;
 
 /**
  * Chromium AX roles that are structural noise relative to this engine's
@@ -60,6 +60,38 @@ export const NATIVE_AX_DROP_ROLES: ReadonlySet<string> = new Set([
  */
 export const NATIVE_AX_DROP_UNLESS_NAMED: ReadonlySet<string> = new Set([
   "generic",
+]);
+
+/**
+ * Roles dropped only when BARE: no name, not focusable, and none of
+ * {@link NATIVE_AX_EXPOSING_PROPERTIES}. These are HTML-AAM's
+ * `sectionheader`/`sectionfooter` (a `<header>`/`<footer>` inside `main` or
+ * sectioning content). HTML-AAM says user agents MAY leave them unexposed
+ * under exactly those conditions; Chromium exposes them anyway. The DOM
+ * producer's a11y view flattens a bare one, so dropping it here keeps the
+ * two producers agreeing — a named or focusable one survives in both.
+ */
+export const NATIVE_AX_DROP_WHEN_BARE: ReadonlySet<string> = new Set([
+  "sectionheader",
+  "sectionfooter",
+]);
+
+/**
+ * CDP AX property names that come from a global ARIA attribute carrying
+ * information of its own — any one of them makes a
+ * {@link NATIVE_AX_DROP_WHEN_BARE} node worth keeping. `focusable` is checked
+ * separately (it is a boolean state, not an attribute reference).
+ */
+export const NATIVE_AX_EXPOSING_PROPERTIES: ReadonlySet<string> = new Set([
+  "describedby",
+  "controls",
+  "details",
+  "flowto",
+  "owns",
+  "keyshortcuts",
+  "roledescription",
+  "live",
+  "errormessage",
 ]);
 
 /**

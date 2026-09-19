@@ -94,6 +94,25 @@ An accordion `<button>` with `aria-expanded` is good. An `aria-expanded` that ne
 
 If a custom widget isn't showing up with the right role — or isn't showing up at all — it may be `aria-hidden`, visually hidden but also hidden from AT, or built with markup that doesn't carry semantic meaning. The A11y view makes absences visible.
 
+### A `<header>` or `<footer>` that isn't there
+
+Not every missing node is a bug. A `<header>` or `<footer>` directly under `<body>` is a landmark (`banner` / `contentinfo`). Inside `<main>`, `<article>`, `<aside>`, `<nav>` or `<section>` it isn't: [HTML-AAM](https://w3c.github.io/html-aam/) maps it to `sectionheader` / `sectionfooter` instead, and lets browsers leave it out when it has no name, isn't focusable and carries no other ARIA attribute. The A11y view follows that rule, so this markup:
+
+```html
+<main>
+  <header><h1>Select-Only Combobox Example</h1></header>
+</main>
+```
+
+shows the heading straight under `main`:
+
+```
+main
+  heading  "Select-Only Combobox Example"  (level 1)
+```
+
+Give the header a name (`aria-label`, `aria-labelledby` or `title`) and it appears as `sectionheader "…"` with the heading nested inside. The DOM view always shows it.
+
 ---
 
 ## Reading a well-structured tree
