@@ -222,6 +222,63 @@ describe("getImplicitRole", () => {
         getImplicitRole(el('<div role="presentation" tabindex="yes">D</div>')),
       ).toBe("presentation");
     });
+
+    // A tabindex does NOT put a disabled control or a hidden input into the
+    // focus order, so the exclusions have to be checked before tabindex is.
+    it("keeps a disabled control presentational despite a tabindex", () => {
+      expect(
+        getImplicitRole(
+          el('<button role="none" disabled tabindex="0">S</button>'),
+        ),
+      ).toBe("presentation");
+      expect(
+        getImplicitRole(
+          el('<textarea role="none" disabled tabindex="-1"></textarea>'),
+        ),
+      ).toBe("presentation");
+    });
+
+    it("keeps <input type=hidden> presentational despite a tabindex", () => {
+      expect(
+        getImplicitRole(
+          el('<input type="hidden" role="presentation" tabindex="0">'),
+        ),
+      ).toBe("presentation");
+    });
+
+    // contenteditable hosts are focusable with no tabindex at all.
+    it("treats a contenteditable host as focusable", () => {
+      expect(
+        getImplicitRole(el('<div role="presentation" contenteditable>D</div>')),
+      ).toBe("generic");
+      expect(
+        getImplicitRole(el('<h2 role="none" contenteditable="true">T</h2>')),
+      ).toBe("heading");
+    });
+
+    it("does not treat contenteditable=false as focusable", () => {
+      expect(
+        getImplicitRole(
+          el('<div role="presentation" contenteditable="false">D</div>'),
+        ),
+      ).toBe("presentation");
+    });
+
+    // ARIA 1.2 promoted these four to global; they void presentation too.
+    it("voids presentation for aria-disabled / aria-invalid / aria-errormessage / aria-haspopup", () => {
+      expect(
+        getImplicitRole(el('<h2 role="none" aria-invalid="true">P</h2>')),
+      ).toBe("heading");
+      expect(
+        getImplicitRole(el('<h2 role="none" aria-disabled="true">P</h2>')),
+      ).toBe("heading");
+      expect(
+        getImplicitRole(el('<h2 role="none" aria-errormessage="e">P</h2>')),
+      ).toBe("heading");
+      expect(
+        getImplicitRole(el('<h2 role="none" aria-haspopup="menu">P</h2>')),
+      ).toBe("heading");
+    });
   });
 
   it("returns generic for <div>", () => {

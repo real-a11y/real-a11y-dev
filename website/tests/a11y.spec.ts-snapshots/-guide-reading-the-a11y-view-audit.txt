@@ -56,12 +56,13 @@ main
   heading "How the A11y view differs from the DOM view" (level 2)
   paragraph "The DOM view shows every HTML element. The A11y view filters and transforms:"
   list
-    listitem "A used only for layout with no role or text shows up in DOM but not in A11y. Same for , empty containers, and elements with or ."
+    listitem "A used only for layout with no role or text shows up in DOM but not in A11y. Same for , empty containers, and elements with or . A focusable element, or one carrying a global ARIA property, is the exception — ARIA says to ignore there, so it stays with its implicit role."
       strong "Presentational elements disappear."
       code "<div>"
       code "<span>"
       code "role="presentation""
       code "aria-hidden="true""
+      code "role="presentation""
     listitem "A and a element look different in DOM but both appear as in A11y."
       strong "Semantics win over markup."
       code "<div role="navigation">"

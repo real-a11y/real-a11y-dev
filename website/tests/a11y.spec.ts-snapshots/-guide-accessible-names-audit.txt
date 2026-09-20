@@ -120,9 +120,13 @@ main
       code "::after"
       code "content"
       emphasis "should"
-    listitem "— the image is treated as decorative and contributes no name."
+    listitem "— the image is treated as decorative and contributes no name. Unless it also has a : HTML-AAM keeps such an image in the tree and names it from the title, so is an named ."
       strong "with empty alt"
         code "<img alt="">"
+      code "title"
+      code "<img alt="" title="Company logo">"
+      code "img"
+      code ""Company logo""
   separator
   heading "Debugging an unexpected name" (level 2)
   paragraph "When shows a name you didn't expect:"

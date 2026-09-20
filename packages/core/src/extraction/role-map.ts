@@ -256,6 +256,9 @@ const ROLE_MAP: Record<string, RoleResolver> = {
   video: "video", // see the audio entry — mirrors Chromium's native tree
 };
 
+/** Form controls that `disabled` removes from the focus order entirely. */
+const FORM_CONTROL_TAGS = new Set(["button", "input", "select", "textarea"]);
+
 /**
  * Focusability, for the sole purpose of presentational conflict resolution.
  *
@@ -270,29 +273,34 @@ const ROLE_MAP: Record<string, RoleResolver> = {
  * own change, with its own migration note.
  */
 function isFocusableForConflictResolution(element: Element): boolean {
+  const tag = element.tagName.toLowerCase();
+
+  // The exclusions come FIRST, before tabindex: a `tabindex` on a disabled
+  // control or on <input type="hidden"> does not put it in the focus order,
+  // so reading tabindex first would hand a decorative role back to exactly
+  // the elements these two rules exist to keep flattened.
+  if (FORM_CONTROL_TAGS.has(tag) && element.hasAttribute("disabled"))
+    return false;
+  // <input type="hidden"> renders nothing and is never a tab stop.
+  if (
+    tag === "input" &&
+    (element.getAttribute("type") || "text").toLowerCase() === "hidden"
+  )
+    return false;
+
   const tabindex = element.getAttribute("tabindex");
   // A negative tabindex is still focusable (scripted focus); only an absent
   // or non-numeric one is not.
   if (tabindex !== null && tabindex.trim() !== "" && !isNaN(Number(tabindex)))
     return true;
 
-  const tag = element.tagName.toLowerCase();
-
-  // `disabled` removes a form control from the focus order entirely.
-  if (
-    (tag === "button" ||
-      tag === "input" ||
-      tag === "select" ||
-      tag === "textarea") &&
-    element.hasAttribute("disabled")
-  )
-    return false;
+  // A contenteditable host is focusable without any tabindex. `""` is the
+  // valid shorthand for "true"; `"false"` opts back out.
+  const editable = element.getAttribute("contenteditable");
+  if (editable === "" || editable === "true") return true;
 
   if (tag === "a" || tag === "area") return element.hasAttribute("href");
-  // <input type="hidden"> renders nothing and is never a tab stop.
-  if (tag === "input")
-    return (element.getAttribute("type") || "text").toLowerCase() !== "hidden";
-  if (tag === "button" || tag === "select" || tag === "textarea") return true;
+  if (FORM_CONTROL_TAGS.has(tag)) return true;
   // <video controls> / <audio controls> are tab stops — Chromium exposes them
   // focusable even though the actual buttons/sliders live in a closed UA
   // shadow root.
@@ -310,11 +318,12 @@ function isFocusableForConflictResolution(element: Element): boolean {
  * element nobody can reach. `aria-dropeffect` and `aria-grabbed` are omitted:
  * ARIA 1.2 deprecates both.
  *
- * Every name here also has to be observed by the DOM observer — toggling one
+ * Exported because every name here also has to be OBSERVED: toggling one
  * changes an element's role, and an unobserved attribute change leaves the
- * panel showing a tree that is silently stale. See EXTRA_OBSERVED_ATTRIBUTES.
+ * panel showing a tree that is silently stale. The DOM observer spreads this
+ * array rather than restating it, so the two cannot drift.
  */
-const GLOBAL_ARIA_ATTRIBUTES = [
+export const GLOBAL_ARIA_ATTRIBUTES = [
   "aria-atomic",
   "aria-braillelabel",
   "aria-brailleroledescription",
@@ -324,7 +333,11 @@ const GLOBAL_ARIA_ATTRIBUTES = [
   "aria-describedby",
   "aria-description",
   "aria-details",
+  "aria-disabled",
+  "aria-errormessage",
   "aria-flowto",
+  "aria-haspopup",
+  "aria-invalid",
   "aria-keyshortcuts",
   "aria-label",
   "aria-labelledby",
