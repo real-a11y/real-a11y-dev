@@ -124,7 +124,7 @@ If #1 resolves to a non-empty string, #2–#5 are ignored — even if #2 looks "
 - **`title`** — the last fallback. It surfaces as a tooltip in desktop browsers, but many AT users (mobile, voice control) never see it. Treat it as documentation, not a label.
 - **Text inside `aria-hidden="true"` subtrees** — excluded from name computation.
 - **CSS-generated content** (`::before`, `::after` `content`) — spec says it *should* contribute, but engine support is inconsistent. Don't rely on it for critical labels.
-- **`<img alt="">` with empty alt** — the image is treated as decorative and contributes no name.
+- **`<img alt="">` with empty alt** — the image is treated as decorative and contributes no name. Unless it also has a `title`: HTML-AAM keeps such an image in the tree and names it from the title, so `<img alt="" title="Company logo">` is an `img` named `"Company logo"`.
 
 ---
 

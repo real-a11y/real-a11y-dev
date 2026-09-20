@@ -97,6 +97,133 @@ describe("getImplicitRole", () => {
     );
   });
 
+  // ARIA "Presentational Roles Conflict Resolution": role=presentation/none
+  // is IGNORED when the element is focusable or carries global ARIA
+  // states/properties. The element is then exposed with its implicit role —
+  // not kept as a "presentation" node, which is what a consumer reading
+  // `role` would otherwise see for a perfectly ordinary link.
+  describe("presentational roles conflict resolution", () => {
+    it("ignores role=presentation on a focusable element", () => {
+      expect(
+        getImplicitRole(el('<a href="/about" role="presentation">A</a>')),
+      ).toBe("link");
+    });
+
+    it("ignores role=none on a focusable element", () => {
+      expect(getImplicitRole(el('<button role="none">Go</button>'))).toBe(
+        "button",
+      );
+    });
+
+    it("ignores role=presentation on an element made focusable by tabindex", () => {
+      expect(
+        getImplicitRole(el('<h2 role="presentation" tabindex="0">T</h2>')),
+      ).toBe("heading");
+    });
+
+    it("ignores role=presentation when a global ARIA attribute is present", () => {
+      expect(
+        getImplicitRole(el('<h2 role="presentation" aria-label="x">T</h2>')),
+      ).toBe("heading");
+    });
+
+    it("ignores role=presentation when aria-live is present", () => {
+      expect(
+        getImplicitRole(el('<div role="none" aria-live="polite">S</div>')),
+      ).toBe("generic");
+    });
+
+    // aria-hidden is global but removes the element from the tree entirely,
+    // so it must not be the thing that resurrects a presentational role.
+    it("does not let aria-hidden void presentation", () => {
+      expect(
+        getImplicitRole(
+          el('<div role="presentation" aria-hidden="true">D</div>'),
+        ),
+      ).toBe("presentation");
+    });
+
+    it("still returns presentation for a plain decorative element", () => {
+      expect(getImplicitRole(el("<div role='presentation'>Decor</div>"))).toBe(
+        "presentation",
+      );
+    });
+
+    // HTML-AAM: alt="" is only presentational absent any other naming.
+    it("returns img for <img alt=''> with aria-label", () => {
+      expect(getImplicitRole(el('<img alt="" aria-label="Photo">'))).toBe(
+        "img",
+      );
+    });
+
+    it("returns img for <img alt=''> with a title", () => {
+      expect(getImplicitRole(el('<img alt="" title="Photo">'))).toBe("img");
+    });
+
+    it("still returns presentation for a bare <img alt=''>", () => {
+      expect(getImplicitRole(el('<img alt="" src="/d.png">'))).toBe(
+        "presentation",
+      );
+    });
+
+    // A non-naming global would expose a permanently nameless <img>, which
+    // every "image has no accessible name" audit would then flag for markup
+    // that is correctly marked decorative.
+    it("does not expose <img alt=''> for a non-naming global ARIA property", () => {
+      expect(getImplicitRole(el('<img alt="" aria-describedby="hint">'))).toBe(
+        "presentation",
+      );
+    });
+
+    // Blank values state nothing, so they must not resurrect a role.
+    it("ignores a blank title on <img alt=''>", () => {
+      expect(getImplicitRole(el('<img alt="" title="   ">'))).toBe(
+        "presentation",
+      );
+    });
+
+    it("ignores a blank aria-label", () => {
+      expect(getImplicitRole(el('<img alt="" aria-label="">'))).toBe(
+        "presentation",
+      );
+      expect(
+        getImplicitRole(el('<h2 role="presentation" aria-label="">T</h2>')),
+      ).toBe("presentation");
+    });
+
+    // Focusability here is stricter than the interaction.isFocusable facet:
+    // these elements are NOT tab stops, so the decorative role stands.
+    it("does not treat <a> without href as focusable", () => {
+      expect(getImplicitRole(el('<a role="presentation">Decorative</a>'))).toBe(
+        "presentation",
+      );
+    });
+
+    it("does not treat a disabled control as focusable", () => {
+      expect(
+        getImplicitRole(el('<button role="none" disabled>Go</button>')),
+      ).toBe("presentation");
+    });
+
+    it("does not treat <input type=hidden> as focusable", () => {
+      expect(
+        getImplicitRole(el('<input type="hidden" role="presentation">')),
+      ).toBe("presentation");
+    });
+
+    it("treats a negative tabindex as focusable", () => {
+      expect(
+        getImplicitRole(el('<h2 role="presentation" tabindex="-1">T</h2>')),
+      ).toBe("heading");
+    });
+
+    it("ignores a non-numeric tabindex", () => {
+      expect(
+        getImplicitRole(el('<div role="presentation" tabindex="yes">D</div>')),
+      ).toBe("presentation");
+    });
+  });
+
   it("returns generic for <div>", () => {
     expect(getImplicitRole(el("<div>Content</div>"))).toBe("generic");
   });

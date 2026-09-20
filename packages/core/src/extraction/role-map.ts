@@ -197,7 +197,13 @@ const ROLE_MAP: Record<string, RoleResolver> = {
   html: "document",
   i: "generic",
   iframe: "group",
-  img: (el) => (el.getAttribute("alt") === "" ? "presentation" : "img"),
+  // HTML-AAM maps `alt=""` to presentation only when nothing else names the
+  // image. `<img alt="" title="Tap to zoom">` is a named, exposed image. See
+  // emptyAltIsNamed.
+  img: (el) =>
+    el.getAttribute("alt") === "" && !emptyAltIsNamed(el)
+      ? "presentation"
+      : "img",
   input: (el) => {
     const type = (el as HTMLInputElement).type || "text";
     return INPUT_TYPE_ROLE_MAP[type] || "textbox";
@@ -250,6 +256,131 @@ const ROLE_MAP: Record<string, RoleResolver> = {
   video: "video", // see the audio entry — mirrors Chromium's native tree
 };
 
+/**
+ * Focusability, for the sole purpose of presentational conflict resolution.
+ *
+ * Deliberately STRICTER than the `interaction.isFocusable` facet the DOM
+ * extractor stamps on nodes, which is tag-based and counts every `<a>` and
+ * every `<input>`. That looseness is harmless for a facet nobody branches the
+ * tree shape on, but here it decides whether an element stays in the tree at
+ * all: counting `<a>` without `href`, a `disabled` control or
+ * `<input type="hidden">` as focusable would resurrect exactly the decorative
+ * markup this resolution exists to keep flattened. The two are not unified
+ * because tightening the facet changes a published value on every node — its
+ * own change, with its own migration note.
+ */
+function isFocusableForConflictResolution(element: Element): boolean {
+  const tabindex = element.getAttribute("tabindex");
+  // A negative tabindex is still focusable (scripted focus); only an absent
+  // or non-numeric one is not.
+  if (tabindex !== null && tabindex.trim() !== "" && !isNaN(Number(tabindex)))
+    return true;
+
+  const tag = element.tagName.toLowerCase();
+
+  // `disabled` removes a form control from the focus order entirely.
+  if (
+    (tag === "button" ||
+      tag === "input" ||
+      tag === "select" ||
+      tag === "textarea") &&
+    element.hasAttribute("disabled")
+  )
+    return false;
+
+  if (tag === "a" || tag === "area") return element.hasAttribute("href");
+  // <input type="hidden"> renders nothing and is never a tab stop.
+  if (tag === "input")
+    return (element.getAttribute("type") || "text").toLowerCase() !== "hidden";
+  if (tag === "button" || tag === "select" || tag === "textarea") return true;
+  // <video controls> / <audio controls> are tab stops — Chromium exposes them
+  // focusable even though the actual buttons/sliders live in a closed UA
+  // shadow root.
+  if (tag === "audio" || tag === "video")
+    return element.hasAttribute("controls");
+
+  return false;
+}
+
+/**
+ * ARIA global states and properties, minus `aria-hidden`.
+ *
+ * `aria-hidden` is global, but it removes the element from the tree outright,
+ * so letting it void `role="presentation"` would resurrect a role for an
+ * element nobody can reach. `aria-dropeffect` and `aria-grabbed` are omitted:
+ * ARIA 1.2 deprecates both.
+ *
+ * Every name here also has to be observed by the DOM observer — toggling one
+ * changes an element's role, and an unobserved attribute change leaves the
+ * panel showing a tree that is silently stale. See EXTRA_OBSERVED_ATTRIBUTES.
+ */
+const GLOBAL_ARIA_ATTRIBUTES = [
+  "aria-atomic",
+  "aria-braillelabel",
+  "aria-brailleroledescription",
+  "aria-busy",
+  "aria-controls",
+  "aria-current",
+  "aria-describedby",
+  "aria-description",
+  "aria-details",
+  "aria-flowto",
+  "aria-keyshortcuts",
+  "aria-label",
+  "aria-labelledby",
+  "aria-live",
+  "aria-owns",
+  "aria-relevant",
+  "aria-roledescription",
+];
+
+/** True when `attr` is present on `element` with a non-blank value. */
+function hasMeaningfulAttribute(element: Element, attr: string): boolean {
+  return !!element.getAttribute(attr)?.trim();
+}
+
+/**
+ * ARIA "Presentational Roles Conflict Resolution": `role="presentation"` /
+ * `role="none"` is IGNORED — and the implicit role exposed instead — when the
+ * element is focusable or carries global ARIA states/properties. Hiding a
+ * focusable control behind a decorative role would lose keyboard access, and
+ * an element someone bothered to label is not decorative.
+ *
+ * A global attribute counts only when it actually says something:
+ * `aria-label=""` states nothing, and honouring it would expose a nameless
+ * node in place of a deliberately decorative one.
+ *
+ * ARIA also voids presentation for an element that is "otherwise interactive"
+ * without being focusable (a `<div role="presentation" onclick>`). That is not
+ * decided here — role resolution runs before the action probe that knows it —
+ * and `keepNode` in a11y-extractor.ts already keeps such nodes.
+ */
+function voidsPresentation(element: Element): boolean {
+  return (
+    isFocusableForConflictResolution(element) ||
+    GLOBAL_ARIA_ATTRIBUTES.some((attr) => hasMeaningfulAttribute(element, attr))
+  );
+}
+
+/**
+ * Whether `<img alt="">` is exposed after all.
+ *
+ * HTML-AAM makes an empty `alt` presentational only absent other naming, so
+ * the gate is the NAMING attributes plus focusability — not the full global
+ * set that voids an explicit `role="presentation"`. A non-naming global such
+ * as `aria-describedby` would otherwise put a permanently nameless `img` in
+ * the tree, which every "image has no accessible name" audit would then flag
+ * for markup that is correctly marked decorative.
+ */
+function emptyAltIsNamed(element: Element): boolean {
+  return (
+    hasMeaningfulAttribute(element, "title") ||
+    hasMeaningfulAttribute(element, "aria-label") ||
+    hasMeaningfulAttribute(element, "aria-labelledby") ||
+    isFocusableForConflictResolution(element)
+  );
+}
+
 /** Elements that are hidden from the accessibility tree by default */
 const HIDDEN_FROM_AT = new Set([
   "head",
@@ -270,9 +401,17 @@ export function getImplicitRole(element: Element): string {
   // element from the tree (children are promoted to the parent). This
   // matches what <img alt=""> already returns and what assistive tech /
   // browser a11y trees do per ARIA spec.
-  if (explicitRole === "presentation" || explicitRole === "none")
-    return "presentation";
-  if (explicitRole) return explicitRole;
+  //
+  // ...unless conflict resolution voids it, in which case the element is
+  // exposed with its IMPLICIT role — so we fall through to the map below
+  // rather than returning early. Returning "presentation" here for a
+  // focusable element is what made `<a href role="presentation">` read as
+  // a presentation node instead of a link.
+  if (explicitRole === "presentation" || explicitRole === "none") {
+    if (!voidsPresentation(element)) return "presentation";
+  } else if (explicitRole) {
+    return explicitRole;
+  }
 
   const tag = element.tagName.toLowerCase();
   const resolver = ROLE_MAP[tag];

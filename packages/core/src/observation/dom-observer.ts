@@ -44,6 +44,21 @@ const EXTRA_OBSERVED_ATTRIBUTES = [
   "open", // <details open>
   "style", // CSS visibility/display changes (e.g., captcha showing/hiding content)
   "kind", // <track kind> drives the media node's hoisted captions property
+
+  // Every ARIA global state/property voids role="presentation" (role-map's
+  // GLOBAL_ARIA_ATTRIBUTES), so adding or clearing one on a presentational
+  // element changes its ROLE — the element appears in or vanishes from the
+  // tree. The rest of that list is already observed above or via
+  // ARIA_STATE_ATTRIBUTES; these are the ones nothing else covers.
+  "aria-atomic",
+  "aria-braillelabel",
+  "aria-brailleroledescription",
+  "aria-details",
+  "aria-flowto",
+  "aria-keyshortcuts",
+  "aria-owns",
+  "aria-relevant",
+  "aria-roledescription",
 ];
 
 /**

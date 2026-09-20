@@ -727,10 +727,17 @@ function computeRawAccessibleName(
 
   const tag = element.tagName.toLowerCase();
 
-  // 3. alt attribute for images
+  // 3. alt attribute for images. An empty alt is an intentional "no name"
+  //    and stops here — EXCEPT when a `title` is also present. HTML-AAM keeps
+  //    such an image exposed (see the img entry in ROLE_MAP) and names it from
+  //    the title, so returning "" here would leave an exposed, nameless image.
+  //    Scoped to <img>, the element whose role the empty alt also changes;
+  //    <area> keeps its existing behaviour.
   if (tag === "img" || tag === "area") {
     const alt = element.getAttribute("alt");
-    if (alt !== null) return alt;
+    const titleNamesEmptyAlt =
+      tag === "img" && alt === "" && !!element.getAttribute("title")?.trim();
+    if (alt !== null && !titleNamesEmptyAlt) return alt;
   }
 
   // 4. Label element for form controls
