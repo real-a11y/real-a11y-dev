@@ -148,6 +148,93 @@ describe("TabSequenceView", () => {
     });
   }
 
+  /**
+   * A `nodes` Map that counts lookups. `linearize` — which `getTabSequence`
+   * walks the tree with — does exactly one `get` per visited node, so the
+   * counter is a direct, deterministic measure of whether the sequence was
+   * rebuilt.
+   */
+  class CountingMap extends Map<string, SemanticNode> {
+    gets = 0;
+    override get(key: string): SemanticNode | undefined {
+      this.gets++;
+      return super.get(key);
+    }
+  }
+
+  function rerender(nodes: Map<string, SemanticNode>, query: string) {
+    act(() => {
+      render(
+        <TabSequenceView
+          nodes={nodes}
+          rootId="root"
+          query={query}
+          onSelect={vi.fn()}
+          onActivate={vi.fn()}
+          onHover={vi.fn()}
+        />,
+        container,
+      );
+    });
+  }
+
+  describe("sequence cost", () => {
+    function makeCountingTree() {
+      const nodes = new CountingMap();
+      const ids = Array.from({ length: 20 }, (_, i) => `n${i}`);
+      nodes.set("root", makeRoot(ids));
+      for (const [i, id] of ids.entries()) {
+        nodes.set(id, makeFocusable(id, { name: `Item ${i}` }));
+      }
+      return nodes;
+    }
+
+    it("does not rebuild the tab sequence when only the query changes", () => {
+      const nodes = makeCountingTree();
+      rerender(nodes, "");
+      expect(nodes.gets).toBeGreaterThan(0);
+
+      // Typing "Item 1" one character at a time. The node Map is referentially
+      // stable across keystrokes (TreePanel holds it in tree state), so the
+      // sequence itself cannot have changed — only the filter over it.
+      const afterMount = nodes.gets;
+      for (const query of ["I", "It", "Ite", "Item", "Item ", "Item 1"]) {
+        rerender(nodes, query);
+      }
+
+      expect(nodes.gets).toBe(afterMount);
+    });
+
+    it("does rebuild the tab sequence when the nodes change", () => {
+      const nodes = makeCountingTree();
+      rerender(nodes, "");
+      const afterMount = nodes.gets;
+
+      const next = makeCountingTree();
+      rerender(next, "");
+      expect(next.gets).toBeGreaterThan(0);
+      expect(nodes.gets).toBe(afterMount);
+    });
+
+    it("still filters correctly across query changes", () => {
+      const nodes = makeCountingTree();
+      rerender(nodes, "");
+      expect(container.querySelectorAll('[role="option"]')).toHaveLength(20);
+
+      rerender(nodes, "Item 1");
+      // "Item 1" plus "Item 10".."Item 19".
+      expect(container.querySelectorAll('[role="option"]')).toHaveLength(11);
+
+      rerender(nodes, "Item 19");
+      expect(
+        container.querySelector('[role="option"] .sn-tab-name')?.textContent,
+      ).toBe("Item 19");
+
+      rerender(nodes, "");
+      expect(container.querySelectorAll('[role="option"]')).toHaveLength(20);
+    });
+  });
+
   it("lists focusable nodes in tab order with activedescendant", () => {
     const nodes = new Map<string, SemanticNode>([
       ["root", makeRoot(["second", "first", "zero"])],

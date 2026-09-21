@@ -53,13 +53,20 @@ export function TabSequenceView({
   const listRef = useRef<HTMLDivElement>(null);
   const typeAhead = useRef(createTypeAheadBuffer());
 
-  // Full tab sequence, then optionally filtered by search query. The panel
-  // only renders DOM-produced trees, so every sequenced node has all facets.
+  // The full tab sequence. The panel only renders DOM-produced trees, so every
+  // sequenced node has all facets.
+  const sequence = useMemo(
+    () => getTabSequence({ nodes, rootId }) as DomSemanticNode[],
+    [nodes, rootId],
+  );
+
+  // …then optionally filtered by the search query. Kept in its own memo so a
+  // keystroke only re-runs the filter — the tree walk behind `getTabSequence`
+  // depends on the nodes, which don't change while the user types.
   const items = useMemo(() => {
-    const seq = getTabSequence({ nodes, rootId }) as DomSemanticNode[];
-    if (!query.trim()) return seq;
+    if (!query.trim()) return sequence;
     const lq = query.toLowerCase();
-    return seq.filter((node) => {
+    return sequence.filter((node) => {
       const name = (node.a11y.name || "").toLowerCase();
       const text = (node.dom.textContent || "").toLowerCase();
       const tag = (node.dom.tagName || "").toLowerCase();
@@ -71,7 +78,7 @@ export function TabSequenceView({
         role.includes(lq)
       );
     });
-  }, [nodes, rootId, query]);
+  }, [sequence, query]);
 
   // Reset selection and type-ahead when query changes
   useEffect(() => {
