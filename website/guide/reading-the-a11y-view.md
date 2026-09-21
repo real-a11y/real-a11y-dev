@@ -36,7 +36,7 @@ Each node represents one meaningful element in the accessibility tree. For each 
 
 The DOM view shows every HTML element. The A11y view filters and transforms:
 
-- **Presentational elements disappear.** A `<div>` used only for layout with no role or text shows up in DOM but not in A11y. Same for `<span>`, empty containers, and elements with `role="presentation"` or `aria-hidden="true"`.
+- **Presentational elements disappear.** A `<div>` used only for layout with no role or text shows up in DOM but not in A11y. Same for `<span>`, empty containers, and elements with `role="presentation"` or `aria-hidden="true"`. A focusable element, or one carrying a global ARIA property, is the exception — ARIA says to ignore `role="presentation"` there, so it stays with its implicit role.
 - **Semantics win over markup.** A `<div role="navigation">` and a `<nav>` element look different in DOM but both appear as `navigation` in A11y.
 - **Names are computed, not just copied.** The name shown is the *result* of the full accessible name algorithm — not just the `aria-label` attribute, but the winner of a priority contest between label elements, `aria-labelledby`, `aria-label`, `title`, and text content.
 

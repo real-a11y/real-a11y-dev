@@ -3,6 +3,7 @@ import {
   containsOverlaySignal,
   KEY_ATTRIBUTES,
 } from "../extraction/dom-extractor.js";
+import { GLOBAL_ARIA_ATTRIBUTES } from "../extraction/role-map.js";
 import type { TreeChange } from "../types.js";
 
 /**
@@ -44,6 +45,14 @@ const EXTRA_OBSERVED_ATTRIBUTES = [
   "open", // <details open>
   "style", // CSS visibility/display changes (e.g., captcha showing/hiding content)
   "kind", // <track kind> drives the media node's hoisted captions property
+
+  // Every ARIA global state/property voids role="presentation", so adding or
+  // clearing one on a presentational element changes its ROLE — the element
+  // appears in or vanishes from the tree. Spread from role-map's own list
+  // rather than restated, so a name added there is observed automatically
+  // instead of leaving a silently stale tree. Duplicates are fine: the Set
+  // below folds them.
+  ...GLOBAL_ARIA_ATTRIBUTES,
 ];
 
 /**

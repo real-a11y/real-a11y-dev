@@ -400,12 +400,12 @@ describe("extractA11yTree", () => {
       expect(allNodes.find((n) => n.a11y.role === "heading")).toBeDefined();
     });
 
-    it("keeps focusable elements with role=presentation (spec carve-out)", () => {
-      // Per ARIA spec, role=presentation is ignored when the element is
-      // focusable — presenting a real interactive control as decorative
-      // would lose keyboard access. So an <a href> with role=presentation
-      // stays in the tree (as the presentation role itself, since the
-      // implicit role isn't restored — but it's kept rather than flattened).
+    it("exposes focusable role=presentation elements with their implicit role", () => {
+      // ARIA Presentational Roles Conflict Resolution: role=presentation is
+      // ignored when the element is focusable — presenting a real interactive
+      // control as decorative would lose keyboard access. The element is
+      // exposed with its IMPLICIT role, so an <a href> reads as a link, not
+      // as a "presentation" node an audit or matcher would have to special-case.
       const root = createPage(`
         <nav aria-label="Main">
           <a href="/about" role="presentation">About</a>
@@ -415,10 +415,67 @@ describe("extractA11yTree", () => {
       const { nodes } = extractA11yTree(root);
       const allNodes = Array.from(nodes.values());
 
-      // The link is still in the tree (focusable carve-out).
       const link = allNodes.find((n) => n.dom?.tagName === "a");
       expect(link).toBeDefined();
+      expect(link!.a11y.role).toBe("link");
       expect(link!.interaction?.isInteractive).toBe(true);
+    });
+
+    it("leaves a genuinely decorative role=presentation flattened", () => {
+      // The conflict-resolution check is deliberately stricter than the
+      // interaction.isFocusable facet: an <a> without href is not a tab stop,
+      // so its decorative role stands and it flattens as before.
+      const root = createPage(`
+        <main>
+          <a role="presentation">Decorative</a>
+        </main>
+      `);
+
+      const { nodes } = extractA11yTree(root);
+      const allNodes = Array.from(nodes.values());
+
+      expect(allNodes.find((n) => n.dom?.tagName === "a")).toBeUndefined();
+    });
+
+    it("keeps a role=presentation heading that carries a global ARIA property", () => {
+      // aria-label voids presentation, so the heading stays a heading —
+      // otherwise it silently vanished from heading-order audits.
+      const root = createPage(`
+        <main>
+          <h2 role="presentation" aria-label="Quarterly results">Q3</h2>
+        </main>
+      `);
+
+      const { nodes } = extractA11yTree(root);
+      const heading = Array.from(nodes.values()).find(
+        (n) => n.dom?.tagName === "h2",
+      );
+
+      expect(heading).toBeDefined();
+      expect(heading!.a11y.role).toBe("heading");
+      expect(heading!.a11y.name).toBe("Quarterly results");
+    });
+
+    it("keeps <img alt=''> that is named by a title", () => {
+      // HTML-AAM: alt="" is presentational only absent other naming. With a
+      // title the image is exposed AND named from it — the name has to land
+      // too, or the tree gains an exposed but nameless image.
+      const root = createPage(`
+        <main>
+          <img alt="" title="Company logo" src="/logo.png">
+          <img alt="" src="/spacer.gif">
+        </main>
+      `);
+
+      const { nodes } = extractA11yTree(root);
+      const images = Array.from(nodes.values()).filter(
+        (n) => n.dom?.tagName === "img",
+      );
+
+      // Only the titled one survives; the bare spacer is still decorative.
+      expect(images).toHaveLength(1);
+      expect(images[0].a11y.role).toBe("img");
+      expect(images[0].a11y.name).toBe("Company logo");
     });
   });
 });

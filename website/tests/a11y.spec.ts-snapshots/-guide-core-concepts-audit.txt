@@ -114,6 +114,14 @@ main
   paragraph "and strip the element's role from the tree — the element is still present, but its children are re-parented."
     code "role="presentation""
     code "role="none""
+  paragraph "Per ARIA's , that role is when the element is focusable or carries a global ARIA state or property, and the element keeps its implicit role instead. is a , and is still a — a decorative role can't hide a control from the keyboard or a heading from heading order. is the exception: it removes the element outright, so it never restores a role."
+    link "presentational roles conflict resolution"
+    strong "ignored"
+    code "<a href="/about" role="presentation">"
+    code "link"
+    code "<h2 role="presentation" aria-label="Q3">"
+    code "heading"
+    code "aria-hidden="true""
   separator
   heading "Accessible Names" (level 2)
   paragraph "The computation follows the algorithm, in priority order:"

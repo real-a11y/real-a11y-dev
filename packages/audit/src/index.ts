@@ -330,8 +330,12 @@ export function collectFindings(
     for (const node of linearize(tree)) {
       if (node.a11y.role !== "img") continue;
       if (node.a11y.name.trim().length > 0) continue;
-      // Decorative images (alt="") map to role presentation and never reach the
-      // a11y tree, so an img-role node with no name is a genuine missing name.
+      // Decorative images (alt="") map to role presentation and never reach
+      // the a11y tree, so an img-role node with no name is a genuine missing
+      // name. An `alt=""` image that IS exposed got there by being named
+      // (title / aria-label / aria-labelledby — so it has a name and is
+      // skipped above) or by being focusable, and a focusable image with no
+      // name is exactly what this rule should report.
       const tag = node.dom?.tagName;
       findings.push({
         rule: "image-alt",

@@ -77,6 +77,8 @@ Examples:
 
 `role="presentation"` and `role="none"` strip the element's role from the tree — the element is still present, but its children are re-parented.
 
+Per ARIA's [presentational roles conflict resolution](https://www.w3.org/TR/wai-aria-1.2/#conflict_resolution_presentation_none), that role is **ignored** when the element is focusable or carries a global ARIA state or property, and the element keeps its implicit role instead. `<a href="/about" role="presentation">` is a `link`, and `<h2 role="presentation" aria-label="Q3">` is still a `heading` — a decorative role can't hide a control from the keyboard or a heading from heading order. `aria-hidden="true"` is the exception: it removes the element outright, so it never restores a role.
+
 ---
 
 ## Accessible Names
