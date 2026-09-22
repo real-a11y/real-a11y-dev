@@ -155,6 +155,60 @@ export async function createSession(
   return session;
 }
 
+/**
+ * Chromium net errors worth naming, in match order. The navigation catch-all
+ * used to answer every failure with "is the server running? Try --wait-until
+ * …", which is advice for a page that loads too slowly — and nonsense for a
+ * hostname that doesn't resolve or a port Chrome refuses outright (both hit
+ * during CLI dogfooding, against `…invalid/` and `127.0.0.1:1`). The exit code
+ * was right; the hint sent people to tune timeouts instead of fixing the URL.
+ *
+ * Matched against the RAW message: these are Chromium's own `net::ERR_*`
+ * tokens, which carry no user data, and matching before redaction keeps them
+ * intact no matter how a URL is rewritten.
+ */
+const NAVIGATION_HINTS: ReadonlyArray<readonly [RegExp, string]> = [
+  [
+    /ERR_NAME_NOT_RESOLVED|ERR_NAME_RESOLUTION_FAILED/,
+    "that hostname does not resolve — check the spelling, your DNS, or whether the host is only reachable over a VPN.",
+  ],
+  [
+    /ERR_UNSAFE_PORT/,
+    "Chrome refuses to connect on this port — serve the page on an ordinary one (3000, 8080, …).",
+  ],
+  [
+    /ERR_CONNECTION_REFUSED/,
+    "nothing is listening there — start the server, or check the host and port.",
+  ],
+  [
+    /ERR_INTERNET_DISCONNECTED|ERR_NETWORK_CHANGED|ERR_ADDRESS_UNREACHABLE|ERR_PROXY_CONNECTION_FAILED/,
+    "the network is unreachable from here — check connectivity, or the proxy you passed to --proxy.",
+  ],
+  [
+    /ERR_CERT_|ERR_SSL_/,
+    "the site's TLS certificate was rejected — trust the certificate locally, or audit the plain-http origin.",
+  ],
+  [
+    /ERR_TOO_MANY_REDIRECTS/,
+    "the URL redirects in a loop — a login wall is the usual cause; see --storage-state for auditing signed-in pages.",
+  ],
+  [
+    /ERR_CONNECTION_RESET|ERR_EMPTY_RESPONSE/,
+    "the server closed the connection without answering — check it speaks the scheme you used (http:// vs https://).",
+  ],
+];
+
+/**
+ * The hint for a failed navigation. Falls back to the timeout advice, which is
+ * what an unrecognised failure most often is: a page that never settled.
+ */
+function navigationHint(raw: string): string {
+  for (const [pattern, hint] of NAVIGATION_HINTS) {
+    if (pattern.test(raw)) return hint;
+  }
+  return "is the server running? Try --wait-until domcontentloaded or --timeout 60000.";
+}
+
 /** Navigate with the full error catalog applied; re-asserts the final scheme. */
 export async function openPage(
   session: BrowserSession,
@@ -217,7 +271,7 @@ export async function openPage(
     }
     throw new CliError(
       `could not open ${redactUrl(url)}: ${message}`,
-      "is the server running? Try --wait-until domcontentloaded or --timeout 60000.",
+      navigationHint(raw),
     );
   }
 }

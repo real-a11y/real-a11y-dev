@@ -65,7 +65,11 @@ findings), not a view.
   `inspect` may exit `1` when the page has errors — it is a gate
 - **4** — the mobile tree differs where the layout does (e.g. desktop nav vs a
   mobile-navigation control), even if the finding list does not
-- **6** — exit `2`, reported as a navigation error, not a clean pass. An HTML 404
+- **6** — exit `2`, reported as a navigation error, not a clean pass, and the
+  **hint names the failure**: a hostname that does not resolve says so, a port
+  Chrome refuses says so. From cli ≥ the first release after 0.1.0-beta.6 —
+  earlier versions answer every cause with the `--wait-until` / `--timeout`
+  timeout advice, which is the old behaviour, not a fail. An HTML 404
   that still loads is exit `1`/`0` according to its findings, not this case
 - **7** — the reads reach structure the old in-page walk couldn't (UA-shadow media
   controls on any page that has a `<video>`). Element findings carry a locator;
