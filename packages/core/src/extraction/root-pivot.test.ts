@@ -164,6 +164,20 @@ describe("an attached root still pivots — the feature is intact", () => {
     );
   });
 
+  it("does NOT widen for an overlay that is hidden from AT", () => {
+    // A closed nav drawer left mounted: aria-hidden, and translated off-screen
+    // so it passes the CSS visibility check. Nothing in it reaches the tree,
+    // so it must not turn the component snapshot into a page snapshot.
+    page(
+      `<div id="host"><button>Open</button></div>
+       <div role="dialog" aria-modal="true" aria-hidden="true" aria-label="Nav"
+            style="transform: translateX(1280px)"><a href="/x">Menu</a></div>
+       <div inert><div role="menu"><button>Copy</button></div></div>`,
+    );
+    const host = document.getElementById("host")!;
+    expect(resolveEffectiveRoot(host)).toBe(host);
+  });
+
   it("KNOWN GAP (R35 step 1): a sibling live region still widens an attached root", () => {
     // Deliberately open, and asserted so it stays visible. "Outside the root"
     // cannot tell an ordinary in-page live region from a portal, so a result

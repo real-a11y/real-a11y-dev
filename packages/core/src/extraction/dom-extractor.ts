@@ -1382,6 +1382,11 @@ function findPortalOverlay(doc: Document, root: Element): Element | null {
     // toast was up.
     if (root.contains(el) || el.contains(root)) continue;
     if (!countsAsOverlay(el)) continue;
+    // An overlay AT cannot reach adds nothing to the tree, so it is no reason
+    // to widen: a closed drawer left mounted as `aria-hidden` (and translated
+    // off-screen, so the CSS check passes) turned every component root on the
+    // page into a whole-page snapshot.
+    if (el.closest('[aria-hidden="true"], [inert]')) continue;
     if (isActuallyVisible(el) && hasOverlayContent(el)) return body;
   }
   return null;
