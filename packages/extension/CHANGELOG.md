@@ -25,7 +25,7 @@
   events.tinder.com). Modality now follows Chromium's own tree: only a
   `<dialog>` opened with `showModal()` hides the page behind it. A cookie bar
   marked `aria-modal` no longer takes over an interactive page either. It
-  appears alongside the page instead. ([#PR])
+  appears alongside the page instead. ([#398])
 
 - Collect `.tsx` test suites. The vitest `include` was `src/**/*.test.ts`, so a
   suite written as `.tsx` was never picked up — and silently: vitest ran the
@@ -349,3 +349,4 @@ Earlier releases predate this changelog.
 [#354]: https://github.com/real-a11y/real-a11y-dev/pull/354
 [#356]: https://github.com/real-a11y/real-a11y-dev/pull/356
 [#380]: https://github.com/real-a11y/real-a11y-dev/pull/380
+[#398]: https://github.com/real-a11y/real-a11y-dev/pull/398
