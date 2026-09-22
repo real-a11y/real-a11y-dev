@@ -1153,16 +1153,31 @@ export function App() {
             }
             return;
           }
-          setLastAction(`Native: ${action} on ${nodeId}`);
-          setTimeout(() => setLastAction(null), 2000);
-          // Always settle before checking staleness or reading again — even
-          // when `nativeOpToken` already moved by the time `r` arrived (a
-          // same-tab link click can make PAGE_NAVIGATED, fired on
-          // `onBeforeNavigate` in background.ts, win the race against this
-          // message's own round trip). Reading immediately would race the
-          // navigation itself and land on the old document, or on a new one
-          // that hasn't settled yet — the same reason every other action
-          // here waits before its own re-read.
+          // Only toast a still-fresh success — a reply that arrived after
+          // the token already moved (a real tab switch racing the round
+          // trip) belongs to a tab the panel has since left, and toasting it
+          // would name an action for a page no longer on screen.
+          if (token === nativeOpToken.current) {
+            setLastAction(`Native: ${action} on ${nodeId}`);
+            setTimeout(() => setLastAction(null), 2000);
+          }
+          // Always settle before checking staleness or reading again,
+          // regardless of the toast above — even when `nativeOpToken`
+          // already moved by the time `r` arrived (a same-tab link click can
+          // make PAGE_NAVIGATED, fired on `onBeforeNavigate` in
+          // background.ts, win the race against this message's own round
+          // trip). Reading immediately would race the navigation itself and
+          // land on the old document, or on a new one that hasn't settled
+          // yet — the same reason every other action here waits before its
+          // own re-read. This is still a single best-effort attempt, not a
+          // wait-for-load: a destination slower than NATIVE_SETTLE_MS to
+          // become CDP-navigable can still come back sparse, same as the
+          // existing risk of refreshing too early elsewhere in this file —
+          // an accepted tradeoff here rather than a load-event wait, since
+          // an empty/partial recovery read is strictly better than never
+          // getting the request at all (the bug status quo before this
+          // fix), and the user's own "Refresh native tree" button remains
+          // available either way.
           await new Promise((res) => setTimeout(res, NATIVE_SETTLE_MS));
           if (token !== nativeOpToken.current) {
             await recoverFromOwnNavigation(tabId, tabChangeAtStart);
