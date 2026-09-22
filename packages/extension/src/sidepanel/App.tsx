@@ -362,6 +362,27 @@ export function App() {
     setNativeModeEnabledState(next);
     setShowNativeConsent(false);
     if (!next) {
+      // Same teardown the myTabId effect and PAGE_NAVIGATED both do on
+      // their own producer-invalidating transitions, for the identical
+      // reason: bumping `nativeOpToken` is what makes a NATIVE_READ/
+      // NATIVE_ACT already in flight when the user disables native mode
+      // recognizably stale to every guard in this file (`if (token !==
+      // nativeOpToken.current) return`) — without it, a later re-enable
+      // could start a fresh read under the SAME token, and whichever of
+      // the two replies resolves last would win, clobbering a current read
+      // with a stale one (or vice versa). Clearing `nativeBusy` here is
+      // what unsticks it: that stale reply's own `finally` only clears it
+      // when its token still matches, which a bump here now guarantees it
+      // won't. `tabChangeToken` bumps too — disabling mid-recovery has to
+      // abort `recoverFromOwnNavigation`'s own settle loop the same way a
+      // real tab switch does, or that loop would keep waiting and
+      // eventually re-read (a `NATIVE_READ` the disabled flag would refuse
+      // server-side, but the reply would still land and overwrite
+      // `nativeStatus`/`nativeCapability` with a refusal for a producer the
+      // panel has already left).
+      nativeOpToken.current++;
+      tabChangeToken.current++;
+      setNativeBusy(false);
       setProducer("dom");
       setNativeNodes(new Map());
       setNativeRootId("");
@@ -400,14 +421,16 @@ export function App() {
   // `capabilityRequest`, one counter shared across both message types since
   // both answer "does this reply still describe the tab we're looking at".
   const nativeOpToken = useRef(0);
-  // Bumped ONLY by the myTabId effect below — never by PAGE_NAVIGATED. A
-  // snapshot of this taken before a native op, compared after, tells apart
-  // "a real tab switch happened" from "nativeOpToken moved for some other
-  // reason", which `myTabId` equality alone cannot: a rapid switch away and
-  // back leaves `myTabId` (and a ref mirroring it) reading the same tab id
-  // again even though the effect fired twice and cleared the tree — see
-  // `dispatchNativeAction`'s own recovery path for why that distinction
-  // matters.
+  // Bumped by the myTabId effect below and by `setNativeMode` turning
+  // native mode off — NEVER by PAGE_NAVIGATED. A snapshot of this taken
+  // before a native op, compared after, tells apart "something that isn't
+  // this action's own navigation invalidated it" from "nativeOpToken moved
+  // only because PAGE_NAVIGATED fired for the navigation this action
+  // itself caused", which `myTabId` equality alone cannot: a rapid tab
+  // switch away and back leaves `myTabId` (and a ref mirroring it) reading
+  // the same tab id again even though the effect fired twice and cleared
+  // the tree — see `dispatchNativeAction`'s own recovery path for why that
+  // distinction matters.
   const tabChangeToken = useRef(0);
   // Excludes a second native read/act from starting while one is already in
   // flight. Has to be a ref, not state driving a `disabled` attribute alone:
