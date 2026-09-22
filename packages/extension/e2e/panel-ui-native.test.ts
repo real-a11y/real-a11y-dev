@@ -6,8 +6,9 @@
  * (`panel-ui.test.ts`), never the production tree the toolbar's NATIVE
  * toggle switches to.
  *
- * Both tests pin a real bug a review round caught that no test would have —
- * proof this gap was worth closing rather than assumed:
+ * Every test here pins a real bug a review round (or a user's own
+ * hands-on pass) caught that no test would have — proof this gap was worth
+ * closing rather than assumed:
  *
  *  - `useVirtualTree`'s `containerRef` went unwired in `NativeTreeView.tsx`,
  *    which silently capped the rendered tree at the hook's fixed ~10-row
@@ -18,6 +19,14 @@
  *    `inputType` set, so a retyped replacement for a password field rendered
  *    in plaintext — masking only ever applied to the DOM producer's own
  *    password fields before this.
+ *  - Activating a link through the native tree left the panel on a blank
+ *    tree after the navigation it caused: `dispatchNativeAction`'s own
+ *    post-action re-read got cancelled by the very `PAGE_NAVIGATED` its
+ *    click triggered, and nothing else was scheduled to pick it back up —
+ *    see the fix's own comment in `App.tsx` (the `dispatchNativeAction`
+ *    token-check branch) for why re-reading here does NOT reopen the
+ *    tab-switch anti-silent-reattach hole `hasAutoLoadedNative` exists to
+ *    close.
  */
 
 import { expect, test, type NativeHarness } from "./harness";
@@ -132,4 +141,31 @@ test("a redacted field's retype panel never shows the real value, and masks it",
   await nav.panel.getByRole("button", { name: "Refresh native tree" }).click();
   await expect(pwRow).toContainText("[redacted]");
   await expect(pwRow).not.toContainText("newpass456");
+});
+
+test("activating a link through the native tree re-reads the page it navigated to", async ({
+  nav,
+}) => {
+  const page = await showNative(nav, "native-nav-link.html");
+
+  const linkRow = nav.panel.getByRole("treeitem", { name: "Go to tree view" });
+  await expect(linkRow).toBeVisible();
+  await linkRow.getByTitle("Click (Enter)").click();
+
+  // The click is a real, un-prevented <a href> — the tab actually
+  // navigates, same as a user following any other link.
+  await page.waitForURL(/tree-view\.html/);
+
+  // No "Refresh native tree" click anywhere in this test — that omission is
+  // the assertion. Without the fix, `dispatchNativeAction`'s own scheduled
+  // re-read gets cancelled by the very PAGE_NAVIGATED its click causes, and
+  // nothing else fires one (hasAutoLoadedNative is deliberately never reset
+  // by a navigation, for the unrelated tab-switch case), so the tree would
+  // sit empty here. tree-view.html's own <h1> — a node that only exists on
+  // the NEW page, and a root-level one that needs no "Expand all" first —
+  // is proof this is a genuine fresh read, not a stale tree that happened
+  // to still render something.
+  await expect(
+    nav.panel.getByRole("treeitem", { name: "Tree View" }),
+  ).toBeVisible({ timeout: 10_000 });
 });

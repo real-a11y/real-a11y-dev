@@ -1045,6 +1045,26 @@ export function App() {
     if (producer === "dom") hasAutoLoadedNative.current = false;
   }, [producer]);
 
+  /** Called from `dispatchNativeAction` wherever it finds `nativeOpToken`
+   *  already bumped out from under it. If `myTabIdRef` has moved off `tabId`,
+   *  some other native op or a real tab switch beat us to it — leave it
+   *  alone, same as every other token check in this file (re-reading there
+   *  would be exactly the silent reattach-with-no-gesture
+   *  `hasAutoLoadedNative` exists to prevent elsewhere). Otherwise nothing
+   *  else could have bumped the token: the only remaining source is
+   *  PAGE_NAVIGATED firing for the navigation this action itself just caused
+   *  (a link activated through the tree, a form submit, …) — not an
+   *  unrelated tab switch, but the same user gesture this function is still
+   *  handling, continuing onto the page it navigated to. Read that new page
+   *  once rather than leaving the tree empty until a manual refresh. */
+  const recoverFromOwnNavigation = useCallback(
+    async (tabId: number) => {
+      if (myTabIdRef.current !== tabId) return;
+      await loadNativeTreeCore(tabId);
+    },
+    [loadNativeTreeCore],
+  );
+
   /** Dispatch one native action and, on success, settle + re-read — the same
    *  two-step DogfoodPanel's runAct uses, so a click that opens a menu or
    *  re-renders a list doesn't leave the tree showing backendDOMNodeIds the
@@ -1095,7 +1115,17 @@ export function App() {
             error?: string;
             reason?: NativeUnavailableReason;
           };
-          if (token !== nativeOpToken.current) return;
+          // The token can already be stale by the time this resolves, not
+          // just after the settle wait below: PAGE_NAVIGATED fires on
+          // `onBeforeNavigate` (background.ts), which for a same-tab link
+          // click can win the race against this message's own round trip.
+          // Route both checkpoints through the same recovery so an action
+          // that navigates gets exactly one treatment regardless of which
+          // one catches it first.
+          if (token !== nativeOpToken.current) {
+            await recoverFromOwnNavigation(tabId);
+            return;
+          }
           if (!r?.success) {
             if (r?.reason) {
               setNativeCapability(blockedBy(r.reason));
@@ -1110,7 +1140,29 @@ export function App() {
           setLastAction(`Native: ${action} on ${nodeId}`);
           setTimeout(() => setLastAction(null), 2000);
           await new Promise((res) => setTimeout(res, NATIVE_SETTLE_MS));
-          if (token !== nativeOpToken.current) return;
+          if (token !== nativeOpToken.current) {
+            // Superseded. The token only bumps in two places: the myTabId
+            // effect (a tab switch) and PAGE_NAVIGATED (a top-frame
+            // navigation on the bound tab) — see nativeOpToken's own
+            // declaration. If myTabId has moved off this tab, some other
+            // native op or a real tab switch beat us to it; leave it alone,
+            // same as every other token check in this file — re-reading
+            // here would be exactly the silent reattach-with-no-gesture
+            // `hasAutoLoadedNative` exists to prevent elsewhere.
+            //
+            // But if myTabId is STILL this tab, nothing else could have
+            // bumped the token — the only remaining source is PAGE_NAVIGATED
+            // firing for the navigation THIS action itself just caused (a
+            // link activated through the tree, a form submit, ...). That
+            // is not an unrelated tab switch; it is the same user gesture
+            // this function is still handling, continuing onto the page it
+            // navigated to. Read that new page once rather than leaving the
+            // tree empty until a manual refresh — every other action here
+            // already re-reads on success, and a navigating one deserves
+            // the same treatment, not a stricter one.
+            await recoverFromOwnNavigation(tabId);
+            return;
+          }
           // The unguarded core, not `loadNativeTree` — this function already
           // holds `nativeInFlight`, so calling the guarded wrapper here
           // would see it held and silently skip the re-read.
@@ -1122,7 +1174,12 @@ export function App() {
         nativeInFlight.current = false;
       }
     },
-    [nativeTreeTabId, nativeTreeUrl, loadNativeTreeCore],
+    [
+      nativeTreeTabId,
+      nativeTreeUrl,
+      loadNativeTreeCore,
+      recoverFromOwnNavigation,
+    ],
   );
 
   const handleNativeActivate = useCallback(
