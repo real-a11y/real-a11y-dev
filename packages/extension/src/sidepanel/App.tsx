@@ -237,6 +237,15 @@ export function App() {
   // `capabilityRequest`, one counter shared across both message types since
   // both answer "does this reply still describe the tab we're looking at".
   const nativeOpToken = useRef(0);
+  // Bumped ONLY by the myTabId effect below — never by PAGE_NAVIGATED. A
+  // snapshot of this taken before a native op, compared after, tells apart
+  // "a real tab switch happened" from "nativeOpToken moved for some other
+  // reason", which `myTabId` equality alone cannot: a rapid switch away and
+  // back leaves `myTabId` (and a ref mirroring it) reading the same tab id
+  // again even though the effect fired twice and cleared the tree — see
+  // `dispatchNativeAction`'s own recovery path for why that distinction
+  // matters.
+  const tabChangeToken = useRef(0);
   // Excludes a second native read/act from starting while one is already in
   // flight. Has to be a ref, not state driving a `disabled` attribute alone:
   // `setNativeBusy(true)` only lands after the first `await` inside the
@@ -435,6 +444,7 @@ export function App() {
     // also the one place responsible for clearing it back to false: nothing
     // else is coming to do it for an operation this tab change just orphaned.
     nativeOpToken.current++;
+    tabChangeToken.current++;
     setNativeNodes(new Map());
     setNativeRootId("");
     setNativeTreeTabId(undefined);
@@ -1045,21 +1055,30 @@ export function App() {
     if (producer === "dom") hasAutoLoadedNative.current = false;
   }, [producer]);
 
-  /** Called from `dispatchNativeAction` wherever it finds `nativeOpToken`
-   *  already bumped out from under it. If `myTabIdRef` has moved off `tabId`,
-   *  some other native op or a real tab switch beat us to it — leave it
-   *  alone, same as every other token check in this file (re-reading there
-   *  would be exactly the silent reattach-with-no-gesture
-   *  `hasAutoLoadedNative` exists to prevent elsewhere). Otherwise nothing
-   *  else could have bumped the token: the only remaining source is
-   *  PAGE_NAVIGATED firing for the navigation this action itself just caused
-   *  (a link activated through the tree, a form submit, …) — not an
-   *  unrelated tab switch, but the same user gesture this function is still
-   *  handling, continuing onto the page it navigated to. Read that new page
-   *  once rather than leaving the tree empty until a manual refresh. */
+  /** Called after a successful action finds `nativeOpToken` bumped out from
+   *  under it once the settle wait (below) has passed. `tabChangeAtStart` is
+   *  a snapshot of `tabChangeToken` — the counter ONLY the myTabId effect
+   *  bumps — taken at the same moment as `nativeOpToken`. Comparing that
+   *  snapshot, not `myTabId` itself, is what makes this reliable: a rapid
+   *  switch away and back leaves `myTabId` (and a ref mirroring it) reading
+   *  the same tab id again even though a real switch happened and the effect
+   *  ran, clearing the tree both times — so equality on the id alone cannot
+   *  tell "no tab switch occurred" from "one occurred and reverted". The
+   *  counter can't: ANY switch bumps it, round trip or not.
+   *
+   *  If it moved, a real tab switch (or another native op) beat us to it —
+   *  leave it alone, same as every other token check in this file (re-
+   *  reading here would be exactly the silent reattach-with-no-gesture
+   *  `hasAutoLoadedNative` exists to prevent elsewhere). If it did NOT move,
+   *  nothing but PAGE_NAVIGATED could have bumped `nativeOpToken` — firing
+   *  for the navigation this action itself just caused (a link activated
+   *  through the tree, a form submit, …), not an unrelated tab switch, but
+   *  the same user gesture this function is still handling, continuing onto
+   *  the page it navigated to. Read that new page once rather than leaving
+   *  the tree empty until a manual refresh. */
   const recoverFromOwnNavigation = useCallback(
-    async (tabId: number) => {
-      if (myTabIdRef.current !== tabId) return;
+    async (tabId: number, tabChangeAtStart: number) => {
+      if (tabChangeToken.current !== tabChangeAtStart) return;
       await loadNativeTreeCore(tabId);
     },
     [loadNativeTreeCore],
@@ -1075,6 +1094,7 @@ export function App() {
       nativeInFlight.current = true;
       try {
         const token = nativeOpToken.current;
+        const tabChangeAtStart = tabChangeToken.current;
         if (nativeTreeTabId === undefined) {
           setNativeStatus("load a tree first");
           return;
@@ -1115,52 +1135,37 @@ export function App() {
             error?: string;
             reason?: NativeUnavailableReason;
           };
-          // The token can already be stale by the time this resolves, not
-          // just after the settle wait below: PAGE_NAVIGATED fires on
-          // `onBeforeNavigate` (background.ts), which for a same-tab link
-          // click can win the race against this message's own round trip.
-          // Route both checkpoints through the same recovery so an action
-          // that navigates gets exactly one treatment regardless of which
-          // one catches it first.
-          if (token !== nativeOpToken.current) {
-            await recoverFromOwnNavigation(tabId);
-            return;
-          }
           if (!r?.success) {
-            if (r?.reason) {
-              setNativeCapability(blockedBy(r.reason));
-              setNativeStatus(
-                `native unavailable — ${explainUnavailable(r.reason)}`,
-              );
-            } else {
-              setNativeStatus(`act failed: ${r?.error ?? "unknown"}`);
+            // Only report a failure that still describes the tab we asked
+            // about — a reply superseded by a tab switch or navigation is
+            // dropped silently, matching every other stale-token check in
+            // this file, rather than surfacing an error for an action whose
+            // page may already be gone.
+            if (token === nativeOpToken.current) {
+              if (r?.reason) {
+                setNativeCapability(blockedBy(r.reason));
+                setNativeStatus(
+                  `native unavailable — ${explainUnavailable(r.reason)}`,
+                );
+              } else {
+                setNativeStatus(`act failed: ${r?.error ?? "unknown"}`);
+              }
             }
             return;
           }
           setLastAction(`Native: ${action} on ${nodeId}`);
           setTimeout(() => setLastAction(null), 2000);
+          // Always settle before checking staleness or reading again — even
+          // when `nativeOpToken` already moved by the time `r` arrived (a
+          // same-tab link click can make PAGE_NAVIGATED, fired on
+          // `onBeforeNavigate` in background.ts, win the race against this
+          // message's own round trip). Reading immediately would race the
+          // navigation itself and land on the old document, or on a new one
+          // that hasn't settled yet — the same reason every other action
+          // here waits before its own re-read.
           await new Promise((res) => setTimeout(res, NATIVE_SETTLE_MS));
           if (token !== nativeOpToken.current) {
-            // Superseded. The token only bumps in two places: the myTabId
-            // effect (a tab switch) and PAGE_NAVIGATED (a top-frame
-            // navigation on the bound tab) — see nativeOpToken's own
-            // declaration. If myTabId has moved off this tab, some other
-            // native op or a real tab switch beat us to it; leave it alone,
-            // same as every other token check in this file — re-reading
-            // here would be exactly the silent reattach-with-no-gesture
-            // `hasAutoLoadedNative` exists to prevent elsewhere.
-            //
-            // But if myTabId is STILL this tab, nothing else could have
-            // bumped the token — the only remaining source is PAGE_NAVIGATED
-            // firing for the navigation THIS action itself just caused (a
-            // link activated through the tree, a form submit, ...). That
-            // is not an unrelated tab switch; it is the same user gesture
-            // this function is still handling, continuing onto the page it
-            // navigated to. Read that new page once rather than leaving the
-            // tree empty until a manual refresh — every other action here
-            // already re-reads on success, and a navigating one deserves
-            // the same treatment, not a stricter one.
-            await recoverFromOwnNavigation(tabId);
+            await recoverFromOwnNavigation(tabId, tabChangeAtStart);
             return;
           }
           // The unguarded core, not `loadNativeTree` — this function already
