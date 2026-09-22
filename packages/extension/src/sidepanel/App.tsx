@@ -81,6 +81,13 @@ const dogfood = typeof __DOGFOOD__ !== "undefined" && __DOGFOOD__;
  *  action — same rationale and value as `DogfoodPanel.tsx`'s `SETTLE_MS`. */
 const NATIVE_SETTLE_MS = 250;
 
+/** Bound on how many additional navigations `recoverFromOwnNavigation` will
+ *  wait out (a login page that immediately client-redirects to a dashboard,
+ *  say) before giving up and leaving the recovery to a manual refresh. Caps
+ *  the worst case at `MAX_NAV_RECOVERY_HOPS * NATIVE_SETTLE_MS` rather than
+ *  waiting on a chain that never settles. */
+const MAX_NAV_RECOVERY_HOPS = 5;
+
 /**
  * Map HTML tag names to a human-readable display role when the ARIA role
  * ("generic" / "group") doesn't convey enough semantic information.
@@ -1074,11 +1081,33 @@ export function App() {
    *  for the navigation this action itself just caused (a link activated
    *  through the tree, a form submit, …), not an unrelated tab switch, but
    *  the same user gesture this function is still handling, continuing onto
-   *  the page it navigated to. Read that new page once rather than leaving
-   *  the tree empty until a manual refresh. */
+   *  the page it navigated to. Read that new page rather than leaving the
+   *  tree empty until a manual refresh.
+   *
+   *  A single navigation is the common case, but not the only one: a link to
+   *  a page that itself client-redirects onward (a login page landing on a
+   *  dashboard) fires PAGE_NAVIGATED again while — or right after — this
+   *  reads the intermediate document, which unconditionally clears
+   *  `nativeNodes` on every fire and would make a one-shot read here land on
+   *  a document already gone, or get its own result silently discarded by
+   *  `loadNativeTreeCore`'s own token check. So this waits out the settle
+   *  window and re-checks: if `nativeOpToken` moved again during the wait,
+   *  another navigation is still in flight (still THIS tab, still no real
+   *  tab switch — `tabChangeToken` is re-checked every pass) and it waits
+   *  again rather than reading a document already being replaced. Bounded by
+   *  `MAX_NAV_RECOVERY_HOPS` so a page that never stops redirecting doesn't
+   *  hold this open forever — the manual refresh button is always the
+   *  fallback past that. */
   const recoverFromOwnNavigation = useCallback(
     async (tabId: number, tabChangeAtStart: number) => {
-      if (tabChangeToken.current !== tabChangeAtStart) return;
+      let lastSeenToken = nativeOpToken.current;
+      for (let hop = 0; hop < MAX_NAV_RECOVERY_HOPS; hop++) {
+        if (tabChangeToken.current !== tabChangeAtStart) return;
+        await new Promise((res) => setTimeout(res, NATIVE_SETTLE_MS));
+        if (tabChangeToken.current !== tabChangeAtStart) return;
+        if (nativeOpToken.current === lastSeenToken) break; // no further nav during the wait — settled
+        lastSeenToken = nativeOpToken.current;
+      }
       await loadNativeTreeCore(tabId);
     },
     [loadNativeTreeCore],

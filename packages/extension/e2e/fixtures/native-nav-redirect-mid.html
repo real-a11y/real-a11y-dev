@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Native nav — redirect chain middle</title>
+  </head>
+  <body>
+    <!--
+      Never actually rendered by a human — a real page in this shape (a
+      login page redirecting to a dashboard, a tracking link redirecting to
+      its destination) client-redirects before anyone reads it. Redirects to
+      tree-view.html, whose own <h1> is what the test waits for as proof the
+      FINAL document's tree was read, not this intermediate one's.
+    -->
+    <h1>Redirecting…</h1>
+    <script>
+      location.replace("tree-view.html");
+    </script>
+  </body>
+</html>
