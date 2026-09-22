@@ -36,7 +36,9 @@ const REFERENCE_ATTRS = new Set([
  * or destroying a modal/overlay candidate (`aria-modal`, `role`, `open`) or by
  * flipping one's visibility, its own or an ancestor's (`class`, `style`,
  * `hidden`, `inert`), since `findActiveModal`/`findPortalOverlay` both gate on
- * visibility.
+ * visibility. `aria-hidden` and `inert` also decide whether an overlay is
+ * reachable by AT at all, which `findPortalOverlay` checks up the ancestor
+ * chain: a portal that gains `aria-hidden` must un-pivot.
  *
  * A hit here does NOT force a full extraction. It only arms ONE
  * `resolveEffectiveRoot()` recomputation for the whole batch; the full
@@ -59,6 +61,7 @@ const SCOPE_ATTRS = new Set([
   "style",
   "hidden",
   "inert",
+  "aria-hidden",
 ]);
 
 // The rule itself lives in `containsOverlaySignal` (extraction/dom-extractor),

@@ -904,6 +904,29 @@ describe("LiveTreeExtractor", () => {
       expect(result.nodes).toEqual(expected.nodes);
     });
 
+    it("un-pivots when an out-of-root overlay becomes aria-hidden", () => {
+      // An overlay AT cannot reach is no reason to widen, so a portal that
+      // gains aria-hidden (a drawer closing without unmounting) must hand the
+      // scope back to the root rather than leave the whole page in the view.
+      document.body.innerHTML = `
+        <main id="app"><p>Background</p></main>
+        <div id="portal">
+          <div id="menu" role="menu"><button>Item</button></div>
+        </div>
+      `;
+      const root = document.getElementById("app")!;
+      const live = new LiveTreeExtractor(root, { mode: "a11y" });
+
+      const menu = document.getElementById("menu")!;
+      menu.setAttribute("aria-hidden", "true");
+
+      const result = live.refresh(attrChange(menu, "aria-hidden"));
+      const expected = extractA11yTree(root);
+
+      expect(result.rootId).toBe(expected.rootId);
+      expect(result.nodes).toEqual(expected.nodes);
+    });
+
     it("keeps repositioning an open overlay incremental", () => {
       document.body.innerHTML = `
         <main id="app"><p>Background</p></main>
