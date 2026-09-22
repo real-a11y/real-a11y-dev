@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Native nav — real link</title>
+  </head>
+  <body>
+    <!--
+      A genuine, un-prevented <a href> — unlike tree-view.html's Bookmarks
+      section, which calls preventDefault() so its links never leave the
+      page. This fixture exists specifically to produce a real cross-
+      document navigation when the link is activated through the native
+      tree, for panel-ui-native.test.ts's own navigation-re-read case.
+    -->
+    <h1>Before navigation</h1>
+    <p><a href="tree-view.html">Go to tree view</a></p>
+  </body>
+</html>

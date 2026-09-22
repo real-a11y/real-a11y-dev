@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Native nav — redirect chain start</title>
+  </head>
+  <body>
+    <!--
+      Pairs with native-nav-redirect-mid.html to reproduce a redirect chain:
+      this link's own navigation is not the final document — the page it
+      lands on immediately client-redirects onward (a login page landing on
+      a dashboard, say), firing a SECOND PAGE_NAVIGATED before the panel's
+      one-shot recovery read (pre-fix) would have settled. See
+      panel-ui-native.test.ts's own redirect-chain case.
+    -->
+    <h1>Redirect chain start</h1>
+    <p><a href="native-nav-redirect-mid.html">Go via redirect</a></p>
+  </body>
+</html>
