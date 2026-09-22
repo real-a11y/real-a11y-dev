@@ -172,9 +172,16 @@ function isFieldStateSuccess(
 function NativeConsentBanner({
   onEnable,
   onCancel,
+  error,
 }: {
   onEnable: () => void;
   onCancel: () => void;
+  /** Shown inline when a previous Enable attempt failed — the banner stays
+   *  open on failure (see App's own `onEnable` handler), so this is the only
+   *  place left to surface it; `nativeStatus` renders only inside
+   *  `NativeTreeView`, which never mounts unless the flip already
+   *  succeeded. */
+  error?: string;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const enableRef = useRef<HTMLButtonElement>(null);
@@ -210,6 +217,11 @@ function NativeConsentBanner({
         content the DOM producer can't see. While it's attached, Chrome shows
         its own "is debugging this browser" notice.
       </p>
+      {error && (
+        <p class="sn-native-consent-error" role="alert">
+          {error}
+        </p>
+      )}
       <div class="sn-native-consent-actions">
         <button
           ref={enableRef}
@@ -295,6 +307,13 @@ export function App() {
   // before anything attaches, rather than surprising them with it. Dismissed
   // by either button; never shown again once the setting is on.
   const [showNativeConsent, setShowNativeConsent] = useState(false);
+  // Set only when an Enable attempt actually fails (the message never
+  // reached the service worker, or its handler replied with a logical
+  // failure) — cleared on every fresh attempt so a stale error never
+  // outlives the retry it was about.
+  const [nativeConsentError, setNativeConsentError] = useState<
+    string | undefined
+  >(undefined);
 
   useEffect(() => {
     void chrome.runtime
@@ -312,10 +331,19 @@ export function App() {
   /** Flips the persisted setting. Turning it off also drops any live
    *  attachment (mirrors DogfoodPanel's own `toggle`) and returns the view to
    *  DOM — leaving `producer` at "native" with the capability just revoked
-   *  would strand the panel on a tree it can no longer refresh. */
-  const setNativeMode = useCallback(async (next: boolean) => {
+   *  would strand the panel on a tree it can no longer refresh.
+   *
+   *  Returns whether the flip actually took: callers that follow success
+   *  with another state change (the consent banner's own `onEnable` flips
+   *  `producer` to "native" right after) need that signal, not just a
+   *  resolved promise — `NATIVE_FLAG_SET`'s own handler (`native/index.ts`)
+   *  replies `{ok: false, ...}` from its outer catch on an internal failure
+   *  WITHOUT rejecting the message, so "the promise resolved" alone doesn't
+   *  mean the setting was persisted. */
+  const setNativeMode = useCallback(async (next: boolean): Promise<boolean> => {
+    let r: { enabled?: boolean; ok?: boolean } | undefined;
     try {
-      await chrome.runtime.sendMessage({
+      r = await chrome.runtime.sendMessage({
         type: "NATIVE_FLAG_SET",
         enabled: next,
       });
@@ -323,8 +351,14 @@ export function App() {
       // Message never reached the service worker — nothing was persisted,
       // so leave the UI as it was rather than claiming a flip that didn't
       // happen.
-      return;
+      return false;
     }
+    // A resolved reply can still be a logical failure — `native/index.ts`'s
+    // outer catch replies `{ok: false, error: "native mode error"}` rather
+    // than rejecting, so `enabled` (only present on the success path) is
+    // what actually distinguishes the two, not just "did the promise
+    // resolve".
+    if (r?.enabled !== next) return false;
     setNativeModeEnabledState(next);
     setShowNativeConsent(false);
     if (!next) {
@@ -334,6 +368,7 @@ export function App() {
       setNativeCapability(undefined);
       setNativeStatus("");
     }
+    return true;
   }, []);
 
   // Which tree the panel is currently showing. Only ever leaves "dom" when
@@ -2160,10 +2195,27 @@ export function App() {
           placement pattern as NativeTreeView's own capability banner. */}
       {showNativeConsent && (
         <NativeConsentBanner
-          onEnable={() =>
-            void setNativeMode(true).then(() => setProducer("native"))
-          }
-          onCancel={() => setShowNativeConsent(false)}
+          error={nativeConsentError}
+          onEnable={() => {
+            setNativeConsentError(undefined);
+            void setNativeMode(true).then((ok) => {
+              // Only follow a REAL flip with the producer switch — on
+              // failure `setNativeMode` already left `showNativeConsent`
+              // and `nativeModeEnabled` untouched, so switching to "native"
+              // here would show a view the setting was never actually
+              // enabled for. Surface the failure inline instead and leave
+              // the banner open for a retry.
+              if (ok) setProducer("native");
+              else
+                setNativeConsentError(
+                  "Couldn't enable native mode — try again.",
+                );
+            });
+          }}
+          onCancel={() => {
+            setShowNativeConsent(false);
+            setNativeConsentError(undefined);
+          }}
         />
       )}
 
