@@ -94,9 +94,11 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      # Root `build` (the same one CI and the pre-push hook run) builds every
-      # publishable package; it shares its workspace filter with `typecheck`
-      # and `test` below, so the gate can never trip over an unbuilt package.
+      # Root `build` — the same one CI's `Verify` step runs, and nothing local:
+      # the pre-push hook is build-free, so it runs neither this nor anything
+      # below. It builds every publishable package, and shares its workspace
+      # filter with `typecheck` and `test` below, so the gate can never trip
+      # over an unbuilt package.
       - name: Build all packages
         run: pnpm build
 
