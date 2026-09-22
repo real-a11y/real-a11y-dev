@@ -1265,61 +1265,49 @@ function isActuallyVisible(
 }
 
 /**
- * True if `element` is a MODAL dialog — content behind a modal is inert to
- * assistive tech, so extraction scopes exclusively to it.
+ * True if `element` is a MODAL dialog — one the BROWSER has made modal, so the
+ * content behind it is inert and extraction scopes exclusively to it.
  *
- * Modality is identified by a POSITIVE signal, never by role="dialog" alone:
- *   - `aria-modal="true"` — set by every mainstream modal library (Radix
- *     Dialog, Headless UI, MUI) and by the APG dialog pattern itself.
- *   - the native `:modal` pseudo-class — a `<dialog>` opened via showModal().
+ * That is only a `<dialog>` opened with showModal() (the `:modal`
+ * pseudo-class), which is exactly the rule Chromium's own accessibility tree
+ * applies: it drops the page behind a `:modal` dialog and keeps it behind
+ * everything else.
  *
- * A role="dialog" WITHOUT one of these is NOT modal: cookie-consent banners,
- * Radix `Popover.Content`, and non-modal drawers all render role="dialog"
- * yet leave the page interactive. Treating those as modal collapsed the whole
- * page down to just the banner in the inspector. (We deliberately do NOT
- * infer modality from "siblings are aria-hidden" — that heuristic carries the
- * same false-positive hijack risk, and mainstream libraries all set
- * aria-modal regardless.)
+ * `aria-modal="true"` is deliberately NOT a signal. It is a claim the author
+ * makes to assistive tech, not a state the browser enforces, and Chromium does
+ * not prune for it. Honoring it here made the DOM producer disagree with the
+ * native one on two shapes seen in the wild:
+ *   - a CLOSED drawer left mounted with `aria-modal="true" aria-hidden="true"`
+ *     and translated off-screen. It passes a CSS visibility check, so it won
+ *     the scope and the whole page extracted as an empty tree.
+ *   - a non-blocking cookie bar marked `aria-modal="true"`, which collapsed an
+ *     interactive page down to the banner's four buttons.
+ *
+ * Libraries that really are modal still come out right without it: Radix and
+ * MUI `aria-hidden` the siblings, Headless UI makes them `inert`, and the walk
+ * already drops both — the same way Chromium does. An `aria-modal` dialog is an
+ * ordinary overlay here, joining the tree through `findPortalOverlay`.
  */
 function isModal(element: Element): boolean {
-  if (element.getAttribute("aria-modal") === "true") return true;
   try {
-    if (element.matches(":modal")) return true;
+    return element.matches(":modal");
   } catch {
-    // :modal pseudo-class not supported in this environment (e.g. jsdom)
+    // :modal pseudo-class not supported in this environment
+    return false;
   }
-  return false;
 }
 
 /**
- * Find the active modal dialog, if any.
- * When a modal is active, content behind it is inert — screen readers
- * scope navigation exclusively to the modal content.
+ * Find the active modal dialog, if any — see {@link isModal} for what counts.
  */
 function findActiveModal(doc: Document): Element | null {
-  // Candidate dialogs, gated by isModal(): a visible role="dialog" alone does
-  // not imply modality, so a non-modal dialog (cookie banner, Radix Popover)
-  // must not hijack the scope. Iterate last-to-first so the top-most stacked
-  // dialog wins; isActuallyVisible filters closed/unmounted ones.
-  const dialogs = doc.querySelectorAll(
-    '[aria-modal="true"], [role="dialog"], [role="alertdialog"]',
-  );
+  // Per element rather than `querySelectorAll("dialog:modal")`, so an
+  // environment that cannot parse `:modal` degrades to "no modal" in one place.
+  // Last-to-first so the top-most of a stack of modals wins.
+  const dialogs = doc.querySelectorAll("dialog");
   for (let i = dialogs.length - 1; i >= 0; i--) {
-    if (isActuallyVisible(dialogs[i]) && isModal(dialogs[i])) {
-      return dialogs[i];
-    }
+    if (isModal(dialogs[i])) return dialogs[i];
   }
-
-  // Native <dialog> opened with showModal() — matches :modal pseudo-class
-  try {
-    const nativeModals = doc.querySelectorAll("dialog:modal");
-    if (nativeModals.length > 0) {
-      return nativeModals[nativeModals.length - 1];
-    }
-  } catch {
-    // :modal pseudo-class not supported in this environment
-  }
-
   return null;
 }
 

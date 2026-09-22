@@ -14,7 +14,7 @@
  * The branch that runs in Chrome, the extension and the page-bundle is not
  * covered by this file — `packages/testing/e2e` is where that gets exercised.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 import { resolveEffectiveRoot } from "./dom-extractor.js";
 
@@ -25,6 +25,29 @@ beforeEach(() => {
 function page(html: string): void {
   document.body.innerHTML = html;
 }
+
+/**
+ * Open the page's `<dialog>` as a browser modal. jsdom has no `showModal()`
+ * and never matches `:modal`, so answer `:modal` for that dialog alone.
+ */
+function openModal(): Element {
+  const dialog = document.querySelector("dialog")!;
+  const matches = Element.prototype.matches;
+  vi.spyOn(Element.prototype, "matches").mockImplementation(function (
+    this: Element,
+    selector: string,
+  ) {
+    return selector === ":modal"
+      ? this === dialog
+      : matches.call(this, selector);
+  });
+  dialog.setAttribute("open", "");
+  return dialog;
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 /** A root that was never appended — the jsdom-fixture and pre-mount shapes. */
 function detached(html = `<button>Save</button>`): HTMLElement {
@@ -43,9 +66,8 @@ describe("a detached root is never pivoted away", () => {
   it("survives an open modal", () => {
     // findActiveModal never looked at `root`, so this path hijacked a detached
     // root just as readily — and it runs FIRST.
-    page(
-      `<div role="dialog" aria-modal="true" aria-label="Confirm">Delete?</div>`,
-    );
+    page(`<dialog aria-label="Confirm">Delete?</dialog>`);
+    openModal();
     const root = detached();
     expect(resolveEffectiveRoot(root)).toBe(root);
   });
@@ -74,9 +96,8 @@ describe("a detached root is never pivoted away", () => {
   });
 
   it("a shadow root is not hijacked by an open modal either", () => {
-    page(
-      `<div id="wc"></div><div role="dialog" aria-modal="true" aria-label="C">x</div>`,
-    );
+    page(`<div id="wc"></div><dialog aria-label="C">x</dialog>`);
+    openModal();
     const shadow = document
       .getElementById("wc")!
       .attachShadow({ mode: "open" });
@@ -111,9 +132,9 @@ describe("an attached root still pivots — the feature is intact", () => {
 
   it("pivots to a modal that CONTAINS the root", () => {
     page(
-      `<div role="dialog" aria-modal="true" aria-label="C"><div id="host"><button>Open</button></div></div>`,
+      `<dialog aria-label="C"><div id="host"><button>Open</button></div></dialog>`,
     );
-    const modal = document.querySelector('[role="dialog"]')!;
+    const modal = openModal();
     expect(resolveEffectiveRoot(document.getElementById("host")!)).toBe(modal);
   });
 
@@ -126,10 +147,21 @@ describe("an attached root still pivots — the feature is intact", () => {
     // be discovered. Changing it is a decision about modelling AT, not a bug
     // fix, and does not belong in a change about detached roots.
     page(
-      `<div id="host"><button>Open</button></div><div role="dialog" aria-modal="true" aria-label="C">x</div>`,
+      `<div id="host"><button>Open</button></div><dialog aria-label="C">x</dialog>`,
     );
-    const modal = document.querySelector('[role="dialog"]')!;
+    const modal = openModal();
     expect(resolveEffectiveRoot(document.getElementById("host")!)).toBe(modal);
+  });
+
+  it("an aria-modal dialog only WIDENS — it is not browser-modal", () => {
+    // Chromium keeps the page behind an aria-modal dialog, so the root keeps
+    // its content and the dialog joins it, like any portalled overlay.
+    page(
+      `<div id="host"><button>Open</button></div><div role="dialog" aria-modal="true" aria-label="C"><button>OK</button></div>`,
+    );
+    expect(resolveEffectiveRoot(document.getElementById("host")!)).toBe(
+      document.body,
+    );
   });
 
   it("KNOWN GAP (R35 step 1): a sibling live region still widens an attached root", () => {

@@ -60,7 +60,7 @@ expect(
 
 ## It models real AT behavior
 
-Because the snapshot reflects the *extracted* accessibility tree — not raw markup — it captures semantics a DOM dump can't. The clearest example is **modal scoping**: when a dialog is open, content behind it is inert to assistive tech, so it drops out of the tree. Open a modal and the snapshot (and tab order) collapse to just the dialog — a precise artifact for that state:
+Because the snapshot reflects the *extracted* accessibility tree — not raw markup — it captures semantics a DOM dump can't. The clearest example is **modal scoping**: when a dialog is genuinely modal, content behind it is inert to assistive tech, so it drops out of the tree. Open a modal and the snapshot (and tab order) collapse to just the dialog — a precise artifact for that state. "Genuinely modal" follows Chromium's own accessibility tree: a `<dialog>` opened with `showModal()`, or a page that makes the background `inert` or `aria-hidden` the way modal libraries do. `aria-modal="true"` on its own is only a hint, and the page behind it stays in the tree:
 
 ```ts
 await flow(container).findByRole("button", { name: "Delete account" }).click();

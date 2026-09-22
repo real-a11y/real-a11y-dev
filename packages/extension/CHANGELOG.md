@@ -18,6 +18,15 @@
 
 ## Unreleased
 
+- Fix an empty tree on pages that keep a closed `aria-modal` drawer mounted.
+  The DOM tree treated any visible `aria-modal="true"` element as the open
+  modal and scoped to it alone, so a closed mobile nav, hidden with
+  `aria-hidden` and moved off-screen, left the panel showing nothing (seen on
+  events.tinder.com). Modality now follows Chromium's own tree: only a
+  `<dialog>` opened with `showModal()` hides the page behind it. A cookie bar
+  marked `aria-modal` no longer takes over an interactive page either. It
+  appears alongside the page instead. ([#PR])
+
 - Collect `.tsx` test suites. The vitest `include` was `src/**/*.test.ts`, so a
   suite written as `.tsx` was never picked up — and silently: vitest ran the
   files it matched, reported them green, and said nothing about the one it
