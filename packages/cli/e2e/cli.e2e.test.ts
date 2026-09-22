@@ -155,7 +155,10 @@ describe("real-a11y (built bin)", () => {
     ]);
     expect(code).toBe(2);
     expect(stdout).toContain("page failed: could not open");
-    expect(stdout).toContain("is the server running?");
+    // Port 1 is a port Chrome refuses outright, so the hint must say that
+    // rather than offer the timeout advice this once printed for every cause.
+    expect(stdout).toContain("Chrome refuses to connect on this port");
+    expect(stdout).not.toContain("--wait-until");
   });
 
   it("--help and --version exit 0; bare invocation exits 2", async () => {
