@@ -104,6 +104,15 @@
   margin: 0 0 6px;
 }
 
+/* A failed Enable attempt — same amber the capability banner uses, so an
+   in-banner failure reads consistently with every other "something's
+   blocking native mode" state, distinct from the banner's own informational
+   blue. */
+.sn-native-consent-error {
+  color: hsl(28 70% 30%);
+  font-weight: 600;
+}
+
 .sn-native-consent-actions {
   display: flex;
   gap: 6px;
@@ -113,6 +122,10 @@
   border-left-color: hsl(210 50% 55%);
   background: hsl(210 40% 16%);
   color: hsl(210 85% 88%);
+}
+
+.sn-theme-dark .sn-native-consent-error {
+  color: hsl(28 90% 78%);
 }
 
 .sn-page-url {
