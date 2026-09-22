@@ -54,11 +54,19 @@
   Curtain gates none of it — driving the page from the panel while it is
   hidden is what the curtain is for. ([#399])
 
-- Leave pick mode in every frame once a pick resolves, not just the frame that
-  resolved it. The picker exits in its own document, so a pick made inside an
-  iframe left the top frame armed and swallowing clicks while the panel's ✛
-  button — which is per-tab — already read off, with no enabled control to
-  switch back off. ([#399])
+- Leave pick mode in every frame once any frame leaves it, not just the one
+  that did. A picker exits in its own document — on a pick, on a click that
+  hit nothing tracked, and on Escape — so leaving pick mode inside an iframe
+  left the top frame armed and swallowing clicks while the panel's ✛ button,
+  which is per-tab, already read off, with no enabled control to switch back
+  off. ([#399])
+
+- Stop one action's feedback from wiping another's. Every message in the
+  panel's status bar armed its own timer to clear the bar, and none of them
+  cancelled the others, so whichever timer came due first blanked whatever
+  the bar was showing by then — a "Click: Save" from two seconds ago erasing
+  a failure raised one second ago. The bar now keeps a single pending clear,
+  belonging to the message actually on screen. ([#399])
 
 - Collect `.tsx` test suites. The vitest `include` was `src/**/*.test.ts`, so a
   suite written as `.tsx` was never picked up — and silently: vitest ran the

@@ -134,6 +134,57 @@ describe("panel action feedback: a frame that refuses", () => {
     ).toHaveLength(1);
   });
 
+  // Escape, and a click that lands on nothing tracked, both exit the picker
+  // WITHOUT a NODE_PICKED — PICK_MODE_CHANGED is the only notice the panel
+  // gets. Handling just the pick path leaves sibling frames armed.
+  it("disarms every frame when one reports itself out of pick mode", () => {
+    mount();
+    chromeMock.sent.length = 0;
+
+    act(() => {
+      chromeMock.emit({
+        type: "PICK_MODE_CHANGED",
+        tabId: TAB_ID,
+        payload: { enabled: false },
+      } as unknown as ContentToPanel);
+    });
+
+    expect(
+      chromeMock.sent.filter(
+        (m) =>
+          m.type === "SET_PICK_MODE" &&
+          (m.payload as { enabled: boolean }).enabled === false,
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("does not let an earlier action's timer clear a later message", () => {
+    let refuse = false;
+    mount((m) =>
+      m.type === "DISPATCH_ACTION" && refuse
+        ? { success: false, error: ERROR }
+        : undefined,
+    );
+
+    // "Click: Save" succeeds and arms a 2s clear.
+    clickAction();
+    expect(feedback()).toBe("Click: Save");
+
+    // A second later a refusal puts up its own 3s message.
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    refuse = true;
+    clickAction();
+    expect(feedback()).toBe(`Failed: ${ERROR}`);
+
+    // The first action's clear is now due. It must not take this one with it.
+    act(() => {
+      vi.advanceTimersByTime(1100);
+    });
+    expect(feedback()).toBe(`Failed: ${ERROR}`);
+  });
+
   it("reports the refusal instead of the optimistic banner", () => {
     mount((m) =>
       m.type === "DISPATCH_ACTION"
