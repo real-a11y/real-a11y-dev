@@ -11,10 +11,19 @@
       its destination) client-redirects before anyone reads it. Redirects to
       tree-view.html, whose own <h1> is what the test waits for as proof the
       FINAL document's tree was read, not this intermediate one's.
+
+      The redirect is deliberately delayed past NATIVE_SETTLE_MS (250ms in
+      App.tsx): on a fast local test server both hops complete within that
+      first settle window regardless of the fix, since the very check that
+      detects "stale, recover" already waited that long — the race only
+      shows up when the SECOND navigation lands after that first window has
+      already elapsed, which is what forces a one-shot recovery to either
+      read this intermediate document or have that read's result thrown away
+      by the later navigation. 400ms clears the 250ms window with margin.
     -->
     <h1>Redirecting…</h1>
     <script>
-      location.replace("tree-view.html");
+      setTimeout(() => location.replace("tree-view.html"), 400);
     </script>
   </body>
 </html>
