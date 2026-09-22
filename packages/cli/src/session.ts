@@ -165,35 +165,38 @@ export async function createSession(
  *
  * Matched against the RAW message: these are Chromium's own `net::ERR_*`
  * tokens, which carry no user data, and matching before redaction keeps them
- * intact no matter how a URL is rewritten.
+ * intact no matter how a URL is rewritten. The `net::` prefix is load-bearing
+ * — Playwright quotes the target URL inside the same message, so a bare
+ * `ERR_*` would also match one echoed from a path or query string and answer
+ * a failure that never happened.
  */
 const NAVIGATION_HINTS: ReadonlyArray<readonly [RegExp, string]> = [
   [
-    /ERR_NAME_NOT_RESOLVED|ERR_NAME_RESOLUTION_FAILED/,
+    /net::ERR_NAME_NOT_RESOLVED|net::ERR_NAME_RESOLUTION_FAILED/,
     "that hostname does not resolve — check the spelling, your DNS, or whether the host is only reachable over a VPN.",
   ],
   [
-    /ERR_UNSAFE_PORT/,
+    /net::ERR_UNSAFE_PORT/,
     "Chrome refuses to connect on this port — serve the page on an ordinary one (3000, 8080, …).",
   ],
   [
-    /ERR_CONNECTION_REFUSED/,
+    /net::ERR_CONNECTION_REFUSED/,
     "nothing is listening there — start the server, or check the host and port.",
   ],
   [
-    /ERR_INTERNET_DISCONNECTED|ERR_NETWORK_CHANGED|ERR_ADDRESS_UNREACHABLE|ERR_PROXY_CONNECTION_FAILED/,
+    /net::ERR_(INTERNET_DISCONNECTED|NETWORK_CHANGED|ADDRESS_UNREACHABLE|PROXY_CONNECTION_FAILED)/,
     "the network is unreachable from here — check connectivity, or the proxy you passed to --proxy.",
   ],
   [
-    /ERR_CERT_|ERR_SSL_/,
+    /net::ERR_(CERT_|SSL_)/,
     "the site's TLS certificate was rejected — trust the certificate locally, or audit the plain-http origin.",
   ],
   [
-    /ERR_TOO_MANY_REDIRECTS/,
+    /net::ERR_TOO_MANY_REDIRECTS/,
     "the URL redirects in a loop — a login wall is the usual cause; see --storage-state for auditing signed-in pages.",
   ],
   [
-    /ERR_CONNECTION_RESET|ERR_EMPTY_RESPONSE/,
+    /net::ERR_(CONNECTION_RESET|EMPTY_RESPONSE)/,
     "the server closed the connection without answering — check it speaks the scheme you used (http:// vs https://).",
   ],
 ];
