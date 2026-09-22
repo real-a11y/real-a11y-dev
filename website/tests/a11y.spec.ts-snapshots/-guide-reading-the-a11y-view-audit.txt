@@ -130,6 +130,34 @@ main
   heading "Elements that should be in the tree but aren't" (level 3)
   paragraph "If a custom widget isn't showing up with the right role — or isn't showing up at all — it may be , visually hidden but also hidden from AT, or built with markup that doesn't carry semantic meaning. The A11y view makes absences visible."
     code "aria-hidden"
+  heading "A <header> or <footer> that isn't there" (level 3)
+    code "<header>"
+    code "<footer>"
+  paragraph "Not every missing node is a bug. A or directly under is a landmark ( / ). Inside , , , or it isn't: maps it to / instead, and lets browsers leave it out when it has no name, isn't focusable and carries no other ARIA attribute. The A11y view follows that rule, so this markup:"
+    code "<header>"
+    code "<footer>"
+    code "<body>"
+    code "banner"
+    code "contentinfo"
+    code "<main>"
+    code "<article>"
+    code "<aside>"
+    code "<nav>"
+    code "<section>"
+    link "HTML-AAM"
+    code "sectionheader"
+    code "sectionfooter"
+  button "Copy Code"
+  code
+  paragraph "shows the heading straight under :"
+    code "main"
+  button "Copy Code"
+  code
+  paragraph "Give the header a name (, or ) and it appears as with the heading nested inside. The DOM view always shows it."
+    code "aria-label"
+    code "aria-labelledby"
+    code "title"
+    code "sectionheader "…""
   separator
   heading "Reading a well-structured tree" (level 2)
   paragraph "A healthy A11y tree looks something like this:"

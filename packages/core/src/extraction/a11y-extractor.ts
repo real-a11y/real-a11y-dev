@@ -19,19 +19,35 @@ function keepNode(node: SemanticNode, rootId: string): boolean {
     return node.interaction!.isInteractive;
   }
 
+  // HTML-AAM's header/footer-in-sectioning-content roles. Its mapping note
+  // says user agents MAY leave them unexposed when the element has no
+  // accessible name, isn't focusable and carries no other global ARIA
+  // attribute — so they flatten like a bare `generic`, with those extra keep
+  // conditions below. The native normalizer applies the matching rule
+  // (`NATIVE_AX_DROP_WHEN_BARE`) so both producers agree.
+  const role = node.a11y.role;
+  const sectioned = role === "sectionheader" || role === "sectionfooter";
+
   // Keep nodes with meaningful roles (not generic)
-  if (node.a11y.role !== "generic") return true;
+  if (!sectioned && role !== "generic") return true;
 
-  // Keep generic nodes that have an accessible name
-  if (node.a11y.name) return true;
+  // Keep named or interactive generics, and the root
+  if (node.a11y.name || node.interaction!.isInteractive || node.id === rootId)
+    return true;
 
-  // Keep generic nodes that are interactive
-  if (node.interaction!.isInteractive) return true;
-
-  // Keep the root
-  if (node.id === rootId) return true;
-
-  return false;
+  // "Another global ARIA attribute", as far as the node records it:
+  // `dom.attributes` holds only KEY_ATTRIBUTES (no `aria-describedby`), but a
+  // describedby reference surfaces as a computed description instead, and
+  // aria-busy (not a KEY_ATTRIBUTE) lands in `a11y.states`.
+  return (
+    sectioned &&
+    (node.interaction!.isFocusable ||
+      !!node.a11y.description ||
+      "busy" in node.a11y.states ||
+      Object.keys(node.dom?.attributes ?? {}).some(
+        (name) => name.startsWith("aria-") && name !== "aria-hidden",
+      ))
+  );
 }
 
 /**

@@ -18,6 +18,8 @@ import {
   mapNativeAXRole,
   NATIVE_AX_DROP_ROLES,
   NATIVE_AX_DROP_UNLESS_NAMED,
+  NATIVE_AX_DROP_WHEN_BARE,
+  NATIVE_AX_EXPOSING_PROPERTIES,
   NATIVE_AX_NAME_SOURCE_ROLES,
 } from "./ax-vocabulary.js";
 
@@ -30,6 +32,9 @@ export interface RawNativeAXNode {
   ignored?: boolean;
   role?: { value?: string };
   name?: { value?: string };
+  /** Read only for its property NAMES and the `focusable` flag — see
+   *  `NATIVE_AX_DROP_WHEN_BARE`. Values are never inspected otherwise. */
+  properties?: Array<{ name: string; value?: { value?: unknown } }>;
 }
 
 /** One kept node of the normalized native tree, in document order. */
@@ -65,6 +70,14 @@ function isKept(node: RawNativeAXNode): boolean {
   if (NATIVE_AX_DROP_UNLESS_NAMED.has(role)) {
     return (node.name?.value ?? "").trim() !== "";
   }
+  if (NATIVE_AX_DROP_WHEN_BARE.has(role)) {
+    if ((node.name?.value ?? "").trim() !== "") return true;
+    return (node.properties ?? []).some(
+      (p) =>
+        (p.name === "focusable" && p.value?.value === true) ||
+        NATIVE_AX_EXPOSING_PROPERTIES.has(p.name),
+    );
+  }
   return true;
 }
 
@@ -97,6 +110,10 @@ function promoteNameFromDroppedDescendants(
   for (const childId of node.childIds ?? []) {
     const child = byId.get(childId);
     if (!child || isKept(child)) continue;
+    // A dropped sectionheader/sectionfooter is name-from-author only: its
+    // loose text (a byline) must not name the ancestor it flattened into —
+    // the DOM producer never names anything from it either.
+    if (NATIVE_AX_DROP_WHEN_BARE.has(child.role?.value ?? "")) continue;
     if (NATIVE_AX_NAME_SOURCE_ROLES.has(child.role?.value ?? "")) {
       const text = collapseWhitespace(child.name?.value ?? "");
       if (text) return text;

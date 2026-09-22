@@ -871,6 +871,15 @@ function computeRawAccessibleName(
     if (fullText) return fullText;
   }
 
+  // sectionheader/sectionfooter are name-from-author only (ARIA 1.3), and
+  // Chromium names them that way. Taking a byline's loose text here would
+  // make every such header "named" and keep it in the a11y view, where the
+  // native producer drops it as bare.
+  if (tag === "header" || tag === "footer") {
+    const role = getImplicitRole(element);
+    if (role === "sectionheader" || role === "sectionfooter") return "";
+  }
+
   // 9. Fallback: direct text content only (for generic/container elements)
   const directText = getDirectTextContent(element);
   if (directText) return directText;
