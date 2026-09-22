@@ -660,6 +660,15 @@ export function App() {
         const nodeId = message.payload.nodeId;
         setSelectedId(nodeId);
         setPickModeOn(false);
+        // Only the frame that resolved the click exited — `setEnabled(false)`
+        // runs in that document alone, while every other frame in the tab is
+        // still armed and still holding its pointer events. The panel's ✛ is
+        // per-tab, so it now reads "off" for frames that are on: a pick made
+        // inside an iframe would leave the top frame swallowing clicks with
+        // no control still showing as enabled to switch back off. Disarm the
+        // whole tab. `setEnabled` is idempotent, so the frame that already
+        // exited ignores this and answers nothing.
+        sendToBoundTab({ type: "SET_PICK_MODE", payload: { enabled: false } });
         setNodes((prev) => {
           let current = asDom(prev.get(nodeId));
           while (current?.parentId) {
@@ -913,6 +922,9 @@ export function App() {
       const isStepper =
         primaryAction === "increment" || primaryAction === "decrement";
 
+      /** Pending clear for the optimistic banner, if one was shown. */
+      let clearOptimistic: ReturnType<typeof setTimeout> | undefined;
+
       if (!isStepper) {
         // Contextual feedback based on role
         let feedback: string;
@@ -926,12 +938,28 @@ export function App() {
         }
 
         setLastAction(feedback);
-        setTimeout(() => setLastAction(null), 2000);
+        clearOptimistic = setTimeout(() => setLastAction(null), 2000);
       }
 
-      sendToBoundTab({ type: "DISPATCH_ACTION", payload: request }, () => {
-        if (chrome.runtime.lastError) {
-          setLastAction(`Failed: ${chrome.runtime.lastError.message}`);
+      sendToBoundTab({ type: "DISPATCH_ACTION", payload: request }, (res) => {
+        // Two ways an action fails to land, and both have to be read: the
+        // message never reached a content script (lastError), or one
+        // answered and refused — which is how it reports that the page is
+        // in a state the action cannot run in, such as an armed picker
+        // holding the pointer events. Without the second, the optimistic
+        // banner set above stays on screen claiming something happened.
+        const refusal = res as
+          { success?: boolean; error?: string } | undefined;
+        const failure = chrome.runtime.lastError
+          ? chrome.runtime.lastError.message
+          : refusal && refusal.success === false
+            ? (refusal.error ?? "the page refused the action")
+            : null;
+        if (failure) {
+          // The optimistic banner's own 2s clear is already in flight and
+          // would wipe this one early. Cancel it — this message replaces it.
+          if (clearOptimistic !== undefined) clearTimeout(clearOptimistic);
+          setLastAction(`Failed: ${failure}`);
           setTimeout(() => setLastAction(null), 3000);
         }
         // Re-extract to reflect state change (checked, expanded, etc.)

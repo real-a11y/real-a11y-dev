@@ -35,6 +35,31 @@
   itself when something changes inside a component; press refresh to pick it
   up. ([#389])
 
+- Stop a tree action from silently cancelling pick mode and selecting the
+  wrong node. While the picker is armed it holds the page's pointer events:
+  its capture-phase listeners swallowed the dispatcher's whole synthetic
+  `pointerdown`→`click` sequence, so the action never reached the page — and
+  then that click landed on the picker's own handler, which resolved the
+  actioned element, reported it as a pick the user never made, and dropped out
+  of pick mode. The panel jumped its selection to that node and the ✛ button
+  snapped off, while the page was left untouched and the status bar still read
+  "Click: …". Such an action is now refused outright, and the panel says why.
+
+  Only what actually collides with the picker is refused — `click` and
+  `navigate`, the two that go through the pointer sequence. Typing, selecting,
+  focusing, submitting, scrolling, `toggle` on a `<details>` and the ▼/▲
+  steppers never touch a pointer event and keep working while pick mode is on,
+  as they always did. So does the key bar: Escape is the one key the picker
+  reacts to, and leaving pick mode is a fair reading of Escape. The Screen
+  Curtain gates none of it — driving the page from the panel while it is
+  hidden is what the curtain is for.
+
+- Leave pick mode in every frame once a pick resolves, not just the frame that
+  resolved it. The picker exits in its own document, so a pick made inside an
+  iframe left the top frame armed and swallowing clicks while the panel's ✛
+  button — which is per-tab — already read off, with no enabled control to
+  switch back off.
+
 - Collect `.tsx` test suites. The vitest `include` was `src/**/*.test.ts`, so a
   suite written as `.tsx` was never picked up — and silently: vitest ran the
   files it matched, reported them green, and said nothing about the one it
