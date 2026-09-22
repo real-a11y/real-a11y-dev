@@ -52,13 +52,13 @@
   as they always did. So does the key bar: Escape is the one key the picker
   reacts to, and leaving pick mode is a fair reading of Escape. The Screen
   Curtain gates none of it — driving the page from the panel while it is
-  hidden is what the curtain is for.
+  hidden is what the curtain is for. ([#399])
 
 - Leave pick mode in every frame once a pick resolves, not just the frame that
   resolved it. The picker exits in its own document, so a pick made inside an
   iframe left the top frame armed and swallowing clicks while the panel's ✛
   button — which is per-tab — already read off, with no enabled control to
-  switch back off.
+  switch back off. ([#399])
 
 - Collect `.tsx` test suites. The vitest `include` was `src/**/*.test.ts`, so a
   suite written as `.tsx` was never picked up — and silently: vitest ran the
@@ -384,3 +384,4 @@ Earlier releases predate this changelog.
 [#380]: https://github.com/real-a11y/real-a11y-dev/pull/380
 [#389]: https://github.com/real-a11y/real-a11y-dev/pull/389
 [#398]: https://github.com/real-a11y/real-a11y-dev/pull/398
+[#399]: https://github.com/real-a11y/real-a11y-dev/pull/399
