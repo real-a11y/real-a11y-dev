@@ -165,10 +165,10 @@ export async function createSession(
  *
  * Matched against the RAW message: these are Chromium's own `net::ERR_*`
  * tokens, which carry no user data, and matching before redaction keeps them
- * intact no matter how a URL is rewritten. The `net::` prefix is load-bearing
- * — Playwright quotes the target URL inside the same message, so a bare
- * `ERR_*` would also match one echoed from a path or query string and answer
- * a failure that never happened.
+ * intact no matter how a URL is rewritten. Each pattern is tested against
+ * the single error token `navigationHint` extracts, never the whole message:
+ * Playwright quotes the target URL in the same message, and a URL can carry
+ * `net::ERR_*` text of its own.
  */
 const NAVIGATION_HINTS: ReadonlyArray<readonly [RegExp, string]> = [
   [
@@ -206,8 +206,15 @@ const NAVIGATION_HINTS: ReadonlyArray<readonly [RegExp, string]> = [
  * what an unrecognised failure most often is: a page that never settled.
  */
 function navigationHint(raw: string): string {
-  for (const [pattern, hint] of NAVIGATION_HINTS) {
-    if (pattern.test(raw)) return hint;
+  // Classify Chromium's OWN error only: the first `net::ERR_*` token, which
+  // Playwright prints before the target URL (`page.goto: net::ERR_X at <url>`).
+  // A URL may legally carry the same text — `?q=net::ERR_NAME_NOT_RESOLVED` —
+  // so matching the whole message would let the URL pick the hint.
+  const token = /net::ERR_[A-Z0-9_]+/.exec(raw)?.[0];
+  if (token) {
+    for (const [pattern, hint] of NAVIGATION_HINTS) {
+      if (pattern.test(token)) return hint;
+    }
   }
   return "is the server running? Try --wait-until domcontentloaded or --timeout 60000.";
 }

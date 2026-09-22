@@ -147,6 +147,19 @@ describe("openPage — navigation hints name the failure", () => {
   });
 });
 
+it("ignores a full net::ERR_ token echoed back from the URL itself", async () => {
+  const session = fakeSessionThatThrows(
+    "page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:3000/search?q=net::ERR_NAME_NOT_RESOLVED",
+  );
+  const err = await openPage(session, "http://localhost:3000/", {}, false).then(
+    () => {
+      throw new Error("expected the call to reject, but it resolved");
+    },
+    (e: unknown) => e as CliError,
+  );
+  expect(err.hint).toMatch(/nothing is listening there/);
+});
+
 it("ignores an ERR_ token echoed back from the URL itself", async () => {
   const session = fakeSessionThatThrows(
     "page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:3000/search?q=ERR_NAME_NOT_RESOLVED",
