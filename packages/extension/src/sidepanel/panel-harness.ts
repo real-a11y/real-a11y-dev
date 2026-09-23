@@ -17,7 +17,18 @@ export interface ChromeMock {
   emit: (message: ContentToPanel) => void;
 }
 
-export function installChromeMock(): ChromeMock {
+export interface ChromeMockOptions {
+  /**
+   * Stand in for the frame's reply to a message the panel sends. Returning
+   * `undefined` falls back to the ordinary reachable-page reply, so a suite
+   * that does not care is unaffected. Supply one to play a frame that answers
+   * and REFUSES — the panel has to tell that apart from a success, and only
+   * the reply distinguishes them.
+   */
+  respond?: (message: PanelToContent) => unknown;
+}
+
+export function installChromeMock(options: ChromeMockOptions = {}): ChromeMock {
   type Listener = (
     message: ContentToPanel,
     sender: chrome.runtime.MessageSender,
@@ -40,7 +51,8 @@ export function installChromeMock(): ChromeMock {
       sent.push(message);
       // An ordinary reachable page: `isUnreachablePageResponse` reads
       // `unreachable`, and leaving it unset is what such a page replies.
-      responseCallback?.({ success: true });
+      const reply = options.respond?.(message);
+      responseCallback?.(reply === undefined ? { success: true } : reply);
     },
     onMessage: {
       addListener: (fn: Listener) => listeners.push(fn),

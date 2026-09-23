@@ -195,6 +195,13 @@ export function App() {
   // saying "Connecting to page..." forever on chrome:// and the PDF viewer.
   const [pageUnreachable, setPageUnreachable] = useState(false);
   const [lastAction, setLastAction] = useState<string | null>(null);
+  // One pending clear for the whole action-feedback bar, because there is one
+  // bar. Each caller used to arm its own untracked timer, so the FIRST to fire
+  // blanked whatever the LATEST caller had just put there — a 2s "Click: Save"
+  // wiping a 3s "Failed: …" raised a second later. See `announce`.
+  const feedbackTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
   const [roleFilter, setRoleFilter] = useState<RoleFilter>(null);
   const [curtainOn, setCurtainOn] = useState(false);
   const [focusTrackerOn, setFocusTrackerOn] = useState(true);
@@ -342,6 +349,34 @@ export function App() {
     myTabIdRef.current = myTabId;
   }, [myTabId]);
 
+  /**
+   * Put a line in the action-feedback bar for `ms`, then clear it.
+   *
+   * Every caller goes through here so the bar has exactly one pending clear:
+   * arming a new message cancels the old timer, which is what stops an
+   * earlier, shorter-lived message from blanking a later one mid-display.
+   */
+  const announce = useCallback((text: string, ms: number) => {
+    if (feedbackTimer.current !== undefined) {
+      clearTimeout(feedbackTimer.current);
+    }
+    setLastAction(text);
+    feedbackTimer.current = setTimeout(() => {
+      feedbackTimer.current = undefined;
+      setLastAction(null);
+    }, ms);
+  }, []);
+
+  // Don't leave a clear pending on a panel that is going away.
+  useEffect(
+    () => () => {
+      if (feedbackTimer.current !== undefined) {
+        clearTimeout(feedbackTimer.current);
+      }
+    },
+    [],
+  );
+
   // Stamp every panel→content command with the tab this panel instance is
   // bound to. The background prefers that over its global `activeTabId`,
   // which races `chrome.tabs.onActivated` after a tab switch — without the
@@ -365,6 +400,28 @@ export function App() {
     },
     [],
   );
+
+  /**
+   * Leave pick mode across the whole tab.
+   *
+   * A picker only ever disables itself in ITS OWN document — on a tracked
+   * click, on a click that hit nothing tracked, and on Escape — so the other
+   * frames stay armed and keep swallowing pointer events while the panel's
+   * per-tab ⦿ already reads off, leaving no enabled control to switch them
+   * back. Broadcasting converges them.
+   *
+   * Deliberately unconditional rather than guarded on the panel's own mirror
+   * of the mode. The frames this has to reach are exactly the ones the mirror
+   * can be wrong about, so a guard would skip the broadcast in the case it
+   * exists for. It terminates on its own instead: `setEnabled` is idempotent
+   * and only reports a real transition, so the frames disarmed by one
+   * broadcast answer with a PICK_MODE_CHANGED that provokes at most one more,
+   * and that one silences everybody.
+   */
+  const exitPickMode = useCallback(() => {
+    setPickModeOn(false);
+    sendToBoundTab({ type: "SET_PICK_MODE", payload: { enabled: false } });
+  }, [sendToBoundTab]);
 
   // Every REQUEST_TREE goes through here so its reply is always read. The
   // background can only tell whether a page is reachable from inside its
@@ -659,7 +716,11 @@ export function App() {
         // already exited on its side after the click).
         const nodeId = message.payload.nodeId;
         setSelectedId(nodeId);
-        setPickModeOn(false);
+        // Content already exited on its side after the click — but only in
+        // the frame that resolved it, so this takes the rest of the tab with
+        // it. The PICK_MODE_CHANGED that follows this same click is then a
+        // no-op, as are the ones the other frames send back.
+        exitPickMode();
         setNodes((prev) => {
           let current = asDom(prev.get(nodeId));
           while (current?.parentId) {
@@ -680,7 +741,13 @@ export function App() {
         // Content authoritatively reports its own pick-mode state. This
         // covers the case where the user pressed Escape on the page to
         // exit — without it the panel button would stay stuck "on".
-        setPickModeOn(message.payload.enabled);
+        //
+        // A frame reporting itself OFF is reporting only for itself, and
+        // Escape (like a click that hit nothing tracked) sends no
+        // NODE_PICKED, so this is the only notice the panel gets that a
+        // picker somewhere has closed. Take the rest of the tab with it.
+        if (message.payload.enabled) setPickModeOn(true);
+        else exitPickMode();
       }
     };
 
@@ -925,15 +992,27 @@ export function App() {
           feedback = `${ACTION_LABELS[primaryAction]}: ${name}`;
         }
 
-        setLastAction(feedback);
-        setTimeout(() => setLastAction(null), 2000);
+        announce(feedback, 2000);
       }
 
-      sendToBoundTab({ type: "DISPATCH_ACTION", payload: request }, () => {
-        if (chrome.runtime.lastError) {
-          setLastAction(`Failed: ${chrome.runtime.lastError.message}`);
-          setTimeout(() => setLastAction(null), 3000);
-        }
+      sendToBoundTab({ type: "DISPATCH_ACTION", payload: request }, (res) => {
+        // Two ways an action fails to land, and both have to be read: the
+        // message never reached a content script (lastError), or one
+        // answered and refused — which is how it reports that the page is
+        // in a state the action cannot run in, such as an armed picker
+        // holding the pointer events. Without the second, the optimistic
+        // banner set above stays on screen claiming something happened.
+        const refusal = res as
+          { success?: boolean; error?: string } | undefined;
+        const failure = chrome.runtime.lastError
+          ? chrome.runtime.lastError.message
+          : refusal && refusal.success === false
+            ? (refusal.error ?? "the page refused the action")
+            : null;
+        // Replaces the optimistic banner set above, whose own clear
+        // `announce` cancels — otherwise that 2s timer wipes this 3s
+        // message a second early.
+        if (failure) announce(`Failed: ${failure}`, 3000);
         // Re-extract to reflect state change (checked, expanded, etc.)
         setTimeout(reExtract, 100);
       });
@@ -1187,8 +1266,7 @@ export function App() {
           // trip) belongs to a tab the panel has since left, and toasting it
           // would name an action for a page no longer on screen.
           if (token === nativeOpToken.current) {
-            setLastAction(`Native: ${action} on ${nodeId}`);
-            setTimeout(() => setLastAction(null), 2000);
+            announce(`Native: ${action} on ${nodeId}`, 2000);
           }
           // Always settle before checking staleness or reading again,
           // regardless of the toast above — even when `nativeOpToken`
@@ -1304,10 +1382,10 @@ export function App() {
         },
         () => {
           const name = node?.a11y.name || nodeId;
-          setLastAction(
+          announce(
             actionType === "select" ? `Selected: ${value}` : `Typed in ${name}`,
+            2000,
           );
-          setTimeout(() => setLastAction(null), 2000);
           // Re-extract tree to reflect new values
           setTimeout(reExtract, 100);
         },
@@ -1345,12 +1423,18 @@ export function App() {
   // page to exit), and we mirror state from that message handler below.
   const togglePickMode = useCallback(() => {
     const next = !pickModeOn;
-    setPickModeOn(next);
+    if (!next) {
+      // Goes through the same path as a frame exiting on its own, so the
+      // mirror and the broadcast stay in one place.
+      exitPickMode();
+      return;
+    }
+    setPickModeOn(true);
     sendToBoundTab({
       type: "SET_PICK_MODE",
-      payload: { enabled: next },
+      payload: { enabled: true },
     });
-  }, [pickModeOn, sendToBoundTab]);
+  }, [pickModeOn, sendToBoundTab, exitPickMode]);
 
   // Ctrl/Cmd+Shift+C: toggle pick mode, mirroring DevTools' inspector
   // shortcut. Bound to the panel document so it fires whenever the panel
@@ -1441,8 +1525,7 @@ export function App() {
             const label = modifiers?.shift
               ? `Shift+${key === "Tab" ? "Tab" : key}`
               : key;
-            setLastAction(`Sent key: ${label}`);
-            setTimeout(() => setLastAction(null), 1500);
+            announce(`Sent key: ${label}`, 1500);
           }
         },
       );
@@ -1460,8 +1543,7 @@ export function App() {
       setExportMenuOpen(false);
       const exportRootId = scopedRootId || rootId;
       if (!exportRootId || nodes.size === 0) {
-        setLastAction("Nothing to export yet");
-        setTimeout(() => setLastAction(null), 2000);
+        announce("Nothing to export yet", 2000);
         return;
       }
       // The panel renders the extension's own DOM-producer tree, so stamp the
@@ -1508,10 +1590,9 @@ export function App() {
       );
 
       navigator.clipboard.writeText(markdown).then(
-        () => setLastAction("Copied to clipboard"),
-        () => setLastAction("Clipboard blocked — click the panel, then retry"),
+        () => announce("Copied to clipboard", 2500),
+        () => announce("Clipboard blocked — click the panel, then retry", 2500),
       );
-      setTimeout(() => setLastAction(null), 2500);
     },
     [nodes, scopedRootId, rootId, viewMode, pageTitle, pageUrl],
   );
@@ -1644,8 +1725,7 @@ export function App() {
   const handleCloseTab = useCallback(() => {
     sendToBoundTab({ type: "CLOSE_TAB" }, (response: unknown) => {
       if (isSuccessResponse(response)) {
-        setLastAction("Tab closed");
-        setTimeout(() => setLastAction(null), 2000);
+        announce("Tab closed", 2000);
       }
     });
   }, [sendToBoundTab]);
@@ -1839,8 +1919,7 @@ export function App() {
               // race the background's activeTabId update — without that, hitting
               // refresh right after a tab switch would route to the wrong tab.
               requestTree();
-              setLastAction("Tree refreshed");
-              setTimeout(() => setLastAction(null), 1500);
+              announce("Tree refreshed", 1500);
             }}
             aria-label="Refresh tree"
             title="Refresh tree"

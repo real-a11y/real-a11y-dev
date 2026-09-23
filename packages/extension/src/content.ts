@@ -17,6 +17,19 @@ import type { PanelToContent } from "./types.js";
 
 const isSubFrame = window !== window.top;
 
+/**
+ * Actions whose dispatch goes through `ActionDispatcher`'s synthetic
+ * pointerdown→click sequence, and which an armed element picker therefore
+ * swallows.
+ *
+ * Not `toggle`, despite its click fallback: the extractor emits it only for
+ * `<details>`/`<summary>` (`dom-extractor.ts`), and both of those flip
+ * `.open` directly, so the fallback is unreachable from a tree this panel
+ * built. The rest — `type`, `select`, `focus`, `submit`, `scroll` and the
+ * steppers, which use Arrow keys — never touch a pointer event either.
+ */
+const POINTER_ACTIONS = new Set(["click", "navigate"]);
+
 let currentViewMode: TreeViewMode = "a11y";
 let focusingFromTree = false;
 let liveExtractor: LiveTreeExtractor | null = null;
@@ -198,6 +211,30 @@ chrome.runtime.onMessage.addListener(
       }
 
       case "DISPATCH_ACTION": {
+        // An armed picker owns the page's POINTER events, so an action that
+        // reaches the dispatcher's synthetic pointerdown→click sequence
+        // cannot land: the picker's capture-phase listeners swallow the whole
+        // sequence before the page sees any of it. Worse, that click reaches
+        // the picker's own handler, which resolves the actioned element —
+        // tracked by construction, since the action arrived as a node id —
+        // reports it as a NODE_PICKED the user never pointed at, and drops
+        // out of pick mode. Refuse instead: same page outcome as before,
+        // without the phantom pick.
+        //
+        // Only the pointer actions. The picker listens for pointer events and
+        // Escape, nothing else, so `type`, `select`, `focus`, `submit`,
+        // `scroll` and the steppers (keyboard arrows) reach the page
+        // unharmed and stay available — blocking those would strand a typed
+        // value in the input panel for no reason. `toggle` is here because it
+        // falls back to a click for anything that is not a <details>.
+        if (picker.isEnabled() && POINTER_ACTIONS.has(message.payload.action)) {
+          sendResponse({
+            success: false,
+            error: "Turn off pick mode to act on the page",
+          });
+          break;
+        }
+
         const result = dispatcher.dispatch(message.payload);
         sendResponse(result);
 
@@ -308,6 +345,14 @@ chrome.runtime.onMessage.addListener(
       }
 
       case "SEND_KEY": {
+        // No pick-mode gate here, deliberately. The picker's keydown
+        // listener acts on exactly one key — it takes Escape as "leave pick
+        // mode" — and that is a reasonable thing for Escape to do, not the
+        // silent corruption DISPATCH_ACTION suffered. Refusing it instead
+        // would leave the key bar's Esc doing nothing at all: the page never
+        // sees it either way, and the mode it used to close stays open.
+        // Every other key passes the picker untouched.
+        //
         // Synthetic KeyboardEvents are untrusted — Chrome skips their
         // default actions (Tab does not move focus; Escape does not close
         // <dialog>). sendKey dispatches the events for page listeners and
