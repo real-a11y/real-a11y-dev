@@ -193,7 +193,7 @@ main
       row
         cell "@real-a11y-dev/cli"
           code "@real-a11y-dev/cli"
-        cell "≥ 20"
+        cell "≥ 22.12"
         cell "Real browser via optional peer playwright (lazily imported)"
           code "playwright"
       row

@@ -45,8 +45,10 @@ main
   paragraph "Accessibility is a property of the page — the roles, names, and visibility a browser actually computes, not what's in the HTML source. So the CLI drives a real browser (via Playwright) rather than parsing markup, and needs:"
     strong "rendered"
   list
-    listitem "."
-      strong "Node.js 20+"
+    listitem ". downloads Chrome through , which needs 22.12; Node 20 reached end-of-life in April 2026."
+      strong "Node.js 22.12+"
+      code "real-a11y install"
+      code "@puppeteer/browsers"
     listitem "— Playwright is an optional peer dependency, loaded only when a command needs a browser."
       strong "Playwright + a Chromium binary"
   button "Copy Code"
