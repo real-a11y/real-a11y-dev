@@ -11,9 +11,14 @@ import type { ControlsLink } from "./TreePanel.js";
  * TreeNode is stubbed rather than spied on because the defect is about the
  * *identity* of the arrays TreePanel builds, which is invisible in the DOM.
  */
+interface RowLinks {
+  controls?: ControlsLink[];
+  controlledBy?: ControlsLink[];
+}
+
 const recorder = vi.hoisted(() => ({
-  passes: [] as Array<Map<string, ControlsLink[] | undefined>>,
-  current: null as Map<string, ControlsLink[] | undefined> | null,
+  passes: [] as Array<Map<string, RowLinks>>,
+  current: null as Map<string, RowLinks> | null,
 }));
 
 vi.mock("./TreeNode.js", () => ({
@@ -26,10 +31,13 @@ vi.mock("./TreeNode.js", () => ({
       recorder.current = new Map();
       recorder.passes.push(recorder.current);
     }
-    recorder.current.set(
-      props.node.id,
-      props.controlsLinks ?? props.controlledByLinks,
-    );
+    // Both directions are recorded separately: a row can hold forward AND
+    // reverse links at once (TreePanel merges them into one entry), and
+    // collapsing them into a single slot would stop checking one of them.
+    recorder.current.set(props.node.id, {
+      controls: props.controlsLinks,
+      controlledBy: props.controlledByLinks,
+    });
     // Deliberately not role="treeitem" — the stub stands in for the row only
     // to capture its props, and a bare treeitem without aria-selected is an
     // a11y lint error in its own right.
@@ -62,9 +70,10 @@ describe("TreePanel cross-link cost", () => {
     host.innerHTML = `
       <main>
         <button id="open" aria-controls="menu" aria-expanded="true">Open</button>
-        <ul id="menu" role="menu">
+        <ul id="menu" role="menu" aria-controls="panel">
           <li role="menuitem">One</li>
         </ul>
+        <div id="panel" role="region" aria-label="Details">Details</div>
         <button type="button">Save</button>
       </main>
     `;
@@ -98,10 +107,18 @@ describe("TreePanel cross-link cost", () => {
 
     const tree = container.querySelector<HTMLElement>('[role="tree"]')!;
     const first = recorder.passes[0];
-    // The fixture really does produce cross-links: the button controls the
-    // menu (forward) and the menu is controlled by the button (reverse).
-    const linkedIds = [...first].filter(([, v]) => v !== undefined);
+    const linkedIds = [...first].filter(
+      ([, v]) => v.controls !== undefined || v.controlledBy !== undefined,
+    );
+    // The fixture really does produce cross-links in both directions, and at
+    // least one row (the menu) carries both at once — that row is the one
+    // that exercises TreePanel's forward/reverse merge.
     expect(linkedIds.length).toBeGreaterThan(0);
+    expect(
+      linkedIds.some(
+        ([, v]) => v.controls !== undefined && v.controlledBy !== undefined,
+      ),
+    ).toBe(true);
 
     // Arrow-key selection re-renders the list without touching tree data.
     recorder.current = null;
@@ -118,7 +135,9 @@ describe("TreePanel cross-link cost", () => {
     const second = recorder.passes[recorder.passes.length - 1];
     expect(second).not.toBe(first);
     for (const [id, links] of linkedIds) {
-      expect(second.get(id)).toBe(links);
+      const after = second.get(id);
+      expect(after?.controls).toBe(links.controls);
+      expect(after?.controlledBy).toBe(links.controlledBy);
     }
   });
 });
