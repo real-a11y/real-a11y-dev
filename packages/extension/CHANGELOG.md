@@ -66,6 +66,15 @@
   dogfood build and its `DogfoodPanel` diagnostics widget continue to exist
   separately for internal telemetry — see `DOGFOOD.md`. ([#386])
 
+- **Copy ▾ now works under native mode.** Previously the entire export
+  menu disappeared the moment you switched to NATIVE — Everything, tree,
+  and Headings all went with it, not just the tab-sequence export that
+  genuinely has no native equivalent (native has no `tabindex`/focus-order
+  data, so that one option stays DOM-only). Copy ▾ → Everything / Native
+  tree / Headings now produces the same Markdown report format as the DOM
+  view, labeled "Native accessibility tree" so a report never gets silently
+  mistaken for a DOM-producer one. (PR pending — see the next commit)
+
 ## 0.1.15
 
 ### Patch Changes
