@@ -6,9 +6,9 @@ area: Testing
 type: Automated
 priority: P0
 status: Active
-validFrom: "testing ≥ 0.1.0-beta.15 for the row; the detached-root guard and the aria-live=off correction ship in the FIRST release after 0.1.0-beta.15. Running steps 2–4 against 0.1.0-beta.15 or earlier reproduces the defect rather than failing the test — there a detached root is replaced outright and an inert announcer pivots the whole extraction. That is the old behaviour, not a fail. Step 1 is a KNOWN OPEN GAP at every version so far, not a regression. The behaviour lives in `resolveEffectiveRoot` (packages/core/src/extraction/dom-extractor.ts), but `core` is PRIVATE and bundled — there is no core version to pin or install, so assert against `@real-a11y-dev/testing` only. The same pivot reaches users through `inspector` and `react`, which bundle their own copy."
+validFrom: "testing ≥ 0.1.0-beta.15 for the row; the detached-root guard and the aria-live=off correction ship in the FIRST release after 0.1.0-beta.15. Running steps 2–4 against 0.1.0-beta.15 or earlier reproduces the defect rather than failing the test — there a detached root is replaced outright and an inert announcer pivots the whole extraction. That is the old behaviour, not a fail. Step 7 changed in the FIRST release after 0.1.0-beta.16: before it, `aria-modal=true` alone counted as an open modal, so a sibling aria-modal dialog replaced the root instead of widening it. On those releases that is the old behaviour, not a fail. Step 1 is a KNOWN OPEN GAP at every version so far, not a regression. The behaviour lives in `resolveEffectiveRoot` (packages/core/src/extraction/dom-extractor.ts), but `core` is PRIVATE and bundled — there is no core version to pin or install, so assert against `@real-a11y-dev/testing` only. The same pivot reaches users through `inspector` and `react`, which bundle their own copy."
 validUntil: ""
-expected: "a pivot never DROPS the caller's own subtree — detached, shadow-rooted and ancestor-live-region cases all return the root passed. ONE deliberate exception: an open modal scopes EXCLUSIVELY, including over a root that is merely its sibling, because aria-modal states that everything outside it is inert and an AT user cannot reach that root at all. Step 1 is a KNOWN OPEN GAP: an ordinary in-page live region beside an attached root still widens to the whole document, and there is no scope-moved signal; it is documented rather than fixed"
+expected: "a pivot never DROPS the caller's own subtree — detached, shadow-rooted and ancestor-live-region cases all return the root passed. ONE deliberate exception: an open modal, meaning a `<dialog>` opened with showModal(), scopes EXCLUSIVELY, including over a root that is merely its sibling, because the browser makes everything outside it inert and an AT user cannot reach that root at all. `aria-modal=true` alone is not modal: Chromium's own tree keeps the page behind it, so it only widens. Step 1 is a KNOWN OPEN GAP: an ordinary in-page live region beside an attached root still widens to the whole document, and there is no scope-moved signal; it is documented rather than fixed"
 covers:
   - packages.@real-a11y-dev/core
   - packages.@real-a11y-dev/testing
@@ -48,8 +48,11 @@ form status, a save confirmation — as a **sibling** of the element under test:
 6. An **ancestor** live region: `<main aria-live="polite">` wrapping the root,
    which is the SPA route-announcer pattern Next.js, Remix and React Router
    ship
-7. An **open modal**, twice: one that contains the root, and one that is merely
-   its sibling. Then the same sibling modal against a detached root
+7. An **open modal** (a `<dialog>` opened with `showModal()`, so run this step
+   in a real browser because jsdom has no `showModal()`), twice: one that
+   contains the root, and one that is merely its sibling. Then the same sibling
+   modal against a detached root. Last, a sibling
+   `<div role="dialog" aria-modal="true">` with nothing hiding the page
 8. A genuinely portal-mounted overlay — a dropdown rendered to `document.body`
    by a portal while its trigger sits inside the root
 9. The same root, audited twice: once with the live region present, once with it
@@ -86,11 +89,15 @@ form status, a save confirmation — as a **sibling** of the element under test:
   was up — because the route announcer wraps the entire app
 - **7** — the modal wins in BOTH attached shapes, and the sibling one drops the
   root's own content. That is the deliberate exception, not a defect:
-  `aria-modal` states that everything outside is inert, so an AT user cannot
-  reach that root at all and reporting on it would describe something
+  `showModal()` makes everything outside the dialog inert, so an AT user
+  cannot reach that root at all and reporting on it would describe something
   unreachable. Against a DETACHED root it must not win — there is no "behind"
   relationship to model, and the result would share nothing with what was
-  passed
+  passed. The bare `aria-modal` dialog must only WIDEN: the root's content
+  stays and the dialog joins it. `aria-modal` is an author's claim the browser
+  does not enforce, and Chromium's own tree keeps the page behind it. Honouring
+  it let a closed drawer (`aria-modal` + `aria-hidden`, off-screen) blank a
+  whole page
 - **8** — this is the case the feature exists for, and it must keep working
 - **9** — the same element must not produce two different snapshots because of
   markup outside it. Detached, shadow and ancestor: satisfied. Sibling live

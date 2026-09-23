@@ -59,9 +59,14 @@ function renderAccountPage(): Element {
   root.querySelector("#delete")!.addEventListener("click", () => {
     const dialog = document.createElement("div");
     dialog.setAttribute("role", "dialog");
-    // Genuinely modal (as the APG dialog pattern and every mainstream modal
-    // library emit) — content behind it is inert, so the tree scopes to it.
+    // Genuinely modal, the way modal libraries make it: the dialog says so,
+    // and everything behind it is made inert. It is the `inert` that takes the
+    // page out of the tree — `aria-modal` alone is only a hint, and Chromium's
+    // own accessibility tree keeps the page behind it, as the extraction does.
     dialog.setAttribute("aria-modal", "true");
+    for (const behind of root.querySelectorAll("header, main > *, footer")) {
+      behind.setAttribute("inert", "");
+    }
     dialog.setAttribute("aria-labelledby", "confirm-title");
     dialog.innerHTML = `
       <h2 id="confirm-title">Delete account?</h2>
@@ -120,8 +125,8 @@ describe("account page — after opening the confirm dialog", () => {
     await flow(root).findByRole("button", { name: "Delete account" }).click();
 
     // Modal semantics: with a dialog active, content behind it is inert to
-    // assistive tech, so the extracted tree pivots to the dialog. The gate
-    // we care about now is that the *dialog itself* is accessible.
+    // assistive tech, so it drops out of the extracted tree. The gate we care
+    // about now is that the *dialog itself* is accessible.
     expect(root).toHaveLabeledDialogs();
     expect(root).toHaveNoUnlabeledInteractive();
 
@@ -129,8 +134,8 @@ describe("account page — after opening the confirm dialog", () => {
     // the tab order — the form fields behind it have dropped out.
     expect(root).toHaveTabSequence(['button "Cancel"', 'button "Delete"']);
 
-    // The snapshot captures the scoped tree (dialog only) — a precise
-    // regression artifact for the modal state.
+    // The snapshot captures the modal state — the dialog, with the inert page
+    // behind it gone — as a precise regression artifact.
     expect(boxedTreeSnapshot(root)).toMatchSnapshot();
   });
 });

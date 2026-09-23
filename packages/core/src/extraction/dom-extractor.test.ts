@@ -14,6 +14,27 @@ beforeEach(() => {
   resetIdCounter();
 });
 
+/**
+ * jsdom has no `showModal()`, and `:modal` never matches there — so open a
+ * `<dialog>` as a browser modal by answering `:modal` for it alone.
+ */
+function fakeShowModal(dialog: Element): void {
+  const matches = Element.prototype.matches;
+  vi.spyOn(Element.prototype, "matches").mockImplementation(function (
+    this: Element,
+    selector: string,
+  ) {
+    return selector === ":modal"
+      ? this === dialog
+      : matches.call(this, selector);
+  });
+  dialog.setAttribute("open", "");
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 function createPage(html: string): Element {
   const div = document.createElement("div");
   div.innerHTML = html;
@@ -1003,12 +1024,14 @@ describe("extractDomTree", () => {
 
     it("active modal still wins over portal overlay (modal scope is exclusive)", () => {
       // Both a modal AND a separate menu/toast outside root.
-      appendOverlay(`
-        <div role="dialog" aria-modal="true">
-          <p>Are you sure?</p>
-          <button>OK</button>
-        </div>
-      `);
+      fakeShowModal(
+        appendOverlay(`
+          <dialog aria-label="Confirm">
+            <p>Are you sure?</p>
+            <button>OK</button>
+          </dialog>
+        `),
+      );
       appendOverlay(`<div role="status">Pending…</div>`);
 
       const tree = extractDomTree(appRoot);
@@ -1018,17 +1041,19 @@ describe("extractDomTree", () => {
       expect(allNodes.some((n) => n.a11y.role === "status")).toBe(false);
     });
 
-    it("pivots exclusively to a MODAL role='dialog' (aria-modal, as Radix/Headless/MUI set)", () => {
-      // Real modal dialogs (Radix Dialog, Headless UI, MUI, the APG pattern)
-      // set aria-modal="true". AT scopes exclusively to a modal, so we pivot:
-      // the dialog appears and the page behind it is dropped.
-      appendOverlay(`
-        <div role="dialog" aria-modal="true" aria-labelledby="t">
-          <h2 id="t">Confirm deletion</h2>
-          <p>This action cannot be undone.</p>
-          <button>Close</button>
-        </div>
-      `);
+    it("pivots exclusively to a <dialog> opened with showModal()", () => {
+      // The browser makes the page behind a :modal dialog inert, and
+      // Chromium's own tree drops it — so we pivot: the dialog appears and
+      // the page behind it is dropped.
+      fakeShowModal(
+        appendOverlay(`
+          <dialog aria-labelledby="t">
+            <h2 id="t">Confirm deletion</h2>
+            <p>This action cannot be undone.</p>
+            <button>Close</button>
+          </dialog>
+        `),
+      );
 
       const tree = extractDomTree(appRoot);
       const allNodes = [...tree.nodes.values()];
@@ -1040,6 +1065,46 @@ describe("extractDomTree", () => {
       ).toBe(true);
       // Modal scope is exclusive — the appRoot "Open menu" trigger is dropped.
       expect(allNodes.some((n) => n.a11y.name === "Open menu")).toBe(false);
+    });
+
+    it("treats aria-modal as an ordinary overlay, as Chromium's tree does", () => {
+      // aria-modal is an author's claim, not something the browser enforces,
+      // and Chromium keeps the page behind it. A cookie bar marked
+      // aria-modal="true" must not collapse an interactive page to its
+      // buttons: the page stays AND the dialog joins the tree.
+      appendOverlay(`
+        <div role="alertdialog" aria-modal="true" aria-label="Privacy Preferences">
+          <button>I accept</button>
+        </div>
+      `);
+
+      const tree = extractDomTree(appRoot);
+      const allNodes = [...tree.nodes.values()];
+      expect(allNodes.some((n) => n.a11y.name === "Open menu")).toBe(true);
+      expect(
+        allNodes.some(
+          (n) => n.a11y.role === "button" && n.a11y.name === "I accept",
+        ),
+      ).toBe(true);
+    });
+
+    it("a closed aria-hidden aria-modal drawer does not blank the page", () => {
+      // A nav drawer left mounted while closed — aria-hidden, and moved
+      // off-screen with a transform, so it passes a CSS visibility check.
+      // It used to win the modal scope, and since everything in it is
+      // aria-hidden, the whole page extracted as an EMPTY tree.
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        `<div role="dialog" aria-modal="true" aria-hidden="true"
+              aria-label="Navigation Bar" style="transform: translateX(1280px)">
+           <a href="/menu">Menu link</a>
+         </div>`,
+      );
+
+      const tree = extractA11yTree(document.body);
+      const allNodes = [...tree.nodes.values()];
+      expect(allNodes.some((n) => n.a11y.name === "Open menu")).toBe(true);
+      expect(allNodes.some((n) => n.a11y.name === "Menu link")).toBe(false);
     });
 
     it("does NOT hijack scope for a non-modal role='dialog' (cookie banner / Radix Popover)", () => {

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import {
   LiveTreeExtractor,
@@ -806,20 +806,41 @@ describe("LiveTreeExtractor", () => {
     const firstNodeWithTag = (result: ExtractionResult, tag: string) =>
       [...result.nodes.values()].find((n) => n.dom?.tagName === tag);
 
-    it("re-scopes to a modal when aria-modal is toggled on in place", () => {
+    /**
+     * jsdom has no `showModal()` and never matches `:modal`, so open `dialog`
+     * as a browser modal by answering `:modal` for it alone.
+     */
+    const fakeShowModal = (dialog: Element) => {
+      const matches = Element.prototype.matches;
+      vi.spyOn(Element.prototype, "matches").mockImplementation(function (
+        this: Element,
+        selector: string,
+      ) {
+        return selector === ":modal"
+          ? this === dialog
+          : matches.call(this, selector);
+      });
+      dialog.setAttribute("open", "");
+    };
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("re-scopes to a modal when a <dialog> is opened with showModal() in place", () => {
       document.body.innerHTML = `
         <main id="app">
           <p>Background</p>
-          <div id="dlg" role="dialog"><button>Confirm</button></div>
+          <dialog id="dlg"><button>Confirm</button></dialog>
         </main>
       `;
       const root = document.getElementById("app")!;
       const live = new LiveTreeExtractor(root, { mode: "a11y" });
 
       const dlg = document.getElementById("dlg")!;
-      dlg.setAttribute("aria-modal", "true");
+      fakeShowModal(dlg);
 
-      const result = live.refresh(attrChange(dlg, "aria-modal"));
+      const result = live.refresh(attrChange(dlg, "open"));
       const expected = extractA11yTree(root);
 
       // Scoping is EXCLUSIVE to the modal: content behind it is inert to AT.
@@ -829,22 +850,22 @@ describe("LiveTreeExtractor", () => {
       expect(names).not.toContain("Background");
     });
 
-    it("restores the surrounding tree when aria-modal is removed in place", () => {
+    it("restores the surrounding tree when the modal <dialog> closes in place", () => {
       document.body.innerHTML = `
         <main id="app">
           <p>Background</p>
-          <div id="dlg" role="dialog" aria-modal="true">
-            <button>Confirm</button>
-          </div>
+          <dialog id="dlg"><button>Confirm</button></dialog>
         </main>
       `;
+      const dlg = document.getElementById("dlg")!;
+      fakeShowModal(dlg);
       const root = document.getElementById("app")!;
       const live = new LiveTreeExtractor(root, { mode: "a11y" });
 
-      const dlg = document.getElementById("dlg")!;
-      dlg.removeAttribute("aria-modal");
+      vi.restoreAllMocks();
+      dlg.removeAttribute("open");
 
-      const result = live.refresh(attrChange(dlg, "aria-modal"));
+      const result = live.refresh(attrChange(dlg, "open"));
       const expected = extractA11yTree(root);
 
       // Without a scope re-check the tree stays rooted at the closed dialog
@@ -877,6 +898,29 @@ describe("LiveTreeExtractor", () => {
       menu.removeAttribute("role");
 
       const result = live.refresh(attrChange(menu, "role"));
+      const expected = extractA11yTree(root);
+
+      expect(result.rootId).toBe(expected.rootId);
+      expect(result.nodes).toEqual(expected.nodes);
+    });
+
+    it("un-pivots when an out-of-root overlay becomes aria-hidden", () => {
+      // An overlay AT cannot reach is no reason to widen, so a portal that
+      // gains aria-hidden (a drawer closing without unmounting) must hand the
+      // scope back to the root rather than leave the whole page in the view.
+      document.body.innerHTML = `
+        <main id="app"><p>Background</p></main>
+        <div id="portal">
+          <div id="menu" role="menu"><button>Item</button></div>
+        </div>
+      `;
+      const root = document.getElementById("app")!;
+      const live = new LiveTreeExtractor(root, { mode: "a11y" });
+
+      const menu = document.getElementById("menu")!;
+      menu.setAttribute("aria-hidden", "true");
+
+      const result = live.refresh(attrChange(menu, "aria-hidden"));
       const expected = extractA11yTree(root);
 
       expect(result.rootId).toBe(expected.rootId);
