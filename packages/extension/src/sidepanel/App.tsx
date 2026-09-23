@@ -20,6 +20,7 @@ import {
   useTreeKeyboard,
   useInputModality,
   useVirtualTree,
+  useIndexById,
 } from "@real-a11y-dev/semantic-navigator-ui";
 import { useSearch } from "@real-a11y-dev/semantic-navigator-ui";
 import {
@@ -821,11 +822,15 @@ export function App() {
     // renderCount changes on every forceRender() call — intentional invalidation.
   }, [nodes, effectiveRootId, renderCount]);
 
-  // Latest visible list, read by the selection-scroll effect below so it can
-  // resolve the selected row's index without listing `visibleNodeIds` as a
-  // dependency (which would re-fire the scroll on every expand/collapse).
-  const visibleNodeIdsRef = useRef(visibleNodeIds);
-  visibleNodeIdsRef.current = visibleNodeIds;
+  // Row id → position in `visibleNodeIds`, so resolving the selection to an
+  // index (aria-activedescendant on every keypress, scroll-into-view, reveal)
+  // is a lookup rather than a scan of the whole list. Kept in a ref as well,
+  // read by the effects below so they resolve against the post-expansion list
+  // without listing `visibleNodeIds` as a dependency (which would re-fire the
+  // scroll on every expand/collapse).
+  const visibleIndexById = useIndexById(visibleNodeIds);
+  const visibleIndexByIdRef = useRef(visibleIndexById);
+  visibleIndexByIdRef.current = visibleIndexById;
 
   const {
     containerRef,
@@ -842,7 +847,7 @@ export function App() {
   // current window (keyboard selection scrolls it in via scrollToIndex).
   const activeDescendantId = (() => {
     if (selectedId === null) return undefined;
-    const i = visibleNodeIds.indexOf(selectedId);
+    const i = visibleIndexById.get(selectedId) ?? -1;
     return i >= startIndex && i < endIndex ? `snrow-${selectedId}` : undefined;
   })();
 
@@ -1635,7 +1640,7 @@ export function App() {
   // dependency.
   useEffect(() => {
     if (!selectedId) return;
-    const index = visibleNodeIdsRef.current.indexOf(selectedId);
+    const index = visibleIndexByIdRef.current.get(selectedId) ?? -1;
     if (index !== -1) scrollToIndex(index, "nearest");
   }, [selectedId, scrollToIndex]);
 
@@ -1647,7 +1652,7 @@ export function App() {
     if (revealNonce === 0) return;
     const target = revealTargetRef.current;
     if (!target) return;
-    const index = visibleNodeIdsRef.current.indexOf(target);
+    const index = visibleIndexByIdRef.current.get(target) ?? -1;
     if (index !== -1) scrollToIndex(index, "nearest");
   }, [revealNonce, scrollToIndex]);
 
