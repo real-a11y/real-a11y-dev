@@ -1,5 +1,5 @@
 import type { ActionType, SemanticNode } from "@real-a11y-dev/core";
-import { useCallback, useRef } from "preact/hooks";
+import { useCallback, useMemo, useRef } from "preact/hooks";
 
 import { resolveStepperKeyAction } from "./stepperKeys.js";
 import {
@@ -49,6 +49,20 @@ export function useTreeKeyboard({
 }: UseTreeKeyboardOptions) {
   const typeAhead = useRef(createTypeAheadBuffer());
 
+  // Row id → position in `visibleNodeIds`. Every keypress needs the selected
+  // row's index, and ArrowRight needs to know whether a child id is visible;
+  // reading those off the array meant an O(N) `indexOf` per keypress plus an
+  // O(children x N) `includes` sweep on ArrowRight. Building the map once per
+  // list identity pays that walk a single time instead.
+  const indexById = useMemo(() => {
+    const map = new Map<string, number>();
+    for (let i = 0; i < visibleNodeIds.length; i++) {
+      // First occurrence wins, matching `indexOf`.
+      if (!map.has(visibleNodeIds[i])) map.set(visibleNodeIds[i], i);
+    }
+    return map;
+  }, [visibleNodeIds]);
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (
@@ -90,7 +104,7 @@ export function useTreeKeyboard({
         return;
       }
 
-      const currentIndex = visibleNodeIds.indexOf(selectedId);
+      const currentIndex = indexById.get(selectedId) ?? -1;
       if (currentIndex === -1) return;
 
       const node = nodes.get(selectedId);
@@ -126,7 +140,7 @@ export function useTreeKeyboard({
             } else {
               // Move to first child
               const firstVisibleChild = node.childIds.find((id) =>
-                visibleNodeIds.includes(id),
+                indexById.has(id),
               );
               if (firstVisibleChild) {
                 onSelect(firstVisibleChild);
@@ -225,6 +239,7 @@ export function useTreeKeyboard({
     [
       nodes,
       visibleNodeIds,
+      indexById,
       selectedId,
       onSelect,
       onToggle,

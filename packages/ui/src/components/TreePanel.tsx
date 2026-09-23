@@ -225,6 +225,51 @@ export function TreePanel({
     [treeData],
   );
 
+  // Chip data per row, resolved once per tree rather than rebuilt inside the
+  // render loop. The arrays used to be constructed inline for every rendered
+  // row on every render — so each arrow keypress, flash timeout and
+  // forceRender re-ran `nodes.get` + `makeLinkLabel` for every link on screen
+  // and handed TreeNode fresh array identities. Only rows that actually have a
+  // link get an entry, so this walks the cross-link index, not the whole tree.
+  // Safe to key on the tree alone: labels read `a11y.role`/`a11y.name`, which
+  // the panel never mutates in place (it only touches `ui.*`).
+  const controlsLinksById = useMemo(() => {
+    const resolve = (ids: string[], inferredFrom: (id: string) => boolean) => {
+      const links: ControlsLink[] = [];
+      for (const id of ids) {
+        const target = treeData.nodes.get(id);
+        if (!target) continue;
+        links.push({
+          id,
+          label: makeLinkLabel(target),
+          inferred: inferredFrom(id),
+        });
+      }
+      return links.length > 0 ? links : undefined;
+    };
+
+    const byId = new Map<
+      string,
+      { controls?: ControlsLink[]; controlledBy?: ControlsLink[] }
+    >();
+    for (const [rowId, forwardIds] of controlsIndex.forward) {
+      const controls = resolve(forwardIds, () =>
+        controlsIndex.inferred.has(rowId),
+      );
+      if (controls) byId.set(rowId, { controls });
+    }
+    for (const [rowId, reverseIds] of controlsIndex.reverse) {
+      const controlledBy = resolve(reverseIds, (triggerId) =>
+        controlsIndex.inferred.has(triggerId),
+      );
+      if (!controlledBy) continue;
+      const existing = byId.get(rowId);
+      if (existing) existing.controlledBy = controlledBy;
+      else byId.set(rowId, { controlledBy });
+    }
+    return byId;
+  }, [treeData, controlsIndex]);
+
   // Tree-node id currently flashing after a cross-link jump. Cleared by a
   // timeout so the flash plays once.
   const [flashingId, setFlashingId] = useState<string | null>(null);
@@ -536,36 +581,7 @@ export function TreePanel({
             {visibleNodeIds.slice(startIndex, endIndex).map((id) => {
               const node = asDom(treeData.nodes.get(id));
               if (!node) return null;
-              const forwardIds = controlsIndex.forward.get(id);
-              const reverseIds = controlsIndex.reverse.get(id);
-              const controlsLinks: ControlsLink[] | undefined =
-                forwardIds && forwardIds.length > 0
-                  ? (forwardIds
-                      .map((targetId) => {
-                        const target = treeData.nodes.get(targetId);
-                        if (!target) return null;
-                        return {
-                          id: targetId,
-                          label: makeLinkLabel(target),
-                          inferred: controlsIndex.inferred.has(id),
-                        };
-                      })
-                      .filter(Boolean) as ControlsLink[])
-                  : undefined;
-              const controlledByLinks: ControlsLink[] | undefined =
-                reverseIds && reverseIds.length > 0
-                  ? (reverseIds
-                      .map((triggerId) => {
-                        const trigger = treeData.nodes.get(triggerId);
-                        if (!trigger) return null;
-                        return {
-                          id: triggerId,
-                          label: makeLinkLabel(trigger),
-                          inferred: controlsIndex.inferred.has(triggerId),
-                        };
-                      })
-                      .filter(Boolean) as ControlsLink[])
-                  : undefined;
+              const links = controlsLinksById.get(id);
               const position = visiblePositions.get(id);
               return (
                 <TreeNode
@@ -582,8 +598,8 @@ export function TreePanel({
                   onToggle={handleToggle}
                   onActivate={handleActivate}
                   onHover={handleHover}
-                  controlsLinks={controlsLinks}
-                  controlledByLinks={controlledByLinks}
+                  controlsLinks={links?.controls}
+                  controlledByLinks={links?.controlledBy}
                   onJumpToNode={handleJumpToNode}
                   idPrefix={instanceId}
                 />

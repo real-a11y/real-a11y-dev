@@ -1,0 +1,124 @@
+import { extractA11yTree } from "@real-a11y-dev/core";
+import { render } from "preact";
+import { act } from "preact/test-utils";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+
+import type { ControlsLink } from "./TreePanel.js";
+
+/**
+ * Records the cross-link props each row is handed, per render pass.
+ *
+ * TreeNode is stubbed rather than spied on because the defect is about the
+ * *identity* of the arrays TreePanel builds, which is invisible in the DOM.
+ */
+const recorder = vi.hoisted(() => ({
+  passes: [] as Array<Map<string, ControlsLink[] | undefined>>,
+  current: null as Map<string, ControlsLink[] | undefined> | null,
+}));
+
+vi.mock("./TreeNode.js", () => ({
+  TreeNode: (props: {
+    node: { id: string };
+    controlsLinks?: ControlsLink[];
+    controlledByLinks?: ControlsLink[];
+  }) => {
+    if (!recorder.current) {
+      recorder.current = new Map();
+      recorder.passes.push(recorder.current);
+    }
+    recorder.current.set(
+      props.node.id,
+      props.controlsLinks ?? props.controlledByLinks,
+    );
+    // Deliberately not role="treeitem" — the stub stands in for the row only
+    // to capture its props, and a bare treeitem without aria-selected is an
+    // a11y lint error in its own right.
+    return <div data-node-id={props.node.id} />;
+  },
+}));
+
+const { TreePanel } = await import("./TreePanel.js");
+
+/**
+ * Guards the per-render cost of the aria-controls jump chips.
+ *
+ * The chip arrays used to be rebuilt inside TreePanel's render loop, so every
+ * rendered row re-ran `nodes.get` + label formatting for each of its links on
+ * every render — including renders caused by plain arrow-key selection, which
+ * change no tree data at all — and handed TreeNode a brand-new array each
+ * time. They are now resolved once per tree, so an unchanged row keeps the
+ * same array identity across renders (which is also what makes memoizing the
+ * row component possible at all).
+ */
+describe("TreePanel cross-link cost", () => {
+  let host: HTMLElement;
+  let container: HTMLElement;
+  let originalScrollIntoView: typeof Element.prototype.scrollIntoView;
+
+  beforeEach(() => {
+    recorder.passes = [];
+    recorder.current = null;
+    host = document.createElement("div");
+    host.innerHTML = `
+      <main>
+        <button id="open" aria-controls="menu" aria-expanded="true">Open</button>
+        <ul id="menu" role="menu">
+          <li role="menuitem">One</li>
+        </ul>
+        <button type="button">Save</button>
+      </main>
+    `;
+    document.body.appendChild(host);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    originalScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function () {};
+  });
+
+  afterEach(() => {
+    render(null, container);
+    container.remove();
+    host.remove();
+    Element.prototype.scrollIntoView = originalScrollIntoView;
+  });
+
+  it("hands unchanged rows the same jump-chip arrays across re-renders", () => {
+    const treeData = extractA11yTree(host);
+
+    act(() => {
+      render(
+        <TreePanel
+          treeData={treeData}
+          viewMode="a11y"
+          onViewModeChange={() => {}}
+        />,
+        container,
+      );
+    });
+
+    const tree = container.querySelector<HTMLElement>('[role="tree"]')!;
+    const first = recorder.passes[0];
+    // The fixture really does produce cross-links: the button controls the
+    // menu (forward) and the menu is controlled by the button (reverse).
+    const linkedIds = [...first].filter(([, v]) => v !== undefined);
+    expect(linkedIds.length).toBeGreaterThan(0);
+
+    // Arrow-key selection re-renders the list without touching tree data.
+    recorder.current = null;
+    act(() => {
+      tree.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowDown",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+
+    const second = recorder.passes[recorder.passes.length - 1];
+    expect(second).not.toBe(first);
+    for (const [id, links] of linkedIds) {
+      expect(second.get(id)).toBe(links);
+    }
+  });
+});
