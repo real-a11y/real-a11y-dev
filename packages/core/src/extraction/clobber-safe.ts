@@ -36,6 +36,9 @@ const childNodesGetter = nodeProto
 const textContentGetter = nodeProto
   ? Object.getOwnPropertyDescriptor(nodeProto, "textContent")?.get
   : undefined;
+const shadowRootGetter = elementProto
+  ? Object.getOwnPropertyDescriptor(elementProto, "shadowRoot")?.get
+  : undefined;
 const hiddenGetter = htmlElementProto
   ? Object.getOwnPropertyDescriptor(htmlElementProto, "hidden")?.get
   : undefined;
@@ -54,6 +57,18 @@ export function safeChildNodes(node: Node): ChildNode[] {
     ? (childNodesGetter.call(node) as NodeListOf<ChildNode>)
     : node.childNodes;
   return Array.from(kids);
+}
+
+/**
+ * Clobber-immune `element.shadowRoot` — the OPEN shadow root, or null (a
+ * closed root is unreachable by design). `<input name="shadowRoot">` in a
+ * `<form>` would otherwise hand back the input.
+ */
+export function safeShadowRoot(element: Element): ShadowRoot | null {
+  const root = shadowRootGetter
+    ? shadowRootGetter.call(element)
+    : element.shadowRoot;
+  return root && root.nodeType === 11 ? (root as ShadowRoot) : null;
 }
 
 /** Clobber-immune `node.textContent`, coerced to a string. */

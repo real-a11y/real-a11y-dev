@@ -12,6 +12,8 @@ navigation "On this page"
     listitem
       link "My snapshot contains the whole page, not the component I passed"
     listitem
+      link "Content inside a web component is missing or stale"
+    listitem
       link "React hydration mismatch when rendering the panel"
     listitem
       link "Tests pass in jsdom but fail in Playwright (or vice versa)"
@@ -126,6 +128,23 @@ main
     strong "a detached root therefore never sees teleported content either."
     code "document.body"
     code "document.body"
+  separator
+  heading "Content inside a web component is missing or stale" (level 2)
+  paragraph "The tree follows what the browser renders, including shadow roots. A custom element's shadow content appears under its host, and slotted children appear where their is. Light-DOM children that no slot takes aren't rendered, so they aren't in the tree either. , and resolve inside the component's own shadow root, as they do in the browser."
+    strong "open"
+    code "<slot>"
+    code "aria-labelledby"
+    code "aria-describedby"
+    code "<label for>"
+  paragraph "Two cases still come up short:"
+  list
+    listitem "() can't be read from page script, so their host shows up with nothing inside it. The CLI and MCP server read Chromium's own accessibility tree, which does include them. If you own the component, an open root costs you nothing in encapsulation that matters for styling."
+      strong "Closed shadow roots"
+      code "attachShadow({ mode: "closed" })"
+    listitem "The panel and the extension re-extract on DOM mutations, and mutations inside a component's shadow tree don't reach that observer yet. If a component updates and the panel doesn't, press refresh. One-shot extraction (the matchers and assertions, ) always reads the current state."
+      strong "Live views don't yet notice changes inside a shadow root."
+      code "testing"
+      code "getTree()"
   separator
   heading "React hydration mismatch when rendering the panel" (level 2)
   paragraph "If you drop into an SSR-rendered component tree, the server renders the wrapper but no inspector content — the inspector mounts on the client. That's fine. Hydration warnings typically come from sources in the same tree; the panel itself is hydration-safe."

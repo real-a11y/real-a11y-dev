@@ -10,6 +10,7 @@ import {
   resolveEffectiveRoot,
   resolveFocusedElement,
 } from "../extraction/dom-extractor.js";
+import { deepQuerySelectorAll } from "../extraction/flat-tree.js";
 import { getImplicitRole } from "../extraction/role-map.js";
 import type { ExtractionResult, SemanticNode, TreeChange } from "../types.js";
 import { getNodeId } from "../utils/id-generator.js";
@@ -346,7 +347,12 @@ export class LiveTreeExtractor {
 
     const effectiveRoot = this.effectiveRoot ?? this.root;
 
-    for (const el of effectiveRoot.querySelectorAll("[aria-labelledby]")) {
+    // One deep scan serves both passes (see extractDomTree).
+    const referrers = deepQuerySelectorAll(
+      effectiveRoot,
+      "[aria-labelledby], [aria-describedby]",
+    );
+    for (const el of referrers) {
       const ids = (el.getAttribute("aria-labelledby") || "")
         .split(/\s+/)
         .filter(Boolean);
@@ -356,14 +362,14 @@ export class LiveTreeExtractor {
       }
     }
 
-    for (const el of effectiveRoot.querySelectorAll("[aria-describedby]")) {
+    for (const el of referrers) {
       const ids = (el.getAttribute("aria-describedby") || "")
         .split(/\s+/)
         .filter(Boolean);
       for (const id of ids) {
-        if (!this.labelTargetIds.has(id)) {
-          this.descriptionTargetIds.add(id);
-        }
+        // Candidate ids only — tree scope, and the labelledby carve-out, are
+        // applied per element in `buildNode` (see extractDomTree).
+        this.descriptionTargetIds.add(id);
         this.addReferrer(id, el);
       }
     }

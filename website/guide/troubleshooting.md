@@ -123,6 +123,30 @@ a root that contains it (`document.body`), or mount into the document first.
 
 ---
 
+## Content inside a web component is missing or stale
+
+The tree follows what the browser renders, including **open** shadow roots. A
+custom element's shadow content appears under its host, and slotted children
+appear where their `<slot>` is. Light-DOM children that no slot takes aren't
+rendered, so they aren't in the tree either. `aria-labelledby`, `aria-describedby`
+and `<label for>` resolve inside the component's own shadow root, as they do in
+the browser.
+
+Two cases still come up short:
+
+- **Closed shadow roots** (`attachShadow({ mode: "closed" })`) can't be read
+  from page script, so their host shows up with nothing inside it. The CLI and
+  MCP server read Chromium's own accessibility tree, which does include them. If
+  you own the component, an open root costs you nothing in encapsulation that
+  matters for styling.
+- **Live views don't yet notice changes inside a shadow root.** The panel and the
+  extension re-extract on DOM mutations, and mutations inside a component's shadow
+  tree don't reach that observer yet. If a component updates and the panel
+  doesn't, press refresh. One-shot extraction (the `testing` matchers and
+  assertions, `getTree()`) always reads the current state.
+
+---
+
 ## React hydration mismatch when rendering the panel
 
 If you drop `<SemanticNavigator />` into an SSR-rendered component tree, the server renders the wrapper `<div>` but no inspector content — the inspector mounts on the client. That's fine. Hydration warnings typically come from **other** sources in the same tree; the panel itself is hydration-safe.

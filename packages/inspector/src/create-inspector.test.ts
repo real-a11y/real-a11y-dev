@@ -17,6 +17,31 @@ describe("createInspector", () => {
     document.body.innerHTML = "";
   });
 
+  it.each(["shadow", "light"] as const)(
+    "keeps its own panel out of the tree when mounted inside the root (%s)",
+    (mount) => {
+      document.body.innerHTML = "<main><h1>App</h1></main>";
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+      const nav = createInspector({ root: document.body, container, mount });
+      nav.mount();
+
+      const roles = Array.from(nav.getTree().nodes.values()).map(
+        (n) => n.a11y.role,
+      );
+      expect(roles).toContain("main");
+      // The panel's toolbar buttons, search box and tree must not appear.
+      expect(roles).not.toContain("button");
+      expect(roles).not.toContain("searchbox");
+      expect(roles).not.toContain("tree");
+
+      nav.unmount();
+      expect(container.hasAttribute("data-real-a11y-panel")).toBe(false);
+      // mount: "light" puts its stylesheet in <head>; don't leak it.
+      document.getElementById("sn-styles")?.remove();
+    },
+  );
+
   it("mounts inside a ShadowRoot by default", () => {
     const { root, container } = mountDoc("<h1>Hi</h1>");
     const nav = createInspector({ root, container });

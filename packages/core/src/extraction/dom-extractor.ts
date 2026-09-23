@@ -3,11 +3,14 @@ import { ElementRefMap, ELEMENT_REF_MAP_SHAPE } from "../utils/element-ref.js";
 import { getNodeId } from "../utils/id-generator.js";
 import { realmSingleton } from "../utils/realm-singleton.js";
 
+import { safeTextContent } from "./clobber-safe.js";
 import {
-  safeChildren,
-  safeChildNodes,
-  safeTextContent,
-} from "./clobber-safe.js";
+  deepQuerySelectorAll,
+  flatChildNodes,
+  flatChildren,
+  idScope,
+  isRenderedInFlatTree,
+} from "./flat-tree.js";
 import {
   getCachedComputedStyle,
   getImplicitRole,
@@ -16,6 +19,18 @@ import {
   isSubtreeHidden,
   type StyleCache,
 } from "./role-map.js";
+
+/**
+ * Marks an element that hosts one of this project's own panels (the
+ * inspector sets it on its `container`). The walk skips it and everything
+ * under it: the panel mounts in an open shadow root, which the flat-tree walk
+ * would otherwise read as page content — and in `mount: "light"` the panel's
+ * UI was already in the light DOM.
+ *
+ * @internal Shared between `core` and this project's own panels. Both are
+ * internal packages; no published surface re-exports it.
+ */
+export const PANEL_HOST_ATTRIBUTE = "data-real-a11y-panel";
 
 /** Tags to skip entirely during extraction */
 // track/source are media/picture metadata: HTML-AAM gives them no role and
@@ -280,8 +295,9 @@ function getActions(
  *   for exactly the text-only help text this is meant to keep suppressing.
  *   Same call the overlay-content guard makes when it omits `[tabindex]`.
  *
- * Descends with `safeChildren` rather than `querySelectorAll` so a clobbered
- * `<form>` in the subtree reads the way it does everywhere else in the walk.
+ * Descends the flat tree (`flatChildren`) rather than `querySelectorAll`, so
+ * shadow content counts and a clobbered `<form>` in the subtree reads the way
+ * it does everywhere else in the walk.
  */
 function hasInteractiveContent(
   element: Element,
@@ -300,7 +316,7 @@ function hasInteractiveContent(
   // already returned true above.)
   if (MEDIA_TAGS.has(tag)) return false;
 
-  for (const child of safeChildren(element)) {
+  for (const child of flatChildren(element)) {
     if (isHiddenFromAT(child, getCachedComputedStyle(child, styleCache))) {
       continue;
     }
@@ -401,7 +417,7 @@ function computeAccessibleDescription(
   // 1. aria-describedby — resolve referenced element text
   const describedBy = element.getAttribute("aria-describedby");
   if (describedBy) {
-    const doc = element.ownerDocument;
+    const doc = idScope(element);
     const texts = describedBy
       .split(/\s+/)
       .filter(Boolean)
@@ -646,7 +662,7 @@ function getAccessibleTextContent(
   styleCache?: StyleCache | null,
 ): string {
   let text = "";
-  for (const child of safeChildNodes(element)) {
+  for (const child of flatChildNodes(element)) {
     if (child.nodeType === Node.TEXT_NODE) {
       text += child.textContent || "";
     } else if (child.nodeType === Node.ELEMENT_NODE) {
@@ -708,7 +724,7 @@ function computeRawAccessibleName(
   //    IDREF, in order. The visit-once guard above breaks reference cycles.
   const labelledBy = element.getAttribute("aria-labelledby");
   if (labelledBy) {
-    const doc = element.ownerDocument;
+    const doc = idScope(element);
     const names = labelledBy
       .split(/\s+/)
       .map((id) => {
@@ -744,7 +760,7 @@ function computeRawAccessibleName(
   if (tag === "input" || tag === "select" || tag === "textarea") {
     const id = element.getAttribute("id");
     if (id) {
-      const label = element.ownerDocument.querySelector(`label[for="${id}"]`);
+      const label = idScope(element).querySelector(`label[for="${id}"]`);
       if (label)
         return getAccessibleTextContent(label, visited, styleCache).trim();
     }
@@ -890,7 +906,7 @@ function computeRawAccessibleName(
 /** Get direct text content of an element, excluding child element text */
 function getDirectTextContent(element: Element): string {
   let text = "";
-  for (const child of safeChildNodes(element)) {
+  for (const child of flatChildNodes(element)) {
     if (child.nodeType === Node.TEXT_NODE) {
       text += child.textContent || "";
     }
@@ -943,7 +959,7 @@ function appendCollapsedTextChunk(
  * Depth-first walk that collects descendant text with whitespace collapsed,
  * skipping `<video>`/`<audio>` subtrees (unrendered fallback + metadata).
  * Stops once enough characters for the capped preview are accumulated.
- * Clobber-immune throughout (safeChildNodes / safeTextContent).
+ * Clobber-immune throughout (flatChildNodes / safeTextContent).
  */
 function collectDescendantTextBounded(
   node: Node,
@@ -958,7 +974,7 @@ function collectDescendantTextBounded(
   const tag = typeof rawTag === "string" ? rawTag.toLowerCase() : "";
   if (MEDIA_TAGS.has(tag)) return false;
 
-  const children = safeChildNodes(node);
+  const children = flatChildNodes(node);
   for (let i = 0; i < children.length; i++) {
     const child = children[i]!;
     const moreAfter = () =>
@@ -980,7 +996,7 @@ function collectDescendantTextBounded(
  */
 export function getDescendantText(element: Element): string {
   const state: CollapsedTextState = { text: "", phase: "start" };
-  const children = safeChildNodes(element);
+  const children = flatChildNodes(element);
   let truncated = false;
 
   for (let i = 0; i < children.length; i++) {
@@ -1521,7 +1537,7 @@ export function resolveEffectiveRoot(root: Element): Element {
   // for it and missed two shapes of the same loss:
   //
   //   - a root inside a SHADOW root. `isConnected` is shadow-including but the
-  //     walk is not (`safeChildren` reads light-DOM `children`), so a web
+  //     walk used to read light-DOM `children` only, so a web
   //     component audited at its shadow subtree lost all of its content to any
   //     light-DOM toast — while reading as "connected", so the guard was a
   //     no-op for it.
@@ -1622,6 +1638,7 @@ function buildNode(
     // to return that element, so `.id.startsWith(...)` would throw a TypeError
     // and crash the whole extraction. getAttribute always yields a string|null.
     if (element.getAttribute("id")?.startsWith("__sn-")) return null;
+    if (element.hasAttribute(PANEL_HOST_ATTRIBUTE)) return null;
 
     // Resolve style once for this element — subtree-hidden / visually-hidden /
     // AT-hidden / sr-only all share the declaration via the per-extraction cache.
@@ -1644,10 +1661,16 @@ function buildNode(
     // panel, audits, serialization). When the subtree holds a control the user
     // can actually reach, keep it: the description text being duplicated on the
     // referencing element is a far smaller cost than losing a control.
+    //
+    // The id set is page-wide but ids are scoped per tree: a component's
+    // shadow-internal `id="hint"` must not suppress an unrelated `#hint` in
+    // the page. So a target is only folded when a referrer in its OWN tree
+    // points at it.
     const ownId = element.getAttribute("id");
     if (
       ownId &&
       descriptionTargetIds.has(ownId) &&
+      isDescribedInOwnTree(element, ownId) &&
       !hasInteractiveContent(element, styleCache)
     ) {
       return null;
@@ -1728,6 +1751,39 @@ function buildNode(
   }
 }
 
+/**
+ * True if `element` is folded into somebody's description: a RENDERED element
+ * in its own tree (its document, shadow root, or — detached — its subtree
+ * root) lists `id` in `aria-describedby`, and none labels it.
+ *
+ * All three qualifiers earn their place, because the id sets collected up
+ * front are page-wide while ids are scoped per tree:
+ *
+ * - **own tree** — a component's internal `id="hint"` must not fold an
+ *   unrelated `#hint` in the page.
+ * - **rendered** — an unslotted light child of a shadow host is not rendered,
+ *   so its reference reaches nobody and must not cost the page a visible node.
+ * - **none labels it** — the `labelTargetIds` exclusion is page-wide too, so a
+ *   labelledby in ANOTHER tree would otherwise keep this target, printing its
+ *   text both as a description and as standalone content.
+ */
+function isDescribedInOwnTree(element: Element, id: string): boolean {
+  const scope = element.getRootNode() as Document | ShadowRoot | Element;
+  if (typeof scope.querySelectorAll !== "function") return true;
+  const escaped =
+    typeof CSS !== "undefined" && typeof CSS.escape === "function"
+      ? CSS.escape(id)
+      : id.replace(/["\\]/g, "\\$&");
+  const referrers = (attr: string): Element[] =>
+    Array.from(scope.querySelectorAll(`[${attr}~="${escaped}"]`)).filter(
+      isRenderedInFlatTree,
+    );
+  return (
+    referrers("aria-describedby").length > 0 &&
+    referrers("aria-labelledby").length === 0
+  );
+}
+
 function walk(
   element: Element,
   parentId: string | null,
@@ -1760,7 +1816,7 @@ function walk(
 
   // Walk children. Each child is isolated by buildNode's own boundary, so a
   // single pathological descendant can't take out its siblings or ancestors.
-  for (const child of safeChildren(element)) {
+  for (const child of flatChildren(element)) {
     const childId = walk(
       child,
       id,
@@ -1794,28 +1850,20 @@ export function extractDomTree(
   if (!isPartial || !options.descriptionTargetIds) {
     effectiveRoot = resolveEffectiveRoot(root);
 
-    // Pre-collect aria-labelledby targets so we don't accidentally hide them.
-    // (Elements that are labelledby targets are visible content — they label something.)
-    const labelTargetIds = new Set<string>();
-    for (const el of effectiveRoot.querySelectorAll("[aria-labelledby]")) {
-      for (const id of (el.getAttribute("aria-labelledby") || "")
-        .split(/\s+/)
-        .filter(Boolean)) {
-        labelTargetIds.add(id);
-      }
-    }
-
-    // Pre-collect aria-describedby targets.
-    // These elements' text is shown inline on the referencing element as a description.
-    // Hide them from the tree to avoid redundancy — unless they're also labelledby targets.
+    // Pre-collect aria-describedby targets: their text is shown inline on the
+    // referencing element as a description, so a node of their own would be
+    // redundant. This is a CANDIDATE set — ids here are page-wide, while a
+    // reference is scoped to one tree — and `isDescribedInOwnTree` decides per
+    // element. That includes the "also a labelledby target" carve-out (such a
+    // target is visible content that labels something), which is likewise only
+    // true within one tree.
+    const referrers = deepQuerySelectorAll(effectiveRoot, "[aria-describedby]");
     const freshDescriptionTargetIds = new Set<string>();
-    for (const el of effectiveRoot.querySelectorAll("[aria-describedby]")) {
+    for (const el of referrers) {
       for (const id of (el.getAttribute("aria-describedby") || "")
         .split(/\s+/)
         .filter(Boolean)) {
-        if (!labelTargetIds.has(id)) {
-          freshDescriptionTargetIds.add(id);
-        }
+        freshDescriptionTargetIds.add(id);
       }
     }
     descriptionTargetIds = freshDescriptionTargetIds;

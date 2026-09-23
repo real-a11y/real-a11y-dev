@@ -1,6 +1,7 @@
 import {
   extractDomTree,
   extractA11yTree,
+  PANEL_HOST_ATTRIBUTE,
   type SemanticNode,
   type TreeViewMode,
   type ActionRequest,
@@ -191,6 +192,9 @@ export function createInspector(
     mount() {
       if (mounted) return;
       mounted = true;
+      // Keep the panel out of the tree it shows: extraction walks open
+      // shadow roots now, and this container hosts one.
+      container.setAttribute(PANEL_HOST_ATTRIBUTE, "");
       renderTree();
     },
 
@@ -199,6 +203,7 @@ export function createInspector(
       mounted = false;
       const mountPoint = renderHost ?? (renderTarget as Element | null);
       if (mountPoint) render(null, mountPoint);
+      container.removeAttribute(PANEL_HOST_ATTRIBUTE);
       // Drop references so the next mount() rebuilds cleanly.
       renderHost = null;
       renderTarget = null;

@@ -5,6 +5,7 @@
  */
 
 import { safeHidden } from "./clobber-safe.js";
+import { flatParent } from "./flat-tree.js";
 
 type RoleResolver = string | ((el: Element) => string);
 
@@ -110,14 +111,16 @@ function thHeaderRole(el: Element): string {
 
 function isLandmarkContext(el: Element): boolean {
   // header/footer only map to banner/contentinfo when not inside
-  // article, aside, main, nav, or section
-  let parent = el.parentElement;
+  // article, aside, main, nav, or section. Ancestors are read in the flat
+  // tree, so a header inside a component rendered within <main> is scoped
+  // by that <main>, as the browser scopes it.
+  let parent = flatParent(el);
   while (parent) {
     const tag = parent.tagName.toLowerCase();
     if (["article", "aside", "main", "nav", "section"].includes(tag)) {
       return false;
     }
-    parent = parent.parentElement;
+    parent = flatParent(parent);
   }
   return true;
 }

@@ -27,6 +27,14 @@
   marked `aria-modal` no longer takes over an interactive page either. It
   appears alongside the page instead. ([#398])
 
+- The DOM view now shows what's inside web components. Content in an open
+  shadow root appears under its custom element, and slotted children appear
+  where the component places them. Before, a Lit or Shoelace control, or the
+  Skip To button on the W3C APG pages, showed up as an empty element.
+  Closed shadow roots still can't be read. The panel doesn't yet refresh by
+  itself when something changes inside a component; press refresh to pick it
+  up. ([#389])
+
 - Collect `.tsx` test suites. The vitest `include` was `src/**/*.test.ts`, so a
   suite written as `.tsx` was never picked up — and silently: vitest ran the
   files it matched, reported them green, and said nothing about the one it
@@ -349,4 +357,5 @@ Earlier releases predate this changelog.
 [#354]: https://github.com/real-a11y/real-a11y-dev/pull/354
 [#356]: https://github.com/real-a11y/real-a11y-dev/pull/356
 [#380]: https://github.com/real-a11y/real-a11y-dev/pull/380
+[#389]: https://github.com/real-a11y/real-a11y-dev/pull/389
 [#398]: https://github.com/real-a11y/real-a11y-dev/pull/398
