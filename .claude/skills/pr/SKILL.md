@@ -159,12 +159,13 @@ pnpm surface:plan
 ```
 
 It diffs `docs/surface.json` against the merge base and prints what moved, which
-documents that obliges you to update, which of them the branch has already
-touched, and what §4b says to do to the scenarios — with the version stamps
-filled in from your pending changesets. The same report lands on the PR as a
-sticky comment. Read the table below to understand _why_ a page is in scope, and
-for the cases the manifest can't see (an error message's wording, a network
-behavior change).
+documents that obliges you to update (website pages **and**
+`community-skills/**/SKILL.md` workflow skills), which of them the branch has
+already touched, and what §4b says to do to the scenarios — with the version
+stamps filled in from your pending changesets. The same report lands on the PR
+as a sticky comment. Read the table below to understand _why_ a page is in
+scope, and for the cases the manifest can't see (an error message's wording, a
+network behavior change).
 
 **Then let the mechanical part happen on its own:**
 

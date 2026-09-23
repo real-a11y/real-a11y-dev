@@ -1,0 +1,92 @@
+navigation "On this page"
+  heading "On this page" (level 2)
+  list
+    listitem
+      link "Skills (v1)"
+    listitem
+      link "Install"
+    listitem
+      link "MCP + skills together"
+    listitem
+      link "Keeping skills current"
+main
+  heading "Agent Skills" (level 1)
+  paragraph "are portable folders of instructions that coding agents (Cursor, Claude Code, Codex, and others) load on demand. Real A11y ships a small set of skills so an agent can pick the right package, wire up MCP, audit a page, write snapshot tests, or gate CI — without guessing from memory."
+    link "Agent Skills"
+    strong "workflow"
+  paragraph "They complement the : MCP exposes (audit, tree, act); skills teach to use those tools and the other surfaces (CLI, testing, Storybook, embeds)."
+    link "MCP server"
+    strong "tools"
+    strong "when and how"
+  heading "Skills (v1)" (level 2)
+  table
+    rowgroup
+      row
+        columnheader "Skill"
+        columnheader "Use when…"
+    rowgroup
+      row
+        cell "choose-real-a11y-surface"
+          code "choose-real-a11y-surface"
+        cell "You need to pick CLI vs testing vs MCP vs panel vs Storybook vs the extension"
+      row
+        cell "wire-up-mcp"
+          code "wire-up-mcp"
+        cell "Connecting @real-a11y-dev/mcp to Cursor, Claude, VS Code, or another client"
+          code "@real-a11y-dev/mcp"
+      row
+        cell "audit-a-page"
+          code "audit-a-page"
+        cell "Auditing a live URL with MCP or the CLI"
+      row
+        cell "a11y-act-loop"
+          code "a11y-act-loop"
+        cell "Clicking / typing by role + accessible name, then diffing the tree"
+      row
+        cell "a11y-snapshot-tests"
+          code "a11y-snapshot-tests"
+        cell "Adding Vitest / Jest / Playwright a11y snapshots and flow()"
+          code "flow()"
+      row
+        cell "gate-ci-a11y"
+          code "gate-ci-a11y"
+        cell "CI gates, PR snapshot → diff, baselines"
+      row
+        cell "a11y-in-storybook"
+          code "a11y-in-storybook"
+        cell "Adding the Storybook Semantic Navigator addon"
+      row
+        cell "embed-semantic-navigator"
+          code "embed-semantic-navigator"
+        cell "Embedding the panel with @real-a11y-dev/react or inspector"
+          code "@real-a11y-dev/react"
+          code "inspector"
+  heading "Install" (level 2)
+  button "Copy Code"
+  code
+  paragraph "Pin (or an exact version) on any package the skill installs while the family is in public beta. Keep packages under ."
+    code "@beta"
+    code "@real-a11y-dev/*"
+    code "devDependencies"
+  heading "MCP + skills together" (level 2)
+  list
+    listitem "Connect the MCP server — see ."
+      link "Connect it to your client"
+    listitem "Install the skills so the agent loads the audit / act-loop workflows."
+    listitem "Ask in plain language (“Audit localhost:3000”, “Open the dialog then re-check”)."
+  paragraph "Skills never replace reading the package docs. When a skill and disagree, — and that disagreement is a bug to report."
+    link "real-a11y.dev"
+    strong "the docs win"
+  heading "Keeping skills current" (level 2)
+  paragraph "Skills are hand-written workflows. In the Real A11y monorepo they are checked against the same public-surface inventory as the website (): a skill that names a removed CLI command or MCP tool fails , and nags when a surface change should update a skill. See the maintainer note in the repo under ."
+    code "docs/surface.json"
+    code "pnpm surface:check"
+    code "pnpm surface:plan"
+    code "docs/maintainers/community-skills.md"
+contentinfo
+  link "Edit this page on GitHub"
+  paragraph "Last updated:"
+    time "[redacted]"
+  navigation "Pager"
+    link "Previous pageGetting Started"
+    link "Next pageCore Concepts"

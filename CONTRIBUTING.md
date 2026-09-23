@@ -223,7 +223,8 @@ pnpm surface:plan -- --base upstream/main
 ```
 
 Reads the manifest diff between your branch and its merge base, and prints the
-documents that have to move with it and what happens to the release test
+documents that have to move with it — website pages **and** community Agent
+Skills under `community-skills/` — and what happens to the release test
 scenarios — the `pr` skill's §4 and §4b, computed rather than remembered. It
 marks which of those docs your branch already touched, and stamps each scenario
 with the version it applies from (or, for a removal, until), taken from your

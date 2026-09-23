@@ -20,6 +20,8 @@ complementary
       heading "Introduction" (level 2)
     link "Getting Started"
       paragraph "Getting Started"
+    link "Agent Skills"
+      paragraph "Agent Skills"
     link "Core Concepts"
       paragraph "Core Concepts"
     link "Accessibility Snapshots"
