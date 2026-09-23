@@ -101,13 +101,14 @@ Do that in a **throwaway worktree at your branch point**, never by checking
 main's files out over your own:
 
 ```bash
+HERE=$(pwd)
 BEFORE=$(mktemp -d)
 git worktree add --detach "$BEFORE" "$(git merge-base origin/main HEAD)"
 cd "$BEFORE"                        # the step that makes the rest mean anything
 pnpm install                        # deps aren't materialised in a new worktree
 # build and walk the same steps here, then:
-cd -                                # back to your own worktree
-git worktree remove "$BEFORE"
+cd "$HERE"                          # not `cd -`: any cd in between clobbers it
+git worktree remove --force "$BEFORE"
 ```
 
 An absolute path on purpose. `add` and `remove` both resolve a relative one
@@ -115,6 +116,9 @@ against your **cwd**, and you are working inside a worktree already (see
 CLAUDE.md), so a relative path buries the copy inside your own checkout. Worse,
 `remove` matches on a path _suffix_: a short name like `before` will happily
 match some other worktree ending in it — possibly the one you are standing in.
+`--force` because a plain `remove` exits 128 over any modified or untracked
+non-ignored file, and a throwaway that refuses to go stays registered — which
+is exactly the stale entry that suffix match then finds.
 
 And `merge-base`, not `origin/main`: being behind main is routine here (§9a), so
 a tip-of-main "before" also carries everyone else's commits, and the difference
@@ -151,7 +155,14 @@ By change type:
 - **React / inspector / storybook / ui** — exercise it in an example app or
   Storybook (`pnpm --filter @real-a11y-dev/example-… dev`), or the browser preview.
 - **Extension** — `pnpm --filter @real-a11y-dev/semantic-navigator-extension test`,
-  and load the unpacked `packages/extension/dist` in Chrome for a real check.
+  then build and load the unpacked `packages/extension/dist` in Chrome for a
+  real check. The deps build is not optional in a fresh worktree — `dist/` does
+  not exist yet and the package alone fails on an unbuilt `core`:
+
+  ```bash
+  pnpm --filter "@real-a11y-dev/semantic-navigator-extension^..." build
+  pnpm --filter @real-a11y-dev/semantic-navigator-extension build
+  ```
 
 The commands you run here **are** the reviewer's verification steps. Capture each
 one and its expected result for the PR's **How to verify** section (step 8), so a

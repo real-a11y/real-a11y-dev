@@ -100,8 +100,9 @@ Cutting a release or adding a package? There are tailored templates:
      your branch point:
        BEFORE=$(mktemp -d)
        git worktree add --detach "$BEFORE" "$(git merge-base origin/main HEAD)"
+       HERE=$(pwd)
        cd "$BEFORE" && pnpm i     # then build and repeat the steps here
-       cd - && git worktree remove "$BEFORE"
+       cd "$HERE" && git worktree remove --force "$BEFORE"
 
      NOT `git checkout origin/main -- <files>`. It overwrites uncommitted work
      irrecoverably; naming a branch-new path makes it revert nothing at all
@@ -113,7 +114,8 @@ Cutting a release or adding a package? There are tailored templates:
      must invent. This is IN ADDITION to the tests, not instead of them. -->
 
 - [ ] The steps above run clean on a fresh checkout of this branch
-- [ ] A by-hand before/after is included, or nothing observable changed, because: <!-- e.g. internal refactor, no user-visible behaviour -->
+- [ ] A by-hand before/after is included
+- [ ] Not needed, because: <!-- e.g. internal refactor — nothing observable changed -->
 - [ ] `pnpm verify` passes (build + typecheck + format + lint + test — the gate CI and the pre-push hook run)
 - [ ] Added / updated tests where appropriate
 
