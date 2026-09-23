@@ -124,7 +124,7 @@
   data, so that one option stays DOM-only). Copy ▾ → Everything / Native
   tree / Headings now produces the same Markdown report format as the DOM
   view, labeled "Native accessibility tree" so a report never gets silently
-  mistaken for a DOM-producer one. (PR pending — see the next commit)
+  mistaken for a DOM-producer one. ([#403])
 
 
 - Collect `.tsx` test suites. The vitest `include` was `src/**/*.test.ts`, so a
@@ -454,3 +454,4 @@ Earlier releases predate this changelog.
 [#390]: https://github.com/real-a11y/real-a11y-dev/pull/390
 [#398]: https://github.com/real-a11y/real-a11y-dev/pull/398
 [#399]: https://github.com/real-a11y/real-a11y-dev/pull/399
+[#403]: https://github.com/real-a11y/real-a11y-dev/pull/403
