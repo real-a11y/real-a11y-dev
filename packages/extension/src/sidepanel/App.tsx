@@ -1820,7 +1820,15 @@ export function App() {
         const tree = nativeToExtractionResult(nativeNodes, nativeRootId);
         const markdown = buildExportMarkdown(
           {
-            tree: serializeTree(tree),
+            // `normalizeNativeAX` already drops every UNNAMED generic
+            // wrapper as noise, keeping a bare `role: "generic"` node only
+            // when it's a meaningfully named group (see
+            // `ax-normalize.ts`'s own comment) — so unlike a DOM tree,
+            // every generic node that survives into a native tree is one
+            // the panel actually shows. `serializeTree`'s default
+            // `includeGeneric: false` doesn't know that distinction and
+            // would silently drop it from the export.
+            tree: serializeTree(tree, { includeGeneric: true }),
             outline: serializeOutline(tree),
             // Native has no tab-order data at all (see NATIVE_VIEWS) —
             // never selected, so this value never renders.

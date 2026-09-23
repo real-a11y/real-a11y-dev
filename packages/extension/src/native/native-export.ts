@@ -51,9 +51,20 @@ export function toExtractionResult(
     });
   }
 
+  // Chromium marks the focused node with the `focused` AX property, which
+  // lands in `a11y.states` above. Promote it to the tree-level pointer
+  // `serializeTree`'s `[focused]` marker actually reads — the same
+  // promotion `@real-a11y-dev/browser`'s own native adapter does (see
+  // `native-tree.ts`'s identical comment) — otherwise a native tree knows
+  // where focus is and the export just doesn't say so.
+  const focused = [...semanticNodes.values()].find(
+    (node) => node.a11y.states.focused === true,
+  );
+
   return {
     nodes: semanticNodes,
     rootId,
+    ...(focused ? { focusedId: focused.id } : {}),
     source: { producer: "native" },
   };
 }

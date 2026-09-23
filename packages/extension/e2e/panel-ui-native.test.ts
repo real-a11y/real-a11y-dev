@@ -471,4 +471,12 @@ test("Copy → Everything copies a native tree + heading report, correctly label
   expect(markdown).toContain("h1 Native panel fixture");
   expect(markdown).toContain("h2 Sensitive field");
   expect(markdown).toMatch(/button "Item 1"/);
+
+  // A named `generic` group ("Sensitive field group") — Chromium keeps a
+  // generic node only when it has a name (unnamed ones are noise), so
+  // unlike a DOM tree, every generic that reaches a native tree is one the
+  // panel actually shows. `serializeTree`'s default `includeGeneric: false`
+  // doesn't know that and would silently drop it; this is what pins
+  // `App.tsx`'s native export call to pass `{ includeGeneric: true }`.
+  expect(markdown).toMatch(/generic "Sensitive field group"/);
 });
