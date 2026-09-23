@@ -91,7 +91,53 @@ fix, a test that fails without the change is the gold standard.
 
 `pnpm verify` (step 6) proves the suite passes; it does **not** prove YOUR change
 works. Actually exercise the new behavior, then write what you did in the PR's
-**How was this tested?** section — "ran `pnpm verify`" is not an answer.
+**How to verify** section — "ran `pnpm verify`" is not an answer.
+
+While you are exercising it, watch the OLD behaviour fail once. It is the only
+thing that proves you fixed what you think you fixed rather than something
+adjacent, and it hands you the before/after the PR body needs in step 8.
+
+Do that in a **throwaway worktree at your branch point**, never by checking
+main's files out over your own:
+
+```bash
+HERE=$(pwd)
+BEFORE=$(mktemp -d)
+git worktree add --detach "$BEFORE" "$(git merge-base origin/main HEAD)"
+cd "$BEFORE"                        # the step that makes the rest mean anything
+pnpm install                        # deps aren't materialised in a new worktree
+# build and walk the same steps here, then:
+cd "$HERE"                          # not `cd -`: any cd in between clobbers it
+git worktree remove --force "$BEFORE"
+```
+
+An absolute path on purpose. `add` and `remove` both resolve a relative one
+against your **cwd**, and you are working inside a worktree already (see
+CLAUDE.md), so a relative path buries the copy inside your own checkout. Worse,
+`remove` matches on a path _suffix_: a short name like `before` will happily
+match some other worktree ending in it — possibly the one you are standing in.
+`--force` because a plain `remove` exits 128 over any modified or untracked
+non-ignored file, and a throwaway that refuses to go stays registered — which
+is exactly the stale entry that suffix match then finds.
+
+And `merge-base`, not `origin/main`: being behind main is routine here (§9a), so
+a tip-of-main "before" also carries everyone else's commits, and the difference
+you observe may not be yours.
+
+`git checkout origin/main -- <files>` is the tempting short version and it is a
+trap three ways:
+
+- **It destroys your work.** Your change is still uncommitted at this point
+  (commit is step 7), and this overwrites worktree and index with nothing to
+  recover from.
+- **It lies about what it reverted.** Name a path that is new on your branch and
+  git refuses the whole command — loudly, but having reverted _nothing_, so the
+  run you are about to do shows the _after_ behaviour. Pass a directory instead
+  (`-- src/`, the form people actually type) and it exits 0 having reverted the
+  tracked edits while leaving your new files in place: a hybrid that is neither
+  before nor after, with nothing on screen to say so.
+- **It stages what it reverts**, so a later `git commit -am` quietly lands a
+  commit undoing your own fix, with CI still green.
 
 By change type:
 
@@ -109,7 +155,14 @@ By change type:
 - **React / inspector / storybook / ui** — exercise it in an example app or
   Storybook (`pnpm --filter @real-a11y-dev/example-… dev`), or the browser preview.
 - **Extension** — `pnpm --filter @real-a11y-dev/semantic-navigator-extension test`,
-  and load the unpacked `packages/extension/dist` in Chrome for a real check.
+  then build and load the unpacked `packages/extension/dist` in Chrome for a
+  real check. The deps build is not optional in a fresh worktree — `dist/` does
+  not exist yet and the package alone fails on an unbuilt `core`:
+
+  ```bash
+  pnpm --filter "@real-a11y-dev/semantic-navigator-extension^..." build
+  pnpm --filter @real-a11y-dev/semantic-navigator-extension build
+  ```
 
 The commands you run here **are** the reviewer's verification steps. Capture each
 one and its expected result for the PR's **How to verify** section (step 8), so a
@@ -333,8 +386,32 @@ gh pr create --base main   # add --template release.md only for releases
   new package); don't replace it with a freeform body.
 - In **How to verify**, give the reviewer the exact steps to run on a fresh
   checkout and what they should see (the commands from step 3) — reviewer
-  instructions, not "ran `pnpm verify`." For a UI/docs change, name the page to
-  open and what to look for.
+  instructions, not "ran `pnpm verify`."
+- **If a person can see the change, lead with how to see it** — above the test
+  commands, because it is the part a reviewer cannot get from CI. Numbered steps
+  from a clean start (build, serve, load, navigate, click), and a **before /
+  after** for each step that shows something: what the old behaviour does there,
+  what the new one does.
+
+  The before/after **table is the deliverable** — you already ran both sides in
+  step 3, so write down what you saw. One row per thing a reviewer can observe
+  (the page, the selection, a button's state, the status text) reads faster than
+  prose and makes a missed regression obvious.
+
+  If you also give them a way to reproduce the "before" themselves, give the
+  worktree recipe from step 3, not `git checkout origin/main -- <files>` — see
+  there for the three ways that one misleads. Name a fixture or URL that already
+  exists in the repo rather than asking them to invent one.
+
+  This is **in addition to** the tests, never instead: a green suite says the
+  code does what the tests say, not that you fixed the thing they care about.
+  Skip it only when nothing observable changed (a refactor, an internal rename)
+  — and say that is why.
+
+  A **new package** is the one case with a walkthrough but no before: nothing
+  existed to misbehave. Give the steps that use it for real anyway — that is
+  what the before/after was for. `package.md` prompts for exactly that.
+
 - Link issues (`Fixes #123`).
 
 ## 9. Land it
