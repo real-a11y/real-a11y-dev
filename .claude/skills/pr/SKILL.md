@@ -397,6 +397,10 @@ gh pr create --base main   # add --template release.md only for releases
   Skip it only when nothing observable changed (a refactor, an internal rename)
   — and say that is why.
 
+  A **new package** is the one case with a walkthrough but no before: nothing
+  existed to misbehave. Give the steps that use it for real anyway — that is
+  what the before/after was for. `package.md` prompts for exactly that.
+
 - Link issues (`Fixes #123`).
 
 ## 9. Land it

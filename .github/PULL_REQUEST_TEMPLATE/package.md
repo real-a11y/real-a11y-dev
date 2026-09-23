@@ -8,6 +8,22 @@
 
 <!-- Entry points and exports — the API consumers will import. -->
 
+## How to verify
+
+<!-- Steps a reviewer can run on a fresh checkout to use the new package for
+     real, and what they should see — the install/build, the import or command,
+     the output. Name a fixture or example in the repo rather than asking them
+     to invent one.
+
+     A brand-new package has no "before", so the before/after table the generic
+     template asks for does not apply here. What replaces it is the same thing
+     it was for: a reviewer confirming the thing works by using it, rather than
+     inferring it from a green suite. If this package ships a surface a person
+     interacts with (a CLI, a panel, a rendered page), walk through that too,
+     not just the programmatic API. -->
+
+- [ ] The steps above run clean on a fresh checkout of this branch
+
 ## Checklist
 
 - [ ] `package.json`: `publishConfig` (`access: public`, `provenance: true`), `files`, `exports`, repo/homepage/bugs
