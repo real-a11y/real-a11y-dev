@@ -59,6 +59,27 @@ const FIXTURE_DIR = resolve(HERE, "fixtures");
 export type NativeAction =
   "click" | "type" | "focus" | "increment" | "decrement" | "select";
 
+/**
+ * One node of a DOM-producer tree, as `TREE_DATA` puts it on the wire.
+ *
+ * Only the fields the DOM-path tests actually read. Declared rather than
+ * imported from `core` for the same reason `NativeNode` is: these tests talk
+ * to the extension over its message channel, and compiling against its
+ * internals would hide a drift that should show up as a failing assertion.
+ */
+export interface DomNode {
+  id: string;
+  dom?: { tagName: string; attributes?: Record<string, string> };
+  a11y?: { role: string; name: string };
+}
+
+/** A background → panel push, as the e2e recorder stores it. */
+export interface PanelMsg {
+  type: string;
+  tabId?: number;
+  payload?: Record<string, unknown>;
+}
+
 /** One node as `NATIVE_READ` puts it on the wire. */
 export interface NativeNode {
   id: string;
@@ -281,6 +302,174 @@ export class NativeHarness {
     tabId: number,
   ): Promise<{ native: boolean; reason?: string; domFallback: boolean }> {
     return await this.send({ type: "NATIVE_CAPABILITY", tabId });
+  }
+
+  // ---- DOM producer ------------------------------------------------------
+  //
+  // Everything above drives the dev-only NATIVE path. The methods below drive
+  // the one the STORE build actually ships: an in-page content script that
+  // walks the DOM and dispatches through it. What they buy over a jsdom suite
+  // is the part jsdom can only approximate — real capture-phase event
+  // handling, in real Chromium, across real frames.
+  //
+  // They address the frames FROM THE SERVICE WORKER, which is where the
+  // background addresses them from, rather than by sending panel messages.
+  // That is forced, not stylistic: this harness loads the panel as an ordinary
+  // tab so Playwright can drive it, and the background's router splits on
+  // `sender.tab?.id` (a real side panel has no tab). A panel-as-tab's messages
+  // are therefore read as if a content script sent them, and every DOM-path
+  // command would be silently misrouted. So these mirror what the background
+  // does with each command — fan SET_PICK_MODE out to every frame, address
+  // DISPATCH_ACTION to the frame named in the node id — and leave the
+  // background's own routing to `background.test.ts` and `routing.test.ts`,
+  // which cover it directly.
+
+  /**
+   * Ask every frame in the tab to extract, and return the merged tree the
+   * panel would render — node ids frame-prefixed, exactly as a tree row
+   * carries them.
+   *
+   * `REQUEST_TREE` is answered per frame; the MERGED tree arrives separately,
+   * as the background's `TREE_DATA` push to the panel once its debounce
+   * settles. So this polls the recorder rather than reading a return value.
+   */
+  async domTree(tabId: number): Promise<{ nodes: [string, DomNode][] }> {
+    await this.watchPanelMessages();
+    const before = await this.panelMessageCount();
+    await this.toFrames(tabId, {
+      type: "REQUEST_TREE",
+      payload: { viewMode: "a11y" },
+    });
+    const deadline = Date.now() + 10_000;
+    for (;;) {
+      const tree = await this.browser.panel.evaluate(
+        ([tab, from]) => {
+          const seen = (window as unknown as { __e2eMessages: PanelMsg[] })
+            .__e2eMessages;
+          for (let i = seen.length - 1; i >= from; i -= 1) {
+            const m = seen[i];
+            if (m?.type === "TREE_DATA" && m.tabId === tab) return m.payload;
+          }
+          return null;
+        },
+        [tabId, before] as const,
+      );
+      if (tree) return tree as { nodes: [string, DomNode][] };
+      if (Date.now() > deadline) {
+        throw new Error(`no TREE_DATA for tab ${tabId} within 10s`);
+      }
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  }
+
+  /** Arm or disarm the element picker in EVERY frame, as the background's
+   *  `broadcastToAllFrames` does for SET_PICK_MODE. Fanning out is the point:
+   *  pick mode is per frame, and the panel's toggle is per tab. */
+  async setPickMode(tabId: number, enabled: boolean): Promise<void> {
+    await this.toFrames(tabId, {
+      type: "SET_PICK_MODE",
+      payload: { enabled },
+    });
+  }
+
+  /**
+   * Dispatch a DOM-producer action, as a click on a tree row's ⏎ does.
+   *
+   * `nodeId` is the merged, frame-prefixed id. Splitting it and addressing
+   * that one frame with the frame-local id is what the background does for
+   * DISPATCH_ACTION; sending the prefixed id to frame 0 would just miss.
+   */
+  async domAct(
+    tabId: number,
+    nodeId: string,
+    action: string,
+  ): Promise<{ success?: boolean; error?: string }> {
+    const match = /^f(\d+)-(.+)$/.exec(nodeId);
+    const frameId = match ? Number(match[1]) : 0;
+    const localId = match ? match[2] : nodeId;
+    return await this.toFrame(tabId, frameId, {
+      type: "DISPATCH_ACTION",
+      payload: { nodeId: localId, action },
+    });
+  }
+
+  /** Send to one frame's content script, from the extension's own service
+   *  worker — which is what satisfies the content script's `isTrustedSender`. */
+  private async toFrame<T>(
+    tabId: number,
+    frameId: number,
+    message: object,
+  ): Promise<T> {
+    return (await this.browser.serviceWorker.evaluate(
+      ([tab, frame, m]) =>
+        new Promise((resolve) => {
+          chrome.tabs.sendMessage(
+            tab as number,
+            m as object,
+            { frameId: frame as number },
+            (response) => {
+              resolve(
+                chrome.runtime.lastError
+                  ? { error: chrome.runtime.lastError.message }
+                  : response,
+              );
+            },
+          );
+        }),
+      [tabId, frameId, message] as const,
+    )) as T;
+  }
+
+  /** Send to every frame in the tab. Omitting `frameId` is how
+   *  `chrome.tabs.sendMessage` broadcasts, and how the background does it. */
+  private async toFrames(tabId: number, message: object): Promise<void> {
+    await this.browser.serviceWorker.evaluate(
+      ([tab, m]) => chrome.tabs.sendMessage(tab as number, m as object),
+      [tabId, message] as const,
+    );
+  }
+
+  /**
+   * Record every background → panel push, so a test can assert on what did
+   * NOT arrive (a `NODE_PICKED` nobody asked for) as well as what did.
+   *
+   * Installed once per panel page and idempotent: the panel outlives each
+   * test, and a second listener would double every message.
+   */
+  async watchPanelMessages(): Promise<void> {
+    await this.browser.panel.evaluate(() => {
+      const w = window as unknown as { __e2eMessages?: PanelMsg[] };
+      if (w.__e2eMessages) return;
+      w.__e2eMessages = [];
+      chrome.runtime.onMessage.addListener((m: PanelMsg) => {
+        w.__e2eMessages?.push(m);
+        // Returning a value here would claim the response channel from the
+        // panel's own listener; this one only observes.
+      });
+    });
+  }
+
+  /** How many pushes have been recorded — a mark to filter later ones by. */
+  async panelMessageCount(): Promise<number> {
+    return await this.browser.panel.evaluate(
+      () =>
+        (window as unknown as { __e2eMessages?: PanelMsg[] }).__e2eMessages
+          ?.length ?? 0,
+    );
+  }
+
+  /** Recorded pushes of one type, from `from` onwards. */
+  async panelMessages(type: string, from = 0): Promise<PanelMsg[]> {
+    return await this.browser.panel.evaluate(
+      ([want, start]) =>
+        (
+          (window as unknown as { __e2eMessages?: PanelMsg[] }).__e2eMessages ??
+          []
+        )
+          .slice(start)
+          .filter((m) => m?.type === want),
+      [type, from] as const,
+    );
   }
 
   private async send<T>(message: object): Promise<T> {

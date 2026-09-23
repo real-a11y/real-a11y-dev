@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Pick mode — DOM producer fixture</title>
+  </head>
+  <body>
+    <h1>Pick mode</h1>
+
+    <!--
+      Unlike every other fixture here, this one is about the DOM producer, not
+      the native one: the shipped extension extracts and dispatches through the
+      in-page content script, and the element picker it competes with lives in
+      that same script. So the thing under test is real capture-phase event
+      interception in a real browser — which is exactly what a jsdom unit test
+      has to approximate.
+
+      Two documents, because pick mode is armed per frame while the panel's
+      toggle is per tab.
+    -->
+
+    <button id="target" type="button">Top button</button>
+
+    <iframe
+      id="child"
+      title="Subframe"
+      src="pick-mode-frame.html"
+      width="300"
+      height="80"
+    ></iframe>
+
+    <script>
+      // A counter rather than a flag: it separates "never landed" from
+      // "landed twice", and a dispatch that is refused must leave it at 0.
+      window.clicks = 0;
+      document.getElementById("target").addEventListener("click", () => {
+        window.clicks += 1;
+      });
+    </script>
+  </body>
+</html>

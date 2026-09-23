@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Pick mode — subframe</title>
+  </head>
+  <body>
+    <!--
+      The iframe half of `pick-mode.html`. Its only job is to be a SECOND
+      document with its own content script, and therefore its own picker:
+      pick mode is armed per frame, so whether leaving it in one frame
+      releases the others is only observable with more than one.
+    -->
+    <button id="frame-target" type="button">Frame button</button>
+
+    <script>
+      // Same recorder as the top frame. Reading `clicks` is how a test tells
+      // "the action reached the page" from "the picker swallowed it" — the
+      // picker calls preventDefault + stopPropagation in the capture phase,
+      // so a swallowed click never increments this.
+      window.clicks = 0;
+      document.getElementById("frame-target").addEventListener("click", () => {
+        window.clicks += 1;
+      });
+    </script>
+  </body>
+</html>
