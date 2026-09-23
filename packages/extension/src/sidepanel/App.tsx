@@ -407,7 +407,7 @@ export function App() {
    * A picker only ever disables itself in ITS OWN document — on a tracked
    * click, on a click that hit nothing tracked, and on Escape — so the other
    * frames stay armed and keep swallowing pointer events while the panel's
-   * per-tab ✛ already reads off, leaving no enabled control to switch them
+   * per-tab ⦿ already reads off, leaving no enabled control to switch them
    * back. Broadcasting converges them.
    *
    * Deliberately unconditional rather than guarded on the panel's own mirror

@@ -123,7 +123,7 @@ describe("panel action feedback: a frame that refuses", () => {
     });
 
     // Only the frame that resolved the click exits on its own. Without this
-    // the other frames stay armed while the ✛ button reads off, swallowing
+    // the other frames stay armed while the ⦿ button reads off, swallowing
     // clicks with no visible control to turn back off.
     expect(
       chromeMock.sent.filter(

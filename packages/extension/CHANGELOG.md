@@ -41,7 +41,7 @@
   `pointerdown`→`click` sequence, so the action never reached the page — and
   then that click landed on the picker's own handler, which resolved the
   actioned element, reported it as a pick the user never made, and dropped out
-  of pick mode. The panel jumped its selection to that node and the ✛ button
+  of pick mode. The panel jumped its selection to that node and the ⦿ button
   snapped off, while the page was left untouched and the status bar still read
   "Click: …". Such an action is now refused outright, and the panel says why.
 
@@ -57,7 +57,7 @@
 - Leave pick mode in every frame once any frame leaves it, not just the one
   that did. A picker exits in its own document — on a pick, on a click that
   hit nothing tracked, and on Escape — so leaving pick mode inside an iframe
-  left the top frame armed and swallowing clicks while the panel's ✛ button,
+  left the top frame armed and swallowing clicks while the panel's ⦿ button,
   which is per-tab, already read off, with no enabled control to switch back
   off. ([#399])
 
