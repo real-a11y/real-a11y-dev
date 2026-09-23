@@ -190,11 +190,24 @@ describe("slots", () => {
   it.each([
     ["hidden", `<slot hidden></slot>`],
     ["aria-hidden", `<slot aria-hidden="true"></slot>`],
+    ["inert", `<slot inert></slot>`],
     ["display:none", `<slot style="display:none"></slot>`],
   ])("drops the assignment of a %s slot — it renders nothing", (_, markup) => {
     page.innerHTML = `<x-box><button>Delete</button></x-box>`;
     shadow(page.querySelector("x-box")!, markup);
     expect(find(extractDomTree(page), "button")).toBeUndefined();
+  });
+
+  it("keeps the assignment of a visibility:hidden slot", () => {
+    // visibility is inherited but not subtree-hiding: an assigned child may
+    // set `visibility:visible` and render. The child's own computed style
+    // decides, exactly as it does for any other element.
+    page.innerHTML = `<x-box><button style="visibility:visible">Still here</button></x-box>`;
+    shadow(
+      page.querySelector("x-box")!,
+      `<slot style="visibility:hidden"></slot>`,
+    );
+    expect(find(extractDomTree(page), "button", "Still here")).toBeTruthy();
   });
 
   it("forwards a slot through a nested host", () => {

@@ -30,20 +30,37 @@ function isSlot(node: Node): node is HTMLSlotElement {
 }
 
 /**
- * A hidden slot renders nothing THROUGH it — `hidden`, `display:none` or
- * `aria-hidden` on the slot takes the whole distributed subtree with it,
- * wherever that content's own markup lives. The slot itself never becomes a
- * node (it is transparent), so the walk can't prune it later; this is the one
- * chance to drop the assignment. Deliberately a local read, not
- * `isSubtreeHidden`: `role-map` imports this module.
+ * A hidden slot renders nothing THROUGH it — the whole distributed subtree
+ * goes with it, wherever that content's own markup lives. The slot never
+ * becomes a node of its own (it is transparent), so the walk cannot prune it
+ * later; this is the one chance to drop the assignment.
+ *
+ * The conditions mirror `isSubtreeHidden` (plus `aria-hidden`, which the walk
+ * applies separately) and they matter in both directions:
+ *
+ * - **`visibility:hidden` is NOT here**, for the same reason `isSubtreeHidden`
+ *   omits it: visibility is inherited but not subtree-hiding, so an assigned
+ *   child may set `visibility:visible` and render after all. Real browsers
+ *   inherit through the flat tree, so a child that doesn't override it is
+ *   hidden by its own computed style anyway.
+ * - **`inert` IS here.** It hides its flat-tree subtree from AT and from the
+ *   keyboard, and skipping the slot removes the only ancestor where the walk
+ *   would have seen it.
+ *
+ * Duplicated rather than calling `isSubtreeHidden`, because `role-map`
+ * imports this module — keep the two in step.
  */
 function slotHidesItsAssignment(slot: HTMLSlotElement): boolean {
-  if (safeHidden(slot) || slot.getAttribute("aria-hidden") === "true") {
+  if (
+    safeHidden(slot) ||
+    slot.hasAttribute("inert") ||
+    slot.getAttribute("aria-hidden") === "true"
+  ) {
     return true;
   }
   const style =
     typeof getComputedStyle === "function" ? getComputedStyle(slot) : null;
-  return style?.display === "none" || style?.visibility === "hidden";
+  return style?.display === "none" || style?.contentVisibility === "hidden";
 }
 
 /**
