@@ -25,14 +25,26 @@
          must be masked like a DOM password field.
     -->
 
-    <h2>Sensitive field</h2>
-    <label for="pw">Password</label>
-    <input
-      id="pw"
-      type="password"
-      value="hunter2"
-      autocomplete="current-password"
-    />
+    <!--
+      A plain, non-semantic <div> with an accessible name — Chromium's own
+      tree normalizes this to a NAMED `generic` group (see
+      `ax-normalize.ts`'s comment on `generic`: bare/unnamed ones are
+      dropped as noise, but a named one is kept as a meaningful labelled
+      container, e.g. a media-player wrapper). Exercises Copy/export's
+      `includeGeneric: true` for native trees — without it, this whole
+      group (and its label) silently vanishes from the exported report
+      even though the panel itself still shows it.
+    -->
+    <div aria-label="Sensitive field group">
+      <h2>Sensitive field</h2>
+      <label for="pw">Password</label>
+      <input
+        id="pw"
+        type="password"
+        value="hunter2"
+        autocomplete="current-password"
+      />
+    </div>
 
     <!--
       Nothing follows this section in the DOM — Item 16 must be the actual

@@ -112,4 +112,17 @@ describe("toExtractionResult", () => {
     expect(tree.nodes.size).toBe(0);
     expect(serializeTree(tree)).toBe("");
   });
+
+  it("promotes a node with states.focused into the tree-level focusedId, mirroring @real-a11y-dev/browser's native adapter", () => {
+    const nodes = buildTree();
+    nodes.set("button", { ...nodes.get("button")!, states: { focused: true } });
+    const tree = toExtractionResult(nodes, "root");
+    expect(tree.focusedId).toBe("button");
+    expect(serializeTree(tree)).toContain('button "Submit" [focused]');
+  });
+
+  it("omits focusedId when no node reports focused", () => {
+    const tree = toExtractionResult(buildTree(), "root");
+    expect(tree.focusedId).toBeUndefined();
+  });
 });
