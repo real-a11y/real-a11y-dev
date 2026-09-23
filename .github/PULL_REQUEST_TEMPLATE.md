@@ -75,10 +75,45 @@ Cutting a release or adding a package? There are tailored templates:
        pnpm i && pnpm --filter @real-a11y-dev/cli build
        node packages/cli/dist/index.js audit https://example.com
          -> exits 1 and lists the unlabeled-button finding
+
      UI / docs: pnpm --filter @real-a11y-dev/website dev -> open the page ->
-       confirm the change renders (check the console and dark mode too). -->
+       confirm the change renders (check the console and dark mode too).
+
+     IF A PERSON CAN SEE THE CHANGE, put the by-hand walkthrough FIRST — it is
+     the part a reviewer cannot get from CI. Numbered steps from a clean start,
+     and a before/after table saying what the old behaviour does at that same
+     step. Write down what YOU saw running both sides; that table is the
+     deliverable.
+
+       pnpm i
+       pnpm --filter "@real-a11y-dev/semantic-navigator-extension^..." build
+       pnpm --filter @real-a11y-dev/semantic-navigator-extension build
+       chrome://extensions -> Load unpacked -> packages/extension/dist
+       open <fixture url> -> click X
+         before: the panel jumps to the wrong row and the mode switches off
+         after:  the row stays put, status bar reads "Failed: ..."
+
+     (The `^...` build is not optional on a fresh checkout — the workspace deps
+     resolve to dist/, so building the package alone fails.)
+
+     To let them reproduce the "before", point at a throwaway worktree cut at
+     your branch point:
+       BEFORE=$(mktemp -d)
+       git worktree add --detach "$BEFORE" "$(git merge-base origin/main HEAD)"
+       cd "$BEFORE" && pnpm i     # then build and repeat the steps here
+       cd - && git worktree remove "$BEFORE"
+
+     NOT `git checkout origin/main -- <files>`. It overwrites uncommitted work
+     irrecoverably; naming a branch-new path makes it revert nothing at all
+     while a directory pathspec reverts the edits but keeps your new files, so
+     either way you can be looking at the AFTER and calling it the before; and
+     it stages the revert, so a later `git commit -am` undoes your own fix.
+
+     Prefer a fixture that already exists in the repo over one the reviewer
+     must invent. This is IN ADDITION to the tests, not instead of them. -->
 
 - [ ] The steps above run clean on a fresh checkout of this branch
+- [ ] A by-hand before/after is included, or nothing observable changed, because: <!-- e.g. internal refactor, no user-visible behaviour -->
 - [ ] `pnpm verify` passes (build + typecheck + format + lint + test — the gate CI and the pre-push hook run)
 - [ ] Added / updated tests where appropriate
 
