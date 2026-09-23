@@ -39,6 +39,24 @@ export type NativeNode = {
 };
 
 /**
+ * Derive a `childId -> parentId` index from a native tree's `childIds` —
+ * the one way to get a parent pointer for a {@link NativeNode}, which
+ * carries none itself (see this type's own doc comment). Shared here so
+ * `NativeTreeView.tsx`'s tree walk and `native-export.ts`'s Copy/export
+ * adapter compute it identically rather than keeping two copies of the
+ * same 6-line loop that could quietly drift apart.
+ */
+export function nativeParentIndex(
+  nodes: Map<string, NativeNode>,
+): Map<string, string> {
+  const parentOf = new Map<string, string>();
+  for (const node of nodes.values()) {
+    for (const childId of node.childIds ?? []) parentOf.set(childId, node.id);
+  }
+  return parentOf;
+}
+
+/**
  * Roles worth offering a one-click action for during a dogfood session.
  *
  * Sourced from the DOM producer's own role→action mapping (`getActions` in

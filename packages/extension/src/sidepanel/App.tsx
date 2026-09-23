@@ -49,6 +49,7 @@ import {
   NATIVE_REDACTED_VALUE,
   type NativeAction,
 } from "../native/native-core.js";
+import { toExtractionResult as nativeToExtractionResult } from "../native/native-export.js";
 import {
   isTrustedSender,
   isUnreachablePageResponse,
@@ -56,7 +57,7 @@ import {
 } from "../routing.js";
 import type { ContentToPanel, PanelToContent } from "../types.js";
 
-import { buildExportMarkdown, ALL_VIEWS } from "./export.js";
+import { buildExportMarkdown, ALL_VIEWS, NATIVE_VIEWS } from "./export.js";
 import type { ExportView } from "./export.js";
 import { FilteredList } from "./FilteredList.js";
 import {
@@ -1805,6 +1806,44 @@ export function App() {
   const doExport = useCallback(
     (selection: ExportView[]) => {
       setExportMenuOpen(false);
+
+      // Native has no subtree scoping (that's a DOM-tree-only concept — see
+      // the `producer === "dom" && scopedRootId` breadcrumb gate below), so
+      // it always exports the whole last-read tree; no scope de-indent, no
+      // scope label.
+      if (producer === "native") {
+        if (!nativeRootId || nativeNodes.size === 0) {
+          setLastAction("Nothing to export yet");
+          setTimeout(() => setLastAction(null), 2000);
+          return;
+        }
+        const tree = nativeToExtractionResult(nativeNodes, nativeRootId);
+        const markdown = buildExportMarkdown(
+          {
+            tree: serializeTree(tree),
+            outline: serializeOutline(tree),
+            // Native has no tab-order data at all (see NATIVE_VIEWS) —
+            // never selected, so this value never renders.
+            tabSequence: "",
+          },
+          {
+            pageTitle,
+            pageUrl,
+            capturedAt: new Date().toISOString(),
+            extensionVersion: chrome.runtime.getManifest().version,
+            viewLabel: "Native accessibility tree",
+          },
+          selection,
+        );
+        navigator.clipboard.writeText(markdown).then(
+          () => setLastAction("Copied to clipboard"),
+          () =>
+            setLastAction("Clipboard blocked — click the panel, then retry"),
+        );
+        setTimeout(() => setLastAction(null), 2500);
+        return;
+      }
+
       const exportRootId = scopedRootId || rootId;
       if (!exportRootId || nodes.size === 0) {
         announce("Nothing to export yet", 2000);
@@ -1858,7 +1897,17 @@ export function App() {
         () => announce("Clipboard blocked — click the panel, then retry", 2500),
       );
     },
-    [nodes, scopedRootId, rootId, viewMode, pageTitle, pageUrl],
+    [
+      producer,
+      nativeNodes,
+      nativeRootId,
+      nodes,
+      scopedRootId,
+      rootId,
+      viewMode,
+      pageTitle,
+      pageUrl,
+    ],
   );
 
   // Close the export menu on outside-click or Escape.
@@ -2265,47 +2314,53 @@ export function App() {
           </button>
         )}
 
-        {producer === "dom" && (
-          <div class="sn-export" ref={exportRef}>
-            <button
-              class="sn-toolbar-btn sn-export-btn"
-              aria-haspopup="true"
-              aria-expanded={exportMenuOpen}
-              onClick={() => setExportMenuOpen((o) => !o)}
-              title="Copy the tree as Markdown — paste into a bug report"
-            >
-              {"Copy ▾"}
-            </button>
-            {exportMenuOpen && (
-              <div class="sn-export-menu" aria-label="Copy which view">
-                <button
-                  class="sn-export-item"
-                  onClick={() => doExport(ALL_VIEWS)}
-                >
-                  Everything
-                </button>
-                <button
-                  class="sn-export-item"
-                  onClick={() => doExport(["tree"] as ExportView[])}
-                >
-                  {viewMode === "dom" ? "DOM tree" : "A11y tree"}
-                </button>
-                <button
-                  class="sn-export-item"
-                  onClick={() => doExport(["outline"] as ExportView[])}
-                >
-                  Headings
-                </button>
+        <div class="sn-export" ref={exportRef}>
+          <button
+            class="sn-toolbar-btn sn-export-btn"
+            aria-haspopup="true"
+            aria-expanded={exportMenuOpen}
+            onClick={() => setExportMenuOpen((o) => !o)}
+            title="Copy the tree as Markdown — paste into a bug report"
+          >
+            {"Copy ▾"}
+          </button>
+          {exportMenuOpen && (
+            <div class="sn-export-menu" aria-label="Copy which view">
+              <button
+                class="sn-export-item"
+                onClick={() =>
+                  doExport(producer === "native" ? NATIVE_VIEWS : ALL_VIEWS)
+                }
+              >
+                Everything
+              </button>
+              <button
+                class="sn-export-item"
+                onClick={() => doExport(["tree"] as ExportView[])}
+              >
+                {producer === "native"
+                  ? "Native tree"
+                  : viewMode === "dom"
+                    ? "DOM tree"
+                    : "A11y tree"}
+              </button>
+              <button
+                class="sn-export-item"
+                onClick={() => doExport(["outline"] as ExportView[])}
+              >
+                Headings
+              </button>
+              {producer === "dom" && (
                 <button
                   class="sn-export-item"
                   onClick={() => doExport(["tab"] as ExportView[])}
                 >
                   Tab sequence
                 </button>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Block-level, NOT a toolbar flex child: its paragraph of consent text

@@ -55,6 +55,7 @@ import {
   isSelectableRole,
   isSteppableRole,
   isTypableRole,
+  nativeParentIndex,
   type NativeNode,
 } from "../native/native-actions.js";
 import { searchNativeTree } from "../native/native-search.js";
@@ -158,13 +159,7 @@ export function NativeTreeView({
     // it must NOT re-seed just because the tree refreshed with the same root.
   }, [rootId]);
 
-  const parentOf = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const node of nodes.values()) {
-      for (const childId of node.childIds ?? []) map.set(childId, node.id);
-    }
-    return map;
-  }, [nodes]);
+  const parentOf = useMemo(() => nativeParentIndex(nodes), [nodes]);
 
   const hasFilter = query.trim().length > 0 || roleFilter !== null;
 

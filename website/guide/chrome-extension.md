@@ -123,6 +123,8 @@ Pick what to copy:
 - **Headings** — the heading outline (`h1`..`h6`).
 - **Tab sequence** — the focusable nodes in tab order.
 
+Works under [native mode](#native-mode-—-chromium-s-own-accessibility-tree) too, labeled **Native tree** in place of A11y/DOM tree — with one permanent exception: there's no **Tab sequence** option. `tabindex` never reaches a native node (see [CLAUDE.md's "Two producers build the tree"](https://github.com/real-a11y/real-a11y-dev/blob/main/CLAUDE.md)), so there's no tab-order data to export, not merely an unimplemented one; **Everything** under native mode is the tree and headings only.
+
 Every export opens with a reproducibility header, so a pasted report is self-describing:
 
 ```md
