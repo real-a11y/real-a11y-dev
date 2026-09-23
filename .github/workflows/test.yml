@@ -241,11 +241,6 @@ jobs:
       - name: Run MCP e2e tests
         run: pnpm --filter @real-a11y-dev/mcp test:e2e
 
-      # CLI e2e — spawns the built `real-a11y` bin against data: URLs;
-      # reuses the same Chromium install.
-      - name: Run CLI e2e tests
-        run: pnpm --filter @real-a11y-dev/cli test:e2e
-
       # DOM↔native parity harness (RFC PR E). Non-blocking FIRST: it logs the
       # overlap watermark and fails only below a conservative floor, but does
       # not gate merges while the corpus + native normalizer stabilize. Drop
@@ -271,6 +266,21 @@ jobs:
       - name: Run extension native-tree e2e (advisory)
         continue-on-error: true
         run: pnpm --filter @real-a11y-dev/semantic-navigator-extension test:e2e
+
+      # CLI e2e runs LAST, and on Node 22 — `@real-a11y-dev/cli` declares
+      # `engines: >=22.12.0` (its `@puppeteer/browsers` dependency requires it),
+      # so running its suite on 20 would exercise a version the package does not
+      # support and let a Node 22-only regression pass. Everything above stays on
+      # 20 deliberately: those packages still support it, and this is the last
+      # step, so one switch covers it. `node_modules` is reused as installed —
+      # nothing in this workspace links against a Node ABI.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12
+          cache: pnpm
+
+      - name: Run CLI e2e tests (Node 22 — the CLI's supported floor)
+        run: pnpm --filter @real-a11y-dev/cli test:e2e
 
       - name: Upload Playwright report on failure
         if: failure()
