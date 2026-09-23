@@ -52,6 +52,14 @@ export function useTreeKeyboard({
 
   // Row id → position, so neither the per-keypress index lookup nor
   // ArrowRight's "is this child visible?" check scans the list.
+  //
+  // Both panels also hold this map for their own lookups, so the list is
+  // walked twice per change. Taking it as an option instead was tried and
+  // backed out: it buys one O(N) walk per *list change* — the same order as
+  // building the list — at the cost of coupling the hook to its callers and
+  // ~20 bytes that put the ui bundle exactly on its size-limit ceiling. Not
+  // worth it; the win here is the per-keypress scans, which are gone either
+  // way.
   const indexById = useIndexById(visibleNodeIds);
 
   const handleKeyDown = useCallback(
