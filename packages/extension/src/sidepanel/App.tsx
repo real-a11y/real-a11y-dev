@@ -287,6 +287,14 @@ export function App() {
   // content script owns the actual click capture — this flag is just the
   // panel's mirror so the button shows the right pressed state.
   const [pickModeOn, setPickModeOn] = useState(false);
+  // Latest `pickModeOn` for the native-pick tab-switch cleanup effect below,
+  // which must not re-arm just because a pick's own ordinary completion
+  // flips this state — see that effect's own comment for why it reads this
+  // via ref instead of depending on the state directly.
+  const pickModeOnRef = useRef(pickModeOn);
+  useEffect(() => {
+    pickModeOnRef.current = pickModeOn;
+  }, [pickModeOn]);
   const [inputState, setInputState] = useState<InputPanelState | null>(null);
   const [pageTitle, setPageTitle] = useState<string>("");
   const [pageUrl, setPageUrl] = useState<string>("");
@@ -397,6 +405,18 @@ export function App() {
   // `nativeModeEnabled` is true — the toggle that flips it is itself gated on
   // that setting below.
   const [producer, setProducer] = useState<"dom" | "native">("dom");
+  // Latest `producer` for use inside the long-lived onMessage listener,
+  // which closes over the value at registration time — same pattern as
+  // `myTabIdRef` below. Needed because a producer switch sends the OLD
+  // producer's picker an async disable (`switchProducer`'s own
+  // `togglePickMode()` call) whose acknowledgement can arrive after the
+  // switch — a late DOM `PICK_MODE_CHANGED` must not clear a native pick
+  // that's since been armed, and the mirror case (a late `NATIVE_PICK_
+  // RESULT`) must not clear a DOM one.
+  const producerRef = useRef<"dom" | "native">(producer);
+  useEffect(() => {
+    producerRef.current = producer;
+  }, [producer]);
   const [nativeNodes, setNativeNodes] = useState<Map<string, NativeNode>>(
     new Map(),
   );
@@ -425,6 +445,17 @@ export function App() {
   const [nativePickReveal, setNativePickReveal] = useState<
     { nodeId: string; ancestorIds?: string[]; nonce: number } | undefined
   >(undefined);
+  // `nativeOpToken.current` at the moment the in-flight pick was armed —
+  // compared against its CURRENT value when NATIVE_PICK_RESULT arrives, same
+  // pattern `dispatchNativeAction`/`loadNativeTree` already use for a
+  // read/act reply. A pick can take arbitrarily long (it waits on a page
+  // click), so a tab switch, navigation, or disabling native mode can all
+  // land while one is outstanding; without this, a result that arrives after
+  // any of those applies stale `backendDOMNodeId`-derived ids to whatever
+  // tree the panel has loaded by then. Chromium's backend node ids are
+  // small, renderer-scoped integers that a new document can plausibly reuse
+  // — this is a real collision risk, not just a defensive habit.
+  const nativePickToken = useRef<number | null>(null);
   // Bumped whenever the bound tab changes (see the myTabId effect below).
   // Read-gates a NATIVE_READ/NATIVE_CAPABILITY reply against a tab switch
   // that happened while it was in flight — same purpose as DogfoodPanel's
@@ -934,14 +965,23 @@ export function App() {
       if (message.type === "PICK_MODE_CHANGED") {
         // Content authoritatively reports its own pick-mode state. This
         // covers the case where the user pressed Escape on the page to
-        // exit — without it the panel button would stay stuck "on".
+        // exit — without it the panel button would stay stuck "on". Gated
+        // on the producer STILL being "dom": `switchProducer` sends the
+        // content script an async disable when leaving DOM with a pick
+        // armed, and that acknowledgement can arrive after the panel has
+        // already switched to native and armed a pick there — an
+        // unconditional apply would clear the (still-live) native pick's
+        // "on" indicator for an ack that belongs to a producer nobody is
+        // looking at anymore.
         //
         // A frame reporting itself OFF is reporting only for itself, and
         // Escape (like a click that hit nothing tracked) sends no
         // NODE_PICKED, so this is the only notice the panel gets that a
         // picker somewhere has closed. Take the rest of the tab with it.
-        if (message.payload.enabled) setPickModeOn(true);
-        else exitPickMode();
+        if (producerRef.current === "dom") {
+          if (message.payload.enabled) setPickModeOn(true);
+          else exitPickMode();
+        }
       }
 
       if (message.type === "NATIVE_PICK_RESULT") {
@@ -952,9 +992,20 @@ export function App() {
         // already attached, an unattachable navigation mid-arm, a
         // connection drop). Pick mode is inherently one-shot server-side
         // (`runPick` always resolves and turns Overlay.setInspectMode back
-        // off), so the local mirror comes off here unconditionally, matching
-        // PICK_MODE_CHANGED's own DOM-side handling above.
-        setPickModeOn(false);
+        // off), so the local mirror comes off here whenever the producer is
+        // still native — the mirror image of the `PICK_MODE_CHANGED` guard
+        // above: a result that outlives a switch back to DOM must not clear
+        // a pick the DOM producer has since armed.
+        if (producerRef.current === "native") setPickModeOn(false);
+        // Everything past this point describes a SPECIFIC document (a
+        // picked node's backendDOMNodeId, or a capability tied to the tab
+        // that was current when the pick was armed) — gate it against
+        // `nativePickToken`, the same "does this reply still describe what
+        // we're looking at" check every other native reply already makes.
+        // Chromium's backend node ids are small enough that a new document
+        // reusing one and landing on the WRONG row is a real risk, not a
+        // theoretical one.
+        if (nativePickToken.current !== nativeOpToken.current) return;
         if ("nodeId" in message.payload) {
           setNativePickReveal({
             nodeId: message.payload.nodeId,
@@ -1759,6 +1810,11 @@ export function App() {
       // unrelated state that could in principle flip true while a pick is
       // outstanding, and the user still needs a way to cancel it.
       if (next && nativeBusy) return;
+      // Snapshot the token this pick is armed under — compared against its
+      // current value when the result arrives (see `nativePickToken`'s own
+      // comment). Only on arming: a STOP's own result never reveals
+      // anything, so it has nothing to stamp.
+      if (next) nativePickToken.current = nativeOpToken.current;
       setPickModeOn(next);
       void chrome.runtime
         .sendMessage(
@@ -1828,25 +1884,45 @@ export function App() {
   }, [togglePickMode]);
 
   // Cancel an in-flight native pick if the panel leaves it behind — a tab
-  // switch, a producer flip back to DOM, or the panel unmounting entirely.
+  // switch (including `nativeTreeTabId` resetting to `undefined`, which
+  // covers disabling native mode too) or the panel unmounting entirely.
   // `runPick` on the background side never leaks past a single pick (it
   // always resolves and turns `Overlay.setInspectMode` back off), but
   // without this the OVERLAY stays up on the page and the panel's own
   // `pickModeOn` stays stuck "on" until a result — which, once the panel
-  // has moved off that tab/producer, may never arrive for it to see.
+  // has moved off that tab, may never arrive for it to see.
+  //
+  // Deliberately depends on `nativeTreeTabId` ALONE, not `[producer,
+  // pickModeOn, nativeTreeTabId]` the way this used to read: `pickModeOn`
+  // flips false on every ORDINARY pick completion too (the NATIVE_PICK_
+  // RESULT handler above sets it), and depending on it re-armed this
+  // effect's cleanup on that transition as well — sending a STOP for a pick
+  // that had already resolved normally. `cancelPick` on the background side
+  // treats a STOP with nothing currently armed as "record a pending cancel
+  // for whatever starts next on this tab" (see its own comment), so that
+  // redundant STOP silently cancelled the NEXT pick the user armed, before
+  // its own click could ever reach it — a real, observed regression this
+  // dependency change fixes. `nativeTreeTabId` itself never changes as part
+  // of an ordinary pick completing, only on a genuine tab switch, so it's
+  // the correct sole trigger; `producer` is dropped too, since
+  // `switchProducer` already sends its own explicit STOP for the producer
+  // being left, and this effect firing a SECOND one for the same pick would
+  // reintroduce the identical poisoning bug one layer up.
   useEffect(() => {
-    if (producer !== "native" || !pickModeOn || nativeTreeTabId === undefined) {
-      return;
-    }
     const tabId = nativeTreeTabId;
     return () => {
+      if (
+        producerRef.current !== "native" ||
+        !pickModeOnRef.current ||
+        tabId === undefined
+      ) {
+        return;
+      }
       void chrome.runtime
         .sendMessage({ type: "NATIVE_PICK_STOP", tabId })
         .catch(() => {});
     };
-    // Re-run (and so re-arm the cleanup) only when one of these identifies a
-    // DIFFERENT pick session — not on every unrelated re-render.
-  }, [producer, pickModeOn, nativeTreeTabId]);
+  }, [nativeTreeTabId]);
 
   // Escape cancels an active native pick. The DOM picker's Escape handling
   // lives in the content script because it owns the page-side click capture;

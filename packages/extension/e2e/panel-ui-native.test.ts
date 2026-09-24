@@ -590,6 +590,40 @@ test("Escape cancels an armed native pick while the panel has focus", async ({
   await expect(nav.panel.locator("[aria-selected='true']")).toHaveCount(0);
 });
 
+test("Escape on the inspected page itself also cancels an armed native pick", async ({
+  nav,
+}) => {
+  // The panel's own Escape listener (previous test) is scoped to the panel's
+  // document and never sees a keystroke on the inspected page — there's no
+  // content script in native mode to relay one. Chromium's Overlay domain
+  // fires `Overlay.inspectModeCanceled` for exactly this case (confirmed
+  // against a real browser, not assumed from the CDP spec), which `runPick`
+  // now also listens for.
+  const page = await showNative(nav, "native-panel.html");
+  const pickButton = nav.panel.getByRole("button", {
+    name: "Pick element in page",
+  });
+
+  await pickButton.click();
+  await expect(pickButton).toHaveAttribute("aria-pressed", "true");
+
+  await page.bringToFront();
+  // No click here — clicking anything while inspect mode is armed IS a pick.
+  // Escape alone is what this test is pinning.
+  await page.keyboard.press("Escape");
+
+  await expect(pickButton).toHaveAttribute("aria-pressed", "false");
+  await expect(nav.panel.locator("[aria-selected='true']")).toHaveCount(0);
+
+  // The tab's per-operation queue isn't stuck behind the (now-resolved)
+  // pick — same proof the "picking a second time" test above relies on, just
+  // via a refresh instead of a second pick.
+  await nav.panel.getByRole("button", { name: "Refresh native tree" }).click();
+  await expect
+    .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 10_000 })
+    .toBeGreaterThan(0);
+});
+
 test("picking an element the AX tree pruned resolves to its nearest kept ancestor", async ({
   nav,
 }) => {
