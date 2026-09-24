@@ -109,7 +109,7 @@ Six packages are published to npm (the table above); the Chrome extension ships 
 pnpm install && pnpm build && pnpm test
 ```
 
-Node.js >= 20, pnpm >= 9. [CONTRIBUTING.md](./CONTRIBUTING.md) is the canonical guide — project structure, the surface manifest, branch and commit conventions, and how to get a PR merged.
+Node.js >= 20, pnpm >= 9 — except `@real-a11y-dev/cli`, which requires Node.js >= 22.12 (`@puppeteer/browsers`). [CONTRIBUTING.md](./CONTRIBUTING.md) is the canonical guide — project structure, the surface manifest, branch and commit conventions, and how to get a PR merged.
 
 ## Status
 

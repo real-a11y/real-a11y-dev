@@ -44,9 +44,21 @@ function findPackageDir(fromDir: string, name: string): string | null {
   }
 }
 
-/** Every installed runtime dependency of `rootDir`, transitively, once each. */
-function runtimeClosure(rootDir: string): Manifest[] {
+/**
+ * Every installed runtime dependency of `rootDir`, transitively, once each —
+ * plus any REQUIRED dependency that could not be resolved on disk.
+ *
+ * The two are reported separately on purpose. An `optionalDependencies` entry
+ * for another platform is legitimately absent, but a missing `dependencies`
+ * entry means this walk did not see the real tree, and a guard that silently
+ * skips what it cannot find passes a partial install while checking nothing.
+ */
+function runtimeClosure(rootDir: string): {
+  manifests: Manifest[];
+  unresolved: string[];
+} {
   const seen = new Map<string, Manifest>();
+  const unresolved = new Set<string>();
   const visit = (dir: string, isRoot: boolean): void => {
     const manifest = readManifest(dir);
     const key = `${manifest.name}@${manifest.version}`;
@@ -54,18 +66,19 @@ function runtimeClosure(rootDir: string): Manifest[] {
       if (seen.has(key)) return;
       seen.set(key, manifest);
     }
-    const deps = {
-      ...manifest.dependencies,
-      ...manifest.optionalDependencies,
-    };
-    for (const name of Object.keys(deps)) {
+    const optional = new Set(Object.keys(manifest.optionalDependencies ?? {}));
+    for (const name of [
+      ...Object.keys(manifest.dependencies ?? {}),
+      ...optional,
+    ]) {
       const depDir = findPackageDir(dir, name);
-      // An optional dependency for another platform is legitimately absent.
       if (depDir) visit(depDir, false);
+      else if (!optional.has(name))
+        unresolved.add(`${manifest.name} → ${name}`);
     }
   };
   visit(rootDir, true);
-  return [...seen.values()];
+  return { manifests: [...seen.values()], unresolved: [...unresolved] };
 }
 
 describe("runtime dependencies accept the CLI's Node floor", () => {
@@ -78,11 +91,14 @@ describe("runtime dependencies accept the CLI's Node floor", () => {
   });
 
   it("installs nothing that warns EBADENGINE on the lowest Node it advertises", () => {
-    const closure = runtimeClosure(cliDir);
+    const { manifests, unresolved } = runtimeClosure(cliDir);
     // Sanity: the walk actually found the tree, so a pass means something.
-    expect(closure.some((m) => m.name === "@puppeteer/browsers")).toBe(true);
+    expect(manifests.some((m) => m.name === "@puppeteer/browsers")).toBe(true);
+    // A required dependency the walk could not resolve is a hole in the
+    // guard, not a pass — run `pnpm install` and try again.
+    expect(unresolved, "unresolved required dependencies").toEqual([]);
 
-    const rejecting = closure
+    const rejecting = manifests
       .filter((m) => m.engines?.node)
       .filter((m) => !semver.satisfies(floor!, m.engines!.node!))
       .map((m) => `${m.name}@${m.version} requires node ${m.engines!.node}`);

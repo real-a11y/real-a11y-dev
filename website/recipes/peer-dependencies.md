@@ -16,7 +16,7 @@ Real A11y is a lean dev-time audit suite. It relies on a small set of peers you 
 | `@real-a11y-dev/testing` | ≥ 20 | — | — | — |
 | `@real-a11y-dev/testing/playwright` | ≥ 20 | — | — | ≥ 1.49 |
 | `@real-a11y-dev/storybook-addon` | ≥ 20 | 18 or 19 | ≥ 8.0 | — |
-| `@real-a11y-dev/cli` | ≥ 20 | — | — | ≥ 1.49 (optional) |
+| `@real-a11y-dev/cli` | ≥ 22.12 | — | — | ≥ 1.49 (optional) |
 | `@real-a11y-dev/mcp` | ≥ 20 | — | — | ≥ 1.49 (optional) |
 
 `@real-a11y-dev/inspector` has no runtime peers — it uses standard DOM APIs, and the extraction engine it bundles has none either. `@real-a11y-dev/testing` takes any `Element` root, so your test runner and component renderer are entirely your choice.

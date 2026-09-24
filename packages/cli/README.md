@@ -5,6 +5,10 @@ semantic accessibility tree — not a WCAG rule dump — and gates CI on
 screen-reader-fidelity findings, with exit codes, machine formats, and GitHub
 annotations built in.
 
+Requires **Node.js 22.12+** (`real-a11y install` downloads Chrome through
+`@puppeteer/browsers`, which needs it) and, for anything that opens a real
+page, the optional `playwright` peer.
+
 ```sh
 npm i -D @real-a11y-dev/cli@beta playwright
 npx real-a11y install   # downloads Chrome for Testing, first time only
