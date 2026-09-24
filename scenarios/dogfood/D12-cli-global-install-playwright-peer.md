@@ -18,6 +18,13 @@ notion: "https://app.notion.com/p/3c41c354b0b5815b97f0e8b6f3a13dc8"
 
 ## Steps
 
+**Node.js 22.12 or newer.** From cli ≥ the first release after 0.1.0-beta.6
+the CLI's `engines` is `>=22.12.0`. Run from **outside** this repo, or with
+`volta run --node 22` — the repo's Volta pin is Node 20.20.2 (for the docs
+build), and on 20 npm now warns `EBADENGINE` about `@real-a11y-dev/cli`
+itself. That warning is correct, not a finding. Earlier releases advertised
+Node 20 and warned about `@puppeteer/browsers` instead (D2 F3).
+
 From a machine that does **not** already have `playwright` resolvable via
 `createRequire` from the CLI package — empty cwd, no leftover global on
 `NODE_PATH`. `--version` and `audit` must agree; a version number while

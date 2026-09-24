@@ -230,7 +230,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - run: npm ci
@@ -308,7 +308,7 @@ Replace `actions/setup-node`'s npm cache with pnpm's action and update the insta
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
@@ -349,7 +349,7 @@ one-line findings summary explains why).
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - run: npm ci # `diff` is browser-free — no `playwright install` needed here

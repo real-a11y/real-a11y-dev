@@ -241,11 +241,6 @@ jobs:
       - name: Run MCP e2e tests
         run: pnpm --filter @real-a11y-dev/mcp test:e2e
 
-      # CLI e2e — spawns the built `real-a11y` bin against data: URLs;
-      # reuses the same Chromium install.
-      - name: Run CLI e2e tests
-        run: pnpm --filter @real-a11y-dev/cli test:e2e
-
       # DOM↔native parity harness (RFC PR E). Non-blocking FIRST: it logs the
       # overlap watermark and fails only below a conservative floor, but does
       # not gate merges while the corpus + native normalizer stabilize. Drop
@@ -271,6 +266,21 @@ jobs:
       - name: Run extension native-tree e2e (advisory)
         continue-on-error: true
         run: pnpm --filter @real-a11y-dev/semantic-navigator-extension test:e2e
+
+      # CLI e2e runs LAST, and on Node 22 — `@real-a11y-dev/cli` declares
+      # `engines: >=22.12.0` (its `@puppeteer/browsers` dependency requires it),
+      # so running its suite on 20 would exercise a version the package does not
+      # support and let a Node 22-only regression pass. Everything above stays on
+      # 20 deliberately: those packages still support it, and this is the last
+      # step, so one switch covers it. `node_modules` is reused as installed —
+      # nothing in this workspace links against a Node ABI.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12
+          cache: pnpm
+
+      - name: Run CLI e2e tests (Node 22 — the CLI's supported floor)
+        run: pnpm --filter @real-a11y-dev/cli test:e2e
 
       - name: Upload Playwright report on failure
         if: failure()
@@ -314,22 +324,32 @@ jobs:
       - name: Build workspace packages
         run: pnpm -r --filter='./packages/*' build
 
+      - name: Smoke-test example dev servers
+        run: pnpm examples:dev-smoke
+
+      # The CLI steps run LAST, and on Node 22 — `@real-a11y-dev/cli` declares
+      # `engines: >=22.12.0`, so exercising it on 20 tests a version the
+      # package does not support. The examples above stay on 20, which is the
+      # point of this job: they still support it, and the resolver bug that
+      # motivated the Windows runner was version-independent.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12
+          cache: pnpm
+
       # CLI unit tests on both OSes — the CLI's path/URL normalization and
       # exit-code discipline are exactly the class of behavior only a
       # Windows runner catches (pathToFileURL, drive-letter "schemes").
       # Browserless, so it costs seconds.
-      - name: Run CLI unit tests
+      - name: Run CLI unit tests (Node 22 — the CLI's supported floor)
         run: pnpm --filter @real-a11y-dev/cli test
 
       # Spawn the built bin browser-free — exit-code and stdout-drain
       # discipline on Windows only shows up in a real spawned process.
       # `&&`, not a multi-line block: pwsh only propagates the LAST command's
       # exit code, which would mask a failing --version.
-      - name: Smoke-test CLI bin (browser-free)
+      - name: Smoke-test CLI bin (browser-free, Node 22)
         run: node packages/cli/dist/index.js --version && node packages/cli/dist/index.js --help
-
-      - name: Smoke-test example dev servers
-        run: pnpm examples:dev-smoke
 
   # Per-route accessibility gate for the deployed docs site. Runs axe
   # (per route × theme) and three structural snapshots per route — full
@@ -386,7 +406,16 @@ jobs:
       # both in-page implementations derived a name Chromium refused to (#264).
       # Runs after, not instead: it sees names the others can't, and they see
       # contrast and ARIA rules it doesn't.
-      - name: Audit the built site through Chromium's own a11y tree
+      # On Node 22: this step runs our own CLI, which declares
+      # `engines: >=22.12.0`. Everything above stays on 20 — the VitePress
+      # build needs it (see CONTRIBUTING), and this is the last step that
+      # runs anything, so one switch covers it.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12
+          cache: pnpm
+
+      - name: Audit the built site through Chromium's own a11y tree (Node 22)
         run: pnpm --filter @real-a11y-dev/website audit:native
 
       - name: Upload the native audit artifact on failure
