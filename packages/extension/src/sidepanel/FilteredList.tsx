@@ -152,8 +152,13 @@ export function FilteredListView({
                 if (!activateDisabled) {
                   onActivate(selectedItem.id, step ?? undefined);
                 }
+              } else if (onHighlight) {
+                onHighlight(selectedItem.id);
               } else {
-                onHighlight?.(selectedItem.id);
+                // Nothing to activate and no page highlight (a native
+                // `listbox`): open its tree row instead, the same place a
+                // double-click already goes, so Enter is never a dead key.
+                onGoToTree(selectedItem.id);
               }
             } else {
               onGoToTree(selectedItem.id);

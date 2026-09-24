@@ -164,6 +164,40 @@ describe("NativeTreeView role filter", () => {
     expect(onActivate).toHaveBeenCalledWith(slider[1], "increment");
   });
 
+  it("opens a listbox's tree row on Enter, since it has no action to run", () => {
+    const nodes = new Map<string, NativeNode>([
+      node("root", "document", "", 0, ["lb"]),
+      node("lb", "listbox", "Colors", 1, ["opt"]),
+      node("opt", "option", "Red", 2),
+    ]);
+    const onActivate = vi.fn();
+    act(() => {
+      render(
+        <NativeTreeView
+          nodes={nodes}
+          rootId="root"
+          busy={false}
+          capability={undefined}
+          status=""
+          onRefresh={() => {}}
+          onActivate={onActivate}
+        />,
+        container,
+      );
+    });
+    act(() => pill("Forms").click());
+    expect(options().map((o) => o.textContent)).toEqual(["Colors"]);
+    act(() => {
+      listbox().dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+      );
+    });
+    expect(onActivate).not.toHaveBeenCalled();
+    expect(container.querySelector('[role="tree"]')).not.toBeNull();
+    const selected = container.querySelector('[aria-selected="true"]');
+    expect(selected?.getAttribute("data-node-id")).toBe("lb");
+  });
+
   it("goes back to the tree on Enter over a heading, with the heading selected", () => {
     mount();
     act(() => pill("Headings").click());
