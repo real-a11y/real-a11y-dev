@@ -480,3 +480,112 @@ test("Copy → Everything copies a native tree + heading report, correctly label
   // `App.tsx`'s native export call to pass `{ includeGeneric: true }`.
   expect(markdown).toMatch(/generic "Sensitive field group"/);
 });
+
+// ---- Picker mode for the native tree ----
+//
+// The DOM producer's picker uses the content script's own capture-phase
+// click handler — nothing a native tree has, since native mode never injects
+// one. Native goes through `chrome.debugger`'s `Overlay.setInspectMode`
+// instead (the exact primitive DevTools' own "inspect element" uses), armed
+// for the whole pick session inside a SINGLE `withDebugger` span
+// (`runPick` in debugger-session.ts). These tests drive it through a real
+// page click — Playwright's own CDP input dispatch reaches the same
+// Overlay-level hit-test a real mouse click would, so `Overlay.
+// inspectNodeRequested` fires for real rather than being simulated at the
+// message level.
+
+test("picking an element on the page selects and reveals it in the native tree", async ({
+  nav,
+}) => {
+  const page = await showNative(nav, "native-panel.html");
+
+  const pickButton = nav.panel.getByRole("button", {
+    name: "Pick element in page",
+  });
+  await expect(pickButton).toHaveAttribute("aria-pressed", "false");
+  await pickButton.click();
+  await expect(pickButton).toHaveAttribute("aria-pressed", "true");
+
+  // The root-level <h1> — visible without "Expand all" (root + its immediate
+  // children are seeded open by default), and distinct from the buttons
+  // nested a level under "Items" so this can't accidentally pass by picking
+  // whatever the tree already had selected.
+  await page.getByRole("heading", { name: "Native panel fixture" }).click();
+
+  // The click resolves the pick (NATIVE_PICK_RESULT), which turns the
+  // button back off without any further panel interaction.
+  await expect(pickButton).toHaveAttribute("aria-pressed", "false");
+
+  const headingRow = nav.panel.getByRole("treeitem", {
+    name: "Native panel fixture",
+  });
+  await expect(headingRow).toBeVisible();
+  await expect(headingRow).toHaveAttribute("aria-selected", "true");
+  // Same focus-visible wiring the click/dblclick tests above pin for an
+  // ordinary row selection — the reveal effect calls the identical
+  // `treeRef.current?.focus()`.
+  await expect(nav.panel.locator(".sn-tree")).toBeFocused();
+});
+
+test("picking a second time re-fires the reveal even for the same node", async ({
+  nav,
+}) => {
+  const page = await showNative(nav, "native-panel.html");
+  const pickButton = nav.panel.getByRole("button", {
+    name: "Pick element in page",
+  });
+  const headingRow = nav.panel.getByRole("treeitem", {
+    name: "Native panel fixture",
+  });
+
+  await pickButton.click();
+  await page.getByRole("heading", { name: "Native panel fixture" }).click();
+  await expect(headingRow).toHaveAttribute("aria-selected", "true");
+
+  // Select something else first, so the second pick has somewhere to move
+  // the selection back FROM — proof this is a fresh reveal, not a
+  // no-op-because-unchanged effect (see NativeTreeView's own `reveal.nonce`
+  // comment for why a plain `nodeId`-keyed effect would miss this).
+  await nav.panel
+    .getByRole("treeitem", { name: "Sensitive field group" })
+    .click();
+  await expect(headingRow).toHaveAttribute("aria-selected", "false");
+
+  await pickButton.click();
+  await page.getByRole("heading", { name: "Native panel fixture" }).click();
+  await expect(headingRow).toHaveAttribute("aria-selected", "true");
+});
+
+test("clicking Pick again while armed cancels it without selecting anything", async ({
+  nav,
+}) => {
+  await showNative(nav, "native-panel.html");
+  const pickButton = nav.panel.getByRole("button", {
+    name: "Pick element in page",
+  });
+
+  await pickButton.click();
+  await expect(pickButton).toHaveAttribute("aria-pressed", "true");
+  await pickButton.click();
+  await expect(pickButton).toHaveAttribute("aria-pressed", "false");
+
+  // No row is selected — the cancel never produced a NATIVE_PICK_RESULT with
+  // a node id.
+  await expect(nav.panel.locator("[aria-selected='true']")).toHaveCount(0);
+});
+
+test("Escape cancels an armed native pick while the panel has focus", async ({
+  nav,
+}) => {
+  await showNative(nav, "native-panel.html");
+  const pickButton = nav.panel.getByRole("button", {
+    name: "Pick element in page",
+  });
+
+  await pickButton.click();
+  await expect(pickButton).toHaveAttribute("aria-pressed", "true");
+
+  await nav.panel.keyboard.press("Escape");
+  await expect(pickButton).toHaveAttribute("aria-pressed", "false");
+  await expect(nav.panel.locator("[aria-selected='true']")).toHaveCount(0);
+});

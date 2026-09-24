@@ -83,6 +83,14 @@ export interface NativeTreeViewProps {
     node: NativeNode,
     explicitAction?: "increment" | "decrement" | "select",
   ) => void;
+  /**
+   * A native pick just resolved to this node id. `nonce` changes on every
+   * pick result (even a repeated pick of the same node) so the effect below
+   * fires again rather than bailing out on an unchanged `nodeId` — a plain
+   * `useEffect([reveal?.nodeId])` would silently no-op on "pick the same row
+   * twice in a row."
+   */
+  reveal?: { nodeId: string; nonce: number };
 }
 
 /** A node is worth a click/Enter action, a select action, or both never — the
@@ -126,6 +134,7 @@ export function NativeTreeView({
   status,
   onRefresh,
   onActivate,
+  reveal,
 }: NativeTreeViewProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -160,6 +169,31 @@ export function NativeTreeView({
   }, [rootId]);
 
   const parentOf = useMemo(() => nativeParentIndex(nodes), [nodes]);
+
+  // A pick result lands here from App.tsx's own message handler. Expand every
+  // ancestor of the picked node (it may be nested under rows the user never
+  // opened) and select it — clearing any active search/role filter first,
+  // since a filter that doesn't match the picked node would otherwise hide it
+  // and the selection effect below would immediately drop it again (see that
+  // effect's own "gone from the current tree" comment).
+  useEffect(() => {
+    if (!reveal) return;
+    const { nodeId } = reveal;
+    if (!nodes.has(nodeId)) return;
+    setQuery("");
+    setRoleFilter(null);
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      for (let id = parentOf.get(nodeId); id; id = parentOf.get(id)) {
+        next.add(id);
+      }
+      return next;
+    });
+    setSelectedId(nodeId);
+    treeRef.current?.focus();
+    // Only re-run on a new pick (`nonce`), not on every `nodes`/`parentOf`
+    // change a background refresh causes.
+  }, [reveal?.nonce]);
 
   const hasFilter = query.trim().length > 0 || roleFilter !== null;
 

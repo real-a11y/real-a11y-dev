@@ -94,6 +94,17 @@ export type ContentToPanel =
       type: "PICK_MODE_CHANGED";
       tabId?: number;
       payload: { enabled: boolean };
+    }
+  // Native picker's counterpart to NODE_PICKED. Lives here (unlike the rest
+  // of the NATIVE_* messages, which stay in native/index.ts's own
+  // NativeMessage union — see that union's own comment) because it is a
+  // genuine background→panel PUSH the same shape as NODE_PICKED/
+  // PICK_MODE_CHANGED above, not a request/response call; the panel's
+  // single message handler already routes exactly this shape.
+  | {
+      type: "NATIVE_PICK_RESULT";
+      tabId: number;
+      payload: { nodeId: string } | { cancelled: true };
     };
 
 /** Select option for GET_FIELD_STATE response */

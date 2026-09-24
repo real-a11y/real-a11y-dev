@@ -53,7 +53,16 @@ type NativeMessage =
       value?: string;
     }
   | { type: "NATIVE_DOGFOOD_REPORT" }
-  | { type: "NATIVE_DOGFOOD_CLEAR" };
+  | { type: "NATIVE_DOGFOOD_CLEAR" }
+  // Picker: arm CDP's element picker on `tabId`. Acknowledged immediately
+  // (the pick itself can take as long as the user needs to click) — the
+  // actual outcome arrives later as a `NATIVE_PICK_RESULT` push to the
+  // panel, mirroring how the DOM picker's own NODE_PICKED works.
+  | { type: "NATIVE_PICK_START"; tabId: number }
+  // Picker: cancel an in-flight pick on `tabId` — explicit toggle-off, or
+  // the panel leaving native mode / switching tabs / disabling native mode
+  // entirely.
+  | { type: "NATIVE_PICK_STOP"; tabId: number };
 
 /** The tab's current URL, or undefined if it can't be read. Best-effort: it
  *  only drives a staleness check, so a miss degrades to "don't refuse". */
@@ -148,6 +157,13 @@ export function registerNativeMode(): void {
             return;
           case "NATIVE_FLAG_SET": {
             await chrome.storage.local.set({ [FLAG_KEY]: message.enabled });
+            // Cancel any in-flight picker session BEFORE detachAll: a pick
+            // that never got a click is still occupying that tab's slot in
+            // the per-tab operation queue detachAll waits on (see
+            // `cancelAllPicks`'s own comment) — without this, turning native
+            // mode off would hang until the user happened to click
+            // something.
+            if (!message.enabled) session.cancelAllPicks();
             // Turning it off must drop the capability, not merely stop offering
             // it. `debugger` cannot be optional, so there is no permission to
             // revoke — "off" can only mean "not attached", and an attachment
@@ -280,6 +296,47 @@ export function registerNativeMode(): void {
               success: result.success,
             });
             sendResponse(result);
+            return;
+          }
+          case "NATIVE_PICK_START": {
+            // Acknowledge immediately — the pick itself can take as long as
+            // the user needs to click something, so it must not hold this
+            // sendResponse open. The eventual outcome (a node, a cancel, or
+            // an attach failure) arrives later as a NATIVE_PICK_RESULT push.
+            sendResponse({ ok: true });
+            const tabId = message.tabId;
+            void (async () => {
+              const { outcome, value } = await withRecovery(
+                session,
+                tabId,
+                (t) => session.runPick(tabId, t),
+                log,
+              );
+              const picked = outcome.ok ? value : undefined;
+              void chrome.runtime
+                .sendMessage({
+                  type: "NATIVE_PICK_RESULT",
+                  tabId,
+                  payload: picked
+                    ? {
+                        // Chromium's Overlay.inspectNodeRequested reports a
+                        // DOM backendNodeId — the exact id nativeIdOf's own
+                        // DOM-backed branch encodes into a tree node's id
+                        // (native-core.ts), so this resolves directly
+                        // against whatever tree the panel already has.
+                        nodeId: `ax-dom-${picked.backendNodeId}`,
+                      }
+                    : { cancelled: true },
+                })
+                .catch(() => {});
+            })();
+            return;
+          }
+          case "NATIVE_PICK_STOP": {
+            sendResponse({
+              ok: true,
+              cancelled: session.cancelPick(message.tabId),
+            });
             return;
           }
         }
