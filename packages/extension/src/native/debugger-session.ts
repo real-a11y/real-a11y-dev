@@ -148,7 +148,7 @@ export class NativeDebuggerSession {
    * metric like every other native op's drop) when `fn` REJECTS rather than
    * resolves — see the constructor's `onDetach` listener.
    */
-  private pickReject = new Map<number, (reason: string) => void>();
+  private pickReject = new Map<number, () => void>();
 
   /**
    * Tabs with a pick STOP that arrived before {@link runPick} had registered
@@ -197,7 +197,7 @@ export class NativeDebuggerSession {
       // classifies a rejection via `isConnectionLost`, so this reads as the
       // same kind of drop a mid-read/mid-act disconnect already does, not as
       // the user pressing Escape.
-      this.pickReject.get(tabId)?.(String(reason));
+      this.pickReject.get(tabId)?.();
       void this.enqueue(async () => {
         const attached = await this.readAttached();
         const startedAt = attached[tabId];
@@ -750,7 +750,7 @@ export class NativeDebuggerSession {
         this.pickReject.delete(tabId);
         resolve(value);
       };
-      const rejectWith = (reason: string) => {
+      const rejectWith = () => {
         if (settled) return;
         settled = true;
         chrome.debugger.onEvent.removeListener(onEvent);
