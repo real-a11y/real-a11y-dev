@@ -589,3 +589,48 @@ test("Escape cancels an armed native pick while the panel has focus", async ({
   await expect(pickButton).toHaveAttribute("aria-pressed", "false");
   await expect(nav.panel.locator("[aria-selected='true']")).toHaveCount(0);
 });
+
+test("picking an element the AX tree pruned resolves to its nearest kept ancestor", async ({
+  nav,
+}) => {
+  const page = await showNative(nav, "native-panel.html");
+  const pickButton = nav.panel.getByRole("button", {
+    name: "Pick element in page",
+  });
+
+  await pickButton.click();
+  await expect(pickButton).toHaveAttribute("aria-pressed", "true");
+
+  // The inner span has no accessible role or name of its own — Chromium's
+  // AX tree never kept a node for it (see the fixture's own comment on
+  // Item 1) — so this pins the ancestor-walk fallback (runPick's
+  // `resolveChain`), not just the common case an ordinary element click
+  // already covers.
+  await page.locator(".item-1-inner").click();
+  await expect(pickButton).toHaveAttribute("aria-pressed", "false");
+
+  const itemRow = nav.panel.getByRole("treeitem", {
+    name: /^button "Item 1" focusable/,
+  });
+  await expect(itemRow).toHaveAttribute("aria-selected", "true");
+});
+
+test("switching producer while a native pick is armed resets the button and cancels the pick", async ({
+  nav,
+}) => {
+  await showNative(nav, "native-panel.html");
+  const pickButton = nav.panel.getByRole("button", {
+    name: "Pick element in page",
+  });
+
+  await pickButton.click();
+  await expect(pickButton).toHaveAttribute("aria-pressed", "true");
+
+  await nav.panel.getByRole("button", { name: "DOM", exact: true }).click();
+
+  // The SAME button now reflects the DOM producer's own (never-armed)
+  // picker state — without the fix, `pickModeOn` stayed true across the
+  // switch and this button rendered "on" for a picker nothing had actually
+  // started.
+  await expect(pickButton).toHaveAttribute("aria-pressed", "false");
+});

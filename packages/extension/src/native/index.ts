@@ -306,28 +306,39 @@ export function registerNativeMode(): void {
             sendResponse({ ok: true });
             const tabId = message.tabId;
             void (async () => {
-              const { outcome, value } = await withRecovery(
+              const { outcome, value: picked } = await withRecovery(
                 session,
                 tabId,
                 (t) => session.runPick(tabId, t),
                 log,
               );
-              const picked = outcome.ok ? value : undefined;
+              // Three distinct outcomes, kept distinct all the way to the
+              // panel rather than collapsed into one "it didn't work" —
+              // `outcome.ok === false` is a real attach/dispatch failure
+              // (DevTools already attached, an unattachable navigation
+              // mid-arm, a connection drop), not the same thing as the user
+              // pressing Escape (`outcome.ok === true`, `picked === null`).
+              const payload = !outcome.ok
+                ? {
+                    error: outcome.error ?? "pick failed",
+                    ...(outcome.reason ? { reason: outcome.reason } : {}),
+                  }
+                : picked
+                  ? {
+                      // Chromium's Overlay.inspectNodeRequested reports a
+                      // DOM backendNodeId — the exact id nativeIdOf's own
+                      // DOM-backed branch encodes into a tree node's id
+                      // (native-core.ts). `chainBackendNodeIds` walks up
+                      // from it (runPick's own `resolveChain`) for when the
+                      // exact hit isn't a node the AX tree kept.
+                      nodeId: `ax-dom-${picked.backendNodeId}`,
+                      ancestorIds: picked.chainBackendNodeIds
+                        .slice(1)
+                        .map((id) => `ax-dom-${id}`),
+                    }
+                  : { cancelled: true };
               void chrome.runtime
-                .sendMessage({
-                  type: "NATIVE_PICK_RESULT",
-                  tabId,
-                  payload: picked
-                    ? {
-                        // Chromium's Overlay.inspectNodeRequested reports a
-                        // DOM backendNodeId — the exact id nativeIdOf's own
-                        // DOM-backed branch encodes into a tree node's id
-                        // (native-core.ts), so this resolves directly
-                        // against whatever tree the panel already has.
-                        nodeId: `ax-dom-${picked.backendNodeId}`,
-                      }
-                    : { cancelled: true },
-                })
+                .sendMessage({ type: "NATIVE_PICK_RESULT", tabId, payload })
                 .catch(() => {});
             })();
             return;

@@ -423,7 +423,7 @@ export function App() {
   // a `reveal` prop instead; `nonce` forces the child's effect to re-fire
   // even when the same node is picked twice in a row.
   const [nativePickReveal, setNativePickReveal] = useState<
-    { nodeId: string; nonce: number } | undefined
+    { nodeId: string; ancestorIds?: string[]; nonce: number } | undefined
   >(undefined);
   // Bumped whenever the bound tab changes (see the myTabId effect below).
   // Read-gates a NATIVE_READ/NATIVE_CAPABILITY reply against a tab switch
@@ -945,19 +945,34 @@ export function App() {
       }
 
       if (message.type === "NATIVE_PICK_RESULT") {
-        // Background's reply to NATIVE_PICK_START, for either outcome: a
-        // click resolved to a node, or the pick was cancelled (Escape, tab
-        // switch, disabling native mode — see the cleanup effect below).
-        // Pick mode is inherently one-shot server-side (`runPick` always
-        // resolves and turns Overlay.setInspectMode back off), so the local
-        // mirror comes off here unconditionally, matching PICK_MODE_CHANGED's
-        // own DOM-side handling above.
+        // Background's reply to NATIVE_PICK_START, for any of three
+        // outcomes: a click resolved to a node, the pick was cancelled
+        // (Escape, tab switch, disabling native mode — see the cleanup
+        // effect below), or the attach/dispatch itself failed (DevTools
+        // already attached, an unattachable navigation mid-arm, a
+        // connection drop). Pick mode is inherently one-shot server-side
+        // (`runPick` always resolves and turns Overlay.setInspectMode back
+        // off), so the local mirror comes off here unconditionally, matching
+        // PICK_MODE_CHANGED's own DOM-side handling above.
         setPickModeOn(false);
         if ("nodeId" in message.payload) {
           setNativePickReveal({
             nodeId: message.payload.nodeId,
+            ancestorIds: message.payload.ancestorIds,
             nonce: Date.now(),
           });
+        } else if ("error" in message.payload) {
+          // Distinct from a plain cancel (the `else` — nothing to say, the
+          // user asked for exactly this) so a real failure doesn't read as
+          // Escape having silently worked.
+          if (message.payload.reason) {
+            setNativeCapability(blockedBy(message.payload.reason));
+            setNativeStatus(
+              `native unavailable — ${explainUnavailable(message.payload.reason)}`,
+            );
+          } else {
+            setNativeStatus(`pick failed: ${message.payload.error}`);
+          }
         }
       }
     };
@@ -1736,6 +1751,14 @@ export function App() {
     const next = !pickModeOn;
     if (producer === "native") {
       if (nativeTreeTabId === undefined) return; // load a tree first
+      // Same guard the toolbar button's own `disabled` enforces, but only
+      // for ARMING — without it, the Ctrl/Cmd+Shift+C shortcut could start a
+      // pick while a NATIVE_READ/NATIVE_ACT is still in flight, queueing it
+      // behind an operation the UI is actively showing as disabled. Stopping
+      // an already-armed pick must never be blocked by this: `nativeBusy` is
+      // unrelated state that could in principle flip true while a pick is
+      // outstanding, and the user still needs a way to cancel it.
+      if (next && nativeBusy) return;
       setPickModeOn(next);
       void chrome.runtime
         .sendMessage(
@@ -1761,7 +1784,31 @@ export function App() {
       type: "SET_PICK_MODE",
       payload: { enabled: true },
     });
-  }, [pickModeOn, producer, nativeTreeTabId, sendToBoundTab, exitPickMode]);
+  }, [
+    pickModeOn,
+    producer,
+    nativeTreeTabId,
+    nativeBusy,
+    sendToBoundTab,
+    exitPickMode,
+  ]);
+
+  // Switching producers while a pick is armed left the OLD producer's picker
+  // running (the DOM content script's click capture, or the native Overlay
+  // inspect mode) with nothing to turn it off — the toolbar's own pick
+  // button just started reflecting the NEW producer's state (always "off",
+  // since neither ever auto-arms), so the running picker became invisible to
+  // the UI while still live. Cancelling first, on the producer the pick
+  // actually belongs to, avoids that: `togglePickMode` reads `producer` from
+  // its own closure, so calling it before `setProducer` targets the right
+  // one.
+  const switchProducer = useCallback(
+    (next: "dom" | "native") => {
+      if (pickModeOn) togglePickMode();
+      setProducer(next);
+    },
+    [pickModeOn, togglePickMode],
+  );
 
   // Ctrl/Cmd+Shift+C: toggle pick mode, mirroring DevTools' inspector
   // shortcut. Bound to the panel document so it fires whenever the panel
@@ -2280,14 +2327,14 @@ export function App() {
               <button
                 class="sn-toggle-btn"
                 aria-pressed={producer === "dom"}
-                onClick={() => setProducer("dom")}
+                onClick={() => switchProducer("dom")}
               >
                 DOM
               </button>
               <button
                 class="sn-toggle-btn"
                 aria-pressed={producer === "native"}
-                onClick={() => setProducer("native")}
+                onClick={() => switchProducer("native")}
               >
                 NATIVE
               </button>
@@ -2356,7 +2403,7 @@ export function App() {
             onClick={togglePickMode}
             disabled={
               producer === "native" &&
-              (nativeTreeTabId === undefined || nativeBusy)
+              (nativeTreeTabId === undefined || (!pickModeOn && nativeBusy))
             }
             title={
               pickModeOn

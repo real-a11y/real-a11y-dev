@@ -621,8 +621,11 @@ export class NativeDebuggerSession {
   runPick(
     tabId: number,
     t: CdpTransport,
-  ): Promise<{ backendNodeId: number } | null> {
-    return new Promise<{ backendNodeId: number } | null>((resolve) => {
+  ): Promise<{ backendNodeId: number; chainBackendNodeIds: number[] } | null> {
+    return new Promise<{
+      backendNodeId: number;
+      chainBackendNodeIds: number[];
+    } | null>((resolve) => {
       let settled = false;
       const onEvent = (
         source: { tabId?: number },
@@ -635,9 +638,56 @@ export class NativeDebuggerSession {
         ) {
           return;
         }
-        finish((params as { backendNodeId: number } | undefined) ?? null);
+        const picked = params as { backendNodeId: number } | undefined;
+        if (!picked) {
+          finish(null);
+          return;
+        }
+        void resolveChain(picked.backendNodeId).then((chainBackendNodeIds) =>
+          finish({ backendNodeId: picked.backendNodeId, chainBackendNodeIds }),
+        );
       };
-      const finish = (value: { backendNodeId: number } | null) => {
+      /**
+       * Chromium's hit test resolves to the exact DOM element under the
+       * cursor, which is often a node the accessibility tree never kept —
+       * an unnamed wrapper `<span>` inside a named button, padding inside a
+       * labelled group, and so on (the DOM picker's own `resolveTracked`
+       * walks `.parentElement` for the identical reason). `Accessibility.
+       * getAXNodeAndAncestors` returns the AX node for `backendNodeId` and
+       * its ancestors up to the root in one call — cheaper than walking the
+       * DOM domain's own parent chain node by node — so the panel can try
+       * each ancestor in turn against whatever tree it currently has
+       * loaded until one is actually present. A failure here (an older
+       * Chromium without the method, a torn-down target) degrades to just
+       * the raw hit, matching this function's pre-fallback behavior rather
+       * than losing the pick entirely.
+       */
+      const resolveChain = async (backendNodeId: number): Promise<number[]> => {
+        try {
+          // `getAXNodeAndAncestors` answers "Accessibility has not been
+          // enabled" without this — this `runPick` attach span never enables
+          // the Accessibility domain otherwise (readNativeTree does, but
+          // that's a separate withDebugger call). Idempotent, so calling it
+          // again if a later change to this method ever does enable it
+          // elsewhere costs nothing.
+          await t.send("Accessibility.enable");
+          const result = await t.send<{
+            nodes?: Array<{ backendDOMNodeId?: number }>;
+          }>("Accessibility.getAXNodeAndAncestors", { backendNodeId });
+          const ancestorIds = (result.nodes ?? [])
+            .map((n) => n.backendDOMNodeId)
+            .filter((id): id is number => typeof id === "number");
+          // The raw hit always leads, regardless of what index 0 of the
+          // ancestor response reports — this is a fallback CHAIN, not a
+          // replacement for the actual click target.
+          return Array.from(new Set([backendNodeId, ...ancestorIds]));
+        } catch {
+          return [backendNodeId];
+        }
+      };
+      const finish = (
+        value: { backendNodeId: number; chainBackendNodeIds: number[] } | null,
+      ) => {
         if (settled) return;
         settled = true;
         chrome.debugger.onEvent.removeListener(onEvent);

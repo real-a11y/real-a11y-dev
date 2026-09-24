@@ -90,7 +90,17 @@ export interface NativeTreeViewProps {
    * `useEffect([reveal?.nodeId])` would silently no-op on "pick the same row
    * twice in a row."
    */
-  reveal?: { nodeId: string; nonce: number };
+  reveal?: {
+    nodeId: string;
+    /**
+     * Nearest-first fallback chain — the picked node's own DOM ancestors —
+     * for when `nodeId` itself was never kept in the AX tree (an unnamed
+     * wrapper, padding inside a labelled group). Tried in order; the first
+     * one present in `nodes` wins.
+     */
+    ancestorIds?: string[];
+    nonce: number;
+  };
 }
 
 /** A node is worth a click/Enter action, a select action, or both never — the
@@ -178,8 +188,14 @@ export function NativeTreeView({
   // effect's own "gone from the current tree" comment).
   useEffect(() => {
     if (!reveal) return;
-    const { nodeId } = reveal;
-    if (!nodes.has(nodeId)) return;
+    // The exact hit-tested node may not itself be one the AX tree kept — an
+    // unnamed wrapper `<span>`, padding inside a labelled group. Fall back
+    // to the nearest ancestor that IS present, same as the DOM picker's own
+    // `resolveTracked` walking `.parentElement` for the identical reason.
+    const nodeId = [reveal.nodeId, ...(reveal.ancestorIds ?? [])].find((id) =>
+      nodes.has(id),
+    );
+    if (nodeId === undefined) return;
     setQuery("");
     setRoleFilter(null);
     setExpanded((prev) => {
