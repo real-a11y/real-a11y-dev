@@ -678,7 +678,48 @@ describe("NativeDebuggerSession picker", () => {
 
     const { outcome, value } = await result;
     expect(outcome.ok).toBe(true);
-    expect(value).toEqual({ backendNodeId: 123 });
+    // The default `sendCommand` stub answers `Accessibility.
+    // getAXNodeAndAncestors` with `{}` (no `nodes`), so the ancestor chain
+    // falls back to just the raw hit — the next test covers the real chain.
+    expect(value).toEqual({ backendNodeId: 123, chainBackendNodeIds: [123] });
+  });
+
+  it("resolves ancestorIds from Accessibility.getAXNodeAndAncestors, deduped and self-first", async () => {
+    const { eventListeners } = stubChrome();
+    const g = globalThis as unknown as { chrome: typeof chrome };
+    (
+      g.chrome.debugger.sendCommand as ReturnType<typeof vi.fn>
+    ).mockImplementation(async (_target: unknown, method: string) => {
+      if (method === "Accessibility.getAXNodeAndAncestors") {
+        return {
+          nodes: [
+            // The picked node itself, echoed back without a role — an
+            // unnamed wrapper `<span>` the AX tree never kept.
+            { backendDOMNodeId: 123 },
+            // Its nearest labelled ancestor — the one actually present in a
+            // loaded native tree.
+            { backendDOMNodeId: 100 },
+            // A text-only AX node with no DOM backing at all, same as a
+            // native tree's own synthesized root — must be filtered out,
+            // not turned into `ax-dom-undefined`.
+            {},
+            { backendDOMNodeId: 1 },
+          ],
+        };
+      }
+      return {};
+    });
+    const session = new NativeDebuggerSession(new FakeStorage());
+
+    const result = session.withDebugger(7, (t) => session.runPick(7, t));
+    await settleAttach();
+    fireInspectNodeRequested(eventListeners, 7, 123);
+
+    const { value } = await result;
+    expect(value).toEqual({
+      backendNodeId: 123,
+      chainBackendNodeIds: [123, 100, 1],
+    });
   });
 
   it("ignores an inspectNodeRequested for a different tab", async () => {

@@ -53,7 +53,16 @@
       later, unrelated node.
     -->
     <section aria-label="Items">
-      <button id="item-1">Item 1</button>
+      <!--
+        Item 1's text sits in its own inner <span>, unlike every other item
+        here — a DOM element with no accessible role or name of its own, so
+        Chromium's AX tree prunes it and keeps only the enclosing <button>.
+        Exercises the native picker's ancestor-fallback: clicking exactly on
+        this span hits a backendNodeId no native tree row was ever built
+        from, and the picker has to walk up to the button to resolve
+        anything at all.
+      -->
+      <button id="item-1"><span class="item-1-inner">Item 1</span></button>
       <button id="item-2">Item 2</button>
       <button id="item-3">Item 3</button>
       <button id="item-4">Item 4</button>
