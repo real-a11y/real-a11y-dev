@@ -128,6 +128,17 @@ export class NativeDebuggerSession {
   private isEnabled: () => Promise<boolean>;
 
   /**
+   * Cancel callback for an in-flight {@link runPick}, keyed by tab id. Lets
+   * {@link cancelPick}/{@link cancelAllPicks} resolve a pick session that is
+   * currently just an in-memory `Promise` awaiting either a click or a stop
+   * — there is nothing in `chrome.storage` to read it back from, unlike
+   * every other piece of state this class tracks, because a pick session
+   * that outlives an MV3 suspend has nothing left to cancel anyway (see
+   * {@link runPick}'s own comment).
+   */
+  private pickCancel = new Map<number, () => void>();
+
+  /**
    * @param storage        durable area for the dogfood log (chrome.storage.local).
    * @param attachStorage  area for attach bookkeeping; defaults to `storage`.
    *                       Production passes `chrome.storage.session` — it
@@ -577,5 +588,110 @@ export class NativeDebuggerSession {
     );
     // The tab may be gone; a failed detach is not actionable.
     await chrome.debugger.detach({ tabId }).catch(() => {});
+  }
+
+  /**
+   * Arm CDP's own element picker — `Overlay.setInspectMode`, the exact
+   * primitive DevTools' own "inspect element" tool uses — and resolve once
+   * the user clicks something (`Overlay.inspectNodeRequested`) or
+   * {@link cancelPick}/{@link cancelAllPicks} is called.
+   *
+   * Pass this as the `fn` to `withDebugger` (via `native/index.ts`'s
+   * `withRecovery`, exactly like `readNativeTree`/`dispatchNative`): the
+   * whole pick session — however long the user takes to click — then runs
+   * inside ONE attach→detach span, so every existing per-tab queue,
+   * dogfood-log and revoke-safety guarantee `withDebugger` already provides
+   * applies unchanged. This is deliberately the one native operation that
+   * does NOT keep attach dwell minimal — see the picker-mode ticket's own
+   * risk note; a caller measuring dwell time should treat this session
+   * separately from the rest.
+   *
+   * MV3 caveat, not solved here: if the service worker suspends while a
+   * pick is still armed (a realistic outcome if the user takes longer than
+   * the SW's idle timeout to click), the in-memory `Promise` this creates —
+   * and the `pickCancel` entry pointing at it — are destroyed along with
+   * the rest of the worker's heap. `chrome.debugger.onDetach` still fires
+   * on the fresh worker instance and records the drop (see the
+   * constructor), so the attachment itself never leaks or strands the
+   * banner — only this specific pick's eventual `NATIVE_PICK_RESULT` push
+   * never arrives. The panel's own pick-mode toggle is the recovery: it
+   * clears its local "on" state optimistically on stop, never waiting for
+   * a push that this scenario means will never come.
+   */
+  runPick(
+    tabId: number,
+    t: CdpTransport,
+  ): Promise<{ backendNodeId: number } | null> {
+    return new Promise<{ backendNodeId: number } | null>((resolve) => {
+      let settled = false;
+      const onEvent = (
+        source: { tabId?: number },
+        method: string,
+        params?: object,
+      ) => {
+        if (
+          source.tabId !== tabId ||
+          method !== "Overlay.inspectNodeRequested"
+        ) {
+          return;
+        }
+        finish((params as { backendNodeId: number } | undefined) ?? null);
+      };
+      const finish = (value: { backendNodeId: number } | null) => {
+        if (settled) return;
+        settled = true;
+        chrome.debugger.onEvent.removeListener(onEvent);
+        this.pickCancel.delete(tabId);
+        resolve(value);
+      };
+      this.pickCancel.set(tabId, () => finish(null));
+      chrome.debugger.onEvent.addListener(onEvent);
+      // `Overlay.setInspectMode` answers "DOM should be enabled first" without
+      // this — the Overlay domain resolves a hit-tested node against the DOM
+      // domain's own node tree, which nothing else in this class ever enables
+      // (readNativeTree/dispatchNative go through Accessibility/Runtime, not
+      // DOM). `DOM.enable` needs no matching disable: this session's own
+      // detach (the `finally` below, then `withDebugger`'s own) drops it with
+      // the rest of the attachment.
+      void t
+        .send("DOM.enable")
+        .then(() => t.send("Overlay.enable"))
+        .then(() =>
+          t.send("Overlay.setInspectMode", {
+            mode: "searchForNode",
+            highlightConfig: {
+              contentColor: { r: 111, g: 168, b: 220, a: 0.35 },
+              showInfo: true,
+            },
+          }),
+        )
+        .catch(() => finish(null));
+    }).finally(() =>
+      // Best-effort: if the tab or connection is already gone this is a
+      // no-op failure, same as every other cleanup call in this file.
+      t.send("Overlay.setInspectMode", { mode: "none" }).catch(() => {}),
+    );
+  }
+
+  /** Cancel an in-flight {@link runPick} on `tabId`. Returns whether one was
+   *  actually active — a stop with nothing to cancel (picking already
+   *  resolved, or this worker instance never armed it) is a normal no-op,
+   *  not an error. */
+  cancelPick(tabId: number): boolean {
+    const cancel = this.pickCancel.get(tabId);
+    if (!cancel) return false;
+    cancel();
+    return true;
+  }
+
+  /**
+   * Cancel every in-flight pick, across every tab. Called before
+   * {@link detachAll} (the revoke path — turning native mode off): without
+   * this, a pick session that never got a click would sit in the per-tab
+   * queue {@link detachAll} waits on, and "Disable native mode" would hang
+   * until the user happened to click something or time out the worker.
+   */
+  cancelAllPicks(): void {
+    for (const cancel of [...this.pickCancel.values()]) cancel();
   }
 }
