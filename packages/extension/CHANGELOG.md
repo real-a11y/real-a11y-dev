@@ -18,6 +18,12 @@
 
 ## Unreleased
 
+- Split the role-filtered list (Headings, Links, Buttons, …) into a
+  producer-agnostic view, so the dev-only native tree can show the same list.
+  The list itself is unchanged, except that a row with no accessible name now
+  shows its trimmed text content.
+  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR))
+
 - Make tree keyboard navigation cost the same on a large tree as on a small
   one. Resolving the selected row to a list position was a linear scan of the
   whole visible list, and it happened on every arrow keypress — once inside the

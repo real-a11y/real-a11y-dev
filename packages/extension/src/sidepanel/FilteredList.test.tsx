@@ -71,6 +71,26 @@ describe("FilteredList", () => {
 
   function noop() {}
 
+  it("keeps the Move to button for the DOM producer, which can highlight", () => {
+    act(() => {
+      render(
+        <FilteredList
+          nodes={HEADINGS}
+          roleFilter="heading"
+          query=""
+          onHighlight={noop}
+          onActivate={noop}
+          onGoToTree={noop}
+        />,
+        container,
+      );
+    });
+    const buttons = [...container.querySelectorAll(".sn-list-action-btn")].map(
+      (b) => b.textContent,
+    );
+    expect(buttons).toEqual(["Activate", "Move to"]);
+  });
+
   it("lists only the nodes in the filtered role group, with heading levels", () => {
     act(() => {
       render(
