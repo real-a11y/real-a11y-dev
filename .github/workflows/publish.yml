@@ -80,12 +80,12 @@ jobs:
       # npm's provenance attestation, which is built from GITHUB_SHA/OIDC claims
       # rather than the working tree, both resolve to that exact commit.
       # `release-tag.yml` dispatches at a release tag precisely so these agree.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # pnpm version is read from `packageManager` in package.json.
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: pnpm
