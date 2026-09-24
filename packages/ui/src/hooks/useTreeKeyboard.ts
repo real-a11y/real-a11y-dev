@@ -7,6 +7,7 @@ import {
   findTypeAheadIndex,
   isTypeAheadKey,
 } from "./typeAhead.js";
+import { useIndexById } from "./useIndexById.js";
 
 interface UseTreeKeyboardOptions {
   nodes: Map<string, SemanticNode>;
@@ -49,6 +50,18 @@ export function useTreeKeyboard({
 }: UseTreeKeyboardOptions) {
   const typeAhead = useRef(createTypeAheadBuffer());
 
+  // Row id → position, so neither the per-keypress index lookup nor
+  // ArrowRight's "is this child visible?" check scans the list.
+  //
+  // Both panels also hold this map for their own lookups, so the list is
+  // walked twice per change. Taking it as an option instead was tried and
+  // backed out: it buys one O(N) walk per *list change* — the same order as
+  // building the list — at the cost of coupling the hook to its callers and
+  // ~20 bytes that put the ui bundle exactly on its size-limit ceiling. Not
+  // worth it; the win here is the per-keypress scans, which are gone either
+  // way.
+  const indexById = useIndexById(visibleNodeIds);
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (
@@ -90,7 +103,7 @@ export function useTreeKeyboard({
         return;
       }
 
-      const currentIndex = visibleNodeIds.indexOf(selectedId);
+      const currentIndex = indexById.get(selectedId) ?? -1;
       if (currentIndex === -1) return;
 
       const node = nodes.get(selectedId);
@@ -126,7 +139,7 @@ export function useTreeKeyboard({
             } else {
               // Move to first child
               const firstVisibleChild = node.childIds.find((id) =>
-                visibleNodeIds.includes(id),
+                indexById.has(id),
               );
               if (firstVisibleChild) {
                 onSelect(firstVisibleChild);
@@ -225,6 +238,7 @@ export function useTreeKeyboard({
     [
       nodes,
       visibleNodeIds,
+      indexById,
       selectedId,
       onSelect,
       onToggle,

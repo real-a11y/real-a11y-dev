@@ -18,6 +18,15 @@
 
 ## Unreleased
 
+- Make tree keyboard navigation cost the same on a large tree as on a small
+  one. Resolving the selected row to a list position was a linear scan of the
+  whole visible list, and it happened on every arrow keypress — once inside the
+  keyboard hook, again for `aria-activedescendant`, and again in the
+  scroll-into-view and reveal effects. ArrowRight was worse still, scanning the
+  list once per child to find the first visible one. All of them now read an
+  index map built once per list. Navigation behaviour is unchanged.
+  ([#402](https://github.com/real-a11y/real-a11y-dev/pull/402))
+
 - Fix an empty tree on pages that keep a closed `aria-modal` drawer mounted.
   The DOM tree treated any visible `aria-modal="true"` element as the open
   modal and scoped to it alone, so a closed mobile nav, hidden with

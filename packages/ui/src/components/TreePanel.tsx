@@ -34,6 +34,7 @@ import {
 } from "preact/hooks";
 
 import type { TreeDiffView } from "../diff.js";
+import { useIndexById } from "../hooks/useIndexById.js";
 import { useInputModality } from "../hooks/useInputModality.js";
 import { treeRowDomId, useInstanceId } from "../hooks/useInstanceId.js";
 import { useSearch } from "../hooks/useSearch.js";
@@ -225,6 +226,51 @@ export function TreePanel({
     [treeData],
   );
 
+  // Chip data per row, resolved once per tree rather than rebuilt inside the
+  // render loop. The arrays used to be constructed inline for every rendered
+  // row on every render — so each arrow keypress, flash timeout and
+  // forceRender re-ran `nodes.get` + `makeLinkLabel` for every link on screen
+  // and handed TreeNode fresh array identities. Only rows that actually have a
+  // link get an entry, so this walks the cross-link index, not the whole tree.
+  // Safe to key on the tree alone: labels read `a11y.role`/`a11y.name`, which
+  // the panel never mutates in place (it only touches `ui.*`).
+  const controlsLinksById = useMemo(() => {
+    const resolve = (ids: string[], inferredFrom: (id: string) => boolean) => {
+      const links: ControlsLink[] = [];
+      for (const id of ids) {
+        const target = treeData.nodes.get(id);
+        if (!target) continue;
+        links.push({
+          id,
+          label: makeLinkLabel(target),
+          inferred: inferredFrom(id),
+        });
+      }
+      return links.length > 0 ? links : undefined;
+    };
+
+    const byId = new Map<
+      string,
+      { controls?: ControlsLink[]; controlledBy?: ControlsLink[] }
+    >();
+    for (const [rowId, forwardIds] of controlsIndex.forward) {
+      const controls = resolve(forwardIds, () =>
+        controlsIndex.inferred.has(rowId),
+      );
+      if (controls) byId.set(rowId, { controls });
+    }
+    for (const [rowId, reverseIds] of controlsIndex.reverse) {
+      const controlledBy = resolve(reverseIds, (triggerId) =>
+        controlsIndex.inferred.has(triggerId),
+      );
+      if (!controlledBy) continue;
+      const existing = byId.get(rowId);
+      if (existing) existing.controlledBy = controlledBy;
+      else byId.set(rowId, { controlledBy });
+    }
+    return byId;
+  }, [treeData, controlsIndex]);
+
   // Tree-node id currently flashing after a cross-link jump. Cleared by a
   // timeout so the flash plays once.
   const [flashingId, setFlashingId] = useState<string | null>(null);
@@ -253,10 +299,17 @@ export function TreePanel({
     [treeData, renderCount],
   );
 
-  // Latest visible list, readable from a rAF callback that runs after an
-  // ancestor-expansion re-render has committed (see the picker effect below).
-  const visibleNodeIdsRef = useRef(visibleNodeIds);
-  visibleNodeIdsRef.current = visibleNodeIds;
+  // Row id → position, so resolving the selection to an index (for
+  // aria-activedescendant, scroll-into-view, and every pick/jump) is a lookup
+  // rather than a scan of the whole visible list.
+  const visibleIndexById = useIndexById(visibleNodeIds);
+
+  // Latest index map, readable from a rAF callback that runs after an
+  // ancestor-expansion re-render has committed (see the picker effect below),
+  // so those callbacks resolve against the post-expansion list without taking
+  // a dependency on it.
+  const visibleIndexByIdRef = useRef(visibleIndexById);
+  visibleIndexByIdRef.current = visibleIndexById;
 
   // Virtualize the tree list: render only the rows in the viewport plus overscan.
   const {
@@ -275,7 +328,7 @@ export function TreePanel({
   // Prefixed with instanceId so a second panel's reference can't resolve here.
   const activeDescendantId = (() => {
     if (selectedId === null) return undefined;
-    const i = visibleNodeIds.indexOf(selectedId);
+    const i = visibleIndexById.get(selectedId) ?? -1;
     return i >= startIndex && i < endIndex
       ? treeRowDomId(instanceId, selectedId)
       : undefined;
@@ -290,7 +343,7 @@ export function TreePanel({
   // and `handleJumpToNode`.)
   useEffect(() => {
     if (!selectedId) return;
-    const index = visibleNodeIdsRef.current.indexOf(selectedId);
+    const index = visibleIndexByIdRef.current.get(selectedId) ?? -1;
     if (index !== -1) scrollToIndex(index, "nearest");
   }, [selectedId, scrollToIndex]);
 
@@ -322,7 +375,7 @@ export function TreePanel({
     // away from. In that case neither `selectedId` nor `visibleNodeIds` change,
     // so the selection effect above never re-runs; with virtualization the row
     // may also be unmounted, so we scroll by index explicitly. The rAF lets any
-    // ancestor-expansion re-render commit (refreshing `visibleNodeIdsRef`) first.
+    // ancestor-expansion re-render commit (refreshing `visibleIndexByIdRef`) first.
     //
     // Deliberately NOT cancelled on cleanup: acknowledging the pick clears
     // `pickedNodeId`, which re-runs this effect, and a cleanup-based
@@ -330,7 +383,7 @@ export function TreePanel({
     // one-shot frame is harmless after unmount because scrollToIndex no-ops when
     // the container ref is null.
     requestAnimationFrame(() => {
-      const index = visibleNodeIdsRef.current.indexOf(pickedNodeId);
+      const index = visibleIndexByIdRef.current.get(pickedNodeId) ?? -1;
       if (index !== -1) scrollToIndex(index, "nearest");
     });
     onPickedNodeHandled?.();
@@ -404,9 +457,9 @@ export function TreePanel({
       // Scroll the target into view even when it is already the selection (a
       // chip can point back at the current node); the selectedId-keyed effect
       // won't re-run in that case. The rAF lets any ancestor-expansion
-      // re-render commit (refreshing `visibleNodeIdsRef`) first.
+      // re-render commit (refreshing `visibleIndexByIdRef`) first.
       requestAnimationFrame(() => {
-        const index = visibleNodeIdsRef.current.indexOf(targetId);
+        const index = visibleIndexByIdRef.current.get(targetId) ?? -1;
         if (index !== -1) scrollToIndex(index, "nearest");
       });
     },
@@ -536,36 +589,7 @@ export function TreePanel({
             {visibleNodeIds.slice(startIndex, endIndex).map((id) => {
               const node = asDom(treeData.nodes.get(id));
               if (!node) return null;
-              const forwardIds = controlsIndex.forward.get(id);
-              const reverseIds = controlsIndex.reverse.get(id);
-              const controlsLinks: ControlsLink[] | undefined =
-                forwardIds && forwardIds.length > 0
-                  ? (forwardIds
-                      .map((targetId) => {
-                        const target = treeData.nodes.get(targetId);
-                        if (!target) return null;
-                        return {
-                          id: targetId,
-                          label: makeLinkLabel(target),
-                          inferred: controlsIndex.inferred.has(id),
-                        };
-                      })
-                      .filter(Boolean) as ControlsLink[])
-                  : undefined;
-              const controlledByLinks: ControlsLink[] | undefined =
-                reverseIds && reverseIds.length > 0
-                  ? (reverseIds
-                      .map((triggerId) => {
-                        const trigger = treeData.nodes.get(triggerId);
-                        if (!trigger) return null;
-                        return {
-                          id: triggerId,
-                          label: makeLinkLabel(trigger),
-                          inferred: controlsIndex.inferred.has(triggerId),
-                        };
-                      })
-                      .filter(Boolean) as ControlsLink[])
-                  : undefined;
+              const links = controlsLinksById.get(id);
               const position = visiblePositions.get(id);
               return (
                 <TreeNode
@@ -582,8 +606,8 @@ export function TreePanel({
                   onToggle={handleToggle}
                   onActivate={handleActivate}
                   onHover={handleHover}
-                  controlsLinks={controlsLinks}
-                  controlledByLinks={controlledByLinks}
+                  controlsLinks={links?.controls}
+                  controlledByLinks={links?.controlledBy}
                   onJumpToNode={handleJumpToNode}
                   idPrefix={instanceId}
                 />
