@@ -5,13 +5,12 @@ import {
   getDescendantText,
   getElementRefs,
   htmlAamNameOwner,
-  isNameBarrierRole,
+  isNameBarrierElement,
   isNameFromContentHost,
   resolveEffectiveRoot,
   resolveFocusedElement,
 } from "../extraction/dom-extractor.js";
 import { deepQuerySelectorAll } from "../extraction/flat-tree.js";
-import { getImplicitRole } from "../extraction/role-map.js";
 import type { ExtractionResult, SemanticNode, TreeChange } from "../types.js";
 import { getNodeId } from "../utils/id-generator.js";
 
@@ -485,7 +484,7 @@ export class LiveTreeExtractor {
       else if (isNameFromContentHost(node)) outermostHost = node;
       // A name-source child is often itself a barrier (`caption`). Don't stop
       // there when its owner still needs the re-extract.
-      if (!owner && isNameBarrierRole(getImplicitRole(node))) break;
+      if (!owner && isNameBarrierElement(node)) break;
       node = node.parentElement;
     }
     return outermostHost ?? el;
