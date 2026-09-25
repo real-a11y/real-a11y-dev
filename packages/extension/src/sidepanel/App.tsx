@@ -1418,18 +1418,42 @@ export function App() {
   useEffect(() => {
     if (!nativeModeEnabled || !connected || myTabId === null) return;
     if (hasAppliedNativeDefault.current) return;
+    // Another native read already holds `nativeInFlight` (the auto-load
+    // effect firing from a manual toggle that raced this one, a refresh, an
+    // in-flight action's own re-read, …) — `loadNativeTree` would return
+    // `false` purely because it's busy, not because THIS attempt actually
+    // failed, and the code below can't tell those apart (nothing bumps
+    // `nativeOpToken` on a busy-skip). Misreading busy as failed would burn
+    // the one-shot and revert to DOM under a tree that may well load fine
+    // moments later. `nativeBusy` is a dependency below specifically so this
+    // effect re-evaluates once that other read clears, instead of never
+    // getting another chance.
+    if (nativeInFlight.current) return;
     hasAppliedNativeDefault.current = true;
     const tabId = myTabId;
     const token = nativeOpToken.current;
     setProducer("native");
     hasAutoLoadedNative.current = true;
-    void loadNativeTree(tabId).then((ok) => {
-      if (ok || token !== nativeOpToken.current) return;
-      hasAppliedNativeDefault.current = false;
-      hasAutoLoadedNative.current = false;
-      setProducer("dom");
-    });
-  }, [nativeModeEnabled, connected, myTabId, loadNativeTree]);
+    void loadNativeTree(tabId)
+      .then((ok) => {
+        if (ok || token !== nativeOpToken.current) return;
+        hasAppliedNativeDefault.current = false;
+        hasAutoLoadedNative.current = false;
+        setProducer("dom");
+      })
+      .catch(() => {
+        // sendMessage rejected outright (service worker not yet woken, a
+        // torn-down context) — loadNativeTreeCore has no catch of its own
+        // for this, so without one here the rejection would strand the
+        // panel on "native" with an empty tree and no retry, the one-shot
+        // burned on a read that never even completed. Same revert as an
+        // ordinary `ok === false` above.
+        if (token !== nativeOpToken.current) return;
+        hasAppliedNativeDefault.current = false;
+        hasAutoLoadedNative.current = false;
+        setProducer("dom");
+      });
+  }, [nativeModeEnabled, connected, myTabId, nativeBusy, loadNativeTree]);
 
   /** Dispatch one native action and, on success, settle + re-read — the same
    *  two-step DogfoodPanel's runAct uses, so a click that opens a menu or
