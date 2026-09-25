@@ -29,15 +29,15 @@
     "@radix-ui/react-tabs": "^1.1.21",
     "@radix-ui/react-toast": "^1.2.23",
     "@radix-ui/react-toolbar": "^1.1.19",
-    "react-aria-components": "^1.20.0"
+    "react-aria-components": "^1.21.1"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0"
   },
   "devDependencies": {
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "tsup": "^8.3.0",
     "typescript": "^5.6.0"
   },
