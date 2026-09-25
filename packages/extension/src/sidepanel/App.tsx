@@ -2046,7 +2046,19 @@ export function App() {
             </div>
             <button
               class="sn-toolbar-btn"
-              onClick={() => void setNativeMode(false)}
+              onClick={() => {
+                void setNativeMode(false).then((ok) => {
+                  // A failed disable (message never reached the service
+                  // worker, or its reply didn't confirm `enabled: false`)
+                  // leaves the setting — and the attached debugger — as
+                  // they were; without this the button gives no sign the
+                  // click didn't take, asymmetric with the Enable flow's
+                  // own inline error.
+                  if (!ok) {
+                    announce("Couldn't disable native mode — try again.", 3000);
+                  }
+                });
+              }}
               title="Turn off native mode and detach the debugger"
             >
               Disable native mode

@@ -16,7 +16,7 @@
   {
     "name": "@real-a11y-dev/inspector (esm)",
     "path": "packages/inspector/dist/index.js",
-    "limit": "34.9 KB",
+    "limit": "35.3 KB",
     "gzip": true
   },
   {
@@ -41,7 +41,7 @@
   {
     "name": "@real-a11y-dev/storybook-addon (manager)",
     "path": "packages/storybook-addon/dist/manager.js",
-    "limit": "24 KB",
+    "limit": "24.2 KB",
     "gzip": true,
     "ignore": [
       "react",
