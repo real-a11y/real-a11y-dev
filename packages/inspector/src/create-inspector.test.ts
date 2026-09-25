@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
 
-import { createInspector } from "./index.js";
+import {
+  createInspector,
+  type ActionRequest,
+  type ActionResult,
+} from "./index.js";
 
 function mountDoc(html: string): { root: HTMLElement; container: HTMLElement } {
   document.body.innerHTML = "";
@@ -160,5 +164,73 @@ describe("createInspector", () => {
       nav.unmount();
       nav.destroy();
     }).not.toThrow();
+  });
+});
+
+describe("createInspector: onAction results", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  /**
+   * Preact flushes effect-driven state updates over several async hops, so
+   * poll for the rendered row rather than using a fixed timeout — see
+   * TreeView.test.tsx.
+   */
+  const waitUntil = async (fn: () => boolean, timeoutMs = 2000) => {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (fn()) return;
+      await new Promise((r) => setTimeout(r, 5));
+    }
+  };
+
+  /** Mount an inspector over one button and return its row action button. */
+  async function mountWithButton() {
+    const { root, container } = mountDoc('<button id="btn">Press</button>');
+    const seen: Array<[ActionRequest, ActionResult]> = [];
+    const nav = createInspector({
+      root,
+      container,
+      onAction: (request, result) => seen.push([request, result]),
+    });
+    nav.mount();
+
+    const actionButton = () =>
+      container.shadowRoot!.querySelector<HTMLButtonElement>(".sn-action");
+    await waitUntil(() => actionButton() !== null);
+    expect(actionButton()).not.toBeNull();
+
+    return { root, nav, seen, actionButton };
+  }
+
+  it("reports the dispatcher's failure instead of a fabricated success", async () => {
+    const { root, nav, seen, actionButton } = await mountWithButton();
+
+    // Detach the host element after extraction: the ref map still holds it,
+    // so the dispatcher answers `{ success: false }` rather than throwing.
+    root.querySelector("#btn")!.remove();
+    actionButton()!.click();
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0]![1].success).toBe(false);
+    expect(seen[0]![1].error).toMatch(/disconnected|no longer in DOM/i);
+
+    nav.unmount();
+  });
+
+  it("still reports success when the action really is dispatched", async () => {
+    const { root, nav, seen, actionButton } = await mountWithButton();
+
+    let clicked = 0;
+    root.querySelector("#btn")!.addEventListener("click", () => clicked++);
+    actionButton()!.click();
+
+    expect(clicked).toBe(1);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]![0].action).toBe("click");
+    expect(seen[0]![1].success).toBe(true);
+
+    nav.unmount();
   });
 });

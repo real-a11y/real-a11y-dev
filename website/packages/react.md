@@ -63,7 +63,7 @@ function App() {
 | `enablePicker` | `boolean` | `false` | Surface a DevTools-style element picker (⦿ button + Ctrl/Cmd+Shift+C). |
 | `styleNonce` | `string` | — | CSP nonce for injected styles (mount-only — not updated on later prop changes). |
 | `onNodeSelect` | `(node: SemanticNode) => void` | — | Called when a tree node is selected. |
-| `onAction` | `(request: ActionRequest, result: ActionResult) => void` | — | Called after an interactive action is dispatched. |
+| `onAction` | `(request: ActionRequest, result: ActionResult) => void` | — | Called after an interactive action is dispatched, with the dispatcher's own result. Check `result.success`: a failed action reports `{ success: false, error }`. Not called when nothing was dispatched — `interactive: false`, or a focus-moving action gated by `focusHostOnActivate`. |
 | `className` | `string` | — | Class name applied to the host `<div>` (inline mode only). |
 | `style` | `CSSProperties` | — | Inline styles for the host `<div>` (inline mode only). |
 | `floating` | `boolean` | `false` | Render as a fixed-position, draggable, resizable, collapsible panel portaled into `document.body` instead of an inline div. |

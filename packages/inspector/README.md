@@ -53,7 +53,7 @@ inspector.destroy();
 | `enablePicker` | `boolean` | `false` | Surface a DevTools-style "select an element in the page" picker (toolbar button + Ctrl/Cmd+Shift+C); off by default because it captures document-level clicks. |
 | `styleNonce` | `string` | — | CSP nonce applied to the injected `<style>` element. |
 | `onNodeSelect` | `(node) => void` | — | Callback when a node is selected |
-| `onAction` | `(request, result) => void` | — | Callback when an action is dispatched |
+| `onAction` | `(request, result) => void` | — | Callback when an action is dispatched, with the dispatcher's own result. Check `result.success` — a failed action reports `{ success: false, error }` (e.g. the element left the DOM). Not called when nothing was dispatched (`interactive: false`, or a focus-moving action gated by `focusHostOnActivate`). |
 
 ## License
 
