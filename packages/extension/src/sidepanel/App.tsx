@@ -1419,6 +1419,15 @@ export function App() {
   useEffect(() => {
     if (!nativeModeEnabled || !connected || myTabId === null) return;
     if (hasAppliedNativeDefault.current) return;
+    // Already on native — either this effect's own earlier success, or a
+    // manual switch the user made themselves after an earlier failure reset
+    // `hasAppliedNativeDefault`. Without this, `nativeBusy` flipping back to
+    // false at the end of THAT unrelated manual read (it's a dependency
+    // below, for the busy-vs-failed fix above) would re-fire this effect
+    // with nothing to apply — a duplicate NATIVE_READ the user never asked
+    // for, racing whatever they were doing, and able to bounce their own
+    // manual choice back to DOM if this redundant attempt itself failed.
+    if (producer === "native") return;
     // Another native read already holds `nativeInFlight` (the auto-load
     // effect firing from a manual toggle that raced this one, a refresh, an
     // in-flight action's own re-read, …) — `loadNativeTree` would return
@@ -1454,7 +1463,14 @@ export function App() {
         hasAutoLoadedNative.current = false;
         setProducer("dom");
       });
-  }, [nativeModeEnabled, connected, myTabId, nativeBusy, loadNativeTree]);
+  }, [
+    nativeModeEnabled,
+    connected,
+    myTabId,
+    nativeBusy,
+    producer,
+    loadNativeTree,
+  ]);
 
   /** Dispatch one native action and, on success, settle + re-read — the same
    *  two-step DogfoodPanel's runAct uses, so a click that opens a menu or
@@ -1813,8 +1829,7 @@ export function App() {
       // scope label.
       if (producer === "native") {
         if (!nativeRootId || nativeNodes.size === 0) {
-          setLastAction("Nothing to export yet");
-          setTimeout(() => setLastAction(null), 2000);
+          announce("Nothing to export yet", 2000);
           return;
         }
         const tree = nativeToExtractionResult(nativeNodes, nativeRootId);
@@ -1844,11 +1859,10 @@ export function App() {
           selection,
         );
         navigator.clipboard.writeText(markdown).then(
-          () => setLastAction("Copied to clipboard"),
+          () => announce("Copied to clipboard", 2500),
           () =>
-            setLastAction("Clipboard blocked — click the panel, then retry"),
+            announce("Clipboard blocked — click the panel, then retry", 2500),
         );
-        setTimeout(() => setLastAction(null), 2500);
         return;
       }
 
