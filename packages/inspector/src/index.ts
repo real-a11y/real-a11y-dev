@@ -180,9 +180,7 @@ export function createInspector(
         focusHostOnActivate,
         enablePicker,
         onNodeSelect,
-        onAction: onAction
-          ? (request: ActionRequest) => onAction(request, { success: true })
-          : undefined,
+        onAction,
       }),
       mountPoint,
     );

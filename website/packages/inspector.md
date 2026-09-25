@@ -62,7 +62,7 @@ Returns an `InspectorInstance`.
 | `enablePicker` | `boolean` | `false` | Surface a DevTools-style "select an element in the page" picker (toolbar button + Ctrl/Cmd+Shift+C); off by default because it captures document-level clicks. |
 | `styleNonce` | `string` | — | CSP nonce applied to injected `<style>` elements. |
 | `onNodeSelect` | `(node) => void` | — | Callback when a node is selected. |
-| `onAction` | `(request, result) => void` | — | Callback when an action is dispatched. |
+| `onAction` | `(request, result) => void` | — | Callback when an action is dispatched, carrying the dispatcher's own result. Check `result.success`: a failed action reports `{ success: false, error }` (e.g. `"Element is disconnected from the document"`). Not called when nothing was dispatched — `interactive: false`, or a focus-moving action gated by `focusHostOnActivate`. |
 
 ::: tip Shadow DOM is the right default
 With `mount: "shadow"`, the panel's styles live inside the ShadowRoot and cannot conflict with your app. Your app's CSS cannot accidentally override the panel's layout. Keep this default unless you have a specific reason to opt out.

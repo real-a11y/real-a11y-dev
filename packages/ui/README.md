@@ -35,7 +35,7 @@ import { TreeView } from "@real-a11y-dev/semantic-navigator-ui";
   interactive={true}
   theme="auto"
   onNodeSelect={(node) => console.log(node)}
-  onAction={(request) => console.log(request)}
+  onAction={(request, result) => console.log(request, result.success)}
 />
 ```
 

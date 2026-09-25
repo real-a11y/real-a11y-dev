@@ -152,7 +152,11 @@ main
         cell "(request: ActionRequest, result: ActionResult) => void"
           code "(request: ActionRequest, result: ActionResult) => void"
         cell "—"
-        cell "Called after an interactive action is dispatched."
+        cell "Called after an interactive action is dispatched, with the dispatcher's own result. Check result.success: a failed action reports { success: false, error }. Not called when nothing was dispatched — interactive: false, or a focus-moving action gated by focusHostOnActivate."
+          code "result.success"
+          code "{ success: false, error }"
+          code "interactive: false"
+          code "focusHostOnActivate"
       row
         cell "className"
           code "className"

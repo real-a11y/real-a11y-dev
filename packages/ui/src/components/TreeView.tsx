@@ -9,6 +9,7 @@ import type {
   TreeViewMode,
   ActionType,
   ActionRequest,
+  ActionResult,
   ExtractionResult,
   Picker,
   TreeChange,
@@ -101,8 +102,13 @@ export interface TreeViewProps {
   enableDiff?: boolean;
   /** Callback when a node is selected */
   onNodeSelect?: (node: SemanticNode) => void;
-  /** Callback when an action is dispatched */
-  onAction?: (request: ActionRequest) => void;
+  /**
+   * Callback when an action is dispatched, carrying the dispatcher's own
+   * result — including the failures (`{ success: false, error }`) a caller
+   * needs to see. Not called when no dispatch happened — the `interactive`
+   * and `focusHostOnActivate` gates in `handleActivate` return first.
+   */
+  onAction?: (request: ActionRequest, result: ActionResult) => void;
 }
 
 export function TreeView({
@@ -314,8 +320,12 @@ export function TreeView({
         return;
       }
       const request: ActionRequest = { nodeId, action };
-      dispatcherRef.current?.dispatch(request);
-      onAction?.(request);
+      const result = dispatcherRef.current?.dispatch(request);
+      // Report what the dispatcher actually returned. Reporting a fabricated
+      // success told every consumer the action worked even when the element
+      // was gone from the DOM or a handler threw. No dispatcher means no
+      // dispatch happened, so there is nothing truthful to report.
+      if (result) onAction?.(request, result);
     },
     [interactive, focusHostOnActivate, onAction],
   );
