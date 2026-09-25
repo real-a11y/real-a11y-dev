@@ -18,5 +18,8 @@
     "@real-a11y-dev/testing": "workspace:*",
     "markdown-it-anchor": "^9.2.1",
     "vitepress": "^1.6.3"
+  },
+  "volta": {
+    "extends": "../package.json"
   }
 }

@@ -8,7 +8,12 @@ Thanks for your interest in contributing to Real A11y. This guide covers how to 
 
 - Node.js 20 — a `.nvmrc` is provided (`nvm use` / `fnm use`), and the repo is
   pinned to `20.20.2` for [Volta](https://volta.sh) users, who get it
-  automatically on `cd`. The published packages support Node 20+ (`engines`) —
+  automatically on `cd`. Volta reads the _nearest_ `package.json`, so every
+  private workspace (`website/`, `examples/*`, the internal `packages/*`)
+  carries `"volta": { "extends": "../…/package.json" }` back to the root pin —
+  add it to any new private workspace, or pnpm runs its scripts on Volta's
+  global default instead. The six published packages deliberately carry no
+  `volta` key: it would ship in their tarballs. The published packages support Node 20+ (`engines`) —
   except `@real-a11y-dev/cli`, which needs 22.12+ for `@puppeteer/browsers` —
   and CI exercises the libraries on 20, 22, and 24, but **the docs build needs
   Node 20**: VitePress 1.6 (the latest stable) throws `ERR_REQUIRE_CYCLE_MODULE`
