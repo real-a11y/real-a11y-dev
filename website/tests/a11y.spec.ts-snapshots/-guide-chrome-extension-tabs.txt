@@ -11,6 +11,8 @@ link "View on GitHub"
 link "the test"
 link "the panel features guide"
 link "screen curtain"
+link "native mode"
+link "CLAUDE.md's "Two producers build the tree""
 button "Copy Code"
 generic
 link "CLAUDE.md's "Two producers build the tree""

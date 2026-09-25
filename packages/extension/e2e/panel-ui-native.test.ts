@@ -394,3 +394,89 @@ test("switching tabs after the default does not silently re-attach", async ({
     .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
     .toBeGreaterThan(0);
 });
+
+// ---- Copy/export for the native tree ----
+//
+// `doExport` previously only knew the DOM producer's `nodes` state — the
+// `Copy ▾` menu was hidden entirely under `producer === "dom"`. Stubs
+// `navigator.clipboard.writeText` rather than relying on the real OS
+// clipboard (the app itself already treats a real write as unreliable in an
+// automated context — see the "Clipboard blocked" fallback message in
+// `App.tsx`), same rationale as the sendMessage stub above: intercept before
+// the unreliable browser API is ever reached.
+async function stubClipboard(nav: NativeHarness): Promise<void> {
+  await nav.panel.evaluate(() => {
+    (window as typeof window & { __copiedText?: string }).__copiedText =
+      undefined;
+    navigator.clipboard.writeText = ((text: string) => {
+      (window as typeof window & { __copiedText?: string }).__copiedText = text;
+      return Promise.resolve();
+    }) as typeof navigator.clipboard.writeText;
+  });
+}
+
+async function readClipboardStub(
+  nav: NativeHarness,
+): Promise<string | undefined> {
+  return nav.panel.evaluate(
+    () => (window as typeof window & { __copiedText?: string }).__copiedText,
+  );
+}
+
+test("Copy on the native tree offers no Tab sequence — native has no tab-order data", async ({
+  nav,
+}) => {
+  await showNative(nav, "native-panel.html");
+
+  // The button's accessible name is its text content ("Copy ▾"), not its
+  // `title` — accname prefers content over title, so a `title`-shaped
+  // locator here never resolves.
+  await nav.panel.getByRole("button", { name: "Copy ▾" }).click();
+  const menu = nav.panel.locator(".sn-export-menu");
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole("button", { name: "Native tree" })).toBeVisible();
+  await expect(menu.getByRole("button", { name: "Headings" })).toBeVisible();
+  await expect(menu.getByRole("button", { name: "Tab sequence" })).toHaveCount(
+    0,
+  );
+});
+
+test("Copy → Everything copies a native tree + heading report, correctly labeled", async ({
+  nav,
+}) => {
+  await showNative(nav, "native-panel.html");
+  await stubClipboard(nav);
+
+  await nav.panel.getByRole("button", { name: "Copy ▾" }).click();
+  await nav.panel
+    .locator(".sn-export-menu")
+    .getByRole("button", { name: "Everything" })
+    .click();
+
+  const copied = await readClipboardStub(nav);
+  expect(copied).toBeDefined();
+  const markdown = copied!;
+
+  // Labeled distinctly from the DOM producer's own "DOM tree"/"Accessibility
+  // tree" header — this is the one place a user actually sees which
+  // producer a report came from (the internal `source.producer` stamp isn't
+  // rendered anywhere today; see CLAUDE.md's "Two producers build the tree").
+  expect(markdown).toContain("## Native accessibility tree");
+  expect(markdown).toContain("## Heading outline");
+  expect(markdown).not.toContain("## Tab sequence");
+
+  // Real content from the native tree, not an empty/placeholder report —
+  // native-panel.html's own headings and a leaf button, proving this came
+  // from `nativeNodes`, not the (empty, never-connected) DOM producer state.
+  expect(markdown).toContain("h1 Native panel fixture");
+  expect(markdown).toContain("h2 Sensitive field");
+  expect(markdown).toMatch(/button "Item 1"/);
+
+  // A named `generic` group ("Sensitive field group") — Chromium keeps a
+  // generic node only when it has a name (unnamed ones are noise), so
+  // unlike a DOM tree, every generic that reaches a native tree is one the
+  // panel actually shows. `serializeTree`'s default `includeGeneric: false`
+  // doesn't know that and would silently drop it; this is what pins
+  // `App.tsx`'s native export call to pass `{ includeGeneric: true }`.
+  expect(markdown).toMatch(/generic "Sensitive field group"/);
+});

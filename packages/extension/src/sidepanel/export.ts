@@ -40,6 +40,16 @@ export interface ExportMeta {
 /** Every view, in canonical order — the default "copy everything". */
 export const ALL_VIEWS: ExportView[] = ["tree", "outline", "tab"];
 
+/**
+ * Every view a native tree can actually produce — `tab` (tab sequence)
+ * omitted. `tabindex` never reaches a native node (see `CLAUDE.md`'s "Two
+ * producers build the tree"), so there's no tab-order data to export, not
+ * merely an unimplemented one. `getTabSequence` would return an empty
+ * sequence for a native tree either way, but rendering that as "(nothing
+ * focusable)" would misreport a missing capability as a real finding.
+ */
+export const NATIVE_VIEWS: ExportView[] = ["tree", "outline"];
+
 function fenced(body: string): string {
   // The serialized trees never contain a ``` fence, so a plain triple-fence
   // is safe. Fall back to a placeholder for empty views so the section still

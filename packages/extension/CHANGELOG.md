@@ -117,6 +117,16 @@
   auto-reattaches, exactly as before, so the "…is debugging this browser"
   banner never reappears without a gesture you made that session. ([#390])
 
+- **Copy ▾ now works under native mode.** Previously the entire export
+  menu disappeared the moment you switched to NATIVE — Everything, tree,
+  and Headings all went with it, not just the tab-sequence export that
+  genuinely has no native equivalent (native has no `tabindex`/focus-order
+  data, so that one option stays DOM-only). Copy ▾ → Everything / Native
+  tree / Headings now produces the same Markdown report format as the DOM
+  view, labeled "Native accessibility tree" so a report never gets silently
+  mistaken for a DOM-producer one. ([#403])
+
+
 - Collect `.tsx` test suites. The vitest `include` was `src/**/*.test.ts`, so a
   suite written as `.tsx` was never picked up — and silently: vitest ran the
   files it matched, reported them green, and said nothing about the one it
@@ -444,3 +454,4 @@ Earlier releases predate this changelog.
 [#390]: https://github.com/real-a11y/real-a11y-dev/pull/390
 [#398]: https://github.com/real-a11y/real-a11y-dev/pull/398
 [#399]: https://github.com/real-a11y/real-a11y-dev/pull/399
+[#403]: https://github.com/real-a11y/real-a11y-dev/pull/403

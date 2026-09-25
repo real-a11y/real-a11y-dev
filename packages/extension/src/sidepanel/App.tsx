@@ -49,6 +49,7 @@ import {
   NATIVE_REDACTED_VALUE,
   type NativeAction,
 } from "../native/native-core.js";
+import { toExtractionResult as nativeToExtractionResult } from "../native/native-export.js";
 import {
   isTrustedSender,
   isUnreachablePageResponse,
@@ -56,7 +57,7 @@ import {
 } from "../routing.js";
 import type { ContentToPanel, PanelToContent } from "../types.js";
 
-import { buildExportMarkdown, ALL_VIEWS } from "./export.js";
+import { buildExportMarkdown, ALL_VIEWS, NATIVE_VIEWS } from "./export.js";
 import type { ExportView } from "./export.js";
 import { FilteredList } from "./FilteredList.js";
 import {
@@ -1418,6 +1419,15 @@ export function App() {
   useEffect(() => {
     if (!nativeModeEnabled || !connected || myTabId === null) return;
     if (hasAppliedNativeDefault.current) return;
+    // Already on native — either this effect's own earlier success, or a
+    // manual switch the user made themselves after an earlier failure reset
+    // `hasAppliedNativeDefault`. Without this, `nativeBusy` flipping back to
+    // false at the end of THAT unrelated manual read (it's a dependency
+    // below, for the busy-vs-failed fix above) would re-fire this effect
+    // with nothing to apply — a duplicate NATIVE_READ the user never asked
+    // for, racing whatever they were doing, and able to bounce their own
+    // manual choice back to DOM if this redundant attempt itself failed.
+    if (producer === "native") return;
     // Another native read already holds `nativeInFlight` (the auto-load
     // effect firing from a manual toggle that raced this one, a refresh, an
     // in-flight action's own re-read, …) — `loadNativeTree` would return
@@ -1453,7 +1463,14 @@ export function App() {
         hasAutoLoadedNative.current = false;
         setProducer("dom");
       });
-  }, [nativeModeEnabled, connected, myTabId, nativeBusy, loadNativeTree]);
+  }, [
+    nativeModeEnabled,
+    connected,
+    myTabId,
+    nativeBusy,
+    producer,
+    loadNativeTree,
+  ]);
 
   /** Dispatch one native action and, on success, settle + re-read — the same
    *  two-step DogfoodPanel's runAct uses, so a click that opens a menu or
@@ -1805,6 +1822,50 @@ export function App() {
   const doExport = useCallback(
     (selection: ExportView[]) => {
       setExportMenuOpen(false);
+
+      // Native has no subtree scoping (that's a DOM-tree-only concept — see
+      // the `producer === "dom" && scopedRootId` breadcrumb gate below), so
+      // it always exports the whole last-read tree; no scope de-indent, no
+      // scope label.
+      if (producer === "native") {
+        if (!nativeRootId || nativeNodes.size === 0) {
+          announce("Nothing to export yet", 2000);
+          return;
+        }
+        const tree = nativeToExtractionResult(nativeNodes, nativeRootId);
+        const markdown = buildExportMarkdown(
+          {
+            // `normalizeNativeAX` already drops every UNNAMED generic
+            // wrapper as noise, keeping a bare `role: "generic"` node only
+            // when it's a meaningfully named group (see
+            // `ax-normalize.ts`'s own comment) — so unlike a DOM tree,
+            // every generic node that survives into a native tree is one
+            // the panel actually shows. `serializeTree`'s default
+            // `includeGeneric: false` doesn't know that distinction and
+            // would silently drop it from the export.
+            tree: serializeTree(tree, { includeGeneric: true }),
+            outline: serializeOutline(tree),
+            // Native has no tab-order data at all (see NATIVE_VIEWS) —
+            // never selected, so this value never renders.
+            tabSequence: "",
+          },
+          {
+            pageTitle,
+            pageUrl,
+            capturedAt: new Date().toISOString(),
+            extensionVersion: chrome.runtime.getManifest().version,
+            viewLabel: "Native accessibility tree",
+          },
+          selection,
+        );
+        navigator.clipboard.writeText(markdown).then(
+          () => announce("Copied to clipboard", 2500),
+          () =>
+            announce("Clipboard blocked — click the panel, then retry", 2500),
+        );
+        return;
+      }
+
       const exportRootId = scopedRootId || rootId;
       if (!exportRootId || nodes.size === 0) {
         announce("Nothing to export yet", 2000);
@@ -1858,7 +1919,17 @@ export function App() {
         () => announce("Clipboard blocked — click the panel, then retry", 2500),
       );
     },
-    [nodes, scopedRootId, rootId, viewMode, pageTitle, pageUrl],
+    [
+      producer,
+      nativeNodes,
+      nativeRootId,
+      nodes,
+      scopedRootId,
+      rootId,
+      viewMode,
+      pageTitle,
+      pageUrl,
+    ],
   );
 
   // Close the export menu on outside-click or Escape.
@@ -2265,47 +2336,53 @@ export function App() {
           </button>
         )}
 
-        {producer === "dom" && (
-          <div class="sn-export" ref={exportRef}>
-            <button
-              class="sn-toolbar-btn sn-export-btn"
-              aria-haspopup="true"
-              aria-expanded={exportMenuOpen}
-              onClick={() => setExportMenuOpen((o) => !o)}
-              title="Copy the tree as Markdown — paste into a bug report"
-            >
-              {"Copy ▾"}
-            </button>
-            {exportMenuOpen && (
-              <div class="sn-export-menu" aria-label="Copy which view">
-                <button
-                  class="sn-export-item"
-                  onClick={() => doExport(ALL_VIEWS)}
-                >
-                  Everything
-                </button>
-                <button
-                  class="sn-export-item"
-                  onClick={() => doExport(["tree"] as ExportView[])}
-                >
-                  {viewMode === "dom" ? "DOM tree" : "A11y tree"}
-                </button>
-                <button
-                  class="sn-export-item"
-                  onClick={() => doExport(["outline"] as ExportView[])}
-                >
-                  Headings
-                </button>
+        <div class="sn-export" ref={exportRef}>
+          <button
+            class="sn-toolbar-btn sn-export-btn"
+            aria-haspopup="true"
+            aria-expanded={exportMenuOpen}
+            onClick={() => setExportMenuOpen((o) => !o)}
+            title="Copy the tree as Markdown — paste into a bug report"
+          >
+            {"Copy ▾"}
+          </button>
+          {exportMenuOpen && (
+            <div class="sn-export-menu" aria-label="Copy which view">
+              <button
+                class="sn-export-item"
+                onClick={() =>
+                  doExport(producer === "native" ? NATIVE_VIEWS : ALL_VIEWS)
+                }
+              >
+                Everything
+              </button>
+              <button
+                class="sn-export-item"
+                onClick={() => doExport(["tree"] as ExportView[])}
+              >
+                {producer === "native"
+                  ? "Native tree"
+                  : viewMode === "dom"
+                    ? "DOM tree"
+                    : "A11y tree"}
+              </button>
+              <button
+                class="sn-export-item"
+                onClick={() => doExport(["outline"] as ExportView[])}
+              >
+                Headings
+              </button>
+              {producer === "dom" && (
                 <button
                   class="sn-export-item"
                   onClick={() => doExport(["tab"] as ExportView[])}
                 >
                   Tab sequence
                 </button>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Block-level, NOT a toolbar flex child: its paragraph of consent text
