@@ -1302,6 +1302,112 @@ describe("name from content covers the whole ARIA 1.2 role set", () => {
   });
 });
 
+// A `<details>` inside a heading/button/link. Its implicit role is `group`,
+// a name barrier, so the whole disclosure used to vanish from the ancestor's
+// name — e.g. a GitHub comment header read "user commented •" without the
+// "edited by …" summary. Every expectation below is what Chromium's own
+// accessibility tree computes for the same markup (measured over CDP).
+describe("name from content through a <details>", () => {
+  function nameOf(html: string): string {
+    const root = createPage(html);
+    document.body.appendChild(root);
+    try {
+      const target = [...extractDomTree(root).nodes.values()].find(
+        (n) => n.dom?.attributes["id"] === "t",
+      )!;
+      return target.a11y.name;
+    } finally {
+      root.remove();
+    }
+  }
+
+  it("includes a closed details' summary, but not its hidden body", () => {
+    expect(
+      nameOf(`<h3 id="t">A <details><summary>S</summary>Body</details> Z</h3>`),
+    ).toBe("A S Z");
+  });
+
+  it("includes the whole disclosure once it is open", () => {
+    expect(
+      nameOf(
+        `<h3 id="t">A <details open><summary>S</summary>Body</details> Z</h3>`,
+      ),
+    ).toBe("A S Body Z");
+  });
+
+  it("names a GitHub-style edited comment header in full", () => {
+    expect(
+      nameOf(`<h3 id="t">user commented <span>•</span>
+        <details class="details-overlay"><summary role="button" aria-haspopup="menu">
+          <div><span> edited by bot <span>Bot</span></span><svg aria-hidden="true"></svg></div>
+        </summary><div>menu body</div></details></h3>`),
+    ).toBe("user commented • edited by bot Bot");
+  });
+
+  it("uses only the first summary of a closed details", () => {
+    expect(
+      nameOf(
+        `<h3 id="t">A <details><summary>S1</summary><summary>S2</summary>Body</details> Z</h3>`,
+      ),
+    ).toBe("A S1 Z");
+  });
+
+  it("hides a closed inner details' body inside an open outer one", () => {
+    expect(
+      nameOf(
+        `<h3 id="t">A <details open><summary>S</summary><details><summary>T</summary>Inner</details></details> Z</h3>`,
+      ),
+    ).toBe("A S T Z");
+  });
+
+  it("works inside a button too", () => {
+    expect(
+      nameOf(
+        `<button id="t">A <details><summary>S</summary>Body</details> Z</button>`,
+      ),
+    ).toBe("A S Z");
+  });
+
+  it("keeps an explicit role=group a barrier, as Chromium does", () => {
+    expect(
+      nameOf(
+        `<h3 id="t">A <details role="group"><summary>S</summary>Body</details> Z</h3>`,
+      ),
+    ).toBe("A Z");
+  });
+
+  it("hides a closed body even when the details is role=none", () => {
+    expect(
+      nameOf(
+        `<h3 id="t">A <details role="none"><summary>S</summary>Body</details> Z</h3>`,
+      ),
+    ).toBe("A S Z");
+  });
+
+  it("describes through a details without doubling the space", () => {
+    const root = createPage(
+      `<button id="t" aria-describedby="d">Go</button><div id="d">X <details><summary>S</summary>Body</details></div>`,
+    );
+    document.body.appendChild(root);
+    try {
+      const btn = [...extractDomTree(root).nodes.values()].find(
+        (n) => n.dom?.attributes["id"] === "t",
+      )!;
+      expect(btn.a11y.description).toBe("X S");
+    } finally {
+      root.remove();
+    }
+  });
+
+  it("still skips an aria-hidden summary", () => {
+    expect(
+      nameOf(
+        `<h3 id="t">A <details><summary aria-hidden="true">S</summary>Body</details> Z</h3>`,
+      ),
+    ).toBe("A Z");
+  });
+});
+
 describe("accessible-name cycle safety (accname visit-once)", () => {
   // Since PR #101, name-from-content recurses into named-widget descendants
   // (getAccessibleTextContent -> computeAccessibleName), and

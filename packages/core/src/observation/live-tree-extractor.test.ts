@@ -654,6 +654,49 @@ describe("LiveTreeExtractor", () => {
     observer.stop();
   });
 
+  // A heading names itself through a `<details>` it contains (its summary, or
+  // all of it once open), so an edit inside the disclosure must re-extract the
+  // heading. The climb used to stop at `<details>` as a group barrier.
+  describe("a heading named through a <details>", () => {
+    async function refreshAfter(mutate: () => void) {
+      document.body.innerHTML = `<main><h3>A <details><summary>Old</summary>Body</details></h3></main>`;
+      const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
+      let lastChange: TreeChange | undefined;
+      const observer = new DomObserver(
+        document.body,
+        (change) => {
+          lastChange = change;
+        },
+        50,
+      );
+      observer.start();
+      mutate();
+      await vi.advanceTimersByTimeAsync(100);
+      const result = live.refresh(lastChange);
+      observer.stop();
+      const heading = [...result.nodes.values()].find(
+        (n) => n.a11y.role === "heading",
+      )!;
+      return { result, heading };
+    }
+
+    it("follows an edit to the summary text", async () => {
+      const { result, heading } = await refreshAfter(() => {
+        document.querySelector("summary")!.textContent = "New";
+      });
+      expect(heading.a11y.name).toBe("A New");
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+    });
+
+    it("follows the disclosure opening", async () => {
+      const { result, heading } = await refreshAfter(() => {
+        document.querySelector("details")!.setAttribute("open", "");
+      });
+      expect(heading.a11y.name).toBe("A Old Body");
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+    });
+  });
+
   it("keeps a reparented node when its destination was dirtied first", () => {
     document.body.innerHTML = `
       <main id="app">

@@ -428,7 +428,11 @@ function computeAccessibleDescription(
           : undefined;
       })
       .filter((t): t is string => !!t);
-    if (texts.length) return texts.join(" ");
+    // Whitespace-normalized like a name (accname §4.3.2 step 4). The walk
+    // pads named widgets and summaries with spaces so their text never glues
+    // to a neighbour; without this a description read "X  S" where Chromium
+    // reads "X S".
+    if (texts.length) return texts.join(" ").replace(/\s+/g, " ").trim();
   }
   // 2. aria-description — inline string (ARIA 1.3+)
   return element.getAttribute("aria-description") || "";
@@ -610,11 +614,18 @@ export function htmlAamNameOwner(element: Element): Element | null {
 }
 
 /**
- * True if `role` acts as a name-from-content barrier — text inside an element
- * with this role does not bubble up to name an ancestor.
+ * True if `element` is a name-from-content barrier — its text does not bubble
+ * up to name an ancestor. Its role decides, except that a native `<details>`
+ * with its implicit `group` role is walked into (see
+ * {@link isImplicitDetailsGroup}). The one check both the name walk and the
+ * live extractor's host climb use, so they can't disagree about where a
+ * name stops.
  */
-export function isNameBarrierRole(role: string): boolean {
-  return NAME_BARRIER_ROLES.has(role);
+export function isNameBarrierElement(element: Element): boolean {
+  return (
+    NAME_BARRIER_ROLES.has(getImplicitRole(element)) &&
+    !isImplicitDetailsGroup(element)
+  );
 }
 
 /**
@@ -641,6 +652,40 @@ const NAMED_WIDGET_ROLES = new Set<string>([
 ]);
 
 /**
+ * A native `<details>` carrying only its implicit `group` role. Unlike the
+ * other barrier roles, Chromium walks into it for an ancestor's name, so a
+ * heading like `user commented • <details><summary>edited</summary>…` keeps its
+ * "edited" part. An author's explicit `role="group"` stays a barrier: Chromium
+ * treats that one like any other group.
+ */
+function isImplicitDetailsGroup(element: Element): boolean {
+  return (
+    element.tagName.toLowerCase() === "details" &&
+    !element.getAttribute("role")?.trim()
+  );
+}
+
+/**
+ * The children name-from-content walks. Normally the flat-tree children; for
+ * a closed `<details>`, only its summary (the first `<summary>` child), since
+ * everything else in it is hidden until it opens. The body isn't hidden by
+ * any style on its own nodes (the UA slot does it), so the per-child hidden
+ * check can't catch it: a bare text node there would otherwise leak into the
+ * name. Applies whatever the details' role is — `role="none"` changes what
+ * it is, not what is rendered.
+ */
+function nameContentChildren(element: Element): Node[] {
+  if (
+    element.tagName.toLowerCase() === "details" &&
+    !(element as HTMLDetailsElement).open
+  ) {
+    const summary = element.querySelector(":scope > summary");
+    return summary ? [summary] : [];
+  }
+  return flatChildNodes(element);
+}
+
+/**
  * Recursive text-content walker for accessible name/description computation.
  *
  * Per WAI-ARIA accname-1.2 §4.3.2 step 2A, hidden subtrees contribute the
@@ -662,7 +707,7 @@ function getAccessibleTextContent(
   styleCache?: StyleCache | null,
 ): string {
   let text = "";
-  for (const child of flatChildNodes(element)) {
+  for (const child of nameContentChildren(element)) {
     if (child.nodeType === Node.TEXT_NODE) {
       text += child.textContent || "";
     } else if (child.nodeType === Node.ELEMENT_NODE) {
@@ -681,8 +726,14 @@ function getAccessibleTextContent(
         text += ` ${computeAccessibleName(childEl, visited, styleCache)} `;
         continue;
       }
-      if (NAME_BARRIER_ROLES.has(role)) continue;
-      text += getAccessibleTextContent(childEl, visited, styleCache);
+      if (NAME_BARRIER_ROLES.has(role) && !isImplicitDetailsGroup(childEl)) {
+        continue; // isNameBarrierElement, with the role already in hand
+      }
+      const inner = getAccessibleTextContent(childEl, visited, styleCache);
+      // A summary renders as its own block, so its text never runs into the
+      // disclosure body beside it ("S Body", not "SBody") — Chromium spaces it.
+      text +=
+        childEl.tagName.toLowerCase() === "summary" ? ` ${inner} ` : inner;
     }
   }
   return text;
