@@ -65,7 +65,7 @@
   "devDependencies": {
     "@real-a11y-dev/audit": "workspace:*",
     "@real-a11y-dev/serialize": "workspace:*",
-    "@types/node": "^22.0.0",
+    "@types/node": "^26.6.2",
     "jsdom": "^29.1.1",
     "playwright": "^1.62.1",
     "tsup": "^8.3.0",
