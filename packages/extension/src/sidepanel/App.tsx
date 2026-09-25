@@ -528,6 +528,11 @@ export function App() {
         tabChangeToken.current++;
         resetNativeState();
         setProducer("dom");
+        // The service worker cancels an armed pick when native mode goes off,
+        // but its NATIVE_PICK_RESULT arrives after `producerRef` has already
+        // flipped to "dom", and the handler drops a native result then. Clear
+        // the button here instead of waiting for a message that won't land.
+        setPickModeOn(false);
       }
       return true;
     },
@@ -1941,6 +1946,12 @@ export function App() {
       ) {
         return;
       }
+      // Clear the local mirror immediately rather than waiting on this
+      // message's own reply — the panel is leaving this tab either way, and
+      // a rejected send (service worker momentarily unreachable) would
+      // otherwise leave the toolbar's Pick button stuck showing "on" with
+      // no armed pick and no NATIVE_PICK_RESULT ever coming to clear it.
+      setPickModeOn(false);
       void chrome.runtime
         .sendMessage({ type: "NATIVE_PICK_STOP", tabId })
         .catch(() => {});
