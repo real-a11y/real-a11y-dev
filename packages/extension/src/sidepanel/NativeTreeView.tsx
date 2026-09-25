@@ -30,7 +30,12 @@
  * and this component unmounts.
  */
 
-import { ROLE_FILTER_LABELS, type RoleFilter } from "@real-a11y-dev/core";
+import {
+  getPrimaryAction,
+  ROLE_FILTER_LABELS,
+  type ActionType,
+  type RoleFilter,
+} from "@real-a11y-dev/core";
 import { useVirtualTree } from "@real-a11y-dev/semantic-navigator-ui";
 import {
   useCallback,
@@ -53,6 +58,12 @@ import {
   type NativeNode,
 } from "../native/native-actions.js";
 import { searchNativeTree } from "../native/native-search.js";
+
+import {
+  describeStates,
+  FilteredListView,
+  type FilteredListItem,
+} from "./FilteredList.js";
 
 const ROLE_FILTER_KEYS = Object.keys(ROLE_FILTER_LABELS) as Array<
   Exclude<RoleFilter, null>
@@ -81,6 +92,29 @@ function primaryLabel(node: NativeNode): string | undefined {
   if (isSelectableRole(node.role)) return "Select";
   if (ACTABLE.has(node.role)) return "Click";
   return undefined;
+}
+
+/** What a native row can do, in `interaction.actions`' vocabulary, so the
+ *  shared filtered list can decide Enter/Activate and the stepper keys the
+ *  same way it does for a DOM row. Mirrors `primaryLabel`'s precedence. */
+function nativeActions(node: NativeNode): ActionType[] {
+  const actions: ActionType[] = [];
+  if (isTypableRole(node.role, node.states)) actions.push("type");
+  else if (isSelectableRole(node.role)) actions.push("select");
+  else if (ACTABLE.has(node.role)) actions.push("click");
+  if (isSteppableRole(node.role)) actions.push("increment", "decrement");
+  return actions;
+}
+
+function toListItem(node: NativeNode): FilteredListItem {
+  const level = parseInt(node.properties?.["level"] ?? "", 10);
+  return {
+    id: node.id,
+    label: node.name || `(${node.role})`,
+    level: Number.isNaN(level) ? undefined : level,
+    states: describeStates(node.states),
+    actions: nativeActions(node),
+  };
 }
 
 export function NativeTreeView({
@@ -142,6 +176,26 @@ export function NativeTreeView({
     () => searchNativeTree(nodes, parentOf, query, roleFilter),
     [nodes, parentOf, query, roleFilter],
   );
+
+  // With a role filter on, show the same flat list the DOM producer does
+  // (`FilteredList`) instead of the tree: every direct match, in document
+  // order. A pre-order walk from the root, not `nodes`' own iteration order,
+  // because that's what "document order" means for this tree. The query
+  // still narrows it, through the same `directIds` the match count reports.
+  const listItems = useMemo(() => {
+    if (roleFilter === null) return [];
+    const items: FilteredListItem[] = [];
+    const stack = rootId ? [rootId] : [];
+    while (stack.length > 0) {
+      const id = stack.pop()!;
+      const node = nodes.get(id);
+      if (!node) continue;
+      if (search.directIds.has(id)) items.push(toListItem(node));
+      const children = node.childIds ?? [];
+      for (let i = children.length - 1; i >= 0; i--) stack.push(children[i]!);
+    }
+    return items;
+  }, [nodes, rootId, roleFilter, search]);
 
   // `visiblePositions` records each row's aria-posinset/aria-setsize within
   // its visible sibling group — mirrors App.tsx's own identical computation
@@ -225,6 +279,44 @@ export function NativeTreeView({
   const collapseAll = useCallback(() => {
     setExpanded(rootId ? new Set([rootId]) : new Set());
   }, [rootId]);
+
+  // The list's "go to tree" (Enter/double-click on a heading, landmark or
+  // image): drop the role filter, open every ancestor so the row is actually
+  // rendered, select it and hand focus to the tree — the same steps
+  // `App.tsx`'s `handleGoToTree` takes for the DOM producer. The selection
+  // effect above scrolls it into view once the tree has rendered.
+  const goToTree = useCallback(
+    (id: string) => {
+      setRoleFilter(null);
+      setExpanded((prev) => {
+        const next = new Set(prev);
+        for (let p = parentOf.get(id); p; p = parentOf.get(p)) next.add(p);
+        return next;
+      });
+      setSelectedId(id);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => treeRef.current?.focus());
+      });
+    },
+    [parentOf],
+  );
+
+  const activateFromList = useCallback(
+    (id: string, action?: ActionType) => {
+      const node = nodes.get(id);
+      if (!node) return;
+      // A plain Enter/Activate arrives with no action, and `onActivate`
+      // without one clicks — wrong for a slider, which can only step. Resolve
+      // the primary here, as `App.tsx`'s `handleActivate` does for DOM rows.
+      const resolved = action ?? getPrimaryAction(nativeActions(node));
+      if (resolved === "increment" || resolved === "decrement") {
+        onActivate(node, resolved);
+      } else {
+        onActivate(node, isSelectableRole(node.role) ? "select" : undefined);
+      }
+    },
+    [nodes, onActivate],
+  );
 
   const activeDescendantId = (() => {
     if (selectedId === null) return undefined;
@@ -432,203 +524,222 @@ export function NativeTreeView({
         </div>
       )}
 
-      <div ref={containerRef} class="sn-tree-container" onScroll={onScroll}>
-        <div
-          ref={treeRef}
-          class="sn-tree"
-          role="tree"
-          aria-label="Native accessibility tree — press Enter to activate, +/- to step, arrows to navigate"
-          tabIndex={0}
-          style={{
-            minHeight: totalHeight,
-            paddingTop: offset,
-            boxSizing: "border-box",
-          }}
-          aria-activedescendant={activeDescendantId}
-          onKeyDown={handleKeyDown}
-        >
-          {visibleIds.slice(startIndex, endIndex).map((id) => {
-            const node = nodes.get(id);
-            if (!node) return null;
+      {roleFilter !== null ? (
+        <FilteredListView
+          items={listItems}
+          roleFilter={roleFilter}
+          query={query}
+          onActivate={activateFromList}
+          onGoToTree={goToTree}
+          onFocusSearch={() => searchInputRef.current?.focus()}
+          activateDisabled={busy}
+        />
+      ) : (
+        <>
+          <div ref={containerRef} class="sn-tree-container" onScroll={onScroll}>
+            <div
+              ref={treeRef}
+              class="sn-tree"
+              role="tree"
+              aria-label="Native accessibility tree — press Enter to activate, +/- to step, arrows to navigate"
+              tabIndex={0}
+              style={{
+                minHeight: totalHeight,
+                paddingTop: offset,
+                boxSizing: "border-box",
+              }}
+              aria-activedescendant={activeDescendantId}
+              onKeyDown={handleKeyDown}
+            >
+              {visibleIds.slice(startIndex, endIndex).map((id) => {
+                const node = nodes.get(id);
+                if (!node) return null;
 
-            const hasChildren = (node.childIds?.length ?? 0) > 0;
-            const isSelected = id === selectedId;
-            const label = primaryLabel(node);
-            const steppable = isSteppableRole(node.role);
-            const selectAction = isSelectableRole(node.role)
-              ? "select"
-              : undefined;
-            const position = visiblePositions.get(id);
+                const hasChildren = (node.childIds?.length ?? 0) > 0;
+                const isSelected = id === selectedId;
+                const label = primaryLabel(node);
+                const steppable = isSteppableRole(node.role);
+                const selectAction = isSelectableRole(node.role)
+                  ? "select"
+                  : undefined;
+                const position = visiblePositions.get(id);
 
-            return (
-              <div
-                key={id}
-                id={`native-row-${id}`}
-                class={[
-                  "sn-node",
-                  isSelected && "sn-node--selected",
-                  label && "sn-node--interactive",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-                role="treeitem"
-                aria-expanded={hasChildren ? expanded.has(id) : undefined}
-                aria-selected={isSelected}
-                aria-level={node.depth + 1}
-                aria-posinset={position?.posinset}
-                aria-setsize={position?.setsize}
-                data-node-id={id}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedId(id);
-                }}
-              >
-                <span class="sn-indent">
-                  {Array.from({ length: node.depth }, (_, i) => (
-                    <span key={i} class="sn-indent-unit" />
-                  ))}
-                </span>
-
-                <button
-                  class={`sn-toggle ${!hasChildren ? "sn-toggle--leaf" : ""}`}
-                  tabIndex={-1}
-                  aria-hidden="true"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (hasChildren) toggle(id);
-                  }}
-                >
-                  {hasChildren ? (expanded.has(id) ? "▾" : "▸") : ""}
-                </button>
-
-                <span class="sn-label">
-                  <span class="sn-role">{node.role}</span>
-                  {node.name && <span class="sn-name">{node.name}</span>}
-                  {node.description && (
-                    <span class="sn-description" title={node.description}>
-                      {node.description.length > 80
-                        ? node.description.slice(0, 80) + "…"
-                        : node.description}
-                    </span>
-                  )}
-                  {node.value !== undefined && (
-                    <span class="sn-field-value">
-                      {"= "}
-                      {JSON.stringify(node.value)}
-                    </span>
-                  )}
-                  {node.value === undefined && node.placeholder && (
-                    <span class="sn-field-value" title="Placeholder hint">
-                      {"placeholder: "}
-                      {JSON.stringify(node.placeholder)}
-                    </span>
-                  )}
-                  {(() => {
-                    const badges: string[] = [];
-                    for (const [key, value] of Object.entries(
-                      node.states ?? {},
-                    )) {
-                      if (key === "expanded") {
-                        badges.push(value === true ? "expanded" : "collapsed");
-                      } else if (key === "checked" && value === "mixed") {
-                        badges.push("mixed");
-                      } else if (value === true) {
-                        badges.push(key);
-                      } else if (value !== false) {
-                        badges.push(`${key}=${value}`);
-                      }
-                    }
-                    // AX properties (heading level, hasPopup, orientation,
-                    // value bounds, …) — a separate collection from states on
-                    // the wire (native-core.ts's axFacets), and DogfoodPanel's
-                    // own formatFacets shows both. Always key=value; unlike
-                    // states, nothing here is a bare boolean flag.
-                    for (const [key, value] of Object.entries(
-                      node.properties ?? {},
-                    )) {
-                      badges.push(`${key}=${value}`);
-                    }
-                    if (badges.length === 0) return null;
-                    return (
-                      <span class="sn-state-badges">
-                        {badges.map((b) => (
-                          <span key={b} class="sn-state-badge sn-state--info">
-                            {b}
-                          </span>
-                        ))}
-                      </span>
-                    );
-                  })()}
-                  {label && <span class="sn-action-tag">{label}</span>}
-                </span>
-
-                {label && (
-                  <button
-                    class="sn-action sn-action--visible"
-                    tabIndex={-1}
-                    disabled={busy}
+                return (
+                  <div
+                    key={id}
+                    id={`native-row-${id}`}
+                    class={[
+                      "sn-node",
+                      isSelected && "sn-node--selected",
+                      label && "sn-node--interactive",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    role="treeitem"
+                    aria-expanded={hasChildren ? expanded.has(id) : undefined}
+                    aria-selected={isSelected}
+                    aria-level={node.depth + 1}
+                    aria-posinset={position?.posinset}
+                    aria-setsize={position?.setsize}
+                    data-node-id={id}
                     onClick={(e) => {
                       e.stopPropagation();
-                      onActivate(node, selectAction);
+                      setSelectedId(id);
                     }}
-                    title={`${label} (Enter)`}
                   >
-                    {"⏎"}
-                  </button>
-                )}
+                    <span class="sn-indent">
+                      {Array.from({ length: node.depth }, (_, i) => (
+                        <span key={i} class="sn-indent-unit" />
+                      ))}
+                    </span>
 
-                {steppable && (
-                  <span class="sn-action-pair">
                     <button
-                      class="sn-action sn-action--visible sn-action--step"
+                      class={`sn-toggle ${!hasChildren ? "sn-toggle--leaf" : ""}`}
                       tabIndex={-1}
-                      disabled={busy}
-                      aria-label={`Decrement "${node.name || node.role}"`}
-                      title="Decrement"
+                      aria-hidden="true"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onActivate(node, "decrement");
+                        if (hasChildren) toggle(id);
                       }}
                     >
-                      {"▼"}
+                      {hasChildren ? (expanded.has(id) ? "▾" : "▸") : ""}
                     </button>
-                    <button
-                      class="sn-action sn-action--visible sn-action--step"
-                      tabIndex={-1}
-                      disabled={busy}
-                      aria-label={`Increment "${node.name || node.role}"`}
-                      title="Increment"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onActivate(node, "increment");
-                      }}
-                    >
-                      {"▲"}
-                    </button>
-                  </span>
-                )}
-              </div>
-            );
-          })}
 
-          {visibleIds.length === 0 && (
-            <div class="sn-empty">
-              {capability && !capability.native
-                ? "Native unavailable on this page"
-                : nodes.size === 0
-                  ? "No native tree loaded yet — hit refresh"
-                  : hasFilter
-                    ? `No matches${query ? ` for "${query}"` : ""}`
-                    : "Empty tree"}
+                    <span class="sn-label">
+                      <span class="sn-role">{node.role}</span>
+                      {node.name && <span class="sn-name">{node.name}</span>}
+                      {node.description && (
+                        <span class="sn-description" title={node.description}>
+                          {node.description.length > 80
+                            ? node.description.slice(0, 80) + "…"
+                            : node.description}
+                        </span>
+                      )}
+                      {node.value !== undefined && (
+                        <span class="sn-field-value">
+                          {"= "}
+                          {JSON.stringify(node.value)}
+                        </span>
+                      )}
+                      {node.value === undefined && node.placeholder && (
+                        <span class="sn-field-value" title="Placeholder hint">
+                          {"placeholder: "}
+                          {JSON.stringify(node.placeholder)}
+                        </span>
+                      )}
+                      {(() => {
+                        const badges: string[] = [];
+                        for (const [key, value] of Object.entries(
+                          node.states ?? {},
+                        )) {
+                          if (key === "expanded") {
+                            badges.push(
+                              value === true ? "expanded" : "collapsed",
+                            );
+                          } else if (key === "checked" && value === "mixed") {
+                            badges.push("mixed");
+                          } else if (value === true) {
+                            badges.push(key);
+                          } else if (value !== false) {
+                            badges.push(`${key}=${value}`);
+                          }
+                        }
+                        // AX properties (heading level, hasPopup, orientation,
+                        // value bounds, …) — a separate collection from states on
+                        // the wire (native-core.ts's axFacets), and DogfoodPanel's
+                        // own formatFacets shows both. Always key=value; unlike
+                        // states, nothing here is a bare boolean flag.
+                        for (const [key, value] of Object.entries(
+                          node.properties ?? {},
+                        )) {
+                          badges.push(`${key}=${value}`);
+                        }
+                        if (badges.length === 0) return null;
+                        return (
+                          <span class="sn-state-badges">
+                            {badges.map((b) => (
+                              <span
+                                key={b}
+                                class="sn-state-badge sn-state--info"
+                              >
+                                {b}
+                              </span>
+                            ))}
+                          </span>
+                        );
+                      })()}
+                      {label && <span class="sn-action-tag">{label}</span>}
+                    </span>
+
+                    {label && (
+                      <button
+                        class="sn-action sn-action--visible"
+                        tabIndex={-1}
+                        disabled={busy}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onActivate(node, selectAction);
+                        }}
+                        title={`${label} (Enter)`}
+                      >
+                        {"⏎"}
+                      </button>
+                    )}
+
+                    {steppable && (
+                      <span class="sn-action-pair">
+                        <button
+                          class="sn-action sn-action--visible sn-action--step"
+                          tabIndex={-1}
+                          disabled={busy}
+                          aria-label={`Decrement "${node.name || node.role}"`}
+                          title="Decrement"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onActivate(node, "decrement");
+                          }}
+                        >
+                          {"▼"}
+                        </button>
+                        <button
+                          class="sn-action sn-action--visible sn-action--step"
+                          tabIndex={-1}
+                          disabled={busy}
+                          aria-label={`Increment "${node.name || node.role}"`}
+                          title="Increment"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onActivate(node, "increment");
+                          }}
+                        >
+                          {"▲"}
+                        </button>
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+
+              {visibleIds.length === 0 && (
+                <div class="sn-empty">
+                  {capability && !capability.native
+                    ? "Native unavailable on this page"
+                    : nodes.size === 0
+                      ? "No native tree loaded yet — hit refresh"
+                      : hasFilter
+                        ? `No matches${query ? ` for "${query}"` : ""}`
+                        : "Empty tree"}
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </div>
+          </div>
 
-      <div class="sn-hints">
-        <kbd>Enter</kbd> activate &middot; <kbd>+/-</kbd> step &middot;{" "}
-        <kbd>Space</kbd> expand &middot; <kbd>Arrow</kbd> navigate
-      </div>
+          <div class="sn-hints">
+            <kbd>Enter</kbd> activate &middot; <kbd>+/-</kbd> step &middot;{" "}
+            <kbd>Space</kbd> expand &middot; <kbd>Arrow</kbd> navigate
+          </div>
+        </>
+      )}
     </>
   );
 }

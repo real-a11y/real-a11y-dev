@@ -491,6 +491,22 @@ role="slider">` elements, not the `<div role="slider">` shape the
   restored to the panel's last-clicked control afterward either way.
   (`packages/extension/src/native/native-core.ts`, `pageStep`.)
 
+- **The role filters looked different in NATIVE mode.** With a filter on, the
+  DOM producer replaced its tree with a flat list of the matches (`H<n>`
+  badges for headings, an item count, Activate / Move to), while NATIVE kept
+  its tree and hid everything except the matches and their ancestors. The
+  labels and the matching rule were already shared through `core`'s
+  `ROLE_FILTER_GROUPS`; only the rendering differed. Fixed: the list is now
+  `FilteredListView`, fed by each producer's own mapping onto a
+  producer-agnostic row, and NATIVE shows it too. Enter or double-click on a
+  heading, landmark or image goes back to the tree with that node selected
+  and its ancestors opened. NATIVE shows no **Move to**, since it can't
+  highlight on the page yet. The same session saw different heading counts in
+  the two modes (43 vs 47) on a logged-in GitHub PR page. A logged-out,
+  same-moment comparison counted the same number in both, so the filter isn't
+  the cause. (`packages/extension/src/sidepanel/FilteredList.tsx`,
+  `NativeTreeView.tsx`.)
+
 ## Automated coverage: the native-tree e2e suite
 
 Every finding logged above was found by hand and verified by a throwaway
