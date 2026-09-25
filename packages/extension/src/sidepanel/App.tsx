@@ -80,6 +80,12 @@ const NATIVE_SETTLE_MS = 250;
  *  waiting on a chain that never settles. */
 const MAX_NAV_RECOVERY_HOPS = 5;
 
+/** Bound on how long the native-as-default effect waits out a read already
+ *  in flight (a manual toggle or refresh that raced it) before giving up on
+ *  this connect and just going with whichever producer wins. Caps the worst
+ *  case at `NATIVE_DEFAULT_BUSY_RETRIES * NATIVE_SETTLE_MS`. */
+const NATIVE_DEFAULT_BUSY_RETRIES = 5;
+
 /**
  * Map HTML tag names to a human-readable display role when the ARIA role
  * ("generic" / "group") doesn't convey enough semantic information.
@@ -397,6 +403,15 @@ export function App() {
       setNativeRootId("");
       setNativeCapability(undefined);
       setNativeStatus("");
+      // If a native pick was armed, the background's own NATIVE_FLAG_SET
+      // handler cancels it server-side, but that cancellation's own
+      // NATIVE_PICK_RESULT is a separate, later message — and by the time
+      // it arrives `producerRef.current` has already flipped to "dom" here,
+      // so the message handler's `producerRef.current === "native"` guard
+      // (it must not clear a pick that's since been re-armed under a
+      // different producer) silently drops the reset. Clear it directly
+      // instead of waiting on a message that can no longer land.
+      setPickModeOn(false);
     }
     return true;
   }, []);
@@ -1481,12 +1496,13 @@ export function App() {
     [loadNativeTreeCore],
   );
 
-  // The default itself (see `hasAppliedNativeDefault`'s own declaration for
-  // the one-shot-per-session scoping rationale). Gated on `connected`, not
-  // just `myTabId`, for the same reason the producer toggle itself waits for
-  // it (see the toolbar's own comment below): reaching for native before the
-  // DOM producer has proven the tab is even reachable would default into a
-  // capability check with nothing to fall back to yet.
+  // The default itself (see `hasAppliedNativeDefault`'s own declaration:
+  // fires at most ONCE per panel session, full stop — not once per tab).
+  // Gated on `connected`, not just `myTabId`, for the same reason the
+  // producer toggle itself waits for it (see the toolbar's own comment
+  // below): reaching for native before the DOM producer has proven the tab
+  // is even reachable would default into a capability check with nothing to
+  // fall back to yet.
   //
   // Deliberately no pre-flight NATIVE_CAPABILITY check here — neither the
   // manual NATIVE toggle nor the consent banner's own "Enable native mode…"
@@ -1494,75 +1510,67 @@ export function App() {
   // THIS effect does have to tell a real failure apart from success: it's
   // spending a one-shot the user never asked for, on a page they didn't
   // pick, so a page that merely can't attach (DevTools already owns that
-  // tab, a blocked URL, ...) must not burn the one-shot and strand later,
-  // genuinely attachable tabs on DOM for the rest of the session. That's why
-  // this effect calls the guarded `loadNativeTree` directly — the same read
-  // the auto-load effect below would otherwise trigger on its own once
-  // `producer` flips — instead of leaving it to fire independently: setting
-  // `hasAutoLoadedNative` up front makes that effect a no-op (no duplicate
-  // NATIVE_READ), and awaiting the result here is what lets a failure revert
-  // `producer` back to "dom" and un-mark `hasAppliedNativeDefault`, leaving
-  // the default eligible again the next time a tab connects. The `token`
-  // re-check on the way out is the same guard every other native op in this
-  // file uses (see `nativeOpToken`'s own declaration): if a tab switch (or
-  // any other native op) has superseded this attempt by the time it
-  // resolves, leave whatever that other operation left behind alone rather
-  // than stomping it with a stale revert.
+  // tab, a blocked URL, ...) reverts to DOM rather than leaving the panel
+  // stuck on a producer with an empty tree. `hasAppliedNativeDefault` is
+  // consumed up front and — on purpose — never un-marked on failure: an
+  // earlier version reset it so a later, different tab could get its own
+  // shot, but that reset used `nativeBusy`/`producer` as effect
+  // dependencies to know when to retry, and both of those flip as a direct
+  // side effect of the retry attempt itself (`loadNativeTreeCore` toggles
+  // `nativeBusy`, a failure calls `setProducer("dom")`) — so a page that
+  // persistently can't attach (DevTools already on it, a permanently
+  // blocked URL) retried forever, re-attaching `chrome.debugger` and
+  // reflashing the "…is debugging this browser" banner with no further user
+  // gesture. Once per session, unconditionally, is the guarantee that
+  // actually holds.
+  //
+  // The busy wait below is a bounded poll, not a dependency-driven re-fire,
+  // for the same reason: `loadNativeTree` returns `false` when
+  // `nativeInFlight` is already held by something else (a manual toggle
+  // that raced this effect, a refresh, an in-flight action's own re-read),
+  // purely because it's busy, not because this attempt actually failed —
+  // waiting it out here (rather than bailing and relying on a later
+  // re-evaluation) is what keeps that from being misread as a genuine
+  // attach failure. Setting `hasAutoLoadedNative` up front makes the
+  // auto-load effect below a no-op once `producer` does flip (no duplicate
+  // NATIVE_READ). The `token` re-check on the way out is the same guard
+  // every other native op in this file uses (see `nativeOpToken`'s own
+  // declaration): if a tab switch (or any other native op) has superseded
+  // this attempt by the time it resolves, leave whatever that other
+  // operation left behind alone rather than stomping it with a stale
+  // revert.
   useEffect(() => {
     if (!nativeModeEnabled || !connected || myTabId === null) return;
     if (hasAppliedNativeDefault.current) return;
-    // Already on native — either this effect's own earlier success, or a
-    // manual switch the user made themselves after an earlier failure reset
-    // `hasAppliedNativeDefault`. Without this, `nativeBusy` flipping back to
-    // false at the end of THAT unrelated manual read (it's a dependency
-    // below, for the busy-vs-failed fix above) would re-fire this effect
-    // with nothing to apply — a duplicate NATIVE_READ the user never asked
-    // for, racing whatever they were doing, and able to bounce their own
-    // manual choice back to DOM if this redundant attempt itself failed.
-    if (producer === "native") return;
-    // Another native read already holds `nativeInFlight` (the auto-load
-    // effect firing from a manual toggle that raced this one, a refresh, an
-    // in-flight action's own re-read, …) — `loadNativeTree` would return
-    // `false` purely because it's busy, not because THIS attempt actually
-    // failed, and the code below can't tell those apart (nothing bumps
-    // `nativeOpToken` on a busy-skip). Misreading busy as failed would burn
-    // the one-shot and revert to DOM under a tree that may well load fine
-    // moments later. `nativeBusy` is a dependency below specifically so this
-    // effect re-evaluates once that other read clears, instead of never
-    // getting another chance.
-    if (nativeInFlight.current) return;
     hasAppliedNativeDefault.current = true;
     const tabId = myTabId;
     const token = nativeOpToken.current;
-    setProducer("native");
-    hasAutoLoadedNative.current = true;
-    void loadNativeTree(tabId)
-      .then((ok) => {
+    void (async () => {
+      for (
+        let i = 0;
+        nativeInFlight.current && i < NATIVE_DEFAULT_BUSY_RETRIES;
+        i++
+      ) {
+        await new Promise((res) => setTimeout(res, NATIVE_SETTLE_MS));
+        if (token !== nativeOpToken.current) return; // superseded meanwhile
+      }
+      setProducer("native");
+      hasAutoLoadedNative.current = true;
+      try {
+        const ok = await loadNativeTree(tabId);
         if (ok || token !== nativeOpToken.current) return;
-        hasAppliedNativeDefault.current = false;
-        hasAutoLoadedNative.current = false;
         setProducer("dom");
-      })
-      .catch(() => {
+      } catch {
         // sendMessage rejected outright (service worker not yet woken, a
         // torn-down context) — loadNativeTreeCore has no catch of its own
         // for this, so without one here the rejection would strand the
-        // panel on "native" with an empty tree and no retry, the one-shot
-        // burned on a read that never even completed. Same revert as an
-        // ordinary `ok === false` above.
+        // panel on "native" with an empty tree. Same revert as an ordinary
+        // `ok === false` above.
         if (token !== nativeOpToken.current) return;
-        hasAppliedNativeDefault.current = false;
-        hasAutoLoadedNative.current = false;
         setProducer("dom");
-      });
-  }, [
-    nativeModeEnabled,
-    connected,
-    myTabId,
-    nativeBusy,
-    producer,
-    loadNativeTree,
-  ]);
+      }
+    })();
+  }, [nativeModeEnabled, connected, myTabId, loadNativeTree]);
 
   /** Dispatch one native action and, on success, settle + re-read — the same
    *  two-step DogfoodPanel's runAct uses, so a click that opens a menu or
@@ -1918,6 +1926,12 @@ export function App() {
       ) {
         return;
       }
+      // Clear the local mirror immediately rather than waiting on this
+      // message's own reply — the panel is leaving this tab either way, and
+      // a rejected send (service worker momentarily unreachable) would
+      // otherwise leave the toolbar's Pick button stuck showing "on" with
+      // no armed pick and no NATIVE_PICK_RESULT ever coming to clear it.
+      setPickModeOn(false);
       void chrome.runtime
         .sendMessage({ type: "NATIVE_PICK_STOP", tabId })
         .catch(() => {});
