@@ -239,3 +239,54 @@ describe("content: panel-driven actions vs. the element picker", () => {
     expect(clicks).toHaveLength(1);
   });
 });
+
+/**
+ * What a frame does before any side panel connects to it.
+ *
+ * The content script is injected into every frame of every page the user
+ * visits — banking, webmail, credential pages included — so what it does
+ * while dormant is a privacy property, not just a cost one. These pin it:
+ * an unarmed frame announces itself and nothing more.
+ */
+describe("content: a frame whose panel never connected", () => {
+  let h: Harness;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.resetModules();
+    document.body.innerHTML = `<button id="target">Click me</button>`;
+    h = makeHarness();
+    (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
+    // Deliberately no REQUEST_TREE / SET_OBSERVING: this is a frame the
+    // background never armed, because no panel is open for its tab.
+    await import("./content.js");
+  });
+
+  afterEach(() => {
+    h.send({ type: "SET_PICK_MODE", payload: { enabled: false } });
+    h.send({ type: "SET_OBSERVING", payload: { enabled: false } });
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    delete (globalThis as { chrome?: unknown }).chrome;
+    document.body.innerHTML = "";
+  });
+
+  it("announces itself without extracting a tree", () => {
+    expect(h.sent.map((m) => m.type)).toEqual(["FRAME_HELLO"]);
+  });
+
+  it("tells the background nothing about the page it is in", () => {
+    // The announce is payload-free by design: the background identifies the
+    // frame from `sender.tab.id` / `sender.frameId`, so a URL here would be
+    // page data leaving a page the extension was never opened on.
+    expect(h.sent).toEqual([{ type: "FRAME_HELLO" }]);
+  });
+
+  it("does not extract when the page mutates", async () => {
+    h.sent.length = 0;
+    document.body.appendChild(document.createElement("section"));
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(h.sent).toEqual([]);
+  });
+});

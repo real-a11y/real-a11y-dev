@@ -460,19 +460,20 @@ function stopObserving() {
 }
 
 function onNavigated() {
-  // Re-announce so the background re-evaluates a new top-frame URL; only
-  // re-extract if we're actively observing.
-  safeSendMessage({
-    type: "FRAME_HELLO",
-    payload: { frameUrl: location.href },
-  });
+  // Re-announce so a connected panel re-arms this frame after the
+  // navigation; only re-extract if we're actively observing. The new URL
+  // rides on that re-extraction's FRAME_TREE_DATA, not on the announce.
+  safeSendMessage({ type: "FRAME_HELLO" });
   if (observingEnabled) sendTree();
 }
 
-// Announce presence WITHOUT extracting. The background replies with
-// SET_OBSERVING(true) only if a side panel is connected for this tab, so a
-// page whose panel is never opened pays nothing.
-safeSendMessage({ type: "FRAME_HELLO", payload: { frameUrl: location.href } });
+// Announce presence WITHOUT extracting, and without saying anything about the
+// page. The background replies with SET_OBSERVING(true) only if a side panel
+// is connected for this tab, so a page whose panel is never opened pays
+// nothing — and, since this announce is payload-free, tells the extension
+// nothing. This is the only message an unarmed frame ever sends, and it runs
+// in every frame of every page the user visits.
+safeSendMessage({ type: "FRAME_HELLO" });
 
 window.addEventListener("popstate", onNavigated);
 window.addEventListener("hashchange", onNavigated);
