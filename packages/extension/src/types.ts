@@ -20,7 +20,14 @@ export type FrameToBackground =
   // It lets the background learn a frame is reachable so it can tell the
   // frame to start observing IFF a panel is connected — without paying a
   // full extraction on every page whether or not the panel is ever opened.
-  | { type: "FRAME_HELLO"; payload: { frameUrl: string } }
+  //
+  // Deliberately payload-free. This is the ONE message every frame of every
+  // page the user visits sends whether or not the extension is ever opened
+  // there, so it must not carry anything about the page: the background
+  // learns which frame is speaking from `sender.tab.id` / `sender.frameId`,
+  // which is all `planFrameHello` takes. Page-derived data belongs on
+  // FRAME_TREE_DATA, which is only ever sent by an armed frame.
+  | { type: "FRAME_HELLO" }
   | { type: "FOCUS_CHANGED"; payload: { nodeId: string } }
   | {
       type: "LIVE_REGION";

@@ -18,6 +18,15 @@
 
 ## Unreleased
 
+- Stop telling the extension which page you are on when you are not using it.
+  The content script runs in every frame of every page and announces itself at
+  load whether or not the side panel is ever opened there; that announce
+  carried the frame's URL, which nothing read. It no longer carries anything —
+  the background identifies the frame from the sender. Tree extraction was
+  already deferred until the panel connects, so a frame you never inspect now
+  reports nothing about itself at all.
+  ([#407](https://github.com/real-a11y/real-a11y-dev/pull/407))
+
 - Split the role-filtered list (Headings, Links, Buttons, …) into a
   producer-agnostic view, so the dev-only native tree can show the same list.
   The list itself is unchanged, except that a row with no accessible name now
