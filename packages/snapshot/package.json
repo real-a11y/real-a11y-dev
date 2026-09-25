@@ -64,7 +64,7 @@
     "@types/node": "^22.0.0",
     "tsup": "^8.3.0",
     "typescript": "^5.6.0",
-    "vitest": "^3.2.7"
+    "vitest": "^4.1.11"
   },
   "volta": {
     "extends": "../../package.json"
