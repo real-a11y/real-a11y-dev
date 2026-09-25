@@ -128,6 +128,46 @@ export class NativeDebuggerSession {
   private isEnabled: () => Promise<boolean>;
 
   /**
+   * Cancel callback for an in-flight {@link runPick}, keyed by tab id. Lets
+   * {@link cancelPick}/{@link cancelAllPicks} resolve a pick session that is
+   * currently just an in-memory `Promise` awaiting either a click or a stop
+   * — there is nothing in `chrome.storage` to read it back from, unlike
+   * every other piece of state this class tracks, because a pick session
+   * that outlives an MV3 suspend has nothing left to cancel anyway (see
+   * {@link runPick}'s own comment).
+   */
+  private pickCancel = new Map<number, () => void>();
+
+  /**
+   * Reject callback for an in-flight {@link runPick}, keyed by tab id —
+   * distinct from {@link pickCancel}, which *resolves* the pick as a plain
+   * cancel. `chrome.debugger.onDetach` uses this one instead: a detach mid-
+   * pick (DevTools opening on the tab, the SW's own connection dropping) is
+   * a genuine connection loss, not the user cancelling, and `attachAndRun`
+   * only classifies it that way (`connection-lost`, feeding the reattach
+   * metric like every other native op's drop) when `fn` REJECTS rather than
+   * resolves — see the constructor's `onDetach` listener.
+   */
+  private pickReject = new Map<number, () => void>();
+
+  /**
+   * Tabs with a pick STOP that arrived before {@link runPick} had registered
+   * {@link pickCancel} for them — the attach a START triggers can take real
+   * time (a slow round trip, a queued operation ahead of it), and a STOP
+   * that lands during that window previously found nothing to cancel,
+   * `cancelPick` reported `false`, and the START went on to arm
+   * `Overlay.setInspectMode` moments later — behind a toolbar button the
+   * panel had already shown as "off", with no way for the user to reach it
+   * again short of the per-tab operation queue's next unrelated op. `runPick`
+   * consumes (and clears) its own tab's entry the instant it starts, so a
+   * pending cancel resolves the pick immediately without ever arming the
+   * overlay. Consumed unconditionally on every `runPick` call, so a stray
+   * STOP with nothing outstanding at all costs at most one future pick
+   * silently resolving as cancelled — never a hang.
+   */
+  private pendingPickCancel = new Set<number>();
+
+  /**
    * @param storage        durable area for the dogfood log (chrome.storage.local).
    * @param attachStorage  area for attach bookkeeping; defaults to `storage`.
    *                       Production passes `chrome.storage.session` — it
@@ -148,6 +188,16 @@ export class NativeDebuggerSession {
     chrome.debugger.onDetach.addListener((source, reason) => {
       const tabId = source.tabId;
       if (typeof tabId !== "number") return;
+      // An armed pick occupies the SAME per-tab operation queue as reads and
+      // actions (see `withDebugger`'s own comment) — so if this detach isn't
+      // settled, the queue can't advance until the user happens to click
+      // something or explicitly stops picking, exactly the way a genuinely
+      // failed read or act never gets to (those always resolve `fn`, one way
+      // or the other). Reject rather than resolve: `attachAndRun`'s own catch
+      // classifies a rejection via `isConnectionLost`, so this reads as the
+      // same kind of drop a mid-read/mid-act disconnect already does, not as
+      // the user pressing Escape.
+      this.pickReject.get(tabId)?.();
       void this.enqueue(async () => {
         const attached = await this.readAttached();
         const startedAt = attached[tabId];
@@ -577,5 +627,200 @@ export class NativeDebuggerSession {
     );
     // The tab may be gone; a failed detach is not actionable.
     await chrome.debugger.detach({ tabId }).catch(() => {});
+  }
+
+  /**
+   * Arm CDP's own element picker — `Overlay.setInspectMode`, the exact
+   * primitive DevTools' own "inspect element" tool uses — and resolve once
+   * the user clicks something (`Overlay.inspectNodeRequested`) or
+   * {@link cancelPick}/{@link cancelAllPicks} is called.
+   *
+   * Pass this as the `fn` to `withDebugger` (via `native/index.ts`'s
+   * `withRecovery`, exactly like `readNativeTree`/`dispatchNative`): the
+   * whole pick session — however long the user takes to click — then runs
+   * inside ONE attach→detach span, so every existing per-tab queue,
+   * dogfood-log and revoke-safety guarantee `withDebugger` already provides
+   * applies unchanged. This is deliberately the one native operation that
+   * does NOT keep attach dwell minimal — see the picker-mode ticket's own
+   * risk note; a caller measuring dwell time should treat this session
+   * separately from the rest.
+   *
+   * MV3 caveat, not solved here: if the service worker suspends while a
+   * pick is still armed (a realistic outcome if the user takes longer than
+   * the SW's idle timeout to click), the in-memory `Promise` this creates —
+   * and the `pickCancel`/`pickReject` entries pointing at it — are destroyed
+   * along with the rest of the worker's heap. `chrome.debugger.onDetach`
+   * still fires on the fresh worker instance and records the drop (see the
+   * constructor), so the attachment itself never leaks or strands the
+   * banner — only this specific pick's eventual `NATIVE_PICK_RESULT` push
+   * never arrives. The panel's own pick-mode toggle is the recovery: it
+   * clears its local "on" state optimistically on stop, never waiting for
+   * a push that this scenario means will never come.
+   */
+  runPick(
+    tabId: number,
+    t: CdpTransport,
+  ): Promise<{ backendNodeId: number; chainBackendNodeIds: number[] } | null> {
+    // A STOP that arrived while the attach this pick needed was still in
+    // flight — see `pendingPickCancel`'s own comment. Consumed here,
+    // unconditionally, before anything is armed.
+    if (this.pendingPickCancel.delete(tabId)) {
+      return Promise.resolve(null).finally(() =>
+        t.send("Overlay.setInspectMode", { mode: "none" }).catch(() => {}),
+      );
+    }
+    return new Promise<{
+      backendNodeId: number;
+      chainBackendNodeIds: number[];
+    } | null>((resolve, reject) => {
+      let settled = false;
+      const onEvent = (
+        source: { tabId?: number },
+        method: string,
+        params?: object,
+      ) => {
+        if (source.tabId !== tabId) return;
+        // The page-side counterpart to a STOP click in the panel: Chromium
+        // fires this when inspect mode is cancelled without a click — the
+        // user pressing Escape while the INSPECTED PAGE (not the panel) has
+        // focus, which the panel's own Escape listener never sees (it's
+        // scoped to the panel's document — see App.tsx's own comment on
+        // that). Confirmed empirically against a real Chromium: `Escape` on
+        // the page fires `Overlay.inspectModeCanceled` with no
+        // `inspectNodeRequested` alongside it.
+        if (method === "Overlay.inspectModeCanceled") {
+          finish(null);
+          return;
+        }
+        if (method !== "Overlay.inspectNodeRequested") return;
+        const picked = params as { backendNodeId: number } | undefined;
+        if (!picked) {
+          finish(null);
+          return;
+        }
+        void resolveChain(picked.backendNodeId).then((chainBackendNodeIds) =>
+          finish({ backendNodeId: picked.backendNodeId, chainBackendNodeIds }),
+        );
+      };
+      /**
+       * Chromium's hit test resolves to the exact DOM element under the
+       * cursor, which is often a node the accessibility tree never kept —
+       * an unnamed wrapper `<span>` inside a named button, padding inside a
+       * labelled group, and so on (the DOM picker's own `resolveTracked`
+       * walks `.parentElement` for the identical reason). `Accessibility.
+       * getAXNodeAndAncestors` returns the AX node for `backendNodeId` and
+       * its ancestors up to the root in one call — cheaper than walking the
+       * DOM domain's own parent chain node by node — so the panel can try
+       * each ancestor in turn against whatever tree it currently has
+       * loaded until one is actually present. A failure here (an older
+       * Chromium without the method, a torn-down target) degrades to just
+       * the raw hit, matching this function's pre-fallback behavior rather
+       * than losing the pick entirely.
+       */
+      const resolveChain = async (backendNodeId: number): Promise<number[]> => {
+        try {
+          // `getAXNodeAndAncestors` answers "Accessibility has not been
+          // enabled" without this — this `runPick` attach span never enables
+          // the Accessibility domain otherwise (readNativeTree does, but
+          // that's a separate withDebugger call). Idempotent, so calling it
+          // again if a later change to this method ever does enable it
+          // elsewhere costs nothing.
+          await t.send("Accessibility.enable");
+          const result = await t.send<{
+            nodes?: Array<{ backendDOMNodeId?: number }>;
+          }>("Accessibility.getAXNodeAndAncestors", { backendNodeId });
+          const ancestorIds = (result.nodes ?? [])
+            .map((n) => n.backendDOMNodeId)
+            .filter((id): id is number => typeof id === "number");
+          // The raw hit always leads, regardless of what index 0 of the
+          // ancestor response reports — this is a fallback CHAIN, not a
+          // replacement for the actual click target.
+          return Array.from(new Set([backendNodeId, ...ancestorIds]));
+        } catch {
+          return [backendNodeId];
+        }
+      };
+      const finish = (
+        value: { backendNodeId: number; chainBackendNodeIds: number[] } | null,
+      ) => {
+        if (settled) return;
+        settled = true;
+        chrome.debugger.onEvent.removeListener(onEvent);
+        this.pickCancel.delete(tabId);
+        this.pickReject.delete(tabId);
+        resolve(value);
+      };
+      const rejectWith = () => {
+        if (settled) return;
+        settled = true;
+        chrome.debugger.onEvent.removeListener(onEvent);
+        this.pickCancel.delete(tabId);
+        this.pickReject.delete(tabId);
+        // A static, recognized string (R6: never surface a raw
+        // chrome.runtime.lastError/onDetach reason verbatim) — matches
+        // `isConnectionLost`'s own "Target closed." pattern so
+        // `attachAndRun`'s catch classifies this the same way a mid-read or
+        // mid-act disconnect already is, regardless of what `reason` Chrome
+        // actually reported for this detach.
+        reject(new Error("Target closed."));
+      };
+      this.pickCancel.set(tabId, () => finish(null));
+      this.pickReject.set(tabId, rejectWith);
+      chrome.debugger.onEvent.addListener(onEvent);
+      // `Overlay.setInspectMode` answers "DOM should be enabled first" without
+      // this — the Overlay domain resolves a hit-tested node against the DOM
+      // domain's own node tree, which nothing else in this class ever enables
+      // (readNativeTree/dispatchNative go through Accessibility/Runtime, not
+      // DOM). `DOM.enable` needs no matching disable: this session's own
+      // detach (the `finally` below, then `withDebugger`'s own) drops it with
+      // the rest of the attachment.
+      void t
+        .send("DOM.enable")
+        .then(() => t.send("Overlay.enable"))
+        .then(() =>
+          t.send("Overlay.setInspectMode", {
+            mode: "searchForNode",
+            highlightConfig: {
+              contentColor: { r: 111, g: 168, b: 220, a: 0.35 },
+              showInfo: true,
+            },
+          }),
+        )
+        .catch(() => finish(null));
+    }).finally(() =>
+      // Best-effort: if the tab or connection is already gone this is a
+      // no-op failure, same as every other cleanup call in this file.
+      t.send("Overlay.setInspectMode", { mode: "none" }).catch(() => {}),
+    );
+  }
+
+  /** Cancel an in-flight {@link runPick} on `tabId` — armed (a `pickCancel`
+   *  entry exists) or still attaching (nothing armed yet, so the intent is
+   *  recorded in {@link pendingPickCancel} for `runPick` itself to consume;
+   *  see that field's own comment for why). Returns whether either applied —
+   *  a stop with truly nothing outstanding (picking already resolved, or
+   *  this worker instance never armed it) still records a pending cancel and
+   *  reports `true`; the cost of that false positive is at most one future
+   *  pick silently resolving as cancelled, never a hang, and is the
+   *  deliberate trade `pendingPickCancel` documents. */
+  cancelPick(tabId: number): boolean {
+    const cancel = this.pickCancel.get(tabId);
+    if (cancel) {
+      cancel();
+      return true;
+    }
+    this.pendingPickCancel.add(tabId);
+    return true;
+  }
+
+  /**
+   * Cancel every in-flight pick, across every tab. Called before
+   * {@link detachAll} (the revoke path — turning native mode off): without
+   * this, a pick session that never got a click would sit in the per-tab
+   * queue {@link detachAll} waits on, and "Disable native mode" would hang
+   * until the user happened to click something or time out the worker.
+   */
+  cancelAllPicks(): void {
+    for (const cancel of [...this.pickCancel.values()]) cancel();
   }
 }

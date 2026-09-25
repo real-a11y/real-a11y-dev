@@ -126,6 +126,16 @@
   view, labeled "Native accessibility tree" so a report never gets silently
   mistaken for a DOM-producer one. ([#403])
 
+- **Pick element now works under native mode.** Previously the toolbar `⦿`
+  button (and `Ctrl`/`Cmd`+`Shift`+`C`) only appeared for the DOM producer —
+  switching to NATIVE hid it entirely, with no way to jump from a click on
+  the page to the matching tree row. Native has no content script to install
+  a page-side click handler in, so this goes through a different mechanism:
+  arming Chromium's own inspect-element mode (the same one DevTools' "select
+  an element" tool uses) for the length of the pick, over the same
+  `chrome.debugger` connection every other native operation already uses.
+  Clicking an element, or pressing `Escape` to cancel, behaves the same as
+  the DOM producer's own picker. ([#404])
 
 - Collect `.tsx` test suites. The vitest `include` was `src/**/*.test.ts`, so a
   suite written as `.tsx` was never picked up — and silently: vitest ran the
@@ -455,3 +465,4 @@ Earlier releases predate this changelog.
 [#398]: https://github.com/real-a11y/real-a11y-dev/pull/398
 [#399]: https://github.com/real-a11y/real-a11y-dev/pull/399
 [#403]: https://github.com/real-a11y/real-a11y-dev/pull/403
+[#404]: https://github.com/real-a11y/real-a11y-dev/pull/404

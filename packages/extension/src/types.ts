@@ -5,6 +5,8 @@ import type {
   ActionResult,
 } from "@real-a11y-dev/core";
 
+import type { NativeUnavailableReason } from "./native/capability.js";
+
 /** Messages from content script frame → background (per-frame tree data) */
 export type FrameToBackground =
   | {
@@ -94,6 +96,34 @@ export type ContentToPanel =
       type: "PICK_MODE_CHANGED";
       tabId?: number;
       payload: { enabled: boolean };
+    }
+  // Native picker's counterpart to NODE_PICKED. Lives here (unlike the rest
+  // of the NATIVE_* messages, which stay in native/index.ts's own
+  // NativeMessage union — see that union's own comment) because it is a
+  // genuine background→panel PUSH the same shape as NODE_PICKED/
+  // PICK_MODE_CHANGED above, not a request/response call; the panel's
+  // single message handler already routes exactly this shape.
+  | {
+      type: "NATIVE_PICK_RESULT";
+      tabId: number;
+      payload:
+        | {
+            nodeId: string;
+            // Nearest-first fallback chain (nodeId's own DOM ancestors) for
+            // when the hit-tested element itself was never kept in the AX
+            // tree — an unnamed wrapper, padding inside a labelled group,
+            // and so on. The panel tries these in order against whatever
+            // tree it currently has loaded; see NativeTreeView's `reveal`
+            // prop. Absent when the ancestor lookup itself failed (an older
+            // Chromium, a torn-down target) — `nodeId` alone is still tried.
+            ancestorIds?: string[];
+          }
+        | { cancelled: true }
+        // A real attach/dispatch failure — DevTools already attached, the
+        // tab navigated somewhere unattachable mid-arm, a connection drop —
+        // distinct from a user-initiated cancel so the panel can surface it
+        // instead of silently mirroring Escape's own quiet exit.
+        | { error: string; reason?: NativeUnavailableReason };
     };
 
 /** Select option for GET_FIELD_STATE response */

@@ -201,6 +201,8 @@ The button opens a one-time consent step naming what it does before anything att
 
 Once you've accepted that consent step, native mode defaults to on for the first page the panel connects to in a **later** side-panel session — no click needed. That default applies once per session only: switching tabs or navigating afterward never silently reattaches `chrome.debugger` on its own, so the banner never reappears without a gesture you actually made that session — a manual **NATIVE** click, or **Refresh native tree**.
 
+**Pick element** (the toolbar `⦿` button, or `Ctrl`/`Cmd`+`Shift`+`C`) works under native mode too, once a native tree is loaded. It goes through a different mechanism than the DOM producer's own picker — there's no content script in native mode to install a page-side click handler, so this arms Chromium's own inspect-element mode (the same one DevTools' "select an element" tool uses) for the length of the pick, and turns it off again the moment you click something or press `Escape`. The rest of the experience matches: a click selects and reveals the corresponding row in the tree.
+
 ### BETA pill in the panel header
 
 Sets expectations during the pre-1.0 phase. Linked to the GitHub issues page. Goes away at v1.0.

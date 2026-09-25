@@ -220,6 +220,14 @@ main
     code "chrome.debugger"
     strong "NATIVE"
     strong "Refresh native tree"
+  paragraph "(the toolbar button, or /++) works under native mode too, once a native tree is loaded. It goes through a different mechanism than the DOM producer's own picker — there's no content script in native mode to install a page-side click handler, so this arms Chromium's own inspect-element mode (the same one DevTools' "select an element" tool uses) for the length of the pick, and turns it off again the moment you click something or press . The rest of the experience matches: a click selects and reveals the corresponding row in the tree."
+    strong "Pick element"
+    code "⦿"
+    code "Ctrl"
+    code "Cmd"
+    code "Shift"
+    code "C"
+    code "Escape"
   heading "BETA pill in the panel header" (level 3)
   paragraph "Sets expectations during the pre-1.0 phase. Linked to the GitHub issues page. Goes away at v1.0."
   separator
