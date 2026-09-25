@@ -13,6 +13,7 @@ link "the panel features guide"
 link "screen curtain"
 button "Copy Code"
 generic
+link "CLAUDE.md's "Two producers build the tree""
 link "Reading the DOM view"
 link "A11y view"
 link "TAB view"

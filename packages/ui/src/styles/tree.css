@@ -88,6 +88,46 @@
   color: hsl(28 90% 82%);
 }
 
+/* One-time inline consent shown when a user reaches for NATIVE while the
+   setting is still off — informational, not a warning, so it gets its own
+   (blue, not amber) treatment distinct from .sn-native-capability-banner. */
+.sn-native-consent-banner {
+  margin: 6px 8px;
+  padding: 8px 10px;
+  border-left: 3px solid hsl(210 70% 45%);
+  background: hsl(210 80% 95%);
+  color: hsl(210 60% 20%);
+  font-size: 12px;
+}
+
+.sn-native-consent-banner p {
+  margin: 0 0 6px;
+}
+
+/* A failed Enable attempt — same amber the capability banner uses, so an
+   in-banner failure reads consistently with every other "something's
+   blocking native mode" state, distinct from the banner's own informational
+   blue. */
+.sn-native-consent-error {
+  color: hsl(28 70% 30%);
+  font-weight: 600;
+}
+
+.sn-native-consent-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.sn-theme-dark .sn-native-consent-banner {
+  border-left-color: hsl(210 50% 55%);
+  background: hsl(210 40% 16%);
+  color: hsl(210 85% 88%);
+}
+
+.sn-theme-dark .sn-native-consent-error {
+  color: hsl(28 90% 78%);
+}
+
 .sn-page-url {
   font-family: var(--sn-font-mono);
   font-size: 10px;

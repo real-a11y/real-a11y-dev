@@ -37,6 +37,15 @@
  *    settle window and re-checks, looping (bounded by
  *    `MAX_NAV_RECOVERY_HOPS`) until a full settle window passes with no
  *    further navigation.
+ *  - Native rows had no `onDblClick` at all (the DOM tree's own row does),
+ *    so double-clicking a native row silently did nothing where the DOM
+ *    producer would activate it.
+ *  - A mouse click on a native row never moved real DOM focus onto `.sn-tree`
+ *    (only `aria-activedescendant` updated), so the selected row's
+ *    `:focus-visible` outline — keyed off the *container's* focus state —
+ *    never appeared. The DOM tree's own `handleSelect` calls
+ *    `treeRef.current?.focus()` after selecting; `NativeTreeView`'s row
+ *    `onClick` never did.
  */
 
 import { expect, test, type NativeHarness } from "./harness";
@@ -205,4 +214,109 @@ test("activating a link that redirects onward still recovers on the final page",
   await expect(
     nav.panel.getByRole("treeitem", { name: "Tree View" }),
   ).toBeVisible({ timeout: 10_000 });
+});
+
+test("double-clicking a row activates it, same as the DOM tree's own row", async ({
+  nav,
+}) => {
+  const page = await showNative(nav, "native-panel.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+
+  const lastRow = nav.panel.getByRole("treeitem", { name: "Item 16" });
+  await expect(lastRow).toBeVisible();
+
+  // The row body, not its "Click (Enter)" action button — a plain
+  // double-click anywhere on the row is what the DOM tree's own row
+  // already honors (App.tsx's `onDblClick`).
+  await lastRow.dblclick({ position: { x: 5, y: 5 } });
+  await expect(page.locator("#item-16")).toHaveAttribute(
+    "data-clicked",
+    "true",
+  );
+});
+
+test("clicking a row gives the tree its own focus-visible outline", async ({
+  nav,
+}) => {
+  await showNative(nav, "native-panel.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+
+  const row = nav.panel.getByRole("treeitem", { name: "Item 16" });
+  await expect(row).toBeVisible();
+  await row.click({ position: { x: 5, y: 5 } });
+
+  // `.sn-tree:focus-visible .sn-node--selected` is the only thing that
+  // paints the outline — real DOM focus has to land on the container for
+  // it to ever apply.
+  await expect(nav.panel.locator(".sn-tree")).toBeFocused();
+});
+
+test("a failed Enable attempt surfaces its error inline and never flips the setting", async ({
+  nav,
+}) => {
+  const { page } = await nav.open("native-panel.html");
+  await page.bringToFront();
+
+  // Every other test in this file relies on the worker-scoped dogfood
+  // fixture's own native-mode-already-on storage write — this test needs it
+  // OFF so the entry point is the consent banner, not the toggle. Written
+  // before the reload below so App.tsx's mount-time NATIVE_FLAG_GET effect
+  // reads the fresh value.
+  await nav.panel.evaluate(() =>
+    chrome.storage.local.set({ "settings.nativeModeEnabled": false }),
+  );
+  await nav.panel.reload();
+
+  const enableEntry = nav.panel.getByRole("button", {
+    name: "Enable native mode…",
+  });
+  await expect(enableEntry).toBeVisible({ timeout: 20_000 });
+
+  // Simulate NATIVE_FLAG_SET never reaching the service worker — the exact
+  // case `setNativeMode`'s own catch branch exists for (a torn-down
+  // extension context, a not-yet-woken MV3 worker). Only that one message
+  // type is intercepted; everything else (including the DOM producer's own
+  // connection) goes through untouched.
+  await nav.panel.evaluate(() => {
+    const real = chrome.runtime.sendMessage.bind(chrome.runtime);
+    chrome.runtime.sendMessage = ((message: unknown, ...rest: unknown[]) => {
+      if (
+        typeof message === "object" &&
+        message !== null &&
+        (message as { type?: unknown }).type === "NATIVE_FLAG_SET"
+      ) {
+        return Promise.reject(
+          new Error("simulated: service worker unreachable"),
+        );
+      }
+      return (
+        real as (message: unknown, ...rest: unknown[]) => Promise<unknown>
+      )(message, ...rest);
+    }) as typeof chrome.runtime.sendMessage;
+  });
+
+  await enableEntry.click();
+  const banner = nav.panel.getByRole("dialog", { name: "Enable native mode" });
+  await expect(banner).toBeVisible();
+  await banner.getByRole("button", { name: "Enable" }).click();
+
+  // Without the fix, `onEnable`'s `.then(() => setProducer("native"))` fires
+  // unconditionally — the promise resolves either way, since the catch
+  // branch returns rather than rejects — so the panel would silently switch
+  // to a "native" view for a setting that was never actually persisted,
+  // with the banner gone and no error anywhere.
+  await expect(banner).toBeVisible();
+  await expect(banner.getByRole("alert")).toContainText(
+    "Couldn't enable native mode",
+  );
+  await expect(enableEntry).toBeVisible();
+  await expect(
+    nav.panel.getByRole("button", { name: "NATIVE", exact: true }),
+  ).toHaveCount(0);
+
+  // Restore the shared worker fixture's own assumed state for every test
+  // that follows.
+  await nav.panel.evaluate(() =>
+    chrome.storage.local.set({ "settings.nativeModeEnabled": true }),
+  );
 });

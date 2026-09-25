@@ -72,18 +72,28 @@ The normalization vocabulary lives in `core/src/native/` (`normalizeNativeAX`,
 native transport stays a thin adapter over shared vocabulary instead of growing
 its own engine. Changing that vocabulary reaches every native transport at once.
 
-**The extension is DOM-only today.** A native path over `chrome.debugger` is
-proposed in #229 as a dev-only dogfood build — it is not on `main`, so nothing
-under `packages/extension/src/native/` exists yet. What is already true, and what
-that PR is built to preserve: the shipped
-`packages/extension/public/manifest.json` carries exactly `activeTab`,
-`sidePanel` and `webNavigation`. **A new permission forces every existing user to
-re-consent and raises the Chrome Web Store review bar**, so `chrome.debugger` must
-never reach the published listing — in #229 it stays out via a build-time
-`__DOGFOOD__` constant the store build dead-code-eliminates, a runtime
-`devFlags.nativeMode` gate, and a separate `dist-dogfood/` output. If you work on
-that branch, confirm the production bundle contains zero `chrome.debugger`
-references before pushing.
+**The extension has a native path now, gated by a runtime setting.** Native mode
+(`chrome.debugger`, read Chromium's own accessibility tree over CDP) shipped
+first as a dev-only dogfood build (#229), then graduated into the production
+store build. `packages/extension/public/manifest.json` — the real, published
+manifest — carries `activeTab`, `sidePanel`, `webNavigation`, `debugger`,
+`tabs` and `storage` as required permissions. `chrome.debugger` cannot be an
+optional permission (Chrome enforces `kFlagCannotBeOptional`), so it ships
+required and **every existing user re-consents on the update that carries
+it** — that release is a deliberate, signed-off product decision, not
+something to repeat casually.
+
+What actually keeps native mode off by default is a runtime setting, not a
+build-time constant: `packages/extension/src/native/index.ts` gates
+`registerNativeMode()`'s message handlers behind a `chrome.storage`-backed
+flag (`settings.nativeModeEnabled`), off unless the user explicitly turns it
+on via the side panel's "Enable native mode…" entry point. `__DOGFOOD__` still
+exists as a build-time constant, but it now gates only `DogfoodPanel` — the
+internal telemetry/diagnostics UI for the dogfooding exercise — not the
+native capability itself, which is dead-code-eliminated from nothing and
+compiled into every build. If you touch this area, don't reintroduce a
+build-time gate on `chrome.debugger`; the runtime setting is the one gate
+that matters now.
 
 ## Working in this repo
 

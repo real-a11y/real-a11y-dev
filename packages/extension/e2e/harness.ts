@@ -43,9 +43,12 @@ import {
   type Worker,
 } from "@playwright/test";
 
-/** The dogfood build — NOT `dist/`. The store build dead-code-eliminates the
- *  entire native path behind `__DOGFOOD__`, so pointing here at `dist/` would
- *  silently test an extension with no native mode at all. */
+/** The dogfood build — NOT `dist/`. This suite drives `DogfoodPanel`, the
+ *  internal diagnostics widget, directly over its own `chrome.runtime`
+ *  messages — `__DOGFOOD__` still gates that widget alone (native mode
+ *  itself now ships in the store build too, behind the runtime
+ *  `settings.nativeModeEnabled` flag), so pointing here at `dist/` would
+ *  silently test a build with no `DogfoodPanel` to drive at all. */
 // The package is `"type": "module"`, so Playwright loads this file as ESM and
 // there is no `__dirname` to lean on.
 const HERE = resolve(fileURLToPath(import.meta.url), "..");
@@ -194,12 +197,14 @@ async function launchDogfoodExtension(): Promise<
   await panel.goto(
     `chrome-extension://${extensionId}/src/sidepanel/index.html`,
   );
-  // Native mode is off by default and gated twice over (build constant plus
-  // runtime flag). Flipping the flag here is what the dogfooder's own toggle
-  // does; `attach()` enforces it inside its storage transaction, so every
-  // later `NATIVE_READ`/`NATIVE_ACT` in this worker sees it.
+  // Native mode is off by default, gated by the user-facing runtime setting
+  // (`settings.nativeModeEnabled` in `chrome.storage.local` —
+  // `packages/extension/src/native/index.ts`'s `FLAG_KEY`). Flipping it here
+  // is what the "Enable native mode…" toggle does; `attach()` enforces it
+  // inside its storage transaction, so every later `NATIVE_READ`/`NATIVE_ACT`
+  // in this worker sees it.
   await panel.evaluate(() =>
-    chrome.storage.local.set({ "devFlags.nativeMode": true }),
+    chrome.storage.local.set({ "settings.nativeModeEnabled": true }),
   );
 
   return {

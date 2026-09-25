@@ -38,17 +38,24 @@ Web Page
 
 - **Content Script** — Injected into every page. Extracts the DOM/accessibility tree using `@real-a11y-dev/core`, dispatches actions on real DOM elements, manages the highlight overlay, and applies native Tab / Escape defaults for the panel keyboard bar (Tab reuses core `getTabSequence`; synthetic key events alone cannot move focus or close `<dialog>`).
 - **Background Service Worker** — Routes messages between the Side Panel and content scripts, and merges each frame's tree into one. Because that per-frame state is in memory only, it also originates traffic of its own: when Chrome restarts it under a loaded page it asks frames it has no tree for to re-announce, so the panel doesn't lose its iframe subtrees. Manages the Side Panel lifecycle. Panel→content commands carry the panel's bound `tabId`; the background prefers that over its global `activeTabId` so a tab-switch race cannot land `DISPATCH_ACTION` / `SEND_KEY` / `CLOSE_TAB` on the newly active tab while the panel still shows the previous tab's nodes.
-- **Side Panel** — Renders the tree UI. Receives serialized tree data from the content script and sends action commands back. A **Copy ▾** dropdown exports the current view to the clipboard as a paste-ready Markdown accessibility report — Everything, the A11y/DOM tree, the heading outline, or the tab sequence — for dropping into a bug tracker. The keyboard bar (`Esc` · `Tab` · `Shift+Tab` · `Enter` · `Space` · `↑` · `↓`) sends keys to the focused page element.
+- **Side Panel** — Renders the tree UI. Receives serialized tree data from the content script and sends action commands back. A **Copy ▾** dropdown exports the current view to the clipboard as a paste-ready Markdown accessibility report — Everything, the A11y/DOM tree, the heading outline, or the tab sequence — for dropping into a bug tracker. The keyboard bar (`Esc` · `Tab` · `Shift+Tab` · `Enter` · `Space` · `↑` · `↓`) sends keys to the focused page element. An **"Enable native mode…"** button, off by default, switches the producer to Chromium's own accessibility tree over `chrome.debugger` instead of the content script's DOM walk — see Native mode below.
 
 ### Permissions
 
-| Permission | Why |
-|------------|-----|
-| `activeTab` | Access the current tab's DOM for tree extraction |
-| `sidePanel` | Register and open the Side Panel UI |
-| `webNavigation` | Detect SPA route changes so the tree refreshes when the page does |
+| Permission      | Why                                                                                                                                                                |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `activeTab`     | Access the current tab's DOM for tree extraction                                                                                                                |
+| `sidePanel`     | Register and open the Side Panel UI                                                                                                                             |
+| `webNavigation` | Detect SPA route changes so the tree refreshes when the page does                                                                                               |
+| `debugger`      | Powers native mode (below): reads and acts on Chromium's own accessibility tree over CDP. Required by the manifest for every install — `chrome.debugger` cannot be an optional Chrome permission — but inert until a user explicitly turns native mode on. |
+| `tabs`          | Resolves which tab's accessibility tree to attach to when native mode is on — Chrome has no way to grant `tabs` scoped to a single tab, so this is technically broader than that use needs (it could read the URL/title of any open tab); the code only ever acts on a tab id the side panel already supplied, never enumerates others |
+| `storage`       | Persists the native-mode setting and short-lived attach bookkeeping locally on the device                                                                      |
 
 The content script is declared in the manifest with `<all_urls>` and `all_frames: true` so the tree is ready the moment the user opens the side panel. No data leaves your browser; the extension makes no network requests.
+
+### Native mode
+
+Off by default. The side panel's own DOM/A11Y tree (above) is this extension's own in-page ARIA/AccName walk; native mode instead reads **Chromium's own** accessibility tree over `chrome.debugger` — the same protocol DevTools uses — which sees things the DOM walk can't (UA-shadow content like native media controls) at the cost of Chrome's own "…is debugging this browser" notice while attached. Turning it on requires an explicit one-time step in the panel; turning it back off immediately detaches. See `DOGFOOD.md` for the exercise that validated shipping this, and `CLAUDE.md`'s "Two producers build the tree" for how the DOM and native producers relate.
 
 Chrome still blocks content scripts outright on some pages — `chrome://` pages (including the default new-tab page), the Chrome Web Store, and the built-in PDF viewer. A panel→content broadcast there reaches no frame, and the background reports that back (`{ success: false, error: "restricted-page" }`) rather than claiming delivery. Any tree request that comes back that way — the panel's first load, the `↻` refresh, **Load tree** — puts the panel in a **This page can't be inspected** state instead of leaving it waiting on a tree that can never arrive.
 
