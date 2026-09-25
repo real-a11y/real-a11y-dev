@@ -448,6 +448,18 @@ export function App() {
   // tab switch while already in native mode clears the tree and waits for an
   // explicit refresh rather than re-attaching automatically).
   const hasAutoLoadedNative = useRef(false);
+  // RFC PR H's "native as default on attachable pages" (execution plan PR 5):
+  // fires exactly ONCE per panel session, the first time the DOM producer
+  // connects while the user already has native mode enabled — never again
+  // after that, on purpose. This is deliberately narrower than "default on
+  // every attachable page": re-checking on every later tab switch or
+  // navigation would re-open exactly the silent-reattach hole
+  // `hasAutoLoadedNative`'s own comment above describes fixing (the debugger
+  // banner reappearing with no fresh user gesture). A session's first connect
+  // is the one moment a default can stand in for that gesture — the user
+  // opened the panel on an already-opted-in browser; every subsequent tab or
+  // page is a fresh moment that still asks for one.
+  const hasAppliedNativeDefault = useRef(false);
 
   const treeRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -1231,14 +1243,17 @@ export function App() {
 
   /** Read the native tree into state. Mirrors DogfoodPanel's readTreeInto,
    *  minus its own flat-list bookkeeping — NativeTreeView owns expand state.
+   *  Returns whether the read succeeded — the native-default effect below is
+   *  the one caller that needs to tell a real failure apart from a read that
+   *  just got superseded by something else.
    *
    *  UNGUARDED by `nativeInFlight` — `dispatchNativeAction`'s own re-read
    *  step calls this directly (not the guarded `loadNativeTree` below) so
    *  that its own held guard doesn't make its post-action re-read a silent
    *  no-op. Never call this one from anywhere else; call `loadNativeTree`. */
   const loadNativeTreeCore = useCallback(
-    async (tabId: number) => {
-      if (!nativeModeEnabled) return;
+    async (tabId: number): Promise<boolean> => {
+      if (!nativeModeEnabled) return false;
       const token = nativeOpToken.current;
       setNativeBusy(true);
       setNativeStatus("reading native tree…");
@@ -1254,7 +1269,7 @@ export function App() {
           rootId?: string;
           url?: string;
         };
-        if (token !== nativeOpToken.current) return; // tab switched mid-flight
+        if (token !== nativeOpToken.current) return false; // tab switched mid-flight
         if (!r?.ok) {
           setNativeNodes(new Map());
           setNativeRootId("");
@@ -1266,7 +1281,7 @@ export function App() {
           } else {
             setNativeStatus(`read failed: ${r?.error ?? "unknown"}`);
           }
-          return;
+          return false;
         }
         setNativeNodes(new Map((r.nodes ?? []).map((n) => [n.id, n])));
         setNativeRootId(r.rootId ?? "");
@@ -1276,6 +1291,7 @@ export function App() {
         // same reasoning as DogfoodPanel's identical line.
         setNativeCapability(undefined);
         setNativeStatus(`${r.nodes?.length ?? 0} nodes`);
+        return true;
       } finally {
         if (token === nativeOpToken.current) setNativeBusy(false);
       }
@@ -1285,13 +1301,14 @@ export function App() {
 
   /** Guarded entry point for a user- or effect-triggered read (refresh
    *  button, auto-load). Excludes a second read/act while one is in flight —
-   *  see `nativeInFlight`'s own declaration. */
+   *  see `nativeInFlight`'s own declaration. Propagates `loadNativeTreeCore`'s
+   *  success/failure so the native-default effect can tell them apart. */
   const loadNativeTree = useCallback(
-    async (tabId: number) => {
-      if (!nativeModeEnabled || nativeInFlight.current) return;
+    async (tabId: number): Promise<boolean> => {
+      if (!nativeModeEnabled || nativeInFlight.current) return false;
       nativeInFlight.current = true;
       try {
-        await loadNativeTreeCore(tabId);
+        return await loadNativeTreeCore(tabId);
       } finally {
         nativeInFlight.current = false;
       }
@@ -1370,6 +1387,73 @@ export function App() {
     },
     [loadNativeTreeCore],
   );
+
+  // The default itself (see `hasAppliedNativeDefault`'s own declaration for
+  // the one-shot-per-session scoping rationale). Gated on `connected`, not
+  // just `myTabId`, for the same reason the producer toggle itself waits for
+  // it (see the toolbar's own comment below): reaching for native before the
+  // DOM producer has proven the tab is even reachable would default into a
+  // capability check with nothing to fall back to yet.
+  //
+  // Deliberately no pre-flight NATIVE_CAPABILITY check here — neither the
+  // manual NATIVE toggle nor the consent banner's own "Enable native mode…"
+  // flow does one either; both just flip `producer`. But unlike those two,
+  // THIS effect does have to tell a real failure apart from success: it's
+  // spending a one-shot the user never asked for, on a page they didn't
+  // pick, so a page that merely can't attach (DevTools already owns that
+  // tab, a blocked URL, ...) must not burn the one-shot and strand later,
+  // genuinely attachable tabs on DOM for the rest of the session. That's why
+  // this effect calls the guarded `loadNativeTree` directly — the same read
+  // the auto-load effect below would otherwise trigger on its own once
+  // `producer` flips — instead of leaving it to fire independently: setting
+  // `hasAutoLoadedNative` up front makes that effect a no-op (no duplicate
+  // NATIVE_READ), and awaiting the result here is what lets a failure revert
+  // `producer` back to "dom" and un-mark `hasAppliedNativeDefault`, leaving
+  // the default eligible again the next time a tab connects. The `token`
+  // re-check on the way out is the same guard every other native op in this
+  // file uses (see `nativeOpToken`'s own declaration): if a tab switch (or
+  // any other native op) has superseded this attempt by the time it
+  // resolves, leave whatever that other operation left behind alone rather
+  // than stomping it with a stale revert.
+  useEffect(() => {
+    if (!nativeModeEnabled || !connected || myTabId === null) return;
+    if (hasAppliedNativeDefault.current) return;
+    // Another native read already holds `nativeInFlight` (the auto-load
+    // effect firing from a manual toggle that raced this one, a refresh, an
+    // in-flight action's own re-read, …) — `loadNativeTree` would return
+    // `false` purely because it's busy, not because THIS attempt actually
+    // failed, and the code below can't tell those apart (nothing bumps
+    // `nativeOpToken` on a busy-skip). Misreading busy as failed would burn
+    // the one-shot and revert to DOM under a tree that may well load fine
+    // moments later. `nativeBusy` is a dependency below specifically so this
+    // effect re-evaluates once that other read clears, instead of never
+    // getting another chance.
+    if (nativeInFlight.current) return;
+    hasAppliedNativeDefault.current = true;
+    const tabId = myTabId;
+    const token = nativeOpToken.current;
+    setProducer("native");
+    hasAutoLoadedNative.current = true;
+    void loadNativeTree(tabId)
+      .then((ok) => {
+        if (ok || token !== nativeOpToken.current) return;
+        hasAppliedNativeDefault.current = false;
+        hasAutoLoadedNative.current = false;
+        setProducer("dom");
+      })
+      .catch(() => {
+        // sendMessage rejected outright (service worker not yet woken, a
+        // torn-down context) — loadNativeTreeCore has no catch of its own
+        // for this, so without one here the rejection would strand the
+        // panel on "native" with an empty tree and no retry, the one-shot
+        // burned on a read that never even completed. Same revert as an
+        // ordinary `ok === false` above.
+        if (token !== nativeOpToken.current) return;
+        hasAppliedNativeDefault.current = false;
+        hasAutoLoadedNative.current = false;
+        setProducer("dom");
+      });
+  }, [nativeModeEnabled, connected, myTabId, nativeBusy, loadNativeTree]);
 
   /** Dispatch one native action and, on success, settle + re-read — the same
    *  two-step DogfoodPanel's runAct uses, so a click that opens a menu or

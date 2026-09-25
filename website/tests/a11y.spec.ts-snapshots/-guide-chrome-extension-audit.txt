@@ -208,6 +208,11 @@ main
     strong "DOM / NATIVE"
     strong "Disable native mode"
     link "CLAUDE.md's "Two producers build the tree""
+  paragraph "Once you've accepted that consent step, native mode defaults to on for the first page the panel connects to in a side-panel session — no click needed. That default applies once per session only: switching tabs or navigating afterward never silently reattaches on its own, so the banner never reappears without a gesture you actually made that session — a manual click, or ."
+    strong "later"
+    code "chrome.debugger"
+    strong "NATIVE"
+    strong "Refresh native tree"
   heading "BETA pill in the panel header" (level 3)
   paragraph "Sets expectations during the pre-1.0 phase. Linked to the GitHub issues page. Goes away at v1.0."
   separator

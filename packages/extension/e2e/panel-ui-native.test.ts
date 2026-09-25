@@ -320,3 +320,77 @@ test("a failed Enable attempt surfaces its error inline and never flips the sett
     chrome.storage.local.set({ "settings.nativeModeEnabled": true }),
   );
 });
+
+// ---- Native as default (execution plan PR 5) ----
+//
+// The `dogfood` fixture (harness.ts) already flips `settings.nativeModeEnabled`
+// on before any test runs, simulating a user who opted in during an earlier
+// session — exactly the precondition PR 5's default targets. Both tests below
+// therefore never click the "NATIVE" toggle at all; that omission is the
+// assertion.
+
+test("native mode defaults to the native producer on first connect, with no click", async ({
+  nav,
+}) => {
+  const { page } = await nav.open("native-panel.html");
+  await page.bringToFront();
+  await nav.panel.reload();
+
+  // Same wait `showNative` uses, but note what's absent: no
+  // `.getByRole("button", { name: "NATIVE" }).click()` anywhere in this test.
+  await expect
+    .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
+    .toBeGreaterThan(0);
+
+  await expect(
+    nav.panel.getByRole("button", { name: "NATIVE", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  // The rows are native-panel.html's own ids, not the production DOM tree's
+  // fixture markup — proof this is genuinely the native producer's tree, not
+  // a DOM-producer tree that merely rendered before the assertion ran.
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+  // A row's accessible name is `button "Item 1" focusable Click ⏎`; anchored
+  // at the start so the match doesn't also hit "Item 10".."Item 16".
+  await expect(
+    nav.panel.getByRole("treeitem", { name: /^button "Item 1" focusable/ }),
+  ).toBeVisible();
+});
+
+test("switching tabs after the default does not silently re-attach", async ({
+  nav,
+}) => {
+  const first = await nav.open("native-panel.html");
+  await first.page.bringToFront();
+  await nav.panel.reload();
+  await expect
+    .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
+    .toBeGreaterThan(0);
+
+  // A second tab, brought to the front — the same tab-switch shape
+  // `hasAutoLoadedNative`'s own comment in App.tsx describes, now exercised
+  // through the default path rather than a manual toggle.
+  const second = await nav.open("tree-view.html");
+  await second.page.bringToFront();
+
+  // The switch clears the stale tree (native ids are scoped to the document
+  // they were read from) but must NOT re-attach on its own — a fresh
+  // `chrome.debugger` attach with no user gesture on this tab is exactly what
+  // the anti-silent-reattach fix exists to prevent. Polling for the count to
+  // drop to zero and stay there (rather than a single snapshot read) is what
+  // catches a re-attach that would otherwise race this assertion and win.
+  await expect
+    .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 5_000 })
+    .toBe(0);
+  await nav.panel.waitForTimeout(500);
+  expect(await nav.panel.locator(".sn-node").count()).toBe(0);
+
+  // The toggle itself stays on NATIVE — only the tree emptied, not the
+  // producer choice — and an explicit refresh still works normally.
+  await expect(
+    nav.panel.getByRole("button", { name: "NATIVE", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await nav.panel.getByRole("button", { name: "Refresh native tree" }).click();
+  await expect
+    .poll(() => nav.panel.locator(".sn-node").count(), { timeout: 20_000 })
+    .toBeGreaterThan(0);
+});

@@ -197,6 +197,8 @@ Off by default. Everything above describes the DOM producer — this extension's
 
 The button opens a one-time consent step naming what it does before anything attaches; accepting swaps the toolbar's single tree for a **DOM / NATIVE** toggle, and a **Disable native mode** button next to it turns the setting back off and detaches immediately. The two producers never silently mix — see [CLAUDE.md's "Two producers build the tree"](https://github.com/real-a11y/real-a11y-dev/blob/main/CLAUDE.md) for why they will never agree byte for byte, by design.
 
+Once you've accepted that consent step, native mode defaults to on for the first page the panel connects to in a **later** side-panel session — no click needed. That default applies once per session only: switching tabs or navigating afterward never silently reattaches `chrome.debugger` on its own, so the banner never reappears without a gesture you actually made that session — a manual **NATIVE** click, or **Refresh native tree**.
+
 ### BETA pill in the panel header
 
 Sets expectations during the pre-1.0 phase. Linked to the GitHub issues page. Goes away at v1.0.
