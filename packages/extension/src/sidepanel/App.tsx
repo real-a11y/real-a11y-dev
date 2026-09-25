@@ -1841,8 +1841,7 @@ export function App() {
       // scope label.
       if (producer === "native") {
         if (!nativeRootId || nativeNodes.size === 0) {
-          setLastAction("Nothing to export yet");
-          setTimeout(() => setLastAction(null), 2000);
+          announce("Nothing to export yet", 2000);
           return;
         }
         const tree = nativeToExtractionResult(nativeNodes, nativeRootId);
@@ -1872,11 +1871,10 @@ export function App() {
           selection,
         );
         navigator.clipboard.writeText(markdown).then(
-          () => setLastAction("Copied to clipboard"),
+          () => announce("Copied to clipboard", 2500),
           () =>
-            setLastAction("Clipboard blocked — click the panel, then retry"),
+            announce("Clipboard blocked — click the panel, then retry", 2500),
         );
-        setTimeout(() => setLastAction(null), 2500);
         return;
       }
 
