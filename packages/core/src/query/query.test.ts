@@ -132,6 +132,65 @@ describe("getOutline", () => {
   });
 });
 
+// The visually-hidden ("sr-only") pattern: clipped to 1px and positioned out
+// of flow, but read by every screen reader. The extractor flags it
+// `dom.isHidden` (it is not visible) while keeping it `a11y.isExposedToAT`.
+// Queries follow what AT reads, so they keep it; content hidden from AT too
+// (`visibility: hidden`, `aria-hidden`) stays out.
+describe("screen-reader-only content", () => {
+  const SR_ONLY =
+    "position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)";
+
+  function attached(html: string) {
+    const root = createPage(html);
+    document.body.appendChild(root);
+    return {
+      tree: extractDomTree(root),
+      [Symbol.dispose]: () => root.remove(),
+    };
+  }
+
+  it("is flagged visually hidden but exposed to AT", () => {
+    using page = attached(`<h2 style="${SR_ONLY}">Navigation Menu</h2>`);
+    const h2 = findAllByRole(page.tree, "heading", { includeHidden: true })[0];
+    expect(h2?.dom?.isHidden).toBe(true);
+    expect(h2?.a11y.isExposedToAT).toBe(true);
+  });
+
+  it("stays in the heading outline", () => {
+    using page = attached(`
+      <h2 style="${SR_ONLY}">Navigation Menu</h2>
+      <h1>Title</h1>
+    `);
+    expect(getOutline(page.tree).map((e) => e.name)).toEqual([
+      "Navigation Menu",
+      "Title",
+    ]);
+  });
+
+  it("is found by findByRole and kept by linearize", () => {
+    using page = attached(`<h1 style="${SR_ONLY}">Only heading</h1>`);
+    expect(findByRole(page.tree, "heading")?.a11y.name).toBe("Only heading");
+    expect(
+      linearize(page.tree).some((n) => n.a11y.name === "Only heading"),
+    ).toBe(true);
+  });
+
+  it("still leaves out visibility:hidden and aria-hidden headings", () => {
+    using page = attached(`
+      <h2 style="visibility:hidden">Invisible</h2>
+      <h2 aria-hidden="true" style="${SR_ONLY}">Hidden from AT</h2>
+      <h2>Shown</h2>
+    `);
+    expect(getOutline(page.tree).map((e) => e.name)).toEqual(["Shown"]);
+    expect(
+      findAllByRole(page.tree, "heading", { includeHidden: true }).map(
+        (n) => n.a11y.name,
+      ),
+    ).toEqual(["Invisible", "Hidden from AT", "Shown"]);
+  });
+});
+
 describe("getTabSequence", () => {
   it("places positive tabindexes first, in ascending order", () => {
     const root = createPage(`

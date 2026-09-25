@@ -516,6 +516,15 @@ describe("isHiddenFromAT", () => {
       node.remove();
     }
   });
+
+  // With no computed style (a DOM-less runtime), the extractor's visual check
+  // falls back to the inline `visibility`. This check must do the same, or an
+  // inline `visibility:hidden` element would read as "not visible, but
+  // exposed to AT" — the sr-only signature — and queries would keep it.
+  it("falls back to inline visibility:hidden when there is no computed style", () => {
+    const node = el('<div style="visibility:hidden">Ghost</div>');
+    expect(isHiddenFromAT(node, null)).toBe(true);
+  });
 });
 
 describe("getHeadingLevel", () => {

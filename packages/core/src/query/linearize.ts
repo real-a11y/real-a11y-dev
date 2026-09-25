@@ -3,7 +3,15 @@ import type { SemanticNode } from "../types.js";
 import { nodesOf, rootIdOf, type QueryInput } from "./types.js";
 
 export interface LinearizeOptions {
-  /** Include nodes with `dom.isHidden === true` (default false). */
+  /**
+   * Include nodes hidden from assistive technology as well as from sight:
+   * `dom.isHidden === true` and `a11y.isExposedToAT === false`, such as a
+   * `visibility: hidden` element in the DOM view. Default false.
+   *
+   * Visually hidden content that AT still reads — the "sr-only" pattern,
+   * flagged `dom.isHidden` but exposed — is always included, because a
+   * screen reader announces it.
+   */
   includeHidden?: boolean;
   /**
    * Include nodes that were suppressed from the AT tree
@@ -35,7 +43,11 @@ export function linearize(
   const visit = (id: string) => {
     const node = nodes.get(id);
     if (!node) return;
-    const skipHidden = !includeHidden && node.dom?.isHidden === true;
+    // `dom.isHidden` alone means "not visible", which includes sr-only
+    // content AT reads; skipping on it dropped e.g. GitHub's visually hidden
+    // "Navigation Menu" heading from outlines, snapshots and audits.
+    const skipHidden =
+      !includeHidden && node.dom?.isHidden === true && !node.a11y.isExposedToAT;
     const skipAT = !includeNotExposed && !node.a11y.isExposedToAT;
     if (!skipHidden && !skipAT) out.push(node);
     for (const childId of node.childIds) visit(childId);
