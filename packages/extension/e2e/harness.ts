@@ -43,9 +43,12 @@ import {
   type Worker,
 } from "@playwright/test";
 
-/** The dogfood build — NOT `dist/`. The store build dead-code-eliminates the
- *  entire native path behind `__DOGFOOD__`, so pointing here at `dist/` would
- *  silently test an extension with no native mode at all. */
+/** The dogfood build — NOT `dist/`. This suite drives `DogfoodPanel`, the
+ *  internal diagnostics widget, directly over its own `chrome.runtime`
+ *  messages — `__DOGFOOD__` still gates that widget alone (native mode
+ *  itself now ships in the store build too, behind the runtime
+ *  `settings.nativeModeEnabled` flag), so pointing here at `dist/` would
+ *  silently test a build with no `DogfoodPanel` to drive at all. */
 // The package is `"type": "module"`, so Playwright loads this file as ESM and
 // there is no `__dirname` to lean on.
 const HERE = resolve(fileURLToPath(import.meta.url), "..");
