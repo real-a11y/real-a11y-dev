@@ -64,7 +64,7 @@
     "@real-a11y-dev/serialize": "workspace:*",
     "@real-a11y-dev/session-registry": "workspace:*",
     "@real-a11y-dev/snapshot": "workspace:*",
-    "@types/node": "^22.0.0",
+    "@types/node": "^26.6.2",
     "@types/semver": "^7.8.0",
     "playwright": "^1.62.1",
     "semver": "^7.8.5",
