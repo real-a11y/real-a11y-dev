@@ -301,23 +301,68 @@ describe("content: native focus-follow suppresses the reverse focus-sync", () =>
     expect(h.sent.filter((m) => m.type === "FOCUS_CHANGED")).toHaveLength(1);
   });
 
-  it("drops a focus change that lands inside the suppression window", () => {
-    h.send({ type: "SUPPRESS_NATIVE_FOCUS_TRACK" });
+  function suppress(seq: number, active: boolean): void {
+    h.send({
+      type: "SUPPRESS_NATIVE_FOCUS_TRACK",
+      payload: { seq, active },
+    });
+  }
+
+  function reported(): number {
+    return h.sent.filter((m) => m.type === "FOCUS_CHANGED").length;
+  }
+
+  it("drops the focus change the native dispatch causes while armed", () => {
+    suppress(1, true);
     h.sent.length = 0;
 
     focusTarget();
 
-    expect(h.sent.filter((m) => m.type === "FOCUS_CHANGED")).toEqual([]);
+    expect(reported()).toBe(0);
   });
 
-  it("resumes tracking once the suppression window elapses", () => {
-    h.send({ type: "SUPPRESS_NATIVE_FOCUS_TRACK" });
+  it("drops only that ONE focus change, not every one inside the window", () => {
+    // Regression (Devin Review, second round): a blanket window swallowed a
+    // genuine user click or Tab landing in the same 800ms, leaving reverse
+    // focus sync stale until the next focus event.
+    suppress(1, true);
+    h.sent.length = 0;
+
+    focusTarget();
+    focusTarget();
+
+    expect(reported()).toBe(1);
+  });
+
+  it("stops suppressing once the panel releases it", () => {
+    suppress(1, true);
+    suppress(1, false);
+    h.sent.length = 0;
+
+    focusTarget();
+
+    expect(reported()).toBe(1);
+  });
+
+  it("ignores a late release from an older follow", () => {
+    suppress(1, true);
+    suppress(2, true);
+    suppress(1, false);
+    h.sent.length = 0;
+
+    focusTarget();
+
+    expect(reported()).toBe(0);
+  });
+
+  it("resumes tracking once the deadline passes with no release", () => {
+    suppress(1, true);
     vi.advanceTimersByTime(801);
     h.sent.length = 0;
 
     focusTarget();
 
-    expect(h.sent.filter((m) => m.type === "FOCUS_CHANGED")).toHaveLength(1);
+    expect(reported()).toBe(1);
   });
 });
 
