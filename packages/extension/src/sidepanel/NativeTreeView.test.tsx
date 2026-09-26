@@ -219,3 +219,96 @@ describe("NativeTreeView role filter", () => {
     expect(selected?.getAttribute("data-node-id")).toBe("h3");
   });
 });
+
+describe("NativeTreeView selection-focus follow", () => {
+  let container: HTMLDivElement;
+  let originalScrollIntoView: typeof Element.prototype.scrollIntoView;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    originalScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function () {};
+    container = document.createElement("div");
+    document.body.appendChild(container);
+  });
+
+  afterEach(() => {
+    render(null, container);
+    container.remove();
+    Element.prototype.scrollIntoView = originalScrollIntoView;
+    vi.useRealTimers();
+  });
+
+  function mountWithFocusFollow(onSelectionFocus = vi.fn()) {
+    act(() => {
+      render(
+        <NativeTreeView
+          nodes={NODES}
+          rootId="root"
+          busy={false}
+          capability={undefined}
+          status=""
+          onRefresh={() => {}}
+          onActivate={() => {}}
+          onSelectionFocus={onSelectionFocus}
+        />,
+        container,
+      );
+    });
+    return onSelectionFocus;
+  }
+
+  function row(id: string): HTMLElement {
+    const el = container.querySelector<HTMLElement>(`[data-node-id="${id}"]`);
+    if (!el) throw new Error(`no row for ${id}`);
+    return el;
+  }
+
+  it("calls onSelectionFocus with the clicked row's id, after a debounce", () => {
+    const onSelectionFocus = mountWithFocusFollow();
+    act(() => row("h1").click());
+
+    expect(onSelectionFocus).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(150));
+    expect(onSelectionFocus).toHaveBeenCalledExactlyOnceWith("h1");
+  });
+
+  it("only fires once for the row the selection settles on, not every intermediate one", () => {
+    const onSelectionFocus = mountWithFocusFollow();
+    act(() => row("h1").click());
+    act(() => vi.advanceTimersByTime(50));
+    act(() => row("link").click());
+    act(() => vi.advanceTimersByTime(50));
+    act(() => row("h-foot").click());
+    act(() => vi.advanceTimersByTime(150));
+
+    expect(onSelectionFocus).toHaveBeenCalledExactlyOnceWith("h-foot");
+  });
+
+  it("never calls onSelectionFocus when nothing is selected", () => {
+    const onSelectionFocus = mountWithFocusFollow();
+    act(() => vi.advanceTimersByTime(500));
+    expect(onSelectionFocus).not.toHaveBeenCalled();
+  });
+
+  it("does not throw when onSelectionFocus is omitted", () => {
+    act(() => {
+      render(
+        <NativeTreeView
+          nodes={NODES}
+          rootId="root"
+          busy={false}
+          capability={undefined}
+          status=""
+          onRefresh={() => {}}
+          onActivate={() => {}}
+        />,
+        container,
+      );
+    });
+    expect(() => {
+      act(() => row("h1").click());
+      act(() => vi.advanceTimersByTime(500));
+    }).not.toThrow();
+  });
+});
