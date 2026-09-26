@@ -44,6 +44,12 @@ main
       code "title"
     listitem "Empty string (element has no accessible name)"
   paragraph "If #1 resolves to a non-empty string, #2–#5 are ignored — even if #2 looks "more specific" from a CSS or developer perspective."
+  paragraph "A paragraph, a list item, or a live region (, ) with text directly inside it shows that text as its name: , . That keeps its content visible in a snapshot, where the tree prints names and nothing else. A screen reader reads that text as the element's content, not as a label. It never applies to a dialog, image, landmark or text field."
+    strong "One thing a tree shows beyond this list."
+    code "alert"
+    code "status"
+    code "paragraph "Read the guide""
+    code "status "3 results""
   separator
   heading "Concrete examples" (level 2)
   heading "Button with only text" (level 3)
