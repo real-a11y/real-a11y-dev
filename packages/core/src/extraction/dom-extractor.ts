@@ -574,6 +574,81 @@ const NAMES_FROM_CONTENT_ROLES = new Set<string>([
 ]);
 
 /**
+ * Roles only an author can name — by aria-label/labelledby, `title`, or a
+ * host-language source (a legend, a summary) — so the last-resort direct-text
+ * step of the name computation must not name them. Chromium leaves every one
+ * unnamed however much loose text it holds (measured over CDP, Chromium 151):
+ * `<div role="dialog">Delete this project? <button>Cancel</button></div>` is an
+ * unnamed dialog, and `dialog-labeled` has to see it that way. The same goes
+ * for a landmark (a named `form` becomes a landmark), an `img`, and a widget
+ * whose text is its VALUE — a `<textarea>`'s contents are the user's data, not
+ * its label.
+ *
+ * Deliberately a deny-list, so everything else keeps the fallback:
+ * - `generic` — a text-bearing generic is kept in the a11y view BECAUSE it is
+ *   named (`keepNode` in a11y-extractor.ts); taking that away changes the
+ *   tree's shape, not just a name.
+ * - The prose roles (paragraph, listitem, blockquote, term, code, time…),
+ *   whose text is their content. The native producer takes their own text
+ *   too (`NATIVE_AX_OWN_TEXT_ROLES`).
+ * - The live regions (alert, status, log, timer, marquee). ARIA names them by
+ *   author only, but their text is the announcement itself, no audit reads
+ *   their name, and the native producer names a text-only one from its text
+ *   as well — blanking it would blank every toast and error message.
+ */
+const AUTHOR_NAMED_ROLES = new Set<string>([
+  // Windows and images
+  "dialog",
+  "alertdialog",
+  "img",
+  // Landmarks
+  "banner",
+  "complementary",
+  "contentinfo",
+  "form",
+  "main",
+  "navigation",
+  "region",
+  "search",
+  // Sectioning and document structure (ARIA 1.3 sectionheader/sectionfooter
+  // included — a byline is not a header's name)
+  "application",
+  "article",
+  "document",
+  "feed",
+  "figure",
+  "group",
+  "math",
+  "note",
+  "sectionfooter",
+  "sectionheader",
+  "tabpanel",
+  // Composite widgets and their containers
+  "grid",
+  "list",
+  "listbox",
+  "menu",
+  "menubar",
+  "radiogroup",
+  "rowgroup",
+  "table",
+  "tablist",
+  "toolbar",
+  "tree",
+  "treegrid",
+  // Widgets whose text is a value, not a label
+  "combobox",
+  "meter",
+  "progressbar",
+  "scrollbar",
+  "searchbox",
+  "separator",
+  "slider",
+  "spinbutton",
+  "textbox",
+]);
+
+/**
  * True if `element` is a host whose accessible name can come from its
  * descendant text content. Used by the incremental extractor to decide
  * whether a text mutation must invalidate an ancestor's name.
@@ -938,18 +1013,15 @@ function computeRawAccessibleName(
     if (fullText) return fullText;
   }
 
-  // sectionheader/sectionfooter are name-from-author only (ARIA 1.3), and
-  // Chromium names them that way. Taking a byline's loose text here would
-  // make every such header "named" and keep it in the a11y view, where the
-  // native producer drops it as bare.
-  if (tag === "header" || tag === "footer") {
-    const role = getImplicitRole(element);
-    if (role === "sectionheader" || role === "sectionfooter") return "";
-  }
-
-  // 9. Fallback: direct text content only (for generic/container elements)
+  // 9. Fallback: direct text content only — for generics and prose, never for
+  //    a role only an author can name (see AUTHOR_NAMED_ROLES). For a
+  //    sectionheader/sectionfooter that also keeps a byline from making the
+  //    header "named" and so kept in the a11y view, where the native producer
+  //    drops it as bare. The role is resolved only when there is text to give.
   const directText = getDirectTextContent(element);
-  if (directText) return directText;
+  if (directText && !AUTHOR_NAMED_ROLES.has(getImplicitRole(element))) {
+    return directText;
+  }
 
   return "";
 }
