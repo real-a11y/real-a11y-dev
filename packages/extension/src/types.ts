@@ -106,6 +106,11 @@ export type ContentToPanel =
   | {
       type: "NATIVE_PICK_RESULT";
       tabId: number;
+      // Echoed straight back from this result's own NATIVE_PICK_START —
+      // see that message's own comment for why the panel needs it to tell
+      // a stale pick's delayed result apart from the one it's currently
+      // showing armed.
+      requestId: number;
       payload:
         | {
             nodeId: string;
