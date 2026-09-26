@@ -595,6 +595,13 @@ const NAMES_FROM_CONTENT_ROLES = new Set<string>([
  *   author only, but their text is the announcement itself, no audit reads
  *   their name, and the native producer names a text-only one from its text
  *   as well — blanking it would blank every toast and error message.
+ *
+ * The native producer's counterpart is two-tier: `NATIVE_AX_AUTHOR_NAMED_ROLES`
+ * (the audit-read subset of this set) never takes text, and the rest take
+ * their own text only as a leaf. This set blanks the rest even as a leaf, so
+ * a text-only `<div role="tabpanel">Panel text</div>` is `tabpanel` here and
+ * `tabpanel "Panel text"` there. The name step has no view of which children
+ * the a11y view keeps, so it can't tell a leaf from a container.
  */
 const AUTHOR_NAMED_ROLES = new Set<string>([
   // Windows and images
