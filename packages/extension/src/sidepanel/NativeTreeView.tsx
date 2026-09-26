@@ -677,7 +677,11 @@ export function NativeTreeView({
 
                     <span class="sn-label">
                       <span class="sn-role">{node.role}</span>
-                      {node.name && <span class="sn-name">{node.name}</span>}
+                      {node.name && (
+                        <span class="sn-name" title={node.name}>
+                          {node.name}
+                        </span>
+                      )}
                       {node.description && (
                         <span class="sn-description" title={node.description}>
                           {node.description.length > 80
