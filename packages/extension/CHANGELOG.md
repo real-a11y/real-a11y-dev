@@ -220,6 +220,13 @@
   you actually settle on.
   ([#412](https://github.com/real-a11y/real-a11y-dev/pull/412))
 
+- Selecting a row in the native tree now shows you where it is on the page.
+  The matching element is outlined and scrolled into view, with the same
+  overlay the DOM tree's own selection draws, and real focus moves there too.
+  Clicking a row, arrow-key navigation and a native pick all follow. It is
+  debounced, so a fast arrow-key run through several rows only lands on the
+  row you actually stop at.
+
 ## 0.1.14
 
 ### Patch Changes

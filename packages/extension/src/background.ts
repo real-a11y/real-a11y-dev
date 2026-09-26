@@ -722,30 +722,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
 
-  // The native tree's own focus follow may focus an element inside a
-  // subframe, whose content script runs its own reverse focus-sync listener
-  // — so every frame has to be armed, not just the top one. A frameId-less
-  // send fans out to every frame immediately (no getAllFrames round trip),
-  // and the reply waits for delivery so the panel can hold its native
-  // dispatch until the suppression is actually in place.
-  if (message.type === "SUPPRESS_NATIVE_FOCUS_TRACK") {
-    const targetTabId = resolvePanelTargetTab(
-      (message as { tabId?: number }).tabId,
-      activeTabId,
-    );
-    if (targetTabId == null) {
-      sendResponse({ success: false, error: "No active tab" });
-      return false;
-    }
-    chrome.tabs.sendMessage(targetTabId, message, () => {
-      // A page with no content script at all still gets its native focus;
-      // there is simply no listener to suppress.
-      void chrome.runtime.lastError;
-      sendResponse({ success: true });
-    });
-    return true;
-  }
-
   // Picker toggle — broadcast to every frame so a click inside an iframe
   // also picks an element. NODE_PICKED comes back through the default
   // content→panel forwarder below (with `tabId` stamped on).
