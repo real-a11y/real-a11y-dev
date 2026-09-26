@@ -96,6 +96,9 @@ link "--no-annotate"
 link "--include-generic"
 button "Copy Code"
 generic
+button "Copy Code"
+generic
+link "tabs"
 link "Browser & page"
 link "Output"
 link "Config"

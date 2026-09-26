@@ -70,6 +70,8 @@ button "Copy Code"
 generic
 link "get_tab_order"
 link "act tools"
+link "type_text"
+link "get_tab_order"
 link "named session"
 link "get_semantic_tree"
 link "audit_page"
