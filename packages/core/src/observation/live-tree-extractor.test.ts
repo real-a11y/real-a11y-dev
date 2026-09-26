@@ -657,6 +657,56 @@ describe("LiveTreeExtractor", () => {
   // A heading names itself through a `<details>` it contains (its summary, or
   // all of it once open), so an edit inside the disclosure must re-extract the
   // heading. The climb used to stop at `<details>` as a group barrier.
+  // The a11y projection is rebuilt from the root on every refresh, and it
+  // drops a non-exposed node's whole subtree, so an incremental update can't
+  // bring an aria-hidden descendant back.
+  describe("aria-hidden subtrees across a refresh", () => {
+    async function refreshAfter(html: string, mutate: () => void) {
+      document.body.innerHTML = html;
+      const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
+      let lastChange: TreeChange | undefined;
+      const observer = new DomObserver(
+        document.body,
+        (change) => {
+          lastChange = change;
+        },
+        50,
+      );
+      observer.start();
+      mutate();
+      await vi.advanceTimersByTimeAsync(100);
+      const result = live.refresh(lastChange);
+      observer.stop();
+      return result;
+    }
+
+    it("drops the descendants when a container becomes aria-hidden", async () => {
+      const result = await refreshAfter(
+        `<main><div id="c"><h2>Behind a modal</h2><button>Act</button></div></main>`,
+        () => document.getElementById("c")!.setAttribute("aria-hidden", "true"),
+      );
+      const names = [...result.nodes.values()].map((n) => n.a11y.name);
+      expect(names).not.toContain("Behind a modal");
+      expect(names).not.toContain("Act");
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+    });
+
+    it("does not add a heading inserted inside an aria-hidden container", async () => {
+      const result = await refreshAfter(
+        `<main><div id="c" aria-hidden="true"><p>Old</p></div><h2>Shown</h2></main>`,
+        () => {
+          const h = document.createElement("h2");
+          h.textContent = "Inserted";
+          document.getElementById("c")!.appendChild(h);
+        },
+      );
+      const names = [...result.nodes.values()].map((n) => n.a11y.name);
+      expect(names).toContain("Shown");
+      expect(names).not.toContain("Inserted");
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+    });
+  });
+
   describe("a heading named through a <details>", () => {
     async function refreshAfter(mutate: () => void) {
       document.body.innerHTML = `<main><h3>A <details><summary>Old</summary>Body</details></h3></main>`;

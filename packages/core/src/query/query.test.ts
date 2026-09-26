@@ -187,6 +187,18 @@ describe("screen-reader-only content", () => {
     expect(getOutline(page.tree).map((e) => e.name)).toEqual(["Shown"]);
   });
 
+  // A heading outline is what AT navigates by, so on a DOM-view tree (which
+  // keeps aria-hidden subtrees) it leaves out headings AT can't reach, even
+  // visible ones.
+  it("leaves AT-hidden headings out of the outline of a DOM-view tree", () => {
+    using page = attached(`
+      <h2 aria-hidden="true">Decorative</h2>
+      <div aria-hidden="true"><h2>Behind a modal</h2></div>
+      <h2>Shown</h2>
+    `);
+    expect(getOutline(page.tree).map((e) => e.name)).toEqual(["Shown"]);
+  });
+
   it("does not find an aria-hidden heading by default", () => {
     using page = attached(
       `<h2 aria-hidden="true">Decorative</h2><h2>Shown</h2>`,

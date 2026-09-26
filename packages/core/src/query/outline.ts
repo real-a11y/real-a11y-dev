@@ -17,7 +17,10 @@ export interface OutlineEntry {
  */
 export function getOutline(input: QueryInput): OutlineEntry[] {
   const out: OutlineEntry[] = [];
-  for (const node of linearize(input)) {
+  // A heading outline is what AT navigates by, so it leaves out headings AT
+  // can't reach, even visible ones: a DOM-view tree keeps aria-hidden
+  // subtrees, and `linearize` keeps not-exposed nodes unless told otherwise.
+  for (const node of linearize(input, { includeNotExposed: false })) {
     if (node.a11y.role !== "heading") continue;
     const raw = node.a11y.properties?.level;
     const level = raw !== undefined ? Number(raw) : NaN;
