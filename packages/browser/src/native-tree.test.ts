@@ -9,6 +9,7 @@ import { normalizeNativeAX } from "@real-a11y-dev/core";
 import { serializeTree } from "@real-a11y-dev/serialize";
 import { describe, expect, it } from "vitest";
 
+import hostsPayload from "./__fixtures__/native-ax-editor-hosts.json";
 import editorPayload from "./__fixtures__/native-ax-editor.json";
 import payload from "./__fixtures__/native-ax-payload.json";
 import {
@@ -684,6 +685,36 @@ describe("buildNativeTree — R1: what a user typed into an editor never reaches
     expect(tree.nodes.get("ax-dom-34")?.a11y.name).toBe("[redacted]");
     expect(tree.nodes.get("ax-dom-35")?.a11y.name).toBe("Mention Alice");
     expect(tree.nodes.get("ax-dom-20")?.a11y.name).toBe("Message"); // the host
+  });
+
+  it("withholds typed text from a node that CONTAINS an editor and is named from its contents", () => {
+    // A second recording (Chromium 151, native-ax-editor-hosts.json): an
+    // inline-editable <span> inside an <h3> and inside a <button>. Neither
+    // the heading nor the button is in an editable region, but Chromium names
+    // both from their contents — which include the typed text.
+    const hostsRaw = hostsPayload.nodes as Parameters<
+      typeof buildNativeTree
+    >[0];
+    expect(JSON.stringify(hostsRaw)).toContain(
+      '"value":"Title: HOST-SECRET-inline"',
+    ); // the vector is real
+    const tree = buildNativeTree(hostsRaw);
+    expect(JSON.stringify([...tree.nodes.values()])).not.toContain(
+      "HOST-SECRET",
+    );
+    expect(nativeAXView(hostsRaw).tree).not.toContain("HOST-SECRET");
+
+    // Named, just not shown — so audit doesn't call the button unlabeled.
+    expect(find(tree, "heading", "[redacted]")).toHaveLength(1);
+    expect(find(tree, "button", "[redacted]")).toHaveLength(1);
+    // An editable root itself: Chromium leaves an <h2 contenteditable>
+    // unnamed, and promotion finds only blanked text.
+    expect(find(tree, "heading", "")).toHaveLength(1);
+    // Labels that come from outside the field are the page's, and stay.
+    expect(find(tree, "heading", "Page")).toHaveLength(1);
+    for (const label of ["Composer", "Email", "Notes"]) {
+      expect(find(tree, "textbox", label)).toHaveLength(1);
+    }
   });
 
   it("leaves everything outside the editor untouched", () => {

@@ -12,6 +12,7 @@ Below any node Chromium marks `editable` — a `contenteditable` host, a `design
 - a node Chromium named from the typed text reads `[redacted]` — not empty, because an empty-named link would read as unlabeled and `audit` would report a `no-unlabeled-interactive` error that isn't there
 - a text-only node such as a paragraph or list item reads unnamed, as does a container that used to take a role-less editor's text as its own name
 - a name from the page's own markup — `aria-label`, `alt`, `title` — is kept, as is the editor host's own label
+- a node that merely contains an editor — an `<h1>` or `<button>` around an inline-editable `<span>` — reads `[redacted]` when Chromium named it from its contents, which include the typed text; a label from outside (`<label for>`, `aria-labelledby`) is kept
 - the `dom` facet drops `href`, `src`, `poster` and `id` inside the editor, and a locator there anchors on an id outside it, since an editor may derive an id from typed text
 
 Expect a one-time change in any committed `snapshot` artifact or baseline of a page with an editor: those names now read `[redacted]`, so the next `diff` reports them as renamed. Refresh the baseline. And since every withheld node shares that name, a link inside an editor is targeted with `nth` (or through the editor itself) rather than by its text.

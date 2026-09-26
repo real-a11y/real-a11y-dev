@@ -246,6 +246,39 @@ function isEditable(raw: RawAXNode): boolean {
   return (raw.properties ?? []).some((p) => p.name === "editable");
 }
 
+/** The step of Chromium's name trace that produced `raw`'s name: the first
+ *  one with text that wasn't superseded. */
+function winningNameSource(raw: RawAXNode): AXNameSource | undefined {
+  return raw.name?.sources?.find(
+    (s) =>
+      s.superseded !== true && cleanText(String(s.value?.value ?? "")) !== "",
+  );
+}
+
+/**
+ * Nodes that ARE an editable region's root or CONTAIN one — the other way a
+ * name can carry the typed text. An `<h1 contenteditable>`, a
+ * `<td contenteditable>`, or an `<h1>` wrapping an inline-editable `<span>` is
+ * named from its contents by Chromium, and those contents are the typed text;
+ * none of them is inside a region, so {@link nodesInsideEditable} never sees
+ * them. Returned as raw `nodeId`s.
+ */
+function nodesContainingEditable(rawNodes: RawAXNode[]): Set<string> {
+  const byId = new Map(rawNodes.map((n) => [n.nodeId, n]));
+  const containing = new Set<string>();
+  for (const raw of rawNodes) {
+    if (!isEditable(raw)) continue;
+    for (
+      let cur: RawAXNode | undefined = raw;
+      cur && !containing.has(cur.nodeId);
+      cur = cur.parentId ? byId.get(cur.parentId) : undefined
+    ) {
+      containing.add(cur.nodeId);
+    }
+  }
+  return containing;
+}
+
 /**
  * True when `raw`'s name is exactly the text of one of the
  * {@link MARKUP_NAME_ATTRIBUTES}. The winning source is the first one in the
@@ -255,10 +288,7 @@ function isEditable(raw: RawAXNode): boolean {
  */
 function authoredByMarkup(raw: RawAXNode): boolean {
   const name = cleanText(String(raw.name?.value ?? ""));
-  const winner = raw.name?.sources?.find(
-    (s) =>
-      s.superseded !== true && cleanText(String(s.value?.value ?? "")) !== "",
-  );
+  const winner = winningNameSource(raw);
   return (
     winner?.type === "attribute" &&
     MARKUP_NAME_ATTRIBUTES.has(winner.attribute ?? "") &&
@@ -333,6 +363,13 @@ function nodesInsideEditable(rawNodes: RawAXNode[]): Set<RawAXNode> {
  * - its description is dropped: with no trace of where it came from, it could
  *   be an `aria-describedby` pointing at typed text.
  *
+ * And a node that is, or contains, a region's root
+ * ({@link nodesContainingEditable}) reads {@link REDACTED_NAME} when Chromium
+ * named it from its contents. Any other name it has — a `<label for>`, an
+ * `aria-labelledby`, an `aria-label` — is the page's and is kept; so is a name
+ * with no trace, which is how a native field's label arrives in an older
+ * recording.
+ *
  * Doing this before normalization, not after, is the point: after
  * normalization a promoted name no longer says which node it came from.
  */
@@ -341,12 +378,22 @@ function redactEditableContent(rawNodes: RawAXNode[]): {
   inside: Set<RawAXNode>;
 } {
   const inside = nodesInsideEditable(rawNodes);
-  if (inside.size === 0) return { nodes: rawNodes, inside };
+  const containing = nodesContainingEditable(rawNodes);
+  if (containing.size === 0) return { nodes: rawNodes, inside };
   const redactedInside = new Set<RawAXNode>();
   const nodes = rawNodes.map((raw) => {
-    if (!inside.has(raw)) return raw;
+    const textRun = NATIVE_AX_NAME_SOURCE_ROLES.has(raw.role?.value ?? "");
+    if (!inside.has(raw)) {
+      if (
+        !containing.has(raw.nodeId) ||
+        winningNameSource(raw)?.type !== "contents"
+      ) {
+        return raw;
+      }
+      return { ...raw, name: { value: textRun ? "" : REDACTED_NAME } };
+    }
     const computed = cleanText(String(raw.name?.value ?? ""));
-    const name = NATIVE_AX_NAME_SOURCE_ROLES.has(raw.role?.value ?? "")
+    const name = textRun
       ? ""
       : computed === "" || authoredByMarkup(raw)
         ? computed
