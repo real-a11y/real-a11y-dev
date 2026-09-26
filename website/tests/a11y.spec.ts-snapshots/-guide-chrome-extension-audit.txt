@@ -228,6 +228,8 @@ main
     code "Shift"
     code "C"
     code "Escape"
+  paragraph "Selecting a row also matches the DOM producer now: clicking one, arrow-navigating to it, or a pick's own reveal moves real focus to the page's matching element — the same simultaneous visible indicator (the page's own focus ring, plus the highlighted row in the panel) that DOM mode already gives, dispatched over a moment after the selection settles rather than on every intermediate row a fast arrow-key run passes through. What DOM mode still does that native doesn't: a highlight overlay while merely hovering a row (no selection) — native mode has no page-side effect for that yet."
+    code "chrome.debugger"
   heading "BETA pill in the panel header" (level 3)
   paragraph "Sets expectations during the pre-1.0 phase. Linked to the GitHub issues page. Goes away at v1.0."
   separator
