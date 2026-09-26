@@ -311,6 +311,31 @@ test("selecting a native tree row via the keyboard only focuses the row the sele
   );
 });
 
+test("selecting a native tree row never moves real focus while Screen Curtain is on", async ({
+  nav,
+}) => {
+  // Regression: a code-review round caught that the new selection-focus
+  // follow above had no curtain guard, unlike `content.ts`'s own DOM
+  // `HIGHLIGHT_NODE` handler (which skips its highlight-and-focus outright
+  // while `curtainVisible`, precisely because moving real focus on a page
+  // hidden behind the curtain would still scroll/jump it underneath.
+  const page = await showNative(nav, "native-panel.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+  await nav.panel.getByRole("button", { name: "Curtain", exact: true }).click();
+
+  const row = nav.panel.getByRole("treeitem", { name: "Item 16" });
+  await expect(row).toBeVisible();
+  await row.click({ position: { x: 5, y: 5 } });
+
+  // No poll-to-success here — this asserts the ABSENCE of an effect, so it
+  // has to wait out the same debounce + dispatch window the positive tests
+  // above poll through, then confirm nothing happened.
+  await page.waitForTimeout(1_000);
+  expect(await page.evaluate(() => document.activeElement?.id)).not.toBe(
+    "item-16",
+  );
+});
+
 test("a failed Enable attempt surfaces its error inline and never flips the setting", async ({
   nav,
 }) => {

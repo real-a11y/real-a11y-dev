@@ -1754,10 +1754,28 @@ export function App() {
    * element that turned out not to be focusable) is silent — this is a
    * visual aid, not a dispatched action the user is waiting on or would
    * want an error banner for.
+   *
+   * Skips outright while Screen Curtain is on (`curtainOn`) — the page is
+   * hidden behind it, so there's nothing to visibly focus, and moving real
+   * focus on a covered page would still scroll/jump it underneath the
+   * curtain and fight whatever the curtained page itself had focused.
+   * Matches `content.ts`'s own DOM `HIGHLIGHT_NODE` handler, which skips its
+   * highlight-and-focus for exactly this reason when `curtainVisible`.
+   *
+   * `silent: true` keeps this out of the dogfood log's `act` count
+   * (`native/index.ts`) — that count is how a dogfooder judges how much
+   * native mode was actually USED; an automatic follow firing on every
+   * settled tree selection would inflate it with browsing, not real
+   * dispatches.
    */
   const focusNativeSelectionOnPage = useCallback(
     (nodeId: string) => {
-      if (!nativeModeEnabled || nativeTreeTabId === undefined || nativeBusy) {
+      if (
+        !nativeModeEnabled ||
+        nativeTreeTabId === undefined ||
+        nativeBusy ||
+        curtainOn
+      ) {
         return;
       }
       void chrome.runtime
@@ -1766,10 +1784,11 @@ export function App() {
           tabId: nativeTreeTabId,
           nodeId,
           action: "focus",
+          silent: true,
         })
         .catch(() => {});
     },
-    [nativeModeEnabled, nativeTreeTabId, nativeBusy],
+    [nativeModeEnabled, nativeTreeTabId, nativeBusy, curtainOn],
   );
 
   const handleNativeActivate = useCallback(

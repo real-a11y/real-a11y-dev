@@ -51,6 +51,14 @@ type NativeMessage =
       nodeId: string;
       action: NativeAction;
       value?: string;
+      // A background follow (e.g. the tree's own selection moving real page
+      // focus, App.tsx's `focusNativeSelectionOnPage`), not a user-dispatched
+      // action from the toolbar/row buttons — kept out of the dogfood log's
+      // `act` count. That count (and its success ratio) is how a dogfooder
+      // judges how much native mode was actually USED; counting an automatic
+      // follow that fires on every settled tree selection would silently
+      // inflate it with browsing, not real dispatches.
+      silent?: boolean;
     }
   | { type: "NATIVE_DOGFOOD_REPORT" }
   | { type: "NATIVE_DOGFOOD_CLEAR" }
@@ -295,12 +303,14 @@ export function registerNativeMode(): void {
               return;
             }
             const result = value ?? { success: false, error: "no result" };
-            await log.record({
-              kind: "act",
-              at: Date.now(),
-              action: message.action,
-              success: result.success,
-            });
+            if (!message.silent) {
+              await log.record({
+                kind: "act",
+                at: Date.now(),
+                action: message.action,
+                success: result.success,
+              });
+            }
             sendResponse(result);
             return;
           }

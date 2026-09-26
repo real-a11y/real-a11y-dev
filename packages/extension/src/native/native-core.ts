@@ -549,7 +549,13 @@ export function pageClick(this: Element): Marker {
   return { ok: true };
 }
 
-/** Move real keyboard focus. */
+/**
+ * Move real keyboard focus. `preventScroll` always on, matching the DOM
+ * producer's own `content.ts` focus call: its caller has usually already
+ * scrolled/centered the element by other means, and a default-scroll
+ * `.focus()` on top would re-snap it to a viewport edge or jump the page
+ * out from under a user simply arrow-navigating the tree.
+ */
 export function pageFocus(this: Element): Marker {
   const el = this;
   if (!el || !el.tagName) return { ok: false, reason: "not-element" };
@@ -557,7 +563,7 @@ export function pageFocus(this: Element): Marker {
   if (typeof focusable.focus !== "function") {
     return { ok: false, reason: "not-focusable" };
   }
-  focusable.focus();
+  focusable.focus({ preventScroll: true });
   return { ok: true };
 }
 

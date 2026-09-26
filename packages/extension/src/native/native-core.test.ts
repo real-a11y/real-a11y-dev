@@ -7,6 +7,7 @@ import {
   findNative,
   IN_PAGE_ACTION_SOURCE,
   pageClick,
+  pageFocus,
   pageReadValue,
   pageSelectOption,
   pageStep,
@@ -611,6 +612,31 @@ describe("in-page actions — click", () => {
     const seen = record(el, ["click"]);
     expect(on(pageClick, el)).toEqual({ ok: true });
     expect(seen).toEqual(["click"]);
+  });
+});
+
+describe("in-page actions — focus", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("moves real focus without scrolling the page", () => {
+    // Regression: the panel's own selection-follow (App.tsx) is the first
+    // caller of this action ever reached — a default-scroll `.focus()` would
+    // jump the page out from under a user simply arrow-navigating the tree,
+    // the same reason the DOM producer's own `content.ts` focus call always
+    // passes `preventScroll: true`.
+    const el = document.createElement("button");
+    document.body.appendChild(el);
+    const focusSpy = vi.spyOn(el, "focus");
+
+    expect(on(pageFocus, el)).toEqual({ ok: true });
+    expect(focusSpy).toHaveBeenCalledExactlyOnceWith({ preventScroll: true });
+  });
+
+  it("refuses an element with no focus method", () => {
+    const el = { tagName: "svg" } as unknown as Element;
+    expect(on(pageFocus, el)).toEqual({ ok: false, reason: "not-focusable" });
   });
 });
 
