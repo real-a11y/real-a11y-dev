@@ -92,6 +92,11 @@ CDP. It reaches structure no in-page walk can — most visibly a
 user-agent shadow root — and it is the same tree the act tools target, so a node
 you click by name can't come back in a report under another one.
 
+What a user typed never reaches it: not a text field's value, and not a
+rich-text editor's content — inside a `contenteditable` composer the structure
+is kept, but a name computed from the typed text reads `[redacted]`. So text
+entered with `type_text` is absent from every read built on this tree.
+
 That tree is **whole-document**, which is why no tool takes a `rootSelector`
 except the one exception below. There is no `producer` parameter: each surface
 has exactly one correct producer, so there was nothing left to choose.

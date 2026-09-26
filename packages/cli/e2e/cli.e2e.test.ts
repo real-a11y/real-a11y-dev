@@ -237,6 +237,47 @@ describe("the native producer is the only producer (built bin)", () => {
     expect(inspect.stdout).not.toContain("== Tab order ==");
   });
 
+  it("keeps what was written in a rich-text editor out of tree, audit and json (R1)", async () => {
+    // What sits in a composer is its field value — Chromium says so, and R1
+    // already drops the host's value. The nodes inside must not carry it back
+    // out as names, a link's URL, or a heading-order message.
+    // The page writes the editor's content at runtime from a split literal,
+    // so the sentinel is not in the data: URL — which stderr and the json
+    // envelope both echo, and which is this page's whole source.
+    const EDITOR_PAGE = dataUrl(`<main><h1>Compose</h1>
+      <div contenteditable="true" role="textbox" aria-label="Message">
+        <p>draft <span class="s">p</span> <a class="s-href"><span class="s">link</span></a></p>
+        <h3 class="s">heading</h3>
+      </div>
+      <article><div contenteditable="true" class="s">plain</div></article>
+      <script>
+        const S = "EDITOR-" + "SECRET-";
+        for (const el of document.querySelectorAll(".s")) el.textContent = S + el.textContent;
+        document.querySelector(".s-href").href = "https://x.test/?token=" + S + "href";
+      </script>
+    </main>`);
+    expect(EDITOR_PAGE).not.toContain("EDITOR-SECRET");
+    for (const args of [
+      ["tree", EDITOR_PAGE],
+      ["tree", EDITOR_PAGE, "-f", "json"],
+      ["outline", EDITOR_PAGE],
+      ["audit", EDITOR_PAGE, "-f", "json"],
+    ]) {
+      const { stdout, stderr } = await runCli(args);
+      expect(stdout).not.toContain("EDITOR-SECRET");
+      expect(stderr).not.toContain("EDITOR-SECRET");
+    }
+    const { code, stdout } = await runCli(["tree", EDITOR_PAGE]);
+    expect(code).toBe(0);
+    // The structure is all still there; only the typed words are withheld.
+    expect(stdout).toContain('textbox "Message"');
+    expect(stdout).toContain('link "[redacted]"');
+    expect(stdout).toContain('heading "[redacted]" (level 3)');
+    // …and the withheld link is not reported as unlabeled: its name exists.
+    const audit = await runCli(["audit", EDITOR_PAGE]);
+    expect(audit.stdout).not.toContain("no-unlabeled-interactive");
+  });
+
   it("tabs still reports the keyboard sequence, from the in-page walk", async () => {
     const { code, stdout } = await runCli(["tabs", ICON_BTN_PAGE]);
     expect(code).toBe(0);

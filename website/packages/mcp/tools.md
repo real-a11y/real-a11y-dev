@@ -207,6 +207,8 @@ Return the page's accessibility tree as a deterministic, indented role + accessi
 
 This is the vocabulary the [act tools](#act) target in, so a node you aim at by role + name here is the same node they dispatch against.
 
+What a user typed never appears in it — not a text field's value, and not the content of a rich-text editor (a `contenteditable` composer, a `designMode` document), which is that editor's value. The editor's structure is kept; a name computed from its text reads `[redacted]` and a paragraph inside it reads unnamed, while a name from the page's own markup (an `aria-label`, an image's `alt`) is kept. So text entered with [`type_text`](#type-text) is absent from this tree and from every tool built on it — `diff_tree`, `audit_page`, `inspect_page`, `list_elements`. [`get_tab_order`](#get-tab-order) is the in-page walk, not built on it, and still names a link inside an editor by its text.
+
 Parameters:
 
 - **`includeGeneric`** — boolean — optional (default `false`) — include generic container nodes (`role=generic`).
@@ -413,7 +415,7 @@ Targeting is deliberately **role + accessible name**, never a CSS selector or a 
 All three tools share the targeting parameters:
 
 - **`role`** — string — required — ARIA role exactly as the tree prints it (`button`, `link`, `textbox`, `checkbox`, `menuitem`, …).
-- **`name`** — string — optional — accessible name; case-insensitive, whitespace-normalized **exact** match against the tree [`get_semantic_tree`](#get-semantic-tree) returns. Pass `""` to target an unlabeled control; omit to match any name.
+- **`name`** — string — optional — accessible name; case-insensitive, whitespace-normalized **exact** match against the tree [`get_semantic_tree`](#get-semantic-tree) returns. Pass `""` to target an unlabeled control; omit to match any name. A node inside a rich-text editor whose name was withheld reads `[redacted]` in the tree, so it can't be told apart by its text — every such node matches `[redacted]`; pick one with `nth`, or target the editor itself.
 - **`nth`** — integer ≥ 1 — optional — 1-based pick among the role+name-filtered matches, in document order.
 
 When several nodes match and no `nth` was given, the tool errors and **lists the candidates as `nth=1 · role "name"` lines** — the remedy is copy-paste. A **disabled** target is refused with the cause (the page would silently ignore the action, and the empty diff that followed would mislead). A match with no backing DOM element (a synthesized node such as the document root) is refused before any CDP traffic.

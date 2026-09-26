@@ -34,6 +34,7 @@ generic
 button "Copy Code"
 generic
 link "login"
+link "how"
 link "command reference"
 button "Copy Code"
 generic

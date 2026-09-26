@@ -209,7 +209,11 @@ The actions are real — they submit forms, toggle state, and can navigate. A st
 that loads a new document leaves the tree captured before it describing a page
 that's gone, so no diff is possible; the run says where it landed and still
 exits `0`. A typed value is never echoed back in any output format, and `type`
-is not a login mechanism: use `real-a11y login` for that.
+is not a login mechanism: use `real-a11y login` for that. Nor does it reach a
+later tree: a field's value, including a rich-text editor's content, is
+withheld from `tree`, `audit` and every view built from Chromium's tree (all
+but `tabs`) — inside an editor, a name computed from the typed text reads
+`[redacted]`.
 
 ## Configure once
 

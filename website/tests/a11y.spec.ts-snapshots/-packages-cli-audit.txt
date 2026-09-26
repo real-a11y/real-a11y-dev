@@ -130,10 +130,12 @@ main
     code "focus"
   paragraph "Targeting is , resolved against Chromium's own accessibility tree — never a CSS selector. That's the point: if a control can't be reached that way, assistive technology can't reach it either, and the refusal is a finding rather than a targeting inconvenience."
     strong "role + accessible name only"
-  paragraph "The actions are real — they submit forms and can navigate. A typed value is never echoed back in any output format, and is not a login mechanism; use for that. Chromium only. Full contract in the ."
+  paragraph "The actions are real — they submit forms and can navigate. A typed value is never echoed back in any output format, and is not a login mechanism; use for that. Nor does it reach a later tree: a field's value, including a rich-text editor's content, is withheld from every view built from Chromium's tree — all but (). Chromium only. Full contract in the ."
     code "type"
     link "login"
       code "login"
+    code "tabs"
+    link "how"
     link "command reference"
   heading "Configure once" (level 2)
   paragraph "Put your project's settings in an and every command picks them up — the Jest/ESLint model. A block seeds any flag you don't pass; an optional list names the routes you audit. Both are optional — a -only config is valid."

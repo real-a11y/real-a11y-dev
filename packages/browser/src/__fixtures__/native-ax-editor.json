@@ -1,0 +1,1732 @@
+{
+  "chrome": "151.0.7922.34",
+  "html": "<!doctype html><html lang=\"en\"><head><title>editor fixture</title></head><body>\n<main>\n  <h1>Compose</h1>\n  <div contenteditable=\"true\" role=\"textbox\" aria-label=\"Message\" aria-multiline=\"true\" aria-describedby=\"hint\">\n    <p>Hello EDITOR-SECRET-para <a href=\"https://x.test/reset?token=EDITOR-SECRET-href\">EDITOR-SECRET-link</a> and more.</p>\n    <h2>EDITOR-SECRET-heading</h2>\n    <ul><li>EDITOR-SECRET-item</li></ul>\n    <table><tr><td>EDITOR-SECRET-cell</td></tr></table>\n    <figure><img src=\"https://x.test/EDITOR-SECRET-src.png\" alt=\"Diagram\"><figcaption>EDITOR-SECRET-caption</figcaption></figure>\n    <p>cc <a contenteditable=\"false\" href=\"/u/alice\" aria-label=\"Mention Alice\">@EDITOR-SECRET-mention</a> <span contenteditable=\"false\"><a href=\"/x\">EDITOR-SECRET-island</a></span></p>\n  </div>\n  <p id=\"hint\">Press Enter to send</p>\n  <a href=\"/help\">Help</a>\n  <article><div contenteditable=\"true\">EDITOR-SECRET-plain</div></article>\n  <label>Notes <textarea>EDITOR-SECRET-textarea</textarea></label>\n</main></body></html>",
+  "nodes": [
+    {
+      "nodeId": "1",
+      "childIds": ["3"],
+      "backendDOMNodeId": 1,
+      "ignored": false,
+      "role": {
+        "value": "RootWebArea"
+      },
+      "name": {
+        "value": "editor fixture",
+        "sources": [
+          {
+            "type": "relatedElement",
+            "attribute": "aria-labelledby"
+          },
+          {
+            "type": "attribute",
+            "attribute": "aria-label"
+          },
+          {
+            "type": "attribute",
+            "attribute": "aria-label",
+            "superseded": true
+          },
+          {
+            "type": "relatedElement",
+            "nativeSource": "title",
+            "value": {
+              "value": "editor fixture"
+            }
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "value": true
+          }
+        },
+        {
+          "name": "focused",
+          "value": {
+            "value": true
+          }
+        },
+        {
+          "name": "url",
+          "value": {
+            "value": "about:blank"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "3",
+      "parentId": "1",
+      "childIds": ["6"],
+      "backendDOMNodeId": 3,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "6",
+      "parentId": "3",
+      "childIds": ["2"],
+      "backendDOMNodeId": 6,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "2",
+      "parentId": "6",
+      "childIds": ["7", "8", "28", "29", "30", "32"],
+      "backendDOMNodeId": 2,
+      "ignored": false,
+      "role": {
+        "value": "main"
+      },
+      "name": {
+        "value": "",
+        "sources": [
+          {
+            "type": "relatedElement",
+            "attribute": "aria-labelledby"
+          },
+          {
+            "type": "attribute",
+            "attribute": "aria-label"
+          },
+          {
+            "type": "attribute",
+            "attribute": "title"
+          }
+        ]
+      },
+      "properties": []
+    },
+    {
+      "nodeId": "7",
+      "parentId": "2",
+      "childIds": ["35"],
+      "backendDOMNodeId": 7,
+      "ignored": false,
+      "role": {
+        "value": "heading"
+      },
+      "name": {
+        "value": "Compose",
+        "sources": [
+          {
+            "type": "relatedElement",
+            "attribute": "aria-labelledby"
+          },
+          {
+            "type": "attribute",
+            "attribute": "aria-label"
+          },
+          {
+            "type": "contents",
+            "value": {
+              "value": "Compose"
+            }
+          },
+          {
+            "type": "attribute",
+            "attribute": "title",
+            "superseded": true
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "level",
+          "value": {
+            "value": 1
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "8",
+      "parentId": "2",
+      "childIds": ["9", "11", "12", "14", "18", "24"],
+      "backendDOMNodeId": 8,
+      "ignored": false,
+      "role": {
+        "value": "textbox"
+      },
+      "name": {
+        "value": "Message",
+        "sources": [
+          {
+            "type": "relatedElement",
+            "attribute": "aria-labelledby"
+          },
+          {
+            "type": "attribute",
+            "attribute": "aria-label",
+            "value": {
+              "value": "Message"
+            }
+          },
+          {
+            "type": "placeholder",
+            "attribute": "aria-placeholder",
+            "superseded": true
+          },
+          {
+            "type": "attribute",
+            "attribute": "title",
+            "superseded": true
+          }
+        ]
+      },
+      "description": {
+        "value": "Press Enter to send"
+      },
+      "value": {
+        "value": "Hello EDITOR-SECRET-para EDITOR-SECRET-link and more.\n\nEDITOR-SECRET-heading\nEDITOR-SECRET-item\nEDITOR-SECRET-cell\nEDITOR-SECRET-caption\n\ncc @EDITOR-SECRET-mention EDITOR-SECRET-island"
+      },
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "value": true
+          }
+        },
+        {
+          "name": "editable",
+          "value": {
+            "value": "richtext"
+          }
+        },
+        {
+          "name": "settable",
+          "value": {
+            "value": true
+          }
+        },
+        {
+          "name": "multiline",
+          "value": {
+            "value": true
+          }
+        },
+        {
+          "name": "readonly",
+          "value": {
+            "value": false
+          }
+        },
+        {
+          "name": "required",
+          "value": {
+            "value": false
+          }
+        },
+        {
+          "name": "describedby",
+          "value": {
+            "value": "hint"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "28",
+      "parentId": "2",
+      "childIds": ["48"],
+      "backendDOMNodeId": 28,
+      "ignored": false,
+      "role": {
+        "value": "paragraph"
+      },
+      "name": {
+        "value": "",
+        "sources": [
+          {
+            "type": "relatedElement",
+            "attribute": "aria-labelledby"
+          },
+          {
+            "type": "attribute",
+            "attribute": "aria-label"
+          }
+        ]
+      },
+      "properties": []
+    },
+    {
+      "nodeId": "29",
+      "parentId": "2",
+      "childIds": ["49"],
+      "backendDOMNodeId": 29,
+      "ignored": false,
+      "role": {
+        "value": "link"
+      },
+      "name": {
+        "value": "Help",
+        "sources": [
+          {
+            "type": "relatedElement",
+            "attribute": "aria-labelledby"
+          },
+          {
+            "type": "attribute",
+            "attribute": "aria-label"
+          },
+          {
+            "type": "contents",
+            "value": {
+              "value": "Help"
+            }
+          },
+          {
+            "type": "attribute",
+            "attribute": "title",
+            "superseded": true
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "value": true
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "30",
+      "parentId": "2",
+      "childIds": ["31"],
+      "backendDOMNodeId": 30,
+      "ignored": false,
+      "role": {
+        "value": "article"
+      },
+      "name": {
+        "value": "",
+        "sources": [
+          {
+            "type": "relatedElement",
+            "attribute": "aria-labelledby"
+          },
+          {
+            "type": "attribute",
+            "attribute": "aria-label"
+          },
+          {
+            "type": "attribute",
+            "attribute": "title"
+          }
+        ]
+      },
+      "properties": []
+    },
+    {
+      "nodeId": "32",
+      "parentId": "2",
+      "childIds": ["51", "33"],
+      "backendDOMNodeId": 32,
+      "ignored": false,
+      "role": {
+        "value": "LabelText"
+      },
+      "name": {
+        "value": "",
+        "sources": [
+          {
+            "type": "relatedElement",
+            "attribute": "aria-labelledby"
+          },
+          {
+            "type": "attribute",
+            "attribute": "aria-label"
+          },
+          {
+            "type": "attribute",
+            "attribute": "title"
+          }
+        ]
+      },
+      "properties": []
+    },
+    {
+      "nodeId": "35",
+      "parentId": "7",
+      "childIds": ["-1000000002"],
+      "backendDOMNodeId": 35,
+      "ignored": false,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Compose",
+        "sources": [
+          {
+            "type": "contents",
+            "value": {
+              "value": "Compose"
+            }
+          }
+        ]
+      },
+      "properties": []
+    },
+    {
+      "nodeId": "9",
+      "parentId": "8",
+      "childIds": ["36", "10", "38"],
+      "backendDOMNodeId": 9,
+      "ignored": false,
+      "role": {
+        "value": "paragraph"
+      },
+      "name": {
+        "value": "",
+        "sources": [
+          {
+            "type": "relatedElement",
+            "attribute": "aria-labelledby"
+          },
+          {
+            "type": "attribute",
+            "attribute": "aria-label"
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "richtext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "11",
+      "parentId": "8",
+      "childIds": ["39"],
+      "backendDOMNodeId": 11,
+      "ignored": false,
+      "role": {
+        "value": "heading"
+      },
+      "name": {
+        "value": "EDITOR-SECRET-heading",
+        "sources": [
+          {
+            "type": "relatedElement",
+            "attribute": "aria-labelledby"
+          },
+          {
+            "type": "attribute",
+            "attribute": "aria-label"
+          },
+          {
+            "type": "contents",
+            "value": {
+              "value": "EDITOR-SECRET-heading"
+            }
+          },
+          {
+            "type": "attribute",
+            "attribute": "title",
+            "superseded": true
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "richtext"
+          }
+        },
+        {
+          "name": "level",
+          "value": {
+            "value": 2
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "12",
+      "parentId": "8",
+      "childIds": ["13"],
+      "backendDOMNodeId": 12,
+      "ignored": false,
+      "role": {
+        "value": "list"
+      },
+      "name": {
+        "value": "",
+        "sources": [
+          {
+            "type": "relatedElement",
+            "attribute": "aria-labelledby"
+          },
+          {
+            "type": "attribute",
+            "attribute": "aria-label"
+          },
+          {
+            "type": "attribute",
+            "attribute": "title"
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "richtext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "14",
+      "parentId": "8",
+      "childIds": ["15"],
+      "backendDOMNodeId": 14,
+      "ignored": false,
+      "role": {
+        "value": "table"
+      },
+      "name": {
+        "value": "",
+        "sources": [
+          {
+            "type": "relatedElement",
+            "attribute": "aria-labelledby"
+          },
+          {
+            "type": "attribute",
+            "attribute": "aria-label"
+          },
+          {
+            "type": "relatedElement",
+            "nativeSource": "tablecaption"
+          },
+          {
+            "type": "attribute",
+            "attribute": "summary"
+          },
+          {
+            "type": "attribute",
+            "attribute": "title"
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "richtext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "18",
+      "parentId": "8",
+      "childIds": ["19", "23"],
+      "backendDOMNodeId": 18,
+      "ignored": false,
+      "role": {
+        "value": "figure"
+      },
+      "name": {
+        "value": "",
+        "sources": [
+          {
+            "type": "relatedElement",
+            "attribute": "aria-labelledby"
+          },
+          {
+            "type": "attribute",
+            "attribute": "aria-label"
+          },
+          {
+            "type": "attribute",
+            "attribute": "title"
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "richtext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "24",
+      "parentId": "8",
+      "childIds": ["44", "25", "46", "27"],
+      "backendDOMNodeId": 24,
+      "ignored": false,
+      "role": {
+        "value": "paragraph"
+      },
+      "name": {
+        "value": "",
+        "sources": [
+          {
+            "type": "relatedElement",
+            "attribute": "aria-labelledby"
+          },
+          {
+            "type": "attribute",
+            "attribute": "aria-label"
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "richtext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "48",
+      "parentId": "28",
+      "childIds": ["-1000000015"],
+      "backendDOMNodeId": 48,
+      "ignored": false,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Press Enter to send",
+        "sources": [
+          {
+            "type": "contents",
+            "value": {
+              "value": "Press Enter to send"
+            }
+          }
+        ]
+      },
+      "properties": []
+    },
+    {
+      "nodeId": "49",
+      "parentId": "29",
+      "childIds": ["-1000000016"],
+      "backendDOMNodeId": 49,
+      "ignored": false,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Help",
+        "sources": [
+          {
+            "type": "contents",
+            "value": {
+              "value": "Help"
+            }
+          }
+        ]
+      },
+      "properties": []
+    },
+    {
+      "nodeId": "31",
+      "parentId": "30",
+      "childIds": ["50"],
+      "backendDOMNodeId": 31,
+      "ignored": false,
+      "role": {
+        "value": "generic"
+      },
+      "name": {
+        "value": "",
+        "sources": [
+          {
+            "type": "relatedElement",
+            "attribute": "aria-labelledby"
+          },
+          {
+            "type": "attribute",
+            "attribute": "aria-label"
+          },
+          {
+            "type": "placeholder",
+            "attribute": "aria-placeholder"
+          },
+          {
+            "type": "attribute",
+            "attribute": "title"
+          }
+        ]
+      },
+      "value": {
+        "value": "EDITOR-SECRET-plain"
+      },
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "value": true
+          }
+        },
+        {
+          "name": "editable",
+          "value": {
+            "value": "richtext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "51",
+      "parentId": "32",
+      "childIds": ["-1000000018"],
+      "backendDOMNodeId": 51,
+      "ignored": false,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Notes ",
+        "sources": [
+          {
+            "type": "contents",
+            "value": {
+              "value": "Notes "
+            }
+          }
+        ]
+      },
+      "properties": []
+    },
+    {
+      "nodeId": "33",
+      "parentId": "32",
+      "childIds": ["34"],
+      "backendDOMNodeId": 33,
+      "ignored": false,
+      "role": {
+        "value": "textbox"
+      },
+      "name": {
+        "value": "Notes ",
+        "sources": [
+          {
+            "type": "relatedElement",
+            "attribute": "aria-labelledby"
+          },
+          {
+            "type": "attribute",
+            "attribute": "aria-label"
+          },
+          {
+            "type": "relatedElement",
+            "nativeSource": "labelwrapped",
+            "value": {
+              "value": "Notes "
+            }
+          },
+          {
+            "type": "attribute",
+            "attribute": "title",
+            "superseded": true
+          },
+          {
+            "type": "placeholder",
+            "attribute": "placeholder",
+            "superseded": true
+          },
+          {
+            "type": "placeholder",
+            "attribute": "aria-placeholder",
+            "superseded": true
+          },
+          {
+            "type": "attribute",
+            "attribute": "title",
+            "superseded": true
+          }
+        ]
+      },
+      "value": {
+        "value": "EDITOR-SECRET-textarea"
+      },
+      "properties": [
+        {
+          "name": "invalid",
+          "value": {
+            "value": "false"
+          }
+        },
+        {
+          "name": "focusable",
+          "value": {
+            "value": true
+          }
+        },
+        {
+          "name": "editable",
+          "value": {
+            "value": "plaintext"
+          }
+        },
+        {
+          "name": "settable",
+          "value": {
+            "value": true
+          }
+        },
+        {
+          "name": "multiline",
+          "value": {
+            "value": true
+          }
+        },
+        {
+          "name": "readonly",
+          "value": {
+            "value": false
+          }
+        },
+        {
+          "name": "required",
+          "value": {
+            "value": false
+          }
+        },
+        {
+          "name": "labelledby",
+          "value": {}
+        }
+      ]
+    },
+    {
+      "nodeId": "36",
+      "parentId": "9",
+      "childIds": ["-1000000003"],
+      "backendDOMNodeId": 36,
+      "ignored": false,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Hello EDITOR-SECRET-para ",
+        "sources": [
+          {
+            "type": "contents",
+            "value": {
+              "value": "Hello EDITOR-SECRET-para "
+            }
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "richtext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "10",
+      "parentId": "9",
+      "childIds": ["37"],
+      "backendDOMNodeId": 10,
+      "ignored": false,
+      "role": {
+        "value": "link"
+      },
+      "name": {
+        "value": "EDITOR-SECRET-link",
+        "sources": [
+          {
+            "type": "relatedElement",
+            "attribute": "aria-labelledby"
+          },
+          {
+            "type": "attribute",
+            "attribute": "aria-label"
+          },
+          {
+            "type": "contents",
+            "value": {
+              "value": "EDITOR-SECRET-link"
+            }
+          },
+          {
+            "type": "attribute",
+            "attribute": "title",
+            "superseded": true
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "richtext"
+          }
+        },
+        {
+          "name": "url",
+          "value": {
+            "value": "https://x.test/reset?token=EDITOR-SECRET-href"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "38",
+      "parentId": "9",
+      "childIds": ["-1000000005"],
+      "backendDOMNodeId": 38,
+      "ignored": false,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": " and more.",
+        "sources": [
+          {
+            "type": "contents",
+            "value": {
+              "value": " and more."
+            }
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "richtext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "39",
+      "parentId": "11",
+      "childIds": ["-1000000006"],
+      "backendDOMNodeId": 39,
+      "ignored": false,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "EDITOR-SECRET-heading",
+        "sources": [
+          {
+            "type": "contents",
+            "value": {
+              "value": "EDITOR-SECRET-heading"
+            }
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "richtext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "13",
+      "parentId": "12",
+      "childIds": ["40", "41"],
+      "backendDOMNodeId": 13,
+      "ignored": false,
+      "role": {
+        "value": "listitem"
+      },
+      "name": {
+        "value": "",
+        "sources": [
+          {
+            "type": "relatedElement",
+            "attribute": "aria-labelledby"
+          },
+          {
+            "type": "attribute",
+            "attribute": "aria-label"
+          },
+          {
+            "type": "attribute",
+            "attribute": "title"
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "richtext"
+          }
+        },
+        {
+          "name": "level",
+          "value": {
+            "value": 1
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "15",
+      "parentId": "14",
+      "childIds": ["16"],
+      "backendDOMNodeId": 15,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "16",
+      "parentId": "15",
+      "childIds": ["17"],
+      "backendDOMNodeId": 16,
+      "ignored": false,
+      "role": {
+        "value": "row"
+      },
+      "name": {
+        "value": "",
+        "sources": [
+          {
+            "type": "relatedElement",
+            "attribute": "aria-labelledby"
+          },
+          {
+            "type": "attribute",
+            "attribute": "aria-label"
+          },
+          {
+            "type": "attribute",
+            "attribute": "title"
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "richtext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "19",
+      "parentId": "18",
+      "childIds": [],
+      "backendDOMNodeId": 19,
+      "ignored": false,
+      "role": {
+        "value": "image"
+      },
+      "name": {
+        "value": "Diagram",
+        "sources": [
+          {
+            "type": "relatedElement",
+            "attribute": "aria-labelledby"
+          },
+          {
+            "type": "attribute",
+            "attribute": "aria-label"
+          },
+          {
+            "type": "attribute",
+            "attribute": "alt",
+            "value": {
+              "value": "Diagram"
+            }
+          },
+          {
+            "type": "attribute",
+            "attribute": "title",
+            "superseded": true
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "plaintext"
+          }
+        },
+        {
+          "name": "url",
+          "value": {
+            "value": "https://x.test/EDITOR-SECRET-src.png"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "23",
+      "parentId": "18",
+      "childIds": ["43"],
+      "backendDOMNodeId": 23,
+      "ignored": false,
+      "role": {
+        "value": "Figcaption"
+      },
+      "name": {
+        "value": "",
+        "sources": [
+          {
+            "type": "relatedElement",
+            "attribute": "aria-labelledby"
+          },
+          {
+            "type": "attribute",
+            "attribute": "aria-label"
+          },
+          {
+            "type": "attribute",
+            "attribute": "title"
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "richtext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "44",
+      "parentId": "24",
+      "childIds": ["-1000000011"],
+      "backendDOMNodeId": 44,
+      "ignored": false,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "cc ",
+        "sources": [
+          {
+            "type": "contents",
+            "value": {
+              "value": "cc "
+            }
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "richtext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "25",
+      "parentId": "24",
+      "childIds": ["45"],
+      "backendDOMNodeId": 25,
+      "ignored": false,
+      "role": {
+        "value": "link"
+      },
+      "name": {
+        "value": "Mention Alice",
+        "sources": [
+          {
+            "type": "relatedElement",
+            "attribute": "aria-labelledby"
+          },
+          {
+            "type": "attribute",
+            "attribute": "aria-label",
+            "value": {
+              "value": "Mention Alice"
+            }
+          },
+          {
+            "type": "contents",
+            "value": {
+              "value": "@EDITOR-SECRET-mention"
+            },
+            "superseded": true
+          },
+          {
+            "type": "attribute",
+            "attribute": "title",
+            "superseded": true
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "value": true
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "46",
+      "parentId": "24",
+      "childIds": ["-1000000013"],
+      "backendDOMNodeId": 46,
+      "ignored": false,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": " ",
+        "sources": [
+          {
+            "type": "contents",
+            "value": {
+              "value": " "
+            }
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "richtext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "27",
+      "parentId": "24",
+      "childIds": ["47"],
+      "backendDOMNodeId": 27,
+      "ignored": false,
+      "role": {
+        "value": "link"
+      },
+      "name": {
+        "value": "EDITOR-SECRET-island",
+        "sources": [
+          {
+            "type": "relatedElement",
+            "attribute": "aria-labelledby"
+          },
+          {
+            "type": "attribute",
+            "attribute": "aria-label"
+          },
+          {
+            "type": "contents",
+            "value": {
+              "value": "EDITOR-SECRET-island"
+            }
+          },
+          {
+            "type": "attribute",
+            "attribute": "title",
+            "superseded": true
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "value": true
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "50",
+      "parentId": "31",
+      "childIds": ["-1000000017"],
+      "backendDOMNodeId": 50,
+      "ignored": false,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "EDITOR-SECRET-plain",
+        "sources": [
+          {
+            "type": "contents",
+            "value": {
+              "value": "EDITOR-SECRET-plain"
+            }
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "richtext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "34",
+      "parentId": "33",
+      "childIds": ["52"],
+      "backendDOMNodeId": 34,
+      "ignored": false,
+      "role": {
+        "value": "generic"
+      },
+      "name": {
+        "value": "",
+        "sources": [
+          {
+            "type": "relatedElement",
+            "attribute": "aria-labelledby"
+          },
+          {
+            "type": "attribute",
+            "attribute": "aria-label"
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "plaintext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "37",
+      "parentId": "10",
+      "childIds": ["-1000000004"],
+      "backendDOMNodeId": 37,
+      "ignored": false,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "EDITOR-SECRET-link",
+        "sources": [
+          {
+            "type": "contents",
+            "value": {
+              "value": "EDITOR-SECRET-link"
+            }
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "richtext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "40",
+      "parentId": "13",
+      "childIds": ["-1000000007"],
+      "backendDOMNodeId": 40,
+      "ignored": false,
+      "role": {
+        "value": "ListMarker"
+      },
+      "name": {
+        "value": "• ",
+        "sources": [
+          {
+            "type": "contents",
+            "value": {
+              "value": "• "
+            }
+          }
+        ]
+      },
+      "properties": []
+    },
+    {
+      "nodeId": "41",
+      "parentId": "13",
+      "childIds": ["-1000000008"],
+      "backendDOMNodeId": 41,
+      "ignored": false,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "EDITOR-SECRET-item",
+        "sources": [
+          {
+            "type": "contents",
+            "value": {
+              "value": "EDITOR-SECRET-item"
+            }
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "richtext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "17",
+      "parentId": "16",
+      "childIds": ["42"],
+      "backendDOMNodeId": 17,
+      "ignored": false,
+      "role": {
+        "value": "cell"
+      },
+      "name": {
+        "value": "EDITOR-SECRET-cell",
+        "sources": [
+          {
+            "type": "relatedElement",
+            "attribute": "aria-labelledby"
+          },
+          {
+            "type": "attribute",
+            "attribute": "aria-label"
+          },
+          {
+            "type": "contents",
+            "value": {
+              "value": "EDITOR-SECRET-cell"
+            }
+          },
+          {
+            "type": "attribute",
+            "attribute": "title",
+            "superseded": true
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "richtext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "43",
+      "parentId": "23",
+      "childIds": ["-1000000010"],
+      "backendDOMNodeId": 43,
+      "ignored": false,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "EDITOR-SECRET-caption",
+        "sources": [
+          {
+            "type": "contents",
+            "value": {
+              "value": "EDITOR-SECRET-caption"
+            }
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "richtext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "45",
+      "parentId": "25",
+      "childIds": ["-1000000012"],
+      "backendDOMNodeId": 45,
+      "ignored": false,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "@EDITOR-SECRET-mention",
+        "sources": [
+          {
+            "type": "contents",
+            "value": {
+              "value": "@EDITOR-SECRET-mention"
+            }
+          }
+        ]
+      },
+      "properties": []
+    },
+    {
+      "nodeId": "47",
+      "parentId": "27",
+      "childIds": ["-1000000014"],
+      "backendDOMNodeId": 47,
+      "ignored": false,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "EDITOR-SECRET-island",
+        "sources": [
+          {
+            "type": "contents",
+            "value": {
+              "value": "EDITOR-SECRET-island"
+            }
+          }
+        ]
+      },
+      "properties": []
+    },
+    {
+      "nodeId": "52",
+      "parentId": "34",
+      "childIds": ["-1000000019"],
+      "backendDOMNodeId": 52,
+      "ignored": false,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "EDITOR-SECRET-textarea",
+        "sources": [
+          {
+            "type": "contents",
+            "value": {
+              "value": "EDITOR-SECRET-textarea"
+            }
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "plaintext"
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "-1000000007",
+      "parentId": "40",
+      "childIds": [],
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "42",
+      "parentId": "17",
+      "childIds": ["-1000000009"],
+      "backendDOMNodeId": 42,
+      "ignored": false,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "EDITOR-SECRET-cell",
+        "sources": [
+          {
+            "type": "contents",
+            "value": {
+              "value": "EDITOR-SECRET-cell"
+            }
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "editable",
+          "value": {
+            "value": "richtext"
+          }
+        }
+      ]
+    }
+  ],
+  "enrich": {
+    "2": {
+      "tagName": "MAIN",
+      "attributes": []
+    },
+    "3": {
+      "tagName": "HTML",
+      "attributes": ["lang", "en"]
+    },
+    "4": {
+      "tagName": "HEAD",
+      "attributes": []
+    },
+    "5": {
+      "tagName": "TITLE",
+      "attributes": []
+    },
+    "6": {
+      "tagName": "BODY",
+      "attributes": []
+    },
+    "7": {
+      "tagName": "H1",
+      "attributes": []
+    },
+    "8": {
+      "tagName": "DIV",
+      "attributes": [
+        "contenteditable",
+        "true",
+        "role",
+        "textbox",
+        "aria-label",
+        "Message",
+        "aria-multiline",
+        "true",
+        "aria-describedby",
+        "hint"
+      ]
+    },
+    "9": {
+      "tagName": "P",
+      "attributes": []
+    },
+    "10": {
+      "tagName": "A",
+      "attributes": ["href", "https://x.test/reset?token=EDITOR-SECRET-href"]
+    },
+    "11": {
+      "tagName": "H2",
+      "attributes": []
+    },
+    "12": {
+      "tagName": "UL",
+      "attributes": []
+    },
+    "13": {
+      "tagName": "LI",
+      "attributes": []
+    },
+    "14": {
+      "tagName": "TABLE",
+      "attributes": []
+    },
+    "15": {
+      "tagName": "TBODY",
+      "attributes": []
+    },
+    "16": {
+      "tagName": "TR",
+      "attributes": []
+    },
+    "17": {
+      "tagName": "TD",
+      "attributes": []
+    },
+    "18": {
+      "tagName": "FIGURE",
+      "attributes": []
+    },
+    "19": {
+      "tagName": "IMG",
+      "attributes": [
+        "src",
+        "https://x.test/EDITOR-SECRET-src.png",
+        "alt",
+        "Diagram"
+      ]
+    },
+    "23": {
+      "tagName": "FIGCAPTION",
+      "attributes": []
+    },
+    "24": {
+      "tagName": "P",
+      "attributes": []
+    },
+    "25": {
+      "tagName": "A",
+      "attributes": [
+        "contenteditable",
+        "false",
+        "href",
+        "/u/alice",
+        "aria-label",
+        "Mention Alice"
+      ]
+    },
+    "26": {
+      "tagName": "SPAN",
+      "attributes": ["contenteditable", "false"]
+    },
+    "27": {
+      "tagName": "A",
+      "attributes": ["href", "/x"]
+    },
+    "28": {
+      "tagName": "P",
+      "attributes": ["id", "hint"]
+    },
+    "29": {
+      "tagName": "A",
+      "attributes": ["href", "/help"]
+    },
+    "30": {
+      "tagName": "ARTICLE",
+      "attributes": []
+    },
+    "31": {
+      "tagName": "DIV",
+      "attributes": ["contenteditable", "true"]
+    },
+    "32": {
+      "tagName": "LABEL",
+      "attributes": []
+    },
+    "33": {
+      "tagName": "TEXTAREA",
+      "attributes": []
+    }
+  }
+}
