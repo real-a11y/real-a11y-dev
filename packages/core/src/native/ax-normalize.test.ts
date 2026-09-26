@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 
 import fixture from "./__fixtures__/ax-media-form.json";
+import mixedTextFixture from "./__fixtures__/ax-mixed-text.json";
 import {
   normalizeNativeAX,
   serializeNativeAX,
@@ -191,6 +192,188 @@ describe("name promotion depth and guard", () => {
       raw("3", "StaticText", { parentId: "1", name: "Alpha" }),
     ]);
     expect(serializeNativeAX(nodes)).toBe('listitem "Alpha"');
+  });
+});
+
+describe("a node's own text (direct StaticText children)", () => {
+  const raw = (
+    nodeId: string,
+    role: string,
+    opts: {
+      parentId?: string;
+      childIds?: string[];
+      name?: string;
+      ignored?: boolean;
+      properties?: RawNativeAXNode["properties"];
+    } = {},
+  ): RawNativeAXNode => ({
+    nodeId,
+    role: { value: role },
+    ...(opts.name !== undefined ? { name: { value: opts.name } } : {}),
+    ...(opts.parentId !== undefined ? { parentId: opts.parentId } : {}),
+    ...(opts.childIds !== undefined ? { childIds: opts.childIds } : {}),
+    ...(opts.ignored ? { ignored: true } : {}),
+    ...(opts.properties !== undefined ? { properties: opts.properties } : {}),
+  });
+
+  it("keeps a paragraph's plain text around its kept inline children", () => {
+    // `<p>See <a>#386</a> and <code>x</code> here.</p>` — the paragraph is not
+    // a leaf, so leaf-only promotion never ran and all three runs were lost.
+    const nodes = normalizeNativeAX([
+      raw("1", "paragraph", { childIds: ["2", "3", "5", "6", "8"] }),
+      raw("2", "StaticText", { parentId: "1", name: "See " }),
+      raw("3", "link", { parentId: "1", name: "#386", childIds: ["4"] }),
+      raw("4", "StaticText", { parentId: "3", name: "#386" }),
+      raw("5", "StaticText", { parentId: "1", name: " and " }),
+      raw("6", "code", { parentId: "1", childIds: ["7"] }),
+      raw("7", "StaticText", { parentId: "6", name: "x" }),
+      raw("8", "StaticText", { parentId: "1", name: " here." }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe(
+      ['paragraph "See and here."', '  link "#386"', '  code "x"'].join("\n"),
+    );
+  });
+
+  it("concatenates every run of a leaf, not just the first", () => {
+    // Chromium gives `<b>` no node of its own, so `<p>Pure <b>bold</b> text.</p>`
+    // is a leaf with three StaticText children — first-match promotion
+    // truncated it to "Pure".
+    const nodes = normalizeNativeAX([
+      raw("1", "paragraph", { childIds: ["2", "3", "4"] }),
+      raw("2", "StaticText", { parentId: "1", name: "Pure " }),
+      raw("3", "StaticText", { parentId: "1", name: "bold" }),
+      raw("4", "StaticText", { parentId: "1", name: " text." }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe('paragraph "Pure bold text."');
+  });
+
+  it("reads a LineBreak as a space", () => {
+    const nodes = normalizeNativeAX([
+      raw("1", "paragraph", { childIds: ["2", "3", "4"] }),
+      raw("2", "StaticText", { parentId: "1", name: "Line one" }),
+      raw("3", "LineBreak", { parentId: "1", name: "\n" }),
+      raw("4", "StaticText", { parentId: "1", name: "Line two" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe('paragraph "Line one Line two"');
+  });
+
+  it("never lets a container take text from a dropped wrapper", () => {
+    // Only DIRECT StaticText counts once a node has kept descendants: a
+    // `main` must not be named after a loose `<div>` or a `<label>` inside it.
+    const nodes = normalizeNativeAX([
+      raw("1", "main", { childIds: ["2", "4", "6"] }),
+      raw("2", "generic", { parentId: "1", childIds: ["3"] }),
+      raw("3", "StaticText", { parentId: "2", name: "Loose block" }),
+      raw("4", "LabelText", { parentId: "1", childIds: ["5"] }),
+      raw("5", "StaticText", { parentId: "4", name: "Email" }),
+      raw("6", "button", { parentId: "1", name: "Save" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe(
+      ["main", '  button "Save"'].join("\n"),
+    );
+  });
+
+  it("does not enter an ignored wrapper, even on a leaf with direct text", () => {
+    // A clipped screen-reader-only span: Chromium ignores the span but not its
+    // text. Its neighbours' whitespace has already collapsed around it, so
+    // entering it would glue words ("screen-readertext").
+    const nodes = normalizeNativeAX([
+      raw("1", "paragraph", { childIds: ["2", "3", "5"] }),
+      raw("2", "StaticText", { parentId: "1", name: "Visible " }),
+      raw("3", "none", { parentId: "1", ignored: true, childIds: ["4"] }),
+      raw("4", "StaticText", { parentId: "3", name: "screen-reader" }),
+      raw("5", "StaticText", { parentId: "1", name: "text." }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe('paragraph "Visible text."');
+  });
+
+  it("skips an ignored StaticText", () => {
+    const nodes = normalizeNativeAX([
+      raw("1", "paragraph", { childIds: ["2", "3", "4"] }),
+      raw("2", "StaticText", { parentId: "1", name: "Shown " }),
+      raw("3", "StaticText", { parentId: "1", name: "hidden ", ignored: true }),
+      raw("4", "StaticText", { parentId: "1", name: "text" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe('paragraph "Shown text"');
+  });
+
+  it("never names a kept sectionheader after its byline", () => {
+    // Name-from-author only, like the DOM producer: a focusable `<header>`
+    // survives, but "By Ada" is not its name — with or without kept children.
+    const focusable = [{ name: "focusable", value: { value: true } }];
+    const withHeading = normalizeNativeAX([
+      raw("1", "sectionheader", {
+        childIds: ["2", "3"],
+        properties: focusable,
+      }),
+      raw("2", "StaticText", { parentId: "1", name: "By Ada" }),
+      raw("3", "heading", { parentId: "1", name: "Post" }),
+    ]);
+    expect(serializeNativeAX(withHeading)).toBe(
+      ["sectionheader", '  heading "Post"'].join("\n"),
+    );
+
+    const leaf = normalizeNativeAX([
+      raw("1", "sectionfooter", { childIds: ["2"], properties: focusable }),
+      raw("2", "StaticText", { parentId: "1", name: "By Ada" }),
+    ]);
+    expect(serializeNativeAX(leaf)).toBe("sectionfooter");
+  });
+
+  it("still prefers the node's own name over any child text", () => {
+    const nodes = normalizeNativeAX([
+      raw("1", "paragraph", { name: "Authored", childIds: ["2"] }),
+      raw("2", "StaticText", { parentId: "1", name: "Content" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe('paragraph "Authored"');
+  });
+});
+
+// Recorded from Chromium 151 on this page (a real `getFullAXTree` payload,
+// trimmed to the fields the normalizer reads):
+//
+//   <main>
+//   <p>Follow-up to <a href="#a">#386</a>/<a href="#b">#390</a>. Selecting a
+//     row in <code>NativeTreeView.tsx</code>'s <code>selectedId</code>
+//     <strong>and</strong> moves focus.</p>
+//   <p>Pure <b>bold</b> text.</p>
+//   <p>Line one<br>Line two</p>
+//   <ul><li>Alpha <a href="#c">link</a> tail</li></ul>
+//   <p>Visible <span style="position:absolute;width:1px;height:1px;
+//     overflow:hidden;clip:rect(0 0 0 0)">screen-reader</span> text
+//     <a href="#d">here</a>.</p>
+//   <label>Email <input></label>
+//   <div>Loose block</div>
+//   <article><header tabindex="0">By Ada<h2>Post</h2></header></article>
+//   </main>
+describe("normalizeNativeAX (recorded mixed inline text)", () => {
+  const nodes = normalizeNativeAX(mixedTextFixture.nodes as RawNativeAXNode[]);
+
+  it("keeps every paragraph's own text, matching the DOM producer's direct text", () => {
+    expect(serializeNativeAX(nodes)).toBe(
+      [
+        "main",
+        '  paragraph "Follow-up to /. Selecting a row in \'s moves focus."',
+        '    link "#386"',
+        '    link "#390"',
+        '    code "NativeTreeView.tsx"',
+        '    code "selectedId"',
+        '    strong "and"',
+        '  paragraph "Pure bold text."',
+        '  paragraph "Line one Line two"',
+        "  list",
+        '    listitem "Alpha tail"',
+        '      link "link"',
+        // The clipped span's text sits under an ignored wrapper — not the
+        // paragraph's own text, exactly as the DOM producer reads it.
+        '  paragraph "Visible text ."',
+        '    link "here"',
+        '  textbox "Email"',
+        "  article",
+        "    sectionheader",
+        '      heading "Post"',
+      ].join("\n"),
+    );
   });
 });
 

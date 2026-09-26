@@ -1,0 +1,940 @@
+{
+  "chrome": "151.0.7922.34",
+  "nodes": [
+    {
+      "nodeId": "1",
+      "childIds": ["2"],
+      "backendDOMNodeId": 1,
+      "role": {
+        "value": "RootWebArea"
+      },
+      "name": {
+        "value": "mixed text fixture"
+      }
+    },
+    {
+      "nodeId": "2",
+      "parentId": "1",
+      "childIds": ["5"],
+      "backendDOMNodeId": 2,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "5",
+      "parentId": "2",
+      "childIds": ["6"],
+      "backendDOMNodeId": 5,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "6",
+      "parentId": "5",
+      "childIds": ["7", "13", "15", "17", "20", "23", "26", "27"],
+      "backendDOMNodeId": 6,
+      "role": {
+        "value": "main"
+      }
+    },
+    {
+      "nodeId": "7",
+      "parentId": "6",
+      "childIds": [
+        "30",
+        "8",
+        "32",
+        "9",
+        "34",
+        "10",
+        "36",
+        "11",
+        "38",
+        "12",
+        "40"
+      ],
+      "backendDOMNodeId": 7,
+      "role": {
+        "value": "paragraph"
+      }
+    },
+    {
+      "nodeId": "13",
+      "parentId": "6",
+      "childIds": ["41", "42", "43"],
+      "backendDOMNodeId": 13,
+      "role": {
+        "value": "paragraph"
+      }
+    },
+    {
+      "nodeId": "15",
+      "parentId": "6",
+      "childIds": ["44", "16", "45"],
+      "backendDOMNodeId": 15,
+      "role": {
+        "value": "paragraph"
+      }
+    },
+    {
+      "nodeId": "17",
+      "parentId": "6",
+      "childIds": ["18"],
+      "backendDOMNodeId": 17,
+      "role": {
+        "value": "list"
+      }
+    },
+    {
+      "nodeId": "20",
+      "parentId": "6",
+      "childIds": ["50", "21", "52", "22", "54"],
+      "backendDOMNodeId": 20,
+      "role": {
+        "value": "paragraph"
+      }
+    },
+    {
+      "nodeId": "23",
+      "parentId": "6",
+      "childIds": ["55", "24"],
+      "backendDOMNodeId": 23,
+      "role": {
+        "value": "LabelText"
+      }
+    },
+    {
+      "nodeId": "26",
+      "parentId": "6",
+      "childIds": ["56"],
+      "backendDOMNodeId": 26,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "27",
+      "parentId": "6",
+      "childIds": ["28"],
+      "backendDOMNodeId": 27,
+      "role": {
+        "value": "article"
+      }
+    },
+    {
+      "nodeId": "30",
+      "parentId": "7",
+      "childIds": ["-1000000002"],
+      "backendDOMNodeId": 30,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Follow-up to "
+      }
+    },
+    {
+      "nodeId": "8",
+      "parentId": "7",
+      "childIds": ["31"],
+      "backendDOMNodeId": 8,
+      "role": {
+        "value": "link"
+      },
+      "name": {
+        "value": "#386"
+      }
+    },
+    {
+      "nodeId": "32",
+      "parentId": "7",
+      "childIds": ["-1000000004"],
+      "backendDOMNodeId": 32,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "/"
+      }
+    },
+    {
+      "nodeId": "9",
+      "parentId": "7",
+      "childIds": ["33"],
+      "backendDOMNodeId": 9,
+      "role": {
+        "value": "link"
+      },
+      "name": {
+        "value": "#390"
+      }
+    },
+    {
+      "nodeId": "34",
+      "parentId": "7",
+      "childIds": ["-1000000006"],
+      "backendDOMNodeId": 34,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": ". Selecting a row in "
+      }
+    },
+    {
+      "nodeId": "10",
+      "parentId": "7",
+      "childIds": ["35"],
+      "backendDOMNodeId": 10,
+      "role": {
+        "value": "code"
+      }
+    },
+    {
+      "nodeId": "36",
+      "parentId": "7",
+      "childIds": ["-1000000008"],
+      "backendDOMNodeId": 36,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "'s "
+      }
+    },
+    {
+      "nodeId": "11",
+      "parentId": "7",
+      "childIds": ["37"],
+      "backendDOMNodeId": 11,
+      "role": {
+        "value": "code"
+      }
+    },
+    {
+      "nodeId": "38",
+      "parentId": "7",
+      "childIds": ["-1000000010"],
+      "backendDOMNodeId": 38,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": " "
+      }
+    },
+    {
+      "nodeId": "12",
+      "parentId": "7",
+      "childIds": ["39"],
+      "backendDOMNodeId": 12,
+      "role": {
+        "value": "strong"
+      }
+    },
+    {
+      "nodeId": "40",
+      "parentId": "7",
+      "childIds": ["-1000000012"],
+      "backendDOMNodeId": 40,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": " moves focus."
+      }
+    },
+    {
+      "nodeId": "41",
+      "parentId": "13",
+      "childIds": ["-1000000013"],
+      "backendDOMNodeId": 41,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Pure "
+      }
+    },
+    {
+      "nodeId": "42",
+      "parentId": "13",
+      "childIds": ["-1000000014"],
+      "backendDOMNodeId": 42,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "bold"
+      }
+    },
+    {
+      "nodeId": "43",
+      "parentId": "13",
+      "childIds": ["-1000000015"],
+      "backendDOMNodeId": 43,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": " text."
+      }
+    },
+    {
+      "nodeId": "44",
+      "parentId": "15",
+      "childIds": ["-1000000016"],
+      "backendDOMNodeId": 44,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Line one"
+      }
+    },
+    {
+      "nodeId": "16",
+      "parentId": "15",
+      "childIds": ["-1000000017"],
+      "backendDOMNodeId": 16,
+      "role": {
+        "value": "LineBreak"
+      },
+      "name": {
+        "value": "\n"
+      }
+    },
+    {
+      "nodeId": "45",
+      "parentId": "15",
+      "childIds": ["-1000000018"],
+      "backendDOMNodeId": 45,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Line two"
+      }
+    },
+    {
+      "nodeId": "18",
+      "parentId": "17",
+      "childIds": ["46", "47", "19", "49"],
+      "backendDOMNodeId": 18,
+      "role": {
+        "value": "listitem"
+      }
+    },
+    {
+      "nodeId": "50",
+      "parentId": "20",
+      "childIds": ["-1000000023"],
+      "backendDOMNodeId": 50,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Visible "
+      }
+    },
+    {
+      "nodeId": "21",
+      "parentId": "20",
+      "childIds": ["51"],
+      "backendDOMNodeId": 21,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "51",
+      "parentId": "21",
+      "childIds": ["-1000000024", "-1000000025"],
+      "backendDOMNodeId": 51,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "screen-reader"
+      }
+    },
+    {
+      "nodeId": "52",
+      "parentId": "20",
+      "childIds": ["-1000000026"],
+      "backendDOMNodeId": 52,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "text "
+      }
+    },
+    {
+      "nodeId": "22",
+      "parentId": "20",
+      "childIds": ["53"],
+      "backendDOMNodeId": 22,
+      "role": {
+        "value": "link"
+      },
+      "name": {
+        "value": "here"
+      }
+    },
+    {
+      "nodeId": "54",
+      "parentId": "20",
+      "childIds": ["-1000000028"],
+      "backendDOMNodeId": 54,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "."
+      }
+    },
+    {
+      "nodeId": "55",
+      "parentId": "23",
+      "childIds": ["-1000000029"],
+      "backendDOMNodeId": 55,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Email "
+      }
+    },
+    {
+      "nodeId": "24",
+      "parentId": "23",
+      "childIds": ["25"],
+      "backendDOMNodeId": 24,
+      "role": {
+        "value": "textbox"
+      },
+      "name": {
+        "value": "Email "
+      }
+    },
+    {
+      "nodeId": "56",
+      "parentId": "26",
+      "childIds": ["-1000000030"],
+      "backendDOMNodeId": 56,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Loose block"
+      }
+    },
+    {
+      "nodeId": "28",
+      "parentId": "27",
+      "childIds": ["57", "29"],
+      "backendDOMNodeId": 28,
+      "role": {
+        "value": "sectionheader"
+      },
+      "properties": [
+        {
+          "name": "focusable",
+          "value": {
+            "value": true
+          }
+        }
+      ]
+    },
+    {
+      "nodeId": "-1000000002",
+      "parentId": "30",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Follow-up to "
+      }
+    },
+    {
+      "nodeId": "31",
+      "parentId": "8",
+      "childIds": ["-1000000003"],
+      "backendDOMNodeId": 31,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "#386"
+      }
+    },
+    {
+      "nodeId": "-1000000004",
+      "parentId": "32",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "/"
+      }
+    },
+    {
+      "nodeId": "33",
+      "parentId": "9",
+      "childIds": ["-1000000005"],
+      "backendDOMNodeId": 33,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "#390"
+      }
+    },
+    {
+      "nodeId": "-1000000006",
+      "parentId": "34",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": ". Selecting a row in "
+      }
+    },
+    {
+      "nodeId": "35",
+      "parentId": "10",
+      "childIds": ["-1000000007"],
+      "backendDOMNodeId": 35,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "NativeTreeView.tsx"
+      }
+    },
+    {
+      "nodeId": "-1000000008",
+      "parentId": "36",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "'s "
+      }
+    },
+    {
+      "nodeId": "37",
+      "parentId": "11",
+      "childIds": ["-1000000009"],
+      "backendDOMNodeId": 37,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "selectedId"
+      }
+    },
+    {
+      "nodeId": "-1000000010",
+      "parentId": "38",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": " "
+      }
+    },
+    {
+      "nodeId": "39",
+      "parentId": "12",
+      "childIds": ["-1000000011"],
+      "backendDOMNodeId": 39,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "and"
+      }
+    },
+    {
+      "nodeId": "-1000000012",
+      "parentId": "40",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": " moves focus."
+      }
+    },
+    {
+      "nodeId": "-1000000013",
+      "parentId": "41",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Pure "
+      }
+    },
+    {
+      "nodeId": "-1000000014",
+      "parentId": "42",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "bold"
+      }
+    },
+    {
+      "nodeId": "-1000000015",
+      "parentId": "43",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": " text."
+      }
+    },
+    {
+      "nodeId": "-1000000016",
+      "parentId": "44",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Line one"
+      }
+    },
+    {
+      "nodeId": "-1000000017",
+      "parentId": "16",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "\n"
+      }
+    },
+    {
+      "nodeId": "-1000000018",
+      "parentId": "45",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Line two"
+      }
+    },
+    {
+      "nodeId": "46",
+      "parentId": "18",
+      "childIds": ["-1000000019"],
+      "backendDOMNodeId": 46,
+      "role": {
+        "value": "ListMarker"
+      },
+      "name": {
+        "value": "• "
+      }
+    },
+    {
+      "nodeId": "47",
+      "parentId": "18",
+      "childIds": ["-1000000020"],
+      "backendDOMNodeId": 47,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Alpha "
+      }
+    },
+    {
+      "nodeId": "19",
+      "parentId": "18",
+      "childIds": ["48"],
+      "backendDOMNodeId": 19,
+      "role": {
+        "value": "link"
+      },
+      "name": {
+        "value": "link"
+      }
+    },
+    {
+      "nodeId": "49",
+      "parentId": "18",
+      "childIds": ["-1000000022"],
+      "backendDOMNodeId": 49,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": " tail"
+      }
+    },
+    {
+      "nodeId": "-1000000023",
+      "parentId": "50",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Visible "
+      }
+    },
+    {
+      "nodeId": "-1000000024",
+      "parentId": "51",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "screen-"
+      }
+    },
+    {
+      "nodeId": "-1000000025",
+      "parentId": "51",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "reader"
+      }
+    },
+    {
+      "nodeId": "-1000000026",
+      "parentId": "52",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "text "
+      }
+    },
+    {
+      "nodeId": "53",
+      "parentId": "22",
+      "childIds": ["-1000000027"],
+      "backendDOMNodeId": 53,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "here"
+      }
+    },
+    {
+      "nodeId": "-1000000028",
+      "parentId": "54",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "."
+      }
+    },
+    {
+      "nodeId": "-1000000029",
+      "parentId": "55",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Email "
+      }
+    },
+    {
+      "nodeId": "25",
+      "parentId": "24",
+      "backendDOMNodeId": 25,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "-1000000030",
+      "parentId": "56",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Loose block"
+      }
+    },
+    {
+      "nodeId": "57",
+      "parentId": "28",
+      "childIds": ["-1000000031"],
+      "backendDOMNodeId": 57,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "By Ada"
+      }
+    },
+    {
+      "nodeId": "29",
+      "parentId": "28",
+      "childIds": ["58"],
+      "backendDOMNodeId": 29,
+      "role": {
+        "value": "heading"
+      },
+      "name": {
+        "value": "Post"
+      }
+    },
+    {
+      "nodeId": "-1000000003",
+      "parentId": "31",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "#386"
+      }
+    },
+    {
+      "nodeId": "-1000000005",
+      "parentId": "33",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "#390"
+      }
+    },
+    {
+      "nodeId": "-1000000007",
+      "parentId": "35",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "NativeTreeView.tsx"
+      }
+    },
+    {
+      "nodeId": "-1000000009",
+      "parentId": "37",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "selectedId"
+      }
+    },
+    {
+      "nodeId": "-1000000011",
+      "parentId": "39",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "and"
+      }
+    },
+    {
+      "nodeId": "-1000000019",
+      "parentId": "46",
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "-1000000020",
+      "parentId": "47",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Alpha "
+      }
+    },
+    {
+      "nodeId": "48",
+      "parentId": "19",
+      "childIds": ["-1000000021"],
+      "backendDOMNodeId": 48,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "link"
+      }
+    },
+    {
+      "nodeId": "-1000000022",
+      "parentId": "49",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": " tail"
+      }
+    },
+    {
+      "nodeId": "-1000000027",
+      "parentId": "53",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "here"
+      }
+    },
+    {
+      "nodeId": "-1000000031",
+      "parentId": "57",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "By Ada"
+      }
+    },
+    {
+      "nodeId": "58",
+      "parentId": "29",
+      "childIds": ["-1000000032"],
+      "backendDOMNodeId": 58,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Post"
+      }
+    },
+    {
+      "nodeId": "-1000000021",
+      "parentId": "48",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "link"
+      }
+    },
+    {
+      "nodeId": "-1000000032",
+      "parentId": "58",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Post"
+      }
+    }
+  ]
+}

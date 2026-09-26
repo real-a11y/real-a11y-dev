@@ -21,7 +21,7 @@
  */
 
 /** Bump on any table/rule change that alters normalized output. */
-export const NATIVE_AX_VOCABULARY_VERSION = 3;
+export const NATIVE_AX_VOCABULARY_VERSION = 4;
 
 /**
  * Chromium AX roles that are structural noise relative to this engine's
@@ -120,7 +120,9 @@ export function mapNativeAXRole(role: string): string {
  * `LabelText` child instead of the node itself. Dropping those children
  * without promoting the text loses real content (`listitem "Alpha"` became a
  * bare `listitem` in the spikes) — see `promoteNameFromDroppedDescendants`
- * in the normalizer.
+ * in the normalizer. (A node's DIRECT `StaticText` children are read by
+ * `directText` there first, and that step reads only `StaticText`: a
+ * `LabelText` is a `<label>` element, not the node's own text.)
  */
 export const NATIVE_AX_NAME_SOURCE_ROLES: ReadonlySet<string> = new Set([
   "StaticText",

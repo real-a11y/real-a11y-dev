@@ -213,6 +213,66 @@ describe("buildNativeTree — R1: unlabeled field value must not leak via the na
   });
 });
 
+describe("buildNativeTree — R1: typed text beside a kept child must not leak via the name", () => {
+  // Chromium 151's shape for `<div role="textbox" contenteditable>typed
+  // <a href="#">link</a> more</div>`: the typed text is on the textbox's own
+  // StaticText children, around a kept link. Core names a node from its direct
+  // text even when it has kept children, so this is a second route into the
+  // name — and it must meet the same redaction as the leaf case above.
+  const raw = [
+    { nodeId: "1", childIds: ["2"], role: { value: "RootWebArea" } },
+    { nodeId: "2", parentId: "1", childIds: ["3"], role: { value: "main" } },
+    {
+      nodeId: "3",
+      parentId: "2",
+      childIds: ["4", "5", "7"],
+      role: { value: "textbox" },
+      name: { value: "" },
+      backendDOMNodeId: 300,
+    },
+    {
+      nodeId: "4",
+      parentId: "3",
+      role: { value: "StaticText" },
+      name: { value: "typed-SECRET " },
+    },
+    {
+      nodeId: "5",
+      parentId: "3",
+      childIds: ["6"],
+      role: { value: "link" },
+      name: { value: "link" },
+    },
+    {
+      nodeId: "6",
+      parentId: "5",
+      role: { value: "StaticText" },
+      name: { value: "link" },
+    },
+    {
+      nodeId: "7",
+      parentId: "3",
+      role: { value: "StaticText" },
+      name: { value: " more" },
+    },
+  ] as Parameters<typeof buildNativeTree>[0];
+
+  it("sanity: core DOES name the textbox from its typed text (the vector)", () => {
+    const promoted = normalizeNativeAX(raw).find((n) => n.id === "ax-dom-300");
+    expect(promoted?.name).toBe("typed-SECRET more");
+  });
+
+  it("redacts it in both buildNativeTree and nativeAXView", () => {
+    const tree = buildNativeTree(raw);
+    expect(tree.nodes.get("ax-dom-300")?.a11y.name).toBe("");
+    expect(serializeTree(tree, { includeGeneric: true })).not.toContain(
+      "SECRET",
+    );
+    const { tree: view } = nativeAXView(raw);
+    expect(view).toBe('main\n  textbox\n    link "link"');
+  });
+});
+
 describe("nativeAXView — the shared vocabulary, not a private copy", () => {
   const node = (
     nodeId: string,
