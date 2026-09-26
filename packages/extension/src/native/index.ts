@@ -59,6 +59,13 @@ type NativeMessage =
       // follow that fires on every settled tree selection would silently
       // inflate it with browsing, not real dispatches.
       silent?: boolean;
+      // The URL of the document the caller's tree was read from. Checked
+      // after the per-tab queue wait, right before dispatch: a node id
+      // encodes a `backendDOMNodeId`, which the page it came from owns, and
+      // an action sent just before a navigation would otherwise resolve
+      // that id in the NEW document — possibly an unrelated element there.
+      // Optional, so existing callers keep their behavior unchanged.
+      expectUrl?: string;
     }
   | { type: "NATIVE_DOGFOOD_REPORT" }
   | { type: "NATIVE_DOGFOOD_CLEAR" }
@@ -279,13 +286,23 @@ export function registerNativeMode(): void {
             const { outcome, value } = await withRecovery(
               session,
               message.tabId,
-              (t) =>
-                dispatchNative(
+              async (t) => {
+                if (
+                  message.expectUrl !== undefined &&
+                  (await tabUrl(message.tabId)) !== message.expectUrl
+                ) {
+                  return {
+                    success: false,
+                    error: "page navigated — reload the native tree",
+                  };
+                }
+                return dispatchNative(
                   t,
                   message.nodeId,
                   message.action,
                   message.value,
-                ),
+                );
+              },
               log,
             );
             if (!outcome.ok) {

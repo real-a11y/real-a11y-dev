@@ -562,6 +562,10 @@ export function pageClick(this: Element): Marker {
  * `document.activeElement` — the native tree includes plenty of DOM-backed
  * nodes like that (headings, landmarks), and reporting `{ ok: true }` for a
  * no-op would silently leave real page focus on whatever it was before.
+ *
+ * Checked against the element's OWN root, not the document: inside a shadow
+ * tree, `document.activeElement` is the shadow host, and the focused control
+ * is only visible as its shadow root's `activeElement`.
  */
 export function pageFocus(this: Element): Marker {
   const el = this;
@@ -571,7 +575,8 @@ export function pageFocus(this: Element): Marker {
     return { ok: false, reason: "not-focusable" };
   }
   focusable.focus({ preventScroll: true });
-  if (focusable.ownerDocument.activeElement !== focusable) {
+  const root = focusable.getRootNode() as Document | ShadowRoot;
+  if (root.activeElement !== focusable) {
     return { ok: false, reason: "not-focusable" };
   }
   return { ok: true };

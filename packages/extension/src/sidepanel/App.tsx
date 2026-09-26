@@ -511,6 +511,9 @@ export function App() {
   // display flag, a stale token here must not leave this permanently stuck
   // true, or no native action could ever dispatch again.
   const nativeInFlight = useRef(false);
+  // Pairs each native focus follow's suppression arm with its own release —
+  // see `focusNativeSelectionOnPage`.
+  const nativeFocusFollowSeq = useRef(0);
   // Auto-load the native tree once per transition into native mode (mirrors
   // the DOM producer's own `hasRequestedInitial` restraint below — a later
   // tab switch while already in native mode clears the tree and waits for an
@@ -1744,11 +1747,21 @@ export function App() {
    * for a user-initiated act (a click can open a menu, re-render a list),
    * wrong for a background follow that fires on every settled selection
    * and must never flash a busy state or reset expand/scroll position over
-   * a plain arrow-key move. Skips while a real action is already busy
-   * (`nativeBusy`), rather than queueing behind it — the effect that calls
-   * this only fires again on a NEW selection, so a focus-follow dropped
-   * here is simply not retried for the same selection once busy clears; an
-   * accepted gap, not a correctness issue.
+   * a plain arrow-key move. Skips while a real action is in flight rather
+   * than queueing behind it: a follow landing AFTER an activation would
+   * steal focus back from whatever that activation opened (a dialog's own
+   * autofocus). `nativeInFlight` is the check that matters — it's a ref set
+   * synchronously at the start of `dispatchNativeAction`, where
+   * `nativeBusy` is state and can still read `false` in this closure for a
+   * render after an activation has already been sent. It's checked again
+   * after the suppression round trip, the one await before the dispatch.
+   *
+   * `expectUrl` closes the navigation race: a node id encodes a
+   * `backendDOMNodeId` from the document the tree was read from, and a
+   * follow sent just before a navigation could otherwise resolve that id in
+   * the NEW document. The service worker checks it after the per-tab queue
+   * wait, immediately before dispatching — not only here, where a
+   * navigation landing after the send would slip past.
    *
    * A failure (a stale/backendDOMNodeId invalidated by a navigation, an
    * element that turned out not to be focusable) is silent — this is a
@@ -1768,15 +1781,13 @@ export function App() {
    * settled tree selection would inflate it with browsing, not real
    * dispatches.
    *
-   * Also tells `content.ts` to suppress its own reverse focus-sync listener
-   * first (`SUPPRESS_NATIVE_FOCUS_TRACK`) — a Devin Review finding caught
-   * that without it, the real `focusin` event this dispatch causes on the
-   * page reaches that listener (on by default, independent of which
-   * producer the panel is showing) exactly like a genuine user-driven focus
-   * change, which re-highlights and SCROLLS to it — undoing the
-   * `preventScroll` the native dispatch itself already passed. See that
-   * message's own comment in `types.ts` for why it's a bounded window
-   * rather than a matched set/clear.
+   * Arms `content.ts`'s suppression of its own reverse focus-sync listener
+   * first (`SUPPRESS_NATIVE_FOCUS_TRACK`, every frame) and waits for it to
+   * land: the real `focusin` this dispatch causes would otherwise reach
+   * that listener — on by default, whichever producer the panel shows — and
+   * it re-highlights and SCROLLS to the element, undoing `preventScroll`.
+   * Released as soon as the dispatch returns; `seq` keeps a late release
+   * from an older follow from disarming a newer one.
    */
   const focusNativeSelectionOnPage = useCallback(
     (nodeId: string) => {
@@ -1784,22 +1795,52 @@ export function App() {
         !nativeModeEnabled ||
         nativeTreeTabId === undefined ||
         nativeBusy ||
+        nativeInFlight.current ||
         curtainOn
       ) {
         return;
       }
-      sendToBoundTab({ type: "SUPPRESS_NATIVE_FOCUS_TRACK" });
-      void chrome.runtime
-        .sendMessage({
-          type: "NATIVE_ACT",
-          tabId: nativeTreeTabId,
-          nodeId,
-          action: "focus",
-          silent: true,
-        })
-        .catch(() => {});
+      const tabId = nativeTreeTabId;
+      const seq = ++nativeFocusFollowSeq.current;
+      const suppress = (active: boolean) =>
+        new Promise<void>((resolve) =>
+          sendToBoundTab(
+            { type: "SUPPRESS_NATIVE_FOCUS_TRACK", payload: { seq, active } },
+            () => {
+              void chrome.runtime.lastError;
+              resolve();
+            },
+          ),
+        );
+      void (async () => {
+        await suppress(true);
+        try {
+          if (nativeInFlight.current) return;
+          await chrome.runtime
+            .sendMessage({
+              type: "NATIVE_ACT",
+              tabId,
+              nodeId,
+              action: "focus",
+              silent: true,
+              ...(nativeTreeUrl !== undefined
+                ? { expectUrl: nativeTreeUrl }
+                : {}),
+            })
+            .catch(() => {});
+        } finally {
+          await suppress(false);
+        }
+      })();
     },
-    [nativeModeEnabled, nativeTreeTabId, nativeBusy, curtainOn, sendToBoundTab],
+    [
+      nativeModeEnabled,
+      nativeTreeTabId,
+      nativeTreeUrl,
+      nativeBusy,
+      curtainOn,
+      sendToBoundTab,
+    ],
   );
 
   const handleNativeActivate = useCallback(

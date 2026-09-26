@@ -157,6 +157,10 @@ export function NativeTreeView({
 }: NativeTreeViewProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Bumped by an explicit gesture that re-selects a row — a click, or a pick
+  // reveal — so the page-focus follow below re-fires even when `selectedId`
+  // is already that row (focus may have moved elsewhere on the page since).
+  const [followNonce, setFollowNonce] = useState(0);
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<RoleFilter>(null);
   const treeRef = useRef<HTMLDivElement>(null);
@@ -215,6 +219,7 @@ export function NativeTreeView({
       return next;
     });
     setSelectedId(nodeId);
+    setFollowNonce((n) => n + 1);
     // Clearing the role filter above swaps `FilteredListView` back for the
     // actual tree — an async Preact re-render, not something the
     // `setRoleFilter(null)` call itself finishes — so `treeRef.current` is
@@ -344,7 +349,8 @@ export function NativeTreeView({
   // on every such change and refired a focus dispatch for the SAME row —
   // concretely, selecting a button, activating it, and having the resulting
   // dialog's own autofocus get immediately stolen back once `nativeBusy`
-  // cleared. This effect must fire only when the SELECTION itself changes.
+  // cleared. This effect must fire only when the SELECTION itself changes —
+  // or when `followNonce` says a gesture re-selected the same row.
   const onSelectionFocusRef = useRef(onSelectionFocus);
   onSelectionFocusRef.current = onSelectionFocus;
   useEffect(() => {
@@ -353,7 +359,7 @@ export function NativeTreeView({
       onSelectionFocusRef.current?.(selectedId);
     }, 150);
     return () => clearTimeout(timer);
-  }, [selectedId]);
+  }, [selectedId, followNonce]);
 
   const toggle = useCallback((id: string) => {
     setExpanded((prev) => {
@@ -681,6 +687,7 @@ export function NativeTreeView({
                     onClick={(e) => {
                       e.stopPropagation();
                       setSelectedId(id);
+                      setFollowNonce((n) => n + 1);
                       // A mouse click on the row never moves real DOM focus (the
                       // row itself is tabIndex=-1; only the `.sn-tree` container
                       // is focusable, per the roving-focus/aria-activedescendant

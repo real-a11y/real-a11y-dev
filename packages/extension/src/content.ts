@@ -54,16 +54,14 @@ function getLiveExtractor(): LiveTreeExtractor {
 let focusTrackerEnabled = false;
 let curtainVisible = false; // whether the screen curtain is currently on
 
-// See SUPPRESS_NATIVE_FOCUS_TRACK's own comment in types.ts for why this is
-// a bounded deadline rather than a matched set/clear pair. Re-armed (pushed
-// forward, never stacked/counted) on every native focus dispatch, so
-// overlapping dispatches from fast successive selections stay safe without
-// needing reference counting. 800ms is generous headroom over the dogfood
-// log's own measured ~64ms average attach+resolve+focus round trip — a false
-// negative here (an unrelated real focus change landing inside the window by
-// sheer bad timing) just misses one reverse-focus-sync update, never a wrong
-// permanent state.
-let nativeFocusSuppressUntil = 0;
+// Armed by SUPPRESS_NATIVE_FOCUS_TRACK (see its comment in types.ts): drops
+// exactly ONE focusin — the one the native dispatch causes — then disarms.
+// The panel releases it explicitly once the dispatch returns (`seq` must
+// match, so a late release from an older dispatch can't disarm a newer one),
+// and the deadline only bounds the case where that release never arrives.
+// Without the one-shot and the release, every genuine user focus change for
+// the whole window would be swallowed too.
+let nativeFocusSuppress: { seq: number; until: number } | null = null;
 const NATIVE_FOCUS_SUPPRESS_MS = 800;
 const elementRefs = getElementRefs();
 const dispatcher = new ActionDispatcher(elementRefs);
@@ -295,7 +293,15 @@ chrome.runtime.onMessage.addListener(
       }
 
       case "SUPPRESS_NATIVE_FOCUS_TRACK": {
-        nativeFocusSuppressUntil = Date.now() + NATIVE_FOCUS_SUPPRESS_MS;
+        const { seq, active } = message.payload;
+        if (active) {
+          nativeFocusSuppress = {
+            seq,
+            until: Date.now() + NATIVE_FOCUS_SUPPRESS_MS,
+          };
+        } else if (nativeFocusSuppress?.seq === seq) {
+          nativeFocusSuppress = null;
+        }
         sendResponse({ success: true });
         break;
       }
@@ -395,7 +401,11 @@ chrome.runtime.onMessage.addListener(
 // Reverse focus sync: page focus → tree selection
 document.addEventListener("focusin", (e) => {
   if (focusingFromTree) return;
-  if (Date.now() < nativeFocusSuppressUntil) return;
+  if (nativeFocusSuppress) {
+    const live = Date.now() < nativeFocusSuppress.until;
+    nativeFocusSuppress = null;
+    if (live) return;
+  }
   if (!focusTrackerEnabled) return;
   if (curtainVisible) return;
 

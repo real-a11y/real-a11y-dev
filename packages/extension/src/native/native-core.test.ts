@@ -650,6 +650,21 @@ describe("in-page actions — focus", () => {
     expect(on(pageFocus, el)).toEqual({ ok: false, reason: "not-focusable" });
     expect(document.activeElement).not.toBe(el);
   });
+
+  it("reports success for a control inside a shadow root", () => {
+    // Regression (Devin Review, second round): inside a shadow tree
+    // `document.activeElement` is the HOST, so checking it reported
+    // `not-focusable` for a focus that had in fact succeeded.
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const shadow = host.attachShadow({ mode: "open" });
+    const button = document.createElement("button");
+    shadow.appendChild(button);
+
+    expect(on(pageFocus, button)).toEqual({ ok: true });
+    expect(shadow.activeElement).toBe(button);
+    expect(document.activeElement).toBe(host);
+  });
 });
 
 describe("in-page actions — type", () => {

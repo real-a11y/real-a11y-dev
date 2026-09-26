@@ -200,14 +200,18 @@ export type PanelToContent =
   // focusNativeSelectionOnPage) is about to move real page focus over
   // chrome.debugger — a real `focusin` event, indistinguishable to this
   // content script from a genuine user-driven one, that the reverse
-  // focus-sync listener below would otherwise re-highlight and scroll to,
-  // fighting the `preventScroll` the native dispatch already passed. A
-  // bounded window, not a matched set/clear: the actual `.focus()` call
-  // happens asynchronously inside the page via a separate chrome.debugger
-  // round trip this content script has no visibility into, so there is no
-  // single request/response pair to wrap the way the DOM tree's own
-  // `HIGHLIGHT_NODE` path wraps its in-process `.focus()` call.
-  | (BoundTab & { type: "SUPPRESS_NATIVE_FOCUS_TRACK" })
+  // focus-sync listener would otherwise re-highlight and scroll to, fighting
+  // the `preventScroll` the native dispatch already passed. The `.focus()`
+  // itself happens inside the page over a separate chrome.debugger round
+  // trip, so there is no in-process call to wrap the way the DOM tree's own
+  // `HIGHLIGHT_NODE` path wraps its `.focus()`: the panel arms it
+  // (`active: true`) before dispatching and releases it (`active: false`,
+  // same `seq`) once the dispatch returns. Broadcast to every frame — the
+  // focused element may live in a subframe with its own listener.
+  | (BoundTab & {
+      type: "SUPPRESS_NATIVE_FOCUS_TRACK";
+      payload: { seq: number; active: boolean };
+    })
   // Start/stop the (expensive) live tree observation in the content script.
   // Driven by the panel's connect/disconnect the same way SET_FOCUS_TRACKER
   // is, so a page whose panel was never opened does no observing at all.
