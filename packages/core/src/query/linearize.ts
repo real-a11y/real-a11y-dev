@@ -48,15 +48,18 @@ export function linearize(
     // DOM view keeps the subtree. Inherit it, so a node inside one is never
     // "exposed" here. (The a11y view already pruned these subtrees.)
     const ariaHidden =
-      underAriaHidden || node.dom?.attributes?.["aria-hidden"] === "true";
-    const exposed = node.a11y.isExposedToAT && !ariaHidden;
-    // `dom.isHidden` alone means "not visible", which includes sr-only
-    // content AT reads; skipping on it dropped e.g. GitHub's visually hidden
-    // "Navigation Menu" heading from outlines, snapshots and audits.
-    const skipHidden =
-      !includeHidden && node.dom?.isHidden === true && !exposed;
-    const skipAT = !includeNotExposed && !exposed;
-    if (!skipHidden && !skipAT) out.push(node);
+      underAriaHidden || node.dom?.attributes["aria-hidden"] === "true";
+    // Anything AT reaches is kept, including sr-only content: `dom.isHidden`
+    // alone means "not visible", and skipping on it dropped e.g. GitHub's
+    // visually hidden "Navigation Menu" heading from outlines, snapshots and
+    // audits. What AT can't reach is kept only when asked for, and a node that
+    // is also not visible only with `includeHidden`.
+    if (
+      (node.a11y.isExposedToAT && !ariaHidden) ||
+      (includeNotExposed && (includeHidden || !node.dom?.isHidden))
+    ) {
+      out.push(node);
+    }
     for (const childId of node.childIds) visit(childId, ariaHidden);
   };
 

@@ -62,6 +62,17 @@ function matches(
 }
 
 /**
+ * The nodes a role query searches, in document order: only what AT can reach,
+ * unless `includeHidden`. Both flags are set explicitly because `linearize`
+ * defaults `includeNotExposed` to true, and passing the unset option straight
+ * through kept every AT-hidden node, contrary to `includeHidden`'s docs.
+ */
+function searchable(input: QueryInput, options: FindByRoleOptions) {
+  const all = options.includeHidden === true;
+  return linearize(input, { includeHidden: all, includeNotExposed: all });
+}
+
+/**
  * Find the first node in document order with the given ARIA role.
  * Returns `null` if no node matches.
  */
@@ -70,17 +81,10 @@ export function findByRole(
   role: string,
   options: FindByRoleOptions = {},
 ): SemanticNode | null {
-  const visible = linearize(input, {
-    includeHidden: options.includeHidden,
-    // `?? false`, not a bare pass-through: `linearize` defaults
-    // `includeNotExposed` to true, so an unset option kept every node hidden
-    // from AT, contrary to `includeHidden`'s documented default.
-    includeNotExposed: options.includeHidden ?? false,
-  });
-  for (const node of visible) {
-    if (matches(node, role, options)) return node;
-  }
-  return null;
+  return (
+    searchable(input, options).find((node) => matches(node, role, options)) ??
+    null
+  );
 }
 
 /** Find every node with the given ARIA role, in document order. */
@@ -89,12 +93,7 @@ export function findAllByRole(
   role: string,
   options: FindByRoleOptions = {},
 ): SemanticNode[] {
-  const visible = linearize(input, {
-    includeHidden: options.includeHidden,
-    // `?? false`, not a bare pass-through: `linearize` defaults
-    // `includeNotExposed` to true, so an unset option kept every node hidden
-    // from AT, contrary to `includeHidden`'s documented default.
-    includeNotExposed: options.includeHidden ?? false,
-  });
-  return visible.filter((node) => matches(node, role, options));
+  return searchable(input, options).filter((node) =>
+    matches(node, role, options),
+  );
 }
