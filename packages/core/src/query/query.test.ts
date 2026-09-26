@@ -176,6 +176,42 @@ describe("screen-reader-only content", () => {
     ).toBe(true);
   });
 
+  // The DOM view keeps an aria-hidden subtree and records exposure per
+  // element, so a heading inside one still reads `isExposedToAT: true`. No
+  // descendant can escape an aria-hidden ancestor, so the walk inherits it.
+  it("leaves out an sr-only heading inside an aria-hidden ancestor", () => {
+    using page = attached(`
+      <div aria-hidden="true"><h2 style="${SR_ONLY}">Private</h2></div>
+      <h2>Shown</h2>
+    `);
+    expect(getOutline(page.tree).map((e) => e.name)).toEqual(["Shown"]);
+  });
+
+  it("does not find an aria-hidden heading by default", () => {
+    using page = attached(
+      `<h2 aria-hidden="true">Decorative</h2><h2>Shown</h2>`,
+    );
+    expect(findAllByRole(page.tree, "heading").map((n) => n.a11y.name)).toEqual(
+      ["Shown"],
+    );
+    expect(findByRole(page.tree, "heading")?.a11y.name).toBe("Shown");
+  });
+
+  it("does not find a visible heading inside an aria-hidden ancestor", () => {
+    using page = attached(`
+      <div aria-hidden="true"><h2>Behind a modal</h2></div>
+      <h2>Shown</h2>
+    `);
+    expect(findAllByRole(page.tree, "heading").map((n) => n.a11y.name)).toEqual(
+      ["Shown"],
+    );
+    expect(
+      findAllByRole(page.tree, "heading", { includeHidden: true }).map(
+        (n) => n.a11y.name,
+      ),
+    ).toEqual(["Behind a modal", "Shown"]);
+  });
+
   it("still leaves out visibility:hidden and aria-hidden headings", () => {
     using page = attached(`
       <h2 style="visibility:hidden">Invisible</h2>

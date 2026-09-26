@@ -72,7 +72,10 @@ export function findByRole(
 ): SemanticNode | null {
   const visible = linearize(input, {
     includeHidden: options.includeHidden,
-    includeNotExposed: options.includeHidden,
+    // `?? false`, not a bare pass-through: `linearize` defaults
+    // `includeNotExposed` to true, so an unset option kept every node hidden
+    // from AT, contrary to `includeHidden`'s documented default.
+    includeNotExposed: options.includeHidden ?? false,
   });
   for (const node of visible) {
     if (matches(node, role, options)) return node;
@@ -88,7 +91,10 @@ export function findAllByRole(
 ): SemanticNode[] {
   const visible = linearize(input, {
     includeHidden: options.includeHidden,
-    includeNotExposed: options.includeHidden,
+    // `?? false`, not a bare pass-through: `linearize` defaults
+    // `includeNotExposed` to true, so an unset option kept every node hidden
+    // from AT, contrary to `includeHidden`'s documented default.
+    includeNotExposed: options.includeHidden ?? false,
   });
   return visible.filter((node) => matches(node, role, options));
 }
