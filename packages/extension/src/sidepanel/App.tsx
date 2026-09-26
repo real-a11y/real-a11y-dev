@@ -1731,6 +1731,47 @@ export function App() {
     ],
   );
 
+  /**
+   * Best-effort follow: the user settled on a new selection in the native
+   * tree (`NativeTreeView`'s own debounced `onSelectionFocus`) — move real
+   * page focus there, the same simultaneous visible indicator (real
+   * browser focus ring + the panel's own selected row) the DOM tree's
+   * `handleSelect` already gives for free by calling `element.focus()`
+   * in-process.
+   *
+   * Deliberately NOT `dispatchNativeAction`: that helper sets `nativeBusy`,
+   * waits `NATIVE_SETTLE_MS` and re-reads the whole tree afterward — right
+   * for a user-initiated act (a click can open a menu, re-render a list),
+   * wrong for a background follow that fires on every settled selection
+   * and must never flash a busy state or reset expand/scroll position over
+   * a plain arrow-key move. Skips while a real action is already busy
+   * (`nativeBusy`), rather than queueing behind it — the effect that calls
+   * this only fires again on a NEW selection, so a focus-follow dropped
+   * here is simply not retried for the same selection once busy clears; an
+   * accepted gap, not a correctness issue.
+   *
+   * A failure (a stale/backendDOMNodeId invalidated by a navigation, an
+   * element that turned out not to be focusable) is silent — this is a
+   * visual aid, not a dispatched action the user is waiting on or would
+   * want an error banner for.
+   */
+  const focusNativeSelectionOnPage = useCallback(
+    (nodeId: string) => {
+      if (!nativeModeEnabled || nativeTreeTabId === undefined || nativeBusy) {
+        return;
+      }
+      void chrome.runtime
+        .sendMessage({
+          type: "NATIVE_ACT",
+          tabId: nativeTreeTabId,
+          nodeId,
+          action: "focus",
+        })
+        .catch(() => {});
+    },
+    [nativeModeEnabled, nativeTreeTabId, nativeBusy],
+  );
+
   const handleNativeActivate = useCallback(
     (
       node: NativeNode,
@@ -2806,6 +2847,7 @@ export function App() {
           }}
           onActivate={handleNativeActivate}
           reveal={nativePickReveal}
+          onSelectionFocus={focusNativeSelectionOnPage}
         />
       ) : viewMode === "tab" ? (
         /* ---- Tab sequence view ---- */

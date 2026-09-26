@@ -203,6 +203,8 @@ Once you've accepted that consent step, native mode defaults to on for the first
 
 **Pick element** (the toolbar `⦿` button, or `Ctrl`/`Cmd`+`Shift`+`C`) works under native mode too, once a native tree is loaded. It goes through a different mechanism than the DOM producer's own picker — there's no content script in native mode to install a page-side click handler, so this arms Chromium's own inspect-element mode (the same one DevTools' "select an element" tool uses) for the length of the pick, and turns it off again the moment you click something or press `Escape`. The rest of the experience matches: a click selects and reveals the corresponding row in the tree.
 
+Selecting a row also matches the DOM producer now: clicking one, arrow-navigating to it, or a pick's own reveal moves real focus to the page's matching element — the same simultaneous visible indicator (the page's own focus ring, plus the highlighted row in the panel) that DOM mode already gives, dispatched over `chrome.debugger` a moment after the selection settles rather than on every intermediate row a fast arrow-key run passes through. What DOM mode still does that native doesn't: a highlight overlay while merely hovering a row (no selection) — native mode has no page-side effect for that yet.
+
 ### BETA pill in the panel header
 
 Sets expectations during the pre-1.0 phase. Linked to the GitHub issues page. Goes away at v1.0.

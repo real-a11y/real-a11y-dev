@@ -251,6 +251,66 @@ test("clicking a row gives the tree its own focus-visible outline", async ({
   await expect(nav.panel.locator(".sn-tree")).toBeFocused();
 });
 
+test("selecting a native tree row moves real focus onto the page's own element", async ({
+  nav,
+}) => {
+  // Native has no content script to run a `HIGHLIGHT_NODE`-style handler in
+  // — `NativeTreeView`'s own selection has never had any effect on the real
+  // page before this, unlike the DOM tree's `handleSelect`. This pins the
+  // fix: selecting a row dispatches a native `focus` action over
+  // `chrome.debugger`, so the panel's selected row and the real page's own
+  // focus ring become visible at the same time, matching the DOM producer.
+  const page = await showNative(nav, "native-panel.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+
+  const row = nav.panel.getByRole("treeitem", { name: "Item 16" });
+  await expect(row).toBeVisible();
+  await row.click({ position: { x: 5, y: 5 } });
+
+  // Debounced (150ms) on the panel side, then a real chrome.debugger
+  // attach→resolve→focus→detach round trip — poll rather than assert once.
+  await expect
+    .poll(() => page.evaluate(() => document.activeElement?.id), {
+      timeout: 5_000,
+    })
+    .toBe("item-16");
+});
+
+test("selecting a native tree row via the keyboard only focuses the row the selection settles on", async ({
+  nav,
+}) => {
+  // Same debounce the unit tests pin directly against `NativeTreeView`'s own
+  // effect — this is the end-to-end proof: arrow-key repeat walking through
+  // several rows must not leave the real page's focus trailing behind on an
+  // intermediate row, or racing multiple concurrent chrome.debugger attaches
+  // for rows the user already navigated past.
+  const page = await showNative(nav, "native-panel.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+
+  // "Item 2", not "Item 1": every "Item 1" role-name query also matches
+  // "Item 10".."Item 16" (substring), same reason the click test above
+  // anchors on "Item 16" rather than "Item 1".
+  const start = nav.panel.getByRole("treeitem", { name: "Item 2" });
+  await expect(start).toBeVisible();
+  await start.click({ position: { x: 5, y: 5 } });
+
+  // Walk down three rows in quick succession, well inside the 150ms debounce
+  // window between each keystroke.
+  await nav.panel.locator(".sn-tree").press("ArrowDown");
+  await nav.panel.locator(".sn-tree").press("ArrowDown");
+  await nav.panel.locator(".sn-tree").press("ArrowDown");
+
+  await expect
+    .poll(() => page.evaluate(() => document.activeElement?.id), {
+      timeout: 5_000,
+    })
+    .toBe("item-5");
+  // Never landed on the starting row along the way.
+  expect(await page.evaluate(() => document.activeElement?.id)).not.toBe(
+    "item-2",
+  );
+});
+
 test("a failed Enable attempt surfaces its error inline and never flips the setting", async ({
   nav,
 }) => {

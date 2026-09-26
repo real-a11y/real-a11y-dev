@@ -101,6 +101,14 @@ export interface NativeTreeViewProps {
     ancestorIds?: string[];
     nonce: number;
   };
+  /**
+   * Best-effort: the user settled on this node id as the tree's selection
+   * (click, arrow-key nav, pick-reveal, or the filtered list's "go to
+   * tree") — App.tsx moves real page focus there, mirroring what the DOM
+   * tree's own row selection already does. Optional so a test/host that
+   * doesn't care about page-side effects can omit it.
+   */
+  onSelectionFocus?: (nodeId: string) => void;
 }
 
 /** A node is worth a click/Enter action, a select action, or both never — the
@@ -145,6 +153,7 @@ export function NativeTreeView({
   onRefresh,
   onActivate,
   reveal,
+  onSelectionFocus,
 }: NativeTreeViewProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -311,6 +320,25 @@ export function NativeTreeView({
     }
     scrollToIndex(index, "nearest");
   }, [selectedId, visibleIds, scrollToIndex]);
+
+  // Best-effort: follow the selection onto the real page, the same visible
+  // indicator the DOM tree's own row selection already gives — a native
+  // node has no light-DOM element this component can call `.focus()` on
+  // directly, so it hands the id up to App.tsx, which dispatches a native
+  // `focus` action over `chrome.debugger` (see that callback's own comment
+  // for why it's a plain fire-and-forget, not the heavier action pipeline).
+  //
+  // Debounced, deliberately: every branch of handleKeyDown below can walk
+  // `selectedId` through several rows within one key-repeat burst, and each
+  // dispatch is a real attach→resolve→focus→detach round trip — firing one
+  // per intermediate row would queue that whole cycle behind a selection the
+  // user has already moved past. Only the row they actually settle on gets
+  // the real page's focus.
+  useEffect(() => {
+    if (!selectedId || !onSelectionFocus) return;
+    const timer = setTimeout(() => onSelectionFocus(selectedId), 150);
+    return () => clearTimeout(timer);
+  }, [selectedId, onSelectionFocus]);
 
   const toggle = useCallback((id: string) => {
     setExpanded((prev) => {
