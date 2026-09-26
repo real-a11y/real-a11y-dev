@@ -350,6 +350,57 @@ describe("NativeTreeView selection-focus follow", () => {
     expect(first).toHaveBeenCalledTimes(1);
   });
 
+  it("re-fires when a click re-selects the row that's already selected", () => {
+    // Page focus may have moved elsewhere since the first follow; clicking
+    // the same row again is an explicit request to go back to it — the DOM
+    // tree's own `handleSelect` re-highlights on every click, same row or not.
+    const onSelectionFocus = mountWithFocusFollow();
+    act(() => row("h1").click());
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    act(() => row("h1").click());
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(onSelectionFocus).toHaveBeenCalledTimes(2);
+    expect(onSelectionFocus).toHaveBeenLastCalledWith("h1");
+  });
+
+  it("re-fires when a pick reveals the row that's already selected", () => {
+    // Regression (Devin Review, second round): `selectedId` doesn't change
+    // for a repeat pick of the selected row, so keying on it alone skipped
+    // the follow and left page focus wherever it had moved in between.
+    const onSelectionFocus = vi.fn();
+    const mountWith = (nonce: number) =>
+      act(() => {
+        render(
+          <NativeTreeView
+            nodes={NODES}
+            rootId="root"
+            busy={false}
+            capability={undefined}
+            status=""
+            onRefresh={() => {}}
+            onActivate={() => {}}
+            onSelectionFocus={onSelectionFocus}
+            reveal={{ nodeId: "link", nonce }}
+          />,
+          container,
+        );
+      });
+    mountWith(1);
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    mountWith(2);
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(onSelectionFocus).toHaveBeenCalledTimes(2);
+    expect(onSelectionFocus).toHaveBeenLastCalledWith("link");
+  });
+
   it("never calls onSelectionFocus when nothing is selected", () => {
     const onSelectionFocus = mountWithFocusFollow();
     act(() => {
