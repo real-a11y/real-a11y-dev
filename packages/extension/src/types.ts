@@ -196,18 +196,19 @@ export type PanelToContent =
       };
     })
   | (BoundTab & { type: "SET_FOCUS_TRACKER"; payload: { enabled: boolean } })
-  // The native tree's own selection-focus follow (App.tsx's
-  // focusNativeSelectionOnPage) is about to move real page focus over
-  // chrome.debugger — a real `focusin` event, indistinguishable to this
-  // content script from a genuine user-driven one, that the reverse
-  // focus-sync listener would otherwise re-highlight and scroll to, fighting
-  // the `preventScroll` the native dispatch already passed. The `.focus()`
-  // itself happens inside the page over a separate chrome.debugger round
-  // trip, so there is no in-process call to wrap the way the DOM tree's own
-  // `HIGHLIGHT_NODE` path wraps its `.focus()`: the panel arms it
-  // (`active: true`) before dispatching and releases it (`active: false`,
-  // same `seq`) once the dispatch returns. Broadcast to every frame — the
-  // focused element may live in a subframe with its own listener.
+  // Sent by the SERVICE WORKER (native/index.ts, NATIVE_ACT's `reveal`
+  // branch), not the panel, around a native `reveal` dispatch. That dispatch
+  // moves real page focus over chrome.debugger — a real `focusin`,
+  // indistinguishable here from a user-driven one, which the reverse
+  // focus-sync listener would otherwise re-highlight and scroll to. The
+  // `.focus()` happens inside the page over a separate chrome.debugger call,
+  // so there is no in-process call to wrap the way the DOM tree's own
+  // `HIGHLIGHT_NODE` path wraps its `.focus()`: armed (`active: true`)
+  // before the dispatch, released (`active: false`, same `seq`) after.
+  // Fanned out to every frame — the element may live in a subframe with its
+  // own listener. While armed, it is also the only window in which
+  // `content.ts` honors the `real-a11y:native-reveal` DOM event and draws
+  // its overlay.
   | (BoundTab & {
       type: "SUPPRESS_NATIVE_FOCUS_TRACK";
       payload: { seq: number; active: boolean };

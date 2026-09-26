@@ -18,13 +18,12 @@
 
 ## Unreleased
 
-- Selecting a row in the native tree now moves real focus to the matching
-  element on the page, the same simultaneous visible indicator (a real
-  browser focus ring on the page, plus the highlighted row in the panel) the
-  DOM tree's own selection already gave. Clicking a row, arrow-key
-  navigation, and a native pick's reveal all follow — debounced, so a fast
-  arrow-key run through several rows only moves the page's focus to the row
-  you actually settle on.
+- Selecting a row in the native tree now shows you where it is on the page.
+  The matching element is outlined and scrolled into view, with the same
+  overlay the DOM tree's own selection draws, and real focus moves there too.
+  Clicking a row, arrow-key navigation and a native pick all follow. It is
+  debounced, so a fast arrow-key run through several rows only lands on the
+  row you actually stop at.
   ([#412](https://github.com/real-a11y/real-a11y-dev/pull/412))
 
 - Stop telling the extension which page you are on when you are not using it.

@@ -9,6 +9,7 @@ import {
   pageClick,
   pageFocus,
   pageReadValue,
+  pageReveal,
   pageSelectOption,
   pageStep,
   pageType,
@@ -651,6 +652,33 @@ describe("in-page actions — focus", () => {
     expect(document.activeElement).not.toBe(el);
   });
 
+  it("reveal asks the content script for its overlay, then focuses without scrolling", () => {
+    // Regression (user report on PR #412): real focus alone showed nothing —
+    // Chromium paints no focus ring while the side panel, not the page, has
+    // window focus. The visible indicator is the content script's overlay,
+    // requested through this DOM event.
+    const el = document.createElement("button");
+    document.body.appendChild(el);
+    const events: Event[] = [];
+    document.addEventListener("real-a11y:native-reveal", (e) => events.push(e));
+    const focusSpy = vi.spyOn(el, "focus");
+
+    expect(on(pageReveal, el)).toEqual({ ok: true });
+    expect(events).toHaveLength(1);
+    expect(events[0]!.target).toBe(el);
+    expect(focusSpy).toHaveBeenCalledExactlyOnceWith({ preventScroll: true });
+  });
+
+  it("reveal still asks for the overlay on a heading that can't take focus", () => {
+    document.body.innerHTML = "<h2>Shipping</h2>";
+    const el = document.querySelector("h2") as Element;
+    const events: Event[] = [];
+    document.addEventListener("real-a11y:native-reveal", (e) => events.push(e));
+
+    expect(on(pageReveal, el)).toEqual({ ok: true });
+    expect(events).toHaveLength(1);
+  });
+
   it("reports success for a control inside a shadow root", () => {
     // Regression (Devin Review, second round): inside a shadow tree
     // `document.activeElement` is the HOST, so checking it reported
@@ -1170,6 +1198,9 @@ describe("in-page action source", () => {
     }
     // The composite list must live inside the click body, not hoisted.
     expect(IN_PAGE_ACTION_SOURCE.click).toContain("treeitem");
+    // The reveal event name is a literal inside the body — `content.ts`
+    // listens for the identical string.
+    expect(IN_PAGE_ACTION_SOURCE.reveal).toContain("real-a11y:native-reveal");
     // The sensitive-token list must live inside pageReadValue's own body too.
     expect(String(pageReadValue)).toContain("cc-number");
   });

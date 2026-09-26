@@ -281,6 +281,12 @@ describe("content: native focus-follow suppresses the reverse focus-sync", () =>
     // `vi.resetModules()` layers a second listener on top of it.
     h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: false } });
     h.send({ type: "SET_OBSERVING", payload: { enabled: false } });
+    // Same leak, other listener: a suppression this test left armed would
+    // let its still-attached reveal listener draw during a later test. One
+    // focusin consumes the one-shot, and the overlay hangs off
+    // `documentElement`, which the `body` reset below doesn't reach.
+    document.body.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    document.getElementById("__sn-highlight")?.remove();
     vi.clearAllTimers();
     vi.useRealTimers();
     delete (globalThis as { chrome?: unknown }).chrome;
@@ -353,6 +359,45 @@ describe("content: native focus-follow suppresses the reverse focus-sync", () =>
     focusTarget();
 
     expect(reported()).toBe(0);
+  });
+
+  function reveal(): void {
+    document.getElementById("target")!.dispatchEvent(
+      new CustomEvent("real-a11y:native-reveal", {
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
+  function overlay(): HTMLElement | null {
+    return document.getElementById("__sn-highlight");
+  }
+
+  it("draws the highlight overlay for a native reveal while a follow is armed", () => {
+    // Regression (user report on PR #412): the native follow moved real
+    // focus but showed nothing — no focus ring is painted while the side
+    // panel has window focus. The overlay is the visible indicator, the same
+    // one the DOM tree's own select draws.
+    suppress(1, true);
+    reveal();
+    expect(overlay()).not.toBeNull();
+    expect(overlay()!.style.display).toBe("block");
+  });
+
+  it("ignores a reveal event no native follow asked for", () => {
+    // The page can dispatch this event itself; it must not get to draw over
+    // or scroll the page on the extension's behalf.
+    reveal();
+    expect(overlay()).toBeNull();
+  });
+
+  it("draws no overlay while Screen Curtain is on", () => {
+    h.send({ type: "TOGGLE_CURTAIN", payload: { visible: true } });
+    suppress(1, true);
+    reveal();
+    expect(overlay()).toBeNull();
+    h.send({ type: "TOGGLE_CURTAIN", payload: { visible: false } });
   });
 
   it("resumes tracking once the deadline passes with no release", () => {

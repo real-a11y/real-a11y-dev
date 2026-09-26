@@ -377,7 +377,7 @@ export async function readNativeTree(
 
 /** Actions the native backend can dispatch. Others are refused, not guessed. */
 export type NativeAction =
-  "click" | "type" | "focus" | "increment" | "decrement" | "select";
+  "click" | "type" | "focus" | "reveal" | "increment" | "decrement" | "select";
 
 export interface NativeDispatchResult {
   success: boolean;
@@ -400,6 +400,7 @@ const SUPPORTED = new Set<NativeAction>([
   "click",
   "type",
   "focus",
+  "reveal",
   "increment",
   "decrement",
   "select",
@@ -578,6 +579,42 @@ export function pageFocus(this: Element): Marker {
   const root = focusable.getRootNode() as Document | ShadowRoot;
   if (root.activeElement !== focusable) {
     return { ok: false, reason: "not-focusable" };
+  }
+  return { ok: true };
+}
+
+/**
+ * Show the user where a selected native row lives on the page — the native
+ * tree's counterpart to the DOM tree's `HIGHLIGHT_NODE` on select.
+ *
+ * Real focus alone is not a visible indicator: Chromium paints no focus ring
+ * in a page whose window isn't focused, and while the user drives the side
+ * panel, the inspected page never is. The DOM producer's visible indicator is
+ * the content script's overlay (`FocusManager.highlightElement`), so this
+ * asks for exactly that: it fires a DOM event on the element, which crosses
+ * from this main-world call into the content script's isolated world, and
+ * the content script draws its overlay on the event's own target. Keyed to
+ * the element itself, it needs no node-id mapping between the two producers.
+ * The event name is repeated in `content.ts` — this function is serialized
+ * as source text, so it can't import a shared constant.
+ *
+ * Then moves real focus too, without scrolling (the overlay already
+ * centered it), so keyboard use resumes from here when the user returns to
+ * the page. A heading or landmark can't take focus; it still gets the
+ * overlay, so the row counts as revealed either way.
+ */
+export function pageReveal(this: Element): Marker {
+  const el = this;
+  if (!el || !el.tagName) return { ok: false, reason: "not-element" };
+  el.dispatchEvent(
+    new CustomEvent("real-a11y:native-reveal", {
+      bubbles: true,
+      composed: true,
+    }),
+  );
+  const focusable = el as HTMLElement;
+  if (typeof focusable.focus === "function") {
+    focusable.focus({ preventScroll: true });
   }
   return { ok: true };
 }
@@ -900,6 +937,7 @@ export function pageSelectOption(this: Element): Marker {
 export const IN_PAGE_ACTION_SOURCE: Record<NativeAction, string> = {
   click: String(pageClick),
   focus: String(pageFocus),
+  reveal: String(pageReveal),
   type: String(pageType),
   increment: String(pageStep),
   decrement: String(pageStep),

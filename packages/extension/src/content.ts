@@ -425,6 +425,32 @@ document.addEventListener("focusin", (e) => {
   }
 });
 
+// The native tree's selection follow asks for the same overlay the DOM
+// tree's own select draws (HIGHLIGHT_NODE → `highlightElement`, scrolled into
+// view). `pageReveal` in native/native-core.ts fires this from the page's
+// main world; DOM events reach this isolated world with the same target, so
+// the overlay lands on the exact element the native row describes. Honored
+// only while a native follow has armed SUPPRESS_NATIVE_FOCUS_TRACK: the page
+// can dispatch this event itself, and nothing unrequested may draw over or
+// scroll it.
+document.addEventListener("real-a11y:native-reveal", (e) => {
+  if (!nativeFocusSuppress || Date.now() >= nativeFocusSuppress.until) return;
+  if (curtainVisible) return;
+  // `composedPath()[0]` is the real target even inside an open shadow tree,
+  // where `e.target` has been retargeted to the host by the time it bubbles
+  // up to `document`.
+  let el = (e.composedPath()[0] ?? e.target) as Element | null;
+  while (el) {
+    const nodeId = elementRefs.findId(el);
+    if (nodeId) {
+      focusManager.highlightElement(nodeId);
+      return;
+    }
+    const root = el.getRootNode();
+    el = el.parentElement ?? (root instanceof ShadowRoot ? root.host : null);
+  }
+});
+
 // ---- Live region observer (top frame only) ----
 if (!isSubFrame) {
   let liveDebounce: ReturnType<typeof setTimeout> | null = null;

@@ -251,15 +251,58 @@ test("clicking a row gives the tree its own focus-visible outline", async ({
   await expect(nav.panel.locator(".sn-tree")).toBeFocused();
 });
 
-test("selecting a native tree row moves real focus onto the page's own element", async ({
+/**
+ * The content script's highlight overlay, as a rect — or null when absent or
+ * hidden. The overlay is what the user actually SEES: real focus alone paints
+ * no ring while the side panel, not the page, has window focus.
+ */
+async function overlayRect(page: PanelPage) {
+  return page.evaluate(() => {
+    const el = document.getElementById("__sn-highlight");
+    if (!el || el.style.display === "none") return null;
+    const r = el.getBoundingClientRect();
+    return { top: r.top, left: r.left, width: r.width, height: r.height };
+  });
+}
+
+/** An element's own rect on the page, for comparing against the overlay. */
+async function rectOf(page: PanelPage, selector: string) {
+  return page.locator(selector).evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    return { top: r.top, left: r.left, width: r.width, height: r.height };
+  });
+}
+
+/**
+ * Whether the content script's overlay sits over `selector`'s element. The
+ * overlay is `content-box` with a 2px border, so it measures up to 4px wider
+ * and taller than what it frames; it also animates between targets
+ * (`transition: all 0.15s`), so callers poll this rather than read it once.
+ */
+async function overlayCovers(page: PanelPage, selector: string) {
+  const overlay = await overlayRect(page);
+  if (!overlay) return false;
+  const target = await rectOf(page, selector);
+  const slack = 1;
+  return (
+    Math.abs(overlay.top - target.top) <= slack &&
+    Math.abs(overlay.left - target.left) <= slack &&
+    overlay.width >= target.width - slack &&
+    overlay.width <= target.width + 4 + slack &&
+    overlay.height >= target.height - slack &&
+    overlay.height <= target.height + 4 + slack
+  );
+}
+
+test("selecting a native tree row highlights and focuses the page's own element", async ({
   nav,
 }) => {
-  // Native has no content script to run a `HIGHLIGHT_NODE`-style handler in
-  // — `NativeTreeView`'s own selection has never had any effect on the real
-  // page before this, unlike the DOM tree's `handleSelect`. This pins the
-  // fix: selecting a row dispatches a native `focus` action over
-  // `chrome.debugger`, so the panel's selected row and the real page's own
-  // focus ring become visible at the same time, matching the DOM producer.
+  // Selecting a native row used to have no effect on the page at all, unlike
+  // the DOM tree's `handleSelect`. This pins both halves of the fix: the
+  // content script's overlay lands on the element (the part the user sees —
+  // a first version only moved real focus, which a user reported showed
+  // nothing, and which the old version of this test couldn't tell apart
+  // from working), and real focus follows so keyboard use resumes there.
   const page = await showNative(nav, "native-panel.html");
   await nav.panel.getByRole("button", { name: "Expand all" }).click();
 
@@ -268,12 +311,33 @@ test("selecting a native tree row moves real focus onto the page's own element",
   await row.click({ position: { x: 5, y: 5 } });
 
   // Debounced (150ms) on the panel side, then a real chrome.debugger
-  // attach→resolve→focus→detach round trip — poll rather than assert once.
+  // attach→resolve→reveal→detach round trip — poll rather than assert once.
+  await expect
+    .poll(() => overlayCovers(page, "#item-16"), { timeout: 5_000 })
+    .toBe(true);
+
   await expect
     .poll(() => page.evaluate(() => document.activeElement?.id), {
       timeout: 5_000,
     })
     .toBe("item-16");
+});
+
+test("selecting a native heading row highlights it even though it can't take focus", async ({
+  nav,
+}) => {
+  const page = await showNative(nav, "native-panel.html");
+  await nav.panel.getByRole("button", { name: "Expand all" }).click();
+
+  const row = nav.panel.getByRole("treeitem", {
+    name: /Native panel fixture/,
+  });
+  await expect(row).toBeVisible();
+  await row.click({ position: { x: 5, y: 5 } });
+
+  await expect
+    .poll(() => overlayCovers(page, "h1"), { timeout: 5_000 })
+    .toBe(true);
 });
 
 test("selecting a native tree row via the keyboard only focuses the row the selection settles on", async ({
@@ -334,6 +398,7 @@ test("selecting a native tree row never moves real focus while Screen Curtain is
   expect(await page.evaluate(() => document.activeElement?.id)).not.toBe(
     "item-16",
   );
+  expect(await overlayRect(page)).toBeNull();
 });
 
 test("a failed Enable attempt surfaces its error inline and never flips the setting", async ({
