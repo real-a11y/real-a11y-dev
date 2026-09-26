@@ -33,7 +33,7 @@
   `dialog "Delete this project?"`. So did a `<nav>`'s "Menu:" label, a
   `<textarea>`'s typed contents and a `<footer>`'s copyright line. Paragraphs,
   list items and live regions (`alert`, `status`) keep their text.
-  ([#415](https://github.com/real-a11y/real-a11y-dev/pull/415))
+  ([#416](https://github.com/real-a11y/real-a11y-dev/pull/416))
 
 - The copied heading outline and DOM tree now include visually hidden
   ("sr-only") content that screen readers read, the way NATIVE mode already
