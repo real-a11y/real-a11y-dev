@@ -26,6 +26,15 @@
   with sensitive fields masked as before.
   ([#414](https://github.com/real-a11y/real-a11y-dev/pull/414))
 
+- A dialog, image, landmark or text field no longer shows its loose text as
+  its name in DOM mode. `<div role="dialog">Delete this project?
+  <button>Cancel</button></div>` has no accessible name, as NATIVE mode and a
+  screen reader already reported, and appeared in the tree as
+  `dialog "Delete this project?"`. So did a `<nav>`'s "Menu:" label, a
+  `<textarea>`'s typed contents and a `<footer>`'s copyright line. Paragraphs,
+  list items and live regions (`alert`, `status`) keep their text.
+  ([#416](https://github.com/real-a11y/real-a11y-dev/pull/416))
+
 - The copied heading outline and DOM tree now include visually hidden
   ("sr-only") content that screen readers read, the way NATIVE mode already
   did. On a GitHub PR page, the DOM outline was missing GitHub's visually

@@ -38,12 +38,18 @@ main
         listitem "for images, for iframes"
           code "alt"
           code "title"
-    listitem "— inner text, including text inside descendants"
+    listitem "— inner text, including text inside descendants. Only for roles named from their content (buttons, links, headings, cells, options…): a dialog, image, landmark or text field is named by its author alone, never by its text"
       strong "Text content"
     listitem "attribute — last-resort fallback"
       code "title"
     listitem "Empty string (element has no accessible name)"
   paragraph "If #1 resolves to a non-empty string, #2–#5 are ignored — even if #2 looks "more specific" from a CSS or developer perspective."
+  paragraph "A paragraph, a list item, or a live region (, ) with text directly inside it shows that text as its name: , . That keeps its content visible in a snapshot, where the tree prints names and nothing else. A screen reader reads that text as the element's content, not as a label. It never applies to a dialog, image, landmark or text field."
+    strong "One thing a tree shows beyond this list."
+    code "alert"
+    code "status"
+    code "paragraph "Read the guide""
+    code "status "3 results""
   separator
   heading "Concrete examples" (level 2)
   heading "Button with only text" (level 3)
@@ -65,6 +71,18 @@ main
     code """"
     code "assertNoUnlabeledInteractive()"
     code "aria-label"
+  button "Copy Code"
+  code
+  heading "Dialog with text but no label" (level 3)
+  button "Copy Code"
+  code
+  paragraph "→ — no name. A dialog's text is its content, not its label: a screen reader announces this dialog unnamed. The same holds for an image, a landmark (, , …) and a text field, whose text is the user's value. This fails . Fix it by pointing at a visible heading:"
+    code """"
+    code "<nav>"
+    code "<form>"
+    code "<footer>"
+    code "assertDialogsLabeled()"
+    code "aria-labelledby"
   button "Copy Code"
   code
   heading "Form control with a wrapping label" (level 3)

@@ -17,7 +17,7 @@ main
     heading "Danger zone" (level 2)
     paragraph "Account ID: [REDACTED]"
     button "Delete account"
-contentinfo "© 2026 Example Inc."
+contentinfo
 `;
 
 exports[`account page — after opening the confirm dialog > scopes the a11y tree to the modal, and the modal is accessible 1`] = `

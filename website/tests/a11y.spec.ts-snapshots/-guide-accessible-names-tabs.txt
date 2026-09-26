@@ -21,6 +21,10 @@ button "Copy Code"
 generic
 button "Copy Code"
 generic
+button "Copy Code"
+generic
+button "Copy Code"
+generic
 link "Edit this page on GitHub"
 link "Previous pageAuthenticated Pages"
 link "Next pageArchitecture"

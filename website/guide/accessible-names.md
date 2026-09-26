@@ -22,11 +22,13 @@ For any element, the accessible name is picked from the **first non-empty source
    - `<fieldset><legend>` for grouped controls
    - `<caption>` for tables
    - `alt` for images, `title` for iframes
-4. **Text content** — inner text, including text inside descendants
+4. **Text content** — inner text, including text inside descendants. Only for roles named from their content (buttons, links, headings, cells, options…): a dialog, image, landmark or text field is named by its author alone, never by its text
 5. `title` attribute — last-resort fallback
 6. Empty string (element has no accessible name)
 
 If #1 resolves to a non-empty string, #2–#5 are ignored — even if #2 looks "more specific" from a CSS or developer perspective.
+
+**One thing a tree shows beyond this list.** A paragraph, a list item, or a live region (`alert`, `status`) with text directly inside it shows that text as its name: `paragraph "Read the guide"`, `status "3 results"`. That keeps its content visible in a snapshot, where the tree prints names and nothing else. A screen reader reads that text as the element's content, not as a label. It never applies to a dialog, image, landmark or text field.
 
 ---
 
@@ -65,6 +67,24 @@ If #1 resolves to a non-empty string, #2–#5 are ignored — even if #2 looks "
 <button aria-label="Close dialog">
   <svg aria-hidden="true">…</svg>
 </button>
+```
+
+### Dialog with text but no label
+
+```html
+<div role="dialog">
+  Delete this project?
+  <button>Cancel</button>
+</div>
+```
+
+→ `""` — no name. A dialog's text is its content, not its label: a screen reader announces this dialog unnamed. The same holds for an image, a landmark (`<nav>`, `<form>`, `<footer>`…) and a text field, whose text is the user's value. This fails `assertDialogsLabeled()`. Fix it by pointing `aria-labelledby` at a visible heading:
+
+```html
+<div role="dialog" aria-labelledby="delete-title">
+  <h2 id="delete-title">Delete this project?</h2>
+  <button>Cancel</button>
+</div>
 ```
 
 ### Form control with a wrapping label
