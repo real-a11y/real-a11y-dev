@@ -269,25 +269,35 @@ describe("NativeTreeView selection-focus follow", () => {
     act(() => row("h1").click());
 
     expect(onSelectionFocus).not.toHaveBeenCalled();
-    act(() => vi.advanceTimersByTime(150));
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
     expect(onSelectionFocus).toHaveBeenCalledExactlyOnceWith("h1");
   });
 
   it("only fires once for the row the selection settles on, not every intermediate one", () => {
     const onSelectionFocus = mountWithFocusFollow();
     act(() => row("h1").click());
-    act(() => vi.advanceTimersByTime(50));
+    act(() => {
+      vi.advanceTimersByTime(50);
+    });
     act(() => row("link").click());
-    act(() => vi.advanceTimersByTime(50));
+    act(() => {
+      vi.advanceTimersByTime(50);
+    });
     act(() => row("h-foot").click());
-    act(() => vi.advanceTimersByTime(150));
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
 
     expect(onSelectionFocus).toHaveBeenCalledExactlyOnceWith("h-foot");
   });
 
   it("never calls onSelectionFocus when nothing is selected", () => {
     const onSelectionFocus = mountWithFocusFollow();
-    act(() => vi.advanceTimersByTime(500));
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
     expect(onSelectionFocus).not.toHaveBeenCalled();
   });
 
@@ -308,7 +318,9 @@ describe("NativeTreeView selection-focus follow", () => {
     });
     expect(() => {
       act(() => row("h1").click());
-      act(() => vi.advanceTimersByTime(500));
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
     }).not.toThrow();
   });
 });
