@@ -6,9 +6,9 @@ area: CLI
 type: Automated
 priority: P0
 status: Active
-validFrom: "cli ≥ 0.1.0-beta.2 · mcp ≥ 0.1.0-beta.2 (both unreleased — pending changesets)"
+validFrom: "cli ≥ 0.1.0-beta.2 · mcp ≥ 0.1.0-beta.2 (both unreleased — pending changesets). Step 7 (rich-text editor): cli ≥ 0.1.0-beta.7 · mcp ≥ 0.1.0-beta.7 (unreleased)"
 validUntil: ""
-expected: "Type a sentinel secret, then grep for it in: CLI stdout, CLI stderr, --format json (the step renders = ‹hidden›), the MCP tool result, and any subsequent get_semantic_tree / audit output. Zero hits anywhere — including the FAILURE paths (bad nth, unknown role, unterminated quote, trailing input). Prove delivery separately, via a page that echoes only the value's LENGTH."
+expected: "Type a sentinel secret, then grep for it in: CLI stdout, CLI stderr, --format json (the step renders = ‹hidden›), the MCP tool result, and any subsequent get_semantic_tree / audit output. Zero hits anywhere — including the FAILURE paths (bad nth, unknown role, unterminated quote, trailing input), and including when the target is a rich-text editor that keeps the text in its own paragraph. Prove delivery separately, via a page that echoes only the value's LENGTH."
 twin: D10
 covers:
   - cli.commands.type
@@ -40,6 +40,10 @@ masking is broken — that is exactly how this shipped broken three times.
    same page
 6. Delivery proof, separately: a field whose handler writes only `value.length` into a
    heading
+7. A rich-text editor: `<div contenteditable role="textbox" aria-label="Composer"><p><br></p></div>`
+   whose `beforeinput` handler cancels the event, writes `e.data` into its own `<p>`
+   (the ProseMirror / Lexical shape), and echoes only the length. Repeat (3) and (5)
+   against `textbox "Composer"`
 
 ## Expected
 
@@ -51,6 +55,10 @@ masking is broken — that is exactly how this shipped broken three times.
   still a leak
 - (6) shows the length changed, proving the value reached the page. Redaction that also
   broke delivery would pass a naive grep
+- (7) is equally clean: the `interact` diff, `diff_tree`, `get_semantic_tree` and
+  `inspect_page` show the length change and a bare `paragraph`, never the text. Before
+  cli / mcp 0.1.0-beta.7 the diff printed `~ paragraph "<sentinel>"` — the editor's
+  paragraph took the typed text as its name
 
 ## Why this exists
 
@@ -69,6 +77,12 @@ step, not just the value.
 Worth stating plainly: our own tests shared the blind spot. Every sentinel we used
 contained no `=`. That is why the sentinel above is prescribed rather than left to the
 runner.
+
+A fourth path, found later and outside the echo entirely: the *tree*. Typing into a
+model-driven editor puts the text in the editor's own `<p>`, and the native tree named
+that paragraph with it — so `get_semantic_tree` after a clean `type_text` printed the
+secret. Every earlier target was an `<input>`, whose value never becomes a node name,
+which is why (7) exists.
 
 ## Notes
 

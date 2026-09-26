@@ -41,6 +41,9 @@ Then read a target's role + name from `real-a11y tree https://real-a11y.dev`.
 8. A slow-reacting control with `--step-settle 0`, then `--step-settle 800`
 9. `real-a11y type … --text "$SENTINEL"` into a real field, capturing stdout/stderr, then again
    with `--format json`
+10. Our site has no rich-text editor, so save **R24**'s step-7 composer page locally and run
+    `real-a11y interact ./composer.html --step "type textbox \"Composer\" = $SENTINEL"`, then
+    `real-a11y tree ./composer.html` after writing the sentinel into its paragraph (cli ≥ 0.1.0-beta.7)
 
 ## Expected
 
@@ -54,6 +57,9 @@ Then read a target's role + name from `real-a11y tree https://real-a11y.dev`.
 - **8** — the settle visibly changes what the diff catches
 - **9** — `grep -F "$SENTINEL"` finds **zero** hits in stdout, stderr or JSON (see **R24** for the
   sentinel — it must contain `=` and end in `=`)
+- **10** — zero hits again, while the diff shows the length echo changed and the tree still shows
+  `textbox "Composer"` over a bare `paragraph`. An editor's content is its value: the published
+  build must withhold it from the tree, not just from the step echo
 
 ## Why this exists
 

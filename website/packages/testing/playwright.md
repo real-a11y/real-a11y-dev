@@ -77,6 +77,7 @@ Native mode is **read-only and whole-document** for now:
 
 - `tabSequenceSnapshot()` **throws** — a native tree carries no focus/interaction data, so tab order can't be computed. Use `{ tree: "dom" }` for tab-sequence snapshots.
 - `rootSelector` scoping is **not supported** — omit it (the default `"body"` audits the whole document); passing any other selector throws up front rather than silently ignoring it.
+- **Field content is withheld.** A native tree never carries what a user typed — a text field's value, or the content of a rich-text editor (`contenteditable`, `designMode`), whose nodes keep their roles but read `[redacted]` (or unnamed, for a paragraph) where Chromium named them from the typed text. The DOM producer shows a page's own editor content as it shows an `<input>`'s value, so snapshot a composer's *draft* in `{ tree: "dom" }`.
 
 Everything else — `treeSnapshot()`, `outlineSnapshot()`, and every `assert*` method — works identically. Both producers normalize to the *same* tree model, so a snapshot's `role "name"` grammar is the same and the two trees are directly comparable.
 

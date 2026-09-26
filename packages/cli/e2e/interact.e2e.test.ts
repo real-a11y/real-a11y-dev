@@ -112,6 +112,37 @@ describe("real-a11y interact", () => {
     expect(res.stderr).toContain("‹hidden›");
   });
 
+  it("keeps what was typed into a rich-text editor out of the diff (R1)", async () => {
+    // A model-driven editor (the ProseMirror / Lexical shape) writes the text
+    // into its own paragraph — which used to promote it into the paragraph's
+    // name, so the diff printed it. It echoes only the length, as proof.
+    const EDITOR_SECRET = "api_key=sk-editor-9f2b==";
+    const EDITOR_PAGE = dataUrl(`<main>
+      <div id="ed" contenteditable="true" role="textbox" aria-label="Composer"><p><br></p></div>
+      <h3 id="len">length 0</h3>
+      <script>
+        document.getElementById("ed").addEventListener("beforeinput", (e) => {
+          e.preventDefault();
+          e.currentTarget.querySelector("p").textContent = e.data;
+          document.getElementById("len").textContent = "length " + e.data.length;
+        });
+      </script>
+    </main>`);
+    for (const format of [[], ["-q", "-f", "json"]]) {
+      const res = await runCli([
+        "interact",
+        EDITOR_PAGE,
+        ...format,
+        "--step",
+        `type textbox "Composer" = ${EDITOR_SECRET}`,
+      ]);
+      expect(res.code).toBe(0);
+      expect(res.stdout).toContain(`length ${EDITOR_SECRET.length}`);
+      expect(res.stdout).not.toContain("sk-editor");
+      expect(res.stderr).not.toContain("sk-editor");
+    }
+  });
+
   it("keeps the typed value out of --format json too", async () => {
     const res = await runCli([
       "interact",
