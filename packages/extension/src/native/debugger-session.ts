@@ -764,6 +764,26 @@ export class NativeDebuggerSession {
         // actually reported for this detach.
         reject(new Error("Target closed."));
       };
+      // A DOM.enable/Overlay.enable/Overlay.setInspectMode rejection below
+      // is a real protocol failure, not a cancellation — `finish(null)`
+      // would report it identically to an explicit STOP or the page-side
+      // Escape (`{cancelled: true}` at the call site), silently turning the
+      // picker off with no sign inspection never actually started.
+      // Rejecting instead — deliberately NOT through `rejectWith` and its
+      // fixed "Target closed." text, which `isConnectionLost` would
+      // misclassify as a connection drop — lets `attachAndRun`'s own catch
+      // apply its ordinary `command-failed` classification, same as any
+      // other native op's real command failure. The message itself never
+      // surfaces (R6): `attachAndRun` only pattern-matches it, then reduces
+      // the whole thing to the fixed `"command-failed"` tag.
+      const rejectSetupFailure = (err: unknown) => {
+        if (settled) return;
+        settled = true;
+        chrome.debugger.onEvent.removeListener(onEvent);
+        this.pickCancel.delete(tabId);
+        this.pickReject.delete(tabId);
+        reject(err instanceof Error ? err : new Error(String(err)));
+      };
       this.pickCancel.set(tabId, () => finish(null));
       this.pickReject.set(tabId, rejectWith);
       chrome.debugger.onEvent.addListener(onEvent);
@@ -786,7 +806,7 @@ export class NativeDebuggerSession {
             },
           }),
         )
-        .catch(() => finish(null));
+        .catch(rejectSetupFailure);
     }).finally(() =>
       // Best-effort: if the tab or connection is already gone this is a
       // no-op failure, same as every other cleanup call in this file.
