@@ -21,6 +21,7 @@ import {
   NATIVE_AX_DROP_WHEN_BARE,
   NATIVE_AX_EXPOSING_PROPERTIES,
   NATIVE_AX_NAME_SOURCE_ROLES,
+  NATIVE_AX_OWN_TEXT_ROLES,
 } from "./ax-vocabulary.js";
 
 /** The subset of CDP `Accessibility.AXNode` this normalizer consumes. */
@@ -88,6 +89,45 @@ function idOf(node: RawNativeAXNode): string {
 }
 
 /**
+ * The text Chromium hung DIRECTLY on `node`: its own `StaticText` children,
+ * concatenated in document order, with a `LineBreak` read as a space. The
+ * native analog of the DOM producer's direct-text name fallback, which
+ * concatenates an element's own text-node children and skips its child
+ * elements' text.
+ *
+ * This is how a paragraph that mixes plain text with inline elements keeps its
+ * words: `<p>See <a>#386</a> and <code>x</code> here.</p>` puts "See ", " and "
+ * and " here." on `StaticText` children of the paragraph, between a kept `link`
+ * and `code` — and since a node with kept children is not a leaf, the deep
+ * search below never runs for it. Chromium keeps each run's own whitespace
+ * (`"See "`, `" and "`), so plain concatenation reads right.
+ *
+ * Strictly direct: it never enters another node, dropped or kept. A kept child
+ * owns its text; a dropped wrapper (`LabelText`, a bare `generic`, an ignored
+ * span) is an element whose text the DOM producer doesn't count as direct
+ * either — and crossing into an out-of-flow one glues words, because the
+ * whitespace beside it has already collapsed.
+ *
+ * On a node with kept children it runs only for the prose roles in
+ * {@link NATIVE_AX_OWN_TEXT_ROLES}: a dialog or landmark with a loose sentence
+ * beside its buttons has no accessible name, and must keep reading that way.
+ */
+function directText(
+  node: RawNativeAXNode,
+  byId: Map<string, RawNativeAXNode>,
+): string {
+  let text = "";
+  for (const childId of node.childIds ?? []) {
+    const child = byId.get(childId);
+    if (!child || child.ignored) continue;
+    const role = child.role?.value;
+    if (role === "StaticText") text += child.name?.value ?? "";
+    else if (role === "LineBreak") text += " ";
+  }
+  return collapseWhitespace(text);
+}
+
+/**
  * Chromium often leaves a node's visible text on a `StaticText`/`LabelText`
  * descendant while the node's own name is empty — and the text is not always
  * a DIRECT child (`LabelText` usually carries no name itself; its text sits
@@ -97,11 +137,11 @@ function idOf(node: RawNativeAXNode): string {
  * descendants are never entered: their text belongs to them.
  *
  * Callers only invoke this for normalized LEAVES (no kept descendants) with
- * an empty name. That guard is what keeps deep search safe — without it a
- * container like `main` would steal the text of a dropped form label deep in
- * its subtree. It also means a `textbox` whose *value* lives in a StaticText
- * child keeps its authored label: the name is only promoted when Chromium
- * left it empty.
+ * an empty name, and only once {@link directText} found nothing. The leaf
+ * guard is what keeps deep search safe — without it a container like `main`
+ * would steal the text of a dropped form label deep in its subtree. It also
+ * means a `textbox` whose *value* lives in a StaticText child keeps its
+ * authored label: the name is only promoted when Chromium left it empty.
  */
 function promoteNameFromDroppedDescendants(
   node: RawNativeAXNode,
@@ -175,12 +215,25 @@ export function normalizeNativeAX(rawNodes: RawNativeAXNode[]): NativeAXNode[] {
   }
 
   // Name promotion is a post-pass so the leaf guard can see the normalized
-  // shape: only leaves (no kept descendants) may pull text from their
-  // dropped subtree — see promoteNameFromDroppedDescendants.
+  // shape. An unnamed leaf takes the text on its own StaticText children
+  // (directText), else the first text in its dropped subtree
+  // (promoteNameFromDroppedDescendants). A node with kept children takes its
+  // own text only if it is a prose role — see NATIVE_AX_OWN_TEXT_ROLES.
   for (const node of out) {
-    if (node.name || node.childIds.length > 0) continue;
+    if (node.name) continue;
     const raw = rawOf.get(node);
-    if (raw) node.name = promoteNameFromDroppedDescendants(raw, byId);
+    if (!raw) continue;
+    const role = raw.role?.value ?? "";
+    // A kept sectionheader/sectionfooter is name-from-author only: its loose
+    // byline is not its name — the DOM producer never names one from content.
+    if (NATIVE_AX_DROP_WHEN_BARE.has(role)) continue;
+    const isLeaf = node.childIds.length === 0;
+    if (isLeaf || NATIVE_AX_OWN_TEXT_ROLES.has(role)) {
+      node.name = directText(raw, byId);
+    }
+    if (!node.name && isLeaf) {
+      node.name = promoteNameFromDroppedDescendants(raw, byId);
+    }
   }
 
   return out;
