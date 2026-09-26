@@ -1767,6 +1767,16 @@ export function App() {
    * native mode was actually USED; an automatic follow firing on every
    * settled tree selection would inflate it with browsing, not real
    * dispatches.
+   *
+   * Also tells `content.ts` to suppress its own reverse focus-sync listener
+   * first (`SUPPRESS_NATIVE_FOCUS_TRACK`) — a Devin Review finding caught
+   * that without it, the real `focusin` event this dispatch causes on the
+   * page reaches that listener (on by default, independent of which
+   * producer the panel is showing) exactly like a genuine user-driven focus
+   * change, which re-highlights and SCROLLS to it — undoing the
+   * `preventScroll` the native dispatch itself already passed. See that
+   * message's own comment in `types.ts` for why it's a bounded window
+   * rather than a matched set/clear.
    */
   const focusNativeSelectionOnPage = useCallback(
     (nodeId: string) => {
@@ -1778,6 +1788,7 @@ export function App() {
       ) {
         return;
       }
+      sendToBoundTab({ type: "SUPPRESS_NATIVE_FOCUS_TRACK" });
       void chrome.runtime
         .sendMessage({
           type: "NATIVE_ACT",
@@ -1788,7 +1799,7 @@ export function App() {
         })
         .catch(() => {});
     },
-    [nativeModeEnabled, nativeTreeTabId, nativeBusy, curtainOn],
+    [nativeModeEnabled, nativeTreeTabId, nativeBusy, curtainOn, sendToBoundTab],
   );
 
   const handleNativeActivate = useCallback(

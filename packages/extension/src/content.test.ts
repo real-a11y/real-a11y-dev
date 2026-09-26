@@ -241,6 +241,87 @@ describe("content: panel-driven actions vs. the element picker", () => {
 });
 
 /**
+ * Regression (Devin Review, PR #412): the native tree's own selection-focus
+ * follow (App.tsx's `focusNativeSelectionOnPage`) moves real page focus over
+ * `chrome.debugger` — a real `focusin` event this content script cannot
+ * otherwise tell apart from a genuine user-driven one. Without
+ * `SUPPRESS_NATIVE_FOCUS_TRACK`, the reverse focus-sync listener below (on
+ * by default, independent of which producer the panel is showing) reacted
+ * to it and re-highlighted/scrolled to the element, fighting the
+ * `preventScroll` the native dispatch had already passed.
+ */
+describe("content: native focus-follow suppresses the reverse focus-sync", () => {
+  let h: Harness;
+  let originalScrollIntoView: typeof Element.prototype.scrollIntoView;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.resetModules();
+    // jsdom has no real layout engine, so `highlightElement`'s own
+    // `scrollIntoView` call (the exact behavior these tests exist to
+    // confirm is suppressed) has nothing to call through to.
+    originalScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function () {};
+    document.body.innerHTML = `<button id="target">Click me</button>`;
+    h = makeHarness();
+    (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
+    await import("./content.js");
+    h.send({ type: "REQUEST_TREE", payload: { viewMode: "a11y" } });
+    h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: true } });
+  });
+
+  afterEach(() => {
+    // The focusin listener hangs off `document`, same as every other
+    // listener this module arms — and unlike SET_PICK_MODE/SET_OBSERVING
+    // above, no earlier test in this file ever turned SET_FOCUS_TRACKER on,
+    // so this specific leak had nothing to expose until this describe block.
+    // Left enabled, a stale listener from THIS test still fires (and still
+    // reaches the CURRENT test's `chrome.runtime.sendMessage`, since it's
+    // read off `globalThis` at call time, not captured) once the next test's
+    // `vi.resetModules()` layers a second listener on top of it.
+    h.send({ type: "SET_FOCUS_TRACKER", payload: { enabled: false } });
+    h.send({ type: "SET_OBSERVING", payload: { enabled: false } });
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    delete (globalThis as { chrome?: unknown }).chrome;
+    document.body.innerHTML = "";
+    Element.prototype.scrollIntoView = originalScrollIntoView;
+  });
+
+  function focusTarget(): void {
+    document
+      .getElementById("target")!
+      .dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+  }
+
+  it("reports a real focus change to the panel when nothing suppressed it", () => {
+    // Baseline: the tracker itself works absent this PR's own new message.
+    h.sent.length = 0;
+    focusTarget();
+    expect(h.sent.filter((m) => m.type === "FOCUS_CHANGED")).toHaveLength(1);
+  });
+
+  it("drops a focus change that lands inside the suppression window", () => {
+    h.send({ type: "SUPPRESS_NATIVE_FOCUS_TRACK" });
+    h.sent.length = 0;
+
+    focusTarget();
+
+    expect(h.sent.filter((m) => m.type === "FOCUS_CHANGED")).toEqual([]);
+  });
+
+  it("resumes tracking once the suppression window elapses", () => {
+    h.send({ type: "SUPPRESS_NATIVE_FOCUS_TRACK" });
+    vi.advanceTimersByTime(801);
+    h.sent.length = 0;
+
+    focusTarget();
+
+    expect(h.sent.filter((m) => m.type === "FOCUS_CHANGED")).toHaveLength(1);
+  });
+});
+
+/**
  * What a frame does before any side panel connects to it.
  *
  * The content script is injected into every frame of every page the user

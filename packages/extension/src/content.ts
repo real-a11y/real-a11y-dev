@@ -53,6 +53,18 @@ function getLiveExtractor(): LiveTreeExtractor {
 // on every tab keystroke, even with no panel to receive the updates.
 let focusTrackerEnabled = false;
 let curtainVisible = false; // whether the screen curtain is currently on
+
+// See SUPPRESS_NATIVE_FOCUS_TRACK's own comment in types.ts for why this is
+// a bounded deadline rather than a matched set/clear pair. Re-armed (pushed
+// forward, never stacked/counted) on every native focus dispatch, so
+// overlapping dispatches from fast successive selections stay safe without
+// needing reference counting. 800ms is generous headroom over the dogfood
+// log's own measured ~64ms average attach+resolve+focus round trip — a false
+// negative here (an unrelated real focus change landing inside the window by
+// sheer bad timing) just misses one reverse-focus-sync update, never a wrong
+// permanent state.
+let nativeFocusSuppressUntil = 0;
+const NATIVE_FOCUS_SUPPRESS_MS = 800;
 const elementRefs = getElementRefs();
 const dispatcher = new ActionDispatcher(elementRefs);
 const focusManager = new FocusManager(elementRefs);
@@ -282,6 +294,12 @@ chrome.runtime.onMessage.addListener(
         break;
       }
 
+      case "SUPPRESS_NATIVE_FOCUS_TRACK": {
+        nativeFocusSuppressUntil = Date.now() + NATIVE_FOCUS_SUPPRESS_MS;
+        sendResponse({ success: true });
+        break;
+      }
+
       case "SET_OBSERVING": {
         if (message.payload.enabled) startObserving();
         else stopObserving();
@@ -377,6 +395,7 @@ chrome.runtime.onMessage.addListener(
 // Reverse focus sync: page focus → tree selection
 document.addEventListener("focusin", (e) => {
   if (focusingFromTree) return;
+  if (Date.now() < nativeFocusSuppressUntil) return;
   if (!focusTrackerEnabled) return;
   if (curtainVisible) return;
 

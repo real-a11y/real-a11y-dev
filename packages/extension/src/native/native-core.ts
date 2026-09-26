@@ -555,6 +555,13 @@ export function pageClick(this: Element): Marker {
  * scrolled/centered the element by other means, and a default-scroll
  * `.focus()` on top would re-snap it to a viewport edge or jump the page
  * out from under a user simply arrow-navigating the tree.
+ *
+ * Verifies the call actually moved focus before reporting success. An
+ * ordinary heading or landmark has a `.focus` method like any
+ * `HTMLElement`, but calling it without a `tabindex` never changes
+ * `document.activeElement` — the native tree includes plenty of DOM-backed
+ * nodes like that (headings, landmarks), and reporting `{ ok: true }` for a
+ * no-op would silently leave real page focus on whatever it was before.
  */
 export function pageFocus(this: Element): Marker {
   const el = this;
@@ -564,6 +571,9 @@ export function pageFocus(this: Element): Marker {
     return { ok: false, reason: "not-focusable" };
   }
   focusable.focus({ preventScroll: true });
+  if (focusable.ownerDocument.activeElement !== focusable) {
+    return { ok: false, reason: "not-focusable" };
+  }
   return { ok: true };
 }
 

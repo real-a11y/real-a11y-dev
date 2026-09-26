@@ -196,6 +196,18 @@ export type PanelToContent =
       };
     })
   | (BoundTab & { type: "SET_FOCUS_TRACKER"; payload: { enabled: boolean } })
+  // The native tree's own selection-focus follow (App.tsx's
+  // focusNativeSelectionOnPage) is about to move real page focus over
+  // chrome.debugger — a real `focusin` event, indistinguishable to this
+  // content script from a genuine user-driven one, that the reverse
+  // focus-sync listener below would otherwise re-highlight and scroll to,
+  // fighting the `preventScroll` the native dispatch already passed. A
+  // bounded window, not a matched set/clear: the actual `.focus()` call
+  // happens asynchronously inside the page via a separate chrome.debugger
+  // round trip this content script has no visibility into, so there is no
+  // single request/response pair to wrap the way the DOM tree's own
+  // `HIGHLIGHT_NODE` path wraps its in-process `.focus()` call.
+  | (BoundTab & { type: "SUPPRESS_NATIVE_FOCUS_TRACK" })
   // Start/stop the (expensive) live tree observation in the content script.
   // Driven by the panel's connect/disconnect the same way SET_FOCUS_TRACKER
   // is, so a page whose panel was never opened does no observing at all.

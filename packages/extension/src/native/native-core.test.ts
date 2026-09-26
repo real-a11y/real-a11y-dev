@@ -638,6 +638,18 @@ describe("in-page actions — focus", () => {
     const el = { tagName: "svg" } as unknown as Element;
     expect(on(pageFocus, el)).toEqual({ ok: false, reason: "not-focusable" });
   });
+
+  it("refuses a heading — it has .focus() like any HTMLElement, but no tabindex means it never actually takes focus", () => {
+    // Regression: a Devin Review finding on the panel's own selection-follow
+    // caught that this used to report { ok: true } here — the native tree
+    // includes plenty of DOM-backed nodes that are headings/landmarks, not
+    // controls, and the old version never checked whether focus() actually
+    // did anything.
+    document.body.innerHTML = "<h2>Shipping</h2>";
+    const el = document.querySelector("h2") as Element;
+    expect(on(pageFocus, el)).toEqual({ ok: false, reason: "not-focusable" });
+    expect(document.activeElement).not.toBe(el);
+  });
 });
 
 describe("in-page actions — type", () => {

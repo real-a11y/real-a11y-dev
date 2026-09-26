@@ -334,11 +334,26 @@ export function NativeTreeView({
   // per intermediate row would queue that whole cycle behind a selection the
   // user has already moved past. Only the row they actually settle on gets
   // the real page's focus.
+  //
+  // `onSelectionFocus` deliberately stays OUT of the effect's own dependency
+  // array — read through a ref instead. A Devin Review finding caught the
+  // bug this avoids: App.tsx's callback depends on `nativeBusy`/`curtainOn`,
+  // so its identity changes whenever EITHER flips, with `selectedId`
+  // completely unchanged (e.g. a native action settling after dispatch, or
+  // toggling the curtain). Listing it as a dependency re-armed the debounce
+  // on every such change and refired a focus dispatch for the SAME row —
+  // concretely, selecting a button, activating it, and having the resulting
+  // dialog's own autofocus get immediately stolen back once `nativeBusy`
+  // cleared. This effect must fire only when the SELECTION itself changes.
+  const onSelectionFocusRef = useRef(onSelectionFocus);
+  onSelectionFocusRef.current = onSelectionFocus;
   useEffect(() => {
-    if (!selectedId || !onSelectionFocus) return;
-    const timer = setTimeout(() => onSelectionFocus(selectedId), 150);
+    if (!selectedId) return;
+    const timer = setTimeout(() => {
+      onSelectionFocusRef.current?.(selectedId);
+    }, 150);
     return () => clearTimeout(timer);
-  }, [selectedId, onSelectionFocus]);
+  }, [selectedId]);
 
   const toggle = useCallback((id: string) => {
     setExpanded((prev) => {
