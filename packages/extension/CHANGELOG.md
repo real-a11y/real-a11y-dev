@@ -18,6 +18,14 @@
 
 ## Unreleased
 
+- In NATIVE mode, an image, dialog, landmark or form field that has no label
+  no longer shows its text as its name. `<span role="img">🎉</span>` read
+  `img "🎉"` and now reads a bare `img`, as Chromium names it. The same goes for
+  a text-only dialog or `<footer>`. An unlabeled text field no longer shows what
+  was typed into it as its name either; its value still shows as its value,
+  with sensitive fields masked as before.
+  ([#414](https://github.com/real-a11y/real-a11y-dev/pull/414))
+
 - The copied heading outline and DOM tree now include visually hidden
   ("sr-only") content that screen readers read, the way NATIVE mode already
   did. On a GitHub PR page, the DOM outline was missing GitHub's visually

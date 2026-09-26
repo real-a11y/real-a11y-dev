@@ -395,6 +395,14 @@ describe("author-named leaves", () => {
     }
   });
 
+  it("covers every drop-when-bare role, so a kept one never takes its byline", () => {
+    // The post-pass guard for a kept sectionheader/sectionfooter IS this
+    // table now; a role added to one list and not the other would regress it.
+    for (const role of NATIVE_AX_DROP_WHEN_BARE) {
+      expect(NATIVE_AX_AUTHOR_NAMED_ROLES.has(role)).toBe(true);
+    }
+  });
+
   it.each(AUTHOR_NAMED_LEAF_ROLES)(
     "never names a leaf %s from its own text",
     (role) => {
