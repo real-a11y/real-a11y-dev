@@ -124,9 +124,10 @@ const STATE_PROPS = new Set([
 /**
  * Roles whose accessible name, when not authored (no label / aria-label /
  * placeholder / title), Chromium derives from the control's **current value**
- * — which it emits as a `StaticText` descendant. Core's name-promotion would
- * otherwise copy that value into `a11y.name`, leaking a user's typed input
- * past the R1 gate. For these roles a *promoted* name is redacted (see
+ * — which it emits as a `StaticText` descendant. A name promoted from that
+ * would leak a user's typed input past the R1 gate. Core no longer promotes
+ * one for the field roles (see its `NATIVE_AX_AUTHOR_NAMED_ROLES`), so this is
+ * the backstop: for these roles a *promoted* name is redacted (see
  * `buildNativeTree`); an authored name is always kept.
  */
 const VALUE_BEARING_ROLES = new Set([
@@ -180,7 +181,9 @@ function cleanText(text: string): string {
  * unlabeled input's value as a StaticText child), so a promoted name would
  * leak the value. Detect the promotion (own AX name empty) for those roles and
  * drop the name. An authored name (own AX name present) is never promoted, so
- * it is kept untouched.
+ * it is kept untouched. Core already refuses to promote onto the field roles,
+ * so what this catches in practice is a role core does still name from text
+ * that carries an AX value — a `<div role="application" contenteditable>`.
  */
 function redactedName(nn: NativeAXNode, raw: RawAXNode | undefined): string {
   const authoredName = raw ? cleanText(String(raw.name?.value ?? "")) : "";

@@ -192,6 +192,12 @@ const VIDEO_PAGE = dataUrl(
 const ICON_BTN_PAGE = dataUrl(
   "<main><h1>Hi</h1><button><svg width='10' height='10'></svg></button></main>",
 );
+// Chromium names neither: an image and a dialog are named by their author only,
+// and the text inside them is not a name.
+const TEXT_ONLY_PAGE = dataUrl(
+  "<main><h1>Hi</h1><span role='img'>🎉</span>" +
+    "<div role='dialog'>Unsaved changes</div></main>",
+);
 
 describe("the native producer is the only producer (built bin)", () => {
   it("tree surfaces UA-shadow media controls no in-page walk can reach", async () => {
@@ -214,6 +220,27 @@ describe("the native producer is the only producer (built bin)", () => {
     const { code, stdout } = await runCli(["audit", ICON_BTN_PAGE]);
     expect(code).toBe(1);
     expect(stdout).toContain("no-unlabeled-interactive");
+  });
+
+  it("audit flags an image and a dialog whose only text is their content", async () => {
+    const { code, stdout } = await runCli([
+      "audit",
+      TEXT_ONLY_PAGE,
+      "--format",
+      "json",
+      "--quiet",
+    ]);
+    expect(code).toBe(1);
+    const parsed = JSON.parse(stdout) as {
+      pages: { findings: { rule: string }[] }[];
+    };
+    const rules = parsed.pages[0].findings.map((f) => f.rule);
+    expect(rules).toContain("image-alt");
+    expect(rules).toContain("dialog-labeled");
+
+    const tree = await runCli(["tree", TEXT_ONLY_PAGE]);
+    expect(tree.stdout).toMatch(/^\s*img$/m);
+    expect(tree.stdout).toMatch(/^\s*dialog$/m);
   });
 
   it("list reaches the same nodes as tree, with locators", async () => {

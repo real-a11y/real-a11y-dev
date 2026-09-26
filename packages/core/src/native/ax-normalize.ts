@@ -16,6 +16,7 @@
 
 import {
   mapNativeAXRole,
+  NATIVE_AX_AUTHOR_NAMED_ROLES,
   NATIVE_AX_DROP_ROLES,
   NATIVE_AX_DROP_UNLESS_NAMED,
   NATIVE_AX_DROP_WHEN_BARE,
@@ -111,6 +112,7 @@ function idOf(node: RawNativeAXNode): string {
  * On a node with kept children it runs only for the prose roles in
  * {@link NATIVE_AX_OWN_TEXT_ROLES}: a dialog or landmark with a loose sentence
  * beside its buttons has no accessible name, and must keep reading that way.
+ * It never runs for {@link NATIVE_AX_AUTHOR_NAMED_ROLES}, even on a leaf.
  */
 function directText(
   node: RawNativeAXNode,
@@ -139,9 +141,10 @@ function directText(
  * Callers only invoke this for normalized LEAVES (no kept descendants) with
  * an empty name, and only once {@link directText} found nothing. The leaf
  * guard is what keeps deep search safe — without it a container like `main`
- * would steal the text of a dropped form label deep in its subtree. It also
- * means a `textbox` whose *value* lives in a StaticText child keeps its
- * authored label: the name is only promoted when Chromium left it empty.
+ * would steal the text of a dropped form label deep in its subtree. Nor is it
+ * ever invoked for an author-named role (NATIVE_AX_AUTHOR_NAMED_ROLES): a
+ * `textbox` whose *value* lives in a StaticText child, or an `<svg role="img">`
+ * with a `<text>` inside, stays as unnamed as Chromium left it.
  */
 function promoteNameFromDroppedDescendants(
   node: RawNativeAXNode,
@@ -224,9 +227,11 @@ export function normalizeNativeAX(rawNodes: RawNativeAXNode[]): NativeAXNode[] {
     const raw = rawOf.get(node);
     if (!raw) continue;
     const role = raw.role?.value ?? "";
-    // A kept sectionheader/sectionfooter is name-from-author only: its loose
-    // byline is not its name — the DOM producer never names one from content.
-    if (NATIVE_AX_DROP_WHEN_BARE.has(role)) continue;
+    // Named by its author only: Chromium's empty name is the finding, and no
+    // text inside it stands in for one, leaf or not. An unlabeled
+    // `<span role="img">🎉</span>` stays a bare `img` — see
+    // NATIVE_AX_AUTHOR_NAMED_ROLES.
+    if (NATIVE_AX_AUTHOR_NAMED_ROLES.has(role)) continue;
     const isLeaf = node.childIds.length === 0;
     if (isLeaf || NATIVE_AX_OWN_TEXT_ROLES.has(role)) {
       node.name = directText(raw, byId);

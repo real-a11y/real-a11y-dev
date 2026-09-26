@@ -97,6 +97,7 @@ export {
   NATIVE_AX_ROLE_MAP,
   NATIVE_AX_NAME_SOURCE_ROLES,
   NATIVE_AX_OWN_TEXT_ROLES,
+  NATIVE_AX_AUTHOR_NAMED_ROLES,
   mapNativeAXRole,
 } from "./native/ax-vocabulary.js";
 export { normalizeNativeAX, serializeNativeAX } from "./native/ax-normalize.js";

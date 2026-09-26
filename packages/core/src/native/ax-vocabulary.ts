@@ -21,7 +21,7 @@
  */
 
 /** Bump on any table/rule change that alters normalized output. */
-export const NATIVE_AX_VOCABULARY_VERSION = 4;
+export const NATIVE_AX_VOCABULARY_VERSION = 5;
 
 /**
  * Chromium AX roles that are structural noise relative to this engine's
@@ -144,6 +144,8 @@ export const NATIVE_AX_NAME_SOURCE_ROLES: ReadonlySet<string> = new Set([
  * <button>Cancel</button></div>` has no accessible name, and the audit rules
  * (`dialog-labeled`, `image-alt`, `no-unlabeled-interactive`) read exactly that
  * emptiness. Naming them from their loose text would pass an unlabeled dialog.
+ * The ones the audit reads never take a name from text even as a leaf — see
+ * {@link NATIVE_AX_AUTHOR_NAMED_ROLES}.
  *
  * Raw Blink role strings (Chromium 151), like the other tables here.
  */
@@ -164,4 +166,55 @@ export const NATIVE_AX_OWN_TEXT_ROLES: ReadonlySet<string> = new Set([
   "subscript",
   "superscript",
   "time",
+]);
+
+/**
+ * Roles named by their author only, where Chromium's EMPTY name is the
+ * information. An image, a dialog, a landmark or a form field with no
+ * `aria-label`, `aria-labelledby`, `alt`, `<label>` or `title` is unlabeled,
+ * and the audit rules (`image-alt`, `dialog-labeled`,
+ * `no-unlabeled-interactive`) report exactly that emptiness. So none of these
+ * takes a name from the text inside it: not as a leaf, not from its direct
+ * text, not from deeper in its dropped subtree. `<span role="img">🎉</span>` is
+ * `image ""` with a `StaticText "🎉"` child, and prints as a bare `img`, not
+ * `img "🎉"`. The text is dropped with its StaticText, as it already is beside
+ * kept children: the native tree prints names, and this text is not one.
+ *
+ * The form fields are the name-from-author roles in the audit's interactive
+ * set. The text inside one is a typed value, or a `<label>` that labels
+ * nothing — never its name. Name-from-content roles (button, link, checkbox,
+ * tab…) are not here: Chromium names those from their content itself, and
+ * leaves one empty only when that content is hidden or absent.
+ *
+ * Also not here: author-named roles that no rule reads the name of, and whose
+ * text is their content — alert, status, group, article, list, tree. They
+ * keep their text as a name, which is the only place the tree keeps it.
+ *
+ * Checked against Chromium 151: each comes back unnamed with its text on a
+ * child, except `region` and `role="form"`, which Chromium does not expose at
+ * all until they are named. They are listed anyway, so a milestone that starts
+ * exposing them unnamed can't slip one past. Raw Blink role strings.
+ */
+export const NATIVE_AX_AUTHOR_NAMED_ROLES: ReadonlySet<string> = new Set([
+  "image",
+  "dialog",
+  "alertdialog",
+  // Landmarks, and HTML-AAM's scoped header/footer.
+  "banner",
+  "complementary",
+  "contentinfo",
+  "form",
+  "main",
+  "navigation",
+  "region",
+  "search",
+  "sectionheader",
+  "sectionfooter",
+  // Form fields.
+  "combobox",
+  "listbox",
+  "searchbox",
+  "slider",
+  "spinbutton",
+  "textbox",
 ]);

@@ -141,9 +141,8 @@ describe("buildNativeTree — R1: no field value ever reaches the tree", () => {
 });
 
 describe("buildNativeTree — R1: unlabeled field value must not leak via the name", () => {
-  // The fixture's inputs are all labeled, so the redaction path for an
-  // UNLABELED control (where Chromium emits the typed value as a StaticText
-  // descendant that core's name-promotion would pull into a11y.name) is not
+  // The fixture's inputs are all labeled, so an UNLABELED control (where
+  // Chromium emits the typed value as a StaticText descendant) is not
   // exercised there. This builds that exact shape explicitly.
   const TYPED_SECRET = "typed-SECRET-value";
   const raw = [
@@ -183,14 +182,15 @@ describe("buildNativeTree — R1: unlabeled field value must not leak via the na
     },
   ] as Parameters<typeof buildNativeTree>[0];
 
-  it("sanity: core's name-promotion DOES pull the value into the name (the leak)", () => {
-    // Guards the fix below: prove the vector is real, so the redaction test
-    // can never pass vacuously if promotion behaviour changes.
-    const promoted = normalizeNativeAX(raw).find((n) => n.id === "ax-dom-100");
-    expect(promoted?.name).toBe(TYPED_SECRET);
+  it("core never promotes the value: a textbox is named by its author only", () => {
+    // The first line of defense. The redaction below is the backstop, and the
+    // next describe proves it still has a real vector to catch.
+    const textbox = normalizeNativeAX(raw).find((n) => n.id === "ax-dom-100");
+    expect(textbox?.role).toBe("textbox");
+    expect(textbox?.name).toBe("");
   });
 
-  it("redacts the promoted value from an unlabeled control's name", () => {
+  it("keeps the value out of an unlabeled control's name", () => {
     const tree = buildNativeTree(raw);
     const unlabeled = tree.nodes.get("ax-dom-100");
     expect(unlabeled?.a11y.role).toBe("textbox");
@@ -210,6 +210,49 @@ describe("buildNativeTree — R1: unlabeled field value must not leak via the na
     expect(tree).toBe('main\n  textbox\n  textbox "Email"');
     expect(pairs).toEqual(["main", "textbox", 'textbox "Email"']);
     expect(JSON.stringify(pairs)).not.toContain(TYPED_SECRET);
+  });
+});
+
+describe("buildNativeTree — R1: the redaction backstop, for a role core still names from its text", () => {
+  // Chromium 151's shape for `<div role="application" contenteditable>typed
+  // secret</div>`: the typed text is the node's AX value AND its StaticText
+  // child. `application` is not one of the author-named fields core refuses to
+  // name from text, so core still promotes it — the AX value is what the
+  // redaction keys on here.
+  const TYPED_SECRET = "typed-SECRET-value";
+  const raw = [
+    { nodeId: "1", childIds: ["2"], role: { value: "RootWebArea" } },
+    {
+      nodeId: "2",
+      parentId: "1",
+      childIds: ["3"],
+      role: { value: "application" },
+      name: { value: "" },
+      value: { value: TYPED_SECRET },
+      backendDOMNodeId: 400,
+    },
+    {
+      nodeId: "3",
+      parentId: "2",
+      role: { value: "StaticText" },
+      name: { value: TYPED_SECRET },
+    },
+  ] as Parameters<typeof buildNativeTree>[0];
+
+  it("sanity: core's name-promotion DOES pull the value into the name (the leak)", () => {
+    // Guards the redaction: prove the vector is real, so the test below can
+    // never pass vacuously if promotion behaviour changes.
+    const promoted = normalizeNativeAX(raw).find((n) => n.id === "ax-dom-400");
+    expect(promoted?.name).toBe(TYPED_SECRET);
+  });
+
+  it("redacts it from buildNativeTree and nativeAXView", () => {
+    const tree = buildNativeTree(raw);
+    expect(tree.nodes.get("ax-dom-400")?.a11y.name).toBe("");
+    expect(serializeTree(tree, { includeGeneric: true })).not.toContain(
+      TYPED_SECRET,
+    );
+    expect(nativeAXView(raw).tree).toBe("application");
   });
 });
 
