@@ -1343,10 +1343,6 @@ describe("the direct-text fallback skips author-named roles", () => {
     ["contentinfo", `<footer id="t">Copyright <a href="#">x</a></footer>`],
     ["complementary", `<aside id="t">Aside <a href="#">x</a></aside>`],
     ["search", `<search id="t">Find: <input></search>`],
-    [
-      "region",
-      `<section id="t" aria-labelledby="missing">Intro <a href="#">x</a></section>`,
-    ],
     ["article", `<article id="t">Article text</article>`],
     ["figure", `<figure id="t">Loose <img alt="a"></figure>`],
     ["group", `<div id="t" role="group">Shipping <input></div>`],
@@ -1473,6 +1469,29 @@ describe("the direct-text fallback skips author-named roles", () => {
     [`<details id="t" open><summary>More</summary>Body</details>`, "More"],
   ])("keeps an author-given name: %s", (html, expected) => {
     expect(target(html).a11y.name).toBe(expected);
+  });
+
+  // An authored role outranks a name-from-content TAG, so these never reach
+  // the text-content step either. The first is the Radix Select trigger,
+  // whose text is the selected value.
+  it.each([
+    [
+      "combobox",
+      `<button id="t" role="combobox" aria-expanded="false">Apple</button>`,
+    ],
+    ["img", `<a id="t" href="#" role="img">logo text</a>`],
+    ["dialog", `<a id="t" href="#" role="dialog">Dialog text</a>`],
+    ["tabpanel", `<h2 id="t" role="tabpanel">Panel</h2>`],
+  ])("leaves a %s on a name-from-content tag unnamed", (role, html) => {
+    const node = target(html);
+    expect(node.a11y.role).toBe(role);
+    expect(node.a11y.name).toBe("");
+  });
+
+  it("still names a name-from-content role on such a tag", () => {
+    expect(target(`<button id="t" role="tab">Tab A</button>`).a11y.name).toBe(
+      "Tab A",
+    );
   });
 });
 

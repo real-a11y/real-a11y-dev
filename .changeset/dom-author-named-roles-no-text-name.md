@@ -17,6 +17,8 @@ Roles only an author can name now skip that step. They are still named by `aria-
 - the composite widgets (`listbox`, `menu`, `toolbar`, `grid`, …)
 - widgets whose text is a value, not a label: a `<textarea>`'s contents, a contenteditable `textbox`, a `combobox`'s selected text, `<progress>` / `<meter>` fallback text
 
+An authored role now also outranks a tag that is normally named by its content. The Radix Select trigger, `<button role="combobox">Apple</button>`, was `combobox "Apple"` and is now an unnamed `combobox`. So are `<a role="img">` and `<h2 role="tabpanel">`.
+
 Every one matches what Chromium 151 computes for the same markup.
 
 Unchanged: paragraphs, list items and the other prose roles, plain containers (so the a11y view keeps the same shape), and live regions (`alert`, `status`, `log`, `timer`, `marquee`), whose text is the announcement and whose name no audit reads.

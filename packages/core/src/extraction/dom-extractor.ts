@@ -651,14 +651,18 @@ const AUTHOR_NAMED_ROLES = new Set<string>([
 /**
  * True if `element` is a host whose accessible name can come from its
  * descendant text content. Used by the incremental extractor to decide
- * whether a text mutation must invalidate an ancestor's name.
+ * whether a text mutation must invalidate an ancestor's name. The same test
+ * gates step 8 of the name computation, so the two cannot disagree.
+ *
+ * An authored role outranks the tag: `<button role="combobox">Apple</button>`
+ * (the Radix Select trigger) is a combobox, named by its author only, and
+ * Chromium leaves it unnamed — its text is the selected VALUE.
  */
 export function isNameFromContentHost(element: Element): boolean {
-  const tag = element.tagName.toLowerCase();
-  if (NAMES_FROM_CONTENT_TAGS.has(tag)) return true;
   const explicitRole = element.getAttribute("role")?.trim().split(/\s+/)[0];
-  if (explicitRole && NAMES_FROM_CONTENT_ROLES.has(explicitRole)) return true;
-  return false;
+  if (explicitRole && AUTHOR_NAMED_ROLES.has(explicitRole)) return false;
+  if (NAMES_FROM_CONTENT_TAGS.has(element.tagName.toLowerCase())) return true;
+  return !!explicitRole && NAMES_FROM_CONTENT_ROLES.has(explicitRole);
 }
 
 /**
@@ -1000,11 +1004,7 @@ function computeRawAccessibleName(
   //    "name from content" (headings, links, buttons, checkboxes, table cells,
   //    options — see NAMES_FROM_CONTENT_ROLES). NOT for generic containers
   //    (div, span, p) which would grab huge text blobs.
-  const explicitRole = element.getAttribute("role")?.trim().split(/\s+/)[0];
-  const namesFromContentRole =
-    !!explicitRole && NAMES_FROM_CONTENT_ROLES.has(explicitRole);
-
-  if (NAMES_FROM_CONTENT_TAGS.has(tag) || namesFromContentRole) {
+  if (isNameFromContentHost(element)) {
     const fullText = getAccessibleTextContent(
       element,
       visited,

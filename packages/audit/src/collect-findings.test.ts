@@ -54,6 +54,11 @@ describe("collectFindings — no-unlabeled-interactive", () => {
     [`<textarea>typed text</textarea>`, "textbox"],
     [`<div role="textbox" contenteditable="true">typed text</div>`, "textbox"],
     [`<div role="combobox" tabindex="0">Selected value</div>`, "combobox"],
+    // The Radix Select trigger: the button tag doesn't make it name-from-content.
+    [
+      `<button role="combobox" aria-expanded="false">Apple</button>`,
+      "combobox",
+    ],
   ])("flags a control whose only text is its value: %s", (html, role) => {
     const findings = collectFindings(mount(html), ["no-unlabeled-interactive"]);
     expect(findings).toHaveLength(1);
