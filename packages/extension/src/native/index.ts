@@ -187,6 +187,9 @@ let activeSession: NativeDebuggerSession | undefined;
 export function cancelNativePicks(): void {
   activeSession?.cancelAllPicks();
 }
+// Pairs each `reveal` dispatch's content-script arm with its own release —
+// see the NATIVE_ACT handler.
+let revealSeq = 0;
 
 export function registerNativeMode(): void {
   // Content scripts can read and write `chrome.storage.local` by default. They
@@ -374,12 +377,35 @@ export function registerNativeMode(): void {
                     error: "page navigated — reload the native tree",
                   };
                 }
-                return dispatchNative(
-                  t,
-                  message.nodeId,
-                  message.action,
-                  message.value,
-                );
+                if (message.action !== "reveal") {
+                  return dispatchNative(
+                    t,
+                    message.nodeId,
+                    message.action,
+                    message.value,
+                  );
+                }
+                // `reveal` asks the content script for its overlay and moves
+                // real focus (`pageReveal`). Arm the content script first —
+                // it only honors the reveal event while armed, and it drops
+                // the `focusin` the focus causes rather than re-highlighting
+                // and re-scrolling to it — then release it. Armed HERE, after
+                // the per-tab queue wait, right beside the dispatch it covers:
+                // armed any earlier, a long queue could outlast its deadline.
+                const seq = ++revealSeq;
+                const suppress = (active: boolean) =>
+                  chrome.tabs
+                    .sendMessage(message.tabId, {
+                      type: "SUPPRESS_NATIVE_FOCUS_TRACK",
+                      payload: { seq, active },
+                    })
+                    .catch(() => {});
+                await suppress(true);
+                try {
+                  return await dispatchNative(t, message.nodeId, "reveal");
+                } finally {
+                  await suppress(false);
+                }
               },
               log,
             );
