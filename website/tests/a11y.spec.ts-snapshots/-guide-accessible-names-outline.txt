@@ -5,6 +5,7 @@ h1 Accessible Names
     h3 Button with only text
     h3 Button with an icon and hidden text
     h3 Button with only an icon
+    h3 Dialog with text but no label
     h3 Form control with a wrapping label
     h3 Form control with for / id
     h3 aria-label beats text content

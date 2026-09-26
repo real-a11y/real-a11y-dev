@@ -133,11 +133,12 @@ main
   code
   heading "assertDialogsLabeled(root)" (level 2)
     code "assertDialogsLabeled(root)"
-  paragraph "Throws if any or element has no accessible name (via or )."
+  paragraph "Throws if any or element has no accessible name (via or ). A dialog's own text doesn't count: has no accessible name, because a screen reader announces a dialog only by the name its author gives it, so it throws."
     code "dialog"
     code "alertdialog"
     code "aria-label"
     code "aria-labelledby"
+    code "<div role="dialog">Delete this project? <button>Cancel</button></div>"
   button "Copy Code"
   code
   heading "assertLandmarkStructure(root)" (level 2)
