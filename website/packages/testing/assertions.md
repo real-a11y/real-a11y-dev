@@ -89,7 +89,7 @@ assertHeadingOrder(document.body);
 
 ## `assertDialogsLabeled(root)`
 
-Throws if any `dialog` or `alertdialog` element has no accessible name (via `aria-label` or `aria-labelledby`).
+Throws if any `dialog` or `alertdialog` element has no accessible name (via `aria-label` or `aria-labelledby`). A dialog's own text doesn't count: `<div role="dialog">Delete this project? <button>Cancel</button></div>` has no accessible name, because a screen reader announces a dialog only by the name its author gives it, so it throws.
 
 ```ts
 assertDialogsLabeled(document.body);
