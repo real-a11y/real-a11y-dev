@@ -28,7 +28,14 @@
  * redacts a value that would otherwise be promoted into the accessible name of
  * an unlabeled control, and the `dom` facet copies only an allowlist of
  * structural / a11y attributes (never `value`). An allowlist is strictly safer
- * than redacting after the fact. (Caveat, documented not
+ * than redacting after the fact.
+ *
+ * What a user typed into a rich-text editor is that editor's field value too —
+ * Chromium reports it as the host's AX `value`, which is dropped with every
+ * other. But it also names the nodes inside the editor (a paragraph's text, a
+ * link's, a heading's), so the same text reaches the tree a second way. The
+ * redaction closes that path at the source, before normalization can promote
+ * anything: see {@link redactEditableContent}. (Caveat, documented not
  * hand-waved: `getFullAXTree` / `getDocument` responses may themselves contain
  * field values in their CDP payload — Chromium masks passwords but not, e.g.,
  * an email field. That is Chromium's wire content, outside this code's control;
@@ -40,6 +47,7 @@ import {
   normalizeNativeAX,
   serializeNativeAX,
   buildCssPath,
+  NATIVE_AX_NAME_SOURCE_ROLES,
   type CssPathAdapter,
   type NativeAXNode,
   type RawNativeAXNode,
@@ -53,6 +61,8 @@ import type { CDPSession, Page } from "playwright";
 /** The full CDP `Accessibility.AXNode` shape this producer consumes — a
  *  superset of core's structural {@link RawNativeAXNode}. */
 interface RawAXNode extends RawNativeAXNode {
+  /** `sources` is Chromium's accname trace — see {@link authoredByMarkup}. */
+  name?: { value?: string; sources?: AXNameSource[] };
   description?: { value?: string };
   value?: { value?: unknown };
   properties?: Array<{ name: string; value?: { value?: unknown } }>;
@@ -194,6 +204,178 @@ function redactedName(nn: NativeAXNode, raw: RawAXNode | undefined): string {
   return redactPromotedValue ? "" : nn.name;
 }
 
+/** One step of Chromium's accessible-name computation, as `getFullAXTree`
+ *  reports it on `name.sources`, in accname order. */
+interface AXNameSource {
+  type?: string;
+  attribute?: string;
+  value?: { value?: unknown };
+  superseded?: boolean;
+}
+
+/**
+ * The attributes allowed to name a node INSIDE an editable region. They are
+ * the page's markup — an `aria-label` on a mention chip, an inserted image's
+ * `alt`, a `title` — rather than the editor's text, and Chromium leaves them
+ * out of the host's `value` too. Every other name source there (the node's
+ * contents, a `<figcaption>` / `<caption>` / `<legend>`, an `aria-labelledby`
+ * target) is, or can point at, what the user typed. An allowlist, so a source
+ * Chromium adds later is withheld until someone decides otherwise.
+ */
+const MARKUP_NAME_ATTRIBUTES = new Set(["aria-label", "alt", "title"]);
+
+/**
+ * The `dom` attributes dropped inside an editable region: a URL the user typed
+ * or pasted into a link or an image (an auto-linked `?token=` is the likeliest
+ * secret in a message box), and an `id`, which some editors derive from a
+ * heading's text. No sink prints these today; R1 holds by construction rather
+ * than by that coincidence.
+ */
+const EDITABLE_CONTENT_ATTRIBUTES = new Set(["href", "src", "poster", "id"]);
+
+/**
+ * What a node inside an editable region is named when Chromium computed its
+ * name from the editor's text. Constant, and deliberately not empty: an empty
+ * name reads as UNLABELED, and a link or a cell in a message box is labeled —
+ * `no-unlabeled-interactive` would report an error that isn't there. The same
+ * literal the DOM producer substitutes for a withheld field value.
+ */
+const REDACTED_NAME = "[redacted]";
+
+function isEditable(raw: RawAXNode): boolean {
+  return (raw.properties ?? []).some((p) => p.name === "editable");
+}
+
+/**
+ * True when `raw`'s name is exactly the text of one of the
+ * {@link MARKUP_NAME_ATTRIBUTES}. The winning source is the first one in the
+ * trace that produced text and wasn't superseded; requiring its text to equal
+ * the computed name means a trace that disagrees with its own result — or is
+ * missing, as in a payload recorded without it — fails closed.
+ */
+function authoredByMarkup(raw: RawAXNode): boolean {
+  const name = cleanText(String(raw.name?.value ?? ""));
+  const winner = raw.name?.sources?.find(
+    (s) =>
+      s.superseded !== true && cleanText(String(s.value?.value ?? "")) !== "",
+  );
+  return (
+    winner?.type === "attribute" &&
+    MARKUP_NAME_ATTRIBUTES.has(winner.attribute ?? "") &&
+    cleanText(String(winner.value?.value)) === name
+  );
+}
+
+/**
+ * The raw nodes strictly INSIDE an editable region — below a node Chromium
+ * marks `editable` (a contenteditable host, a `designMode` document, a native
+ * text field). The region's own root is not inside it: that is the field
+ * itself, whose authored label is kept and whose value is already withheld.
+ *
+ * Decided by ancestry rather than by each node's own `editable` flag, because
+ * a `contenteditable="false"` island (a mention chip, an embedded link) carries
+ * no flag of its own but is still part of what the user wrote.
+ */
+function nodesInsideEditable(rawNodes: RawAXNode[]): Set<RawAXNode> {
+  const byId = new Map(rawNodes.map((n) => [n.nodeId, n]));
+  // nodeId → "this node, or one of its ancestors, is editable".
+  const covered = new Map<string, boolean>();
+  const isCovered = (start: RawAXNode | undefined): boolean => {
+    const chain: string[] = [];
+    let result = false;
+    for (
+      let cur = start;
+      cur;
+      cur = cur.parentId ? byId.get(cur.parentId) : undefined
+    ) {
+      const known = covered.get(cur.nodeId);
+      if (known !== undefined) {
+        result = known;
+        break;
+      }
+      chain.push(cur.nodeId);
+      if (isEditable(cur)) {
+        result = true;
+        break;
+      }
+      // A parent cycle is malformed input with no root to reach; treat what
+      // it holds as inside rather than prove a negative about it.
+      if (chain.length > rawNodes.length) {
+        result = true;
+        break;
+      }
+    }
+    for (const id of chain) covered.set(id, result);
+    return result;
+  };
+
+  const inside = new Set<RawAXNode>();
+  for (const raw of rawNodes) {
+    if (raw.parentId && isCovered(byId.get(raw.parentId))) inside.add(raw);
+  }
+  return inside;
+}
+
+/**
+ * R1 for what a user typed into an editor. Returns a copy of `rawNodes` (the
+ * input is never mutated) in which every node inside an editable region
+ * ({@link nodesInsideEditable}) has lost the editor's text:
+ *
+ * - a text run (`StaticText` / `LabelText`) loses its name outright, so no
+ *   later step — core's leaf promotion, or anything that reads a node's own
+ *   text runs — can promote it into another node's name. That includes a
+ *   container OUTSIDE the editor: a role-less contenteditable is a bare
+ *   `generic` that normalization drops, which leaves its parent a leaf that
+ *   would otherwise take the text.
+ * - any other node keeps a name only if the page's markup supplied it
+ *   ({@link authoredByMarkup}); a name Chromium computed from the content
+ *   becomes {@link REDACTED_NAME}.
+ * - its description is dropped: with no trace of where it came from, it could
+ *   be an `aria-describedby` pointing at typed text.
+ *
+ * Doing this before normalization, not after, is the point: after
+ * normalization a promoted name no longer says which node it came from.
+ */
+function redactEditableContent(rawNodes: RawAXNode[]): {
+  nodes: RawAXNode[];
+  inside: Set<RawAXNode>;
+} {
+  const inside = nodesInsideEditable(rawNodes);
+  if (inside.size === 0) return { nodes: rawNodes, inside };
+  const redactedInside = new Set<RawAXNode>();
+  const nodes = rawNodes.map((raw) => {
+    if (!inside.has(raw)) return raw;
+    const computed = cleanText(String(raw.name?.value ?? ""));
+    const name = NATIVE_AX_NAME_SOURCE_ROLES.has(raw.role?.value ?? "")
+      ? ""
+      : computed === "" || authoredByMarkup(raw)
+        ? computed
+        : REDACTED_NAME;
+    const { description: _dropped, ...rest } = raw;
+    const redacted: RawAXNode = { ...rest, name: { value: name } };
+    redactedInside.add(redacted);
+    return redacted;
+  });
+  return { nodes, inside: redactedInside };
+}
+
+/** The editable roots' backend DOM ids — where {@link enrichFromDom} starts
+ *  treating a subtree as the user's content. */
+function editableRootBackendIds(rawNodes: RawAXNode[]): Set<number> {
+  const inside = nodesInsideEditable(rawNodes);
+  const roots = new Set<number>();
+  for (const raw of rawNodes) {
+    if (
+      isEditable(raw) &&
+      !inside.has(raw) &&
+      typeof raw.backendDOMNodeId === "number"
+    ) {
+      roots.add(raw.backendDOMNodeId);
+    }
+  }
+  return roots;
+}
+
 /**
  * The flat, text-only view of Chromium's native tree that
  * `BrowserSession.nativeAX()` returns: indented `role "name"` lines (the same
@@ -209,9 +391,10 @@ export function nativeAXView(rawNodes: RawAXNode[]): {
   tree: string;
   pairs: string[];
 } {
+  const { nodes: redacted } = redactEditableContent(rawNodes);
   const rawById = new Map<string, RawAXNode>();
-  for (const raw of rawNodes) rawById.set(nativeIdOf(raw), raw);
-  const nodes = normalizeNativeAX(rawNodes).map((nn) => ({
+  for (const raw of redacted) rawById.set(nativeIdOf(raw), raw);
+  const nodes = normalizeNativeAX(redacted).map((nn) => ({
     ...nn,
     name: redactedName(nn, rawById.get(nn.id)),
   }));
@@ -234,6 +417,18 @@ export function allowlistAttributes(flat: string[]): Record<string, string> {
     if (DOM_ATTR_ALLOWLIST.has(key)) attributes[key] = flat[i + 1];
   }
   return attributes;
+}
+
+/** {@link allowlistAttributes}' output minus what an editor's user supplied —
+ *  see {@link EDITABLE_CONTENT_ATTRIBUTES}. */
+function withoutEditableContent(
+  attributes: Record<string, string>,
+): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(attributes).filter(
+      ([key]) => !EDITABLE_CONTENT_ATTRIBUTES.has(key),
+    ),
+  );
 }
 
 /** Split an AX node's `properties` into `states` (bool/stateful) and
@@ -275,9 +470,14 @@ function axFacets(raw: RawAXNode): Pick<A11yInfo, "states" | "properties"> {
  * Node with no live element, so without this they carry no "where" at all —
  * and `audit` is documented as rule · severity · locator. Computing it here
  * costs nothing extra: the parent/child links are already in hand.
+ *
+ * Below an `editableRoots` element the walk ignores `id`s, so a locator inside
+ * an editor anchors on the nearest id outside it (typically the host's own):
+ * an editor may derive a heading's `id` from its typed text (R1).
  */
 async function enrichFromDom(
   client: CDPSession,
+  editableRoots: ReadonlySet<number> = new Set(),
 ): Promise<Map<number, NativeDomInfo>> {
   const out = new Map<number, NativeDomInfo>();
   const { root } = (await client.send("DOM.getDocument", {
@@ -288,13 +488,15 @@ async function enrichFromDom(
   // Parent links aren't in the payload — record them on the way down so the
   // locator walk can go back up.
   const parents = new Map<DomNode, DomNode>();
+  // Everything strictly below an editable root — the user's content.
+  const insideEditable = new Set<DomNode>();
   const ELEMENT_NODE = 1;
   const elementChildren = (node: DomNode): DomNode[] =>
     (node.children ?? []).filter((c) => c.nodeType === ELEMENT_NODE);
 
   const adapter: CssPathAdapter<DomNode> = {
     tagName: (n) => (n.nodeName ?? "").toLowerCase(),
-    id: (n) => attributeOf(n, "id"),
+    id: (n) => (insideEditable.has(n) ? null : attributeOf(n, "id")),
     parent: (n) => parents.get(n) ?? null,
     children: (n) => elementChildren(n),
     // Two kinds of stop. `<html>` is the document element — the path stops
@@ -310,7 +512,8 @@ async function enrichFromDom(
       (n.nodeName ?? "").toLowerCase() === "html",
   };
 
-  const walk = (node: DomNode): void => {
+  const walk = (node: DomNode, inside: boolean): void => {
+    if (inside) insideEditable.add(node);
     for (const child of elementChildren(node)) parents.set(child, node);
     if (typeof node.backendNodeId === "number" && node.nodeName) {
       out.set(node.backendNodeId, {
@@ -319,11 +522,15 @@ async function enrichFromDom(
         locator: buildCssPath(node, adapter),
       });
     }
-    for (const child of node.children ?? []) walk(child);
-    if (node.contentDocument) walk(node.contentDocument);
-    for (const sub of node.shadowRoots ?? []) walk(sub);
+    const below =
+      inside ||
+      (typeof node.backendNodeId === "number" &&
+        editableRoots.has(node.backendNodeId));
+    for (const child of node.children ?? []) walk(child, below);
+    if (node.contentDocument) walk(node.contentDocument, below);
+    for (const sub of node.shadowRoots ?? []) walk(sub, below);
   };
-  walk(root);
+  walk(root, false);
   return out;
 }
 
@@ -374,7 +581,10 @@ export async function nativeTree(page: Page): Promise<ExtractionResult> {
       "Accessibility.getFullAXTree",
     )) as { nodes: RawAXNode[] };
 
-    const enrichment = await enrichFromDom(client);
+    const enrichment = await enrichFromDom(
+      client,
+      editableRootBackendIds(rawNodes),
+    );
     const chrome = page.context().browser()?.version();
     return buildNativeTree(rawNodes, enrichment, chrome);
   } finally {
@@ -393,10 +603,13 @@ export function buildNativeTree(
   chrome?: string,
 ): ExtractionResult {
   // Core owns the vocabulary: which nodes survive, sibling order, role map,
-  // name promotion, id derivation. We only decorate the survivors.
-  const skeleton = normalizeNativeAX(rawNodes);
+  // name promotion, id derivation. We only decorate the survivors — after the
+  // editor's text is gone from the raw nodes, so nothing core promotes can
+  // carry it (R1).
+  const { nodes: redacted, inside } = redactEditableContent(rawNodes);
+  const skeleton = normalizeNativeAX(redacted);
   const rawById = new Map<string, RawAXNode>();
-  for (const raw of rawNodes) rawById.set(nativeIdOf(raw), raw);
+  for (const raw of redacted) rawById.set(nativeIdOf(raw), raw);
 
   const nodes = new Map<string, SemanticNode>();
   for (const nn of skeleton) {
@@ -423,7 +636,10 @@ export function buildNativeTree(
     const dom: DomInfo | undefined = enriched
       ? {
           tagName: enriched.tagName,
-          attributes: enriched.attributes,
+          attributes:
+            raw && inside.has(raw)
+              ? withoutEditableContent(enriched.attributes)
+              : enriched.attributes,
           textContent: null,
           descendantText: "",
           isHidden: false,

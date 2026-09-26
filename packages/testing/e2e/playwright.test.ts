@@ -262,6 +262,31 @@ test.describe("contenteditable rich-text widgets", () => {
     expect(snapshot).toContain('combobox "Search"');
   });
 
+  test("native mode withholds what was typed into the message box; DOM mode still shows it", async ({
+    page,
+  }) => {
+    // Quill keeps the draft in the editor's own <p>, as every model-driven
+    // editor does. Native mode (the CLI / MCP producer) holds R1: the draft
+    // is the box's value, so it never reaches the tree. DOM mode is the
+    // developer inspecting their own page and keeps it — deliberately, the
+    // same way it keeps a plain <input>'s value.
+    await page.evaluate(() => {
+      document.querySelector(
+        '[aria-label="Message to general"] p',
+      )!.textContent = "draft EDITOR-SECRET";
+    });
+
+    const native = await (
+      await attach(page, { tree: "native" })
+    ).treeSnapshot();
+    expect(native).toContain('textbox "Message to general"');
+    expect(native).not.toContain("EDITOR-SECRET");
+
+    expect(await (await attach(page)).treeSnapshot()).toContain(
+      "EDITOR-SECRET",
+    );
+  });
+
   test("a native <input role=combobox> serializes as a combobox (W3C APG example shape)", async ({
     page,
   }) => {

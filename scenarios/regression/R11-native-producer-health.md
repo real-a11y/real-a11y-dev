@@ -6,9 +6,9 @@ area: MCP
 type: Automated
 priority: P1
 status: Active
-validFrom: "browser ≥ 0.1.0-beta.12 · cli ≥ 0.1.0-beta.2 (locators + focusedId unreleased). The native producer itself: browser ≥ 0.1.0-beta.11"
+validFrom: "browser ≥ 0.1.0-beta.12 · cli ≥ 0.1.0-beta.2 (locators + focusedId unreleased). The native producer itself: browser ≥ 0.1.0-beta.11. Step 6b (rich-text editor): cli ≥ 0.1.0-beta.7 (unreleased)"
 validUntil: ""
-expected: "native tree returns a document tree reaching UA-shadow media controls the in-page walk misses; every native FINDING carries a CSS locator identical to the DOM producer's for the same element (a shadow-root element stops its path at the boundary rather than faking a selector); the tree sets focusedId so [focused] renders; a value typed into a field NEVER appears anywhere in the tree (R1)."
+expected: "native tree returns a document tree reaching UA-shadow media controls the in-page walk misses; every native FINDING carries a CSS locator identical to the DOM producer's for the same element (a shadow-root element stops its path at the boundary rather than faking a selector); the tree sets focusedId so [focused] renders; a value typed into a field — or written into a rich-text editor — NEVER appears anywhere in the tree (R1)."
 covers:
   - packages.@real-a11y-dev/browser
 notion: "https://app.notion.com/p/3aa1c354b0b581379ac1caea2338fb81"
@@ -19,7 +19,9 @@ notion: "https://app.notion.com/p/3aa1c354b0b581379ac1caea2338fb81"
 Use a page with a `<video controls>` (UA-shadow media controls), an image with no
 `alt`, an unlabeled `<button id="go">`, an image nested under
 `<section id="panel">`, a pair of sibling images, an element inside an open shadow
-root, and a text field.
+root, a text field, and a rich-text editor — `<div id="composer" contenteditable
+role="textbox" aria-label="Message">` holding a `<p>` with a link in it, an `<h3>`,
+and a `contenteditable="false"` mention chip `<a aria-label="Mention Alice">`.
 
 **There is no `--producer` flag.** #258 removed the axis — every browser-driving read
 is native now — so these are plain invocations. An earlier version of this row spelled
@@ -32,6 +34,9 @@ is native now — so these are plain invocations. An earlier version of this row
 4. `real-a11y list image <url>` — locators present on every entry
 5. Focus a control, then `real-a11y tree <url>`
 6. Type a sentinel into the field, then re-read the tree
+   - **6b** — write a second sentinel into the editor's paragraph, link text and
+     heading (and one into the link's `href`), then `real-a11y tree <url>`,
+     `real-a11y tree <url> -f json` and `real-a11y audit <url> -f json`
 7. `real-a11y audit <url> --root main`
 8. `pnpm --filter @real-a11y-dev/browser test:e2e`
 
@@ -54,6 +59,13 @@ is native now — so these are plain invocations. An earlier version of this row
 - **6** — the sentinel appears **nowhere** in the tree. The producer never reads
   `.value`, drops the AX `value` field, excludes `valuenow`/`valuetext`, and copies
   only an allowlist of attributes
+- **6b** — the editor sentinel appears **nowhere** either, while the editor's
+  structure survives: `textbox "Message"` keeps its label; inside it a bare
+  `paragraph`, `link "[redacted]"`, `heading "[redacted]" (level 3)`, and
+  `link "Mention Alice"` (a markup name, kept). `audit` does **not** report the
+  withheld link as `no-unlabeled-interactive` — it is named, just not shown. Before
+  cli 0.1.0-beta.7 the sentinel printed as the paragraph's, link's and heading's
+  names
 - **4** — locators on every entry. Native `list_elements` used to carry none, and
   three docs stated that as intended; both were fixed together
 - **7** — refused: the read is whole-document, so it cannot be combined with a root
@@ -83,6 +95,13 @@ than loudly:
   defects with no address.
 - **`focusedId`.** The native tree knew where focus was (per-node `focused`) and had
   no way to say so, because every consumer reads the tree-level pointer.
+
+Step 6b guards a third, and the one with a privacy cost. What sits in a rich-text
+editor is its field value — Chromium reports it as the host's AX `value`, which R1
+always dropped — but Chromium *also* names the nodes inside the editor from that
+text, and those names reached `tree`, `audit` and every MCP read. A test with a
+plain `<input>` (step 6) can never see this: the leak needs content-named nodes
+under an editable host.
 
 Parity itself is now a standing automated gate, so this row checks the things that
 gate can't see.

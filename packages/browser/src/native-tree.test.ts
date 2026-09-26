@@ -9,6 +9,7 @@ import { normalizeNativeAX } from "@real-a11y-dev/core";
 import { serializeTree } from "@real-a11y-dev/serialize";
 import { describe, expect, it } from "vitest";
 
+import editorPayload from "./__fixtures__/native-ax-editor.json";
 import payload from "./__fixtures__/native-ax-payload.json";
 import {
   allowlistAttributes,
@@ -503,5 +504,149 @@ describe("buildNativeTree — focusedId", () => {
       }
     }
     expect(build().focusedId).toBeUndefined();
+  });
+});
+
+describe("buildNativeTree — R1: what a user typed into an editor never reaches the tree", () => {
+  // A REAL recorded payload (Chromium 151, __fixtures__/native-ax-editor.json;
+  // the page is in its `html` key): a contenteditable `role="textbox"`
+  // message box holding paragraphs, a link, a heading, a list, a table, a
+  // figure and two `contenteditable="false"` islands, plus a role-less
+  // contenteditable and a <textarea>. Chromium reports the whole editor text
+  // as the host's AX `value` — which R1 already drops — and then again as the
+  // names of the nodes inside it, which is the leak these tests pin shut.
+  const EDITOR_SECRET = "EDITOR-SECRET";
+  const editorRaw = editorPayload.nodes as Parameters<
+    typeof buildNativeTree
+  >[0];
+  const editorEnrichment = new Map(
+    Object.entries(editorPayload.enrich).map(([backendId, e]) => [
+      Number(backendId),
+      {
+        tagName: e.tagName.toLowerCase(),
+        attributes: allowlistAttributes(e.attributes),
+      },
+    ]),
+  );
+  const buildEditor = () =>
+    buildNativeTree(editorRaw, editorEnrichment, editorPayload.chrome);
+  const find = (
+    tree: ReturnType<typeof buildNativeTree>,
+    role: string,
+    name?: string,
+  ) =>
+    [...tree.nodes.values()].filter(
+      (n) =>
+        n.a11y.role === role && (name === undefined || n.a11y.name === name),
+    );
+
+  it("the recorded payload DID carry the typed text, as names and as the host's value (guards the tests)", () => {
+    const raw = JSON.stringify(editorPayload.nodes);
+    expect(raw).toContain(`"name":{"value":"${EDITOR_SECRET}-heading"`);
+    const host = editorPayload.nodes.find(
+      (n) => n.role?.value === "textbox" && n.name?.value === "Message",
+    );
+    expect(String(host?.value?.value)).toContain(`${EDITOR_SECRET}-para`);
+    // And the enrichment carried the typed link's URL.
+    expect(JSON.stringify(editorPayload.enrich)).toContain(
+      `token=${EDITOR_SECRET}-href`,
+    );
+  });
+
+  it("surfaces no typed text anywhere in the model", () => {
+    const tree = buildEditor();
+    expect(serializeTree(tree, { includeGeneric: true })).not.toContain(
+      EDITOR_SECRET,
+    );
+    expect(JSON.stringify([...tree.nodes.values()])).not.toContain(
+      EDITOR_SECRET,
+    );
+  });
+
+  it("applies the same redaction to nativeAXView (nativeAX())", () => {
+    const { tree, pairs } = nativeAXView(editorRaw);
+    expect(tree).not.toContain(EDITOR_SECRET);
+    expect(JSON.stringify(pairs)).not.toContain(EDITOR_SECRET);
+  });
+
+  it("keeps the editor's structure: every role inside it is still there", () => {
+    const printed = serializeTree(buildEditor(), { includeGeneric: true });
+    // The host keeps its authored label, and what is inside it keeps its
+    // shape — only the typed words are withheld.
+    expect(printed).toContain('textbox "Message"');
+    expect(printed).toMatch(/^ {4}paragraph$/m);
+    expect(printed).toContain('heading "[redacted]" (level 2)');
+    expect(printed).toMatch(/^ {4}list$/m);
+    expect(printed).toMatch(/^ {6}listitem\b/m);
+    expect(printed).toContain('cell "[redacted]"');
+    expect(printed).toMatch(/^ {4}figure$/m);
+  });
+
+  it("names a node Chromium named from typed content with a placeholder, not nothing", () => {
+    // Blank would be a lie the audit acts on: an empty-named link or cell
+    // reads as UNLABELED, and `no-unlabeled-interactive` is an error — every
+    // page with a link in its composer would fail CI. The placeholder says
+    // "this has a name, withheld", which is true.
+    const tree = buildEditor();
+    expect(find(tree, "link", "[redacted]")).toHaveLength(2); // typed + island
+    expect(find(tree, "heading", "[redacted]")).toHaveLength(1);
+    expect(find(tree, "cell", "[redacted]")).toHaveLength(1);
+  });
+
+  it("keeps names that come from the page's own markup inside the editor", () => {
+    const tree = buildEditor();
+    // aria-label on a mention chip, alt on an inserted image: authored
+    // attributes, not the editor's text.
+    expect(find(tree, "link", "Mention Alice")).toHaveLength(1);
+    expect(find(tree, "img", "Diagram")).toHaveLength(1);
+  });
+
+  it("never promotes typed text into a paragraph, a list item, or the container a role-less editor sits in", () => {
+    const tree = buildEditor();
+    for (const role of ["paragraph", "listitem", "Figcaption"]) {
+      for (const node of find(tree, role)) {
+        if (node.a11y.name === "Press Enter to send") continue; // outside
+        expect(node.a11y.name).toBe("");
+      }
+    }
+    // A role-less contenteditable is a bare `generic`, dropped — so its
+    // `<article>` became a leaf and used to promote the typed text into its
+    // OWN name. The article is not editable; the text it took was.
+    expect(find(tree, "article")).toHaveLength(1);
+    expect(find(tree, "article")[0].a11y.name).toBe("");
+  });
+
+  it("drops the URL a user typed or pasted into a link or image inside the editor", () => {
+    // No sink prints `href`/`src` today, but R1 is by construction: an
+    // auto-linked `?token=` URL is the likeliest secret in a message box, and
+    // it must not be on the model for a future sink to find.
+    const tree = buildEditor();
+    const insideLinks = [
+      ...find(tree, "link", "[redacted]"),
+      ...find(tree, "link", "Mention Alice"),
+    ];
+    expect(insideLinks).toHaveLength(3);
+    for (const link of insideLinks) {
+      expect(link.dom?.tagName).toBe("a"); // still DOM-backed…
+      expect(link.dom?.attributes.href).toBeUndefined(); // …minus the URL
+    }
+    const image = find(tree, "img", "Diagram")[0];
+    expect(image.dom?.attributes.src).toBeUndefined();
+    expect(image.dom?.attributes.alt).toBe("Diagram"); // markup kept
+  });
+
+  it("leaves everything outside the editor untouched", () => {
+    const tree = buildEditor();
+    expect(find(tree, "heading", "Compose")).toHaveLength(1);
+    expect(find(tree, "paragraph", "Press Enter to send")).toHaveLength(1);
+    const help = find(tree, "link", "Help");
+    expect(help).toHaveLength(1);
+    expect(help[0].dom?.attributes.href).toBe("/help");
+    // The host's description is page-authored help text outside the editor.
+    expect(find(tree, "textbox", "Message")[0].a11y.description).toBe(
+      "Press Enter to send",
+    );
+    // A <textarea>'s label is its authored name; only its value is withheld.
+    expect(find(tree, "textbox", "Notes")).toHaveLength(1);
   });
 });

@@ -115,4 +115,35 @@ describe("native producer — findings carry locators", () => {
       expect(f.locator).not.toContain("#document");
     }
   });
+
+  it("addresses a node inside an editor from outside it, never by an id the editor derived from typed text (R1)", async () => {
+    // Some editors derive an id from what was typed (a heading slug, a
+    // figure's caption). The unlabeled image is a finding INSIDE the composer:
+    // its locator must anchor on the host's id, not its own. The skipped
+    // heading level is one too, and its message quotes the heading's name.
+    await session.open(
+      "data:text/html," +
+        encodeURIComponent(`<!doctype html><html><head><title>Editor</title></head><body><main>
+          <h1>Compose</h1>
+          <div id="composer" contenteditable="true" role="textbox" aria-label="Message">
+            <h3>Q3 EDITOR-SECRET plan</h3>
+            <p><img id="fig-EDITOR-SECRET" src="https://x.test/EDITOR-SECRET.png"></p>
+          </div>
+        </main></body></html>`),
+    );
+    const tree = await session.nativeTree();
+    const native = collectFindings(tree);
+
+    expect(addressed(native)).toEqual([
+      "heading-order @ (none)", // this rule never carries a locator
+      "image-alt @ #composer > p > img",
+    ]);
+    expect(native.find((f) => f.rule === "heading-order")?.message).toContain(
+      '"[redacted]" is h3',
+    );
+    expect(JSON.stringify(native)).not.toContain("EDITOR-SECRET");
+    expect(JSON.stringify([...tree.nodes.values()])).not.toContain(
+      "EDITOR-SECRET",
+    );
+  });
 });

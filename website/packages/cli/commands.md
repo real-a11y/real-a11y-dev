@@ -218,6 +218,27 @@ real-a11y tree https://example.com
 real-a11y tree https://example.com/player   # reaches user-agent-shadow media controls
 ```
 
+What a user typed stays out of it. A text field shows its label, never its
+value — and so does a rich-text editor (a `contenteditable` message box, a
+`designMode` document), whose content is its value. Inside one the structure is
+kept, but a name Chromium computed from the typed text prints as `[redacted]`,
+and a text-only node such as a paragraph prints unnamed:
+
+```
+textbox "Message"
+  paragraph
+    link "[redacted]"
+  heading "[redacted]" (level 3)
+  paragraph
+    link "Mention Alice"
+```
+
+A name from the page's own markup inside the editor — an `aria-label`, an
+image's `alt` — is kept. The same holds in `outline`, `list`, `audit`,
+`snapshot` and the `interact` diff, which all read this tree. [`tabs`](#tabs-url)
+does not: it is the in-page walk, and a link inside an editor still prints
+there under its own text.
+
 **Flags:** [Browser & page](#browser-page) · [Output](#output) (`pretty | json`)
 · [Config](#config) · [`--include-generic`](#include-generic) · no `--root`.
 

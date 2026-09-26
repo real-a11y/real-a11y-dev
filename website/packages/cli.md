@@ -135,7 +135,10 @@ is a finding rather than a targeting inconvenience.
 
 The actions are real — they submit forms and can navigate. A typed value is
 never echoed back in any output format, and `type` is not a login mechanism;
-use [`login`](/packages/cli/commands#login-url-save-file) for that. Chromium
+use [`login`](/packages/cli/commands#login-url-save-file) for that. Nor does it
+reach a later tree: a field's value, including a rich-text editor's content, is
+withheld from every view built from Chromium's tree — all but `tabs`
+([how](/packages/cli/commands#tree-url)). Chromium
 only. Full contract in the
 [command reference](/packages/cli/commands#interact-url-step-step).
 

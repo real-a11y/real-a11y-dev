@@ -207,6 +207,8 @@ Return the page's accessibility tree as a deterministic, indented role + accessi
 
 This is the vocabulary the [act tools](#act) target in, so a node you aim at by role + name here is the same node they dispatch against.
 
+What a user typed never appears in it — not a text field's value, and not the content of a rich-text editor (a `contenteditable` composer, a `designMode` document), which is that editor's value. The editor's structure is kept; a name computed from its text reads `[redacted]` and a paragraph inside it reads unnamed, while a name from the page's own markup (an `aria-label`, an image's `alt`) is kept. So text entered with [`type_text`](#type-text) is absent from this tree and from every tool built on it — `diff_tree`, `audit_page`, `inspect_page`, `list_elements`. [`get_tab_order`](#get-tab-order) is the in-page walk, not built on it, and still names a link inside an editor by its text.
+
 Parameters:
 
 - **`includeGeneric`** — boolean — optional (default `false`) — include generic container nodes (`role=generic`).

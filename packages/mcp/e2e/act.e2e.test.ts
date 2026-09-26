@@ -29,8 +29,23 @@ const PAGE =
     <h3 id="echo">empty</h3>
     <button onclick="document.getElementById('out').textContent='first'">Add</button>
     <button onclick="document.getElementById('out').textContent='second'">Add</button>
+    <div id="composer" contenteditable="true" role="textbox" aria-label="Composer"><p><br></p></div>
+    <h4 id="typed-length">length 0</h4>
   </main>
+  <script>
+    // A model-driven editor (the ProseMirror / Lexical shape): it takes the
+    // text from beforeinput into its own paragraph, and echoes only the
+    // LENGTH, so delivery is provable without the text itself.
+    document.getElementById("composer").addEventListener("beforeinput", (e) => {
+      e.preventDefault();
+      e.currentTarget.querySelector("p").textContent = e.data;
+      document.getElementById("typed-length").textContent = "length " + e.data.length;
+    });
+  </script>
 </body></html>`);
+
+// R24's sentinel shape: an `=` inside and a trailing `=`.
+const EDITOR_SECRET = "api_key=sk-editor-9f2b==";
 
 const session = new BrowserSession({ headless: true });
 let client: Client;
@@ -94,6 +109,31 @@ describe("act tools end-to-end (checkpoint → act → diff)", () => {
       }),
     );
     expect(tree).toContain(SECRET); // page content, where the page put it
+  });
+
+  it("type_text into a rich-text editor: the text reaches the editor, never a later tree (R1)", async () => {
+    await client.callTool({ name: "checkpoint_tree", arguments: {} });
+
+    const typed = await client.callTool({
+      name: "type_text",
+      arguments: { role: "textbox", name: "Composer", text: EDITOR_SECRET },
+    });
+    expect(typed.isError).toBeFalsy();
+    expect(textOf(typed)).not.toContain(EDITOR_SECRET);
+
+    // Delivered: the editor's own handler saw every character…
+    const diff = textOf(
+      await client.callTool({ name: "diff_tree", arguments: {} }),
+    );
+    expect(diff).toContain(`length ${EDITOR_SECRET.length}`);
+    // …yet it is the editor's value, so unlike the echo heading above it
+    // reaches no tool result: not the diff, not the tree, not an audit.
+    expect(diff).not.toContain(EDITOR_SECRET);
+    for (const name of ["get_semantic_tree", "inspect_page"]) {
+      const out = textOf(await client.callTool({ name, arguments: {} }));
+      expect(out).toContain('textbox "Composer"');
+      expect(out).not.toContain(EDITOR_SECRET);
+    }
   });
 
   it("ambiguity lists candidates, then nth resolves by document order", async () => {
