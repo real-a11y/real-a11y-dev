@@ -206,7 +206,15 @@ export function NativeTreeView({
       return next;
     });
     setSelectedId(nodeId);
-    treeRef.current?.focus();
+    // Clearing the role filter above swaps `FilteredListView` back for the
+    // actual tree — an async Preact re-render, not something the
+    // `setRoleFilter(null)` call itself finishes — so `treeRef.current` is
+    // still null (or stale) here when a filter was active a moment ago.
+    // Same double-`requestAnimationFrame` defer `goToTree` above already
+    // uses for the identical filtered-list-to-tree transition.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => treeRef.current?.focus());
+    });
     // Only re-run on a new pick (`nonce`), not on every `nodes`/`parentOf`
     // change a background refresh causes.
   }, [reveal?.nonce]);

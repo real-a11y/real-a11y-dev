@@ -831,6 +831,32 @@ describe("NativeDebuggerSession picker", () => {
     expect(value).toBeUndefined();
   });
 
+  it("a setup command failure (Overlay.setInspectMode rejected) reports a real failure, not a cancel", async () => {
+    stubChrome();
+    const g = globalThis as unknown as { chrome: typeof chrome };
+    (
+      g.chrome.debugger.sendCommand as ReturnType<typeof vi.fn>
+    ).mockImplementation(async (_target: unknown, method: string) => {
+      if (method === "Overlay.setInspectMode") {
+        throw new Error("Could not compute box model.");
+      }
+      return {};
+    });
+    const session = new NativeDebuggerSession(new FakeStorage());
+
+    const { outcome, value } = await session.withDebugger(7, (t) =>
+      session.runPick(7, t),
+    );
+
+    // A protocol failure while arming the picker is not the same thing as
+    // the user cancelling — it must not be misreported as one, and it must
+    // not be misclassified as a connection drop either (the rejection
+    // message here matches neither `isConnectionLost` pattern).
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error).toBe("command-failed");
+    expect(value).toBeUndefined();
+  });
+
   it("cancelAllPicks resolves every armed pick across every tab", async () => {
     stubChrome();
     const session = new NativeDebuggerSession(new FakeStorage());

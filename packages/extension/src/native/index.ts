@@ -58,7 +58,13 @@ type NativeMessage =
   // (the pick itself can take as long as the user needs to click) — the
   // actual outcome arrives later as a `NATIVE_PICK_RESULT` push to the
   // panel, mirroring how the DOM picker's own NODE_PICKED works.
-  | { type: "NATIVE_PICK_START"; tabId: number }
+  // `requestId` is opaque here — the background only ever echoes it back
+  // verbatim on the eventual result — but the panel needs it: a STOP
+  // immediately followed by a new START on the same tab leaves every token
+  // it already tracks unchanged (nothing about the tab or document moved),
+  // so without a per-arm id the old pick's delayed result is
+  // indistinguishable from the new one's.
+  | { type: "NATIVE_PICK_START"; tabId: number; requestId: number }
   // Picker: cancel an in-flight pick on `tabId` — explicit toggle-off, or
   // the panel leaving native mode / switching tabs / disabling native mode
   // entirely.
@@ -305,6 +311,7 @@ export function registerNativeMode(): void {
             // an attach failure) arrives later as a NATIVE_PICK_RESULT push.
             sendResponse({ ok: true });
             const tabId = message.tabId;
+            const requestId = message.requestId;
             void (async () => {
               const { outcome, value: picked } = await withRecovery(
                 session,
@@ -338,7 +345,12 @@ export function registerNativeMode(): void {
                     }
                   : { cancelled: true };
               void chrome.runtime
-                .sendMessage({ type: "NATIVE_PICK_RESULT", tabId, payload })
+                .sendMessage({
+                  type: "NATIVE_PICK_RESULT",
+                  tabId,
+                  requestId,
+                  payload,
+                })
                 .catch(() => {});
             })();
             return;

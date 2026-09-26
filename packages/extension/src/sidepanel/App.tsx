@@ -471,6 +471,18 @@ export function App() {
   // small, renderer-scoped integers that a new document can plausibly reuse
   // — this is a real collision risk, not just a defensive habit.
   const nativePickToken = useRef<number | null>(null);
+  // Monotonic id for the CURRENTLY ARMED pick, bumped on every arm — a
+  // second, independent staleness check from `nativePickToken` above. That
+  // one guards against a tab switch/navigation/disable landing mid-pick;
+  // this one guards the narrower case neither it nor `nativeOpToken`
+  // catches at all: a STOP immediately followed by a new START on the SAME
+  // tab, same document. Nothing about the tab or document moved, so every
+  // other staleness token stays put, yet the STOP's own pick can still
+  // deliver its result (a cancellation, or a click that resolved just
+  // before the STOP reached the background) after the new pick has already
+  // armed. Comparing this against the result's own echoed `requestId` is
+  // what tells that late arrival apart from the pick actually in flight.
+  const nativePickRequestId = useRef(0);
   // Bumped whenever the bound tab changes (see the myTabId effect below).
   // Read-gates a NATIVE_READ/NATIVE_CAPABILITY reply against a tab switch
   // that happened while it was in flight — same purpose as DogfoodPanel's
@@ -1005,12 +1017,24 @@ export function App() {
         // (Escape, tab switch, disabling native mode — see the cleanup
         // effect below), or the attach/dispatch itself failed (DevTools
         // already attached, an unattachable navigation mid-arm, a
-        // connection drop). Pick mode is inherently one-shot server-side
-        // (`runPick` always resolves and turns Overlay.setInspectMode back
-        // off), so the local mirror comes off here whenever the producer is
-        // still native — the mirror image of the `PICK_MODE_CHANGED` guard
-        // above: a result that outlives a switch back to DOM must not clear
-        // a pick the DOM producer has since armed.
+        // connection drop).
+        //
+        // A STOP immediately followed by a new START on the same tab moves
+        // neither `nativeOpToken` nor `nativePickToken` — nothing about the
+        // tab or document changed — so the STOP's own now-cancelled pick
+        // can still deliver its result after the new one has armed. Applied
+        // unchecked, its "cancelled" would turn the NEW pick's indicator
+        // off while it's still armed and consuming clicks, or its "picked"
+        // would reveal the OLD pick's node under the new one's name. Check
+        // this before anything else below reads the result, including the
+        // indicator clear.
+        if (message.requestId !== nativePickRequestId.current) return;
+        // Pick mode is inherently one-shot server-side (`runPick` always
+        // resolves and turns Overlay.setInspectMode back off), so the local
+        // mirror comes off here whenever the producer is still native — the
+        // mirror image of the `PICK_MODE_CHANGED` guard above: a result
+        // that outlives a switch back to DOM must not clear a pick the DOM
+        // producer has since armed.
         if (producerRef.current === "native") setPickModeOn(false);
         // Everything past this point describes a SPECIFIC document (a
         // picked node's backendDOMNodeId, or a capability tied to the tab
@@ -1542,6 +1566,19 @@ export function App() {
   useEffect(() => {
     if (!nativeModeEnabled || !connected || myTabId === null) return;
     if (hasAppliedNativeDefault.current) return;
+    if (producerRef.current === "native") {
+      // Already native by some other path that raced this effect — the
+      // consent banner's own onEnable (which flips producer straight to
+      // "native" on a real success), or a manual toggle click landing in
+      // the same window as nativeModeEnabled first turning true. There is
+      // nothing left to default, and reading again here would be exactly
+      // the redundant, user-never-asked-for NATIVE_READ this effect exists
+      // to avoid elsewhere — one whose own failure could revert the
+      // producer the user (or the other flow) already established. Once
+      // per session means once: consume the one-shot without reading.
+      hasAppliedNativeDefault.current = true;
+      return;
+    }
     hasAppliedNativeDefault.current = true;
     const tabId = myTabId;
     const token = nativeOpToken.current;
@@ -1554,6 +1591,10 @@ export function App() {
         await new Promise((res) => setTimeout(res, NATIVE_SETTLE_MS));
         if (token !== nativeOpToken.current) return; // superseded meanwhile
       }
+      // Re-check: producer may have gone native via another path (the same
+      // race the guard above closes) while this was waiting out someone
+      // else's in-flight read.
+      if (producerRef.current === "native") return;
       setProducer("native");
       hasAutoLoadedNative.current = true;
       try {
@@ -1822,12 +1863,19 @@ export function App() {
       // current value when the result arrives (see `nativePickToken`'s own
       // comment). Only on arming: a STOP's own result never reveals
       // anything, so it has nothing to stamp.
-      if (next) nativePickToken.current = nativeOpToken.current;
+      if (next) {
+        nativePickToken.current = nativeOpToken.current;
+        nativePickRequestId.current++;
+      }
       setPickModeOn(next);
       void chrome.runtime
         .sendMessage(
           next
-            ? { type: "NATIVE_PICK_START", tabId: nativeTreeTabId }
+            ? {
+                type: "NATIVE_PICK_START",
+                tabId: nativeTreeTabId,
+                requestId: nativePickRequestId.current,
+              }
             : { type: "NATIVE_PICK_STOP", tabId: nativeTreeTabId },
         )
         .catch(() => {
