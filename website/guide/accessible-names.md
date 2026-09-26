@@ -28,6 +28,8 @@ For any element, the accessible name is picked from the **first non-empty source
 
 If #1 resolves to a non-empty string, #2–#5 are ignored — even if #2 looks "more specific" from a CSS or developer perspective.
 
+**One thing a tree shows beyond this list.** A paragraph, a list item, or a live region (`alert`, `status`) with text directly inside it shows that text as its name: `paragraph "Read the guide"`, `status "3 results"`. That keeps its content visible in a snapshot, where the tree prints names and nothing else. A screen reader reads that text as the element's content, not as a label. It never applies to a dialog, image, landmark or text field.
+
 ---
 
 ## Concrete examples
