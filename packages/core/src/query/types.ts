@@ -26,9 +26,12 @@ export interface FindByRoleOptions {
   /** Match only nodes whose `a11y.states.disabled` matches. */
   disabled?: boolean;
   /**
-   * Include nodes that would be hidden from the accessibility tree
-   * (`dom.isHidden === true` or `a11y.isExposedToAT === false`).
-   * Defaults to `false`.
+   * Include nodes hidden from the accessibility tree
+   * (`a11y.isExposedToAT === false`), which in the DOM view includes
+   * `visibility: hidden` and `aria-hidden` elements. Defaults to `false`.
+   *
+   * Visually hidden content that AT still reads (the "sr-only" pattern) is
+   * matched either way.
    */
   includeHidden?: boolean;
 }

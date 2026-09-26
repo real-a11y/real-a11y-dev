@@ -3,7 +3,15 @@ import type { SemanticNode } from "../types.js";
 import { nodesOf, rootIdOf, type QueryInput } from "./types.js";
 
 export interface LinearizeOptions {
-  /** Include nodes with `dom.isHidden === true` (default false). */
+  /**
+   * Include nodes hidden from assistive technology as well as from sight:
+   * `dom.isHidden === true` and `a11y.isExposedToAT === false`, such as a
+   * `visibility: hidden` element in the DOM view. Default false.
+   *
+   * Visually hidden content that AT still reads — the "sr-only" pattern,
+   * flagged `dom.isHidden` but exposed — is always included, because a
+   * screen reader announces it.
+   */
   includeHidden?: boolean;
   /**
    * Include nodes that were suppressed from the AT tree
@@ -32,15 +40,29 @@ export function linearize(
   const { includeHidden = false, includeNotExposed = true } = options;
   const out: SemanticNode[] = [];
 
-  const visit = (id: string) => {
+  const visit = (id: string, underAriaHidden: boolean) => {
     const node = nodes.get(id);
     if (!node) return;
-    const skipHidden = !includeHidden && node.dom?.isHidden === true;
-    const skipAT = !includeNotExposed && !node.a11y.isExposedToAT;
-    if (!skipHidden && !skipAT) out.push(node);
-    for (const childId of node.childIds) visit(childId);
+    // `aria-hidden` hides the whole subtree from AT and no descendant can
+    // override it, but the extractor records exposure per element, and the
+    // DOM view keeps the subtree. Inherit it, so a node inside one is never
+    // "exposed" here. (The a11y view already pruned these subtrees.)
+    const ariaHidden =
+      underAriaHidden || node.dom?.attributes["aria-hidden"] === "true";
+    // Anything AT reaches is kept, including sr-only content: `dom.isHidden`
+    // alone means "not visible", and skipping on it dropped e.g. GitHub's
+    // visually hidden "Navigation Menu" heading from outlines, snapshots and
+    // audits. What AT can't reach is kept only when asked for, and a node that
+    // is also not visible only with `includeHidden`.
+    if (
+      (node.a11y.isExposedToAT && !ariaHidden) ||
+      (includeNotExposed && (includeHidden || !node.dom?.isHidden))
+    ) {
+      out.push(node);
+    }
+    for (const childId of node.childIds) visit(childId, ariaHidden);
   };
 
-  visit(rootId);
+  visit(rootId, false);
   return out;
 }

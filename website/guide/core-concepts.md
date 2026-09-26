@@ -31,7 +31,9 @@ interface SemanticNode {
     textContent: string | null;  // direct text-node children only
     descendantText: string;      // truncated recursive text — useful for elements whose
                                  // accessible name is empty by spec (<code>, <pre>, <svg>)
-    isHidden: boolean;           // aria-hidden or display:none subtree
+    isHidden: boolean;           // not visible: visibility:hidden, or the visually-hidden
+                                 // ("sr-only") pattern, which AT still reads. display:none
+                                 // subtrees are never extracted at all.
   };
   interaction: {
     isInteractive: boolean;

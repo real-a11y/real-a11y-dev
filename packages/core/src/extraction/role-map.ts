@@ -466,6 +466,11 @@ export function isHiddenFromAT(
 
   if (computed) {
     if (computed.visibility === "hidden") return true;
+  } else if ((element as HTMLElement).style?.visibility === "hidden") {
+    // No computed style (a DOM-less runtime): read the inline value, the same
+    // fallback `isVisuallyHidden` uses. Without it the two disagree, and a
+    // "not visible but exposed" node reads as sr-only content AT would see.
+    return true;
   }
 
   return false;

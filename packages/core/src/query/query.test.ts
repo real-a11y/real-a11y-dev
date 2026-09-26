@@ -132,6 +132,113 @@ describe("getOutline", () => {
   });
 });
 
+// The visually-hidden ("sr-only") pattern: clipped to 1px and positioned out
+// of flow, but read by every screen reader. The extractor flags it
+// `dom.isHidden` (it is not visible) while keeping it `a11y.isExposedToAT`.
+// Queries follow what AT reads, so they keep it; content hidden from AT too
+// (`visibility: hidden`, `aria-hidden`) stays out.
+describe("screen-reader-only content", () => {
+  const SR_ONLY =
+    "position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)";
+
+  function attached(html: string) {
+    const root = createPage(html);
+    document.body.appendChild(root);
+    return {
+      tree: extractDomTree(root),
+      [Symbol.dispose]: () => root.remove(),
+    };
+  }
+
+  it("is flagged visually hidden but exposed to AT", () => {
+    using page = attached(`<h2 style="${SR_ONLY}">Navigation Menu</h2>`);
+    const h2 = findAllByRole(page.tree, "heading", { includeHidden: true })[0];
+    expect(h2?.dom?.isHidden).toBe(true);
+    expect(h2?.a11y.isExposedToAT).toBe(true);
+  });
+
+  it("stays in the heading outline", () => {
+    using page = attached(`
+      <h2 style="${SR_ONLY}">Navigation Menu</h2>
+      <h1>Title</h1>
+    `);
+    expect(getOutline(page.tree).map((e) => e.name)).toEqual([
+      "Navigation Menu",
+      "Title",
+    ]);
+  });
+
+  it("is found by findByRole and kept by linearize", () => {
+    using page = attached(`<h1 style="${SR_ONLY}">Only heading</h1>`);
+    expect(findByRole(page.tree, "heading")?.a11y.name).toBe("Only heading");
+    expect(
+      linearize(page.tree).some((n) => n.a11y.name === "Only heading"),
+    ).toBe(true);
+  });
+
+  // The DOM view keeps an aria-hidden subtree and records exposure per
+  // element, so a heading inside one still reads `isExposedToAT: true`. No
+  // descendant can escape an aria-hidden ancestor, so the walk inherits it.
+  it("leaves out an sr-only heading inside an aria-hidden ancestor", () => {
+    using page = attached(`
+      <div aria-hidden="true"><h2 style="${SR_ONLY}">Private</h2></div>
+      <h2>Shown</h2>
+    `);
+    expect(getOutline(page.tree).map((e) => e.name)).toEqual(["Shown"]);
+  });
+
+  // A heading outline is what AT navigates by, so on a DOM-view tree (which
+  // keeps aria-hidden subtrees) it leaves out headings AT can't reach, even
+  // visible ones.
+  it("leaves AT-hidden headings out of the outline of a DOM-view tree", () => {
+    using page = attached(`
+      <h2 aria-hidden="true">Decorative</h2>
+      <div aria-hidden="true"><h2>Behind a modal</h2></div>
+      <h2>Shown</h2>
+    `);
+    expect(getOutline(page.tree).map((e) => e.name)).toEqual(["Shown"]);
+  });
+
+  it("does not find an aria-hidden heading by default", () => {
+    using page = attached(
+      `<h2 aria-hidden="true">Decorative</h2><h2>Shown</h2>`,
+    );
+    expect(findAllByRole(page.tree, "heading").map((n) => n.a11y.name)).toEqual(
+      ["Shown"],
+    );
+    expect(findByRole(page.tree, "heading")?.a11y.name).toBe("Shown");
+  });
+
+  it("does not find a visible heading inside an aria-hidden ancestor", () => {
+    using page = attached(`
+      <div aria-hidden="true"><h2>Behind a modal</h2></div>
+      <h2>Shown</h2>
+    `);
+    expect(findAllByRole(page.tree, "heading").map((n) => n.a11y.name)).toEqual(
+      ["Shown"],
+    );
+    expect(
+      findAllByRole(page.tree, "heading", { includeHidden: true }).map(
+        (n) => n.a11y.name,
+      ),
+    ).toEqual(["Behind a modal", "Shown"]);
+  });
+
+  it("still leaves out visibility:hidden and aria-hidden headings", () => {
+    using page = attached(`
+      <h2 style="visibility:hidden">Invisible</h2>
+      <h2 aria-hidden="true" style="${SR_ONLY}">Hidden from AT</h2>
+      <h2>Shown</h2>
+    `);
+    expect(getOutline(page.tree).map((e) => e.name)).toEqual(["Shown"]);
+    expect(
+      findAllByRole(page.tree, "heading", { includeHidden: true }).map(
+        (n) => n.a11y.name,
+      ),
+    ).toEqual(["Invisible", "Hidden from AT", "Shown"]);
+  });
+});
+
 describe("getTabSequence", () => {
   it("places positive tabindexes first, in ascending order", () => {
     const root = createPage(`

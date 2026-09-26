@@ -130,6 +130,30 @@ describe("serializeOutline", () => {
   });
 });
 
+// The visually hidden ("sr-only") pattern is read by screen readers, so both
+// snapshots keep it — as Chromium's native tree does. It used to vanish
+// because the extractor flags it `dom.isHidden`.
+describe("screen-reader-only content in snapshots", () => {
+  const SR_ONLY =
+    "position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)";
+
+  it("keeps a visually hidden heading in the outline", () => {
+    document.body.innerHTML = `<h2 style="${SR_ONLY}">Navigation Menu</h2><h1>Title</h1>`;
+    expect(serializeOutline(document.body)).toBe(
+      "  h2 Navigation Menu\nh1 Title",
+    );
+  });
+
+  it("keeps it in the tree snapshot, and still drops visibility:hidden", () => {
+    document.body.innerHTML = `
+      <h2 style="${SR_ONLY}">Navigation Menu</h2>
+      <h2 style="visibility:hidden">Invisible</h2>`;
+    const out = serializeTree(document.body);
+    expect(out).toContain('heading "Navigation Menu" (level 2)');
+    expect(out).not.toContain("Invisible");
+  });
+});
+
 describe("serializeTabSequence", () => {
   it("lists focusable nodes in tab order, one per line, unnumbered", () => {
     document.body.innerHTML = `<a href="#a">Home</a><button>Go</button>`;

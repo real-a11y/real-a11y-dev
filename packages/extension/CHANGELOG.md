@@ -18,6 +18,20 @@
 
 ## Unreleased
 
+- The copied heading outline and DOM tree now include visually hidden
+  ("sr-only") content that screen readers read, the way NATIVE mode already
+  did. On a GitHub PR page, the DOM outline was missing GitHub's visually
+  hidden `h2 Navigation Menu`. `visibility: hidden` and `aria-hidden` content
+  is still left out.
+  ([#410](https://github.com/real-a11y/real-a11y-dev/pull/410))
+
+- A heading or button that contains a `<details>` now includes the
+  disclosure's summary in its name in DOM mode, matching NATIVE mode. A
+  GitHub comment header read "user commented •" instead of "user commented •
+  edited by …". Opening or closing the disclosure, or editing its summary,
+  updates the name without a refresh.
+  ([#409](https://github.com/real-a11y/real-a11y-dev/pull/409))
+
 - Stop telling the extension which page you are on when you are not using it.
   The content script runs in every frame of every page and announces itself at
   load whether or not the side panel is ever opened there; that announce

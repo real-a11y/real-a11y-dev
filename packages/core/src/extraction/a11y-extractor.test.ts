@@ -15,6 +15,26 @@ function createPage(html: string): Element {
 }
 
 describe("extractA11yTree", () => {
+  // aria-hidden hides the whole subtree, and no descendant can override it.
+  // The DOM view records exposure per element, so a descendant still reads
+  // `isExposedToAT: true` there; the projection must drop it with its
+  // ancestor rather than flatten it back up into the tree.
+  it("drops every descendant of an aria-hidden element, not just the element", () => {
+    const root = createPage(`
+      <div aria-hidden="true">
+        <h2>Behind a modal</h2>
+        <div><button>Hidden action</button></div>
+      </div>
+      <h2>Shown</h2>
+    `);
+    const names = [...extractA11yTree(root).nodes.values()].map(
+      (n) => n.a11y.name,
+    );
+    expect(names).toContain("Shown");
+    expect(names).not.toContain("Behind a modal");
+    expect(names).not.toContain("Hidden action");
+  });
+
   it("keeps interactive nodes with meaningful roles", () => {
     const root = createPage(`
       <main>

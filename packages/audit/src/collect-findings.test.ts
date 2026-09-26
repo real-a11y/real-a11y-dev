@@ -173,6 +173,15 @@ describe("collectFindings — heading-order", () => {
     const root = mount(`<h1>A</h1><h2>B</h2><h3>C</h3>`);
     expect(collectFindings(root, ["heading-order"])).toEqual([]);
   });
+
+  // A visually hidden ("sr-only") h1 is a common pattern, and screen readers
+  // announce it. Reporting the page as missing its h1 was a false positive.
+  it("counts a visually hidden h1 that screen readers still read", () => {
+    const root = mount(
+      `<h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">Dashboard</h1><h2>Recent</h2>`,
+    );
+    expect(collectFindings(root, ["heading-order"])).toEqual([]);
+  });
 });
 
 describe("collectFindings — dialog-labeled", () => {
