@@ -635,6 +635,57 @@ describe("buildNativeTree — R1: what a user typed into an editor never reaches
     expect(image.dom?.attributes.alt).toBe("Diagram"); // markup kept
   });
 
+  it("fails closed when Chromium's name trace is missing or disagrees with the name", () => {
+    // A markup name is only kept when the trace PROVES it: a payload without
+    // `sources` (older Chromium, a trimmed recording), or one whose winning
+    // source isn't the text the node ended up named, reads as withheld.
+    const host = {
+      nodeId: "2",
+      parentId: "1",
+      childIds: ["3", "4", "5"],
+      role: { value: "textbox" },
+      name: { value: "Message" },
+      properties: [{ name: "editable", value: { value: "richtext" } }],
+      backendDOMNodeId: 20,
+    };
+    const link = (
+      nodeId: string,
+      name: { value: string; sources?: unknown[] },
+    ) => ({
+      nodeId,
+      parentId: "2",
+      role: { value: "link" },
+      name,
+      backendDOMNodeId: 30 + Number(nodeId),
+    });
+    const raw = [
+      { nodeId: "1", childIds: ["2"], role: { value: "RootWebArea" } },
+      host,
+      link("3", { value: "untraced" }),
+      link("4", {
+        value: "typed text",
+        sources: [
+          { type: "attribute", attribute: "aria-label", value: { value: "x" } },
+        ],
+      }),
+      link("5", {
+        value: "Mention Alice",
+        sources: [
+          {
+            type: "attribute",
+            attribute: "aria-label",
+            value: { value: "Mention Alice" },
+          },
+        ],
+      }),
+    ] as Parameters<typeof buildNativeTree>[0];
+    const tree = buildNativeTree(raw);
+    expect(tree.nodes.get("ax-dom-33")?.a11y.name).toBe("[redacted]");
+    expect(tree.nodes.get("ax-dom-34")?.a11y.name).toBe("[redacted]");
+    expect(tree.nodes.get("ax-dom-35")?.a11y.name).toBe("Mention Alice");
+    expect(tree.nodes.get("ax-dom-20")?.a11y.name).toBe("Message"); // the host
+  });
+
   it("leaves everything outside the editor untouched", () => {
     const tree = buildEditor();
     expect(find(tree, "heading", "Compose")).toHaveLength(1);

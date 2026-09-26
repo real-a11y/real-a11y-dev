@@ -14,4 +14,6 @@ Below any node Chromium marks `editable` — a `contenteditable` host, a `design
 - a name from the page's own markup — `aria-label`, `alt`, `title` — is kept, as is the editor host's own label
 - the `dom` facet drops `href`, `src`, `poster` and `id` inside the editor, and a locator there anchors on an id outside it, since an editor may derive an id from typed text
 
+Expect a one-time change in any committed `snapshot` artifact or baseline of a page with an editor: those names now read `[redacted]`, so the next `diff` reports them as renamed. Refresh the baseline. And since every withheld node shares that name, a link inside an editor is targeted with `nth` (or through the editor itself) rather than by its text.
+
 The DOM producer is unchanged, deliberately: it is the developer inspecting their own page and shows editor content the way it shows an `<input>`'s value. `tabs` and MCP's `get_tab_order` are built from it, so a link inside an editor still prints there under its own text.
