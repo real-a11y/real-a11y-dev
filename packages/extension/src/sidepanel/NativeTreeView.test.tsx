@@ -293,6 +293,63 @@ describe("NativeTreeView selection-focus follow", () => {
     expect(onSelectionFocus).toHaveBeenCalledExactlyOnceWith("h-foot");
   });
 
+  it("does not re-fire for the same selection when only the callback's identity changes", () => {
+    // Regression (Devin Review, PR #412): App.tsx's real callback
+    // (focusNativeSelectionOnPage) depends on nativeBusy/curtainOn, so its
+    // identity changes whenever either flips even though the tree's own
+    // selection didn't move — e.g. a native action settling after dispatch.
+    // The effect used to list the callback itself as a dependency, so a
+    // fresh reference re-armed the debounce for the SAME row and fired a
+    // second, unwanted dispatch — concretely, stealing focus back from a
+    // dialog an action had just opened, once nativeBusy cleared.
+    const first = vi.fn();
+    act(() => {
+      render(
+        <NativeTreeView
+          nodes={NODES}
+          rootId="root"
+          busy={false}
+          capability={undefined}
+          status=""
+          onRefresh={() => {}}
+          onActivate={() => {}}
+          onSelectionFocus={first}
+        />,
+        container,
+      );
+    });
+    act(() => row("h1").click());
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(first).toHaveBeenCalledExactlyOnceWith("h1");
+
+    // Re-render with a NEW callback reference — same as App.tsx handing down
+    // a fresh `focusNativeSelectionOnPage` once nativeBusy/curtainOn flips —
+    // with the selection itself untouched.
+    const second = vi.fn();
+    act(() => {
+      render(
+        <NativeTreeView
+          nodes={NODES}
+          rootId="root"
+          busy={false}
+          capability={undefined}
+          status=""
+          onRefresh={() => {}}
+          onActivate={() => {}}
+          onSelectionFocus={second}
+        />,
+        container,
+      );
+    });
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    expect(second).not.toHaveBeenCalled();
+    expect(first).toHaveBeenCalledTimes(1);
+  });
+
   it("never calls onSelectionFocus when nothing is selected", () => {
     const onSelectionFocus = mountWithFocusFollow();
     act(() => {

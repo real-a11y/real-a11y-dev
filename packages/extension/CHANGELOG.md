@@ -217,7 +217,8 @@
   DOM tree's own selection already gave. Clicking a row, arrow-key
   navigation, and a native pick's reveal all follow — debounced, so a fast
   arrow-key run through several rows only moves the page's focus to the row
-  you actually settle on. (PR pending — see the next commit)
+  you actually settle on.
+  ([#412](https://github.com/real-a11y/real-a11y-dev/pull/412))
 
 ## 0.1.14
 
