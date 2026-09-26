@@ -18,6 +18,7 @@ import {
   NATIVE_AX_DROP_ROLES,
   NATIVE_AX_DROP_UNLESS_NAMED,
   NATIVE_AX_DROP_WHEN_BARE,
+  NATIVE_AX_OWN_TEXT_ROLES,
   NATIVE_AX_VOCABULARY_VERSION,
 } from "./ax-vocabulary.js";
 
@@ -25,6 +26,29 @@ const rawNodes = fixture.nodes as RawNativeAXNode[];
 
 function byRole(nodes: NativeAXNode[], role: string): NativeAXNode[] {
   return nodes.filter((n) => n.role === role);
+}
+
+/** A hand-built raw AX node, carrying only the fields a case sets. */
+function raw(
+  nodeId: string,
+  role: string,
+  opts: {
+    parentId?: string;
+    childIds?: string[];
+    name?: string;
+    ignored?: boolean;
+    properties?: RawNativeAXNode["properties"];
+  } = {},
+): RawNativeAXNode {
+  return {
+    nodeId,
+    role: { value: role },
+    ...(opts.name !== undefined ? { name: { value: opts.name } } : {}),
+    ...(opts.parentId !== undefined ? { parentId: opts.parentId } : {}),
+    ...(opts.childIds !== undefined ? { childIds: opts.childIds } : {}),
+    ...(opts.ignored ? { ignored: true } : {}),
+    ...(opts.properties !== undefined ? { properties: opts.properties } : {}),
+  };
 }
 
 describe("native AX vocabulary", () => {
@@ -143,18 +167,6 @@ describe("normalizeNativeAX (recorded Chromium 141 tree)", () => {
 });
 
 describe("name promotion depth and guard", () => {
-  const raw = (
-    nodeId: string,
-    role: string,
-    opts: { parentId?: string; childIds?: string[]; name?: string } = {},
-  ): RawNativeAXNode => ({
-    nodeId,
-    role: { value: role },
-    ...(opts.name !== undefined ? { name: { value: opts.name } } : {}),
-    ...(opts.parentId !== undefined ? { parentId: opts.parentId } : {}),
-    ...(opts.childIds !== undefined ? { childIds: opts.childIds } : {}),
-  });
-
   it("promotes through nested dropped wrappers (LabelText → StaticText)", () => {
     // Chromium's common label shape: the LabelText carries NO name itself;
     // its text lives on a StaticText child — sometimes under a generic too.
@@ -196,26 +208,6 @@ describe("name promotion depth and guard", () => {
 });
 
 describe("a node's own text (direct StaticText children)", () => {
-  const raw = (
-    nodeId: string,
-    role: string,
-    opts: {
-      parentId?: string;
-      childIds?: string[];
-      name?: string;
-      ignored?: boolean;
-      properties?: RawNativeAXNode["properties"];
-    } = {},
-  ): RawNativeAXNode => ({
-    nodeId,
-    role: { value: role },
-    ...(opts.name !== undefined ? { name: { value: opts.name } } : {}),
-    ...(opts.parentId !== undefined ? { parentId: opts.parentId } : {}),
-    ...(opts.childIds !== undefined ? { childIds: opts.childIds } : {}),
-    ...(opts.ignored ? { ignored: true } : {}),
-    ...(opts.properties !== undefined ? { properties: opts.properties } : {}),
-  });
-
   it("keeps a paragraph's plain text around its kept inline children", () => {
     // `<p>See <a>#386</a> and <code>x</code> here.</p>` — the paragraph is not
     // a leaf, so leaf-only promotion never ran and all three runs were lost.
@@ -272,6 +264,41 @@ describe("a node's own text (direct StaticText children)", () => {
       ["main", '  button "Save"'].join("\n"),
     );
   });
+
+  // Chromium 151 leaves each of these unnamed even with a sentence of its own
+  // beside a kept child: they are named by the author only, and that empty
+  // name is what `dialog-labeled`, `image-alt` and `no-unlabeled-interactive`
+  // report. `<div role="dialog">Delete this project? <button>Cancel</button>`
+  // must not read as a labelled dialog.
+  it.each([
+    "dialog",
+    "alertdialog",
+    "image",
+    "navigation",
+    "form",
+    "tree",
+    "combobox",
+    "textbox",
+  ])("never names a %s from its own text", (role) => {
+    const nodes = normalizeNativeAX([
+      raw("1", role, { childIds: ["2", "3"] }),
+      raw("2", "StaticText", { parentId: "1", name: "Delete this project? " }),
+      raw("3", "button", { parentId: "1", name: "Cancel" }),
+    ]);
+    expect(nodes[0].name).toBe("");
+  });
+
+  it.each([...NATIVE_AX_OWN_TEXT_ROLES])(
+    "names a %s from its own text beside a kept child",
+    (role) => {
+      const nodes = normalizeNativeAX([
+        raw("1", role, { childIds: ["2", "3"] }),
+        raw("2", "StaticText", { parentId: "1", name: "Own text " }),
+        raw("3", "link", { parentId: "1", name: "kept" }),
+      ]);
+      expect(nodes[0].name).toBe("Own text");
+    },
+  );
 
   it("does not enter an ignored wrapper, even on a leaf with direct text", () => {
     // A clipped screen-reader-only span: Chromium ignores the span but not its
@@ -345,11 +372,13 @@ describe("a node's own text (direct StaticText children)", () => {
 //   <label>Email <input></label>
 //   <div>Loose block</div>
 //   <article><header tabindex="0">By Ada<h2>Post</h2></header></article>
+//   <nav>Menu: <a href="#e">Home</a></nav>
+//   <div role="dialog">Delete this project? <button>Cancel</button></div>
 //   </main>
 describe("normalizeNativeAX (recorded mixed inline text)", () => {
   const nodes = normalizeNativeAX(mixedTextFixture.nodes as RawNativeAXNode[]);
 
-  it("keeps every paragraph's own text, matching the DOM producer's direct text", () => {
+  it("keeps every paragraph's own text, and no author-named role takes one", () => {
     expect(serializeNativeAX(nodes)).toBe(
       [
         "main",
@@ -372,24 +401,18 @@ describe("normalizeNativeAX (recorded mixed inline text)", () => {
         "  article",
         "    sectionheader",
         '      heading "Post"',
+        // Author-named: their loose text is not a name, so a landmark and a
+        // dialog stay unnamed — the dialog is still a `dialog-labeled` finding.
+        "  navigation",
+        '    link "Home"',
+        "  dialog",
+        '    button "Cancel"',
       ].join("\n"),
     );
   });
 });
 
 describe("named container preservation (generic)", () => {
-  const raw = (
-    nodeId: string,
-    role: string,
-    opts: { parentId?: string; childIds?: string[]; name?: string } = {},
-  ): RawNativeAXNode => ({
-    nodeId,
-    role: { value: role },
-    ...(opts.name !== undefined ? { name: { value: opts.name } } : {}),
-    ...(opts.parentId !== undefined ? { parentId: opts.parentId } : {}),
-    ...(opts.childIds !== undefined ? { childIds: opts.childIds } : {}),
-  });
-
   // Chromium exposes YouTube's player wrapper as `generic "YouTube Video
   // Player"` with the media controls beneath it. The named container must
   // survive so the grouping (and native↔DOM parity) is preserved.
@@ -436,24 +459,6 @@ describe("named container preservation (generic)", () => {
 // bare. Chromium exposes them; we drop the bare ones so native agrees with
 // the DOM producer's a11y view, and keep any that carry information.
 describe("sectionheader / sectionfooter (drop when bare)", () => {
-  const raw = (
-    nodeId: string,
-    role: string,
-    opts: {
-      parentId?: string;
-      childIds?: string[];
-      name?: string;
-      properties?: RawNativeAXNode["properties"];
-    } = {},
-  ): RawNativeAXNode => ({
-    nodeId,
-    role: { value: role },
-    ...(opts.name !== undefined ? { name: { value: opts.name } } : {}),
-    ...(opts.parentId !== undefined ? { parentId: opts.parentId } : {}),
-    ...(opts.childIds !== undefined ? { childIds: opts.childIds } : {}),
-    ...(opts.properties !== undefined ? { properties: opts.properties } : {}),
-  });
-
   const tree = (
     role: string,
     extra: { name?: string; properties?: RawNativeAXNode["properties"] },

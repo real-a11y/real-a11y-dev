@@ -21,6 +21,7 @@ import {
   NATIVE_AX_DROP_WHEN_BARE,
   NATIVE_AX_EXPOSING_PROPERTIES,
   NATIVE_AX_NAME_SOURCE_ROLES,
+  NATIVE_AX_OWN_TEXT_ROLES,
 } from "./ax-vocabulary.js";
 
 /** The subset of CDP `Accessibility.AXNode` this normalizer consumes. */
@@ -105,8 +106,11 @@ function idOf(node: RawNativeAXNode): string {
  * owns its text; a dropped wrapper (`LabelText`, a bare `generic`, an ignored
  * span) is an element whose text the DOM producer doesn't count as direct
  * either — and crossing into an out-of-flow one glues words, because the
- * whitespace beside it has already collapsed. That boundary is what makes this
- * safe on a container, where the deep search is not.
+ * whitespace beside it has already collapsed.
+ *
+ * On a node with kept children it runs only for the prose roles in
+ * {@link NATIVE_AX_OWN_TEXT_ROLES}: a dialog or landmark with a loose sentence
+ * beside its buttons has no accessible name, and must keep reading that way.
  */
 function directText(
   node: RawNativeAXNode,
@@ -211,18 +215,23 @@ export function normalizeNativeAX(rawNodes: RawNativeAXNode[]): NativeAXNode[] {
   }
 
   // Name promotion is a post-pass so the leaf guard can see the normalized
-  // shape. Any unnamed node takes the text on its own StaticText children
-  // (directText); only leaves (no kept descendants) may then go further and
-  // pull text from their dropped subtree (promoteNameFromDroppedDescendants).
+  // shape. An unnamed leaf takes the text on its own StaticText children
+  // (directText), else the first text in its dropped subtree
+  // (promoteNameFromDroppedDescendants). A node with kept children takes its
+  // own text only if it is a prose role — see NATIVE_AX_OWN_TEXT_ROLES.
   for (const node of out) {
     if (node.name) continue;
     const raw = rawOf.get(node);
     if (!raw) continue;
+    const role = raw.role?.value ?? "";
     // A kept sectionheader/sectionfooter is name-from-author only: its loose
     // byline is not its name — the DOM producer never names one from content.
-    if (NATIVE_AX_DROP_WHEN_BARE.has(raw.role?.value ?? "")) continue;
-    node.name = directText(raw, byId);
-    if (!node.name && node.childIds.length === 0) {
+    if (NATIVE_AX_DROP_WHEN_BARE.has(role)) continue;
+    const isLeaf = node.childIds.length === 0;
+    if (isLeaf || NATIVE_AX_OWN_TEXT_ROLES.has(role)) {
+      node.name = directText(raw, byId);
+    }
+    if (!node.name && isLeaf) {
       node.name = promoteNameFromDroppedDescendants(raw, byId);
     }
   }

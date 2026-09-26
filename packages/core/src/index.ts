@@ -96,6 +96,7 @@ export {
   NATIVE_AX_EXPOSING_PROPERTIES,
   NATIVE_AX_ROLE_MAP,
   NATIVE_AX_NAME_SOURCE_ROLES,
+  NATIVE_AX_OWN_TEXT_ROLES,
   mapNativeAXRole,
 } from "./native/ax-vocabulary.js";
 export { normalizeNativeAX, serializeNativeAX } from "./native/ax-normalize.js";

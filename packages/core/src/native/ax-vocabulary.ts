@@ -122,9 +122,46 @@ export function mapNativeAXRole(role: string): string {
  * bare `listitem` in the spikes) — see `promoteNameFromDroppedDescendants`
  * in the normalizer. (A node's DIRECT `StaticText` children are read by
  * `directText` there first, and that step reads only `StaticText`: a
- * `LabelText` is a `<label>` element, not the node's own text.)
+ * `LabelText` is a `<label>` element, not the node's own text. See
+ * {@link NATIVE_AX_OWN_TEXT_ROLES}.)
  */
 export const NATIVE_AX_NAME_SOURCE_ROLES: ReadonlySet<string> = new Set([
   "StaticText",
   "LabelText",
+]);
+
+/**
+ * Prose roles whose text IS their content, so they take a name from their own
+ * `StaticText` children even when they also have kept children — a paragraph
+ * that mixes sentences with a `link` or `code` (see `directText` in the
+ * normalizer). Chromium leaves these unnamed because ARIA prohibits naming
+ * them (paragraph, code, strong…) or never computes one from content
+ * (listitem, blockquote…), not because anything is missing.
+ *
+ * Deliberately NOT here: every role named by its author only — dialog,
+ * alertdialog, img, the landmarks, form, and widgets. Chromium's empty name
+ * on those IS the finding: `<div role="dialog">Delete this project?
+ * <button>Cancel</button></div>` has no accessible name, and the audit rules
+ * (`dialog-labeled`, `image-alt`, `no-unlabeled-interactive`) read exactly that
+ * emptiness. Naming them from their loose text would pass an unlabeled dialog.
+ *
+ * Raw Blink role strings (Chromium 151), like the other tables here.
+ */
+export const NATIVE_AX_OWN_TEXT_ROLES: ReadonlySet<string> = new Set([
+  "paragraph",
+  "blockquote",
+  "listitem",
+  "term",
+  "definition",
+  "caption",
+  "Figcaption",
+  "code",
+  "strong",
+  "emphasis",
+  "mark",
+  "deletion",
+  "insertion",
+  "subscript",
+  "superscript",
+  "time",
 ]);
