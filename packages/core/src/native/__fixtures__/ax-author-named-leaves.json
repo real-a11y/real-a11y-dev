@@ -1,0 +1,635 @@
+{
+  "chrome": "151.0.7922.34",
+  "nodes": [
+    {
+      "nodeId": "1",
+      "childIds": ["2"],
+      "backendDOMNodeId": 1,
+      "role": {
+        "value": "RootWebArea"
+      },
+      "name": {
+        "value": "author-named leaves fixture"
+      }
+    },
+    {
+      "nodeId": "2",
+      "parentId": "1",
+      "childIds": ["5"],
+      "backendDOMNodeId": 2,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "5",
+      "parentId": "2",
+      "childIds": ["6", "7", "8", "29", "30"],
+      "backendDOMNodeId": 5,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "6",
+      "parentId": "5",
+      "childIds": ["31"],
+      "backendDOMNodeId": 6,
+      "role": {
+        "value": "banner"
+      }
+    },
+    {
+      "nodeId": "7",
+      "parentId": "5",
+      "childIds": ["32"],
+      "backendDOMNodeId": 7,
+      "role": {
+        "value": "navigation"
+      }
+    },
+    {
+      "nodeId": "8",
+      "parentId": "5",
+      "childIds": [
+        "9",
+        "10",
+        "12",
+        "13",
+        "14",
+        "15",
+        "17",
+        "22",
+        "24",
+        "25",
+        "26",
+        "28"
+      ],
+      "backendDOMNodeId": 8,
+      "role": {
+        "value": "main"
+      }
+    },
+    {
+      "nodeId": "29",
+      "parentId": "5",
+      "childIds": ["46"],
+      "backendDOMNodeId": 29,
+      "role": {
+        "value": "complementary"
+      }
+    },
+    {
+      "nodeId": "30",
+      "parentId": "5",
+      "childIds": ["47"],
+      "backendDOMNodeId": 30,
+      "role": {
+        "value": "contentinfo"
+      }
+    },
+    {
+      "nodeId": "31",
+      "parentId": "6",
+      "childIds": ["-1000000002"],
+      "backendDOMNodeId": 31,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Acme"
+      }
+    },
+    {
+      "nodeId": "32",
+      "parentId": "7",
+      "childIds": ["-1000000003"],
+      "backendDOMNodeId": 32,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Menu"
+      }
+    },
+    {
+      "nodeId": "9",
+      "parentId": "8",
+      "childIds": ["33"],
+      "backendDOMNodeId": 9,
+      "role": {
+        "value": "image"
+      }
+    },
+    {
+      "nodeId": "10",
+      "parentId": "8",
+      "childIds": ["11"],
+      "backendDOMNodeId": 10,
+      "role": {
+        "value": "image"
+      }
+    },
+    {
+      "nodeId": "12",
+      "parentId": "8",
+      "childIds": ["35"],
+      "backendDOMNodeId": 12,
+      "role": {
+        "value": "dialog"
+      }
+    },
+    {
+      "nodeId": "13",
+      "parentId": "8",
+      "childIds": ["36"],
+      "backendDOMNodeId": 13,
+      "role": {
+        "value": "alertdialog"
+      }
+    },
+    {
+      "nodeId": "14",
+      "parentId": "8",
+      "childIds": ["37"],
+      "backendDOMNodeId": 14,
+      "role": {
+        "value": "form"
+      }
+    },
+    {
+      "nodeId": "15",
+      "parentId": "8",
+      "childIds": ["16"],
+      "backendDOMNodeId": 15,
+      "role": {
+        "value": "listbox"
+      }
+    },
+    {
+      "nodeId": "17",
+      "parentId": "8",
+      "childIds": ["18"],
+      "backendDOMNodeId": 17,
+      "role": {
+        "value": "searchbox"
+      }
+    },
+    {
+      "nodeId": "22",
+      "parentId": "8",
+      "childIds": ["23"],
+      "backendDOMNodeId": 22,
+      "role": {
+        "value": "list"
+      }
+    },
+    {
+      "nodeId": "24",
+      "parentId": "8",
+      "childIds": ["42"],
+      "backendDOMNodeId": 24,
+      "role": {
+        "value": "code"
+      }
+    },
+    {
+      "nodeId": "25",
+      "parentId": "8",
+      "childIds": ["43"],
+      "backendDOMNodeId": 25,
+      "role": {
+        "value": "alert"
+      }
+    },
+    {
+      "nodeId": "26",
+      "parentId": "8",
+      "childIds": ["27"],
+      "backendDOMNodeId": 26,
+      "role": {
+        "value": "checkbox"
+      },
+      "name": {
+        "value": "Accept"
+      }
+    },
+    {
+      "nodeId": "28",
+      "parentId": "8",
+      "childIds": ["45"],
+      "backendDOMNodeId": 28,
+      "role": {
+        "value": "image"
+      },
+      "name": {
+        "value": "Party"
+      }
+    },
+    {
+      "nodeId": "46",
+      "parentId": "29",
+      "childIds": ["-1000000017"],
+      "backendDOMNodeId": 46,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Tip of the day"
+      }
+    },
+    {
+      "nodeId": "47",
+      "parentId": "30",
+      "childIds": ["-1000000018"],
+      "backendDOMNodeId": 47,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "© 2026 Acme"
+      }
+    },
+    {
+      "nodeId": "-1000000002",
+      "parentId": "31",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Acme"
+      }
+    },
+    {
+      "nodeId": "-1000000003",
+      "parentId": "32",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Menu"
+      }
+    },
+    {
+      "nodeId": "33",
+      "parentId": "9",
+      "childIds": ["-1000000004"],
+      "backendDOMNodeId": 33,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "🎉"
+      }
+    },
+    {
+      "nodeId": "11",
+      "parentId": "10",
+      "childIds": ["34"],
+      "backendDOMNodeId": 11,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "35",
+      "parentId": "12",
+      "childIds": ["-1000000006"],
+      "backendDOMNodeId": 35,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Unsaved changes"
+      }
+    },
+    {
+      "nodeId": "36",
+      "parentId": "13",
+      "childIds": ["-1000000007"],
+      "backendDOMNodeId": 36,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Discard them?"
+      }
+    },
+    {
+      "nodeId": "37",
+      "parentId": "14",
+      "childIds": ["-1000000008"],
+      "backendDOMNodeId": 37,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Sign up below"
+      }
+    },
+    {
+      "nodeId": "16",
+      "parentId": "15",
+      "childIds": ["38"],
+      "backendDOMNodeId": 16,
+      "role": {
+        "value": "LabelText"
+      }
+    },
+    {
+      "nodeId": "18",
+      "parentId": "17",
+      "childIds": ["20"],
+      "backendDOMNodeId": 18,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "20",
+      "parentId": "18",
+      "childIds": ["39"],
+      "backendDOMNodeId": 20,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "23",
+      "parentId": "22",
+      "childIds": ["40", "41"],
+      "backendDOMNodeId": 23,
+      "role": {
+        "value": "listitem"
+      }
+    },
+    {
+      "nodeId": "42",
+      "parentId": "24",
+      "childIds": ["-1000000013"],
+      "backendDOMNodeId": 42,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "npm test"
+      }
+    },
+    {
+      "nodeId": "43",
+      "parentId": "25",
+      "childIds": ["-1000000014"],
+      "backendDOMNodeId": 43,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Saved"
+      }
+    },
+    {
+      "nodeId": "27",
+      "parentId": "26",
+      "childIds": ["44"],
+      "backendDOMNodeId": 27,
+      "role": {
+        "value": "LabelText"
+      }
+    },
+    {
+      "nodeId": "45",
+      "parentId": "28",
+      "childIds": ["-1000000016"],
+      "backendDOMNodeId": 45,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "🎉"
+      }
+    },
+    {
+      "nodeId": "-1000000017",
+      "parentId": "46",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Tip of the day"
+      }
+    },
+    {
+      "nodeId": "-1000000018",
+      "parentId": "47",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "© 2026 Acme"
+      }
+    },
+    {
+      "nodeId": "-1000000004",
+      "parentId": "33",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "🎉"
+      }
+    },
+    {
+      "nodeId": "34",
+      "parentId": "11",
+      "childIds": ["-1000000005"],
+      "backendDOMNodeId": 34,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Chart"
+      }
+    },
+    {
+      "nodeId": "-1000000006",
+      "parentId": "35",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Unsaved changes"
+      }
+    },
+    {
+      "nodeId": "-1000000007",
+      "parentId": "36",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Discard them?"
+      }
+    },
+    {
+      "nodeId": "-1000000008",
+      "parentId": "37",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Sign up below"
+      }
+    },
+    {
+      "nodeId": "38",
+      "parentId": "16",
+      "childIds": ["-1000000009"],
+      "backendDOMNodeId": 38,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Choose a plan"
+      }
+    },
+    {
+      "nodeId": "39",
+      "parentId": "20",
+      "childIds": ["-1000000010"],
+      "backendDOMNodeId": 39,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "typed query"
+      }
+    },
+    {
+      "nodeId": "40",
+      "parentId": "23",
+      "childIds": ["-1000000011"],
+      "backendDOMNodeId": 40,
+      "role": {
+        "value": "ListMarker"
+      },
+      "name": {
+        "value": "• "
+      }
+    },
+    {
+      "nodeId": "41",
+      "parentId": "23",
+      "childIds": ["-1000000012"],
+      "backendDOMNodeId": 41,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Alpha"
+      }
+    },
+    {
+      "nodeId": "-1000000013",
+      "parentId": "42",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "npm test"
+      }
+    },
+    {
+      "nodeId": "-1000000014",
+      "parentId": "43",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Saved"
+      }
+    },
+    {
+      "nodeId": "44",
+      "parentId": "27",
+      "childIds": ["-1000000015"],
+      "backendDOMNodeId": 44,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Accept"
+      }
+    },
+    {
+      "nodeId": "-1000000016",
+      "parentId": "45",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "🎉"
+      }
+    },
+    {
+      "nodeId": "-1000000005",
+      "parentId": "34",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Chart"
+      }
+    },
+    {
+      "nodeId": "-1000000009",
+      "parentId": "38",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Choose a plan"
+      }
+    },
+    {
+      "nodeId": "-1000000010",
+      "parentId": "39",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "typed query"
+      }
+    },
+    {
+      "nodeId": "-1000000011",
+      "parentId": "40",
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "-1000000012",
+      "parentId": "41",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Alpha"
+      }
+    },
+    {
+      "nodeId": "-1000000015",
+      "parentId": "44",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Accept"
+      }
+    }
+  ]
+}

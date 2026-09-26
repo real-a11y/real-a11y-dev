@@ -5,6 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 
+import authorNamedFixture from "./__fixtures__/ax-author-named-leaves.json";
 import fixture from "./__fixtures__/ax-media-form.json";
 import mixedTextFixture from "./__fixtures__/ax-mixed-text.json";
 import {
@@ -15,6 +16,7 @@ import {
 } from "./ax-normalize.js";
 import {
   mapNativeAXRole,
+  NATIVE_AX_AUTHOR_NAMED_ROLES,
   NATIVE_AX_DROP_ROLES,
   NATIVE_AX_DROP_UNLESS_NAMED,
   NATIVE_AX_DROP_WHEN_BARE,
@@ -356,6 +358,117 @@ describe("a node's own text (direct StaticText children)", () => {
   });
 });
 
+// A LEAF of an author-named role gets the same rule as one with kept children:
+// its text is not its name. Chromium 151 leaves every one of these unnamed with
+// a lone StaticText child (`<span role="img">🎉</span>` is `image ""`), and
+// that empty name is what `image-alt`, `dialog-labeled` and
+// `no-unlabeled-interactive` report. Raw Blink role strings.
+const AUTHOR_NAMED_LEAF_ROLES = [
+  "image",
+  "dialog",
+  "alertdialog",
+  "banner",
+  "complementary",
+  "contentinfo",
+  "form",
+  "main",
+  "navigation",
+  "region",
+  "search",
+  "sectionheader",
+  "sectionfooter",
+  "combobox",
+  "listbox",
+  "searchbox",
+  "slider",
+  "spinbutton",
+  "textbox",
+];
+
+describe("author-named leaves", () => {
+  it("is the vocabulary's author-named table, apart from the prose roles", () => {
+    expect(NATIVE_AX_AUTHOR_NAMED_ROLES).toEqual(
+      new Set(AUTHOR_NAMED_LEAF_ROLES),
+    );
+    for (const role of NATIVE_AX_AUTHOR_NAMED_ROLES) {
+      expect(NATIVE_AX_OWN_TEXT_ROLES.has(role)).toBe(false);
+    }
+  });
+
+  it("covers every drop-when-bare role, so a kept one never takes its byline", () => {
+    // The post-pass guard for a kept sectionheader/sectionfooter IS this
+    // table now; a role added to one list and not the other would regress it.
+    for (const role of NATIVE_AX_DROP_WHEN_BARE) {
+      expect(NATIVE_AX_AUTHOR_NAMED_ROLES.has(role)).toBe(true);
+    }
+  });
+
+  it.each(AUTHOR_NAMED_LEAF_ROLES)(
+    "never names a leaf %s from its own text",
+    (role) => {
+      // Focusable, so a sectionheader/sectionfooter is kept rather than dropped
+      // as bare.
+      const focusable = [{ name: "focusable", value: { value: true } }];
+      const nodes = normalizeNativeAX([
+        raw("1", role, { childIds: ["2"], properties: focusable }),
+        raw("2", "StaticText", { parentId: "1", name: "🎉" }),
+      ]);
+      expect(nodes).toHaveLength(1);
+      expect(nodes[0].name).toBe("");
+    },
+  );
+
+  it("never names one from text deeper in its dropped subtree", () => {
+    // `<svg role="img"><text>Chart</text></svg>`: Chromium hangs the SVG
+    // text under a generic, and names the image nothing.
+    const svg = normalizeNativeAX([
+      raw("1", "image", { childIds: ["2"] }),
+      raw("2", "generic", { parentId: "1", childIds: ["3"] }),
+      raw("3", "StaticText", { parentId: "2", name: "Chart" }),
+    ]);
+    expect(serializeNativeAX(svg)).toBe("img");
+
+    // `<div role="listbox"><label>Choose a plan</label></div>`: a label
+    // INSIDE a listbox does not label it.
+    const listbox = normalizeNativeAX([
+      raw("1", "listbox", { childIds: ["2"] }),
+      raw("2", "LabelText", { parentId: "1", childIds: ["3"] }),
+      raw("3", "StaticText", { parentId: "2", name: "Choose a plan" }),
+    ]);
+    expect(serializeNativeAX(listbox)).toBe("listbox");
+  });
+
+  it("never names a field after its typed value", () => {
+    // `<input type="search" value="typed query">`: the value sits on a
+    // StaticText under Chromium's inner-editor generic.
+    const nodes = normalizeNativeAX([
+      raw("1", "searchbox", { childIds: ["2"] }),
+      raw("2", "generic", { parentId: "1", childIds: ["3"] }),
+      raw("3", "StaticText", { parentId: "2", name: "typed query" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe("searchbox");
+  });
+
+  it("keeps the name Chromium gave one", () => {
+    const nodes = normalizeNativeAX([
+      raw("1", "image", { name: "Party", childIds: ["2"] }),
+      raw("2", "StaticText", { parentId: "1", name: "🎉" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe('img "Party"');
+  });
+
+  it.each(["alert", "status", "listitem", "code", "group", "article"])(
+    "still names a leaf %s from its text",
+    (role) => {
+      const nodes = normalizeNativeAX([
+        raw("1", role, { childIds: ["2"] }),
+        raw("2", "StaticText", { parentId: "1", name: "Saved" }),
+      ]);
+      expect(nodes[0].name).toBe("Saved");
+    },
+  );
+});
+
 // Recorded from Chromium 151 on this page (a real `getFullAXTree` payload,
 // trimmed to the fields the normalizer reads):
 //
@@ -407,6 +520,60 @@ describe("normalizeNativeAX (recorded mixed inline text)", () => {
         '    link "Home"',
         "  dialog",
         '    button "Cancel"',
+      ].join("\n"),
+    );
+  });
+});
+
+// Recorded from Chromium 151 on this page, trimmed the same way:
+//
+//   <header>Acme</header>
+//   <nav>Menu</nav>
+//   <main>
+//   <span role="img">🎉</span>
+//   <svg role="img" width="80" height="20"><text x="0" y="15">Chart</text></svg>
+//   <div role="dialog">Unsaved changes</div>
+//   <div role="alertdialog">Discard them?</div>
+//   <form>Sign up below</form>
+//   <div role="listbox"><label>Choose a plan</label></div>
+//   <input type="search" value="typed query">
+//   <ul><li>Alpha</li></ul>
+//   <code>npm test</code>
+//   <div role="alert">Saved</div>
+//   <div role="checkbox" aria-checked="false" tabindex="0"><label>Accept</label></div>
+//   <span role="img" aria-label="Party">🎉</span>
+//   </main>
+//   <aside>Tip of the day</aside>
+//   <footer>© 2026 Acme</footer>
+describe("normalizeNativeAX (recorded author-named leaves)", () => {
+  const nodes = normalizeNativeAX(
+    authorNamedFixture.nodes as RawNativeAXNode[],
+  );
+
+  it("leaves every author-named leaf as unnamed as Chromium does", () => {
+    expect(serializeNativeAX(nodes)).toBe(
+      [
+        "banner",
+        "navigation",
+        "main",
+        // `image-alt` reports both images, `dialog-labeled` both dialogs, and
+        // `no-unlabeled-interactive` the listbox and the searchbox.
+        "  img",
+        "  img",
+        "  dialog",
+        "  alertdialog",
+        "  form",
+        "  listbox",
+        "  searchbox",
+        // Everything else still reads its text, as before.
+        "  list",
+        '    listitem "Alpha"',
+        '  code "npm test"',
+        '  alert "Saved"',
+        '  checkbox "Accept"',
+        '  img "Party"',
+        "complementary",
+        "contentinfo",
       ].join("\n"),
     );
   });
