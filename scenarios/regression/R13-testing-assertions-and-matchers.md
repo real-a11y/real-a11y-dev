@@ -25,7 +25,7 @@ once on markup that should fail:
 | -------------------------------- | -------------------------------------------------------------- |
 | `assertNoUnlabeledInteractive`   | an empty-name control (icon `<svg>` with no name). Glyph / emoji text and `title=` on a **button** pass — accname is non-empty, same as axe `button-name` |
 | `assertHeadingOrder`             | a page whose first heading is `<h2>`, and one that skips h2→h4 |
-| `assertDialogsLabeled`           | `role="dialog"` with no accessible name                         |
+| `assertDialogsLabeled`           | `role="dialog"` with no accessible name — including one whose only text is loose content beside its buttons (step 9) |
 | `assertLandmarkStructure`        | no `<main>`, and two `<main>`s                                  |
 
 1. Each assertion on good markup
@@ -46,6 +46,10 @@ once on markup that should fail:
 8. `assertNoUnlabeledInteractive` on the three icon-button shapes that ship in
    real products: an `<svg>` child, a glyph or emoji as the button's text
    (`⬇`, `🗑`), and `title=` with no other name
+9. `assertDialogsLabeled` on
+   `<div role="dialog">Delete this project? <button>Cancel</button></div>`, then
+   on the same dialog with `aria-labelledby` pointing at an `<h2>` holding that
+   sentence
 
 ## Expected
 
@@ -69,11 +73,23 @@ once on markup that should fail:
   `<label>` is `label-title-only` (warning), not this assertion — that rule is
   **R37**. The table above used to say this assertion "fails on an icon-only
   `<button>`"; that is only true for an empty name.
+- **9** — the loose-text dialog **throws**
+  `Dialog (role dialog) has no accessible name.` with its locator; the
+  `aria-labelledby` one passes. From testing ≥ the first release after
+  0.1.0-beta.16. On 0.1.0-beta.16 and earlier the first call passes, because the
+  DOM producer named the dialog "Delete this project?" from its loose text. That
+  is the old behaviour reproduced, not a fail of this row.
 
 ## Why this exists
 
 An assertion library's failure message _is_ its product — the pass path is trivially
 right and tells nobody anything. Step 2 is the real test.
+
+Step 9 guards a false pass of the same shape. A dialog with a sentence beside
+its buttons looks labeled, and the DOM producer used to agree, naming it from
+that sentence, while Chromium and a screen reader give it no name at all. So
+`assertDialogsLabeled` passed exactly the unlabeled confirm dialog it exists to
+catch.
 
 Step 6 guards the worst outcome available here: a matcher that accepts junk and
 passes turns an entire suite into decoration, and it does so silently and

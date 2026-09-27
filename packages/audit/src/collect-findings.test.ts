@@ -47,6 +47,23 @@ describe("collectFindings — no-unlabeled-interactive", () => {
       ).toEqual([]);
     }
   });
+
+  // A text field's contents are the user's data, and a combobox's text is its
+  // value — neither is a label, and Chromium names none of these.
+  it.each([
+    [`<textarea>typed text</textarea>`, "textbox"],
+    [`<div role="textbox" contenteditable="true">typed text</div>`, "textbox"],
+    [`<div role="combobox" tabindex="0">Selected value</div>`, "combobox"],
+    // The Radix Select trigger: the button tag doesn't make it name-from-content.
+    [
+      `<button role="combobox" aria-expanded="false">Apple</button>`,
+      "combobox",
+    ],
+  ])("flags a control whose only text is its value: %s", (html, role) => {
+    const findings = collectFindings(mount(html), ["no-unlabeled-interactive"]);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].role).toBe(role);
+  });
 });
 
 describe("collectFindings — label-title-only", () => {
@@ -201,6 +218,17 @@ describe("collectFindings — dialog-labeled", () => {
     const root = mount(`<div role="alertdialog"></div>`);
     expect(collectFindings(root, ["dialog-labeled"])).toHaveLength(1);
   });
+
+  // A dialog's loose text is its content, not its name — Chromium exposes all
+  // three of these as unnamed. The DOM producer used to name each from that
+  // text, so the rule passed dialogs AT announces with no name at all.
+  it.each([
+    `<div role="dialog">Delete this project? <button>Cancel</button></div>`,
+    `<dialog open>Discard changes? <button>OK</button></dialog>`,
+    `<div role="alertdialog">Session expired <button>Renew</button></div>`,
+  ])("flags a dialog whose only text is loose content: %s", (html) => {
+    expect(collectFindings(mount(html), ["dialog-labeled"])).toHaveLength(1);
+  });
 });
 
 describe("collectFindings — landmark-structure", () => {
@@ -286,6 +314,18 @@ describe("collectFindings — image-alt", () => {
 
   it("passes a decorative image (alt='')", () => {
     const root = mount(`<img src="a.png" alt="">`);
+    expect(collectFindings(root, ["image-alt"])).toEqual([]);
+  });
+
+  // role="img" makes its children presentational: the text inside is never
+  // announced, and Chromium leaves the image unnamed.
+  it("flags a role=img whose only text is its own content", () => {
+    const root = mount(`<div role="img">text img</div>`);
+    expect(collectFindings(root, ["image-alt"])).toHaveLength(1);
+  });
+
+  it("passes a role=img named by aria-label", () => {
+    const root = mount(`<div role="img" aria-label="Chart">text img</div>`);
     expect(collectFindings(root, ["image-alt"])).toEqual([]);
   });
 });

@@ -1302,6 +1302,199 @@ describe("name from content covers the whole ARIA 1.2 role set", () => {
   });
 });
 
+// The last step of the name computation takes an element's DIRECT text. That is
+// right for a paragraph or list item, whose text is their content, and it is
+// what keeps a text-bearing generic in the a11y view. It is wrong for a role
+// only an author can name: Chromium leaves every one below unnamed, and a name
+// taken from a loose sentence made `dialog-labeled`, `image-alt` and
+// `no-unlabeled-interactive` pass markup AT announces with no name at all.
+// Every expectation is what Chromium 151 computes for the same markup (CDP).
+describe("the direct-text fallback skips author-named roles", () => {
+  const target = (html: string) => {
+    const root = createPage(html);
+    document.body.appendChild(root);
+    try {
+      return [...extractA11yTree(root).nodes.values()].find(
+        (n) => n.dom?.attributes["id"] === "t",
+      )!;
+    } finally {
+      root.remove();
+    }
+  };
+
+  it.each([
+    [
+      "dialog",
+      `<div id="t" role="dialog">Delete this project? <button>Cancel</button></div>`,
+    ],
+    [
+      "dialog",
+      `<dialog id="t" open>Discard changes? <button>OK</button></dialog>`,
+    ],
+    [
+      "alertdialog",
+      `<div id="t" role="alertdialog">Session expired <button>Renew</button></div>`,
+    ],
+    ["img", `<div id="t" role="img">text img</div>`],
+    ["form", `<form id="t">Search: <input></form>`],
+    ["navigation", `<nav id="t">Menu: <a href="#">Home</a></nav>`],
+    ["main", `<main id="t">Welcome <a href="#">x</a></main>`],
+    ["banner", `<header id="t">Site <a href="#">x</a></header>`],
+    ["contentinfo", `<footer id="t">Copyright <a href="#">x</a></footer>`],
+    ["complementary", `<aside id="t">Aside <a href="#">x</a></aside>`],
+    ["search", `<search id="t">Find: <input></search>`],
+    ["article", `<article id="t">Article text</article>`],
+    ["figure", `<figure id="t">Loose <img alt="a"></figure>`],
+    ["group", `<div id="t" role="group">Shipping <input></div>`],
+    ["group", `<address id="t">Contact <a href="#">x</a></address>`],
+    // A closed <details> with no <summary>: its loose text is the hidden BODY.
+    ["group", `<details id="t">Hidden body</details>`],
+    ["application", `<div id="t" role="application">App</div>`],
+    ["document", `<div id="t" role="document">Doc</div>`],
+    ["feed", `<div id="t" role="feed">Feed <article>a</article></div>`],
+    ["note", `<div id="t" role="note">Note text</div>`],
+    ["tabpanel", `<div id="t" role="tabpanel">Panel text</div>`],
+    ["textbox", `<textarea id="t">typed text</textarea>`],
+    [
+      "textbox",
+      `<div id="t" role="textbox" contenteditable="true">typed text</div>`,
+    ],
+    [
+      "searchbox",
+      `<div id="t" role="searchbox" contenteditable="true">query</div>`,
+    ],
+    ["combobox", `<div id="t" role="combobox" tabindex="0">Selected</div>`],
+    [
+      "listbox",
+      `<div id="t" role="listbox">Pick: <div role="option">A</div></div>`,
+    ],
+    ["slider", `<div id="t" role="slider" tabindex="0">5 units</div>`],
+    ["spinbutton", `<div id="t" role="spinbutton" tabindex="0">5</div>`],
+    ["scrollbar", `<div id="t" role="scrollbar">sb</div>`],
+    ["progressbar", `<progress id="t" value="3" max="10">30%</progress>`],
+    ["meter", `<meter id="t" value="3" max="10">3 of 10</meter>`],
+    ["separator", `<div id="t" role="separator" tabindex="0">sep</div>`],
+    ["menu", `<div id="t" role="menu">Menu <div role="menuitem">a</div></div>`],
+    [
+      "menubar",
+      `<div id="t" role="menubar">Bar <div role="menuitem">a</div></div>`,
+    ],
+    [
+      "tablist",
+      `<div id="t" role="tablist">Tabs: <div role="tab">a</div></div>`,
+    ],
+    ["toolbar", `<div id="t" role="toolbar">Tools: <button>a</button></div>`],
+    ["tree", `<div id="t" role="tree">Tree <div role="treeitem">a</div></div>`],
+    [
+      "treegrid",
+      `<div id="t" role="treegrid">TG <div role="row"><div role="gridcell">a</div></div></div>`,
+    ],
+    [
+      "grid",
+      `<div id="t" role="grid">G <div role="row"><div role="gridcell">a</div></div></div>`,
+    ],
+    [
+      "table",
+      `<div id="t" role="table">T <div role="row"><div role="cell">a</div></div></div>`,
+    ],
+    [
+      "rowgroup",
+      `<div id="t" role="rowgroup">RG <div role="row"><div role="cell">a</div></div></div>`,
+    ],
+    [
+      "radiogroup",
+      `<div id="t" role="radiogroup">Size: <input type="radio"></div>`,
+    ],
+    ["list", `<div id="t" role="list">List <div role="listitem">a</div></div>`],
+  ])("leaves a %s unnamed by its loose text", (role, html) => {
+    const node = target(html);
+    expect(node.a11y.role).toBe(role);
+    expect(node.a11y.name).toBe("");
+  });
+
+  // What the fallback is FOR. The prose roles' text is their content — the
+  // native producer takes it too (NATIVE_AX_OWN_TEXT_ROLES) — and a generic's
+  // direct text is what keeps it in the a11y view. A live region's text is
+  // the announcement itself, and no audit reads its name: blanking it would
+  // blank every toast and error message in a snapshot.
+  it.each([
+    ["paragraph", `<p id="t">Para <a href="#">x</a></p>`, "Para"],
+    ["listitem", `<ul><li id="t">Item <a href="#">x</a></li></ul>`, "Item"],
+    [
+      "blockquote",
+      `<blockquote id="t">Quote <a href="#">x</a></blockquote>`,
+      "Quote",
+    ],
+    ["term", `<dl><dt id="t">Term</dt><dd>d</dd></dl>`, "Term"],
+    [
+      "definition",
+      `<dl><dt>t</dt><dd id="t">Def <a href="#">x</a></dd></dl>`,
+      "Def",
+    ],
+    ["code", `<code id="t">npm i <a href="#">x</a></code>`, "npm i"],
+    ["time", `<time id="t">today <b>x</b></time>`, "today"],
+    ["generic", `<div id="t">Loose text <a href="#">x</a></div>`, "Loose text"],
+    [
+      "alert",
+      `<div id="t" role="alert">Email is required</div>`,
+      "Email is required",
+    ],
+    ["status", `<div id="t" role="status">3 results</div>`, "3 results"],
+    ["status", `<output id="t">42</output>`, "42"],
+    ["log", `<div id="t" role="log">connected</div>`, "connected"],
+    ["timer", `<div id="t" role="timer">0:30</div>`, "0:30"],
+    ["marquee", `<div id="t" role="marquee">ticker</div>`, "ticker"],
+  ])("still names a %s from its own text", (role, html, expected) => {
+    const node = target(html);
+    expect(node.a11y.role).toBe(role);
+    expect(node.a11y.name).toBe(expected);
+  });
+
+  // Only the LOOSE-TEXT step is skipped: every author mechanism still names
+  // these roles, and an alt/labelledby/title is never mistaken for loose text.
+  it.each([
+    [
+      `<div id="t" role="dialog" aria-label="Delete project">Sure? <button>OK</button></div>`,
+      "Delete project",
+    ],
+    [
+      `<h2 id="h">Delete project</h2><div id="t" role="dialog" aria-labelledby="h">Sure? <button>OK</button></div>`,
+      "Delete project",
+    ],
+    [`<nav id="t" title="Primary">Menu: <a href="#">Home</a></nav>`, "Primary"],
+    [
+      `<fieldset id="t"><legend>Shipping</legend>Loose <input></fieldset>`,
+      "Shipping",
+    ],
+    [`<details id="t" open><summary>More</summary>Body</details>`, "More"],
+  ])("keeps an author-given name: %s", (html, expected) => {
+    expect(target(html).a11y.name).toBe(expected);
+  });
+
+  // An authored role outranks a name-from-content TAG, so these never reach
+  // the text-content step either. The first is the Radix Select trigger,
+  // whose text is the selected value.
+  it.each([
+    [
+      "combobox",
+      `<button id="t" role="combobox" aria-expanded="false">Apple</button>`,
+    ],
+    ["img", `<a id="t" href="#" role="img">logo text</a>`],
+    ["dialog", `<a id="t" href="#" role="dialog">Dialog text</a>`],
+    ["tabpanel", `<h2 id="t" role="tabpanel">Panel</h2>`],
+  ])("leaves a %s on a name-from-content tag unnamed", (role, html) => {
+    const node = target(html);
+    expect(node.a11y.role).toBe(role);
+    expect(node.a11y.name).toBe("");
+  });
+
+  it("still names a name-from-content role on such a tag", () => {
+    expect(target(`<button id="t" role="tab">Tab A</button>`).a11y.name).toBe(
+      "Tab A",
+    );
+  });
+});
+
 // A `<details>` inside a heading/button/link. Its implicit role is `group`,
 // a name barrier, so the whole disclosure used to vanish from the ancestor's
 // name — e.g. a GitHub comment header read "user commented •" without the
