@@ -1941,6 +1941,31 @@ describe("a11y.value — what a screen reader announces (ADR-0001)", () => {
     ).toBe("Apple");
   });
 
+  it("skips hidden text and a widget's own popup, which aren't announced as the value", () => {
+    expect(
+      valueOf(
+        `<div role="combobox" aria-label="Fruit" tabindex="0">Apple<span hidden>(3 results)</span><span aria-hidden="true">▾</span></div>`,
+        "[role=combobox]",
+      ),
+    ).toBe("Apple");
+    expect(
+      valueOf(
+        `<div role="combobox" aria-label="Fruit" tabindex="0">Apple<ul role="listbox"><li role="option">Apple</li><li role="option">Pear</li></ul></div>`,
+        "[role=combobox]",
+      ),
+    ).toBe("Apple");
+  });
+
+  it("counts an editor's text once: a textbox nested inside it has no value of its own", () => {
+    const root = createPage(
+      `<div contenteditable="true" role="textbox" aria-label="Doc"><p>intro</p><div role="textbox" aria-label="Cell">cell text</div></div>`,
+    );
+    expect(nodeFor(root, "[aria-label=Doc]").a11y.value).toBe(
+      "intro cell text",
+    );
+    expect(nodeFor(root, "[aria-label=Cell]").a11y.value).toBeUndefined();
+  });
+
   it("leaves the value to the native control an ARIA combobox wraps", () => {
     const root = createPage(
       `<div role="combobox" aria-label="State"><input aria-label="State" value="Ohio"><ul role="listbox"><li role="option">Ohio</li><li role="option">Utah</li></ul></div>`,
@@ -1988,6 +2013,13 @@ describe("a11y.value — what a screen reader announces (ADR-0001)", () => {
     const node = nodeFor(createPage(`<input value="typed">`), "input");
     expect(node.a11y.value).toBe("typed");
     expect(node.a11y.name).toBe("");
+    // A role-less editor too: its loose text is what was typed, not a name.
+    const editor = nodeFor(
+      createPage(`<div contenteditable="true">typed here</div>`),
+      "div",
+    );
+    expect(editor.a11y.value).toBe("typed here");
+    expect(editor.a11y.name).toBe("");
   });
 
   it("drops only the value when a hostile getter throws, never the node", () => {

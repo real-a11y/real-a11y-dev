@@ -339,6 +339,15 @@ describe("values (ADR-0001)", () => {
     ).toContain('textbox "Email" = "jane[REDACTED]"');
   });
 
+  it("prints a role-less editor holding text when values are on, and folds it away otherwise", () => {
+    document.body.innerHTML = `<main><div contenteditable="true">just typed</div></main>`;
+    expect(serializeTree(document.body)).not.toContain("generic");
+    const out = serializeTree(document.body, { values: true });
+    // Unnamed — its text is its value, never its name — and printed once.
+    expect(out).toContain('generic = "just typed"');
+    expect(out.match(/just typed/g)).toHaveLength(1);
+  });
+
   it("adds values to the tab sequence too, and only when asked", () => {
     page();
     expect(serializeTabSequence(document.body)).not.toContain(" = ");

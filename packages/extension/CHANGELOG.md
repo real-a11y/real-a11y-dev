@@ -28,6 +28,14 @@
   shows its fallback text as its name.
   ([#418](https://github.com/real-a11y/real-a11y-dev/pull/418))
 
+- In DOM mode, a contenteditable editor with no role (a ProseMirror-style
+  composer) no longer shows what was typed into it as its name. It read
+  `generic "draft text"` and now reads a bare `generic` that stays in the tree
+  as a field, as Chromium leaves it unnamed. With a diff baseline captured, a
+  field you type into is now marked **changed**, because the tree now records
+  each field's value (ADR-0001). The panel's value display is unchanged until
+  the A11y view learns the announced value. ([#PR_A])
+
 - In NATIVE mode, an image, dialog, landmark or form field that has no label
   no longer shows its text as its name. `<span role="img">🎉</span>` read
   `img "🎉"` and now reads a bare `img`, as Chromium names it. The same goes for

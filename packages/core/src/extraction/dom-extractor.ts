@@ -1025,8 +1025,15 @@ function computeRawAccessibleName(
   //    sectionheader/sectionfooter that also keeps a byline from making the
   //    header "named" and so kept in the a11y view, where the native producer
   //    drops it as bare. The role is resolved only when there is text to give.
+  //    Nor for an editing host: its text is what the user typed — its VALUE
+  //    (ADR-0001), which never doubles as its name. Chromium leaves a
+  //    role-less contenteditable unnamed too.
   const directText = getDirectTextContent(element);
-  if (directText && !AUTHOR_NAMED_ROLES.has(getImplicitRole(element))) {
+  if (
+    directText &&
+    !AUTHOR_NAMED_ROLES.has(getImplicitRole(element)) &&
+    !isEditingHost(element)
+  ) {
     return directText;
   }
 
@@ -1198,20 +1205,44 @@ const LINE_BREAKING_TAGS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Roles of a widget's own popup or companion. A select-only combobox that
+ * renders its listbox inside itself holds "Apple" — not "Apple Apple Pear".
+ */
+const POPUP_ROLES: ReadonlySet<string> = new Set([
+  "listbox",
+  "option",
+  "menu",
+  "menuitem",
+  "grid",
+  "tree",
+  "dialog",
+  "tooltip",
+]);
+
+/**
  * The text a non-native field holds — a contenteditable editor, an ARIA
  * textbox or combobox — collapsed and capped like {@link getDescendantText},
- * but with block boundaries read as spaces.
+ * but with block boundaries read as spaces. Hidden text (`display:none`,
+ * `hidden`, `aria-hidden`) and a widget's own popup are skipped: neither is
+ * what a screen reader announces as the value.
  */
-function getFieldText(element: Element): string {
+function getFieldText(element: Element, styleCache?: StyleCache): string {
   const state: CollapsedTextState = { text: "", phase: "start" };
   const walk = (node: Node): boolean => {
     if (node.nodeType === Node.TEXT_NODE) {
       return appendCollapsedTextChunk(state, safeTextContent(node));
     }
     if (node.nodeType !== Node.ELEMENT_NODE) return false;
-    const rawTag = (node as Element).tagName;
+    const el = node as Element;
+    const rawTag = el.tagName;
     const tag = typeof rawTag === "string" ? rawTag.toLowerCase() : "";
     if (MEDIA_TAGS.has(tag)) return false;
+    if (el.getAttribute("aria-hidden") === "true") return false;
+    const role = el.getAttribute("role")?.trim().split(/\s+/)[0];
+    if (role && POPUP_ROLES.has(role)) return false;
+    if (isSubtreeHidden(el, getCachedComputedStyle(el, styleCache))) {
+      return false;
+    }
     const breaks = LINE_BREAKING_TAGS.has(tag);
     // Whitespace never trips the cap, so these two appends can't end the walk.
     if (breaks) appendCollapsedTextChunk(state, " ");
@@ -1354,9 +1385,7 @@ function isEditingHost(element: Element): boolean {
   if (editable === null || editable.trim().toLowerCase() === "false") {
     return false;
   }
-  return !element.parentElement?.closest(
-    '[contenteditable]:not([contenteditable="false"])',
-  );
+  return !enclosingEditable(element);
 }
 
 /** A `<select>`'s selected options by label — what a screen reader says. */
@@ -1367,8 +1396,21 @@ function selectedLabels(select: HTMLSelectElement): string {
     .join(", ");
 }
 
+/** The editable region `element` sits inside, if any (itself excluded). */
+function enclosingEditable(element: Element): Element | null {
+  return (
+    element.parentElement?.closest(
+      '[contenteditable]:not([contenteditable="false"])',
+    ) ?? null
+  );
+}
+
 /** The raw text a field holds, before sensitivity, collapse and cap. */
-function readFieldValue(element: Element, role: string): string | undefined {
+function readFieldValue(
+  element: Element,
+  role: string,
+  styleCache?: StyleCache,
+): string | undefined {
   const tag = element.tagName.toLowerCase();
   if (STATE_ONLY_ROLES.has(role)) return undefined;
 
@@ -1404,9 +1446,12 @@ function readFieldValue(element: Element, role: string): string | undefined {
   // A non-native field: an editor, or an ARIA textbox/combobox built on a div.
   // One that wraps a native control (the ARIA 1.0 combobox around an <input>)
   // leaves the value to that control — its own text would be every option.
+  // A textbox nested INSIDE an editor is part of that editor's content, which
+  // its host already announces — a second value would count the text twice.
   if (TEXT_VALUE_ROLES.has(role) || isEditingHost(element)) {
     if (element.querySelector("input, select, textarea")) return undefined;
-    return getFieldText(element);
+    if (enclosingEditable(element)) return undefined;
+    return getFieldText(element, styleCache);
   }
   return undefined;
 }
@@ -1429,9 +1474,10 @@ function readFieldValue(element: Element, role: string): string | undefined {
 export function getAnnouncedValue(
   element: Element,
   role: string,
+  styleCache?: StyleCache,
 ): string | undefined {
   try {
-    const raw = readFieldValue(element, role);
+    const raw = readFieldValue(element, role, styleCache);
     const collapsed = (raw ?? "").replace(/\s+/g, " ").trim();
     if (!collapsed) return undefined;
     if (isSensitiveField(element)) return REDACTED_VALUE;
@@ -2062,7 +2108,7 @@ function buildNode(
 
     const id = getNodeId(element);
     const role = getImplicitRole(element);
-    const value = getAnnouncedValue(element, role);
+    const value = getAnnouncedValue(element, role, styleCache);
     const actions = getActions(element);
     const isMedia = MEDIA_TAGS.has(tag);
     const isFocusable =

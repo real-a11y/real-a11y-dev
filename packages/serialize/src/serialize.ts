@@ -71,6 +71,15 @@ function redactText(input: string, patterns: RegExp[] | undefined): string {
   return out;
 }
 
+/** ` = "value"`, JSON-escaped and redacted, or `""` when the node has none.
+ *  The one place a value is formatted, so every view prints it alike. */
+function valueText(node: SemanticNode, redact?: RegExp[]): string {
+  const value = node.a11y.value;
+  return value === undefined
+    ? ""
+    : ` = ${JSON.stringify(redactText(value, redact))}`;
+}
+
 /**
  * The shared node label — `role "name" = "value" (level N)` — with no
  * indentation and no focus marker. This is the vocabulary every serializer
@@ -87,11 +96,7 @@ function nodeLabel(
 ): string {
   const name = redactText(node.a11y.name, redact);
   const nameSuffix = name ? ` "${name}"` : "";
-  const value = values ? node.a11y.value : undefined;
-  const valueSuffix =
-    value !== undefined
-      ? ` = ${JSON.stringify(redactText(value, redact))}`
-      : "";
+  const valueSuffix = values ? valueText(node, redact) : "";
   const level = node.a11y.properties?.level;
   const levelSuffix = level ? ` (level ${level})` : "";
   return `${node.a11y.role}${nameSuffix}${valueSuffix}${levelSuffix}`;
@@ -187,7 +192,12 @@ export function serializeTree(
   const focusedId = markFocus ? tree.focusedId : undefined;
 
   const printed = linearize(tree).filter(
-    (node) => includeGeneric || node.a11y.role !== "generic",
+    (node) =>
+      includeGeneric ||
+      node.a11y.role !== "generic" ||
+      // A role-less editor is a `generic` holding what was typed: with values
+      // on, it is a field worth a line, not a wrapper to fold away.
+      (values && node.a11y.value !== undefined),
   );
   const depths = printedDepths(tree, printed);
 
@@ -253,10 +263,7 @@ export function serializeTabSequence(
     .map((n) => {
       const redacted = redactText(n.a11y.name, redact);
       const name = redacted ? ` "${redacted}"` : "";
-      const value =
-        values && n.a11y.value !== undefined
-          ? ` = ${JSON.stringify(redactText(n.a11y.value, redact))}`
-          : "";
+      const value = values ? valueText(n, redact) : "";
       const marker = n.id === focusedId ? " [focused]" : "";
       return `${n.a11y.role}${name}${value}${marker}`;
     })
