@@ -199,7 +199,7 @@ main
   code
   paragraph "Three forms:"
   list
-    listitem "— the ergonomic default. / / are matched by + optional (string = case-, whitespace-, and typography-normalized exact; RegExp = tested against the folded name). A may list (dot-paths that must appear). — resilient to incidental changes; asserts nothing else changed (a -only change on a container is treated as the structural shadow of an add/remove and never counts as an extra)."
+    listitem "— the ergonomic default. / / are matched by + optional (string = case-, whitespace-, and typography-normalized exact; RegExp = tested against the folded name). A may list (dot-paths that must appear). — resilient to incidental changes; asserts nothing else changed. Two kinds of change never count as an extra on their own: a -only change on a container (the structural shadow of an add/remove), and an -only change (a field whose contents a step changed). Assert a value change explicitly with ."
       strong
         code "ChangeSpec"
       code "added"
@@ -212,6 +212,9 @@ main
       strong "Subset by default"
       code "exact: true"
       code "childIds"
+      code "a11y.value"
+      code "type"
+      code "changes: ["a11y.value"]"
     listitem "— trim-compared against the output, like . Includes the line. (This whole-diff text form compares literally — unlike the name match, it is typography-folded, so it stays a faithful snapshot.)"
       strong
         code "string"

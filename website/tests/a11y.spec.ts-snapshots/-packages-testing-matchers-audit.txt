@@ -216,11 +216,12 @@ main
   heading "boxedTreeSnapshot vs treeSnapshot" (level 3)
     code "boxedTreeSnapshot"
     code "treeSnapshot"
-  paragraph "Both render the — under the hood they call the same serializer with the same options (, , ). The only difference is what they hand back, and therefore how the framework treats it:"
+  paragraph "Both render the — under the hood they call the same serializer with the same options (, , , ). The only difference is what they hand back, and therefore how the framework treats it:"
     strong "same tree"
     code "mode"
     code "redact"
     code "includeGeneric"
+    code "values"
   list
     listitem "returns a . The value your test holds the tree, so you can assert on it directly — , — log it, or write it to a file. It needs no setup."
       link "treeSnapshot()"
