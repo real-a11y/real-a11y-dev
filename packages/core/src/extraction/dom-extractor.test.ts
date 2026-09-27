@@ -1956,6 +1956,30 @@ describe("a11y.value — what a screen reader announces (ADR-0001)", () => {
     ).toBe("Apple");
   });
 
+  it("skips visibility:hidden text, but reads a child that sets itself visible again", () => {
+    expect(
+      valueOf(
+        `<div contenteditable="true">Visible <span style="visibility:hidden">secret <b style="visibility:visible">shown</b></span></div>`,
+        "div",
+      ),
+    ).toBe("Visible shown");
+  });
+
+  it("reads only a closed <details>'s summary, and its body once opened", () => {
+    expect(
+      valueOf(
+        `<div contenteditable="true">Note <details><summary>More</summary>Private text</details></div>`,
+        "div",
+      ),
+    ).toBe("Note More");
+    expect(
+      valueOf(
+        `<div contenteditable="true">Note <details open><summary>More</summary>Private text</details></div>`,
+        "div",
+      ),
+    ).toBe("Note More Private text");
+  });
+
   it("counts an editor's text once: a textbox nested inside it has no value of its own", () => {
     const root = createPage(
       `<div contenteditable="true" role="textbox" aria-label="Doc"><p>intro</p><div role="textbox" aria-label="Cell">cell text</div></div>`,

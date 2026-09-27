@@ -196,6 +196,69 @@ describe("LiveTreeExtractor", () => {
     observer.stop();
   });
 
+  describe("a field's value, when what changed is beneath or beside it (ADR-0001)", () => {
+    /** Refresh after `mutate` (no input event) and return the live and a
+     *  freshly extracted tree, which must agree. */
+    async function refreshAfter(html: string, mutate: () => void) {
+      document.body.innerHTML = html;
+      const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
+      let lastChange: TreeChange | undefined;
+      const observer = new DomObserver(
+        document.body,
+        (change) => {
+          lastChange = change;
+        },
+        50,
+      );
+      observer.start();
+      mutate();
+      await vi.advanceTimersByTimeAsync(100);
+      const result = live.refresh(lastChange);
+      observer.stop();
+      return { result, expected: extractA11yTree(document.body), lastChange };
+    }
+    const valueOf = (tree: ExtractionResult, role: string) =>
+      [...tree.nodes.values()].find((n) => n.a11y.role === role)?.a11y.value;
+
+    it("re-reads an editor's value when text inside it changes with no input event", async () => {
+      // A remote collaborator's edit: the paragraph's text node changes, and
+      // nothing fires on the editor itself.
+      const { result, expected } = await refreshAfter(
+        `<main><div contenteditable="true" role="textbox" aria-label="Doc"><p>Old</p></div></main>`,
+        () => {
+          document.querySelector("p")!.firstChild!.textContent = "New";
+        },
+      );
+      expect(valueOf(result, "textbox")).toBe("New");
+      expect(result.nodes).toEqual(expected.nodes);
+    });
+
+    it("re-reads a <select>'s value when its selected option is relabelled", async () => {
+      const { result, expected } = await refreshAfter(
+        `<main><select aria-label="Country"><option selected>Spain</option></select></main>`,
+        () => {
+          document.querySelector("option")!.textContent = "España";
+        },
+      );
+      expect(valueOf(result, "combobox")).toBe("España");
+      expect(result.nodes).toEqual(expected.nodes);
+    });
+
+    it("re-reads a slider when only its aria-valuetext changes", async () => {
+      const { result, expected, lastChange } = await refreshAfter(
+        `<main><div role="slider" aria-label="Rating" tabindex="0" aria-valuenow="4" aria-valuetext="four stars"></div></main>`,
+        () => {
+          document
+            .querySelector("[role=slider]")!
+            .setAttribute("aria-valuetext", "five stars");
+        },
+      );
+      expect(lastChange).toBeDefined(); // the observer saw it at all
+      expect(valueOf(result, "slider")).toBe("five stars");
+      expect(result.nodes).toEqual(expected.nodes);
+    });
+  });
+
   it("falls back to a full extract when a reference attribute changes", async () => {
     document.body.innerHTML = `
       <main>

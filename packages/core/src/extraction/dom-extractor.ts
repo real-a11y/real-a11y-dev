@@ -1175,6 +1175,7 @@ const LINE_BREAKING_TAGS: ReadonlySet<string> = new Set([
   "blockquote",
   "br",
   "dd",
+  "details",
   "div",
   "dl",
   "dt",
@@ -1197,6 +1198,7 @@ const LINE_BREAKING_TAGS: ReadonlySet<string> = new Set([
   "p",
   "pre",
   "section",
+  "summary",
   "table",
   "td",
   "th",
@@ -1222,15 +1224,23 @@ const POPUP_ROLES: ReadonlySet<string> = new Set([
 /**
  * The text a non-native field holds — a contenteditable editor, an ARIA
  * textbox or combobox — collapsed and capped like {@link getDescendantText},
- * but with block boundaries read as spaces. Hidden text (`display:none`,
- * `hidden`, `aria-hidden`) and a widget's own popup are skipped: neither is
- * what a screen reader announces as the value.
+ * but with block boundaries read as spaces. What a screen reader would not
+ * announce is skipped: hidden subtrees (`display:none`, `hidden`,
+ * `aria-hidden`), `visibility:hidden` text, a closed `<details>`'s body, and
+ * a widget's own popup.
  */
 function getFieldText(element: Element, styleCache?: StyleCache): string {
   const state: CollapsedTextState = { text: "", phase: "start" };
-  const walk = (node: Node): boolean => {
+  // `visibility` is per element and inherited, and a child may set it back to
+  // `visible` — so a hidden element's own text is skipped but its children are
+  // still walked, each judged by its own computed style.
+  const isVisible = (style: CSSStyleDeclaration | null): boolean =>
+    style?.visibility !== "hidden" && style?.visibility !== "collapse";
+  const walk = (node: Node, textVisible: boolean): boolean => {
     if (node.nodeType === Node.TEXT_NODE) {
-      return appendCollapsedTextChunk(state, safeTextContent(node));
+      return textVisible
+        ? appendCollapsedTextChunk(state, safeTextContent(node))
+        : false;
     }
     if (node.nodeType !== Node.ELEMENT_NODE) return false;
     const el = node as Element;
@@ -1240,21 +1250,22 @@ function getFieldText(element: Element, styleCache?: StyleCache): string {
     if (el.getAttribute("aria-hidden") === "true") return false;
     const role = el.getAttribute("role")?.trim().split(/\s+/)[0];
     if (role && POPUP_ROLES.has(role)) return false;
-    if (isSubtreeHidden(el, getCachedComputedStyle(el, styleCache))) {
-      return false;
-    }
+    const style = getCachedComputedStyle(el, styleCache);
+    if (isSubtreeHidden(el, style)) return false;
     const breaks = LINE_BREAKING_TAGS.has(tag);
     // Whitespace never trips the cap, so these two appends can't end the walk.
     if (breaks) appendCollapsedTextChunk(state, " ");
-    for (const child of flatChildNodes(node)) {
-      if (walk(child)) return true;
+    // A closed <details> renders only its <summary> — the name walker's rule.
+    for (const child of nameContentChildren(el)) {
+      if (walk(child, isVisible(style))) return true;
     }
     if (breaks) appendCollapsedTextChunk(state, " ");
     return false;
   };
   let truncated = false;
-  for (const child of flatChildNodes(element)) {
-    if (walk(child)) {
+  const ownVisible = isVisible(getCachedComputedStyle(element, styleCache));
+  for (const child of nameContentChildren(element)) {
+    if (walk(child, ownVisible)) {
       truncated = true;
       break;
     }
@@ -1403,6 +1414,30 @@ function enclosingEditable(element: Element): Element | null {
       '[contenteditable]:not([contenteditable="false"])',
     ) ?? null
   );
+}
+
+/**
+ * The outermost field whose `a11y.value` is computed from `el`'s content — a
+ * `<select>` (its options' labels), an editing host, or a non-native ARIA
+ * textbox/searchbox/combobox (their text) — or null. A mutation anywhere
+ * inside one changes that field's value without touching the field itself,
+ * so a live refresh must re-extract it (see `LiveTreeExtractor.refresh`).
+ * Outermost, because a textbox nested in an editor has no value of its own:
+ * the editor's does.
+ */
+export function fieldValueOwner(el: Element): Element | null {
+  let owner: Element | null = null;
+  for (let node: Element | null = el; node; node = node.parentElement) {
+    const tag = node.tagName.toLowerCase();
+    if (tag === "select" || isEditingHost(node)) {
+      owner = node;
+      continue;
+    }
+    if (tag === "input" || tag === "textarea") continue;
+    const role = node.getAttribute("role")?.trim().split(/\s+/)[0];
+    if (role && TEXT_VALUE_ROLES.has(role)) owner = node;
+  }
+  return owner;
 }
 
 /** The raw text a field holds, before sensitivity, collapse and cap. */
