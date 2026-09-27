@@ -30,6 +30,9 @@ function collectChanges(before: SemanticNode, after: SemanticNode): string[] {
   if (before.a11y.description !== after.a11y.description) {
     changes.push("a11y.description");
   }
+  // What a field holds (ADR-0001). Reported here unconditionally; whether it is
+  // PRINTED is the serializer's `values` option, off by default.
+  if (before.a11y.value !== after.a11y.value) changes.push("a11y.value");
   // Optional facets: two native nodes both lack `dom`/`interaction` (undefined
   // on both sides → no change reported); a facet appearing/disappearing across
   // producers reads as a change, which is the honest signal.

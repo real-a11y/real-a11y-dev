@@ -190,6 +190,8 @@ describe("LiveTreeExtractor", () => {
 
     const inputId = result.nodes.get(result.rootId!)?.childIds[0];
     expect(result.nodes.get(inputId!)?.dom?.attributes.value).toBe("hello");
+    // The announced value follows the typing too (ADR-0001).
+    expect(result.nodes.get(inputId!)?.a11y.value).toBe("hello");
 
     observer.stop();
   });

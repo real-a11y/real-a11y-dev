@@ -288,3 +288,62 @@ describe("focus marker (markFocus)", () => {
     expect(out).not.toContain('link "Home" [focused]');
   });
 });
+
+describe("values (ADR-0001)", () => {
+  const page = () => {
+    document.body.innerHTML = `
+      <main>
+        <h1>Profile</h1>
+        <input aria-label="Email" value="jane@x.com">
+        <input type="password" aria-label="Password" value="hunter2">
+        <select aria-label="Country"><option value="es" selected>Spain</option></select>
+        <input aria-label="Quote" value='say "hi" '>
+      </main>`;
+  };
+
+  it("prints nothing new by default — a committed snapshot stays byte-identical", () => {
+    page();
+    const out = serializeTree(document.body);
+    expect(out).toBe(serializeTree(document.body, { values: false }));
+    expect(out).not.toContain(" = ");
+    expect(out).not.toContain("jane@x.com");
+  });
+
+  it("prints each field's announced value with values on", () => {
+    page();
+    const out = serializeTree(document.body, { values: true });
+    expect(out).toContain('textbox "Email" = "jane@x.com"');
+    expect(out).toContain('combobox "Country" = "Spain"'); // the label, not "es"
+    expect(out).toContain('heading "Profile" (level 1)'); // no value, unchanged
+  });
+
+  it("prints a sensitive field as [redacted], never its value", () => {
+    page();
+    const out = serializeTree(document.body, { values: true });
+    expect(out).toContain('textbox "Password" = "[redacted]"');
+    expect(out).not.toContain("hunter2");
+  });
+
+  it("JSON-escapes the value, so quotes and trailing spaces stay visible", () => {
+    page();
+    // Whitespace collapses and trims in the model; the quotes survive, escaped.
+    expect(serializeTree(document.body, { values: true })).toContain(
+      'textbox "Quote" = "say \\"hi\\""',
+    );
+  });
+
+  it("applies redact patterns to values as to names", () => {
+    page();
+    expect(
+      serializeTree(document.body, { values: true, redact: [/@x\.com/] }),
+    ).toContain('textbox "Email" = "jane[REDACTED]"');
+  });
+
+  it("adds values to the tab sequence too, and only when asked", () => {
+    page();
+    expect(serializeTabSequence(document.body)).not.toContain(" = ");
+    expect(serializeTabSequence(document.body, { values: true })).toContain(
+      'textbox "Email" = "jane@x.com"',
+    );
+  });
+});

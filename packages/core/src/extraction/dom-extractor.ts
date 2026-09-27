@@ -1138,6 +1138,14 @@ export function getDescendantText(element: Element): string {
     }
   }
 
+  return finishCollapsedText(state, truncated);
+}
+
+/** Trim a collapsed-text walk's result and apply the cap's `…`. */
+function finishCollapsedText(
+  state: CollapsedTextState,
+  truncated: boolean,
+): string {
   if (state.phase === "space" && state.text.endsWith(" ")) {
     state.text = state.text.slice(0, -1);
   }
@@ -1149,11 +1157,92 @@ export function getDescendantText(element: Element): string {
 }
 
 /**
+ * Elements that break a line when rendered. A field's text reads a space
+ * across them, the way `innerText` — and Chromium's AX value — does, so an
+ * editor's `<p>one</p><p>two</p>` reads "one two", not "onetwo".
+ */
+const LINE_BREAKING_TAGS: ReadonlySet<string> = new Set([
+  "address",
+  "article",
+  "aside",
+  "blockquote",
+  "br",
+  "dd",
+  "div",
+  "dl",
+  "dt",
+  "figcaption",
+  "figure",
+  "footer",
+  "form",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "header",
+  "hr",
+  "li",
+  "main",
+  "nav",
+  "ol",
+  "p",
+  "pre",
+  "section",
+  "table",
+  "td",
+  "th",
+  "tr",
+  "ul",
+]);
+
+/**
+ * The text a non-native field holds — a contenteditable editor, an ARIA
+ * textbox or combobox — collapsed and capped like {@link getDescendantText},
+ * but with block boundaries read as spaces.
+ */
+function getFieldText(element: Element): string {
+  const state: CollapsedTextState = { text: "", phase: "start" };
+  const walk = (node: Node): boolean => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return appendCollapsedTextChunk(state, safeTextContent(node));
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return false;
+    const rawTag = (node as Element).tagName;
+    const tag = typeof rawTag === "string" ? rawTag.toLowerCase() : "";
+    if (MEDIA_TAGS.has(tag)) return false;
+    const breaks = LINE_BREAKING_TAGS.has(tag);
+    // Whitespace never trips the cap, so these two appends can't end the walk.
+    if (breaks) appendCollapsedTextChunk(state, " ");
+    for (const child of flatChildNodes(node)) {
+      if (walk(child)) return true;
+    }
+    if (breaks) appendCollapsedTextChunk(state, " ");
+    return false;
+  };
+  let truncated = false;
+  for (const child of flatChildNodes(element)) {
+    if (walk(child)) {
+      truncated = true;
+      break;
+    }
+  }
+  return finishCollapsedText(state, truncated);
+}
+
+/**
  * Autocomplete field names (WHATWG autofill tokens) that identify a control
  * holding a secret. Matched against each space-separated token of an
  * element's `autocomplete` value.
+ *
+ * This list IS the sensitivity policy (ADR-0001): together with
+ * `type="password"` it is the whole of what every producer withholds. It grows
+ * only by a later decision. Exported so a copy that cannot import it — the
+ * extension's in-page `pageReadValue`, which runs as source text over CDP —
+ * can be pinned to it by a parity test.
  */
-const SENSITIVE_AUTOCOMPLETE_TOKENS: ReadonlySet<string> = new Set([
+export const SENSITIVE_AUTOCOMPLETE_TOKENS: ReadonlySet<string> = new Set([
   "current-password",
   "new-password",
   "one-time-code",
@@ -1164,8 +1253,36 @@ const SENSITIVE_AUTOCOMPLETE_TOKENS: ReadonlySet<string> = new Set([
   "cc-exp-year",
 ]);
 
-/** Substituted for a sensitive field's live value in the extracted tree. */
-const REDACTED_VALUE = "[redacted]";
+/** Substituted for a sensitive field's value, wherever a value is shown. */
+export const REDACTED_VALUE = "[redacted]";
+
+/**
+ * The sensitivity policy over a field's markup alone — its tag name plus its
+ * `type` and `autocomplete` attributes — for callers with no live `Element`.
+ * The native producer holds exactly this: CDP's `DOM.getDocument` attributes,
+ * never a field's value. {@link isSensitiveField} is this, read off an element.
+ */
+export function isSensitiveFieldAttributes(
+  tagName: string,
+  attributes: { type?: string | null; autocomplete?: string | null },
+): boolean {
+  const tag = tagName.toLowerCase();
+  if (tag !== "input" && tag !== "textarea" && tag !== "select") {
+    return false;
+  }
+  if (
+    tag === "input" &&
+    (attributes.type ?? "").trim().toLowerCase() === "password"
+  ) {
+    return true;
+  }
+  for (const token of (attributes.autocomplete ?? "")
+    .toLowerCase()
+    .split(/\s+/)) {
+    if (SENSITIVE_AUTOCOMPLETE_TOKENS.has(token)) return true;
+  }
+  return false;
+}
 
 /**
  * True if `element` is a form field whose live value must never be captured
@@ -1175,25 +1292,155 @@ const REDACTED_VALUE = "[redacted]";
  * The extracted tree flows into serializer snapshots (committed to git and
  * CI), the testing package's assertions, and the Chrome extension's message
  * channel. A secret typed into such a field must not ride along, so callers
- * that read `.value` — {@link extractDomTree} via `getKeyAttributes`, the
- * accessible-name fallback, and downstream consumers like the extension's
- * field-state read — gate on this predicate.
+ * that read `.value` — {@link extractDomTree} via `getKeyAttributes` and
+ * `getAnnouncedValue`, the accessible-name fallback, and downstream consumers
+ * like the extension's field-state read — gate on this predicate.
  */
 export function isSensitiveField(element: Element): boolean {
-  const tag = element.tagName.toLowerCase();
-  if (tag !== "input" && tag !== "textarea" && tag !== "select") {
+  return isSensitiveFieldAttributes(element.tagName, {
+    // The `type` PROPERTY, not the attribute: it is what the browser actually
+    // renders, normalized (an unknown or missing type reads as "text").
+    // Tag-checked rather than `instanceof`, which fails across realms.
+    type:
+      element.tagName.toLowerCase() === "input"
+        ? (element as HTMLInputElement).type
+        : element.getAttribute("type"),
+    autocomplete: element.getAttribute("autocomplete"),
+  });
+}
+
+/** Roles announced by position in a range: `aria-valuetext`, else `valuenow`. */
+const RANGE_VALUE_ROLES: ReadonlySet<string> = new Set([
+  "slider",
+  "spinbutton",
+  "progressbar",
+  "meter",
+  "scrollbar",
+]);
+
+/** Roles whose checked/pressed STATE is what's announced — never a value. */
+const STATE_ONLY_ROLES: ReadonlySet<string> = new Set([
+  "checkbox",
+  "radio",
+  "switch",
+  "menuitemcheckbox",
+  "menuitemradio",
+]);
+
+/** Non-native roles whose value is the text they hold. */
+const TEXT_VALUE_ROLES: ReadonlySet<string> = new Set([
+  "textbox",
+  "searchbox",
+  "combobox",
+]);
+
+/** `<input>` types with no announced value: a state, a name, or nothing. */
+const VALUELESS_INPUT_TYPES: ReadonlySet<string> = new Set([
+  "checkbox",
+  "radio",
+  "button",
+  "submit",
+  "reset",
+  "image",
+  "hidden",
+]);
+
+/** The cap an announced value is cut to, with `…` — the same as text previews. */
+const VALUE_MAX = DESCENDANT_TEXT_MAX;
+
+/** True for the root of a contenteditable region (not an element inside one). */
+function isEditingHost(element: Element): boolean {
+  const editable = element.getAttribute("contenteditable");
+  if (editable === null || editable.trim().toLowerCase() === "false") {
     return false;
   }
-  if (tag === "input" && (element as HTMLInputElement).type === "password") {
-    return true;
-  }
-  const autocomplete = element.getAttribute("autocomplete");
-  if (autocomplete) {
-    for (const token of autocomplete.toLowerCase().split(/\s+/)) {
-      if (SENSITIVE_AUTOCOMPLETE_TOKENS.has(token)) return true;
+  return !element.parentElement?.closest(
+    '[contenteditable]:not([contenteditable="false"])',
+  );
+}
+
+/** A `<select>`'s selected options by label — what a screen reader says. */
+function selectedLabels(select: HTMLSelectElement): string {
+  return Array.from(select.options)
+    .filter((option) => option.selected)
+    .map((option) => option.label || option.text)
+    .join(", ");
+}
+
+/** The raw text a field holds, before sensitivity, collapse and cap. */
+function readFieldValue(element: Element, role: string): string | undefined {
+  const tag = element.tagName.toLowerCase();
+  if (STATE_ONLY_ROLES.has(role)) return undefined;
+
+  if (RANGE_VALUE_ROLES.has(role)) {
+    const valuetext = element.getAttribute("aria-valuetext");
+    if (valuetext?.trim()) return valuetext;
+    const valuenow = element.getAttribute("aria-valuenow");
+    if (valuenow?.trim()) return valuenow;
+    if (tag === "input") return (element as HTMLInputElement).value;
+    // An indeterminate <progress> (no value attribute) announces no value.
+    if (
+      (tag === "progress" || tag === "meter") &&
+      element.hasAttribute("value")
+    ) {
+      return String((element as HTMLProgressElement).value);
     }
+    return undefined;
   }
-  return false;
+
+  if (tag === "input") {
+    const input = element as HTMLInputElement;
+    if (VALUELESS_INPUT_TYPES.has(input.type)) return undefined;
+    if (input.type === "file") {
+      return Array.from(input.files ?? [])
+        .map((file) => file.name)
+        .join(", ");
+    }
+    return input.value;
+  }
+  if (tag === "textarea") return (element as HTMLTextAreaElement).value;
+  if (tag === "select") return selectedLabels(element as HTMLSelectElement);
+
+  // A non-native field: an editor, or an ARIA textbox/combobox built on a div.
+  // One that wraps a native control (the ARIA 1.0 combobox around an <input>)
+  // leaves the value to that control — its own text would be every option.
+  if (TEXT_VALUE_ROLES.has(role) || isEditingHost(element)) {
+    if (element.querySelector("input, select, textarea")) return undefined;
+    return getFieldText(element);
+  }
+  return undefined;
+}
+
+/**
+ * The value a screen reader announces for a field (ADR-0001): a text field's
+ * text, a `<select>`'s selected option LABEL (not its `value` attribute), a
+ * range widget's `aria-valuetext` else `valuenow`, a file input's file names,
+ * an editor's or ARIA textbox's text. A checkbox, radio or button has none —
+ * its state or name says it. Whitespace collapses and the value is capped at
+ * {@link VALUE_MAX} characters with `…`. Empty reads as no value.
+ *
+ * A {@link isSensitiveField sensitive} field that holds anything reads
+ * {@link REDACTED_VALUE}: an agent can tell "password entered" from "empty",
+ * never what it is or how long.
+ *
+ * Never throws: a hostile page can make a getter throw, and the caller builds
+ * the node inside one try — a value must not cost the page a node.
+ */
+export function getAnnouncedValue(
+  element: Element,
+  role: string,
+): string | undefined {
+  try {
+    const raw = readFieldValue(element, role);
+    const collapsed = (raw ?? "").replace(/\s+/g, " ").trim();
+    if (!collapsed) return undefined;
+    if (isSensitiveField(element)) return REDACTED_VALUE;
+    return collapsed.length > VALUE_MAX
+      ? collapsed.slice(0, VALUE_MAX - 1) + "…"
+      : collapsed;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -1257,7 +1504,14 @@ function getKeyAttributes(element: Element): Record<string, string> {
   // getAttribute("value") returns the initial value; .value reflects user input
   const tag = element.tagName.toLowerCase();
   if (tag === "input" || tag === "textarea" || tag === "select") {
-    const currentValue = (element as HTMLInputElement).value;
+    // Guarded: a page can make the `.value` getter throw, and this runs inside
+    // `buildNode`'s one try — an unguarded read cost the page the whole node.
+    let currentValue = "";
+    try {
+      currentValue = (element as HTMLInputElement).value;
+    } catch {
+      // No readable value: record none.
+    }
     if (currentValue) {
       attrs["value"] = isSensitiveField(element)
         ? REDACTED_VALUE
@@ -1808,6 +2062,7 @@ function buildNode(
 
     const id = getNodeId(element);
     const role = getImplicitRole(element);
+    const value = getAnnouncedValue(element, role);
     const actions = getActions(element);
     const isMedia = MEDIA_TAGS.has(tag);
     const isFocusable =
@@ -1837,6 +2092,7 @@ function buildNode(
         role,
         name: computeAccessibleName(element, new Set(), styleCache),
         description: computeAccessibleDescription(element, styleCache),
+        ...(value !== undefined ? { value } : {}),
         states: getAriaStates(element),
         properties: {
           ...(getHeadingLevel(element) !== null

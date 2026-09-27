@@ -175,7 +175,7 @@ interface SemanticNode {
   parentId: string | null;
   childIds: string[];
   depth: number;
-  a11y: { role, name, description, states, properties, isExposedToAT };
+  a11y: { role, name, description, value?, states, properties, isExposedToAT };
   dom?: { tagName, attributes, textContent, descendantText, isHidden };
   interaction?: { isInteractive, actions, isFocusable, isEditable };
   ui?: { expanded, highlighted, matchesFilter, selected };
