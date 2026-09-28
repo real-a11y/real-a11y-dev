@@ -73,7 +73,7 @@
   bullets. The copied Markdown report still leaves values out. In NATIVE mode,
   a `<select>` shows its option label instead of its `value`, a custom slider
   shows its `aria-valuetext`, and a rich-text editor shows its text.
-  (ADR-0001)
+  (ADR-0001) ([#431](https://github.com/real-a11y/real-a11y-dev/pull/431))
 
 - In DOM mode, the Tab Sequence view, its copied export and the keyboard bar's
   Tab now stop at a rich-text editor and skip the links inside it. They used to
