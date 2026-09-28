@@ -1990,6 +1990,24 @@ describe("a11y.value — what a screen reader announces (ADR-0001)", () => {
     expect(nodeFor(root, "[aria-label=Cell]").a11y.value).toBeUndefined();
   });
 
+  it("keeps an editor's value when it contains native controls, like a task list's checkboxes", () => {
+    expect(
+      valueOf(
+        `<div contenteditable="true" role="textbox" aria-label="Tasks"><ul><li><input type="checkbox"> Buy milk</li><li><input type="checkbox" checked> Call Ana</li></ul><input type="hidden" value="doc-1"></div>`,
+        "[aria-label=Tasks]",
+      ),
+    ).toBe("Buy milk Call Ana");
+  });
+
+  it("lets an ARIA combobox read its own text when all it wraps is a hidden input", () => {
+    expect(
+      valueOf(
+        `<div role="combobox" aria-label="Fruit" tabindex="0">Apple<input type="hidden" name="fruit" value="apple"></div>`,
+        "[role=combobox]",
+      ),
+    ).toBe("Apple");
+  });
+
   it("leaves the value to the native control an ARIA combobox wraps", () => {
     const root = createPage(
       `<div role="combobox" aria-label="State"><input aria-label="State" value="Ohio"><ul role="listbox"><li role="option">Ohio</li><li role="option">Utah</li></ul></div>`,

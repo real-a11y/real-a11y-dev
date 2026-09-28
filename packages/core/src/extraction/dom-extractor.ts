@@ -1407,6 +1407,19 @@ function selectedLabels(select: HTMLSelectElement): string {
     .join(", ");
 }
 
+/** True when `element` wraps a text-entry control that holds the value
+ *  itself. Hidden, checkbox, radio, button and file inputs don't. */
+function wrapsTextControl(element: Element): boolean {
+  return Array.from(element.querySelectorAll("input, select, textarea")).some(
+    (control) => {
+      // Tag-checked, not `instanceof`, which fails across realms.
+      if (control.tagName.toLowerCase() !== "input") return true;
+      const type = (control as HTMLInputElement).type;
+      return !VALUELESS_INPUT_TYPES.has(type) && type !== "file";
+    },
+  );
+}
+
 /** The editable region `element` sits inside, if any (itself excluded). */
 function enclosingEditable(element: Element): Element | null {
   return (
@@ -1479,13 +1492,17 @@ function readFieldValue(
   if (tag === "select") return selectedLabels(element as HTMLSelectElement);
 
   // A non-native field: an editor, or an ARIA textbox/combobox built on a div.
-  // One that wraps a native control (the ARIA 1.0 combobox around an <input>)
-  // leaves the value to that control — its own text would be every option.
   // A textbox nested INSIDE an editor is part of that editor's content, which
   // its host already announces — a second value would count the text twice.
-  if (TEXT_VALUE_ROLES.has(role) || isEditingHost(element)) {
-    if (element.querySelector("input, select, textarea")) return undefined;
+  // An ARIA textbox/combobox that wraps a text-entry control (the ARIA 1.0
+  // combobox around an <input>) leaves the value to that control — its own
+  // text would be every option. An editor never does: a task list's
+  // checkboxes are part of the document, and its text walk can't see a
+  // control's value anyway.
+  const editingHost = isEditingHost(element);
+  if (TEXT_VALUE_ROLES.has(role) || editingHost) {
     if (enclosingEditable(element)) return undefined;
+    if (!editingHost && wrapsTextControl(element)) return undefined;
     return getFieldText(element, styleCache);
   }
   return undefined;
