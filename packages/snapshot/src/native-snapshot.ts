@@ -26,6 +26,13 @@ export interface NativeSnapshotOptions {
   rules?: readonly A11yRule[];
   /** Include generic container nodes in the serialized tree. */
   includeGeneric?: boolean;
+  /**
+   * Print each field's announced value in the tree view —
+   * `textbox "Email" = "jane@x.com"`, a sensitive field `"[redacted]"`
+   * (ADR-0001). Default false: live views turn it on, persisted ones (an
+   * artifact, a checkpoint) only when the caller opted in.
+   */
+  values?: boolean;
 }
 
 /**
@@ -49,7 +56,10 @@ export function projectNativeTree(
   const rules = options.rules?.length ? options.rules : undefined;
   return projectSnapshot({
     findings: collectFindings(tree, rules),
-    tree: serializeTree(tree, { includeGeneric }),
+    tree: serializeTree(tree, {
+      includeGeneric,
+      values: options.values === true,
+    }),
     outline: serializeOutline(tree),
     tabOrder: "",
   });

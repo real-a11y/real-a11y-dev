@@ -74,6 +74,24 @@ export function envInt(
   return Number(trimmed);
 }
 
+/**
+ * Parse an on/off environment variable, strictly. `1` / `true` turn it on;
+ * unset, empty, `0` or `false` leave it off; anything else refuses to start.
+ * The strict parse matters for the variables that withhold data: a
+ * `REAL_A11Y_REDACT_INPUT=yes` that silently meant "off" would print field
+ * values into an agent's context while the operator believed they were
+ * withheld.
+ *
+ * The env read stays at the call site (a property access) so the surface
+ * extractor can see the variable's name; this helper only validates.
+ */
+export function envFlag(name: string, raw: string | undefined): boolean {
+  const value = (raw ?? "").trim().toLowerCase();
+  if (value === "1" || value === "true") return true;
+  if (value === "" || value === "0" || value === "false") return false;
+  throw new Error(`${name} must be 1 or 0 (true/false), got "${raw}"`);
+}
+
 /** Parse the comma-separated origin allowlist, normalizing each to its origin. */
 export function parseAllowedOrigins(raw: string | undefined): string[] {
   if (!raw) return [];

@@ -107,6 +107,17 @@ export interface SnapshotArtifact {
      * measured all three. Read it through {@link measuredViews}.
      */
     views?: SnapshotView[] | null;
+    /**
+     * `true` when the views carry field values — `textbox "Email" = "…"`
+     * (ADR-0001) — because the run asked for them (`real-a11y snapshot
+     * --values`, MCP `checkpoint_findings` with `values: true`). An artifact is
+     * committed and posted, so values are opt-in; absent means none.
+     *
+     * Recorded because a diff between an artifact with values and one without
+     * reads every filled field as a changed line — a reader should be told
+     * why, not left to guess. Read it through {@link carriesValues}.
+     */
+    values?: boolean | null;
   };
   pages: SnapshotPage[];
 }
@@ -120,6 +131,8 @@ export interface ArtifactMeta {
   only?: "findings" | "views";
   /** Views this run measured. Defaults to all of {@link SNAPSHOT_VIEWS}. */
   views?: readonly SnapshotView[];
+  /** The views carry field values. Recorded only when true. */
+  values?: boolean;
 }
 
 /**
@@ -192,9 +205,22 @@ export function buildArtifact(
       viewport: meta.viewport ?? null,
       only: meta.only ?? null,
       views: [...(meta.views ?? SNAPSHOT_VIEWS)],
+      // Only when true, so an artifact without values is byte-identical to
+      // one written before values existed.
+      ...(meta.values === true ? { values: true } : {}),
     },
     pages,
   };
+}
+
+/**
+ * Whether an artifact's views carry field values (see `meta.values`). Reads
+ * defensively: a legacy or hand-made artifact without the field has none.
+ */
+export function carriesValues(
+  artifact: Pick<SnapshotArtifact, "meta">,
+): boolean {
+  return artifact.meta?.values === true;
 }
 
 /**

@@ -264,10 +264,12 @@ describe("MCP end-to-end against a real browser", () => {
     expect(textOf(res)).toMatch(/REAL_A11Y_MCP_ALLOW_FILE|Refusing/);
   });
 
-  it("never names an unlabeled input by its value", async () => {
+  it("never names an unlabeled input by its value — the value is its value", async () => {
     // Unlabeled input WITH a value. Chromium's own tree never names it by
     // value, and since the #119 core fix neither did the in-page walk — this
     // is the regression guard that outlived the producer comparison itself.
+    // The value is page content a screen reader announces (ADR-0001), so it
+    // prints — after `=`, never as the name an audit would read.
     const html = `<!doctype html><html><head><title>x</title></head><body><main>
       <h1>Sign in</h1>
       <input value="john@example.com" />
@@ -280,8 +282,9 @@ describe("MCP end-to-end against a real browser", () => {
     const tree = textOf(
       await client.callTool({ name: "get_semantic_tree", arguments: {} }),
     );
-    expect(tree).toMatch(/textbox/); // Chromium's own tree, via CDP
-    expect(tree).not.toMatch(/john@example\.com/);
+    // Chromium's own tree, via CDP: unnamed, holding its value.
+    expect(tree).toMatch(/^\s*textbox = "john@example\.com"$/m);
+    expect(tree).not.toContain('textbox "john@example.com"');
   });
 
   it("keeps a tree checkpoint in-page and diffs a later DOM change", async () => {

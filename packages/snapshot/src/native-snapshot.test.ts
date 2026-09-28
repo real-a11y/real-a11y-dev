@@ -96,3 +96,35 @@ describe("projectNativeTree", () => {
     ).toBe(true);
   });
 });
+
+describe("projectNativeTree — field values (ADR-0001)", () => {
+  const withField = tree([
+    node({
+      id: "root",
+      parentId: null,
+      childIds: ["f"],
+      depth: 0,
+      role: "main",
+    }),
+    {
+      ...node({
+        id: "f",
+        parentId: "root",
+        depth: 1,
+        role: "textbox",
+        name: "Email",
+      }),
+    },
+  ]);
+  withField.nodes.get("f")!.a11y.value = "jane@x.com";
+
+  it("leaves values out by default — the tree view goes into artifacts", () => {
+    expect(projectNativeTree(withField).tree).toBe('main\n  textbox "Email"');
+  });
+
+  it("prints them when asked", () => {
+    expect(projectNativeTree(withField, { values: true }).tree).toBe(
+      'main\n  textbox "Email" = "jane@x.com"',
+    );
+  });
+});

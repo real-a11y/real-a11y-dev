@@ -116,11 +116,13 @@ describe("native producer — findings carry locators", () => {
     }
   });
 
-  it("addresses a node inside an editor from outside it, never by an id the editor derived from typed text (R1)", async () => {
+  it("in strict mode (redactInput), addresses a node inside an editor from outside it, never by an id the editor derived from typed text", async () => {
     // Some editors derive an id from what was typed (a heading slug, a
     // figure's caption). The unlabeled image is a finding INSIDE the composer:
-    // its locator must anchor on the host's id, not its own. The skipped
-    // heading level is one too, and its message quotes the heading's name.
+    // under strict mode its locator must anchor on the host's id, not its
+    // own. The skipped heading level is one too, and its message quotes the
+    // heading's name. (By default an editor's content is page content, and
+    // both read as the page wrote them — see the next test.)
     await session.open(
       "data:text/html," +
         encodeURIComponent(`<!doctype html><html><head><title>Editor</title></head><body><main>
@@ -131,7 +133,7 @@ describe("native producer — findings carry locators", () => {
           </div>
         </main></body></html>`),
     );
-    const tree = await session.nativeTree();
+    const tree = await session.nativeTree({ redactInput: true });
     const native = collectFindings(tree);
 
     expect(addressed(native)).toEqual([
@@ -144,6 +146,17 @@ describe("native producer — findings carry locators", () => {
     expect(JSON.stringify(native)).not.toContain("EDITOR-SECRET");
     expect(JSON.stringify([...tree.nodes.values()])).not.toContain(
       "EDITOR-SECRET",
+    );
+
+    // By default the same editor reads as the page wrote it (ADR-0001): the
+    // heading's text is its name, and the image's own id addresses it.
+    const plain = collectFindings(await session.nativeTree());
+    expect(addressed(plain)).toEqual([
+      "heading-order @ (none)",
+      "image-alt @ #fig-EDITOR-SECRET",
+    ]);
+    expect(plain.find((f) => f.rule === "heading-order")?.message).toContain(
+      '"Q3 EDITOR-SECRET plan" is h3',
     );
   });
 });

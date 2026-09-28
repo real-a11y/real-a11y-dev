@@ -76,6 +76,19 @@ export interface AttachOptions {
    *   `rootSelector` scoping is not yet supported.
    */
   tree?: "dom" | "native";
+  /**
+   * Strict mode for the native tree (ADR-0001's `redactInput`): no node
+   * carries a field value, and inside a rich-text editor a name computed from
+   * the typed text reads `"[redacted]"`. Default false — a native tree holds
+   * each field's announced value, with sensitive fields (`type="password"`, a
+   * credential or payment `autocomplete`) as `"[redacted]"`; snapshots print
+   * values only with `treeSnapshot({ values: true })`.
+   *
+   * Native only: the DOM tree is you inspecting your own page and has no
+   * strict mode, so `{ redactInput: true }` without `tree: "native"` throws
+   * rather than be silently ignored.
+   */
+  redactInput?: boolean;
 }
 
 export interface TreeSnapshotOptions {
@@ -174,7 +187,16 @@ export async function attach(
   // Native producer: no page-bundle injection — read Chromium's own tree over
   // CDP and run the same serialize/audit helpers in Node. Same handle shape.
   if (options.tree === "native") {
-    return attachNative(page, rootSelector);
+    return attachNative(page, rootSelector, {
+      redactInput: options.redactInput === true,
+    });
+  }
+  // A privacy option that silently did nothing would be worse than none.
+  if (options.redactInput === true) {
+    throw new Error(
+      '@real-a11y-dev/testing/playwright: { redactInput: true } applies to { tree: "native" } only — ' +
+        'the DOM tree has no strict mode. Pass tree: "native", or leave values out of snapshots (they\'re off unless treeSnapshot({ values: true })).',
+    );
   }
 
   // Inject the bundle by EVALUATING its source rather than appending a
@@ -350,11 +372,13 @@ export async function attach(
  * work; `tabSequenceSnapshot()` throws (tab order needs interaction data the
  * native tree doesn't carry), and `rootSelector` scoping isn't supported yet.
  * Each call re-reads the tree so the handle reflects the live page, matching the
- * DOM handle's per-call re-extraction.
+ * DOM handle's per-call re-extraction — in strict mode when `redactInput` is
+ * set, on every read.
  */
 async function attachNative(
   page: PlaywrightPage,
   rootSelector: string,
+  treeOptions: { redactInput: boolean },
 ): Promise<SemanticNavigatorPageHandle> {
   if (rootSelector !== "body") {
     throw new Error(
@@ -367,7 +391,7 @@ async function attachNative(
   // its exact parameter type from the function so this file needs no direct
   // `playwright` import (keeping the DOM path's structural-typing contract).
   const nativePage = page as unknown as Parameters<typeof nativeTree>[0];
-  const getTree = () => nativeTree(nativePage);
+  const getTree = () => nativeTree(nativePage, treeOptions);
 
   return {
     async treeSnapshot(opts: TreeSnapshotOptions = {}) {

@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   assertValidStorageState,
+  envFlag,
   envInt,
   parseAllowedOrigins,
 } from "./config.js";
@@ -106,6 +107,23 @@ describe("envInt", () => {
   it("names the variable and echoes what was set", () => {
     expect(() => envInt("REAL_A11Y_MCP_MAX_SESSIONS", "lots", 4)).toThrow(
       /REAL_A11Y_MCP_MAX_SESSIONS must be a non-negative integer, got "lots"/,
+    );
+  });
+});
+
+describe("envFlag (REAL_A11Y_REDACT_INPUT)", () => {
+  it("reads 1/true as on and unset/empty/0/false as off", () => {
+    for (const on of ["1", "true", " TRUE "]) {
+      expect(envFlag("REAL_A11Y_REDACT_INPUT", on)).toBe(true);
+    }
+    for (const off of [undefined, "", "  ", "0", "false"]) {
+      expect(envFlag("REAL_A11Y_REDACT_INPUT", off)).toBe(false);
+    }
+  });
+
+  it("refuses to start on anything else, rather than guess off", () => {
+    expect(() => envFlag("REAL_A11Y_REDACT_INPUT", "yes")).toThrow(
+      /REAL_A11Y_REDACT_INPUT must be 1 or 0/,
     );
   });
 });

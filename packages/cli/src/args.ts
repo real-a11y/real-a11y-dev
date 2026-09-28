@@ -64,6 +64,12 @@ const PAGE_FLAGS: Options = {
   "audit-origin": { type: "string", multiple: true },
   session: { type: "string" },
   "session-idle-timeout": { type: "string" },
+  // Strict mode (ADR-0001's `redactInput`): no field value and no rich-text
+  // editor content in any output. A page flag because it governs every read
+  // of the page, the act commands' diffs included — and per run, not per
+  // browser, so a reused `--session` can't carry it from one invocation into
+  // the next.
+  "redact-input": { type: "boolean" },
 };
 
 const OUTPUT_FLAGS: Options = {
@@ -182,6 +188,9 @@ const SNAPSHOT_FLAGS: Options = {
   ...PAGE_FLAGS,
   ...CONFIG_FLAGS,
   "include-generic": { type: "boolean" },
+  // Field values in the artifact's views. Opt-in: an artifact is committed and
+  // posted, so what users typed stays out unless a run asks for it.
+  values: { type: "boolean" },
   rules: { type: "string" },
   md: { type: "boolean" },
   format: { type: "string", short: "f" },
@@ -242,6 +251,8 @@ const SHARED_FLAG_HELP_NO_ROOT = `  --device <name>        Emulate a device, e.g
                          audit a login (no emulation flags over CDP)
   --chrome-path <file>   Browser binary to launch (default: the Chrome from
                          'real-a11y install', else Playwright's Chromium)
+  --redact-input         Strict mode: withhold EVERY field value and all
+                         rich-text editor content, not just sensitive fields
   --config <file>        a11y.config.json (auto-discovered in cwd) — its
                          "defaults" seed any flag you don't pass
   --no-config            Ignore an auto-discovered config
@@ -393,6 +404,11 @@ Print the semantic tree — what a screen reader perceives, role by role. Read
 from Chromium's own accessibility tree (whole document, so no --root; reaches
 user-agent-shadow media controls an in-page walk never sees).
 
+A field prints what it holds, the way a screen reader announces it:
+textbox "Email" = "jane@x.com". A password, one-time code or payment field
+reads "[redacted]"; --redact-input withholds every value and all rich-text
+editor content.
+
 Flags:
   --include-generic      Include generic container nodes
 ${SHARED_FLAG_HELP_NO_ROOT}
@@ -499,7 +515,11 @@ Targeting, acting, and the diff all read the same native tree, so a node you
 aim at by one name can't come back in the report under another. That tree is
 whole-document, which is why these commands take no --root.
 
-A typed value is never echoed — not in progress output, not in --format json.
+The text a step types is never echoed: the step prints as '= ‹hidden›', in
+progress output and in --format json alike. The diff then shows what the field
+holds, the way a screen reader announces it — a11y.value (unset) → "…" — with
+a password, one-time code or payment field as "[redacted]". --redact-input
+withholds every field value and all rich-text editor content from the diff.
 Don't use this to log in: a password on the command line is visible to other
 processes and lands in your shell history. Use 'real-a11y login' instead.
 
@@ -557,7 +577,10 @@ Examples:
   real-a11y type http://localhost:3000 --role textbox --name "Email" --text you@example.com
   real-a11y type http://localhost:3000 --role searchbox --name "Search" --text shoes
 
-The value is never echoed back — not in progress output, not in --format json.
+The --text you pass is never echoed back — not in progress output, not in
+--format json. The diff shows what the field then holds, as a screen reader
+would announce it (a password field as "[redacted]"; every field withheld
+under --redact-input).
 Don't use this to log in: a password on the command line is visible to other
 processes and lands in your shell history. Use 'real-a11y login' instead.
 
@@ -703,6 +726,8 @@ Flags:
                          --fail-on still gates on the full findings; a gating
                          views-only run explains itself on stderr
   --rules <ids>          Comma-separated subset (overrides config)
+  --values               Include field values in the tree view (off by
+                         default: an artifact is committed and posted)
   --baseline <file>      Suppress findings this baseline accepts (kept in the
                          report, out of the --fail-on count and sarif)
   --update-baseline      Rewrite the baseline from the current findings, then
@@ -945,6 +970,24 @@ export function parseStepSettle(flags: FlagValues): number {
 
 /** Long enough for a framework flush and a mount; short enough not to be felt. */
 export const DEFAULT_STEP_SETTLE_MS = 200;
+
+/**
+ * How a run treats what users entered into the page (ADR-0001).
+ *
+ * `redactInput` is the strict mode (`--redact-input`, config
+ * `defaults.redactInput`): the tree carries no field value and no rich-text
+ * editor content at all. Otherwise a LIVE view prints each field's value the
+ * way a screen reader announces it, sensitive fields as `[redacted]` —
+ * `liveValues` is what the live views pass to the serializers. Persisted
+ * outputs (`snapshot`) don't read `liveValues`; they opt in with `--values`.
+ */
+export function inputPolicy(flags: FlagValues): {
+  redactInput: boolean;
+  liveValues: boolean;
+} {
+  const redactInput = flags["redact-input"] === true;
+  return { redactInput, liveValues: !redactInput };
+}
 
 const WAIT_STATES = [
   "load",

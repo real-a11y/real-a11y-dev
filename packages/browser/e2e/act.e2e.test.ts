@@ -116,6 +116,46 @@ describe("BrowserSession.act (native producer, write side)", () => {
     expect(findId(after, "heading", secret)).toBeDefined();
   });
 
+  it("a typed value is the field's a11y.value; a password's is [redacted]; strict mode has none (ADR-0001)", async () => {
+    await session.open(
+      dataUrl(`<!doctype html><html><head><title>values</title></head><body><main>
+        <label>Email <input id="email" type="email"></label>
+        <label>Password <input id="pw" type="password"></label>
+      </main></body></html>`),
+    );
+    const tree = await session.nativeTree();
+    const valueOf = (t: ExtractionResult, name: string) =>
+      t.nodes.get(findId(t, "textbox", name) ?? "")?.a11y.value;
+    expect(valueOf(tree, "Email")).toBeUndefined(); // empty is no value
+
+    for (const [name, text] of [
+      ["Email", "hello@example.com"],
+      ["Password", "PW-SECRET-typed"],
+    ] as const) {
+      const result = await session.act({
+        nodeId: findId(tree, "textbox", name)!,
+        action: "type",
+        payload: { value: text },
+      });
+      expect(result).toEqual({ success: true });
+    }
+
+    const after = await session.nativeTree();
+    expect(valueOf(after, "Email")).toBe("hello@example.com");
+    expect(valueOf(after, "Password")).toBe("[redacted]");
+    const blob = JSON.stringify([...after.nodes.values()]);
+    expect(blob).not.toContain("PW-SECRET");
+    expect(blob).not.toContain("•"); // not even its length
+
+    const strict = await session.nativeTree({ redactInput: true });
+    for (const node of strict.nodes.values()) {
+      expect(node.a11y.value).toBeUndefined();
+    }
+    expect(JSON.stringify([...strict.nodes.values()])).not.toContain(
+      "hello@example.com",
+    );
+  });
+
   it("refuses a node id with no backing DOM element", async () => {
     await session.open(PAGE);
     // `ax-<n>` form — the id scheme's marker for a node with no DOM element

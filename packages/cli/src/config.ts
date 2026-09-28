@@ -62,6 +62,10 @@ export interface A11yDefaults {
   maxLines?: number;
   maxPages?: number;
   explain?: boolean;
+  /** `--redact-input`: withhold every field value and all editor content. */
+  redactInput?: boolean;
+  /** `snapshot --values`: field values in the artifact's views. */
+  values?: boolean;
 }
 
 export interface A11yConfig {
@@ -115,6 +119,8 @@ const DEFAULT_TYPES = {
   session: "string",
   sessionIdleTimeout: "number",
   explain: "boolean",
+  redactInput: "boolean",
+  values: "boolean",
 } as const;
 const DEFAULT_KEYS: ReadonlySet<string> = new Set(Object.keys(DEFAULT_TYPES));
 
@@ -455,6 +461,7 @@ const KEY_TO_FLAG: Record<string, string> = {
   maxPages: "max-pages",
   sessionIdleTimeout: "session-idle-timeout",
   annotate: "no-annotate",
+  redactInput: "redact-input",
 };
 /** The set of parseArgs flag names a config default can populate — every
  * DEFAULT_KEYS entry mapped through KEY_TO_FLAG. Exported for the lockstep test

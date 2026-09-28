@@ -32,6 +32,10 @@
  *                                Idle ms before all sessions close (default 900000 = 15 min;
  *                                0 disables; capped at 1 hour). The server stays up — the next
  *                                tool call relaunches, and saved findings checkpoints survive.
+ *   REAL_A11Y_REDACT_INPUT       Set to "1" for the strict mode: no field value and no
+ *                                rich-text editor content in any result. By default a field
+ *                                shows what it holds (a password or payment field reads
+ *                                "[redacted]"), the way a screen reader announces it.
  */
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -43,6 +47,7 @@ import {
 
 import {
   assertValidStorageState,
+  envFlag,
   envInt,
   parseAllowedOrigins,
 } from "./config.js";
@@ -57,6 +62,12 @@ async function main(): Promise<void> {
 
   const cdpEndpoint = process.env.REAL_A11Y_MCP_CDP;
   const headful = process.env.REAL_A11Y_MCP_HEADFUL === "1";
+  // Strict mode (ADR-0001's `redactInput`). Parsed strictly: a value that
+  // doesn't say on or off refuses to start rather than guess "off".
+  const redactInput = envFlag(
+    "REAL_A11Y_REDACT_INPUT",
+    process.env.REAL_A11Y_REDACT_INPUT,
+  );
   // CDP mode reuses a running browser — there's no binary for us to pick. A
   // bad REAL_A11Y_CHROME_PATH throws here and refuses to start (below), same
   // philosophy as an invalid REAL_A11Y_MCP_STORAGE_STATE above: silently
@@ -97,6 +108,7 @@ async function main(): Promise<void> {
     authenticated: Boolean(storageState),
     headful,
     cdpAttached: Boolean(cdpEndpoint),
+    redactInput,
   });
 
   // Tear down every session exactly once on any shutdown signal. The SDK's
@@ -126,6 +138,11 @@ async function main(): Promise<void> {
   if (chrome) {
     process.stderr.write(
       `  browser: ${chrome.executablePath} (${chrome.source})\n`,
+    );
+  }
+  if (redactInput) {
+    process.stderr.write(
+      "  strict mode (REAL_A11Y_REDACT_INPUT): field values and rich-text editor content are withheld from every result\n",
     );
   }
   if (storageState) {
