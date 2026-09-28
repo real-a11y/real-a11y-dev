@@ -272,6 +272,10 @@
             "type": "boolean"
           },
           {
+            "name": "redact-input",
+            "type": "boolean"
+          },
+          {
             "name": "rules",
             "type": "string"
           },
@@ -377,6 +381,10 @@
           {
             "name": "quiet",
             "short": "q",
+            "type": "boolean"
+          },
+          {
+            "name": "redact-input",
             "type": "boolean"
           },
           {
@@ -566,6 +574,10 @@
             "type": "boolean"
           },
           {
+            "name": "redact-input",
+            "type": "boolean"
+          },
+          {
             "name": "role",
             "type": "string"
           },
@@ -683,6 +695,10 @@
           {
             "name": "quiet",
             "short": "q",
+            "type": "boolean"
+          },
+          {
+            "name": "redact-input",
             "type": "boolean"
           },
           {
@@ -829,6 +845,10 @@
             "type": "boolean"
           },
           {
+            "name": "redact-input",
+            "type": "boolean"
+          },
+          {
             "name": "session",
             "type": "string"
           },
@@ -935,6 +955,10 @@
           {
             "name": "quiet",
             "short": "q",
+            "type": "boolean"
+          },
+          {
+            "name": "redact-input",
             "type": "boolean"
           },
           {
@@ -1077,6 +1101,10 @@
           {
             "name": "quiet",
             "short": "q",
+            "type": "boolean"
+          },
+          {
+            "name": "redact-input",
             "type": "boolean"
           },
           {
@@ -1241,6 +1269,10 @@
             "type": "boolean"
           },
           {
+            "name": "redact-input",
+            "type": "boolean"
+          },
+          {
             "name": "rules",
             "type": "string"
           },
@@ -1266,6 +1298,10 @@
           },
           {
             "name": "update-baseline",
+            "type": "boolean"
+          },
+          {
+            "name": "values",
             "type": "boolean"
           },
           {
@@ -1346,6 +1382,10 @@
           {
             "name": "quiet",
             "short": "q",
+            "type": "boolean"
+          },
+          {
+            "name": "redact-input",
             "type": "boolean"
           },
           {
@@ -1453,6 +1493,10 @@
             "type": "boolean"
           },
           {
+            "name": "redact-input",
+            "type": "boolean"
+          },
+          {
             "name": "session",
             "type": "string"
           },
@@ -1554,6 +1598,10 @@
           {
             "name": "quiet",
             "short": "q",
+            "type": "boolean"
+          },
+          {
+            "name": "redact-input",
             "type": "boolean"
           },
           {
@@ -1715,6 +1763,12 @@
       "packages": [
         "mcp"
       ]
+    },
+    {
+      "name": "REAL_A11Y_REDACT_INPUT",
+      "packages": [
+        "mcp"
+      ]
     }
   ],
   "manifestVersion": 2,
@@ -1764,7 +1818,7 @@
           "openWorldHint": false,
           "readOnlyHint": false
         },
-        "description": "Snapshot the CURRENT page's accessibility findings and store them under `name`. Later call diff_findings to see which findings are new / changed / fixed — the same identity semantics (fingerprints) the CI a11y-diff uses. Checkpoints survive navigation AND the session idle timeout (the browser may close and relaunch between saving and diffing; checkpoints remain), so you can checkpoint one deploy and diff another: save 'prod', open the preview URL, then diff_findings('prod'). They are held in memory and do NOT survive close_browser — call export_checkpoint first if you need one to outlive the session. Whole-document. Chromium only.",
+        "description": "Snapshot the CURRENT page's accessibility findings and store them under `name`. Later call diff_findings to see which findings are new / changed / fixed — the same identity semantics (fingerprints) the CI a11y-diff uses. Checkpoints survive navigation AND the session idle timeout (the browser may close and relaunch between saving and diffing; checkpoints remain), so you can checkpoint one deploy and diff another: save 'prod', open the preview URL, then diff_findings('prod'). They are held in memory and do NOT survive close_browser — call export_checkpoint first if you need one to outlive the session. The stored tree view leaves field values out unless you pass values: true. Whole-document. Chromium only.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "additionalProperties": false,
@@ -1794,6 +1848,11 @@
               "default": "default",
               "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
+            },
+            "values": {
+              "default": false,
+              "description": "Capture each field's value in the checkpoint's tree view (`textbox \"Email\" = \"jane@x.com\"`, sensitive fields \"[redacted]\"). Default false — a checkpoint becomes an artifact that may be exported, committed and posted, so what users typed stays out unless you ask. A checkpoint captured with values can only be exported with values: true.",
+              "type": "boolean"
             }
           },
           "required": [
@@ -1966,7 +2025,7 @@
           "openWorldHint": false,
           "readOnlyHint": true
         },
-        "description": "Diff the CURRENT accessibility tree against the one captured by checkpoint_tree: nodes added, removed, or changed, plus a focus move. This is the interaction diff — the precise answer to 'what did that click actually change for a screen reader?'.",
+        "description": "Diff the CURRENT accessibility tree against the one captured by checkpoint_tree: nodes added, removed, or changed, plus a focus move. This is the interaction diff — the precise answer to 'what did that click actually change for a screen reader?'. After type_text it shows what the field now holds — `~ textbox \"Email\": a11y.value (unset) → \"jane@x.com\"`, a sensitive field as \"[redacted]\".",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "additionalProperties": false,
@@ -1988,7 +2047,7 @@
           "openWorldHint": false,
           "readOnlyHint": true
         },
-        "description": "Return a stored checkpoint as a Real A11y snapshot artifact — the same a11y-snapshot.json the CLI writes (same schemaVersion, same fingerprints). Persist it to your own file to diff across sessions, or feed it to the CI a11y-diff. Checkpoints are whole-document, and the artifact has to come back as one valid JSON string, so a large page can exceed the output cap and fail — use the CLI's `real-a11y snapshot --output` for those.",
+        "description": "Return a stored checkpoint as a Real A11y snapshot artifact — the same a11y-snapshot.json the CLI writes (same schemaVersion, same fingerprints). Persist it to your own file to diff across sessions, or feed it to the CI a11y-diff. An artifact carries no field values unless the checkpoint was captured with values: true AND you export it with values: true. Checkpoints are whole-document, and the artifact has to come back as one valid JSON string, so a large page can exceed the output cap and fail — use the CLI's `real-a11y snapshot --output` for those.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "additionalProperties": false,
@@ -2003,6 +2062,11 @@
               "default": "default",
               "description": "Named browser session to use (1-32 characters from A-Z, a-z, 0-9, _ and -). Separate names are independent live pages with their own checkpoints; calls within one session run one at a time, different sessions run in parallel. Omit for the default session.",
               "type": "string"
+            },
+            "values": {
+              "default": false,
+              "description": "Export a checkpoint that was captured with field values. Default false, which refuses one rather than write what users typed into an artifact that may be committed and posted. A checkpoint captured without values exports the same either way.",
+              "type": "boolean"
             }
           },
           "required": [
@@ -2081,7 +2145,7 @@
           "openWorldHint": false,
           "readOnlyHint": true
         },
-        "description": "Return the page's accessibility tree as a deterministic, indented role + accessible-name outline (what a screen reader would traverse) — read from Chromium's own accessibility tree over CDP, so it reaches user-agent-shadow media controls an in-page walk never sees. The element focused at capture time is marked `[focused]`. Token-efficient and stable across runs. This is the vocabulary the act tools target in. Whole-document. Chromium only.",
+        "description": "Return the page's accessibility tree as a deterministic, indented role + accessible-name outline (what a screen reader would traverse) — read from Chromium's own accessibility tree over CDP, so it reaches user-agent-shadow media controls an in-page walk never sees. The element focused at capture time is marked `[focused]`. Each field shows what it holds, the way a screen reader announces it — `textbox \"Email\" = \"jane@x.com\"`; a password, one-time-code or payment field reads \"[redacted]\". Token-efficient and stable across runs. This is the vocabulary the act tools target in. Whole-document. Chromium only.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "additionalProperties": false,
@@ -2108,7 +2172,7 @@
           "openWorldHint": false,
           "readOnlyHint": true
         },
-        "description": "Return the focusable elements in the order a keyboard user encounters them when pressing Tab, numbered, with role + accessible name. The stop focused at capture time is marked `[focused]`. Built from the in-page DOM walk — Chromium's accessibility tree knows whether a node is focusable but not the SEQUENCE (tabindex never reaches it), so this is the only source for tab order, and the one tool `rootSelector` still scopes.",
+        "description": "Return the focusable elements in the order a keyboard user encounters them when pressing Tab, numbered, with role + accessible name. The stop focused at capture time is marked `[focused]`. A field shows what it holds (`textbox \"Email\" = \"jane@x.com\"`; a sensitive field \"[redacted]\"). Built from the in-page DOM walk — Chromium's accessibility tree knows whether a node is focusable but not the SEQUENCE (tabindex never reaches it), so this is the only source for tab order, and the one tool `rootSelector` still scopes.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "additionalProperties": false,
@@ -2172,7 +2236,7 @@
           "openWorldHint": false,
           "readOnlyHint": true
         },
-        "description": "Return the audit findings AND the semantic tree and heading outline — all derived from ONE read of Chromium's accessibility tree, so they are guaranteed internally consistent. The element focused at capture time is marked `[focused]`. Prefer this over separate audit_page + get_* calls on dynamic pages (SPAs, pages with consent dialogs) where separate calls could catch different states. That tree carries no tab order, so there is no tab-order section here — call get_tab_order for the keyboard sequence. Whole-document. Chromium only.",
+        "description": "Return the audit findings AND the semantic tree and heading outline — all derived from ONE read of Chromium's accessibility tree, so they are guaranteed internally consistent. The element focused at capture time is marked `[focused]`. Each field shows what it holds, the way a screen reader announces it — `textbox \"Email\" = \"jane@x.com\"`; a password, one-time-code or payment field reads \"[redacted]\". Prefer this over separate audit_page + get_* calls on dynamic pages (SPAs, pages with consent dialogs) where separate calls could catch different states. That tree carries no tab order, so there is no tab-order section here — call get_tab_order for the keyboard sequence. Whole-document. Chromium only.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "additionalProperties": false,
@@ -2236,7 +2300,7 @@
           "openWorldHint": false,
           "readOnlyHint": true
         },
-        "description": "List every element of one category — links, buttons, form controls, landmarks, images, or headings — as role + accessible name + a CSS locator. A token-efficient way to review one kind of element (e.g. 'images' pairs with the image-alt rule, 'form' with labeling). Listed from Chromium's own accessibility tree, so it agrees node for node with get_semantic_tree and audit_page. Whole-document. Chromium only.",
+        "description": "List every element of one category — links, buttons, form controls, landmarks, images, or headings — as role + accessible name + a CSS locator, and for a form field what it holds (a sensitive one \"[redacted]\"). A token-efficient way to review one kind of element (e.g. 'images' pairs with the image-alt rule, 'form' with labeling). Listed from Chromium's own accessibility tree, so it agrees node for node with get_semantic_tree and audit_page. Whole-document. Chromium only.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "additionalProperties": false,
@@ -2368,7 +2432,7 @@
           "openWorldHint": false,
           "readOnlyHint": false
         },
-        "description": "Set the value of the text field matched by role + accessible name in the native accessibility tree (role is usually 'textbox', 'searchbox', or 'combobox'). REPLACES the field's current value — via the prototype value setter plus input/change events, so framework-controlled inputs (React et al.) register it. The result NEVER echoes the typed text or any field content. There is deliberately NO credential parameter and this tool must NOT be used to log in — a password or token typed here would enter the agent's context; for pages behind auth the user starts the server with REAL_A11Y_MCP_STORAGE_STATE or REAL_A11Y_MCP_CDP instead. Pair with checkpoint_tree / diff_tree to see what the input changed (a combobox popping options, an inline error appearing). Chromium only.",
+        "description": "Set the value of the text field matched by role + accessible name in the native accessibility tree (role is usually 'textbox', 'searchbox', or 'combobox'). REPLACES the field's current value — via the prototype value setter plus input/change events, so framework-controlled inputs (React et al.) register it. The result NEVER echoes the typed text or any field content; diff_tree afterwards shows what the field holds the way a screen reader announces it (a sensitive field as \"[redacted]\"; nothing at all when the server runs with REAL_A11Y_REDACT_INPUT=1). There is deliberately NO credential parameter and this tool must NOT be used to log in — a password or token typed here would enter the agent's context; for pages behind auth the user starts the server with REAL_A11Y_MCP_STORAGE_STATE or REAL_A11Y_MCP_CDP instead. Pair with checkpoint_tree / diff_tree to see what the input changed (a combobox popping options, an inline error appearing). Chromium only.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "additionalProperties": false,

@@ -1,6 +1,6 @@
 # Privacy Policy
 
-_Last updated: 2026-04-18_
+_Last updated: 2026-09-28_
 
 This policy covers the Real A11y website (`real-a11y.dev`), the Semantic Navigator Chrome extension, and the `@real-a11y-dev/*` npm packages.
 
@@ -9,6 +9,7 @@ This policy covers the Real A11y website (`real-a11y.dev`), the Semantic Navigat
 - We don't collect personal data.
 - The Chrome extension runs entirely on your device. It does not send page content, URLs, or any other data to any server — ours or anyone else's.
 - The npm library packages run on your device / in your CI and make no network requests. The CLI and MCP server load only the page you point them at — that request goes to your target URL, never to us.
+- The CLI and MCP server print what a page's form fields hold (never a password, one-time code or card field); a strict mode leaves every field value out. [Details](#field-values-in-what-they-print).
 - The website may use privacy-respecting aggregate analytics (no cookies, no personal identifiers). If enabled, it's disclosed here.
 
 ## Chrome extension — Semantic Navigator
@@ -49,6 +50,16 @@ The `@real-a11y-dev/inspector`, `@real-a11y-dev/testing`, `@real-a11y-dev/react`
 - Have no side effects at install time beyond what `pnpm` / `npm` / `yarn` does normally.
 
 `@real-a11y-dev/cli` and `@real-a11y-dev/mcp` build on those libraries but additionally drive a headless browser (Playwright) so they can audit a live page. That browser loads **only the URL you give them** — the page you asked to audit — and reads its accessibility tree locally. They send no page content, no results, and no telemetry to us or any third party. Installing the browser with `npx playwright install` downloads it from Microsoft's Playwright CDN, the same as any Playwright project — that is the only network activity, and it is under your control.
+
+### Field values in what they print
+
+What these tools print is page content, and that includes what is **in the page's form fields**. Their live output — the CLI's `tree`, `tabs`, `list`, `inspect` and `interact` diff, the MCP server's tree, list, tab-order and diff tools — shows each field's value the way a screen reader announces it: the text in an email box, a chosen option, a draft in a rich-text editor. Wherever that output goes — your terminal, a CI log, or, for the MCP server, the AI agent you connected it to and that agent's model provider — those values go with it. Nothing is sent anywhere by the tools themselves.
+
+What they never print is a field the page marks as secret: a `type="password"` field, or one whose `autocomplete` names a credential or a payment card (`current-password`, `new-password`, `one-time-code`, `cc-number`, `cc-csc`, `cc-exp`, `cc-exp-month`, `cc-exp-year`). Those read `[redacted]` — not the text, not its length. And the text you hand to a `type` command or the `type_text` tool is never echoed back.
+
+Outputs meant to be committed or shared — CLI `snapshot` artifacts and the diffs built from them, the MCP server's exported checkpoints — leave field values out unless you ask for them (`--values`, or `values: true`).
+
+To keep every field value and all rich-text editor content out of the output, use the strict mode: `--redact-input` (or `defaults.redactInput` in `a11y.config.json`) for the CLI, `REAL_A11Y_REDACT_INPUT=1` for the MCP server, `attach(page, { tree: "native", redactInput: true })` in `@real-a11y-dev/testing`. Use it when a page's ordinary fields may hold something sensitive the markup doesn't say is sensitive.
 
 ## Website
 

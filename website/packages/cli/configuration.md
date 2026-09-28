@@ -1,6 +1,6 @@
 ---
 title: "@real-a11y-dev/cli — a11y.config.json reference"
-description: Every a11y.config.json key — urls, defaults (every settable flag), and redact — with types, defaults, and the CLI flag each maps to.
+description: Every a11y.config.json key — urls, defaults (every settable flag, including redactInput and values), and redact — with types, defaults, and the CLI flag each maps to.
 ---
 
 # `a11y.config.json`
@@ -239,6 +239,22 @@ GitHub Actions annotations (grouped `::error` lines + a job summary), on by defa
 **`includeGeneric: boolean`** — flag `--include-generic` · default `false` · applies to `inspect`, the view commands, `snapshot`
 
 Keep generic container nodes (no role, no name) in the serialized tree. Off by default so output shows only what a screen reader announces. Declared on every view command; only tree-rendering output (`tree`, `inspect`, `snapshot`) actually consumes it.
+
+### `redactInput`
+
+**`redactInput: boolean`** — flag `--redact-input` · default `false` · applies to `audit`, `inspect`, the view commands, `interact`, `click`, `type`, `focus`, `snapshot`
+
+The strict mode, as project policy: no field value and no rich-text editor content in any output. By default a field prints what it holds the way a screen reader announces it, and only a password, one-time code or payment field reads `[redacted]` — set this for a repo whose output lands where field contents must not, or whose plain text fields hold secrets the markup doesn't mark. There is no flag to turn it off for one run: a committed `true` holds for every invocation. See [`--redact-input`](/packages/cli/commands#redact-input).
+
+```json
+{ "defaults": { "redactInput": true } }
+```
+
+### `values`
+
+**`values: boolean`** — flag `--values` · default `false` · applies to `snapshot`
+
+Put field values into every snapshot artifact's tree view (sensitive fields still read `[redacted]`). Off by default, because an artifact is committed and posted into PR comments. Set it on both the base and the PR run — [`diff`](/packages/cli/commands#diff-base-json-pr-json) warns when only one side carries values. Ignored under [`redactInput`](#redactinput). See [`--values`](/packages/cli/commands#values).
 
 ### `baseline`
 

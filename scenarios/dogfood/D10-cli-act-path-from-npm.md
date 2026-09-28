@@ -6,9 +6,9 @@ area: CLI
 type: Automated
 priority: P0
 status: Active
-validFrom: "cli ≥ 0.1.0-beta.2 (unreleased). Not runnable until interact/click/type/focus + --step-settle actually publish — mark N/A for earlier releases"
+validFrom: "cli ≥ 0.1.0-beta.2 (unreleased). Not runnable until interact/click/type/focus + --step-settle actually publish — mark N/A for earlier releases. Steps 9–10 as written (field values, --redact-input): cli ≥ 0.1.0-beta.7"
 validUntil: ""
-expected: "Against a real site: real-a11y click <url> --role … --name … exits 0 and prints a tree diff that plainly describes what the click did. A target that role+name can't reach exits 2 with a message that reads as an accessibility finding, not a tool failure. A click that navigates says where it landed and still exits 0. Then the sentinel check: type a secret into a real field and grep stdout, stderr and --format json — zero hits."
+expected: "Against a real site: real-a11y click <url> --role … --name … exits 0 and prints a tree diff that plainly describes what the click did. A target that role+name can't reach exits 2 with a message that reads as an accessibility finding, not a tool failure. A click that navigates says where it landed and still exits 0. Then the sentinel check: type a secret into a password field and grep stdout, stderr and --format json — zero hits, the field reading only [redacted]; typed into a plain field it is never echoed but shows as the field's value in the diff, and --redact-input withholds it."
 twin:
   - R23
   - R24
@@ -39,11 +39,13 @@ Then read a target's role + name from `real-a11y tree https://real-a11y.dev`.
 6. `real-a11y click … --role button --name "definitely not here"`
 7. `real-a11y interact … --step '…' --step '…'` — two ordered steps
 8. A slow-reacting control with `--step-settle 0`, then `--step-settle 800`
-9. `real-a11y type … --text "$SENTINEL"` into a real field, capturing stdout/stderr, then again
-   with `--format json`
-10. Our site has no rich-text editor, so save **R24**'s step-7 composer page locally and run
-    `real-a11y interact ./composer.html --step "type textbox \"Composer\" = $SENTINEL"`, then
-    `real-a11y tree ./composer.html` after writing the sentinel into its paragraph (cli ≥ 0.1.0-beta.7)
+9. Our site has no password field, so save **R24**'s page (a password field and a plain
+   `Email` field, each echoing only its value's length) locally. `real-a11y type ./fields.html
+   --role textbox --name "Password" --text "$SENTINEL"`, capturing stdout/stderr, then again
+   with `--format json`; then the same into `Email`, with and without `--redact-input`
+10. Our site has no rich-text editor either, so save **R24**'s step-7 composer page locally and
+    run `real-a11y interact ./composer.html --step "type textbox \"Composer\" = $SENTINEL"`,
+    then again with `--redact-input`
 
 ## Expected
 
@@ -55,11 +57,16 @@ Then read a target's role + name from `real-a11y tree https://real-a11y.dev`.
 - **6** — exit `2`, phrased as an accessibility finding — if role + name can't reach it, assistive
   tech can't either
 - **8** — the settle visibly changes what the diff catches
-- **9** — `grep -F "$SENTINEL"` finds **zero** hits in stdout, stderr or JSON (see **R24** for the
-  sentinel — it must contain `=` and end in `=`)
-- **10** — zero hits again, while the diff shows the length echo changed and the tree still shows
-  `textbox "Composer"` over a bare `paragraph`. An editor's content is its value: the published
-  build must withhold it from the tree, not just from the step echo
+- **9** — into `Password`: `grep -F "$SENTINEL"` finds **zero** hits in stdout, stderr or JSON,
+  and no `•`; the diff reads `a11y.value (unset) → "[redacted]"` beside the length echo (see
+  **R24** for the sentinel — it must contain `=` and end in `=`). Into `Email`: stderr has zero
+  hits and the step echo is `= ‹hidden›`, while the diff shows the text as the field's value —
+  page content, not an echo. With `--redact-input`, zero hits anywhere
+- **10** — by default the diff shows `textbox "Composer"`'s value as the sentinel (the step echo
+  still hidden). With `--redact-input`, zero hits: the diff shows the length echo changed and no
+  value, and a later `tree ./composer.html --redact-input` shows `textbox "Composer"` over a
+  bare `paragraph`. The published build must withhold an editor's content from names, not just
+  from its value
 
 ## Why this exists
 
@@ -71,7 +78,9 @@ already prints, so copying a line out of `tree` should nearly produce a working 
 false against a real site, the feature is harder to use than it reads.
 
 Step 9 repeats R24 deliberately — pre-publish proves the redaction logic, this proves it in the
-built, published binary against a real field.
+built, published binary. Since cli 0.1.0-beta.7 a plain field's value is shown on purpose
+(ADR-0001), so the leak this guards is narrower and sharper: the echo of what was typed, and any
+trace of a password — its text or its length.
 
 ## Notes
 
