@@ -17,9 +17,12 @@
  * Editing counts both ways (see editing.ts): an editing host is a stop with no
  * `tabindex`, and a link inside editable content is not one.
  *
- * One stop Chromium has is not counted yet: the default summary Chromium gives
- * a `<details>` that has none of its own, which lives in a UA shadow root the
- * walk has no element for.
+ * Two stops Chromium has are not listed yet. One is the default summary
+ * Chromium gives a `<details>` that has none of its own, which lives in a UA
+ * shadow root the walk has no element for. The other is an image map's
+ * `<area>`: since Chromium 153 its UA stylesheet gives one `display: none`,
+ * so the walk skips it, although Chromium still tabs to it. The rule below is
+ * still right wherever an area is asked about.
  */
 
 import { isEditable, isEditingHost } from "./editing.js";

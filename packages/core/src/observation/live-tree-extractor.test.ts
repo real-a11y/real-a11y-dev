@@ -886,8 +886,9 @@ describe("LiveTreeExtractor", () => {
   // is disabled by an ancestor <fieldset>. Each case must come out of a
   // refresh the way a fresh extraction would.
   describe("focusability that depends on another element", () => {
-    // jsdom's UA sheet hides <area>, as the spec's does; Chromium renders
-    // one, so match Chromium to let the walk reach the areas.
+    // jsdom's UA sheet hides <area>, as the spec's does and Chromium's has
+    // since 153. Chromium 151 rendered one inline; match that here so the
+    // walk reaches the areas and the refresh logic has something to test.
     beforeEach(() => {
       const style = document.createElement("style");
       style.id = "render-areas";

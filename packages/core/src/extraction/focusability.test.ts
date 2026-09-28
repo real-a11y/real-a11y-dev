@@ -4,10 +4,10 @@ import { isFocusable, parseTabindex } from "./focusability.js";
 
 /**
  * Most of these rules are tested through the walk, in dom-extractor.test.ts
- * and query.test.ts. The ones here are the elements jsdom's walk never emits,
- * because its UA stylesheet gives them `display: none`, as Chromium's does for
- * a hidden input. Chromium does render an `<area>`, so the walk reaches one
- * there, and the CLI e2e covers it.
+ * and query.test.ts. The ones here are the elements the walk never emits,
+ * because the UA stylesheet gives them `display: none`: jsdom's and Chromium's
+ * both, for a hidden input, and for an `<area>` since Chromium 153 (151
+ * rendered one inline).
  */
 function build(html: string): HTMLElement {
   const div = document.createElement("div");

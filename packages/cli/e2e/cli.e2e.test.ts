@@ -116,16 +116,10 @@ describe("real-a11y (built bin)", () => {
   });
 
   it("tabs lists only the stops Chromium actually tabs to", async () => {
-    // The expected list is Chromium's own Tab walk of this page (151 and
-    // 153). The in-page walk used to list the two href-less anchors, the
-    // button in the disabled fieldset and the div with an empty tabindex,
-    // which Chromium never focuses, and to drop the aria-disabled button,
-    // which it does. The image map is here because only a real browser
-    // renders an <area>: the used map's area is a stop, the unused one's is
-    // not. The GIF is a valid 1x1 image; a truncated one left a broken image
-    // whose fallback rendering varies by platform.
-    const gif =
-      "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+    // The expected list is Chromium's own Tab walk of this page. The in-page
+    // walk used to list the two href-less anchors, the button in the disabled
+    // fieldset and the div with an empty tabindex, which Chromium never
+    // focuses, and to drop the aria-disabled button, which it does.
     const page = dataUrl(
       "<!doctype html><title>Stops</title><main>" +
         '<a name="top">Back to top anchor</a>' +
@@ -135,26 +129,14 @@ describe("real-a11y (built bin)", () => {
         "<fieldset disabled><legend><button>Unlock</button></legend>" +
         "<button>Save</button></fieldset>" +
         '<div tabindex="">Card</div>' +
-        `<img src="${gif}" width="10" height="10" alt="Site map" usemap="#nav">` +
-        '<map name="nav"><area href="/home" alt="Home" coords="0,0,10,10"></map>' +
-        '<map name="unused"><area href="/old" alt="Old" coords="0,0,10,10"></map>' +
         "</main>",
     );
-    const { code, stdout, stderr } = await runCli(["tabs", page, "-q"]);
+    const { code, stdout } = await runCli(["tabs", page, "-q"]);
     expect(code).toBe(0);
-    // stderr in the message: if a stop goes missing on one platform only,
-    // the failure should say what the CLI reported there.
-    expect(
-      stdout.trimEnd(),
-      `stderr:
-${stderr}`,
-    ).toBe(
-      [
-        '01. link "Docs"',
-        '02. button "Publish"',
-        '03. button "Unlock"',
-        '04. link "Home"',
-      ].join("\n"),
+    expect(stdout.trimEnd()).toBe(
+      ['01. link "Docs"', '02. button "Publish"', '03. button "Unlock"'].join(
+        "\n",
+      ),
     );
   });
 

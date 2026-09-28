@@ -231,7 +231,7 @@ An agent calls this to flag skipped levels or a missing/duplicate `h1`.
 
 Return the focusable elements in the order a keyboard user reaches them with Tab — numbered, each with role + accessible name. The stop focused at capture time is marked `[focused]`. Surfaces focus traps, illogical order, and unreachable controls.
 
-The stops are the ones Chromium tabs to. An `<a>` without an `href` is not one, not even with `role="button"`, which is the keyboard bug worth catching. Nor is a control disabled directly or by its `<fieldset>`, or an element whose `tabindex` is not an integer, such as `""`. An `aria-disabled` control is a stop, because `aria-disabled` announces a state and leaves focus alone. So is an image map's `<area href>` while an image uses the map.
+The stops are the ones Chromium tabs to. An `<a>` without an `href` is not one, not even with `role="button"`, which is the keyboard bug worth catching. Nor is a control disabled directly or by its `<fieldset>`, or an element whose `tabindex` is not an integer, such as `""`. An `aria-disabled` control is a stop, because `aria-disabled` announces a state and leaves focus alone.
 
 So is the `<summary>` that toggles a `<details>`, such as an FAQ accordion's question, listed as `generic` and named by its text. Only the first `<summary>` child of a `<details>` is a stop. A second one, or a summary anywhere else, is plain text to Chromium.
 
