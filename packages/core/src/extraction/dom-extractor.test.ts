@@ -2430,6 +2430,68 @@ describe("interaction.isFocusable follows Chromium", () => {
       "button-word": true,
     });
   });
+
+  it("counts a details' summary: its first summary child, wherever it sits", () => {
+    expect(
+      focusableById(`
+        <details><summary id="closed">Shipping</summary><p>Body</p></details>
+        <details open><summary id="open">Returns</summary><p>Body</p></details>
+        <details>
+          <summary id="first">A</summary>
+          <summary id="second">B</summary>
+        </details>
+        <details open><p>Lead</p><summary id="after-text">C</summary></details>
+        <details open><div><summary id="nested">D</summary></div></details>
+        <div><summary id="stray">E</summary></div>
+        <div><summary id="stray-tabindexed" tabindex="0">F</summary></div>
+        <details><summary id="scripted" tabindex="-1">G</summary></details>
+        <fieldset disabled>
+          <details><summary id="in-fieldset">H</summary></details>
+        </fieldset>
+        <details open><summary id="role-button" role="button">I</summary></details>
+        <details open><summary id="aria-disabled" aria-disabled="true">J</summary></details>
+      `),
+    ).toEqual({
+      closed: true,
+      open: true,
+      // Only the first summary child is the details' summary, even when
+      // other content comes before it.
+      first: true,
+      second: false,
+      "after-text": true,
+      // A summary that is not a details' child is plain text.
+      nested: false,
+      stray: false,
+      "stray-tabindexed": true,
+      // Focusable, just not a Tab stop.
+      scripted: true,
+      // A summary is no form control, so a disabled fieldset leaves it be.
+      "in-fieldset": true,
+      "role-button": true,
+      "aria-disabled": true,
+    });
+  });
+
+  it("reads a summary's details from the DOM, not from where it is slotted", () => {
+    const root = createPage(
+      `<div id="direct-host"></div>` +
+        `<div id="slot-host"><summary id="slotted">Slotted</summary></div>`,
+    );
+    root
+      .querySelector("#direct-host")!
+      .attachShadow({ mode: "open" }).innerHTML =
+      `<details><summary id="in-shadow">In shadow</summary></details>`;
+    // Rendered inside the details, but its parent is the host, so Chromium
+    // gives the details its default summary and leaves this one unfocusable.
+    root.querySelector("#slot-host")!.attachShadow({ mode: "open" }).innerHTML =
+      `<details open><slot></slot></details>`;
+    const byId: Record<string, boolean> = {};
+    for (const node of extractDomTree(root).nodes.values()) {
+      const id = node.dom?.attributes["id"];
+      if (id) byId[id] = node.interaction!.isFocusable;
+    }
+    expect(byId).toMatchObject({ "in-shadow": true, slotted: false });
+  });
 });
 
 describe("computed-style cache during extraction", () => {

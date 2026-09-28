@@ -274,6 +274,21 @@ describe("getImplicitRole", () => {
       expect(getImplicitRole(inFieldset)).toBe("presentation");
     });
 
+    // Checked over CDP in Chromium 151: a details' summary is focusable, so
+    // it ignores role="none"; a summary outside any details is not.
+    it("keeps a details' summary despite role=none, but not a stray one", () => {
+      const details = el(
+        '<details><summary role="none">Shipping</summary>' +
+          '<summary role="none">Second</summary></details>',
+      );
+      const [summary, second] = details.querySelectorAll("summary");
+      expect(getImplicitRole(summary)).toBe("generic");
+      expect(getImplicitRole(second)).toBe("presentation");
+      expect(getImplicitRole(el('<summary role="none">Stray</summary>'))).toBe(
+        "presentation",
+      );
+    });
+
     // A tabindex does NOT put a disabled control or a hidden input into the
     // focus order, so the exclusions have to be checked before tabindex is.
     it("keeps a disabled control presentational despite a tabindex", () => {

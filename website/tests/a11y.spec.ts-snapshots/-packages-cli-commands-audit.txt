@@ -411,6 +411,12 @@ main
     code "aria-disabled"
     code "aria-disabled"
     code "<area href>"
+  paragraph "So is the that toggles a , such as an FAQ accordion's question, listed as and named by its text. Only the first child of a is a stop. A second one, or a summary anywhere else, is plain text to Chromium."
+    code "<summary>"
+    code "<details>"
+    code "generic"
+    code "<summary>"
+    code "<details>"
   button "Copy Code"
   code
   paragraph "· () · · ."

@@ -121,20 +121,34 @@ function processNode(
     SUPPRESS_KEEP_INTERACTIVE.has(node.dom!.tagName) ||
     captionSuppliedTableName(node, domNodes)
   ) {
-    const promotedIds: string[] = [];
+    // A name source Chromium can focus is more than a name: the <summary>
+    // that toggles its <details> is a tab stop. It stays as a node of its
+    // own, or the tab sequence and a [focused] marker have nothing to point
+    // at. Its text-only children go either way, since that text is its name.
+    const keep = node.interaction!.isFocusable;
+    const keptChildIds: string[] = [];
     for (const childId of node.childIds) {
       if (!hasInteractiveDescendant(childId, domNodes)) continue;
-      const keptChildIds = processNode(
-        childId,
-        newParentId,
-        depth,
-        domNodes,
-        a11yNodes,
-        rootId,
+      keptChildIds.push(
+        ...processNode(
+          childId,
+          keep ? node.id : newParentId,
+          keep ? depth + 1 : depth,
+          domNodes,
+          a11yNodes,
+          rootId,
+        ),
       );
-      promotedIds.push(...keptChildIds);
     }
-    return promotedIds;
+    if (!keep) return keptChildIds;
+    a11yNodes.set(node.id, {
+      ...node,
+      parentId: newParentId,
+      childIds: keptChildIds,
+      depth,
+      ui: { ...node.ui!, expanded: depth < 3 },
+    });
+    return [node.id];
   }
 
   if (keepNode(node, rootId)) {

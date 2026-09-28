@@ -15,8 +15,9 @@
  * `:disabled` folds in.
  *
  * Two stops Chromium has are not counted yet: an editing host (see
- * role-map.ts, which counts one for conflict resolution only) and a
- * `<summary>`.
+ * role-map.ts, which counts one for conflict resolution only), and the default
+ * summary Chromium gives a `<details>` that has none of its own, which lives in
+ * a UA shadow root the walk has no element for.
  */
 
 /** Form controls that `disabled` removes from the focus order entirely. */
@@ -84,6 +85,24 @@ function isInUsedImageMap(area: Element): boolean {
   return false;
 }
 
+/**
+ * Whether a `<summary>` is its `<details>`' summary, the disclosure toggle:
+ * the first `<summary>` child, even with other content before it. Any other
+ * summary, including one slotted into a details it is not a child of, is
+ * plain text to Chromium. A disabled `<fieldset>` does not disable one, since
+ * a summary is no form control.
+ *
+ * A loop over the children rather than `:scope > summary`: jsdom's selector
+ * engine misses that match inside a shadow root.
+ */
+function isDetailsSummary(summary: Element): boolean {
+  const details = summary.parentElement;
+  if (details?.tagName.toLowerCase() !== "details") return false;
+  for (const child of details.children)
+    if (child.tagName.toLowerCase() === "summary") return child === summary;
+  return false;
+}
+
 /** True when `element` can take focus, from Tab or from script. */
 export function isFocusable(element: Element): boolean {
   if (isFocusBarred(element)) return false;
@@ -101,6 +120,7 @@ export function isFocusable(element: Element): boolean {
   if (tag === "area")
     return element.hasAttribute("href") && isInUsedImageMap(element);
   if (FORM_CONTROL_TAGS.has(tag)) return true;
+  if (tag === "summary") return isDetailsSummary(element);
   // <video controls> / <audio controls> are tab stops — Chromium exposes them
   // focusable even though the actual buttons/sliders live in a closed UA
   // shadow root.

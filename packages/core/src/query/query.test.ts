@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 
+import { extractA11yTree } from "../extraction/a11y-extractor.js";
 import { extractDomTree } from "../extraction/dom-extractor.js";
 import { resetIdCounter } from "../utils/id-generator.js";
 
@@ -300,6 +301,31 @@ describe("getTabSequence", () => {
     // "0.5" is 0. "" and "abc" are no integer, so those divs aren't stops.
     // Any negative tabindex takes a stop out, not just -1.
     expect(names).toEqual(["One", "Two", "Zero", "Half"]);
+  });
+
+  it("counts a details' summary, and only its first summary child", () => {
+    // A disclosure or FAQ toggle is a stop wherever it sits among the
+    // details' children. A second summary, one nested deeper, or one outside
+    // any details is plain text to Chromium, and a disabled fieldset around
+    // the details disables no summary.
+    const root = createPage(`
+      <details><summary>Shipping</summary><p>3 to 5 days.</p></details>
+      <details open>
+        <p>Lead paragraph</p>
+        <summary>Returns</summary>
+        <summary>Second summary</summary>
+      </details>
+      <details open><div><summary>Nested summary</summary></div></details>
+      <div><summary>Stray summary</summary></div>
+      <fieldset disabled><details><summary>Warranty</summary></details></fieldset>
+      <details><summary tabindex="-1">Scripted only</summary></details>
+    `);
+    // Every shipped reader takes the sequence from the a11y view, where a
+    // summary's text names its details, so the stop has to survive that too.
+    for (const tree of [extractDomTree(root), extractA11yTree(root)]) {
+      const names = getTabSequence(tree).map((n) => n.a11y.name);
+      expect(names).toEqual(["Shipping", "Returns", "Warranty"]);
+    }
   });
 
   it("skips tabindex=-1 and disabled nodes", () => {
