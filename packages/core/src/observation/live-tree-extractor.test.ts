@@ -934,6 +934,31 @@ describe("LiveTreeExtractor", () => {
       expect(focusableIds(result)).not.toContain("slotted");
       expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
     });
+
+    // Only a details' first summary child is a stop, so inserting or
+    // removing a sibling summary moves the stop between two nodes.
+    const SUMMARIES = `<details id="d" open>
+      <summary id="first">First</summary><summary id="second">Second</summary>
+    </details>`;
+
+    it("moves the stop when a summary is inserted ahead of the first", async () => {
+      const result = await refreshAfter(SUMMARIES, () => {
+        const summary = document.createElement("summary");
+        summary.id = "new";
+        summary.textContent = "New";
+        document.getElementById("d")!.prepend(summary);
+      });
+      expect(focusableIds(result)).toEqual(["new"]);
+      expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
+    });
+
+    it("moves the stop when the first summary is removed", async () => {
+      const result = await refreshAfter(SUMMARIES, () =>
+        document.getElementById("first")!.remove(),
+      );
+      expect(focusableIds(result)).toEqual(["second"]);
+      expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
+    });
   });
 
   it("keeps a reparented node when its destination was dirtied first", () => {
