@@ -24,7 +24,10 @@
  *
  * Redaction discipline (R1) matches the browser side: a value typed into a
  * field never crosses back out — the in-page function returns only a structural
- * marker, and errors are content-free.
+ * marker, and errors are content-free. Names come from `normalizeNativeAX` as
+ * they are: it never promotes a node's value into its name, so what a user
+ * typed into an editor stays out of it here exactly as in `browser`. Don't add
+ * a second strip here; a rule both transports need belongs in core.
  */
 
 import {

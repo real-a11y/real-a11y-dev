@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Typed editors — native name fixture</title>
+  </head>
+  <body>
+    <h1>Typed editors</h1>
+
+    <!--
+      Rich-text editors that are not text fields. Chromium reports what is
+      typed into each one twice: as the node's AX value, and on a StaticText
+      child. The native tree must never read that text as the node's name.
+
+      `application` and `document` are not in core's author-named field roles,
+      so it is the AX value alone that keeps their text out of the name.
+    -->
+
+    <div id="app" role="application" contenteditable="true"></div>
+    <div id="doc" role="document" contenteditable="true"></div>
+    <div
+      id="labelled"
+      role="application"
+      contenteditable="true"
+      aria-label="Message"
+    ></div>
+
+    <!--
+      A role-less editor is dropped from the tree, but it still carries the
+      typed text as its value, and the list item around it must not take it.
+    -->
+    <ul>
+      <li><div id="item" contenteditable="true"></div></li>
+    </ul>
+
+    <!-- The same kind of role, not editable: it still reads its text. -->
+    <div role="log">Saved at 10:00</div>
+  </body>
+</html>
