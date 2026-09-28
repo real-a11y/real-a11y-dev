@@ -287,8 +287,11 @@ what a person actually ran into holding the tree next to a page.
   reads its option label ("Spain") rather than its `value` ("es"), a custom
   slider its `aria-valuetext` (read in-page, since CDP never carries it), and
   an editor its text. `pageReadValue` became the gate in front of that value:
-  it classifies every candidate element, empty sensitive fields included, and
-  a node it never classified shows nothing, Chromium's value included. Its raw
+  it classifies every candidate element, empty sensitive fields included, as
+  well as the parts Chromium builds a field from (a `cc-exp` month input's
+  "Month" and "Year" spinbuttons, which sit in its UA shadow root and would
+  otherwise read the expiry date), and a node it never classified shows
+  nothing, Chromium's value included. Its raw
   read survives only as the retype prefill (`rawValue`). Its copy of the
   sensitive-token list is pinned to core's `SENSITIVE_AUTOCOMPLETE_TOKENS` by
   a parity test. (`fieldFacets`, `pageReadValue` in `native-core.ts`.)
