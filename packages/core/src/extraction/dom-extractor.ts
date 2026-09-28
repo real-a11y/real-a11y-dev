@@ -4,6 +4,7 @@ import { getNodeId } from "../utils/id-generator.js";
 import { realmSingleton } from "../utils/realm-singleton.js";
 
 import { safeTextContent } from "./clobber-safe.js";
+import { isEditable, isEditingHost } from "./editing.js";
 import {
   deepQuerySelectorAll,
   flatChildNodes,
@@ -259,6 +260,17 @@ function getActions(
     // Spinbuttons (date pickers, custom number steppers) accept both
     // typed values and arrow-key stepping. Surface both.
     actions.push("focus", "type", "increment", "decrement");
+  }
+
+  // An editing host is a text field whatever its role: Chromium focuses it
+  // and takes typing, and the dispatcher's `type` writes into it. The role
+  // branches above cover a textbox, a searchbox and an editable combobox;
+  // this catches the role-less `<div contenteditable>` composer, which
+  // otherwise read as inert and folded out of the a11y view — and so out of
+  // every tab sequence built on it. It precedes the tabindex catch-all,
+  // whose `click` would outrank `type` in getPrimaryAction.
+  if (actions.length === 0 && isEditingHost(element)) {
+    actions.push("focus", "type");
   }
 
   if (
@@ -664,8 +676,14 @@ const AUTHOR_NAMED_ROLES = new Set<string>([
  * An authored role outranks the tag: `<button role="combobox">Apple</button>`
  * (the Radix Select trigger) is a combobox, named by its author only, and
  * Chromium leaves it unnamed — its text is the selected VALUE.
+ *
+ * An editing host outranks both: what is typed into an editor is its content,
+ * never its label. Chromium names one only by `aria-label`,
+ * `aria-labelledby` or `title` — a `<button contenteditable>` or an editable
+ * `<h3>` is unnamed there, whatever it holds.
  */
 export function isNameFromContentHost(element: Element): boolean {
+  if (isEditingHost(element)) return false;
   const explicitRole = element.getAttribute("role")?.trim().split(/\s+/)[0];
   if (explicitRole && AUTHOR_NAMED_ROLES.has(explicitRole)) return false;
   if (NAMES_FROM_CONTENT_TAGS.has(element.tagName.toLowerCase())) return true;
@@ -1025,8 +1043,14 @@ function computeRawAccessibleName(
   //    sectionheader/sectionfooter that also keeps a byline from making the
   //    header "named" and so kept in the a11y view, where the native producer
   //    drops it as bare. The role is resolved only when there is text to give.
+  //    Nor for an editing host, for step 8's reason: its text is what was
+  //    typed into it (see isNameFromContentHost).
   const directText = getDirectTextContent(element);
-  if (directText && !AUTHOR_NAMED_ROLES.has(getImplicitRole(element))) {
+  if (
+    directText &&
+    !AUTHOR_NAMED_ROLES.has(getImplicitRole(element)) &&
+    !isEditingHost(element)
+  ) {
     return directText;
   }
 
@@ -1811,8 +1835,16 @@ function buildNode(
     const actions = getActions(element);
     const isMedia = MEDIA_TAGS.has(tag);
     const isFocusable =
-      NATIVELY_FOCUSABLE.has(tag) ||
       element.getAttribute("tabindex") !== null ||
+      // An editing host is focusable with no tabindex; an editable element
+      // nested inside one is not (Chromium focuses only the host).
+      isEditingHost(element) ||
+      // Editing takes a link's focusability away: Chromium won't focus an
+      // `<a href>` inside editable content, not even from script, unless it
+      // carries its own tabindex (above) or sits in a
+      // `contenteditable="false"` island. Nothing else loses it — a button or
+      // an input inside an editor is still a tab stop.
+      (NATIVELY_FOCUSABLE.has(tag) && !(tag === "a" && isEditable(element))) ||
       // <video controls> / <audio controls> are tab stops — Chromium
       // exposes them focusable even though the actual buttons/sliders
       // live in a closed UA shadow root.

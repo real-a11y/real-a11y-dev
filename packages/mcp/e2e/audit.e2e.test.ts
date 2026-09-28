@@ -207,6 +207,30 @@ describe("MCP end-to-end against a real browser", () => {
     );
   });
 
+  it("get_tab_order stops at each editor, never at a link typed into one", async () => {
+    const html = `<!doctype html><html><head><title>Composer</title></head><body>
+      <main>
+        <div contenteditable="true" role="textbox" aria-label="Message">
+          <p>Reset link: <a href="https://x.test/reset?token=abc123">https://x.test/reset?token=abc123</a></p>
+          <p>cc <a contenteditable="false" href="/u/alice" aria-label="Mention Alice">@alice</a></p>
+        </div>
+        <div contenteditable="true">my password is hunter2</div>
+      </main>
+    </body></html>`;
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: dataUrl(html) },
+    });
+    const out = textOf(
+      await client.callTool({ name: "get_tab_order", arguments: {} }),
+    );
+    expect(out).toMatch(
+      /^01\. textbox "Message"\n02\. link "Mention Alice"\n03\. generic$/m,
+    );
+    expect(out).not.toContain("token=abc123");
+    expect(out).not.toContain("hunter2");
+  });
+
   it("the read tools take no rootSelector at all", async () => {
     const tools = (await client.listTools()).tools;
     const props = (name: string) =>

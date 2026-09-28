@@ -5,6 +5,7 @@
  */
 
 import { safeHidden } from "./clobber-safe.js";
+import { isEditable, isEditingHost } from "./editing.js";
 import { flatParent } from "./flat-tree.js";
 
 type RoleResolver = string | ((el: Element) => string);
@@ -301,12 +302,15 @@ function isFocusableForConflictResolution(element: Element): boolean {
   if (tabindex !== null && tabindex.trim() !== "" && !isNaN(Number(tabindex)))
     return true;
 
-  // A contenteditable host is focusable without any tabindex. `""` is the
-  // valid shorthand for "true"; `"false"` opts back out.
-  const editable = element.getAttribute("contenteditable");
-  if (editable === "" || editable === "true") return true;
+  // An editing host is focusable without any tabindex; an editable element
+  // nested inside one is not. See editing.ts for how the attribute resolves.
+  if (isEditingHost(element)) return true;
 
-  if (tag === "a" || tag === "area") return element.hasAttribute("href");
+  // A link inside editable content is not focusable either, unless a
+  // `contenteditable="false"` island gives it back (or a tabindex, above).
+  if (tag === "a" || tag === "area") {
+    return element.hasAttribute("href") && !isEditable(element);
+  }
   if (FORM_CONTROL_TAGS.has(tag)) return true;
   // <video controls> / <audio controls> are tab stops — Chromium exposes them
   // focusable even though the actual buttons/sliders live in a closed UA

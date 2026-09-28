@@ -260,6 +260,44 @@ describe("LiveTreeExtractor", () => {
     observer.stop();
   });
 
+  // An editor toggled read-only (ProseMirror's `editable: false` flips the
+  // host to contenteditable="false") gives every link inside it back its
+  // focusability, and turns the host itself back into a plain container.
+  it("refreshes an editor's links when its contenteditable toggles", async () => {
+    document.body.innerHTML = `<main><div id="ed" contenteditable="true" role="textbox" aria-label="Message"><p>See <a href="/x">docs</a></p></div></main>`;
+
+    const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
+    const changes: TreeChange[] = [];
+    const observer = new DomObserver(
+      document.body,
+      (change) => {
+        changes.push(change);
+      },
+      50,
+    );
+    observer.start();
+
+    const focusable = (result: ExtractionResult) =>
+      [...result.nodes.values()]
+        .filter((n) => n.interaction?.isFocusable)
+        .map((n) => n.a11y.role);
+    expect(focusable(live.extract())).toEqual(["textbox"]);
+
+    document.getElementById("ed")!.setAttribute("contenteditable", "false");
+    await vi.advanceTimersByTimeAsync(100);
+    let result = live.refresh(changes[0]);
+    expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+    expect(focusable(result)).toEqual(["link"]);
+
+    document.getElementById("ed")!.setAttribute("contenteditable", "true");
+    await vi.advanceTimersByTimeAsync(100);
+    result = live.refresh(changes[1]);
+    expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+    expect(focusable(result)).toEqual(["textbox"]);
+
+    observer.stop();
+  });
+
   it("supports dom mode", async () => {
     document.body.innerHTML = `<main><div>Old</div></main>`;
 

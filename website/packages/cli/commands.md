@@ -248,6 +248,16 @@ real-a11y tabs https://example.com
 real-a11y tabs https://example.com --root "#app main"
 ```
 
+A rich-text editor counts the way Chromium counts it. Each `contenteditable`
+region is one stop, named by its label and never by what was typed into it. A
+link inside the editor is not a stop, because Chromium can't focus it, unless it
+sits in a `contenteditable="false"` island such as a mention chip:
+
+```
+01. textbox "Message"
+02. link "Mention Alice"
+```
+
 **Flags:** [Browser & page](#browser-page) · [Output](#output) (`pretty | json`)
 · [Config](#config) · [`--root`](#root-selector).
 
