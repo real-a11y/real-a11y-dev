@@ -1,6 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { isFocusable, parseTabindex } from "./focusability.js";
+import {
+  isActuallyDisabled,
+  isFocusable,
+  parseTabindex,
+} from "./focusability.js";
 
 /**
  * Most of these rules are tested through the walk, in dom-extractor.test.ts
@@ -53,6 +57,27 @@ describe("isFocusable", () => {
     expect(focusable("case")).toBe(false);
     expect(focusable("no-hash")).toBe(false);
     expect(focusable("no-href")).toBe(false);
+  });
+});
+
+describe("isActuallyDisabled", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("falls back to the element's own attribute without :disabled", () => {
+    const root = build(`
+      <fieldset disabled>
+        <button id="own" disabled>Save</button>
+        <button id="inherited">Send</button>
+      </fieldset>
+    `);
+    vi.spyOn(Element.prototype, "matches").mockImplementation(() => {
+      throw new SyntaxError("unsupported selector");
+    });
+    expect(isActuallyDisabled(root.querySelector("#own")!)).toBe(true);
+    // The fallback misses the fieldset case, and only that.
+    expect(isActuallyDisabled(root.querySelector("#inherited")!)).toBe(false);
   });
 });
 

@@ -11,7 +11,7 @@ import {
   idScope,
   isRenderedInFlatTree,
 } from "./flat-tree.js";
-import { isFocusable } from "./focusability.js";
+import { isActuallyDisabled, isFocusable } from "./focusability.js";
 import {
   getCachedComputedStyle,
   getImplicitRole,
@@ -1300,7 +1300,8 @@ function getAriaStates(element: Element): Record<string, string | boolean> {
     tag === "select" ||
     tag === "textarea"
   ) {
-    if (htmlEl.disabled) states["disabled"] = true;
+    // Not `htmlEl.disabled`, which misses a control disabled by its fieldset.
+    if (isActuallyDisabled(element)) states["disabled"] = true;
     if ("checked" in htmlEl && htmlEl.checked) states["checked"] = true;
     if ("required" in htmlEl && htmlEl.required) states["required"] = true;
   }

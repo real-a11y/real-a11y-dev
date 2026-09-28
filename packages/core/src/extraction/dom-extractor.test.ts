@@ -499,6 +499,61 @@ describe("extractDomTree", () => {
     expect(checkbox.a11y.states["checked"]).toBe(true);
   });
 
+  /** Each node carrying an `id` attribute, mapped to its `disabled` state. */
+  function disabledById(html: string): Record<string, unknown> {
+    const byId: Record<string, unknown> = {};
+    for (const node of extractDomTree(createPage(html)).nodes.values()) {
+      const id = node.dom?.attributes["id"];
+      if (id) byId[id] = node.a11y.states["disabled"];
+    }
+    return byId;
+  }
+
+  it("reports a control disabled by its <fieldset> as disabled", () => {
+    expect(
+      disabledById(`
+        <fieldset disabled>
+          <legend><button id="unlock">Unlock</button></legend>
+          <button id="save">Save</button>
+        </fieldset>
+      `),
+    ).toEqual({
+      // A disabled fieldset's first legend is exempt, as HTML defines it.
+      unlock: undefined,
+      save: true,
+    });
+  });
+
+  it("disables every control kind outside the first legend, at any depth", () => {
+    expect(
+      disabledById(`
+        <fieldset disabled>
+          <legend><span><button id="first-legend">Unlock</button></span></legend>
+          <legend><button id="second-legend">Help</button></legend>
+          <input id="input" aria-label="Title">
+          <input id="checkbox" type="checkbox" aria-label="Agree">
+          <select id="select" aria-label="Size"><option>M</option></select>
+          <textarea id="textarea" aria-label="Notes"></textarea>
+          <fieldset><div><button id="nested">Nested</button></div></fieldset>
+        </fieldset>
+        <fieldset><button id="enabled-fieldset">Send</button></fieldset>
+        <button id="aria-disabled" aria-disabled="true">Publish</button>
+      `),
+    ).toEqual({
+      "first-legend": undefined,
+      // Only the first legend is exempt.
+      "second-legend": true,
+      input: true,
+      checkbox: true,
+      select: true,
+      textarea: true,
+      nested: true,
+      "enabled-fieldset": undefined,
+      // aria-disabled still reads through as authored.
+      "aria-disabled": true,
+    });
+  });
+
   it("skips script and style elements", () => {
     const root = createPage(`
       <p>Visible</p>

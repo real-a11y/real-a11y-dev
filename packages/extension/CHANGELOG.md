@@ -18,6 +18,13 @@
 
 ## Unreleased
 
+- In DOM mode, a control disabled by its `<fieldset>` now shows as disabled in
+  the tree and in the Buttons and Forms lists, as NATIVE mode already
+  showed it. In `<fieldset disabled><button>Save</button></fieldset>`, `Save`
+  had no `disabled` badge, although Chromium and a screen reader treat it as
+  disabled. A control in the fieldset's first `<legend>` stays enabled, as
+  HTML defines it.
+
 - In DOM mode, the Tab Sequence view, its copied export and the keyboard bar's
   Tab now stop where Chromium stops. They used to stop at an `<a>` with no
   `href`, even an `<a role="button">` no keyboard can reach, at a control

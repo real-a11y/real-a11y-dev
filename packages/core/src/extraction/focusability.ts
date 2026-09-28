@@ -41,6 +41,25 @@ export function parseTabindex(value: string | null | undefined): number | null {
 }
 
 /**
+ * True when HTML calls `element` actually disabled: by its own `disabled`
+ * attribute, or by a disabled `<fieldset>` it sits in outside that fieldset's
+ * first `<legend>`. Chromium follows the same rule for focus and for its
+ * accessibility tree's `disabled` state, so both readers ask here.
+ *
+ * `element.disabled` is the tempting shortcut and it is wrong: the property
+ * reflects the element's own attribute only, so it misses the fieldset case.
+ */
+export function isActuallyDisabled(element: Element): boolean {
+  try {
+    return element.matches(":disabled");
+  } catch {
+    // A selector engine without `:disabled` still has the element's own
+    // attribute, which misses only the fieldset case.
+    return element.hasAttribute("disabled");
+  }
+}
+
+/**
  * True for an element nothing can focus, whatever else it carries: a disabled
  * form control, including one in a disabled `<fieldset>` outside its first
  * `<legend>`, or an `<input type="hidden">`. A `tabindex` or
@@ -57,13 +76,7 @@ export function isFocusBarred(element: Element): boolean {
     (element.getAttribute("type") || "text").toLowerCase() === "hidden"
   )
     return true;
-  try {
-    return element.matches(":disabled");
-  } catch {
-    // A selector engine without `:disabled` still has the element's own
-    // attribute, which misses only the fieldset case.
-    return element.hasAttribute("disabled");
-  }
+  return isActuallyDisabled(element);
 }
 
 /**
