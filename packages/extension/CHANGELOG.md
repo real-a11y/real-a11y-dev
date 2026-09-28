@@ -25,7 +25,7 @@
   can't focus it at all. A mention chip marked `contenteditable="false"` is
   still a stop. A role-less editor shows as `generic` instead of taking what
   was typed into it as its name, and gets a Type action like a text box.
-  ([#418](https://github.com/real-a11y/real-a11y-dev/pull/418))
+  ([#419](https://github.com/real-a11y/real-a11y-dev/pull/419))
 
 - In NATIVE mode, an image, dialog, landmark or form field that has no label
   no longer shows its text as its name. `<span role="img">🎉</span>` read
