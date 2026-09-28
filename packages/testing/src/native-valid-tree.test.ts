@@ -204,6 +204,23 @@ describe("engine vocabulary is not reported as invalid ARIA", () => {
   });
 });
 
+// ARIA 1.3's `image` is a synonym of `img`. The schema predates it, so an
+// authored `role="image"` used to be reported as invalid ARIA — and named by
+// its own text, which Chromium never does.
+describe("the img synonym role=image", () => {
+  it("is valid ARIA once named", () => {
+    expect(
+      mount(`<span role="image" aria-label="Party">🎉</span>`),
+    ).toBeValidA11yTree();
+  });
+
+  it("is checked as the img it is, not as an unknown role", () => {
+    expect(violations(mount(`<span role="image">🎉</span>`))).toEqual([
+      'img — role "img" requires an accessible name',
+    ]);
+  });
+});
+
 describe("real problems are still caught in native markup", () => {
   it("an unnamed native select", () => {
     expect(
