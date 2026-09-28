@@ -645,7 +645,7 @@ const any = (files, re) => files.filter((f) => re.test(f));
  * message `mcp` and the CLI daemon print), `storageStatePath`,
  * `MY_NPM_TOKEN`, `NATIVE_REDACTED_VALUE`, `isSensitiveFieldAttributes`. The
  * old comment here claimed those were caught; none of them was. The left side
- * still refuses a letter or digit, so `unredactedName` is not `redactedName`.
+ * still refuses a letter or digit, so `xredactUrl` is not `redactUrl`.
  */
 function touchedNames(code, names) {
   const re = new RegExp(`(?<![A-Za-z0-9])(${names})`, "g");
@@ -673,11 +673,13 @@ const FIELD_VALUE_GATES = [
   "DOM_ATTR_ALLOWLIST",
   "allowlistAttributes",
   "DETAIL_PROPS",
-  "VALUE_BEARING_ROLES",
-  "redactedName",
-  // Core's shared native vocabulary (`core/src/native/ax-vocabulary.ts`): the
-  // field roles here never take a name from the text inside them, which is a
-  // typed value. `VALUE_BEARING_ROLES` above is only the backstop to it.
+  // Core's shared native normalizer (`core/src/native/`), which every native
+  // transport inherits: a node that `carriesValue` never lends its text to a
+  // name, and the field roles in `NATIVE_AX_AUTHOR_NAMED_ROLES` never take a
+  // name from the text inside them — a typed value either way. This replaced
+  // the browser's own `redactedName` backstop (#418), which is why that name
+  // is not here.
+  "carriesValue",
   "NATIVE_AX_AUTHOR_NAMED_ROLES",
   // The DOM producer, `core/src/extraction/dom-extractor.ts`: the attributes a
   // node copies verbatim, where the live `.value` is read — and the definition
@@ -688,8 +690,10 @@ const FIELD_VALUE_GATES = [
   "SENSITIVE_AUTOCOMPLETE_TOKENS",
   "REDACTED_VALUE",
   // The extension's native path, which reads a live value and redacts it in
-  // the page (`extension/src/native/native-core.ts`).
+  // the page (`extension/src/native/native-core.ts`) for the roles in its
+  // `VALUE_BEARING_ROLES`.
   "pageReadValue",
+  "VALUE_BEARING_ROLES",
   // The act path: `pageType` in `browser` and its in-page mirror in the
   // extension return a marker, never the value; the CLI masks a `type` step.
   "pageType",
