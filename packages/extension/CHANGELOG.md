@@ -26,7 +26,7 @@
   list item or note around a plain `<div contenteditable>` no longer takes
   its typed text as its name either, and a `role="progressbar"` no longer
   shows its fallback text as its name.
-  ([#PR_NUMBER](https://github.com/real-a11y/real-a11y-dev/pull/PR_NUMBER))
+  ([#418](https://github.com/real-a11y/real-a11y-dev/pull/418))
 
 - In NATIVE mode, an image, dialog, landmark or form field that has no label
   no longer shows its text as its name. `<span role="img">🎉</span>` read
