@@ -358,15 +358,38 @@ export function NativeTreeView({
   // dialog's own autofocus get immediately stolen back once `nativeBusy`
   // cleared. This effect must fire only when the SELECTION itself changes —
   // or when `followNonce` says a gesture re-selected the same row.
+  //
+  // One timer shared with the role-filter list's own follow (`followFromList`
+  // below), so a list click and a tree selection can never both land: the
+  // later request always replaces the pending one.
   const onSelectionFocusRef = useRef(onSelectionFocus);
   onSelectionFocusRef.current = onSelectionFocus;
+  const followTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+  const scheduleFollow = useCallback((id: string) => {
+    clearTimeout(followTimer.current);
+    followTimer.current = setTimeout(() => {
+      followTimer.current = undefined;
+      onSelectionFocusRef.current?.(id);
+    }, 150);
+  }, []);
   useEffect(() => {
     if (!selectedId) return;
-    const timer = setTimeout(() => {
-      onSelectionFocusRef.current?.(selectedId);
-    }, 150);
-    return () => clearTimeout(timer);
-  }, [selectedId, followNonce]);
+    scheduleFollow(selectedId);
+    return () => clearTimeout(followTimer.current);
+  }, [selectedId, followNonce, scheduleFollow]);
+  // The tree effect's own cleanup doesn't run for a follow the list
+  // scheduled, so an unmount with one pending has to clear it here.
+  useEffect(() => () => clearTimeout(followTimer.current), []);
+
+  // The role-filter list's selection lives in `FilteredListView`, not in
+  // `selectedId`, so it follows onto the page through this instead: every
+  // click, arrow/Home/End/type-ahead move and "Move to" in the list calls
+  // it, the same `onHighlight` hook the DOM producer's list drives its page
+  // highlight with. Absent `onSelectionFocus` it stays undefined, which is
+  // how the list knows to hide "Move to" rather than show a dead button.
+  const followFromList = onSelectionFocus ? scheduleFollow : undefined;
 
   const toggle = useCallback((id: string) => {
     setExpanded((prev) => {
@@ -638,6 +661,7 @@ export function NativeTreeView({
           items={listItems}
           roleFilter={roleFilter}
           query={query}
+          onHighlight={followFromList}
           onActivate={activateFromList}
           onGoToTree={goToTree}
           onFocusSearch={() => searchInputRef.current?.focus()}

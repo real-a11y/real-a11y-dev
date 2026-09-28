@@ -351,6 +351,36 @@ test("selecting a native heading row highlights it even though it can't take foc
     .toBe(true);
 });
 
+test("clicking an item in a role-filter list highlights and focuses it on the page too", async ({
+  nav,
+}) => {
+  // Regression (user report on PR #412): the follow worked from the tree but
+  // not from any filter's flat list, which keeps its own selection — so
+  // turning a filter on silently turned the page indicator off.
+  const page = await showNative(nav, "native-panel.html");
+
+  await nav.panel
+    .getByRole("button", { name: "Headings", exact: true })
+    .click();
+  await nav.panel.getByRole("option", { name: /Sensitive field/ }).click();
+  await expect
+    .poll(() => overlayCovers(page, "h2"), { timeout: 5_000 })
+    .toBe(true);
+
+  // A focusable item under another filter: the overlay moves AND real focus
+  // lands on it, same as selecting its tree row.
+  await nav.panel.getByRole("button", { name: "Buttons", exact: true }).click();
+  await nav.panel.getByRole("option", { name: "Item 16" }).click();
+  await expect
+    .poll(() => overlayCovers(page, "#item-16"), { timeout: 5_000 })
+    .toBe(true);
+  await expect
+    .poll(() => page.evaluate(() => document.activeElement?.id), {
+      timeout: 5_000,
+    })
+    .toBe("item-16");
+});
+
 test("selecting a native tree row via the keyboard only focuses the row the selection settles on", async ({
   nav,
 }) => {
