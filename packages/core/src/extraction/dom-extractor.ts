@@ -610,7 +610,8 @@ const NAMES_FROM_CONTENT_ROLES = new Set<string>([
  *   as well — blanking it would blank every toast and error message.
  *
  * The native producer's counterpart is two-tier: `NATIVE_AX_AUTHOR_NAMED_ROLES`
- * (the audit-read subset of this set) never takes text, and the rest take
+ * (the audit-read subset of this set, plus the range widgets whose text is
+ * fallback for a value) never takes text, and the rest take
  * their own text only as a leaf. This set blanks the rest even as a leaf, so
  * a text-only `<div role="tabpanel">Panel text</div>` is `tabpanel` here and
  * `tabpanel "Panel text"` there. The name step has no view of which children
