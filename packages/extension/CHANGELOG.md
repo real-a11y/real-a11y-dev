@@ -18,6 +18,15 @@
 
 ## Unreleased
 
+- In DOM mode, an option in a disabled `<select>` or `<optgroup>`, and a
+  control inside an `aria-disabled="true"` container, now show as disabled in
+  the tree and in the Buttons and Forms lists, as NATIVE mode already showed
+  them. In `<div role="group" aria-disabled="true"><button>Quote</button></div>`,
+  `Quote` had no `disabled` badge, although Chromium and a screen reader
+  treat it as disabled. Only focusable elements take the state from a
+  container, so a paragraph or heading inside one stays as it was, and a
+  disabled `<fieldset>` still passes it to its form controls only.
+
 - In DOM mode, a control disabled by its `<fieldset>` now shows as disabled in
   the tree and in the Buttons and Forms lists, as NATIVE mode already
   showed it. In `<fieldset disabled><button>Save</button></fieldset>`, `Save`

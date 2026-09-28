@@ -8,6 +8,7 @@ import {
   deepQuerySelectorAll,
   flatChildNodes,
   flatChildren,
+  flatParent,
   idScope,
   isRenderedInFlatTree,
 } from "./flat-tree.js";
@@ -1279,8 +1280,84 @@ export const ARIA_STATE_ATTRIBUTES = [
   "aria-current",
 ];
 
-/** Get ARIA states from an element */
-function getAriaStates(element: Element): Record<string, string | boolean> {
+/** Form controls whose `disabled` Chromium reports, and passes to their content. */
+const DISABLEABLE_TAGS = new Set(["button", "input", "select", "textarea"]);
+
+/**
+ * True for a control HTML calls disabled, which Chromium reports disabled.
+ *
+ * Not a `<fieldset>`, although `:disabled` matches one: Chromium reports
+ * neither the fieldset nor its non-control content disabled. Its effect
+ * reaches the controls it disables, and through them their content.
+ */
+function isDisabledControl(element: Element): boolean {
+  const tag = element.tagName.toLowerCase();
+  if (tag === "option") return isDisabledOption(element);
+  // Not `.disabled`, which misses a control disabled by its fieldset.
+  return DISABLEABLE_TAGS.has(tag) && isActuallyDisabled(element);
+}
+
+/**
+ * An option HTML calls disabled: by its own `disabled`, or by its parent
+ * `<optgroup disabled>`.
+ *
+ * Not `:disabled`, which Chromium 151 also matches for every option in a
+ * disabled `<select>`. Its accessibility tree treats that option as
+ * inheriting the state instead, which the option's own `aria-disabled="false"`
+ * overrides, as does that of an optgroup in between.
+ */
+function isDisabledOption(option: Element): boolean {
+  if (option.hasAttribute("disabled")) return true;
+  const parent = option.parentElement;
+  return (
+    parent?.tagName.toLowerCase() === "optgroup" &&
+    parent.hasAttribute("disabled")
+  );
+}
+
+/**
+ * `aria-disabled` as Chromium reads it: `null` when absent, empty or
+ * `undefined`, which leaves the element to inherit; `false` for `false`; and
+ * `true` for any other value, `yes` and `" false"` included. Case is ignored.
+ *
+ * The state loop in `getAriaStates` still copies an element's own value
+ * literally, so its `"TRUE"` stays a string. This decides only what it passes
+ * down, and whether it inherits.
+ */
+function explicitAriaDisabled(element: Element): boolean | null {
+  const value = element.getAttribute("aria-disabled")?.toLowerCase();
+  if (value === undefined || value === "" || value === "undefined") return null;
+  return value !== "false";
+}
+
+/**
+ * True when an ancestor disables `element`, the way Chromium passes the state
+ * down its accessibility tree: the nearest flat-tree ancestor that is a
+ * disabled control, or that sets `aria-disabled` explicitly, decides.
+ *
+ * A disabled control decides `true` whatever its own `aria-disabled` says,
+ * since that can't re-enable it. An explicit `aria-disabled="false"` in
+ * between decides `false`. The walk goes past the extraction root on purpose:
+ * the live extractor re-extracts one mutated subtree at a time, and an
+ * ancestor above it still counts.
+ */
+function inheritsDisabled(element: Element): boolean {
+  for (let el = flatParent(element); el; el = flatParent(el)) {
+    if (isDisabledControl(el)) return true;
+    const explicit = explicitAriaDisabled(el);
+    if (explicit !== null) return explicit;
+  }
+  return false;
+}
+
+/**
+ * Get ARIA states from an element. `focusable` is its `isFocusable()` answer,
+ * which the caller already has.
+ */
+function getAriaStates(
+  element: Element,
+  focusable: boolean,
+): Record<string, string | boolean> {
   const states: Record<string, string | boolean> = {};
   const tag = element.tagName.toLowerCase();
 
@@ -1300,10 +1377,23 @@ function getAriaStates(element: Element): Record<string, string | boolean> {
     tag === "select" ||
     tag === "textarea"
   ) {
-    // Not `htmlEl.disabled`, which misses a control disabled by its fieldset.
-    if (isActuallyDisabled(element)) states["disabled"] = true;
     if ("checked" in htmlEl && htmlEl.checked) states["checked"] = true;
     if ("required" in htmlEl && htmlEl.required) states["required"] = true;
+  }
+
+  // A disabled control is disabled whatever its aria-disabled says. Anything
+  // else with an explicit aria-disabled keeps it. The rest inherit from an
+  // ancestor, if focusable, as CORE-AAM says. A native option counts as
+  // focusable here, because Chromium's tree counts it: that is how every
+  // option in a disabled select comes out disabled.
+  if (isDisabledControl(element)) {
+    states["disabled"] = true;
+  } else if (
+    explicitAriaDisabled(element) === null &&
+    (focusable || tag === "option") &&
+    inheritsDisabled(element)
+  ) {
+    states["disabled"] = true;
   }
 
   if (tag === "details") {
@@ -1802,6 +1892,7 @@ function buildNode(
     const id = getNodeId(element);
     const role = getImplicitRole(element);
     const actions = getActions(element);
+    const focusable = isFocusable(element);
     const isMedia = MEDIA_TAGS.has(tag);
 
     const node: SemanticNode = {
@@ -1823,7 +1914,7 @@ function buildNode(
         role,
         name: computeAccessibleName(element, new Set(), styleCache),
         description: computeAccessibleDescription(element, styleCache),
-        states: getAriaStates(element),
+        states: getAriaStates(element, focusable),
         properties: {
           ...(getHeadingLevel(element) !== null
             ? { level: String(getHeadingLevel(element)) }
@@ -1841,7 +1932,7 @@ function buildNode(
       interaction: {
         isInteractive: actions.length > 0,
         actions,
-        isFocusable: isFocusable(element),
+        isFocusable: focusable,
         isEditable:
           (tag === "input" &&
             TEXT_INPUT_TYPES.has(
