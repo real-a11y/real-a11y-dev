@@ -81,7 +81,7 @@ Switching between **A11y** and **DOM** re-extracts the story via the channel; **
 
 The addon follows Storybook's manager/preview split:
 
-- **Preview** (`@real-a11y-dev/storybook-addon/preview`) runs inside the story iframe. Extraction is **lazy**: it only stands up a `DomObserver` (200ms debounce) after the manager emits `REQUEST_TREE` (panel open), and tears it down on `STOP_TREE` (panel hidden). While active it emits `TREE_UPDATED` over the Storybook channel whenever the story DOM changes — so animating or Controls-driven stories don't pay extract + `postMessage` cost while you're on another addon tab.
+- **Preview** (`@real-a11y-dev/storybook-addon/preview`) runs inside the story iframe. Extraction is **lazy**: it only stands up a `DomObserver` (200ms debounce) after the manager emits `REQUEST_TREE` (panel open), and tears it down on `STOP_TREE` (panel hidden). While active it emits `TREE_UPDATED` over the Storybook channel whenever the story DOM changes **the extracted tree** — so animating or Controls-driven stories don't pay extract + `postMessage` cost while you're on another addon tab, and a mutation that extracts to an identical tree (an animation frame rewriting inline `style`, a change inside an `aria-hidden` subtree) costs no `postMessage` and no panel re-render at all.
 
 - **Manager** (`@real-a11y-dev/storybook-addon/manager`) runs in the Storybook UI shell (React). It mounts only when the Semantic Navigator tab is active, subscribes to `TREE_UPDATED` events, deserializes the tree (the `[id, node][]` array back into a `Map`), re-applies the user's expand/collapse via `preserveExpandedState` (so a Controls tweak or animation does not snap open every row), and renders the interactive `TreePanel` from `@real-a11y-dev/semantic-navigator-ui` inside a shadow root.
 
@@ -135,7 +135,8 @@ import { EVENTS, type TreeUpdatePayload } from "@real-a11y-dev/storybook-addon";
 import { addons } from "storybook/manager-api";
 
 // Preview → manager:
-//   EVENTS.TREE_UPDATED    — a fresh extraction (on every debounced DOM change while the panel is open)
+//   EVENTS.TREE_UPDATED    — a fresh extraction (on every debounced DOM change that
+//                            altered the tree, while the panel is open)
 //   EVENTS.PREVIEW_READY   — preview iframe (re)booted; manager re-sends REQUEST_TREE if still open
 // Manager → preview:
 //   EVENTS.REQUEST_TREE    — start observing (if needed) and send the current tree (panel mount)
@@ -154,6 +155,20 @@ channel.on(EVENTS.TREE_UPDATED, (payload: TreeUpdatePayload) => {
   console.log(payload.extractedAt);  // Date.now() timestamp
 });
 ```
+
+`TREE_UPDATED` is de-duplicated: the preview compares each extraction against the
+last one it published (`mode` included, `extractedAt` excluded) and stays quiet
+when they are byte-identical. So it fires on **changes to the extracted tree**,
+not on every mutation — do not use it as a DOM-mutation heartbeat, and do not
+expect a fresh `extractedAt` while a story is animating without semantic effect.
+The first publish after the panel opens, after a story renders, and after a mode
+change is always sent.
+
+It is not a general mutation filter, though. `class` is a key attribute and
+lands in `dom.attributes`, so a class toggle always publishes; and node ids are
+minted per DOM element, so a re-render that **replaces** elements publishes even
+when the resulting markup is identical. Only a framework that patches nodes in
+place de-duplicates.
 
 ---
 
