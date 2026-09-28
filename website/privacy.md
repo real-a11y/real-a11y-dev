@@ -57,7 +57,7 @@ What these tools print is page content, and that includes what is **in the page'
 
 What they never print is a field the page marks as secret: a `type="password"` field, or one whose `autocomplete` names a credential or a payment card (`current-password`, `new-password`, `one-time-code`, `cc-number`, `cc-csc`, `cc-exp`, `cc-exp-month`, `cc-exp-year`). Those read `[redacted]` — not the text, not its length. And the text you hand to a `type` command or the `type_text` tool is never echoed back.
 
-Outputs meant to be committed or shared — CLI `snapshot` artifacts and the diffs built from them, the MCP server's exported checkpoints — leave field values out unless you ask for them (`--values`, or `values: true`).
+Outputs meant to be committed or shared — CLI `snapshot` artifacts and the diffs built from them, the MCP server's exported checkpoints — leave field values out unless you ask for them (`--values`, or `values: true`). That covers each field's own value; text the browser builds into an element's *name* from what a field or rich-text editor holds (a heading typed into an editor, a button around a filled box) is part of the page's names and stays, except for sensitive fields. The strict mode below withholds that too.
 
 To keep every field value and all rich-text editor content out of the output, use the strict mode: `--redact-input` (or `defaults.redactInput` in `a11y.config.json`) for the CLI, `REAL_A11Y_REDACT_INPUT=1` for the MCP server, `attach(page, { tree: "native", redactInput: true })` in `@real-a11y-dev/testing`. Use it when a page's ordinary fields may hold something sensitive the markup doesn't say is sensitive.
 

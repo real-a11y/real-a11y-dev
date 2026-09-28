@@ -300,7 +300,7 @@ Parameters:
 
 - **`name`** — string — required — the checkpoint label (the store key).
 - **`rules`** — array of the five rule ids — optional — subset for the findings. Omit to run all.
-- **`values`** — boolean — optional (default `false`) — capture each field's value in the checkpoint's tree view, as the live views show it (a sensitive field still `[redacted]`). Off by default because a checkpoint becomes an artifact that can be exported, committed and posted — the same opt-in as the CLI's `snapshot --values`. A checkpoint captured with values is exported only when [`export_checkpoint`](#export-checkpoint) is asked for them too. Ignored under [`REAL_A11Y_REDACT_INPUT=1`](#real-a11y-redact-input).
+- **`values`** — boolean — optional (default `false`) — capture each field's value in the checkpoint's tree view, as the live views show it (a sensitive field still `[redacted]`). Off by default because a checkpoint becomes an artifact that can be exported, committed and posted — the same opt-in as the CLI's `snapshot --values`. It covers each field's own value; a name Chromium builds from what a field or editor holds (a heading typed into an editor) stays, except for sensitive fields — [`REAL_A11Y_REDACT_INPUT=1`](#real-a11y-redact-input) withholds those too. A checkpoint captured with values is exported only when [`export_checkpoint`](#export-checkpoint) is asked for them too. Ignored under [`REAL_A11Y_REDACT_INPUT=1`](#real-a11y-redact-input).
 
 Whole-document, and built from the same producer `real-a11y snapshot` uses — which is what lets a checkpoint captured here be diffed by the CLI, and vice versa. The exported artifact records which views it measured (`meta.views`) and omits the tabs view rather than storing an empty one.
 

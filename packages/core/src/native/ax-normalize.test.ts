@@ -752,6 +752,30 @@ describe("value-carrying nodes", () => {
     },
   );
 
+  it("keeps an EMPTY role-less editor too — typing into it must not add a node", () => {
+    // Kept for being an editing root, not for holding text right now: an
+    // editor that appeared when typed into and vanished when cleared would
+    // diff as `+ generic` / `- generic`, values on or off.
+    const editable = [{ name: "editable", value: { value: "richtext" } }];
+    const shape = (value: string) =>
+      normalizeNativeAX([
+        raw("1", "listitem", { childIds: ["2"] }),
+        raw("2", "generic", {
+          parentId: "1",
+          childIds: ["3"],
+          value,
+          properties: editable,
+        }),
+        // An editable span INSIDE the editor is not a root: flattened.
+        raw("3", "generic", {
+          parentId: "2",
+          properties: editable,
+        }),
+      ]);
+    expect(serializeNativeAX(shape(""))).toBe("listitem\n  generic");
+    expect(serializeNativeAX(shape("typed"))).toBe("listitem\n  generic");
+  });
+
   it("still drops a bare generic with no value and no name", () => {
     // The value is what keeps it: the same wrapper holding nothing typed is
     // noise, flattened as before.

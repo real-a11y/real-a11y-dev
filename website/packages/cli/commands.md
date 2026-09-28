@@ -522,7 +522,11 @@ The artifact's tree view leaves field values out: it gets committed, uploaded
 and posted into PR comments. [`--values`](#values) puts them in (a sensitive
 field still reads `[redacted]`) and records `meta.values: true`, so a
 [`diff`](#diff-base-json-pr-json) against an artifact without them can say why
-every filled field changed.
+every filled field changed. The opt-in covers each field's own value; a *name*
+Chromium builds from what a field or editor holds — a heading typed into a
+rich-text editor, a button wrapped around a filled input — is part of the
+page's names and stays (a sensitive field's value never reaches one).
+[`--redact-input`](#redact-input) withholds those too.
 
 ```sh
 real-a11y snapshot https://example.com -o base.json

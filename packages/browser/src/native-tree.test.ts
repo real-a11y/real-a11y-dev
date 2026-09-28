@@ -1237,3 +1237,219 @@ describe("buildNativeTree — strict mode (redactInput): what a user typed into 
     expect(find(tree, "textbox", "Notes")).toHaveLength(1);
   });
 });
+
+describe("buildNativeTree — sensitive values in states, references and races", () => {
+  const select = () =>
+    [
+      { nodeId: "1", childIds: ["2"], role: { value: "RootWebArea" } },
+      {
+        nodeId: "2",
+        parentId: "1",
+        childIds: ["3"],
+        role: { value: "combobox" },
+        name: { value: "Expiry month" },
+        value: { value: "04" },
+        backendDOMNodeId: 20,
+      },
+      {
+        nodeId: "3",
+        parentId: "2",
+        childIds: ["4", "5"],
+        role: { value: "MenuListPopup" },
+        backendDOMNodeId: 21,
+      },
+      ...["01", "04"].map((label, i) => ({
+        nodeId: String(4 + i),
+        parentId: "3",
+        role: { value: "option" },
+        name: { value: label },
+        properties: [{ name: "selected", value: { value: label === "04" } }],
+        backendDOMNodeId: 22 + i,
+      })),
+    ] as RawNodes;
+  const enrichSelect = (autocomplete?: string) =>
+    new Map<number, NativeDomInfo>([
+      [20, domOf("select", autocomplete ? { autocomplete } : {})],
+      [21, domOf("div")],
+      [22, domOf("option")],
+      [23, domOf("option")],
+    ]);
+  const selectedOf = (
+    autocomplete: string | undefined,
+    options: { redactInput?: boolean } = {},
+  ) =>
+    nodesOf(
+      buildNativeTree(select(), enrichSelect(autocomplete), undefined, options),
+    )
+      .filter((n) => n.a11y.role === "option")
+      .map((n) => n.a11y.states.selected);
+
+  it("keeps which option is selected on an ordinary select", () => {
+    expect(selectedOf(undefined)).toEqual([false, true]);
+  });
+
+  it("drops it inside a sensitive select, whose value it would give away", () => {
+    expect(selectedOf("cc-exp-month")).toEqual([undefined, undefined]);
+  });
+
+  it("drops it inside any choice field in strict mode", () => {
+    expect(selectedOf(undefined, { redactInput: true })).toEqual([
+      undefined,
+      undefined,
+    ]);
+  });
+
+  const referencing = (property: "labelledby" | "describedby") =>
+    [
+      { nodeId: "1", childIds: ["2", "3"], role: { value: "RootWebArea" } },
+      {
+        nodeId: "2",
+        parentId: "1",
+        role: { value: "textbox" },
+        name: { value: "Card" },
+        value: { value: "4111 1111 1111 1111" },
+        backendDOMNodeId: 30,
+      },
+      {
+        nodeId: "3",
+        parentId: "1",
+        role: { value: "button" },
+        name: {
+          value: property === "labelledby" ? "4111 1111 1111 1111" : "Pay now",
+          sources: [
+            property === "labelledby"
+              ? {
+                  type: "relatedElement",
+                  value: { value: "4111 1111 1111 1111" },
+                }
+              : { type: "contents", value: { value: "Pay now" } },
+          ],
+        },
+        ...(property === "describedby"
+          ? { description: { value: "4111 1111 1111 1111" } }
+          : {}),
+        properties: [
+          {
+            name: property,
+            value: { relatedNodes: [{ backendDOMNodeId: 30 }] },
+          },
+        ],
+        backendDOMNodeId: 31,
+      },
+    ] as RawNodes;
+  const referencingTree = (property: "labelledby" | "describedby") =>
+    buildNativeTree(
+      referencing(property),
+      new Map([
+        [30, domOf("input", { autocomplete: "cc-number" })],
+        [31, domOf("button")],
+      ]),
+    );
+
+  it("withholds a name taken from a sensitive field by aria-labelledby", () => {
+    const tree = referencingTree("labelledby");
+    expect(tree.nodes.get("ax-dom-31")?.a11y.name).toBe("[redacted]");
+    expect(JSON.stringify(nodesOf(tree))).not.toContain("4111");
+  });
+
+  it("drops a description taken from one by aria-describedby", () => {
+    const tree = referencingTree("describedby");
+    expect(tree.nodes.get("ax-dom-31")?.a11y).toMatchObject({
+      name: "Pay now",
+      description: "",
+    });
+    expect(JSON.stringify(nodesOf(tree))).not.toContain("4111");
+  });
+
+  it("fails closed for a field the DOM walk never saw: the cell around it is withheld too", () => {
+    // The page re-rendered between the AX read and the DOM read: the input
+    // has no DOM record to say it is a card field. Its value is withheld, and
+    // so is the cell Chromium named after it.
+    const raw = [
+      { nodeId: "1", childIds: ["2"], role: { value: "RootWebArea" } },
+      {
+        nodeId: "2",
+        parentId: "1",
+        childIds: ["3"],
+        role: { value: "cell" },
+        name: {
+          value: "4111 1111",
+          sources: [{ type: "contents", value: { value: "4111 1111" } }],
+        },
+        backendDOMNodeId: 40,
+      },
+      {
+        nodeId: "3",
+        parentId: "2",
+        role: { value: "textbox" },
+        name: { value: "" },
+        value: { value: "4111 1111" },
+        backendDOMNodeId: 41,
+      },
+    ] as RawNodes;
+    const tree = buildNativeTree(raw, new Map([[40, domOf("td")]]));
+    expect(tree.nodes.get("ax-dom-40")?.a11y.name).toBe("[redacted]");
+    expect(tree.nodes.get("ax-dom-41")?.a11y.value).toBe("[redacted]");
+  });
+});
+
+describe("buildNativeTree — strict mode around native text fields", () => {
+  const STRICT = { redactInput: true };
+  const cellAround = (value: string, sources?: unknown[]) =>
+    [
+      { nodeId: "1", childIds: ["2"], role: { value: "RootWebArea" } },
+      {
+        nodeId: "2",
+        parentId: "1",
+        childIds: ["3"],
+        role: { value: "cell" },
+        name: { value: value || "Quantity", ...(sources ? { sources } : {}) },
+        backendDOMNodeId: 50,
+      },
+      {
+        nodeId: "3",
+        parentId: "2",
+        role: { value: "textbox" },
+        name: { value: "Quantity" },
+        value: { value },
+        properties: [{ name: "editable", value: { value: "plaintext" } }],
+        backendDOMNodeId: 51,
+      },
+    ] as RawNodes;
+  const cellName = (value: string, sources?: unknown[]) =>
+    buildNativeTree(
+      cellAround(value, sources),
+      new Map([
+        [50, domOf("td")],
+        [51, domOf("input")],
+      ]),
+      undefined,
+      STRICT,
+    ).nodes.get("ax-dom-50")?.a11y.name;
+
+  it("leaves a cell around an EMPTY input named — nothing typed is in it", () => {
+    expect(
+      cellName("", [{ type: "contents", value: { value: "Quantity" } }]),
+    ).toBe("Quantity");
+  });
+
+  it("withholds a cell around a FILLED one that Chromium named from its contents", () => {
+    expect(cellName("3", [{ type: "contents", value: { value: "3" } }])).toBe(
+      "[redacted]",
+    );
+  });
+
+  it("fails closed on an ancestor whose name has no trace, but keeps the field's own label", () => {
+    const tree = buildNativeTree(
+      cellAround("3"),
+      new Map([
+        [50, domOf("td")],
+        [51, domOf("input")],
+      ]),
+      undefined,
+      STRICT,
+    );
+    expect(tree.nodes.get("ax-dom-50")?.a11y.name).toBe("[redacted]");
+    expect(tree.nodes.get("ax-dom-51")?.a11y.name).toBe("Quantity");
+  });
+});
