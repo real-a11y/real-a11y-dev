@@ -140,8 +140,11 @@ function getActions(
   const actions: ActionType[] = [];
   const role = element.getAttribute("role");
 
-  // Links
-  if (tag === "a" && element.hasAttribute("href")) {
+  // Links — live ones. A link inside editable content is not: Chromium
+  // won't follow it, not even on a scripted click(), or focus it, so it has
+  // no action to offer. (One that is itself an editing host gets focus/type
+  // below.)
+  if (tag === "a" && element.hasAttribute("href") && !isEditable(element)) {
     actions.push("click", "navigate");
   }
   // Buttons (native + input type=button/submit/reset/image)

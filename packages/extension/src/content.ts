@@ -66,12 +66,18 @@ let observingEnabled = false;
 function isFocusable(el: Element): boolean {
   if (!(el instanceof HTMLElement)) return false;
   if ((el as HTMLInputElement).disabled) return false;
+  if (el.hasAttribute("tabindex")) return true;
+  // The rule core's tab sequence follows: an editing host takes focus on its
+  // own, and a link inside editable content can't be focused at all. This
+  // script only runs in Chrome, so `isContentEditable` is the browser's own
+  // answer, inherited editability included.
+  if (el.isContentEditable && !el.parentElement?.isContentEditable) return true;
   const tag = el.tagName;
-  if (tag === "A" || tag === "AREA") return el.hasAttribute("href");
+  if (tag === "A" || tag === "AREA") {
+    return el.hasAttribute("href") && !el.isContentEditable;
+  }
   if (["BUTTON", "INPUT", "SELECT", "TEXTAREA"].includes(tag)) return true;
   if (tag === "DETAILS" || tag === "SUMMARY") return true;
-  if (el.hasAttribute("tabindex")) return true;
-  if (el.getAttribute("contenteditable") === "true") return true;
   return false;
 }
 

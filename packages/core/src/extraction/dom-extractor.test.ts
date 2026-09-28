@@ -2285,6 +2285,34 @@ describe("contenteditable editing hosts", () => {
     expect(nodeBy(root, "ti").interaction?.actions).toEqual(["focus", "type"]);
   });
 
+  // Chromium doesn't follow one either, not even on a scripted click().
+  it("gives a link inside an editor no actions, except in an island", () => {
+    const root = createPage(`
+      <div contenteditable="true" role="textbox" aria-label="Message">
+        <a id="inside" href="#inside">reset</a>
+        <a id="island" contenteditable="false" href="#island">@alice</a>
+      </div>
+    `);
+    expect(nodeBy(root, "inside").interaction?.actions).toEqual([]);
+    expect(nodeBy(root, "island").interaction?.actions).toEqual([
+      "click",
+      "navigate",
+    ]);
+  });
+
+  // role="none" on a link Chromium can't focus is honored, so the link
+  // flattens away instead of surviving as a bare presentation node.
+  it("flattens a decorative link inside an editor out of the a11y view", () => {
+    const root = createPage(
+      `<div contenteditable="true" role="textbox" aria-label="Message"><a href="/x" role="none">Help</a></div>`,
+    );
+    const roles = [...extractA11yTree(root).nodes.values()].map(
+      (n) => n.a11y.role,
+    );
+    expect(roles).not.toContain("presentation");
+    expect(roles).not.toContain("link");
+  });
+
   it("does not make a link inside an editor focusable, except in an island", () => {
     const root = createPage(`
       <div contenteditable="true" role="textbox" aria-label="Message">

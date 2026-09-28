@@ -299,6 +299,36 @@ describe("LiveTreeExtractor", () => {
     observer.stop();
   });
 
+  // An editable button has no name of its own, but its text still names the
+  // heading around it. Named widgets aren't name barriers, so the refresh
+  // climbs past the button to the heading.
+  it("refreshes a heading's name when an editable button inside it is edited", async () => {
+    document.body.innerHTML = `<main><h2>Before <button contenteditable="true">Save</button> after</h2></main>`;
+
+    const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
+    let lastChange: TreeChange | undefined;
+    const observer = new DomObserver(
+      document.body,
+      (change) => {
+        lastChange = change;
+      },
+      50,
+    );
+    observer.start();
+
+    document.querySelector("button")!.firstChild!.textContent = "Send";
+    await vi.advanceTimersByTimeAsync(100);
+    const result = live.refresh(lastChange);
+
+    expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+    const heading = [...result.nodes.values()].find(
+      (n) => n.a11y.role === "heading",
+    );
+    expect(heading?.a11y.name).toBe("Before Send after");
+
+    observer.stop();
+  });
+
   it("supports dom mode", async () => {
     document.body.innerHTML = `<main><div>Old</div></main>`;
 
