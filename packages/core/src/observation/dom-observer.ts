@@ -37,6 +37,12 @@ const EXTRA_OBSERVED_ATTRIBUTES = [
   "aria-modal",
   "scope", // <th scope> selects the columnheader/rowheader role (role-map)
   "autocomplete", // names credential/payment fields, whose value gets redacted
+  // Inputs to a field's announced value (ADR-0001) that nothing else watches:
+  // a range widget's spoken text, an <option>'s label (its <select>'s value),
+  // and a <progress>/<meter>'s value, which is reflected as this attribute.
+  "aria-valuetext",
+  "label",
+  "value",
   "disabled",
   "checked",
   "hidden",

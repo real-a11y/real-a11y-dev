@@ -61,9 +61,12 @@ pre-extracted tree it also runs in **plain Node** — no DOM globals needed — 
 trees produced outside a DOM runtime (a deserialized snapshot, a browser tree
 read over CDP) serialize the same way.
 
-`serializeTree` takes `{ mode, redact, includeGeneric, markFocus }` options —
-see the [testing docs](https://real-a11y.dev/packages/testing/snapshots) for the
-`redact` pattern reference and the `[focused]` marker. The output is stable
+`serializeTree` takes `{ mode, redact, includeGeneric, markFocus, values }`
+options — see the [testing docs](https://real-a11y.dev/packages/testing/snapshots)
+for the `redact` pattern reference, the `[focused]` marker, and `values`, which
+prints each field's announced value (`textbox "Email" = "jane@x.com"`, a
+sensitive field as `"[redacted]"`). `values` is off by default, so output is
+unchanged unless asked. The output is stable
 across runs (roles + names only, no ids or timestamps), which is what makes it
 safe to commit and diff.
 
@@ -95,7 +98,10 @@ same reason. A pure reorder shows `childIds reordered (3 children)` (so a
 tab-order or menu reorder isn't a silent no-op). An empty diff renders
 `(no changes)`.
 
-Options: `redact` (as above), plus `focusBefore` / `focusAfter` — pass the
+Options: `redact` (as above); `values`, which adds `a11y.value` change lines
+(`~ textbox "Search": a11y.value (unset) → "hello"`) and values on added or
+removed nodes (off by default, when a change to a field's contents alone renders
+`(no changes)`); plus `focusBefore` / `focusAfter` — pass the
 focused node at each capture point and the diff gains a trailing focus line,
 which is how a focus-management bug becomes visible:
 

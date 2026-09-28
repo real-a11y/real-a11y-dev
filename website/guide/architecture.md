@@ -154,7 +154,7 @@ interface SemanticNode {
   childIds: string[];
   depth: number;
   dom:         { tagName, attributes, textContent, isHidden };
-  a11y:        { role, name, description, states, properties, isExposedToAT };
+  a11y:        { role, name, description, value?, states, properties, isExposedToAT };
   interaction: { isInteractive, actions, isFocusable, isEditable };
   ui:          { expanded, highlighted, matchesFilter, selected };
 }

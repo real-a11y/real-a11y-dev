@@ -35,6 +35,14 @@ export interface SerializeOptions {
    * tree from a source that has no focus concept (a native browser tree).
    */
   markFocus?: boolean;
+  /**
+   * Print each field's announced value — `textbox "Email" = "jane@x.com"` —
+   * from `a11y.value` (ADR-0001). Default `false`, so output is byte-identical
+   * to a serializer without values: a committed snapshot only gains values
+   * when asked. A sensitive field prints `"[redacted]"`; `redact` patterns
+   * apply to values as they do to names.
+   */
+  values?: boolean;
 }
 
 /**
@@ -63,18 +71,35 @@ function redactText(input: string, patterns: RegExp[] | undefined): string {
   return out;
 }
 
+/** ` = "value"`, JSON-escaped and redacted, or `""` when the node has none.
+ *  The one place a value is formatted, so every view prints it alike. */
+function valueText(node: SemanticNode, redact?: RegExp[]): string {
+  const value = node.a11y.value;
+  return value === undefined
+    ? ""
+    : ` = ${JSON.stringify(redactText(value, redact))}`;
+}
+
 /**
- * The shared node label — `role "name" (level N)` — with no indentation and no
- * focus marker. This is the vocabulary every serializer speaks; `serializeTree`
- * wraps it with indent + focus, `serializeTreeDiff` prefixes it with `+`/`-`/`~`.
- * Never contains a node id (ids are internal, test-order-dependent).
+ * The shared node label — `role "name" = "value" (level N)` — with no
+ * indentation and no focus marker. This is the vocabulary every serializer
+ * speaks; `serializeTree` wraps it with indent + focus, `serializeTreeDiff`
+ * prefixes it with `+`/`-`/`~`. The value appears only when `values` is on and
+ * the node has one; it is JSON-escaped, so an empty string, a quote or a
+ * trailing space stays visible. Never contains a node id (ids are internal,
+ * test-order-dependent).
  */
-function nodeLabel(node: SemanticNode, redact?: RegExp[]): string {
+function nodeLabel(
+  node: SemanticNode,
+  redact?: RegExp[],
+  values = false,
+): string {
   const name = redactText(node.a11y.name, redact);
   const nameSuffix = name ? ` "${name}"` : "";
+  const valueSuffix = values ? valueText(node, redact) : "";
   const level = node.a11y.properties?.level;
   const levelSuffix = level ? ` (level ${level})` : "";
-  return `${node.a11y.role}${nameSuffix}${levelSuffix}`;
+  return `${node.a11y.role}${nameSuffix}${valueSuffix}${levelSuffix}`;
 }
 
 /**
@@ -156,13 +181,23 @@ export function serializeTree(
   input: SerializeInput,
   options: SerializeOptions = {},
 ): string {
-  const { mode = "a11y", includeGeneric = false, markFocus = true } = options;
+  const {
+    mode = "a11y",
+    includeGeneric = false,
+    markFocus = true,
+    values = false,
+  } = options;
   const redact = ensureGlobalFlags(options.redact);
   const tree = toTree(input, mode, "serializeTree");
   const focusedId = markFocus ? tree.focusedId : undefined;
 
   const printed = linearize(tree).filter(
-    (node) => includeGeneric || node.a11y.role !== "generic",
+    (node) =>
+      includeGeneric ||
+      node.a11y.role !== "generic" ||
+      // A role-less editor is a `generic` holding what was typed: with values
+      // on, it is a field worth a line, not a wrapper to fold away.
+      (values && node.a11y.value !== undefined),
   );
   const depths = printedDepths(tree, printed);
 
@@ -170,7 +205,7 @@ export function serializeTree(
   for (const node of printed) {
     const indent = "  ".repeat(depths.get(node.id) ?? 0);
     const focusSuffix = node.id === focusedId ? " [focused]" : "";
-    lines.push(`${indent}${nodeLabel(node, redact)}${focusSuffix}`);
+    lines.push(`${indent}${nodeLabel(node, redact, values)}${focusSuffix}`);
   }
   return lines.join("\n");
 }
@@ -218,7 +253,7 @@ export function serializeTabSequence(
   input: SerializeInput,
   options: SerializeOptions = {},
 ): string {
-  const { markFocus = true } = options;
+  const { markFocus = true, values = false } = options;
   const redact = ensureGlobalFlags(options.redact);
   const tree = toTree(input, "a11y", "serializeTabSequence");
   const focusedId = markFocus ? tree.focusedId : undefined;
@@ -228,8 +263,9 @@ export function serializeTabSequence(
     .map((n) => {
       const redacted = redactText(n.a11y.name, redact);
       const name = redacted ? ` "${redacted}"` : "";
+      const value = values ? valueText(n, redact) : "";
       const marker = n.id === focusedId ? " [focused]" : "";
-      return `${n.a11y.role}${name}${marker}`;
+      return `${n.a11y.role}${name}${value}${marker}`;
     })
     .join("\n");
 }
@@ -268,6 +304,14 @@ export interface TreeDiffSerializeOptions {
    */
   focusBefore?: SemanticNode | null;
   focusAfter?: SemanticNode | null;
+  /**
+   * Report what fields hold (ADR-0001): an `a11y.value` change line
+   * (`~ textbox "Search": a11y.value (unset) → "hello"`), and the value on an
+   * added or removed node's label. Default `false`, which leaves value changes
+   * out entirely — a diff that differs only in a field's contents renders
+   * `(no changes)`, exactly as before values were modelled.
+   */
+  values?: boolean;
 }
 
 /** `n children` / `1 child` — child-LIST changes render as counts, never ids. */
@@ -380,15 +424,21 @@ export function serializeTreeDiff(
   diff: TreeDiff,
   options: TreeDiffSerializeOptions = {},
 ): string {
-  const { focusBefore, focusAfter } = options;
+  const { focusBefore, focusAfter, values = false } = options;
   const redact = ensureGlobalFlags(options.redact);
   const lines: string[] = [];
 
-  for (const node of diff.added) lines.push(`+ ${nodeLabel(node, redact)}`);
-  for (const node of diff.removed) lines.push(`- ${nodeLabel(node, redact)}`);
+  for (const node of diff.added) {
+    lines.push(`+ ${nodeLabel(node, redact, values)}`);
+  }
+  for (const node of diff.removed) {
+    lines.push(`- ${nodeLabel(node, redact, values)}`);
+  }
   for (const change of diff.changed) {
+    // A changed node's label carries no value: its `a11y.value` line does.
     const label = nodeLabel(change.after, redact);
     for (const path of change.changes) {
+      if (path === "a11y.value" && !values) continue;
       lines.push(`~ ${label}: ${changeDetail(change, path, redact)}`);
     }
   }

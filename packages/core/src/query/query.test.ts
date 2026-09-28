@@ -344,4 +344,15 @@ describe("diffTrees", () => {
     // Empty <div> removed
     expect(diff.removed.length).toBeGreaterThan(0);
   });
+
+  it("reports what a field holds changing (ADR-0001)", () => {
+    const root = createPage(`<input aria-label="Search">`);
+    const before = extractDomTree(root);
+    (root.querySelector("input") as HTMLInputElement).value = "hello";
+    const diff = diffTrees(before, extractDomTree(root));
+    expect(diff.changed).toHaveLength(1);
+    expect(diff.changed[0].changes).toEqual(["a11y.value"]);
+    expect(diff.changed[0].before.a11y.value).toBeUndefined();
+    expect(diff.changed[0].after.a11y.value).toBe("hello");
+  });
 });

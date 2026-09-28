@@ -7,7 +7,10 @@ import * as clobberSafe from "./clobber-safe.js";
 import {
   extractDomTree,
   getDescendantText,
+  getElementRefs,
   isSensitiveField,
+  isSensitiveFieldAttributes,
+  SENSITIVE_AUTOCOMPLETE_TOKENS,
 } from "./dom-extractor.js";
 
 beforeEach(() => {
@@ -1731,6 +1734,357 @@ describe("sensitive value redaction", () => {
     );
     expect(withPlaceholder.a11y.name).toBe("Password");
     expect(JSON.stringify(withPlaceholder)).not.toContain("hunter2");
+  });
+});
+
+describe("isSensitiveFieldAttributes — the policy over markup alone (ADR-0001)", () => {
+  it("flags a password input whatever the attribute's case", () => {
+    expect(isSensitiveFieldAttributes("input", { type: "password" })).toBe(
+      true,
+    );
+    expect(isSensitiveFieldAttributes("INPUT", { type: " Password " })).toBe(
+      true,
+    );
+  });
+
+  it("flags every credential and payment token, and nothing else", () => {
+    for (const token of SENSITIVE_AUTOCOMPLETE_TOKENS) {
+      expect(isSensitiveFieldAttributes("input", { autocomplete: token })).toBe(
+        true,
+      );
+    }
+    expect(
+      isSensitiveFieldAttributes("select", {
+        autocomplete: "section-a billing CC-EXP-MONTH",
+      }),
+    ).toBe(true);
+    for (const autocomplete of ["email", "username", "off", "name", ""]) {
+      expect(isSensitiveFieldAttributes("input", { autocomplete })).toBe(false);
+    }
+  });
+
+  it("only ever flags a form field", () => {
+    expect(
+      isSensitiveFieldAttributes("div", {
+        type: "password",
+        autocomplete: "current-password",
+      }),
+    ).toBe(false);
+    // A textarea's `type` is not a password type; its autocomplete still is.
+    expect(isSensitiveFieldAttributes("textarea", { type: "password" })).toBe(
+      false,
+    );
+    expect(
+      isSensitiveFieldAttributes("textarea", { autocomplete: "one-time-code" }),
+    ).toBe(true);
+  });
+
+  it("agrees with isSensitiveField on the same markup", () => {
+    const fixtures = [
+      `<input type="password">`,
+      `<input autocomplete="cc-number">`,
+      `<input type="text" autocomplete="email">`,
+      `<select autocomplete="cc-exp"></select>`,
+      `<textarea></textarea>`,
+      `<div contenteditable="true"></div>`,
+    ];
+    for (const html of fixtures) {
+      const div = document.createElement("div");
+      div.innerHTML = html;
+      const el = div.firstElementChild!;
+      expect(
+        isSensitiveFieldAttributes(el.tagName, {
+          type: el.getAttribute("type"),
+          autocomplete: el.getAttribute("autocomplete"),
+        }),
+        html,
+      ).toBe(isSensitiveField(el));
+    }
+  });
+});
+
+describe("a11y.value — what a screen reader announces (ADR-0001)", () => {
+  /** Extract `html` and return the node for the element matching `selector`. */
+  function nodeFor(root: Element, selector: string) {
+    const target = root.querySelector(selector)!;
+    const tree = extractDomTree(root);
+    const refs = getElementRefs();
+    const node = [...tree.nodes.values()].find(
+      (n) => refs.get(n.id) === target,
+    );
+    if (!node) throw new Error(`no node for ${selector}`);
+    return node;
+  }
+  const valueOf = (html: string, selector: string) =>
+    nodeFor(createPage(html), selector).a11y.value;
+
+  it("reads a text field's current text, not its initial attribute", () => {
+    const root = createPage(`<input aria-label="City" value="Lima">`);
+    (root.querySelector("input") as HTMLInputElement).value = "Quito";
+    expect(nodeFor(root, "input").a11y.value).toBe("Quito");
+  });
+
+  it("has no value when a field is empty", () => {
+    expect(valueOf(`<input aria-label="City">`, "input")).toBeUndefined();
+    expect(
+      valueOf(`<textarea aria-label="Notes"></textarea>`, "textarea"),
+    ).toBe(undefined);
+  });
+
+  it("collapses a textarea's whitespace", () => {
+    expect(
+      valueOf(
+        `<textarea aria-label="Notes">line one\n\n   line two</textarea>`,
+        "textarea",
+      ),
+    ).toBe("line one line two");
+  });
+
+  it("announces a <select>'s option LABEL, while dom.attributes keeps the raw value", () => {
+    const root = createPage(
+      `<select aria-label="Country"><option value="pt">Portugal</option><option value="es" selected>Spain</option></select>`,
+    );
+    const node = nodeFor(root, "select");
+    expect(node.a11y.value).toBe("Spain");
+    expect(node.dom?.attributes.value).toBe("es");
+  });
+
+  it("joins a multi-select's selected labels", () => {
+    expect(
+      valueOf(
+        `<select multiple aria-label="Toppings"><option selected>Cheese</option><option>Ham</option><option selected>Basil</option></select>`,
+        "select",
+      ),
+    ).toBe("Cheese, Basil");
+  });
+
+  it("reads a range widget's valuetext, else valuenow, else its native value", () => {
+    expect(
+      valueOf(
+        `<div role="slider" aria-label="Rating" aria-valuenow="4" aria-valuetext="4 of 5 stars" tabindex="0"></div>`,
+        "div",
+      ),
+    ).toBe("4 of 5 stars");
+    expect(
+      valueOf(
+        `<div role="spinbutton" aria-label="Qty" aria-valuenow="3" tabindex="0"></div>`,
+        "div",
+      ),
+    ).toBe("3");
+    expect(
+      valueOf(
+        `<input type="range" aria-label="Volume" min="0" max="100" value="50">`,
+        "input",
+      ),
+    ).toBe("50");
+    expect(
+      valueOf(
+        `<progress aria-label="Upload" max="100" value="30"></progress>`,
+        "progress",
+      ),
+    ).toBe("30");
+    // Indeterminate: no value attribute, nothing announced.
+    expect(
+      valueOf(`<progress aria-label="Loading"></progress>`, "progress"),
+    ).toBeUndefined();
+  });
+
+  it("has no value for controls whose state or name says it", () => {
+    expect(
+      valueOf(
+        `<input type="checkbox" aria-label="Agree" value="yes" checked>`,
+        "input",
+      ),
+    ).toBeUndefined();
+    expect(
+      valueOf(`<input type="radio" aria-label="Small" value="s">`, "input"),
+    ).toBeUndefined();
+    expect(valueOf(`<input type="submit" value="Send">`, "input")).toBe(
+      undefined,
+    );
+    expect(
+      valueOf(
+        `<div role="switch" aria-checked="true" aria-label="Wi-Fi" tabindex="0">On</div>`,
+        "div",
+      ),
+    ).toBeUndefined();
+  });
+
+  it("reads a file input's file names", () => {
+    const root = createPage(`<input type="file" aria-label="Attach" multiple>`);
+    Object.defineProperty(root.querySelector("input")!, "files", {
+      value: [{ name: "report.pdf" }, { name: "photo.png" }],
+    });
+    expect(nodeFor(root, "input").a11y.value).toBe("report.pdf, photo.png");
+  });
+
+  it("reads an editor's text across its blocks, on the host only", () => {
+    const root = createPage(
+      `<div contenteditable="true" role="textbox" aria-label="Message"><p>Hello <b>team</b></p><p>second line</p></div>`,
+    );
+    expect(nodeFor(root, "[contenteditable]").a11y.value).toBe(
+      "Hello team second line",
+    );
+    // The paragraph inside is part of the editor, not a field of its own.
+    expect(nodeFor(root, "p").a11y.value).toBeUndefined();
+  });
+
+  it("reads a role-less editor host, and a plain ARIA textbox or combobox", () => {
+    expect(
+      valueOf(`<div contenteditable="plaintext-only">just typed</div>`, "div"),
+    ).toBe("just typed");
+    expect(
+      valueOf(
+        `<div role="combobox" aria-label="Fruit" tabindex="0">Apple</div>`,
+        "div",
+      ),
+    ).toBe("Apple");
+  });
+
+  it("skips hidden text and a widget's own popup, which aren't announced as the value", () => {
+    expect(
+      valueOf(
+        `<div role="combobox" aria-label="Fruit" tabindex="0">Apple<span hidden>(3 results)</span><span aria-hidden="true">▾</span></div>`,
+        "[role=combobox]",
+      ),
+    ).toBe("Apple");
+    expect(
+      valueOf(
+        `<div role="combobox" aria-label="Fruit" tabindex="0">Apple<ul role="listbox"><li role="option">Apple</li><li role="option">Pear</li></ul></div>`,
+        "[role=combobox]",
+      ),
+    ).toBe("Apple");
+  });
+
+  it("skips visibility:hidden text, but reads a child that sets itself visible again", () => {
+    expect(
+      valueOf(
+        `<div contenteditable="true">Visible <span style="visibility:hidden">secret <b style="visibility:visible">shown</b></span></div>`,
+        "div",
+      ),
+    ).toBe("Visible shown");
+  });
+
+  it("reads only a closed <details>'s summary, and its body once opened", () => {
+    expect(
+      valueOf(
+        `<div contenteditable="true">Note <details><summary>More</summary>Private text</details></div>`,
+        "div",
+      ),
+    ).toBe("Note More");
+    expect(
+      valueOf(
+        `<div contenteditable="true">Note <details open><summary>More</summary>Private text</details></div>`,
+        "div",
+      ),
+    ).toBe("Note More Private text");
+  });
+
+  it("counts an editor's text once: a textbox nested inside it has no value of its own", () => {
+    const root = createPage(
+      `<div contenteditable="true" role="textbox" aria-label="Doc"><p>intro</p><div role="textbox" aria-label="Cell">cell text</div></div>`,
+    );
+    expect(nodeFor(root, "[aria-label=Doc]").a11y.value).toBe(
+      "intro cell text",
+    );
+    expect(nodeFor(root, "[aria-label=Cell]").a11y.value).toBeUndefined();
+  });
+
+  it("keeps an editor's value when it contains native controls, like a task list's checkboxes", () => {
+    expect(
+      valueOf(
+        `<div contenteditable="true" role="textbox" aria-label="Tasks"><ul><li><input type="checkbox"> Buy milk</li><li><input type="checkbox" checked> Call Ana</li></ul><input type="hidden" value="doc-1"></div>`,
+        "[aria-label=Tasks]",
+      ),
+    ).toBe("Buy milk Call Ana");
+  });
+
+  it("leaves a nested <select>'s options and a <textarea>'s default text out of an editor's value", () => {
+    const root = createPage(
+      `<div contenteditable="true" role="textbox" aria-label="Form doc">Size: <select aria-label="Size"><option>Small</option><option selected>Large</option></select> Notes: <textarea aria-label="Notes">default text</textarea></div>`,
+    );
+    expect(nodeFor(root, "[aria-label='Form doc']").a11y.value).toBe(
+      "Size: Notes:",
+    );
+    // Each control still announces its own value.
+    expect(nodeFor(root, "select").a11y.value).toBe("Large");
+  });
+
+  it("lets an ARIA combobox read its own text when all it wraps is a hidden input", () => {
+    expect(
+      valueOf(
+        `<div role="combobox" aria-label="Fruit" tabindex="0">Apple<input type="hidden" name="fruit" value="apple"></div>`,
+        "[role=combobox]",
+      ),
+    ).toBe("Apple");
+  });
+
+  it("leaves the value to the native control an ARIA combobox wraps", () => {
+    const root = createPage(
+      `<div role="combobox" aria-label="State"><input aria-label="State" value="Ohio"><ul role="listbox"><li role="option">Ohio</li><li role="option">Utah</li></ul></div>`,
+    );
+    expect(nodeFor(root, "[role=combobox]").a11y.value).toBeUndefined();
+    expect(nodeFor(root, "input").a11y.value).toBe("Ohio");
+  });
+
+  it("caps a long value at 240 characters with an ellipsis", () => {
+    const value = nodeFor(
+      createPage(
+        `<textarea aria-label="Essay">${"word ".repeat(100)}</textarea>`,
+      ),
+      "textarea",
+    ).a11y.value!;
+    expect(value).toHaveLength(240);
+    expect(value.endsWith("…")).toBe(true);
+  });
+
+  it("reads [redacted] for a filled sensitive field, and nothing for an empty one", () => {
+    const filled = nodeFor(
+      createPage(
+        `<input type="password" aria-label="Password" value="hunter2">`,
+      ),
+      "input",
+    );
+    expect(filled.a11y.value).toBe("[redacted]");
+    expect(JSON.stringify(filled)).not.toContain("hunter2");
+
+    const card = nodeFor(
+      createPage(
+        `<input autocomplete="cc-number" aria-label="Card" value="4111111111111111">`,
+      ),
+      "input",
+    );
+    expect(card.a11y.value).toBe("[redacted]");
+    expect(JSON.stringify(card)).not.toContain("4111111111111111");
+
+    expect(
+      valueOf(`<input type="password" aria-label="Password">`, "input"),
+    ).toBeUndefined();
+  });
+
+  it("never names a field after its value", () => {
+    const node = nodeFor(createPage(`<input value="typed">`), "input");
+    expect(node.a11y.value).toBe("typed");
+    expect(node.a11y.name).toBe("");
+    // A role-less editor too: its loose text is what was typed, not a name.
+    const editor = nodeFor(
+      createPage(`<div contenteditable="true">typed here</div>`),
+      "div",
+    );
+    expect(editor.a11y.value).toBe("typed here");
+    expect(editor.a11y.name).toBe("");
+  });
+
+  it("drops only the value when a hostile getter throws, never the node", () => {
+    const root = createPage(`<input aria-label="Trap">`);
+    Object.defineProperty(root.querySelector("input")!, "value", {
+      get() {
+        throw new Error("gotcha");
+      },
+    });
+    const node = nodeFor(root, "input");
+    expect(node.a11y.name).toBe("Trap");
+    expect(node.a11y.value).toBeUndefined();
   });
 });
 

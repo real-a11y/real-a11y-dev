@@ -9,6 +9,11 @@ import { boxSnapshot, type A11ySnapshotBox } from "./snapshot-box.js";
 export interface A11yDiffOptions {
   /** Redact matching substrings from names/values (passed to serializeTreeDiff). */
   redact?: RegExp[];
+  /**
+   * Report what fields hold: `~ textbox "Search": a11y.value (unset) → "hello"`.
+   * Default false, which leaves value changes out, as before.
+   */
+  values?: boolean;
 }
 
 /** A tree + its focus context, or `undefined` focus for a plain tree. */
@@ -64,6 +69,7 @@ export function a11yDiff(
   return boxSnapshot(
     serializeTreeDiff(diffTrees(b.tree, a.tree), {
       redact: options.redact,
+      values: options.values,
       focusBefore: b.focus,
       focusAfter: a.focus,
     }),

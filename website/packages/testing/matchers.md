@@ -239,7 +239,7 @@ See [`redact`](/packages/testing/snapshots#using-redact) for the full pattern re
 
 ### `boxedTreeSnapshot` vs `treeSnapshot`
 
-Both render the **same tree** — under the hood they call the same serializer with the same options (`mode`, `redact`, `includeGeneric`). The only difference is what they hand back, and therefore how the framework treats it:
+Both render the **same tree** — under the hood they call the same serializer with the same options (`mode`, `redact`, `includeGeneric`, `values`). The only difference is what they hand back, and therefore how the framework treats it:
 
 - [`treeSnapshot()`](/packages/testing/snapshots#treesnapshot-root-options) returns a **plain string**. The value your test holds *is* the tree, so you can assert on it directly — `expect(s).toContain('button "Save"')`, `expect(s1).toBe(s2)` — log it, or write it to a file. It needs no setup.
 - `boxedTreeSnapshot()` returns an **opaque boxed value** that the registered serializer renders at snapshot time. It does nothing on its own, but it keeps `toMatchSnapshot()` / `toMatchInlineSnapshot()` fully native — and crucially, **inline snapshots stay readable**: the tree is rendered as-is instead of escaped into a quoted string literal.

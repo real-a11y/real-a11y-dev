@@ -32,6 +32,25 @@ test("login form structure", () => {
 | `redact` | `RegExp[]` | `[]` | Patterns replaced with `[REDACTED]` in accessible names. Use this to keep snapshots deterministic. |
 | `includeGeneric` | `boolean` | `false` | Include generic container nodes (`role="generic"`). |
 | `markFocus` | `boolean` | `true` | Mark the element focused at extraction time with a trailing `[focused]`. See [Focus marker](#focus-marker). |
+| `values` | `boolean` | `false` | Print each field's announced value: `textbox "Email" = "jane@x.com"`. See [Field values](#field-values). |
+
+### Field values
+
+Pass `values: true` to print what each field holds, the way a screen reader announces it:
+
+```
+form "Checkout"
+  textbox "Email" = "jane@x.com"
+  combobox "Country" = "Spain"
+  textbox "Password" = "[redacted]"
+  slider "Tip" = "15%"
+```
+
+- **What the value is.** A text field's or editor's text, a `<select>`'s selected option **label** (`"Spain"`, not its `value="es"`), and a range widget's `aria-valuetext` (else `aria-valuenow`). Checkboxes and radios carry none; their state says it. Whitespace collapses, and a value is capped at 240 characters.
+- **Sensitive fields never print.** A `type="password"` field, or one whose `autocomplete` names a credential or payment field (`current-password`, `new-password`, `one-time-code`, `cc-number`, `cc-csc`, `cc-exp*`), prints `"[redacted]"` when it holds anything.
+- **Off by default.** A committed snapshot only changes when you ask for values. `redact` patterns apply to values as they do to names.
+
+The value lives on the node as `a11y.value`, so a custom assertion can read it directly.
 
 Example output:
 

@@ -31,8 +31,14 @@ function keepNode(node: SemanticNode, rootId: string): boolean {
   // Keep nodes with meaningful roles (not generic)
   if (!sectioned && role !== "generic") return true;
 
-  // Keep named or interactive generics, and the root
-  if (node.a11y.name || node.interaction!.isInteractive || node.id === rootId)
+  // Keep named or interactive generics, and the root — and a generic holding a
+  // value: a role-less editor is a field (ADR-0001), not a wrapper to fold.
+  if (
+    node.a11y.name ||
+    node.a11y.value !== undefined ||
+    node.interaction!.isInteractive ||
+    node.id === rootId
+  )
     return true;
 
   // "Another global ARIA attribute", as far as the node records it:
