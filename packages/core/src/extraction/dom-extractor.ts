@@ -13,6 +13,7 @@ import {
 } from "./flat-tree.js";
 import {
   getCachedComputedStyle,
+  getExplicitRole,
   getImplicitRole,
   getHeadingLevel,
   isHiddenFromAT,
@@ -667,7 +668,7 @@ const AUTHOR_NAMED_ROLES = new Set<string>([
  * Chromium leaves it unnamed — its text is the selected VALUE.
  */
 export function isNameFromContentHost(element: Element): boolean {
-  const explicitRole = element.getAttribute("role")?.trim().split(/\s+/)[0];
+  const explicitRole = getExplicitRole(element);
   if (explicitRole && AUTHOR_NAMED_ROLES.has(explicitRole)) return false;
   if (NAMES_FROM_CONTENT_TAGS.has(element.tagName.toLowerCase())) return true;
   return !!explicitRole && NAMES_FROM_CONTENT_ROLES.has(explicitRole);
@@ -1261,7 +1262,7 @@ function getFieldText(element: Element, styleCache?: StyleCache): string {
     const tag = typeof rawTag === "string" ? rawTag.toLowerCase() : "";
     if (MEDIA_TAGS.has(tag) || CONTROL_TEXT_TAGS.has(tag)) return false;
     if (el.getAttribute("aria-hidden") === "true") return false;
-    const role = el.getAttribute("role")?.trim().split(/\s+/)[0];
+    const role = getExplicitRole(el);
     if (role && POPUP_ROLES.has(role)) return false;
     const style = getCachedComputedStyle(el, styleCache);
     if (isSubtreeHidden(el, style)) return false;
@@ -1460,7 +1461,7 @@ export function fieldValueOwner(el: Element): Element | null {
       continue;
     }
     if (tag === "input" || tag === "textarea") continue;
-    const role = node.getAttribute("role")?.trim().split(/\s+/)[0];
+    const role = getExplicitRole(node);
     if (role && TEXT_VALUE_ROLES.has(role)) owner = node;
   }
   return owner;
@@ -1939,12 +1940,12 @@ const IMPLICIT_LIVE_ROLES = new Set(["status", "alert", "log"]);
  * `<div aria-live>` and `<div aria-live="">` behave like the roleless divs
  * they are.
  *
- * The role is read with `getImplicitRole`'s exact parse — first token, no case
- * folding — so the pivot and the extracted tree always agree about what an
- * element is. That inherits first-token-not-first-VALID-token
- * (`role="toast status"` resolves to `toast`), which is a real gap but belongs
- * in `getImplicitRole`, where fixing it corrects the whole engine at once
- * instead of adding a third role-parsing convention here.
+ * The role is read with `getExplicitRole`, the parse `getImplicitRole` uses —
+ * first token, no case folding — so the pivot and the extracted tree always
+ * agree about what an element is. That inherits first-token-not-first-VALID-
+ * token (`role="toast status"` resolves to `toast`), which is a real gap but
+ * belongs in `getExplicitRole`, where fixing it corrects the whole engine at
+ * once instead of adding a second role-parsing convention here.
  *
  * Case matters and is not folded: CSS matches `role` values case-sensitively,
  * so `[role]` candidates arriving here already agree with the tree. Folding
@@ -1953,7 +1954,7 @@ const IMPLICIT_LIVE_ROLES = new Set(["status", "alert", "log"]);
  * on an unrelated attribute.
  */
 export function countsAsOverlay(el: Element): boolean {
-  const role = el.getAttribute("role")?.trim().split(/\s+/)[0];
+  const role = getExplicitRole(el);
   if (role && OVERLAY_ROLES.has(role)) return true;
 
   // `aria-live` values ARE case-insensitive tokens, unlike `role` above.

@@ -1339,6 +1339,8 @@ describe("the direct-text fallback skips author-named roles", () => {
       `<div id="t" role="alertdialog">Session expired <button>Renew</button></div>`,
     ],
     ["img", `<div id="t" role="img">text img</div>`],
+    // ARIA 1.3's `image` is a synonym of `img`: same role, same unnamed text.
+    ["img", `<span id="t" role="image">🎉</span>`],
     ["form", `<form id="t">Search: <input></form>`],
     ["navigation", `<nav id="t">Menu: <a href="#">Home</a></nav>`],
     ["main", `<main id="t">Welcome <a href="#">x</a></main>`],
@@ -1483,6 +1485,10 @@ describe("the direct-text fallback skips author-named roles", () => {
       `<button id="t" role="combobox" aria-expanded="false">Apple</button>`,
     ],
     ["img", `<a id="t" href="#" role="img">logo text</a>`],
+    // The synonym has to be folded before the name-from-content test too, or
+    // the tag wins it back: this was `image "🎉"` while Chromium says unnamed.
+    ["img", `<button id="t" role="image">🎉</button>`],
+    ["img", `<a id="t" href="#" role="image">logo text</a>`],
     ["dialog", `<a id="t" href="#" role="dialog">Dialog text</a>`],
     ["tabpanel", `<h2 id="t" role="tabpanel">Panel</h2>`],
   ])("leaves a %s on a name-from-content tag unnamed", (role, html) => {
