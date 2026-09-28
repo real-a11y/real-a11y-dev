@@ -84,10 +84,11 @@ In the Chrome extension's panel, double-click a container node — a form, a lan
 Scoping affects:
 - **What's visible** in the tree (only the scoped subtree's descendants)
 - **What search matches** in the tree (only rows inside the scope show)
+- **What the role-filter lists show** (Headings, Links, … list only matches inside the scope)
 - **The tab sequence** (TAB view only lists focusable elements inside the scope)
 - **What Copy exports** (the scoped subtree, with a `Scope` line naming it)
 
-The role-filter lists (Headings, Links, …) still cover the whole page. Going to the tree from an item outside the scope, or picking or focusing an element outside it, leaves the scope so the row you land on is actually shown.
+Picking an element outside the scope, or focus moving to one while focus tracking is on, leaves the scope so the row you land on is actually shown.
 
 | Surface | API |
 |---|---|

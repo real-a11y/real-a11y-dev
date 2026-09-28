@@ -212,19 +212,38 @@ describe("NativeTreeView scope", () => {
     expect(row("h3").getAttribute("aria-selected")).toBe("true");
   });
 
-  it("go-to-tree from a list item outside the scope leaves it", () => {
-    const scopes = mount({ initialScope: "sec" });
-    const headings = [
+  function pill(label: string): HTMLButtonElement {
+    const btn = [
       ...container.querySelectorAll<HTMLButtonElement>(".sn-filter-btn"),
-    ].find((b) => b.textContent === "Headings")!;
-    act(() => headings.click());
-    const footer = [
-      ...container.querySelectorAll<HTMLElement>('[role="option"]'),
-    ].find((o) => o.textContent?.includes("Footer"))!;
-    dblclick(footer);
+    ].find((b) => b.textContent === label);
+    if (!btn) throw new Error(`no ${label} pill`);
+    return btn;
+  }
 
-    expect(scopes).toEqual([null]);
-    expect(row("h-foot").getAttribute("aria-selected")).toBe("true");
+  it("a role-filter list shows only matches inside the scope", () => {
+    mount({ initialScope: "sec" });
+    act(() => pill("Headings").click());
+    const labels = [
+      ...container.querySelectorAll<HTMLElement>('[role="option"]'),
+    ].map((o) => o.textContent);
+    expect(labels).toEqual(["Deep"]);
+  });
+
+  it("a scoped list with no matches says so", () => {
+    mount({ initialScope: "sec" });
+    act(() => pill("Links").click());
+    expect(container.querySelector(".sn-empty")?.textContent).toBe(
+      "No links found in this scope",
+    );
+  });
+
+  it("go-to-tree from a scoped list keeps the scope", () => {
+    const scopes = mount({ initialScope: "sec" });
+    act(() => pill("Headings").click());
+    const deep = container.querySelector<HTMLElement>('[role="option"]')!;
+    dblclick(deep);
+    expect(scopes).toEqual([]);
+    expect(row("h3").getAttribute("aria-selected")).toBe("true");
   });
 
   it("opens a saved scope root on mount, even below the seeded levels", () => {

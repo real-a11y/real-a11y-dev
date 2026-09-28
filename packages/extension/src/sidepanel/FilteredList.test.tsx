@@ -91,6 +91,69 @@ describe("FilteredList", () => {
     expect(buttons).toEqual(["Activate", "Move to"]);
   });
 
+  it("lists only matches inside the scope when scoped", () => {
+    // `h3` sits under a `section` the panel is scoped to; `h1` and `h2` are
+    // outside it. The list covers the same subtree the scoped tree shows.
+    const scoped = new Map<string, SemanticNode>([
+      ...HEADINGS,
+      listNode("section", "region", "Help"),
+    ]);
+    (scoped.get("h3") as { parentId: string }).parentId = "section";
+    act(() => {
+      render(
+        <FilteredList
+          nodes={scoped}
+          scopeRootId="section"
+          roleFilter="heading"
+          query=""
+          onHighlight={noop}
+          onActivate={noop}
+          onGoToTree={noop}
+        />,
+        container,
+      );
+    });
+    expect(options().map((o) => o.textContent)).toEqual(["H3Troubleshooting"]);
+  });
+
+  it("says a scoped list is empty in this scope", () => {
+    act(() => {
+      render(
+        <FilteredList
+          nodes={HEADINGS}
+          scopeRootId="p1"
+          roleFilter="heading"
+          query=""
+          onHighlight={noop}
+          onActivate={noop}
+          onGoToTree={noop}
+        />,
+        container,
+      );
+    });
+    expect(container.querySelector(".sn-empty")?.textContent).toBe(
+      "No headings found in this scope",
+    );
+  });
+
+  it("ignores a scope id the tree doesn't have", () => {
+    act(() => {
+      render(
+        <FilteredList
+          nodes={HEADINGS}
+          scopeRootId="gone"
+          roleFilter="heading"
+          query=""
+          onHighlight={noop}
+          onActivate={noop}
+          onGoToTree={noop}
+        />,
+        container,
+      );
+    });
+    expect(options()).toHaveLength(3);
+  });
+
   it("lists only the nodes in the filtered role group, with heading levels", () => {
     act(() => {
       render(

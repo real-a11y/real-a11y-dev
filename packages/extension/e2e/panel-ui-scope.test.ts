@@ -178,24 +178,32 @@ for (const producer of ["DOM", "NATIVE"] as const) {
       await expect(nav.panel.getByRole("listbox")).toBeFocused();
     });
 
-    test("go-to-tree from a list item outside the scope leaves it", async ({
-      nav,
-    }) => {
+    test("role-filter lists cover only the scope", async ({ nav }) => {
       await show(nav, "native-panel.html", producer);
       await itemsRow(nav.panel).dblclick({ position: { x: 5, y: 5 } });
       await expect(scopeBar(nav.panel)).toBeVisible();
 
+      // Every button on the page sits inside "Items"…
+      await nav.panel
+        .getByRole("button", { name: "Buttons", exact: true })
+        .click();
+      await expect(nav.panel.locator(".sn-list-count")).toHaveText("16 items");
+
+      // …but none of its headings: the page's h1 and h2 are outside it.
       await nav.panel
         .getByRole("button", { name: "Headings", exact: true })
         .click();
-      await nav.panel
-        .getByRole("option", { name: /Native panel fixture/ })
-        .dblclick();
+      await expect(nav.panel.getByRole("option")).toHaveCount(0);
+      await expect(nav.panel.locator(".sn-empty")).toHaveText(
+        "No headings found in this scope",
+      );
 
-      await expect(scopeBar(nav.panel)).toHaveCount(0);
-      await expect(
-        nav.panel.getByRole("treeitem", { name: /Native panel fixture/ }),
-      ).toHaveAttribute("aria-selected", "true");
+      // Going to the tree from a scoped list keeps the scope.
+      await nav.panel
+        .getByRole("button", { name: "Buttons", exact: true })
+        .click();
+      await nav.panel.getByRole("option", { name: "Item 16" }).dblclick();
+      await expect(scopeBar(nav.panel)).toBeVisible();
     });
   });
 }
@@ -217,6 +225,25 @@ test("NATIVE: a pick outside the scope leaves it and selects the picked row", as
   await expect(scopeBar(nav.panel)).toHaveCount(0);
   await expect(
     nav.panel.getByRole("treeitem", { name: /Native panel fixture/ }),
+  ).toHaveAttribute("aria-selected", "true");
+});
+
+test("DOM: focus tracking to an element outside the scope leaves it", async ({
+  nav,
+}) => {
+  // The DOM picker can't be armed from a panel loaded as a tab (see the
+  // harness's note on `sender.tab` routing), so this drives the same reveal
+  // path through focus tracking instead: the content script reports the
+  // page's own focus change, and the password field sits outside "Items".
+  const page = await show(nav, "native-panel.html", "DOM");
+  await itemsRow(nav.panel).dblclick({ position: { x: 5, y: 5 } });
+  await expect(scopeBar(nav.panel)).toBeVisible();
+
+  await page.locator("#pw").focus();
+
+  await expect(scopeBar(nav.panel)).toHaveCount(0);
+  await expect(
+    nav.panel.getByRole("treeitem", { name: /Password/ }),
   ).toHaveAttribute("aria-selected", "true");
 });
 

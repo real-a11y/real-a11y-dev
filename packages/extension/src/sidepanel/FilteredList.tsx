@@ -19,6 +19,8 @@ import {
   useEffect,
 } from "preact/hooks";
 
+import { isInScope } from "./ScopeBar.js";
+
 // Filters whose items have meaningful activate actions
 const INTERACTIVE_FILTERS: Set<string> = new Set(["link", "button", "form"]);
 
@@ -76,6 +78,8 @@ interface FilteredListViewProps {
   onFocusSearch?: () => void;
   /** Hold activation back while a previous one is still in flight. */
   activateDisabled?: boolean;
+  /** The items come from a scoped subtree; says so when there are none. */
+  scoped?: boolean;
 }
 
 export function FilteredListView({
@@ -87,6 +91,7 @@ export function FilteredListView({
   onGoToTree,
   onFocusSearch,
   activateDisabled = false,
+  scoped = false,
 }: FilteredListViewProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
@@ -271,6 +276,7 @@ export function FilteredListView({
         {items.length === 0 && (
           <div class="sn-empty">
             No {roleFilter}s found{query ? ` matching "${query}"` : ""}
+            {scoped ? " in this scope" : ""}
           </div>
         )}
       </div>
@@ -305,6 +311,9 @@ export function FilteredListView({
 
 interface FilteredListProps {
   nodes: Map<string, SemanticNode>;
+  /** The scoped subtree's root, if the panel is scoped: only matches inside
+   *  it are listed, the same subtree the tree shows. */
+  scopeRootId?: string | null;
   roleFilter: Exclude<RoleFilter, null>;
   query: string;
   onHighlight: (nodeId: string) => void;
@@ -318,10 +327,12 @@ interface FilteredListProps {
 /** The DOM producer's role-filtered list: maps `nodes` onto `FilteredListView`. */
 export function FilteredList({
   nodes,
+  scopeRootId = null,
   roleFilter,
   query,
   ...rest
 }: FilteredListProps) {
+  const scoped = scopeRootId !== null && nodes.has(scopeRootId);
   // Get direct matches in document order
   const items = useMemo(() => {
     const roles = ROLE_FILTER_GROUPS[roleFilter];
@@ -333,6 +344,12 @@ export function FilteredList({
 
     for (const node of nodes.values() as IterableIterator<DomSemanticNode>) {
       if (!roles.includes(node.a11y.role)) continue;
+      if (
+        scoped &&
+        !isInScope(node.id, scopeRootId!, (id) => nodes.get(id)?.parentId)
+      ) {
+        continue;
+      }
       // Apply text search within results
       if (lowerQuery) {
         const name = (node.a11y.name || "").toLowerCase();
@@ -353,13 +370,14 @@ export function FilteredList({
     }
 
     return result;
-  }, [nodes, roleFilter, query]);
+  }, [nodes, roleFilter, query, scoped, scopeRootId]);
 
   return (
     <FilteredListView
       items={items}
       roleFilter={roleFilter}
       query={query}
+      scoped={scoped}
       {...rest}
     />
   );
