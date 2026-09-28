@@ -258,6 +258,33 @@ describe("buildNativeTree — R1: a value never becomes a name, for a role core 
   });
 });
 
+describe("buildNativeTree — a scrollbar is never named from its text, value or not", () => {
+  // Chromium always reports a scrollbar value, which keeps its fallback text
+  // out on its own. This pins the payload without one: the producer's former
+  // strip covered `scrollbar` by role, and core's table now does.
+  const raw = [
+    { nodeId: "1", childIds: ["2"], role: { value: "RootWebArea" } },
+    {
+      nodeId: "2",
+      parentId: "1",
+      childIds: ["3"],
+      role: { value: "scrollbar" },
+      backendDOMNodeId: 600,
+    },
+    {
+      nodeId: "3",
+      parentId: "2",
+      role: { value: "StaticText" },
+      name: { value: "50%" },
+    },
+  ] as Parameters<typeof buildNativeTree>[0];
+
+  it("prints a bare scrollbar in buildNativeTree and nativeAXView", () => {
+    expect(buildNativeTree(raw).nodes.get("ax-dom-600")?.a11y.name).toBe("");
+    expect(nativeAXView(raw).tree).toBe("scrollbar");
+  });
+});
+
 describe("buildNativeTree — R1: a role-less editor's value never names the item around it", () => {
   // Chromium 151's shape for `<li><div contenteditable>typed</div></li>`: the
   // editor is a dropped generic carrying the typed text as its value, and its

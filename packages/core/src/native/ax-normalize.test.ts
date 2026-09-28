@@ -386,6 +386,7 @@ const AUTHOR_NAMED_LEAF_ROLES = [
   "slider",
   "spinbutton",
   "textbox",
+  "scrollbar",
 ];
 
 describe("author-named leaves", () => {
