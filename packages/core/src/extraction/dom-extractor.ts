@@ -1262,7 +1262,7 @@ function getFieldText(element: Element, styleCache?: StyleCache): string {
     const tag = typeof rawTag === "string" ? rawTag.toLowerCase() : "";
     if (MEDIA_TAGS.has(tag) || CONTROL_TEXT_TAGS.has(tag)) return false;
     if (el.getAttribute("aria-hidden") === "true") return false;
-    const role = el.getAttribute("role")?.trim().split(/\s+/)[0];
+    const role = getExplicitRole(el);
     if (role && POPUP_ROLES.has(role)) return false;
     const style = getCachedComputedStyle(el, styleCache);
     if (isSubtreeHidden(el, style)) return false;
@@ -1461,7 +1461,7 @@ export function fieldValueOwner(el: Element): Element | null {
       continue;
     }
     if (tag === "input" || tag === "textarea") continue;
-    const role = node.getAttribute("role")?.trim().split(/\s+/)[0];
+    const role = getExplicitRole(node);
     if (role && TEXT_VALUE_ROLES.has(role)) owner = node;
   }
   return owner;
