@@ -29,6 +29,7 @@
   whose `<form>` has a field named `parentElement` or `assignedSlot` no
   longer hangs the DOM-mode tree when the form holds a `<header>` or
   `<footer>`.
+  ([#429](https://github.com/real-a11y/real-a11y-dev/pull/429))
 
 - In DOM mode, a control disabled by its `<fieldset>` now shows as disabled in
   the tree and in the Buttons and Forms lists, as NATIVE mode already
