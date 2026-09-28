@@ -18,6 +18,7 @@ link "CLAUDE.md's "Two producers build the tree""
 button "Copy Code"
 generic
 link "CLAUDE.md's "Two producers build the tree""
+link "Scoping"
 link "Reading the DOM view"
 link "A11y view"
 link "TAB view"
