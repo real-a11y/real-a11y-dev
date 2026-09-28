@@ -109,6 +109,10 @@ function idOf(node: RawNativeAXNode): string {
  * or `role="scrollbar"` is fallback, no more its name. Chromium leaves all of
  * them unnamed.
  *
+ * The same holds one level removed: a role-less `<div contenteditable>` is a
+ * dropped `generic` carrying a value, and its text must not name the kept
+ * ancestor it flattens into either.
+ *
  * The field roles never reach this check — {@link NATIVE_AX_AUTHOR_NAMED_ROLES}
  * already keeps them unnamed — so it is what covers the roles that otherwise
  * read their text. A `0` is a value; an empty string or `null` is none.
@@ -176,6 +180,7 @@ function directText(
  * `textbox` whose *value* lives in a StaticText child, or an `<svg role="img">`
  * with a `<text>` inside, stays as unnamed as Chromium left it. Nor for a node
  * that {@link carriesValue}: a progress bar's fallback text is not its name.
+ * And the search never enters a dropped descendant that carries a value.
  */
 function promoteNameFromDroppedDescendants(
   node: RawNativeAXNode,
@@ -184,6 +189,10 @@ function promoteNameFromDroppedDescendants(
   for (const childId of node.childIds ?? []) {
     const child = byId.get(childId);
     if (!child || isKept(child)) continue;
+    // A dropped node's value is no more its ancestor's name than its own: a
+    // role-less `<div contenteditable>` is a dropped generic carrying what was
+    // typed into it, and `<li>` around it must not read as that text.
+    if (carriesValue(child)) continue;
     // A dropped sectionheader/sectionfooter is name-from-author only: its
     // loose text (a byline) must not name the ancestor it flattened into —
     // the DOM producer never names anything from it either.

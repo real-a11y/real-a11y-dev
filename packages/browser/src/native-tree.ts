@@ -54,7 +54,6 @@ import type { CDPSession, Page } from "playwright";
  *  superset of core's structural {@link RawNativeAXNode}. */
 interface RawAXNode extends RawNativeAXNode {
   description?: { value?: string };
-  properties?: Array<{ name: string; value?: { value?: unknown } }>;
 }
 
 /** Structural / accessibility attributes we surface on the `dom` facet.

@@ -258,6 +258,47 @@ describe("buildNativeTree — R1: a value never becomes a name, for a role core 
   });
 });
 
+describe("buildNativeTree — R1: a role-less editor's value never names the item around it", () => {
+  // Chromium 151's shape for `<li><div contenteditable>typed</div></li>`: the
+  // editor is a dropped generic carrying the typed text as its value, and its
+  // StaticText sits under it. The listitem is a kept leaf, so name promotion
+  // searches its dropped subtree — and must not take the editor's text.
+  const TYPED_SECRET = "typed-SECRET-li";
+  const raw = [
+    { nodeId: "1", childIds: ["2"], role: { value: "RootWebArea" } },
+    { nodeId: "2", parentId: "1", childIds: ["3"], role: { value: "list" } },
+    {
+      nodeId: "3",
+      parentId: "2",
+      childIds: ["4"],
+      role: { value: "listitem" },
+      backendDOMNodeId: 500,
+    },
+    {
+      nodeId: "4",
+      parentId: "3",
+      childIds: ["5"],
+      role: { value: "generic" },
+      value: { value: TYPED_SECRET },
+    },
+    {
+      nodeId: "5",
+      parentId: "4",
+      role: { value: "StaticText" },
+      name: { value: TYPED_SECRET },
+    },
+  ] as Parameters<typeof buildNativeTree>[0];
+
+  it("keeps it out of buildNativeTree and nativeAXView", () => {
+    const tree = buildNativeTree(raw);
+    expect(tree.nodes.get("ax-dom-500")?.a11y.name).toBe("");
+    expect(serializeTree(tree, { includeGeneric: true })).not.toContain(
+      "SECRET",
+    );
+    expect(nativeAXView(raw).tree).toBe("list\n  listitem");
+  });
+});
+
 describe("buildNativeTree — R1: typed text beside a kept child must not leak via the name", () => {
   // Chromium 151's shape for `<div role="textbox" contenteditable>typed
   // <a href="#">link</a> more</div>`: the typed text is on the textbox's own

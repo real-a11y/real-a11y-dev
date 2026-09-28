@@ -23,8 +23,9 @@
   `application "<everything typed>"`, and so did a `role="document"` or
   `role="log"` editor and a contenteditable `<p>`. Each now reads bare, as
   Chromium names it; an editor labelled with `aria-label` keeps its label. A
-  `role="progressbar"` no longer shows its fallback text as its name either.
-  The same text was already kept out of the CLI and MCP.
+  list item or note around a plain `<div contenteditable>` no longer takes
+  its typed text as its name either, and a `role="progressbar"` no longer
+  shows its fallback text as its name.
   ([#PR_NUMBER](https://github.com/real-a11y/real-a11y-dev/pull/PR_NUMBER))
 
 - In NATIVE mode, an image, dialog, landmark or form field that has no label

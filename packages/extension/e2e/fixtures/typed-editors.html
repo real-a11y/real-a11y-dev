@@ -25,6 +25,14 @@
       aria-label="Message"
     ></div>
 
+    <!--
+      A role-less editor is dropped from the tree, but it still carries the
+      typed text as its value, and the list item around it must not take it.
+    -->
+    <ul>
+      <li><div id="item" contenteditable="true"></div></li>
+    </ul>
+
     <!-- The same kind of role, not editable: it still reads its text. -->
     <div role="log">Saved at 10:00</div>
   </body>

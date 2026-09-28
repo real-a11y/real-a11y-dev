@@ -676,6 +676,35 @@ describe("value-carrying nodes", () => {
   });
 
   it.each([
+    ["listitem", "typed secret li"],
+    ["note", "typed secret note"],
+  ])(
+    "never lets a dropped editor's value name the %s around it",
+    (role, typed) => {
+      // Chromium 151's shape for `<li><div contenteditable>…</div></li>` and
+      // `<div role="note"><div contenteditable>…</div></div>` after typing: the
+      // role-less editor is a dropped generic carrying the value, and its
+      // StaticText would otherwise be promoted onto the kept ancestor.
+      const nodes = normalizeNativeAX([
+        raw("1", role, { childIds: ["2"] }),
+        raw("2", "generic", { parentId: "1", childIds: ["3"], value: typed }),
+        raw("3", "StaticText", { parentId: "2", name: typed }),
+      ]);
+      expect(serializeNativeAX(nodes)).toBe(role);
+    },
+  );
+
+  it("still promotes past a dropped wrapper with no value", () => {
+    // The same shape without an editor: `<li><div>Alpha</div></li>`.
+    const nodes = normalizeNativeAX([
+      raw("1", "listitem", { childIds: ["2"] }),
+      raw("2", "generic", { parentId: "1", childIds: ["3"] }),
+      raw("3", "StaticText", { parentId: "2", name: "Alpha" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe('listitem "Alpha"');
+  });
+
+  it.each([
     ["empty", ""],
     ["null", null],
   ])("still names one whose value is %s", (_, value) => {

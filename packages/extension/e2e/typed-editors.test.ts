@@ -17,6 +17,7 @@ const TYPED = {
   app: "typed-SECRET-app",
   doc: "typed-SECRET-doc",
   labelled: "typed-SECRET-labelled",
+  item: "typed-SECRET-item",
 };
 
 test("an editor's typed text is never its name", async ({ nav }) => {
@@ -39,6 +40,9 @@ test("an editor's typed text is never its name", async ({ nav }) => {
     "Message",
   ]);
   expect(node(tree, "document").name).toBe("");
+  // The role-less editor inside it is dropped; its text is still not the
+  // item's name.
+  expect(node(tree, "listitem").name).toBe("");
   // Not every name is stripped: the same kind of role with no value keeps its
   // text.
   expect(node(tree, "log").name).toBe("Saved at 10:00");
