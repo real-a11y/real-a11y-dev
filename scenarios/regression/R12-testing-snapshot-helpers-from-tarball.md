@@ -1,14 +1,14 @@
 ---
 id: R12
 suite: regression
-scenario: "Testing pkg — snapshot helpers from the installed tarball (treeSnapshot / outlineSnapshot / tabSequenceSnapshot + redact + markFocus)"
+scenario: "Testing pkg — snapshot helpers from the installed tarball (treeSnapshot / outlineSnapshot / tabSequenceSnapshot + redact + markFocus + values)"
 area: Testing
 type: Automated
 priority: P0
 status: Active
-validFrom: "testing ≥ 0.1.0-beta.11 (installed from the packed tarball, not a workspace link)"
+validFrom: "testing ≥ 0.1.0-beta.11 (installed from the packed tarball, not a workspace link). Step 10 (values): testing ≥ 0.1.0-beta.17 (unreleased)"
 validUntil: ""
-expected: "all three produce stable deterministic strings; redact masks EVERY occurrence; [focused] appears only when something is focused"
+expected: "all three produce stable deterministic strings; redact masks EVERY occurrence; [focused] appears only when something is focused; values are absent unless asked, and a password never prints"
 twin: D5
 covers:
   - packages.@real-a11y-dev/testing
@@ -31,6 +31,9 @@ Packaging faults only show from the tarball.
 8. `tabSequenceSnapshot` inside a stored snapshot artifact vs printed to a terminal
 9. Focus a control and pass **no option at all**, then focus one and pass
    `{ markFocus: false }`
+10. On a form with a filled text field, a filled `type="password"` field and a
+    `<select>` whose selected option is `<option value="es">Spain</option>`:
+    `treeSnapshot(root)`, then `treeSnapshot(root, { values: true })`
 
 ## Expected
 
@@ -46,6 +49,11 @@ Packaging faults only show from the tarball.
   `markFocus: false` suppresses it. Step 6 on its own cannot tell a working
   option from an ignored one — both produce the marker — so 9 is the step that
   actually exercises the flag
+- **10** — with no option, **no** ` = ` anywhere: identical to a release without
+  values, so committed snapshots don't churn. With `values: true`, the text field
+  prints `= "<its text>"`, the select prints `= "Spain"` (the label, never `"es"`),
+  and the password prints `= "[redacted]"`, with its real value nowhere in the
+  string
 
 ## Why this exists
 

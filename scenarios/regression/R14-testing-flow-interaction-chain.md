@@ -23,6 +23,9 @@ notion: "https://app.notion.com/p/3aa1c354b0b58162a033c8231ca8d360"
 5. `await` the **same** chain object a second time
 6. `expectTree(...)` against the post-flow tree, once matching and once not
 7. `expectChanges(...)` for an expected delta, and for one that didn't happen
+   - **7b** — after a `.type(...)` into a field, `expectChanges({ exact: true })`
+     listing only the step's other effects, then again adding
+     `changed: [{ role: "textbox", changes: ["a11y.value"] }]` (testing ≥ 0.1.0-beta.17)
 8. A flow whose effect lands asynchronously (`setTimeout`, a transition)
 9. A flow targeting an element that isn't there
 10. Read the failure text from 6, 7 and 9
@@ -37,6 +40,10 @@ notion: "https://app.notion.com/p/3aa1c354b0b58162a033c8231ca8d360"
 - **6/7** — mismatches name the **first differing line**, not a wall of
   diff. They must not dump the full expected and actual trees after
   that pointer (`--- expected` / `--- actual`)
+- **7b** — both pass. Diffs see field values since ADR-0001, but a change made
+  only of `a11y.value` is never an unexpected extra under `exact`. Otherwise every
+  existing exact spec around a `type` would have started failing. The second form
+  proves the value change is still there to assert
 - **8** — the flow settles before asserting. It debounces (~200ms) for exactly this
 - **9** — an actionable failure naming what it looked for, not a null dereference
 - **10** — each message is usable by someone who didn't write the test

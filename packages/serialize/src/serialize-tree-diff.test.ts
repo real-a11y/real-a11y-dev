@@ -19,6 +19,7 @@ function mk(
     properties?: Record<string, string>;
     textContent?: string | null;
     level?: string;
+    value?: string;
   } = {},
 ): SemanticNode {
   return {
@@ -37,6 +38,7 @@ function mk(
       role,
       name: extra.name ?? "",
       description: "",
+      ...(extra.value !== undefined ? { value: extra.value } : {}),
       states: extra.states ?? {},
       properties: {
         ...(extra.level ? { level: extra.level } : {}),
@@ -185,6 +187,65 @@ describe("serializeTreeDiff", () => {
         ],
       }),
     ).toBe('~ checkbox "Agree": a11y.states.checked (unset) → true');
+  });
+
+  describe("values (ADR-0001)", () => {
+    const typed = {
+      ...empty,
+      changed: [
+        {
+          id: "sn-s",
+          before: mk("textbox", { id: "sn-s", name: "Search" }),
+          after: mk("textbox", { id: "sn-s", name: "Search", value: "hello" }),
+          changes: ["a11y.value"],
+        },
+      ],
+    };
+
+    it("leaves a value change out by default — output as before values existed", () => {
+      expect(serializeTreeDiff(typed)).toBe("(no changes)");
+    });
+
+    it("reports a value change with values on, without repeating it on the label", () => {
+      expect(serializeTreeDiff(typed, { values: true })).toBe(
+        '~ textbox "Search": a11y.value (unset) → "hello"',
+      );
+    });
+
+    it("keeps a node's other changes when only its value line is hidden", () => {
+      const both = {
+        ...empty,
+        changed: [
+          {
+            ...typed.changed[0],
+            after: mk("textbox", {
+              id: "sn-s",
+              name: "Search",
+              value: "hello",
+              states: { invalid: true },
+            }),
+            changes: ["a11y.value", "a11y.states.invalid"],
+          },
+        ],
+      };
+      expect(serializeTreeDiff(both)).toBe(
+        '~ textbox "Search": a11y.states.invalid (unset) → true',
+      );
+    });
+
+    it("labels an added node with its value, redacted like a name", () => {
+      const added = {
+        ...empty,
+        added: [mk("textbox", { name: "Code", value: "token-123" })],
+      };
+      expect(serializeTreeDiff(added)).toBe('+ textbox "Code"');
+      expect(serializeTreeDiff(added, { values: true })).toBe(
+        '+ textbox "Code" = "token-123"',
+      );
+      expect(
+        serializeTreeDiff(added, { values: true, redact: [/token-\d+/] }),
+      ).toBe('+ textbox "Code" = "[REDACTED]"');
+    });
   });
 
   it("emits one line per changed field, labeling with the after-state", () => {

@@ -34,6 +34,7 @@ Current projects:
 | Release sync — docs/npm/extension cadence | `https://app.notion.com/p/3af1c354b0b581bc9c59ee72aa19fd01` |
 | Dogfood follow-ups — 0.1.0-beta.1         | `https://app.notion.com/p/3a81c354b0b5816bb2bff81fd574ca0b` |
 | Phase 2: session daemon                   | `https://app.notion.com/p/3b01c354b0b581b690dbc4c790a406a6` |
+| ADR-0001: field values                    | `https://app.notion.com/p/3e81c354b0b58181aaacc03119226984` |
 
 Re-query them with `notion-query-data-sources` in `rows` mode against the Projects
 data source rather than trusting this table after a reorganisation. Not

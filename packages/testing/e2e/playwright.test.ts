@@ -117,6 +117,19 @@ test.describe("good fixture", () => {
     expect(snapshot).not.toContain("Test fixture");
     expect(snapshot).toContain("[REDACTED]");
   });
+
+  test("treeSnapshot prints field values only with values: true (ADR-0001)", async ({
+    page,
+  }) => {
+    // Proves `values` survives the page.evaluate() marshalling — the adapter
+    // picks option keys one by one, so a key it forgets is silently dropped.
+    await page.fill("#name", "Ada Lovelace");
+    const sn = await attach(page);
+    expect(await sn.treeSnapshot()).not.toContain("Ada Lovelace");
+    expect(await sn.treeSnapshot({ values: true })).toContain(
+      'textbox "Full name" = "Ada Lovelace"',
+    );
+  });
 });
 
 // ─── Native producer (attach with { tree: "native" }) ───────────────────────
