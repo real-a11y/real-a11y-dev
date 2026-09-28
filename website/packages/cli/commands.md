@@ -1003,7 +1003,11 @@ Under `--redact-input` no field prints a value, in any view or format, and the
 `contenteditable` region or a `designMode` document, a name Chromium computed
 from the typed text reads `[redacted]` and a text-only node reads unnamed; a
 link or image there loses its `href` / `src`, and a locator anchors on an id
-outside the editor. [`tabs`](#tabs-url) is the in-page walk and has no strict
+outside the editor. Outside an editor, a name Chromium builds from what any
+field holds reads `[redacted]` too — a cell around a filled input or a chosen
+`<select>` option, a checkbox whose `<label>` wraps another field, a region
+labelled by an editable heading — and no `<select>` option says it is the
+selected one. [`tabs`](#tabs-url) is the in-page walk and has no strict
 mode of its own: it prints no values, but a link inside an editor keeps its text.
 
 Use it when output goes somewhere field contents must not: a shared CI log, a

@@ -100,9 +100,11 @@ can confirm what `type_text` landed. A field whose markup marks it secret
 never its text, never its length. Findings checkpoints leave values out unless
 `checkpoint_findings` and `export_checkpoint` are both passed `values: true`.
 Start the server with `REAL_A11Y_REDACT_INPUT=1` to keep every field value and
-all rich-text editor content out of every result — inside a `contenteditable`
-composer the structure is kept, but a name computed from the typed text reads
-`[redacted]`.
+all rich-text editor content out of every read built on this tree — inside a
+`contenteditable` composer the structure is kept, but a name computed from the
+typed text reads `[redacted]`, as does a name taken from a field or an editor
+by `aria-labelledby` or a `<label>`. (`get_tab_order`, the in-page walk below,
+prints no values then, but still names a control inside an editor by its text.)
 
 That tree is **whole-document**, which is why no tool takes a `rootSelector`
 except the one exception below. There is no `producer` parameter: each surface

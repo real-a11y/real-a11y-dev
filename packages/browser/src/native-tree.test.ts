@@ -1453,3 +1453,134 @@ describe("buildNativeTree — strict mode around native text fields", () => {
     expect(tree.nodes.get("ax-dom-51")?.a11y.name).toBe("Quantity");
   });
 });
+
+describe("buildNativeTree — names taken by reference (<label>, aria-labelledby)", () => {
+  // Chromium reports a `labelledby` property, with the referenced nodes, for a
+  // <label> as well as aria-labelledby.
+  const labelledBy = (backendId: number) => [
+    {
+      name: "labelledby",
+      value: { relatedNodes: [{ backendDOMNodeId: backendId }] },
+    },
+  ];
+  const traced = (text: string) => ({
+    value: text,
+    sources: [{ type: "relatedElement", value: { value: text } }],
+  });
+
+  it("keeps a field's name from its own wrapping <label> — the label's only field is itself", () => {
+    // <label>Password <input type=password></label>
+    const raw = [
+      { nodeId: "1", childIds: ["2"], role: { value: "RootWebArea" } },
+      {
+        nodeId: "2",
+        parentId: "1",
+        childIds: ["3", "4"],
+        role: { value: "LabelText" },
+        backendDOMNodeId: 60,
+      },
+      {
+        nodeId: "3",
+        parentId: "2",
+        role: { value: "StaticText" },
+        name: { value: "Password" },
+      },
+      {
+        nodeId: "4",
+        parentId: "2",
+        role: { value: "textbox" },
+        name: traced("Password"),
+        value: { value: "••••" },
+        properties: labelledBy(60),
+        backendDOMNodeId: 61,
+      },
+    ] as RawNodes;
+    const tree = buildNativeTree(
+      raw,
+      new Map([
+        [60, domOf("label")],
+        [61, domOf("input", { type: "password" })],
+      ]),
+    );
+    expect(tree.nodes.get("ax-dom-61")?.a11y).toMatchObject({
+      name: "Password",
+      value: "[redacted]",
+    });
+  });
+
+  // <label><input type=checkbox> Remind me <input value="47"> minutes</label>,
+  // and a region labelled by the editable heading inside it.
+  const referencing = [
+    { nodeId: "1", childIds: ["2", "6"], role: { value: "RootWebArea" } },
+    {
+      nodeId: "2",
+      parentId: "1",
+      childIds: ["3", "4"],
+      role: { value: "LabelText" },
+      backendDOMNodeId: 70,
+    },
+    {
+      nodeId: "3",
+      parentId: "2",
+      role: { value: "checkbox" },
+      name: traced("Remind me 47 minutes"),
+      properties: labelledBy(70),
+      backendDOMNodeId: 71,
+    },
+    {
+      nodeId: "4",
+      parentId: "2",
+      role: { value: "textbox" },
+      name: { value: "Minutes" },
+      value: { value: "47" },
+      properties: [{ name: "editable", value: { value: "plaintext" } }],
+      backendDOMNodeId: 72,
+    },
+    {
+      nodeId: "6",
+      parentId: "1",
+      childIds: ["7"],
+      role: { value: "region" },
+      name: traced("Q3 plan"),
+      properties: labelledBy(81),
+      backendDOMNodeId: 80,
+    },
+    {
+      nodeId: "7",
+      parentId: "6",
+      role: { value: "heading" },
+      name: { value: "" },
+      value: { value: "Q3 plan" },
+      properties: [{ name: "editable", value: { value: "richtext" } }],
+      backendDOMNodeId: 81,
+    },
+  ] as RawNodes;
+  const referencingTree = (options: { redactInput?: boolean }) =>
+    buildNativeTree(
+      referencing,
+      new Map([
+        [70, domOf("label")],
+        [71, domOf("input", { type: "checkbox" })],
+        [72, domOf("input")],
+        [80, domOf("section")],
+        [81, domOf("h1")],
+      ]),
+      undefined,
+      options,
+    );
+
+  it("by default, a name built from ordinary field or editor text is page content", () => {
+    const tree = referencingTree({});
+    expect(tree.nodes.get("ax-dom-71")?.a11y.name).toBe("Remind me 47 minutes");
+    expect(tree.nodes.get("ax-dom-80")?.a11y.name).toBe("Q3 plan");
+  });
+
+  it("strict mode withholds a name taken from another field or an editor", () => {
+    const tree = referencingTree({ redactInput: true });
+    expect(tree.nodes.get("ax-dom-71")?.a11y.name).toBe("[redacted]");
+    expect(tree.nodes.get("ax-dom-80")?.a11y.name).toBe("[redacted]");
+    // The field that holds the value keeps its own label.
+    expect(tree.nodes.get("ax-dom-72")?.a11y.name).toBe("Minutes");
+    expect(JSON.stringify(nodesOf(tree))).not.toMatch(/47|Q3 plan/);
+  });
+});
