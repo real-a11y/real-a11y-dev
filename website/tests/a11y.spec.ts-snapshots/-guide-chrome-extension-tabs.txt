@@ -8,6 +8,8 @@ link "Reading the tree, scoping, filtering, focus tracking"
 link "Install"
 link "Add to Chrome"
 link "View on GitHub"
+button "Copy Code"
+generic
 link "the test"
 link "the panel features guide"
 link "screen curtain"
