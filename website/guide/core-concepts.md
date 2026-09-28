@@ -21,6 +21,8 @@ interface SemanticNode {
     role: string;                // ARIA role (resolved from element + explicit role attr)
     name: string;                // accessible name (label, aria-label, aria-labelledby…)
     description: string;
+    value?: string;              // what a screen reader announces for a field ("Spain", not "es");
+                                 // "[redacted]" for a filled password / card / one-time-code field
     states: Record<string, string | boolean>; // checked, expanded, selected, pressed…
     properties: Record<string, string>;       // aria-* properties (incl. heading "level")
     isExposedToAT: boolean;      // false when aria-hidden, role="presentation", etc.

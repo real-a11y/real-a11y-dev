@@ -52,6 +52,8 @@ main
   button "Continue"
 ```
 
+Pass `{ values: true }` to also print what each field holds, the way a screen reader announces it: `textbox "Email" = "jane@x.com"`, or `= "[redacted]"` for a password or card field. It's off by default, so existing snapshots don't change. The same option works on `boxedTreeSnapshot`, `a11yDiff` and the Playwright adapter's `sn.treeSnapshot`.
+
 `@testing-library/react` is **optional** — any `Element` works as an audit root — but it is the usual way to get a container:
 
 ```ts

@@ -16,6 +16,8 @@ navigation "On this page"
     listitem
       link "Redacting variable content"
     listitem
+      link "Field values"
+    listitem
       link "How it works"
     listitem
       link "Error propagation"
@@ -135,6 +137,15 @@ main
     code "RegExp"
     link "g-flag gotcha"
       code "g"
+  heading "Field values" (level 2)
+  paragraph "prints what each field holds, the way a screen reader announces it. It's off by default, as in jsdom (see ):"
+    code "treeSnapshot({ values: true })"
+    link "Field values"
+  button "Copy Code"
+  code
+  paragraph "A password field, or one with a credential or payment , prints ."
+    code "autocomplete"
+    code ""[redacted]""
   heading "How it works" (level 2)
   button "Copy Code"
   code

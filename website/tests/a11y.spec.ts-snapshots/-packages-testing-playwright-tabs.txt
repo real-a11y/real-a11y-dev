@@ -5,6 +5,7 @@ link "Auditing the native tree"
 link "Testing that assertions fail on broken pages"
 link "Determinism"
 link "Redacting variable content"
+link "Field values"
 link "How it works"
 link "Error propagation"
 link "SemanticNavigatorPageHandle type"
@@ -28,6 +29,9 @@ link "redact"
 button "Copy Code"
 generic
 link "g-flag gotcha"
+link "Field values"
+button "Copy Code"
+generic
 button "Copy Code"
 generic
 button "Copy Code"

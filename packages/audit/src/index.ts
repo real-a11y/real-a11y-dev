@@ -486,10 +486,15 @@ function nothingMatched(
  * Never returns an empty string: an empty category returns a line explaining
  * why (see {@link nothingMatched}), so a caller never has to invent a sentinel
  * of its own.
+ *
+ * `options.values` adds each field's announced value (`a11y.value`) as
+ * `= "…"` after the name, the same way the serializers print it (ADR-0001).
+ * Off by default.
  */
 export function listByRole(
   root: Element | ExtractionResult,
   filter: RoleFilter,
+  options: { values?: boolean } = {},
 ): string {
   const roles = ROLE_FILTER_GROUPS[filter];
   if (!roles) return `(unknown filter "${filter}")`;
@@ -504,13 +509,18 @@ export function listByRole(
     if (!roles.includes(node.a11y.role)) continue;
     const name = node.a11y.name.trim();
     const nameSuffix = name ? ` "${name}"` : "";
+    const value = options.values ? node.a11y.value : undefined;
+    const valueSuffix =
+      value !== undefined ? ` = ${JSON.stringify(value)}` : "";
     const level = node.a11y.properties?.level;
     const levelSuffix = level ? ` (level ${level})` : "";
     const { locator, context } = locate(node);
     const where = locator
       ? `  [${locator}${context ? ` · ${context}` : ""}]`
       : "";
-    lines.push(`${node.a11y.role}${nameSuffix}${levelSuffix}${where}`);
+    lines.push(
+      `${node.a11y.role}${nameSuffix}${valueSuffix}${levelSuffix}${where}`,
+    );
   }
   return lines.length
     ? lines.join("\n")

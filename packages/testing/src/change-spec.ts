@@ -30,11 +30,19 @@ export interface ChangeSpec {
   changed?: ChangedMatcher[];
   /**
    * false (default): the diff must contain AT LEAST these. true: and nothing
-   * else — except a `childIds`-only change, which is the structural shadow of
-   * an add/remove and is never counted as an unexpected extra.
+   * else — except a change made only of `childIds` (the structural shadow of
+   * an add/remove) and/or `a11y.value` (what a field holds — typing into one
+   * is the step itself), which is never counted as an unexpected extra.
+   * Assert a value change explicitly with `changes: ["a11y.value"]`.
    */
   exact?: boolean;
 }
+
+/** Change paths `exact` never counts as unexpected on their own. */
+const INCIDENTAL_CHANGES: ReadonlySet<string> = new Set([
+  "childIds",
+  "a11y.value",
+]);
 
 function normalizeName(s: string): string {
   return foldTypography(s).replace(/\s+/g, " ").trim().toLowerCase();
@@ -189,7 +197,13 @@ export function checkChangeSpec(diff: TreeDiff, spec: ChangeSpec): string[] {
       // parent's child list). Forcing every parent's churn to be enumerated
       // would defeat `exact`; assert it explicitly with a `changed` matcher
       // (`changes: ["childIds"]`) if a reorder is what you care about.
-      if (c.changes.length === 1 && c.changes[0] === "childIds") continue;
+      //
+      // `a11y.value` joins it: diffs only started seeing field values with
+      // ADR-0001, and a step that types into a field changing that field's
+      // value is the step, not a side effect — counting it would fail every
+      // existing exact spec around a `type`. Assert it with
+      // `changes: ["a11y.value"]` when the value is the point.
+      if (c.changes.every((p) => INCIDENTAL_CHANGES.has(p))) continue;
       problems.push(
         `unexpected CHANGED ${describeNode(c.after)} (${c.changes.join(", ")})`,
       );

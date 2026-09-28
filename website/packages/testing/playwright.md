@@ -146,6 +146,20 @@ test("home page structure", async ({ page }) => {
 
 A `RegExp` can't be passed through `page.evaluate()` directly — Playwright serializes evaluate arguments and a `RegExp` arrives as an empty `{}`. The adapter handles this for you: it marshals each pattern to `{ source, flags }`, ferries that across the boundary, and rebuilds the `RegExp` inside the page — so patterns behave exactly as they do in jsdom. Keep the [`g`-flag gotcha](/packages/testing/snapshots#using-redact) in mind when a name can contain more than one match.
 
+## Field values
+
+`treeSnapshot({ values: true })` prints what each field holds, the way a screen reader announces it. It's off by default, as in jsdom (see [Field values](/packages/testing/snapshots#field-values)):
+
+```ts
+await page.fill("#name", "Ada Lovelace");
+const sn = await attach(page);
+expect(await sn.treeSnapshot({ values: true })).toContain(
+  'textbox "Full name" = "Ada Lovelace"',
+);
+```
+
+A password field, or one with a credential or payment `autocomplete`, prints `"[redacted]"`.
+
 ## How it works
 
 ```

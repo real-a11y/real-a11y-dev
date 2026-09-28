@@ -354,6 +354,17 @@ describe("listByRole", () => {
     expect(out).not.toMatch(/button/);
   });
 
+  it("adds each field's announced value only when asked (ADR-0001)", () => {
+    const root = mount(
+      `<input aria-label="Email" value="jane@x.com"><input type="password" aria-label="Password" value="hunter2">`,
+    );
+    expect(listByRole(root, "form")).not.toContain(" = ");
+    const out = listByRole(root, "form", { values: true });
+    expect(out).toMatch(/textbox "Email" = "jane@x\.com"/);
+    expect(out).toMatch(/textbox "Password" = "\[redacted\]"/);
+    expect(out).not.toContain("hunter2");
+  });
+
   it("lists images", () => {
     const root = mount(`<img alt="A logo"><p>text</p>`);
     expect(listByRole(root, "image")).toMatch(/img "A logo"/);

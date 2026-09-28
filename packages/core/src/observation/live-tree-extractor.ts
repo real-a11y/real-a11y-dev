@@ -3,6 +3,7 @@ import {
   containsOverlaySignal,
   extractDomTree,
   getDescendantText,
+  fieldValueOwner,
   getElementRefs,
   htmlAamNameOwner,
   isNameBarrierElement,
@@ -211,6 +212,19 @@ export class LiveTreeExtractor {
             dirty.add(this.nameRelevantAncestor(target.parentElement));
           }
         }
+      }
+    }
+
+    // A field's value can be computed from content beneath it — an editor's
+    // text, a <select>'s option labels — so a change deep inside (a remote
+    // collaborator's edit, a script relabelling an option) changes a node
+    // that no mutation names. Re-extract the field too (ADR-0001). Typing
+    // already dirties the host through its `input` event; this covers the
+    // edits that fire none.
+    if (!needsFull) {
+      for (const el of Array.from(dirty)) {
+        const owner = fieldValueOwner(el);
+        if (owner && owner !== el) dirty.add(owner);
       }
     }
 

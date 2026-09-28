@@ -91,6 +91,13 @@ export interface TreeSnapshotOptions {
   redact?: RegExp[];
   /** Include generic container nodes (`role="generic"`). Default false. */
   includeGeneric?: boolean;
+  /**
+   * Print each field's announced value — `textbox "Email" = "jane@x.com"`.
+   * Default false, so an existing committed snapshot stays byte-identical. A
+   * sensitive field (`type="password"`, a credential or payment `autocomplete`)
+   * prints `"[redacted]"`. Mirrors the jsdom `treeSnapshot` option.
+   */
+  values?: boolean;
 }
 
 export interface SemanticNavigatorPageHandle {
@@ -254,7 +261,7 @@ export async function attach(
 
   return {
     treeSnapshot(opts: TreeSnapshotOptions = {}) {
-      const { mode, redact, includeGeneric } = opts;
+      const { mode, redact, includeGeneric, values } = opts;
       // `RegExp` doesn't survive `page.evaluate()` serialisation — it arrives
       // as an empty `{}`. Marshal each pattern to a plain `{ source, flags }`
       // pair and rebuild the `RegExp` inside the page.
@@ -268,6 +275,7 @@ export async function attach(
         mode?: "a11y" | "dom";
         redact?: { source: string; flags: string }[];
         includeGeneric?: boolean;
+        values?: boolean;
       };
 
       return page.evaluate(
@@ -298,6 +306,7 @@ export async function attach(
           if (a.mode) options.mode = a.mode;
           if (a.includeGeneric !== undefined)
             options.includeGeneric = a.includeGeneric;
+          if (a.values !== undefined) options.values = a.values;
           if (a.redact)
             options.redact = a.redact.map((r) => new RegExp(r.source, r.flags));
           return ra.treeSnapshot(root, options) as string;
@@ -307,6 +316,7 @@ export async function attach(
           mode,
           redact: redactParts,
           includeGeneric,
+          values,
         } satisfies TreeArg,
       );
     },
@@ -366,6 +376,7 @@ async function attachNative(
       return serializeTree(await getTree(), {
         redact: opts.redact,
         includeGeneric: opts.includeGeneric,
+        values: opts.values,
       });
     },
     async outlineSnapshot() {
