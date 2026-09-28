@@ -23,7 +23,7 @@
   so a disclosure or an FAQ accordion question is no longer missing from the
   tab order. Only the first summary of a `<details>` counts. The DOM tree now
   keeps that summary as a node under its `<details>`, where it used to drop it.
-  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR))
+  ([#426](https://github.com/real-a11y/real-a11y-dev/pull/426))
 
 - In DOM mode, the Tab Sequence view, its copied export and the keyboard bar's
   Tab now stop where Chromium stops. They used to stop at an `<a>` with no
