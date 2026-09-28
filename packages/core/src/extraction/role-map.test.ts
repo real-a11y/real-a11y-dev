@@ -104,6 +104,15 @@ describe("getImplicitRole", () => {
     expect(getImplicitRole(el('<span role="image">🎉</span>'))).toBe("img");
   });
 
+  it("passes through a role named like an Object.prototype member", () => {
+    expect(getImplicitRole(el('<div role="constructor">x</div>'))).toBe(
+      "constructor",
+    );
+    expect(getImplicitRole(el('<div role="toString">x</div>'))).toBe(
+      "toString",
+    );
+  });
+
   it("folds role=image when it leads a role list", () => {
     expect(
       getImplicitRole(el('<div role="image graphics-symbol">x</div>')),

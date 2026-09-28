@@ -416,9 +416,11 @@ const HIDDEN_FROM_AT = new Set([
 /**
  * ARIA role synonyms, folded to the token the rest of the engine speaks.
  * ARIA 1.3's `image` is Chromium's same image role as `img`, and the native
- * producer already reports it as `img` (`mapNativeAXRole`).
+ * producer already reports it as `img` (`mapNativeAXRole`). A Map, not an
+ * object literal, so an author's `role="constructor"` can't resolve to
+ * `Object.prototype`'s.
  */
-const ROLE_SYNONYMS: Readonly<Record<string, string>> = { image: "img" };
+const ROLE_SYNONYMS: ReadonlyMap<string, string> = new Map([["image", "img"]]);
 
 /**
  * The author's `role` token, with synonyms folded — the one parse of the
@@ -427,7 +429,7 @@ const ROLE_SYNONYMS: Readonly<Record<string, string>> = { image: "img" };
  */
 export function getExplicitRole(element: Element): string | undefined {
   const token = element.getAttribute("role")?.trim().split(/\s+/)[0];
-  return token ? (ROLE_SYNONYMS[token] ?? token) : undefined;
+  return token ? (ROLE_SYNONYMS.get(token) ?? token) : undefined;
 }
 
 /** Resolve the implicit ARIA role for an element */
