@@ -831,6 +831,259 @@ describe("extractDomTree", () => {
     });
   });
 
+  /** Each node carrying an `id` attribute, mapped to one of its states. */
+  function stateById(
+    page: string | Element,
+    state: string,
+  ): Record<string, unknown> {
+    const root = typeof page === "string" ? createPage(page) : page;
+    const byId: Record<string, unknown> = {};
+    for (const node of extractDomTree(root).nodes.values()) {
+      const id = node.dom?.attributes["id"];
+      if (id) byId[id] = node.a11y.states[state];
+    }
+    return byId;
+  }
+
+  // The expectations from here to "skips script and style elements" were
+  // each checked against Chromium 151's own tree: CDP `getFullAXTree`, and
+  // chrome://accessibility for `aria-current`, which CDP doesn't expose.
+  it("reads an element's own aria-disabled the way Chromium does", () => {
+    expect(
+      disabledById(`
+        <div id="upper" role="group" aria-disabled="TRUE">a</div>
+        <div id="mixed" role="group" aria-disabled="mixed">b</div>
+        <div id="yes" role="group" aria-disabled="yes">c</div>
+        <div id="zero" role="group" aria-disabled="0">d</div>
+        <div id="null" role="group" aria-disabled="null">e</div>
+        <div id="padded-true" role="group" aria-disabled=" true">f</div>
+        <div id="padded-false" role="group" aria-disabled=" false">g</div>
+        <div id="false-padded" role="group" aria-disabled="false ">h</div>
+        <div id="space" role="group" aria-disabled=" ">i</div>
+        <div id="false" role="group" aria-disabled="False">j</div>
+        <div id="upper-false" role="group" aria-disabled="FALSE">k</div>
+        <div id="empty" role="group" aria-disabled="">l</div>
+        <div id="undefined" role="group" aria-disabled="undefined">m</div>
+        <div id="upper-undefined" role="group" aria-disabled="UNDEFINED">n</div>
+      `),
+    ).toEqual({
+      // Anything but `false`, empty or `undefined` disables, in any case and
+      // untrimmed.
+      upper: true,
+      mixed: true,
+      yes: true,
+      zero: true,
+      null: true,
+      "padded-true": true,
+      "padded-false": true,
+      "false-padded": true,
+      space: true,
+      false: false,
+      "upper-false": false,
+      // Empty and `undefined` leave it unset.
+      empty: undefined,
+      undefined: undefined,
+      "upper-undefined": undefined,
+    });
+  });
+
+  it("never marks an <optgroup> disabled, but still disables its options", () => {
+    expect(
+      disabledById(`
+        <select aria-label="Size">
+          <optgroup id="aria" label="Large" aria-disabled="true">
+            <option id="in-aria">L</option>
+          </optgroup>
+          <optgroup id="role" role="group" label="Small" aria-disabled="TRUE">
+            <option id="in-role">S</option>
+          </optgroup>
+          <optgroup id="false" label="Medium" aria-disabled="false">
+            <option id="in-false">M</option>
+          </optgroup>
+        </select>
+      `),
+    ).toEqual({
+      aria: undefined,
+      "in-aria": true,
+      role: undefined,
+      "in-role": true,
+      false: undefined,
+      "in-false": undefined,
+    });
+  });
+
+  it.each([
+    ["busy", `<div role="group" X>x</div>`],
+    ["required", `<div role="textbox" tabindex="0" X>x</div>`],
+    ["readonly", `<div role="textbox" tabindex="0" X>x</div>`],
+    ["expanded", `<div role="button" tabindex="0" X>x</div>`],
+    ["selected", `<div role="tablist"><div role="tab" X>x</div></div>`],
+  ])("reads aria-%s the way Chromium does", (state, template) => {
+    const tokens = {
+      upper: "TRUE",
+      yes: "yes",
+      mixed: "mixed",
+      "padded-false": " false",
+      false: "False",
+      "upper-false": "FALSE",
+      empty: "",
+      undefined: "undefined",
+      "upper-undefined": "UNDEFINED",
+    };
+    const page = Object.entries(tokens)
+      .map(([id, value]) =>
+        template.replace("X", `id="${id}" aria-${state}="${value}"`),
+      )
+      .join("");
+    expect(stateById(page, state)).toEqual({
+      upper: true,
+      yes: true,
+      mixed: true,
+      "padded-false": true,
+      false: false,
+      "upper-false": false,
+      empty: undefined,
+      undefined: undefined,
+      "upper-undefined": undefined,
+    });
+  });
+
+  it("reads aria-checked the way Chromium does, mixed where the role has it", () => {
+    expect(
+      stateById(
+        `
+        <div id="upper" role="checkbox" aria-checked="TRUE">a</div>
+        <div id="yes" role="checkbox" aria-checked="yes">b</div>
+        <div id="false" role="checkbox" aria-checked="FALSE">c</div>
+        <div id="mixed" role="checkbox" aria-checked="MIXED">d</div>
+        <div id="padded-mixed" role="checkbox" aria-checked=" mixed">e</div>
+        <div id="empty" role="checkbox" aria-checked="">f</div>
+        <div id="undefined" role="checkbox" aria-checked="undefined">g</div>
+        <div id="upper-undefined" role="checkbox" aria-checked="UNDEFINED">h</div>
+        <div role="menu">
+          <div id="menuitemcheckbox" role="menuitemcheckbox" aria-checked="mixed">i</div>
+          <div id="menuitemradio" role="menuitemradio" aria-checked="mixed">j</div>
+        </div>
+        <div role="listbox"><div id="option" role="option" aria-checked="Mixed">k</div></div>
+        <div role="tree"><div id="treeitem" role="treeitem" aria-checked="mixed">l</div></div>
+        <div role="radiogroup"><div id="radio" role="radio" aria-checked="mixed">m</div></div>
+        <div id="switch" role="switch" aria-checked="mixed">n</div>
+      `,
+        "checked",
+      ),
+    ).toEqual({
+      upper: true,
+      yes: true,
+      false: false,
+      mixed: "mixed",
+      "padded-mixed": true,
+      empty: undefined,
+      undefined: undefined,
+      // Unlike every boolean state, only a lowercase `undefined` leaves it
+      // unset.
+      "upper-undefined": true,
+      menuitemcheckbox: "mixed",
+      option: "mixed",
+      treeitem: "mixed",
+      // These three roles have no mixed state, and Chromium reads it as false.
+      menuitemradio: false,
+      radio: false,
+      switch: false,
+    });
+  });
+
+  it("reads aria-pressed the way Chromium does", () => {
+    expect(
+      stateById(
+        `
+        <button id="upper" aria-pressed="TRUE">a</button>
+        <button id="yes" aria-pressed="yes">b</button>
+        <button id="false" aria-pressed="False">c</button>
+        <button id="mixed" aria-pressed="MIXED">d</button>
+        <button id="padded-mixed" aria-pressed=" mixed">e</button>
+        <button id="empty" aria-pressed="">f</button>
+        <button id="undefined" aria-pressed="undefined">g</button>
+        <button id="upper-undefined" aria-pressed="UNDEFINED">h</button>
+      `,
+        "pressed",
+      ),
+    ).toEqual({
+      upper: true,
+      yes: true,
+      false: false,
+      mixed: "mixed",
+      "padded-mixed": true,
+      empty: undefined,
+      undefined: undefined,
+      "upper-undefined": true,
+    });
+  });
+
+  it("reads aria-current the way Chromium does", () => {
+    expect(
+      stateById(
+        `
+        <a id="page" href="#a" aria-current="PAGE">a</a>
+        <a id="step" href="#b" aria-current="Step">b</a>
+        <a id="location" href="#c" aria-current="LOCATION">c</a>
+        <a id="date" href="#d" aria-current="date">d</a>
+        <a id="time" href="#e" aria-current="Time">e</a>
+        <a id="true" href="#f" aria-current="TRUE">f</a>
+        <a id="unknown" href="#g" aria-current="yes">g</a>
+        <a id="padded-page" href="#h" aria-current=" page">h</a>
+        <a id="two-tokens" href="#i" aria-current="page step">i</a>
+        <a id="false" href="#j" aria-current="False">j</a>
+        <a id="empty" href="#k" aria-current="">k</a>
+        <a id="undefined" href="#l" aria-current="undefined">l</a>
+        <a id="upper-undefined" href="#m" aria-current="UNDEFINED">m</a>
+      `,
+        "current",
+      ),
+    ).toEqual({
+      // The five tokens match in any case, and come out lowercase.
+      page: "page",
+      step: "step",
+      location: "location",
+      date: "date",
+      time: "time",
+      // Anything else Chromium reads as true, untrimmed.
+      true: true,
+      unknown: true,
+      "padded-page": true,
+      "two-tokens": true,
+      false: false,
+      empty: undefined,
+      undefined: undefined,
+      "upper-undefined": true,
+    });
+  });
+
+  it("hides an element for every aria-hidden value Chromium hides it for", () => {
+    const { nodes } = extractDomTree(
+      createPage(`
+        <div id="upper" role="group" aria-hidden="TRUE">a</div>
+        <div id="yes" role="group" aria-hidden="yes">b</div>
+        <div id="padded-false" role="group" aria-hidden=" false">c</div>
+        <div id="false" role="group" aria-hidden="FALSE">d</div>
+        <div id="empty" role="group" aria-hidden="">e</div>
+        <div id="undefined" role="group" aria-hidden="UNDEFINED">f</div>
+      `),
+    );
+    const byId: Record<string, unknown> = {};
+    for (const node of nodes.values()) {
+      const id = node.dom?.attributes["id"];
+      if (id) byId[id] = [node.a11y.isExposedToAT, node.a11y.states["hidden"]];
+    }
+    expect(byId).toEqual({
+      upper: [false, true],
+      yes: [false, true],
+      "padded-false": [false, true],
+      false: [true, false],
+      empty: [true, undefined],
+      undefined: [true, undefined],
+    });
+  });
+
   it("skips script and style elements", () => {
     const root = createPage(`
       <p>Visible</p>
@@ -1046,6 +1299,37 @@ describe("extractDomTree", () => {
         (n) => n.dom?.tagName === "button",
       )!;
       expect(btn.a11y.name.replace(/\s+/g, " ").trim()).toBe("Close dialog");
+    });
+
+    // Checked against Chromium 151, which hides for any aria-hidden value
+    // but `false`, empty or `undefined`, in any case.
+    it("skips a descendant for every aria-hidden value Chromium hides it for", () => {
+      const root = createPage(`
+        <button id="button">
+          <span aria-hidden="TRUE">×</span>
+          <span aria-hidden="yes">✓</span>
+          <span aria-hidden="FALSE">Close</span>
+          <span aria-hidden="">dialog</span>
+        </button>
+        <label>
+          Email <span aria-hidden="True">*</span>
+          <input id="input" type="email">
+        </label>
+        <table id="table">
+          <caption aria-hidden="yes">Decorative</caption>
+          <tr><td>1</td></tr>
+        </table>
+      `);
+      const byId: Record<string, string> = {};
+      for (const node of extractDomTree(root).nodes.values()) {
+        const id = node.dom?.attributes["id"];
+        if (id) byId[id] = node.a11y.name.replace(/\s+/g, " ").trim();
+      }
+      expect(byId).toEqual({
+        button: "Close dialog",
+        input: "Email",
+        table: "",
+      });
     });
 
     it("skips a [hidden] descendant in a heading's name-from-content", () => {

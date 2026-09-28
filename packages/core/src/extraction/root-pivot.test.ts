@@ -178,6 +178,19 @@ describe("an attached root still pivots — the feature is intact", () => {
     expect(resolveEffectiveRoot(host)).toBe(host);
   });
 
+  it("reads the hiding ancestor's aria-hidden the way Chromium does", () => {
+    // Chromium hides for any aria-hidden value but `false`, empty or
+    // `undefined`, in any case, and an `aria-hidden="false"` below the
+    // ancestor that hides doesn't bring the overlay back.
+    page(
+      `<div id="host"><button>Open</button></div>
+       <div aria-hidden="TRUE"><div role="dialog" aria-label="Nav"><a href="/x">Menu</a></div></div>
+       <div aria-hidden="yes"><div aria-hidden="false"><div role="menu"><button>Copy</button></div></div></div>`,
+    );
+    const host = document.getElementById("host")!;
+    expect(resolveEffectiveRoot(host)).toBe(host);
+  });
+
   it("KNOWN GAP (R35 step 1): a sibling live region still widens an attached root", () => {
     // Deliberately open, and asserted so it stays visible. "Outside the root"
     // cannot tell an ordinary in-page live region from a portal, so a result
