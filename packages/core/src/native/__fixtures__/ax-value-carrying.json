@@ -1,0 +1,387 @@
+{
+  "chrome": "151.0.7922.34",
+  "nodes": [
+    {
+      "nodeId": "1",
+      "childIds": ["2"],
+      "backendDOMNodeId": 1,
+      "role": {
+        "value": "RootWebArea"
+      },
+      "name": {
+        "value": "value-carrying nodes fixture"
+      }
+    },
+    {
+      "nodeId": "2",
+      "parentId": "1",
+      "childIds": ["15"],
+      "backendDOMNodeId": 2,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "15",
+      "parentId": "2",
+      "childIds": ["18"],
+      "backendDOMNodeId": 15,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "18",
+      "parentId": "15",
+      "childIds": ["3", "11", "12", "13", "14", "4", "5", "8", "9", "10"],
+      "backendDOMNodeId": 18,
+      "role": {
+        "value": "main"
+      }
+    },
+    {
+      "nodeId": "3",
+      "parentId": "18",
+      "childIds": ["20"],
+      "backendDOMNodeId": 3,
+      "role": {
+        "value": "application"
+      },
+      "value": {
+        "value": "typed secret app"
+      }
+    },
+    {
+      "nodeId": "11",
+      "parentId": "18",
+      "childIds": ["21"],
+      "backendDOMNodeId": 11,
+      "role": {
+        "value": "document"
+      },
+      "value": {
+        "value": "typed secret doc"
+      }
+    },
+    {
+      "nodeId": "12",
+      "parentId": "18",
+      "childIds": ["22"],
+      "backendDOMNodeId": 12,
+      "role": {
+        "value": "paragraph"
+      },
+      "value": {
+        "value": "typed secret para"
+      }
+    },
+    {
+      "nodeId": "13",
+      "parentId": "18",
+      "childIds": ["23"],
+      "backendDOMNodeId": 13,
+      "role": {
+        "value": "log"
+      },
+      "value": {
+        "value": "typed secret log"
+      }
+    },
+    {
+      "nodeId": "14",
+      "parentId": "18",
+      "childIds": ["24"],
+      "backendDOMNodeId": 14,
+      "role": {
+        "value": "application"
+      },
+      "name": {
+        "value": "Editor"
+      },
+      "value": {
+        "value": "typed secret labelled"
+      }
+    },
+    {
+      "nodeId": "4",
+      "parentId": "18",
+      "childIds": ["25"],
+      "backendDOMNodeId": 4,
+      "role": {
+        "value": "progressbar"
+      },
+      "value": {
+        "value": 30
+      }
+    },
+    {
+      "nodeId": "5",
+      "parentId": "18",
+      "childIds": ["6"],
+      "backendDOMNodeId": 5,
+      "role": {
+        "value": "meter"
+      },
+      "value": {
+        "value": 0.6000000238418579
+      }
+    },
+    {
+      "nodeId": "8",
+      "parentId": "18",
+      "childIds": ["26"],
+      "backendDOMNodeId": 8,
+      "role": {
+        "value": "scrollbar"
+      },
+      "value": {
+        "value": 50
+      }
+    },
+    {
+      "nodeId": "9",
+      "parentId": "18",
+      "childIds": ["27"],
+      "backendDOMNodeId": 9,
+      "role": {
+        "value": "paragraph"
+      }
+    },
+    {
+      "nodeId": "10",
+      "parentId": "18",
+      "childIds": ["28"],
+      "backendDOMNodeId": 10,
+      "role": {
+        "value": "log"
+      }
+    },
+    {
+      "nodeId": "20",
+      "parentId": "3",
+      "childIds": ["-1000000002"],
+      "backendDOMNodeId": 20,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "typed secret app"
+      }
+    },
+    {
+      "nodeId": "21",
+      "parentId": "11",
+      "childIds": ["-1000000003"],
+      "backendDOMNodeId": 21,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "typed secret doc"
+      }
+    },
+    {
+      "nodeId": "22",
+      "parentId": "12",
+      "childIds": ["-1000000004"],
+      "backendDOMNodeId": 22,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "typed secret para"
+      }
+    },
+    {
+      "nodeId": "23",
+      "parentId": "13",
+      "childIds": ["-1000000005"],
+      "backendDOMNodeId": 23,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "typed secret log"
+      }
+    },
+    {
+      "nodeId": "24",
+      "parentId": "14",
+      "childIds": ["-1000000006"],
+      "backendDOMNodeId": 24,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "typed secret labelled"
+      }
+    },
+    {
+      "nodeId": "25",
+      "parentId": "4",
+      "childIds": ["-1000000007"],
+      "backendDOMNodeId": 25,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "thirty"
+      }
+    },
+    {
+      "nodeId": "6",
+      "parentId": "5",
+      "childIds": ["7"],
+      "backendDOMNodeId": 6,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "26",
+      "parentId": "8",
+      "childIds": ["-1000000008"],
+      "backendDOMNodeId": 26,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "five"
+      }
+    },
+    {
+      "nodeId": "27",
+      "parentId": "9",
+      "childIds": ["-1000000009"],
+      "backendDOMNodeId": 27,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Plain paragraph"
+      }
+    },
+    {
+      "nodeId": "28",
+      "parentId": "10",
+      "childIds": ["-1000000010"],
+      "backendDOMNodeId": 28,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Saved at 10:00"
+      }
+    },
+    {
+      "nodeId": "-1000000002",
+      "parentId": "20",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "typed secret app"
+      }
+    },
+    {
+      "nodeId": "-1000000003",
+      "parentId": "21",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "typed secret doc"
+      }
+    },
+    {
+      "nodeId": "-1000000004",
+      "parentId": "22",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "typed secret para"
+      }
+    },
+    {
+      "nodeId": "-1000000005",
+      "parentId": "23",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "typed secret log"
+      }
+    },
+    {
+      "nodeId": "-1000000006",
+      "parentId": "24",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "typed secret labelled"
+      }
+    },
+    {
+      "nodeId": "-1000000007",
+      "parentId": "25",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "thirty"
+      }
+    },
+    {
+      "nodeId": "7",
+      "parentId": "6",
+      "childIds": ["19"],
+      "backendDOMNodeId": 7,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "-1000000008",
+      "parentId": "26",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "five"
+      }
+    },
+    {
+      "nodeId": "-1000000009",
+      "parentId": "27",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Plain paragraph"
+      }
+    },
+    {
+      "nodeId": "-1000000010",
+      "parentId": "28",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Saved at 10:00"
+      }
+    },
+    {
+      "nodeId": "19",
+      "parentId": "7",
+      "backendDOMNodeId": 19,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    }
+  ]
+}

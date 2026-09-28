@@ -25,10 +25,11 @@
  * that by construction: it **never reads any element's live `.value`**, drops
  * the AX `value` field, excludes the value-carrying AX properties
  * (`valuenow` / `valuetext`, which for a spinbutton/slider *are* the input),
- * redacts a value that would otherwise be promoted into the accessible name of
- * an unlabeled control, and the `dom` facet copies only an allowlist of
- * structural / a11y attributes (never `value`). An allowlist is strictly safer
- * than redacting after the fact. (Caveat, documented not
+ * takes names from core's normalizer, which never promotes a node's value into
+ * its name (an unlabeled field's, or an editor's typed text — the extension's
+ * native path shares the same rule), and the `dom` facet copies only an
+ * allowlist of structural / a11y attributes (never `value`). An allowlist is
+ * strictly safer than redacting after the fact. (Caveat, documented not
  * hand-waved: `getFullAXTree` / `getDocument` responses may themselves contain
  * field values in their CDP payload — Chromium masks passwords but not, e.g.,
  * an email field. That is Chromium's wire content, outside this code's control;
@@ -41,7 +42,6 @@ import {
   serializeNativeAX,
   buildCssPath,
   type CssPathAdapter,
-  type NativeAXNode,
   type RawNativeAXNode,
   type SemanticNode,
   type ExtractionResult,
@@ -54,8 +54,6 @@ import type { CDPSession, Page } from "playwright";
  *  superset of core's structural {@link RawNativeAXNode}. */
 interface RawAXNode extends RawNativeAXNode {
   description?: { value?: string };
-  value?: { value?: unknown };
-  properties?: Array<{ name: string; value?: { value?: unknown } }>;
 }
 
 /** Structural / accessibility attributes we surface on the `dom` facet.
@@ -122,24 +120,6 @@ const STATE_PROPS = new Set([
 ]);
 
 /**
- * Roles whose accessible name, when not authored (no label / aria-label /
- * placeholder / title), Chromium derives from the control's **current value**
- * — which it emits as a `StaticText` descendant. A name promoted from that
- * would leak a user's typed input past the R1 gate. Core no longer promotes
- * one for the field roles (see its `NATIVE_AX_AUTHOR_NAMED_ROLES`), so this is
- * the backstop: for these roles a *promoted* name is redacted (see
- * `buildNativeTree`); an authored name is always kept.
- */
-const VALUE_BEARING_ROLES = new Set([
-  "textbox",
-  "searchbox",
-  "spinbutton",
-  "combobox",
-  "slider",
-  "scrollbar",
-]);
-
-/**
  * AX property names that map to descriptive `a11y.properties` (strings).
  *
  * R1: `valuenow` / `valuetext` are deliberately EXCLUDED. For a value-bearing
@@ -173,51 +153,21 @@ function cleanText(text: string): string {
 }
 
 /**
- * A normalized node's name with the R1 redaction applied.
- *
- * Core's name-promotion pulls text from dropped `StaticText` descendants when
- * a node has no name of its own. For a value-bearing control with no AUTHORED
- * name, that descendant is the field's *typed value* (Chromium represents an
- * unlabeled input's value as a StaticText child), so a promoted name would
- * leak the value. Detect the promotion (own AX name empty) for those roles and
- * drop the name. An authored name (own AX name present) is never promoted, so
- * it is kept untouched. Core already refuses to promote onto the field roles,
- * so what this catches in practice is a role core does still name from text
- * that carries an AX value — a `<div role="application" contenteditable>`.
- */
-function redactedName(nn: NativeAXNode, raw: RawAXNode | undefined): string {
-  const authoredName = raw ? cleanText(String(raw.name?.value ?? "")) : "";
-  const hasAxValue =
-    raw?.value?.value !== undefined &&
-    raw?.value?.value !== null &&
-    String(raw.value.value) !== "";
-  const nameWasPromoted = !authoredName && nn.name !== "";
-  const redactPromotedValue =
-    nameWasPromoted && (VALUE_BEARING_ROLES.has(nn.role) || hasAxValue);
-  return redactPromotedValue ? "" : nn.name;
-}
-
-/**
  * The flat, text-only view of Chromium's native tree that
  * `BrowserSession.nativeAX()` returns: indented `role "name"` lines (the same
  * shape the DOM producer's serializer prints, so the two are comparable) plus
  * the same lines as a flat list of role+name pairs, for order- and
  * indent-insensitive diffing.
  *
- * Vocabulary comes from core's shared `normalizeNativeAX`, and names pass the
- * same R1 redaction as {@link buildNativeTree} — so this view and the
+ * Vocabulary and names both come from core's shared `normalizeNativeAX`, as
+ * they do for {@link buildNativeTree} — so this view and the
  * `ExtractionResult` one can never disagree about what is on a page.
  */
 export function nativeAXView(rawNodes: RawAXNode[]): {
   tree: string;
   pairs: string[];
 } {
-  const rawById = new Map<string, RawAXNode>();
-  for (const raw of rawNodes) rawById.set(nativeIdOf(raw), raw);
-  const nodes = normalizeNativeAX(rawNodes).map((nn) => ({
-    ...nn,
-    name: redactedName(nn, rawById.get(nn.id)),
-  }));
+  const nodes = normalizeNativeAX(rawNodes);
   return {
     tree: serializeNativeAX(nodes),
     pairs: nodes.map((n) => (n.name ? `${n.role} "${n.name}"` : n.role)),
@@ -410,7 +360,9 @@ export function buildNativeTree(
 
     const a11y: A11yInfo = {
       role: nn.role,
-      name: redactedName(nn, raw),
+      // Core never promotes a node's value into its name (R1), so this is
+      // safe to take as-is.
+      name: nn.name,
       description: raw?.description?.value
         ? cleanText(String(raw.description.value))
         : "",

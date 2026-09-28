@@ -21,7 +21,7 @@
  */
 
 /** Bump on any table/rule change that alters normalized output. */
-export const NATIVE_AX_VOCABULARY_VERSION = 5;
+export const NATIVE_AX_VOCABULARY_VERSION = 6;
 
 /**
  * Chromium AX roles that are structural noise relative to this engine's
@@ -186,6 +186,13 @@ export const NATIVE_AX_OWN_TEXT_ROLES: ReadonlySet<string> = new Set([
  * tab…) are not here: Chromium names those from their content itself, and
  * leaves one empty only when that content is hidden or absent.
  *
+ * `scrollbar` is here for the same reason as the fields: its text is fallback
+ * for its value, never its name. Chromium reports a value for every scrollbar,
+ * which already keeps that text out (see `carriesValue` in the normalizer).
+ * Listing the role keeps it out when a payload has no value too, as
+ * `@real-a11y-dev/browser`'s own strip did before the rule moved here. The DOM
+ * producer lists it for the same reason.
+ *
  * Also not here: author-named roles that no rule reads the name of, and whose
  * text is their content — alert, status, group, article, list, tree. They
  * keep their text as a name, which is the only place the tree keeps it.
@@ -217,4 +224,6 @@ export const NATIVE_AX_AUTHOR_NAMED_ROLES: ReadonlySet<string> = new Set([
   "slider",
   "spinbutton",
   "textbox",
+  // A value-bearing widget whose text is fallback.
+  "scrollbar",
 ]);
