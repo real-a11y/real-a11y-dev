@@ -6,6 +6,11 @@ on:
     - cron: "17 5 * * 1"
   push:
     branches: [main]
+  # TEMPORARY — reverted before merge. Runs the bumped action on its own PR so
+  # the ghcr.io image pull is proven on a branch; scorecard-action skips
+  # publishing on pull_request (main.go), and rejects push/dispatch off main.
+  pull_request:
+    paths: [.github/workflows/scorecard.yml]
 
 permissions: read-all
 
