@@ -24,7 +24,7 @@
   disabled by its `<fieldset>` and at an element with an empty or non-numeric
   `tabindex`, and to skip an `aria-disabled` control, which Chromium does tab
   to.
-  ([#PRNUM](https://github.com/real-a11y/real-a11y-dev/pull/PRNUM))
+  ([#422](https://github.com/real-a11y/real-a11y-dev/pull/422))
 
 - In NATIVE mode, an image, dialog, landmark or form field that has no label
   no longer shows its text as its name. `<span role="img">🎉</span>` read
