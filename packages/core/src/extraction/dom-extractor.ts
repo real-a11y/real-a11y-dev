@@ -4,6 +4,7 @@ import { getNodeId } from "../utils/id-generator.js";
 import { realmSingleton } from "../utils/realm-singleton.js";
 
 import { safeTextContent } from "./clobber-safe.js";
+import { isEditable, isEditingHost } from "./editing.js";
 import {
   deepQuerySelectorAll,
   flatChildNodes,
@@ -12,7 +13,11 @@ import {
   idScope,
   isRenderedInFlatTree,
 } from "./flat-tree.js";
-import { isActuallyDisabled, isFocusable } from "./focusability.js";
+import {
+  isActuallyDisabled,
+  isFocusable,
+  parseTabindex,
+} from "./focusability.js";
 import {
   getCachedComputedStyle,
   getImplicitRole,
@@ -1351,6 +1356,32 @@ function inheritsDisabled(element: Element): boolean {
 }
 
 /**
+ * True when Chromium's tree counts `element` as focusable, which is what lets
+ * it inherit `disabled` (CORE-AAM). That is `isFocusable()`'s answer, adjusted
+ * the three ways Chromium differs from it:
+ *
+ * - A native `<option>` counts, which is how every option in a disabled
+ *   select comes out disabled.
+ * - An editing host counts: Chromium focuses one with no `tabindex`, and
+ *   `isFocusable()` doesn't count it yet.
+ * - A link inside editable content doesn't, because editing takes its focus
+ *   away, unless a `tabindex` gives it back.
+ */
+function takesInheritedDisabled(
+  element: Element,
+  tag: string,
+  focusable: boolean,
+): boolean {
+  if (tag === "option" || isEditingHost(element)) return true;
+  if (!focusable) return false;
+  return !(
+    tag === "a" &&
+    parseTabindex(element.getAttribute("tabindex")) === null &&
+    isEditable(element)
+  );
+}
+
+/**
  * Get ARIA states from an element. `focusable` is its `isFocusable()` answer,
  * which the caller already has.
  */
@@ -1383,14 +1414,12 @@ function getAriaStates(
 
   // A disabled control is disabled whatever its aria-disabled says. Anything
   // else with an explicit aria-disabled keeps it. The rest inherit from an
-  // ancestor, if focusable, as CORE-AAM says. A native option counts as
-  // focusable here, because Chromium's tree counts it: that is how every
-  // option in a disabled select comes out disabled.
+  // ancestor, if Chromium counts them focusable, as CORE-AAM says.
   if (isDisabledControl(element)) {
     states["disabled"] = true;
   } else if (
     explicitAriaDisabled(element) === null &&
-    (focusable || tag === "option") &&
+    takesInheritedDisabled(element, tag, focusable) &&
     inheritsDisabled(element)
   ) {
     states["disabled"] = true;

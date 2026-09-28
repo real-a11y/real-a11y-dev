@@ -718,6 +718,48 @@ describe("extractDomTree", () => {
     });
   });
 
+  it("counts an editing host as focusable, and a link inside one as not", () => {
+    expect(
+      disabledById(`
+        <div role="group" aria-label="Compose" aria-disabled="true">
+          <div id="textbox" contenteditable="true" role="textbox" aria-label="Note"></div>
+          <div id="plaintext" contenteditable="plaintext-only" aria-label="Plain">P</div>
+          <div id="upper" contenteditable="TRUE" aria-label="Upper">U</div>
+          <div id="invalid" contenteditable="bogus" aria-label="Bogus">B</div>
+          <div id="host" contenteditable="" aria-label="Body">
+            <p id="child">Hi</p>
+            <span id="nested" contenteditable="true">there</span>
+            <a id="link" href="/terms">terms</a>
+            <a id="tabbable-link" href="/help" tabindex="0">help</a>
+            <button id="button">Send</button>
+            <div contenteditable="false">
+              <span id="island-host" contenteditable="true">island</span>
+              <a id="island-link" href="/faq">faq</a>
+            </div>
+          </div>
+        </div>
+      `),
+    ).toEqual({
+      // Chromium focuses an editing host with no tabindex, so it inherits.
+      textbox: true,
+      plaintext: true,
+      upper: true,
+      host: true,
+      // An invalid value inherits editing, here none.
+      invalid: undefined,
+      // Editable content inside a host is not a host itself.
+      child: undefined,
+      nested: undefined,
+      // Editing takes a link's focus away, unless a tabindex gives it back.
+      link: undefined,
+      "tabbable-link": true,
+      button: true,
+      // A `contenteditable="false"` island ends the editing.
+      "island-host": true,
+      "island-link": true,
+    });
+  });
+
   it("disables a focusable descendant of a disabled control, not of a fieldset", () => {
     expect(
       disabledById(`

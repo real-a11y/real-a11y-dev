@@ -377,13 +377,16 @@ describe("flat-tree ancestors of a clobbered <form>", () => {
           <input name="parentElement" aria-label="Card">
           <input name="assignedSlot" aria-label="Name">
           <button>Pay</button>
+          <a href="/terms">Terms</a>
         </form>
       </div>`;
     const form = page.querySelector("form")!;
     clobber(form, "parentElement");
     clobber(form, "assignedSlot");
-    const button = find(extractDomTree(page), "button", "Pay");
-    expect(button?.a11y.states["disabled"]).toBe(true);
+    const tree = extractDomTree(page);
+    expect(find(tree, "button", "Pay")?.a11y.states["disabled"]).toBe(true);
+    // A link asks whether it sits in editable content, a walk up of its own.
+    expect(find(tree, "link", "Terms")?.a11y.states["disabled"]).toBe(true);
   });
 
   it("scopes a <header> inside such a form", () => {
