@@ -270,7 +270,7 @@ jobs:
         # Outputs used below: deployment-url, pages-deployment-alias-url
         # (documented on cloudflare/wrangler-action@v3; alias needs wrangler
         # >= 3.78). Fallback URL is constructed if either is empty.
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
