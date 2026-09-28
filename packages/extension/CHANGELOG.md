@@ -105,8 +105,8 @@
     native tree to it, with the same breadcrumb bar as the DOM tree. It used
     to only expand or collapse the row.
   - **Keyboard.** In either tree, `Ctrl`/`Cmd`+`Enter` scopes to the selected
-    row and `Esc` leaves the scope. Scoping was mouse-only before. While a
-    pick is armed, `Esc` still cancels the pick first.
+    row and `Esc` leaves the scope. Scoping was mouse-only before. In the
+    native tree, `Esc` still cancels an armed pick first.
   - **Native Copy** exports the scoped subtree, as DOM mode's does.
   - Two DOM fixes:
     - Copy on a scoped tree no longer cuts the start off every line of the

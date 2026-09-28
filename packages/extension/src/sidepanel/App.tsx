@@ -2986,7 +2986,10 @@ export function App() {
                 markKeyboard();
                 const scopeKey = scopeKeyAction(e, {
                   scoped: scopedRootId !== null,
-                  pickArmed: pickModeOn,
+                  // A DOM pick is cancelled by Escape on the PAGE (the
+                  // content script owns it); the panel's own Escape never
+                  // reaches it, so here Escape always leaves the scope.
+                  pickArmed: false,
                 });
                 if (scopeKey) {
                   e.preventDefault();
