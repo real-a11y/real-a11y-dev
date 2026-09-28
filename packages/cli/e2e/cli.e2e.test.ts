@@ -149,6 +149,38 @@ describe("real-a11y (built bin)", () => {
     );
   });
 
+  it("tabs lists a details' summary, as Chromium tabs to it", async () => {
+    // The expected list is Chromium 151's own Tab walk of this page. The
+    // in-page walk used to skip every summary, so a disclosure or FAQ toggle
+    // never showed up as a stop. Only the first summary child of a details
+    // is one, and an inert one is none, which only a real browser's walk
+    // shows end to end.
+    const page = dataUrl(
+      "<!doctype html><title>FAQ</title><main>" +
+        "<button>Before</button>" +
+        "<details><summary>Shipping</summary><p>3 to 5 days.</p></details>" +
+        "<details open><p>Lead</p><summary>Returns</summary>" +
+        "<summary>Second summary</summary></details>" +
+        "<div><summary>Stray summary</summary></div>" +
+        "<div inert><details><summary>Inert</summary></details></div>" +
+        "<fieldset disabled><details><summary>Warranty</summary></details>" +
+        "</fieldset>" +
+        '<a href="/faq">All questions</a>' +
+        "</main>",
+    );
+    const { code, stdout } = await runCli(["tabs", page, "-q"]);
+    expect(code).toBe(0);
+    expect(stdout.trimEnd()).toBe(
+      [
+        '01. button "Before"',
+        '02. generic "Shipping"',
+        '03. generic "Returns"',
+        '04. generic "Warranty"',
+        '05. link "All questions"',
+      ].join("\n"),
+    );
+  });
+
   it("audits under device emulation", async () => {
     const { code, stdout } = await runCli([
       "audit",
