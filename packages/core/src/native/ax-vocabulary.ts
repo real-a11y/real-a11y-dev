@@ -56,7 +56,9 @@ export const NATIVE_AX_DROP_ROLES: ReadonlySet<string> = new Set([
  * Dropping it flattens the scrubber/play/mute nodes up to the surrounding
  * region — losing the grouping a screen-reader user relies on, and diverging
  * from the DOM producer, which keeps the named container. So a `generic` is
- * kept iff it carries a non-empty accessible name.
+ * kept iff it carries a non-empty accessible name — or a value: a role-less
+ * `contenteditable` is a `generic` whose AX value is what was typed, a field
+ * the DOM producer keeps too (ADR-0001). See `isKept` in the normalizer.
  */
 export const NATIVE_AX_DROP_UNLESS_NAMED: ReadonlySet<string> = new Set([
   "generic",

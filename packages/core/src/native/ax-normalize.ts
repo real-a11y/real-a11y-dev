@@ -76,8 +76,12 @@ function isKept(node: RawNativeAXNode): boolean {
   }
   // A `generic` (and any drop-unless-named role) is noise when bare but a
   // meaningful labelled container when named — keep it only if it has a name.
+  // Or a value: a role-less `<div contenteditable>` is a `generic` holding
+  // what was typed, and a text that sits directly in it is nowhere else in the
+  // tree. It is a field, not a wrapper (ADR-0001), as the DOM producer keeps
+  // it. Its text still never names it — see {@link carriesValue}.
   if (NATIVE_AX_DROP_UNLESS_NAMED.has(role)) {
-    return (node.name?.value ?? "").trim() !== "";
+    return (node.name?.value ?? "").trim() !== "" || carriesValue(node);
   }
   if (NATIVE_AX_DROP_WHEN_BARE.has(role)) {
     if ((node.name?.value ?? "").trim() !== "") return true;
@@ -98,7 +102,8 @@ function idOf(node: RawNativeAXNode): string {
 
 /**
  * Whether Chromium reports a value for `node` — in which case the text inside
- * it is that value, not its name, and name promotion leaves it alone.
+ * it is that value, not its name, and name promotion leaves it alone. (It is
+ * also what keeps a role-less editor in the tree — see `isKept`.)
  *
  * An editable region's text is its value, and Chromium 151 reports it twice: as
  * the AX `value` and on a `StaticText` child. That covers `<div
@@ -107,9 +112,10 @@ function idOf(node: RawNativeAXNode): string {
  * user typed as the node's name, which the R1 gate exists to prevent. Chromium
  * leaves all of them unnamed.
  *
- * The same holds one level removed: a role-less `<div contenteditable>` is a
- * dropped `generic` carrying a value, and its text must not name the kept
- * ancestor it flattens into either.
+ * The same holds one level removed: a value carrier that normalization drops
+ * must not name the kept ancestor it flattens into either. (A role-less
+ * `<div contenteditable>` was the case that motivated it; it is kept as a
+ * `generic` now, so its text is its own value, never an ancestor's name.)
  *
  * The field roles and the range widgets (`progressbar`, `meter`, `scrollbar`,
  * `separator`) never reach this check — {@link NATIVE_AX_AUTHOR_NAMED_ROLES}
@@ -189,9 +195,9 @@ function promoteNameFromDroppedDescendants(
   for (const childId of node.childIds ?? []) {
     const child = byId.get(childId);
     if (!child || isKept(child)) continue;
-    // A dropped node's value is no more its ancestor's name than its own: a
-    // role-less `<div contenteditable>` is a dropped generic carrying what was
-    // typed into it, and `<li>` around it must not read as that text.
+    // A dropped node's value is no more its ancestor's name than its own. (A
+    // role-less `<div contenteditable>` is kept, not dropped, so the `isKept`
+    // check above already stops there; this guards any other value carrier.)
     if (carriesValue(child)) continue;
     // A dropped sectionheader/sectionfooter is name-from-author only: its
     // loose text (a byline) must not name the ancestor it flattened into —

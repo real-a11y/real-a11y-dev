@@ -1,8 +1,13 @@
 // Unit tests for the native producer's pure assembly (`buildNativeTree`) and
-// its redaction gate (`allowlistAttributes`), run against a REAL recorded
-// `Accessibility.getFullAXTree` + `DOM.getDocument` payload (Chromium 141,
-// __fixtures__/native-ax-payload.json) — a fixture page carrying a `<video>`
-// with UA-shadow controls and email/password fields with real secret values.
+// its redaction gate (`allowlistAttributes`), run against REAL recorded
+// `Accessibility.getFullAXTree` + `DOM.getDocument` payloads:
+//   - __fixtures__/native-ax-payload.json (Chromium 141) — a `<video>` with
+//     UA-shadow controls and email/password fields holding real values;
+//   - __fixtures__/native-ax-values.json (Chromium 151) — one of each kind of
+//     field ADR-0001 announces a value for, plus sensitive ones placed where
+//     Chromium names a container from them (a table cell);
+//   - __fixtures__/native-ax-editor{,-hosts}.json (Chromium 151) — rich-text
+//     editors, for the strict `redactInput` mode.
 // No browser needed at test time; the recording IS the browser's output.
 
 import { normalizeNativeAX } from "@real-a11y-dev/core";
@@ -12,31 +17,59 @@ import { describe, expect, it } from "vitest";
 import hostsPayload from "./__fixtures__/native-ax-editor-hosts.json";
 import editorPayload from "./__fixtures__/native-ax-editor.json";
 import payload from "./__fixtures__/native-ax-payload.json";
+import valuesPayload from "./__fixtures__/native-ax-values.json";
 import {
   allowlistAttributes,
   buildNativeTree,
   nativeAXView,
+  type NativeDomInfo,
 } from "./native-tree.js";
 
 const EMAIL_SECRET = "secret-user@example.com";
 const PASSWORD_SECRET = "hunter2-SECRET";
 
-const rawNodes = payload.nodes as Parameters<typeof buildNativeTree>[0];
-const enrichment = new Map(
-  Object.entries(payload.enrich).map(([backendId, e]) => [
-    Number(backendId),
-    {
-      tagName: (e as { tagName: string }).tagName.toLowerCase(),
-      attributes: allowlistAttributes(
-        (e as { attributes: string[] }).attributes,
-      ),
-    },
-  ]),
-);
+type RawNodes = Parameters<typeof buildNativeTree>[0];
 
-function build() {
-  return buildNativeTree(rawNodes, enrichment, payload.chrome);
+/**
+ * A recorded `enrich` block as the live DOM walk would have produced it: the
+ * tag, the allowlisted attributes, and the `aria-valuetext` it reads aside.
+ */
+function enrichmentOf(
+  enrich: Record<string, { tagName: string; attributes: string[] }>,
+): Map<number, NativeDomInfo> {
+  return new Map(
+    Object.entries(enrich).map(([backendId, e]) => {
+      const at = e.attributes.indexOf("aria-valuetext");
+      return [
+        Number(backendId),
+        {
+          tagName: e.tagName.toLowerCase(),
+          attributes: allowlistAttributes(e.attributes),
+          ...(at >= 0 && at % 2 === 0
+            ? { ariaValueText: e.attributes[at + 1] }
+            : {}),
+        },
+      ];
+    }),
+  );
 }
+
+/** A DOM record for a hand-built raw node. */
+const domOf = (
+  tagName: string,
+  attributes: Record<string, string> = {},
+): NativeDomInfo => ({ tagName, attributes });
+
+const rawNodes = payload.nodes as RawNodes;
+const enrichment = enrichmentOf(payload.enrich);
+
+function build(options: { redactInput?: boolean } = {}) {
+  return buildNativeTree(rawNodes, enrichment, payload.chrome, options);
+}
+
+const nodesOf = (tree: ReturnType<typeof buildNativeTree>) => [
+  ...tree.nodes.values(),
+];
 
 describe("allowlistAttributes (R1 redaction gate)", () => {
   it("drops value and any non-allowlisted attribute", () => {
@@ -114,31 +147,317 @@ describe("buildNativeTree — the forcing function (UA-shadow media controls)", 
   });
 });
 
-describe("buildNativeTree — R1: no field value ever reaches the tree", () => {
-  it("never surfaces the email or password secret anywhere in the model", () => {
-    const tree = build();
-    // Whole serialized model — names, states, dom attributes, everything.
-    const serialized = serializeTree(tree, { includeGeneric: true });
-    expect(serialized).not.toContain(EMAIL_SECRET);
-    expect(serialized).not.toContain(PASSWORD_SECRET);
-
-    // And prove it structurally: walk every facet of every node.
-    const blob = JSON.stringify([...tree.nodes.values()]);
-    expect(blob).not.toContain(EMAIL_SECRET);
-    expect(blob).not.toContain(PASSWORD_SECRET);
-    // The email textbox is present (so absence isn't because the node was
-    // dropped) — its label is the name, its value is gone.
-    const email = [...tree.nodes.values()].find(
-      (n) => n.a11y.role === "textbox" && /email/i.test(n.a11y.name),
+describe("buildNativeTree — field values on the recorded payload (ADR-0001)", () => {
+  const field = (tree: ReturnType<typeof buildNativeTree>, name: RegExp) =>
+    nodesOf(tree).find(
+      (n) => n.a11y.role === "textbox" && name.test(n.a11y.name),
     );
+
+  it("shows a text field's value as a11y.value — and only there", () => {
+    const email = field(build(), /email/i);
     expect(email).toBeDefined();
+    // Page content, the way a screen reader announces it.
+    expect(email!.a11y.value).toBe(EMAIL_SECRET);
+    // Never as the name, and never on the dom facet.
+    expect(email!.a11y.name).toBe("Email");
     expect(email!.dom?.attributes.value).toBeUndefined();
   });
 
+  it("withholds a password as [redacted] — never Chromium's bullets, which give away its length", () => {
+    const tree = build();
+    const password = field(tree, /password/i);
+    expect(password!.a11y.value).toBe("[redacted]");
+    const blob = JSON.stringify(nodesOf(tree));
+    expect(blob).not.toContain("•");
+    expect(blob).not.toContain(PASSWORD_SECRET);
+  });
+
+  it("prints values only when the serializer is asked to", () => {
+    const tree = build();
+    expect(serializeTree(tree)).not.toContain(EMAIL_SECRET);
+    const withValues = serializeTree(tree, { values: true });
+    expect(withValues).toContain(`textbox "Email" = "${EMAIL_SECRET}"`);
+    expect(withValues).toContain('textbox "Password" = "[redacted]"');
+  });
+
+  it("reads a UA-shadow range control's aria-valuetext, from the DOM walk", () => {
+    const scrubber = nodesOf(build()).find(
+      (n) => n.a11y.role === "slider" && /time scrubber/.test(n.a11y.name),
+    );
+    expect(scrubber?.a11y.value).toBe("elapsed time: 0:00");
+    // A value has one home; the bounds stay properties.
+    expect(scrubber?.a11y.properties.valuetext).toBeUndefined();
+    expect(scrubber?.a11y.properties.valuemax).toBe("100");
+  });
+
+  it("strict mode (redactInput) withholds every value, sensitive or not", () => {
+    const tree = build({ redactInput: true });
+    for (const node of nodesOf(tree)) expect(node.a11y.value).toBeUndefined();
+    const blob = JSON.stringify(nodesOf(tree));
+    expect(blob).not.toContain(EMAIL_SECRET);
+    expect(blob).not.toContain(PASSWORD_SECRET);
+    expect(blob).not.toContain("elapsed time");
+    // The fields are still there: only what they hold is gone.
+    expect(field(tree, /email/i)?.a11y.name).toBe("Email");
+  });
+
   it("the recorded raw payload DID contain the secrets (guards the test)", () => {
-    // If the fixture ever stops carrying real secrets, the test above is
-    // vacuous — pin that the redaction is doing real work.
+    // If the fixture ever stops carrying real values, the tests above are
+    // vacuous — pin that the classification is doing real work.
     expect(JSON.stringify(payload)).toContain(EMAIL_SECRET);
+    expect(JSON.stringify(payload.nodes)).toContain("••••");
+  });
+});
+
+describe("buildNativeTree — what a screen reader announces, per kind of field (Chromium 151)", () => {
+  // __fixtures__/native-ax-values.json; the page is in its `html` key.
+  const valuesRaw = valuesPayload.nodes as RawNodes;
+  const valuesEnrichment = enrichmentOf(valuesPayload.enrich);
+  const buildValues = (options: { redactInput?: boolean } = {}) =>
+    buildNativeTree(valuesRaw, valuesEnrichment, valuesPayload.chrome, options);
+  const valueOf = (role: string, name: string) =>
+    nodesOf(buildValues()).find(
+      (n) => n.a11y.role === role && n.a11y.name === name,
+    )?.a11y.value;
+
+  it("the recording carries the plaintext of every sensitive field (guards the tests)", () => {
+    // Chromium masks a password, but not a card number on a text input, nor
+    // the month and year inside a card-expiry input.
+    const raw = JSON.stringify(valuesPayload.nodes);
+    expect(raw).toContain("SENSITIVE-card");
+    expect(raw).toContain("SENSITIVE-cell-card");
+    expect(raw).toContain("2031-04");
+    expect(raw).toContain("••••");
+  });
+
+  it.each([
+    ["textbox", "Email", "VALUE-email@example.com"],
+    // A <select> announces the selected option's text, not its value.
+    ["combobox", "Country", "France"],
+    ["slider", "Volume", "3"],
+    // aria-valuetext beats the number; Chromium 151 doesn't report it.
+    ["slider", "Rating", "four of five stars"],
+    // 0.6 arrives as the float 0.6000000238418579.
+    ["meter", "", "0.6"],
+    // Whitespace collapses, as in every value.
+    ["textbox", "Notes", "line one line two"],
+    ["button", "Attachment", "report.pdf"],
+    // A role-less contenteditable is a field: kept, and its text is its value.
+    ["generic", "", "VALUE-plain-editor"],
+    ["textbox", "Quantity", "3"],
+  ])("%s %j = %j", (role, name, value) => {
+    expect(valueOf(role, name)).toBe(value);
+  });
+
+  it.each([
+    ["checkbox", "Agree"], // its state says it
+    ["searchbox", "Search"], // empty is no value
+  ])("%s %j has no value", (role, name) => {
+    const node = nodesOf(buildValues()).find(
+      (n) => n.a11y.role === role && n.a11y.name === name,
+    );
+    expect(node).toBeDefined();
+    expect(node!.a11y.value).toBeUndefined();
+  });
+
+  it.each([
+    ["textbox", "Password"],
+    ["textbox", "Card number"], // autocomplete="cc-number"
+    ["DateTime", "Expiry"], // autocomplete="cc-exp"
+    // …and the month and year INSIDE the expiry input: UA-shadow nodes whose
+    // own <div> says nothing, classified by the field around them.
+    ["spinbutton", "Month Month"],
+    ["spinbutton", "Year Year"],
+    ["textbox", "Card in table"],
+    ["textbox", "PIN"],
+  ])("sensitive %s %j reads [redacted]", (role, name) => {
+    expect(valueOf(role, name)).toBe("[redacted]");
+  });
+
+  it("keeps a sensitive value out of a container Chromium named from its contents", () => {
+    // Chromium names `<td><input autocomplete="cc-number"></td>` after the
+    // card number, and a cell around a password after its bullets.
+    const cells = nodesOf(buildValues()).filter(
+      (n) => n.a11y.role === "LayoutTableCell",
+    );
+    expect(cells.map((c) => c.a11y.name)).toEqual([
+      "Card", // a cell that merely sits beside one keeps its text
+      "[redacted]",
+      "[redacted]",
+    ]);
+    // A non-sensitive embedded value is page content, like any other.
+    expect(
+      nodesOf(buildValues()).find(
+        (n) => n.a11y.role === "button" && n.a11y.name.startsWith("Buy"),
+      )?.a11y.name,
+    ).toBe("Buy 3 items");
+  });
+
+  it("no sensitive value, mask or part of one reaches any facet of any node", () => {
+    for (const options of [{}, { redactInput: true }]) {
+      const blob = JSON.stringify(nodesOf(buildValues(options)));
+      expect(blob).not.toContain("SENSITIVE");
+      expect(blob).not.toContain("2031");
+      expect(blob).not.toContain("•");
+    }
+  });
+
+  it("serializes the way a screen reader reads the form", () => {
+    const printed = serializeTree(buildValues(), { values: true });
+    expect(printed).toContain('textbox "Email" = "VALUE-email@example.com"');
+    expect(printed).toContain('combobox "Country" = "France"');
+    expect(printed).toContain('textbox "Password" = "[redacted]"');
+    expect(printed).toContain('generic = "VALUE-plain-editor"');
+  });
+
+  it("strict mode (redactInput) prints the same form with no values at all", () => {
+    const tree = buildValues({ redactInput: true });
+    for (const node of nodesOf(tree)) expect(node.a11y.value).toBeUndefined();
+    const printed = serializeTree(tree, { values: true });
+    expect(printed).toContain('textbox "Email"\n');
+    expect(printed).not.toContain(" = ");
+    expect(printed).not.toContain("VALUE-");
+  });
+});
+
+describe("buildNativeTree — value edge cases", () => {
+  const withValue = (
+    role: string,
+    value: unknown,
+    extra: Record<string, unknown> = {},
+  ) =>
+    [
+      { nodeId: "1", childIds: ["2"], role: { value: "RootWebArea" } },
+      {
+        nodeId: "2",
+        parentId: "1",
+        role: { value: role },
+        name: { value: "Field" },
+        value: { value },
+        backendDOMNodeId: 70,
+        ...extra,
+      },
+    ] as RawNodes;
+  const valueOf = (
+    raw: RawNodes,
+    dom: NativeDomInfo | null = domOf("input", { type: "text" }),
+  ) =>
+    buildNativeTree(raw, dom ? new Map([[70, dom]]) : new Map()).nodes.get(
+      "ax-dom-70",
+    )?.a11y.value;
+
+  it("caps a long value at 240 characters with …", () => {
+    const long = "x".repeat(300);
+    const value = valueOf(withValue("textbox", long));
+    expect(value).toHaveLength(240);
+    expect(value?.endsWith("…")).toBe(true);
+  });
+
+  it("withholds a value it cannot classify: a DOM-backed node the DOM walk never saw", () => {
+    expect(valueOf(withValue("textbox", "hello"), null)).toBe("[redacted]");
+  });
+
+  it("withholds Chromium's password mask even when the markup is unknown", () => {
+    expect(valueOf(withValue("textbox", "•••••"), domOf("div"))).toBe(
+      "[redacted]",
+    );
+  });
+
+  it("classifies by type and by every autocomplete token, not just the first", () => {
+    expect(
+      valueOf(withValue("textbox", "x"), domOf("input", { type: "PASSWORD" })),
+    ).toBe("[redacted]");
+    expect(
+      valueOf(
+        withValue("textbox", "x"),
+        domOf("input", { autocomplete: "section-pay billing cc-csc" }),
+      ),
+    ).toBe("[redacted]");
+    // `autocomplete="off"` means "don't autofill", not "secret".
+    expect(
+      valueOf(
+        withValue("textbox", "x"),
+        domOf("input", { autocomplete: "off" }),
+      ),
+    ).toBe("x");
+  });
+
+  it("prints a number the way the page wrote it, a zero included", () => {
+    expect(valueOf(withValue("progressbar", 0.30000001192092896))).toBe("0.3");
+    expect(valueOf(withValue("slider", 0))).toBe("0");
+    expect(valueOf(withValue("spinbutton", 2031))).toBe("2031");
+  });
+
+  it("has no value for an empty field, or a checkbox", () => {
+    expect(valueOf(withValue("textbox", "   "))).toBeUndefined();
+    expect(valueOf(withValue("checkbox", "true"))).toBeUndefined();
+  });
+
+  it("withholds the value of a node that CONTAINS a sensitive field", () => {
+    // An editor or an ARIA combobox around a credential field may build its
+    // own value from it.
+    const raw = [
+      { nodeId: "1", childIds: ["2"], role: { value: "RootWebArea" } },
+      {
+        nodeId: "2",
+        parentId: "1",
+        childIds: ["3"],
+        role: { value: "combobox" },
+        name: { value: "Card" },
+        value: { value: "4111 1111" },
+        backendDOMNodeId: 80,
+      },
+      {
+        nodeId: "3",
+        parentId: "2",
+        role: { value: "textbox" },
+        name: { value: "Card" },
+        value: { value: "4111 1111" },
+        backendDOMNodeId: 81,
+      },
+    ] as RawNodes;
+    const tree = buildNativeTree(
+      raw,
+      new Map([
+        [80, domOf("div", { role: "combobox" })],
+        [81, domOf("input", { autocomplete: "cc-number" })],
+      ]),
+    );
+    expect(tree.nodes.get("ax-dom-80")?.a11y.value).toBe("[redacted]");
+    expect(tree.nodes.get("ax-dom-81")?.a11y.value).toBe("[redacted]");
+    expect(JSON.stringify(nodesOf(tree))).not.toContain("4111");
+  });
+
+  it("keeps a container's name that came from its markup, not its contents", () => {
+    const raw = [
+      { nodeId: "1", childIds: ["2"], role: { value: "RootWebArea" } },
+      {
+        nodeId: "2",
+        parentId: "1",
+        childIds: ["3"],
+        role: { value: "group" },
+        name: {
+          value: "Payment",
+          sources: [{ type: "relatedElement", value: { value: "Payment" } }],
+        },
+        backendDOMNodeId: 90,
+      },
+      {
+        nodeId: "3",
+        parentId: "2",
+        role: { value: "textbox" },
+        name: { value: "Card" },
+        backendDOMNodeId: 91,
+      },
+    ] as RawNodes;
+    const tree = buildNativeTree(
+      raw,
+      new Map([
+        [90, domOf("fieldset")],
+        [91, domOf("input", { autocomplete: "cc-number" })],
+      ]),
+    );
+    expect(tree.nodes.get("ax-dom-90")?.a11y.name).toBe("Payment");
   });
 });
 
@@ -196,9 +515,30 @@ describe("buildNativeTree — R1: unlabeled field value must not leak via the na
     const tree = buildNativeTree(raw);
     const unlabeled = tree.nodes.get("ax-dom-100");
     expect(unlabeled?.a11y.role).toBe("textbox");
-    expect(unlabeled?.a11y.name).toBe(""); // value dropped, not promoted
+    expect(unlabeled?.a11y.name).toBe(""); // not promoted
     expect(serializeTree(tree, { includeGeneric: true })).not.toContain(
       TYPED_SECRET,
+    );
+  });
+
+  it("puts the value in a11y.value instead — once the DOM walk has classified the field", () => {
+    const enriched = buildNativeTree(
+      raw,
+      new Map([
+        [100, domOf("input", { type: "text" })],
+        [200, domOf("input", { type: "email" })],
+      ]),
+    );
+    expect(enriched.nodes.get("ax-dom-100")?.a11y).toMatchObject({
+      name: "",
+      value: TYPED_SECRET,
+    });
+    expect(serializeTree(enriched, { values: true })).toContain(
+      `textbox = "${TYPED_SECRET}"`,
+    );
+    // With no DOM record there is nothing to classify it by: withheld.
+    expect(buildNativeTree(raw).nodes.get("ax-dom-100")?.a11y.value).toBe(
+      "[redacted]",
     );
   });
 
@@ -287,11 +627,11 @@ describe("buildNativeTree — a scrollbar is never named from its text, value or
   });
 });
 
-describe("buildNativeTree — R1: a role-less editor's value never names the item around it", () => {
+describe("buildNativeTree — a role-less editor's value never names the item around it", () => {
   // Chromium 151's shape for `<li><div contenteditable>typed</div></li>`: the
-  // editor is a dropped generic carrying the typed text as its value, and its
-  // StaticText sits under it. The listitem is a kept leaf, so name promotion
-  // searches its dropped subtree — and must not take the editor's text.
+  // editor is a generic carrying the typed text as its value, and its
+  // StaticText sits under it. It is a field, so it is kept, with the text as
+  // its value — never as its name or the listitem's.
   const TYPED_SECRET = "typed-SECRET-li";
   const raw = [
     { nodeId: "1", childIds: ["2"], role: { value: "RootWebArea" } },
@@ -318,13 +658,22 @@ describe("buildNativeTree — R1: a role-less editor's value never names the ite
     },
   ] as Parameters<typeof buildNativeTree>[0];
 
-  it("keeps it out of buildNativeTree and nativeAXView", () => {
+  it("keeps it out of every name in buildNativeTree and nativeAXView", () => {
     const tree = buildNativeTree(raw);
     expect(tree.nodes.get("ax-dom-500")?.a11y.name).toBe("");
     expect(serializeTree(tree, { includeGeneric: true })).not.toContain(
       "SECRET",
     );
-    expect(nativeAXView(raw).tree).toBe("list\n  listitem");
+    expect(nativeAXView(raw).tree).toBe("list\n  listitem\n    generic");
+  });
+
+  it("shows it as the editor's own value, and withholds it in strict mode", () => {
+    const editor = (options: { redactInput?: boolean }) =>
+      nodesOf(buildNativeTree(raw, new Map(), undefined, options)).find(
+        (n) => n.a11y.role === "generic",
+      );
+    expect(editor({})?.a11y).toMatchObject({ name: "", value: TYPED_SECRET });
+    expect(editor({ redactInput: true })?.a11y.value).toBeUndefined();
   });
 });
 
@@ -439,7 +788,7 @@ describe("nativeAXView — the shared vocabulary, not a private copy", () => {
   });
 
   it("agrees with buildNativeTree on the recorded payload, and leaks no secret", () => {
-    const { tree, pairs } = nativeAXView(rawNodes);
+    const { tree, pairs } = nativeAXView(rawNodes, enrichment);
     // `pairs` is exactly the tree's lines with indentation stripped.
     expect(pairs).toEqual(tree.split("\n").map((l) => l.trim()));
     // Same survivors and names as the ExtractionResult producer (minus the
@@ -508,8 +857,8 @@ describe("buildNativeTree — multiple top-level roots (normal single-frame page
   });
 });
 
-describe("buildNativeTree — R1: valuenow/valuetext of value controls must not leak", () => {
-  const QTY_SECRET = "42 SECRET-QUANTITY";
+describe("buildNativeTree — a range widget's value lives in a11y.value, never in properties", () => {
+  const QTY_TEXT = "42 SECRET-QUANTITY";
   const raw = [
     { nodeId: "1", childIds: ["2"], role: { value: "RootWebArea" } },
     {
@@ -520,25 +869,35 @@ describe("buildNativeTree — R1: valuenow/valuetext of value controls must not 
       backendDOMNodeId: 20,
       properties: [
         { name: "valuenow", value: { value: 42 } },
-        { name: "valuetext", value: { value: QTY_SECRET } },
+        { name: "valuetext", value: { value: QTY_TEXT } },
         { name: "valuemin", value: { value: 0 } },
       ],
     },
   ] as Parameters<typeof buildNativeTree>[0];
+  const spinOf = (options: { redactInput?: boolean } = {}) =>
+    buildNativeTree(
+      raw,
+      new Map([[20, domOf("input", { type: "number" })]]),
+      undefined,
+      options,
+    ).nodes.get("ax-dom-20");
 
-  it("drops valuenow/valuetext but keeps authored bounds", () => {
-    const tree = buildNativeTree(raw);
-    const spin = tree.nodes.get("ax-dom-20");
+  it("announces valuetext over valuenow, and keeps authored bounds as properties", () => {
+    const spin = spinOf();
     expect(spin?.a11y.role).toBe("spinbutton");
     expect(spin?.a11y.name).toBe("Quantity");
+    expect(spin?.a11y.value).toBe(QTY_TEXT);
+    // One home for a value: the sensitivity policy and strict mode both
+    // govern `a11y.value`, and a copy here would route around them.
     expect(spin?.a11y.properties.valuenow).toBeUndefined();
     expect(spin?.a11y.properties.valuetext).toBeUndefined();
     expect(spin?.a11y.properties.valuemin).toBe("0"); // authored bound kept
-    // the value never reaches the serialized model or any node facet
-    expect(serializeTree(tree, { includeGeneric: true })).not.toContain(
-      QTY_SECRET,
-    );
-    expect(JSON.stringify([...tree.nodes.values()])).not.toContain(QTY_SECRET);
+  });
+
+  it("withholds it in strict mode (redactInput)", () => {
+    const spin = spinOf({ redactInput: true });
+    expect(spin?.a11y.value).toBeUndefined();
+    expect(JSON.stringify(spin)).not.toContain(QTY_TEXT);
   });
 });
 
@@ -621,29 +980,60 @@ describe("buildNativeTree — focusedId", () => {
   });
 });
 
-describe("buildNativeTree — R1: what a user typed into an editor never reaches the tree", () => {
+describe("buildNativeTree — an editor's content is page content by default (ADR-0001)", () => {
+  // The same recording the strict-mode tests below use.
+  const EDITOR_SECRET = "EDITOR-SECRET";
+  const tree = buildNativeTree(
+    editorPayload.nodes as RawNodes,
+    enrichmentOf(editorPayload.enrich),
+    editorPayload.chrome,
+  );
+  const named = (role: string, name: string) =>
+    nodesOf(tree).filter((n) => n.a11y.role === role && n.a11y.name === name);
+
+  it("shows the typed text the way a screen reader reads it: in the names inside, and as the host's value", () => {
+    expect(named("heading", `${EDITOR_SECRET}-heading`)).toHaveLength(1);
+    expect(named("link", `${EDITOR_SECRET}-link`)).toHaveLength(1);
+    const host = named("textbox", "Message")[0];
+    expect(host.a11y.value).toContain(`${EDITOR_SECRET}-para`);
+    // A role-less editor is its own field, holding its own text.
+    expect(
+      nodesOf(tree).find((n) => n.a11y.value === `${EDITOR_SECRET}-plain`)?.a11y
+        .role,
+    ).toBe("generic");
+    // A <textarea> is a field like any other.
+    expect(named("textbox", "Notes")[0].a11y.value).toBe(
+      `${EDITOR_SECRET}-textarea`,
+    );
+  });
+
+  it("keeps the dom facet as it is outside strict mode — a link keeps its href", () => {
+    const link = named("link", `${EDITOR_SECRET}-link`)[0];
+    expect(link.dom?.attributes.href).toContain("token=");
+  });
+
+  it("never names the host after its own value", () => {
+    expect(named("textbox", "Message")).toHaveLength(1);
+  });
+});
+
+describe("buildNativeTree — strict mode (redactInput): what a user typed into an editor never reaches the tree", () => {
   // A REAL recorded payload (Chromium 151, __fixtures__/native-ax-editor.json;
   // the page is in its `html` key): a contenteditable `role="textbox"`
   // message box holding paragraphs, a link, a heading, a list, a table, a
   // figure and two `contenteditable="false"` islands, plus a role-less
   // contenteditable and a <textarea>. Chromium reports the whole editor text
-  // as the host's AX `value` — which R1 already drops — and then again as the
-  // names of the nodes inside it, which is the leak these tests pin shut.
+  // as the host's AX `value` — which strict mode never copies — and then again
+  // as the names of the nodes inside it, which is the path these tests pin
+  // shut.
   const EDITOR_SECRET = "EDITOR-SECRET";
+  const STRICT = { redactInput: true };
   const editorRaw = editorPayload.nodes as Parameters<
     typeof buildNativeTree
   >[0];
-  const editorEnrichment = new Map(
-    Object.entries(editorPayload.enrich).map(([backendId, e]) => [
-      Number(backendId),
-      {
-        tagName: e.tagName.toLowerCase(),
-        attributes: allowlistAttributes(e.attributes),
-      },
-    ]),
-  );
+  const editorEnrichment = enrichmentOf(editorPayload.enrich);
   const buildEditor = () =>
-    buildNativeTree(editorRaw, editorEnrichment, editorPayload.chrome);
+    buildNativeTree(editorRaw, editorEnrichment, editorPayload.chrome, STRICT);
   const find = (
     tree: ReturnType<typeof buildNativeTree>,
     role: string,
@@ -678,7 +1068,7 @@ describe("buildNativeTree — R1: what a user typed into an editor never reaches
   });
 
   it("applies the same redaction to nativeAXView (nativeAX())", () => {
-    const { tree, pairs } = nativeAXView(editorRaw);
+    const { tree, pairs } = nativeAXView(editorRaw, editorEnrichment, STRICT);
     expect(tree).not.toContain(EDITOR_SECRET);
     expect(JSON.stringify(pairs)).not.toContain(EDITOR_SECRET);
   });
@@ -793,7 +1183,7 @@ describe("buildNativeTree — R1: what a user typed into an editor never reaches
         ],
       }),
     ] as Parameters<typeof buildNativeTree>[0];
-    const tree = buildNativeTree(raw);
+    const tree = buildNativeTree(raw, new Map(), undefined, STRICT);
     expect(tree.nodes.get("ax-dom-33")?.a11y.name).toBe("[redacted]");
     expect(tree.nodes.get("ax-dom-34")?.a11y.name).toBe("[redacted]");
     expect(tree.nodes.get("ax-dom-35")?.a11y.name).toBe("Mention Alice");
@@ -811,11 +1201,13 @@ describe("buildNativeTree — R1: what a user typed into an editor never reaches
     expect(JSON.stringify(hostsRaw)).toContain(
       '"value":"Title: HOST-SECRET-inline"',
     ); // the vector is real
-    const tree = buildNativeTree(hostsRaw);
+    const tree = buildNativeTree(hostsRaw, new Map(), undefined, STRICT);
     expect(JSON.stringify([...tree.nodes.values()])).not.toContain(
       "HOST-SECRET",
     );
-    expect(nativeAXView(hostsRaw).tree).not.toContain("HOST-SECRET");
+    expect(nativeAXView(hostsRaw, new Map(), STRICT).tree).not.toContain(
+      "HOST-SECRET",
+    );
 
     // Named, just not shown — so audit doesn't call the button unlabeled.
     expect(find(tree, "heading", "[redacted]")).toHaveLength(1);

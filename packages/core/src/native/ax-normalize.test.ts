@@ -735,20 +735,33 @@ describe("value-carrying nodes", () => {
     ["listitem", "typed secret li"],
     ["note", "typed secret note"],
   ])(
-    "never lets a dropped editor's value name the %s around it",
+    "keeps a role-less editor as its own unnamed generic inside the %s, never the %s's name",
     (role, typed) => {
       // Chromium 151's shape for `<li><div contenteditable>…</div></li>` and
       // `<div role="note"><div contenteditable>…</div></div>` after typing: the
-      // role-less editor is a dropped generic carrying the value, and its
-      // StaticText would otherwise be promoted onto the kept ancestor.
+      // role-less editor is a generic carrying the value, and its StaticText
+      // must not be promoted onto the ancestor. It is a field (ADR-0001), so it
+      // survives as a node of its own — where a producer can hang its value —
+      // and its text names neither it nor the item around it.
       const nodes = normalizeNativeAX([
         raw("1", role, { childIds: ["2"] }),
         raw("2", "generic", { parentId: "1", childIds: ["3"], value: typed }),
         raw("3", "StaticText", { parentId: "2", name: typed }),
       ]);
-      expect(serializeNativeAX(nodes)).toBe(role);
+      expect(serializeNativeAX(nodes)).toBe(`${role}\n  generic`);
     },
   );
+
+  it("still drops a bare generic with no value and no name", () => {
+    // The value is what keeps it: the same wrapper holding nothing typed is
+    // noise, flattened as before.
+    const nodes = normalizeNativeAX([
+      raw("1", "listitem", { childIds: ["2"] }),
+      raw("2", "generic", { parentId: "1", childIds: ["3"], value: "" }),
+      raw("3", "button", { parentId: "2", name: "Go" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe('listitem\n  button "Go"');
+  });
 
   it("still promotes past a dropped wrapper with no value", () => {
     // The same shape without an editor: `<li><div>Alpha</div></li>`.

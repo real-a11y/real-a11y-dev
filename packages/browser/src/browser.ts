@@ -31,8 +31,9 @@ import type {
 
 import { CdpActionBackend } from "./cdp-action-backend.js";
 import {
-  nativeAXView,
+  nativeAXViewOf,
   nativeTree as computeNativeTree,
+  type NativeTreeOptions,
 } from "./native-tree.js";
 
 /**
@@ -229,6 +230,12 @@ export interface SnapshotOptions {
   rules?: string[];
   /** Include generic container nodes in `tree`. Default false. */
   includeGeneric?: boolean;
+  /**
+   * Print each field's announced value in `tree` and `tabOrder` —
+   * `textbox "Email" = "jane@x.com"` (ADR-0001). Default false. A sensitive
+   * field prints `"[redacted]"`.
+   */
+  values?: boolean;
 }
 
 /**
@@ -259,14 +266,19 @@ export interface A11ySession {
     options?: SnapshotOptions,
   ): Promise<PageSnapshot>;
   /** The browser's own (native) accessibility tree via CDP — Chromium only. */
-  nativeAX(): Promise<{ tree: string; pairs: string[] }>;
+  nativeAX(
+    options?: NativeTreeOptions,
+  ): Promise<{ tree: string; pairs: string[] }>;
   /**
    * The browser's own accessibility tree via CDP, normalized into the same
    * `ExtractionResult` model the DOM producer emits (`source.producer ===
    * "native"`). Read-only — nodes carry `a11y` and, where a DOM node backs
-   * them, `dom`; never `interaction`. Chromium only.
+   * them, `dom`; never `interaction`. Field values follow ADR-0001 (shown,
+   * sensitive ones `[redacted]`) unless `options.redactInput` withholds them
+   * all. Per call, not per session, so one session can serve both. Chromium
+   * only.
    */
-  nativeTree(): Promise<ExtractionResult>;
+  nativeTree(options?: NativeTreeOptions): Promise<ExtractionResult>;
   /**
    * Dispatch an action (click / type / focus) against a node from the native
    * tree, over CDP — the write side of the native producer. The `nodeId` is a
@@ -431,7 +443,7 @@ export class BrowserSession implements A11ySession {
       const page = this.requirePage();
       await this.ensureInjected(page);
       return page.evaluate(
-        ({ selector, rules, includeGeneric }) => {
+        ({ selector, rules, includeGeneric, values }) => {
           const ra = (globalThis as Record<string, unknown>).__realA11y__ as
             Record<string, (...a: unknown[]) => unknown> | undefined;
           if (!ra || typeof ra.extractA11yTree !== "function") {
@@ -459,15 +471,16 @@ export class BrowserSession implements A11ySession {
               tree,
               rules && rules.length ? rules : undefined,
             ),
-            tree: ra.treeSnapshot(tree, { includeGeneric }),
+            tree: ra.treeSnapshot(tree, { includeGeneric, values }),
             outline: ra.outlineSnapshot(tree),
-            tabOrder: ra.tabSequenceSnapshot(tree),
+            tabOrder: ra.tabSequenceSnapshot(tree, { values }),
           };
         },
         {
           selector: rootSelector,
           rules: options.rules ?? null,
           includeGeneric: options.includeGeneric ?? false,
+          values: options.values ?? false,
         },
       ) as Promise<PageSnapshot>;
     });
@@ -478,29 +491,21 @@ export class BrowserSession implements A11ySession {
    * `Accessibility` domain — the authoritative computation, not our
    * reimplementation. Used to cross-check custom-engine fidelity.
    */
-  async nativeAX(): Promise<{ tree: string; pairs: string[] }> {
-    return this.run(async () => {
-      const page = this.requirePage();
-      const client = await page.context().newCDPSession(page);
-      try {
-        await client.send("Accessibility.enable");
-        const { nodes } = (await client.send(
-          "Accessibility.getFullAXTree",
-        )) as { nodes: Parameters<typeof nativeAXView>[0] };
-        return nativeAXView(nodes);
-      } finally {
-        await client.detach().catch(() => {});
-      }
-    });
+  async nativeAX(
+    options: NativeTreeOptions = {},
+  ): Promise<{ tree: string; pairs: string[] }> {
+    return this.run(() => nativeAXViewOf(this.requirePage(), options));
   }
 
   /**
    * Chromium's native accessibility tree as an {@link ExtractionResult} —
    * the same model the DOM producer emits, so `serialize` / `audit` / diff
-   * treat it identically (`source.producer === "native"`). Read-only.
+   * treat it identically (`source.producer === "native"`). Read-only. Pass
+   * `{ redactInput: true }` for the strict mode that withholds every field
+   * value and all rich-text editor content.
    */
-  async nativeTree(): Promise<ExtractionResult> {
-    return this.run(() => computeNativeTree(this.requirePage()));
+  async nativeTree(options: NativeTreeOptions = {}): Promise<ExtractionResult> {
+    return this.run(() => computeNativeTree(this.requirePage(), options));
   }
 
   /**
