@@ -19,9 +19,12 @@
  */
 
 import {
+  safeAssignedSlot,
   safeChildNodes,
   safeChildren,
   safeHidden,
+  safeParentElement,
+  safeRootNode,
   safeShadowRoot,
 } from "./clobber-safe.js";
 
@@ -141,14 +144,16 @@ export function flatChildNodes(node: Node): Node[] {
  * content.
  *
  * Climbs through the slot a node is assigned to, not straight to its host, so
- * a `<details>` in the shadow tree around that slot counts too.
+ * a `<details>` in the shadow tree around that slot counts too. Every read on
+ * the way up is clobber-safe: a `<form>` holding `<input name="parentElement">`
+ * would otherwise send the climb round the form and that input forever.
  */
 export function isRenderedInFlatTree(element: Element): boolean {
   let node: Element | null = element;
   while (node) {
-    const parent: Element | null = node.parentElement;
+    const parent: Element | null = safeParentElement(node);
     if (parent && safeShadowRoot(parent)) {
-      node = node.assignedSlot;
+      node = safeAssignedSlot(node);
       if (!node) return false;
       continue;
     }
@@ -159,7 +164,7 @@ export function isRenderedInFlatTree(element: Element): boolean {
       node = parent;
       continue;
     }
-    const root: Node = node.getRootNode();
+    const root: Node = safeRootNode(node);
     node =
       root.nodeType === DOCUMENT_FRAGMENT_NODE
         ? ((root as ShadowRoot).host ?? null)

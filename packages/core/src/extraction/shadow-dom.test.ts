@@ -10,6 +10,7 @@ import { resetIdCounter } from "../utils/id-generator.js";
 
 import { extractA11yTree } from "./a11y-extractor.js";
 import { extractDomTree, getElementRefs } from "./dom-extractor.js";
+import { isRenderedInFlatTree } from "./flat-tree.js";
 
 let page: HTMLElement;
 
@@ -377,6 +378,45 @@ describe("a closed <details> in a shadow tree", () => {
         (n) => n.dom?.textContent === "Help text",
       ),
     ).toBe(true);
+  });
+});
+
+// `isRenderedInFlatTree` climbs to the document. On a <form> whose fields
+// shadow what that climb reads, a plain read goes round the form and the field
+// forever, so each read goes through the prototype.
+describe("isRenderedInFlatTree on a clobbered <form>", () => {
+  function clobber(form: Element, name: string): void {
+    Object.defineProperty(form, name, {
+      configurable: true,
+      get: () => form.querySelector(`[name="${name}"]`),
+    });
+  }
+
+  it("reads parentElement past a field named parentElement", () => {
+    page.innerHTML = `<details><summary>S</summary><form><input name="parentElement"><span id="t"></span></form></details>`;
+    clobber(page.querySelector("form")!, "parentElement");
+    expect(isRenderedInFlatTree(page.querySelector("#t")!)).toBe(false);
+  });
+
+  it("reads assignedSlot past a field named assignedSlot", () => {
+    page.innerHTML = `<x-d><form><input name="assignedSlot"><span id="t"></span></form></x-d>`;
+    shadow(
+      page.querySelector("x-d")!,
+      `<details><summary>S</summary><slot></slot></details>`,
+    );
+    clobber(page.querySelector("form")!, "assignedSlot");
+    expect(isRenderedInFlatTree(page.querySelector("#t")!)).toBe(false);
+  });
+
+  it("reads getRootNode past a field named getRootNode", () => {
+    const host = document.createElement("x-top");
+    page.appendChild(host);
+    const root = shadow(
+      host,
+      `<form><input name="getRootNode"><span id="t"></span></form>`,
+    );
+    clobber(root.querySelector("form")!, "getRootNode");
+    expect(isRenderedInFlatTree(root.querySelector("#t")!)).toBe(true);
   });
 });
 
