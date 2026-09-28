@@ -270,6 +270,31 @@ describe("NativeTreeView scope", () => {
     );
   });
 
+  function search(text: string) {
+    const input = container.querySelector<HTMLInputElement>(".sn-search")!;
+    act(() => {
+      input.value = text;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+
+  it("counts search matches in the whole tree when unscoped", () => {
+    mount();
+    search("heading");
+    expect(container.querySelector(".sn-search-count")?.textContent).toBe(
+      "3 matches",
+    );
+  });
+
+  it("counts only search matches inside the scope while scoped", () => {
+    // Three headings on the page, one of them under `sec`.
+    mount({ initialScope: "sec" });
+    search("heading");
+    expect(container.querySelector(".sn-search-count")?.textContent).toBe(
+      "1 match in this scope",
+    );
+  });
+
   it("treats a scope id the tree doesn't have as no scope", () => {
     mount({ initialScope: "gone" });
     expect(rowIds()[0]).toBe("root");

@@ -71,6 +71,7 @@ import {
   ScopeBar,
   scopeKeyAction,
   scopePath,
+  subtreeNodes,
 } from "./ScopeBar.js";
 import { TabSequenceView } from "./TabSequenceView.js";
 
@@ -1117,10 +1118,23 @@ export function App() {
   // Apply search + role filter
   useEffect(() => {
     if (nodes.size === 0) return;
-    const count = applySearchFilter(nodes, query, viewMode, roleFilter);
+    let count = applySearchFilter(nodes, query, viewMode, roleFilter);
+    // Scoped, the count covers only what the scoped tree can show. The
+    // whole-tree pass above still runs first so every node's `matchesFilter`
+    // is right the moment the scope is left; the second pass over just the
+    // subtree sets the same flags for the nodes inside it (their visibility
+    // depends only on their own subtree) and returns the scoped count.
+    if (scopedRootId && nodes.has(scopedRootId)) {
+      count = applySearchFilter(
+        subtreeNodes(nodes, scopedRootId),
+        query,
+        viewMode,
+        roleFilter,
+      );
+    }
     updateMatchCount(count);
     forceRender((n) => n + 1);
-  }, [query, nodes, viewMode, roleFilter, updateMatchCount]);
+  }, [query, nodes, viewMode, roleFilter, scopedRootId, updateMatchCount]);
 
   // Compute visible nodes
   const effectiveRootId = scopedRootId || rootId;
@@ -2604,7 +2618,7 @@ export function App() {
         {producer === "dom" && (
           <span class="sn-search-count" aria-live="polite">
             {(query || roleFilter) &&
-              `${matchCount} match${matchCount !== 1 ? "es" : ""}`}
+              `${matchCount} match${matchCount !== 1 ? "es" : ""}${scopedRootId ? " in this scope" : ""}`}
           </span>
         )}
 

@@ -326,6 +326,17 @@ export function NativeTreeView({
   // when scoped, so the list covers what the scoped tree covers and nothing
   // outside it. The query still narrows it, through the same `directIds` the
   // match count reports.
+  // What the toolbar's count reports: every direct match, or only those
+  // inside the scope while scoped — the same rows the scoped tree can show.
+  const matchCount = useMemo(() => {
+    if (!scopeRoot) return search.directIds.size;
+    let n = 0;
+    for (const id of search.directIds) {
+      if (isInScope(id, scopeRoot, (p) => parentOf.get(p))) n++;
+    }
+    return n;
+  }, [search, scopeRoot, parentOf]);
+
   const listItems = useMemo(() => {
     if (roleFilter === null) return [];
     const items: FilteredListItem[] = [];
@@ -699,7 +710,7 @@ export function NativeTreeView({
             reader/browser pairs. */}
         <span class="sn-search-count" aria-live="polite">
           {hasFilter &&
-            `${search.directIds.size} match${search.directIds.size !== 1 ? "es" : ""}`}
+            `${matchCount} match${matchCount !== 1 ? "es" : ""}${scopeRoot ? " in this scope" : ""}`}
         </span>
         <button
           class="sn-toolbar-btn"

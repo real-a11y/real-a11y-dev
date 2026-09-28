@@ -231,7 +231,8 @@
   - **Native Copy** exports the scoped subtree, as DOM mode's does.
   - **Role-filter lists follow the scope** in both trees. Headings, Links and
     the rest list only matches inside the scoped subtree, and say "in this
-    scope" when there are none. They used to cover the whole page.
+    scope" when there are none. They used to cover the whole page. The
+    search match count does the same ("3 matches in this scope").
   - Two DOM fixes:
     - Copy on a scoped tree no longer cuts the start off every line of the
       tree section. A region one level below the page root exported as

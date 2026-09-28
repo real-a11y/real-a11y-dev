@@ -178,6 +178,22 @@ for (const producer of ["DOM", "NATIVE"] as const) {
       await expect(nav.panel.getByRole("listbox")).toBeFocused();
     });
 
+    test("the search match count covers only the scope", async ({ nav }) => {
+      await show(nav, "native-panel.html", producer);
+      // Scope first: the search below filters "Items" itself out of view.
+      await itemsRow(nav.panel).dblclick({ position: { x: 5, y: 5 } });
+      await expect(scopeBar(nav.panel)).toBeVisible();
+
+      // The page's h1 matches "fixture"; nothing inside "Items" does.
+      await nav.panel.getByRole("searchbox").first().fill("fixture");
+      const count = nav.panel.locator(".sn-search-count").first();
+      await expect(count).toHaveText("0 matches in this scope");
+
+      await nav.panel.locator(".sn-tree").press("Escape");
+      await expect(scopeBar(nav.panel)).toHaveCount(0);
+      await expect(count).toHaveText(/^[1-9]\d* match(es)?$/);
+    });
+
     test("role-filter lists cover only the scope", async ({ nav }) => {
       await show(nav, "native-panel.html", producer);
       await itemsRow(nav.panel).dblclick({ position: { x: 5, y: 5 } });
