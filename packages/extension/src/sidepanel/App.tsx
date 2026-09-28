@@ -2414,8 +2414,8 @@ export function App() {
   // ordinary expand/collapse never scrolls; the target is resolved against the
   // post-expansion list via the ref.
   //
-  // A target outside the current scope (a pick, a focus sync or a list's
-  // go-to-tree can each land anywhere on the page) leaves the scope first and
+  // A target outside the current scope (a pick, a focus sync or a jump chip
+  // can each land anywhere on the page) leaves the scope first and
   // re-requests the reveal, which then resolves against the full tree.
   // `scopedRootId` and `nodes` are read through a ref for the same reason
   // the visible list is: depending on them would re-scroll on every scope
@@ -2983,6 +2983,7 @@ export function App() {
         /* ---- Filtered list view ---- */
         <FilteredList
           nodes={nodes}
+          scopeRootId={scopedRootId}
           roleFilter={roleFilter}
           query={query}
           onHighlight={handleSelect}

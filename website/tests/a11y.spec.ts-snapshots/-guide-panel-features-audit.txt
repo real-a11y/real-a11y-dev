@@ -203,12 +203,14 @@ main
       strong "What's visible"
     listitem "in the tree (only rows inside the scope show)"
       strong "What search matches"
+    listitem "(Headings, Links, … list only matches inside the scope)"
+      strong "What the role-filter lists show"
     listitem "(TAB view only lists focusable elements inside the scope)"
       strong "The tab sequence"
     listitem "(the scoped subtree, with a line naming it)"
       strong "What Copy exports"
       code "Scope"
-  paragraph "The role-filter lists (Headings, Links, …) still cover the whole page. Going to the tree from an item outside the scope, or picking or focusing an element outside it, leaves the scope so the row you land on is actually shown."
+  paragraph "Picking an element outside the scope, or focus moving to one while focus tracking is on, leaves the scope so the row you land on is actually shown."
   table
     rowgroup
       row

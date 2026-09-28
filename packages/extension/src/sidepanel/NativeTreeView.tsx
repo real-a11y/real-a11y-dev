@@ -216,8 +216,7 @@ export function NativeTreeView({
   const parentOf = useMemo(() => nativeParentIndex(nodes), [nodes]);
 
   // A scope this view has just left, until App's prop catches up. Leaving
-  // and selecting happen together (a pick or a list's go-to-tree outside the
-  // scope), and this view can re-render with its new selection before App
+  // and selecting happen together (a pick outside the scope), and this view can re-render with its new selection before App
   // re-renders it with the cleared scope. For that one render the selection
   // sits outside the still-scoped rows, and the selection effect below
   // drops it as gone. Applying the exit here as well keeps both changes in
@@ -322,13 +321,15 @@ export function NativeTreeView({
 
   // With a role filter on, show the same flat list the DOM producer does
   // (`FilteredList`) instead of the tree: every direct match, in document
-  // order. A pre-order walk from the root, not `nodes`' own iteration order,
-  // because that's what "document order" means for this tree. The query
-  // still narrows it, through the same `directIds` the match count reports.
+  // order. A pre-order walk, not `nodes`' own iteration order, because that's
+  // what "document order" means for this tree. It starts from the scope root
+  // when scoped, so the list covers what the scoped tree covers and nothing
+  // outside it. The query still narrows it, through the same `directIds` the
+  // match count reports.
   const listItems = useMemo(() => {
     if (roleFilter === null) return [];
     const items: FilteredListItem[] = [];
-    const stack = rootId ? [rootId] : [];
+    const stack = walkRoot ? [walkRoot] : [];
     while (stack.length > 0) {
       const id = stack.pop()!;
       const node = nodes.get(id);
@@ -338,7 +339,7 @@ export function NativeTreeView({
       for (let i = children.length - 1; i >= 0; i--) stack.push(children[i]!);
     }
     return items;
-  }, [nodes, rootId, roleFilter, search]);
+  }, [nodes, walkRoot, roleFilter, search]);
 
   // `visiblePositions` records each row's aria-posinset/aria-setsize within
   // its visible sibling group — mirrors App.tsx's own identical computation
@@ -488,8 +489,8 @@ export function NativeTreeView({
   // effect above scrolls it into view once the tree has rendered.
   const goToTree = useCallback(
     (id: string) => {
-      // The list shows matches from the whole page even while scoped, as the
-      // DOM producer's does, so its target can be outside the scope.
+      // The list is built from the scope root, so this only guards a target
+      // that is somehow outside it (a scope that changed under the list).
       if (scopeRoot && !isInScope(id, scopeRoot, (p) => parentOf.get(p))) {
         scopeTo(null);
       }
@@ -783,6 +784,7 @@ export function NativeTreeView({
           onGoToTree={goToTree}
           onFocusSearch={() => searchInputRef.current?.focus()}
           activateDisabled={busy}
+          scoped={scopeRoot !== null}
         />
       ) : (
         <>

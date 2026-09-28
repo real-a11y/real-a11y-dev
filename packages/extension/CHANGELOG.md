@@ -229,12 +229,15 @@
     row and `Esc` leaves the scope. Scoping was mouse-only before. In the
     native tree, `Esc` still cancels an armed pick first.
   - **Native Copy** exports the scoped subtree, as DOM mode's does.
+  - **Role-filter lists follow the scope** in both trees. Headings, Links and
+    the rest list only matches inside the scoped subtree, and say "in this
+    scope" when there are none. They used to cover the whole page.
   - Two DOM fixes:
     - Copy on a scoped tree no longer cuts the start off every line of the
       tree section. A region one level below the page root exported as
       `gion "Items"`.
-    - Going to a row outside the scope (from a filter list, a pick or focus
-      tracking) now leaves the scope instead of selecting a row the tree
+    - Landing on a row outside the scope (from a pick or focus tracking) now
+      leaves the scope instead of selecting a row the tree
       doesn't show. `←` on the scope root also no longer selects its hidden
       parent and leaves the keyboard stuck.
 

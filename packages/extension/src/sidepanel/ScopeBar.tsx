@@ -72,7 +72,7 @@ export function scopePath(
 
 /**
  * Whether `id` is `scopeId` itself or one of its descendants. A reveal that
- * lands outside the scope (a pick, a focus sync, a list's go-to-tree) has to
+ * lands outside the scope (a pick, a focus sync, a jump chip) has to
  * leave the scope first, or it selects a row the scoped tree never renders.
  */
 export function isInScope(
