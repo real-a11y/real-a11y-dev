@@ -4,9 +4,10 @@ name: A11y Semantic Scan
 # accessibility tree (the roles + names a screen reader hears — what real-a11y
 # validates, not the source) and upload the SARIF to GitHub code scanning, so
 # findings show in the Security tab. Code scanning only populates that tab from
-# analyses of the default branch — the a11y-diff workflow uploads for PR refs,
-# which don't surface there — so this runs on push to `main` (plus a weekly
-# sweep to catch content drift, and manual dispatch). Advisory: never gates.
+# analyses of the default branch — an upload for a PR ref doesn't surface there,
+# and a11y-diff reports PRs as a comment rather than SARIF — so this runs on push
+# to `main` (plus a weekly sweep to catch content drift, and manual dispatch).
+# Advisory: never gates.
 on:
   push:
     branches: [main]
