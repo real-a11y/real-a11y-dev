@@ -497,6 +497,38 @@ export function fieldFacets(
   return facets;
 }
 
+/**
+ * The structural backstop behind `pageReadValue`'s own shadow-host walk: no
+ * node inside a sensitive one in the tree shows a value, whatever its own
+ * verdict said. A sensitive field's parts (a month input's "Month" and "Year"
+ * spinbuttons) and a wrapper's contents sit under it in Chromium's tree, so
+ * this catches a part the in-page walk could not place. A nested sensitive
+ * field's own `[redacted]` stays: it says "entered", never what.
+ *
+ * Exported for its tests.
+ */
+export function withholdInsideSensitive(
+  nodes: EnrichedNativeNode[],
+  sensitiveIds: readonly string[],
+): void {
+  if (sensitiveIds.length === 0) return;
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const seen = new Set<string>();
+  const stack = sensitiveIds.flatMap((id) => byId.get(id)?.childIds ?? []);
+  while (stack.length > 0) {
+    const id = stack.pop()!;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const node = byId.get(id);
+    if (!node) continue;
+    if (!node.redacted) {
+      delete node.value;
+      delete node.rawValue;
+    }
+    stack.push(...node.childIds);
+  }
+}
+
 /** Numbers each tree read's remote-object group, so releasing one read's
  *  group never frees objects a concurrent read is still using. */
 let fieldReadCount = 0;
@@ -533,6 +565,7 @@ export async function readNativeTree(
   // — otherwise each read would pin its elements for the life of the session.
   await transport.send("DOM.enable");
   const objectGroup = `sn-field-values-${++fieldReadCount}`;
+  const sensitiveIds: string[] = [];
   try {
     await Promise.all(
       enriched.map(async (node) => {
@@ -552,6 +585,7 @@ export async function readNativeTree(
           backendNodeId,
           objectGroup,
         );
+        if (read.classified && read.sensitive) sensitiveIds.push(node.id);
         Object.assign(node, fieldFacets(node.role, axValue, read));
       }),
     );
@@ -560,6 +594,7 @@ export async function readNativeTree(
       .send("Runtime.releaseObjectGroup", { objectGroup })
       .catch(() => {});
   }
+  withholdInsideSensitive(enriched, sensitiveIds);
 
   // `serializeNativeAX(nodes)` runs on the pre-wrap list, matching every
   // other pre-enrichment field it already serializes from (states/
@@ -931,6 +966,34 @@ export function pageReadValue(this: Element): PageFieldRead {
   // it, so it is read here, for any element.
   const valuetext = getAttribute.call(el, "aria-valuetext");
   const authored = valuetext ? { valuetext } : {};
+
+  // A PART of a sensitive field is as sensitive as the field. Chromium builds
+  // a date or month input from spinbuttons inside the input's UA shadow root,
+  // each announcing its part of the value — so a `cc-exp` month input's
+  // "Month" and "Year" would read the expiry date. Walk out through every
+  // shadow root this element sits in; a sensitive field hosting any of them
+  // withholds this element's value. Its parts carry no `[redacted]` of their
+  // own: the field itself says that once.
+  const nodeType = accessor(Node.prototype, "nodeType");
+  const shadowHost = accessor(ShadowRoot.prototype, "host");
+  for (let inner: Node = el; ;) {
+    const root = Node.prototype.getRootNode.call(inner);
+    if (nodeType.call(root) !== 11) break; // not in a shadow root
+    let host: Element;
+    try {
+      host = shadowHost.call(root) as Element;
+    } catch {
+      break; // a plain fragment: a detached subtree, not a shadow root
+    }
+    const hostTag = localName.call(host) as string;
+    if (
+      (hostTag === "input" || hostTag === "textarea" || hostTag === "select") &&
+      isSensitive(host, hostTag)
+    ) {
+      return { classified: true, sensitive: true };
+    }
+    inner = host;
+  }
 
   if (tag !== "input" && tag !== "textarea" && tag !== "select") {
     // Not a form field, so never sensitive itself: its value is whatever

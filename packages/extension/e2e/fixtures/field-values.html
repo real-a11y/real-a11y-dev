@@ -67,6 +67,12 @@
         Hello world
       </div>
 
+      <!-- A sensitive field Chromium builds from its own parts: the month and
+           year are separate spinbuttons inside the input's UA shadow root,
+           each reporting its part of the value. They must read nothing. -->
+      <label for="expiry">Card expiry</label>
+      <input id="expiry" type="month" autocomplete="cc-exp" value="2031-11" />
+
       <!-- Chromium announces "No file chosen" until a file is picked; the
            value is the file's name, as the DOM producer reads it. -->
       <label for="upload">Upload</label>

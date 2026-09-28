@@ -20,6 +20,7 @@ import {
   readNativeTree,
   rootIdOf,
   SYNTHETIC_ROOT_ID,
+  withholdInsideSensitive,
   type CdpTransport,
   type EnrichedNativeNode,
 } from "./native-core.js";
@@ -353,6 +354,65 @@ describe("readNativeTree", () => {
     );
   });
 
+  it("shows no value for a part of a sensitive field, whatever its own verdict", async () => {
+    // Chromium 151's `<input type="month" autocomplete="cc-exp">`: a
+    // `DateTime` whose Month/Year spinbuttons report the expiry. Here the
+    // parts' own reads come back not sensitive, as a page-side walk that
+    // missed them would — the tree's shape still withholds them.
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 10,
+        role: { value: "DateTime" },
+        name: { value: "Card expiry" },
+        value: { type: "string", value: "2031-11" },
+        childIds: ["2", "3"],
+      },
+      {
+        nodeId: "2",
+        parentId: "1",
+        backendDOMNodeId: 20,
+        role: { value: "spinbutton" },
+        name: { value: "Month" },
+        value: { type: "number", value: 11 },
+      },
+      {
+        nodeId: "3",
+        parentId: "1",
+        backendDOMNodeId: 30,
+        role: { value: "spinbutton" },
+        name: { value: "Year" },
+        value: { type: "number", value: 2031 },
+      },
+    ];
+    const t = new FakeTransport((method, params) => {
+      if (method === "Accessibility.getFullAXTree") return { nodes: raw };
+      if (method === "DOM.resolveNode") {
+        const id = (params as { backendNodeId: number }).backendNodeId;
+        return { object: { objectId: `obj-${id}` } };
+      }
+      if (method === "Runtime.callFunctionOn") {
+        const { objectId } = params as { objectId: string };
+        return {
+          result: {
+            value:
+              objectId === "obj-10"
+                ? { classified: true, sensitive: true, redacted: true }
+                : { classified: true, valuetext: "November" },
+          },
+        };
+      }
+      return {};
+    });
+    const res = await readNativeTree(t);
+    expect(findNative(res.nodes, "DateTime")?.value).toBe("[redacted]");
+    expect(findNative(res.nodes, "spinbutton", "Month")?.value).toBeUndefined();
+    expect(findNative(res.nodes, "spinbutton", "Year")?.value).toBeUndefined();
+    const wire = JSON.stringify(res);
+    expect(wire).not.toContain("2031");
+    expect(wire).not.toContain("November");
+  });
+
   it("resolves every field into one object group, and releases it", async () => {
     const t = oneField(
       {
@@ -675,6 +735,44 @@ describe("fieldFacets", () => {
         placeholder: "Card",
       }),
     ).toEqual({});
+  });
+});
+
+describe("withholdInsideSensitive", () => {
+  const n = (
+    id: string,
+    childIds: string[],
+    extra: Partial<EnrichedNativeNode> = {},
+  ): EnrichedNativeNode => ({
+    id,
+    role: "generic",
+    name: "",
+    depth: 0,
+    backendDOMNodeId: null,
+    childIds,
+    states: {},
+    properties: {},
+    description: "",
+    ...extra,
+  });
+
+  it("clears every value below a sensitive node, but keeps a nested [redacted]", () => {
+    const nodes = [
+      n("wrap", ["field", "part"], { value: "outer" }),
+      n("field", ["deep"], { value: "[redacted]", redacted: true }),
+      n("part", [], { value: "11", rawValue: "11" }),
+      n("deep", [], { value: "2031" }),
+      n("elsewhere", [], { value: "Spain", rawValue: "es" }),
+    ];
+    withholdInsideSensitive(nodes, ["wrap"]);
+    const byId = new Map(nodes.map((x) => [x.id, x]));
+    // The sensitive node's own value is its verdict's business, not this.
+    expect(byId.get("wrap")?.value).toBe("outer");
+    expect(byId.get("field")?.value).toBe("[redacted]");
+    expect(byId.get("part")?.value).toBeUndefined();
+    expect(byId.get("part")?.rawValue).toBeUndefined();
+    expect(byId.get("deep")?.value).toBeUndefined();
+    expect(byId.get("elsewhere")?.value).toBe("Spain");
   });
 });
 

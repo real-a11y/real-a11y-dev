@@ -13,11 +13,11 @@
  * `cc-number` text field in plaintext, so its payload cannot be the gate.
  */
 
-import { expect, node, test, type NativeHarness } from "./harness";
+import { expect, node, nodes, test, type NativeHarness } from "./harness";
 
 type PanelPage = import("@playwright/test").Page;
 
-const SECRETS = ["hunter2", "4111111111111111"];
+const SECRETS = ["hunter2", "4111111111111111", "2031", "November"];
 
 /** Click a panel control from inside the panel. A Playwright click would
  *  bring the panel's own tab to the front, and the panel resolves its target
@@ -65,6 +65,12 @@ test("NATIVE: a select reads its label, a sensitive field [redacted], over the w
   expect(node(tree, "textbox", "Email").value).toBe("jane@example.com");
   expect(node(tree, "textbox", "Password").value).toBe("[redacted]");
   expect(node(tree, "textbox", "Card number").value).toBe("[redacted]");
+  // A sensitive field Chromium builds from parts: the field says it once,
+  // and its Month and Year spinbuttons (UA shadow DOM) say nothing.
+  expect(node(tree, "DateTime", "Card expiry").value).toBe("[redacted]");
+  for (const part of nodes(tree, "spinbutton")) {
+    expect(part.value, part.name).toBeUndefined();
+  }
   // aria-valuetext, which Chromium's CDP payload does not carry at all.
   expect(node(tree, "slider", "Volume").value).toBe("Loud");
   // An editor's content is page content: collapsed, as announced.
@@ -166,7 +172,7 @@ test("DOM mode: the A11y view shows the announced label, the DOM view the raw va
   }).toPass({ timeout: 15_000 });
   await expect(
     nav.panel.locator(".sn-field-value", { hasText: 'value="[redacted]"' }),
-  ).toHaveCount(2);
+  ).toHaveCount(3);
   await expect(
     nav.panel.locator(".sn-field-value", { hasText: 'value="80"' }),
   ).toHaveCount(1);
