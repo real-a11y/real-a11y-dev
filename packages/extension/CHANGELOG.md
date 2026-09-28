@@ -18,7 +18,6 @@
 
 ## Unreleased
 
-<<<<<<< HEAD
 - In DOM mode, the Tab Sequence view, its copied export and the keyboard bar's
   Tab now stop at a rich-text editor and skip the links inside it. They used to
   do the reverse: a `contenteditable` message box was left out, and a link typed
@@ -30,14 +29,20 @@
   `contenteditable=""` or `plaintext-only`. A link inside an editor no
   longer offers Click, since Chromium doesn't follow it.
   ([#421](https://github.com/real-a11y/real-a11y-dev/pull/421))
-=======
+
+- An element with `role="image"` now shows as an `img` in DOM mode, as NATIVE
+  mode already showed it. ARIA 1.3 makes `image` another spelling of `img`, but
+  the DOM tree kept the raw role and named the element by its text, so
+  `<span role="image">🎉</span>` read `image "🎉"` instead of a bare `img`, and
+  the Images filter left it out.
+  ([#419](https://github.com/real-a11y/real-a11y-dev/pull/419))
+
 - In NATIVE mode, an indeterminate progress bar and a static separator no
   longer show their text as their name. `<div role="progressbar">Loading
   files</div>` read `progressbar "Loading files"` and `<div
   role="separator">Or</div>` read `separator "Or"`; both now read bare, as
   Chromium names them. One labelled with `aria-label` keeps its label.
   ([#424](https://github.com/real-a11y/real-a11y-dev/pull/424))
->>>>>>> c4c128995f5cabc513233c0e18d4245b33859e0d
 
 - In NATIVE mode, a rich-text editor no longer shows what was typed into it as
   its name. A `<div role="application" contenteditable>` read

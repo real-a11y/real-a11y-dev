@@ -417,9 +417,28 @@ const HIDDEN_FROM_AT = new Set([
   "title",
 ]);
 
+/**
+ * ARIA role synonyms, folded to the token the rest of the engine speaks.
+ * ARIA 1.3's `image` is Chromium's same image role as `img`, and the native
+ * producer already reports it as `img` (`mapNativeAXRole`). A Map, not an
+ * object literal, so an author's `role="constructor"` can't resolve to
+ * `Object.prototype`'s.
+ */
+const ROLE_SYNONYMS: ReadonlyMap<string, string> = new Map([["image", "img"]]);
+
+/**
+ * The author's `role` token, with synonyms folded — the one parse of the
+ * attribute, so everything that reads an authored role agrees with the tree.
+ * `undefined` when there is no role or it is blank.
+ */
+export function getExplicitRole(element: Element): string | undefined {
+  const token = element.getAttribute("role")?.trim().split(/\s+/)[0];
+  return token ? (ROLE_SYNONYMS.get(token) ?? token) : undefined;
+}
+
 /** Resolve the implicit ARIA role for an element */
 export function getImplicitRole(element: Element): string {
-  const explicitRole = element.getAttribute("role")?.trim().split(/\s+/)[0];
+  const explicitRole = getExplicitRole(element);
   // role="presentation" and role="none" are synonyms — mark with the
   // canonical "presentation" role so the a11y extractor flattens the
   // element from the tree (children are promoted to the parent). This

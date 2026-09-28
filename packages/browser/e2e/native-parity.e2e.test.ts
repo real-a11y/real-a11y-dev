@@ -119,6 +119,34 @@ describe("nativeAX() ↔ nativeTree() (one native vocabulary)", () => {
   }
 });
 
+// ARIA 1.3's `image` is a synonym of `img`: Chromium exposes both as its one
+// image role, and neither takes a name from its content. The DOM producer once
+// kept the raw token and named it by its text — `image "🎉"` against native's
+// bare `img` — so the image-alt audit never saw it.
+describe("the img synonym role=image", () => {
+  it("is an unnamed img in both producers", async () => {
+    await session.open(
+      dataUrl(
+        `<main><span role="image">🎉</span><button role="image">🎊</button><span role="image" aria-label="Party">🥳</span></main>`,
+      ),
+    );
+    const domTree = await session.call<string>("treeSnapshot", "body", [
+      { markFocus: false },
+    ]);
+    const nativeTree = serializeTree(await session.nativeTree(), {
+      markFocus: false,
+    });
+
+    for (const tree of [domTree, nativeTree]) {
+      const lines = tree.split("\n").map((l) => l.trim());
+      expect(lines.filter((l) => l === "img")).toHaveLength(2);
+      expect(lines).toContain('img "Party"');
+      expect(tree).not.toMatch(/\bimage\b/);
+      expect(tree).not.toMatch(/🎉|🎊/);
+    }
+  });
+});
+
 // The DOM producer walks the flat tree through open shadow roots and slots,
 // as Chromium does. Before that, every node below came from native only.
 describe("web components reach the DOM producer", () => {
