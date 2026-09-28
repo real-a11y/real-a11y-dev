@@ -104,18 +104,18 @@ function idOf(node: RawNativeAXNode): string {
  * the AX `value` and on a `StaticText` child. That covers `<div
  * role="application" contenteditable>`, `role="document"` and `role="log"`
  * editors, and a contenteditable `<p>`. Promoting the child would print what a
- * user typed as the node's name, which the R1 gate exists to prevent. A range
- * widget carries a numeric value, and the text inside a `role="progressbar"`
- * or `role="scrollbar"` is fallback, no more its name. Chromium leaves all of
- * them unnamed.
+ * user typed as the node's name, which the R1 gate exists to prevent. Chromium
+ * leaves all of them unnamed.
  *
  * The same holds one level removed: a role-less `<div contenteditable>` is a
  * dropped `generic` carrying a value, and its text must not name the kept
  * ancestor it flattens into either.
  *
- * The field roles never reach this check — {@link NATIVE_AX_AUTHOR_NAMED_ROLES}
- * already keeps them unnamed — so it is what covers the roles that otherwise
- * read their text. A `0` is a value; an empty string or `null` is none.
+ * The field roles and the range widgets (`progressbar`, `meter`, `scrollbar`,
+ * `separator`) never reach this check — {@link NATIVE_AX_AUTHOR_NAMED_ROLES}
+ * already keeps them unnamed, value or not — so it is what covers the roles
+ * that otherwise read their text. A `0` is a value; an empty string or `null`
+ * is none.
  */
 function carriesValue(node: RawNativeAXNode): boolean {
   const value = node.value?.value;
@@ -179,7 +179,7 @@ function directText(
  * ever invoked for an author-named role (NATIVE_AX_AUTHOR_NAMED_ROLES): a
  * `textbox` whose *value* lives in a StaticText child, or an `<svg role="img">`
  * with a `<text>` inside, stays as unnamed as Chromium left it. Nor for a node
- * that {@link carriesValue}: a progress bar's fallback text is not its name.
+ * that {@link carriesValue}: an editor's typed text is not its name.
  * And the search never enters a dropped descendant that carries a value.
  */
 function promoteNameFromDroppedDescendants(
