@@ -162,6 +162,22 @@ for (const producer of ["DOM", "NATIVE"] as const) {
       expect(markdown).not.toContain("Native panel fixture");
     });
 
+    test("✕ with a role filter's list showing hands focus to the list", async ({
+      nav,
+    }) => {
+      await show(nav, "native-panel.html", producer);
+      await itemsRow(nav.panel).dblclick({ position: { x: 5, y: 5 } });
+      await nav.panel
+        .getByRole("button", { name: "Buttons", exact: true })
+        .click();
+
+      await scopeBar(nav.panel)
+        .getByRole("button", { name: "Exit scope" })
+        .click();
+      await expect(scopeBar(nav.panel)).toHaveCount(0);
+      await expect(nav.panel.getByRole("listbox")).toBeFocused();
+    });
+
     test("go-to-tree from a list item outside the scope leaves it", async ({
       nav,
     }) => {

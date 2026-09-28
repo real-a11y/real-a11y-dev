@@ -227,6 +227,30 @@ describe("NativeTreeView scope", () => {
     expect(row("h-foot").getAttribute("aria-selected")).toBe("true");
   });
 
+  it("opens a saved scope root on mount, even below the seeded levels", () => {
+    // Regression (Devin Review): switching to DOM and back remounts this
+    // view with App's saved scope but a fresh expansion set that only opens
+    // the page root and its children. `sec` sits a level below that.
+    mount({ initialScope: "sec" });
+    expect(rowIds()).toEqual(["sec", "h3"]);
+  });
+
+  it("✕ from a role-filter list hands focus to the list, not <body>", () => {
+    // Regression (Devin Review): the tree isn't rendered while a filter's
+    // list is, so focusing it after ✕ left focus on nothing.
+    mount({ initialScope: "sec" });
+    const headings = [
+      ...container.querySelectorAll<HTMLButtonElement>(".sn-filter-btn"),
+    ].find((b) => b.textContent === "Headings")!;
+    act(() => headings.click());
+    const exit = container.querySelector<HTMLButtonElement>(".sn-scope-exit")!;
+    exit.focus();
+    act(() => exit.click());
+    expect(document.activeElement).toBe(
+      container.querySelector('[role="listbox"]'),
+    );
+  });
+
   it("treats a scope id the tree doesn't have as no scope", () => {
     mount({ initialScope: "gone" });
     expect(rowIds()[0]).toBe("root");

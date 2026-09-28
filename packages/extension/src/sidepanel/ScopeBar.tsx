@@ -87,6 +87,15 @@ export function isInScope(
 }
 
 /**
+ * Where focus goes when the scope bar's ✕ (or root crumb) removes the button
+ * that held it: the tree if it's showing, otherwise the listbox a role filter
+ * or the Tab view shows in its place — never `<body>`.
+ */
+export function focusActiveView(tree: HTMLElement | null): void {
+  (tree ?? document.querySelector<HTMLElement>(".sn-filtered-list"))?.focus();
+}
+
+/**
  * The keyboard half of scoping, shared by both trees' keydown handlers.
  * `Ctrl`/`Cmd`+`Enter` scopes to the selected row (`Shift+Enter` is already a
  * slider's decrement); `Escape` leaves the scope, unless a pick is armed, in

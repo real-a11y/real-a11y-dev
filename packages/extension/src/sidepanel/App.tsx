@@ -65,7 +65,13 @@ import {
 } from "./InputPanel.js";
 import type { InputPanelState } from "./InputPanel.js";
 import { NativeTreeView } from "./NativeTreeView.js";
-import { isInScope, ScopeBar, scopeKeyAction, scopePath } from "./ScopeBar.js";
+import {
+  focusActiveView,
+  isInScope,
+  ScopeBar,
+  scopeKeyAction,
+  scopePath,
+} from "./ScopeBar.js";
 import { TabSequenceView } from "./TabSequenceView.js";
 
 /** How long to let the page react before re-reading the native tree after an
@@ -2916,9 +2922,10 @@ export function App() {
           rootId={rootId}
           onScope={(id) => {
             handleScopeToNode(id);
-            // ✕ unmounts the button that had focus; hand it to the tree
-            // rather than dropping it on <body>.
-            if (id === null) treeRef.current?.focus();
+            // ✕ unmounts the button that had focus; hand it to whichever
+            // view is showing (tree, role-filter list or Tab view) rather
+            // than dropping it on <body>.
+            if (id === null) focusActiveView(treeRef.current);
           }}
         />
       )}

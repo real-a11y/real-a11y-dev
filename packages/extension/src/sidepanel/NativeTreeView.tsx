@@ -66,7 +66,13 @@ import {
   FilteredListView,
   type FilteredListItem,
 } from "./FilteredList.js";
-import { isInScope, ScopeBar, scopeKeyAction, scopePath } from "./ScopeBar.js";
+import {
+  focusActiveView,
+  isInScope,
+  ScopeBar,
+  scopeKeyAction,
+  scopePath,
+} from "./ScopeBar.js";
 
 const ROLE_FILTER_KEYS = Object.keys(ROLE_FILTER_LABELS) as Array<
   Exclude<RoleFilter, null>
@@ -229,6 +235,20 @@ export function NativeTreeView({
       : null;
   const walkRoot = scopeRoot ?? rootId;
   const depthOffset = scopeRoot ? (nodes.get(scopeRoot)?.depth ?? 0) : 0;
+
+  // Open the scope root whenever a scope becomes active, including on mount:
+  // switching to DOM and back remounts this view with App's saved scope but
+  // a freshly seeded expansion set (the page root and its children only), so
+  // a deeper scope root would otherwise come back as one collapsed row.
+  // Declared after the root-seeding layout effect above so its update lands
+  // on top of the seeded set rather than being replaced by it. Keyed on the
+  // scope alone, so a user collapsing the scope root later keeps it closed.
+  useLayoutEffect(() => {
+    if (!scopeRoot) return;
+    setExpanded((prev) =>
+      prev.has(scopeRoot) ? prev : new Set(prev).add(scopeRoot),
+    );
+  }, [scopeRoot]);
 
   // Scoping into a row also opens it, as DOM's `handleScopeToNode` does, so
   // the new root never arrives collapsed to a single line.
@@ -746,9 +766,9 @@ export function NativeTreeView({
           rootId={rootId}
           onScope={(id) => {
             scopeTo(id);
-            // ✕ unmounts the button that had focus; hand it to the tree
-            // rather than dropping it on <body>.
-            if (id === null) treeRef.current?.focus();
+            // ✕ unmounts the button that had focus; hand it to whichever
+            // view is showing rather than dropping it on <body>.
+            if (id === null) focusActiveView(treeRef.current);
           }}
         />
       )}
