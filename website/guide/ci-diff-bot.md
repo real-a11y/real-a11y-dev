@@ -526,7 +526,7 @@ jobs:
       - uses: actions/checkout@v4
       # …install deps, build, and start your site (as in the templates above)…
       - run: npx real-a11y snapshot --config a11y.config.json -f sarif -o a11y.sarif
-      - uses: github/codeql-action/upload-sarif@v3
+      - uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: a11y.sarif
           category: real-a11y # keep it distinct from CodeQL / other scanners
