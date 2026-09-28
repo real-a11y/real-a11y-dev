@@ -79,16 +79,19 @@ Focus the page itself first (click anywhere on the page, not the panel), then pr
 
 Narrow the audit root to a subtree. Useful when you want to focus on one form, one dialog, or one widget without the rest of the page in the way.
 
-In the panel, double-click any node to scope into it. The tree re-renders showing only that subtree. A breadcrumb at the top shows the path; click any breadcrumb segment to scope back up, or the `×` to exit to the full tree.
+In the Chrome extension's panel, double-click a container node — a form, a landmark, a list, anything with children and no action of its own — to scope into it, or select any row with children and press `Ctrl`/`Cmd`+`Enter`. Double-clicking an interactive node still activates it. The tree re-renders showing only that subtree, and a breadcrumb at the top shows the path: click any breadcrumb segment to scope back up, or the `×` (or `Esc` in the tree) to return to the full tree. Both the DOM and the native tree scope the same way.
 
 Scoping affects:
 - **What's visible** in the tree (only the scoped subtree's descendants)
-- **What's audited** (search and role filters operate inside the scope)
+- **What search matches** in the tree (only rows inside the scope show)
 - **The tab sequence** (TAB view only lists focusable elements inside the scope)
+- **What Copy exports** (the scoped subtree, with a `Scope` line naming it)
+
+The role-filter lists (Headings, Links, …) still cover the whole page. Going to the tree from an item outside the scope, or picking or focusing an element outside it, leaves the scope so the row you land on is actually shown.
 
 | Surface | API |
 |---|---|
-| Chrome extension | Double-click any node to scope; breadcrumb + `×` button to exit |
+| Chrome extension | Double-click a container node, or `Ctrl`/`Cmd`+`Enter` on any row with children; breadcrumb, `×` or `Esc` to exit |
 | `inspector` | `inspector.setRoot(element)` to scope; `inspector.setRoot(originalRoot)` to exit |
 | React `<SemanticNavigator />` | Update the `root` prop's ref to point at the scoped element |
 | `@real-a11y-dev/testing` | `attach(page, { rootSelector: "form" })` for Playwright; `treeSnapshot(form, …)` for jsdom — see [the testing reference](/packages/testing/snapshots#treesnapshot-root-options) |
@@ -152,9 +155,10 @@ The panel itself is fully keyboard-operable.
 | `/` | Focus the search input |
 | `Home` / `End` | Jump to the first / last visible row |
 | Printable characters | Type-ahead — jump to a row whose accessible name starts with the typed characters (multi-character within ~500ms keeps a still-matching selection; repeating the same letter cycles matches). `/` is reserved for search. |
-| `Esc` | Clear scope, then clear search, then close the panel |
+| `Ctrl`/`Cmd`+`Enter` | Chrome extension: scope the tree to the current row (any row with children) |
+| `Esc` | Chrome extension: leave the current scope. While a pick is armed, `Esc` cancels the pick instead |
 
-Implemented in `@real-a11y-dev/semantic-navigator-ui` via `useTreeKeyboard` (and the same type-ahead + stepper-key helpers on filtered / tab-sequence listboxes) — every package that mounts the tree gets the same keymap.
+Implemented in `@real-a11y-dev/semantic-navigator-ui` via `useTreeKeyboard` (and the same type-ahead + stepper-key helpers on filtered / tab-sequence listboxes) — every package that mounts the tree gets the same keymap. The two scope keys belong to the Chrome extension's panel, the one surface with a scope breadcrumb.
 
 ---
 

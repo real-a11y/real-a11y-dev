@@ -99,6 +99,26 @@
   the panel says so.
   ([#412](https://github.com/real-a11y/real-a11y-dev/pull/412))
 
+- Scope works in the native tree now, and from the keyboard in both trees.
+  - **Native double-click.** Double-clicking a container row (a form, a
+    landmark, anything with children and no action of its own) scopes the
+    native tree to it, with the same breadcrumb bar as the DOM tree. It used
+    to only expand or collapse the row.
+  - **Keyboard.** In either tree, `Ctrl`/`Cmd`+`Enter` scopes to the selected
+    row and `Esc` leaves the scope. Scoping was mouse-only before. While a
+    pick is armed, `Esc` still cancels the pick first.
+  - **Native Copy** exports the scoped subtree, as DOM mode's does.
+  - Two DOM fixes:
+    - Copy on a scoped tree no longer cuts the start off every line of the
+      tree section. A region one level below the page root exported as
+      `gion "Items"`.
+    - Going to a row outside the scope (from a filter list, a pick or focus
+      tracking) now leaves the scope instead of selecting a row the tree
+      doesn't show. `←` on the scope root also no longer selects its hidden
+      parent and leaves the keyboard stuck.
+
+  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR))
+
 ## 0.1.15
 
 ### Patch Changes
