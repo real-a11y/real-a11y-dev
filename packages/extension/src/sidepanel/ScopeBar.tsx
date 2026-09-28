@@ -87,6 +87,27 @@ export function isInScope(
 }
 
 /**
+ * The scoped subtree as its own map: `rootId` and everything under it. Lets
+ * a whole-tree helper (the DOM search filter's match count) run over just the
+ * scope without a scope-aware variant of its own.
+ */
+export function subtreeNodes<T extends { childIds?: string[] }>(
+  nodes: Map<string, T>,
+  rootId: string,
+): Map<string, T> {
+  const out = new Map<string, T>();
+  const stack = [rootId];
+  while (stack.length > 0) {
+    const id = stack.pop()!;
+    const node = nodes.get(id);
+    if (!node || out.has(id)) continue;
+    out.set(id, node);
+    for (const childId of node.childIds ?? []) stack.push(childId);
+  }
+  return out;
+}
+
+/**
  * Where focus goes when the scope bar's ✕ (or root crumb) removes the button
  * that held it: the tree if it's showing, otherwise the listbox a role filter
  * or the Tab view shows in its place — never `<body>`.

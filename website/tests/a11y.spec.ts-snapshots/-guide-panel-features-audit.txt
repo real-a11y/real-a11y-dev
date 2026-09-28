@@ -202,7 +202,7 @@ main
   list
     listitem "in the tree (only the scoped subtree's descendants)"
       strong "What's visible"
-    listitem "in the tree (only rows inside the scope show)"
+    listitem "(only rows inside the scope show, and the match count reads "in this scope" and counts only those)"
       strong "What search matches"
     listitem "(Headings, Links, … list only matches inside the scope)"
       strong "What the role-filter lists show"
