@@ -97,6 +97,19 @@ describe("getImplicitRole", () => {
     );
   });
 
+  // ARIA 1.3 adds `image` as a synonym of `img`, and Chromium exposes both as
+  // the same role. Everything downstream — the image-alt rule, role queries,
+  // the native producer — speaks `img`, so the synonym is folded here.
+  it("returns img for explicit role=image (synonym)", () => {
+    expect(getImplicitRole(el('<span role="image">🎉</span>'))).toBe("img");
+  });
+
+  it("folds role=image when it leads a role list", () => {
+    expect(
+      getImplicitRole(el('<div role="image graphics-symbol">x</div>')),
+    ).toBe("img");
+  });
+
   // ARIA "Presentational Roles Conflict Resolution": role=presentation/none
   // is IGNORED when the element is focusable or carries global ARIA
   // states/properties. The element is then exposed with its implicit role —

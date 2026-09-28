@@ -18,6 +18,13 @@
 
 ## Unreleased
 
+- An element with `role="image"` now shows as an `img` in DOM mode, as NATIVE
+  mode already showed it. ARIA 1.3 makes `image` another spelling of `img`, but
+  the DOM tree kept the raw role and named the element by its text, so
+  `<span role="image">🎉</span>` read `image "🎉"` instead of a bare `img`, and
+  the Images filter left it out.
+  ([#419](https://github.com/real-a11y/real-a11y-dev/pull/419))
+
 - In NATIVE mode, an indeterminate progress bar and a static separator no
   longer show their text as their name. `<div role="progressbar">Loading
   files</div>` read `progressbar "Loading files"` and `<div
