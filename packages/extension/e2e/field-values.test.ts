@@ -70,10 +70,27 @@ test("NATIVE: a select reads its label, a sensitive field [redacted], over the w
   // An editor's content is page content: collapsed, as announced.
   expect(node(tree, "textbox", "Message").value).toBe("Hello world");
 
+  // No file yet: no value — not Chromium's "No file chosen".
+  expect(node(tree, "button", "Upload").value).toBeUndefined();
+
   const wire = JSON.stringify(result);
   for (const secret of SECRETS) expect(wire).not.toContain(secret);
   // Chromium's own mask for the password: one bullet per character.
   expect(wire).not.toContain("•");
+});
+
+test("NATIVE: a file input reads its chosen file's name, never its fake path", async ({
+  nav,
+}) => {
+  const { page, tabId } = await nav.open("field-values.html");
+  await page.setInputFiles("#upload", {
+    name: "photo.png",
+    mimeType: "image/png",
+    buffer: Buffer.from("png"),
+  });
+  const upload = node(await nav.readNodes(tabId), "button", "Upload");
+  expect(upload.value).toBe("photo.png");
+  expect(upload.rawValue).toBeUndefined();
 });
 
 test("NATIVE panel: the tree shows the announced label, and a retype starts from the raw value", async ({
@@ -131,6 +148,11 @@ test("DOM mode: the A11y view shows the announced label, the DOM view the raw va
   await expect(valueOf(/textbox\s*Password/)).toHaveText('= "[redacted]"');
   await expect(valueOf(/textbox\s*Card number/)).toHaveText('= "[redacted]"');
   await expect(valueOf(/slider\s*Volume/)).toHaveText('= "Loud"');
+  // An editor's text prints once, as its value — not again as a preview.
+  await expect(valueOf(/textbox\s*Message/)).toHaveText('= "Hello world"');
+  await expect(
+    nav.panel.locator(".sn-node", { hasText: /textbox\s*Message/ }),
+  ).not.toContainText(/Hello world.*Hello world/);
 
   // DOM view — the view-mode toggle, not the dogfood build's producer one.
   // Switching re-extracts, and the new tree lands with its own default

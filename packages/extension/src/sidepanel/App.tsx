@@ -45,10 +45,7 @@ import {
   type TabCapability,
 } from "../native/capability.js";
 import { isTypableRole, type NativeNode } from "../native/native-actions.js";
-import {
-  NATIVE_REDACTED_VALUE,
-  type NativeAction,
-} from "../native/native-core.js";
+import type { NativeAction } from "../native/native-core.js";
 import {
   isTrustedSender,
   isUnreachablePageResponse,
@@ -1344,8 +1341,13 @@ export function App() {
       // Prefilled from `rawValue`, not `value`: `value` is what a screen
       // reader announces, whitespace-collapsed and capped at 240 characters,
       // so an unedited submit of it would flatten a textarea's line breaks
-      // or cut a long value short. `rawValue` is the field's text as it is.
-      const isRedacted = node.value === NATIVE_REDACTED_VALUE;
+      // or cut a long value short. `rawValue` is an input's or textarea's
+      // text as it is. An editor has none — the tree shows its text, but a
+      // retype replaces the whole of it — so it opens empty too, and gets
+      // the same empty-submit block: an unedited Enter must not wipe it.
+      const isRedacted = node.redacted === true;
+      const unprefillable =
+        isRedacted || (node.value !== undefined && node.rawValue === undefined);
       if (isTypableRole(node.role, node.states)) {
         setInputState({
           type: "text",
@@ -1363,7 +1365,7 @@ export function App() {
           // rather than trying to distinguish which specific rule fired.
           // Erring toward masking more, never less.
           inputType: isRedacted ? "password" : undefined,
-          blockEmptySubmit: isRedacted,
+          blockEmptySubmit: unprefillable,
         });
         return;
       }

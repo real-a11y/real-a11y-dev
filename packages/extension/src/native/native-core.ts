@@ -47,25 +47,15 @@ import {
 
 /**
  * The sentinel a sensitive field's `value` arrives as on the wire — never the
- * raw secret (R1). Exported so a consumer can tell "the real value happens
- * to be this exact string" apart from "this is the redaction marker, not
- * data" — `App.tsx`'s native-activate handler needs that distinction so it
- * never offers this literal text back to the user as something to submit,
- * which would silently overwrite their real value with the word itself.
+ * raw secret (R1). A node that carries it also carries `redacted: true`,
+ * which is what a consumer tests: the sentinel's text alone can't tell "this
+ * is the redaction marker" from "an editor happens to hold these words".
  *
  * Core's own marker, so both producers write the same one (ADR-0001). NOT
  * referenced by `pageReadValue` below, which is serialized via `String(fn)`
  * for `Runtime.callFunctionOn` and must stay fully self-contained: it
  * returns a `redacted` flag instead, and this file's (non-serialized)
  * `fieldFacets` is where that flag becomes this value on a node.
- *
- * Importing this one constant does not pull `pageReadValue`'s (or any other
- * in-page action's) source text into a consumer's bundle — confirmed by
- * building the store bundle with `App.tsx` importing this directly and
- * grepping it for every other symbol unique to this file (`readNativeTree`,
- * `dispatchNative`, `backendDOMNodeId`, `pageSelectOption`, …): none of them
- * appear. Each is its own top-level binding, and esbuild's tree-shaking
- * proves the unreferenced ones dead independently of this one being kept.
  */
 export const NATIVE_REDACTED_VALUE = REDACTED_VALUE;
 
@@ -259,6 +249,12 @@ export type EnrichedNativeNode = NativeAXNode &
      */
     value?: string;
     /**
+     * Set when `value` is the redaction marker — a sensitive field that
+     * holds something — so a consumer never has to compare `value` against
+     * the marker text, which an editor could hold as ordinary content.
+     */
+    redacted?: boolean;
+    /**
      * The raw live DOM value of a non-sensitive `<input>`/`<textarea>`/
      * `<select>` (`"es"` where `value` is `"Spain"`), uncollapsed and
      * uncapped — what a retype starts from, so an unedited submit writes
@@ -386,8 +382,18 @@ export interface PageFieldRead {
    *  agent can tell "entered" from "empty" — never what, or how long. */
   redacted?: boolean;
   /** The raw live `.value` of a non-sensitive `<input>`/`<textarea>`/
-   *  `<select>`. Absent when empty. */
+   *  `<select>` — the retype prefill. Absent when empty, and for a file
+   *  input. */
   value?: string;
+  /**
+   * What a non-sensitive `<input>` or `<textarea>` announces, read here in
+   * the same call as the classification: its text, or a file input's file
+   * names — `""` when empty or valueless (a button-type input). Present for
+   * every such field, so Chromium's AX value, captured a moment earlier,
+   * never stands in for it: a "show password" toggle flipping `type` between
+   * the two reads would otherwise show Chromium's bullet mask — the length.
+   */
+  announced?: string;
   /** The field's placeholder hint — page-authored, never redacted. */
   placeholder?: string;
   /** The element's `aria-valuetext` — page-authored, and what a screen
@@ -424,6 +430,24 @@ function formatAXNumber(n: number): string {
 }
 
 /**
+ * Cut `text` to `max` characters with a trailing `…`, never between the two
+ * halves of a surrogate pair (an emoji), which would leave a lone half.
+ * Exported for the panel's own raw-value cut.
+ */
+export function capText(text: string, max: number): string {
+  if (text.length <= max) return text;
+  let end = max - 1;
+  const last = text.charCodeAt(end - 1);
+  if (last >= 0xd800 && last <= 0xdbff) end -= 1;
+  return text.slice(0, end) + "…";
+}
+
+type FieldFacets = Pick<
+  EnrichedNativeNode,
+  "value" | "redacted" | "rawValue" | "placeholder"
+>;
+
+/**
  * Resolve a node's field facets from Chromium's AX value and the in-page
  * classification (ADR-0001):
  *
@@ -433,10 +457,12 @@ function formatAXNumber(n: number): string {
  *  - **Sensitive** → `[redacted]` when the field holds anything, else no
  *    value — never Chromium's value, which for a password is one bullet per
  *    character: its length.
- *  - **Otherwise** → the announced value: a range widget's `aria-valuetext`,
- *    else Chromium's AX value (a `<select>`'s selected option label, a text
- *    field's or editor's text, a number), whitespace-collapsed and capped at
- *    240 characters with `…`. The raw field value rides along separately as
+ *  - **Otherwise** → the announced value: a range widget's `aria-valuetext`;
+ *    else an `<input>`'s or `<textarea>`'s text as read in-page (what
+ *    Chromium announces for one, without the gap between two reads); else
+ *    Chromium's AX value (a `<select>`'s selected option label, an editor's
+ *    text, a progress bar's number). Whitespace-collapsed and capped at 240
+ *    characters with `…`. The raw field value rides along separately as
  *    `rawValue`, for a retype to start from.
  *
  * Pure, and exported for its tests.
@@ -445,13 +471,15 @@ export function fieldFacets(
   role: string,
   axValue: string | number | undefined,
   read: PageFieldRead,
-): Pick<EnrichedNativeNode, "value" | "rawValue" | "placeholder"> {
+): FieldFacets {
   if (!read.classified) return {};
-  const facets: Pick<EnrichedNativeNode, "value" | "rawValue" | "placeholder"> =
-    {};
+  const facets: FieldFacets = {};
   if (read.placeholder) facets.placeholder = read.placeholder;
   if (read.sensitive) {
-    if (read.redacted) facets.value = NATIVE_REDACTED_VALUE;
+    if (read.redacted) {
+      facets.value = NATIVE_REDACTED_VALUE;
+      facets.redacted = true;
+    }
     return facets;
   }
   if (read.value) facets.rawValue = read.value;
@@ -459,19 +487,19 @@ export function fieldFacets(
   const valuetext = RANGE_VALUE_ROLES.has(role)
     ? cleanText(read.valuetext ?? "")
     : "";
+  const source = read.announced ?? axValue;
   const announced =
     valuetext ||
-    (typeof axValue === "number"
-      ? formatAXNumber(axValue)
-      : cleanText(axValue ?? ""));
-  if (announced) {
-    facets.value =
-      announced.length > VALUE_MAX
-        ? announced.slice(0, VALUE_MAX - 1) + "…"
-        : announced;
-  }
+    (typeof source === "number"
+      ? formatAXNumber(source)
+      : cleanText(source ?? ""));
+  if (announced) facets.value = capText(announced, VALUE_MAX);
   return facets;
 }
+
+/** Numbers each tree read's remote-object group, so releasing one read's
+ *  group never frees objects a concurrent read is still using. */
+let fieldReadCount = 0;
 
 /** Read + normalize the whole native AX tree over any CDP transport. */
 export async function readNativeTree(
@@ -497,21 +525,41 @@ export async function readNativeTree(
   });
 
   // Field values (see `fieldFacets`) — each candidate classified in-page by
-  // `pageReadValue` before its AX value is used, concurrently, so a
-  // form-heavy page costs one round of parallel CDP calls rather than N
-  // sequential ones stacked onto the tree read.
+  // `pageReadValue` before any value is used, concurrently, so a form-heavy
+  // page costs one round of parallel CDP calls rather than N sequential ones
+  // stacked onto the tree read. A range role is a candidate even with no AX
+  // value: its `aria-valuetext`, which CDP never carries, may be all it has.
+  // Every remote object the pass resolves joins one group, released after it
+  // — otherwise each read would pin its elements for the life of the session.
   await transport.send("DOM.enable");
-  await Promise.all(
-    enriched.map(async (node) => {
-      if (STATE_ONLY_ROLES.has(node.role)) return;
-      const axValue = announcedAXValue(rawById.get(node.id));
-      if (axValue === undefined && !VALUE_BEARING_ROLES.has(node.role)) return;
-      const backendNodeId = backendNodeIdFrom(node.id);
-      if (backendNodeId === null) return;
-      const read = await readFieldValue(transport, backendNodeId);
-      Object.assign(node, fieldFacets(node.role, axValue, read));
-    }),
-  );
+  const objectGroup = `sn-field-values-${++fieldReadCount}`;
+  try {
+    await Promise.all(
+      enriched.map(async (node) => {
+        if (STATE_ONLY_ROLES.has(node.role)) return;
+        const axValue = announcedAXValue(rawById.get(node.id));
+        if (
+          axValue === undefined &&
+          !VALUE_BEARING_ROLES.has(node.role) &&
+          !RANGE_VALUE_ROLES.has(node.role)
+        ) {
+          return;
+        }
+        const backendNodeId = backendNodeIdFrom(node.id);
+        if (backendNodeId === null) return;
+        const read = await readFieldValue(
+          transport,
+          backendNodeId,
+          objectGroup,
+        );
+        Object.assign(node, fieldFacets(node.role, axValue, read));
+      }),
+    );
+  } finally {
+    await transport
+      .send("Runtime.releaseObjectGroup", { objectGroup })
+      .catch(() => {});
+  }
 
   // `serializeNativeAX(nodes)` runs on the pre-wrap list, matching every
   // other pre-enrichment field it already serializes from (states/
@@ -802,10 +850,13 @@ export function pageType(this: Element, text: string): Marker {
  * not just form fields — `{ classified: true }` for a contenteditable editor
  * or an ARIA widget, which the policy never counts as sensitive (it covers
  * only `input`/`textarea`/`select`, as core's `isSensitiveFieldAttributes`
- * does) — and it classifies an EMPTY sensitive field too, so a value Chromium
- * reported a moment earlier can never stand in for it. The raw `.value` it
- * still returns for a non-sensitive field is for a retype's prefill, never
- * for display.
+ * does) unless a sensitive field sits inside it — and it classifies an EMPTY
+ * sensitive field too, so a value Chromium reported a moment earlier can
+ * never stand in for it. For an `<input>` or `<textarea>` it also returns the
+ * text the field announces (`announced`), read in this same call, so the
+ * verdict and the value can't come from two different moments. The raw
+ * `.value` it returns for a non-sensitive field is for a retype's prefill,
+ * never for display.
  *
  * The sensitive-token list below is a copy of core's exported
  * `SENSITIVE_AUTOCOMPLETE_TOKENS`, because nothing outside this body survives
@@ -816,9 +867,10 @@ export function pageType(this: Element, text: string): Marker {
  *
  * Reads `value`/`type` via each class's OWN property descriptor
  * (`Object.getOwnPropertyDescriptor(...).get.call(el)`) rather than
- * `el.value`/`el.type` directly, and `autocomplete` via
+ * `el.value`/`el.type` directly, `autocomplete` via
  * `Element.prototype.getAttribute.call(el, ...)` rather than
- * `el.getAttribute(...)` — the same defense `pageType` already applies to
+ * `el.getAttribute(...)`, and what kind of element it is via the pinned
+ * `localName` rather than `instanceof` — the same defense `pageType` already applies to
  * its setter, for the same class of reason: an instance-level property
  * (`el.type = "text"`, shadowing the real one) or a careless page-side
  * reassignment is the easy, realistic way a sensitivity check like this one
@@ -835,67 +887,19 @@ export function pageType(this: Element, text: string): Marker {
  */
 export function pageReadValue(this: Element): PageFieldRead {
   const el = this;
+  if (!el) return {};
+
+  // Every read goes through a prototype's own accessor, never the element's
+  // (see above). A `this` that is not a Node makes the first one throw, which
+  // reaches the caller as no answer at all: unclassified, so nothing shows.
+  const accessor = (proto: object, name: string) =>
+    Object.getOwnPropertyDescriptor(proto, name)!.get!;
   // Not an element: nothing to classify, so the caller shows nothing.
-  if (!el || !(el instanceof Element)) return {};
+  if (accessor(Node.prototype, "nodeType").call(el) !== 1) return {};
+  const localName = accessor(Element.prototype, "localName");
+  const getAttribute = Element.prototype.getAttribute;
+  const inputType = accessor(HTMLInputElement.prototype, "type");
 
-  // `aria-valuetext` is page-authored — what a screen reader reads for a range
-  // widget in place of its number — and Chromium's CDP payload never carries
-  // it, so it is read here, for any element, through the same pinned
-  // `getAttribute` as `autocomplete` below.
-  const valuetext = Element.prototype.getAttribute.call(el, "aria-valuetext");
-  const authored = valuetext ? { valuetext } : {};
-
-  let value: string;
-  let type: string | undefined;
-  // Placeholder is page-authored hint text, not user input — same distinction
-  // `description` already draws (R1 only concerns a field's live VALUE) — so
-  // it is read and returned unconditionally below, including for a redacted
-  // or empty field: it's the one thing worth showing an empty sensitive
-  // field's placeholder for. Only `<input>`/`<textarea>` have a native
-  // `placeholder`; `<select>` has none. Read via the prototype's own
-  // descriptor, the same defense `value`/`type` already get below, for the
-  // same reason: a page-side instance shadow is the easy, realistic way an
-  // unpinned read gets fooled.
-  let placeholder: string | undefined;
-  if (el instanceof HTMLInputElement) {
-    value = Object.getOwnPropertyDescriptor(
-      HTMLInputElement.prototype,
-      "value",
-    )!.get!.call(el) as string;
-    type = Object.getOwnPropertyDescriptor(
-      HTMLInputElement.prototype,
-      "type",
-    )!.get!.call(el) as string;
-    placeholder = Object.getOwnPropertyDescriptor(
-      HTMLInputElement.prototype,
-      "placeholder",
-    )!.get!.call(el) as string;
-  } else if (el instanceof HTMLTextAreaElement) {
-    value = Object.getOwnPropertyDescriptor(
-      HTMLTextAreaElement.prototype,
-      "value",
-    )!.get!.call(el) as string;
-    placeholder = Object.getOwnPropertyDescriptor(
-      HTMLTextAreaElement.prototype,
-      "placeholder",
-    )!.get!.call(el) as string;
-  } else if (el instanceof HTMLSelectElement) {
-    value = Object.getOwnPropertyDescriptor(
-      HTMLSelectElement.prototype,
-      "value",
-    )!.get!.call(el) as string;
-  } else {
-    // Not a form field, so never sensitive: its value is whatever Chromium
-    // announces for it (an editor's text, a custom slider's number).
-    return { classified: true, ...authored };
-  }
-  const answered = {
-    classified: true,
-    ...authored,
-    ...(placeholder ? { placeholder } : {}),
-  };
-
-  let sensitive = type === "password";
   const SENSITIVE_AUTOCOMPLETE_TOKENS = [
     "current-password",
     "new-password",
@@ -906,24 +910,112 @@ export function pageReadValue(this: Element): PageFieldRead {
     "cc-exp-month",
     "cc-exp-year",
   ];
-  const autocomplete = Element.prototype.getAttribute.call(el, "autocomplete");
-  if (!sensitive && autocomplete) {
+  // ADR-0001's policy, as core's `isSensitiveFieldAttributes` states it, for
+  // an input, textarea or select. The TAG decides what a field is, never
+  // `instanceof`: that fails across realms and bends to a page that swaps an
+  // element's prototype, and a field it missed would read as a non-field —
+  // never sensitive, its value shown.
+  const isSensitive = (field: Element, tag: string): boolean => {
+    if (tag === "input" && inputType.call(field) === "password") return true;
+    const autocomplete = getAttribute.call(field, "autocomplete");
+    if (!autocomplete) return false;
     for (const token of autocomplete.toLowerCase().split(/\s+/)) {
-      if (SENSITIVE_AUTOCOMPLETE_TOKENS.indexOf(token) !== -1) {
-        sensitive = true;
-        break;
+      if (SENSITIVE_AUTOCOMPLETE_TOKENS.indexOf(token) !== -1) return true;
+    }
+    return false;
+  };
+
+  const tag = localName.call(el) as string;
+  // `aria-valuetext` is page-authored — what a screen reader reads for a range
+  // widget in place of its number — and Chromium's CDP payload never carries
+  // it, so it is read here, for any element.
+  const valuetext = getAttribute.call(el, "aria-valuetext");
+  const authored = valuetext ? { valuetext } : {};
+
+  if (tag !== "input" && tag !== "textarea" && tag !== "select") {
+    // Not a form field, so never sensitive itself: its value is whatever
+    // Chromium announces for it (an editor's text, a custom slider's number).
+    // Chromium computes that from the element's content, so a sensitive field
+    // nested inside withholds the whole value. Chromium 151 leaves a nested
+    // control's value out of its wrapper's (measured); this does not bet on
+    // every version doing so.
+    const nested = Element.prototype.querySelectorAll.call(
+      el,
+      "input, textarea, select",
+    );
+    for (let i = 0; i < nested.length; i++) {
+      const control = nested[i]!;
+      if (isSensitive(control, localName.call(control) as string)) {
+        return { classified: true, sensitive: true, ...authored };
       }
     }
+    return { classified: true, ...authored };
   }
+
+  // Placeholder is page-authored hint text, not user input — same distinction
+  // `description` already draws (R1 only concerns a field's live VALUE) — so
+  // it is returned for a redacted or empty field too: it's the one thing
+  // worth showing an empty sensitive field for. `<select>` has none.
+  const own = (proto: object, name: string): unknown =>
+    accessor(proto, name).call(el);
+  let value: string;
+  let placeholder = "";
+  // What an input or textarea announces, read in this same call — see
+  // `PageFieldRead.announced`. A select's announced LABEL is Chromium's.
+  let announced: string | undefined;
+  if (tag === "input") {
+    value = own(HTMLInputElement.prototype, "value") as string;
+    placeholder = own(HTMLInputElement.prototype, "placeholder") as string;
+    const type = inputType.call(el) as string;
+    if (type === "file") {
+      // Its `.value` is a fake path, and it is never retyped.
+      const files = own(HTMLInputElement.prototype, "files") as FileList | null;
+      const names: string[] = [];
+      for (let i = 0; files && i < files.length; i++)
+        names.push(files[i]!.name);
+      announced = names.join(", ");
+      value = "";
+    } else if (
+      // Core's VALUELESS_INPUT_TYPES: a state, a name, or nothing says these.
+      [
+        "checkbox",
+        "radio",
+        "button",
+        "submit",
+        "reset",
+        "image",
+        "hidden",
+      ].indexOf(type) !== -1
+    ) {
+      announced = "";
+    } else {
+      announced = value;
+    }
+  } else if (tag === "textarea") {
+    value = own(HTMLTextAreaElement.prototype, "value") as string;
+    placeholder = own(HTMLTextAreaElement.prototype, "placeholder") as string;
+    announced = value;
+  } else {
+    value = own(HTMLSelectElement.prototype, "value") as string;
+  }
+  const answered = {
+    classified: true,
+    ...authored,
+    ...(placeholder ? { placeholder } : {}),
+  };
 
   // Classified whether or not it holds anything: an empty sensitive field
   // still says so, so no AX value read before it was cleared can show.
-  if (sensitive) {
-    return value
+  if (isSensitive(el, tag)) {
+    return value || announced
       ? { ...answered, sensitive: true, redacted: true }
       : { ...answered, sensitive: true };
   }
-  return value ? { ...answered, value } : answered;
+  return {
+    ...answered,
+    ...(value ? { value } : {}),
+    ...(announced !== undefined ? { announced } : {}),
+  };
 }
 
 /**
@@ -1105,11 +1197,12 @@ export const IN_PAGE_READ_VALUE_SOURCE = String(pageReadValue);
 async function readFieldValue(
   transport: CdpTransport,
   backendNodeId: number,
+  objectGroup: string,
 ): Promise<PageFieldRead> {
   try {
     const resolved = await transport.send<{ object?: { objectId?: string } }>(
       "DOM.resolveNode",
-      { backendNodeId },
+      { backendNodeId, objectGroup },
     );
     const objectId = resolved.object?.objectId;
     if (!objectId) return {};

@@ -26,6 +26,8 @@ import {
 } from "../native/native-actions.js";
 import { SYNTHETIC_ROOT_ID } from "../native/native-core.js";
 
+import { announcedValueLabel } from "./field-value.js";
+
 export {
   ACTABLE,
   isTypableRole,
@@ -67,7 +69,7 @@ export function formatDescription(n: NativeNode): string {
  * here.
  */
 export function formatValue(n: NativeNode): string {
-  return n.value !== undefined ? ` = ${JSON.stringify(n.value)}` : "";
+  return n.value !== undefined ? ` ${announcedValueLabel(n.value)}` : "";
 }
 
 /**

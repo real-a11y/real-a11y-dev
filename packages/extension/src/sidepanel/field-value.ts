@@ -12,6 +12,8 @@
  * producer, and `pageReadValue` for NATIVE), and it prints as that.
  */
 
+import { capText } from "../native/native-core.js";
+
 /** The longest raw value the DOM view prints before cutting it with `…` —
  *  the same 240 characters the announced value is capped at. */
 const RAW_VALUE_MAX = 240;
@@ -27,7 +29,5 @@ export function announcedValueLabel(value: string): string {
  * readable row. JSON-escaped, so a line break reads as `\n`.
  */
 export function rawValueLabel(raw: string): string {
-  const shown =
-    raw.length > RAW_VALUE_MAX ? raw.slice(0, RAW_VALUE_MAX - 1) + "…" : raw;
-  return `value=${JSON.stringify(shown)}`;
+  return `value=${JSON.stringify(capText(raw, RAW_VALUE_MAX))}`;
 }

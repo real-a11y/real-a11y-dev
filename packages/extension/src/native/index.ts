@@ -238,6 +238,7 @@ export function registerNativeMode(): void {
                 states: n.states,
                 properties: n.properties,
                 value: n.value,
+                redacted: n.redacted,
                 rawValue: n.rawValue,
                 placeholder: n.placeholder,
                 description: n.description,

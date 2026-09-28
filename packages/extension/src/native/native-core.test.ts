@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   backendNodeIdFrom,
+  capText,
   dispatchNative,
   fieldFacets,
   findNative,
@@ -335,8 +336,40 @@ describe("readNativeTree", () => {
     const res = await readNativeTree(t);
     const field = findNative(res.nodes, "textbox", "Password");
     expect(field?.value).toBe("[redacted]");
+    expect(field?.redacted).toBe(true);
     expect(field?.rawValue).toBeUndefined();
     expect(JSON.stringify(res.nodes)).not.toContain("•");
+  });
+
+  it("reads a range widget's aria-valuetext even when Chromium reports no number", async () => {
+    // `<div role="progressbar" aria-valuetext="Step 2 of 5">`, no valuenow.
+    const t = oneField(
+      { role: { value: "progressbar" }, name: { value: "Setup" } },
+      { classified: true, valuetext: "Step 2 of 5" },
+    );
+    const res = await readNativeTree(t);
+    expect(findNative(res.nodes, "progressbar", "Setup")?.value).toBe(
+      "Step 2 of 5",
+    );
+  });
+
+  it("resolves every field into one object group, and releases it", async () => {
+    const t = oneField(
+      {
+        role: { value: "textbox" },
+        name: { value: "Name:" },
+        value: { type: "string", value: "Ada" },
+      },
+      { classified: true, value: "Ada", announced: "Ada" },
+    );
+    await readNativeTree(t);
+    const resolve = t.calls.find((c) => c.method === "DOM.resolveNode");
+    const group = (resolve?.params as { objectGroup?: string }).objectGroup;
+    expect(group).toMatch(/^sn-field-values-\d+$/);
+    expect(t.calls.at(-1)).toEqual({
+      method: "Runtime.releaseObjectGroup",
+      params: { objectGroup: group },
+    });
   });
 
   it("withholds a sensitive text field Chromium sends in plaintext (cc-number)", async () => {
@@ -601,6 +634,40 @@ describe("fieldFacets", () => {
     ).toEqual({ placeholder: "Password" });
   });
 
+  it("shows an input's in-page text over Chromium's earlier AX value", () => {
+    // A "show password" toggle flipped `type` between the two reads: the AX
+    // value is Chromium's bullet mask, the in-page read the field as it now
+    // is — and the verdict came from that same in-page call.
+    expect(
+      fieldFacets("textbox", "•••••••", {
+        ...classified,
+        value: "hunter2",
+        announced: "hunter2",
+      }).value,
+    ).toBe("hunter2");
+    // Emptied between the reads: no value, not the stale one.
+    expect(
+      fieldFacets("textbox", "4111111111111111", {
+        ...classified,
+        announced: "",
+      }),
+    ).toEqual({});
+  });
+
+  it("flags the redaction marker, so no consumer compares text", () => {
+    expect(
+      fieldFacets("textbox", "•••••••", {
+        ...classified,
+        sensitive: true,
+        redacted: true,
+      }),
+    ).toEqual({ value: "[redacted]", redacted: true });
+    // An editor that merely holds the words is not redacted.
+    expect(
+      fieldFacets("application", "[redacted]", classified).redacted,
+    ).toBeUndefined();
+  });
+
   it("shows nothing at all without a verdict", () => {
     expect(
       fieldFacets("textbox", "4111111111111111", {
@@ -608,6 +675,21 @@ describe("fieldFacets", () => {
         placeholder: "Card",
       }),
     ).toEqual({});
+  });
+});
+
+describe("capText", () => {
+  it("leaves a short text alone", () => {
+    expect(capText("abc", 240)).toBe("abc");
+  });
+
+  it("never cuts between the halves of a surrogate pair", () => {
+    // An emoji straddling the cut would leave a lone half, which JSON
+    // renders as a literal `\ud83d`.
+    const text = "x".repeat(238) + "😀" + "tail";
+    const cut = capText(text, 240);
+    expect(cut).toBe("x".repeat(238) + "…");
+    expect(JSON.stringify(cut)).not.toContain("\\ud83d");
   });
 });
 
@@ -926,13 +1008,14 @@ describe("in-page actions — read value", () => {
     document.body.innerHTML = "";
   });
 
-  it("reads a plain text input's value", () => {
+  it("reads a plain text input's value, and announces the same text", () => {
     const el = document.createElement("input");
     el.value = "456465";
     document.body.appendChild(el);
     expect(on(pageReadValue, el)).toEqual({
       classified: true,
       value: "456465",
+      announced: "456465",
     });
   });
 
@@ -943,10 +1026,12 @@ describe("in-page actions — read value", () => {
     expect(on(pageReadValue, textarea)).toEqual({
       classified: true,
       value: "hello",
+      announced: "hello",
     });
 
-    // The RAW value — "fr", not the label. What the tree SHOWS for a select
-    // is Chromium's announced label; this read is only the retype prefill.
+    // The RAW value — "fr", not the label — and no `announced`: what the tree
+    // SHOWS for a select is Chromium's announced label; this read is only the
+    // retype prefill.
     const select = document.createElement("select");
     const option = document.createElement("option");
     option.value = "fr";
@@ -961,9 +1046,30 @@ describe("in-page actions — read value", () => {
   });
 
   it("classifies an empty field without a value — not even a redacted marker", () => {
+    // `announced: ""` says "empty, as of this read" — so an AX value
+    // captured before the field was cleared is not shown instead.
     const el = document.createElement("input");
     document.body.appendChild(el);
-    expect(on(pageReadValue, el)).toEqual({ classified: true });
+    expect(on(pageReadValue, el)).toEqual({ classified: true, announced: "" });
+  });
+
+  it("announces nothing for a valueless input type — a state or a name says it", () => {
+    for (const type of ["checkbox", "radio", "button", "submit", "reset"]) {
+      const el = document.createElement("input");
+      el.type = type;
+      el.value = "Send";
+      document.body.appendChild(el);
+      expect(on(pageReadValue, el).announced, type).toBe("");
+    }
+  });
+
+  // jsdom can't attach files; the e2e suite reads a chosen file's name back.
+  it("announces an empty file input as empty — never Chromium's 'No file chosen' or a fake path", () => {
+    const el = document.createElement("input");
+    el.type = "file";
+    document.body.appendChild(el);
+    const result = on(pageReadValue, el);
+    expect(result).toEqual({ classified: true, announced: "" });
   });
 
   it("still marks an EMPTY sensitive field sensitive, so no stale AX value can stand in for it", () => {
@@ -992,6 +1098,7 @@ describe("in-page actions — read value", () => {
     expect(on(pageReadValue, el)).toEqual({
       classified: true,
       placeholder: "you@example.com",
+      announced: "",
     });
   });
 
@@ -1003,6 +1110,7 @@ describe("in-page actions — read value", () => {
     expect(on(pageReadValue, el)).toEqual({
       classified: true,
       value: "ada@example.com",
+      announced: "ada@example.com",
       placeholder: "you@example.com",
     });
   });
@@ -1030,6 +1138,7 @@ describe("in-page actions — read value", () => {
     expect(on(pageReadValue, el)).toEqual({
       classified: true,
       placeholder: "Leave a comment",
+      announced: "",
     });
   });
 
@@ -1102,7 +1211,11 @@ describe("in-page actions — read value", () => {
     el.autocomplete = "given-name";
     el.value = "Ada";
     document.body.appendChild(el);
-    expect(on(pageReadValue, el)).toEqual({ classified: true, value: "Ada" });
+    expect(on(pageReadValue, el)).toEqual({
+      classified: true,
+      value: "Ada",
+      announced: "Ada",
+    });
   });
 
   it("classifies a non-field element as never sensitive, without reading its content", () => {
@@ -1119,6 +1232,57 @@ describe("in-page actions — read value", () => {
     const result = on(pageReadValue, el);
     expect(result).toEqual({ classified: true });
     expect(JSON.stringify(result)).not.toContain("typed text");
+  });
+
+  it("withholds a wrapper's value when a sensitive field sits inside it", () => {
+    // Chromium 151 leaves a nested control's value out of its wrapper's AX
+    // value (measured), but the wrapper's value is Chromium's to compute, so
+    // it is withheld whole rather than trusted to exclude the secret.
+    const combobox = document.createElement("div");
+    combobox.setAttribute("role", "combobox");
+    const input = document.createElement("input");
+    input.setAttribute("autocomplete", "cc-number");
+    input.value = "4111111111111111";
+    combobox.appendChild(input);
+    document.body.appendChild(combobox);
+    expect(on(pageReadValue, combobox)).toEqual({
+      classified: true,
+      sensitive: true,
+    });
+
+    const editor = document.createElement("div");
+    editor.setAttribute("contenteditable", "true");
+    editor.append("Draft ");
+    const password = document.createElement("input");
+    password.type = "password";
+    editor.appendChild(password);
+    document.body.appendChild(editor);
+    expect(on(pageReadValue, editor).sensitive).toBe(true);
+
+    // A plain control inside a wrapper changes nothing.
+    const plain = document.createElement("div");
+    plain.setAttribute("contenteditable", "true");
+    plain.appendChild(document.createElement("input"));
+    document.body.appendChild(plain);
+    expect(on(pageReadValue, plain)).toEqual({ classified: true });
+  });
+
+  it("recognises a field by its tag, not instanceof — a swapped prototype still redacts", () => {
+    // A field `instanceof` missed would read as a non-field: never
+    // sensitive, and Chromium's plaintext value shown for it.
+    const el = document.createElement("input");
+    el.setAttribute("autocomplete", "cc-number");
+    el.value = "4111111111111111";
+    document.body.appendChild(el);
+    Object.setPrototypeOf(el, HTMLElement.prototype);
+    expect(el instanceof HTMLInputElement).toBe(false);
+    const result = on(pageReadValue, el);
+    expect(result).toEqual({
+      classified: true,
+      sensitive: true,
+      redacted: true,
+    });
+    expect(JSON.stringify(result)).not.toContain("4111111111111111");
   });
 
   it("returns aria-valuetext, which Chromium's CDP payload never carries", () => {
@@ -1141,6 +1305,7 @@ describe("in-page actions — read value", () => {
       classified: true,
       valuetext: "Loud",
       value: "80",
+      announced: "80",
     });
   });
 

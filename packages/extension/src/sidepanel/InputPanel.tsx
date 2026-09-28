@@ -109,7 +109,8 @@ export interface InputPanelState {
   source?: "dom" | "native";
   /**
    * Set only when `value` was substituted empty for a native field whose
-   * real value is redacted (R1) — see `App.tsx`'s `handleNativeActivate`.
+   * real value is redacted (R1), or that a retype cannot start from (an
+   * editor's content) — see `App.tsx`'s `handleNativeActivate`.
    * Submitting with NO edit (still empty) is a no-op instead of a dispatch:
    * without this, a click-through submit would silently blank the user's
    * real, still-live value on the page for a field they never touched. A

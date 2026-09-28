@@ -31,6 +31,10 @@ export type NativeNode = {
    *  reads `native-core.ts`'s `NATIVE_REDACTED_VALUE` sentinel — never the
    *  raw secret. */
   value?: string;
+  /** Set when `value` is that sentinel for a sensitive field — the one
+   *  reliable test, since an editor can hold the sentinel's text as
+   *  ordinary content. */
+  redacted?: boolean;
   /** The raw live value of a non-sensitive `<input>`/`<textarea>`/
    *  `<select>` (`"es"` where `value` is `"Spain"`) — what a retype starts
    *  from. Never displayed, never set for a sensitive field. */
