@@ -29,6 +29,9 @@ const REFERENCE_ATTRS = new Set([
   "aria-labelledby",
   "aria-describedby",
   "for",
+  // An <img usemap> decides whether the areas of the map it names are
+  // focusable, and that map can sit anywhere in the tree.
+  "usemap",
 ]);
 
 /**
@@ -433,6 +436,12 @@ export class LiveTreeExtractor {
       const el = n as Element;
 
       if (containsOverlaySignal(el)) {
+        return true;
+      }
+
+      // Adding or removing an <img usemap> changes whether a map's areas are
+      // focusable, wherever that map is: the same reach as a `usemap` change.
+      if (el.matches("img[usemap]") || el.querySelector("img[usemap]")) {
         return true;
       }
 

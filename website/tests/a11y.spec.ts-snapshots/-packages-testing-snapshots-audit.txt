@@ -163,6 +163,17 @@ main
   heading "tabSequenceSnapshot(root, options?)" (level 2)
     code "tabSequenceSnapshot(root, options?)"
   paragraph "Returns the tab sequence, one stop per line in Tab order."
+  paragraph "The stops are the ones Chromium tabs to. An without an is not one, not even with , which is the keyboard bug worth catching. Nor is a control disabled directly or by its , or an element whose is not an integer, such as . An control is a stop, because announces a state and leaves focus alone. counts the same way."
+    code "<a>"
+    code "href"
+    code "role="button""
+    code "<fieldset>"
+    code "tabindex"
+    code """"
+    code "aria-disabled"
+    code "aria-disabled"
+    link "toHaveTabSequence"
+      code "toHaveTabSequence"
   button "Copy Code"
   code
   paragraph "Example output:"
