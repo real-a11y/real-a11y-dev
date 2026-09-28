@@ -46,13 +46,13 @@ jobs:
     name: Snapshot (base)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.base_ref }}
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: pnpm
@@ -86,7 +86,7 @@ jobs:
           for i in $(seq 1 60); do curl -sf http://localhost:4173/ >/dev/null && break; sleep 1; done
           node packages/cli/dist/index.js snapshot --config .github/a11y-ci.config.json --wait-until networkidle --settle 1000 -o base.json
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: base-snapshot
           path: base.json
@@ -98,11 +98,11 @@ jobs:
     needs: [snapshot-base]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: pnpm
@@ -129,7 +129,7 @@ jobs:
           for i in $(seq 1 60); do curl -sf http://localhost:4173/ >/dev/null && break; sleep 1; done
           node packages/cli/dist/index.js snapshot --config .github/a11y-ci.config.json --wait-until networkidle --settle 1000 -o pr.json
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: base-snapshot
 
@@ -150,7 +150,7 @@ jobs:
           node packages/cli/dist/index.js diff base.json pr.json --format json --fail-on never --ignore-view-line '^time "' -o diff.json
 
       - name: Post PR comment
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
