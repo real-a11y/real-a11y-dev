@@ -21,6 +21,8 @@ interface SemanticNode {
     role: string;                // ARIA role (resolved from element + explicit role attr)
     name: string;                // accessible name (label, aria-label, aria-labelledby…)
     description: string;
+    value?: string;              // what a screen reader announces for a field ("Spain", not "es");
+                                 // "[redacted]" for a filled password / card / one-time-code field
     states: Record<string, string | boolean>; // checked, expanded, selected, pressed…
     properties: Record<string, string>;       // aria-* properties (incl. heading "level")
     isExposedToAT: boolean;      // false when aria-hidden, role="presentation", etc.
@@ -79,6 +81,8 @@ Examples:
 | `<div>` (no role) | `generic` |
 
 `role="presentation"` and `role="none"` strip the element's role from the tree — the element is still present, but its children are re-parented.
+
+`role="image"`, ARIA 1.3's synonym for `img`, extracts as `img` — the role Chromium's own tree reports for it — so role queries, snapshots and the `image-alt` rule see one role, not two. Like any `img`, it is named only by `aria-label`, `aria-labelledby` or `title`, never by its text.
 
 Per ARIA's [presentational roles conflict resolution](https://www.w3.org/TR/wai-aria-1.2/#conflict_resolution_presentation_none), that role is **ignored** when the element is focusable or carries a global ARIA state or property, and the element keeps its implicit role instead. `<a href="/about" role="presentation">` is a `link`, and `<h2 role="presentation" aria-label="Q3">` is still a `heading` — a decorative role can't hide a control from the keyboard or a heading from heading order. `aria-hidden="true"` is the exception: it removes the element outright, so it never restores a role.
 

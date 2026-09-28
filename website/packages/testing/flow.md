@@ -177,7 +177,7 @@ await flow(document.body)
 
 Three forms:
 
-- **`ChangeSpec`** — the ergonomic default. `added` / `removed` / `changed` are matched by `role` + optional `name` (string = case-, whitespace-, and typography-normalized exact; RegExp = tested against the folded name). A `ChangedMatcher` may list `changes` (dot-paths that must appear). **Subset by default** — resilient to incidental changes; `exact: true` asserts nothing else changed (a `childIds`-only change on a container is treated as the structural shadow of an add/remove and never counts as an extra).
+- **`ChangeSpec`** — the ergonomic default. `added` / `removed` / `changed` are matched by `role` + optional `name` (string = case-, whitespace-, and typography-normalized exact; RegExp = tested against the folded name). A `ChangedMatcher` may list `changes` (dot-paths that must appear). **Subset by default** — resilient to incidental changes; `exact: true` asserts nothing else changed. Two kinds of change never count as an extra on their own: a `childIds`-only change on a container (the structural shadow of an add/remove), and an `a11y.value`-only change (a field whose contents a `type` step changed). Assert a value change explicitly with `changes: ["a11y.value"]`.
 - **`string`** — trim-compared against the `serializeTreeDiff` output, like `expectTree`. Includes the `focus:` line. (This whole-diff text form compares literally — unlike the `ChangeSpec` name match, it is **not** typography-folded, so it stays a faithful snapshot.)
 - **`(diff) => void`** — the escape hatch; throw to fail.
 

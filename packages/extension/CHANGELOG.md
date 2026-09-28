@@ -40,12 +40,45 @@
   ([#425](https://github.com/real-a11y/real-a11y-dev/pull/425))
 
 - In DOM mode, the Tab Sequence view, its copied export and the keyboard bar's
+  Tab now stop at the `<summary>` that toggles a `<details>`, as Chromium does,
+  so a disclosure or an FAQ accordion question is no longer missing from the
+  tab order. Only the first summary of a `<details>` counts. The DOM tree now
+  keeps that summary as a node under its `<details>`, where it used to drop it.
+  ([#428](https://github.com/real-a11y/real-a11y-dev/pull/428))
+
+- In DOM mode, the Tab Sequence view, its copied export and the keyboard bar's
   Tab now stop where Chromium stops. They used to stop at an `<a>` with no
   `href`, even an `<a role="button">` no keyboard can reach, at a control
   disabled by its `<fieldset>` and at an element with an empty or non-numeric
   `tabindex`, and to skip an `aria-disabled` control, which Chromium does tab
   to.
   ([#423](https://github.com/real-a11y/real-a11y-dev/pull/423))
+
+- In DOM mode, the Tab Sequence view, its copied export and the keyboard bar's
+  Tab now stop at a rich-text editor and skip the links inside it. They used to
+  do the reverse: a `contenteditable` message box was left out, and a link typed
+  into it was listed under its own text, often a full URL, although Chromium
+  can't focus it at all. A mention chip marked `contenteditable="false"` is
+  still a stop. A role-less editor shows as `generic` instead of taking what
+  was typed into it as its name, and gets a Type action like a text box.
+  Selecting any editor moves page focus to it, including one written as
+  `contenteditable=""` or `plaintext-only`. A link inside an editor no
+  longer offers Click, since Chromium doesn't follow it.
+  ([#421](https://github.com/real-a11y/real-a11y-dev/pull/421))
+
+- An element with `role="image"` now shows as an `img` in DOM mode, as NATIVE
+  mode already showed it. ARIA 1.3 makes `image` another spelling of `img`, but
+  the DOM tree kept the raw role and named the element by its text, so
+  `<span role="image">🎉</span>` read `image "🎉"` instead of a bare `img`, and
+  the Images filter left it out.
+  ([#419](https://github.com/real-a11y/real-a11y-dev/pull/419))
+
+- In NATIVE mode, an indeterminate progress bar and a static separator no
+  longer show their text as their name. `<div role="progressbar">Loading
+  files</div>` read `progressbar "Loading files"` and `<div
+  role="separator">Or</div>` read `separator "Or"`; both now read bare, as
+  Chromium names them. One labelled with `aria-label` keeps its label.
+  ([#424](https://github.com/real-a11y/real-a11y-dev/pull/424))
 
 - In NATIVE mode, a rich-text editor no longer shows what was typed into it as
   its name. A `<div role="application" contenteditable>` read
@@ -56,6 +89,15 @@
   its typed text as its name either, and a `role="progressbar"` no longer
   shows its fallback text as its name.
   ([#418](https://github.com/real-a11y/real-a11y-dev/pull/418))
+
+- In DOM mode, a contenteditable editor with no role (a ProseMirror-style
+  composer) no longer shows what was typed into it as its name. It read
+  `generic "draft text"` and now reads a bare `generic` that stays in the tree
+  as a field, as Chromium leaves it unnamed. With a diff baseline captured, a
+  field you type into is now marked **changed**, because the tree now records
+  each field's value (ADR-0001). The panel's value display is unchanged until
+  the A11y view learns the announced value.
+  ([#417](https://github.com/real-a11y/real-a11y-dev/pull/417))
 
 - In NATIVE mode, an image, dialog, landmark or form field that has no label
   no longer shows its text as its name. `<span role="img">🎉</span>` read

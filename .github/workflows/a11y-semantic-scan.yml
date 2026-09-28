@@ -35,11 +35,11 @@ jobs:
     name: Scan main & upload SARIF
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: pnpm
@@ -68,7 +68,7 @@ jobs:
       # Uploads for the default branch (refs/heads/main) → the Security tab.
       # A distinct `category` keeps it separate from CodeQL / Scorecard.
       - name: Upload a11y findings to code scanning (SARIF)
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: a11y.sarif
           category: real-a11y

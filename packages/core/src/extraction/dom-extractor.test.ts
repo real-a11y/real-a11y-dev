@@ -7,7 +7,10 @@ import * as clobberSafe from "./clobber-safe.js";
 import {
   extractDomTree,
   getDescendantText,
+  getElementRefs,
   isSensitiveField,
+  isSensitiveFieldAttributes,
+  SENSITIVE_AUTOCOMPLETE_TOKENS,
 } from "./dom-extractor.js";
 
 beforeEach(() => {
@@ -1665,6 +1668,8 @@ describe("the direct-text fallback skips author-named roles", () => {
       `<div id="t" role="alertdialog">Session expired <button>Renew</button></div>`,
     ],
     ["img", `<div id="t" role="img">text img</div>`],
+    // ARIA 1.3's `image` is a synonym of `img`: same role, same unnamed text.
+    ["img", `<span id="t" role="image">🎉</span>`],
     ["form", `<form id="t">Search: <input></form>`],
     ["navigation", `<nav id="t">Menu: <a href="#">Home</a></nav>`],
     ["main", `<main id="t">Welcome <a href="#">x</a></main>`],
@@ -1809,6 +1814,10 @@ describe("the direct-text fallback skips author-named roles", () => {
       `<button id="t" role="combobox" aria-expanded="false">Apple</button>`,
     ],
     ["img", `<a id="t" href="#" role="img">logo text</a>`],
+    // The synonym has to be folded before the name-from-content test too, or
+    // the tag wins it back: this was `image "🎉"` while Chromium says unnamed.
+    ["img", `<button id="t" role="image">🎉</button>`],
+    ["img", `<a id="t" href="#" role="image">logo text</a>`],
     ["dialog", `<a id="t" href="#" role="dialog">Dialog text</a>`],
     ["tabpanel", `<h2 id="t" role="tabpanel">Panel</h2>`],
   ])("leaves a %s on a name-from-content tag unnamed", (role, html) => {
@@ -2060,6 +2069,357 @@ describe("sensitive value redaction", () => {
     );
     expect(withPlaceholder.a11y.name).toBe("Password");
     expect(JSON.stringify(withPlaceholder)).not.toContain("hunter2");
+  });
+});
+
+describe("isSensitiveFieldAttributes — the policy over markup alone (ADR-0001)", () => {
+  it("flags a password input whatever the attribute's case", () => {
+    expect(isSensitiveFieldAttributes("input", { type: "password" })).toBe(
+      true,
+    );
+    expect(isSensitiveFieldAttributes("INPUT", { type: " Password " })).toBe(
+      true,
+    );
+  });
+
+  it("flags every credential and payment token, and nothing else", () => {
+    for (const token of SENSITIVE_AUTOCOMPLETE_TOKENS) {
+      expect(isSensitiveFieldAttributes("input", { autocomplete: token })).toBe(
+        true,
+      );
+    }
+    expect(
+      isSensitiveFieldAttributes("select", {
+        autocomplete: "section-a billing CC-EXP-MONTH",
+      }),
+    ).toBe(true);
+    for (const autocomplete of ["email", "username", "off", "name", ""]) {
+      expect(isSensitiveFieldAttributes("input", { autocomplete })).toBe(false);
+    }
+  });
+
+  it("only ever flags a form field", () => {
+    expect(
+      isSensitiveFieldAttributes("div", {
+        type: "password",
+        autocomplete: "current-password",
+      }),
+    ).toBe(false);
+    // A textarea's `type` is not a password type; its autocomplete still is.
+    expect(isSensitiveFieldAttributes("textarea", { type: "password" })).toBe(
+      false,
+    );
+    expect(
+      isSensitiveFieldAttributes("textarea", { autocomplete: "one-time-code" }),
+    ).toBe(true);
+  });
+
+  it("agrees with isSensitiveField on the same markup", () => {
+    const fixtures = [
+      `<input type="password">`,
+      `<input autocomplete="cc-number">`,
+      `<input type="text" autocomplete="email">`,
+      `<select autocomplete="cc-exp"></select>`,
+      `<textarea></textarea>`,
+      `<div contenteditable="true"></div>`,
+    ];
+    for (const html of fixtures) {
+      const div = document.createElement("div");
+      div.innerHTML = html;
+      const el = div.firstElementChild!;
+      expect(
+        isSensitiveFieldAttributes(el.tagName, {
+          type: el.getAttribute("type"),
+          autocomplete: el.getAttribute("autocomplete"),
+        }),
+        html,
+      ).toBe(isSensitiveField(el));
+    }
+  });
+});
+
+describe("a11y.value — what a screen reader announces (ADR-0001)", () => {
+  /** Extract `html` and return the node for the element matching `selector`. */
+  function nodeFor(root: Element, selector: string) {
+    const target = root.querySelector(selector)!;
+    const tree = extractDomTree(root);
+    const refs = getElementRefs();
+    const node = [...tree.nodes.values()].find(
+      (n) => refs.get(n.id) === target,
+    );
+    if (!node) throw new Error(`no node for ${selector}`);
+    return node;
+  }
+  const valueOf = (html: string, selector: string) =>
+    nodeFor(createPage(html), selector).a11y.value;
+
+  it("reads a text field's current text, not its initial attribute", () => {
+    const root = createPage(`<input aria-label="City" value="Lima">`);
+    (root.querySelector("input") as HTMLInputElement).value = "Quito";
+    expect(nodeFor(root, "input").a11y.value).toBe("Quito");
+  });
+
+  it("has no value when a field is empty", () => {
+    expect(valueOf(`<input aria-label="City">`, "input")).toBeUndefined();
+    expect(
+      valueOf(`<textarea aria-label="Notes"></textarea>`, "textarea"),
+    ).toBe(undefined);
+  });
+
+  it("collapses a textarea's whitespace", () => {
+    expect(
+      valueOf(
+        `<textarea aria-label="Notes">line one\n\n   line two</textarea>`,
+        "textarea",
+      ),
+    ).toBe("line one line two");
+  });
+
+  it("announces a <select>'s option LABEL, while dom.attributes keeps the raw value", () => {
+    const root = createPage(
+      `<select aria-label="Country"><option value="pt">Portugal</option><option value="es" selected>Spain</option></select>`,
+    );
+    const node = nodeFor(root, "select");
+    expect(node.a11y.value).toBe("Spain");
+    expect(node.dom?.attributes.value).toBe("es");
+  });
+
+  it("joins a multi-select's selected labels", () => {
+    expect(
+      valueOf(
+        `<select multiple aria-label="Toppings"><option selected>Cheese</option><option>Ham</option><option selected>Basil</option></select>`,
+        "select",
+      ),
+    ).toBe("Cheese, Basil");
+  });
+
+  it("reads a range widget's valuetext, else valuenow, else its native value", () => {
+    expect(
+      valueOf(
+        `<div role="slider" aria-label="Rating" aria-valuenow="4" aria-valuetext="4 of 5 stars" tabindex="0"></div>`,
+        "div",
+      ),
+    ).toBe("4 of 5 stars");
+    expect(
+      valueOf(
+        `<div role="spinbutton" aria-label="Qty" aria-valuenow="3" tabindex="0"></div>`,
+        "div",
+      ),
+    ).toBe("3");
+    expect(
+      valueOf(
+        `<input type="range" aria-label="Volume" min="0" max="100" value="50">`,
+        "input",
+      ),
+    ).toBe("50");
+    expect(
+      valueOf(
+        `<progress aria-label="Upload" max="100" value="30"></progress>`,
+        "progress",
+      ),
+    ).toBe("30");
+    // Indeterminate: no value attribute, nothing announced.
+    expect(
+      valueOf(`<progress aria-label="Loading"></progress>`, "progress"),
+    ).toBeUndefined();
+  });
+
+  it("has no value for controls whose state or name says it", () => {
+    expect(
+      valueOf(
+        `<input type="checkbox" aria-label="Agree" value="yes" checked>`,
+        "input",
+      ),
+    ).toBeUndefined();
+    expect(
+      valueOf(`<input type="radio" aria-label="Small" value="s">`, "input"),
+    ).toBeUndefined();
+    expect(valueOf(`<input type="submit" value="Send">`, "input")).toBe(
+      undefined,
+    );
+    expect(
+      valueOf(
+        `<div role="switch" aria-checked="true" aria-label="Wi-Fi" tabindex="0">On</div>`,
+        "div",
+      ),
+    ).toBeUndefined();
+  });
+
+  it("reads a file input's file names", () => {
+    const root = createPage(`<input type="file" aria-label="Attach" multiple>`);
+    Object.defineProperty(root.querySelector("input")!, "files", {
+      value: [{ name: "report.pdf" }, { name: "photo.png" }],
+    });
+    expect(nodeFor(root, "input").a11y.value).toBe("report.pdf, photo.png");
+  });
+
+  it("reads an editor's text across its blocks, on the host only", () => {
+    const root = createPage(
+      `<div contenteditable="true" role="textbox" aria-label="Message"><p>Hello <b>team</b></p><p>second line</p></div>`,
+    );
+    expect(nodeFor(root, "[contenteditable]").a11y.value).toBe(
+      "Hello team second line",
+    );
+    // The paragraph inside is part of the editor, not a field of its own.
+    expect(nodeFor(root, "p").a11y.value).toBeUndefined();
+  });
+
+  it("reads a role-less editor host, and a plain ARIA textbox or combobox", () => {
+    expect(
+      valueOf(`<div contenteditable="plaintext-only">just typed</div>`, "div"),
+    ).toBe("just typed");
+    expect(
+      valueOf(
+        `<div role="combobox" aria-label="Fruit" tabindex="0">Apple</div>`,
+        "div",
+      ),
+    ).toBe("Apple");
+  });
+
+  it("skips hidden text and a widget's own popup, which aren't announced as the value", () => {
+    expect(
+      valueOf(
+        `<div role="combobox" aria-label="Fruit" tabindex="0">Apple<span hidden>(3 results)</span><span aria-hidden="true">▾</span></div>`,
+        "[role=combobox]",
+      ),
+    ).toBe("Apple");
+    expect(
+      valueOf(
+        `<div role="combobox" aria-label="Fruit" tabindex="0">Apple<ul role="listbox"><li role="option">Apple</li><li role="option">Pear</li></ul></div>`,
+        "[role=combobox]",
+      ),
+    ).toBe("Apple");
+  });
+
+  it("skips visibility:hidden text, but reads a child that sets itself visible again", () => {
+    expect(
+      valueOf(
+        `<div contenteditable="true">Visible <span style="visibility:hidden">secret <b style="visibility:visible">shown</b></span></div>`,
+        "div",
+      ),
+    ).toBe("Visible shown");
+  });
+
+  it("reads only a closed <details>'s summary, and its body once opened", () => {
+    expect(
+      valueOf(
+        `<div contenteditable="true">Note <details><summary>More</summary>Private text</details></div>`,
+        "div",
+      ),
+    ).toBe("Note More");
+    expect(
+      valueOf(
+        `<div contenteditable="true">Note <details open><summary>More</summary>Private text</details></div>`,
+        "div",
+      ),
+    ).toBe("Note More Private text");
+  });
+
+  it("counts an editor's text once: a textbox nested inside it has no value of its own", () => {
+    const root = createPage(
+      `<div contenteditable="true" role="textbox" aria-label="Doc"><p>intro</p><div role="textbox" aria-label="Cell">cell text</div></div>`,
+    );
+    expect(nodeFor(root, "[aria-label=Doc]").a11y.value).toBe(
+      "intro cell text",
+    );
+    expect(nodeFor(root, "[aria-label=Cell]").a11y.value).toBeUndefined();
+  });
+
+  it("keeps an editor's value when it contains native controls, like a task list's checkboxes", () => {
+    expect(
+      valueOf(
+        `<div contenteditable="true" role="textbox" aria-label="Tasks"><ul><li><input type="checkbox"> Buy milk</li><li><input type="checkbox" checked> Call Ana</li></ul><input type="hidden" value="doc-1"></div>`,
+        "[aria-label=Tasks]",
+      ),
+    ).toBe("Buy milk Call Ana");
+  });
+
+  it("leaves a nested <select>'s options and a <textarea>'s default text out of an editor's value", () => {
+    const root = createPage(
+      `<div contenteditable="true" role="textbox" aria-label="Form doc">Size: <select aria-label="Size"><option>Small</option><option selected>Large</option></select> Notes: <textarea aria-label="Notes">default text</textarea></div>`,
+    );
+    expect(nodeFor(root, "[aria-label='Form doc']").a11y.value).toBe(
+      "Size: Notes:",
+    );
+    // Each control still announces its own value.
+    expect(nodeFor(root, "select").a11y.value).toBe("Large");
+  });
+
+  it("lets an ARIA combobox read its own text when all it wraps is a hidden input", () => {
+    expect(
+      valueOf(
+        `<div role="combobox" aria-label="Fruit" tabindex="0">Apple<input type="hidden" name="fruit" value="apple"></div>`,
+        "[role=combobox]",
+      ),
+    ).toBe("Apple");
+  });
+
+  it("leaves the value to the native control an ARIA combobox wraps", () => {
+    const root = createPage(
+      `<div role="combobox" aria-label="State"><input aria-label="State" value="Ohio"><ul role="listbox"><li role="option">Ohio</li><li role="option">Utah</li></ul></div>`,
+    );
+    expect(nodeFor(root, "[role=combobox]").a11y.value).toBeUndefined();
+    expect(nodeFor(root, "input").a11y.value).toBe("Ohio");
+  });
+
+  it("caps a long value at 240 characters with an ellipsis", () => {
+    const value = nodeFor(
+      createPage(
+        `<textarea aria-label="Essay">${"word ".repeat(100)}</textarea>`,
+      ),
+      "textarea",
+    ).a11y.value!;
+    expect(value).toHaveLength(240);
+    expect(value.endsWith("…")).toBe(true);
+  });
+
+  it("reads [redacted] for a filled sensitive field, and nothing for an empty one", () => {
+    const filled = nodeFor(
+      createPage(
+        `<input type="password" aria-label="Password" value="hunter2">`,
+      ),
+      "input",
+    );
+    expect(filled.a11y.value).toBe("[redacted]");
+    expect(JSON.stringify(filled)).not.toContain("hunter2");
+
+    const card = nodeFor(
+      createPage(
+        `<input autocomplete="cc-number" aria-label="Card" value="4111111111111111">`,
+      ),
+      "input",
+    );
+    expect(card.a11y.value).toBe("[redacted]");
+    expect(JSON.stringify(card)).not.toContain("4111111111111111");
+
+    expect(
+      valueOf(`<input type="password" aria-label="Password">`, "input"),
+    ).toBeUndefined();
+  });
+
+  it("never names a field after its value", () => {
+    const node = nodeFor(createPage(`<input value="typed">`), "input");
+    expect(node.a11y.value).toBe("typed");
+    expect(node.a11y.name).toBe("");
+    // A role-less editor too: its loose text is what was typed, not a name.
+    const editor = nodeFor(
+      createPage(`<div contenteditable="true">typed here</div>`),
+      "div",
+    );
+    expect(editor.a11y.value).toBe("typed here");
+    expect(editor.a11y.name).toBe("");
+  });
+
+  it("drops only the value when a hostile getter throws, never the node", () => {
+    const root = createPage(`<input aria-label="Trap">`);
+    Object.defineProperty(root.querySelector("input")!, "value", {
+      get() {
+        throw new Error("gotcha");
+      },
+    });
+    const node = nodeFor(root, "input");
+    expect(node.a11y.name).toBe("Trap");
+    expect(node.a11y.value).toBeUndefined();
   });
 });
 
@@ -2399,6 +2759,68 @@ describe("interaction.isFocusable follows Chromium", () => {
       "button-word": true,
     });
   });
+
+  it("counts a details' summary: its first summary child, wherever it sits", () => {
+    expect(
+      focusableById(`
+        <details><summary id="closed">Shipping</summary><p>Body</p></details>
+        <details open><summary id="open">Returns</summary><p>Body</p></details>
+        <details>
+          <summary id="first">A</summary>
+          <summary id="second">B</summary>
+        </details>
+        <details open><p>Lead</p><summary id="after-text">C</summary></details>
+        <details open><div><summary id="nested">D</summary></div></details>
+        <div><summary id="stray">E</summary></div>
+        <div><summary id="stray-tabindexed" tabindex="0">F</summary></div>
+        <details><summary id="scripted" tabindex="-1">G</summary></details>
+        <fieldset disabled>
+          <details><summary id="in-fieldset">H</summary></details>
+        </fieldset>
+        <details open><summary id="role-button" role="button">I</summary></details>
+        <details open><summary id="aria-disabled" aria-disabled="true">J</summary></details>
+      `),
+    ).toEqual({
+      closed: true,
+      open: true,
+      // Only the first summary child is the details' summary, even when
+      // other content comes before it.
+      first: true,
+      second: false,
+      "after-text": true,
+      // A summary that is not a details' child is plain text.
+      nested: false,
+      stray: false,
+      "stray-tabindexed": true,
+      // Focusable, just not a Tab stop.
+      scripted: true,
+      // A summary is no form control, so a disabled fieldset leaves it be.
+      "in-fieldset": true,
+      "role-button": true,
+      "aria-disabled": true,
+    });
+  });
+
+  it("reads a summary's details from the DOM, not from where it is slotted", () => {
+    const root = createPage(
+      `<div id="direct-host"></div>` +
+        `<div id="slot-host"><summary id="slotted">Slotted</summary></div>`,
+    );
+    root
+      .querySelector("#direct-host")!
+      .attachShadow({ mode: "open" }).innerHTML =
+      `<details><summary id="in-shadow">In shadow</summary></details>`;
+    // Rendered inside the details, but its parent is the host, so Chromium
+    // gives the details its default summary and leaves this one unfocusable.
+    root.querySelector("#slot-host")!.attachShadow({ mode: "open" }).innerHTML =
+      `<details open><slot></slot></details>`;
+    const byId: Record<string, boolean> = {};
+    for (const node of extractDomTree(root).nodes.values()) {
+      const id = node.dom?.attributes["id"];
+      if (id) byId[id] = node.interaction!.isFocusable;
+    }
+    expect(byId).toMatchObject({ "in-shadow": true, slotted: false });
+  });
 });
 
 describe("computed-style cache during extraction", () => {
@@ -2607,5 +3029,185 @@ describe("aria-describedby target suppression", () => {
     const link = [...nodes.values()].find((n) => n.a11y.role === "link");
     expect(link).toBeDefined();
     expect(link!.a11y.name).toBe("Full rules");
+  });
+});
+
+// Chromium 151 is the reference for every expectation here: an editing host
+// is a tab stop that takes typing, a link inside editable content can't be
+// focused at all (not even by script) unless it carries its own tabindex, and
+// a contenteditable="false" island hands a link its focusability back.
+describe("contenteditable editing hosts", () => {
+  const nodeBy = (root: Element, id: string) => {
+    const { nodes } = extractDomTree(root);
+    const node = [...nodes.values()].find((n) => n.dom?.attributes.id === id);
+    if (!node) throw new Error(`no node with id="${id}"`);
+    return node;
+  };
+
+  it("makes a role-less editor a focusable text field, unnamed by what was typed", () => {
+    const root = createPage(
+      `<div id="ed" contenteditable="true">my password is hunter2</div>`,
+    );
+    const ed = nodeBy(root, "ed");
+    expect(ed.a11y.role).toBe("generic");
+    // What was typed is the editor's content, not its label.
+    expect(ed.a11y.name).toBe("");
+    expect(ed.interaction?.isFocusable).toBe(true);
+    expect(ed.interaction?.actions).toEqual(["focus", "type"]);
+    expect(ed.interaction?.isInteractive).toBe(true);
+  });
+
+  // Not even a role that names from content: Chromium leaves an editable
+  // heading, button or link unnamed, and names one only by its author.
+  it("never names a host from its content, whatever its role", () => {
+    const root = createPage(`
+      <h3 id="title" contenteditable="true">Draft title</h3>
+      <button id="btn" contenteditable="true">Button text</button>
+      <a id="link" href="/l" contenteditable="true">Link text</a>
+      <h3 id="labelled" contenteditable="true" aria-label="Label">Typed</h3>
+      <h3 id="titled" contenteditable="true" title="Tip">Typed</h3>
+      <div contenteditable="true"><h3 id="inner">Inner heading</h3></div>
+    `);
+    const title = nodeBy(root, "title");
+    expect(title.a11y.name).toBe("");
+    expect(title.interaction?.isFocusable).toBe(true);
+    expect(title.interaction?.actions).toEqual(["focus", "type"]);
+    expect(nodeBy(root, "btn").a11y.name).toBe("");
+    expect(nodeBy(root, "link").a11y.name).toBe("");
+    expect(nodeBy(root, "labelled").a11y.name).toBe("Label");
+    expect(nodeBy(root, "titled").a11y.name).toBe("Tip");
+    // Only the host: a heading inside an editor is named as usual.
+    expect(nodeBy(root, "inner").a11y.name).toBe("Inner heading");
+  });
+
+  it("still reads a host's text into an ancestor's name", () => {
+    const root = createPage(
+      `<h2 id="h">Before <button contenteditable="true">Save</button> after</h2>`,
+    );
+    expect(nodeBy(root, "h").a11y.name).toBe("Before Save after");
+  });
+
+  it("marks only an editing host as editable", () => {
+    const root = createPage(`
+      <div id="empty" contenteditable="">x</div>
+      <div id="plain" contenteditable="plaintext-only">y</div>
+      <div id="outer" contenteditable="true"><div id="nested" contenteditable="true">n</div></div>
+    `);
+    expect(nodeBy(root, "empty").interaction?.isEditable).toBe(true);
+    expect(nodeBy(root, "plain").interaction?.isEditable).toBe(true);
+    expect(nodeBy(root, "outer").interaction?.isEditable).toBe(true);
+    expect(nodeBy(root, "nested").interaction?.isEditable).toBe(false);
+  });
+
+  it("types into an upper-case contenteditable combobox", () => {
+    const root = createPage(
+      `<div id="cb" role="combobox" contenteditable="TRUE" aria-label="Q"></div>`,
+    );
+    expect(nodeBy(root, "cb").interaction?.actions).toEqual(["focus", "type"]);
+  });
+
+  // A contenteditable="false" island ends the outer editor, so an editor
+  // reopened inside one is its own field with its own value, as in Chromium
+  // 151 (`textbox "Re"` value "island text").
+  it("gives an editor reopened inside an island its own value", () => {
+    const root = createPage(`
+      <div contenteditable="true" role="textbox" aria-label="Outer">intro
+        <span contenteditable="false">chip
+          <span id="re" contenteditable="true" role="textbox" aria-label="Re">island text</span>
+        </span>
+      </div>
+    `);
+    expect(nodeBy(root, "re").a11y.value).toBe("island text");
+  });
+
+  it("still lends a host's text to a name that references it", () => {
+    const root = createPage(`
+      <span id="src" contenteditable="true">Draft</span>
+      <button id="ref" aria-labelledby="src"></button>
+    `);
+    // Attached, so the IDREF resolves.
+    document.body.appendChild(root);
+    try {
+      expect(nodeBy(root, "ref").a11y.name).toBe("Draft");
+    } finally {
+      root.remove();
+    }
+  });
+
+  it("does not let an editor override a role's own actions", () => {
+    const root = createPage(`
+      <div id="tb" role="textbox" contenteditable="true" aria-label="T"></div>
+      <div id="btn" role="button" contenteditable="true">Go</div>
+      <div id="ti" contenteditable="true" tabindex="0"></div>
+    `);
+    expect(nodeBy(root, "tb").interaction?.actions).toEqual(["focus", "type"]);
+    expect(nodeBy(root, "btn").interaction?.actions).toEqual(["click"]);
+    // The tabindex catch-all is a `click`, which would outrank `type`.
+    expect(nodeBy(root, "ti").interaction?.actions).toEqual(["focus", "type"]);
+  });
+
+  // Chromium doesn't follow one either, not even on a scripted click().
+  it("gives a link inside an editor no actions, except in an island", () => {
+    const root = createPage(`
+      <div contenteditable="true" role="textbox" aria-label="Message">
+        <a id="inside" href="#inside">reset</a>
+        <a id="island" contenteditable="false" href="#island">@alice</a>
+      </div>
+    `);
+    expect(nodeBy(root, "inside").interaction?.actions).toEqual([]);
+    expect(nodeBy(root, "island").interaction?.actions).toEqual([
+      "click",
+      "navigate",
+    ]);
+  });
+
+  // role="none" on a link Chromium can't focus is honored, so the link
+  // flattens away instead of surviving as a bare presentation node.
+  it("flattens a decorative link inside an editor out of the a11y view", () => {
+    const root = createPage(
+      `<div contenteditable="true" role="textbox" aria-label="Message"><a href="/x" role="none">Help</a></div>`,
+    );
+    const roles = [...extractA11yTree(root).nodes.values()].map(
+      (n) => n.a11y.role,
+    );
+    expect(roles).not.toContain("presentation");
+    expect(roles).not.toContain("link");
+  });
+
+  it("does not make a link inside an editor focusable, except in an island", () => {
+    const root = createPage(`
+      <div contenteditable="true" role="textbox" aria-label="Message">
+        <a id="inside" href="https://x.test/reset?token=abc123">reset</a>
+        <a id="island" contenteditable="false" href="/u/alice">@alice</a>
+        <a id="own-ti" href="/t" tabindex="0">tabbable</a>
+      </div>
+    `);
+    expect(nodeBy(root, "inside").interaction?.isFocusable).toBe(false);
+    expect(nodeBy(root, "island").interaction?.isFocusable).toBe(true);
+    expect(nodeBy(root, "own-ti").interaction?.isFocusable).toBe(true);
+  });
+
+  it("does not treat a contenteditable nested in an editor as a host", () => {
+    const root = createPage(`
+      <div id="outer" contenteditable="true">
+        <div id="nested" contenteditable="true">n</div>
+      </div>
+    `);
+    expect(nodeBy(root, "outer").interaction?.isFocusable).toBe(true);
+    const nested = nodeBy(root, "nested");
+    expect(nested.interaction?.isFocusable).toBe(false);
+    expect(nested.interaction?.actions).toEqual([]);
+  });
+
+  it("ignores contenteditable=false and an invalid value", () => {
+    const root = createPage(`
+      <div id="off" contenteditable="false">x</div>
+      <div id="bogus" contenteditable="bogus">y</div>
+    `);
+    for (const id of ["off", "bogus"]) {
+      const node = nodeBy(root, id);
+      expect(node.interaction?.isFocusable).toBe(false);
+      expect(node.interaction?.actions).toEqual([]);
+    }
   });
 });

@@ -50,6 +50,18 @@ export interface A11yInfo {
   role: string;
   name: string;
   description: string;
+  /**
+   * The value a screen reader announces for a field (ADR-0001): a text
+   * field's or editor's text, a `<select>`'s selected option label, a range
+   * widget's `aria-valuetext` else `valuenow`. Absent when the node has none
+   * or it is empty. A sensitive field (`type="password"`, a credential or
+   * payment `autocomplete`) that holds anything reads `"[redacted]"`.
+   * Whitespace-collapsed, capped at 240 characters.
+   *
+   * Distinct from the DOM producer's `dom.attributes.value`, the raw DOM value
+   * (`"es"` where this is `"Spain"`).
+   */
+  value?: string;
   states: Record<string, string | boolean>;
   properties: Record<string, string>;
   isExposedToAT: boolean;

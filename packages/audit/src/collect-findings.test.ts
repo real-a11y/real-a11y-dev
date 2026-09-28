@@ -328,6 +328,20 @@ describe("collectFindings — image-alt", () => {
     const root = mount(`<div role="img" aria-label="Chart">text img</div>`);
     expect(collectFindings(root, ["image-alt"])).toEqual([]);
   });
+
+  // ARIA 1.3's `image` is a synonym of `img` — the rule must not be dodged by
+  // spelling the role the other way.
+  it("flags an unnamed role=image, the img synonym", () => {
+    const root = mount(`<span role="image">🎉</span>`);
+    const findings = collectFindings(root, ["image-alt"]);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({ rule: "image-alt", role: "img" });
+  });
+
+  it("passes a role=image named by aria-label", () => {
+    const root = mount(`<span role="image" aria-label="Party">🎉</span>`);
+    expect(collectFindings(root, ["image-alt"])).toEqual([]);
+  });
 });
 
 describe("listByRole", () => {
@@ -352,6 +366,17 @@ describe("listByRole", () => {
     expect(out).toMatch(/textbox "Email"/);
     expect(out).toMatch(/checkbox "Ok"/);
     expect(out).not.toMatch(/button/);
+  });
+
+  it("adds each field's announced value only when asked (ADR-0001)", () => {
+    const root = mount(
+      `<input aria-label="Email" value="jane@x.com"><input type="password" aria-label="Password" value="hunter2">`,
+    );
+    expect(listByRole(root, "form")).not.toContain(" = ");
+    const out = listByRole(root, "form", { values: true });
+    expect(out).toMatch(/textbox "Email" = "jane@x\.com"/);
+    expect(out).toMatch(/textbox "Password" = "\[redacted\]"/);
+    expect(out).not.toContain("hunter2");
   });
 
   it("lists images", () => {

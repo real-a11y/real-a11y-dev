@@ -1,3 +1,4 @@
+import { isEditable, isEditingHost } from "../extraction/editing.js";
 import type { ActionRequest, ActionResult } from "../types.js";
 import { ElementRefMap } from "../utils/element-ref.js";
 
@@ -76,8 +77,7 @@ function acceptsTextEntry(element: Element): boolean {
     const type = (element as HTMLInputElement).type || "text";
     return TEXT_ENTRY_INPUT_TYPES.has(type);
   }
-  const ce = element.getAttribute("contenteditable");
-  if (ce === "" || ce === "true" || ce === "plaintext-only") return true;
+  if (isEditingHost(element)) return true;
   const role = element.getAttribute("role");
   return role === "textbox" || role === "searchbox" || role === "spinbutton";
 }
@@ -230,16 +230,10 @@ export class ActionDispatcher {
     // just get reverted — so when the event is handled we leave the DOM alone.
     // Plain contenteditable has no such listener, so we do the write. This is
     // best-effort: an editor that only inserts from a real caret/Selection may
-    // still need key simulation. `isContentEditable` covers real browsers
-    // (incl. inherited editability); the attribute check is the jsdom fallback.
+    // still need key simulation. `isContentEditable` covers real browsers;
+    // `isEditable` is the same inherited rule from the attributes, for jsdom.
     const htmlEl = element as HTMLElement;
-    const ceAttr = htmlEl.getAttribute("contenteditable");
-    const editable =
-      htmlEl.isContentEditable ||
-      ceAttr === "" ||
-      ceAttr === "true" ||
-      ceAttr === "plaintext-only";
-    if (editable) {
+    if (htmlEl.isContentEditable || isEditable(htmlEl)) {
       const notHandled = htmlEl.dispatchEvent(
         new InputEvent("beforeinput", {
           bubbles: true,

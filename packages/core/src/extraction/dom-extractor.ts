@@ -20,6 +20,7 @@ import {
 } from "./focusability.js";
 import {
   getCachedComputedStyle,
+  getExplicitRole,
   getImplicitRole,
   getHeadingLevel,
   isHiddenFromAT,
@@ -137,8 +138,11 @@ function getActions(
   const actions: ActionType[] = [];
   const role = element.getAttribute("role");
 
-  // Links
-  if (tag === "a" && element.hasAttribute("href")) {
+  // Links — live ones. A link inside editable content is not: Chromium
+  // won't follow it, not even on a scripted click(), or focus it, so it has
+  // no action to offer. (One that is itself an editing host gets focus/type
+  // below.)
+  if (tag === "a" && element.hasAttribute("href") && !isEditable(element)) {
     actions.push("click", "navigate");
   }
   // Buttons (native + input type=button/submit/reset/image)
@@ -209,9 +213,7 @@ function getActions(
     // is already handled by the tag === "input" branch above. (aria-autocomplete
     // describes autocomplete *behavior*, not editability — a non-editable div
     // can't be typed into regardless, so it isn't the signal here.)
-    const ce = element.getAttribute("contenteditable");
-    const editable = ce === "" || ce === "true" || ce === "plaintext-only";
-    if (editable) {
+    if (isEditingHost(element)) {
       // Treat like a textbox so the panel opens its inline input. Deliberately
       // NOT "click": click outranks type in getPrimaryAction, so a co-present
       // click would re-hijack the primary action and re-break text entry.
@@ -257,6 +259,17 @@ function getActions(
     // Spinbuttons (date pickers, custom number steppers) accept both
     // typed values and arrow-key stepping. Surface both.
     actions.push("focus", "type", "increment", "decrement");
+  }
+
+  // An editing host is a text field whatever its role: Chromium focuses it
+  // and takes typing, and the dispatcher's `type` writes into it. The role
+  // branches above cover a textbox, a searchbox and an editable combobox;
+  // this catches the role-less `<div contenteditable>` composer, which
+  // otherwise read as inert and folded out of the a11y view — and so out of
+  // every tab sequence built on it. It precedes the tabindex catch-all,
+  // whose `click` would outrank `type` in getPrimaryAction.
+  if (actions.length === 0 && isEditingHost(element)) {
+    actions.push("focus", "type");
   }
 
   if (
@@ -595,7 +608,8 @@ const NAMES_FROM_CONTENT_ROLES = new Set<string>([
  *   as well — blanking it would blank every toast and error message.
  *
  * The native producer's counterpart is two-tier: `NATIVE_AX_AUTHOR_NAMED_ROLES`
- * (the audit-read subset of this set) never takes text, and the rest take
+ * (the audit-read subset of this set, plus the range widgets whose text is
+ * fallback for a value) never takes text, and the rest take
  * their own text only as a leaf. This set blanks the rest even as a leaf, so
  * a text-only `<div role="tabpanel">Panel text</div>` is `tabpanel` here and
  * `tabpanel "Panel text"` there. The name step has no view of which children
@@ -662,9 +676,15 @@ const AUTHOR_NAMED_ROLES = new Set<string>([
  * An authored role outranks the tag: `<button role="combobox">Apple</button>`
  * (the Radix Select trigger) is a combobox, named by its author only, and
  * Chromium leaves it unnamed — its text is the selected VALUE.
+ *
+ * An editing host outranks both: what is typed into an editor is its content,
+ * never its label. Chromium names one only by `aria-label`,
+ * `aria-labelledby` or `title` — a `<button contenteditable>` or an editable
+ * `<h3>` is unnamed there, whatever it holds.
  */
 export function isNameFromContentHost(element: Element): boolean {
-  const explicitRole = element.getAttribute("role")?.trim().split(/\s+/)[0];
+  if (isEditingHost(element)) return false;
+  const explicitRole = getExplicitRole(element);
   if (explicitRole && AUTHOR_NAMED_ROLES.has(explicitRole)) return false;
   if (NAMES_FROM_CONTENT_TAGS.has(element.tagName.toLowerCase())) return true;
   return !!explicitRole && NAMES_FROM_CONTENT_ROLES.has(explicitRole);
@@ -807,7 +827,16 @@ function getAccessibleTextContent(
       // padded with spaces so adjacent text doesn't glue; the final
       // whitespace normalization collapses any doubles.
       if (NAMED_WIDGET_ROLES.has(role)) {
-        text += ` ${computeAccessibleName(childEl, visited, styleCache)} `;
+        // An editing host takes no name from its own content, but Chromium
+        // still reads that text into an ancestor's name:
+        // `<h2>Before <button contenteditable>Save</button></h2>` is
+        // heading "Before Save".
+        const name =
+          computeAccessibleName(childEl, visited, styleCache) ||
+          (isEditingHost(childEl)
+            ? getAccessibleTextContent(childEl, visited, styleCache)
+            : "");
+        text += ` ${name} `;
         continue;
       }
       if (NAME_BARRIER_ROLES.has(role) && !isImplicitDetailsGroup(childEl)) {
@@ -1023,8 +1052,16 @@ function computeRawAccessibleName(
   //    sectionheader/sectionfooter that also keeps a byline from making the
   //    header "named" and so kept in the a11y view, where the native producer
   //    drops it as bare. The role is resolved only when there is text to give.
+  //    Nor for an editing host: its text is what the user typed — its VALUE
+  //    (ADR-0001), which never doubles as its name. Chromium leaves an
+  //    editing host of any role unnamed by its content (see
+  //    isNameFromContentHost, which gates step 8 the same way).
   const directText = getDirectTextContent(element);
-  if (directText && !AUTHOR_NAMED_ROLES.has(getImplicitRole(element))) {
+  if (
+    directText &&
+    !AUTHOR_NAMED_ROLES.has(getImplicitRole(element)) &&
+    !isEditingHost(element)
+  ) {
     return directText;
   }
 
@@ -1136,6 +1173,14 @@ export function getDescendantText(element: Element): string {
     }
   }
 
+  return finishCollapsedText(state, truncated);
+}
+
+/** Trim a collapsed-text walk's result and apply the cap's `…`. */
+function finishCollapsedText(
+  state: CollapsedTextState,
+  truncated: boolean,
+): string {
   if (state.phase === "space" && state.text.endsWith(" ")) {
     state.text = state.text.slice(0, -1);
   }
@@ -1147,11 +1192,139 @@ export function getDescendantText(element: Element): string {
 }
 
 /**
+ * Elements that break a line when rendered. A field's text reads a space
+ * across them, the way `innerText` — and Chromium's AX value — does, so an
+ * editor's `<p>one</p><p>two</p>` reads "one two", not "onetwo".
+ */
+const LINE_BREAKING_TAGS: ReadonlySet<string> = new Set([
+  "address",
+  "article",
+  "aside",
+  "blockquote",
+  "br",
+  "dd",
+  "details",
+  "div",
+  "dl",
+  "dt",
+  "figcaption",
+  "figure",
+  "footer",
+  "form",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "header",
+  "hr",
+  "li",
+  "main",
+  "nav",
+  "ol",
+  "p",
+  "pre",
+  "section",
+  "summary",
+  "table",
+  "td",
+  "th",
+  "tr",
+  "ul",
+]);
+
+/**
+ * Roles of a widget's own popup or companion. A select-only combobox that
+ * renders its listbox inside itself holds "Apple" — not "Apple Apple Pear".
+ */
+const POPUP_ROLES: ReadonlySet<string> = new Set([
+  "listbox",
+  "option",
+  "menu",
+  "menuitem",
+  "grid",
+  "tree",
+  "dialog",
+  "tooltip",
+]);
+
+/**
+ * Form controls whose child text is NOT what they show: a `<select>`'s every
+ * option (only the chosen one is displayed, and it is the select's own
+ * value), a `<textarea>`'s default value, a `<datalist>`'s suggestions. A
+ * field's text walk skips them; the control carries its own `a11y.value`.
+ */
+const CONTROL_TEXT_TAGS: ReadonlySet<string> = new Set([
+  "select",
+  "textarea",
+  "datalist",
+]);
+
+/**
+ * The text a non-native field holds — a contenteditable editor, an ARIA
+ * textbox or combobox — collapsed and capped like {@link getDescendantText},
+ * but with block boundaries read as spaces. What a screen reader would not
+ * announce is skipped: hidden subtrees (`display:none`, `hidden`,
+ * `aria-hidden`), `visibility:hidden` text, a closed `<details>`'s body, and
+ * a widget's own popup.
+ */
+function getFieldText(element: Element, styleCache?: StyleCache): string {
+  const state: CollapsedTextState = { text: "", phase: "start" };
+  // `visibility` is per element and inherited, and a child may set it back to
+  // `visible` — so a hidden element's own text is skipped but its children are
+  // still walked, each judged by its own computed style.
+  const isVisible = (style: CSSStyleDeclaration | null): boolean =>
+    style?.visibility !== "hidden" && style?.visibility !== "collapse";
+  const walk = (node: Node, textVisible: boolean): boolean => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return textVisible
+        ? appendCollapsedTextChunk(state, safeTextContent(node))
+        : false;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return false;
+    const el = node as Element;
+    const rawTag = el.tagName;
+    const tag = typeof rawTag === "string" ? rawTag.toLowerCase() : "";
+    if (MEDIA_TAGS.has(tag) || CONTROL_TEXT_TAGS.has(tag)) return false;
+    if (el.getAttribute("aria-hidden") === "true") return false;
+    const role = getExplicitRole(el);
+    if (role && POPUP_ROLES.has(role)) return false;
+    const style = getCachedComputedStyle(el, styleCache);
+    if (isSubtreeHidden(el, style)) return false;
+    const breaks = LINE_BREAKING_TAGS.has(tag);
+    // Whitespace never trips the cap, so these two appends can't end the walk.
+    if (breaks) appendCollapsedTextChunk(state, " ");
+    // A closed <details> renders only its <summary> — the name walker's rule.
+    for (const child of nameContentChildren(el)) {
+      if (walk(child, isVisible(style))) return true;
+    }
+    if (breaks) appendCollapsedTextChunk(state, " ");
+    return false;
+  };
+  let truncated = false;
+  const ownVisible = isVisible(getCachedComputedStyle(element, styleCache));
+  for (const child of nameContentChildren(element)) {
+    if (walk(child, ownVisible)) {
+      truncated = true;
+      break;
+    }
+  }
+  return finishCollapsedText(state, truncated);
+}
+
+/**
  * Autocomplete field names (WHATWG autofill tokens) that identify a control
  * holding a secret. Matched against each space-separated token of an
  * element's `autocomplete` value.
+ *
+ * This list IS the sensitivity policy (ADR-0001): together with
+ * `type="password"` it is the whole of what every producer withholds. It grows
+ * only by a later decision. Exported so a copy that cannot import it — the
+ * extension's in-page `pageReadValue`, which runs as source text over CDP —
+ * can be pinned to it by a parity test.
  */
-const SENSITIVE_AUTOCOMPLETE_TOKENS: ReadonlySet<string> = new Set([
+export const SENSITIVE_AUTOCOMPLETE_TOKENS: ReadonlySet<string> = new Set([
   "current-password",
   "new-password",
   "one-time-code",
@@ -1162,8 +1335,36 @@ const SENSITIVE_AUTOCOMPLETE_TOKENS: ReadonlySet<string> = new Set([
   "cc-exp-year",
 ]);
 
-/** Substituted for a sensitive field's live value in the extracted tree. */
-const REDACTED_VALUE = "[redacted]";
+/** Substituted for a sensitive field's value, wherever a value is shown. */
+export const REDACTED_VALUE = "[redacted]";
+
+/**
+ * The sensitivity policy over a field's markup alone — its tag name plus its
+ * `type` and `autocomplete` attributes — for callers with no live `Element`.
+ * The native producer holds exactly this: CDP's `DOM.getDocument` attributes,
+ * never a field's value. {@link isSensitiveField} is this, read off an element.
+ */
+export function isSensitiveFieldAttributes(
+  tagName: string,
+  attributes: { type?: string | null; autocomplete?: string | null },
+): boolean {
+  const tag = tagName.toLowerCase();
+  if (tag !== "input" && tag !== "textarea" && tag !== "select") {
+    return false;
+  }
+  if (
+    tag === "input" &&
+    (attributes.type ?? "").trim().toLowerCase() === "password"
+  ) {
+    return true;
+  }
+  for (const token of (attributes.autocomplete ?? "")
+    .toLowerCase()
+    .split(/\s+/)) {
+    if (SENSITIVE_AUTOCOMPLETE_TOKENS.has(token)) return true;
+  }
+  return false;
+}
 
 /**
  * True if `element` is a form field whose live value must never be captured
@@ -1173,25 +1374,203 @@ const REDACTED_VALUE = "[redacted]";
  * The extracted tree flows into serializer snapshots (committed to git and
  * CI), the testing package's assertions, and the Chrome extension's message
  * channel. A secret typed into such a field must not ride along, so callers
- * that read `.value` — {@link extractDomTree} via `getKeyAttributes`, the
- * accessible-name fallback, and downstream consumers like the extension's
- * field-state read — gate on this predicate.
+ * that read `.value` — {@link extractDomTree} via `getKeyAttributes` and
+ * `getAnnouncedValue`, the accessible-name fallback, and downstream consumers
+ * like the extension's field-state read — gate on this predicate.
  */
 export function isSensitiveField(element: Element): boolean {
-  const tag = element.tagName.toLowerCase();
-  if (tag !== "input" && tag !== "textarea" && tag !== "select") {
-    return false;
-  }
-  if (tag === "input" && (element as HTMLInputElement).type === "password") {
-    return true;
-  }
-  const autocomplete = element.getAttribute("autocomplete");
-  if (autocomplete) {
-    for (const token of autocomplete.toLowerCase().split(/\s+/)) {
-      if (SENSITIVE_AUTOCOMPLETE_TOKENS.has(token)) return true;
+  return isSensitiveFieldAttributes(element.tagName, {
+    // The `type` PROPERTY, not the attribute: it is what the browser actually
+    // renders, normalized (an unknown or missing type reads as "text").
+    // Tag-checked rather than `instanceof`, which fails across realms.
+    type:
+      element.tagName.toLowerCase() === "input"
+        ? (element as HTMLInputElement).type
+        : element.getAttribute("type"),
+    autocomplete: element.getAttribute("autocomplete"),
+  });
+}
+
+/** Roles announced by position in a range: `aria-valuetext`, else `valuenow`. */
+const RANGE_VALUE_ROLES: ReadonlySet<string> = new Set([
+  "slider",
+  "spinbutton",
+  "progressbar",
+  "meter",
+  "scrollbar",
+]);
+
+/** Roles whose checked/pressed STATE is what's announced — never a value. */
+const STATE_ONLY_ROLES: ReadonlySet<string> = new Set([
+  "checkbox",
+  "radio",
+  "switch",
+  "menuitemcheckbox",
+  "menuitemradio",
+]);
+
+/** Non-native roles whose value is the text they hold. */
+const TEXT_VALUE_ROLES: ReadonlySet<string> = new Set([
+  "textbox",
+  "searchbox",
+  "combobox",
+]);
+
+/** `<input>` types with no announced value: a state, a name, or nothing. */
+const VALUELESS_INPUT_TYPES: ReadonlySet<string> = new Set([
+  "checkbox",
+  "radio",
+  "button",
+  "submit",
+  "reset",
+  "image",
+  "hidden",
+]);
+
+/** The cap an announced value is cut to, with `…` — the same as text previews. */
+const VALUE_MAX = DESCENDANT_TEXT_MAX;
+
+/** A `<select>`'s selected options by label — what a screen reader says. */
+function selectedLabels(select: HTMLSelectElement): string {
+  return Array.from(select.options)
+    .filter((option) => option.selected)
+    .map((option) => option.label || option.text)
+    .join(", ");
+}
+
+/** True when `element` wraps a text-entry control that holds the value
+ *  itself. Hidden, checkbox, radio, button and file inputs don't. */
+function wrapsTextControl(element: Element): boolean {
+  return Array.from(element.querySelectorAll("input, select, textarea")).some(
+    (control) => {
+      // Tag-checked, not `instanceof`, which fails across realms.
+      if (control.tagName.toLowerCase() !== "input") return true;
+      const type = (control as HTMLInputElement).type;
+      return !VALUELESS_INPUT_TYPES.has(type) && type !== "file";
+    },
+  );
+}
+
+/**
+ * True when `element` sits inside editable content (itself excluded), by the
+ * same rule as {@link isEditingHost}: a `contenteditable="false"` island ends
+ * the region, so an editor reopened inside one is a field of its own.
+ */
+function insideEditable(element: Element): boolean {
+  const parent = element.parentElement;
+  return !!parent && isEditable(parent);
+}
+
+/**
+ * The outermost field whose `a11y.value` is computed from `el`'s content — a
+ * `<select>` (its options' labels), an editing host, or a non-native ARIA
+ * textbox/searchbox/combobox (their text) — or null. A mutation anywhere
+ * inside one changes that field's value without touching the field itself,
+ * so a live refresh must re-extract it (see `LiveTreeExtractor.refresh`).
+ * Outermost, because a textbox nested in an editor has no value of its own:
+ * the editor's does.
+ */
+export function fieldValueOwner(el: Element): Element | null {
+  let owner: Element | null = null;
+  for (let node: Element | null = el; node; node = node.parentElement) {
+    const tag = node.tagName.toLowerCase();
+    if (tag === "select" || isEditingHost(node)) {
+      owner = node;
+      continue;
     }
+    if (tag === "input" || tag === "textarea") continue;
+    const role = getExplicitRole(node);
+    if (role && TEXT_VALUE_ROLES.has(role)) owner = node;
   }
-  return false;
+  return owner;
+}
+
+/** The raw text a field holds, before sensitivity, collapse and cap. */
+function readFieldValue(
+  element: Element,
+  role: string,
+  styleCache?: StyleCache,
+): string | undefined {
+  const tag = element.tagName.toLowerCase();
+  if (STATE_ONLY_ROLES.has(role)) return undefined;
+
+  if (RANGE_VALUE_ROLES.has(role)) {
+    const valuetext = element.getAttribute("aria-valuetext");
+    if (valuetext?.trim()) return valuetext;
+    const valuenow = element.getAttribute("aria-valuenow");
+    if (valuenow?.trim()) return valuenow;
+    if (tag === "input") return (element as HTMLInputElement).value;
+    // An indeterminate <progress> (no value attribute) announces no value.
+    if (
+      (tag === "progress" || tag === "meter") &&
+      element.hasAttribute("value")
+    ) {
+      return String((element as HTMLProgressElement).value);
+    }
+    return undefined;
+  }
+
+  if (tag === "input") {
+    const input = element as HTMLInputElement;
+    if (VALUELESS_INPUT_TYPES.has(input.type)) return undefined;
+    if (input.type === "file") {
+      return Array.from(input.files ?? [])
+        .map((file) => file.name)
+        .join(", ");
+    }
+    return input.value;
+  }
+  if (tag === "textarea") return (element as HTMLTextAreaElement).value;
+  if (tag === "select") return selectedLabels(element as HTMLSelectElement);
+
+  // A non-native field: an editor, or an ARIA textbox/combobox built on a div.
+  // A textbox nested INSIDE an editor is part of that editor's content, which
+  // its host already announces — a second value would count the text twice.
+  // An ARIA textbox/combobox that wraps a text-entry control (the ARIA 1.0
+  // combobox around an <input>) leaves the value to that control — its own
+  // text would be every option. An editor never does: a task list's
+  // checkboxes are part of the document, and its text walk can't see a
+  // control's value anyway.
+  const editingHost = isEditingHost(element);
+  if (TEXT_VALUE_ROLES.has(role) || editingHost) {
+    if (insideEditable(element)) return undefined;
+    if (!editingHost && wrapsTextControl(element)) return undefined;
+    return getFieldText(element, styleCache);
+  }
+  return undefined;
+}
+
+/**
+ * The value a screen reader announces for a field (ADR-0001): a text field's
+ * text, a `<select>`'s selected option LABEL (not its `value` attribute), a
+ * range widget's `aria-valuetext` else `valuenow`, a file input's file names,
+ * an editor's or ARIA textbox's text. A checkbox, radio or button has none —
+ * its state or name says it. Whitespace collapses and the value is capped at
+ * {@link VALUE_MAX} characters with `…`. Empty reads as no value.
+ *
+ * A {@link isSensitiveField sensitive} field that holds anything reads
+ * {@link REDACTED_VALUE}: an agent can tell "password entered" from "empty",
+ * never what it is or how long.
+ *
+ * Never throws: a hostile page can make a getter throw, and the caller builds
+ * the node inside one try — a value must not cost the page a node.
+ */
+export function getAnnouncedValue(
+  element: Element,
+  role: string,
+  styleCache?: StyleCache,
+): string | undefined {
+  try {
+    const raw = readFieldValue(element, role, styleCache);
+    const collapsed = (raw ?? "").replace(/\s+/g, " ").trim();
+    if (!collapsed) return undefined;
+    if (isSensitiveField(element)) return REDACTED_VALUE;
+    return collapsed.length > VALUE_MAX
+      ? collapsed.slice(0, VALUE_MAX - 1) + "…"
+      : collapsed;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -1255,7 +1634,14 @@ function getKeyAttributes(element: Element): Record<string, string> {
   // getAttribute("value") returns the initial value; .value reflects user input
   const tag = element.tagName.toLowerCase();
   if (tag === "input" || tag === "textarea" || tag === "select") {
-    const currentValue = (element as HTMLInputElement).value;
+    // Guarded: a page can make the `.value` getter throw, and this runs inside
+    // `buildNode`'s one try — an unguarded read cost the page the whole node.
+    let currentValue = "";
+    try {
+      currentValue = (element as HTMLInputElement).value;
+    } catch {
+      // No readable value: record none.
+    }
     if (currentValue) {
       attrs["value"] = isSensitiveField(element)
         ? REDACTED_VALUE
@@ -1686,12 +2072,12 @@ const IMPLICIT_LIVE_ROLES = new Set(["status", "alert", "log"]);
  * `<div aria-live>` and `<div aria-live="">` behave like the roleless divs
  * they are.
  *
- * The role is read with `getImplicitRole`'s exact parse — first token, no case
- * folding — so the pivot and the extracted tree always agree about what an
- * element is. That inherits first-token-not-first-VALID-token
- * (`role="toast status"` resolves to `toast`), which is a real gap but belongs
- * in `getImplicitRole`, where fixing it corrects the whole engine at once
- * instead of adding a third role-parsing convention here.
+ * The role is read with `getExplicitRole`, the parse `getImplicitRole` uses —
+ * first token, no case folding — so the pivot and the extracted tree always
+ * agree about what an element is. That inherits first-token-not-first-VALID-
+ * token (`role="toast status"` resolves to `toast`), which is a real gap but
+ * belongs in `getExplicitRole`, where fixing it corrects the whole engine at
+ * once instead of adding a second role-parsing convention here.
  *
  * Case matters and is not folded: CSS matches `role` values case-sensitively,
  * so `[role]` candidates arriving here already agree with the tree. Folding
@@ -1700,7 +2086,7 @@ const IMPLICIT_LIVE_ROLES = new Set(["status", "alert", "log"]);
  * on an unrelated attribute.
  */
 export function countsAsOverlay(el: Element): boolean {
-  const role = el.getAttribute("role")?.trim().split(/\s+/)[0];
+  const role = getExplicitRole(el);
   if (role && OVERLAY_ROLES.has(role)) return true;
 
   // `aria-live` values ARE case-insensitive tokens, unlike `role` above.
@@ -1920,6 +2306,7 @@ function buildNode(
 
     const id = getNodeId(element);
     const role = getImplicitRole(element);
+    const value = getAnnouncedValue(element, role, styleCache);
     const actions = getActions(element);
     const focusable = isFocusable(element);
     const isMedia = MEDIA_TAGS.has(tag);
@@ -1943,6 +2330,7 @@ function buildNode(
         role,
         name: computeAccessibleName(element, new Set(), styleCache),
         description: computeAccessibleDescription(element, styleCache),
+        ...(value !== undefined ? { value } : {}),
         states: getAriaStates(element, focusable),
         properties: {
           ...(getHeadingLevel(element) !== null
@@ -1968,7 +2356,7 @@ function buildNode(
               (element as HTMLInputElement).type || "text",
             )) ||
           tag === "textarea" ||
-          element.getAttribute("contenteditable") === "true",
+          isEditingHost(element),
       },
       ui: {
         expanded: depth < 2,

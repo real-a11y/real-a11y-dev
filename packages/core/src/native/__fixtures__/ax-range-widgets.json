@@ -1,0 +1,407 @@
+{
+  "chrome": "151.0.7922.34",
+  "nodes": [
+    {
+      "nodeId": "1",
+      "childIds": ["2"],
+      "backendDOMNodeId": 1,
+      "role": {
+        "value": "RootWebArea"
+      },
+      "name": {
+        "value": "range widgets fixture"
+      }
+    },
+    {
+      "nodeId": "2",
+      "parentId": "1",
+      "childIds": ["6"],
+      "backendDOMNodeId": 2,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "6",
+      "parentId": "2",
+      "childIds": ["7"],
+      "backendDOMNodeId": 6,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    },
+    {
+      "nodeId": "7",
+      "parentId": "6",
+      "childIds": [
+        "8",
+        "9",
+        "11",
+        "12",
+        "16",
+        "17",
+        "21",
+        "22",
+        "23",
+        "24",
+        "25",
+        "26"
+      ],
+      "backendDOMNodeId": 7,
+      "role": {
+        "value": "main"
+      }
+    },
+    {
+      "nodeId": "8",
+      "parentId": "7",
+      "childIds": ["27"],
+      "backendDOMNodeId": 8,
+      "role": {
+        "value": "progressbar"
+      }
+    },
+    {
+      "nodeId": "9",
+      "parentId": "7",
+      "childIds": ["28"],
+      "backendDOMNodeId": 9,
+      "role": {
+        "value": "progressbar"
+      }
+    },
+    {
+      "nodeId": "11",
+      "parentId": "7",
+      "childIds": ["29"],
+      "backendDOMNodeId": 11,
+      "role": {
+        "value": "progressbar"
+      },
+      "value": {
+        "value": 30
+      }
+    },
+    {
+      "nodeId": "12",
+      "parentId": "7",
+      "backendDOMNodeId": 12,
+      "role": {
+        "value": "progressbar"
+      }
+    },
+    {
+      "nodeId": "16",
+      "parentId": "7",
+      "childIds": ["30"],
+      "backendDOMNodeId": 16,
+      "role": {
+        "value": "meter"
+      },
+      "value": {
+        "value": 0
+      }
+    },
+    {
+      "nodeId": "17",
+      "parentId": "7",
+      "childIds": ["18"],
+      "backendDOMNodeId": 17,
+      "role": {
+        "value": "meter"
+      },
+      "value": {
+        "value": 0
+      }
+    },
+    {
+      "nodeId": "21",
+      "parentId": "7",
+      "childIds": ["31"],
+      "backendDOMNodeId": 21,
+      "role": {
+        "value": "separator"
+      }
+    },
+    {
+      "nodeId": "22",
+      "parentId": "7",
+      "childIds": ["32"],
+      "backendDOMNodeId": 22,
+      "role": {
+        "value": "separator"
+      },
+      "value": {
+        "value": 50
+      }
+    },
+    {
+      "nodeId": "23",
+      "parentId": "7",
+      "backendDOMNodeId": 23,
+      "role": {
+        "value": "separator"
+      }
+    },
+    {
+      "nodeId": "24",
+      "parentId": "7",
+      "childIds": ["33"],
+      "backendDOMNodeId": 24,
+      "role": {
+        "value": "separator"
+      },
+      "name": {
+        "value": "Section break"
+      }
+    },
+    {
+      "nodeId": "25",
+      "parentId": "7",
+      "childIds": ["34"],
+      "backendDOMNodeId": 25,
+      "role": {
+        "value": "progressbar"
+      },
+      "name": {
+        "value": "Upload"
+      }
+    },
+    {
+      "nodeId": "26",
+      "parentId": "7",
+      "childIds": ["35"],
+      "backendDOMNodeId": 26,
+      "role": {
+        "value": "status"
+      }
+    },
+    {
+      "nodeId": "27",
+      "parentId": "8",
+      "childIds": ["-1000000002"],
+      "backendDOMNodeId": 27,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Loading files"
+      }
+    },
+    {
+      "nodeId": "28",
+      "parentId": "9",
+      "childIds": ["-1000000003"],
+      "backendDOMNodeId": 28,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Loading deep"
+      }
+    },
+    {
+      "nodeId": "29",
+      "parentId": "11",
+      "childIds": ["-1000000004"],
+      "backendDOMNodeId": 29,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "thirty"
+      }
+    },
+    {
+      "nodeId": "30",
+      "parentId": "16",
+      "childIds": ["-1000000005"],
+      "backendDOMNodeId": 30,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "meter text"
+      }
+    },
+    {
+      "nodeId": "18",
+      "parentId": "17",
+      "childIds": ["19"],
+      "backendDOMNodeId": 18,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "31",
+      "parentId": "21",
+      "childIds": ["-1000000006"],
+      "backendDOMNodeId": 31,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Or"
+      }
+    },
+    {
+      "nodeId": "32",
+      "parentId": "22",
+      "childIds": ["-1000000007"],
+      "backendDOMNodeId": 32,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Resize"
+      }
+    },
+    {
+      "nodeId": "33",
+      "parentId": "24",
+      "childIds": ["-1000000008"],
+      "backendDOMNodeId": 33,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "labelled"
+      }
+    },
+    {
+      "nodeId": "34",
+      "parentId": "25",
+      "childIds": ["-1000000009"],
+      "backendDOMNodeId": 34,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "labelled"
+      }
+    },
+    {
+      "nodeId": "35",
+      "parentId": "26",
+      "childIds": ["-1000000010"],
+      "backendDOMNodeId": 35,
+      "role": {
+        "value": "StaticText"
+      },
+      "name": {
+        "value": "Saved"
+      }
+    },
+    {
+      "nodeId": "-1000000002",
+      "parentId": "27",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Loading files"
+      }
+    },
+    {
+      "nodeId": "-1000000003",
+      "parentId": "28",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Loading deep"
+      }
+    },
+    {
+      "nodeId": "-1000000004",
+      "parentId": "29",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "thirty"
+      }
+    },
+    {
+      "nodeId": "-1000000005",
+      "parentId": "30",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "meter text"
+      }
+    },
+    {
+      "nodeId": "19",
+      "parentId": "18",
+      "childIds": ["20"],
+      "backendDOMNodeId": 19,
+      "role": {
+        "value": "generic"
+      }
+    },
+    {
+      "nodeId": "-1000000006",
+      "parentId": "31",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Or"
+      }
+    },
+    {
+      "nodeId": "-1000000007",
+      "parentId": "32",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Resize"
+      }
+    },
+    {
+      "nodeId": "-1000000008",
+      "parentId": "33",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "labelled"
+      }
+    },
+    {
+      "nodeId": "-1000000009",
+      "parentId": "34",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "labelled"
+      }
+    },
+    {
+      "nodeId": "-1000000010",
+      "parentId": "35",
+      "role": {
+        "value": "InlineTextBox"
+      },
+      "name": {
+        "value": "Saved"
+      }
+    },
+    {
+      "nodeId": "20",
+      "parentId": "19",
+      "backendDOMNodeId": 20,
+      "ignored": true,
+      "role": {
+        "value": "none"
+      }
+    }
+  ]
+}

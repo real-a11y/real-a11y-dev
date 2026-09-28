@@ -97,6 +97,28 @@ describe("getImplicitRole", () => {
     );
   });
 
+  // ARIA 1.3 adds `image` as a synonym of `img`, and Chromium exposes both as
+  // the same role. Everything downstream — the image-alt rule, role queries,
+  // the native producer — speaks `img`, so the synonym is folded here.
+  it("returns img for explicit role=image (synonym)", () => {
+    expect(getImplicitRole(el('<span role="image">🎉</span>'))).toBe("img");
+  });
+
+  it("passes through a role named like an Object.prototype member", () => {
+    expect(getImplicitRole(el('<div role="constructor">x</div>'))).toBe(
+      "constructor",
+    );
+    expect(getImplicitRole(el('<div role="toString">x</div>'))).toBe(
+      "toString",
+    );
+  });
+
+  it("folds role=image when it leads a role list", () => {
+    expect(
+      getImplicitRole(el('<div role="image graphics-symbol">x</div>')),
+    ).toBe("img");
+  });
+
   // ARIA "Presentational Roles Conflict Resolution": role=presentation/none
   // is IGNORED when the element is focusable or carries global ARIA
   // states/properties. The element is then exposed with its implicit role —
@@ -252,6 +274,21 @@ describe("getImplicitRole", () => {
       expect(getImplicitRole(inFieldset)).toBe("presentation");
     });
 
+    // Checked over CDP in Chromium 151: a details' summary is focusable, so
+    // it ignores role="none"; a summary outside any details is not.
+    it("keeps a details' summary despite role=none, but not a stray one", () => {
+      const details = el(
+        '<details><summary role="none">Shipping</summary>' +
+          '<summary role="none">Second</summary></details>',
+      );
+      const [summary, second] = details.querySelectorAll("summary");
+      expect(getImplicitRole(summary)).toBe("generic");
+      expect(getImplicitRole(second)).toBe("presentation");
+      expect(getImplicitRole(el('<summary role="none">Stray</summary>'))).toBe(
+        "presentation",
+      );
+    });
+
     // A tabindex does NOT put a disabled control or a hidden input into the
     // focus order, so the exclusions have to be checked before tabindex is.
     it("keeps a disabled control presentational despite a tabindex", () => {
@@ -291,6 +328,45 @@ describe("getImplicitRole", () => {
           el('<div role="presentation" contenteditable="false">D</div>'),
         ),
       ).toBe("presentation");
+    });
+
+    it("treats a plaintext-only or upper-case host as focusable", () => {
+      expect(
+        getImplicitRole(
+          el('<h2 role="none" contenteditable="plaintext-only">T</h2>'),
+        ),
+      ).toBe("heading");
+      expect(
+        getImplicitRole(el('<h2 role="none" contenteditable="TRUE">T</h2>')),
+      ).toBe("heading");
+    });
+
+    it("does not treat an invalid contenteditable value as a host", () => {
+      expect(
+        getImplicitRole(el('<h2 role="none" contenteditable="bogus">T</h2>')),
+      ).toBe("presentation");
+    });
+
+    // Only the root of an editable region is focusable. A contenteditable
+    // nested inside one, and a link inside one, are not tab stops in Chromium,
+    // so their decorative role stands.
+    it("does not treat a contenteditable nested in a host as focusable", () => {
+      const nested = el(
+        '<div contenteditable="true"><h2 role="none" contenteditable="true">T</h2></div>',
+      ).firstElementChild!;
+      expect(getImplicitRole(nested)).toBe("presentation");
+    });
+
+    it("does not treat a link inside an editor as focusable, except in an island", () => {
+      const host = el(
+        '<div contenteditable="true">' +
+          '<a role="none" href="/in">In</a>' +
+          '<a role="none" href="/island" contenteditable="false">Island</a>' +
+          "</div>",
+      );
+      const [inside, island] = Array.from(host.children);
+      expect(getImplicitRole(inside)).toBe("presentation");
+      expect(getImplicitRole(island)).toBe("link");
     });
 
     // ARIA 1.2 promoted these four to global; they void presentation too.

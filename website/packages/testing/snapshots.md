@@ -32,6 +32,25 @@ test("login form structure", () => {
 | `redact` | `RegExp[]` | `[]` | Patterns replaced with `[REDACTED]` in accessible names. Use this to keep snapshots deterministic. |
 | `includeGeneric` | `boolean` | `false` | Include generic container nodes (`role="generic"`). |
 | `markFocus` | `boolean` | `true` | Mark the element focused at extraction time with a trailing `[focused]`. See [Focus marker](#focus-marker). |
+| `values` | `boolean` | `false` | Print each field's announced value: `textbox "Email" = "jane@x.com"`. See [Field values](#field-values). |
+
+### Field values
+
+Pass `values: true` to print what each field holds, the way a screen reader announces it:
+
+```
+form "Checkout"
+  textbox "Email" = "jane@x.com"
+  combobox "Country" = "Spain"
+  textbox "Password" = "[redacted]"
+  slider "Tip" = "15%"
+```
+
+- **What the value is.** A text field's or editor's text, a `<select>`'s selected option **label** (`"Spain"`, not its `value="es"`), and a range widget's `aria-valuetext` (else `aria-valuenow`). Checkboxes and radios carry none; their state says it. Whitespace collapses, and a value is capped at 240 characters.
+- **Sensitive fields never print.** A `type="password"` field, or one whose `autocomplete` names a credential or payment field (`current-password`, `new-password`, `one-time-code`, `cc-number`, `cc-csc`, `cc-exp*`), prints `"[redacted]"` when it holds anything.
+- **Off by default.** A committed snapshot only changes when you ask for values. `redact` patterns apply to values as they do to names.
+
+The value lives on the node as `a11y.value`, so a custom assertion can read it directly.
 
 Example output:
 
@@ -158,7 +177,7 @@ Honors `markFocus` (default `true`) — a focused heading is shown with a traili
 
 Returns the tab sequence, one stop per line in Tab order.
 
-The stops are the ones Chromium tabs to. An `<a>` without an `href` is not one, not even with `role="button"`, which is the keyboard bug worth catching. Nor is a control disabled directly or by its `<fieldset>`, or an element whose `tabindex` is not an integer, such as `""`. An `aria-disabled` control is a stop, because `aria-disabled` announces a state and leaves focus alone. [`toHaveTabSequence`](/packages/testing/matchers#tohavetabsequence-expected) counts the same way.
+The stops are the ones Chromium tabs to. An `<a>` without an `href` is not one, not even with `role="button"`, which is the keyboard bug worth catching. Nor is a control disabled directly or by its `<fieldset>`, or an element whose `tabindex` is not an integer, such as `""`. An `aria-disabled` control is a stop, because `aria-disabled` announces a state and leaves focus alone. So is the `<summary>` that toggles a `<details>`, such as an FAQ accordion's question, listed as `generic` and named by its text. Only the first `<summary>` child of a `<details>` is a stop; any other summary is plain text to Chromium. [`toHaveTabSequence`](/packages/testing/matchers#tohavetabsequence-expected) counts the same way.
 
 ```ts
 expect(tabSequenceSnapshot(document.body)).toMatchSnapshot();
@@ -173,6 +192,8 @@ link "About"
 textbox "Search"
 button "Submit search"
 ```
+
+A rich-text editor counts the way Chromium counts it. Each `contenteditable` region is one stop, named by its label and never by what was typed into it. A link inside the editor is not a stop, because Chromium can't focus it, unless it sits in a `contenteditable="false"` island such as a mention chip.
 
 Lines carry **no** `NN.` position number: line order already conveys the sequence, and a hard-coded number renumbers every following line the moment one stop is inserted near the top — churning the whole snapshot's diff for one real change. For a human-read listing where an explicit "stop 7" helps, add the numbers at render time with `numberTabStops` from `@real-a11y-dev/testing` (`numberTabStops(tabSequenceSnapshot(root))`); never store the numbered form.
 

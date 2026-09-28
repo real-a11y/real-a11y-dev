@@ -285,5 +285,6 @@ Tasks data source. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
-Single-context: one root `CONTEXT.md` plus `docs/adr/`, both created lazily. See
+Single-context: one root `CONTEXT.md` (created lazily) plus the ADRs, which live
+in **Notion** (Engineering → ADRs), not in `docs/adr/`. See
 `docs/agents/domain.md`.

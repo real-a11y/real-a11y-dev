@@ -247,12 +247,26 @@ The stops are the ones Chromium tabs to. An `<a>` without an `href` is not one,
 not even with `role="button"`, which is the keyboard bug worth catching. Nor is
 a control disabled directly or by its `<fieldset>`, or an element whose
 `tabindex` is not an integer, such as `""`. An `aria-disabled` control is a
-stop, because `aria-disabled` announces a state and leaves focus alone. So is an
-image map's `<area href>` while an image uses the map.
+stop, because `aria-disabled` announces a state and leaves focus alone.
+
+So is the `<summary>` that toggles a `<details>`, such as an FAQ accordion's
+question, listed as `generic` and named by its text. Only the first `<summary>`
+child of a `<details>` is a stop. A second one, or a summary anywhere else, is
+plain text to Chromium.
 
 ```sh
 real-a11y tabs https://example.com
 real-a11y tabs https://example.com --root "#app main"
+```
+
+A rich-text editor counts the way Chromium counts it. Each `contenteditable`
+region is one stop, named by its label and never by what was typed into it. A
+link inside the editor is not a stop, because Chromium can't focus it, unless it
+sits in a `contenteditable="false"` island such as a mention chip:
+
+```
+01. textbox "Message"
+02. link "Mention Alice"
 ```
 
 **Flags:** [Browser & page](#browser-page) · [Output](#output) (`pretty | json`)

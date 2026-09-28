@@ -116,13 +116,10 @@ describe("real-a11y (built bin)", () => {
   });
 
   it("tabs lists only the stops Chromium actually tabs to", async () => {
-    // The expected list is Chromium 151's own Tab walk of this page. The
-    // in-page walk used to list the two href-less anchors, the button in the
-    // disabled fieldset and the div with an empty tabindex, which Chromium
-    // never focuses, and to drop the aria-disabled button, which it does. The
-    // image map is here because only a real browser renders an <area>: the
-    // used map's area is a stop, the unused one's is not.
-    const gif = "data:image/gif;base64,R0lGODlhAQABAAAAACw=";
+    // The expected list is Chromium's own Tab walk of this page. The in-page
+    // walk used to list the two href-less anchors, the button in the disabled
+    // fieldset and the div with an empty tabindex, which Chromium never
+    // focuses, and to drop the aria-disabled button, which it does.
     const page = dataUrl(
       "<!doctype html><title>Stops</title><main>" +
         '<a name="top">Back to top anchor</a>' +
@@ -132,19 +129,45 @@ describe("real-a11y (built bin)", () => {
         "<fieldset disabled><legend><button>Unlock</button></legend>" +
         "<button>Save</button></fieldset>" +
         '<div tabindex="">Card</div>' +
-        `<img src="${gif}" width="10" height="10" alt="Site map" usemap="#nav">` +
-        '<map name="nav"><area href="/home" alt="Home" coords="0,0,10,10"></map>' +
-        '<map name="unused"><area href="/old" alt="Old" coords="0,0,10,10"></map>' +
+        "</main>",
+    );
+    const { code, stdout } = await runCli(["tabs", page, "-q"]);
+    expect(code).toBe(0);
+    expect(stdout.trimEnd()).toBe(
+      ['01. link "Docs"', '02. button "Publish"', '03. button "Unlock"'].join(
+        "\n",
+      ),
+    );
+  });
+
+  it("tabs lists a details' summary, as Chromium tabs to it", async () => {
+    // The expected list is Chromium 151's own Tab walk of this page. The
+    // in-page walk used to skip every summary, so a disclosure or FAQ toggle
+    // never showed up as a stop. Only the first summary child of a details
+    // is one, and an inert one is none, which only a real browser's walk
+    // shows end to end.
+    const page = dataUrl(
+      "<!doctype html><title>FAQ</title><main>" +
+        "<button>Before</button>" +
+        "<details><summary>Shipping</summary><p>3 to 5 days.</p></details>" +
+        "<details open><p>Lead</p><summary>Returns</summary>" +
+        "<summary>Second summary</summary></details>" +
+        "<div><summary>Stray summary</summary></div>" +
+        "<div inert><details><summary>Inert</summary></details></div>" +
+        "<fieldset disabled><details><summary>Warranty</summary></details>" +
+        "</fieldset>" +
+        '<a href="/faq">All questions</a>' +
         "</main>",
     );
     const { code, stdout } = await runCli(["tabs", page, "-q"]);
     expect(code).toBe(0);
     expect(stdout.trimEnd()).toBe(
       [
-        '01. link "Docs"',
-        '02. button "Publish"',
-        '03. button "Unlock"',
-        '04. link "Home"',
+        '01. button "Before"',
+        '02. generic "Shipping"',
+        '03. generic "Returns"',
+        '04. generic "Warranty"',
+        '05. link "All questions"',
       ].join("\n"),
     );
   });
@@ -226,6 +249,18 @@ const VIDEO_PAGE = dataUrl(
 const ICON_BTN_PAGE = dataUrl(
   "<main><h1>Hi</h1><button><svg width='10' height='10'></svg></button></main>",
 );
+// A rich-text composer: an editor with a link typed into it and a mention chip
+// in a contenteditable="false" island, and a second, role-less editor.
+const COMPOSER_PAGE = dataUrl(
+  "<!doctype html><title>Composer</title><main><h1>Compose</h1>" +
+    '<div id="composer" contenteditable="true" role="textbox" aria-label="Message">' +
+    '<p>Reset link: <a href="https://x.test/reset?token=abc123">https://x.test/reset?token=abc123</a></p>' +
+    "<h3>Q3 layoffs plan</h3>" +
+    '<p>cc <a contenteditable="false" href="/u/alice" aria-label="Mention Alice">@alice</a></p>' +
+    "</div>" +
+    '<article><div contenteditable="true">my password is hunter2</div></article>' +
+    "</main>",
+);
 // Chromium names neither: an image and a dialog are named by their author only,
 // and the text inside them is not a name.
 const TEXT_ONLY_PAGE = dataUrl(
@@ -302,6 +337,22 @@ describe("the native producer is the only producer (built bin)", () => {
     const { code, stdout } = await runCli(["tabs", ICON_BTN_PAGE]);
     expect(code).toBe(0);
     expect(stdout).toMatch(/01\. /);
+  });
+
+  it("tabs stops at each editor and its island link, never at a link typed into one", async () => {
+    // Chromium tabs to both editing hosts and to the contenteditable="false"
+    // mention chip, and can't focus the link typed into the composer at all.
+    // That link used to be listed under its own text — here, a reset URL
+    // with its token — while both editors were missing.
+    const { code, stdout } = await runCli(["tabs", COMPOSER_PAGE, "-q"]);
+    expect(code).toBe(0);
+    expect(stdout.trimEnd()).toBe(
+      ['01. textbox "Message"', '02. link "Mention Alice"', "03. generic"].join(
+        "\n",
+      ),
+    );
+    expect(stdout).not.toContain("token=abc123");
+    expect(stdout).not.toContain("hunter2");
   });
 
   it("rejects --producer entirely — the axis is gone", async () => {

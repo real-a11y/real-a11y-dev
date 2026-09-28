@@ -14,10 +14,18 @@
  * such a node. The one ancestor rule here is a disabled `<fieldset>`, which
  * `:disabled` folds in.
  *
- * Two stops Chromium has are not counted yet: an editing host (see
- * role-map.ts, which counts one for conflict resolution only) and a
- * `<summary>`.
+ * Editing counts both ways (see editing.ts): an editing host is a stop with no
+ * `tabindex`, and a link inside editable content is not one.
+ *
+ * Two stops Chromium has are not listed yet. One is the default summary
+ * Chromium gives a `<details>` that has none of its own, which lives in a UA
+ * shadow root the walk has no element for. The other is an image map's
+ * `<area>`: since Chromium 153 its UA stylesheet gives one `display: none`,
+ * so the walk skips it, although Chromium still tabs to it. The rule below is
+ * still right wherever an area is asked about.
  */
+
+import { isEditable, isEditingHost } from "./editing.js";
 
 /** Form controls that `disabled` removes from the focus order entirely. */
 const FORM_CONTROL_TAGS = new Set(["button", "input", "select", "textarea"]);
@@ -68,7 +76,7 @@ export function isActuallyDisabled(element: Element): boolean {
  * `aria-disabled` is not one of these. It announces a state and leaves the
  * element focusable, which is the point of using it.
  */
-export function isFocusBarred(element: Element): boolean {
+function isFocusBarred(element: Element): boolean {
   const tag = element.tagName.toLowerCase();
   if (!FORM_CONTROL_TAGS.has(tag)) return false;
   if (
@@ -97,6 +105,24 @@ function isInUsedImageMap(area: Element): boolean {
   return false;
 }
 
+/**
+ * Whether a `<summary>` is its `<details>`' summary, the disclosure toggle:
+ * the first `<summary>` child, even with other content before it. Any other
+ * summary, including one slotted into a details it is not a child of, is
+ * plain text to Chromium. A disabled `<fieldset>` does not disable one, since
+ * a summary is no form control.
+ *
+ * A loop over the children rather than `:scope > summary`: jsdom's selector
+ * engine misses that match inside a shadow root.
+ */
+function isDetailsSummary(summary: Element): boolean {
+  const details = summary.parentElement;
+  if (details?.tagName.toLowerCase() !== "details") return false;
+  for (const child of details.children)
+    if (child.tagName.toLowerCase() === "summary") return child === summary;
+  return false;
+}
+
 /** True when `element` can take focus, from Tab or from script. */
 export function isFocusable(element: Element): boolean {
   if (isFocusBarred(element)) return false;
@@ -104,16 +130,31 @@ export function isFocusable(element: Element): boolean {
   // A negative tabindex is still focusable (scripted focus), just not a stop.
   if (parseTabindex(element.getAttribute("tabindex")) !== null) return true;
 
+  // An editing host is focusable with no tabindex; an editable element nested
+  // inside one is not (Chromium focuses only the host).
+  if (isEditingHost(element)) return true;
+
   const tag = element.tagName.toLowerCase();
   // Without an href, `<a>` is a fragment target or a placeholder, not a link.
   // An SVG `<a>` may still carry the older `xlink:href`, which Chromium honors.
+  // Editing takes a link's focusability away: Chromium won't focus one inside
+  // editable content, not even from script, unless it carries its own
+  // tabindex (above) or sits in a `contenteditable="false"` island. Nothing
+  // else loses it: a button or an input inside an editor is still a stop.
   if (tag === "a")
     return (
-      element.hasAttribute("href") || element.hasAttributeNS(XLINK_NS, "href")
+      (element.hasAttribute("href") ||
+        element.hasAttributeNS(XLINK_NS, "href")) &&
+      !isEditable(element)
     );
   if (tag === "area")
-    return element.hasAttribute("href") && isInUsedImageMap(element);
+    return (
+      element.hasAttribute("href") &&
+      isInUsedImageMap(element) &&
+      !isEditable(element)
+    );
   if (FORM_CONTROL_TAGS.has(tag)) return true;
+  if (tag === "summary") return isDetailsSummary(element);
   // <video controls> / <audio controls> are tab stops — Chromium exposes them
   // focusable even though the actual buttons/sliders live in a closed UA
   // shadow root.

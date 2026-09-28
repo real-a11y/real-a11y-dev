@@ -39,7 +39,7 @@ The `<a role="button">` is the one that matters. It is a button no keyboard can 
 
 What counts as a stop, all checked against Chromium 151:
 
-- **Link:** an `<a>` needs an `href` or a `tabindex`. An image map's `<area href>` is a stop while an image uses the map.
+- **Link:** an `<a>` needs an `href` or a `tabindex`.
 - **Disabled:** a control disabled directly or by a `<fieldset disabled>` is not a stop, unless it sits in that fieldset's first `<legend>`. `aria-disabled` announces a state and leaves focus alone, so its control stays a stop.
 - **`tabindex`:** read the way HTML parses an integer. `""` and `"abc"` are ignored, `"1abc"` is 1 and `"0.5"` is 0. Any negative value takes an element out of the order, not just `-1`.
 

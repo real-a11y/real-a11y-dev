@@ -267,4 +267,40 @@ describe("checkChangeSpec", () => {
       ),
     ).toBe(true);
   });
+
+  it("exact ignores a value-only change, which stays assertable (ADR-0001)", () => {
+    // Diffs only started seeing field values with ADR-0001. A `type` step that
+    // changes the field it types into must not fail every existing exact spec.
+    const typed: TreeDiff = {
+      added: [],
+      removed: [],
+      changed: [
+        {
+          id: "sn-t",
+          before: mk("textbox", "Search"),
+          after: mk("textbox", "Search"),
+          changes: ["a11y.value"],
+        },
+      ],
+    };
+    expect(checkChangeSpec(typed, { exact: true })).toEqual([]);
+    expect(
+      checkChangeSpec(typed, {
+        changed: [{ role: "textbox", name: "Search", changes: ["a11y.value"] }],
+        exact: true,
+      }),
+    ).toEqual([]);
+    // A value change riding along with a real one is still reported.
+    const typedAndInvalid: TreeDiff = {
+      ...typed,
+      changed: [
+        { ...typed.changed[0], changes: ["a11y.value", "a11y.states.invalid"] },
+      ],
+    };
+    expect(
+      checkChangeSpec(typedAndInvalid, { exact: true }).some((p) =>
+        p.startsWith("unexpected CHANGED textbox"),
+      ),
+    ).toBe(true);
+  });
 });
