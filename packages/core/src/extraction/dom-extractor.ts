@@ -212,9 +212,7 @@ function getActions(
     // is already handled by the tag === "input" branch above. (aria-autocomplete
     // describes autocomplete *behavior*, not editability — a non-editable div
     // can't be typed into regardless, so it isn't the signal here.)
-    const ce = element.getAttribute("contenteditable");
-    const editable = ce === "" || ce === "true" || ce === "plaintext-only";
-    if (editable) {
+    if (isEditingHost(element)) {
       // Treat like a textbox so the panel opens its inline input. Deliberately
       // NOT "click": click outranks type in getPrimaryAction, so a co-present
       // click would re-hijack the primary action and re-break text entry.
@@ -827,7 +825,16 @@ function getAccessibleTextContent(
       // padded with spaces so adjacent text doesn't glue; the final
       // whitespace normalization collapses any doubles.
       if (NAMED_WIDGET_ROLES.has(role)) {
-        text += ` ${computeAccessibleName(childEl, visited, styleCache)} `;
+        // An editing host takes no name from its own content, but Chromium
+        // still reads that text into an ancestor's name:
+        // `<h2>Before <button contenteditable>Save</button></h2>` is
+        // heading "Before Save".
+        const name =
+          computeAccessibleName(childEl, visited, styleCache) ||
+          (isEditingHost(childEl)
+            ? getAccessibleTextContent(childEl, visited, styleCache)
+            : "");
+        text += ` ${name} `;
         continue;
       }
       if (NAME_BARRIER_ROLES.has(role) && !isImplicitDetailsGroup(childEl)) {
@@ -1894,7 +1901,7 @@ function buildNode(
               (element as HTMLInputElement).type || "text",
             )) ||
           tag === "textarea" ||
-          element.getAttribute("contenteditable") === "true",
+          isEditingHost(element),
       },
       ui: {
         expanded: depth < 2,

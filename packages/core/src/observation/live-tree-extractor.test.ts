@@ -267,7 +267,8 @@ describe("LiveTreeExtractor", () => {
     document.body.innerHTML = `<main><div id="ed" contenteditable="true" role="textbox" aria-label="Message"><p>See <a href="/x">docs</a></p></div></main>`;
 
     const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
-    const changes: TreeChange[] = [];
+    // Optional, as the observer's callback is — see the test above.
+    const changes: (TreeChange | undefined)[] = [];
     const observer = new DomObserver(
       document.body,
       (change) => {

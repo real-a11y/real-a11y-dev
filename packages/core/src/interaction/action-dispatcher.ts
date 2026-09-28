@@ -1,3 +1,4 @@
+import { isEditingHost } from "../extraction/editing.js";
 import type { ActionRequest, ActionResult } from "../types.js";
 import { ElementRefMap } from "../utils/element-ref.js";
 
@@ -76,8 +77,7 @@ function acceptsTextEntry(element: Element): boolean {
     const type = (element as HTMLInputElement).type || "text";
     return TEXT_ENTRY_INPUT_TYPES.has(type);
   }
-  const ce = element.getAttribute("contenteditable");
-  if (ce === "" || ce === "true" || ce === "plaintext-only") return true;
+  if (isEditingHost(element)) return true;
   const role = element.getAttribute("role");
   return role === "textbox" || role === "searchbox" || role === "spinbutton";
 }

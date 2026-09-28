@@ -2233,6 +2233,32 @@ describe("contenteditable editing hosts", () => {
     expect(nodeBy(root, "inner").a11y.name).toBe("Inner heading");
   });
 
+  it("still reads a host's text into an ancestor's name", () => {
+    const root = createPage(
+      `<h2 id="h">Before <button contenteditable="true">Save</button> after</h2>`,
+    );
+    expect(nodeBy(root, "h").a11y.name).toBe("Before Save after");
+  });
+
+  it("marks only an editing host as editable", () => {
+    const root = createPage(`
+      <div id="empty" contenteditable="">x</div>
+      <div id="plain" contenteditable="plaintext-only">y</div>
+      <div id="outer" contenteditable="true"><div id="nested" contenteditable="true">n</div></div>
+    `);
+    expect(nodeBy(root, "empty").interaction?.isEditable).toBe(true);
+    expect(nodeBy(root, "plain").interaction?.isEditable).toBe(true);
+    expect(nodeBy(root, "outer").interaction?.isEditable).toBe(true);
+    expect(nodeBy(root, "nested").interaction?.isEditable).toBe(false);
+  });
+
+  it("types into an upper-case contenteditable combobox", () => {
+    const root = createPage(
+      `<div id="cb" role="combobox" contenteditable="TRUE" aria-label="Q"></div>`,
+    );
+    expect(nodeBy(root, "cb").interaction?.actions).toEqual(["focus", "type"]);
+  });
+
   it("still lends a host's text to a name that references it", () => {
     const root = createPage(`
       <span id="src" contenteditable="true">Draft</span>

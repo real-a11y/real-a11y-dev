@@ -386,6 +386,17 @@ describe("getTabSequence", () => {
       expect(stops(tree)).toEqual(['textbox "First"', 'button "Zero"']);
     });
 
+    // A light-DOM link slotted into a component inside an editor is still
+    // editable content, so it is not a stop either.
+    it("skips a link slotted into a component inside an editor", () => {
+      const root = createPage(
+        `<div contenteditable="true" role="textbox" aria-label="Editor"><span id="c"><a href="/s">Slotted link</a></span></div>`,
+      );
+      root.querySelector("#c")!.attachShadow({ mode: "open" }).innerHTML =
+        "<b><slot></slot></b>";
+      expect(stops(extractDomTree(root))).toEqual(['textbox "Editor"']);
+    });
+
     // Editing does not cross into a shadow tree: a link a component renders
     // inside an editor is still a stop.
     it("does not reach into a shadow root under an editor", () => {
