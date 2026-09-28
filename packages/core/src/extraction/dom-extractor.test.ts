@@ -2544,3 +2544,183 @@ describe("aria-describedby target suppression", () => {
     expect(link!.a11y.name).toBe("Full rules");
   });
 });
+
+// Chromium 151 is the reference for every expectation here: an editing host
+// is a tab stop that takes typing, a link inside editable content can't be
+// focused at all (not even by script) unless it carries its own tabindex, and
+// a contenteditable="false" island hands a link its focusability back.
+describe("contenteditable editing hosts", () => {
+  const nodeBy = (root: Element, id: string) => {
+    const { nodes } = extractDomTree(root);
+    const node = [...nodes.values()].find((n) => n.dom?.attributes.id === id);
+    if (!node) throw new Error(`no node with id="${id}"`);
+    return node;
+  };
+
+  it("makes a role-less editor a focusable text field, unnamed by what was typed", () => {
+    const root = createPage(
+      `<div id="ed" contenteditable="true">my password is hunter2</div>`,
+    );
+    const ed = nodeBy(root, "ed");
+    expect(ed.a11y.role).toBe("generic");
+    // What was typed is the editor's content, not its label.
+    expect(ed.a11y.name).toBe("");
+    expect(ed.interaction?.isFocusable).toBe(true);
+    expect(ed.interaction?.actions).toEqual(["focus", "type"]);
+    expect(ed.interaction?.isInteractive).toBe(true);
+  });
+
+  // Not even a role that names from content: Chromium leaves an editable
+  // heading, button or link unnamed, and names one only by its author.
+  it("never names a host from its content, whatever its role", () => {
+    const root = createPage(`
+      <h3 id="title" contenteditable="true">Draft title</h3>
+      <button id="btn" contenteditable="true">Button text</button>
+      <a id="link" href="/l" contenteditable="true">Link text</a>
+      <h3 id="labelled" contenteditable="true" aria-label="Label">Typed</h3>
+      <h3 id="titled" contenteditable="true" title="Tip">Typed</h3>
+      <div contenteditable="true"><h3 id="inner">Inner heading</h3></div>
+    `);
+    const title = nodeBy(root, "title");
+    expect(title.a11y.name).toBe("");
+    expect(title.interaction?.isFocusable).toBe(true);
+    expect(title.interaction?.actions).toEqual(["focus", "type"]);
+    expect(nodeBy(root, "btn").a11y.name).toBe("");
+    expect(nodeBy(root, "link").a11y.name).toBe("");
+    expect(nodeBy(root, "labelled").a11y.name).toBe("Label");
+    expect(nodeBy(root, "titled").a11y.name).toBe("Tip");
+    // Only the host: a heading inside an editor is named as usual.
+    expect(nodeBy(root, "inner").a11y.name).toBe("Inner heading");
+  });
+
+  it("still reads a host's text into an ancestor's name", () => {
+    const root = createPage(
+      `<h2 id="h">Before <button contenteditable="true">Save</button> after</h2>`,
+    );
+    expect(nodeBy(root, "h").a11y.name).toBe("Before Save after");
+  });
+
+  it("marks only an editing host as editable", () => {
+    const root = createPage(`
+      <div id="empty" contenteditable="">x</div>
+      <div id="plain" contenteditable="plaintext-only">y</div>
+      <div id="outer" contenteditable="true"><div id="nested" contenteditable="true">n</div></div>
+    `);
+    expect(nodeBy(root, "empty").interaction?.isEditable).toBe(true);
+    expect(nodeBy(root, "plain").interaction?.isEditable).toBe(true);
+    expect(nodeBy(root, "outer").interaction?.isEditable).toBe(true);
+    expect(nodeBy(root, "nested").interaction?.isEditable).toBe(false);
+  });
+
+  it("types into an upper-case contenteditable combobox", () => {
+    const root = createPage(
+      `<div id="cb" role="combobox" contenteditable="TRUE" aria-label="Q"></div>`,
+    );
+    expect(nodeBy(root, "cb").interaction?.actions).toEqual(["focus", "type"]);
+  });
+
+  // A contenteditable="false" island ends the outer editor, so an editor
+  // reopened inside one is its own field with its own value, as in Chromium
+  // 151 (`textbox "Re"` value "island text").
+  it("gives an editor reopened inside an island its own value", () => {
+    const root = createPage(`
+      <div contenteditable="true" role="textbox" aria-label="Outer">intro
+        <span contenteditable="false">chip
+          <span id="re" contenteditable="true" role="textbox" aria-label="Re">island text</span>
+        </span>
+      </div>
+    `);
+    expect(nodeBy(root, "re").a11y.value).toBe("island text");
+  });
+
+  it("still lends a host's text to a name that references it", () => {
+    const root = createPage(`
+      <span id="src" contenteditable="true">Draft</span>
+      <button id="ref" aria-labelledby="src"></button>
+    `);
+    // Attached, so the IDREF resolves.
+    document.body.appendChild(root);
+    try {
+      expect(nodeBy(root, "ref").a11y.name).toBe("Draft");
+    } finally {
+      root.remove();
+    }
+  });
+
+  it("does not let an editor override a role's own actions", () => {
+    const root = createPage(`
+      <div id="tb" role="textbox" contenteditable="true" aria-label="T"></div>
+      <div id="btn" role="button" contenteditable="true">Go</div>
+      <div id="ti" contenteditable="true" tabindex="0"></div>
+    `);
+    expect(nodeBy(root, "tb").interaction?.actions).toEqual(["focus", "type"]);
+    expect(nodeBy(root, "btn").interaction?.actions).toEqual(["click"]);
+    // The tabindex catch-all is a `click`, which would outrank `type`.
+    expect(nodeBy(root, "ti").interaction?.actions).toEqual(["focus", "type"]);
+  });
+
+  // Chromium doesn't follow one either, not even on a scripted click().
+  it("gives a link inside an editor no actions, except in an island", () => {
+    const root = createPage(`
+      <div contenteditable="true" role="textbox" aria-label="Message">
+        <a id="inside" href="#inside">reset</a>
+        <a id="island" contenteditable="false" href="#island">@alice</a>
+      </div>
+    `);
+    expect(nodeBy(root, "inside").interaction?.actions).toEqual([]);
+    expect(nodeBy(root, "island").interaction?.actions).toEqual([
+      "click",
+      "navigate",
+    ]);
+  });
+
+  // role="none" on a link Chromium can't focus is honored, so the link
+  // flattens away instead of surviving as a bare presentation node.
+  it("flattens a decorative link inside an editor out of the a11y view", () => {
+    const root = createPage(
+      `<div contenteditable="true" role="textbox" aria-label="Message"><a href="/x" role="none">Help</a></div>`,
+    );
+    const roles = [...extractA11yTree(root).nodes.values()].map(
+      (n) => n.a11y.role,
+    );
+    expect(roles).not.toContain("presentation");
+    expect(roles).not.toContain("link");
+  });
+
+  it("does not make a link inside an editor focusable, except in an island", () => {
+    const root = createPage(`
+      <div contenteditable="true" role="textbox" aria-label="Message">
+        <a id="inside" href="https://x.test/reset?token=abc123">reset</a>
+        <a id="island" contenteditable="false" href="/u/alice">@alice</a>
+        <a id="own-ti" href="/t" tabindex="0">tabbable</a>
+      </div>
+    `);
+    expect(nodeBy(root, "inside").interaction?.isFocusable).toBe(false);
+    expect(nodeBy(root, "island").interaction?.isFocusable).toBe(true);
+    expect(nodeBy(root, "own-ti").interaction?.isFocusable).toBe(true);
+  });
+
+  it("does not treat a contenteditable nested in an editor as a host", () => {
+    const root = createPage(`
+      <div id="outer" contenteditable="true">
+        <div id="nested" contenteditable="true">n</div>
+      </div>
+    `);
+    expect(nodeBy(root, "outer").interaction?.isFocusable).toBe(true);
+    const nested = nodeBy(root, "nested");
+    expect(nested.interaction?.isFocusable).toBe(false);
+    expect(nested.interaction?.actions).toEqual([]);
+  });
+
+  it("ignores contenteditable=false and an invalid value", () => {
+    const root = createPage(`
+      <div id="off" contenteditable="false">x</div>
+      <div id="bogus" contenteditable="bogus">y</div>
+    `);
+    for (const id of ["off", "bogus"]) {
+      const node = nodeBy(root, id);
+      expect(node.interaction?.isFocusable).toBe(false);
+      expect(node.interaction?.actions).toEqual([]);
+    }
+  });
+});

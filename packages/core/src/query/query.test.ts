@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 
+import { extractA11yTree } from "../extraction/a11y-extractor.js";
 import { extractDomTree } from "../extraction/dom-extractor.js";
 import { resetIdCounter } from "../utils/id-generator.js";
 
@@ -261,6 +262,154 @@ describe("getTabSequence", () => {
     const tree = extractDomTree(root);
     const names = getTabSequence(tree).map((n) => n.a11y.name);
     expect(names).toEqual(["A", "B"]);
+  });
+
+  // Every expectation below was recorded by pressing Tab through the same
+  // markup in Chromium 151 and reading `document.activeElement`.
+  describe("contenteditable", () => {
+    const stops = (tree: ReturnType<typeof extractDomTree>) =>
+      getTabSequence(tree).map((n) =>
+        n.a11y.name ? `${n.a11y.role} "${n.a11y.name}"` : n.a11y.role,
+      );
+
+    const COMPOSER = `
+      <h1>Compose</h1>
+      <div contenteditable="true" role="textbox" aria-label="Message">
+        <p>Reset link: <a href="https://x.test/reset?token=abc123">https://x.test/reset?token=abc123</a></p>
+        <h3>Q3 layoffs plan</h3>
+        <p>cc <a contenteditable="false" href="/u/alice" aria-label="Mention Alice">@alice</a></p>
+      </div>
+      <article><div contenteditable="true">my password is hunter2</div></article>
+    `;
+
+    // The a11y view is what `tabs` and `get_tab_order` serialize. The
+    // role-less editor is a stop there too, and it is not named after what
+    // was typed into it.
+    it("lists each editing host and skips a link inside one (a11y view)", () => {
+      const tree = extractA11yTree(createPage(COMPOSER));
+      expect(stops(tree)).toEqual([
+        'textbox "Message"',
+        'link "Mention Alice"',
+        "generic",
+      ]);
+    });
+
+    it("lists each editing host and skips a link inside one (DOM view)", () => {
+      const tree = extractDomTree(createPage(COMPOSER));
+      expect(stops(tree)).toEqual([
+        'textbox "Message"',
+        'link "Mention Alice"',
+        "generic",
+      ]);
+    });
+
+    it("keeps an empty role-less editor as a stop", () => {
+      const tree = extractA11yTree(
+        createPage(`<button>Before</button><div contenteditable></div>`),
+      );
+      expect(stops(tree)).toEqual(['button "Before"', "generic"]);
+    });
+
+    // A link loses its focusability to editing; nothing else does.
+    it("keeps controls and explicit tabindexes inside an editor", () => {
+      const tree = extractDomTree(
+        createPage(`
+          <div contenteditable="true" role="textbox" aria-label="Doc">
+            <a href="/plain">Plain link</a>
+            <a href="/ti" tabindex="0">Tabbable link</a>
+            <button>Inside button</button>
+            <input aria-label="Inside input">
+            <span role="button" tabindex="0">Chip</span>
+          </div>
+        `),
+      );
+      expect(stops(tree)).toEqual([
+        'textbox "Doc"',
+        'link "Tabbable link"',
+        'button "Inside button"',
+        'textbox "Inside input"',
+        'button "Chip"',
+      ]);
+    });
+
+    it("counts only the outermost host; a contenteditable=false island reopens one", () => {
+      const tree = extractDomTree(
+        createPage(`
+          <div contenteditable="true" role="textbox" aria-label="Outer">
+            <div contenteditable="true" role="textbox" aria-label="Nested">n</div>
+            <div contenteditable="false">
+              <a href="/island">Island link</a>
+              <div contenteditable="true" role="textbox" aria-label="Reopened">
+                <a href="/re">Link in reopened</a>
+              </div>
+            </div>
+            <div contenteditable="bogus"><a href="/b">Link under invalid value</a></div>
+          </div>
+        `),
+      );
+      expect(stops(tree)).toEqual([
+        'textbox "Outer"',
+        'link "Island link"',
+        'textbox "Reopened"',
+      ]);
+    });
+
+    it("reads the attribute as HTML does: '', plaintext-only, any case; invalid inherits", () => {
+      const tree = extractDomTree(
+        createPage(`
+          <div contenteditable="" role="textbox" aria-label="Empty string"></div>
+          <div contenteditable="plaintext-only" role="textbox" aria-label="Plaintext"></div>
+          <div contenteditable="TRUE" role="textbox" aria-label="Upper case"></div>
+          <div contenteditable="bogus" role="textbox" aria-label="Invalid"></div>
+          <div contenteditable="true" role="textbox" aria-label="Opted out" tabindex="-1"></div>
+          <a href="/host" contenteditable="true">Link that is the host</a>
+          <div contenteditable="false"><a href="/f">Link under false</a></div>
+        `),
+      );
+      expect(stops(tree)).toEqual([
+        'textbox "Empty string"',
+        'textbox "Plaintext"',
+        'textbox "Upper case"',
+        // An editing host takes no name from its content, a link included.
+        "link",
+        'link "Link under false"',
+      ]);
+    });
+
+    it("orders a positive-tabindex host first, like any other stop", () => {
+      const tree = extractDomTree(
+        createPage(`
+          <button>Zero</button>
+          <div contenteditable="true" role="textbox" aria-label="First" tabindex="1"></div>
+        `),
+      );
+      expect(stops(tree)).toEqual(['textbox "First"', 'button "Zero"']);
+    });
+
+    // A light-DOM link slotted into a component inside an editor is still
+    // editable content, so it is not a stop either.
+    it("skips a link slotted into a component inside an editor", () => {
+      const root = createPage(
+        `<div contenteditable="true" role="textbox" aria-label="Editor"><span id="c"><a href="/s">Slotted link</a></span></div>`,
+      );
+      root.querySelector("#c")!.attachShadow({ mode: "open" }).innerHTML =
+        "<b><slot></slot></b>";
+      expect(stops(extractDomTree(root))).toEqual(['textbox "Editor"']);
+    });
+
+    // Editing does not cross into a shadow tree: a link a component renders
+    // inside an editor is still a stop.
+    it("does not reach into a shadow root under an editor", () => {
+      const root = createPage(
+        `<div contenteditable="true" role="textbox" aria-label="Editor"><span id="w"></span></div>`,
+      );
+      root.querySelector("#w")!.attachShadow({ mode: "open" }).innerHTML =
+        `<a href="/s">Shadow link</a>`;
+      expect(stops(extractDomTree(root))).toEqual([
+        'textbox "Editor"',
+        'link "Shadow link"',
+      ]);
+    });
   });
 });
 

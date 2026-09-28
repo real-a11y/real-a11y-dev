@@ -18,6 +18,18 @@
 
 ## Unreleased
 
+- In DOM mode, the Tab Sequence view, its copied export and the keyboard bar's
+  Tab now stop at a rich-text editor and skip the links inside it. They used to
+  do the reverse: a `contenteditable` message box was left out, and a link typed
+  into it was listed under its own text, often a full URL, although Chromium
+  can't focus it at all. A mention chip marked `contenteditable="false"` is
+  still a stop. A role-less editor shows as `generic` instead of taking what
+  was typed into it as its name, and gets a Type action like a text box.
+  Selecting any editor moves page focus to it, including one written as
+  `contenteditable=""` or `plaintext-only`. A link inside an editor no
+  longer offers Click, since Chromium doesn't follow it.
+  ([#421](https://github.com/real-a11y/real-a11y-dev/pull/421))
+
 - An element with `role="image"` now shows as an `img` in DOM mode, as NATIVE
   mode already showed it. ARIA 1.3 makes `image` another spelling of `img`, but
   the DOM tree kept the raw role and named the element by its text, so

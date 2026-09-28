@@ -192,6 +192,18 @@ const VIDEO_PAGE = dataUrl(
 const ICON_BTN_PAGE = dataUrl(
   "<main><h1>Hi</h1><button><svg width='10' height='10'></svg></button></main>",
 );
+// A rich-text composer: an editor with a link typed into it and a mention chip
+// in a contenteditable="false" island, and a second, role-less editor.
+const COMPOSER_PAGE = dataUrl(
+  "<!doctype html><title>Composer</title><main><h1>Compose</h1>" +
+    '<div id="composer" contenteditable="true" role="textbox" aria-label="Message">' +
+    '<p>Reset link: <a href="https://x.test/reset?token=abc123">https://x.test/reset?token=abc123</a></p>' +
+    "<h3>Q3 layoffs plan</h3>" +
+    '<p>cc <a contenteditable="false" href="/u/alice" aria-label="Mention Alice">@alice</a></p>' +
+    "</div>" +
+    '<article><div contenteditable="true">my password is hunter2</div></article>' +
+    "</main>",
+);
 // Chromium names neither: an image and a dialog are named by their author only,
 // and the text inside them is not a name.
 const TEXT_ONLY_PAGE = dataUrl(
@@ -268,6 +280,22 @@ describe("the native producer is the only producer (built bin)", () => {
     const { code, stdout } = await runCli(["tabs", ICON_BTN_PAGE]);
     expect(code).toBe(0);
     expect(stdout).toMatch(/01\. /);
+  });
+
+  it("tabs stops at each editor and its island link, never at a link typed into one", async () => {
+    // Chromium tabs to both editing hosts and to the contenteditable="false"
+    // mention chip, and can't focus the link typed into the composer at all.
+    // That link used to be listed under its own text — here, a reset URL
+    // with its token — while both editors were missing.
+    const { code, stdout } = await runCli(["tabs", COMPOSER_PAGE, "-q"]);
+    expect(code).toBe(0);
+    expect(stdout.trimEnd()).toBe(
+      ['01. textbox "Message"', '02. link "Mention Alice"', "03. generic"].join(
+        "\n",
+      ),
+    );
+    expect(stdout).not.toContain("token=abc123");
+    expect(stdout).not.toContain("hunter2");
   });
 
   it("rejects --producer entirely — the axis is gone", async () => {
