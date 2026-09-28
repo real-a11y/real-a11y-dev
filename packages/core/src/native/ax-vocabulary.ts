@@ -205,7 +205,9 @@ export const NATIVE_AX_OWN_TEXT_ROLES: ReadonlySet<string> = new Set([
  * Checked against Chromium 151: each comes back unnamed with its text on a
  * child, except `region` and `role="form"`, which Chromium does not expose at
  * all until they are named. They are listed anyway, so a milestone that starts
- * exposing them unnamed can't slip one past. Raw Blink role strings.
+ * exposing them unnamed can't slip one past. (The native `<hr>`, `<progress>`
+ * and `<meter>` expose no text child at all; their `role=` forms do.) Raw
+ * Blink role strings.
  */
 export const NATIVE_AX_AUTHOR_NAMED_ROLES: ReadonlySet<string> = new Set([
   "image",
