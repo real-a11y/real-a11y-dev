@@ -423,6 +423,36 @@ describe("field-value redaction (R1) grades as a redaction boundary", () => {
   });
 });
 
+describe("field-value redaction covers each producer's own allowlists", () => {
+  it("grades literal-only edits to KEY_ATTRIBUTES and NATIVE_AX_AUTHOR_NAMED_ROLES 🔴 high", async () => {
+    // The DOM producer's twin of DOM_ATTR_ALLOWLIST, and the first tier of the
+    // native producer's defence against promoting a typed value into a field's
+    // name. Both are string literals in a Set or array, so the hunk header is
+    // the only place either name appears — the same shape as the allowlist
+    // case above, one producer over.
+    const keyAttrs = `export const KEY_ATTRIBUTES = [\n  "id",\n  "role",\n];\n`;
+    const authorNamed = `export const NATIVE_AX_AUTHOR_NAMED_ROLES: ReadonlySet<string> = new Set([\n  "image",\n  "combobox",\n  "textbox",\n]);\n`;
+    const keyAttrsPath = "packages/core/src/extraction/dom-extractor.ts";
+    const authorNamedPath = "packages/core/src/native/ax-vocabulary.ts";
+    const result = await grade(
+      {
+        [keyAttrsPath]: keyAttrs.replace(
+          `  "role",\n`,
+          `  "role",\n  "value",\n`,
+        ),
+        [authorNamedPath]: authorNamed.replace(`  "combobox",\n`, ``),
+      },
+      { base: { [keyAttrsPath]: keyAttrs, [authorNamedPath]: authorNamed } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "field-value-redaction"), [
+      `${keyAttrsPath} → KEY_ATTRIBUTES`,
+      `${authorNamedPath} → NATIVE_AX_AUTHOR_NAMED_ROLES`,
+    ]);
+  });
+});
+
 describe("field-value redaction stays on the gates, not the files", () => {
   it("leaves an unrelated comment edit in native-tree.ts 🟡 medium", async () => {
     // Why this rule matches the gates by name rather than native-tree.ts by
@@ -451,7 +481,7 @@ describe("field-value redaction stays on the gates, not the files", () => {
       DOM_EXTRACTOR_PATH,
       DOM_EXTRACTOR,
       `}\n\nexport function getDescendantText`,
-      `}\n\n/**\n * Attributes recorded verbatim on every node.\n */\nexport const KEY_ATTRIBUTES = ["id", "class"];\n\nexport function getDescendantText`,
+      `}\n\n/**\n * Tags that end a line of collapsed text.\n */\nexport const LINE_BREAKING_TAGS = ["br", "hr"];\n\nexport function getDescendantText`,
     );
 
     assert.equal(result.tier, "medium");

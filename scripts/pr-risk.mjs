@@ -675,8 +675,15 @@ const FIELD_VALUE_GATES = [
   "DETAIL_PROPS",
   "VALUE_BEARING_ROLES",
   "redactedName",
-  // The DOM producer, `core/src/extraction/dom-extractor.ts` — and the
-  // definition of "sensitive" the extension imports rather than restates.
+  // Core's shared native vocabulary (`core/src/native/ax-vocabulary.ts`): the
+  // field roles here never take a name from the text inside them, which is a
+  // typed value. `VALUE_BEARING_ROLES` above is only the backstop to it.
+  "NATIVE_AX_AUTHOR_NAMED_ROLES",
+  // The DOM producer, `core/src/extraction/dom-extractor.ts`: the attributes a
+  // node copies verbatim, where the live `.value` is read — and the definition
+  // of "sensitive" the extension imports rather than restates.
+  "KEY_ATTRIBUTES",
+  "getKeyAttributes",
   "isSensitiveField",
   "SENSITIVE_AUTOCOMPLETE_TOKENS",
   "REDACTED_VALUE",
