@@ -238,7 +238,7 @@
       doesn't show. `←` on the scope root also no longer selects its hidden
       parent and leaves the keyboard stuck.
 
-  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR))
+  ([#422](https://github.com/real-a11y/real-a11y-dev/pull/422))
 
 ## 0.1.14
 
