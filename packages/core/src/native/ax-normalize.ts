@@ -4,7 +4,11 @@
  *
  * See `ax-vocabulary.ts` for why this lives in core (one copy, pure,
  * importable from Node / workers / browsers) and what is deliberately NOT
- * here (transport, DOM enrichment, redaction — `@real-a11y-dev/browser`).
+ * here (transport, DOM enrichment, the attribute allowlist —
+ * `@real-a11y-dev/browser`). One redaction rule IS here, because it is a
+ * naming rule: a node's value never becomes its name (see
+ * {@link carriesValue}). Every native transport inherits it, so none can
+ * forget it.
  *
  * Ordering note (a real drift bug this consolidation fixed): the flat list
  * CDP returns is NOT in document order — a parent's children are ordered by
@@ -37,6 +41,9 @@ export interface RawNativeAXNode {
   /** Read only for its property NAMES and the `focusable` flag — see
    *  `NATIVE_AX_DROP_WHEN_BARE`. Values are never inspected otherwise. */
   properties?: Array<{ name: string; value?: { value?: unknown } }>;
+  /** Read only for whether there is one — see {@link carriesValue}. Never
+   *  copied onto a normalized node. */
+  value?: { value?: unknown };
 }
 
 /** One kept node of the normalized native tree, in document order. */
@@ -90,6 +97,28 @@ function idOf(node: RawNativeAXNode): string {
 }
 
 /**
+ * Whether Chromium reports a value for `node` — in which case the text inside
+ * it is that value, not its name, and name promotion leaves it alone.
+ *
+ * An editable region's text is its value, and Chromium 151 reports it twice: as
+ * the AX `value` and on a `StaticText` child. That covers `<div
+ * role="application" contenteditable>`, `role="document"` and `role="log"`
+ * editors, and a contenteditable `<p>`. Promoting the child would print what a
+ * user typed as the node's name, which the R1 gate exists to prevent. A range
+ * widget carries a numeric value, and the text inside a `role="progressbar"`
+ * or `role="scrollbar"` is fallback, no more its name. Chromium leaves all of
+ * them unnamed.
+ *
+ * The field roles never reach this check — {@link NATIVE_AX_AUTHOR_NAMED_ROLES}
+ * already keeps them unnamed — so it is what covers the roles that otherwise
+ * read their text. A `0` is a value; an empty string or `null` is none.
+ */
+function carriesValue(node: RawNativeAXNode): boolean {
+  const value = node.value?.value;
+  return value !== undefined && value !== null && String(value) !== "";
+}
+
+/**
  * The text Chromium hung DIRECTLY on `node`: its own `StaticText` children,
  * concatenated in document order, with a `LineBreak` read as a space. The
  * native analog of the DOM producer's direct-text name fallback, which
@@ -112,7 +141,8 @@ function idOf(node: RawNativeAXNode): string {
  * On a node with kept children it runs only for the prose roles in
  * {@link NATIVE_AX_OWN_TEXT_ROLES}: a dialog or landmark with a loose sentence
  * beside its buttons has no accessible name, and must keep reading that way.
- * It never runs for {@link NATIVE_AX_AUTHOR_NAMED_ROLES}, even on a leaf.
+ * It never runs for {@link NATIVE_AX_AUTHOR_NAMED_ROLES}, even on a leaf, nor
+ * for a node that {@link carriesValue}.
  */
 function directText(
   node: RawNativeAXNode,
@@ -144,7 +174,8 @@ function directText(
  * would steal the text of a dropped form label deep in its subtree. Nor is it
  * ever invoked for an author-named role (NATIVE_AX_AUTHOR_NAMED_ROLES): a
  * `textbox` whose *value* lives in a StaticText child, or an `<svg role="img">`
- * with a `<text>` inside, stays as unnamed as Chromium left it.
+ * with a `<text>` inside, stays as unnamed as Chromium left it. Nor for a node
+ * that {@link carriesValue}: a progress bar's fallback text is not its name.
  */
 function promoteNameFromDroppedDescendants(
   node: RawNativeAXNode,
@@ -232,6 +263,9 @@ export function normalizeNativeAX(rawNodes: RawNativeAXNode[]): NativeAXNode[] {
     // `<span role="img">🎉</span>` stays a bare `img` — see
     // NATIVE_AX_AUTHOR_NAMED_ROLES.
     if (NATIVE_AX_AUTHOR_NAMED_ROLES.has(role)) continue;
+    // Its text is its value: what was typed into an editor, or a range
+    // widget's fallback. Never a name — see carriesValue.
+    if (carriesValue(raw)) continue;
     const isLeaf = node.childIds.length === 0;
     if (isLeaf || NATIVE_AX_OWN_TEXT_ROLES.has(role)) {
       node.name = directText(raw, byId);

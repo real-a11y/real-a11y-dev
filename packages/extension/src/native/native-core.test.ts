@@ -198,6 +198,74 @@ describe("readNativeTree", () => {
     expect(slider?.properties).not.toHaveProperty("valuetext");
   });
 
+  it("never names an editor from what was typed into it — R1", async () => {
+    // Chromium 151's shape for `<div role="application" contenteditable>` and
+    // `<div role="document" contenteditable>` after typing into them: the text
+    // is the node's AX value AND its StaticText child. This path read
+    // `application "typed-SECRET-app"` until core stopped promoting a value
+    // into a name — the same rule `@real-a11y-dev/browser` relies on.
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 1,
+        role: { value: "RootWebArea" },
+        childIds: ["2", "4", "6"],
+      },
+      {
+        nodeId: "2",
+        parentId: "1",
+        backendDOMNodeId: 20,
+        role: { value: "application" },
+        value: { type: "string", value: "typed-SECRET-app" },
+        childIds: ["3"],
+      },
+      {
+        nodeId: "3",
+        parentId: "2",
+        role: { value: "StaticText" },
+        name: { value: "typed-SECRET-app" },
+      },
+      {
+        nodeId: "4",
+        parentId: "1",
+        backendDOMNodeId: 40,
+        role: { value: "document" },
+        value: { type: "string", value: "typed-SECRET-doc" },
+        childIds: ["5"],
+      },
+      {
+        nodeId: "5",
+        parentId: "4",
+        role: { value: "StaticText" },
+        name: { value: "typed-SECRET-doc" },
+      },
+      // Labelled by its author: Chromium's own name, kept.
+      {
+        nodeId: "6",
+        parentId: "1",
+        backendDOMNodeId: 60,
+        role: { value: "application" },
+        name: { value: "Editor" },
+        value: { type: "string", value: "typed-SECRET-labelled" },
+        childIds: ["7"],
+      },
+      {
+        nodeId: "7",
+        parentId: "6",
+        role: { value: "StaticText" },
+        name: { value: "typed-SECRET-labelled" },
+      },
+    ];
+    const t = new FakeTransport((method) =>
+      method === "Accessibility.getFullAXTree" ? { nodes: raw } : {},
+    );
+    const res = await readNativeTree(t);
+
+    expect(res.serialized).toBe('application\ndocument\napplication "Editor"');
+    for (const node of res.nodes) expect(node.name).not.toContain("SECRET");
+    expect(JSON.stringify(res.nodes)).not.toContain("SECRET");
+  });
+
   it("attaches a field value for a value-bearing role via the in-page read-back", async () => {
     const raw = [
       {

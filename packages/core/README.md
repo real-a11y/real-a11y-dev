@@ -139,7 +139,12 @@ versioned via `NATIVE_AX_VOCABULARY_VERSION` because Chromium's tree shifts
 across milestones. Promotion never names a role in
 `NATIVE_AX_AUTHOR_NAMED_ROLES` — an image, dialog, landmark or form field
 Chromium left unnamed stays unnamed, since that empty name is what the audit
-rules report.
+rules report. Nor does it name a node that carries an AX `value` from its text,
+because that text is the value: what was typed into a
+`<div role="application" contenteditable>`, or a `role="progressbar"`'s
+fallback. Every
+native transport inherits that rule, so none of them can leak typed text into a
+name by forgetting to strip it.
 
 ```ts
 import { normalizeNativeAX, serializeNativeAX } from "@real-a11y-dev/core";

@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import authorNamedFixture from "./__fixtures__/ax-author-named-leaves.json";
 import fixture from "./__fixtures__/ax-media-form.json";
 import mixedTextFixture from "./__fixtures__/ax-mixed-text.json";
+import valueCarryingFixture from "./__fixtures__/ax-value-carrying.json";
 import {
   normalizeNativeAX,
   serializeNativeAX,
@@ -40,6 +41,7 @@ function raw(
     name?: string;
     ignored?: boolean;
     properties?: RawNativeAXNode["properties"];
+    value?: unknown;
   } = {},
 ): RawNativeAXNode {
   return {
@@ -50,6 +52,7 @@ function raw(
     ...(opts.childIds !== undefined ? { childIds: opts.childIds } : {}),
     ...(opts.ignored ? { ignored: true } : {}),
     ...(opts.properties !== undefined ? { properties: opts.properties } : {}),
+    ...("value" in opts ? { value: { value: opts.value } } : {}),
   };
 }
 
@@ -576,6 +579,112 @@ describe("normalizeNativeAX (recorded author-named leaves)", () => {
         "contentinfo",
       ].join("\n"),
     );
+  });
+});
+
+// Recorded from Chromium 151 on this page, with each editor's text typed in
+// through the keyboard (a real `getFullAXTree` payload, trimmed to the fields
+// the normalizer reads — which now include `value`):
+//
+//   <main>
+//   <div role="application" contenteditable>typed secret app</div>
+//   <div role="document" contenteditable>typed secret doc</div>
+//   <p contenteditable>typed secret para</p>
+//   <div role="log" contenteditable>typed secret log</div>
+//   <div role="application" contenteditable aria-label="Editor">
+//     typed secret labelled</div>
+//   <div role="progressbar" aria-valuenow="30">thirty</div>
+//   <meter value="0.6">60 percent</meter>
+//   <div role="scrollbar" aria-controls="app">five</div>
+//   <p>Plain paragraph</p>
+//   <div role="log">Saved at 10:00</div>
+//   </main>
+//
+// Chromium reports each editor's text twice: as the node's AX `value` and on a
+// StaticText child. The range widgets carry a numeric value, and the
+// progressbar and scrollbar keep their fallback text on a StaticText child
+// too. (The meter's fallback is never exposed at all.) Chromium names none of
+// them from that text.
+describe("normalizeNativeAX (recorded value-carrying nodes)", () => {
+  const nodes = normalizeNativeAX(
+    valueCarryingFixture.nodes as RawNativeAXNode[],
+  );
+
+  it("never names a node from the text that is its value", () => {
+    expect(serializeNativeAX(nodes)).toBe(
+      [
+        "main",
+        "  application",
+        "  document",
+        "  paragraph",
+        "  log",
+        // An authored name is Chromium's own, and stays.
+        '  application "Editor"',
+        "  progressbar",
+        "  meter",
+        "  scrollbar",
+        // The same roles with no value still read their text.
+        '  paragraph "Plain paragraph"',
+        '  log "Saved at 10:00"',
+      ].join("\n"),
+    );
+  });
+
+  it("keeps what was typed out of every name", () => {
+    for (const node of nodes) expect(node.name).not.toContain("typed");
+  });
+});
+
+describe("value-carrying nodes", () => {
+  it.each([
+    ["typed text", "typed secret"],
+    ["a number", 30],
+    ["a zero", 0],
+  ])("never names a leaf that carries %s from its text", (_, value) => {
+    const nodes = normalizeNativeAX([
+      raw("1", "application", { childIds: ["2"], value }),
+      raw("2", "StaticText", { parentId: "1", name: "typed secret" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe("application");
+  });
+
+  it("never takes its direct text beside kept children either", () => {
+    // `<p contenteditable>typed <a href="#">link</a> more</p>`: a paragraph
+    // reads its own text around a link — unless that text is its value.
+    const nodes = normalizeNativeAX([
+      raw("1", "paragraph", {
+        childIds: ["2", "3", "5"],
+        value: "typed link more",
+      }),
+      raw("2", "StaticText", { parentId: "1", name: "typed " }),
+      raw("3", "link", { parentId: "1", name: "link", childIds: ["4"] }),
+      raw("4", "StaticText", { parentId: "3", name: "link" }),
+      raw("5", "StaticText", { parentId: "1", name: " more" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe('paragraph\n  link "link"');
+  });
+
+  it("never takes text from deeper in its dropped subtree", () => {
+    // `<div role="progressbar" aria-valuenow="30"><span>thirty</span></div>`:
+    // the fallback text sits under the span's dropped generic.
+    const nodes = normalizeNativeAX([
+      raw("1", "progressbar", { childIds: ["2"], value: 30 }),
+      raw("2", "generic", { parentId: "1", childIds: ["3"] }),
+      raw("3", "StaticText", { parentId: "2", name: "thirty" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe("progressbar");
+  });
+
+  it.each([
+    ["empty", ""],
+    ["null", null],
+  ])("still names one whose value is %s", (_, value) => {
+    // Nothing to withhold, so the node reads its text as before.
+    const nodes = normalizeNativeAX([
+      raw("1", "application", { childIds: ["2"], value }),
+      raw("2", "StaticText", { parentId: "1", name: "Hello" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe('application "Hello"');
   });
 });
 

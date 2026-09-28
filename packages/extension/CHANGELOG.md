@@ -18,6 +18,15 @@
 
 ## Unreleased
 
+- In NATIVE mode, a rich-text editor no longer shows what was typed into it as
+  its name. A `<div role="application" contenteditable>` read
+  `application "<everything typed>"`, and so did a `role="document"` or
+  `role="log"` editor and a contenteditable `<p>`. Each now reads bare, as
+  Chromium names it; an editor labelled with `aria-label` keeps its label. A
+  `role="progressbar"` no longer shows its fallback text as its name either.
+  The same text was already kept out of the CLI and MCP.
+  ([#PR_NUMBER](https://github.com/real-a11y/real-a11y-dev/pull/PR_NUMBER))
+
 - In NATIVE mode, an image, dialog, landmark or form field that has no label
   no longer shows its text as its name. `<span role="img">🎉</span>` read
   `img "🎉"` and now reads a bare `img`, as Chromium names it. The same goes for

@@ -21,7 +21,7 @@
  */
 
 /** Bump on any table/rule change that alters normalized output. */
-export const NATIVE_AX_VOCABULARY_VERSION = 5;
+export const NATIVE_AX_VOCABULARY_VERSION = 6;
 
 /**
  * Chromium AX roles that are structural noise relative to this engine's
