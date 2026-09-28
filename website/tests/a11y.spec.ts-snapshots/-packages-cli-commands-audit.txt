@@ -401,6 +401,9 @@ main
       code "--root"
     emphasis "sequence"
     code "tabindex"
+  paragraph "Nothing in the body of a closed is a stop, not even a nested in it. Chromium renders a closed disclosure as its summary alone, so Tab reaches the body only once it opens."
+    code "<details>"
+    code "<details>"
   button "Copy Code"
   code
   paragraph "A rich-text editor counts the way Chromium counts it. Each region is one stop, named by its label and never by what was typed into it. A link inside the editor is not a stop, because Chromium can't focus it, unless it sits in a island such as a mention chip:"

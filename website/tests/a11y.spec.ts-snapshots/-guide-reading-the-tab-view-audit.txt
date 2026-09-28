@@ -87,6 +87,8 @@ main
       code "display: none"
       code "visibility: hidden"
       code "aria-hidden="true""
+    listitem "It sits in the body of a closed . The browser renders a closed disclosure as its summary alone, so the rest is out of the tab order until it opens."
+      code "<details>"
     listitem "It has the attribute (disabled elements are correctly excluded from tab order)."
       code "disabled"
   heading "Nothing unreachable appears in the list" (level 3)

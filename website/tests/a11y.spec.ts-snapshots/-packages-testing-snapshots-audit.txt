@@ -203,6 +203,15 @@ main
   heading "tabSequenceSnapshot(root, options?)" (level 2)
     code "tabSequenceSnapshot(root, options?)"
   paragraph "Returns the tab sequence, one stop per line in Tab order."
+  paragraph "Nothing in the body of a closed is a stop, not even a nested in it. Chromium renders a closed disclosure as its summary alone, so Tab reaches the body only once it opens. The body is out of and too, and counts the same way."
+    code "<details>"
+    code "<details>"
+    link "treeSnapshot"
+      code "treeSnapshot"
+    link "outlineSnapshot"
+      code "outlineSnapshot"
+    link "toHaveTabSequence"
+      code "toHaveTabSequence"
   button "Copy Code"
   code
   paragraph "Example output:"

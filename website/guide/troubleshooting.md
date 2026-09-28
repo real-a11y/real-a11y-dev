@@ -75,6 +75,7 @@ If your page legitimately has multiple h1s (rare — usually an anti-pattern), t
 - The root is wrapped in `[inert]`, which removes the whole subtree from the focus order (Chrome, Safari, Firefox all honor this).
 - Every focusable element has `tabindex="-1"` — some design systems over-use this to disable default focus.
 - The subtree is `display: none` or `aria-hidden="true"`.
+- The focusable elements sit in the body of a closed `<details>`, which the browser renders as its summary alone until it opens.
 - You're passing a root that doesn't contain the expected elements (e.g. a portaled modal that mounts elsewhere in the DOM). Note that scoping to a subtree does **not** reliably exclude portaled content — see [My snapshot contains the whole page](#my-snapshot-contains-the-whole-page-not-the-component-i-passed) for why, and what to do instead.
 
 If the tab order *should* be empty on a given route (a 404, a splash screen with no interactive content), suppress the assertion for that route rather than the whole suite.

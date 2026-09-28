@@ -58,6 +58,7 @@ Common reasons an element is absent:
 - It's a `<div>` or `<span>` with a click handler but no `tabindex` or `role`. It's mouse-only.
 - It has `tabindex="-1"` — reachable by script, but not by Tab.
 - It has `display: none`, `visibility: hidden`, or `aria-hidden="true"`.
+- It sits in the body of a closed `<details>`. The browser renders a closed disclosure as its summary alone, so the rest is out of the tab order until it opens.
 - It has the `disabled` attribute (disabled elements are correctly excluded from tab order).
 
 ### Nothing unreachable appears in the list

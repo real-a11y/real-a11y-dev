@@ -332,6 +332,54 @@ describe("description-target folding respects tree scope", () => {
   });
 });
 
+// A `<details>`' summary is its first `<summary>` DOM child. Content slotted
+// into a shadow `<details>` is a flat-tree child only, so it is body, and
+// Chromium 151 hides it while the details is closed.
+describe("a closed <details> in a shadow tree", () => {
+  it("hides a light summary slotted into it, since that is body, not its summary", () => {
+    page.innerHTML = `<x-d><summary>Slotted S</summary><button>Slotted B</button></x-d>`;
+    shadow(page.querySelector("x-d")!, `<details><slot></slot></details>`);
+    const names = nodes(extractDomTree(page)).map((n) => n.a11y.name);
+    expect(names).not.toContain("Slotted B");
+    expect(
+      nodes(extractDomTree(page)).map((n) => n.dom!.tagName),
+    ).not.toContain("summary");
+  });
+
+  it("renders content slotted into its own summary, and hides the default slot", () => {
+    page.innerHTML = `<x-e><span slot="s">Named</span><button>Slotted B</button></x-e>`;
+    shadow(
+      page.querySelector("x-e")!,
+      `<details><summary><slot name="s"></slot></summary><slot></slot></details>`,
+    );
+    const tree = extractDomTree(page);
+    expect(nodes(tree).some((n) => n.dom?.textContent === "Named")).toBe(true);
+    expect(find(tree, "button", "Slotted B")).toBeUndefined();
+  });
+
+  it("renders the default slot once it is open", () => {
+    page.innerHTML = `<x-f><span slot="s">Named</span><button>Slotted B</button></x-f>`;
+    shadow(
+      page.querySelector("x-f")!,
+      `<details open><summary><slot name="s"></slot></summary><slot></slot></details>`,
+    );
+    expect(find(extractDomTree(page), "button", "Slotted B")).toBeTruthy();
+  });
+
+  it("keeps a description target whose only referrer is slotted into its body", () => {
+    page.innerHTML = `<x-h><input aria-label="Code" aria-describedby="help"></x-h><p id="help">Help text</p>`;
+    shadow(
+      page.querySelector("x-h")!,
+      `<details><summary>S</summary><slot></slot></details>`,
+    );
+    expect(
+      nodes(extractDomTree(page)).some(
+        (n) => n.dom?.textContent === "Help text",
+      ),
+    ).toBe(true);
+  });
+});
+
 describe("landmark scoping reads flat-tree ancestors", () => {
   it("does not make a header inside a component within <main> a banner", () => {
     page.innerHTML = `<main><x-page-header></x-page-header></main>`;

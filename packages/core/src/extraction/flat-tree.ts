@@ -13,9 +13,17 @@
  * Closed shadow roots — including the UA ones behind `<video>` controls and
  * `<input>` internals — are unreachable from page script by design; their
  * hosts stay leaves, as before.
+ *
+ * One closed UA root still has to be modelled, because it decides what renders:
+ * a `<details>`' (see {@link isClosedDetails}).
  */
 
-import { safeChildNodes, safeHidden, safeShadowRoot } from "./clobber-safe.js";
+import {
+  safeChildNodes,
+  safeChildren,
+  safeHidden,
+  safeShadowRoot,
+} from "./clobber-safe.js";
 
 const ELEMENT_NODE = 1;
 const DOCUMENT_NODE = 9;
@@ -64,12 +72,54 @@ function slotHidesItsAssignment(slot: HTMLSlotElement): boolean {
 }
 
 /**
+ * A `<details>`' summary: its first `<summary>` child, even with other content
+ * before it. A DOM child, not a flat-tree one, so a light-DOM summary slotted
+ * into a shadow `<details>` is body like anything else slotted there, and
+ * Chromium renders its default "Details" summary instead. A loop over the
+ * children rather than `:scope > summary`, which jsdom's selector engine
+ * misses inside a shadow root.
+ */
+function detailsSummary(details: Element): Element | null {
+  for (const child of safeChildren(details)) {
+    if (child.localName === "summary") return child;
+  }
+  return null;
+}
+
+/**
+ * True if `node` is a closed `<details>`, which renders its summary alone. Its
+ * UA shadow root has one slot for the summary and one for everything else, and
+ * the second hides its assignment until the details opens: a hidden slot, like
+ * those {@link slotHidesItsAssignment} drops, except that the slot is out of
+ * reach and nothing on the body's own nodes says it is hidden. Chromium leaves
+ * that body out of its accessibility tree, and Tab never reaches a control in
+ * it.
+ *
+ * `open` decides, whatever the details' role: `role="none"` changes what it is,
+ * not what renders. An author stylesheet can show a closed body through
+ * `::details-content`, but no attribute changes when it does, so a live tree
+ * could not follow it; this goes by `open`, which a MutationObserver sees.
+ */
+function isClosedDetails(node: Node): boolean {
+  return (
+    node.nodeType === ELEMENT_NODE &&
+    (node as Element).localName === "details" &&
+    (node as HTMLDetailsElement).open === false
+  );
+}
+
+/**
  * Child nodes in the flat tree. A `<slot>` is transparent (it renders like
  * `display: contents`): it is replaced by its flattened assignment, which
  * already falls back to the slot's own children when nothing is assigned and
- * resolves slots nested through several hosts.
+ * resolves slots nested through several hosts. A closed `<details>` has only
+ * its summary (see {@link isClosedDetails}).
  */
 export function flatChildNodes(node: Node): Node[] {
+  if (isClosedDetails(node)) {
+    const summary = detailsSummary(node as Element);
+    return summary ? [summary] : [];
+  }
   const shadow =
     node.nodeType === ELEMENT_NODE ? safeShadowRoot(node as Element) : null;
   const out: Node[] = [];
@@ -85,16 +135,27 @@ export function flatChildNodes(node: Node): Node[] {
 
 /**
  * True if `element` is rendered at all: every shadow host above it actually
- * distributes it through a slot. A light child no slot takes is not rendered,
- * so it must not act as an IDREF referrer — folding a visible description
- * target for a reference nobody can reach loses page content.
+ * distributes it through a slot, and no closed `<details>` above it holds it in
+ * its body. Such an element must not act as an IDREF referrer — folding a
+ * visible description target for a reference nobody can reach loses page
+ * content.
+ *
+ * Climbs through the slot a node is assigned to, not straight to its host, so
+ * a `<details>` in the shadow tree around that slot counts too.
  */
 export function isRenderedInFlatTree(element: Element): boolean {
   let node: Element | null = element;
   while (node) {
     const parent: Element | null = node.parentElement;
-    if (parent && safeShadowRoot(parent) && !node.assignedSlot) return false;
+    if (parent && safeShadowRoot(parent)) {
+      node = node.assignedSlot;
+      if (!node) return false;
+      continue;
+    }
     if (parent) {
+      if (isClosedDetails(parent) && detailsSummary(parent) !== node) {
+        return false;
+      }
       node = parent;
       continue;
     }

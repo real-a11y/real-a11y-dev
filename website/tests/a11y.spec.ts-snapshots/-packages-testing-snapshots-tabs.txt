@@ -36,6 +36,9 @@ generic
 button "Copy Code"
 generic
 link "Focus marker"
+link "treeSnapshot"
+link "outlineSnapshot"
+link "toHaveTabSequence"
 button "Copy Code"
 generic
 button "Copy Code"

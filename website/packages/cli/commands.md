@@ -243,6 +243,10 @@ takes [`--root`](#root-selector). Chromium's accessibility tree knows whether a
 node is focusable, but not the *sequence* — `tabindex` never reaches a native
 node — so tab order is DOM work by nature, not a fallback.
 
+Nothing in the body of a closed `<details>` is a stop, not even a `<details>`
+nested in it. Chromium renders a closed disclosure as its summary alone, so Tab
+reaches the body only once it opens.
+
 ```sh
 real-a11y tabs https://example.com
 real-a11y tabs https://example.com --root "#app main"

@@ -18,6 +18,14 @@
 
 ## Unreleased
 
+- In DOM mode, the body of a closed `<details>` no longer shows in the tree,
+  the Tab Sequence view, its copied export or the keyboard bar's Tab. Chromium
+  renders a closed disclosure as its summary alone and never tabs into the
+  rest, but DOM mode listed every link, button and heading in it, and a
+  `<details>` nested in it, as NATIVE mode never did. The body appears when
+  the `<details>` opens and goes when it closes.
+  ([#433](https://github.com/real-a11y/real-a11y-dev/pull/433))
+
 - In DOM mode, the Tab Sequence view, its copied export and the keyboard bar's
   Tab now stop at a rich-text editor and skip the links inside it. They used to
   do the reverse: a `contenteditable` message box was left out, and a link typed
