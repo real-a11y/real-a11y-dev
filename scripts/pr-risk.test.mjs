@@ -144,26 +144,39 @@ after(async () => {
 let n = 0;
 
 /**
- * Grade a diff: `files` is the set of paths this imaginary pull request adds.
+ * Grade a diff: `files` is what this imaginary pull request writes — an array
+ * of paths (each gets placeholder content), or `{ path: content }` when the
+ * rule under test reads the code rather than the path.
  *
- * `seed` is committed first and never appears in the answer — the rubric diffs
+ * `base` is committed first and never appears in the answer — the rubric diffs
  * against the merge base, so the base commit's own contents are invisible to it.
- * That is what lets a case name exactly the paths it is about.
+ * That is what lets a case name exactly the paths it is about, and it is how a
+ * case edits a file rather than creating one.
  */
-async function grade(files) {
+async function grade(files, { base = {} } = {}) {
   const dir = join(root, `case-${++n}`);
   await mkdir(dir, { recursive: true });
 
+  const write = async (path, content) => {
+    const file = resolve(dir, path);
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, content);
+  };
+
   await git(dir, ["init", "-q", "-b", "main"]);
-  await writeFile(join(dir, "seed"), "base\n");
+  await write("seed", "base\n");
+  for (const [path, content] of Object.entries(base)) {
+    await write(path, content);
+  }
   await git(dir, ["add", "-A"]);
   await git(dir, ["commit", "-q", "--no-verify", "-m", "chore: seed"]);
 
   await git(dir, ["checkout", "-q", "-b", "topic"]);
-  for (const path of files) {
-    const file = resolve(dir, path);
-    await mkdir(dirname(file), { recursive: true });
-    await writeFile(file, "changed\n");
+  const changes = Array.isArray(files)
+    ? files.map((path) => [path, "changed\n"])
+    : Object.entries(files);
+  for (const [path, content] of changes) {
+    await write(path, content);
   }
   await git(dir, ["add", "-A"]);
   await git(dir, ["commit", "-q", "--no-verify", "-m", "chore: change"]);
@@ -284,5 +297,187 @@ describe("the CI axis classifies it too", () => {
 
     assert.equal(result.ci.code, true);
     assert.equal(result.tier, "high");
+  });
+});
+
+// Trimmed to the shape of the real files. What matters is which lines sit at
+// column 0, because that is what git reports as the declaration a hunk is in.
+const NATIVE_TREE_PATH = "packages/browser/src/native-tree.ts";
+const NATIVE_TREE = `/**
+ * The native producer.
+ */
+const DOM_ATTR_ALLOWLIST = new Set([
+  "role",
+  "href",
+  "placeholder",
+]);
+
+export function allowlistAttributes(flat: string[]): Record<string, string> {
+  const attributes: Record<string, string> = {};
+  for (let i = 0; i + 1 < flat.length; i += 2) {
+    if (DOM_ATTR_ALLOWLIST.has(flat[i])) attributes[flat[i]] = flat[i + 1];
+  }
+  return attributes;
+}
+
+export function buildNativeTree(nodes: RawNode[]): NativeNode[] {
+  // One pass over CDP's flat list; parents arrive before their children.
+  return nodes.map((node) => ({
+    id: node.nodeId,
+    attributes: allowlistAttributes(node.attributes ?? []),
+  }));
+}
+`;
+
+const DOM_EXTRACTOR_PATH = "packages/core/src/extraction/dom-extractor.ts";
+const DOM_EXTRACTOR = `const SENSITIVE_AUTOCOMPLETE_TOKENS: ReadonlySet<string> = new Set([
+  "current-password",
+  "cc-number",
+]);
+
+export function isSensitiveField(element: Element): boolean {
+  if (element.getAttribute("type") === "password") return true;
+  const tokens = (element.getAttribute("autocomplete") ?? "").split(/\\s+/);
+  return tokens.some((t) => SENSITIVE_AUTOCOMPLETE_TOKENS.has(t));
+}
+
+export function getDescendantText(element: Element): string {
+  return element.textContent ?? "";
+}
+`;
+
+/** Edit one file of the base: `[path, content, from, to]` → a graded diff. */
+const gradeEdit = (path, content, from, to) => {
+  assert.ok(content.includes(from), `fixture has no ${JSON.stringify(from)}`);
+  return grade(
+    { [path]: content.replace(from, to) },
+    { base: { [path]: content } },
+  );
+};
+
+describe("field-value redaction (R1) grades as a redaction boundary", () => {
+  it("grades widening the native allowlist 🔴 high, though no changed line names it", async () => {
+    // The shape a real leak takes. A PR here once added two entries to
+    // DOM_ATTR_ALLOWLIST, and its whole diff under `-U0` was two indented
+    // string literals — nothing on a changed line names the allowlist, so a
+    // rule reading only changed lines cannot see it. Git's hunk header can:
+    // it names the declaration the hunk sits inside. Add `"value"` here and
+    // every field value on the page reaches CLI and MCP output.
+    const result = await gradeEdit(
+      NATIVE_TREE_PATH,
+      NATIVE_TREE,
+      `  "placeholder",\n`,
+      `  "placeholder",\n  "value",\n`,
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "field-value-redaction"), [
+      `${NATIVE_TREE_PATH} → DOM_ATTR_ALLOWLIST`,
+    ]);
+  });
+
+  it("grades routing around allowlistAttributes 🔴 high — the removal side counts", async () => {
+    // Same reasoning as removing a `redactUrl()` call: taking the gate out is
+    // the most direct way to bring the leak back, and the only trace of it in
+    // the diff is the `-` line.
+    const result = await gradeEdit(
+      NATIVE_TREE_PATH,
+      NATIVE_TREE,
+      `allowlistAttributes(node.attributes ?? [])`,
+      `Object.fromEntries(pairs(node.attributes ?? []))`,
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "field-value-redaction"), [
+      `${NATIVE_TREE_PATH} → allowlistAttributes`,
+    ]);
+  });
+
+  it("grades an edit inside isSensitiveField 🔴 high — the DOM producer's gate", async () => {
+    // Dropping the password check names nothing but the attribute it tested.
+    const result = await gradeEdit(
+      DOM_EXTRACTOR_PATH,
+      DOM_EXTRACTOR,
+      `  if (element.getAttribute("type") === "password") return true;\n`,
+      ``,
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "field-value-redaction"), [
+      `${DOM_EXTRACTOR_PATH} → isSensitiveField`,
+    ]);
+  });
+});
+
+describe("field-value redaction stays on the gates, not the files", () => {
+  it("leaves an unrelated comment edit in native-tree.ts 🟡 medium", async () => {
+    // Why this rule matches the gates by name rather than native-tree.ts by
+    // path: most of that file builds the tree, and the gates it holds are one
+    // of four places R1 is enforced — the DOM producer, the extension's native
+    // path and the act path's echo mask are the others. A path rule fires on
+    // this edit and misses all three.
+    const result = await gradeEdit(
+      NATIVE_TREE_PATH,
+      NATIVE_TREE,
+      `// One pass over CDP's flat list; parents arrive before their children.`,
+      `// A single pass over CDP's flat list — parents always precede children.`,
+    );
+
+    assert.equal(result.tier, "medium");
+    assert.deepEqual(ruleIds(result), ["published-src"]);
+  });
+
+  it("does not attribute a new declaration to the gate it was appended after", async () => {
+    // A hunk header names the nearest column-0 line ABOVE the hunk, which is
+    // not always a declaration the hunk is inside: a new top-level block
+    // inserted after `isSensitiveField` is reported under it. Trusting the
+    // header only when the hunk's first changed line is indented is what keeps
+    // a neighbour of a gate from grading as the gate.
+    const result = await gradeEdit(
+      DOM_EXTRACTOR_PATH,
+      DOM_EXTRACTOR,
+      `}\n\nexport function getDescendantText`,
+      `}\n\n/**\n * Attributes recorded verbatim on every node.\n */\nexport const KEY_ATTRIBUTES = ["id", "class"];\n\nexport function getDescendantText`,
+    );
+
+    assert.equal(result.tier, "medium");
+    assert.deepEqual(ruleIds(result), ["published-src"]);
+  });
+});
+
+describe("a boundary name counts with a prefix or a suffix", () => {
+  it("catches redactUrlsIn and NATIVE_REDACTED_VALUE, which a word boundary missed", async () => {
+    // `redactUrlsIn` is this repo's own bulk URL redaction, called on every
+    // error message the MCP server and the CLI daemon print. The boundary
+    // this replaced blocked any alphanumeric suffix and any `_` prefix, so
+    // deleting that call — or blanking the extension's redaction sentinel —
+    // graded no higher than any other source edit.
+    const server = `export function errorText(message: string): string {\n  return redactUrlsIn(message);\n}\n`;
+    const core = `export const NATIVE_REDACTED_VALUE = "[redacted]";\n`;
+    const result = await grade(
+      {
+        "packages/mcp/src/server.ts": server.replace(
+          "redactUrlsIn(message)",
+          "message",
+        ),
+        "packages/extension/src/native/native-core.ts": core.replace(
+          `"[redacted]"`,
+          `""`,
+        ),
+      },
+      {
+        base: {
+          "packages/mcp/src/server.ts": server,
+          "packages/extension/src/native/native-core.ts": core,
+        },
+      },
+    );
+
+    assert.deepEqual(evidenceFor(result, "secrets-and-redaction"), [
+      "packages/mcp/src/server.ts → redactUrl",
+    ]);
+    assert.deepEqual(evidenceFor(result, "field-value-redaction"), [
+      "packages/extension/src/native/native-core.ts → REDACTED_VALUE",
+    ]);
   });
 });

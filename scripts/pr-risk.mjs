@@ -141,8 +141,55 @@ function diffArgs(extra) {
 /** NUL-separated git output → array. */
 const splitZ = (out) => out.split("\0").filter(Boolean);
 
-/** This file's own path in the repo — see the `excludeSelf` rule flag. */
-const SELF_PATH = "scripts/pr-risk.mjs";
+/**
+ * The rubric's own source and its tests — see the `excludeSelf` rule flag. The
+ * tests are here because they must write the names a rule hunts into fixture
+ * code to prove the rule fires, so they match for the same reason this file
+ * does. Nothing is lost: `scripts/` grades 🔴 high on its own.
+ */
+const SELF_PATHS = new Set(["scripts/pr-risk.mjs", "scripts/pr-risk.test.mjs"]);
+
+/**
+ * What a code-reading rule scans in one file's `-U0` diff: every changed line,
+ * plus — for a hunk that sits inside a declaration — that declaration's line.
+ *
+ * The second half is what lets a rule see an edit INSIDE a gate. Git's hunk
+ * header carries the nearest column-0 line above the hunk (its default
+ * funcname for any path `.gitattributes` gives no diff driver), which for
+ * indented code is the enclosing `const X = new Set([` or `function x(`. A PR
+ * that widens an allowlist by one string literal has no changed line naming
+ * the allowlist — the header is the only place its name appears.
+ *
+ * "Nearest column-0 line above" is not always an enclosing one, though: a new
+ * top-level block appended after a gate, or a change in an import list, is
+ * reported under whatever declaration precedes it. So the header counts only
+ * when the hunk's first non-blank changed line is indented — i.e. the change
+ * starts inside a body or a literal rather than at the top level.
+ *
+ * Lines before the first `@@` are the file header. A content line is anything
+ * after it, which is why a removed `--i;` (rendered `---i;`) is not mistaken
+ * for one.
+ */
+function scannable(section) {
+  const out = [];
+  let hunk = null;
+  const flush = () => {
+    if (!hunk) return;
+    const first = hunk.lines.find((l) => l.slice(1).trim());
+    if (first && /^[+-]\s/.test(first)) out.push(hunk.header);
+    out.push(...hunk.lines);
+  };
+  for (const line of section.split("\n")) {
+    if (line.startsWith("@@")) {
+      flush();
+      hunk = { header: line.replace(/^@@[^@]*@@ ?/, ""), lines: [] };
+    } else if (hunk && (line.startsWith("+") || line.startsWith("-"))) {
+      hunk.lines.push(line);
+    }
+  }
+  flush();
+  return out.join("\n");
+}
 
 /**
  * Everything the rules are allowed to look at, gathered once.
@@ -263,40 +310,27 @@ async function collectFacts(base) {
     ],
     "the code diff",
   );
-  const changedLines = (section) =>
-    section
-      .split("\n")
-      .filter(
-        (l) =>
-          (l.startsWith("+") || l.startsWith("-")) &&
-          !l.startsWith("+++") &&
-          !l.startsWith("---"),
-      )
-      .join("\n");
 
-  // Kept per-file so a rule can opt out of scanning the rubric's own source
-  // (see `excludeSelf`). Splitting on the `diff --git` header is safe here
-  // because `core.quotePath=false` and `--no-renames` mean the paths are literal
-  // and the two sides always match.
+  // Kept per-file so a rule can say where it matched, and can opt out of
+  // scanning the rubric's own source (see `excludeSelf`). Splitting on the
+  // `diff --git` header is safe here because `core.quotePath=false` and
+  // `--no-renames` mean the paths are literal and the two sides always match.
   const sections = codeDiff.split(/^diff --git /m).filter(Boolean);
-  const codeByFile = new Map();
+  const touchedCode = [];
   for (const section of sections) {
     const path = section.match(/^a\/(.*?) b\//)?.[1];
-    if (path) codeByFile.set(path, changedLines(section));
+    if (path) touchedCode.push([path, scannable(section)]);
   }
-  const joinExcept = (skip) =>
-    [...codeByFile]
-      .filter(([path]) => path !== skip)
-      .map(([, body]) => body)
-      .join("\n");
 
   return {
     base,
     mergeBase,
     files,
     lines,
-    touchedCode: joinExcept(null),
-    touchedCodeExcludingSelf: joinExcept(SELF_PATH),
+    touchedCode,
+    touchedCodeExcludingSelf: touchedCode.filter(
+      ([path]) => !SELF_PATHS.has(path),
+    ),
     changesets: await readChangesets(files),
     rootPackageKeys: await changedRootPackageKeys(mergeBase),
     packageManifests: await changedPackageManifests(mergeBase, files),
@@ -522,6 +556,62 @@ async function surfaceRemovals(mergeBase, files) {
 const any = (files, re) => files.filter((f) => re.test(f));
 
 /**
+ * Which of `names` (a regex alternation) the touched code reaches, one evidence
+ * line per file: `<path> → name, name`.
+ *
+ * The boundary is `(?<![A-Za-z0-9])` on the left and nothing on the right.
+ * Neither `\b` nor the pair this replaced, `(?<![A-Za-z0-9_])…(?![A-Za-z0-9])`,
+ * lets a name be extended, and extending a name is how this repo spells the
+ * next helper: `redactUrlsIn` (the bulk form of `redactUrl`, on every error
+ * message `mcp` and the CLI daemon print), `storageStatePath`,
+ * `MY_NPM_TOKEN`, `NATIVE_REDACTED_VALUE`, `isSensitiveFieldAttributes`. The
+ * old comment here claimed those were caught; none of them was. The left side
+ * still refuses a letter or digit, so `unredactedName` is not `redactedName`.
+ */
+function touchedNames(code, names) {
+  const re = new RegExp(`(?<![A-Za-z0-9])(${names})`, "g");
+  const out = [];
+  for (const [path, text] of code) {
+    const hits = new Set([...text.matchAll(re)].map((m) => m[1]));
+    if (hits.size) out.push(`${path} → ${[...hits].join(", ")}`);
+  }
+  return out;
+}
+
+/**
+ * The named gates that enforce R1 — which of a user's field values a tree, or
+ * an act step's report, may carry. As of ADR-0001 that is none from a
+ * sensitive field (`type="password"`, the credential and payment
+ * `autocomplete` tokens) and never the text an act step typed.
+ *
+ * Names, not paths: the gates live in four packages, and the files that hold
+ * them are mostly about something else. A PR that adds a gate adds its name
+ * here; a PR that renames one grades high on the old name's `-` lines, which
+ * is the moment to move this list with it.
+ */
+const FIELD_VALUE_GATES = [
+  // The native producer, `browser/src/native-tree.ts`: what a node may carry.
+  "DOM_ATTR_ALLOWLIST",
+  "allowlistAttributes",
+  "DETAIL_PROPS",
+  "VALUE_BEARING_ROLES",
+  "redactedName",
+  // The DOM producer, `core/src/extraction/dom-extractor.ts` — and the
+  // definition of "sensitive" the extension imports rather than restates.
+  "isSensitiveField",
+  "SENSITIVE_AUTOCOMPLETE_TOKENS",
+  "REDACTED_VALUE",
+  // The extension's native path, which reads a live value and redacts it in
+  // the page (`extension/src/native/native-core.ts`).
+  "pageReadValue",
+  // The act path: `pageType` in `browser` and its in-page mirror in the
+  // extension return a marker, never the value; the CLI masks a `type` step.
+  "pageType",
+  "redactStepText",
+  "‹hidden›",
+].join("|");
+
+/**
  * Ordered high → medium. Every rule names the damage it guards, because a rule
  * that can't name one is a rule that will eventually be argued away.
  *
@@ -693,26 +783,26 @@ const RULES = [
     tier: "high",
     title: "Redaction boundary or credential handling",
     why: "Preview URLs carry tokens, and this tool writes files that get posted into PR comments. A field derived from a raw url next to one derived from the redacted url is the signature of a leak — it shipped twice in one PR here. Removing a redaction call counts too, and is the most direct way to bring the leak back.",
-    match: (f) => {
-      const hits = new Set();
-      // Boundaries are `(?<![A-Za-z0-9_])` / `(?![A-Za-z0-9])` rather than `\b`.
-      // `\b` does not fire next to `_`, and a trailing `\b` blocks every suffix,
-      // so the rule missed `storageStatePath`, `MY_NPM_TOKEN`,
-      // `CHROME_CLIENT_SECRET_PATH` — and `redactUrlsIn`, which is this repo's
-      // OWN bulk redaction helper (packages/snapshot/src/sanitize.ts), used by
-      // snapshot, cli and the daemon. A PR adding redaction via the plural
-      // helper was silently not flagged.
-      for (const m of f.touchedCode.matchAll(
-        /(?<![A-Za-z0-9_])(redactUrl|sanitizeUrl|storageState|NPM_TOKEN|GITHUB_TOKEN|CHROME_[A-Z_]*(?:TOKEN|SECRET)|client_secret|refresh_token)(?![A-Za-z0-9])/g,
-      )) {
-        hits.add(m[1]);
-      }
-      return [...hits].map((h) => `touched code references \`${h}\``);
-    },
+    // See `touchedNames` for the boundary, and `scannable` for why an edit
+    // inside `redactUrl` counts even when no changed line names it.
+    match: (f) =>
+      touchedNames(
+        f.touchedCode,
+        "redactUrl|sanitizeUrl|storageState|NPM_TOKEN|GITHUB_TOKEN|CHROME_[A-Z_]*(?:TOKEN|SECRET)|client_secret|refresh_token",
+      ),
     // A rule whose pattern lists the very tokens it hunts will always match its
     // own source. It did: the PR introducing this rule was graded 🔴 by the rule
     // matching itself, and the public comment carried seven meaningless bullets.
     // Seven bullets of noise on the first PR is how a rule stops being read.
+    excludeSelf: true,
+  },
+  {
+    id: "field-value-redaction",
+    tier: "high",
+    title: "Field-value redaction (R1)",
+    why: "R1 decides which of a user's field values a tree may carry, and these trees go into CLI output, MCP responses an agent reads, committed snapshots and CI logs. It is enforced by a handful of named gates — the native producer's attribute allowlist, the DOM producer's `isSensitiveField`, the extension's in-page value read, the act path's echo mask — and a leak can be one string literal added to an allowlist. It graded 🟡 medium as ordinary package source, including the PR that introduced the DOM producer's redaction.",
+    match: (f) => touchedNames(f.touchedCode, FIELD_VALUE_GATES),
+    // Same reason as above: the name list is in this file.
     excludeSelf: true,
   },
 
@@ -1200,7 +1290,7 @@ if (bools.has("gate")) {
   // artifact was a label the same person could remove after merge. Reading the
   // reason back is what makes that sentence true. Naming rules is optional and
   // narrows the waiver, so overriding one misfiring rule stops silently waiving
-  // `ci-workflows`, `packaging` and `secrets-and-redaction` alongside it.
+  // `ci-workflows`, `packaging` and both redaction rules alongside it.
   //
   //   risk-override: the workflow edit is a comment typo
   //   risk-override: packaging — version bump only, no exports moved
