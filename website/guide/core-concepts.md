@@ -37,7 +37,8 @@ interface SemanticNode {
   };
   interaction: {
     isInteractive: boolean;
-    isFocusable: boolean;
+    isFocusable: boolean;        // Chromium would focus it: never an <a> without
+                                 // href, a disabled control, or a bad tabindex
     isEditable: boolean;
     actions: ActionType[];       // click, focus, type, toggle, select…
   };

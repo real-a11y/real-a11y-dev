@@ -18,6 +18,14 @@
 
 ## Unreleased
 
+- In DOM mode, the Tab Sequence view, its copied export and the keyboard bar's
+  Tab now stop where Chromium stops. They used to stop at an `<a>` with no
+  `href`, even an `<a role="button">` no keyboard can reach, at a control
+  disabled by its `<fieldset>` and at an element with an empty or non-numeric
+  `tabindex`, and to skip an `aria-disabled` control, which Chromium does tab
+  to.
+  ([#PRNUM](https://github.com/real-a11y/real-a11y-dev/pull/PRNUM))
+
 - In NATIVE mode, an image, dialog, landmark or form field that has no label
   no longer shows its text as its name. `<span role="img">🎉</span>` read
   `img "🎉"` and now reads a bare `img`, as Chromium names it. The same goes for

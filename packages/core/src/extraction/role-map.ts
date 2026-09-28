@@ -6,6 +6,7 @@
 
 import { safeHidden } from "./clobber-safe.js";
 import { flatParent } from "./flat-tree.js";
+import { isFocusBarred, isFocusable } from "./focusability.js";
 
 type RoleResolver = string | ((el: Element) => string);
 
@@ -263,58 +264,22 @@ const ROLE_MAP: Record<string, RoleResolver> = {
   video: "video", // see the audio entry — mirrors Chromium's native tree
 };
 
-/** Form controls that `disabled` removes from the focus order entirely. */
-const FORM_CONTROL_TAGS = new Set(["button", "input", "select", "textarea"]);
-
 /**
- * Focusability, for the sole purpose of presentational conflict resolution.
+ * Focusability, for presentational conflict resolution: whether a
+ * `role="none"` may take the element's role away.
  *
- * Deliberately STRICTER than the `interaction.isFocusable` facet the DOM
- * extractor stamps on nodes, which is tag-based and counts every `<a>` and
- * every `<input>`. That looseness is harmless for a facet nobody branches the
- * tree shape on, but here it decides whether an element stays in the tree at
- * all: counting `<a>` without `href`, a `disabled` control or
- * `<input type="hidden">` as focusable would resurrect exactly the decorative
- * markup this resolution exists to keep flattened. The two are not unified
- * because tightening the facet changes a published value on every node — its
- * own change, with its own migration note.
+ * The same answer as the `interaction.isFocusable` facet, plus one stop the
+ * facet does not count yet: an editing host. Counting a disabled control, an
+ * `<input type="hidden">` or an `<a>` without `href` would resurrect exactly
+ * the decorative markup this resolution exists to keep flattened.
  */
 function isFocusableForConflictResolution(element: Element): boolean {
-  const tag = element.tagName.toLowerCase();
-
-  // The exclusions come FIRST, before tabindex: a `tabindex` on a disabled
-  // control or on <input type="hidden"> does not put it in the focus order,
-  // so reading tabindex first would hand a decorative role back to exactly
-  // the elements these two rules exist to keep flattened.
-  if (FORM_CONTROL_TAGS.has(tag) && element.hasAttribute("disabled"))
-    return false;
-  // <input type="hidden"> renders nothing and is never a tab stop.
-  if (
-    tag === "input" &&
-    (element.getAttribute("type") || "text").toLowerCase() === "hidden"
-  )
-    return false;
-
-  const tabindex = element.getAttribute("tabindex");
-  // A negative tabindex is still focusable (scripted focus); only an absent
-  // or non-numeric one is not.
-  if (tabindex !== null && tabindex.trim() !== "" && !isNaN(Number(tabindex)))
-    return true;
-
+  if (isFocusable(element)) return true;
   // A contenteditable host is focusable without any tabindex. `""` is the
-  // valid shorthand for "true"; `"false"` opts back out.
+  // valid shorthand for "true"; `"false"` opts back out. Chromium won't
+  // focus a disabled `<button contenteditable>` either, hence the bar.
   const editable = element.getAttribute("contenteditable");
-  if (editable === "" || editable === "true") return true;
-
-  if (tag === "a" || tag === "area") return element.hasAttribute("href");
-  if (FORM_CONTROL_TAGS.has(tag)) return true;
-  // <video controls> / <audio controls> are tab stops — Chromium exposes them
-  // focusable even though the actual buttons/sliders live in a closed UA
-  // shadow root.
-  if (tag === "audio" || tag === "video")
-    return element.hasAttribute("controls");
-
-  return false;
+  return (editable === "" || editable === "true") && !isFocusBarred(element);
 }
 
 /**

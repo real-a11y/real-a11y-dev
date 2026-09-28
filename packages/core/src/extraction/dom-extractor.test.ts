@@ -1976,6 +1976,93 @@ describe("media elements (video/audio)", () => {
   });
 });
 
+describe("interaction.isFocusable follows Chromium", () => {
+  // Every expectation here was checked in Chromium 151, where a Tab walk,
+  // scripted focus() and CDP's `focusable` property all agree.
+  function focusableById(html: string): Record<string, boolean> {
+    const byId: Record<string, boolean> = {};
+    for (const node of extractDomTree(createPage(html)).nodes.values()) {
+      const id = node.dom?.attributes["id"];
+      if (id) byId[id] = node.interaction!.isFocusable;
+    }
+    return byId;
+  }
+
+  it("counts a link only when it has an href", () => {
+    expect(
+      focusableById(`
+        <a id="fragment-target" name="top">Back to top</a>
+        <a id="fake-button" role="button">Save</a>
+        <a id="link" href="/docs">Docs</a>
+        <a id="empty-href" href="">Reload</a>
+        <a id="tabindexed" tabindex="0">Card</a>
+      `),
+    ).toEqual({
+      "fragment-target": false,
+      "fake-button": false,
+      link: true,
+      "empty-href": true,
+      tabindexed: true,
+    });
+  });
+
+  it("does not count a disabled control, however it came to be disabled", () => {
+    expect(
+      focusableById(`
+        <button id="disabled" disabled>Save</button>
+        <button id="disabled-tabindexed" disabled tabindex="0">Save</button>
+        <fieldset disabled>
+          <legend><span><button id="in-legend">Unlock</button></span></legend>
+          <button id="in-fieldset">Save</button>
+          <select id="select-in-fieldset"><option>A</option></select>
+        </fieldset>
+        <button id="aria-disabled" aria-disabled="true">Publish</button>
+      `),
+    ).toEqual({
+      disabled: false,
+      "disabled-tabindexed": false,
+      // A disabled fieldset's first legend is exempt, as HTML defines it.
+      "in-legend": true,
+      "in-fieldset": false,
+      "select-in-fieldset": false,
+      // aria-disabled announces a state; it takes no focus away.
+      "aria-disabled": true,
+    });
+  });
+
+  it("reads tabindex the way HTML parses an integer", () => {
+    expect(
+      focusableById(`
+        <div id="empty" tabindex="">Card</div>
+        <div id="word" tabindex="abc">Card</div>
+        <div id="nbsp" tabindex="&#160;0">Card</div>
+        <div id="negative" tabindex="-1">Card</div>
+        <div id="padded" tabindex=" 0">Card</div>
+        <div id="signed" tabindex="+0">Card</div>
+        <div id="fraction" tabindex="0.5">Card</div>
+        <div id="trailing" tabindex="1abc">Card</div>
+        <button id="button-word" tabindex="abc">Save</button>
+      `),
+    ).toEqual({
+      // Not an integer at all: the attribute is ignored. ASCII whitespace
+      // only, so a leading no-break space makes it invalid too.
+      empty: false,
+      word: false,
+      nbsp: false,
+      // Focusable, just not a Tab stop.
+      negative: true,
+      // Leading whitespace and a sign are allowed; parsing stops at the first
+      // non-digit, so "0.5" is 0 and "1abc" is 1.
+      padded: true,
+      signed: true,
+      fraction: true,
+      trailing: true,
+      // An invalid tabindex leaves a natively focusable control focusable.
+      "button-word": true,
+    });
+  });
+});
+
 describe("computed-style cache during extraction", () => {
   afterEach(() => {
     vi.restoreAllMocks();

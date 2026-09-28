@@ -243,6 +243,13 @@ takes [`--root`](#root-selector). Chromium's accessibility tree knows whether a
 node is focusable, but not the *sequence* — `tabindex` never reaches a native
 node — so tab order is DOM work by nature, not a fallback.
 
+The stops are the ones Chromium tabs to. An `<a>` without an `href` is not one,
+not even with `role="button"`, which is the keyboard bug worth catching. Nor is
+a control disabled directly or by its `<fieldset>`, or an element whose
+`tabindex` is not an integer, such as `""`. An `aria-disabled` control is a
+stop, because `aria-disabled` announces a state and leaves focus alone. So is an
+image map's `<area href>` while an image uses the map.
+
 ```sh
 real-a11y tabs https://example.com
 real-a11y tabs https://example.com --root "#app main"

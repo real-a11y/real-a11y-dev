@@ -251,6 +251,57 @@ describe("getTabSequence", () => {
     expect(names).toEqual(["First", "Second", "Zero"]);
   });
 
+  // The stops below were each checked with a Tab walk in Chromium 151.
+
+  it("skips a link with no href, which Chromium never focuses", () => {
+    // `<a name>` is a fragment target, not a control. And an `<a role=button>`
+    // with no href or tabindex is a button no keyboard can reach: listing it
+    // as a stop hid exactly the defect a tab-order view exists to show.
+    const root = createPage(`
+      <a name="top">Back to top anchor</a>
+      <a role="button">Fake button</a>
+      <a href="/x">Real link</a>
+      <a tabindex="0">Card</a>
+    `);
+    const tree = extractDomTree(root);
+    const names = getTabSequence(tree).map((n) => n.a11y.name);
+    expect(names).toEqual(["Real link", "Card"]);
+  });
+
+  it("treats disabled as Chromium does, fieldset included, aria-disabled not", () => {
+    const root = createPage(`
+      <button aria-disabled="true">Publish</button>
+      <fieldset disabled>
+        <legend><button>Unlock</button></legend>
+        <button>Save</button>
+        <input aria-label="Title">
+      </fieldset>
+    `);
+    const tree = extractDomTree(root);
+    const names = getTabSequence(tree).map((n) => n.a11y.name);
+    // aria-disabled only announces a state, so the button stays a stop. A
+    // disabled fieldset disables everything in it but its first legend.
+    expect(names).toEqual(["Publish", "Unlock"]);
+  });
+
+  it("reads tabindex the way HTML parses an integer", () => {
+    const root = createPage(`
+      <button>Zero</button>
+      <div tabindex="">Empty</div>
+      <div tabindex="abc">Word</div>
+      <div tabindex="0.5">Half</div>
+      <div tabindex="2.5">Two</div>
+      <div tabindex="1abc">One</div>
+      <button tabindex="-2">Minus two</button>
+    `);
+    const tree = extractDomTree(root);
+    const names = getTabSequence(tree).map((n) => n.a11y.name);
+    // Parsing stops at the first non-digit: "1abc" is 1, "2.5" is 2 and
+    // "0.5" is 0. "" and "abc" are no integer, so those divs aren't stops.
+    // Any negative tabindex takes a stop out, not just -1.
+    expect(names).toEqual(["One", "Two", "Zero", "Half"]);
+  });
+
   it("skips tabindex=-1 and disabled nodes", () => {
     const root = createPage(`
       <button>A</button>

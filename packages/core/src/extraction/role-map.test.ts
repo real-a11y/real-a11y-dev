@@ -223,6 +223,35 @@ describe("getImplicitRole", () => {
       ).toBe("presentation");
     });
 
+    // HTML's integer parse, which Chromium applies: leading ASCII whitespace
+    // and trailing junk are allowed, so "1abc" is 1 and a real tab stop.
+    it("reads tabindex the way HTML parses an integer", () => {
+      expect(
+        getImplicitRole(el('<h2 role="presentation" tabindex="1abc">T</h2>')),
+      ).toBe("heading");
+      expect(
+        getImplicitRole(el('<h2 role="presentation" tabindex=" 0">T</h2>')),
+      ).toBe("heading");
+      expect(
+        getImplicitRole(
+          el('<h2 role="presentation" tabindex="&#160;0">T</h2>'),
+        ),
+      ).toBe("presentation");
+    });
+
+    it("does not treat a control in a disabled fieldset as focusable", () => {
+      const fieldset = el(
+        "<fieldset disabled>" +
+          '<legend><button role="none">Unlock</button></legend>' +
+          '<button role="none">Save</button>' +
+          "</fieldset>",
+      );
+      const [inLegend, inFieldset] = fieldset.querySelectorAll("button");
+      // The first legend is exempt, so its button stays focusable.
+      expect(getImplicitRole(inLegend)).toBe("button");
+      expect(getImplicitRole(inFieldset)).toBe("presentation");
+    });
+
     // A tabindex does NOT put a disabled control or a hidden input into the
     // focus order, so the exclusions have to be checked before tabindex is.
     it("keeps a disabled control presentational despite a tabindex", () => {
