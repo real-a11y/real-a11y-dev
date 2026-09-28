@@ -152,8 +152,13 @@ let n = 0;
  * against the merge base, so the base commit's own contents are invisible to it.
  * That is what lets a case name exactly the paths it is about, and it is how a
  * case edits a file rather than creating one.
+ *
+ * `commit: false` leaves the change in the working tree — a new file stays
+ * untracked — which is what `pnpm pr:risk` sees before the author commits.
+ * `config` is written into the fixture's own `.git/config`, where the rubric's
+ * git calls will read it, standing in for whatever the person running it has.
  */
-async function grade(files, { base = {} } = {}) {
+async function grade(files, { base = {}, commit = true, config = {} } = {}) {
   const dir = join(root, `case-${++n}`);
   await mkdir(dir, { recursive: true });
 
@@ -178,8 +183,13 @@ async function grade(files, { base = {} } = {}) {
   for (const [path, content] of changes) {
     await write(path, content);
   }
-  await git(dir, ["add", "-A"]);
-  await git(dir, ["commit", "-q", "--no-verify", "-m", "chore: change"]);
+  if (commit) {
+    await git(dir, ["add", "-A"]);
+    await git(dir, ["commit", "-q", "--no-verify", "-m", "chore: change"]);
+  }
+  for (const [key, value] of Object.entries(config)) {
+    await git(dir, ["config", key, value]);
+  }
 
   // Same stripped environment: the rubric runs its own git with `cwd: repoRoot`,
   // and an inherited `GIT_DIR` would point every one of those reads at the repo
@@ -320,6 +330,9 @@ export function allowlistAttributes(flat: string[]): Record<string, string> {
   return attributes;
 }
 
+/**
+ * Build the tree from CDP's flat node list.
+ */
 export function buildNativeTree(nodes: RawNode[]): NativeNode[] {
   // One pass over CDP's flat list; parents arrive before their children.
   return nodes.map((node) => ({
@@ -362,7 +375,8 @@ describe("field-value redaction (R1) grades as a redaction boundary", () => {
     // string literals — nothing on a changed line names the allowlist, so a
     // rule reading only changed lines cannot see it. Git's hunk header can:
     // it names the declaration the hunk sits inside. Add `"value"` here and
-    // every field value on the page reaches CLI and MCP output.
+    // the `dom` facet carries a field's `value` attribute into CLI and MCP
+    // output — which React keeps in sync with what the user typed.
     const result = await gradeEdit(
       NATIVE_TREE_PATH,
       NATIVE_TREE,
@@ -442,6 +456,72 @@ describe("field-value redaction stays on the gates, not the files", () => {
 
     assert.equal(result.tier, "medium");
     assert.deepEqual(ruleIds(result), ["published-src"]);
+  });
+
+  it("does not attribute a docblock to the gate above it", async () => {
+    // The same trap one space in: ` * …` is indented, but it is a top-level
+    // JSDoc line, and the column-0 line above it is the gate that ends just
+    // before — `}` and `/**` are never a hunk header. In the real file that
+    // put `nativeAXView`'s docblock under `redactedName`.
+    const result = await gradeEdit(
+      NATIVE_TREE_PATH,
+      NATIVE_TREE,
+      ` * Build the tree from CDP's flat node list.`,
+      ` * Build the tree from Chromium's flat AX node list.`,
+    );
+
+    assert.equal(result.tier, "medium");
+    assert.deepEqual(ruleIds(result), ["published-src"]);
+  });
+});
+
+describe("the code scan cannot be switched off by where it runs", () => {
+  it("reads through git config that reshapes diff output", async () => {
+    // The parse needs `a/` `b/` prefixes and a bare `diff --git` line. Before
+    // the rubric pinned its diff format, `diff.mnemonicPrefix` (`c/` `w/`)
+    // or `color.diff=always` on the author's machine left the code scan
+    // empty: this same allowlist edit graded 🟡 locally and 🔴 in CI.
+    const edit = [`  "placeholder",\n`, `  "placeholder",\n  "value",\n`];
+    for (const config of [
+      { "diff.mnemonicPrefix": "true" },
+      { "diff.noprefix": "true" },
+      { "color.diff": "always", "color.ui": "always" },
+    ]) {
+      const result = await grade(
+        { [NATIVE_TREE_PATH]: NATIVE_TREE.replace(...edit) },
+        { base: { [NATIVE_TREE_PATH]: NATIVE_TREE }, config },
+      );
+      assert.equal(result.tier, "high", JSON.stringify(config));
+      assert.deepEqual(
+        evidenceFor(result, "field-value-redaction"),
+        [`${NATIVE_TREE_PATH} → DOM_ATTR_ALLOWLIST`],
+        JSON.stringify(config),
+      );
+    }
+  });
+
+  it("reads a new file before it is committed", async () => {
+    // `git diff` cannot see an untracked file, and `pnpm pr:risk` is meant to
+    // be run before the commit exists.
+    const result = await grade(
+      { "packages/browser/src/field-gate.ts": NATIVE_TREE },
+      { commit: false },
+    );
+
+    assert.deepEqual(evidenceFor(result, "field-value-redaction"), [
+      "packages/browser/src/field-gate.ts → DOM_ATTR_ALLOWLIST, allowlistAttributes",
+    ]);
+  });
+
+  it("does not scan the rubric's own tests, which must name every gate", async () => {
+    // `excludeSelf` exists because a rule listing the names it hunts matches
+    // its own source. These tests have to write those names into fixtures, so
+    // without the exclusion every PR touching them carries a bullet per gate.
+    const result = await grade({
+      "scripts/pr-risk.test.mjs": `const gates = ["isSensitiveField", "redactUrl"];\n`,
+    });
+
+    assert.deepEqual(ruleIds(result), ["verification-machinery"]);
   });
 });
 

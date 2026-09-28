@@ -149,6 +149,9 @@ const splitZ = (out) => out.split("\0").filter(Boolean);
  */
 const SELF_PATHS = new Set(["scripts/pr-risk.mjs", "scripts/pr-risk.test.mjs"]);
 
+/** The file types a code-reading rule scans — see `touchedCode` below. */
+const CODE_EXTENSIONS = ["ts", "tsx", "mjs", "js", "yml", "yaml"];
+
 /**
  * What a code-reading rule scans in one file's `-U0` diff: every changed line,
  * plus — for a hunk that sits inside a declaration — that declaration's line.
@@ -161,10 +164,15 @@ const SELF_PATHS = new Set(["scripts/pr-risk.mjs", "scripts/pr-risk.test.mjs"]);
  * the allowlist — the header is the only place its name appears.
  *
  * "Nearest column-0 line above" is not always an enclosing one, though: a new
- * top-level block appended after a gate, or a change in an import list, is
- * reported under whatever declaration precedes it. So the header counts only
- * when the hunk's first non-blank changed line is indented — i.e. the change
- * starts inside a body or a literal rather than at the top level.
+ * top-level block appended after a gate, an edit to the docblock of whatever
+ * follows it, or a change in an import list is reported under the declaration
+ * that precedes it. So the header counts only when the hunk's first non-blank
+ * changed line is indented by a tab or at least two spaces — i.e. the change
+ * starts inside a body or a literal. One space is a top-level JSDoc line
+ * (` * …`), not a body.
+ *
+ * Git cuts the header at 80 characters, so a name that sits late on a long
+ * declaration line is lost. Every gate named below comes first on its line.
  *
  * Lines before the first `@@` are the file header. A content line is anything
  * after it, which is why a removed `--i;` (rendered `---i;`) is not mistaken
@@ -176,7 +184,7 @@ function scannable(section) {
   const flush = () => {
     if (!hunk) return;
     const first = hunk.lines.find((l) => l.slice(1).trim());
-    if (first && /^[+-]\s/.test(first)) out.push(hunk.header);
+    if (first && /^[+-](\t| {2})/.test(first)) out.push(hunk.header);
     out.push(...hunk.lines);
   };
   for (const line of section.split("\n")) {
@@ -274,10 +282,12 @@ async function collectFacts(base) {
     // Binary files report `-`; they contribute files but not lines.
     return n + (Number(added) || 0) + (Number(removed) || 0);
   }, 0);
+  const untrackedText = new Map();
   for (const file of untracked) {
     try {
       const text = await readFile(resolve(repoRoot, file), "utf8");
       lines += text.length ? text.split("\n").length : 0;
+      untrackedText.set(file, text);
     } catch {
       // Unreadable or binary — it still counts as a file, just not as lines.
     }
@@ -292,21 +302,30 @@ async function collectFacts(base) {
   // *removing* a `redactUrl()` call — the single most direct way to reintroduce
   // the leak the rule exists for — graded LOWER than adding one. `-U0` keeps
   // this bounded to changed lines.
+  //
+  // The output format is pinned, not left to whoever runs this. The parse below
+  // needs `a/` `b/` prefixes, a bare `diff --git` at column 0 and one hunk per
+  // change, and `diff.mnemonicPrefix` (`c/` `w/`), `diff.noprefix`,
+  // `color.diff=always`, `diff.external` and `diff.interHunkContext` each break
+  // one of those. Every one of them used to leave the code scan empty — both
+  // redaction rules silently off on that machine while CI, which has no such
+  // config, disagreed.
   const codeDiff = await gitOrDie(
     [
       "-c",
       "core.quotePath=false",
       "diff",
+      "--no-color",
+      "--no-ext-diff",
+      "--no-textconv",
+      "--src-prefix=a/",
+      "--dst-prefix=b/",
+      "--inter-hunk-context=0",
       "--no-renames",
       "-U0",
       mergeBase,
       "--",
-      "*.ts",
-      "*.tsx",
-      "*.mjs",
-      "*.js",
-      "*.yml",
-      "*.yaml",
+      ...CODE_EXTENSIONS.map((ext) => `*.${ext}`),
     ],
     "the code diff",
   );
@@ -319,7 +338,26 @@ async function collectFacts(base) {
   const touchedCode = [];
   for (const section of sections) {
     const path = section.match(/^a\/(.*?) b\//)?.[1];
-    if (path) touchedCode.push([path, scannable(section)]);
+    // Fails CLOSED. A section this can't attribute is a diff format this parse
+    // doesn't understand, and skipping it is the empty-scan failure above.
+    if (!path) {
+      die([
+        `Can't read a file path out of the code diff — refusing to grade this diff.`,
+        ``,
+        `  ${JSON.stringify(section.slice(0, 120))}`,
+        ``,
+        `  The git call above pins its output format; something it doesn't pin`,
+        `  has changed it. Skipping the section would switch the redaction rules`,
+        `  off for this file without saying so.`,
+      ]);
+    }
+    touchedCode.push([path, scannable(section)]);
+  }
+  // `git diff` cannot see an untracked file, so a new gate written before
+  // `git add` would grade lower here than in CI. Every line of it is new.
+  for (const [path, text] of untrackedText) {
+    if (!CODE_EXTENSIONS.some((ext) => path.endsWith(`.${ext}`))) continue;
+    touchedCode.push([path, text.replace(/^/gm, "+")]);
   }
 
   return {
@@ -580,7 +618,7 @@ function touchedNames(code, names) {
 
 /**
  * The named gates that enforce R1 — which of a user's field values a tree, or
- * an act step's report, may carry. As of ADR-0001 that is none from a
+ * an act report, may carry. As of ADR-0001 that is none from a
  * sensitive field (`type="password"`, the credential and payment
  * `autocomplete` tokens) and never the text an act step typed.
  *
@@ -800,7 +838,7 @@ const RULES = [
     id: "field-value-redaction",
     tier: "high",
     title: "Field-value redaction (R1)",
-    why: "R1 decides which of a user's field values a tree may carry, and these trees go into CLI output, MCP responses an agent reads, committed snapshots and CI logs. It is enforced by a handful of named gates — the native producer's attribute allowlist, the DOM producer's `isSensitiveField`, the extension's in-page value read, the act path's echo mask — and a leak can be one string literal added to an allowlist. It graded 🟡 medium as ordinary package source, including the PR that introduced the DOM producer's redaction.",
+    why: "R1 decides which of a user's field values a tree may carry, and these trees go into CLI output, MCP responses an agent reads, committed snapshots and CI logs. It is enforced by a handful of named gates — the native producer's attribute allowlist, the DOM producer's `isSensitiveField`, the extension's in-page value read, the act path's echo mask — and a leak can be one string literal added to an allowlist. Without this rule a change to those gates grades 🟡 medium as ordinary package source: a branch here that changed what the native tree withholds from CLI and MCP output did exactly that.",
     match: (f) => touchedNames(f.touchedCode, FIELD_VALUE_GATES),
     // Same reason as above: the name list is in this file.
     excludeSelf: true,
