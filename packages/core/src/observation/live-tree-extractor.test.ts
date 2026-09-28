@@ -707,6 +707,72 @@ describe("LiveTreeExtractor", () => {
     });
   });
 
+  // A node can inherit `disabled` from an ancestor. The refresh re-extracts
+  // only the mutated subtree, which holds every node whose state moved.
+  describe("an inherited disabled state across a refresh", () => {
+    async function refreshAfter(html: string, mutate: () => void) {
+      document.body.innerHTML = html;
+      const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
+      let lastChange: TreeChange | undefined;
+      const observer = new DomObserver(
+        document.body,
+        (change) => {
+          lastChange = change;
+        },
+        50,
+      );
+      observer.start();
+      mutate();
+      await vi.advanceTimersByTimeAsync(100);
+      const result = live.refresh(lastChange);
+      observer.stop();
+      return result;
+    }
+
+    function disabledOf(result: ExtractionResult, name: string): unknown {
+      const node = [...result.nodes.values()].find((n) => n.a11y.name === name);
+      expect(node).toBeDefined();
+      return node!.a11y.states["disabled"];
+    }
+
+    it("follows an ancestor's aria-disabled on and off", async () => {
+      const html = `<main><div id="g" role="group" aria-label="Pay"><div><button>Send</button></div></div></main>`;
+      const on = await refreshAfter(html, () =>
+        document.getElementById("g")!.setAttribute("aria-disabled", "true"),
+      );
+      expect(disabledOf(on, "Send")).toBe(true);
+      expect(on.nodes).toEqual(extractA11yTree(document.body).nodes);
+
+      const off = await refreshAfter(
+        html.replace('id="g"', 'id="g" aria-disabled="true"'),
+        () => document.getElementById("g")!.removeAttribute("aria-disabled"),
+      );
+      expect(disabledOf(off, "Send")).toBeUndefined();
+      expect(off.nodes).toEqual(extractA11yTree(document.body).nodes);
+    });
+
+    it("disables a button moved into an aria-disabled group", async () => {
+      const result = await refreshAfter(
+        `<main><div id="g" role="group" aria-label="Pay" aria-disabled="true"></div><button>Send</button></main>`,
+        () =>
+          document
+            .getElementById("g")!
+            .appendChild(document.querySelector("button")!),
+      );
+      expect(disabledOf(result, "Send")).toBe(true);
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+    });
+
+    it("follows a select's disabled onto its options", async () => {
+      const result = await refreshAfter(
+        `<main><select id="s" aria-label="Size"><option>Small</option></select></main>`,
+        () => document.getElementById("s")!.setAttribute("disabled", ""),
+      );
+      expect(disabledOf(result, "Small")).toBe(true);
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+    });
+  });
+
   describe("a heading named through a <details>", () => {
     async function refreshAfter(mutate: () => void) {
       document.body.innerHTML = `<main><h3>A <details><summary>Old</summary>Body</details></h3></main>`;

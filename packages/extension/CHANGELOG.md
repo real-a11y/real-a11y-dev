@@ -18,6 +18,19 @@
 
 ## Unreleased
 
+- In DOM mode, an option in a disabled `<select>` or `<optgroup>`, and a
+  control inside an `aria-disabled="true"` container, now show as disabled in
+  the tree and in the Buttons and Forms lists, as NATIVE mode already showed
+  them. In `<div role="group" aria-disabled="true"><button>Quote</button></div>`,
+  `Quote` had no `disabled` badge, although Chromium and a screen reader
+  treat it as disabled. Only focusable elements take the state from a
+  container, rich-text editors included, so a paragraph or heading inside
+  one stays as it was, and a disabled `<fieldset>` still passes it to its
+  form controls only. A page whose `<form>` has a field named
+  `parentElement` or `assignedSlot` no longer hangs the DOM-mode tree when
+  the form holds a `<header>` or `<footer>`.
+  ([#429](https://github.com/real-a11y/real-a11y-dev/pull/429))
+
 - In DOM mode, a control disabled by its `<fieldset>` now shows as disabled in
   the tree and in the Buttons and Forms lists, as NATIVE mode already
   showed it. In `<fieldset disabled><button>Save</button></fieldset>`, `Save`

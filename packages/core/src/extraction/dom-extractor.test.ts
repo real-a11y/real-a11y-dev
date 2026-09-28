@@ -500,9 +500,10 @@ describe("extractDomTree", () => {
   });
 
   /** Each node carrying an `id` attribute, mapped to its `disabled` state. */
-  function disabledById(html: string): Record<string, unknown> {
+  function disabledById(page: string | Element): Record<string, unknown> {
+    const root = typeof page === "string" ? createPage(page) : page;
     const byId: Record<string, unknown> = {};
-    for (const node of extractDomTree(createPage(html)).nodes.values()) {
+    for (const node of extractDomTree(root).nodes.values()) {
       const id = node.dom?.attributes["id"];
       if (id) byId[id] = node.a11y.states["disabled"];
     }
@@ -551,6 +552,279 @@ describe("extractDomTree", () => {
       "enabled-fieldset": undefined,
       // aria-disabled still reads through as authored.
       "aria-disabled": true,
+    });
+  });
+
+  // The expectations from here to the end of the `disabled` tests were each
+  // checked against the `disabled` property of Chromium 151's own tree.
+  it("disables an option by its own attribute, its optgroup or its select", () => {
+    expect(
+      disabledById(`
+        <select aria-label="Size">
+          <option id="enabled">S</option>
+          <option id="own" disabled>M</option>
+          <optgroup id="optgroup" label="Large" disabled>
+            <option id="in-optgroup">L</option>
+          </optgroup>
+        </select>
+        <select aria-label="Color" disabled>
+          <option id="in-select">Red</option>
+        </select>
+        <select aria-label="Fit" multiple aria-disabled="true">
+          <option id="in-aria-disabled-select">Slim</option>
+        </select>
+        <fieldset disabled>
+          <legend>
+            <select aria-label="Cut"><option id="in-legend">Long</option></select>
+          </legend>
+          <select aria-label="Hem"><option id="in-fieldset">Raw</option></select>
+        </fieldset>
+      `),
+    ).toEqual({
+      enabled: undefined,
+      own: true,
+      // Chromium marks the options of a disabled optgroup, never the optgroup.
+      optgroup: undefined,
+      "in-optgroup": true,
+      // `:disabled` misses these two: HTML's rule for an option reads the
+      // option and its optgroup, never the select.
+      "in-select": true,
+      "in-fieldset": true,
+      "in-aria-disabled-select": true,
+      // A select in a disabled fieldset's first legend is enabled, and so are
+      // its options.
+      "in-legend": undefined,
+    });
+  });
+
+  it("stops inheriting at an explicit aria-disabled, never at a native one", () => {
+    // Answer `:disabled` as Chromium 151 does and jsdom doesn't: for every
+    // option in a disabled select too. Its tree still counts that option's
+    // state as inherited, so reading it from `:disabled` gets this test wrong
+    // in a browser while passing here.
+    const matches = Element.prototype.matches;
+    vi.spyOn(Element.prototype, "matches").mockImplementation(function (
+      this: Element,
+      selector: string,
+    ) {
+      if (selector === ":disabled" && this.tagName === "OPTION") {
+        let el = this.parentElement;
+        while (el && el.tagName !== "SELECT") el = el.parentElement;
+        if (el?.hasAttribute("disabled")) return true;
+      }
+      return matches.call(this, selector);
+    });
+    expect(
+      disabledById(`
+        <select aria-label="Size" disabled>
+          <option id="option-opts-out" aria-disabled="false">S</option>
+          <optgroup label="Large" aria-disabled="false">
+            <option id="optgroup-opts-out">L</option>
+          </optgroup>
+        </select>
+        <select aria-label="Color">
+          <optgroup label="Warm" disabled>
+            <option id="disabled-optgroup-wins" aria-disabled="false">Red</option>
+          </optgroup>
+        </select>
+        <select aria-label="Fit" disabled aria-disabled="false">
+          <option id="disabled-select-wins">Slim</option>
+        </select>
+      `),
+    ).toEqual({
+      // What an option inherits from its select, its own `false` overrides...
+      "option-opts-out": false,
+      // ...and so does the `false` of an ancestor nearer than the select.
+      "optgroup-opts-out": undefined,
+      // A `disabled` attribute is not overridden: not the optgroup's, which
+      // disables the option itself...
+      "disabled-optgroup-wins": true,
+      // ...and not the select's, which aria-disabled="false" can't re-enable.
+      "disabled-select-wins": true,
+    });
+  });
+
+  it("disables a focusable descendant of aria-disabled, at any depth", () => {
+    expect(
+      disabledById(`
+        <div role="group" aria-label="Shipping" aria-disabled="true">
+          <button id="button">Quote</button>
+          <a id="link" href="/rates">Rates</a>
+          <input id="input" aria-label="Zip">
+          <div id="tabbable" role="button" tabindex="0">Estimate</div>
+          <div id="scripted" role="menuitem" tabindex="-1">Copy</div>
+          <select aria-label="Speed"><option id="option">Fast</option></select>
+          <div role="group" aria-label="Extras">
+            <button id="nested">Insure</button>
+          </div>
+          <p id="paragraph">Ships in 2 days</p>
+          <h2 id="heading">Carriers</h2>
+          <div id="untabbable" role="button">Track</div>
+          <div id="aria-option" role="option">Ground</div>
+          <a id="anchor">Returns</a>
+          <button id="opts-out" aria-disabled="false">Help</button>
+          <div aria-disabled="false">
+            <button id="under-opt-out">Chat</button>
+          </div>
+        </div>
+      `),
+    ).toEqual({
+      button: true,
+      link: true,
+      input: true,
+      tabbable: true,
+      scripted: true,
+      // A native option counts as focusable here. An ARIA one does not.
+      option: true,
+      nested: true,
+      // Only focusable descendants inherit it, as CORE-AAM says.
+      paragraph: undefined,
+      heading: undefined,
+      untabbable: undefined,
+      "aria-option": undefined,
+      anchor: undefined,
+      // The nearest explicit aria-disabled wins.
+      "opts-out": false,
+      "under-opt-out": undefined,
+    });
+  });
+
+  it("reads an ancestor's aria-disabled value the way Chromium does", () => {
+    expect(
+      disabledById(`
+        <div role="group" aria-label="Upper" aria-disabled="TRUE">
+          <button id="upper-true">Save</button>
+        </div>
+        <div role="group" aria-label="Other" aria-disabled="yes">
+          <button id="other-value">Send</button>
+        </div>
+        <div role="group" aria-label="Outer" aria-disabled="true">
+          <div aria-disabled="FALSE"><button id="upper-false">Undo</button></div>
+          <div aria-disabled=""><button id="empty">Redo</button></div>
+          <div aria-disabled="undefined"><button id="undefined">Copy</button></div>
+          <button id="own-empty" aria-disabled="">Cut</button>
+        </div>
+      `),
+    ).toEqual({
+      // Any value but `false`, empty or `undefined` disables, in any case.
+      "upper-true": true,
+      "other-value": true,
+      "upper-false": undefined,
+      // Empty and `undefined` pass the ancestor's state through, on an
+      // ancestor or on the element itself.
+      empty: true,
+      undefined: true,
+      "own-empty": true,
+    });
+  });
+
+  it("counts an editing host as focusable, and a link inside one as not", () => {
+    expect(
+      disabledById(`
+        <div role="group" aria-label="Compose" aria-disabled="true">
+          <div id="textbox" contenteditable="true" role="textbox" aria-label="Note"></div>
+          <div id="plaintext" contenteditable="plaintext-only" aria-label="Plain">P</div>
+          <div id="upper" contenteditable="TRUE" aria-label="Upper">U</div>
+          <div id="invalid" contenteditable="bogus" aria-label="Bogus">B</div>
+          <div id="host" contenteditable="" aria-label="Body">
+            <p id="child">Hi</p>
+            <span id="nested" contenteditable="true">there</span>
+            <a id="link" href="/terms">terms</a>
+            <a id="tabbable-link" href="/help" tabindex="0">help</a>
+            <button id="button">Send</button>
+            <div contenteditable="false">
+              <span id="island-host" contenteditable="true">island</span>
+              <a id="island-link" href="/faq">faq</a>
+            </div>
+          </div>
+        </div>
+      `),
+    ).toEqual({
+      // Chromium focuses an editing host with no tabindex, so it inherits.
+      textbox: true,
+      plaintext: true,
+      upper: true,
+      host: true,
+      // An invalid value inherits editing, here none.
+      invalid: undefined,
+      // Editable content inside a host is not a host itself.
+      child: undefined,
+      nested: undefined,
+      // Editing takes a link's focus away, unless a tabindex gives it back.
+      link: undefined,
+      "tabbable-link": true,
+      button: true,
+      // A `contenteditable="false"` island ends the editing.
+      "island-host": true,
+      "island-link": true,
+    });
+  });
+
+  it("disables a focusable descendant of a disabled control, not of a fieldset", () => {
+    expect(
+      disabledById(`
+        <button disabled>
+          Save <span id="in-button" role="button" tabindex="0">now</span>
+        </button>
+        <button disabled aria-disabled="false">
+          Send <span id="in-opted-out-button" role="button" tabindex="0">now</span>
+        </button>
+        <fieldset id="fieldset" disabled>
+          <legend><button id="legend-button">Unlock</button></legend>
+          <div id="div-button" role="button" tabindex="0">Custom</div>
+          <a id="link" href="/help">Help</a>
+          <button>
+            Go <span id="in-fieldset-button" role="button" tabindex="0">now</span>
+          </button>
+        </fieldset>
+      `),
+    ).toEqual({
+      "in-button": true,
+      // aria-disabled="false" doesn't re-enable the button, or what it holds.
+      "in-opted-out-button": true,
+      // A disabled fieldset disables its form controls and nothing else: not
+      // itself, and not a focusable element that isn't a form control...
+      fieldset: undefined,
+      "legend-button": undefined,
+      "div-button": undefined,
+      link: undefined,
+      // ...though a control it disables passes that on like any other.
+      "in-fieldset-button": true,
+    });
+  });
+
+  it("inherits aria-disabled from above the extraction root", () => {
+    const page = createPage(`
+      <div role="group" aria-label="Billing" aria-disabled="true">
+        <section id="root"><button id="pay">Pay</button></section>
+      </div>
+    `);
+    // The live extractor re-extracts only a mutated subtree, from a root
+    // like this one, so the ancestors above it still have to count.
+    expect(disabledById(page.querySelector("#root")!)).toEqual({
+      root: undefined,
+      pay: true,
+    });
+  });
+
+  it("inherits aria-disabled through the flat tree", () => {
+    const page = createPage(`
+      <div role="group" aria-label="Billing" aria-disabled="true">
+        <div id="host"></div>
+      </div>
+      <div id="slot-host"><button id="slotted">Refund</button></div>
+    `);
+    page.querySelector("#host")!.attachShadow({ mode: "open" }).innerHTML =
+      `<button id="in-shadow">Split</button>`;
+    // Nothing in the light tree disables the slotted button. Its slot's
+    // ancestor in the shadow tree does.
+    page.querySelector("#slot-host")!.attachShadow({ mode: "open" }).innerHTML =
+      `<div role="group" aria-label="Refunds" aria-disabled="true"><slot></slot></div>`;
+    expect(disabledById(page)).toEqual({
+      host: undefined,
+      "in-shadow": true,
+      "slot-host": undefined,
+      slotted: true,
     });
   });
 

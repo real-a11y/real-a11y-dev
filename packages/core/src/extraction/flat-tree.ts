@@ -15,7 +15,14 @@
  * hosts stay leaves, as before.
  */
 
-import { safeChildNodes, safeHidden, safeShadowRoot } from "./clobber-safe.js";
+import {
+  safeAssignedSlot,
+  safeChildNodes,
+  safeHidden,
+  safeParentElement,
+  safeParentNode,
+  safeShadowRoot,
+} from "./clobber-safe.js";
 
 const ELEMENT_NODE = 1;
 const DOCUMENT_NODE = 9;
@@ -118,15 +125,20 @@ export function flatChildren(element: Element): Element[] {
  * Parent in the flat tree: the slot a node is assigned to (skipped, since
  * slots are transparent), else the light parent, else — at the top of a
  * shadow tree — the host.
+ *
+ * Each read is clobber-safe: through a `<form>` whose control is named
+ * `parentElement` or `assignedSlot`, a plain read cycles back to the form, and
+ * every loop over ancestors would spin forever.
  */
 export function flatParent(element: Element): Element | null {
   // A slotted node's parent is its slot's parent; a forwarded slot recurses.
-  const slot = element.assignedSlot;
+  const slot = safeAssignedSlot(element);
   if (slot) return flatParent(slot);
+  const parentNode = safeParentNode(element);
   const parent =
-    element.parentElement ??
-    (element.parentNode?.nodeType === DOCUMENT_FRAGMENT_NODE
-      ? (element.parentNode as ShadowRoot).host
+    safeParentElement(element) ??
+    (parentNode?.nodeType === DOCUMENT_FRAGMENT_NODE
+      ? (parentNode as ShadowRoot).host
       : null) ??
     null;
   // Slot fallback content: skip the transparent slot.
