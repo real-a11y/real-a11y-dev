@@ -529,6 +529,47 @@ describe("the code scan cannot be switched off by where it runs", () => {
     ]);
   });
 
+  it("reads a path git has to quote, instead of refusing to grade", async () => {
+    // A `"` in a path makes git C-quote the `diff --git` header, which the
+    // plain `a/… b/…` parse can't read — and an unreadable section stops the
+    // whole run, on purpose. So the quoted form has to parse, or one oddly
+    // named file wedges every future run on the PR.
+    //
+    // Built with plumbing because Windows can't create the file on disk. The
+    // path never reaches the working tree, so the rubric sees it deleted —
+    // every base line on the `-` side, which is enough to prove the parse.
+    const dir = join(root, `case-${++n}`);
+    await mkdir(dir, { recursive: true });
+    await git(dir, ["init", "-q", "-b", "main"]);
+    // On by default on Windows, where it refuses a `"` in any index path.
+    await git(dir, ["config", "core.protectNTFS", "false"]);
+    const blob = join(dir, "blob");
+    await writeFile(blob, NATIVE_TREE);
+    const { stdout: sha } = await run("git", ["hash-object", "-w", blob], {
+      cwd: dir,
+      env: HERMETIC_ENV,
+    });
+    const odd = 'packages/browser/src/native"tree.ts';
+    await git(dir, [
+      "update-index",
+      "--add",
+      "--cacheinfo",
+      `100644,${sha.trim()},${odd}`,
+    ]);
+    await git(dir, ["commit", "-q", "--no-verify", "-m", "chore: seed"]);
+    await git(dir, ["checkout", "-q", "-b", "topic"]);
+
+    const { stdout } = await run(
+      process.execPath,
+      [RUBRIC, "--repo", dir, "--base", "main", "--format", "json"],
+      { env: HERMETIC_ENV },
+    );
+
+    assert.deepEqual(evidenceFor(JSON.parse(stdout), "field-value-redaction"), [
+      `${odd} → DOM_ATTR_ALLOWLIST, allowlistAttributes`,
+    ]);
+  });
+
   it("reads a new file before it is committed", async () => {
     // `git diff` cannot see an untracked file, and `pnpm pr:risk` is meant to
     // be run before the commit exists.

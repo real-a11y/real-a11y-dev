@@ -153,6 +153,36 @@ const SELF_PATHS = new Set(["scripts/pr-risk.mjs", "scripts/pr-risk.test.mjs"]);
 const CODE_EXTENSIONS = ["ts", "tsx", "mjs", "js", "yml", "yaml"];
 
 /**
+ * The path a `diff --git` section is about, or `undefined` if the header is in
+ * a shape this doesn't know.
+ *
+ * `core.quotePath=false` stops git quoting non-ASCII, but a `"`, `\`, tab or
+ * newline in a path still gets the C-quoted form — `"a/x\"y.ts" "b/x\"y.ts"`.
+ * Refusing that shape would make one oddly named file stop every future run
+ * on the PR, with no label that clears it.
+ */
+function headerPath(section) {
+  const plain = section.match(/^a\/(.*?) b\//);
+  if (plain) return plain[1];
+  const quoted = section.match(/^"a\/((?:[^"\\]|\\.)*)" "b\//);
+  if (!quoted) return undefined;
+  const escapes = {
+    a: "\x07",
+    b: "\b",
+    f: "\f",
+    n: "\n",
+    r: "\r",
+    t: "\t",
+    v: "\v",
+  };
+  return quoted[1].replace(/\\([0-7]{3}|.)/g, (_, c) =>
+    /^[0-7]{3}$/.test(c)
+      ? String.fromCharCode(parseInt(c, 8))
+      : (escapes[c] ?? c),
+  );
+}
+
+/**
  * What a code-reading rule scans in one file's `-U0` diff: every changed line,
  * plus — for a hunk that sits inside a declaration — that declaration's line.
  *
@@ -314,7 +344,9 @@ async function collectFacts(base) {
   // `--text` for the same reason, from the other direction: a `-diff`
   // attribute or one NUL byte turns a file's diff into "Binary files differ",
   // which hides every line of it. Those are the two ways a PR itself could
-  // take a gate out of this scan, so neither gets a say.
+  // take a gate out of this scan, so neither gets a say. The cost is a real
+  // binary with a code extension diffing as text, which is bounded by
+  // `maxBuffer` and dies loudly past it rather than grading anything.
   const codeDiff = await gitOrDie(
     [
       "-c",
@@ -338,12 +370,13 @@ async function collectFacts(base) {
 
   // Kept per-file so a rule can say where it matched, and can opt out of
   // scanning the rubric's own source (see `excludeSelf`). Splitting on the
-  // `diff --git` header is safe here because `core.quotePath=false` and
-  // `--no-renames` mean the paths are literal and the two sides always match.
+  // `diff --git` header is safe here because `--no-renames` means the two
+  // sides always match, and a content line always starts with `+`, `-`, ` `
+  // or `\`.
   const sections = codeDiff.split(/^diff --git /m).filter(Boolean);
   const touchedCode = [];
   for (const section of sections) {
-    const path = section.match(/^a\/(.*?) b\//)?.[1];
+    const path = headerPath(section);
     // Fails CLOSED. A section this can't attribute is a diff format this parse
     // doesn't understand, and skipping it is the empty-scan failure above.
     if (!path) {
@@ -361,6 +394,8 @@ async function collectFacts(base) {
   }
   // `git diff` cannot see an untracked file, so a new gate written before
   // `git add` would grade lower here than in CI. Every line of it is new.
+  // (So is any stray untracked copy lying in the checkout — local only, since
+  // CI's is clean, and such a path already grades as unrecognised.)
   for (const [path, text] of untrackedText) {
     if (!CODE_EXTENSIONS.some((ext) => path.endsWith(`.${ext}`))) continue;
     touchedCode.push([path, text.replace(/^/gm, "+")]);
