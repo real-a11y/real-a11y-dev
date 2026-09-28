@@ -221,3 +221,22 @@ test("NATIVE: Escape with a pick armed cancels the pick and keeps the scope", as
   await expect(pickButton).toHaveAttribute("aria-pressed", "false");
   await expect(scopeBar(nav.panel)).toBeVisible();
 });
+
+test("DOM: Escape in the tree leaves the scope even with a pick armed", async ({
+  nav,
+}) => {
+  // A DOM pick is cancelled by Escape on the page, never by the panel's, so
+  // holding the panel's Escape back for it would leave the key doing nothing.
+  await show(nav, "native-panel.html", "DOM");
+  await itemsRow(nav.panel).dblclick({ position: { x: 5, y: 5 } });
+  await expect(scopeBar(nav.panel)).toBeVisible();
+
+  const pickButton = nav.panel.getByRole("button", {
+    name: "Pick element in page",
+  });
+  await pickButton.click();
+  await expect(pickButton).toHaveAttribute("aria-pressed", "true");
+
+  await nav.panel.locator(".sn-tree").press("Escape");
+  await expect(scopeBar(nav.panel)).toHaveCount(0);
+});

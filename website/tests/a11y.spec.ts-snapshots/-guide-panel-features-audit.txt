@@ -347,7 +347,7 @@ main
       row
         cell "Esc"
           code "Esc"
-        cell "Chrome extension: leave the current scope. While a pick is armed, Esc cancels the pick instead"
+        cell "Chrome extension: leave the current scope. In the native tree, while a pick is armed, Esc cancels the pick instead"
           code "Esc"
   paragraph "Implemented in via (and the same type-ahead + stepper-key helpers on filtered / tab-sequence listboxes) — every package that mounts the tree gets the same keymap. The two scope keys belong to the Chrome extension's panel, the one surface with a scope breadcrumb."
     code "@real-a11y-dev/semantic-navigator-ui"

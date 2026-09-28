@@ -138,7 +138,7 @@ The panel itself is fully keyboard-operable.
 | `Home` / `End` | Jump to the first / last visible row |
 | Printable characters | Type-ahead — jump to a row whose accessible name starts with the typed characters (multi-character within ~500ms keeps a still-matching selection; repeating the same letter cycles matches). `/` is reserved for search. |
 | `Ctrl`/`Cmd`+`Enter` | Chrome extension: scope the tree to the current row (any row with children) |
-| `Esc` | Chrome extension: leave the current scope. While a pick is armed, `Esc` cancels the pick instead |
+| `Esc` | Chrome extension: leave the current scope. In the native tree, while a pick is armed, `Esc` cancels the pick instead |
 
 Implemented in `@real-a11y-dev/semantic-navigator-ui` via `useTreeKeyboard` (and the same type-ahead + stepper-key helpers on filtered / tab-sequence listboxes) — every package that mounts the tree gets the same keymap. The two scope keys belong to the Chrome extension's panel, the one surface with a scope breadcrumb.
 
