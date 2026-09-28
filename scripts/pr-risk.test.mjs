@@ -500,6 +500,35 @@ describe("the code scan cannot be switched off by where it runs", () => {
     }
   });
 
+  it("reads through a -diff attribute that makes a gate binary", async () => {
+    // "Binary files differ" has no lines to scan. With the attribute already
+    // on the base, a PR widening the allowlist showed nothing to either
+    // redaction rule — so the diff is forced to text.
+    const edit = [`  "placeholder",\n`, `  "placeholder",\n  "value",\n`];
+    const result = await grade(
+      { [NATIVE_TREE_PATH]: NATIVE_TREE.replace(...edit) },
+      {
+        base: {
+          [NATIVE_TREE_PATH]: NATIVE_TREE,
+          "packages/browser/src/.gitattributes": "native-tree.ts -diff\n",
+        },
+      },
+    );
+
+    assert.deepEqual(evidenceFor(result, "field-value-redaction"), [
+      `${NATIVE_TREE_PATH} → DOM_ATTR_ALLOWLIST`,
+    ]);
+  });
+
+  it("grades a nested .gitattributes 🔴 high, like the root one", async () => {
+    const result = await grade(["packages/browser/src/.gitattributes"]);
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "verification-machinery"), [
+      "packages/browser/src/.gitattributes",
+    ]);
+  });
+
   it("reads a new file before it is committed", async () => {
     // `git diff` cannot see an untracked file, and `pnpm pr:risk` is meant to
     // be run before the commit exists.

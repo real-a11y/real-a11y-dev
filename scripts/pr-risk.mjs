@@ -310,11 +310,17 @@ async function collectFacts(base) {
   // one of those. Every one of them used to leave the code scan empty — both
   // redaction rules silently off on that machine while CI, which has no such
   // config, disagreed.
+  //
+  // `--text` for the same reason, from the other direction: a `-diff`
+  // attribute or one NUL byte turns a file's diff into "Binary files differ",
+  // which hides every line of it. Those are the two ways a PR itself could
+  // take a gate out of this scan, so neither gets a say.
   const codeDiff = await gitOrDie(
     [
       "-c",
       "core.quotePath=false",
       "diff",
+      "--text",
       "--no-color",
       "--no-ext-diff",
       "--no-textconv",
@@ -701,7 +707,13 @@ const RULES = [
     match: (f) =>
       any(
         f.files,
-        /^(scripts\/|\.husky\/|vitest\.workspace\.|tsconfig[^/]*\.json$|eslint\.config\.|\.size-limit\.json$|\.prettierrc|\.prettierignore$|\.gitattributes$)/,
+        /^(scripts\/|\.husky\/|vitest\.workspace\.|tsconfig[^/]*\.json$|eslint\.config\.|\.size-limit\.json$|\.prettierrc|\.prettierignore$)/,
+      ).concat(
+        // At any depth, not just the root: git reads a nested one for the
+        // subtree it sits in, and a `diff=` driver there changes the hunk
+        // headers the redaction rules read to find the gate an edit is in.
+        // None has ever existed here, so this costs nothing until one does.
+        any(f.files, /(^|\/)\.gitattributes$/),
       ),
   },
   {
