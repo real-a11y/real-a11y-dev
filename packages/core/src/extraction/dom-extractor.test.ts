@@ -1999,6 +1999,17 @@ describe("a11y.value — what a screen reader announces (ADR-0001)", () => {
     ).toBe("Buy milk Call Ana");
   });
 
+  it("leaves a nested <select>'s options and a <textarea>'s default text out of an editor's value", () => {
+    const root = createPage(
+      `<div contenteditable="true" role="textbox" aria-label="Form doc">Size: <select aria-label="Size"><option>Small</option><option selected>Large</option></select> Notes: <textarea aria-label="Notes">default text</textarea></div>`,
+    );
+    expect(nodeFor(root, "[aria-label='Form doc']").a11y.value).toBe(
+      "Size: Notes:",
+    );
+    // Each control still announces its own value.
+    expect(nodeFor(root, "select").a11y.value).toBe("Large");
+  });
+
   it("lets an ARIA combobox read its own text when all it wraps is a hidden input", () => {
     expect(
       valueOf(

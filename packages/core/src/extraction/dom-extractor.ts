@@ -1222,6 +1222,18 @@ const POPUP_ROLES: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Form controls whose child text is NOT what they show: a `<select>`'s every
+ * option (only the chosen one is displayed, and it is the select's own
+ * value), a `<textarea>`'s default value, a `<datalist>`'s suggestions. A
+ * field's text walk skips them; the control carries its own `a11y.value`.
+ */
+const CONTROL_TEXT_TAGS: ReadonlySet<string> = new Set([
+  "select",
+  "textarea",
+  "datalist",
+]);
+
+/**
  * The text a non-native field holds — a contenteditable editor, an ARIA
  * textbox or combobox — collapsed and capped like {@link getDescendantText},
  * but with block boundaries read as spaces. What a screen reader would not
@@ -1246,7 +1258,7 @@ function getFieldText(element: Element, styleCache?: StyleCache): string {
     const el = node as Element;
     const rawTag = el.tagName;
     const tag = typeof rawTag === "string" ? rawTag.toLowerCase() : "";
-    if (MEDIA_TAGS.has(tag)) return false;
+    if (MEDIA_TAGS.has(tag) || CONTROL_TEXT_TAGS.has(tag)) return false;
     if (el.getAttribute("aria-hidden") === "true") return false;
     const role = el.getAttribute("role")?.trim().split(/\s+/)[0];
     if (role && POPUP_ROLES.has(role)) return false;

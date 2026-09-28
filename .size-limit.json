@@ -2,7 +2,7 @@
   {
     "name": "@real-a11y-dev/core (esm)",
     "path": "packages/core/dist/index.js",
-    "limit": "16.3 KB",
+    "limit": "16.4 KB",
     "gzip": true
   },
   {
