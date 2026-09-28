@@ -224,11 +224,27 @@ describe("MCP end-to-end against a real browser", () => {
     const out = textOf(
       await client.callTool({ name: "get_tab_order", arguments: {} }),
     );
-    expect(out).toMatch(
+    // The same stops by default, each editor showing what it holds
+    // (ADR-0001) — the text sits in its value, never as a stop of its own.
+    expect(out.replace(/ = ".*"$/gm, "")).toMatch(
       /^01\. textbox "Message"\n02\. link "Mention Alice"\n03\. generic$/m,
     );
-    expect(out).not.toContain("token=abc123");
-    expect(out).not.toContain("hunter2");
+    expect(out).toContain('03. generic = "my password is hunter2"');
+
+    // A server in strict mode (REAL_A11Y_REDACT_INPUT=1), on the same page:
+    // no value, so neither the link typed into the composer nor the draft.
+    const strictServer = buildServer(session, { redactInput: true });
+    const [clientT, serverT] = InMemoryTransport.createLinkedPair();
+    const strict = new Client({ name: "e2e-strict", version: "0.0.0" });
+    await Promise.all([strictServer.connect(serverT), strict.connect(clientT)]);
+    const strictOut = textOf(
+      await strict.callTool({ name: "get_tab_order", arguments: {} }),
+    );
+    expect(strictOut).toMatch(
+      /^01\. textbox "Message"\n02\. link "Mention Alice"\n03\. generic$/m,
+    );
+    expect(strictOut).not.toContain("token=abc123");
+    expect(strictOut).not.toContain("hunter2");
   });
 
   it("the read tools take no rootSelector at all", async () => {

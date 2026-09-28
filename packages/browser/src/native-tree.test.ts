@@ -201,6 +201,14 @@ describe("buildNativeTree — field values on the recorded payload (ADR-0001)", 
     expect(field(tree, /email/i)?.a11y.name).toBe("Email");
   });
 
+  it("strict mode keeps every name here: playback and page state are not input", () => {
+    // The <video>'s UA-shadow scrubber carries a value, but a timeline is not
+    // something a user entered — counting it would withhold the video's name.
+    const names = (tree: ReturnType<typeof buildNativeTree>) =>
+      nodesOf(tree).map((n) => `${n.a11y.role} ${n.a11y.name}`);
+    expect(names(build({ redactInput: true }))).toEqual(names(build()));
+  });
+
   it("the recorded raw payload DID contain the secrets (guards the test)", () => {
     // If the fixture ever stops carrying real values, the tests above are
     // vacuous — pin that the classification is doing real work.

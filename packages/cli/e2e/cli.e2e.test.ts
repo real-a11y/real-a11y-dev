@@ -421,15 +421,27 @@ describe("the native producer is the only producer (built bin)", () => {
     // mention chip, and can't focus the link typed into the composer at all.
     // That link used to be listed under its own text — here, a reset URL
     // with its token — while both editors were missing.
+    const STOPS = [
+      '01. textbox "Message"',
+      '02. link "Mention Alice"',
+      "03. generic",
+    ];
+    // By default the stops are the same, each editor showing what it holds
+    // (ADR-0001): the typed link is in the composer's value, not a stop.
     const { code, stdout } = await runCli(["tabs", COMPOSER_PAGE, "-q"]);
     expect(code).toBe(0);
-    expect(stdout.trimEnd()).toBe(
-      ['01. textbox "Message"', '02. link "Mention Alice"', "03. generic"].join(
-        "\n",
-      ),
-    );
-    expect(stdout).not.toContain("token=abc123");
-    expect(stdout).not.toContain("hunter2");
+    expect(stdout.trimEnd().replace(/ = ".*"$/gm, "")).toBe(STOPS.join("\n"));
+    expect(stdout).toContain('03. generic = "my password is hunter2"');
+    // --redact-input: no values, so neither the link nor the draft.
+    const strict = await runCli([
+      "tabs",
+      COMPOSER_PAGE,
+      "-q",
+      "--redact-input",
+    ]);
+    expect(strict.stdout.trimEnd()).toBe(STOPS.join("\n"));
+    expect(strict.stdout).not.toContain("token=abc123");
+    expect(strict.stdout).not.toContain("hunter2");
   });
 
   it("rejects --producer entirely — the axis is gone", async () => {

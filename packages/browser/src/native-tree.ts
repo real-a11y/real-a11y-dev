@@ -583,6 +583,13 @@ function winningNameSource(raw: RawAXNode): AXNameSource | undefined {
   );
 }
 
+/** Roles whose value is the page's own state, never something a user entered. */
+const PAGE_STATE_VALUE_ROLES: ReadonlySet<string> = new Set([
+  "progressbar",
+  "meter",
+  "scrollbar",
+]);
+
 /**
  * Strict mode's value roots: every field whose value it withholds. That is
  * every node Chromium reports a value for — a text field, a `<select>`, a
@@ -595,9 +602,26 @@ function winningNameSource(raw: RawAXNode): AXNameSource | undefined {
  * withhold every row and cell name in a table of empty inputs.
  */
 function strictValueRoots(rawNodes: RawAXNode[], index: RawIndex): Set<string> {
+  // What a user entered, not what the page reports: a progress bar, a meter
+  // and a scrollbar hold the page's own state, and a media element's timeline
+  // and volume are playback, not input. Counting them would withhold a
+  // `<video>`'s name for containing its scrubber.
+  const inMedia = (raw: RawAXNode): boolean => {
+    for (const cur of ancestry(raw, index.byId)) {
+      const role = cur.role?.value;
+      if (role === "Video" || role === "Audio") return true;
+    }
+    return false;
+  };
   const roots = new Set<string>();
   for (const raw of rawNodes) {
-    if (carriesValue(raw)) roots.add(raw.nodeId);
+    if (
+      carriesValue(raw) &&
+      !PAGE_STATE_VALUE_ROLES.has(raw.role?.value ?? "") &&
+      !inMedia(raw)
+    ) {
+      roots.add(raw.nodeId);
+    }
     if (!isEditable(raw)) continue;
     let root = raw;
     for (const cur of ancestry(raw, index.byId)) {
