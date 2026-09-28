@@ -81,7 +81,7 @@ Switching between **A11y** and **DOM** re-extracts the story via the channel; **
 
 The addon follows Storybook's manager/preview split:
 
-- **Preview** (`@real-a11y-dev/storybook-addon/preview`) runs inside the story iframe. Extraction is **lazy**: it only stands up a `DomObserver` (200ms debounce) after the manager emits `REQUEST_TREE` (panel open), and tears it down on `STOP_TREE` (panel hidden). While active it emits `TREE_UPDATED` over the Storybook channel whenever the story DOM changes **the extracted tree** — so animating or Controls-driven stories don't pay extract + `postMessage` cost while you're on another addon tab, and a mutation that extracts to an identical tree (an animation frame rewriting inline `style`, a change inside an `aria-hidden` subtree) costs no `postMessage` and no panel re-render at all.
+- **Preview** (`@real-a11y-dev/storybook-addon/preview`) runs inside the story iframe. Extraction is **lazy**: it only stands up a `DomObserver` (200ms debounce) after the manager emits `REQUEST_TREE` (panel open), and tears it down on `STOP_TREE` (panel hidden). While active it re-extracts on every debounced DOM mutation, but emits `TREE_UPDATED` over the Storybook channel **only when that extraction differs from the last one it published** — so a mutation that extracts to an identical tree (an animation frame rewriting inline `style`, a change inside an `aria-hidden` subtree) costs no `postMessage` and no panel re-render at all. And because the observer only exists while the panel is open, animating or Controls-driven stories pay no extract and no `postMessage` cost at all while you're on another addon tab.
 
 - **Manager** (`@real-a11y-dev/storybook-addon/manager`) runs in the Storybook UI shell (React). It mounts only when the Semantic Navigator tab is active, subscribes to `TREE_UPDATED` events, deserializes the tree (the `[id, node][]` array back into a `Map`), re-applies the user's expand/collapse via `preserveExpandedState` (so a Controls tweak or animation does not snap open every row), and renders the interactive `TreePanel` from `@real-a11y-dev/semantic-navigator-ui` inside a shadow root.
 
@@ -161,8 +161,10 @@ last one it published (`mode` included, `extractedAt` excluded) and stays quiet
 when they are byte-identical. So it fires on **changes to the extracted tree**,
 not on every mutation — do not use it as a DOM-mutation heartbeat, and do not
 expect a fresh `extractedAt` while a story is animating without semantic effect.
-The first publish after the panel opens, after a story renders, and after a mode
-change is always sent.
+The first publish after the panel opens and after a story renders is always
+sent, as is one whose `mode` differs from the last published — re-selecting the
+mode the panel is already in changes nothing and stays quiet like any other
+no-op.
 
 It is not a general mutation filter, though. `class` is a key attribute and
 lands in `dom.attributes`, so a class toggle always publishes; and node ids are
