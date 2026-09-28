@@ -490,6 +490,9 @@ main
     emphasis "sequence"
     code "tabindex"
     code "rootSelector"
+  paragraph "A rich-text editor counts the way Chromium counts it. Each region is one stop, named by its label and never by what was typed into it. A link inside the editor is not a stop, because Chromium can't focus it, unless it sits in a island such as a mention chip."
+    code "contenteditable"
+    code "contenteditable="false""
   paragraph "An agent calls this to check keyboard operability of a form or menu."
   heading "list_elements" (level 3)
     code "list_elements"

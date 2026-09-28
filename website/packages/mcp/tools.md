@@ -241,6 +241,8 @@ Parameters:
 
 **Built from the in-page DOM walk — the only source there is, not a fallback.** Chromium's accessibility tree knows whether a node is *focusable*, but not the *sequence*: `tabindex` never reaches a native node, and ordering by it is DOM/layout work the AX tree doesn't expose. Because this one runs in the page, a selector means something here — which is why it keeps `rootSelector`.
 
+A rich-text editor counts the way Chromium counts it. Each `contenteditable` region is one stop, named by its label and never by what was typed into it. A link inside the editor is not a stop, because Chromium can't focus it, unless it sits in a `contenteditable="false"` island such as a mention chip.
+
 An agent calls this to check keyboard operability of a form or menu.
 
 ### `list_elements`

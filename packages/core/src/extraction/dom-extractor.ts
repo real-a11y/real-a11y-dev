@@ -4,6 +4,7 @@ import { getNodeId } from "../utils/id-generator.js";
 import { realmSingleton } from "../utils/realm-singleton.js";
 
 import { safeTextContent } from "./clobber-safe.js";
+import { isEditable, isEditingHost } from "./editing.js";
 import {
   deepQuerySelectorAll,
   flatChildNodes,
@@ -132,8 +133,11 @@ function getActions(
   const actions: ActionType[] = [];
   const role = element.getAttribute("role");
 
-  // Links
-  if (tag === "a" && element.hasAttribute("href")) {
+  // Links — live ones. A link inside editable content is not: Chromium
+  // won't follow it, not even on a scripted click(), or focus it, so it has
+  // no action to offer. (One that is itself an editing host gets focus/type
+  // below.)
+  if (tag === "a" && element.hasAttribute("href") && !isEditable(element)) {
     actions.push("click", "navigate");
   }
   // Buttons (native + input type=button/submit/reset/image)
@@ -204,9 +208,7 @@ function getActions(
     // is already handled by the tag === "input" branch above. (aria-autocomplete
     // describes autocomplete *behavior*, not editability — a non-editable div
     // can't be typed into regardless, so it isn't the signal here.)
-    const ce = element.getAttribute("contenteditable");
-    const editable = ce === "" || ce === "true" || ce === "plaintext-only";
-    if (editable) {
+    if (isEditingHost(element)) {
       // Treat like a textbox so the panel opens its inline input. Deliberately
       // NOT "click": click outranks type in getPrimaryAction, so a co-present
       // click would re-hijack the primary action and re-break text entry.
@@ -252,6 +254,17 @@ function getActions(
     // Spinbuttons (date pickers, custom number steppers) accept both
     // typed values and arrow-key stepping. Surface both.
     actions.push("focus", "type", "increment", "decrement");
+  }
+
+  // An editing host is a text field whatever its role: Chromium focuses it
+  // and takes typing, and the dispatcher's `type` writes into it. The role
+  // branches above cover a textbox, a searchbox and an editable combobox;
+  // this catches the role-less `<div contenteditable>` composer, which
+  // otherwise read as inert and folded out of the a11y view — and so out of
+  // every tab sequence built on it. It precedes the tabindex catch-all,
+  // whose `click` would outrank `type` in getPrimaryAction.
+  if (actions.length === 0 && isEditingHost(element)) {
+    actions.push("focus", "type");
   }
 
   if (
@@ -658,8 +671,14 @@ const AUTHOR_NAMED_ROLES = new Set<string>([
  * An authored role outranks the tag: `<button role="combobox">Apple</button>`
  * (the Radix Select trigger) is a combobox, named by its author only, and
  * Chromium leaves it unnamed — its text is the selected VALUE.
+ *
+ * An editing host outranks both: what is typed into an editor is its content,
+ * never its label. Chromium names one only by `aria-label`,
+ * `aria-labelledby` or `title` — a `<button contenteditable>` or an editable
+ * `<h3>` is unnamed there, whatever it holds.
  */
 export function isNameFromContentHost(element: Element): boolean {
+  if (isEditingHost(element)) return false;
   const explicitRole = getExplicitRole(element);
   if (explicitRole && AUTHOR_NAMED_ROLES.has(explicitRole)) return false;
   if (NAMES_FROM_CONTENT_TAGS.has(element.tagName.toLowerCase())) return true;
@@ -803,7 +822,16 @@ function getAccessibleTextContent(
       // padded with spaces so adjacent text doesn't glue; the final
       // whitespace normalization collapses any doubles.
       if (NAMED_WIDGET_ROLES.has(role)) {
-        text += ` ${computeAccessibleName(childEl, visited, styleCache)} `;
+        // An editing host takes no name from its own content, but Chromium
+        // still reads that text into an ancestor's name:
+        // `<h2>Before <button contenteditable>Save</button></h2>` is
+        // heading "Before Save".
+        const name =
+          computeAccessibleName(childEl, visited, styleCache) ||
+          (isEditingHost(childEl)
+            ? getAccessibleTextContent(childEl, visited, styleCache)
+            : "");
+        text += ` ${name} `;
         continue;
       }
       if (NAME_BARRIER_ROLES.has(role) && !isImplicitDetailsGroup(childEl)) {
@@ -1020,8 +1048,9 @@ function computeRawAccessibleName(
   //    header "named" and so kept in the a11y view, where the native producer
   //    drops it as bare. The role is resolved only when there is text to give.
   //    Nor for an editing host: its text is what the user typed — its VALUE
-  //    (ADR-0001), which never doubles as its name. Chromium leaves a
-  //    role-less contenteditable unnamed too.
+  //    (ADR-0001), which never doubles as its name. Chromium leaves an
+  //    editing host of any role unnamed by its content (see
+  //    isNameFromContentHost, which gates step 8 the same way).
   const directText = getDirectTextContent(element);
   if (
     directText &&
@@ -1396,15 +1425,6 @@ const VALUELESS_INPUT_TYPES: ReadonlySet<string> = new Set([
 /** The cap an announced value is cut to, with `…` — the same as text previews. */
 const VALUE_MAX = DESCENDANT_TEXT_MAX;
 
-/** True for the root of a contenteditable region (not an element inside one). */
-function isEditingHost(element: Element): boolean {
-  const editable = element.getAttribute("contenteditable");
-  if (editable === null || editable.trim().toLowerCase() === "false") {
-    return false;
-  }
-  return !enclosingEditable(element);
-}
-
 /** A `<select>`'s selected options by label — what a screen reader says. */
 function selectedLabels(select: HTMLSelectElement): string {
   return Array.from(select.options)
@@ -1426,13 +1446,14 @@ function wrapsTextControl(element: Element): boolean {
   );
 }
 
-/** The editable region `element` sits inside, if any (itself excluded). */
-function enclosingEditable(element: Element): Element | null {
-  return (
-    element.parentElement?.closest(
-      '[contenteditable]:not([contenteditable="false"])',
-    ) ?? null
-  );
+/**
+ * True when `element` sits inside editable content (itself excluded), by the
+ * same rule as {@link isEditingHost}: a `contenteditable="false"` island ends
+ * the region, so an editor reopened inside one is a field of its own.
+ */
+function insideEditable(element: Element): boolean {
+  const parent = element.parentElement;
+  return !!parent && isEditable(parent);
 }
 
 /**
@@ -1507,7 +1528,7 @@ function readFieldValue(
   // control's value anyway.
   const editingHost = isEditingHost(element);
   if (TEXT_VALUE_ROLES.has(role) || editingHost) {
-    if (enclosingEditable(element)) return undefined;
+    if (insideEditable(element)) return undefined;
     if (!editingHost && wrapsTextControl(element)) return undefined;
     return getFieldText(element, styleCache);
   }
@@ -2215,7 +2236,7 @@ function buildNode(
               (element as HTMLInputElement).type || "text",
             )) ||
           tag === "textarea" ||
-          element.getAttribute("contenteditable") === "true",
+          isEditingHost(element),
       },
       ui: {
         expanded: depth < 2,

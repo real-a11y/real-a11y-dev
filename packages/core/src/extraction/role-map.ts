@@ -6,7 +6,7 @@
 
 import { safeHidden } from "./clobber-safe.js";
 import { flatParent } from "./flat-tree.js";
-import { isFocusBarred, isFocusable } from "./focusability.js";
+import { isFocusable } from "./focusability.js";
 
 type RoleResolver = string | ((el: Element) => string);
 
@@ -265,24 +265,6 @@ const ROLE_MAP: Record<string, RoleResolver> = {
 };
 
 /**
- * Focusability, for presentational conflict resolution: whether a
- * `role="none"` may take the element's role away.
- *
- * The same answer as the `interaction.isFocusable` facet, plus one stop the
- * facet does not count yet: an editing host. Counting a disabled control, an
- * `<input type="hidden">` or an `<a>` without `href` would resurrect exactly
- * the decorative markup this resolution exists to keep flattened.
- */
-function isFocusableForConflictResolution(element: Element): boolean {
-  if (isFocusable(element)) return true;
-  // A contenteditable host is focusable without any tabindex. `""` is the
-  // valid shorthand for "true"; `"false"` opts back out. Chromium won't
-  // focus a disabled `<button contenteditable>` either, hence the bar.
-  const editable = element.getAttribute("contenteditable");
-  return (editable === "" || editable === "true") && !isFocusBarred(element);
-}
-
-/**
  * ARIA global states and properties, minus `aria-hidden`.
  *
  * `aria-hidden` is global, but it removes the element from the tree outright,
@@ -342,7 +324,7 @@ function hasMeaningfulAttribute(element: Element, attr: string): boolean {
  */
 function voidsPresentation(element: Element): boolean {
   return (
-    isFocusableForConflictResolution(element) ||
+    isFocusable(element) ||
     GLOBAL_ARIA_ATTRIBUTES.some((attr) => hasMeaningfulAttribute(element, attr))
   );
 }
@@ -362,7 +344,7 @@ function emptyAltIsNamed(element: Element): boolean {
     hasMeaningfulAttribute(element, "title") ||
     hasMeaningfulAttribute(element, "aria-label") ||
     hasMeaningfulAttribute(element, "aria-labelledby") ||
-    isFocusableForConflictResolution(element)
+    isFocusable(element)
   );
 }
 
