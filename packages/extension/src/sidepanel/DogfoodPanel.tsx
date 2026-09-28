@@ -59,11 +59,12 @@ export function formatDescription(n: NativeNode): string {
 }
 
 /**
- * Render a node's current value the way the DOM/A11Y tree view shows it —
+ * Render a node's announced value the way the A11Y tree view shows it —
  * `= "value"` right after the accessible name. Absent entirely for a node
- * with no value (not just an empty string): `pageReadValue` only sets
- * `n.value` for a non-empty, resolved field, so "no badge" already means
- * "nothing to show" without a separate check here.
+ * with no value (not just an empty string): `fieldFacets` only sets
+ * `n.value` for a non-empty value on an element `pageReadValue` classified,
+ * so "no badge" already means "nothing to show" without a separate check
+ * here.
  */
 export function formatValue(n: NativeNode): string {
   return n.value !== undefined ? ` = ${JSON.stringify(n.value)}` : "";

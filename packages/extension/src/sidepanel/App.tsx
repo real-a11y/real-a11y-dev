@@ -58,6 +58,7 @@ import type { ContentToPanel, PanelToContent } from "../types.js";
 
 import { buildExportMarkdown, ALL_VIEWS } from "./export.js";
 import type { ExportView } from "./export.js";
+import { announcedValueLabel, rawValueLabel } from "./field-value.js";
 import { FilteredList } from "./FilteredList.js";
 import { InputPanel } from "./InputPanel.js";
 import type { InputPanelState } from "./InputPanel.js";
@@ -1339,13 +1340,18 @@ export function App() {
       // ever be submitted — and blockEmptySubmit (below) closes the other
       // half: an unedited (still empty) submit must not blank the real
       // value either, since that's just as silent and just as destructive.
+      //
+      // Prefilled from `rawValue`, not `value`: `value` is what a screen
+      // reader announces, whitespace-collapsed and capped at 240 characters,
+      // so an unedited submit of it would flatten a textarea's line breaks
+      // or cut a long value short. `rawValue` is the field's text as it is.
       const isRedacted = node.value === NATIVE_REDACTED_VALUE;
       if (isTypableRole(node.role, node.states)) {
         setInputState({
           type: "text",
           nodeId: node.id,
           label: node.name || node.role,
-          value: isRedacted ? "" : (node.value ?? ""),
+          value: isRedacted ? "" : (node.rawValue ?? ""),
           placeholder: node.placeholder,
           source: "native",
           // Mask the retyped replacement the same way InputPanel already
@@ -1562,6 +1568,11 @@ export function App() {
 
       // A scoped subtree serializes at its absolute depth; de-indent so the
       // scope root sits at column 0 in the report.
+      //
+      // Field values stay OUT of the report (the serializers' `values`
+      // option, off by default), although the tree on screen shows them: a
+      // report gets pasted into issues and PRs, and ADR-0001 leaves values
+      // out of anything posted unless asked.
       const scopeNode = scopedRootId ? nodes.get(scopedRootId) : null;
       const scopeDepth = scopeNode?.depth ?? 0;
       const treeStr =
@@ -2250,6 +2261,14 @@ export function App() {
                             {node.dom.tagName}
                             {">"}
                           </span>
+                          {/* The raw DOM value — a select's `value`, not
+                              its label. A sensitive field's is already
+                              `[redacted]`. */}
+                          {node.dom.attributes.value !== undefined && (
+                            <span class="sn-field-value">
+                              {rawValueLabel(node.dom.attributes.value)}
+                            </span>
+                          )}
                           {node.dom.textContent && (
                             <span class="sn-text-content">
                               {node.dom.textContent}
@@ -2280,10 +2299,13 @@ export function App() {
                               role=presentation spans flattened, `<svg>`
                               with descendant `<text>`, decorative
                               wrappers, etc. Mirrors the shared TreeNode
-                              in @real-a11y-dev/semantic-navigator-ui. */}
+                              in @real-a11y-dev/semantic-navigator-ui.
+                              Skipped when it IS the value shown below —
+                              an editor's text would print twice. */}
                           {node.childIds.length === 0 &&
                             node.dom.descendantText !== "" &&
-                            node.dom.descendantText !== node.a11y.name && (
+                            node.dom.descendantText !== node.a11y.name &&
+                            node.dom.descendantText !== node.a11y.value && (
                               <span class="sn-name-preview">
                                 {node.dom.descendantText}
                               </span>
@@ -2299,25 +2321,16 @@ export function App() {
                                 : node.a11y.description}
                             </span>
                           )}
-                          {/* Current value for editable fields */}
-                          {node.interaction.isEditable &&
-                            (() => {
-                              const val = node.dom.attributes.value;
-                              const inputType =
-                                node.dom.attributes.type || "text";
-                              if (val) {
-                                const display =
-                                  inputType === "password"
-                                    ? "\u2022".repeat(val.length)
-                                    : val;
-                                return (
-                                  <span class="sn-field-value">
-                                    = "{display}"
-                                  </span>
-                                );
-                              }
-                              return null;
-                            })()}
+                          {/* The value a screen reader announces
+                              (ADR-0001) \u2014 on any node that has one, not only
+                              editable fields: a select's option label, a
+                              slider's valuetext, an editor's text. A
+                              sensitive field's is already `[redacted]`. */}
+                          {node.a11y.value !== undefined && (
+                            <span class="sn-field-value">
+                              {announcedValueLabel(node.a11y.value)}
+                            </span>
+                          )}
                           {/* State badges: disabled, checked, required, expanded, etc. */}
                           {(() => {
                             const states = node.a11y.states;

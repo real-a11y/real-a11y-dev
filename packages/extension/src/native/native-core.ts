@@ -23,15 +23,22 @@
  * behaviour.
  *
  * Redaction discipline (R1) matches the browser side: a value typed into a
- * field never crosses back out — the in-page function returns only a structural
- * marker, and errors are content-free. Names come from `normalizeNativeAX` as
- * they are: it never promotes a node's value into its name, so what a user
- * typed into an editor stays out of it here exactly as in `browser`. Don't add
- * a second strip here; a rule both transports need belongs in core.
+ * field never crosses back out of an action — the in-page action functions
+ * return only a structural marker, and errors are content-free. Names come
+ * from `normalizeNativeAX` as they are: it never promotes a node's value into
+ * its name, so what a user typed into an editor stays out of it here exactly
+ * as in `browser`. Don't add a second strip here; a rule both transports need
+ * belongs in core.
+ *
+ * Field VALUES follow ADR-0001: a node's value is what a screen reader
+ * announces — Chromium's own AX value — and a sensitive field's is withheld.
+ * Sensitivity is classified in-page by `pageReadValue` before any value is
+ * used, and a node it could not classify shows none (see `fieldFacets`).
  */
 
 import {
   normalizeNativeAX,
+  REDACTED_VALUE,
   serializeNativeAX,
   type A11yInfo,
   type NativeAXNode,
@@ -46,15 +53,11 @@ import {
  * never offers this literal text back to the user as something to submit,
  * which would silently overwrite their real value with the word itself.
  *
- * NOT referenced by `pageReadValue` below, even though that's conceptually
- * where this sentinel is produced: that function is serialized via
- * `String(fn)` for `Runtime.callFunctionOn` and must stay fully
- * self-contained (no imports, no module-scope references — see its own
- * docs), so it keeps its own inline `"[redacted]"` literal there instead.
- * This constant is what everywhere ELSE that needs the sentinel imports,
- * including this file's own (non-serialized) `readNativeTree`, which is
- * where `pageReadValue`'s `redacted` flag actually becomes this value on a
- * node — so there is exactly one second copy of the literal, not a third.
+ * Core's own marker, so both producers write the same one (ADR-0001). NOT
+ * referenced by `pageReadValue` below, which is serialized via `String(fn)`
+ * for `Runtime.callFunctionOn` and must stay fully self-contained: it
+ * returns a `redacted` flag instead, and this file's (non-serialized)
+ * `fieldFacets` is where that flag becomes this value on a node.
  *
  * Importing this one constant does not pull `pageReadValue`'s (or any other
  * in-page action's) source text into a consumer's bundle — confirmed by
@@ -64,7 +67,7 @@ import {
  * appear. Each is its own top-level binding, and esbuild's tree-shaking
  * proves the unreferenced ones dead independently of this one being kept.
  */
-export const NATIVE_REDACTED_VALUE = "[redacted]";
+export const NATIVE_REDACTED_VALUE = REDACTED_VALUE;
 
 /**
  * The full CDP `Accessibility.AXNode` shape, a superset of core's structural
@@ -113,17 +116,16 @@ const STATE_PROPS = new Set([
 /**
  * AX property names that map to descriptive `a11y.properties` (strings).
  *
- * R1: `valuenow` / `valuetext` stay EXCLUDED here, matching `browser` — this
- * is Chromium's own CDP payload, and it cannot be trusted to have already
- * redacted a sensitive field: it masks passwords but not, e.g. a `cc-number`
- * field on a plain `type="text"` input (the exact caveat `browser`'s own R1
- * header documents). `pageReadValue` below is where field values are
- * surfaced instead, precisely because it classifies sensitivity itself,
- * in-page, against the live element — the RFC's own requirement for when
- * values are "genuinely needed": "capture MUST classify sensitivity
- * in-page." Piping these two CDP properties through untouched would bypass
- * that classification entirely. `valuemin` / `valuemax` are authored bounds,
- * not user data, so they stay.
+ * R1: `valuenow` / `valuetext` stay EXCLUDED here — this is Chromium's own
+ * CDP payload, and it cannot be trusted to have already redacted a sensitive
+ * field: it masks passwords but not, e.g. a `cc-number` field on a plain
+ * `type="text"` input (the exact caveat `browser`'s own R1 header
+ * documents). A node's value reaches it only as `value`, through
+ * `fieldFacets`, and only once `pageReadValue` has classified the element
+ * in-page — the RFC's own requirement for when values are "genuinely
+ * needed": "capture MUST classify sensitivity in-page." Piping these two
+ * properties through untouched would bypass that classification entirely.
+ * `valuemin` / `valuemax` are authored bounds, not user data, so they stay.
  */
 const DETAIL_PROPS = new Set([
   "level",
@@ -197,11 +199,12 @@ function axFacets(
  * from role since the AX tree carries no tag name. Matches
  * `core/src/extraction/role-map.ts`'s own input-type → role table
  * (`textbox`, `searchbox`, `spinbutton`, `slider`) plus `<select>`'s
- * single/multiple split (`combobox`/`listbox`). A node with one of these
- * roles but a non-native backing element (e.g. a custom `role="textbox"`
- * contenteditable div) resolves to "no value" from `pageReadValue`'s own tag
- * check — same as DOM producer's own badge, which likewise only reads
- * `.value` for these three tags.
+ * single/multiple split (`combobox`/`listbox`).
+ *
+ * These are read in-page even while EMPTY, which Chromium reports with no AX
+ * value at all: an empty field still has a placeholder to show and a raw
+ * value (none) to prefill a retype with. Every other node is read only when
+ * Chromium reports a value for it — an editor, a progress bar, a colour well.
  */
 const VALUE_BEARING_ROLES = new Set([
   "textbox",
@@ -212,12 +215,57 @@ const VALUE_BEARING_ROLES = new Set([
   "slider",
 ]);
 
+/**
+ * Roles announced by position in a range: a screen reader reads their
+ * `aria-valuetext` in place of the number. Chromium's CDP payload never
+ * carries `aria-valuetext` (its `valuetext` property is the number as text —
+ * measured on Chromium 151), so `pageReadValue` reads the attribute in-page.
+ * Mirrors core's `RANGE_VALUE_ROLES` (`dom-extractor.ts`).
+ */
+const RANGE_VALUE_ROLES = new Set([
+  "slider",
+  "spinbutton",
+  "progressbar",
+  "meter",
+  "scrollbar",
+]);
+
+/** Roles whose checked/pressed STATE is what's announced — never a value.
+ *  Mirrors core's `STATE_ONLY_ROLES` (`dom-extractor.ts`). */
+const STATE_ONLY_ROLES = new Set([
+  "checkbox",
+  "radio",
+  "switch",
+  "menuitemcheckbox",
+  "menuitemradio",
+]);
+
+/** The cap an announced value is cut to, with `…` — ADR-0001's 240
+ *  characters, the same cap core's DOM producer applies
+ *  (`getAnnouncedValue`). */
+const VALUE_MAX = 240;
+
 /** A normalized native node with the states/properties/description
- *  enrichment attached, plus a redacted field value where `pageReadValue`
- *  found one. */
+ *  enrichment attached, plus the field facets `fieldFacets` resolves. */
 export type EnrichedNativeNode = NativeAXNode &
   Pick<A11yInfo, "states" | "properties" | "description"> & {
+    /**
+     * What a screen reader announces for this node (ADR-0001) — Chromium's
+     * own AX value (a `<select>`'s selected option LABEL, an editor's text),
+     * or a range widget's `aria-valuetext` — whitespace-collapsed and capped
+     * at 240 characters. A sensitive field that holds anything reads
+     * {@link NATIVE_REDACTED_VALUE}. Absent when there is none, and whenever
+     * `pageReadValue` could not classify the element.
+     */
     value?: string;
+    /**
+     * The raw live DOM value of a non-sensitive `<input>`/`<textarea>`/
+     * `<select>` (`"es"` where `value` is `"Spain"`), uncollapsed and
+     * uncapped — what a retype starts from, so an unedited submit writes
+     * back exactly what was there. Never shown in the tree, and never set
+     * for a sensitive field.
+     */
+    rawValue?: string;
     /** The field's static placeholder hint (`<input>`/`<textarea>` only) —
      *  page-authored text, not user input, so unlike `value` it is never
      *  redacted. Present only for a value-bearing role that actually has
@@ -319,6 +367,112 @@ export function rootIdOf(nodes: EnrichedNativeNode[]): string {
   return rootId;
 }
 
+/**
+ * What `pageReadValue` reports for one element, from inside the page.
+ *
+ * `classified` is the load-bearing bit: it is set on every answer the
+ * function actually gives, so a read that never happened (the node did not
+ * resolve, the call threw) comes back without it — and an unclassified node
+ * shows no value at all, Chromium's included (see {@link fieldFacets}).
+ */
+export interface PageFieldRead {
+  /** The element answered, so `sensitive` below is a real verdict. */
+  classified?: boolean;
+  /** A sensitive field under ADR-0001's policy (`type="password"`, or a
+   *  credential or payment `autocomplete` token) — neither its value nor
+   *  Chromium's value for it ever leaves the page's classification. */
+  sensitive?: boolean;
+  /** A sensitive field that holds something: it reads `[redacted]`, so an
+   *  agent can tell "entered" from "empty" — never what, or how long. */
+  redacted?: boolean;
+  /** The raw live `.value` of a non-sensitive `<input>`/`<textarea>`/
+   *  `<select>`. Absent when empty. */
+  value?: string;
+  /** The field's placeholder hint — page-authored, never redacted. */
+  placeholder?: string;
+  /** The element's `aria-valuetext` — page-authored, and what a screen
+   *  reader reads for a range widget in place of its number. */
+  valuetext?: string;
+}
+
+/** Chromium's AX value for a node, when it reports a usable one. A `0` is a
+ *  value; an empty or whitespace-only string is none. */
+function announcedAXValue(
+  raw: RawAXNode | undefined,
+): string | number | undefined {
+  const value = raw?.value?.value;
+  if (typeof value === "number")
+    return Number.isFinite(value) ? value : undefined;
+  if (typeof value === "string") return cleanText(value) ? value : undefined;
+  return undefined;
+}
+
+/**
+ * A numeric AX value as the author wrote it. Chromium keeps range values as
+ * 32-bit floats, so `aria-valuenow="0.6"` arrives as `0.6000000238418579`;
+ * the shortest decimal that is the same float32 is the `0.6` a screen reader
+ * says. Nine significant digits always round-trip a float32.
+ */
+function formatAXNumber(n: number): string {
+  if (Number.isInteger(n)) return String(n);
+  const single = Math.fround(n);
+  for (let digits = 1; digits <= 9; digits++) {
+    const candidate = Number(n.toPrecision(digits));
+    if (Math.fround(candidate) === single) return String(candidate);
+  }
+  return String(n);
+}
+
+/**
+ * Resolve a node's field facets from Chromium's AX value and the in-page
+ * classification (ADR-0001):
+ *
+ *  - **Unclassified** → nothing. Chromium's payload is not redacted for us —
+ *    it masks a password but sends a `cc-number` text field in plaintext — so
+ *    with no in-page verdict there is no way to know its value is showable.
+ *  - **Sensitive** → `[redacted]` when the field holds anything, else no
+ *    value — never Chromium's value, which for a password is one bullet per
+ *    character: its length.
+ *  - **Otherwise** → the announced value: a range widget's `aria-valuetext`,
+ *    else Chromium's AX value (a `<select>`'s selected option label, a text
+ *    field's or editor's text, a number), whitespace-collapsed and capped at
+ *    240 characters with `…`. The raw field value rides along separately as
+ *    `rawValue`, for a retype to start from.
+ *
+ * Pure, and exported for its tests.
+ */
+export function fieldFacets(
+  role: string,
+  axValue: string | number | undefined,
+  read: PageFieldRead,
+): Pick<EnrichedNativeNode, "value" | "rawValue" | "placeholder"> {
+  if (!read.classified) return {};
+  const facets: Pick<EnrichedNativeNode, "value" | "rawValue" | "placeholder"> =
+    {};
+  if (read.placeholder) facets.placeholder = read.placeholder;
+  if (read.sensitive) {
+    if (read.redacted) facets.value = NATIVE_REDACTED_VALUE;
+    return facets;
+  }
+  if (read.value) facets.rawValue = read.value;
+
+  const valuetext = RANGE_VALUE_ROLES.has(role)
+    ? cleanText(read.valuetext ?? "")
+    : "";
+  const announced =
+    valuetext ||
+    (typeof axValue === "number"
+      ? formatAXNumber(axValue)
+      : cleanText(axValue ?? ""));
+  if (announced) {
+    facets.value =
+      announced.length > VALUE_MAX
+        ? announced.slice(0, VALUE_MAX - 1) + "…"
+        : announced;
+  }
+  return facets;
+}
+
 /** Read + normalize the whole native AX tree over any CDP transport. */
 export async function readNativeTree(
   transport: CdpTransport,
@@ -342,22 +496,20 @@ export async function readNativeTree(
     return { ...node, states, properties, description };
   });
 
-  // Field-value read-back (see `pageReadValue`) — resolved only for candidate
-  // roles, concurrently, so a form-heavy page costs one round of parallel CDP
-  // calls rather than N sequential ones stacked onto the tree read.
+  // Field values (see `fieldFacets`) — each candidate classified in-page by
+  // `pageReadValue` before its AX value is used, concurrently, so a
+  // form-heavy page costs one round of parallel CDP calls rather than N
+  // sequential ones stacked onto the tree read.
   await transport.send("DOM.enable");
   await Promise.all(
     enriched.map(async (node) => {
-      if (!VALUE_BEARING_ROLES.has(node.role)) return;
+      if (STATE_ONLY_ROLES.has(node.role)) return;
+      const axValue = announcedAXValue(rawById.get(node.id));
+      if (axValue === undefined && !VALUE_BEARING_ROLES.has(node.role)) return;
       const backendNodeId = backendNodeIdFrom(node.id);
       if (backendNodeId === null) return;
-      const { value, redacted, placeholder } = await readFieldValue(
-        transport,
-        backendNodeId,
-      );
-      if (redacted) node.value = NATIVE_REDACTED_VALUE;
-      else if (value) node.value = value;
-      if (placeholder) node.placeholder = placeholder;
+      const read = await readFieldValue(transport, backendNodeId);
+      Object.assign(node, fieldFacets(node.role, axValue, read));
     }),
   );
 
@@ -619,7 +771,7 @@ export function pageType(this: Element, text: string): Marker {
 }
 
 /**
- * Read-back for the dogfood panel's field-value display.
+ * In-page sensitivity classification for the native tree's field values.
  *
  * The native tree originally withheld every field's current value outright —
  * no read path existed, `valuenow`/`valuetext` excluded from `axFacets`
@@ -642,11 +794,25 @@ export function pageType(this: Element, text: string): Marker {
  * comment above), so classification happens here, against the live element,
  * before anything crosses back out.
  *
- * Matches `getKeyAttributes`'s own behaviour exactly, not just its intent: an
- * empty field gets no value at all (not even a redacted marker), and only
- * `input`/`textarea`/`select` are read — a custom `role="textbox"`
- * contenteditable widget is out of scope here the same way it's out of scope
- * there.
+ * Since ADR-0001 the value SHOWN is not this function's raw read but what a
+ * screen reader announces — Chromium's AX value, so a `<select>` reads its
+ * option label ("Spain"), not its `value` ("es"). This function is the gate
+ * in front of that: `fieldFacets` uses a node's AX value only once this has
+ * classified the element as not sensitive. So it answers for EVERY element,
+ * not just form fields — `{ classified: true }` for a contenteditable editor
+ * or an ARIA widget, which the policy never counts as sensitive (it covers
+ * only `input`/`textarea`/`select`, as core's `isSensitiveFieldAttributes`
+ * does) — and it classifies an EMPTY sensitive field too, so a value Chromium
+ * reported a moment earlier can never stand in for it. The raw `.value` it
+ * still returns for a non-sensitive field is for a retype's prefill, never
+ * for display.
+ *
+ * The sensitive-token list below is a copy of core's exported
+ * `SENSITIVE_AUTOCOMPLETE_TOKENS`, because nothing outside this body survives
+ * the trip into the page. A parity test reads the list back out of this
+ * function's source text — exactly what `Runtime.callFunctionOn` receives —
+ * and fails if it and core's drift apart in either direction. Keep it one
+ * array literal under this name.
  *
  * Reads `value`/`type` via each class's OWN property descriptor
  * (`Object.getOwnPropertyDescriptor(...).get.call(el)`) rather than
@@ -667,13 +833,17 @@ export function pageType(this: Element, text: string): Marker {
  * all. This closes the easy case relative to that baseline; it does not
  * claim to be adversarially bulletproof, and shouldn't be read as such.
  */
-export function pageReadValue(this: Element): {
-  value?: string;
-  redacted?: boolean;
-  placeholder?: string;
-} {
+export function pageReadValue(this: Element): PageFieldRead {
   const el = this;
-  if (!el) return {};
+  // Not an element: nothing to classify, so the caller shows nothing.
+  if (!el || !(el instanceof Element)) return {};
+
+  // `aria-valuetext` is page-authored — what a screen reader reads for a range
+  // widget in place of its number — and Chromium's CDP payload never carries
+  // it, so it is read here, for any element, through the same pinned
+  // `getAttribute` as `autocomplete` below.
+  const valuetext = Element.prototype.getAttribute.call(el, "aria-valuetext");
+  const authored = valuetext ? { valuetext } : {};
 
   let value: string;
   let type: string | undefined;
@@ -715,15 +885,17 @@ export function pageReadValue(this: Element): {
       "value",
     )!.get!.call(el) as string;
   } else {
-    return {};
+    // Not a form field, so never sensitive: its value is whatever Chromium
+    // announces for it (an editor's text, a custom slider's number).
+    return { classified: true, ...authored };
   }
-  const placeholderResult = placeholder ? { placeholder } : {};
+  const answered = {
+    classified: true,
+    ...authored,
+    ...(placeholder ? { placeholder } : {}),
+  };
 
-  if (!value) return placeholderResult;
-
-  if (type === "password") {
-    return { redacted: true, ...placeholderResult };
-  }
+  let sensitive = type === "password";
   const SENSITIVE_AUTOCOMPLETE_TOKENS = [
     "current-password",
     "new-password",
@@ -735,15 +907,23 @@ export function pageReadValue(this: Element): {
     "cc-exp-year",
   ];
   const autocomplete = Element.prototype.getAttribute.call(el, "autocomplete");
-  if (autocomplete) {
+  if (!sensitive && autocomplete) {
     for (const token of autocomplete.toLowerCase().split(/\s+/)) {
       if (SENSITIVE_AUTOCOMPLETE_TOKENS.indexOf(token) !== -1) {
-        return { redacted: true, ...placeholderResult };
+        sensitive = true;
+        break;
       }
     }
   }
 
-  return { value, ...placeholderResult };
+  // Classified whether or not it holds anything: an empty sensitive field
+  // still says so, so no AX value read before it was cleared can show.
+  if (sensitive) {
+    return value
+      ? { ...answered, sensitive: true, redacted: true }
+      : { ...answered, sensitive: true };
+  }
+  return value ? { ...answered, value } : answered;
 }
 
 /**
@@ -910,23 +1090,22 @@ async function runInPage(
   return res.result?.value;
 }
 
-/** The in-page source for the field-value read-back — same calling
+/** The in-page source for the field classification — same calling
  *  convention as `IN_PAGE_ACTION_SOURCE` above, but not itself a
  *  `NativeAction`: it runs during the tree walk, not on user dispatch. */
-const IN_PAGE_READ_VALUE_SOURCE = String(pageReadValue);
+export const IN_PAGE_READ_VALUE_SOURCE = String(pageReadValue);
 
 /**
- * Resolve one node's backing element to its live field value, redacted per
- * `pageReadValue`. Returns `{}` for anything that doesn't resolve — a failed
- * resolve during a read-only enrichment pass has nothing useful to do with a
- * per-node failure, so it degrades to "no value" rather than surfacing an
- * error for what is, for most nodes, an expected miss (most roles aren't
- * value-bearing at all).
+ * Resolve one node's backing element and classify it in-page per
+ * `pageReadValue`. Returns `{}` — unclassified, so no value is shown — for
+ * anything that doesn't resolve: a failed resolve during a read-only
+ * enrichment pass has nothing useful to do with a per-node failure, so it
+ * degrades to "no value" rather than surfacing an error.
  */
 async function readFieldValue(
   transport: CdpTransport,
   backendNodeId: number,
-): Promise<{ value?: string; redacted?: boolean; placeholder?: string }> {
+): Promise<PageFieldRead> {
   try {
     const resolved = await transport.send<{ object?: { objectId?: string } }>(
       "DOM.resolveNode",
@@ -935,9 +1114,7 @@ async function readFieldValue(
     const objectId = resolved.object?.objectId;
     if (!objectId) return {};
     const res = await transport.send<{
-      result?: {
-        value?: { value?: string; redacted?: boolean; placeholder?: string };
-      };
+      result?: { value?: PageFieldRead };
     }>("Runtime.callFunctionOn", {
       objectId,
       functionDeclaration: IN_PAGE_READ_VALUE_SOURCE,

@@ -282,6 +282,17 @@ what a person actually ran into holding the tree next to a page.
   `VALUE_BEARING_ROLES`; `packages/extension/src/sidepanel/DogfoodPanel.tsx`,
   `formatValue`.)
 
+  **Since ADR-0001** the value shown is no longer `pageReadValue`'s raw read
+  but what a screen reader announces: Chromium's AX value, so a `<select>`
+  reads its option label ("Spain") rather than its `value` ("es"), a custom
+  slider its `aria-valuetext` (read in-page, since CDP never carries it), and
+  an editor its text. `pageReadValue` became the gate in front of that value:
+  it classifies every candidate element, empty sensitive fields included, and
+  a node it never classified shows nothing, Chromium's value included. Its raw
+  read survives only as the retype prefill (`rawValue`). Its copy of the
+  sensitive-token list is pinned to core's `SENSITIVE_AUTOCOMPLETE_TOKENS` by
+  a parity test. (`fieldFacets`, `pageReadValue` in `native-core.ts`.)
+
 - **A collapsed accordion trigger showed no state at all on the native
   tree** — `button "Personal Information"` with nothing to say it was
   collapsed, where the DOM/A11Y tree view (right panel) showed an explicit

@@ -59,6 +59,7 @@ import {
 } from "../native/native-actions.js";
 import { searchNativeTree } from "../native/native-search.js";
 
+import { announcedValueLabel } from "./field-value.js";
 import {
   describeStates,
   FilteredListView,
@@ -615,10 +616,11 @@ export function NativeTreeView({
                             : node.description}
                         </span>
                       )}
+                      {/* What a screen reader announces (ADR-0001) — a
+                          select's option label, not its raw `value`. */}
                       {node.value !== undefined && (
                         <span class="sn-field-value">
-                          {"= "}
-                          {JSON.stringify(node.value)}
+                          {announcedValueLabel(node.value)}
                         </span>
                       )}
                       {node.value === undefined && node.placeholder && (

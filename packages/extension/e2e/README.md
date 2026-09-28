@@ -96,6 +96,12 @@ sidesteps the question entirely.
   a query, and the `/`-focuses-search shortcut. `native-search.test.ts` (in
   `src/native/`) covers the matching logic itself at the unit level; this
   file is only for what a unit test can't see — the actual toolbar wiring.
+- `field-values.test.ts` — ADR-0001's field values in both producers and both
+  views: a `<select>` reads its announced label (`= "Spain"`) in the A11y view
+  and its raw value (`value="es"`) in the DOM view, a password and a
+  `cc-number` field read `[redacted]` everywhere, and a native retype starts
+  from the raw value, not the capped announced one. Unlike the pattern files it
+  asserts on what the panel shows, because that is the behaviour.
 
 ## Coverage
 

@@ -216,10 +216,12 @@ export function registerNativeMode(): void {
               // `valuenow`/`valuetext`, the two AX properties that would
               // carry a value-bearing control's current input straight from
               // Chromium's own (incompletely-redacted) CDP payload — `value`
-              // is a SEPARATE field, populated by `pageReadValue`'s own
-              // in-page sensitivity classification (R1: password fields and
-              // sensitive autocomplete tokens arrive as "[redacted]", never
-              // the live text), not a bypass of that exclusion. `description`
+              // is a SEPARATE field: the announced value (ADR-0001), used
+              // only once `pageReadValue` has classified the element in-page
+              // (password fields and sensitive autocomplete tokens arrive as
+              // "[redacted]", never the live text), not a bypass of that
+              // exclusion. `rawValue` is the same classified read's raw
+              // field value, for a retype's prefill. `description`
               // is Chromium's own `aria-describedby`/`aria-description`
               // resolution — page-authored help/error text, not user input,
               // so it carries no R1 concern (same distinction `browser`'s own
@@ -236,6 +238,7 @@ export function registerNativeMode(): void {
                 states: n.states,
                 properties: n.properties,
                 value: n.value,
+                rawValue: n.rawValue,
                 placeholder: n.placeholder,
                 description: n.description,
               })),

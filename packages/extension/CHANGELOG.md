@@ -62,6 +62,19 @@
   to.
   ([#423](https://github.com/real-a11y/real-a11y-dev/pull/423))
 
+- The A11y view now shows a field's value the way a screen reader announces
+  it, and the DOM view shows the raw DOM value. A `<select>` set to "Spain"
+  (`value="es"`) showed no value at all and now reads
+  `combobox "Country" = "Spain"` in the A11y view and `<select> value="es"` in
+  the DOM view. Values now show on every field that has one, not only text
+  fields: a slider shows its `aria-valuetext`, and a progress bar or a
+  rich-text editor shows its value. A password, one-time-code or card field
+  reads `[redacted]` in both views; the A11y view used to show it as a row of
+  bullets. The copied Markdown report still leaves values out. In NATIVE mode,
+  a `<select>` shows its option label instead of its `value`, a custom slider
+  shows its `aria-valuetext`, and a rich-text editor shows its text.
+  (ADR-0001)
+
 - In DOM mode, the Tab Sequence view, its copied export and the keyboard bar's
   Tab now stop at a rich-text editor and skip the links inside it. They used to
   do the reverse: a `contenteditable` message box was left out, and a link typed

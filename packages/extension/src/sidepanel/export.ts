@@ -2,8 +2,9 @@
  * Assemble a shareable Markdown report of the tree currently shown in the
  * panel. The serialized strings are produced panel-side from the panel's own
  * (merged, scoped) snapshot via `@real-a11y-dev/serialize` — so the export is
- * exactly what's on screen and never depends on the content script. This
- * module is pure string assembly: no Chrome / DOM dependencies.
+ * the tree on screen, less its field values (ADR-0001 keeps those out of
+ * anything posted), and never depends on the content script. This module is
+ * pure string assembly: no Chrome / DOM dependencies.
  */
 
 /** The serialized views, computed from the panel's current tree. */

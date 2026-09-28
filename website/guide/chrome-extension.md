@@ -98,6 +98,15 @@ Click the extension icon in your Chrome toolbar. The side panel opens next to th
 **2. See the semantic structure**
 The page renders as an interactive tree — DOM view (raw HTML elements) or A11y view (roles, accessible names, states). This is what assistive technology perceives.
 
+A form field shows its value in both views. The A11y view shows the value a screen reader announces, and the DOM view shows the raw DOM value. For a `<select>` whose chosen option is "Spain" with `value="es"`:
+
+```
+A11y view:  combobox "Country" = "Spain"
+DOM view:   <select> value="es"
+```
+
+A slider shows its `aria-valuetext` in the A11y view, and a rich-text editor shows its text. A password, one-time-code or card field shows `[redacted]` in both views, never its contents or length. The **Copy** report leaves values out.
+
 **3. Navigate your product**
 Click links, fill forms, submit, expand menus, complete flows. You're using the real product — just through its structure instead of its visual layer.
 

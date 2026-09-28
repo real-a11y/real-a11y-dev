@@ -70,15 +70,18 @@ test("a native range input steps via stepUp/stepDown and fires input", async ({
   await expect(page.locator("#rgb-red")).toHaveValue("128");
 });
 
-/** A native input's live value is read back (round 9), where the custom
- *  widget's is not — `pageReadValue` only reads input/textarea/select, exactly
- *  as the DOM producer's own badge does. */
-test("value read-back follows the backing element, not the role", async ({
+/** A slider's value is what a screen reader announces (ADR-0001): the custom
+ *  widget's `aria-valuetext`, the native input's number. Before ADR-0001 only
+ *  the native input's was read back — `pageReadValue` read `.value` off
+ *  input/textarea/select alone, so the custom widget showed nothing. Its
+ *  `aria-valuetext` is read in-page, since Chromium's CDP payload never
+ *  carries it. */
+test("a slider reads what a screen reader announces: valuetext, else its number", async ({
   nav,
 }) => {
   const { tabId } = await nav.open("slider-single.html");
   const tree = await nav.readNodes(tabId);
 
   expect(node(tree, "slider", "Red").value).toBe("128");
-  expect(node(tree, "slider", "Temperature").value).toBeUndefined();
+  expect(node(tree, "slider", "Temperature").value).toBe("68 degrees");
 });
