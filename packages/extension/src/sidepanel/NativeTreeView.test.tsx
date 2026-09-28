@@ -103,7 +103,8 @@ describe("NativeTreeView role filter", () => {
     expect(container.querySelector(".sn-list-count")?.textContent).toBe(
       "3 items",
     );
-    // Native has no page highlight, so no "Move to" that would do nothing.
+    // Mounted without `onSelectionFocus`, so there is no page follow and no
+    // "Move to" that would do nothing.
     const buttons = [...container.querySelectorAll(".sn-list-action-btn")].map(
       (b) => b.textContent,
     );
@@ -430,5 +431,101 @@ describe("NativeTreeView selection-focus follow", () => {
         vi.advanceTimersByTime(500);
       });
     }).not.toThrow();
+  });
+
+  describe("in the role-filter list", () => {
+    function pill(label: string): HTMLButtonElement {
+      const btn = [
+        ...container.querySelectorAll<HTMLButtonElement>(".sn-filter-btn"),
+      ].find((b) => b.textContent === label);
+      if (!btn) throw new Error(`no ${label} pill`);
+      return btn;
+    }
+
+    function option(label: string): HTMLElement {
+      const el = [
+        ...container.querySelectorAll<HTMLElement>('[role="option"]'),
+      ].find((o) => o.textContent?.includes(label));
+      if (!el) throw new Error(`no option ${label}`);
+      return el;
+    }
+
+    function listbox(): HTMLElement {
+      return container.querySelector<HTMLElement>('[role="listbox"]')!;
+    }
+
+    it("follows a clicked list item onto the page, after the same debounce", () => {
+      // Regression (user report on PR #412): the follow only watched the
+      // tree's own `selectedId`, and the flat list keeps its selection to
+      // itself, so a filter being on silently turned the page indicator off.
+      const onSelectionFocus = mountWithFocusFollow();
+      act(() => pill("Headings").click());
+      act(() => option("Deep").click());
+
+      expect(onSelectionFocus).not.toHaveBeenCalled();
+      act(() => {
+        vi.advanceTimersByTime(150);
+      });
+      expect(onSelectionFocus).toHaveBeenCalledExactlyOnceWith("h3");
+    });
+
+    it("follows the item arrow keys settle on, not every one they pass", () => {
+      const onSelectionFocus = mountWithFocusFollow();
+      act(() => pill("Headings").click());
+      act(() => {
+        listbox().dispatchEvent(
+          new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+        );
+      });
+      act(() => {
+        listbox().dispatchEvent(
+          new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+        );
+      });
+      act(() => {
+        vi.advanceTimersByTime(150);
+      });
+      expect(onSelectionFocus).toHaveBeenCalledExactlyOnceWith("h-foot");
+    });
+
+    it("offers Move to, which re-follows the selected item", () => {
+      const onSelectionFocus = mountWithFocusFollow();
+      act(() => pill("Headings").click());
+      act(() => option("Overview").click());
+      act(() => {
+        vi.advanceTimersByTime(150);
+      });
+
+      const moveTo = [
+        ...container.querySelectorAll<HTMLButtonElement>(".sn-list-action-btn"),
+      ].find((b) => b.textContent === "Move to");
+      expect(moveTo).toBeDefined();
+      act(() => moveTo!.click());
+      act(() => {
+        vi.advanceTimersByTime(150);
+      });
+      expect(onSelectionFocus).toHaveBeenCalledTimes(2);
+      expect(onSelectionFocus).toHaveBeenLastCalledWith("h1");
+    });
+
+    it("does not follow anything just for turning a filter on", () => {
+      const onSelectionFocus = mountWithFocusFollow();
+      act(() => pill("Headings").click());
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      expect(onSelectionFocus).not.toHaveBeenCalled();
+    });
+
+    it("drops a pending list follow on unmount", () => {
+      const onSelectionFocus = mountWithFocusFollow();
+      act(() => pill("Headings").click());
+      act(() => option("Deep").click());
+      act(() => render(null, container));
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      expect(onSelectionFocus).not.toHaveBeenCalled();
+    });
   });
 });
