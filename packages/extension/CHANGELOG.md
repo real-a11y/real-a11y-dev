@@ -25,7 +25,10 @@
   `Quote` had no `disabled` badge, although Chromium and a screen reader
   treat it as disabled. Only focusable elements take the state from a
   container, so a paragraph or heading inside one stays as it was, and a
-  disabled `<fieldset>` still passes it to its form controls only.
+  disabled `<fieldset>` still passes it to its form controls only. A page
+  whose `<form>` has a field named `parentElement` or `assignedSlot` no
+  longer hangs the DOM-mode tree when the form holds a `<header>` or
+  `<footer>`.
 
 - In DOM mode, a control disabled by its `<fieldset>` now shows as disabled in
   the tree and in the Buttons and Forms lists, as NATIVE mode already

@@ -42,6 +42,44 @@ const shadowRootGetter = elementProto
 const hiddenGetter = htmlElementProto
   ? Object.getOwnPropertyDescriptor(htmlElementProto, "hidden")?.get
   : undefined;
+const parentElementGetter = nodeProto
+  ? Object.getOwnPropertyDescriptor(nodeProto, "parentElement")?.get
+  : undefined;
+const parentNodeGetter = nodeProto
+  ? Object.getOwnPropertyDescriptor(nodeProto, "parentNode")?.get
+  : undefined;
+const assignedSlotGetter = elementProto
+  ? Object.getOwnPropertyDescriptor(elementProto, "assignedSlot")?.get
+  : undefined;
+
+/**
+ * Clobber-immune `element.parentElement`, `.parentNode` and `.assignedSlot`.
+ *
+ * A walk UP the tree is where clobbering does the most harm: `<input
+ * name="parentElement">` makes a form's parent read as its own child, and
+ * `<input name="assignedSlot">` makes it read as a slot whose parent is the
+ * form again. Either way a loop over ancestors cycles forever and hangs the
+ * page, rather than throwing.
+ */
+export function safeParentElement(node: Node): Element | null {
+  return parentElementGetter
+    ? (parentElementGetter.call(node) as Element | null)
+    : node.parentElement;
+}
+
+/** Clobber-immune `node.parentNode`. See `safeParentElement`. */
+export function safeParentNode(node: Node): ParentNode | null {
+  return parentNodeGetter
+    ? (parentNodeGetter.call(node) as ParentNode | null)
+    : node.parentNode;
+}
+
+/** Clobber-immune `element.assignedSlot`. See `safeParentElement`. */
+export function safeAssignedSlot(element: Element): HTMLSlotElement | null {
+  return assignedSlotGetter
+    ? (assignedSlotGetter.call(element) as HTMLSlotElement | null)
+    : element.assignedSlot;
+}
 
 /** Clobber-immune `element.children` (always an array of the real children). */
 export function safeChildren(element: Element): Element[] {
