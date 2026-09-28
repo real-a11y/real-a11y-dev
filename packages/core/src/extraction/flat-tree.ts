@@ -18,6 +18,7 @@
  * a `<details>`' (see {@link isClosedDetails}).
  */
 
+import { isAriaHiddenValue } from "./aria-tokens.js";
 import {
   safeAssignedSlot,
   safeChildNodes,
@@ -66,7 +67,7 @@ function slotHidesItsAssignment(slot: HTMLSlotElement): boolean {
   if (
     safeHidden(slot) ||
     slot.hasAttribute("inert") ||
-    slot.getAttribute("aria-hidden") === "true"
+    isAriaHiddenValue(slot.getAttribute("aria-hidden"))
   ) {
     return true;
   }

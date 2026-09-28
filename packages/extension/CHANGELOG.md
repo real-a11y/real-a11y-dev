@@ -18,6 +18,18 @@
 
 ## Unreleased
 
+- In DOM mode, ARIA state values now read the way Chromium, and NATIVE mode,
+  read them. `aria-disabled="TRUE"`, `aria-pressed="MIXED"` and
+  `aria-checked="yes"` had no `disabled`, `mixed` or `checked` badge because
+  only the exact lowercase `"true"` counted, and `aria-current="False"`
+  showed a `current: False` badge. Now `false` in any case is off, an empty
+  value or `undefined` leaves the state unset, `mixed` is mixed where the role
+  has it, `aria-current` tokens like `PAGE` read as `page`, and any other
+  value is on. Content under `aria-hidden="TRUE"` or `aria-hidden="yes"`
+  leaves the tree and the names around it, as `aria-hidden="true"` content
+  always did. An `<optgroup>` never shows as disabled, as in Chromium.
+  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR))
+
 - In DOM mode, the body of a closed `<details>` no longer shows in the tree,
   the Tab Sequence view, its copied export or the keyboard bar's Tab. Chromium
   renders a closed disclosure as its summary alone and never tabs into the

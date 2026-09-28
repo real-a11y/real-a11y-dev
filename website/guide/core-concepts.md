@@ -24,6 +24,10 @@ interface SemanticNode {
     value?: string;              // what a screen reader announces for a field ("Spain", not "es");
                                  // "[redacted]" for a filled password / card / one-time-code field
     states: Record<string, string | boolean>; // checked, expanded, selected, pressed…
+                                              // each true/false, "mixed" (checked, pressed)
+                                              // or an aria-current token ("page"…), read as
+                                              // Chromium reads it: aria-disabled="TRUE" is
+                                              // true, aria-disabled="" leaves it unset
     properties: Record<string, string>;       // aria-* properties (incl. heading "level")
     isExposedToAT: boolean;      // false when aria-hidden, role="presentation", etc.
   };

@@ -4,6 +4,7 @@
  * and HTML Accessibility API Mappings (https://w3c.github.io/html-aam/).
  */
 
+import { isAriaHiddenValue } from "./aria-tokens.js";
 import { safeHidden } from "./clobber-safe.js";
 import { flatParent } from "./flat-tree.js";
 import { isFocusable } from "./focusability.js";
@@ -415,8 +416,9 @@ export function isHiddenFromAT(
   const tag = element.tagName.toLowerCase();
   if (HIDDEN_FROM_AT.has(tag)) return true;
 
-  // aria-hidden="true" hides element AND entire subtree from AT
-  if (element.getAttribute("aria-hidden") === "true") return true;
+  // aria-hidden hides the element AND its entire subtree from AT, for every
+  // value Chromium reads as true: "TRUE" and "yes" as well as "true".
+  if (isAriaHiddenValue(element.getAttribute("aria-hidden"))) return true;
 
   // role=presentation/none are NOT hidden — they map to the "presentation"
   // role in getImplicitRole and the a11y extractor flattens them (the

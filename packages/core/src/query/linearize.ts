@@ -1,3 +1,4 @@
+import { isAriaHiddenValue } from "../extraction/aria-tokens.js";
 import type { SemanticNode } from "../types.js";
 
 import { nodesOf, rootIdOf, type QueryInput } from "./types.js";
@@ -48,7 +49,7 @@ export function linearize(
     // DOM view keeps the subtree. Inherit it, so a node inside one is never
     // "exposed" here. (The a11y view already pruned these subtrees.)
     const ariaHidden =
-      underAriaHidden || node.dom?.attributes["aria-hidden"] === "true";
+      underAriaHidden || isAriaHiddenValue(node.dom?.attributes["aria-hidden"]);
     // Anything AT reaches is kept, including sr-only content: `dom.isHidden`
     // alone means "not visible", and skipping on it dropped e.g. GitHub's
     // visually hidden "Navigation Menu" heading from outlines, snapshots and

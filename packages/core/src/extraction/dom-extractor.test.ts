@@ -2699,6 +2699,14 @@ describe("a11y.value — what a screen reader announces (ADR-0001)", () => {
         "[role=combobox]",
       ),
     ).toBe("Apple");
+    // Checked against Chromium 151, which skips any aria-hidden value but
+    // `false`, empty or `undefined`, in any case.
+    expect(
+      valueOf(
+        `<div role="combobox" aria-label="Fruit" tabindex="0">Apple<span aria-hidden="TRUE">▾</span><span aria-hidden="yes">(3)</span><span aria-hidden="FALSE">!</span></div>`,
+        "[role=combobox]",
+      ),
+    ).toBe("Apple!");
     expect(
       valueOf(
         `<div role="combobox" aria-label="Fruit" tabindex="0">Apple<ul role="listbox"><li role="option">Apple</li><li role="option">Pear</li></ul></div>`,
