@@ -21,7 +21,7 @@
  */
 
 /** Bump on any table/rule change that alters normalized output. */
-export const NATIVE_AX_VOCABULARY_VERSION = 6;
+export const NATIVE_AX_VOCABULARY_VERSION = 7;
 
 /**
  * Chromium AX roles that are structural noise relative to this engine's
@@ -186,12 +186,17 @@ export const NATIVE_AX_OWN_TEXT_ROLES: ReadonlySet<string> = new Set([
  * tab…) are not here: Chromium names those from their content itself, and
  * leaves one empty only when that content is hidden or absent.
  *
- * `scrollbar` is here for the same reason as the fields: its text is fallback
- * for its value, never its name. Chromium reports a value for every scrollbar,
- * which already keeps that text out (see `carriesValue` in the normalizer).
- * Listing the role keeps it out when a payload has no value too, as
- * `@real-a11y-dev/browser`'s own strip did before the rule moved here. The DOM
- * producer lists it for the same reason.
+ * The range widgets — `progressbar`, `meter`, `scrollbar`, `separator` — are
+ * here for the same reason as the fields: ARIA names them from the author
+ * only, and the text inside one is fallback for its value, never its name.
+ * Chromium 151 reports a value for every `meter` and `scrollbar` and for a
+ * focusable `separator`, which already keeps their text out (see
+ * `carriesValue` in the normalizer). An indeterminate
+ * `<div role="progressbar">Loading files</div>` and a static
+ * `<div role="separator">Or</div>` carry none, so this table is what keeps
+ * "Loading files" and "Or" from reading as their names. No audit rule reads
+ * these names, so listing them moves no finding. The DOM producer lists all
+ * four for the same reason.
  *
  * Also not here: author-named roles that no rule reads the name of, and whose
  * text is their content — alert, status, group, article, list, tree. They
@@ -224,6 +229,9 @@ export const NATIVE_AX_AUTHOR_NAMED_ROLES: ReadonlySet<string> = new Set([
   "slider",
   "spinbutton",
   "textbox",
-  // A value-bearing widget whose text is fallback.
+  // Range widgets: their text is fallback for a value.
+  "meter",
+  "progressbar",
   "scrollbar",
+  "separator",
 ]);

@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import authorNamedFixture from "./__fixtures__/ax-author-named-leaves.json";
 import fixture from "./__fixtures__/ax-media-form.json";
 import mixedTextFixture from "./__fixtures__/ax-mixed-text.json";
+import rangeWidgetsFixture from "./__fixtures__/ax-range-widgets.json";
 import valueCarryingFixture from "./__fixtures__/ax-value-carrying.json";
 import {
   normalizeNativeAX,
@@ -386,7 +387,10 @@ const AUTHOR_NAMED_LEAF_ROLES = [
   "slider",
   "spinbutton",
   "textbox",
+  "meter",
+  "progressbar",
   "scrollbar",
+  "separator",
 ];
 
 describe("author-named leaves", () => {
@@ -633,6 +637,57 @@ describe("normalizeNativeAX (recorded value-carrying nodes)", () => {
 
   it("keeps what was typed out of every name", () => {
     for (const node of nodes) expect(node.name).not.toContain("typed");
+  });
+});
+
+// Recorded from Chromium 151 on this page (trimmed like the fixture above):
+//
+//   <main>
+//   <div role="progressbar">Loading files</div>
+//   <div role="progressbar"><span>Loading deep</span></div>
+//   <div role="progressbar" aria-valuenow="30">thirty</div>
+//   <progress>Loading native</progress>
+//   <div role="meter">meter text</div>
+//   <meter>no value</meter>
+//   <div role="separator">Or</div>
+//   <div role="separator" tabindex="0">Resize</div>
+//   <hr>
+//   <div role="separator" aria-label="Section break">labelled</div>
+//   <div role="progressbar" aria-label="Upload">labelled</div>
+//   <div role="status">Saved</div>
+//   </main>
+//
+// Chromium reports a value for every meter and for the focusable separator,
+// but none for an indeterminate progress bar or a static separator. Those two
+// are what the author-named table alone keeps unnamed.
+describe("normalizeNativeAX (recorded range widgets)", () => {
+  const nodes = normalizeNativeAX(
+    rangeWidgetsFixture.nodes as RawNativeAXNode[],
+  );
+
+  it("never names a range widget from its fallback text, value or not", () => {
+    expect(serializeNativeAX(nodes)).toBe(
+      [
+        "main",
+        // No value: named "Loading files" / "Loading deep" before the table
+        // listed progressbar.
+        "  progressbar",
+        "  progressbar",
+        "  progressbar",
+        "  progressbar",
+        "  meter",
+        "  meter",
+        // No value: named "Or" before the table listed separator.
+        "  separator",
+        "  separator",
+        "  separator",
+        // An authored name is Chromium's own, and stays.
+        '  separator "Section break"',
+        '  progressbar "Upload"',
+        // A live region is not a range widget: it keeps its text.
+        '  status "Saved"',
+      ].join("\n"),
+    );
   });
 });
 
