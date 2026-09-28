@@ -1454,13 +1454,14 @@ function wrapsTextControl(element: Element): boolean {
   );
 }
 
-/** The editable region `element` sits inside, if any (itself excluded). */
-function enclosingEditable(element: Element): Element | null {
-  return (
-    element.parentElement?.closest(
-      '[contenteditable]:not([contenteditable="false"])',
-    ) ?? null
-  );
+/**
+ * True when `element` sits inside editable content (itself excluded), by the
+ * same rule as {@link isEditingHost}: a `contenteditable="false"` island ends
+ * the region, so an editor reopened inside one is a field of its own.
+ */
+function insideEditable(element: Element): boolean {
+  const parent = element.parentElement;
+  return !!parent && isEditable(parent);
 }
 
 /**
@@ -1535,7 +1536,7 @@ function readFieldValue(
   // control's value anyway.
   const editingHost = isEditingHost(element);
   if (TEXT_VALUE_ROLES.has(role) || editingHost) {
-    if (enclosingEditable(element)) return undefined;
+    if (insideEditable(element)) return undefined;
     if (!editingHost && wrapsTextControl(element)) return undefined;
     return getFieldText(element, styleCache);
   }

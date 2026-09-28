@@ -2619,6 +2619,20 @@ describe("contenteditable editing hosts", () => {
     expect(nodeBy(root, "cb").interaction?.actions).toEqual(["focus", "type"]);
   });
 
+  // A contenteditable="false" island ends the outer editor, so an editor
+  // reopened inside one is its own field with its own value, as in Chromium
+  // 151 (`textbox "Re"` value "island text").
+  it("gives an editor reopened inside an island its own value", () => {
+    const root = createPage(`
+      <div contenteditable="true" role="textbox" aria-label="Outer">intro
+        <span contenteditable="false">chip
+          <span id="re" contenteditable="true" role="textbox" aria-label="Re">island text</span>
+        </span>
+      </div>
+    `);
+    expect(nodeBy(root, "re").a11y.value).toBe("island text");
+  });
+
   it("still lends a host's text to a name that references it", () => {
     const root = createPage(`
       <span id="src" contenteditable="true">Draft</span>
