@@ -24,6 +24,7 @@
   had no `disabled` badge, although Chromium and a screen reader treat it as
   disabled. A control in the fieldset's first `<legend>` stays enabled, as
   HTML defines it.
+  ([#425](https://github.com/real-a11y/real-a11y-dev/pull/425))
 
 - In DOM mode, the Tab Sequence view, its copied export and the keyboard bar's
   Tab now stop where Chromium stops. They used to stop at an `<a>` with no
