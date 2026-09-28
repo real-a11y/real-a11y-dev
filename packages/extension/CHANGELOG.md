@@ -26,6 +26,13 @@
   to.
   ([#423](https://github.com/real-a11y/real-a11y-dev/pull/423))
 
+- In NATIVE mode, an indeterminate progress bar and a static separator no
+  longer show their text as their name. `<div role="progressbar">Loading
+  files</div>` read `progressbar "Loading files"` and `<div
+  role="separator">Or</div>` read `separator "Or"`; both now read bare, as
+  Chromium names them. One labelled with `aria-label` keeps its label.
+  ([#424](https://github.com/real-a11y/real-a11y-dev/pull/424))
+
 - In NATIVE mode, a rich-text editor no longer shows what was typed into it as
   its name. A `<div role="application" contenteditable>` read
   `application "<everything typed>"`, and so did a `role="document"` or
