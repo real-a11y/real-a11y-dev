@@ -66,6 +66,7 @@ import {
   FilteredListView,
   type FilteredListItem,
 } from "./FilteredList.js";
+import { isInScope, ScopeBar, scopeKeyAction, scopePath } from "./ScopeBar.js";
 
 const ROLE_FILTER_KEYS = Object.keys(ROLE_FILTER_LABELS) as Array<
   Exclude<RoleFilter, null>
@@ -110,6 +111,17 @@ export interface NativeTreeViewProps {
    * doesn't care about page-side effects can omit it.
    */
   onSelectionFocus?: (nodeId: string) => void;
+  /**
+   * The subtree the tree is scoped to, or null for the whole tree. Held by
+   * App.tsx (Copy exports the same subtree) and changed through `onScope`:
+   * double-click on a row with children that has no action of its own,
+   * `Ctrl`/`Cmd`+`Enter` on any row with children, and the breadcrumb bar.
+   * An id this tree doesn't have is treated as no scope.
+   */
+  scopedRootId?: string | null;
+  onScope?: (id: string | null) => void;
+  /** A pick is armed: Escape belongs to cancelling it, not to leaving scope. */
+  pickArmed?: boolean;
 }
 
 /** A node is worth a click/Enter action, a select action, or both never — the
@@ -155,6 +167,9 @@ export function NativeTreeView({
   onActivate,
   reveal,
   onSelectionFocus,
+  scopedRootId = null,
+  onScope,
+  pickArmed = false,
 }: NativeTreeViewProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -194,6 +209,41 @@ export function NativeTreeView({
 
   const parentOf = useMemo(() => nativeParentIndex(nodes), [nodes]);
 
+  // A scope this view has just left, until App's prop catches up. Leaving
+  // and selecting happen together (a pick or a list's go-to-tree outside the
+  // scope), and this view can re-render with its new selection before App
+  // re-renders it with the cleared scope. For that one render the selection
+  // sits outside the still-scoped rows, and the selection effect below
+  // drops it as gone. Applying the exit here as well keeps both changes in
+  // the same render.
+  const [leftScope, setLeftScope] = useState<string | null>(null);
+
+  // The scope in effect: App's id, if this tree has it. The tree walks from
+  // it and indents relative to it, the same as the DOM tree's
+  // `effectiveRootId`/`scopedDepthOffset`.
+  const scopeRoot =
+    scopedRootId !== null &&
+    scopedRootId !== leftScope &&
+    nodes.has(scopedRootId)
+      ? scopedRootId
+      : null;
+  const walkRoot = scopeRoot ?? rootId;
+  const depthOffset = scopeRoot ? (nodes.get(scopeRoot)?.depth ?? 0) : 0;
+
+  // Scoping into a row also opens it, as DOM's `handleScopeToNode` does, so
+  // the new root never arrives collapsed to a single line.
+  const scopeTo = useCallback(
+    (id: string | null) => {
+      if (!onScope) return;
+      if (id !== null) {
+        setExpanded((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
+      }
+      setLeftScope(id === null ? scopedRootId : null);
+      onScope(id);
+    },
+    [onScope, scopedRootId],
+  );
+
   // A pick result lands here from App.tsx's own message handler. Expand every
   // ancestor of the picked node (it may be nested under rows the user never
   // opened) and select it — clearing any active search/role filter first,
@@ -210,6 +260,11 @@ export function NativeTreeView({
       nodes.has(id),
     );
     if (nodeId === undefined) return;
+    // A pick can land anywhere on the page; one outside the scope would
+    // select a row the scoped tree never renders.
+    if (scopeRoot && !isInScope(nodeId, scopeRoot, (id) => parentOf.get(id))) {
+      scopeTo(null);
+    }
     setQuery("");
     setRoleFilter(null);
     setExpanded((prev) => {
@@ -295,9 +350,9 @@ export function NativeTreeView({
         children.forEach((childId, i) => walk(childId, i + 1, children.length));
       }
     }
-    if (rootId) walk(rootId, 1, 1);
+    if (walkRoot) walk(walkRoot, 1, 1);
     return { visibleIds: ids, visiblePositions: positions };
-  }, [nodes, rootId, expanded, hasFilter, search]);
+  }, [nodes, walkRoot, expanded, hasFilter, search]);
 
   const {
     containerRef,
@@ -413,6 +468,11 @@ export function NativeTreeView({
   // effect above scrolls it into view once the tree has rendered.
   const goToTree = useCallback(
     (id: string) => {
+      // The list shows matches from the whole page even while scoped, as the
+      // DOM producer's does, so its target can be outside the scope.
+      if (scopeRoot && !isInScope(id, scopeRoot, (p) => parentOf.get(p))) {
+        scopeTo(null);
+      }
       setRoleFilter(null);
       setExpanded((prev) => {
         const next = new Set(prev);
@@ -424,7 +484,7 @@ export function NativeTreeView({
         requestAnimationFrame(() => treeRef.current?.focus());
       });
     },
-    [parentOf],
+    [parentOf, scopeRoot, scopeTo],
   );
 
   const activateFromList = useCallback(
@@ -461,6 +521,24 @@ export function NativeTreeView({
       if (e.key === "/" && !e.ctrlKey && !e.altKey && !e.metaKey) {
         e.preventDefault();
         searchInputRef.current?.focus();
+        return;
+      }
+
+      const scopeKey = scopeKeyAction(e, {
+        scoped: scopeRoot !== null,
+        pickArmed,
+      });
+      if (scopeKey === "exit") {
+        e.preventDefault();
+        scopeTo(null);
+        return;
+      }
+      if (scopeKey === "scope") {
+        // Consumed even with nothing to scope into, so it never falls through
+        // to plain Enter and activates the row by surprise.
+        e.preventDefault();
+        const target = selectedId ? nodes.get(selectedId) : undefined;
+        if (target && (target.childIds?.length ?? 0) > 0) scopeTo(target.id);
         return;
       }
 
@@ -509,7 +587,9 @@ export function NativeTreeView({
           e.preventDefault();
           if (expanded.has(node.id) && (node.childIds?.length ?? 0) > 0) {
             toggle(node.id);
-          } else {
+          } else if (node.id !== scopeRoot) {
+            // Never above the scope root: its parent isn't rendered, and
+            // selecting it would drop the selection altogether.
             const parentId = parentOf.get(node.id);
             if (parentId) setSelectedId(parentId);
           }
@@ -574,6 +654,9 @@ export function NativeTreeView({
       toggle,
       onActivate,
       busy,
+      scopeRoot,
+      pickArmed,
+      scopeTo,
     ],
   );
 
@@ -650,6 +733,26 @@ export function NativeTreeView({
         </div>
       )}
 
+      {scopeRoot && (
+        <ScopeBar
+          path={scopePath(
+            scopeRoot,
+            (id) => parentOf.get(id),
+            (id) => {
+              const n = nodes.get(id);
+              return n ? `${n.role}${n.name ? ` "${n.name}"` : ""}` : undefined;
+            },
+          )}
+          rootId={rootId}
+          onScope={(id) => {
+            scopeTo(id);
+            // ✕ unmounts the button that had focus; hand it to the tree
+            // rather than dropping it on <body>.
+            if (id === null) treeRef.current?.focus();
+          }}
+        />
+      )}
+
       {roleFilter !== null ? (
         <FilteredListView
           items={listItems}
@@ -663,12 +766,16 @@ export function NativeTreeView({
         />
       ) : (
         <>
-          <div ref={containerRef} class="sn-tree-container" onScroll={onScroll}>
+          <div
+            ref={containerRef}
+            class={`sn-tree-container${scopeRoot ? " sn-tree-container--scoped" : ""}`}
+            onScroll={onScroll}
+          >
             <div
               ref={treeRef}
               class="sn-tree"
               role="tree"
-              aria-label="Native accessibility tree — press Enter to activate, +/- to step, arrows to navigate"
+              aria-label="Native accessibility tree — press Enter to activate, +/- to step, arrows to navigate, Ctrl+Enter to scope to a row"
               tabIndex={0}
               style={{
                 minHeight: totalHeight,
@@ -705,7 +812,7 @@ export function NativeTreeView({
                     role="treeitem"
                     aria-expanded={hasChildren ? expanded.has(id) : undefined}
                     aria-selected={isSelected}
-                    aria-level={node.depth + 1}
+                    aria-level={node.depth - depthOffset + 1}
                     aria-posinset={position?.posinset}
                     aria-setsize={position?.setsize}
                     data-node-id={id}
@@ -725,17 +832,23 @@ export function NativeTreeView({
                     }}
                     onDblClick={(e) => {
                       e.stopPropagation();
+                      // Same split as the DOM tree's row: a row with an
+                      // action runs it, a container scopes the view to itself
+                      // (expanding stays on the chevron and the arrow keys).
                       if (label) {
                         if (!busy) onActivate(node, selectAction);
                       } else if (hasChildren) {
-                        toggle(id);
+                        scopeTo(id);
                       }
                     }}
                   >
                     <span class="sn-indent">
-                      {Array.from({ length: node.depth }, (_, i) => (
-                        <span key={i} class="sn-indent-unit" />
-                      ))}
+                      {Array.from(
+                        { length: node.depth - depthOffset },
+                        (_, i) => (
+                          <span key={i} class="sn-indent-unit" />
+                        ),
+                      )}
                     </span>
 
                     <button
