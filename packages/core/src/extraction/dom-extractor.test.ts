@@ -1996,6 +1996,11 @@ describe("interaction.isFocusable follows Chromium", () => {
         <a id="link" href="/docs">Docs</a>
         <a id="empty-href" href="">Reload</a>
         <a id="tabindexed" tabindex="0">Card</a>
+        <svg>
+          <a id="svg-href" href="/a"><text>A</text></a>
+          <a id="svg-xlink" xlink:href="/b"><text>B</text></a>
+          <a id="svg-bare"><text>C</text></a>
+        </svg>
       `),
     ).toEqual({
       "fragment-target": false,
@@ -2003,6 +2008,10 @@ describe("interaction.isFocusable follows Chromium", () => {
       link: true,
       "empty-href": true,
       tabindexed: true,
+      // SVG 1.1's xlink:href still makes an SVG link, in Chromium too.
+      "svg-href": true,
+      "svg-xlink": true,
+      "svg-bare": false,
     });
   });
 

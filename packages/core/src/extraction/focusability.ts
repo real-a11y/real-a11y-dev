@@ -22,6 +22,9 @@
 /** Form controls that `disabled` removes from the focus order entirely. */
 const FORM_CONTROL_TAGS = new Set(["button", "input", "select", "textarea"]);
 
+/** The namespace of SVG 1.1's `xlink:href`, which SVG 2 replaced with `href`. */
+const XLINK_NS = "http://www.w3.org/1999/xlink";
+
 /** HTML's rules for parsing integers: ASCII whitespace, a sign, digits. */
 const HTML_INTEGER = /^[\t\n\f\r ]*([+-]?\d+)/;
 
@@ -90,7 +93,11 @@ export function isFocusable(element: Element): boolean {
 
   const tag = element.tagName.toLowerCase();
   // Without an href, `<a>` is a fragment target or a placeholder, not a link.
-  if (tag === "a") return element.hasAttribute("href");
+  // An SVG `<a>` may still carry the older `xlink:href`, which Chromium honors.
+  if (tag === "a")
+    return (
+      element.hasAttribute("href") || element.hasAttributeNS(XLINK_NS, "href")
+    );
   if (tag === "area")
     return element.hasAttribute("href") && isInUsedImageMap(element);
   if (FORM_CONTROL_TAGS.has(tag)) return true;
