@@ -147,6 +147,27 @@ function getDisplayRole(node: DomSemanticNode): string {
 }
 
 /**
+ * Whether a row may print the node's own text. Never a `<textarea>`'s, in
+ * either view: its text content is its markup DEFAULT, not what it holds now
+ * (the value line shows that), and for a sensitive field
+ * (`autocomplete="one-time-code"`) the default is the secret itself.
+ */
+function showsTextContent(node: DomSemanticNode): boolean {
+  return node.dom.tagName !== "textarea";
+}
+
+/**
+ * Whether the A11y view may print a leaf's text preview. Not for a node with
+ * an announced value (an editor, an ARIA textbox or combobox, a slider's
+ * fallback text): the value line already shows what a screen reader reads,
+ * and the two are computed differently (block spacing), so comparing them
+ * misses and an editor's text prints twice.
+ */
+function showsTextPreview(node: DomSemanticNode): boolean {
+  return node.a11y.value === undefined && showsTextContent(node);
+}
+
+/**
  * Narrow a chrome.runtime.sendMessage reply that reports `{ success: true }`.
  * The callback can receive `undefined` when chrome.runtime.lastError is set
  * (e.g. the MV3 service worker was torn down before responding) — never
@@ -1378,10 +1399,9 @@ export function App() {
     (nodeId: string, value: string) => {
       if (inputState?.source === "native") {
         setInputState(null);
-        // See InputPanelState.blockEmptySubmit's own doc — a redacted field
-        // opened empty; submitting it still-empty is "didn't type anything",
-        // not "clear the field", so it's a no-op rather than a dispatch.
-        if (inputState.blockEmptySubmit && value === "") return;
+        // An untouched empty submit never gets here: InputPanel cancels it
+        // when `blockEmptySubmit` is set (see its doc). An empty value that
+        // does arrive was typed and cleared on purpose — "empty this field".
         void dispatchNativeAction(nodeId, "type", value);
         return;
       }
@@ -2271,7 +2291,7 @@ export function App() {
                               {rawValueLabel(node.dom.attributes.value)}
                             </span>
                           )}
-                          {node.dom.textContent && (
+                          {node.dom.textContent && showsTextContent(node) && (
                             <span class="sn-text-content">
                               {node.dom.textContent}
                             </span>
@@ -2302,12 +2322,11 @@ export function App() {
                               with descendant `<text>`, decorative
                               wrappers, etc. Mirrors the shared TreeNode
                               in @real-a11y-dev/semantic-navigator-ui.
-                              Skipped when it IS the value shown below —
-                              an editor's text would print twice. */}
+                              Skipped for a field — see `showsTextPreview`. */}
                           {node.childIds.length === 0 &&
                             node.dom.descendantText !== "" &&
                             node.dom.descendantText !== node.a11y.name &&
-                            node.dom.descendantText !== node.a11y.value && (
+                            showsTextPreview(node) && (
                               <span class="sn-name-preview">
                                 {node.dom.descendantText}
                               </span>

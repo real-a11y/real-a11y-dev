@@ -70,7 +70,9 @@
   fields: a slider shows its `aria-valuetext`, and a progress bar or a
   rich-text editor shows its value. A password, one-time-code or card field
   reads `[redacted]` in both views; the A11y view used to show it as a row of
-  bullets. The copied Markdown report still leaves values out. In NATIVE mode,
+  bullets. A `<textarea>` no longer shows the text it was loaded with beside
+  its value; for a one-time-code field, that text was the code itself. The
+  copied Markdown report still leaves values out. In NATIVE mode,
   a `<select>` shows its option label instead of its `value`, a custom slider
   shows its `aria-valuetext`, and a rich-text editor shows its text.
   (ADR-0001) ([#431](https://github.com/real-a11y/real-a11y-dev/pull/431))

@@ -132,6 +132,23 @@ test("NATIVE panel: the tree shows the announced label, and a retype starts from
   await expect(bio).toContainText("…");
   await bio.getByTitle("Type (Enter)").click();
   await expect(nav.panel.locator(".sn-input-panel-field")).toHaveValue(full);
+  await nav.panel.locator(".sn-input-panel-field").press("Escape");
+
+  // An editor's retype opens empty (it has no raw value to start from). An
+  // untouched Enter must not wipe it; typing and then clearing must.
+  const field = nav.panel.locator(".sn-input-panel-field");
+  const message = nav.panel.getByRole("treeitem", { name: "Message" });
+  await message.getByTitle("Type (Enter)").click();
+  await expect(field).toHaveValue("");
+  await field.press("Enter");
+  await expect(field).toHaveCount(0);
+  await expect(page.locator("#editor")).toHaveText("Hello world");
+
+  await message.getByTitle("Type (Enter)").click();
+  await field.fill("x");
+  await field.fill("");
+  await field.press("Enter");
+  await expect(page.locator("#editor")).toHaveText("");
 });
 
 test("DOM mode: the A11y view shows the announced label, the DOM view the raw value", async ({

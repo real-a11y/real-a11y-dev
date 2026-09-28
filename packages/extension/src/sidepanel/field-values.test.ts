@@ -135,10 +135,46 @@ const FIELDS: FieldSpec[] = [
     text: "Hello world",
     isEditable: true,
   },
+  // `<p>one</p><p>two</p>`: the value reads a space across the blocks, the
+  // leaf preview does not — two strings for the same text.
+  {
+    id: "blocks",
+    role: "textbox",
+    name: "Note",
+    tagName: "div",
+    announced: "one two",
+    text: "onetwo",
+    isEditable: true,
+  },
 ];
 
-function treeData(): ContentToPanel {
-  const children = FIELDS.map(field);
+/** Their own tree: the panel renders a window of rows, and FIELDS fills it. */
+const TEXTAREAS: FieldSpec[] = [
+  // `<textarea autocomplete="one-time-code">123456</textarea>`: core's text
+  // content and preview carry the markup default — here, the secret.
+  {
+    id: "otp",
+    role: "textbox",
+    name: "Code",
+    tagName: "textarea",
+    announced: "[redacted]",
+    raw: "[redacted]",
+    text: "123456",
+    isEditable: true,
+  },
+  // The same field after the user cleared it: no value, same default text.
+  {
+    id: "otp-cleared",
+    role: "textbox",
+    name: "Backup code",
+    tagName: "textarea",
+    text: "654321",
+    isEditable: true,
+  },
+];
+
+function treeData(fields: FieldSpec[] = FIELDS): ContentToPanel {
+  const children = fields.map(field);
   const root: [string, SemanticNode] = [
     "root",
     {
@@ -254,6 +290,27 @@ describe("field values in the DOM producer's tree", () => {
     const row = container.querySelector('[data-node-id="editor"]')!;
     expect(shownValue("editor")).toBe('= "Hello world"');
     expect(row.textContent!.split("Hello world")).toHaveLength(2);
+  });
+
+  it("prints a block-formatted editor's text once, though value and preview differ in spacing", () => {
+    const row = container.querySelector('[data-node-id="blocks"]')!;
+    expect(shownValue("blocks")).toBe('= "one two"');
+    expect(row.textContent).not.toContain("onetwo");
+  });
+
+  it("never prints a textarea's markup default — for a sensitive one it is the secret", () => {
+    act(() => {
+      chromeMock.emit(treeData(TEXTAREAS));
+    });
+    const rowText = (id: string) =>
+      container.querySelector(`[data-node-id="${id}"]`)!.textContent;
+    expect(shownValue("otp")).toBe('= "[redacted]"');
+    expect(rowText("otp")).not.toContain("123456");
+    expect(rowText("otp-cleared")).not.toContain("654321");
+    showView("DOM");
+    expect(shownValue("otp")).toBe('value="[redacted]"');
+    expect(rowText("otp")).not.toContain("123456");
+    expect(rowText("otp-cleared")).not.toContain("654321");
   });
 
   it("shows nothing for an empty field in either view", () => {
