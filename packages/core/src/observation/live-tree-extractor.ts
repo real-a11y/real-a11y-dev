@@ -17,6 +17,7 @@ import {
 } from "../extraction/flat-tree.js";
 import type { ExtractionResult, SemanticNode, TreeChange } from "../types.js";
 import { getNodeId } from "../utils/id-generator.js";
+import { warnOutsideProduction } from "../utils/warn.js";
 
 export interface LiveTreeExtractorOptions {
   /** "a11y" (default) or "dom". */
@@ -156,7 +157,28 @@ export class LiveTreeExtractor {
     if (!change || change.full) {
       return this.extract();
     }
+    // A splice exists only to reach the tree a full extraction would, faster,
+    // so a splice that cannot finish falls back to that extraction rather than
+    // throwing. What makes one throw is the page: `<form>` has
+    // [LegacyOverrideBuiltIns], so `<input name="getAttribute">` (or `tagName`,
+    // `contains`, `matches`, …) shadows that member on the form, and the splice
+    // calls such members on every element and ancestor it reaches. The full
+    // walk survives the same form through its per-element boundary, and
+    // `extract()` rebuilds every piece of state the splice may have left half
+    // updated.
+    try {
+      return this.splice(change);
+    } catch (error) {
+      warnOutsideProduction(
+        "[real-a11y] An incremental refresh fell back to a full extraction:",
+        error,
+      );
+      return this.extract();
+    }
+  }
 
+  /** The incremental half of {@link refresh}. */
+  private splice(change: TreeChange): ExtractionResult {
     // Rebuild reference indexes from the live DOM so we can expand the dirty
     // region to cover accessibility dependencies (aria-labelledby, label[for]).
     this.rebuildIndexes();
