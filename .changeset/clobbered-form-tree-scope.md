@@ -22,7 +22,7 @@ Keep a `<form>` in the tree when one of its controls is named `getRootNode`. A f
 - **Named by `aria-labelledby`:** the form above and its `Pay` button were missing. They now extract as `form "Payment"` and `button "Pay"`.
 - **A description target:** a form that another field's `aria-describedby` points at was dropped the same way, even when it held a control. It is now kept, like any other target that holds a control.
 
-A finding's locator walks up from the element it names, too. It read a control named `parentElement` as the form's parent, and ran round the form and that control until its depth cap, giving a selector like `form > input > form > input > form > button` that matches nothing. It now follows the form's real ancestors: `#app > section > form > button`. A control named `children` also cost the path its `nth-of-type`, which it now keeps.
+A finding's locator walks up from the element it names, too. It read a control named `parentElement` as the form's parent, and ran round the form and that control until its depth cap, giving a selector like `form > input > form > input > form > button` that matches nothing. It now follows the form's real ancestors, so for an unlabeled button in `<div id="app"><section><form>` it reads `#app > section > form > button`. A control named `children` also cost the path its `nth-of-type`, which it now keeps.
 
 What this changes for you:
 
