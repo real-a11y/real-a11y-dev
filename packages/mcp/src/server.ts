@@ -968,7 +968,17 @@ export function buildServer(
         // An imported base may have been captured at a narrow root; this side is
         // always whole-document. Say so — silently widening turns everything
         // outside the old subtree into NEW findings, the class that gates CI.
-        const note = scopeMismatch(base.page, head);
+        const scopeNote = scopeMismatch(base.page, head);
+        // A checkpoint captured (or imported) with values, diffed on a server
+        // running with REAL_A11Y_REDACT_INPUT: this side can carry none, so
+        // every filled field reads as a changed tree line. Say so rather than
+        // let it pass for a regression — the same warning the CLI's `diff`
+        // gives a one-sided pair. Findings carry no values and are unaffected.
+        const valuesNote =
+          base.values === true && redactInput
+            ? `Note: checkpoint "${name}" carries field values, but this server runs with REAL_A11Y_REDACT_INPUT, so the current tree has none — every filled field reads as a changed tree line. Findings are unaffected.`
+            : undefined;
+        const note = [scopeNote, valuesNote].filter(Boolean).join("\n\n");
         // Checkpoints survive navigation by design, so the agent may well have
         // moved to another page between saving and diffing.
         const body = renderDiff(diffCheckpointPages(base.page, head), {

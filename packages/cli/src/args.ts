@@ -447,6 +447,11 @@ takes --root. Chromium's accessibility tree knows whether a node is focusable,
 but not the SEQUENCE — tabindex never reaches it — so tab order is DOM work by
 nature, not a fallback.
 
+Each stop shows its field value; a password, one-time code or payment field
+reads "[redacted]". --redact-input drops the values, but being the DOM walk it
+is not strict about NAMES: a link typed into a rich-text editor still prints
+under its own text here, unlike in 'tree'.
+
 Flags:
 ${SHARED_FLAG_HELP_ROOT}
 `,

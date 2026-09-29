@@ -265,6 +265,42 @@ function carriesValue(raw: RawAXNode): boolean {
 }
 
 /**
+ * True when `raw` or anything beneath it holds content a name could borrow: a
+ * value (a filled field, or a card-expiry input's month and year parts), and
+ * with `text`, a text run that has text (what was typed into an editor). A
+ * placeholder isn't content — a native field's is never counted, since only
+ * values are for one. An EMPTY field or editor contributes nothing to a name
+ * built around it, so it must not withhold one (a cell labelled "Card number"
+ * around an empty card field keeps its name).
+ */
+function holdsContent(
+  raw: RawAXNode,
+  byId: ReadonlyMap<string, RawAXNode>,
+  text: boolean,
+): boolean {
+  const stack = [raw];
+  const seen = new Set<string>();
+  while (stack.length > 0) {
+    const cur = stack.pop()!;
+    if (seen.has(cur.nodeId)) continue;
+    seen.add(cur.nodeId);
+    if (carriesValue(cur)) return true;
+    if (
+      text &&
+      NATIVE_AX_NAME_SOURCE_ROLES.has(cur.role?.value ?? "") &&
+      cleanText(String(cur.name?.value ?? "")) !== ""
+    ) {
+      return true;
+    }
+    for (const id of cur.childIds ?? []) {
+      const child = byId.get(id);
+      if (child) stack.push(child);
+    }
+  }
+  return false;
+}
+
+/**
  * The value a screen reader announces for `raw`, before sensitivity. Chromium's
  * AX `value` is the source: a text field's text, a `<select>`'s (and an ARIA
  * combobox's) selected text, a file input's names, a date input's value, an
@@ -519,6 +555,12 @@ function fieldSensitivity(
       fields.add(raw.nodeId);
     }
   }
+  // Only a field that holds something withholds names around it: an empty
+  // one has nothing to give away (see holdsContent). Its own value is empty.
+  for (const id of fields) {
+    const field = index.byId.get(id);
+    if (!field || !holdsContent(field, index.byId, false)) fields.delete(id);
+  }
   const regions = valueRegions(index, fields);
   return {
     regions,
@@ -594,11 +636,11 @@ const PAGE_STATE_VALUE_ROLES: ReadonlySet<string> = new Set([
  * Strict mode's value roots: every field whose value it withholds. That is
  * every node Chromium reports a value for — a text field, a `<select>`, a
  * slider, a file input, an editor — plus the root of every rich-text editing
- * region, filled or not, since what is typed there reaches names as well as
+ * region that holds text, since what is typed there reaches names as well as
  * the host's value.
  *
- * An EMPTY native text field (`editable: "plaintext"` with no value) is not a
- * root: it contributes nothing to a name built around it, and counting it would
+ * An EMPTY field or editor is not a root (see {@link holdsContent}): it
+ * contributes nothing to a name built around it, and counting it would
  * withhold every row and cell name in a table of empty inputs.
  */
 function strictValueRoots(rawNodes: RawAXNode[], index: RawIndex): Set<string> {
@@ -628,10 +670,9 @@ function strictValueRoots(rawNodes: RawAXNode[], index: RawIndex): Set<string> {
       if (!isEditable(cur)) break;
       root = cur;
     }
-    const emptyPlainField =
-      propertyOf(root, "editable")?.value === "plaintext" &&
-      !carriesValue(root);
-    if (!emptyPlainField) roots.add(root.nodeId);
+    // An editing root counts only once something was typed into it: an empty
+    // editor, like an empty text field, has nothing a name could borrow.
+    if (holdsContent(root, index.byId, true)) roots.add(root.nodeId);
   }
   return roots;
 }
@@ -854,6 +895,18 @@ function withoutEditableContent(
       ([key]) => !EDITABLE_CONTENT_ATTRIBUTES.has(key),
     ),
   );
+}
+
+/** `attributes` without the markup `selected` flag when the option's selection
+ *  is withheld — an `<option selected>` would otherwise say what a sensitive
+ *  `<select>` holds even with its AX state dropped. */
+function withoutSelection(
+  attributes: Record<string, string>,
+  withhold: boolean,
+): Record<string, string> {
+  if (!withhold || !("selected" in attributes)) return attributes;
+  const { selected: _dropped, ...rest } = attributes;
+  return rest;
 }
 
 /** Split an AX node's `properties` into `states` (bool/stateful) and
@@ -1107,13 +1160,12 @@ export function buildNativeTree(
     const { states, properties } = raw
       ? axFacets(raw)
       : { states: {}, properties: {} };
-    if (
-      raw &&
-      "selected" in states &&
-      (sensitivity.regions.inside(raw) || (redactInput && inChoiceField(raw)))
-    ) {
-      delete states.selected;
-    }
+    // One decision for both places the selection shows: the AX state and the
+    // option's markup `selected` attribute on the `dom` facet.
+    const withholdSelection =
+      !!raw &&
+      (sensitivity.regions.inside(raw) || (redactInput && inChoiceField(raw)));
+    if (withholdSelection) delete states.selected;
 
     const enriched =
       nn.backendDOMNodeId !== null
@@ -1149,10 +1201,12 @@ export function buildNativeTree(
     const dom: DomInfo | undefined = enriched
       ? {
           tagName: enriched.tagName,
-          attributes:
+          attributes: withoutSelection(
             raw && insideEditor.has(raw)
               ? withoutEditableContent(enriched.attributes)
               : enriched.attributes,
+            withholdSelection,
+          ),
           textContent: null,
           descendantText: "",
           isHidden: false,
