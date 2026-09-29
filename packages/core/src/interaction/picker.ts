@@ -22,6 +22,8 @@
  *   - setEnabled is idempotent — calling with the current state is a no-op.
  */
 
+import { safeParentElement } from "../extraction/clobber-safe.js";
+
 /**
  * Pointer events swallowed wholesale while pick mode is on.
  *
@@ -90,7 +92,7 @@ export function createPicker(options: PickerOptions): Picker {
     while (el) {
       const id = findId(el);
       if (id) return id;
-      el = el.parentElement;
+      el = safeParentElement(el);
     }
     return undefined;
   }

@@ -1463,7 +1463,7 @@ function wrapsTextControl(element: Element): boolean {
  * the region, so an editor reopened inside one is a field of its own.
  */
 function insideEditable(element: Element): boolean {
-  const parent = element.parentElement;
+  const parent = safeParentElement(element);
   return !!parent && isEditable(parent);
 }
 
@@ -1478,7 +1478,9 @@ function insideEditable(element: Element): boolean {
  */
 export function fieldValueOwner(el: Element): Element | null {
   let owner: Element | null = null;
-  for (let node: Element | null = el; node; node = node.parentElement) {
+  // Clobber-safe: through a `<form>` whose control is named `parentElement`,
+  // the plain read cycles between the form and that control forever.
+  for (let node: Element | null = el; node; node = safeParentElement(node)) {
     const tag = node.tagName.toLowerCase();
     if (tag === "select" || isEditingHost(node)) {
       owner = node;
@@ -1941,7 +1943,7 @@ function isActuallyVisible(
   while (el) {
     if (isSubtreeHidden(el, getCachedComputedStyle(el, styleCache)))
       return false;
-    el = el.parentElement;
+    el = safeParentElement(el);
   }
   return true;
 }

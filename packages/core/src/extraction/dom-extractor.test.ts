@@ -175,6 +175,84 @@ describe("DOM clobbering resilience", () => {
     expect(a11yNames).toContain("Apply");
   });
 
+  describe("a <form> field that shadows `parentElement`", () => {
+    // A real browser returns the field for `form.parentElement`, and the
+    // field's own parent is the form again. Deciding whether a link or an
+    // editor is inside editable content climbs the ancestors, and a plain climb
+    // cycles between the two forever: the page freezes, and no error boundary
+    // can catch a loop.
+    function clobberParentElement(root: Element): void {
+      const form = root.querySelector("form")!;
+      Object.defineProperty(form, "parentElement", {
+        configurable: true,
+        get: () => form.querySelector('[name="parentElement"]'),
+      });
+    }
+    const byName = (root: Element, name: string) =>
+      [...extractDomTree(root).nodes.values()].find(
+        (n) => n.a11y.name === name,
+      );
+
+    it("keeps a link inside the form live and an editor inside it focusable", () => {
+      const root = createPage(`
+        <main>
+          <form aria-label="Compose">
+            <input name="parentElement" aria-label="Subject" />
+            <div contenteditable="true" role="textbox" aria-label="Body">Hi</div>
+            <a href="/help">Help</a>
+          </form>
+        </main>
+      `);
+      clobberParentElement(root);
+
+      expect(byName(root, "Help")?.interaction?.actions).toEqual(
+        expect.arrayContaining(["click", "navigate"]),
+      );
+      expect(byName(root, "Body")?.interaction?.isFocusable).toBe(true);
+    });
+
+    it("reads the form's real parent, so an editable form is an editing host", () => {
+      // Read through the field, the form's "parent" is editable — the form
+      // itself — so the form looked like an editor's inner element rather
+      // than the host that takes focus.
+      const root = createPage(`
+        <main>
+          <form contenteditable="true" aria-label="Note">
+            <input name="parentElement" aria-label="Title" />
+          </form>
+        </main>
+      `);
+      clobberParentElement(root);
+
+      expect(byName(root, "Note")?.interaction?.isFocusable).toBe(true);
+    });
+
+    it("checks a portal's visibility up through the form", () => {
+      // Without `checkVisibility()` (jsdom, and older browsers) the check
+      // walks the ancestors itself.
+      document.body.innerHTML = `
+        <div id="app"><button>Checkout</button></div>
+        <form>
+          <input type="hidden" name="parentElement" />
+          <div role="dialog" aria-label="Cookies"><button>Accept</button></div>
+        </form>
+      `;
+      try {
+        clobberParentElement(document.body);
+        // jsdom's `closest()` climbs the forced override too; a browser's is
+        // native and never reads it. Give the answer a browser would.
+        const dialog = document.querySelector('[role="dialog"]')!;
+        vi.spyOn(dialog, "closest").mockReturnValue(null);
+        const app = document.getElementById("app")!;
+        // The visible portal widens the scope to body, as outside a form.
+        expect(byName(app, "Cookies")).toBeTruthy();
+        expect(byName(app, "Checkout")).toBeTruthy();
+      } finally {
+        document.body.innerHTML = "";
+      }
+    });
+  });
+
   it("skips only the offending element (and its subtree) when its processing throws, keeping the rest of the tree", () => {
     // The per-element error boundary. If ANY read on ONE element throws — here a
     // clobbered `tagName` (`<input name="tagName">` on a [LegacyOverrideBuiltIns]
