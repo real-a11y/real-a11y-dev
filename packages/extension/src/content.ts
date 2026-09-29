@@ -71,8 +71,11 @@ function isFocusable(el: Element): boolean {
   // The rule core's tab sequence follows: an editing host takes focus on its
   // own, and a link inside editable content can't be focused at all. This
   // script only runs in Chrome, so `isContentEditable` is the browser's own
-  // answer, inherited editability included.
-  if (el.isContentEditable && !el.parentElement?.isContentEditable) return true;
+  // answer, inherited editability included. The parent is read clobber-safely:
+  // a `<form>`'s control named `parentElement` inherits the form's
+  // editability, so an editable form would never count as the host.
+  const parent = safeParentElement(el) as HTMLElement | null;
+  if (el.isContentEditable && !parent?.isContentEditable) return true;
   const tag = el.tagName;
   if (tag === "A" || tag === "AREA") {
     return el.hasAttribute("href") && !el.isContentEditable;

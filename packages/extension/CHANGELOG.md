@@ -31,7 +31,8 @@
   inside one after that. Hovering inside one in pick mode froze too, and so did
   focusing a field in one before the tree caught up with it. A page with a
   `parentNode` control, or an `<img>` named `parentNode` anywhere, froze on its
-  next text change.
+  next text change. Selecting a `<form contenteditable>` holding such a control
+  now moves page focus to it, as for any other editor.
   ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR))
 
 - In DOM mode, a page that names an image or a form control after a DOM

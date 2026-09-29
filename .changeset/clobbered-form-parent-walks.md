@@ -20,6 +20,7 @@ Stop freezing the page on a `<form>` with a control named `parentElement`. A for
 
 - **Extraction:** a link or a `contenteditable` editor inside such a form froze `extractA11yTree` and everything built on it, because deciding whether a link sits in editable content walks up from it. A `<header>` or `<footer>` inside one froze it too, walking up for its landmark role, and there a control named `assignedSlot` did the same. That includes the DOM walk that `real-a11y tabs` and the MCP's `get_tab_order` run in the page.
 - **Live panels:** a refresh after a change inside such a form froze the `inspector`, `react` and `storybook-addon` panels, walking up from the change for the name, the description and the field value it moved. Their mutation observer, and `testing`'s `waitForMutations`, froze on a text change inside a form with a control named `parentNode` — and on a text change anywhere on a page with an `<img>`, `<form>`, `<embed>` or `<object>` named `parentNode`, which the document lets shadow its own properties the same way.
+- **Actions:** typing into a custom text box inside such a form, a `role="textbox"` that isn't `contenteditable`, froze the panels' Type action and `testing`'s `dispatch`, walking up to decide whether it sits in editable content.
 - **Element picker:** with pick mode on, hovering inside such a form froze the page when the form itself was not in the tree.
 - **Portal visibility:** in browsers without `checkVisibility()`, the check that a portal overlay is visible walked up the same way.
 
