@@ -33,7 +33,7 @@
   `parentNode` control, or an `<img>` named `parentNode` anywhere, froze on its
   next text change. Selecting a `<form contenteditable>` holding such a control
   now moves page focus to it, as for any other editor.
-  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR))
+  ([#438](https://github.com/real-a11y/real-a11y-dev/pull/438))
 
 - In DOM mode, a page that names an image or a form control after a DOM
   method no longer costs the tree more than that form. An
