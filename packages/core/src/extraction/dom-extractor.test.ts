@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
+import { clobber } from "../test-support/clobber.js";
+import type { SemanticNode } from "../types.js";
 import { resetIdCounter } from "../utils/id-generator.js";
 
 import { extractA11yTree } from "./a11y-extractor.js";
@@ -12,6 +14,7 @@ import {
   isSensitiveFieldAttributes,
   SENSITIVE_AUTOCOMPLETE_TOKENS,
 } from "./dom-extractor.js";
+import { idScope } from "./flat-tree.js";
 
 beforeEach(() => {
   resetIdCounter();
@@ -222,6 +225,86 @@ describe("DOM clobbering resilience", () => {
     expect(reachable.size).toBe(result.nodes.size);
 
     expect(warnSpy).toHaveBeenCalled();
+  });
+});
+
+// A <form> lets a control named after one of its members shadow it, and that
+// includes methods: with `<input name="getRootNode">`, `form.getRootNode()`
+// throws, because the input is not a function. Finding the tree an IDREF
+// resolves in must still work for such a form, or the per-element boundary
+// drops it with everything inside it.
+describe("tree scope of a clobbered <form>", () => {
+  let page: HTMLElement;
+
+  beforeEach(() => {
+    page = document.createElement("div");
+    document.body.appendChild(page);
+  });
+
+  afterEach(() => {
+    page.remove();
+  });
+
+  const nodeNamed = (
+    root: Element,
+    role: string,
+    name: string,
+  ): SemanticNode | undefined =>
+    [...extractDomTree(root).nodes.values()].find(
+      (n) => n.a11y.role === role && n.a11y.name === name,
+    );
+
+  it("resolves the scope of a form in a shadow root", () => {
+    const host = document.createElement("x-checkout");
+    page.appendChild(host);
+    const root = host.attachShadow({ mode: "open" });
+    root.innerHTML = `<form aria-label="Pay"><input type="hidden" name="getRootNode"></form>`;
+    const form = root.querySelector("form")!;
+    clobber(form, "getRootNode");
+    expect(idScope(form)).toBe(root);
+  });
+
+  it("names a form labelled by a heading", () => {
+    page.innerHTML = `
+      <h2 id="pay-title">Payment</h2>
+      <form aria-labelledby="pay-title">
+        <input type="hidden" name="getRootNode">
+        <button>Pay</button>
+      </form>`;
+    clobber(page.querySelector("form")!, "getRootNode");
+    expect(nodeNamed(page, "form", "Payment")).toBeTruthy();
+    expect(nodeNamed(page, "button", "Pay")).toBeTruthy();
+  });
+
+  it("keeps a description target that is itself such a form", () => {
+    page.innerHTML = `
+      <input aria-label="Email" aria-describedby="terms">
+      <form id="terms">
+        <input type="hidden" name="getRootNode">
+        We never share it. <button>Read the terms</button>
+      </form>`;
+    clobber(page.querySelector("form")!, "getRootNode");
+    // Its button keeps it in the tree: folding it would lose a control.
+    expect(nodeNamed(page, "button", "Read the terms")).toBeTruthy();
+  });
+
+  it("folds a description whose referrer sits in a form with a control named parentElement", () => {
+    page.innerHTML = `
+      <form aria-label="Pay">
+        <input type="hidden" name="parentElement">
+        <input aria-label="Code" aria-describedby="hint">
+      </form>
+      <p id="hint">Six digits</p>`;
+    clobber(page.querySelector("form")!, "parentElement");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const nodes = [...extractDomTree(page).nodes.values()];
+    expect(nodes.find((n) => n.a11y.name === "Code")?.a11y.description).toBe(
+      "Six digits",
+    );
+    expect(nodes.some((n) => n.a11y.role === "paragraph")).toBe(false);
+    // Folded because the referrer was found rendered, not skipped because
+    // a walk up from it threw.
+    expect(warn).not.toHaveBeenCalled();
   });
 });
 
