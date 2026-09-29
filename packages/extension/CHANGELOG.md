@@ -26,7 +26,7 @@
   method no longer costs the tree more than that form. An
   `<img name="getElementById">` anywhere on the page dropped every element
   named through `aria-labelledby` or described through `aria-describedby`, an
-  `<img name="querySelector">` every form control with a `<label for>`, and an
+  `<img name="querySelector">` every form control with an `id`, and an
   `<img name="querySelectorAll">` stopped DOM mode from building a tree at all.
   A change in or around a `<form>` with a control named `getAttribute`,
   `tagName`, `contains` or another method the live update calls left the tree

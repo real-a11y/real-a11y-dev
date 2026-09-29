@@ -112,6 +112,8 @@ export class LiveTreeExtractor {
   private descriptionTargetIds = new Set<string>();
   /** id -> elements that reference that id via aria-labelledby/aria-describedby */
   private referrersById = new Map<string, Set<Element>>();
+  /** Whether {@link refresh} has warned about falling back yet. */
+  private warnedFallback = false;
 
   constructor(root: Element, options: LiveTreeExtractorOptions = {}) {
     this.root = root;
@@ -169,10 +171,15 @@ export class LiveTreeExtractor {
     try {
       return this.splice(change);
     } catch (error) {
-      warnOutsideProduction(
-        "[real-a11y] An incremental refresh fell back to a full extraction:",
-        error,
-      );
+      // Once per extractor: a page that trips this does so on every refresh
+      // near that form, and the gate cannot tell production apart in a browser.
+      if (!this.warnedFallback) {
+        this.warnedFallback = true;
+        warnOutsideProduction(
+          "[real-a11y] An incremental refresh fell back to a full extraction:",
+          error,
+        );
+      }
       return this.extract();
     }
   }
