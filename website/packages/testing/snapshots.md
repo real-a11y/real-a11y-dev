@@ -177,6 +177,8 @@ Honors `markFocus` (default `true`) — a focused heading is shown with a traili
 
 Returns the tab sequence, one stop per line in Tab order.
 
+Nothing in the body of a closed `<details>` is a stop, not even a `<details>` nested in it. Chromium renders a closed disclosure as its summary alone, so Tab reaches the body only once it opens. The body is out of [`treeSnapshot`](#treesnapshot-root-options) and [`outlineSnapshot`](#outlinesnapshot-root-options) too, and [`toHaveTabSequence`](/packages/testing/matchers#tohavetabsequence-expected) counts the same way.
+
 ```ts
 expect(tabSequenceSnapshot(document.body)).toMatchSnapshot();
 ```

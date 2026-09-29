@@ -10,6 +10,7 @@ import { resetIdCounter } from "../utils/id-generator.js";
 
 import { extractA11yTree } from "./a11y-extractor.js";
 import { extractDomTree, getElementRefs } from "./dom-extractor.js";
+import { isRenderedInFlatTree } from "./flat-tree.js";
 
 let page: HTMLElement;
 
@@ -329,6 +330,93 @@ describe("description-target folding respects tree scope", () => {
     detached.innerHTML = `<input aria-label="Password" aria-describedby="pw"><p id="pw">8+ characters</p>`;
     const tree = extractDomTree(detached);
     expect(find(tree, "paragraph")).toBeUndefined();
+  });
+});
+
+// A `<details>`' summary is its first `<summary>` DOM child. Content slotted
+// into a shadow `<details>` is a flat-tree child only, so it is body, and
+// Chromium 151 hides it while the details is closed.
+describe("a closed <details> in a shadow tree", () => {
+  it("hides a light summary slotted into it, since that is body, not its summary", () => {
+    page.innerHTML = `<x-d><summary>Slotted S</summary><button>Slotted B</button></x-d>`;
+    shadow(page.querySelector("x-d")!, `<details><slot></slot></details>`);
+    const names = nodes(extractDomTree(page)).map((n) => n.a11y.name);
+    expect(names).not.toContain("Slotted B");
+    expect(
+      nodes(extractDomTree(page)).map((n) => n.dom!.tagName),
+    ).not.toContain("summary");
+  });
+
+  it("renders content slotted into its own summary, and hides the default slot", () => {
+    page.innerHTML = `<x-e><span slot="s">Named</span><button>Slotted B</button></x-e>`;
+    shadow(
+      page.querySelector("x-e")!,
+      `<details><summary><slot name="s"></slot></summary><slot></slot></details>`,
+    );
+    const tree = extractDomTree(page);
+    expect(nodes(tree).some((n) => n.dom?.textContent === "Named")).toBe(true);
+    expect(find(tree, "button", "Slotted B")).toBeUndefined();
+  });
+
+  it("renders the default slot once it is open", () => {
+    page.innerHTML = `<x-f><span slot="s">Named</span><button>Slotted B</button></x-f>`;
+    shadow(
+      page.querySelector("x-f")!,
+      `<details open><summary><slot name="s"></slot></summary><slot></slot></details>`,
+    );
+    expect(find(extractDomTree(page), "button", "Slotted B")).toBeTruthy();
+  });
+
+  it("keeps a description target whose only referrer is slotted into its body", () => {
+    page.innerHTML = `<x-h><input aria-label="Code" aria-describedby="help"></x-h><p id="help">Help text</p>`;
+    shadow(
+      page.querySelector("x-h")!,
+      `<details><summary>S</summary><slot></slot></details>`,
+    );
+    expect(
+      nodes(extractDomTree(page)).some(
+        (n) => n.dom?.textContent === "Help text",
+      ),
+    ).toBe(true);
+  });
+});
+
+// `isRenderedInFlatTree` climbs to the document. On a <form> whose fields
+// shadow what that climb reads, a plain read goes round the form and the field
+// forever, so each read goes through the prototype.
+describe("isRenderedInFlatTree on a clobbered <form>", () => {
+  function clobber(form: Element, name: string): void {
+    Object.defineProperty(form, name, {
+      configurable: true,
+      get: () => form.querySelector(`[name="${name}"]`),
+    });
+  }
+
+  it("reads parentElement past a field named parentElement", () => {
+    page.innerHTML = `<details><summary>S</summary><form><input name="parentElement"><span id="t"></span></form></details>`;
+    clobber(page.querySelector("form")!, "parentElement");
+    expect(isRenderedInFlatTree(page.querySelector("#t")!)).toBe(false);
+  });
+
+  it("reads assignedSlot past a field named assignedSlot", () => {
+    page.innerHTML = `<x-d><form><input name="assignedSlot"><span id="t"></span></form></x-d>`;
+    shadow(
+      page.querySelector("x-d")!,
+      `<details><summary>S</summary><slot></slot></details>`,
+    );
+    clobber(page.querySelector("form")!, "assignedSlot");
+    expect(isRenderedInFlatTree(page.querySelector("#t")!)).toBe(false);
+  });
+
+  it("reads getRootNode past a field named getRootNode", () => {
+    const host = document.createElement("x-top");
+    page.appendChild(host);
+    const root = shadow(
+      host,
+      `<form><input name="getRootNode"><span id="t"></span></form>`,
+    );
+    clobber(root.querySelector("form")!, "getRootNode");
+    expect(isRenderedInFlatTree(root.querySelector("#t")!)).toBe(true);
   });
 });
 

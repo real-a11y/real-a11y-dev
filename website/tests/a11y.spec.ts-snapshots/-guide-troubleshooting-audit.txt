@@ -100,6 +100,8 @@ main
     listitem "The subtree is or ."
       code "display: none"
       code "aria-hidden="true""
+    listitem "The focusable elements sit in the body of a closed , which the browser renders as its summary alone until it opens."
+      code "<details>"
     listitem "You're passing a root that doesn't contain the expected elements (e.g. a portaled modal that mounts elsewhere in the DOM). Note that scoping to a subtree does reliably exclude portaled content — see for why, and what to do instead."
       strong "not"
       link "My snapshot contains the whole page"

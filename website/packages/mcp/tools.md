@@ -231,6 +231,8 @@ An agent calls this to flag skipped levels or a missing/duplicate `h1`.
 
 Return the focusable elements in the order a keyboard user reaches them with Tab — numbered, each with role + accessible name. The stop focused at capture time is marked `[focused]`. Surfaces focus traps, illogical order, and unreachable controls.
 
+Nothing in the body of a closed `<details>` is a stop, not even a `<details>` nested in it. Chromium renders a closed disclosure as its summary alone, so Tab reaches the body only once it opens.
+
 Parameters:
 
 - **`rootSelector`** — string — optional (default `"body"`) — CSS selector for the walk.
