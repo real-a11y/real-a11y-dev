@@ -457,7 +457,7 @@ main
     link "diff_tree"
       code "diff_tree"
     link "findings checkpoints"
-  paragraph "A server started with shows no value at all, and withholds what was typed into a rich-text editor (a composer, a document): the editor's structure is kept, a name computed from its text reads and a paragraph inside it reads unnamed, while a name from the page's own markup (an , an image's ) is kept. That holds for every tool built on this tree — , , , . is the in-page walk, not built on it: it shows no values there, but still names a link inside an editor by its text."
+  paragraph "A server started with shows no value at all, and withholds what was typed into a rich-text editor (a composer, a document): the editor's structure is kept, a name computed from its text reads and a paragraph inside it reads unnamed, while a name from the page's own markup (an , an image's ) is kept. That holds for every tool built on this tree — , , , . is the in-page walk, not built on it: it shows no values there. A link typed into an editor is not a Tab stop, so it never appears in it; a island such as a mention chip is one, and keeps its name."
     link "REAL_A11Y_REDACT_INPUT=1"
       code "REAL_A11Y_REDACT_INPUT=1"
     code "contenteditable"
@@ -471,6 +471,7 @@ main
     code "list_elements"
     link "get_tab_order"
       code "get_tab_order"
+    code "contenteditable="false""
   paragraph "Parameters:"
   list
     listitem "— boolean — optional (default ) — include generic container nodes ()."

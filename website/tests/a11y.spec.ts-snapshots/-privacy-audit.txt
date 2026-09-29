@@ -116,7 +116,7 @@ main
     code "--values"
     code "values: true"
     emphasis "name"
-  paragraph "To keep every field value and all rich-text editor content out of the output, use the strict mode: (or in ) for the CLI, for the MCP server, in . Use it when a page's ordinary fields may hold something sensitive the markup doesn't say is sensitive. One view is built differently and says less: the keyboard tab order (the CLI's , the MCP server's ) prints no values under the strict mode, but still names a link or button inside a rich-text editor by its text."
+  paragraph "To keep every field value and all rich-text editor content out of the output, use the strict mode: (or in ) for the CLI, for the MCP server, in . Use it when a page's ordinary fields may hold something sensitive the markup doesn't say is sensitive. One view is built differently: the keyboard tab order (the CLI's , the MCP server's ) prints no values under the strict mode. A link or button typed into a rich-text editor is not a Tab stop, so it never appears there; a island such as a mention chip is one, and keeps its name."
     code "--redact-input"
     code "defaults.redactInput"
     code "a11y.config.json"
@@ -125,6 +125,7 @@ main
     code "@real-a11y-dev/testing"
     code "tabs"
     code "get_tab_order"
+    code "contenteditable="false""
   heading "Website" (level 2)
   paragraph "The site at is a static VitePress documentation site. The only first-party state is the search index and local preferences (theme selection) stored in your browser's ."
     code "real-a11y.dev"
