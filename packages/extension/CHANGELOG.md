@@ -28,7 +28,7 @@
   value is on. Content under `aria-hidden="TRUE"` or `aria-hidden="yes"`
   leaves the tree and the names around it, as `aria-hidden="true"` content
   always did. An `<optgroup>` never shows as disabled, as in Chromium.
-  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR))
+  ([#436](https://github.com/real-a11y/real-a11y-dev/pull/436))
 
 - In DOM mode, the body of a closed `<details>` no longer shows in the tree,
   the Tab Sequence view, its copied export or the keyboard bar's Tab. Chromium
