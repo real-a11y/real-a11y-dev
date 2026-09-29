@@ -276,8 +276,10 @@ textbox "Message"
 A name from the page's own markup inside the editor — an `aria-label`, an
 image's `alt` — is kept. The same holds in `outline`, `list`, `audit`,
 `snapshot` and the `interact` diff, which all read this tree. [`tabs`](#tabs-url)
-is the in-page walk: under `--redact-input` it prints no values, but a link
-inside an editor still prints there under its own text.
+is the in-page walk: under `--redact-input` it prints no values. A link typed
+into an editor is not a Tab stop, so it never appears there; a
+`contenteditable="false"` island such as a mention chip is, and keeps its
+name.
 
 **Flags:** [Browser & page](#browser-page) (including
 [`--redact-input`](#redact-input)) · [Output](#output) (`pretty | json`)
@@ -1008,7 +1010,9 @@ field holds reads `[redacted]` too — a cell around a filled input or a chosen
 `<select>` option, a checkbox whose `<label>` wraps another field, a region
 labelled by an editable heading — and no `<select>` option says it is the
 selected one. [`tabs`](#tabs-url) is the in-page walk and has no strict
-mode of its own: it prints no values, but a link inside an editor keeps its text.
+mode of its own: it prints no values. A link typed into an editor is not a Tab
+stop, so it never appears there; a `contenteditable="false"` island such as a
+mention chip is one, and keeps its name.
 
 Use it when output goes somewhere field contents must not: a shared CI log, a
 ticket, a page whose plain text fields hold secrets the markup doesn't mark

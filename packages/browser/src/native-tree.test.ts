@@ -1307,6 +1307,62 @@ describe("buildNativeTree — sensitive values in states, references and races",
     ]);
   });
 
+  it("drops the option's markup `selected` attribute too, not just its state", () => {
+    // `<option selected>` reaches the dom facet through the attribute
+    // allowlist; clearing only the AX state would still say which it is.
+    const enrich = enrichSelect("cc-exp-month");
+    enrich.set(23, domOf("option", { selected: "" }));
+    const options = nodesOf(buildNativeTree(select(), enrich)).filter(
+      (n) => n.a11y.role === "option",
+    );
+    expect(options.map((n) => n.dom?.attributes.selected)).toEqual([
+      undefined,
+      undefined,
+    ]);
+    // …and an ordinary select keeps it.
+    const plain = enrichSelect();
+    plain.set(23, domOf("option", { selected: "" }));
+    expect(
+      nodesOf(buildNativeTree(select(), plain))
+        .filter((n) => n.a11y.role === "option")
+        .map((n) => n.dom?.attributes.selected),
+    ).toEqual([undefined, ""]);
+  });
+
+  it("leaves a cell around an EMPTY sensitive field named — it holds nothing to give away", () => {
+    const raw = [
+      { nodeId: "1", childIds: ["2"], role: { value: "RootWebArea" } },
+      {
+        nodeId: "2",
+        parentId: "1",
+        childIds: ["3"],
+        role: { value: "cell" },
+        name: {
+          value: "Card number",
+          sources: [{ type: "contents", value: { value: "Card number" } }],
+        },
+        backendDOMNodeId: 60,
+      },
+      {
+        nodeId: "3",
+        parentId: "2",
+        role: { value: "textbox" },
+        name: { value: "Card number" },
+        value: { value: "" },
+        backendDOMNodeId: 61,
+      },
+    ] as RawNodes;
+    const tree = buildNativeTree(
+      raw,
+      new Map([
+        [60, domOf("td")],
+        [61, domOf("input", { autocomplete: "cc-number" })],
+      ]),
+    );
+    expect(tree.nodes.get("ax-dom-60")?.a11y.name).toBe("Card number");
+    expect(tree.nodes.get("ax-dom-61")?.a11y.value).toBeUndefined();
+  });
+
   const referencing = (property: "labelledby" | "describedby") =>
     [
       { nodeId: "1", childIds: ["2", "3"], role: { value: "RootWebArea" } },
@@ -1445,6 +1501,54 @@ describe("buildNativeTree — strict mode around native text fields", () => {
     expect(cellName("3", [{ type: "contents", value: { value: "3" } }])).toBe(
       "[redacted]",
     );
+  });
+
+  it("leaves a cell around an EMPTY rich-text editor named, and withholds it once text is typed", () => {
+    const cellAroundEditor = (typed: string) =>
+      [
+        { nodeId: "1", childIds: ["2"], role: { value: "RootWebArea" } },
+        {
+          nodeId: "2",
+          parentId: "1",
+          childIds: ["3"],
+          role: { value: "cell" },
+          name: {
+            value: typed || "Notes",
+            sources: [{ type: "contents", value: { value: typed || "Notes" } }],
+          },
+          backendDOMNodeId: 70,
+        },
+        {
+          nodeId: "3",
+          parentId: "2",
+          childIds: typed ? ["4"] : [],
+          role: { value: "generic" },
+          properties: [{ name: "editable", value: { value: "richtext" } }],
+          backendDOMNodeId: 71,
+        },
+        ...(typed
+          ? [
+              {
+                nodeId: "4",
+                parentId: "3",
+                role: { value: "StaticText" },
+                name: { value: typed },
+              },
+            ]
+          : []),
+      ] as RawNodes;
+    const cell = (typed: string) =>
+      buildNativeTree(
+        cellAroundEditor(typed),
+        new Map([
+          [70, domOf("td")],
+          [71, domOf("div", {})],
+        ]),
+        undefined,
+        STRICT,
+      ).nodes.get("ax-dom-70")?.a11y.name;
+    expect(cell("")).toBe("Notes");
+    expect(cell("my draft")).toBe("[redacted]");
   });
 
   it("fails closed on an ancestor whose name has no trace, but keeps the field's own label", () => {

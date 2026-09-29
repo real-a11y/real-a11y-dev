@@ -2468,6 +2468,49 @@ describe("field values (ADR-0001)", () => {
       expect(diff).not.toMatch(/^[-+] .*textbox "Email"/m);
     });
 
+    it("a strict server diffing a checkpoint that has values says why filled fields read as changed", async () => {
+      // Captured with values on a default server, then imported into a strict
+      // one: this side can hold no values, so the diff must not pass the
+      // missing values off as a regression.
+      session.nativeTreeResponse = form("jane@x.com");
+      const producer = await connect(session);
+      await producer.callTool({
+        name: "open_page",
+        arguments: { url: "https://example.com/" },
+      });
+      await producer.callTool({
+        name: "checkpoint_findings",
+        arguments: { name: "cp", values: true },
+      });
+      const exported = textOf(
+        await producer.callTool({
+          name: "export_checkpoint",
+          arguments: { name: "cp", values: true },
+        }),
+      );
+
+      const strictSession = new FakeSession();
+      strictSession.nativeTreeResponse = form("jane@x.com");
+      const strict = await connect(strictSession, { redactInput: true });
+      await strict.callTool({
+        name: "open_page",
+        arguments: { url: "https://example.com/" },
+      });
+      await strict.callTool({
+        name: "import_checkpoint",
+        arguments: { name: "base", artifact: exported },
+      });
+      const diff = textOf(
+        await strict.callTool({
+          name: "diff_findings",
+          arguments: { name: "base" },
+        }),
+      );
+      expect(diff).toContain("carries field values");
+      expect(diff).toContain("REAL_A11Y_REDACT_INPUT");
+      expect(diff).not.toContain("jane@x.com = ");
+    });
+
     it("strict mode never captures values, even when asked", async () => {
       session.nativeTreeResponse = form("jane@x.com");
       const client = await connect(session, { redactInput: true });
