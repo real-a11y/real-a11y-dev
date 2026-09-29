@@ -378,6 +378,25 @@ describe("a shadowed method on something every element shares", () => {
     expect(named(root, "button")?.name).toBe("Go");
   });
 
+  it("keeps a description target that also labels a control when the document's querySelectorAll is shadowed", () => {
+    // Folding a description target away searches its tree for referrers. A
+    // shadowed search read as "described and not labelled", so this visible
+    // span went missing although it names the button.
+    const root = attach(`
+      <main>
+        <img name="querySelectorAll" alt="" />
+        <span id="hint">Save</span>
+        <button aria-labelledby="hint" aria-describedby="hint">x</button>
+      </main>
+    `);
+    clobberDocument("querySelectorAll");
+
+    const ids = [...extractDomTree(root).nodes.values()].map(
+      (n) => n.dom?.attributes?.id,
+    );
+    expect(ids).toContain("hint");
+  });
+
   it("scopes to an open modal when the document's contains is shadowed", () => {
     const root = attach(`
       <main><img name="contains" alt="" /><button>Behind</button></main>

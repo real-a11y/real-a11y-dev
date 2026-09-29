@@ -2449,13 +2449,15 @@ function isDescribedInOwnTree(element: Element, id: string): boolean {
   // Clobber-safe, as in `idScope`: a description target that is a `<form>`
   // holding `<input name="getRootNode">` would otherwise throw here.
   const scope = safeRootNode(element) as Document | ShadowRoot | Element;
-  if (typeof scope.querySelectorAll !== "function") return true;
   const escaped =
     typeof CSS !== "undefined" && typeof CSS.escape === "function"
       ? CSS.escape(id)
       : id.replace(/["\\]/g, "\\$&");
+  // Through the prototype: the scope is usually the document, which an
+  // `<img name="querySelectorAll">` shadows, and a guess here folds away a
+  // target that labels a control as readily as one that describes nothing.
   const referrers = (attr: string): Element[] =>
-    Array.from(scope.querySelectorAll(`[${attr}~="${escaped}"]`)).filter(
+    Array.from(safeQuerySelectorAll(scope, `[${attr}~="${escaped}"]`)).filter(
       isRenderedInFlatTree,
     );
   return (
