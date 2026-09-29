@@ -113,8 +113,10 @@ function isImageRendered(image: Element | null): boolean {
 /**
  * Whether an image map's `<area>` is hidden from AT. Chromium's tree puts an
  * area under its image, so the image being hidden or `aria-hidden` hides it,
- * and so does the area's own `inert`, though Chromium still tabs to one. Its
- * own visibility counts for nothing, like the rest of its style.
+ * and so does the area's own `inert`, though Chromium still tabs to one. Like
+ * an `aria-hidden` button, such an area then leaves the a11y view, and the tab
+ * sequence read from it. Its own visibility counts for nothing, like the rest
+ * of its style.
  */
 function isAreaHiddenFromAT(area: Element): boolean {
   if (area.hasAttribute("inert")) return true;

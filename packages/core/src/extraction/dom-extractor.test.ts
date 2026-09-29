@@ -3361,12 +3361,14 @@ describe.each(["inline", "none"])(
       }
     });
 
-    it("hides an inert area from AT but keeps it a stop, as Chromium does", () => {
+    it("hides an inert area from AT, where Chromium still focuses it", () => {
       const { inert } = areas(`
         <img src="x.gif" alt="Site map" usemap="#nav">
         <map name="nav"><area id="inert" href="/a" alt="A" inert></map>
       `);
-      // Chromium tabs to it, and leaves it out of its accessibility tree.
+      // Chromium tabs to it, and leaves it out of its accessibility tree. So
+      // it stays focusable here, and hidden from AT like an aria-hidden
+      // button (query.test.ts pins what that does to the tab sequence).
       expect(inert.a11y.isExposedToAT).toBe(false);
       expect(inert.dom!.isHidden).toBe(false);
       expect(inert.interaction!.isFocusable).toBe(true);
@@ -3381,7 +3383,7 @@ describe.each(["inline", "none"])(
       `);
       for (const id of ["img-aria-hidden", "in-aria-hidden"]) {
         expect(found[id].a11y.isExposedToAT, id).toBe(false);
-        // Still a stop: Chromium tabs to it all the same.
+        // Still focusable: Chromium tabs to it all the same.
         expect(found[id].interaction!.isFocusable, id).toBe(true);
       }
     });

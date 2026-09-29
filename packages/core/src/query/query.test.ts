@@ -410,6 +410,29 @@ describe("getTabSequence", () => {
           expect(names).toEqual(["Before", "After"]);
         }
       });
+
+      it("lists an area hidden from AT in the DOM view only, like an aria-hidden button", () => {
+        // Chromium tabs to all three but leaves them out of its accessibility
+        // tree. The a11y view drops what AT can't reach, focusable or not,
+        // and every shipped reader takes its sequence from that view.
+        const [dom, a11y] = stops(`
+          <button>Before</button>
+          <button aria-hidden="true">Hidden button</button>
+          <img src="x.gif" alt="Site map" usemap="#nav" aria-hidden="true">
+          <map name="nav"><area href="/a" alt="Hidden image's area"></map>
+          <img src="x.gif" alt="Floor plan" usemap="#floor">
+          <map name="floor"><area href="/b" alt="Inert area" inert></map>
+          <button>After</button>
+        `);
+        expect(dom).toEqual([
+          "Before",
+          "Hidden button",
+          "Hidden image's area",
+          "Inert area",
+          "After",
+        ]);
+        expect(a11y).toEqual(["Before", "After"]);
+      });
     },
   );
 

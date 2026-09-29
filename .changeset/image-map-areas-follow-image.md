@@ -36,7 +36,7 @@ An area now follows its image, the way Chromium decides it. Each rule was checke
 - **Rendered:** an area is in the tree while the first image whose `usemap` names its map is rendered: not `display: none` or `hidden`, itself or through an ancestor, and not `visibility: hidden` or `inert`. The area's own `display`, `hidden` and `visibility` don't count. An image inside a shadow root gives a map's areas nothing.
 - **Order:** an area is a stop at its own place in the document, not at its image's.
 - **Hidden map:** an area in a hidden or `inert` `<map>` stays out. Chromium tabs to one, but its accessibility tree leaves it out, and the walk follows the tree.
-- **Accessibility:** an area whose image is `aria-hidden`, or which is `inert` itself, is hidden from AT but still a stop, as in Chromium. An area adds nothing to the name of the element its map sits in.
+- **Accessibility:** an area whose image is `aria-hidden`, or which is `inert` itself, is hidden from AT, as Chromium's accessibility tree has it. Like an `aria-hidden` button, it then stays out of the a11y view and every tab list read from it, although Chromium tabs to it; the DOM view keeps it focusable. An area adds nothing to the name of the element its map sits in.
 - **`tabindex`:** it makes an area focusable without an `href`, but only while an image uses its map, and a negative one leaves the area unfocusable even from script.
 
 Where it shows:
