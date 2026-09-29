@@ -22,6 +22,18 @@
 
 ## Unreleased
 
+- A page with a `<form>` holding a control named `parentElement`, such as
+  `<input type="hidden" name="parentElement">`, no longer freezes the tab. A
+  form lets a control shadow its own properties, so the form's parent read as
+  that control, whose parent is the form again. Every walk up the page that met
+  such a form went round the two forever: DOM mode's tree froze on a link, an
+  editor, a `<header>` or a `<footer>` inside one, and on the first change
+  inside one after that. Hovering inside one in pick mode froze too, and so did
+  focusing a field in one before the tree caught up with it. A page with a
+  `parentNode` control, or an `<img>` named `parentNode` anywhere, froze on its
+  next text change.
+  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR))
+
 - In DOM mode, a page that names an image or a form control after a DOM
   method no longer costs the tree more than that form. An
   `<img name="getElementById">` anywhere on the page dropped every element

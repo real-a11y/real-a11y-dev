@@ -7,6 +7,7 @@ import {
   DomObserver,
   createPicker,
   getElementRefs,
+  safeParentElement,
 } from "@real-a11y-dev/core";
 import type { TreeViewMode, TreeChange } from "@real-a11y-dev/core";
 
@@ -386,7 +387,9 @@ document.addEventListener("focusin", (e) => {
   if (!focusTrackerEnabled) return;
   if (curtainVisible) return;
 
-  // Walk up from focused element to find a tracked node
+  // Walk up from focused element to find a tracked node. Clobber-safe: through
+  // a `<form>` whose control is named `parentElement`, the plain read cycles
+  // between the form and that control forever.
   let el = e.target as Element | null;
   while (el) {
     const nodeId = elementRefs.findId(el);
@@ -398,7 +401,7 @@ document.addEventListener("focusin", (e) => {
       });
       return;
     }
-    el = el.parentElement;
+    el = safeParentElement(el);
   }
 });
 
