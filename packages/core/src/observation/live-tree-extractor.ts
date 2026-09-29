@@ -34,7 +34,7 @@ const REFERENCE_ATTRS = new Set([
   "aria-describedby",
   "for",
   // An <img usemap> decides whether the areas of the map it names are
-  // focusable, and that map can sit anywhere in the tree.
+  // rendered, and that map can sit anywhere in the tree.
   "usemap",
 ]);
 
@@ -68,6 +68,22 @@ const SCOPE_ATTRS = new Set([
   "style",
   "hidden",
   "inert",
+  "aria-hidden",
+]);
+
+/**
+ * Attributes that can change whether an image is rendered, or hidden from AT,
+ * from the image itself or from anywhere above it. An image map's areas are
+ * rendered only while the image using their map is (see image-map.ts), and
+ * that map can sit anywhere in the tree, so re-extracting what changed would
+ * leave its areas as they were.
+ */
+const IMAGE_RENDERING_ATTRS = new Set([
+  "class",
+  "style",
+  "hidden",
+  "inert",
+  "open", // a closed <details> hides the image
   "aria-hidden",
 ]);
 
@@ -194,6 +210,9 @@ export class LiveTreeExtractor {
           // Re-extracting the target subtree covers both local attribute
           // updates and visibility-affecting changes like aria-hidden/class.
           dirty.add(target);
+          if (IMAGE_RENDERING_ATTRS.has(attr)) {
+            for (const map of this.mapsUsedWithin(target)) dirty.add(map);
+          }
           // A name-affecting attribute (aria-label, role, alt, title, …) on a
           // descendant also changes the accessible name of an enclosing
           // name-from-content host, which is computed from that descendant's
@@ -464,7 +483,7 @@ export class LiveTreeExtractor {
       }
 
       // Adding or removing an <img usemap> changes whether a map's areas are
-      // focusable, wherever that map is: the same reach as a `usemap` change.
+      // rendered, wherever that map is: the same reach as a `usemap` change.
       if (el.matches("img[usemap]") || el.querySelector("img[usemap]")) {
         return true;
       }
@@ -490,6 +509,30 @@ export class LiveTreeExtractor {
     }
 
     return false;
+  }
+
+  /**
+   * The `<map>`s used by an `<img usemap>` that is `el` or inside it, wherever
+   * in the extraction scope they sit, shadow roots included. Images inside a
+   * shadow root use no map (see image-map.ts), so a light-DOM search is enough
+   * for them.
+   */
+  private mapsUsedWithin(el: Element): Element[] {
+    const images = el.matches("img[usemap]")
+      ? [el]
+      : Array.from(el.querySelectorAll("img[usemap]"));
+    const names = new Set<string>();
+    for (const img of images) {
+      const usemap = img.getAttribute("usemap") ?? "";
+      if (usemap.startsWith("#")) names.add(usemap.slice(1));
+    }
+    if (names.size === 0) return [];
+    return deepQuerySelectorAll(this.effectiveRoot ?? this.root, "map").filter(
+      (map) =>
+        [map.getAttribute("name"), map.getAttribute("id")].some(
+          (name) => name !== null && names.has(name),
+        ),
+    );
   }
 
   /**

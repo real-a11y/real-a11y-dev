@@ -405,6 +405,8 @@ function isVisuallyHidden(
     style !== undefined ? style : getCachedComputedStyle(element);
 
   if (isSubtreeHidden(element, computed)) return true;
+  // An area is drawn by its image, whose visibility isSubtreeHidden read.
+  if (element.localName === "area") return false;
 
   if (computed) {
     if (computed.visibility === "hidden") return true;
@@ -808,6 +810,9 @@ function getAccessibleTextContent(
     } else if (child.nodeType === Node.ELEMENT_NODE) {
       const childEl = child as Element;
       if (isAriaHiddenValue(childEl.getAttribute("aria-hidden"))) continue;
+      // Chromium's tree puts an area under its image, never under the element
+      // its map sits in, so it adds nothing to that element's name.
+      if (childEl.localName === "area") continue;
       if (
         isSubtreeHidden(childEl, getCachedComputedStyle(childEl, styleCache))
       ) {

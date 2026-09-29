@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
+import type { SemanticNode } from "../types.js";
 import { resetIdCounter } from "../utils/id-generator.js";
 
 import { extractA11yTree } from "./a11y-extractor.js";
@@ -3247,6 +3248,201 @@ describe("interaction.isFocusable follows Chromium", () => {
     expect(byId).toMatchObject({ "in-shadow": true, slotted: false });
   });
 });
+
+// An <area> has no box of its own. Chromium's UA sheet rendered one inline up
+// to 151 and gives it `display: none` since 153, and neither decides anything:
+// Chromium focuses an area, and its accessibility tree exposes one, while the
+// image using its map is rendered. So every case runs under both sheets, and
+// each was checked in Chromium 151 and 153 with a Tab walk, scripted focus()
+// and CDP's accessibility tree. jsdom's own sheet hides areas too; the style
+// below says so on purpose rather than leaning on it.
+describe.each(["inline", "none"])(
+  "image map areas, with `area { display: %s }`",
+  (display) => {
+    let sheet: HTMLStyleElement;
+    beforeEach(() => {
+      sheet = document.createElement("style");
+      sheet.textContent = `area { display: ${display} }`;
+      document.head.append(sheet);
+    });
+    afterEach(() => {
+      sheet.remove();
+      document.body.innerHTML = "";
+    });
+
+    /** The area nodes of `html`, rendered in the document, by id. */
+    function areas(html: string): Record<string, SemanticNode> {
+      document.body.innerHTML = `<main>${html}</main>`;
+      const byId: Record<string, SemanticNode> = {};
+      for (const node of extractDomTree(document.body).nodes.values()) {
+        if (node.dom?.tagName === "area")
+          byId[node.dom.attributes["id"]] = node;
+      }
+      return byId;
+    }
+
+    it("emits an area where its map sits, as a link its image renders", () => {
+      const { home } = areas(`
+        <img src="x.gif" alt="Site map" usemap="#nav">
+        <map name="nav"><area id="home" href="/home" alt="Home"></map>
+      `);
+      expect(home).toBeDefined();
+      expect(home.a11y).toMatchObject({
+        role: "link",
+        name: "Home",
+        isExposedToAT: true,
+      });
+      expect(home.dom!.isHidden).toBe(false);
+      expect(home.interaction!.isFocusable).toBe(true);
+    });
+
+    it("leaves an area out while the image using its map is not rendered", () => {
+      const found = areas(`
+        <img src="x.gif" alt="A" usemap="#shown">
+        <map name="shown"><area id="shown" href="/a" alt="A"></map>
+
+        <img src="x.gif" alt="B" usemap="#b" style="display: none">
+        <map name="b"><area id="img-display-none" href="/b" alt="B"></map>
+        <img src="x.gif" alt="C" usemap="#c" hidden>
+        <map name="c"><area id="img-hidden" href="/c" alt="C"></map>
+        <img src="x.gif" alt="D" usemap="#d" style="visibility: hidden">
+        <map name="d"><area id="img-invisible" href="/d" alt="D"></map>
+        <img src="x.gif" alt="E" usemap="#e" inert>
+        <map name="e"><area id="img-inert" href="/e" alt="E"></map>
+        <div style="display: none"><img src="x.gif" alt="F" usemap="#f"></div>
+        <map name="f"><area id="in-display-none" href="/f" alt="F"></map>
+        <div inert><img src="x.gif" alt="G" usemap="#g"></div>
+        <map name="g"><area id="in-inert" href="/g" alt="G"></map>
+        <div style="visibility: hidden"><img src="x.gif" alt="H" usemap="#h"></div>
+        <map name="h"><area id="in-invisible" href="/h" alt="H"></map>
+
+        <div style="visibility: hidden">
+          <img src="x.gif" alt="I" usemap="#i" style="visibility: visible">
+        </div>
+        <map name="i"><area id="made-visible" href="/i" alt="I"></map>
+
+        <map name="unused"><area id="unused" href="/j" alt="J"></map>
+        <area id="no-map" href="/k" alt="K">
+
+        <img src="x.gif" alt="L1" usemap="#l" style="display: none">
+        <img src="x.gif" alt="L2" usemap="#l">
+        <map name="l"><area id="first-image-hidden" href="/l" alt="L"></map>
+      `);
+      // Only the first image using a map counts, so a second, rendered one
+      // doesn't bring back the areas of a map whose first image is hidden.
+      expect(Object.keys(found).sort()).toEqual(["made-visible", "shown"]);
+    });
+
+    it("keeps an area whatever its own style says, as Chromium does", () => {
+      const found = areas(`
+        <img src="x.gif" alt="Site map" usemap="#nav">
+        <map name="nav">
+          <area id="hidden" href="/a" alt="A" hidden>
+          <area id="display-none" href="/b" alt="B" style="display: none">
+          <area id="invisible" href="/c" alt="C" style="visibility: hidden">
+          <area id="skipped" href="/d" alt="D" style="content-visibility: hidden">
+        </map>
+        <img src="x.gif" alt="Floor plan" usemap="#floor">
+        <div style="visibility: hidden">
+          <map name="floor"><area id="in-invisible-map" href="/e" alt="E"></map>
+        </div>
+      `);
+      for (const id of [
+        "hidden",
+        "display-none",
+        "invisible",
+        "skipped",
+        "in-invisible-map",
+      ]) {
+        expect(found[id], id).toBeDefined();
+        expect(found[id].a11y.isExposedToAT, id).toBe(true);
+        expect(found[id].dom!.isHidden, id).toBe(false);
+        expect(found[id].interaction!.isFocusable, id).toBe(true);
+      }
+    });
+
+    it("hides an inert area from AT but keeps it a stop, as Chromium does", () => {
+      const { inert } = areas(`
+        <img src="x.gif" alt="Site map" usemap="#nav">
+        <map name="nav"><area id="inert" href="/a" alt="A" inert></map>
+      `);
+      // Chromium tabs to it, and leaves it out of its accessibility tree.
+      expect(inert.a11y.isExposedToAT).toBe(false);
+      expect(inert.dom!.isHidden).toBe(false);
+      expect(inert.interaction!.isFocusable).toBe(true);
+    });
+
+    it("hides an area from AT with its image, which it belongs to in Chromium's tree", () => {
+      const found = areas(`
+        <img src="x.gif" alt="A" usemap="#a" aria-hidden="true">
+        <map name="a"><area id="img-aria-hidden" href="/a" alt="A"></map>
+        <div aria-hidden="true"><img src="x.gif" alt="B" usemap="#b"></div>
+        <map name="b"><area id="in-aria-hidden" href="/b" alt="B"></map>
+      `);
+      for (const id of ["img-aria-hidden", "in-aria-hidden"]) {
+        expect(found[id].a11y.isExposedToAT, id).toBe(false);
+        // Still a stop: Chromium tabs to it all the same.
+        expect(found[id].interaction!.isFocusable, id).toBe(true);
+      }
+    });
+
+    it("follows the accessibility tree for an area in a hidden or inert map", () => {
+      // Chromium still tabs to these, but its accessibility tree leaves them
+      // out, and the walk never enters a hidden or inert subtree.
+      const found = areas(`
+        <img src="x.gif" alt="Site map" usemap="#a">
+        <map name="a" hidden><area id="map-hidden" href="/a" alt="A"></map>
+        <img src="x.gif" alt="Site map" usemap="#b">
+        <div style="display: none">
+          <map name="b"><area id="in-hidden" href="/b" alt="B"></map>
+        </div>
+        <img src="x.gif" alt="Site map" usemap="#c">
+        <map name="c" inert><area id="map-inert" href="/c" alt="C"></map>
+      `);
+      expect(found).toEqual({});
+    });
+
+    it("takes an area's image from the document, as Chromium does", () => {
+      document.body.innerHTML = `<main>
+        <img src="x.gif" alt="Site map" usemap="#nav">
+        <div id="map-host"></div>
+        <div id="image-host"></div>
+      </main>`;
+      const mapHost = document.getElementById("map-host")!;
+      mapHost.attachShadow({ mode: "open" }).innerHTML =
+        `<map name="nav"><area id="map-in-shadow" href="/a" alt="A"></map>`;
+      document
+        .getElementById("image-host")!
+        .attachShadow({ mode: "open" }).innerHTML =
+        `<img src="x.gif" alt="Plan" usemap="#floor">` +
+        `<map name="floor"><area id="image-in-shadow" href="/b" alt="B"></map>`;
+      const ids = [...extractDomTree(document.body).nodes.values()]
+        .filter((n) => n.dom?.tagName === "area")
+        .map((n) => [n.dom!.attributes["id"], n.interaction!.isFocusable]);
+      // An image inside a shadow root lends its map's areas nothing, while a
+      // map inside one still takes its image from the document.
+      expect(ids).toEqual([["map-in-shadow", true]]);
+    });
+
+    it("keeps an area out of the name of the element its map sits in", () => {
+      document.body.innerHTML = `<main>
+        <h2>Title <map name="m"><area href="/h" alt="Home"></map>end</h2>
+        <div role="button" tabindex="0">Go <map name="n"><area href="/x" alt="Away"></map>now</div>
+        <img src="x.gif" alt="Site map" usemap="#m">
+        <img src="x.gif" alt="Plan" usemap="#n">
+      </main>`;
+      const names = Object.fromEntries(
+        [...extractDomTree(document.body).nodes.values()].map((n) => [
+          n.a11y.role,
+          n.a11y.name,
+        ]),
+      );
+      // Chromium's tree puts an area under its image, never under its map's
+      // parent, so no ancestor of the map takes its text.
+      expect(names).toMatchObject({ heading: "Title end", button: "Go now" });
+    });
+  },
+);
 
 describe("computed-style cache during extraction", () => {
   afterEach(() => {

@@ -51,7 +51,7 @@ const EXTRA_OBSERVED_ATTRIBUTES = [
   "open", // <details open>
   "style", // CSS visibility/display changes (e.g., captcha showing/hiding content)
   "kind", // <track kind> drives the media node's hoisted captions property
-  "usemap", // <img usemap> decides whether its map's <area>s are focusable
+  "usemap", // <img usemap> decides whether its map's <area>s are rendered
 
   // Every ARIA global state/property voids role="presentation", so adding or
   // clearing one on a presentational element changes its ROLE — the element

@@ -140,6 +140,46 @@ describe("real-a11y (built bin)", () => {
     );
   });
 
+  it("tabs lists an image map's areas where their map sits, as Chromium tabs to them", async () => {
+    // Chromium's own Tab walk of this page, in 151 and 153. Since 153 its UA
+    // stylesheet gives every <area> `display: none`, and the walk dropped them
+    // all. An area follows its image instead: a stop while the image using
+    // its map is rendered, at the area's own place in the document. The
+    // unused map's area and the hidden image's are no stops. The GIF is a
+    // valid 1x1 image; a truncated one left a broken image whose fallback
+    // rendering varies by platform.
+    const gif =
+      "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+    const img = (alt: string, usemap: string, attrs = "") =>
+      `<img src="${gif}" width="10" height="10" alt="${alt}" usemap="${usemap}"${attrs}>`;
+    const map = (name: string, alt: string) =>
+      `<map name="${name}"><area href="/${name}" alt="${alt}" coords="0,0,10,10"></map>`;
+    const page = dataUrl(
+      "<!doctype html><title>Image map</title><main>" +
+        "<button>Before</button>" +
+        map("nav", "Home") +
+        "<button>Middle</button>" +
+        img("Site map", "#nav") +
+        img("Old map", "#old", ' style="display: none"') +
+        map("old", "Old home") +
+        map("unused", "Unused") +
+        "<button>After</button>" +
+        "</main>",
+    );
+    const { code, stdout, stderr } = await runCli(["tabs", page, "-q"]);
+    expect(code).toBe(0);
+    // stderr in the message: if a stop goes missing on one platform only,
+    // the failure should say what the CLI reported there.
+    expect(stdout.trimEnd(), `stderr:\n${stderr}`).toBe(
+      [
+        '01. button "Before"',
+        '02. link "Home"',
+        '03. button "Middle"',
+        '04. button "After"',
+      ].join("\n"),
+    );
+  });
+
   it("tabs lists a details' summary, as Chromium tabs to it", async () => {
     // The expected list is Chromium 151's own Tab walk of this page. The
     // in-page walk used to skip every summary, so a disclosure or FAQ toggle
