@@ -318,6 +318,23 @@ describe("extractA11yTree", () => {
     expect(fieldset!.a11y.name).toContain("Payment");
   });
 
+  it("leaves a closed details' body out, and brings it back once open", () => {
+    // Chromium 151's tree for the closed shape holds the group and its
+    // disclosure alone: no heading, image or link from the body.
+    const body = `<summary>S</summary><h2>Body heading</h2><img alt="Body img" src="x.gif"><a href="/x">Body link</a>`;
+    const names = (open: boolean) =>
+      [
+        ...extractA11yTree(
+          createPage(`<details${open ? " open" : ""}>${body}</details>`),
+        ).nodes.values(),
+      ].map((n) => n.a11y.name);
+
+    for (const name of ["Body heading", "Body img", "Body link"]) {
+      expect(names(false)).not.toContain(name);
+      expect(names(true)).toContain(name);
+    }
+  });
+
   it("does not duplicate label-for associated inputs", () => {
     // label[for] name lookup requires document context (uses querySelector on
     // ownerDocument). Attach to document.body for this test.

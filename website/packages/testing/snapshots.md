@@ -179,6 +179,8 @@ Returns the tab sequence, one stop per line in Tab order.
 
 The stops are the ones Chromium tabs to. An `<a>` without an `href` is not one, not even with `role="button"`, which is the keyboard bug worth catching. Nor is a control disabled directly or by its `<fieldset>`, or an element whose `tabindex` is not an integer, such as `""`. An `aria-disabled` control is a stop, because `aria-disabled` announces a state and leaves focus alone. So is the `<summary>` that toggles a `<details>`, such as an FAQ accordion's question, listed as `generic` and named by its text. Only the first `<summary>` child of a `<details>` is a stop; any other summary is plain text to Chromium. [`toHaveTabSequence`](/packages/testing/matchers#tohavetabsequence-expected) counts the same way.
 
+Nothing in the body of a closed `<details>` is a stop, not even a `<details>` nested in it. Chromium renders a closed disclosure as its summary alone, so Tab reaches the body only once it opens. The body is out of [`treeSnapshot`](#treesnapshot-root-options) and [`outlineSnapshot`](#outlinesnapshot-root-options) too, and [`toHaveTabSequence`](/packages/testing/matchers#tohavetabsequence-expected) counts the same way.
+
 ```ts
 expect(tabSequenceSnapshot(document.body)).toMatchSnapshot();
 ```

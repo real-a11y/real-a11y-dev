@@ -28,18 +28,30 @@ const { channel, observerState, extractorState } = vi.hoisted(() => {
       constructed: 0,
       started: 0,
       stopped: 0,
+      /** The debounced callback the live observer was constructed with. */
+      fire: null as ((change?: unknown) => void) | null,
       reset() {
         this.constructed = 0;
         this.started = 0;
         this.stopped = 0;
+        // Drop the callback too, so a test that fires before REQUEST_TREE
+        // drives nothing rather than passing vacuously against a stale one.
+        this.fire = null;
       },
     },
     extractorState: {
       constructed: 0,
       refreshCalls: 0,
+      /**
+       * Accessible name the mock extractor reports for the root node. Tests
+       * change it to simulate a mutation that actually altered the tree, and
+       * leave it alone to simulate one that did not.
+       */
+      rootName: "",
       reset() {
         this.constructed = 0;
         this.refreshCalls = 0;
+        this.rootName = "";
       },
     },
   };
@@ -53,10 +65,11 @@ vi.mock("@real-a11y-dev/core", () => {
   class DomObserver {
     constructor(
       _root: Element,
-      _cb: (change?: unknown) => void,
+      cb: (change?: unknown) => void,
       _debounce: number,
     ) {
       observerState.constructed += 1;
+      observerState.fire = cb;
     }
     start() {
       observerState.started += 1;
@@ -72,6 +85,8 @@ vi.mock("@real-a11y-dev/core", () => {
     }
     refresh() {
       extractorState.refreshCalls += 1;
+      // A fresh object graph every call, exactly like the real extractor: the
+      // payloads are only ever equal by VALUE, never by identity.
       return {
         nodes: new Map([
           [
@@ -80,7 +95,7 @@ vi.mock("@real-a11y-dev/core", () => {
               id: "root",
               a11y: {
                 role: "generic",
-                name: "",
+                name: extractorState.rootName,
                 description: "",
                 states: {},
                 properties: {},
@@ -118,6 +133,8 @@ vi.mock("@real-a11y-dev/core", () => {
     getElementRefs: () => new WeakMap(),
   };
 });
+
+import type { TreeUpdatePayload } from "./constants.js";
 
 let EVENTS: typeof import("./constants.js").EVENTS;
 
@@ -218,5 +235,95 @@ describe("preview channel bootstrap", () => {
     channel.emit(EVENTS.REQUEST_TREE);
     expect(updates).toHaveLength(1);
     expect(observerState.started).toBe(1);
+  });
+});
+
+describe("preview: redundant tree publishes", () => {
+  /** Drive the observer's debounced callback the way a DOM mutation would. */
+  function mutate() {
+    observerState.fire?.({ full: false });
+  }
+
+  it("does not re-emit TREE_UPDATED when the extracted tree is unchanged", () => {
+    const updates: unknown[] = [];
+    channel.on(EVENTS.TREE_UPDATED, (payload) => updates.push(payload));
+
+    channel.emit(EVENTS.REQUEST_TREE);
+    expect(updates).toHaveLength(1);
+
+    // Two mutations that extract to a byte-identical tree — an animation
+    // frame rewriting inline `style`, a change inside an aria-hidden subtree.
+    mutate();
+    mutate();
+
+    expect(updates).toHaveLength(1);
+  });
+
+  it("still re-extracts on every mutation so element refs stay fresh", () => {
+    channel.emit(EVENTS.REQUEST_TREE);
+    const afterStart = extractorState.refreshCalls;
+
+    mutate();
+    mutate();
+
+    expect(extractorState.refreshCalls).toBe(afterStart + 2);
+  });
+
+  it("emits when the mutation actually changed the tree", () => {
+    const updates: unknown[] = [];
+    channel.on(EVENTS.TREE_UPDATED, (payload) => updates.push(payload));
+
+    channel.emit(EVENTS.REQUEST_TREE);
+    expect(updates).toHaveLength(1);
+
+    extractorState.rootName = "Saved";
+    mutate();
+    expect(updates).toHaveLength(2);
+
+    // …and goes quiet again once it stops changing.
+    mutate();
+    expect(updates).toHaveLength(2);
+  });
+
+  it("emits on SET_MODE even when the tree bytes are identical", () => {
+    // `currentMode` is module state that outlives a single test, so pin the
+    // starting mode rather than assuming the default. This publishes nothing
+    // (no extractor yet).
+    channel.emit(EVENTS.SET_MODE, "a11y");
+
+    const updates: TreeUpdatePayload[] = [];
+    channel.on(EVENTS.TREE_UPDATED, (payload) =>
+      updates.push(payload as TreeUpdatePayload),
+    );
+
+    channel.emit(EVENTS.REQUEST_TREE);
+    expect(updates).toHaveLength(1);
+
+    channel.emit(EVENTS.SET_MODE, "dom");
+
+    // The mock extractor returns the same nodes for either mode, but `mode`
+    // is part of the payload — suppressing this would leave a listener
+    // reading `payload.mode` on the mode the user just switched away from.
+    expect(updates).toHaveLength(2);
+    expect(updates[1]!.mode).toBe("dom");
+
+    // Re-selecting the mode the panel is already in carries nothing new.
+    channel.emit(EVENTS.SET_MODE, "dom");
+    expect(updates).toHaveLength(2);
+  });
+
+  it("re-emits the first tree after a restart, unchanged or not", () => {
+    const updates: unknown[] = [];
+    channel.on(EVENTS.TREE_UPDATED, (payload) => updates.push(payload));
+
+    channel.emit(EVENTS.REQUEST_TREE);
+    expect(updates).toHaveLength(1);
+
+    // A story render tears the extractor down and stands a new one up. The
+    // manager may have remounted with no tree at all, so the first publish
+    // after a restart must never be suppressed as a duplicate.
+    channel.emit("storyRendered");
+
+    expect(updates).toHaveLength(2);
   });
 });

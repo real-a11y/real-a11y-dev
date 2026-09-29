@@ -1610,6 +1610,138 @@ describe("name from content through a <details>", () => {
   });
 });
 
+// Chromium renders a closed `<details>` as its summary alone: the body sits in
+// a UA slot that hides it, so its accessibility tree omits the body and Tab
+// never reaches a control in it. Nothing on the body's own nodes says so, so
+// the walk has to know the rule. Every expectation below is Chromium 151's
+// own tree for the same markup, read over CDP.
+describe("a closed <details> renders only its summary", () => {
+  function tags(html: string): string[] {
+    return [...extractDomTree(createPage(html)).nodes.values()].map(
+      (n) => n.dom!.tagName,
+    );
+  }
+
+  function namesOf(html: string): string[] {
+    return [...extractDomTree(createPage(html)).nodes.values()].map(
+      (n) => n.a11y.name,
+    );
+  }
+
+  it("walks the summary but not the body", () => {
+    const names = namesOf(
+      `<main><details><summary>S</summary><a href="/x">Hidden link</a><button>Hidden button</button></details><a href="/y">Visible</a></main>`,
+    );
+    expect(names).not.toContain("Hidden link");
+    expect(names).not.toContain("Hidden button");
+    expect(names).toContain("Visible");
+    expect(tags(`<details><summary>S</summary><p>Body</p></details>`)).toEqual([
+      "div",
+      "details",
+      "summary",
+    ]);
+  });
+
+  it("walks the whole disclosure once it is open", () => {
+    const names = namesOf(
+      `<details open><summary>S</summary><a href="/x">Body link</a><button>Body button</button></details>`,
+    );
+    expect(names).toContain("Body link");
+    expect(names).toContain("Body button");
+  });
+
+  it("hides a details nested in a closed body, summary and all", () => {
+    const html = `<details><summary>Outer</summary><details><summary>Inner</summary><a href="/i">Inner link</a></details></details>`;
+    expect(tags(html)).toEqual(["div", "details", "summary"]);
+    expect(namesOf(html)).not.toContain("Inner");
+  });
+
+  it("walks a closed inner details' summary inside an open outer one", () => {
+    const html = `<details open><summary>Outer</summary><details><summary>Inner</summary><a href="/i">Inner link</a></details></details>`;
+    expect(tags(html)).toEqual([
+      "div",
+      "details",
+      "summary",
+      "details",
+      "summary",
+    ]);
+  });
+
+  it("walks the first summary child, even after other content", () => {
+    const tree = extractDomTree(
+      createPage(
+        `<details>Loose text<a href="/l">Before</a><summary>First</summary><summary>Second</summary><button>After</button></details>`,
+      ),
+    );
+    const nodes = [...tree.nodes.values()];
+    expect(nodes.map((n) => n.dom!.tagName)).toEqual([
+      "div",
+      "details",
+      "summary",
+    ]);
+    expect(nodes[2]!.dom!.textContent).toBe("First");
+  });
+
+  it("hides a closed body whatever the details' role is", () => {
+    for (const role of ["none", "group", "button"]) {
+      expect(
+        namesOf(
+          `<details role="${role}" aria-label="G"><summary>S</summary><button>Hidden B</button></details>`,
+        ),
+      ).not.toContain("Hidden B");
+    }
+  });
+
+  it("keeps the summary's own content, controls included", () => {
+    const names = namesOf(
+      `<details><summary>S <a href="/in">In summary</a></summary><a href="/x">Body</a></details>`,
+    );
+    expect(names).toContain("In summary");
+    expect(names).not.toContain("Body");
+  });
+
+  it("gives a closed details with no summary no children", () => {
+    const tree = extractDomTree(
+      createPage(`<details><a href="/n">No-summary link</a></details>`),
+    );
+    const details = [...tree.nodes.values()].find(
+      (n) => n.dom!.tagName === "details",
+    )!;
+    expect(details.childIds).toEqual([]);
+  });
+
+  it("leaves the hidden body's text out of the details' text previews", () => {
+    const tree = extractDomTree(
+      createPage(
+        `<details>Loose text<summary>S</summary>More text<p>Body</p></details>`,
+      ),
+    );
+    const details = [...tree.nodes.values()].find(
+      (n) => n.dom!.tagName === "details",
+    )!;
+    expect(details.dom!.textContent).toBe("");
+    expect(details.dom!.descendantText).toBe("S");
+  });
+
+  it("keeps a description target whose only referrer is in a closed body", () => {
+    // The input is never rendered, so its aria-describedby reaches nobody and
+    // the help text is ordinary visible content. Folding it into a node that
+    // is no longer in the tree lost it altogether.
+    const root = createPage(
+      `<details><summary>S</summary><input aria-label="Code" aria-describedby="help"></details><p id="help">Help text</p>`,
+    );
+    document.body.appendChild(root);
+    try {
+      const names = [...extractDomTree(root).nodes.values()].map(
+        (n) => n.dom?.textContent,
+      );
+      expect(names).toContain("Help text");
+    } finally {
+      root.remove();
+    }
+  });
+});
+
 describe("accessible-name cycle safety (accname visit-once)", () => {
   // Since PR #101, name-from-content recurses into named-widget descendants
   // (getAccessibleTextContent -> computeAccessibleName), and
@@ -2436,7 +2568,7 @@ describe("interaction.isFocusable follows Chromium", () => {
       focusableById(`
         <details><summary id="closed">Shipping</summary><p>Body</p></details>
         <details open><summary id="open">Returns</summary><p>Body</p></details>
-        <details>
+        <details open>
           <summary id="first">A</summary>
           <summary id="second">B</summary>
         </details>
@@ -2455,7 +2587,8 @@ describe("interaction.isFocusable follows Chromium", () => {
       closed: true,
       open: true,
       // Only the first summary child is the details' summary, even when
-      // other content comes before it.
+      // other content comes before it. (Open, so the second one is in the
+      // tree at all: a closed details' body is left out.)
       first: true,
       second: false,
       "after-text": true,

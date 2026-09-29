@@ -42,6 +42,13 @@ const shadowRootGetter = elementProto
 const hiddenGetter = htmlElementProto
   ? Object.getOwnPropertyDescriptor(htmlElementProto, "hidden")?.get
   : undefined;
+const parentElementGetter = nodeProto
+  ? Object.getOwnPropertyDescriptor(nodeProto, "parentElement")?.get
+  : undefined;
+const assignedSlotGetter = elementProto
+  ? Object.getOwnPropertyDescriptor(elementProto, "assignedSlot")?.get
+  : undefined;
+const getRootNodeMethod = nodeProto?.getRootNode;
 
 /** Clobber-immune `element.children` (always an array of the real children). */
 export function safeChildren(element: Element): Element[] {
@@ -69,6 +76,31 @@ export function safeShadowRoot(element: Element): ShadowRoot | null {
     ? shadowRootGetter.call(element)
     : element.shadowRoot;
   return root && root.nodeType === 11 ? (root as ShadowRoot) : null;
+}
+
+/**
+ * Clobber-immune `node.parentElement`. A climb that reads it plainly never
+ * ends on a `<form>` holding `<input name="parentElement">`: the form's parent
+ * is the input, whose parent is the form again.
+ */
+export function safeParentElement(node: Node): Element | null {
+  const parent = parentElementGetter
+    ? parentElementGetter.call(node)
+    : node.parentElement;
+  return parent && parent.nodeType === 1 ? (parent as Element) : null;
+}
+
+/** Clobber-immune `element.assignedSlot` (`<input name="assignedSlot">`). */
+export function safeAssignedSlot(element: Element): HTMLSlotElement | null {
+  const slot = assignedSlotGetter
+    ? assignedSlotGetter.call(element)
+    : element.assignedSlot;
+  return slot && slot.nodeType === 1 ? (slot as HTMLSlotElement) : null;
+}
+
+/** Clobber-immune `node.getRootNode()` (`<input name="getRootNode">`). */
+export function safeRootNode(node: Node): Node {
+  return getRootNodeMethod ? getRootNodeMethod.call(node) : node.getRootNode();
 }
 
 /** Clobber-immune `node.textContent`, coerced to a string. */
