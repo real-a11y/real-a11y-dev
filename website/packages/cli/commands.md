@@ -254,6 +254,10 @@ question, listed as `generic` and named by its text. Only the first `<summary>`
 child of a `<details>` is a stop. A second one, or a summary anywhere else, is
 plain text to Chromium.
 
+Nothing in the body of a closed `<details>` is a stop, not even a `<details>`
+nested in it. Chromium renders a closed disclosure as its summary alone, so Tab
+reaches the body only once it opens.
+
 ```sh
 real-a11y tabs https://example.com
 real-a11y tabs https://example.com --root "#app main"

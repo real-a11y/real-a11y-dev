@@ -51,35 +51,7 @@ const parentNodeGetter = nodeProto
 const assignedSlotGetter = elementProto
   ? Object.getOwnPropertyDescriptor(elementProto, "assignedSlot")?.get
   : undefined;
-
-/**
- * Clobber-immune `element.parentElement`, `.parentNode` and `.assignedSlot`.
- *
- * A walk UP the tree is where clobbering does the most harm: `<input
- * name="parentElement">` makes a form's parent read as its own child, and
- * `<input name="assignedSlot">` makes it read as a slot whose parent is the
- * form again. Either way a loop over ancestors cycles forever and hangs the
- * page, rather than throwing.
- */
-export function safeParentElement(node: Node): Element | null {
-  return parentElementGetter
-    ? (parentElementGetter.call(node) as Element | null)
-    : node.parentElement;
-}
-
-/** Clobber-immune `node.parentNode`. See `safeParentElement`. */
-export function safeParentNode(node: Node): ParentNode | null {
-  return parentNodeGetter
-    ? (parentNodeGetter.call(node) as ParentNode | null)
-    : node.parentNode;
-}
-
-/** Clobber-immune `element.assignedSlot`. See `safeParentElement`. */
-export function safeAssignedSlot(element: Element): HTMLSlotElement | null {
-  return assignedSlotGetter
-    ? (assignedSlotGetter.call(element) as HTMLSlotElement | null)
-    : element.assignedSlot;
-}
+const getRootNodeMethod = nodeProto?.getRootNode;
 
 /** Clobber-immune `element.children` (always an array of the real children). */
 export function safeChildren(element: Element): Element[] {
@@ -107,6 +79,38 @@ export function safeShadowRoot(element: Element): ShadowRoot | null {
     ? shadowRootGetter.call(element)
     : element.shadowRoot;
   return root && root.nodeType === 11 ? (root as ShadowRoot) : null;
+}
+
+/**
+ * Clobber-immune `node.parentElement`. A climb that reads it plainly never
+ * ends on a `<form>` holding `<input name="parentElement">`: the form's parent
+ * is the input, whose parent is the form again.
+ */
+export function safeParentElement(node: Node): Element | null {
+  const parent = parentElementGetter
+    ? parentElementGetter.call(node)
+    : node.parentElement;
+  return parent && parent.nodeType === 1 ? (parent as Element) : null;
+}
+
+/** Clobber-immune `node.parentNode`. See `safeParentElement`. */
+export function safeParentNode(node: Node): ParentNode | null {
+  return parentNodeGetter
+    ? (parentNodeGetter.call(node) as ParentNode | null)
+    : node.parentNode;
+}
+
+/** Clobber-immune `element.assignedSlot` (`<input name="assignedSlot">`). */
+export function safeAssignedSlot(element: Element): HTMLSlotElement | null {
+  const slot = assignedSlotGetter
+    ? assignedSlotGetter.call(element)
+    : element.assignedSlot;
+  return slot && slot.nodeType === 1 ? (slot as HTMLSlotElement) : null;
+}
+
+/** Clobber-immune `node.getRootNode()` (`<input name="getRootNode">`). */
+export function safeRootNode(node: Node): Node {
+  return getRootNodeMethod ? getRootNodeMethod.call(node) : node.getRootNode();
 }
 
 /** Clobber-immune `node.textContent`, coerced to a string. */

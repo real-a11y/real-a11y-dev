@@ -1097,6 +1097,142 @@ describe("LiveTreeExtractor", () => {
     });
   });
 
+  // A closed <details> renders only its summary, so the body has to come and
+  // go with `open` — which find-in-page also sets, like it clears
+  // `hidden="until-found"` on the match it reveals.
+  describe("a <details> body across a refresh", () => {
+    function track(html: string, mode: "a11y" | "dom") {
+      document.body.innerHTML = html;
+      const live = new LiveTreeExtractor(document.body, { mode });
+      let lastChange: TreeChange | undefined;
+      const observer = new DomObserver(
+        document.body,
+        (change) => {
+          lastChange = change;
+        },
+        50,
+      );
+      observer.start();
+      const clean = () =>
+        mode === "a11y"
+          ? extractA11yTree(document.body)
+          : extractDomTree(document.body);
+      return {
+        async step(mutate: () => void) {
+          mutate();
+          await vi.advanceTimersByTimeAsync(100);
+          const result = live.refresh(lastChange);
+          expect(result.nodes).toEqual(clean().nodes);
+          return [...result.nodes.values()].map((n) => n.a11y.name);
+        },
+        stop: () => observer.stop(),
+      };
+    }
+
+    it.each(["a11y", "dom"] as const)(
+      "adds the body when it opens and drops it when it closes (%s)",
+      async (mode) => {
+        const t = track(
+          `<main><details><summary>S</summary><a href="/x">Body link</a></details></main>`,
+          mode,
+        );
+        const details = document.querySelector("details")!;
+        expect(await t.step(() => details.setAttribute("open", ""))).toContain(
+          "Body link",
+        );
+        expect(
+          await t.step(() => details.removeAttribute("open")),
+        ).not.toContain("Body link");
+        t.stop();
+      },
+    );
+
+    it("splices around a change inside a closed body, not re-extracting the page", async () => {
+      document.body.innerHTML = `<main><p>Background</p><details><summary>S</summary><div id="body"></div></details></main>`;
+      const live = new LiveTreeExtractor(document.body, { mode: "dom" });
+      let lastChange: TreeChange | undefined;
+      const observer = new DomObserver(
+        document.body,
+        (change) => {
+          lastChange = change;
+        },
+        50,
+      );
+      observer.start();
+      const paragraph = (result: ExtractionResult) =>
+        [...result.nodes.values()].find((n) => n.dom!.tagName === "p");
+      const before = paragraph(live.extract());
+      document.getElementById("body")!.append("Streamed log line");
+      await vi.advanceTimersByTimeAsync(100);
+      const after = live.refresh(lastChange);
+      observer.stop();
+      // A full extraction rebuilds every node object; a splice leaves the
+      // untouched ones referentially identical.
+      expect(before).toBeDefined();
+      expect(paragraph(after)).toBe(before);
+      expect(after.nodes).toEqual(extractDomTree(document.body).nodes);
+    });
+
+    it("splices around a change inside a light child no slot takes", async () => {
+      document.body.innerHTML = `<main><p>Background</p><x-box><div id="unslotted"></div></x-box></main>`;
+      document
+        .querySelector("x-box")!
+        .attachShadow({ mode: "open" }).innerHTML = `<span>Box</span>`;
+      const live = new LiveTreeExtractor(document.body, { mode: "dom" });
+      let lastChange: TreeChange | undefined;
+      const observer = new DomObserver(
+        document.body,
+        (change) => {
+          lastChange = change;
+        },
+        50,
+      );
+      observer.start();
+      const paragraph = (result: ExtractionResult) =>
+        [...result.nodes.values()].find((n) => n.dom!.tagName === "p");
+      const before = paragraph(live.extract());
+      document.getElementById("unslotted")!.append("Not rendered");
+      await vi.advanceTimersByTimeAsync(100);
+      const after = live.refresh(lastChange);
+      observer.stop();
+      expect(paragraph(after)).toBe(before);
+      expect(after.nodes).toEqual(extractDomTree(document.body).nodes);
+    });
+
+    it("keeps a control added to a closed body out", async () => {
+      const t = track(
+        `<main><details><summary>S</summary><div id="body"></div></details><h2>Shown</h2></main>`,
+        "a11y",
+      );
+      const names = await t.step(() => {
+        const b = document.createElement("button");
+        b.textContent = "Added";
+        document.getElementById("body")!.appendChild(b);
+      });
+      expect(names).toContain("Shown");
+      expect(names).not.toContain("Added");
+      t.stop();
+    });
+
+    it("brings back content find-in-page reveals from hidden=until-found", async () => {
+      const t = track(
+        `<main><div id="uf" hidden="until-found"><a href="/u">Found link</a></div><h2>Shown</h2></main>`,
+        "a11y",
+      );
+      expect(
+        [...extractA11yTree(document.body).nodes.values()].map(
+          (n) => n.a11y.name,
+        ),
+      ).not.toContain("Found link");
+      expect(
+        await t.step(() =>
+          document.getElementById("uf")!.removeAttribute("hidden"),
+        ),
+      ).toContain("Found link");
+      t.stop();
+    });
+  });
+
   it("keeps a reparented node when its destination was dirtied first", () => {
     document.body.innerHTML = `
       <main id="app">

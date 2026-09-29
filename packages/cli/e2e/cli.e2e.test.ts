@@ -339,6 +339,30 @@ describe("the native producer is the only producer (built bin)", () => {
     expect(stdout).toMatch(/01\. /);
   });
 
+  it("tabs skips the controls in a closed <details>' body", async () => {
+    // Chromium 151's Tab walk of this page reaches the summaries S and O, the
+    // open disclosure's link and "Visible", never the closed body or the
+    // details nested in it. Whether a rendered summary is itself a stop is a
+    // separate rule, so those two lines are left out of the comparison.
+    const page = dataUrl(
+      "<!doctype html><title>Details</title><main>" +
+        "<details><summary>S</summary>" +
+        "<a href='/x'>Hidden link</a><button>Hidden button</button>" +
+        "<details><summary>Nested</summary><a href='/n'>Nested link</a></details>" +
+        "</details>" +
+        "<details open><summary>O</summary><a href='/o'>Open link</a></details>" +
+        "<a href='/y'>Visible</a></main>",
+    );
+    const { code, stdout } = await runCli(["tabs", page, "-q"]);
+    expect(code).toBe(0);
+    const stops = stdout
+      .trimEnd()
+      .split("\n")
+      .map((line) => line.replace(/^\d+\. /, ""))
+      .filter((stop) => !/^\S+ "(S|O)"$/.test(stop));
+    expect(stops).toEqual(['link "Open link"', 'link "Visible"']);
+  });
+
   it("tabs stops at each editor and its island link, never at a link typed into one", async () => {
     // Chromium tabs to both editing hosts and to the contenteditable="false"
     // mention chip, and can't focus the link typed into the composer at all.

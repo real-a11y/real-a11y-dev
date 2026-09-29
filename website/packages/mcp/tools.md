@@ -235,6 +235,8 @@ The stops are the ones Chromium tabs to. An `<a>` without an `href` is not one, 
 
 So is the `<summary>` that toggles a `<details>`, such as an FAQ accordion's question, listed as `generic` and named by its text. Only the first `<summary>` child of a `<details>` is a stop. A second one, or a summary anywhere else, is plain text to Chromium.
 
+Nothing in the body of a closed `<details>` is a stop, not even a `<details>` nested in it. Chromium renders a closed disclosure as its summary alone, so Tab reaches the body only once it opens.
+
 Parameters:
 
 - **`rootSelector`** — string — optional (default `"body"`) — CSS selector for the walk.

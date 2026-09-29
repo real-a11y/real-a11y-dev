@@ -770,26 +770,6 @@ function isImplicitDetailsGroup(element: Element): boolean {
 }
 
 /**
- * The children name-from-content walks. Normally the flat-tree children; for
- * a closed `<details>`, only its summary (the first `<summary>` child), since
- * everything else in it is hidden until it opens. The body isn't hidden by
- * any style on its own nodes (the UA slot does it), so the per-child hidden
- * check can't catch it: a bare text node there would otherwise leak into the
- * name. Applies whatever the details' role is — `role="none"` changes what
- * it is, not what is rendered.
- */
-function nameContentChildren(element: Element): Node[] {
-  if (
-    element.tagName.toLowerCase() === "details" &&
-    !(element as HTMLDetailsElement).open
-  ) {
-    const summary = element.querySelector(":scope > summary");
-    return summary ? [summary] : [];
-  }
-  return flatChildNodes(element);
-}
-
-/**
  * Recursive text-content walker for accessible name/description computation.
  *
  * Per WAI-ARIA accname-1.2 §4.3.2 step 2A, hidden subtrees contribute the
@@ -799,6 +779,11 @@ function nameContentChildren(element: Element): Node[] {
  * Also skips descendants whose computed role is in `NAME_BARRIER_ROLES` —
  * see the set's docstring for the reasoning (treeitem-in-group, nested
  * widgets, etc.).
+ *
+ * Walks `flatChildNodes`, which gives a closed `<details>` its summary alone.
+ * Its body isn't hidden by any style on its own nodes (a UA slot does it), so
+ * the per-child hidden check couldn't catch it: a bare text node there would
+ * otherwise leak into the name.
  *
  * The root element itself is NOT checked — callers reach this with an
  * element that is either already exposed to AT (name-from-content) or
@@ -811,7 +796,7 @@ function getAccessibleTextContent(
   styleCache?: StyleCache | null,
 ): string {
   let text = "";
-  for (const child of nameContentChildren(element)) {
+  for (const child of flatChildNodes(element)) {
     if (child.nodeType === Node.TEXT_NODE) {
       text += child.textContent || "";
     } else if (child.nodeType === Node.ELEMENT_NODE) {
@@ -1295,8 +1280,8 @@ function getFieldText(element: Element, styleCache?: StyleCache): string {
     const breaks = LINE_BREAKING_TAGS.has(tag);
     // Whitespace never trips the cap, so these two appends can't end the walk.
     if (breaks) appendCollapsedTextChunk(state, " ");
-    // A closed <details> renders only its <summary> — the name walker's rule.
-    for (const child of nameContentChildren(el)) {
+    // flatChildNodes gives a closed <details> only its <summary>.
+    for (const child of flatChildNodes(el)) {
       if (walk(child, isVisible(style))) return true;
     }
     if (breaks) appendCollapsedTextChunk(state, " ");
@@ -1304,7 +1289,7 @@ function getFieldText(element: Element, styleCache?: StyleCache): string {
   };
   let truncated = false;
   const ownVisible = isVisible(getCachedComputedStyle(element, styleCache));
-  for (const child of nameContentChildren(element)) {
+  for (const child of flatChildNodes(element)) {
     if (walk(child, ownVisible)) {
       truncated = true;
       break;
@@ -2440,6 +2425,9 @@ function walk(
 
   // Walk children. Each child is isolated by buildNode's own boundary, so a
   // single pathological descendant can't take out its siblings or ancestors.
+  // `flatChildren` leaves out what the browser doesn't render even though no
+  // style on it says so: a light child no slot takes, a hidden slot's
+  // assignment, and a closed <details>' body.
   for (const child of flatChildren(element)) {
     const childId = walk(
       child,

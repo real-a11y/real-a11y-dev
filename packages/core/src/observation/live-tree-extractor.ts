@@ -11,7 +11,10 @@ import {
   resolveEffectiveRoot,
   resolveFocusedElement,
 } from "../extraction/dom-extractor.js";
-import { deepQuerySelectorAll } from "../extraction/flat-tree.js";
+import {
+  deepQuerySelectorAll,
+  isRenderedInFlatTree,
+} from "../extraction/flat-tree.js";
 import type { ExtractionResult, SemanticNode, TreeChange } from "../types.js";
 import { getNodeId } from "../utils/id-generator.js";
 
@@ -269,6 +272,13 @@ export class LiveTreeExtractor {
       const id = getNodeId(r);
       const existing = this.domNodes.get(id);
       if (!existing) {
+        // Something the browser doesn't render (a closed <details>' body, a
+        // light child no slot takes) has nothing to splice, and reaches the
+        // tree only through what is dirty in its own right: a referrer or
+        // description target (expandDependencies), a name host
+        // (nameRelevantAncestor), the <details>' own `open`. Streaming into a
+        // collapsed log must not re-walk the page on every batch.
+        if (!isRenderedInFlatTree(r)) continue;
         return this.extract();
       }
       plans.push({

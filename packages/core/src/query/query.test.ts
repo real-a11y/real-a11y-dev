@@ -340,6 +340,23 @@ describe("getTabSequence", () => {
     expect(names).toEqual(["A", "B"]);
   });
 
+  it("skips the controls in a closed details' body, as Chromium's Tab does", () => {
+    // Chromium 151 tabs to the summaries and "Visible" only. Whether a summary
+    // is itself a stop is a rule of its own, so only the rest is compared.
+    const root = createPage(`
+      <details><summary>S</summary>
+        <a href="/x">Hidden link</a><button>Hidden button</button>
+        <details><summary>Nested</summary><a href="/n">Nested link</a></details>
+      </details>
+      <details open><summary>O</summary><a href="/o">Open link</a></details>
+      <a href="/y">Visible</a>
+    `);
+    const names = getTabSequence(extractDomTree(root))
+      .filter((n) => n.dom?.tagName !== "summary")
+      .map((n) => n.a11y.name);
+    expect(names).toEqual(["Open link", "Visible"]);
+  });
+
   // Every expectation below was recorded by pressing Tab through the same
   // markup in Chromium 151 and reading `document.activeElement`.
   describe("contenteditable", () => {

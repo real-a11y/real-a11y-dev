@@ -18,6 +18,14 @@
 
 ## Unreleased
 
+- In DOM mode, the body of a closed `<details>` no longer shows in the tree,
+  the Tab Sequence view, its copied export or the keyboard bar's Tab. Chromium
+  renders a closed disclosure as its summary alone and never tabs into the
+  rest, but DOM mode listed every link, button and heading in it, and a
+  `<details>` nested in it, as NATIVE mode never did. The body appears when
+  the `<details>` opens and goes when it closes.
+  ([#433](https://github.com/real-a11y/real-a11y-dev/pull/433))
+
 - In DOM mode, an option in a disabled `<select>` or `<optgroup>`, and a
   control inside an `aria-disabled="true"` container, now show as disabled in
   the tree and in the Buttons and Forms lists, as NATIVE mode already showed

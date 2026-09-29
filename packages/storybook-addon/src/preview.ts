@@ -8,7 +8,9 @@
  * another tab.
  *
  * While active, re-extracts on debounced DOM mutations and broadcasts the
- * result as structured JSON over the Storybook channel. Also listens for
+ * result as structured JSON over the Storybook channel — but only when that
+ * result differs from the last one published, so a mutation that extracts to
+ * the same tree costs no postMessage and no panel re-render. Also listens for
  * highlight / activate requests and applies them via FocusManager /
  * ActionDispatcher.
  */
@@ -83,6 +85,29 @@ let liveExtractor: LiveTreeExtractor | null = null;
 let currentMode: TreeMode = "a11y";
 /** True while the manager panel wants a live tree (REQUEST_TREE … STOP_TREE). */
 let panelWantsTree = false;
+/**
+ * JSON of the last payload actually put on the channel, with `extractedAt`
+ * left out and `mode` kept in. `null` means "nothing published since the
+ * extractor was stood up", so the next publish always goes out.
+ *
+ * A DomObserver fire need not change the tree, and the ones that don't used to
+ * ship every node with its full dom/a11y/interaction/ui sub-objects across the
+ * iframe boundary and re-render the whole panel anyway. The two that matter
+ * are the high-frequency ones: inline `style`/`transform` churn (a CSS
+ * animation, an open menu repositioned every scroll frame) and mutations
+ * inside a hidden or `aria-hidden` subtree, which the walk skips entirely.
+ *
+ * Note what this does NOT suppress: `class` is a key attribute, so it lands in
+ * `dom.attributes` and a class toggle always publishes; and a re-render that
+ * REPLACES elements mints fresh node ids, so only frameworks that patch nodes
+ * in place dedup.
+ *
+ * Deliberately the whole JSON rather than a hash of it: this is retained only
+ * while the panel is open, and it is smaller than the node Map the extractor
+ * already holds, whereas a hash collision would silently withhold a real
+ * update and leave the panel showing a stale tree.
+ */
+let lastPublished: string | null = null;
 
 function liveExtractorMode(mode: TreeMode): "dom" | "a11y" {
   return mode === "dom" ? "dom" : "a11y";
@@ -118,12 +143,35 @@ function publish(change?: TreeChange) {
   if (!liveExtractor) return;
   const channel = addons.getChannel();
 
+  // Always re-extract, even when nothing ends up being sent: refresh()
+  // rebuilds the element WeakMap, which is what keeps highlight refs fresh.
+  const tree = buildSerializableTree(change);
+
+  // `mode` is part of the signature because it is part of the payload: two
+  // modes can extract to the same nodes, and a listener reading `payload.mode`
+  // (documented on the website) would never see the switch. The bundled
+  // manager happens to track its own view mode, so this is for everyone else.
+  // `extractedAt` is excluded — it is `Date.now()`, so including it would
+  // defeat the comparison entirely.
+  //
+  // This costs one JSON.stringify on a publish that does go out (the channel
+  // serializes independently). It buys skipping the channel's own serialize +
+  // structured clone and the manager's full re-render on the fires that carry
+  // nothing new, which on an animating or Controls-driven story is most of
+  // them.
+  const signature = JSON.stringify({ mode: currentMode, tree });
+  if (signature === lastPublished) return;
+
   const payload: TreeUpdatePayload = {
-    tree: buildSerializableTree(change),
+    tree,
     mode: currentMode,
     extractedAt: Date.now(),
   };
   channel.emit(EVENTS.TREE_UPDATED, payload);
+  // Only after it is actually on the channel: a throwing emit must not leave
+  // an undelivered tree recorded as published, or the panel stays stale until
+  // something else changes.
+  lastPublished = signature;
 }
 
 function start() {
@@ -158,6 +206,11 @@ function stop() {
   focusManager = null;
   dispatcher = null;
   liveExtractor = null;
+  // A story render (or a panel reopen) tears this down and stands a new one
+  // up, and the manager may have remounted with no tree at all — so the first
+  // publish after a restart must never be withheld as a duplicate of the tree
+  // the PREVIOUS extractor published.
+  lastPublished = null;
 }
 
 // ── Bootstrap ────────────────────────────────────────────────────────────────

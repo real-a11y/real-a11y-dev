@@ -477,6 +477,9 @@ main
     code "generic"
     code "<summary>"
     code "<details>"
+  paragraph "Nothing in the body of a closed is a stop, not even a nested in it. Chromium renders a closed disclosure as its summary alone, so Tab reaches the body only once it opens."
+    code "<details>"
+    code "<details>"
   paragraph "Parameters:"
   list
     listitem "— string — optional (default ) — CSS selector for the walk."
