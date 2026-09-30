@@ -58,6 +58,7 @@
 
 import {
   normalizeNativeAX,
+  nativeAXStateValue,
   serializeNativeAX,
   buildCssPath,
   finishAnnouncedValue,
@@ -918,17 +919,7 @@ function axFacets(raw: RawAXNode): Pick<A11yInfo, "states" | "properties"> {
     const v = p.value?.value;
     if (v === undefined || v === null || typeof v === "object") continue;
     if (STATE_PROPS.has(p.name)) {
-      // Chromium sends some states as booleans and some as "true"/"false"
-      // strings; normalize the latter so native states read like DOM ones
-      // (a tristate like aria-pressed="mixed" stays a string).
-      states[p.name] =
-        typeof v === "boolean"
-          ? v
-          : v === "true"
-            ? true
-            : v === "false"
-              ? false
-              : String(v);
+      states[p.name] = nativeAXStateValue(v, p.value?.type);
     } else if (DETAIL_PROPS.has(p.name)) {
       properties[p.name] = String(v);
     }

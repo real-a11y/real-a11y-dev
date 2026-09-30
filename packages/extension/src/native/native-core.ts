@@ -37,6 +37,7 @@
  */
 
 import {
+  nativeAXStateValue,
   normalizeNativeAX,
   REDACTED_VALUE,
   serializeNativeAX,
@@ -74,7 +75,10 @@ export const NATIVE_REDACTED_VALUE = REDACTED_VALUE;
  * normalizer by design (R4) rather than growing a second enrichment path.
  */
 interface RawAXNode extends RawNativeAXNode {
-  properties?: Array<{ name: string; value?: { value?: unknown } }>;
+  properties?: Array<{
+    name: string;
+    value?: { type?: string; value?: unknown };
+  }>;
   description?: { value?: string };
 }
 
@@ -161,17 +165,7 @@ function axFacets(
     const v = p.value?.value;
     if (v === undefined || v === null || typeof v === "object") continue;
     if (STATE_PROPS.has(p.name)) {
-      // Chromium sends some states as booleans and some as "true"/"false"
-      // strings; normalize the latter so native states read like DOM ones
-      // (a tristate like aria-pressed="mixed" stays a string).
-      states[p.name] =
-        typeof v === "boolean"
-          ? v
-          : v === "true"
-            ? true
-            : v === "false"
-              ? false
-              : String(v);
+      states[p.name] = nativeAXStateValue(v, p.value?.type);
     } else if (DETAIL_PROPS.has(p.name)) {
       properties[p.name] = String(v);
     }

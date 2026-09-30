@@ -239,3 +239,38 @@ export const NATIVE_AX_AUTHOR_NAMED_ROLES: ReadonlySet<string> = new Set([
   "scrollbar",
   "separator",
 ]);
+
+/**
+ * Decode one CDP `AXValue` of a state property (`busy`, `pressed`,
+ * `expanded`, …) into what `a11y.states` holds, so a native state reads the
+ * way the DOM producer writes the same one. `type` is the value's CDP
+ * `AXValueType`.
+ *
+ * Chromium's wire encoding is not uniform. Most boolean states arrive as JSON
+ * booleans, but `busy` arrives as a NUMBER under a boolean type —
+ * `{"type":"boolean","value":1}` in Chromium 151 and 153, the only property
+ * that does across every ARIA state and property. The tristates (`checked`,
+ * `pressed`) arrive as the strings `"true"` / `"false"` / `"mixed"`. So a
+ * boolean-typed value is a boolean whatever its JSON type, `"true"` and
+ * `"false"` are booleans, and everything else — `"mixed"`, a token such as
+ * `invalid`'s `"grammar"` — stays a string.
+ *
+ * Every native transport decodes states through this, so none can drift from
+ * the others. It never touches `normalizeNativeAX`'s output (states aren't
+ * part of it), so it doesn't move {@link NATIVE_AX_VOCABULARY_VERSION}.
+ */
+export function nativeAXStateValue(
+  value: unknown,
+  type?: string,
+): boolean | string {
+  if (typeof value === "boolean") return value;
+  if (
+    typeof value === "number" &&
+    (type === "boolean" || type === "booleanOrUndefined")
+  ) {
+    return value !== 0;
+  }
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return String(value);
+}

@@ -22,6 +22,12 @@
 
 ## Unreleased
 
+- In NATIVE mode, an element with `aria-busy="true"` now shows a `busy`
+  badge in the tree and the filtered lists, as DOM mode does. Chromium sends
+  that state as the number `1`, and the native tree read it as text, so the
+  badge said `busy=1` in the tree and `busy: 1` in the lists.
+  ([#441](https://github.com/real-a11y/real-a11y-dev/pull/441))
+
 - In DOM mode, the body of a closed `<details>` no longer shows in the tree,
   the Tab Sequence view, its copied export or the keyboard bar's Tab. Chromium
   renders a closed disclosure as its summary alone and never tabs into the
