@@ -518,10 +518,12 @@ on:
   workflow_dispatch: {}
 permissions:
   contents: read
-  security-events: write # upload SARIF to code scanning
 jobs:
   scan:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write # upload SARIF to code scanning
     steps:
       - uses: actions/checkout@v4
       # …install deps, build, and start your site (as in the templates above)…
