@@ -6,6 +6,32 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 /**
+ * The parent reads a `<form>` can shadow, each with the reader in
+ * `packages/core/src/extraction/clobber-safe.ts` that it can't. A `<form>` has
+ * `[LegacyOverrideBuiltIns]`, so `<input name="parentElement">` makes
+ * `form.parentElement` that input — whose parent is the form again, and a
+ * plain climb spins forever. Finding every such climb by grep missed five, so
+ * the lint rule finds them instead.
+ */
+const CLOBBER_SAFE_PARENT_READS = [
+  { property: "parentElement", reader: "safeParentElement", onDocument: true },
+  { property: "parentNode", reader: "safeParentNode", onDocument: true },
+  { property: "assignedSlot", reader: "safeAssignedSlot", onDocument: false },
+].map(({ property, reader, onDocument }) => ({
+  property,
+  message:
+    `Read it with ${reader}() from core's extraction/clobber-safe.ts (the ` +
+    `extension gets the readers from @real-a11y-dev/core). A <form> shadows ` +
+    `it with a control named "${property}"` +
+    (onDocument
+      ? ` (the document with a named <img>, <form>, <embed> or <object>)`
+      : "") +
+    `, so a climb that reads it plainly cycles forever. A single read on a ` +
+    `node that can never be a <form> or the document may disable this with ` +
+    `a one-line reason.`,
+}));
+
+/**
  * Flat-config setup for the real-a11y monorepo.
  *
  * Layered, in order:
@@ -15,9 +41,10 @@ import tseslint from "typescript-eslint";
  *      requires a tsconfig project per package and slows things down)
  *   4. Browser globals for src/, Node globals for scripts/
  *   5. import-order rules
- *   6. jsx-a11y on .tsx/.jsx
- *   7. Test file relaxations (Vitest fixtures often include broken markup)
- *   8. eslint-config-prettier LAST — disables formatting rules that fight
+ *   6. Clobber-safe parent reads in core and the extension
+ *   7. jsx-a11y on .tsx/.jsx
+ *   8. Test file relaxations (Vitest fixtures often include broken markup)
+ *   9. eslint-config-prettier LAST — disables formatting rules that fight
  *      Prettier
  */
 export default [
@@ -95,6 +122,23 @@ export default [
       // escapes (e.g. Vitest declaration merges) use eslint-disable with a
       // reason; tests keep the rule off (see below).
       "@typescript-eslint/no-explicit-any": "error",
+    },
+  },
+
+  // Clobber-safe parent reads in the code that walks the page's own DOM.
+  // Tests read parents to assert on fixtures they built; clobber-safe.ts is
+  // where the plain read is the fallback.
+  {
+    files: [
+      "packages/core/src/**/*.{ts,tsx}",
+      "packages/extension/src/**/*.{ts,tsx}",
+    ],
+    ignores: [
+      "**/*.test.{ts,tsx}",
+      "packages/core/src/extraction/clobber-safe.ts",
+    ],
+    rules: {
+      "no-restricted-properties": ["error", ...CLOBBER_SAFE_PARENT_READS],
     },
   },
 

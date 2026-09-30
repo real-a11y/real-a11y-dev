@@ -725,6 +725,7 @@ const NAME_SOURCE_CHILD_TO_OWNER: Readonly<Record<string, string>> = {
 export function htmlAamNameOwner(element: Element): Element | null {
   const ownerTag = NAME_SOURCE_CHILD_TO_OWNER[element.tagName.toLowerCase()];
   if (!ownerTag) return null;
+  // eslint-disable-next-line no-restricted-properties -- one read, and a <legend>, <summary> or <caption> is never a form
   const parent = element.parentElement;
   if (!parent || parent.tagName.toLowerCase() !== ownerTag) return null;
   if (element.tagName.toLowerCase() === "caption") {

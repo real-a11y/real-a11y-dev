@@ -240,13 +240,15 @@ export class LiveTreeExtractor {
           }
         } else if (m.type === "characterData") {
           const target = m.target as CharacterData;
-          if (target.parentElement) {
+          // eslint-disable-next-line no-restricted-properties -- one read, and a text or comment node is never a form
+          const parent = target.parentElement;
+          if (parent) {
             // Add the direct parent too (not just its name host): it may carry
             // the id an aria-labelledby/-describedby referrer points at, and
             // expandDependencies only discovers referrers from elements in the
             // dirty set. Mirrors the attribute / childList branches.
-            dirty.add(target.parentElement);
-            dirty.add(this.nameRelevantAncestor(target.parentElement));
+            dirty.add(parent);
+            dirty.add(this.nameRelevantAncestor(parent));
           }
         }
       }
