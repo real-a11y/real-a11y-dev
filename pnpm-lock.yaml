@@ -606,10 +606,6 @@ importers:
         version: 3.2.7(@types/node@22.19.17)(@vitest/browser@3.2.7)(jiti@2.6.1)(jsdom@29.1.1)(lightningcss@1.32.0)(yaml@2.9.1)
 
   packages/storybook-addon:
-    dependencies:
-      '@real-a11y-dev/testing':
-        specifier: workspace:*
-        version: link:../testing
     devDependencies:
       '@real-a11y-dev/core':
         specifier: workspace:*
