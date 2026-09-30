@@ -9,7 +9,7 @@ banner
     link "Guide"
     link "Recipes"
     link "Packages"
-    button "v0.1.0-beta.16"
+    button "v0.1.0-beta.17"
   switch "Switch to dark theme"
   link "github"
 
