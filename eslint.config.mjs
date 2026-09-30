@@ -20,8 +20,9 @@ const CLOBBER_SAFE_PARENT_READS = [
 ].map(({ property, reader, onDocument }) => ({
   property,
   message:
-    `Read it with ${reader}() from core's extraction/clobber-safe.ts (the ` +
-    `extension gets the readers from @real-a11y-dev/core). A <form> shadows ` +
+    `Read it with ${reader}() from core's extraction/clobber-safe.ts (outside ` +
+    `core, import it from @real-a11y-dev/core, exporting it from core's ` +
+    `index.ts if it isn't yet). A <form> shadows ` +
     `it with a control named "${property}"` +
     (onDocument
       ? ` (the document with a named <img>, <form>, <embed> or <object>)`
@@ -127,7 +128,10 @@ export default [
 
   // Clobber-safe parent reads in the code that walks the page's own DOM.
   // Tests read parents to assert on fixtures they built; clobber-safe.ts is
-  // where the plain read is the fallback.
+  // where the plain read is the fallback. Each exemption is an audited
+  // `eslint-disable-next-line`, so one that stops matching a read is an error
+  // rather than the default warning — a stale exemption would otherwise sit
+  // there waiting to excuse the next plain read on its line.
   {
     files: [
       "packages/core/src/**/*.{ts,tsx}",
@@ -137,6 +141,7 @@ export default [
       "**/*.test.{ts,tsx}",
       "packages/core/src/extraction/clobber-safe.ts",
     ],
+    linterOptions: { reportUnusedDisableDirectives: "error" },
     rules: {
       "no-restricted-properties": ["error", ...CLOBBER_SAFE_PARENT_READS],
     },
