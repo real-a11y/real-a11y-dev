@@ -80,6 +80,10 @@ interface FilteredListViewProps {
   activateDisabled?: boolean;
   /** The items come from a scoped subtree; says so when there are none. */
   scoped?: boolean;
+  /** The scope root's id, or null when unscoped. A change re-finds the
+   *  selected item by id, since a wider or narrower scope shifts every index
+   *  after the first item it adds or drops. */
+  scopeKey?: string | null;
 }
 
 export function FilteredListView({
@@ -92,6 +96,7 @@ export function FilteredListView({
   onFocusSearch,
   activateDisabled = false,
   scoped = false,
+  scopeKey = null,
 }: FilteredListViewProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
@@ -104,6 +109,25 @@ export function FilteredListView({
     setSelectedIndex(0);
     typeAhead.current.clear();
   }, [roleFilter, query]);
+
+  // Follow the selected item, not its index, across a scope change: leaving
+  // a scope can add matches ahead of it, and Enter would then act on a row
+  // the user never selected. Falls back to the first item when the selected
+  // one is outside the new scope. `selectedIdRef` still holds the previous
+  // commit's selection here, because it is updated by the effect below.
+  const selectedIdRef = useRef<string | null>(null);
+  const prevScopeKey = useRef(scopeKey);
+  useEffect(() => {
+    if (prevScopeKey.current === scopeKey) return;
+    prevScopeKey.current = scopeKey;
+    const id = selectedIdRef.current;
+    const at = id === null ? -1 : items.findIndex((item) => item.id === id);
+    setSelectedIndex(Math.max(at, 0));
+    typeAhead.current.clear();
+  }, [scopeKey, items]);
+  useEffect(() => {
+    selectedIdRef.current = items[selectedIndex]?.id ?? null;
+  });
 
   const selectedItem = items[selectedIndex] ?? null;
 
@@ -378,6 +402,7 @@ export function FilteredList({
       roleFilter={roleFilter}
       query={query}
       scoped={scoped}
+      scopeKey={scoped ? scopeRootId : null}
       {...rest}
     />
   );

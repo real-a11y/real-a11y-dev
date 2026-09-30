@@ -116,6 +116,69 @@ describe("FilteredList", () => {
     expect(options().map((o) => o.textContent)).toEqual(["H3Troubleshooting"]);
   });
 
+  describe("a scope change with the list showing", () => {
+    // `h2` and `h3` sit under `section`; `h1` is outside it.
+    function sectioned(): Map<string, SemanticNode> {
+      const nodes = new Map<string, SemanticNode>([
+        ...HEADINGS,
+        listNode("section", "region", "Help"),
+      ]);
+      (nodes.get("h2") as { parentId: string }).parentId = "section";
+      (nodes.get("h3") as { parentId: string }).parentId = "section";
+      return nodes;
+    }
+
+    function show(
+      nodes: Map<string, SemanticNode>,
+      scopeRootId: string | null,
+    ) {
+      act(() => {
+        render(
+          <FilteredList
+            nodes={nodes}
+            scopeRootId={scopeRootId}
+            roleFilter="heading"
+            query=""
+            onHighlight={noop}
+            onActivate={noop}
+            onGoToTree={noop}
+          />,
+          container,
+        );
+      });
+    }
+
+    function selectedLabel(): string | null | undefined {
+      return container.querySelector('[role="option"][aria-selected="true"]')
+        ?.textContent;
+    }
+
+    it("keeps the selected item when leaving the scope adds matches ahead of it", () => {
+      // Regression (Devin Review): the list kept its index, so leaving the
+      // scope moved the selection from Troubleshooting to Install, and
+      // Enter would have acted on a row nobody picked.
+      const nodes = sectioned();
+      show(nodes, "section");
+      act(() => {
+        listbox().dispatchEvent(
+          new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+        );
+      });
+      expect(selectedLabel()).toBe("H3Troubleshooting");
+
+      show(nodes, null);
+      expect(options()).toHaveLength(3);
+      expect(selectedLabel()).toBe("H3Troubleshooting");
+    });
+
+    it("falls back to the first item when the selected one leaves the scope", () => {
+      const nodes = sectioned();
+      show(nodes, null); // Overview is selected
+      show(nodes, "section");
+      expect(selectedLabel()).toBe("H2Install");
+    });
+  });
+
   it("says a scoped list is empty in this scope", () => {
     act(() => {
       render(

@@ -270,6 +270,25 @@ describe("NativeTreeView scope", () => {
     );
   });
 
+  it("✕ from a role-filter list keeps the selected item, not its index", () => {
+    // Regression (Devin Review): the scoped Headings list holds only Deep.
+    // Leaving the scope puts Overview ahead of it, and the list used to keep
+    // index 0 and so land on Overview.
+    mount({ initialScope: "sec" });
+    act(() => pill("Headings").click());
+    act(() =>
+      container.querySelector<HTMLButtonElement>(".sn-scope-exit")!.click(),
+    );
+    const labels = [
+      ...container.querySelectorAll<HTMLElement>('[role="option"]'),
+    ].map((o) => o.textContent);
+    expect(labels).toEqual(["Overview", "Deep", "Footer"]);
+    expect(
+      container.querySelector('[role="option"][aria-selected="true"]')
+        ?.textContent,
+    ).toBe("Deep");
+  });
+
   function search(text: string) {
     const input = container.querySelector<HTMLInputElement>(".sn-search")!;
     act(() => {
