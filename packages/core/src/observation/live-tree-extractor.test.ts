@@ -1017,18 +1017,19 @@ describe("LiveTreeExtractor", () => {
      * by answering as jsdom does. Either way, fire the `toggle` event a
      * browser would.
      */
+    let showingSpy: { mockRestore(): void } | undefined;
     function setShowing(popover: Element, showing: boolean): void {
-      vi.restoreAllMocks();
+      showingSpy?.mockRestore();
+      showingSpy = undefined;
       if (showing) {
         const matches = Element.prototype.matches;
-        vi.spyOn(Element.prototype, "matches").mockImplementation(function (
-          this: Element,
-          selector: string,
-        ) {
-          return selector === ":popover-open"
-            ? this === popover
-            : matches.call(this, selector);
-        });
+        showingSpy = vi
+          .spyOn(Element.prototype, "matches")
+          .mockImplementation(function (this: Element, selector: string) {
+            return selector === ":popover-open"
+              ? this === popover
+              : matches.call(this, selector);
+          });
       }
       popover.dispatchEvent(new Event("toggle"));
     }
@@ -1091,6 +1092,28 @@ describe("LiveTreeExtractor", () => {
       );
       expect(expandedOf(result, "Menu")).toBe(true);
       expect(result.nodes).toEqual(extractA11yTree(main).nodes);
+    });
+
+    it("re-extracts the popover's parent and its invokers, not the page", async () => {
+      document.body.innerHTML = `<main><button popovertarget="menu">Menu</button><section><div id="menu" popover>x</div></section></main>`;
+      const extract = vi.spyOn(LiveTreeExtractor.prototype, "extract");
+      const result = await refreshAfter(document.body, () =>
+        setShowing(document.getElementById("menu")!, true),
+      );
+      // Once, from the constructor.
+      expect(extract).toHaveBeenCalledTimes(1);
+      expect(expandedOf(result, "Menu")).toBe(true);
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+    });
+
+    it("re-extracts only the invoker for a popover outside the tree", async () => {
+      document.body.innerHTML = `<main><button popovertarget="menu">Menu</button></main><div id="menu" popover>x</div>`;
+      const main = document.querySelector("main")!;
+      const extract = vi.spyOn(LiveTreeExtractor.prototype, "extract");
+      await refreshAfter(main, () =>
+        setShowing(document.getElementById("menu")!, true),
+      );
+      expect(extract).toHaveBeenCalledTimes(1);
     });
 
     it("follows an invoker re-pointed at a showing popover", async () => {

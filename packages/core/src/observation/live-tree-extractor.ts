@@ -1,7 +1,7 @@
 import { buildA11yTree } from "../extraction/a11y-extractor.js";
 import {
   containsOverlaySignal,
-  controlExpanded,
+  expandedState,
   extractDomTree,
   getDescendantText,
   fieldValueOwner,
@@ -15,6 +15,7 @@ import {
 } from "../extraction/dom-extractor.js";
 import {
   deepQuerySelectorAll,
+  flatParent,
   isRenderedInFlatTree,
 } from "../extraction/flat-tree.js";
 import type { ExtractionResult, SemanticNode, TreeChange } from "../types.js";
@@ -175,10 +176,16 @@ export class LiveTreeExtractor {
         // A popover that showed or hid, from its `toggle` event. That can move
         // the scope, like a menu showing outside the root, and one outside the
         // tree has nothing of its own to re-extract: only its invokers, which
-        // addMovedInvokers finds.
+        // addMovedInvokers finds. One inside re-extracts from its parent, which
+        // is in the tree whether or not the popover was: a popover that just
+        // showed has no node to splice, and would cost a full extraction.
         if (el.hasAttribute("popover")) {
           scopeSuspect = true;
-          if (!(this.effectiveRoot ?? this.root).contains(el)) continue;
+          const tree = this.effectiveRoot ?? this.root;
+          if (!tree.contains(el)) continue;
+          const parent = flatParent(el);
+          dirty.add(parent && tree.contains(parent) ? parent : el);
+          continue;
         }
         dirty.add(el);
       }
@@ -397,7 +404,7 @@ export class LiveTreeExtractor {
       const el = refs.get(id);
       if (!el?.hasAttribute("popovertarget") && !el?.hasAttribute("commandfor"))
         continue;
-      if (controlExpanded(el, node.a11y.role) !== node.a11y.states["expanded"])
+      if (expandedState(el, node.a11y.role) !== node.a11y.states["expanded"])
         dirty.add(el);
     }
   }

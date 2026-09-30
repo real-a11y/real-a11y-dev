@@ -267,8 +267,11 @@ export class DomObserver {
     // controls that invoke it, so no MutationRecord ever reports either. Its
     // `toggle` event is the only signal. That doesn't bubble, hence the capture
     // phase, and it is heard across `root`'s whole tree: a popover mounted
-    // outside `root` still expands an invoker inside it. A `<details>` or
-    // `<dialog>` fires one too, but changes its `open` attribute as well.
+    // outside `root` still expands an invoker inside it. The event isn't
+    // composed either, so a popover inside a shadow root below that tree is
+    // not heard: its next refresh comes from whatever else changes. A
+    // `<details>` or `<dialog>` fires one too, but changes its `open`
+    // attribute as well.
     this.toggleListener = (e: Event) => {
       if (e.target instanceof Element && e.target.hasAttribute("popover")) {
         this.pendingDirtyRoots.push(e.target);

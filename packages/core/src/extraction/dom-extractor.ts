@@ -1932,9 +1932,9 @@ function referencedElement(
  * True for a submit button: an `<input>` of type submit or image, or a
  * `<button>` of type submit. A `<button>` with a missing or invalid type is
  * one too, unless it has a `commandfor`, which makes it a plain button.
+ * `type` is its `type` attribute, lowercased.
  */
-function isSubmitButton(element: Element, tag: string): boolean {
-  const type = (element.getAttribute("type") ?? "").toLowerCase();
+function isSubmitButton(element: Element, tag: string, type: string): boolean {
   if (tag === "input") return type === "submit" || type === "image";
   if (type === "button" || type === "reset") return false;
   return type === "submit" || !element.hasAttribute("commandfor");
@@ -1952,14 +1952,14 @@ function isSubmitButton(element: Element, tag: string): boolean {
  *   one submits the form instead.
  */
 function invokedElement(element: Element, tag: string): Element | null {
+  const type = (element.getAttribute("type") ?? "").toLowerCase();
   if (tag === "input") {
-    const type = (element.getAttribute("type") ?? "").toLowerCase();
     if (!POPOVER_INVOKER_INPUT_TYPES.has(type)) return null;
   } else if (tag !== "button") {
     return null;
   }
   if (isActuallyDisabled(element)) return null;
-  if (isSubmitButton(element, tag) && (element as HTMLButtonElement).form)
+  if (isSubmitButton(element, tag, type) && (element as HTMLButtonElement).form)
     return null;
   if (tag === "button") {
     const command = (element.getAttribute("command") ?? "").toLowerCase();
@@ -2020,22 +2020,18 @@ function popoverExpanded(
 }
 
 /**
- * The `expanded` state {@link getAriaStates} gives a `<button>` or `<input>`:
- * its popover's, from {@link popoverExpanded}, or else its `aria-expanded`.
+ * The `expanded` state {@link getAriaStates} gives `element` in `role`.
  *
  * A popover shows and hides with no mutation on the controls that invoke it,
- * so `LiveTreeExtractor` re-reads this for each of them on refresh.
+ * so `LiveTreeExtractor` re-reads this for each of them on refresh. It asks
+ * `getAriaStates` itself rather than restating its precedence, which would
+ * drift. `focusable` decides only `disabled`, so it is passed as false.
  */
-export function controlExpanded(
+export function expandedState(
   element: Element,
   role: string,
 ): boolean | undefined {
-  const tag = element.tagName.toLowerCase();
-  return (
-    popoverExpanded(element, tag, role) ??
-    ariaBoolean(element.getAttribute("aria-expanded")) ??
-    undefined
-  );
+  return getAriaStates(element, role, false)["expanded"] as boolean | undefined;
 }
 
 /**

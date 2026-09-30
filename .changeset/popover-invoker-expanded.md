@@ -21,7 +21,7 @@ The rule, as measured against Chromium 151 and 153:
 - **Inside its own popover:** a control inside the popover it invokes, like a close button, reads `aria-expanded` as before. A popover that invokes itself doesn't count as inside.
 - **Roles:** only a role Chromium gives an expanded state takes the popover's: `button`, `link`, `menuitem`, `menuitemcheckbox`, `menuitemradio`, `tab`, `checkbox`, `switch`, `combobox`, `treeitem`, `row`, `gridcell`, `columnheader`, `rowheader`, `listitem` and `application`. An invoker with another author role, such as `role="radio"`, reads `aria-expanded` as before.
 
-A live tree now also refreshes when a popover opens or closes. Neither changes an attribute, so nothing re-extracted, and a panel kept the invoker's old state and the popover's old content until something else changed. It now listens for the popover's `toggle` event, including for a popover outside the observed root, and re-reads every invoker on refresh. It also watches `popovertarget`, `commandfor`, `command`, `popover` and `form`.
+A live tree now also refreshes when a popover opens or closes. Neither changes an attribute, so nothing re-extracted, and a panel kept the invoker's old state and the popover's old content until something else changed. It now listens for the popover's `toggle` event, including for a popover outside the observed root, and re-reads every invoker on refresh. The event doesn't cross a shadow root, so a popover inside a component's shadow tree still updates only on the next refresh something else triggers. It also watches `popovertarget`, `commandfor`, `command`, `popover` and `form`.
 
 What this changes for you:
 
