@@ -138,6 +138,15 @@
   type into still leaves them out, as Chromium does.
   ([#460](https://github.com/real-a11y/real-a11y-dev/pull/460))
 
+- In DOM mode, a `<select>` that shows more than one row, such as
+  `<select size="3">`, now shows as a `listbox` in the tree and the Tab
+  Sequence view, as Chromium's own accessibility tree reports it. DOM mode
+  called every `<select>` without `multiple` a `combobox`. A
+  `<select multiple size="1">`, which Chromium renders as a drop-down, now
+  shows as a `combobox`. Changing a select's `size` or `multiple` on the page
+  updates the tree.
+  ([#445](https://github.com/real-a11y/real-a11y-dev/pull/445))
+
 ## 0.1.14
 
 ### Patch Changes

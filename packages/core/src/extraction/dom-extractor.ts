@@ -1737,6 +1737,11 @@ export const KEY_ATTRIBUTES = [
   "method",
   "placeholder",
   "tabindex",
+  // A <select>'s role: more than one row showing makes it a listbox. The
+  // testing matcher reads them back to tell a redundant authored role, and
+  // the observer must see them flip, or a live tree keeps the old role.
+  "size",
+  "multiple",
   // Media a11y signals (boolean attributes render as "")
   "controls",
   "autoplay",

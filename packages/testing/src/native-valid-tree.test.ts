@@ -54,6 +54,22 @@ describe("native HTML is valid without author-supplied ARIA", () => {
     ).toBeValidA11yTree();
   });
 
+  it("a <select> showing more than one row — a listbox", () => {
+    expect(
+      mount(
+        `<label>Status <select size="3"><option>Open</option><option>Done</option></select></label>`,
+      ),
+    ).toBeValidA11yTree();
+  });
+
+  it("a <select multiple size=1> — the drop-down HTML allows for it", () => {
+    expect(
+      mount(
+        `<label>Tags <select multiple size="1"><option>Bug</option><option>UI</option></select></label>`,
+      ),
+    ).toBeValidA11yTree();
+  });
+
   it("checkboxes, checked and unchecked", () => {
     expect(
       mount(`<label><input type="checkbox"> Weekends</label>`),
@@ -98,6 +114,19 @@ describe("native HTML is valid without author-supplied ARIA", () => {
     expect(
       mount(
         `<label>F <input list="fruits" role="combobox"></label><datalist id="fruits"></datalist>`,
+      ),
+    ).toBeValidA11yTree();
+  });
+
+  it("a redundant role follows a select's size, not only its tag", () => {
+    expect(
+      mount(
+        `<label>S <select size="3" role="listbox"><option>A</option></select></label>`,
+      ),
+    ).toBeValidA11yTree();
+    expect(
+      mount(
+        `<label>S <select multiple size="1" role="combobox"><option>A</option></select></label>`,
       ),
     ).toBeValidA11yTree();
   });
@@ -184,6 +213,24 @@ describe("authored ARIA still owes the contract", () => {
       'option "A" — interactive "option" is nested inside "combobox" — nested controls aren\'t operable by assistive tech',
     );
   });
+
+  it.each([
+    ["size", `size="3"`],
+    ["multiple", "multiple"],
+  ])(
+    "role=combobox on a list-box select (%s) is authored, not redundant",
+    (_label, attrs) => {
+      // More than one row shows, so the select is a listbox and the author
+      // changed its role. Chromium exposes the combobox, whose options are
+      // nested controls.
+      const root = mount(
+        `<label>S <select ${attrs} role="combobox"><option>A</option></select></label>`,
+      );
+      expect(violations(root)).toContain(
+        'option "A" — interactive "option" is nested inside "combobox" — nested controls aren\'t operable by assistive tech',
+      );
+    },
+  );
 });
 
 describe("the nesting rule and its exemption, asserted by message", () => {

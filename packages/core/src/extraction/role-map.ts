@@ -181,6 +181,43 @@ function isLandmarkContext(el: Element): boolean {
   return true;
 }
 
+/** HTML's rules for parsing non-negative integers: ASCII whitespace, an optional `+`, digits. */
+const HTML_NON_NEGATIVE_INTEGER = /^[\t\n\f\r ]*\+?(\d+)/;
+
+/** Chromium holds a select's size as an unsigned 32-bit integer; a larger value fails to parse. */
+const MAX_SELECT_SIZE = 0xffffffff;
+
+/**
+ * A `<select>`'s implicit role over its markup alone — its `size` and
+ * `multiple` attributes — for callers with no live `Element`, such as the
+ * testing matcher reading a node's recorded `dom.attributes`. The role map
+ * reads an element through this too, so the two cannot disagree.
+ *
+ * A select is a list box when it shows more than one row, and a drop-down
+ * combobox otherwise. HTML calls the row count its display size: `size` when
+ * it parses to a positive integer, otherwise 4 for a `multiple` select and 1
+ * for any other. HTML-AAM maps every `multiple` select to a list box, but
+ * HTML lets one with a display size of 1 render as a drop-down, and Chromium
+ * does — so `<select multiple size="1">` is a combobox in its tree, and here.
+ *
+ * Parsed from the attribute rather than read off the `size` property, which
+ * reads 0 past 2^31 - 1 where Chromium still counts the rows.
+ */
+export function selectRoleFromAttributes(attributes: {
+  size?: string | null;
+  multiple?: string | null;
+}): "listbox" | "combobox" {
+  const match = HTML_NON_NEGATIVE_INTEGER.exec(attributes.size ?? "");
+  const size = match ? Number(match[1]) : 0;
+  const displaySize =
+    size > 0 && size <= MAX_SELECT_SIZE
+      ? size
+      : attributes.multiple != null
+        ? 4
+        : 1;
+  return displaySize > 1 ? "listbox" : "combobox";
+}
+
 const INPUT_TYPE_ROLE_MAP: Record<string, string> = {
   button: "button",
   checkbox: "checkbox",
@@ -342,7 +379,11 @@ const ROLE_MAP: Record<string, RoleResolver> = {
   samp: "generic",
   search: "search",
   section: (el) => (hasAccessibleName(el) ? "region" : "generic"),
-  select: (el) => ((el as HTMLSelectElement).multiple ? "listbox" : "combobox"),
+  select: (el) =>
+    selectRoleFromAttributes({
+      size: el.getAttribute("size"),
+      multiple: el.getAttribute("multiple"),
+    }),
   slot: "generic",
   small: "generic",
   span: "generic",
