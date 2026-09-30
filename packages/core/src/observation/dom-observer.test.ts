@@ -1004,5 +1004,94 @@ describe("DomObserver", () => {
 
       expect(onTreeChange).toHaveBeenCalledTimes(1);
     });
+
+    // What a control invokes decides its expanded state.
+    it.each([
+      ["popovertarget", "b"],
+      ["commandfor", "b"],
+      ["command", "show-popover"],
+      ["form", "f"],
+    ])("fires when an invoker's %s changes", async (attr, value) => {
+      document.body.innerHTML = `<form id="f"></form><button id="menu" popovertarget="a" commandfor="a" command="toggle-popover">Menu</button><div id="a" popover>x</div><div id="b" popover>y</div>`;
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      document.getElementById("menu")!.setAttribute(attr, value);
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("fires when an element stops being a popover", async () => {
+      document.body.innerHTML = `<div id="menu" popover>x</div>`;
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      document.getElementById("menu")!.removeAttribute("popover");
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // A popover shows and hides with no attribute changing anywhere, so only
+  // its `toggle` event says so. It doesn't bubble.
+  describe("popover toggles", () => {
+    function toggle(el: Element): void {
+      el.dispatchEvent(new Event("toggle"));
+    }
+
+    it("fires with the popover as a dirty root", () => {
+      document.body.innerHTML = `<main><div id="menu" popover>x</div></main>`;
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      const menu = document.getElementById("menu")!;
+      toggle(menu);
+      vi.advanceTimersByTime(110);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      expect(onTreeChange.mock.calls[0][0].dirtyRoots).toEqual([menu]);
+    });
+
+    it("hears a popover outside the root", () => {
+      document.body.innerHTML = `<main><button popovertarget="menu">Menu</button></main><div id="menu" popover>x</div>`;
+      observer = new DomObserver(
+        document.querySelector("main")!,
+        onTreeChange,
+        100,
+      );
+      observer.start();
+
+      toggle(document.getElementById("menu")!);
+      vi.advanceTimersByTime(110);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("ignores a toggle on anything else, which changes its open attribute too", () => {
+      document.body.innerHTML = `<details id="d"><summary>S</summary>x</details>`;
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      toggle(document.getElementById("d")!);
+      vi.advanceTimersByTime(110);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
+
+    it("stops listening on stop()", () => {
+      document.body.innerHTML = `<div id="menu" popover>x</div>`;
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+      observer.stop();
+
+      toggle(document.getElementById("menu")!);
+      vi.advanceTimersByTime(110);
+
+      expect(onTreeChange).not.toHaveBeenCalled();
+    });
   });
 });

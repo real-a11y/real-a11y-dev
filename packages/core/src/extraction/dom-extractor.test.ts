@@ -34,6 +34,24 @@ function fakeShowModal(dialog: Element): void {
   dialog.setAttribute("open", "");
 }
 
+/**
+ * jsdom has no `showPopover()`, and `:popover-open` never matches there — so
+ * show these popovers by answering `:popover-open` for them alone. jsdom still
+ * styles each one `display: none`, so a test that needs one's content in the
+ * tree renders it with an inline style.
+ */
+function fakeShowPopovers(...popovers: Element[]): void {
+  const matches = Element.prototype.matches;
+  vi.spyOn(Element.prototype, "matches").mockImplementation(function (
+    this: Element,
+    selector: string,
+  ) {
+    return selector === ":popover-open"
+      ? popovers.includes(this)
+      : matches.call(this, selector);
+  });
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -1269,6 +1287,288 @@ describe("extractDomTree", () => {
       button: true,
       "button-false": false,
       link: undefined,
+    });
+  });
+
+  describe("a popover invoker's expanded state", () => {
+    /**
+     * `expanded` by id, on a connected page: an invoker resolves its popover
+     * by id in its own tree. The popovers named in `open` are showing.
+     */
+    function expandedOnPage(
+      html: string,
+      ...open: string[]
+    ): Record<string, unknown> {
+      document.body.innerHTML = html;
+      try {
+        fakeShowPopovers(
+          ...open.map((id) => document.getElementById(id) as Element),
+        );
+        return stateById(document.body, "expanded");
+      } finally {
+        document.body.innerHTML = "";
+      }
+    }
+
+    const POPOVERS = `
+      <div id="closed" popover>x</div>
+      <div id="open" popover>x</div>
+      <div id="plain">x</div>
+    `;
+
+    it("is whether the popover is showing, whatever aria-expanded says", () => {
+      expect(
+        expandedOnPage(
+          `
+          <button id="collapsed" popovertarget="closed">a</button>
+          <button id="collapsed-true" popovertarget="closed" aria-expanded="true">b</button>
+          <button id="expanded" popovertarget="open">c</button>
+          <button id="expanded-false" popovertarget="open" aria-expanded="false">d</button>
+          <input id="input-button" type="button" popovertarget="closed" value="e" aria-expanded="true">
+          <input id="input-submit" type="submit" popovertarget="closed" value="f" aria-expanded="true">
+          <input id="input-reset" type="reset" popovertarget="closed" value="g" aria-expanded="true">
+          <input id="input-image" type="image" popovertarget="open" alt="h" aria-expanded="false">
+          <button id="action-show" popovertarget="closed" popovertargetaction="show" aria-expanded="true">i</button>
+          <button id="action-hide" popovertarget="open" popovertargetaction="hide">j</button>
+          <button id="aria-disabled" aria-disabled="true" popovertarget="closed" aria-expanded="true">k</button>
+          <button id="submit-no-form" type="submit" popovertarget="closed" aria-expanded="true">l</button>
+          <form><button id="form-button" type="button" popovertarget="closed" aria-expanded="true">m</button></form>
+          <form><button id="form-reset" type="RESET" popovertarget="closed" aria-expanded="true">n</button></form>
+          <form><input id="form-input-button" type="button" popovertarget="closed" value="o" aria-expanded="true"></form>
+          <button id="form-missing" form="nowhere" popovertarget="closed" aria-expanded="true">p</button>
+          <div id="manual" popover="manual">x</div>
+          <button id="to-manual" popovertarget="manual" aria-expanded="true">q</button>
+          <div id="hint" popover="hint">x</div>
+          <button id="to-hint" popovertarget="hint">r</button>
+          <div id="bogus" popover="bogus">x</div>
+          <button id="to-bogus" popovertarget="bogus" aria-expanded="true">s</button>
+          ${POPOVERS}
+        `,
+          "open",
+        ),
+      ).toEqual({
+        collapsed: false,
+        "collapsed-true": false,
+        expanded: true,
+        "expanded-false": true,
+        // Each input type that can invoke a popover.
+        "input-button": false,
+        "input-submit": false,
+        "input-reset": false,
+        "input-image": true,
+        // Whatever the click would do to it.
+        "action-show": false,
+        "action-hide": true,
+        // Only a disabled control stops invoking.
+        "aria-disabled": false,
+        // A submit button submits its form instead, but only with one.
+        "submit-no-form": false,
+        "form-button": false,
+        "form-reset": false,
+        "form-input-button": false,
+        "form-missing": false,
+        // Every popover type, and an invalid one, which is manual.
+        "to-manual": false,
+        "to-hint": false,
+        "to-bogus": false,
+      });
+    });
+
+    it("falls back to aria-expanded when the control invokes no popover", () => {
+      expect(
+        expandedOnPage(
+          `
+          <button id="missing" popovertarget="nowhere" aria-expanded="true">a</button>
+          <button id="missing-unset" popovertarget="nowhere">b</button>
+          <button id="not-a-popover" popovertarget="plain" aria-expanded="true">c</button>
+          <button id="disabled" disabled popovertarget="open" aria-expanded="false">d</button>
+          <button id="disabled-unset" disabled popovertarget="open">e</button>
+          <fieldset disabled><button id="fieldset-disabled" popovertarget="closed" aria-expanded="true">f</button></fieldset>
+          <form><button id="form-submit" popovertarget="closed" aria-expanded="true">g</button></form>
+          <form><button id="form-invalid-type" type="bogus" popovertarget="closed" aria-expanded="true">h</button></form>
+          <form><input id="form-input-submit" type="submit" popovertarget="closed" value="i" aria-expanded="true"></form>
+          <form><input id="form-input-image" type="image" popovertarget="closed" alt="j" aria-expanded="true"></form>
+          <form id="owner"></form>
+          <button id="form-attribute" form="owner" popovertarget="closed" aria-expanded="true">k</button>
+          <input id="checkbox" type="checkbox" popovertarget="closed" aria-label="l" aria-expanded="true">
+          <a id="link" href="#" popovertarget="closed" aria-expanded="true">m</a>
+          <div id="div-button" role="button" tabindex="0" popovertarget="closed" aria-expanded="true">n</div>
+          ${POPOVERS}
+        `,
+          "open",
+        ),
+      ).toEqual({
+        missing: true,
+        "missing-unset": undefined,
+        "not-a-popover": true,
+        plain: undefined,
+        // A disabled control invokes nothing, even from a disabled fieldset.
+        disabled: false,
+        "disabled-unset": undefined,
+        "fieldset-disabled": true,
+        // A submit button with a form, a <button> by default and with an
+        // invalid type, submits it instead.
+        "form-submit": true,
+        "form-invalid-type": true,
+        "form-input-submit": true,
+        "form-input-image": true,
+        "form-attribute": true,
+        // Not a button: an input of another type, an element of another tag.
+        checkbox: true,
+        link: true,
+        "div-button": true,
+      });
+    });
+
+    it("takes the state from commandfor's popover, which outranks popovertarget", () => {
+      expect(
+        expandedOnPage(
+          `
+          <button id="toggle" commandfor="closed" command="toggle-popover" aria-expanded="true">a</button>
+          <button id="show" commandfor="open" command="show-popover">b</button>
+          <button id="hide" commandfor="open" command="hide-popover" aria-expanded="false">c</button>
+          <button id="upper" commandfor="open" command="TOGGLE-POPOVER">d</button>
+          <button id="not-a-popover" commandfor="plain" command="toggle-popover" aria-expanded="true">e</button>
+          <button id="outranks" commandfor="closed" command="toggle-popover" popovertarget="open">f</button>
+          <button id="custom" commandfor="closed" command="--custom" popovertarget="open">g</button>
+          <dialog id="dialog">x</dialog>
+          <button id="dialog-command" commandfor="dialog" command="show-modal" popovertarget="open">h</button>
+          <button id="unresolved" commandfor="nowhere" command="toggle-popover" popovertarget="open">i</button>
+          <button id="no-command" commandfor="open">j</button>
+          <form><button id="form-plain" commandfor="closed" command="toggle-popover" aria-expanded="true">k</button></form>
+          <form><button id="form-invalid-type" type="bogus" commandfor="closed" command="toggle-popover" aria-expanded="true">l</button></form>
+          <form><button id="form-popovertarget" commandfor="nowhere" popovertarget="closed" aria-expanded="true">m</button></form>
+          <form><button id="form-submit" type="submit" commandfor="closed" command="toggle-popover" aria-expanded="true">n</button></form>
+          <button id="disabled" disabled commandfor="closed" command="toggle-popover" aria-expanded="true">o</button>
+          <input id="input" type="button" commandfor="closed" command="toggle-popover" value="p" aria-expanded="true">
+          ${POPOVERS}
+        `,
+          "open",
+        ),
+      ).toEqual({
+        toggle: false,
+        show: true,
+        hide: true,
+        upper: true,
+        // Any element it resolves to decides, collapsed unless a popover shows.
+        "not-a-popover": false,
+        plain: undefined,
+        outranks: false,
+        // Not a popover command, or no element: popovertarget decides.
+        custom: true,
+        "dialog-command": true,
+        unresolved: true,
+        "no-command": undefined,
+        // A commandfor attribute makes a typeless <button> a plain button,
+        // so a form doesn't take it over.
+        "form-plain": false,
+        "form-invalid-type": false,
+        "form-popovertarget": false,
+        "form-submit": true,
+        disabled: true,
+        // Only a <button> takes commandfor.
+        input: true,
+      });
+    });
+
+    it("falls back to aria-expanded inside its own popover, but not as it", () => {
+      // jsdom styles every popover `display: none`, showing or not.
+      const shown = `style="display: block"`;
+      expect(
+        expandedOnPage(
+          `
+          <div id="own" popover ${shown}>
+            <button id="close" popovertarget="own" aria-expanded="false">a</button>
+            <button id="close-unset" popovertarget="own" popovertargetaction="hide">b</button>
+            <span><button id="close-command" commandfor="own" command="hide-popover" aria-expanded="true">c</button></span>
+            <button id="other" popovertarget="closed" aria-expanded="true">d</button>
+          </div>
+          <button id="self" popover popovertarget="self" aria-expanded="false" ${shown}>e</button>
+          ${POPOVERS}
+        `,
+          "own",
+          "self",
+          "open",
+        ),
+      ).toEqual({
+        own: undefined,
+        close: false,
+        "close-unset": undefined,
+        "close-command": true,
+        other: false,
+        self: true,
+      });
+    });
+
+    it("resolves the popover in the invoker's own tree", () => {
+      document.body.innerHTML = `
+        <div id="same-scope"></div>
+        <button id="light-to-shadow" popovertarget="shadow-popover" aria-expanded="true">a</button>
+        <div id="shadow-to-light"></div>
+        <div id="closed" popover>x</div>
+      `;
+      try {
+        document
+          .getElementById("same-scope")!
+          .attachShadow({ mode: "open" }).innerHTML = `
+          <button id="in-scope" popovertarget="shadow-popover" aria-expanded="true">b</button>
+          <div id="shadow-popover" popover>x</div>
+        `;
+        document
+          .getElementById("shadow-to-light")!
+          .attachShadow({ mode: "open" }).innerHTML =
+          `<button id="to-light" popovertarget="closed" aria-expanded="true">c</button>`;
+        expect(stateById(document.body, "expanded")).toEqual({
+          "in-scope": false,
+          // An id in another tree names nothing.
+          "light-to-shadow": true,
+          "to-light": true,
+        });
+      } finally {
+        document.body.innerHTML = "";
+      }
+    });
+
+    it("only for a role Chromium can mark expanded", () => {
+      expect(
+        expandedOnPage(
+          `
+          <div role="menu"><button id="menuitem" role="menuitem" popovertarget="closed" aria-expanded="true">a</button></div>
+          <div role="tablist"><button id="tab" role="tab" popovertarget="open">b</button></div>
+          <button id="link" role="link" popovertarget="closed" aria-expanded="true">c</button>
+          <button id="checkbox" role="checkbox" aria-checked="false" popovertarget="open">d</button>
+          <button id="switch" role="switch" aria-checked="false" popovertarget="closed">e</button>
+          <button id="combobox" role="combobox" popovertarget="closed" aria-expanded="true">f</button>
+          <div role="tree"><button id="treeitem" role="treeitem" popovertarget="open">g</button></div>
+          <div role="grid"><div role="row"><button id="gridcell" role="gridcell" popovertarget="closed">h</button></div></div>
+          <button id="application" role="application" popovertarget="open">i</button>
+          <button id="none" role="none" popovertarget="closed" aria-expanded="true">j</button>
+          <button id="radio" role="radio" aria-checked="false" popovertarget="open">k</button>
+          <button id="heading" role="heading" popovertarget="open">l</button>
+          <button id="slider" role="slider" popovertarget="open" aria-valuenow="1">m</button>
+          <div role="listbox"><button id="option" role="option" popovertarget="open">n</button></div>
+          ${POPOVERS}
+        `,
+          "open",
+        ),
+      ).toEqual({
+        menuitem: false,
+        tab: true,
+        link: false,
+        checkbox: true,
+        switch: false,
+        combobox: false,
+        treeitem: true,
+        gridcell: false,
+        application: true,
+        // A focusable button ignores a presentational role.
+        none: false,
+        // Chromium has no expanded state for these roles.
+        radio: undefined,
+        heading: undefined,
+        slider: undefined,
+        option: undefined,
+      });
     });
   });
 
