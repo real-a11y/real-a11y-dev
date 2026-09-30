@@ -782,6 +782,7 @@ export function NativeTreeView({
           onFocusSearch={() => searchInputRef.current?.focus()}
           activateDisabled={busy}
           scoped={scopeRoot !== null}
+          scopeKey={scopeRoot}
         />
       ) : (
         <>
