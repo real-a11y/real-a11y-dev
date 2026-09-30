@@ -907,6 +907,62 @@ describe("LiveTreeExtractor", () => {
     });
   });
 
+  // A click on one checkbox or radio fires its events on that one alone, yet
+  // can move other controls' checkedness, which no attribute reflects.
+  describe("checkedness a change moves elsewhere", () => {
+    async function refreshAfter(html: string, mutate: () => void) {
+      document.body.innerHTML = html;
+      const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
+      let lastChange: TreeChange | undefined;
+      const observer = new DomObserver(
+        document.body,
+        (change) => {
+          lastChange = change;
+        },
+        50,
+      );
+      observer.start();
+      mutate();
+      await vi.advanceTimersByTimeAsync(100);
+      const result = live.refresh(lastChange);
+      observer.stop();
+      return result;
+    }
+
+    function checkedOf(result: ExtractionResult, name: string): unknown {
+      const node = [...result.nodes.values()].find((n) => n.a11y.name === name);
+      expect(node).toBeDefined();
+      return node!.a11y.states["checked"];
+    }
+
+    it("unchecks the radio its sibling replaced", async () => {
+      const result = await refreshAfter(
+        `<main><input type="radio" name="size" aria-label="Small" checked><input id="large" type="radio" name="size" aria-label="Large"></main>`,
+        () => document.getElementById("large")!.click(),
+      );
+      expect(checkedOf(result, "Small")).toBe(false);
+      expect(checkedOf(result, "Large")).toBe(true);
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+    });
+
+    it("marks mixed the box a handler made indeterminate", async () => {
+      const result = await refreshAfter(
+        `<main><input id="all" type="checkbox" aria-label="All"><ul><li><input id="one" type="checkbox" aria-label="One"></li><li><input type="checkbox" aria-label="Two"></li></ul></main>`,
+        () => {
+          const all = document.getElementById("all") as HTMLInputElement;
+          const one = document.getElementById("one")!;
+          one.addEventListener("change", () => {
+            all.indeterminate = true;
+          });
+          one.click();
+        },
+      );
+      expect(checkedOf(result, "All")).toBe("mixed");
+      expect(checkedOf(result, "One")).toBe(true);
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+    });
+  });
+
   describe("a heading named through a <details>", () => {
     async function refreshAfter(mutate: () => void) {
       document.body.innerHTML = `<main><h3>A <details><summary>Old</summary>Body</details></h3></main>`;

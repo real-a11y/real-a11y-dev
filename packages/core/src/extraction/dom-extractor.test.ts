@@ -1058,6 +1058,151 @@ describe("extractDomTree", () => {
     });
   });
 
+  it("reads a native checkbox's and radio's checkedness, never aria-checked", () => {
+    const root = createPage(`
+      <input id="unchecked" type="checkbox" aria-label="a">
+      <input id="checked" type="checkbox" checked aria-label="b">
+      <input id="aria-true" type="checkbox" aria-checked="true" aria-label="c">
+      <input id="aria-mixed" type="checkbox" aria-checked="mixed" aria-label="d">
+      <input id="aria-false" type="checkbox" checked aria-checked="false" aria-label="e">
+      <input id="indeterminate" type="checkbox" aria-label="f">
+      <input id="indeterminate-checked" type="checkbox" checked aria-label="g">
+      <input id="indeterminate-aria-false" type="checkbox" aria-checked="false" aria-label="h">
+      <input id="switch" type="checkbox" role="switch" aria-checked="true" aria-label="i">
+      <input id="switch-indeterminate" type="checkbox" role="switch" aria-label="j">
+      <div role="menu">
+        <input id="menuitemcheckbox" type="checkbox" role="menuitemcheckbox" aria-checked="true" aria-label="k">
+        <input id="menuitemradio-indeterminate" type="checkbox" role="menuitemradio" aria-label="l">
+      </div>
+      <input id="radio" type="radio" name="r1" aria-checked="true" aria-label="m">
+      <input id="radio-checked" type="radio" name="r2" checked aria-checked="false" aria-label="n">
+      <input id="radio-indeterminate" type="radio" name="r3" aria-label="o">
+      <input id="text-checkbox" type="text" role="checkbox" aria-checked="true" aria-label="p">
+      <input id="button-switch" type="button" role="switch" aria-checked="mixed" value="q">
+    `);
+    // A property with no attribute: only script can set it.
+    for (const id of [
+      "indeterminate",
+      "indeterminate-checked",
+      "indeterminate-aria-false",
+      "switch-indeterminate",
+      "menuitemradio-indeterminate",
+      "radio-indeterminate",
+    ])
+      (root.querySelector(`#${id}`) as HTMLInputElement).indeterminate = true;
+
+    expect(stateById(root, "checked")).toEqual({
+      // Always set: a native checkbox is checked or it isn't.
+      unchecked: false,
+      checked: true,
+      "aria-true": false,
+      "aria-mixed": false,
+      "aria-false": true,
+      // An indeterminate checkbox is mixed, checked or not, whatever its
+      // role: native checkedness outranks a role with no mixed state.
+      indeterminate: "mixed",
+      "indeterminate-checked": "mixed",
+      "indeterminate-aria-false": "mixed",
+      switch: false,
+      "switch-indeterminate": "mixed",
+      menuitemcheckbox: false,
+      "menuitemradio-indeterminate": "mixed",
+      radio: false,
+      "radio-checked": true,
+      // A radio is never mixed.
+      "radio-indeterminate": false,
+      // Any other input with a checkable role reads aria-checked as usual.
+      "text-checkbox": true,
+      "button-switch": false,
+    });
+  });
+
+  it("ignores aria-expanded on a <select> in its own role", () => {
+    expect(
+      stateById(
+        `
+        <select id="plain" aria-label="a"><option>o</option></select>
+        <select id="true" aria-label="b" aria-expanded="true"><option>o</option></select>
+        <select id="upper" aria-label="c" aria-expanded="TRUE"><option>o</option></select>
+        <select id="combobox" role="combobox" aria-label="d" aria-expanded="true"><option>o</option></select>
+        <select id="multiple" multiple aria-label="e" aria-expanded="true"><option>o</option></select>
+        <select id="listbox" role="listbox" aria-label="f" aria-expanded="true"><option>o</option></select>
+        <select id="button" role="button" aria-label="g" aria-expanded="true"><option>o</option></select>
+        <select id="button-false" role="button" aria-label="h" aria-expanded="false"><option>o</option></select>
+      `,
+        "expanded",
+      ),
+    ).toEqual({
+      // A drop-down is expanded while its picker is open, which it can't be
+      // here, and collapsed otherwise.
+      plain: false,
+      true: false,
+      upper: false,
+      combobox: false,
+      // A list box has no expanded state.
+      multiple: undefined,
+      listbox: undefined,
+      // An author role that isn't the select's own reads it as usual.
+      button: true,
+      "button-false": false,
+    });
+  });
+
+  it("takes a details' summary's expanded state from the details", () => {
+    expect(
+      stateById(
+        `
+        <details><summary id="closed">a</summary>x</details>
+        <details open><summary id="open">b</summary>x</details>
+        <details><summary id="closed-true" aria-expanded="true">c</summary>x</details>
+        <details open><summary id="open-false" aria-expanded="false">d</summary>x</details>
+        <details open><summary>e</summary><summary id="second" aria-expanded="false">f</summary></details>
+        <details open>Lead<summary id="after-text" aria-expanded="false">g</summary></details>
+        <details><summary id="button" role="button" aria-expanded="true">h</summary>x</details>
+        <details open><summary id="button-open" role="button">i</summary>x</details>
+        <details><summary id="none" role="none" aria-expanded="true">j</summary>x</details>
+      `,
+        "expanded",
+      ),
+    ).toEqual({
+      closed: false,
+      open: true,
+      "closed-true": false,
+      "open-false": true,
+      // Every summary child of a details, not only the one that toggles it.
+      second: true,
+      "after-text": true,
+      // An author role doesn't change where the state comes from.
+      button: false,
+      "button-open": true,
+      none: false,
+    });
+  });
+
+  it("ignores aria-pressed on a details' summary unless a role makes it a button", () => {
+    expect(
+      stateById(
+        `
+        <details><summary id="true" aria-pressed="true">a</summary>x</details>
+        <details open><summary id="mixed" aria-pressed="mixed">b</summary>x</details>
+        <details><summary id="false" aria-pressed="false">c</summary>x</details>
+        <details><summary id="none" role="none" aria-pressed="true">d</summary>x</details>
+        <details><summary id="button" role="button" aria-pressed="true">e</summary>x</details>
+        <details open><summary id="button-false" role="button" aria-pressed="false">f</summary>x</details>
+      `,
+        "pressed",
+      ),
+    ).toEqual({
+      // A summary is a disclosure, not a toggle button.
+      true: undefined,
+      mixed: undefined,
+      false: undefined,
+      none: undefined,
+      button: true,
+      "button-false": false,
+    });
+  });
+
   it("hides an element for every aria-hidden value Chromium hides it for", () => {
     const { nodes } = extractDomTree(
       createPage(`
