@@ -18,6 +18,22 @@
 
 ## Unreleased
 
+- In DOM mode, a native checkbox, radio, `<select>` or `<summary>` now takes
+  its state from what it is, as it does in NATIVE mode, not from an ARIA
+  attribute on it. An unchecked `<input type="checkbox" aria-checked="true">`
+  showed a `checked` badge, an indeterminate checkbox showed none where
+  NATIVE mode shows `mixed`, and a `<select aria-expanded="true">` showed
+  `expanded`. Now a checkbox or radio shows its checkedness, and `mixed` when
+  indeterminate. A drop-down `<select>` shows `collapsed` until its picker
+  opens, and a `<details>`' summary shows `collapsed` or `expanded` as the
+  details is, never a `pressed` badge unless a role makes it a button. A radio
+  its sibling unchecked, or a "select all" box a script made indeterminate,
+  now updates in the tree instead of keeping its old badge. Activating a
+  `mixed` checkbox from the panel announces "Click", not a guessed "Checked"
+  or "Unchecked", since the click's outcome depends on checkedness that
+  `mixed` hides.
+  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR))
+
 - In DOM mode, ARIA state values now read the way Chromium, and NATIVE mode,
   read them. `aria-disabled="TRUE"`, `aria-pressed="MIXED"` and
   `aria-checked="yes"` had no `disabled`, `mixed` or `checked` badge because

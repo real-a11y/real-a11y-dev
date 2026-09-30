@@ -945,6 +945,16 @@ describe("LiveTreeExtractor", () => {
       expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
     });
 
+    it("unchecks the radio a sibling's checked attribute replaced", async () => {
+      const result = await refreshAfter(
+        `<main><input type="radio" name="size" aria-label="Small" checked><input id="large" type="radio" name="size" aria-label="Large"></main>`,
+        () => document.getElementById("large")!.setAttribute("checked", ""),
+      );
+      expect(checkedOf(result, "Small")).toBe(false);
+      expect(checkedOf(result, "Large")).toBe(true);
+      expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+    });
+
     it("marks mixed the box a handler made indeterminate", async () => {
       const result = await refreshAfter(
         `<main><input id="all" type="checkbox" aria-label="All"><ul><li><input id="one" type="checkbox" aria-label="One"></li><li><input type="checkbox" aria-label="Two"></li></ul></main>`,

@@ -27,7 +27,14 @@ interface SemanticNode {
                                               // each true/false, "mixed" (checked, pressed)
                                               // or an aria-current token ("page"…), read as
                                               // Chromium reads it: aria-disabled="TRUE" is
-                                              // true, aria-disabled="" leaves it unset
+                                              // true, aria-disabled="" leaves it unset.
+                                              // An element's own semantics win over its
+                                              // attribute: a native checkbox or radio
+                                              // always has `checked`, true or false
+                                              // ("mixed" when indeterminate), a drop-down
+                                              // <select> is expanded only while its picker
+                                              // is open, and a <details>' summary follows
+                                              // the details' `open`
     properties: Record<string, string>;       // aria-* properties (incl. heading "level")
     isExposedToAT: boolean;      // false when aria-hidden, role="presentation", etc.
   };

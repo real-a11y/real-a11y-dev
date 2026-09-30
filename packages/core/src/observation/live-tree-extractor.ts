@@ -8,6 +8,7 @@ import {
   htmlAamNameOwner,
   isNameBarrierElement,
   isNameFromContentHost,
+  nativeChecked,
   resolveEffectiveRoot,
   resolveFocusedElement,
 } from "../extraction/dom-extractor.js";
@@ -232,6 +233,7 @@ export class LiveTreeExtractor {
         const owner = fieldValueOwner(el);
         if (owner && owner !== el) dirty.add(owner);
       }
+      this.addMovedCheckables(dirty);
     }
 
     // At most ONE resolveEffectiveRoot() per refresh regardless of batch size:
@@ -338,6 +340,24 @@ export class LiveTreeExtractor {
     }
 
     return this.currentResult();
+  }
+
+  /**
+   * Add every recorded checkbox and radio whose checkedness no longer matches
+   * its node. A change can move another control's without an event or an
+   * attribute of its own: a click on one radio unchecks its sibling, and a
+   * handler can make a "select all" box indeterminate. It reads one property
+   * per control, far cheaper than re-extracting them all.
+   */
+  private addMovedCheckables(dirty: Set<Element>): void {
+    const refs = getElementRefs();
+    for (const [id, node] of this.domNodes) {
+      if (node.dom?.tagName !== "input") continue;
+      const el = refs.get(id);
+      const checked = el ? nativeChecked(el) : null;
+      if (checked !== null && checked !== node.a11y.states["checked"])
+        dirty.add(el!);
+    }
   }
 
   private adoptResult(result: ExtractionResult): void {
