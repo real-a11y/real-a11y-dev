@@ -690,6 +690,49 @@ describe("LiveTreeExtractor", () => {
     observer.stop();
   });
 
+  it("updates a name host when a name-barrier child stops rendering a box", async () => {
+    // The group lends the heading no text, but its box separates "Save" from
+    // "now", so the heading is "Save now". Hiding the group takes that box
+    // away and the heading becomes "Savenow". The ancestor climb stops at the
+    // barrier itself, so the heading is only re-extracted if the refresh
+    // climbs from the barrier's parent as well.
+    document.body.innerHTML = `<main><h1>Save<div role="group" style="display: block"></div>now</h1></main>`;
+
+    const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
+    const before = [...live.extract().nodes.values()].find(
+      (n) => n.a11y.role === "heading",
+    );
+    expect(before?.a11y.name).toBe("Save now");
+
+    let lastChange: TreeChange | undefined;
+    const observer = new DomObserver(
+      document.body,
+      (change) => {
+        lastChange = change;
+      },
+      50,
+    );
+    observer.start();
+
+    document
+      .querySelector('[role="group"]')!
+      .setAttribute("style", "display: none");
+
+    await vi.advanceTimersByTimeAsync(100);
+
+    const result = live.refresh(lastChange);
+    const expected = extractA11yTree(document.body);
+
+    expect(result.nodes).toEqual(expected.nodes);
+
+    const heading = [...result.nodes.values()].find(
+      (n) => n.a11y.role === "heading",
+    );
+    expect(heading?.a11y.name).toBe("Savenow");
+
+    observer.stop();
+  });
+
   it("invalidates an aria-labelledby referrer when its nested target is removed", async () => {
     // The referrer button sits in a different container than the removed
     // wrapper, so re-extracting only the mutation target's subtree would miss
