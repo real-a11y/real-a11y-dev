@@ -46,7 +46,7 @@
   a label built from inline `<span>`s still reads as one word, while a `<br>`, an
   empty block, and a rendered child that lends no text of its own (a form
   control, an `aria-hidden` block) now keep the text around them apart.
-  ([#PR_NUMBER](https://github.com/real-a11y/real-a11y-dev/pull/PR_NUMBER))
+  ([#449](https://github.com/real-a11y/real-a11y-dev/pull/449))
 
 - In DOM mode, a native checkbox, radio, `<select>` or `<summary>` now takes
   its state from what it is, as it does in NATIVE mode, not from an ARIA
