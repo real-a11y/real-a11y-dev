@@ -5,8 +5,8 @@
  */
 
 import { safeHidden } from "./clobber-safe.js";
-import { isEditable, isEditingHost } from "./editing.js";
 import { flatParent } from "./flat-tree.js";
+import { isFocusable } from "./focusability.js";
 
 type RoleResolver = string | ((el: Element) => string);
 
@@ -264,63 +264,6 @@ const ROLE_MAP: Record<string, RoleResolver> = {
   video: "video", // see the audio entry — mirrors Chromium's native tree
 };
 
-/** Form controls that `disabled` removes from the focus order entirely. */
-const FORM_CONTROL_TAGS = new Set(["button", "input", "select", "textarea"]);
-
-/**
- * Focusability, for the sole purpose of presentational conflict resolution.
- *
- * Deliberately STRICTER than the `interaction.isFocusable` facet the DOM
- * extractor stamps on nodes, which is tag-based and counts every `<a>` and
- * every `<input>`. That looseness is harmless for a facet nobody branches the
- * tree shape on, but here it decides whether an element stays in the tree at
- * all: counting `<a>` without `href`, a `disabled` control or
- * `<input type="hidden">` as focusable would resurrect exactly the decorative
- * markup this resolution exists to keep flattened. The two are not unified
- * because tightening the facet changes a published value on every node — its
- * own change, with its own migration note.
- */
-function isFocusableForConflictResolution(element: Element): boolean {
-  const tag = element.tagName.toLowerCase();
-
-  // The exclusions come FIRST, before tabindex: a `tabindex` on a disabled
-  // control or on <input type="hidden"> does not put it in the focus order,
-  // so reading tabindex first would hand a decorative role back to exactly
-  // the elements these two rules exist to keep flattened.
-  if (FORM_CONTROL_TAGS.has(tag) && element.hasAttribute("disabled"))
-    return false;
-  // <input type="hidden"> renders nothing and is never a tab stop.
-  if (
-    tag === "input" &&
-    (element.getAttribute("type") || "text").toLowerCase() === "hidden"
-  )
-    return false;
-
-  const tabindex = element.getAttribute("tabindex");
-  // A negative tabindex is still focusable (scripted focus); only an absent
-  // or non-numeric one is not.
-  if (tabindex !== null && tabindex.trim() !== "" && !isNaN(Number(tabindex)))
-    return true;
-
-  // An editing host is focusable without any tabindex; an editable element
-  // nested inside one is not. See editing.ts for how the attribute resolves.
-  if (isEditingHost(element)) return true;
-
-  // A link inside editable content is not focusable either, unless a
-  // `contenteditable="false"` island gives it back (or a tabindex, above).
-  if (tag === "a" || tag === "area") {
-    return element.hasAttribute("href") && !isEditable(element);
-  }
-  if (FORM_CONTROL_TAGS.has(tag)) return true;
-  // <video controls> / <audio controls> are tab stops — Chromium exposes them
-  // focusable even though the actual buttons/sliders live in a closed UA
-  // shadow root.
-  if (tag === "audio" || tag === "video")
-    return element.hasAttribute("controls");
-
-  return false;
-}
-
 /**
  * ARIA global states and properties, minus `aria-hidden`.
  *
@@ -381,7 +324,7 @@ function hasMeaningfulAttribute(element: Element, attr: string): boolean {
  */
 function voidsPresentation(element: Element): boolean {
   return (
-    isFocusableForConflictResolution(element) ||
+    isFocusable(element) ||
     GLOBAL_ARIA_ATTRIBUTES.some((attr) => hasMeaningfulAttribute(element, attr))
   );
 }
@@ -401,7 +344,7 @@ function emptyAltIsNamed(element: Element): boolean {
     hasMeaningfulAttribute(element, "title") ||
     hasMeaningfulAttribute(element, "aria-label") ||
     hasMeaningfulAttribute(element, "aria-labelledby") ||
-    isFocusableForConflictResolution(element)
+    isFocusable(element)
   );
 }
 

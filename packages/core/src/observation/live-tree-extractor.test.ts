@@ -881,6 +881,156 @@ describe("LiveTreeExtractor", () => {
     });
   });
 
+  // Focusability can hang on an element outside the node's own subtree: an
+  // <area> is a stop only while an <img usemap> names its map, and a control
+  // is disabled by an ancestor <fieldset>. Each case must come out of a
+  // refresh the way a fresh extraction would.
+  describe("focusability that depends on another element", () => {
+    // jsdom's UA sheet hides <area>, as the spec's does and Chromium's has
+    // since 153. Chromium 151 rendered one inline; match that here so the
+    // walk reaches the areas and the refresh logic has something to test.
+    beforeEach(() => {
+      const style = document.createElement("style");
+      style.id = "render-areas";
+      style.textContent = "area { display: inline }";
+      document.head.append(style);
+    });
+    afterEach(() => {
+      document.getElementById("render-areas")?.remove();
+    });
+
+    async function refreshAfter(html: string, mutate: () => void) {
+      // Inside <main>, so a mutation isn't at the root, where the extractor
+      // always re-extracts the whole tree whatever changed.
+      document.body.innerHTML = `<main>${html}</main>`;
+      const live = new LiveTreeExtractor(document.body, { mode: "dom" });
+      let lastChange: TreeChange | undefined;
+      const observer = new DomObserver(
+        document.body,
+        (change) => {
+          lastChange = change;
+        },
+        50,
+      );
+      observer.start();
+      mutate();
+      await vi.advanceTimersByTimeAsync(100);
+      // No change at all would leave an open panel on the old tree, while
+      // `refresh(undefined)` re-extracts everything and would hide that.
+      expect(lastChange).toBeDefined();
+      const result = live.refresh(lastChange);
+      observer.stop();
+      return result;
+    }
+
+    function focusableIds(result: ExtractionResult): string[] {
+      return [...result.nodes.values()]
+        .filter((n) => n.interaction?.isFocusable)
+        .map((n) => n.dom?.attributes["id"] ?? "");
+    }
+
+    const MAPS = `
+      <div id="figure"><img src="x.gif" alt="Plan" usemap="#a"></div>
+      <div>
+        <map name="a"><area id="in-a" href="/a" alt="A"></map>
+        <map name="b"><area id="in-b" href="/b" alt="B"></map>
+      </div>
+    `;
+
+    it("moves the stop when an image points at another map", async () => {
+      const result = await refreshAfter(MAPS, () =>
+        document.querySelector("img")!.setAttribute("usemap", "#b"),
+      );
+      expect(focusableIds(result)).toEqual(["in-b"]);
+      expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
+    });
+
+    it("drops the stop when the map is renamed away from the image", async () => {
+      const result = await refreshAfter(MAPS, () =>
+        document.querySelector('map[name="a"]')!.setAttribute("name", "c"),
+      );
+      expect(focusableIds(result)).toEqual([]);
+      expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
+    });
+
+    it("adds the stop when an image using the map is inserted", async () => {
+      const result = await refreshAfter(MAPS, () => {
+        const img = document.createElement("img");
+        img.setAttribute("usemap", "#b");
+        img.setAttribute("alt", "Second plan");
+        document.getElementById("figure")!.append(img);
+      });
+      expect(focusableIds(result)).toEqual(["in-a", "in-b"]);
+      expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
+    });
+
+    it("drops the stop when the image using the map is removed", async () => {
+      const result = await refreshAfter(MAPS, () =>
+        document.querySelector("img")!.remove(),
+      );
+      expect(focusableIds(result)).toEqual([]);
+      expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
+    });
+
+    it("follows a fieldset being disabled, slotted controls included", () => {
+      document.body.innerHTML = `<main><fieldset id="fs">
+        <button id="direct">Save</button>
+        <x-host id="host"><button id="slotted">Send</button></x-host>
+      </fieldset></main>`;
+      document
+        .getElementById("host")!
+        .attachShadow({ mode: "open" }).innerHTML = "<slot></slot>";
+      const live = new LiveTreeExtractor(document.body, { mode: "dom" });
+      live.extract();
+
+      const fieldset = document.getElementById("fs")!;
+      fieldset.setAttribute("disabled", "");
+      // Spy after the first extract: the refresh must splice the fieldset's
+      // subtree, and the slotted button is in it, since every DOM descendant
+      // of the fieldset is also one in the flat tree the walk descends.
+      const full = vi.spyOn(live, "extract");
+      const result = live.refresh({
+        mutations: [
+          {
+            type: "attributes",
+            target: fieldset,
+            attributeName: "disabled",
+          } as unknown as MutationRecord,
+        ],
+      });
+
+      expect(full).not.toHaveBeenCalled();
+      expect(focusableIds(result)).not.toContain("direct");
+      expect(focusableIds(result)).not.toContain("slotted");
+      expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
+    });
+
+    // Only a details' first summary child is a stop, so inserting or
+    // removing a sibling summary moves the stop between two nodes.
+    const SUMMARIES = `<details id="d" open>
+      <summary id="first">First</summary><summary id="second">Second</summary>
+    </details>`;
+
+    it("moves the stop when a summary is inserted ahead of the first", async () => {
+      const result = await refreshAfter(SUMMARIES, () => {
+        const summary = document.createElement("summary");
+        summary.id = "new";
+        summary.textContent = "New";
+        document.getElementById("d")!.prepend(summary);
+      });
+      expect(focusableIds(result)).toEqual(["new"]);
+      expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
+    });
+
+    it("moves the stop when the first summary is removed", async () => {
+      const result = await refreshAfter(SUMMARIES, () =>
+        document.getElementById("first")!.remove(),
+      );
+      expect(focusableIds(result)).toEqual(["second"]);
+      expect(result.nodes).toEqual(extractDomTree(document.body).nodes);
+    });
+  });
+
   // A closed <details> renders only its summary, so the body has to come and
   // go with `open` — which find-in-page also sets, like it clears
   // `hidden="until-found"` on the match it reveals.

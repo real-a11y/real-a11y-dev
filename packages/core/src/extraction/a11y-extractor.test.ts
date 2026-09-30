@@ -213,7 +213,7 @@ describe("extractA11yTree", () => {
     expect(btn!.a11y.name).toBe("Send");
   });
 
-  it("suppresses legend and summary nodes and their text-only children", () => {
+  it("suppresses a legend, but keeps a details' summary as its toggle", () => {
     const root = createPage(`
       <fieldset>
         <legend>Credentials</legend>
@@ -228,14 +228,49 @@ describe("extractA11yTree", () => {
     const { nodes } = extractA11yTree(root);
     const allNodes = Array.from(nodes.values());
 
-    // legend and summary must not appear
+    // The legend only names its fieldset, so it must not appear
     expect(allNodes.find((n) => n.dom?.tagName === "legend")).toBeUndefined();
-    expect(allNodes.find((n) => n.dom?.tagName === "summary")).toBeUndefined();
 
     // fieldset keeps its accessible name from the legend text
-    const fieldset = allNodes.find((n) => n.a11y.role === "group");
+    const fieldset = allNodes.find(
+      (n) => n.a11y.role === "group" && n.dom?.tagName === "fieldset",
+    );
     expect(fieldset).toBeDefined();
     expect(fieldset!.a11y.name).toBe("Credentials");
+
+    // The summary names its details too, but it is also the toggle Chromium
+    // tabs to, so it stays: a tab stop and a focus marker need a node.
+    const details = allNodes.find((n) => n.dom?.tagName === "details");
+    const summary = allNodes.find((n) => n.dom?.tagName === "summary");
+    expect(details!.a11y.name).toBe("More options");
+    expect(summary).toBeDefined();
+    expect(summary!.a11y.name).toBe("More options");
+    expect(summary!.parentId).toBe(details!.id);
+    expect(summary!.childIds).toEqual([]);
+  });
+
+  it("keeps only the first summary of a details, the one Chromium focuses", () => {
+    const root = createPage(`
+      <details open>
+        <summary>First</summary>
+        <summary>Second</summary>
+        <div><summary>Nested</summary></div>
+      </details>
+      <fieldset>
+        <legend tabindex="0">Focusable legend</legend>
+      </fieldset>
+    `);
+
+    const { nodes } = extractA11yTree(root);
+    const summaries = Array.from(nodes.values()).filter(
+      (n) => n.dom?.tagName === "summary",
+    );
+    expect(summaries.map((n) => n.a11y.name)).toEqual(["First"]);
+    // Any name source Chromium can focus stays, not only a summary.
+    const legend = Array.from(nodes.values()).find(
+      (n) => n.dom?.tagName === "legend",
+    );
+    expect(legend?.a11y.name).toBe("Focusable legend");
   });
 
   it("preserves interactive descendants inside a legend or summary", () => {
@@ -256,11 +291,13 @@ describe("extractA11yTree", () => {
     const { nodes } = extractA11yTree(root);
     const allNodes = Array.from(nodes.values());
 
-    // legend and summary themselves are still suppressed
+    // The legend itself is still suppressed. The summary stays, because it
+    // is its details' toggle and a tab stop of its own.
     expect(allNodes.find((n) => n.dom?.tagName === "legend")).toBeUndefined();
-    expect(allNodes.find((n) => n.dom?.tagName === "summary")).toBeUndefined();
+    const summary = allNodes.find((n) => n.dom?.tagName === "summary");
+    expect(summary).toBeDefined();
 
-    // ...but their interactive descendants survive
+    // ...and their interactive descendants survive
     const helpLink = allNodes.find((n) => n.a11y.role === "link");
     expect(helpLink).toBeDefined();
     expect(helpLink!.a11y.name).toBe("(help)");
@@ -268,6 +305,7 @@ describe("extractA11yTree", () => {
     const copyButton = allNodes.find((n) => n.a11y.role === "button");
     expect(copyButton).toBeDefined();
     expect(copyButton!.a11y.name).toBe("Copy");
+    expect(summary!.childIds).toEqual([copyButton!.id]);
 
     // The plain text in the legend/summary is not re-surfaced as a generic
     const generics = allNodes.filter((n) => n.a11y.role === "generic");

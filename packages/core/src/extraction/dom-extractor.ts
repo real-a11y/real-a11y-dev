@@ -12,6 +12,7 @@ import {
   idScope,
   isRenderedInFlatTree,
 } from "./flat-tree.js";
+import { isFocusable } from "./focusability.js";
 import {
   getCachedComputedStyle,
   getExplicitRole,
@@ -95,15 +96,6 @@ function hasCaptionsTrack(element: Element): boolean {
   }
   return false;
 }
-
-/** Tags/roles that are focusable by default */
-const NATIVELY_FOCUSABLE = new Set([
-  "a",
-  "button",
-  "input",
-  "select",
-  "textarea",
-]);
 
 /** Input types that accept text entry */
 const TEXT_INPUT_TYPES = new Set([
@@ -1832,7 +1824,7 @@ function findActiveModal(doc: Document): Element | null {
 /**
  * "This overlay is displaying something" — a natively focusable control (an
  * icon-only menu item carries no text but the menu is unmistakably up) or a
- * graphic. Kept in step with {@link NATIVELY_FOCUSABLE}.
+ * graphic.
  *
  * Deliberately NOT `[tabindex]`: an empty toast viewport is routinely given
  * `tabindex="-1"` for focus management (Radix Toast and Sonner both render
@@ -2183,21 +2175,6 @@ function buildNode(
     const value = getAnnouncedValue(element, role, styleCache);
     const actions = getActions(element);
     const isMedia = MEDIA_TAGS.has(tag);
-    const isFocusable =
-      element.getAttribute("tabindex") !== null ||
-      // An editing host is focusable with no tabindex; an editable element
-      // nested inside one is not (Chromium focuses only the host).
-      isEditingHost(element) ||
-      // Editing takes a link's focusability away: Chromium won't focus an
-      // `<a href>` inside editable content, not even from script, unless it
-      // carries its own tabindex (above) or sits in a
-      // `contenteditable="false"` island. Nothing else loses it — a button or
-      // an input inside an editor is still a tab stop.
-      (NATIVELY_FOCUSABLE.has(tag) && !(tag === "a" && isEditable(element))) ||
-      // <video controls> / <audio controls> are tab stops — Chromium
-      // exposes them focusable even though the actual buttons/sliders
-      // live in a closed UA shadow root.
-      (isMedia && element.hasAttribute("controls"));
 
     const node: SemanticNode = {
       id,
@@ -2237,7 +2214,7 @@ function buildNode(
       interaction: {
         isInteractive: actions.length > 0,
         actions,
-        isFocusable,
+        isFocusable: isFocusable(element),
         isEditable:
           (tag === "input" &&
             TEXT_INPUT_TYPES.has(

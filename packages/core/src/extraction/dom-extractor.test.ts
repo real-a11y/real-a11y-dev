@@ -2468,6 +2468,165 @@ describe("media elements (video/audio)", () => {
   });
 });
 
+describe("interaction.isFocusable follows Chromium", () => {
+  // Every expectation here was checked in Chromium 151, where a Tab walk,
+  // scripted focus() and CDP's `focusable` property all agree.
+  function focusableById(html: string): Record<string, boolean> {
+    const byId: Record<string, boolean> = {};
+    for (const node of extractDomTree(createPage(html)).nodes.values()) {
+      const id = node.dom?.attributes["id"];
+      if (id) byId[id] = node.interaction!.isFocusable;
+    }
+    return byId;
+  }
+
+  it("counts a link only when it has an href", () => {
+    expect(
+      focusableById(`
+        <a id="fragment-target" name="top">Back to top</a>
+        <a id="fake-button" role="button">Save</a>
+        <a id="link" href="/docs">Docs</a>
+        <a id="empty-href" href="">Reload</a>
+        <a id="tabindexed" tabindex="0">Card</a>
+        <svg>
+          <a id="svg-href" href="/a"><text>A</text></a>
+          <a id="svg-xlink" xlink:href="/b"><text>B</text></a>
+          <a id="svg-bare"><text>C</text></a>
+        </svg>
+      `),
+    ).toEqual({
+      "fragment-target": false,
+      "fake-button": false,
+      link: true,
+      "empty-href": true,
+      tabindexed: true,
+      // SVG 1.1's xlink:href still makes an SVG link, in Chromium too.
+      "svg-href": true,
+      "svg-xlink": true,
+      "svg-bare": false,
+    });
+  });
+
+  it("does not count a disabled control, however it came to be disabled", () => {
+    expect(
+      focusableById(`
+        <button id="disabled" disabled>Save</button>
+        <button id="disabled-tabindexed" disabled tabindex="0">Save</button>
+        <fieldset disabled>
+          <legend><span><button id="in-legend">Unlock</button></span></legend>
+          <button id="in-fieldset">Save</button>
+          <select id="select-in-fieldset"><option>A</option></select>
+        </fieldset>
+        <button id="aria-disabled" aria-disabled="true">Publish</button>
+      `),
+    ).toEqual({
+      disabled: false,
+      "disabled-tabindexed": false,
+      // A disabled fieldset's first legend is exempt, as HTML defines it.
+      "in-legend": true,
+      "in-fieldset": false,
+      "select-in-fieldset": false,
+      // aria-disabled announces a state; it takes no focus away.
+      "aria-disabled": true,
+    });
+  });
+
+  it("reads tabindex the way HTML parses an integer", () => {
+    expect(
+      focusableById(`
+        <div id="empty" tabindex="">Card</div>
+        <div id="word" tabindex="abc">Card</div>
+        <div id="nbsp" tabindex="&#160;0">Card</div>
+        <div id="negative" tabindex="-1">Card</div>
+        <div id="padded" tabindex=" 0">Card</div>
+        <div id="signed" tabindex="+0">Card</div>
+        <div id="fraction" tabindex="0.5">Card</div>
+        <div id="trailing" tabindex="1abc">Card</div>
+        <button id="button-word" tabindex="abc">Save</button>
+      `),
+    ).toEqual({
+      // Not an integer at all: the attribute is ignored. ASCII whitespace
+      // only, so a leading no-break space makes it invalid too.
+      empty: false,
+      word: false,
+      nbsp: false,
+      // Focusable, just not a Tab stop.
+      negative: true,
+      // Leading whitespace and a sign are allowed; parsing stops at the first
+      // non-digit, so "0.5" is 0 and "1abc" is 1.
+      padded: true,
+      signed: true,
+      fraction: true,
+      trailing: true,
+      // An invalid tabindex leaves a natively focusable control focusable.
+      "button-word": true,
+    });
+  });
+
+  it("counts a details' summary: its first summary child, wherever it sits", () => {
+    expect(
+      focusableById(`
+        <details><summary id="closed">Shipping</summary><p>Body</p></details>
+        <details open><summary id="open">Returns</summary><p>Body</p></details>
+        <details open>
+          <summary id="first">A</summary>
+          <summary id="second">B</summary>
+        </details>
+        <details open><p>Lead</p><summary id="after-text">C</summary></details>
+        <details open><div><summary id="nested">D</summary></div></details>
+        <div><summary id="stray">E</summary></div>
+        <div><summary id="stray-tabindexed" tabindex="0">F</summary></div>
+        <details><summary id="scripted" tabindex="-1">G</summary></details>
+        <fieldset disabled>
+          <details><summary id="in-fieldset">H</summary></details>
+        </fieldset>
+        <details open><summary id="role-button" role="button">I</summary></details>
+        <details open><summary id="aria-disabled" aria-disabled="true">J</summary></details>
+      `),
+    ).toEqual({
+      closed: true,
+      open: true,
+      // Only the first summary child is the details' summary, even when
+      // other content comes before it. (Open, so the second one is in the
+      // tree at all: a closed details' body is left out.)
+      first: true,
+      second: false,
+      "after-text": true,
+      // A summary that is not a details' child is plain text.
+      nested: false,
+      stray: false,
+      "stray-tabindexed": true,
+      // Focusable, just not a Tab stop.
+      scripted: true,
+      // A summary is no form control, so a disabled fieldset leaves it be.
+      "in-fieldset": true,
+      "role-button": true,
+      "aria-disabled": true,
+    });
+  });
+
+  it("reads a summary's details from the DOM, not from where it is slotted", () => {
+    const root = createPage(
+      `<div id="direct-host"></div>` +
+        `<div id="slot-host"><summary id="slotted">Slotted</summary></div>`,
+    );
+    root
+      .querySelector("#direct-host")!
+      .attachShadow({ mode: "open" }).innerHTML =
+      `<details><summary id="in-shadow">In shadow</summary></details>`;
+    // Rendered inside the details, but its parent is the host, so Chromium
+    // gives the details its default summary and leaves this one unfocusable.
+    root.querySelector("#slot-host")!.attachShadow({ mode: "open" }).innerHTML =
+      `<details open><slot></slot></details>`;
+    const byId: Record<string, boolean> = {};
+    for (const node of extractDomTree(root).nodes.values()) {
+      const id = node.dom?.attributes["id"];
+      if (id) byId[id] = node.interaction!.isFocusable;
+    }
+    expect(byId).toMatchObject({ "in-shadow": true, slotted: false });
+  });
+});
+
 describe("computed-style cache during extraction", () => {
   afterEach(() => {
     vi.restoreAllMocks();
