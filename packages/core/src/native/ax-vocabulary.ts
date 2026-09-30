@@ -258,6 +258,10 @@ export const NATIVE_AX_AUTHOR_NAMED_ROLES: ReadonlySet<string> = new Set([
  * Every native transport decodes states through this, so none can drift from
  * the others. It never touches `normalizeNativeAX`'s output (states aren't
  * part of it), so it doesn't move {@link NATIVE_AX_VOCABULARY_VERSION}.
+ *
+ * @internal Shared between `core` and the native transports (`browser`'s
+ * producer, the extension's debugger mode). All three are internal packages;
+ * no published surface re-exports it.
  */
 export function nativeAXStateValue(
   value: unknown,
