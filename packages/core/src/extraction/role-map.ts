@@ -11,7 +11,7 @@ import {
   isRenderedInFlatTree,
   renderingParent,
 } from "./flat-tree.js";
-import { isFocusable } from "./focusability.js";
+import { isFocusable, parseHtmlInteger } from "./focusability.js";
 import { imageUsingMap } from "./image-map.js";
 
 type RoleResolver = string | ((el: Element) => string);
@@ -181,9 +181,6 @@ function isLandmarkContext(el: Element): boolean {
   return true;
 }
 
-/** HTML's rules for parsing non-negative integers: ASCII whitespace, an optional `+`, digits. */
-const HTML_NON_NEGATIVE_INTEGER = /^[\t\n\f\r ]*\+?(\d+)/;
-
 /** Chromium holds a select's size as an unsigned 32-bit integer; a larger value fails to parse. */
 const MAX_SELECT_SIZE = 0xffffffff;
 
@@ -207,8 +204,7 @@ export function selectRoleFromAttributes(attributes: {
   size?: string | null;
   multiple?: string | null;
 }): "listbox" | "combobox" {
-  const match = HTML_NON_NEGATIVE_INTEGER.exec(attributes.size ?? "");
-  const size = match ? Number(match[1]) : 0;
+  const size = parseHtmlInteger(attributes.size) ?? 0;
   const displaySize =
     size > 0 && size <= MAX_SELECT_SIZE
       ? size
