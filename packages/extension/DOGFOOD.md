@@ -142,8 +142,9 @@ ever built).
 
 `CHANGELOG.md` records what store users get, and native mode ships only in
 this build, so a change to what NATIVE mode shows is recorded here instead.
-Newest first. When native mode graduates to the store build, these describe
-what it does at that point, and its changelog entry can draw on them.
+Newest first. If native mode graduates to the store build (#386 proposes it),
+these describe what it does at that point, and its changelog entry can draw
+on them; changes after that go in `CHANGELOG.md`.
 
 - In NATIVE mode, a rich-text editor with no role (a ProseMirror-style
   `<div contenteditable>`) now stays in the tree as a `generic`, empty or
@@ -152,12 +153,12 @@ what it does at that point, and its changelog entry can draw on them.
   field around it. (ADR-0001)
   ([#432](https://github.com/real-a11y/real-a11y-dev/pull/432))
 
-- In NATIVE mode, a `<select>` shows its option label instead of its `value`,
-  a custom slider shows its `aria-valuetext`, and a rich-text editor shows its
-  text. Its edit box opens empty, as a password field's does: submitting it
-  untouched leaves the editor alone, and submitting it after erasing what you
-  typed empties the editor, including an editor that keeps its own document
-  model and would have ignored a plain empty write.
+- In NATIVE mode, the A11y view shows a `<select>`'s option label instead of
+  its `value`, a custom slider's `aria-valuetext`, and a rich-text editor's
+  text. The editor's edit box opens empty, as a password field's does:
+  submitting it untouched leaves the editor alone, and submitting it after
+  erasing what you typed empties the editor, including an editor that keeps
+  its own document model and would have ignored a plain empty write.
   (ADR-0001) ([#431](https://github.com/real-a11y/real-a11y-dev/pull/431))
 
 - In NATIVE mode, an indeterminate progress bar and a static separator no

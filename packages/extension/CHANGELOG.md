@@ -11,9 +11,11 @@
   dogfood build (`pnpm build:dogfood`, everything behind the `__DOGFOOD__`
   constant) get NO entry: that code is dead-code-eliminated from the store
   bundle, so an entry here would describe a feature nobody on the listing
-  can reach. Those changes are tracked by their PRs and `DOGFOOD.md` — a
-  change to what NATIVE mode shows goes in its "Native-mode changes not yet
-  in the store" list, even when core's shared code made it.
+  can reach. Those changes are tracked by their PRs and `DOGFOOD.md` — while
+  native mode is dogfood-only, a change to what NATIVE mode shows goes in its
+  "Native-mode changes not yet in the store" list, even when core's shared
+  code made it. Once native mode ships in the store build, its changes come
+  back here.
   Anything that changes the shipped bundle does need an entry, even if it
   also touches dogfood code.
 -->
