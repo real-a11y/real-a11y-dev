@@ -30,7 +30,7 @@ What else broke, and now works:
 What this changes for you:
 
 - **Pages without such names** are unaffected.
-- **jsdom** doesn't implement this shadowing, so suites on jsdom never hit it. A real browser does, including through the Playwright adapter — though the adapter still finds its root with `document.querySelector`, so an `<img name="querySelector">` page still fails there before the tree is built.
+- **jsdom** doesn't implement this shadowing, so suites on jsdom never hit it. A real browser does, including through the Playwright adapter.
 - **A form that shadows what the walk reads on every element** (`getAttribute`, `tagName`) is still left out of the tree with its contents, as before. It just no longer takes anything else with it.
 - **Snapshots and tree diffs:** a tree that lost labelled controls, or came back empty, now has them, so re-record a baseline taken from such a page.
 - **`cli` / `mcp`:** only `real-a11y tabs` and `get_tab_order` walk the page themselves, so only they change, and only on such a page.

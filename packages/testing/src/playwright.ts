@@ -269,7 +269,14 @@ export async function attach(
         // the entire document while looking like it checked one region.
         // (The implicit default is the literal selector "body", which always
         // matches, so this only ever fires for an explicit selector.)
-        const root = document.querySelector(selector);
+        //
+        // Through the prototype, not `document.querySelector`: `Document` has
+        // [LegacyOverrideBuiltIns], so an `<img name="querySelector">` on the
+        // page IS `document.querySelector` and every call would reject — even
+        // with no rootSelector. This function is serialized into the page, so
+        // it can't import core's clobber-safe readers; it reaches the method
+        // itself.
+        const root = Document.prototype.querySelector.call(document, selector);
         if (!root) {
           throw new Error(
             `@real-a11y-dev/testing/playwright: rootSelector "${selector}" matched no element.`,
@@ -317,8 +324,12 @@ export async function attach(
             );
           }
           // Same contract as evalFn: a non-matching rootSelector is an error,
-          // not a silent widening of the audit to the whole document.
-          const root = document.querySelector(a.selector);
+          // not a silent widening of the audit to the whole document. And the
+          // same prototype read, for the same shadowed `document.querySelector`.
+          const root = Document.prototype.querySelector.call(
+            document,
+            a.selector,
+          );
           if (!root) {
             throw new Error(
               `@real-a11y-dev/testing/playwright: rootSelector "${a.selector}" matched no element.`,
