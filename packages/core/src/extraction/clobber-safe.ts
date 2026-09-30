@@ -173,19 +173,27 @@ export function safeHidden(element: Element): boolean {
  * extraction, or loses a whole batch of mutations.
  */
 
-const documentProto =
-  typeof Document !== "undefined" ? Document.prototype : null;
-const fragmentProto =
-  typeof DocumentFragment !== "undefined" ? DocumentFragment.prototype : null;
+/**
+ * Run `read` once, at module load — the same capture as the accessors above,
+ * but marked pure at each use, so a bundle that takes in this module without
+ * calling the reader a capture serves (the Storybook manager does) drops it.
+ */
+const capture = <T>(read: () => T): T => read();
 
-const nodeTypeGetter = nodeProto
-  ? Object.getOwnPropertyDescriptor(nodeProto, "nodeType")?.get
-  : undefined;
-const ownerDocumentGetter = nodeProto
-  ? Object.getOwnPropertyDescriptor(nodeProto, "ownerDocument")?.get
-  : undefined;
-const getAttributeMethod = elementProto?.getAttribute;
-const containsMethod = nodeProto?.contains;
+const nodeTypeGetter = /* @__PURE__ */ capture(() =>
+  nodeProto
+    ? Object.getOwnPropertyDescriptor(nodeProto, "nodeType")?.get
+    : undefined,
+);
+const ownerDocumentGetter = /* @__PURE__ */ capture(() =>
+  nodeProto
+    ? Object.getOwnPropertyDescriptor(nodeProto, "ownerDocument")?.get
+    : undefined,
+);
+const getAttributeMethod = /* @__PURE__ */ capture(
+  () => elementProto?.getAttribute,
+);
+const containsMethod = /* @__PURE__ */ capture(() => nodeProto?.contains);
 
 /**
  * `querySelector`, `querySelectorAll` and `getElementById` are defined once per
@@ -208,11 +216,18 @@ const scopeMethodsOf = (
         getElementById: proto.getElementById,
       }
     : undefined;
-const SCOPE_METHODS: Record<number, ScopeMethods | undefined> = {
-  1: scopeMethodsOf(elementProto),
-  9: scopeMethodsOf(documentProto),
-  11: scopeMethodsOf(fragmentProto),
-};
+const SCOPE_METHODS: Record<number, ScopeMethods | undefined> =
+  /* @__PURE__ */ capture(() => ({
+    1: scopeMethodsOf(elementProto),
+    9: scopeMethodsOf(
+      typeof Document !== "undefined" ? Document.prototype : null,
+    ),
+    11: scopeMethodsOf(
+      typeof DocumentFragment !== "undefined"
+        ? DocumentFragment.prototype
+        : null,
+    ),
+  }));
 
 function scopeMethods(node: Node): ScopeMethods | undefined {
   return SCOPE_METHODS[
