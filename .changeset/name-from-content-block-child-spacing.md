@@ -28,6 +28,6 @@ Because the rule reads computed `display`, a name computed in jsdom can differ f
 Four differences from Chromium remain, all pre-existing and none of them closed here:
 
 - An `<img alt="…">` and an `<iframe title="…">` inside a name-from-content element still contribute nothing, where Chromium reads the `alt` / `title` and spaces it: `<button>Save<img alt="icon">now</button>` is `"Savenow"` here and `"Save icon now"` there. A replaced element that contributes nothing (`<svg>`, an empty `alt`) already matches Chromium, spacing included.
-- `inert` and `content-visibility: hidden` hide a child from AT but still **render** it, so Chromium spaces across them where this does not. Telling the two kinds of hidden apart costs more than `core`'s remaining size-limit headroom, so it is left as its own change.
+- `inert` and `content-visibility: hidden` hide a child from AT but still **render** it, so Chromium spaces across them where this does not. Telling the two kinds of hidden apart is a different question from how a child's box spaces its neighbours, and it predates this rule, so it is left as its own change.
 - A `<wbr>`, which Chromium treats as a word separator, does not separate.
 - `visibility: hidden` descendant text still reaches the name at all (`"Save x now"` where Chromium reads `"Save now"`) — a hidden-text question rather than a spacing one, and untouched here.

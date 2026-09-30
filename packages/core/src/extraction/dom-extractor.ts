@@ -457,10 +457,9 @@ function computeAccessibleDescription(
           : undefined;
       })
       .filter((t): t is string => !!t);
-    // Whitespace-normalized like a name (accname §4.3.2 step 4). The walk
-    // pads named widgets and summaries with spaces so their text never glues
-    // to a neighbour; without this a description read "X  S" where Chromium
-    // reads "X S".
+    // Whitespace-normalized like a name (accname §4.3.2 step 4). The walk pads
+    // any child with a box of its own so its text never glues to a neighbour;
+    // without this a description read "X  S" where Chromium reads "X S".
     if (texts.length) return texts.join(" ").replace(/\s+/g, " ").trim();
   }
   // 2. aria-description — inline string (ARIA 1.3+)
@@ -793,7 +792,11 @@ function isImplicitDetailsGroup(element: Element): boolean {
  *
  * Per WAI-ARIA accname-1.2 §4.3.2 step 2A, hidden subtrees contribute the
  * empty string. Skip element descendants that are aria-hidden, hidden,
- * inert, or display/visibility/content-visibility-hidden.
+ * inert, or display/visibility/content-visibility-hidden. A skipped descendant
+ * that still RENDERS contributes a separator even so, because its box keeps the
+ * text either side of it apart — see {@link needsSpaceAround}. (A skipped child
+ * is not recursed into, so a `display: contents` one whose own children render
+ * blocks contributes no separator; obscure, and left as is.)
  *
  * Also skips descendants whose computed role is in `NAME_BARRIER_ROLES` —
  * see the set's docstring for the reasoning (treeitem-in-group, nested
@@ -828,9 +831,9 @@ function getAccessibleTextContent(
       // Known gap, left alone deliberately: `inert` and
       // `content-visibility: hidden` are hidden from AT but still RENDER, so
       // Chromium spaces across them ("Save now") where this returns "Savenow".
-      // Closing it means telling the two kinds of hidden apart here, which is
-      // more bytes than `core`'s remaining size-limit headroom; it is its own
-      // change, not this one.
+      // Closing it means teaching this check to tell the two kinds of hidden
+      // apart — a different question from how a child's box spaces its
+      // neighbours, and one that predates this rule, so it is its own change.
       if (isSubtreeHidden(childEl, childStyle)) {
         continue;
       }
