@@ -34,6 +34,8 @@ generic
 button "Copy Code"
 generic
 link "login"
+link "--redact-input"
+link "how"
 link "command reference"
 button "Copy Code"
 generic

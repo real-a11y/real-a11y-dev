@@ -453,6 +453,40 @@ describe("field-value redaction covers each producer's own allowlists", () => {
   });
 });
 
+describe("field-value redaction covers the redactInput strict mode", () => {
+  it("grades narrowing strictValueRoots or dropping the switch 🔴 high", async () => {
+    // Under `redactInput` the native producer withholds all an editing root
+    // holds, and `strictValueRoots` decides which roots count. Deleting a kind
+    // of root puts that editor's text back in the output, and the deleted line
+    // names only what it tested — the hunk header carries the gate. The CLI
+    // side is the switch itself: stop passing it through and the flag is
+    // accepted and does nothing.
+    const strictPath = "packages/browser/src/native-tree.ts";
+    const strict = `export function strictValueRoots(raw: RawNode[]): Set<string> {\n  const roots = new Set<string>();\n  for (const node of raw) {\n    if (isEditingRoot(node)) roots.add(node.nodeId);\n    if (node.value) roots.add(node.nodeId);\n  }\n  return roots;\n}\n`;
+    const cliPath = "packages/cli/src/commands/tree.ts";
+    const cli = `export async function runTree(page: Page, opts: Options) {\n  const tree = await readNative(page, { redactInput: opts.redactInput });\n  return render(tree);\n}\n`;
+    const result = await grade(
+      {
+        [strictPath]: strict.replace(
+          `    if (isEditingRoot(node)) roots.add(node.nodeId);\n`,
+          ``,
+        ),
+        [cliPath]: cli.replace(
+          `readNative(page, { redactInput: opts.redactInput })`,
+          `readNative(page, {})`,
+        ),
+      },
+      { base: { [strictPath]: strict, [cliPath]: cli } },
+    );
+
+    assert.equal(result.tier, "high");
+    assert.deepEqual(evidenceFor(result, "field-value-redaction"), [
+      `${strictPath} → strictValueRoots`,
+      `${cliPath} → redactInput`,
+    ]);
+  });
+});
+
 describe("field-value redaction stays on the gates, not the files", () => {
   it("leaves an unrelated comment edit in native-tree.ts 🟡 medium", async () => {
     // Why this rule matches the gates by name rather than native-tree.ts by

@@ -69,15 +69,52 @@ function collapseWhitespace(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
-function isKept(node: RawNativeAXNode): boolean {
+function isEditable(node: RawNativeAXNode | undefined): boolean {
+  return (node?.properties ?? []).some((p) => p.name === "editable");
+}
+
+/**
+ * The root of a rich-text editing region: Chromium marks it
+ * `editable: "richtext"` and its parent is not editable. A role-less
+ * `<div contenteditable>` is such a root; the spans and paragraphs inside it
+ * are editable too, but not roots. A native text field's inner editor is
+ * `"plaintext"` — UA-shadow plumbing, not a field of its own — and a
+ * `plaintext-only` editor is kept by its value instead (see `isKept`).
+ */
+function isEditingRoot(
+  node: RawNativeAXNode,
+  byId: ReadonlyMap<string, RawNativeAXNode>,
+): boolean {
+  const editable = node.properties?.find((p) => p.name === "editable");
+  if (editable?.value?.value !== "richtext") return false;
+  return !isEditable(node.parentId ? byId.get(node.parentId) : undefined);
+}
+
+function isKept(
+  node: RawNativeAXNode,
+  byId: ReadonlyMap<string, RawNativeAXNode>,
+): boolean {
   const role = node.role?.value ?? "";
   if (node.ignored || role === "" || NATIVE_AX_DROP_ROLES.has(role)) {
     return false;
   }
   // A `generic` (and any drop-unless-named role) is noise when bare but a
   // meaningful labelled container when named — keep it only if it has a name.
+  // Or if it is a field: a role-less `<div contenteditable>` is a `generic`
+  // holding what was typed, and a text that sits directly in it is nowhere
+  // else in the tree. It is a field, not a wrapper (ADR-0001), as the DOM
+  // producer keeps it. Kept for being an EDITING ROOT, not for holding a value
+  // right now — a node that came and went with its contents would print as
+  // `+ generic` / `- generic` in a diff whenever someone typed into an empty
+  // editor or cleared one. (A generic that carries a value without being
+  // editable is kept too, the one other shape a field takes.) Its text still
+  // never names it — see {@link carriesValue}.
   if (NATIVE_AX_DROP_UNLESS_NAMED.has(role)) {
-    return (node.name?.value ?? "").trim() !== "";
+    return (
+      (node.name?.value ?? "").trim() !== "" ||
+      isEditingRoot(node, byId) ||
+      carriesValue(node)
+    );
   }
   if (NATIVE_AX_DROP_WHEN_BARE.has(role)) {
     if ((node.name?.value ?? "").trim() !== "") return true;
@@ -98,7 +135,8 @@ function idOf(node: RawNativeAXNode): string {
 
 /**
  * Whether Chromium reports a value for `node` — in which case the text inside
- * it is that value, not its name, and name promotion leaves it alone.
+ * it is that value, not its name, and name promotion leaves it alone. (It is
+ * also what keeps a role-less editor in the tree — see `isKept`.)
  *
  * An editable region's text is its value, and Chromium 151 reports it twice: as
  * the AX `value` and on a `StaticText` child. That covers `<div
@@ -107,9 +145,10 @@ function idOf(node: RawNativeAXNode): string {
  * user typed as the node's name, which the R1 gate exists to prevent. Chromium
  * leaves all of them unnamed.
  *
- * The same holds one level removed: a role-less `<div contenteditable>` is a
- * dropped `generic` carrying a value, and its text must not name the kept
- * ancestor it flattens into either.
+ * The same holds one level removed: a value carrier that normalization drops
+ * must not name the kept ancestor it flattens into either. (A role-less
+ * `<div contenteditable>` was the case that motivated it; it is kept as a
+ * `generic` now, so its text is its own value, never an ancestor's name.)
  *
  * The field roles and the range widgets (`progressbar`, `meter`, `scrollbar`,
  * `separator`) never reach this check — {@link NATIVE_AX_AUTHOR_NAMED_ROLES}
@@ -188,10 +227,10 @@ function promoteNameFromDroppedDescendants(
 ): string {
   for (const childId of node.childIds ?? []) {
     const child = byId.get(childId);
-    if (!child || isKept(child)) continue;
-    // A dropped node's value is no more its ancestor's name than its own: a
-    // role-less `<div contenteditable>` is a dropped generic carrying what was
-    // typed into it, and `<li>` around it must not read as that text.
+    if (!child || isKept(child, byId)) continue;
+    // A dropped node's value is no more its ancestor's name than its own. (A
+    // role-less `<div contenteditable>` is kept, not dropped, so the `isKept`
+    // check above already stops there; this guards any other value carrier.)
     if (carriesValue(child)) continue;
     // A dropped sectionheader/sectionfooter is name-from-author only: its
     // loose text (a byline) must not name the ancestor it flattened into —
@@ -226,7 +265,7 @@ export function normalizeNativeAX(rawNodes: RawNativeAXNode[]): NativeAXNode[] {
   ): void => {
     const raw = byId.get(nodeId);
     if (!raw) return;
-    if (!isKept(raw)) {
+    if (!isKept(raw, byId)) {
       // Flattened: children re-parent to the nearest kept ancestor,
       // at the same depth.
       for (const childId of raw.childIds ?? []) visit(childId, depth, parent);

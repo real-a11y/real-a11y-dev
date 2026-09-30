@@ -3,6 +3,7 @@ h1 Privacy Policy
   h2 Short version
   h2 Chrome extension — Semantic Navigator
   h2 npm packages
+    h3 Field values in what they print
   h2 Website
   h2 Data we might receive anyway
   h2 Your rights

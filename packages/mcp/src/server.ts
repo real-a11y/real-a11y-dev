@@ -28,6 +28,7 @@ import {
   assertFullArtifact,
   buildArtifact,
   buildSnapshotPage,
+  carriesValues,
   parseSnapshotArtifact,
   projectNativeTree,
   redactUrl,
@@ -344,6 +345,14 @@ export interface BuildServerOptions {
    * one. Say so instead of guessing.
    */
   cdpAttached?: boolean;
+  /**
+   * Strict mode (`REAL_A11Y_REDACT_INPUT=1`, ADR-0001's `redactInput`): no
+   * field value and no rich-text editor content in any result. Off by
+   * default: the live reads show what each field holds the way a screen
+   * reader announces it, with sensitive fields (`type="password"`, a
+   * credential or payment `autocomplete`) as `[redacted]`.
+   */
+  redactInput?: boolean;
 }
 
 export function buildServer(
@@ -379,6 +388,17 @@ export function buildServer(
   const authenticated = options.authenticated === true;
   const cdpAttached = options.cdpAttached === true;
   const headful = options.headful === true;
+  // What users entered into the page (ADR-0001). Every tree read goes through
+  // `readTree`, so strict mode can't be forgotten at one call site; the live
+  // views print values unless it is on. Persisted outputs (checkpoints, their
+  // export) take their own opt-in `values` parameter.
+  const redactInput = options.redactInput === true;
+  const liveValues = !redactInput;
+  const readTree = (rec: SessionRecord) =>
+    rec.session.nativeTree({ redactInput });
+  const valuesNote = redactInput
+    ? " This server runs in strict mode (REAL_A11Y_REDACT_INPUT=1): no field value and no rich-text editor content appears in any result."
+    : ' Each field shows what it holds, the way a screen reader announces it — `textbox "Email" = "jane@x.com"`; a password, one-time-code or payment field reads "[redacted]".';
   // Over CDP the window state belongs to the browser we attached to, and
   // REAL_A11Y_MCP_HEADFUL is inert — never offer it as a fix there.
   const browserMode = cdpAttached
@@ -705,7 +725,7 @@ export function buildServer(
     async ({ rules, session }) =>
       withSession(session, async (rec) => {
         // Findings are computed in Node over Chromium's own tree.
-        const snap = projectNativeTree(await rec.session.nativeTree(), {
+        const snap = projectNativeTree(await readTree(rec), {
           rules,
         });
         return text(renderAudit(snap.findings), RULES_HINT);
@@ -718,7 +738,9 @@ export function buildServer(
       title: "Inspect page (single snapshot)",
       annotations: READ_ONLY,
       description:
-        "Return the audit findings AND the semantic tree and heading outline — all derived from ONE read of Chromium's accessibility tree, so they are guaranteed internally consistent. The element focused at capture time is marked `[focused]`. Prefer this over separate audit_page + get_* calls on dynamic pages (SPAs, pages with consent dialogs) where separate calls could catch different states. That tree carries no tab order, so there is no tab-order section here — call get_tab_order for the keyboard sequence. Whole-document. Chromium only.",
+        "Return the audit findings AND the semantic tree and heading outline — all derived from ONE read of Chromium's accessibility tree, so they are guaranteed internally consistent. The element focused at capture time is marked `[focused]`." +
+        valuesNote +
+        " Prefer this over separate audit_page + get_* calls on dynamic pages (SPAs, pages with consent dialogs) where separate calls could catch different states. That tree carries no tab order, so there is no tab-order section here — call get_tab_order for the keyboard sequence. Whole-document. Chromium only.",
       inputSchema: {
         rules: z
           .array(z.enum(RULES))
@@ -733,9 +755,10 @@ export function buildServer(
     },
     async ({ rules, includeGeneric, session }) =>
       withSession(session, async (rec) => {
-        const snap = projectNativeTree(await rec.session.nativeTree(), {
+        const snap = projectNativeTree(await readTree(rec), {
           rules,
           includeGeneric,
+          values: liveValues,
         });
         return text(renderSnapshot(snap), `${RULES_HINT} ${SLICE_HINT}`);
       }),
@@ -748,7 +771,9 @@ export function buildServer(
       title: "Get semantic tree",
       annotations: READ_ONLY,
       description:
-        "Return the page's accessibility tree as a deterministic, indented role + accessible-name outline (what a screen reader would traverse) — read from Chromium's own accessibility tree over CDP, so it reaches user-agent-shadow media controls an in-page walk never sees. The element focused at capture time is marked `[focused]`. Token-efficient and stable across runs. This is the vocabulary the act tools target in. Whole-document. Chromium only.",
+        "Return the page's accessibility tree as a deterministic, indented role + accessible-name outline (what a screen reader would traverse) — read from Chromium's own accessibility tree over CDP, so it reaches user-agent-shadow media controls an in-page walk never sees. The element focused at capture time is marked `[focused]`." +
+        valuesNote +
+        " Token-efficient and stable across runs. This is the vocabulary the act tools target in. Whole-document. Chromium only.",
       inputSchema: {
         includeGeneric: z
           .boolean()
@@ -759,8 +784,9 @@ export function buildServer(
     },
     async ({ includeGeneric, session }) =>
       withSession(session, async (rec) => {
-        const snap = projectNativeTree(await rec.session.nativeTree(), {
+        const snap = projectNativeTree(await readTree(rec), {
           includeGeneric,
+          values: liveValues,
         });
         return text(snap.tree || "(empty tree)", SLICE_HINT);
       }),
@@ -777,7 +803,7 @@ export function buildServer(
     },
     async ({ session }) =>
       withSession(session, async (rec) => {
-        const snap = projectNativeTree(await rec.session.nativeTree());
+        const snap = projectNativeTree(await readTree(rec));
         return text(snap.outline);
       }),
   );
@@ -788,7 +814,11 @@ export function buildServer(
       title: "Get tab order",
       annotations: READ_ONLY,
       description:
-        "Return the focusable elements in the order a keyboard user encounters them when pressing Tab, numbered, with role + accessible name. The stop focused at capture time is marked `[focused]`. Built from the in-page DOM walk — Chromium's accessibility tree knows whether a node is focusable but not the SEQUENCE (tabindex never reaches it), so this is the only source for tab order, and the one tool `rootSelector` still scopes.",
+        "Return the focusable elements in the order a keyboard user encounters them when pressing Tab, numbered, with role + accessible name. The stop focused at capture time is marked `[focused]`." +
+        (redactInput
+          ? " In this server's strict mode no stop shows a field value."
+          : ' A field shows what it holds (`textbox "Email" = "jane@x.com"`; a sensitive field "[redacted]").') +
+        " Built from the in-page DOM walk — Chromium's accessibility tree knows whether a node is focusable but not the SEQUENCE (tabindex never reaches it), so this is the only source for tab order, and the one tool `rootSelector` still scopes.",
       inputSchema: { rootSelector, session: sessionParam },
     },
     async ({ rootSelector, session }) =>
@@ -796,6 +826,7 @@ export function buildServer(
         const seq = await rec.session.call<string>(
           "tabSequenceSnapshot",
           rootSelector,
+          [{ values: liveValues }],
         );
         // Number at render — the page bundle produces the canonical unnumbered
         // form; the ordinals help an agent reference "stop 7" and are never stored.
@@ -809,7 +840,11 @@ export function buildServer(
       title: "List elements by category",
       annotations: READ_ONLY,
       description:
-        "List every element of one category — links, buttons, form controls, landmarks, images, or headings — as role + accessible name + a CSS locator. A token-efficient way to review one kind of element (e.g. 'images' pairs with the image-alt rule, 'form' with labeling). Listed from Chromium's own accessibility tree, so it agrees node for node with get_semantic_tree and audit_page. Whole-document. Chromium only.",
+        "List every element of one category — links, buttons, form controls, landmarks, images, or headings — as role + accessible name + a CSS locator" +
+        (redactInput
+          ? ""
+          : ', and for a form field what it holds (a sensitive one "[redacted]")') +
+        ". A token-efficient way to review one kind of element (e.g. 'images' pairs with the image-alt rule, 'form' with labeling). Listed from Chromium's own accessibility tree, so it agrees node for node with get_semantic_tree and audit_page. Whole-document. Chromium only.",
       inputSchema: {
         filter: z
           .enum(["heading", "link", "button", "form", "landmark", "image"])
@@ -825,7 +860,9 @@ export function buildServer(
         // saying why (0 of N nodes matched, and which roles it looked for), so
         // there is no sentinel for this caller to supply.
         return text(
-          listByRole(await rec.session.nativeTree(), filter as RoleFilter),
+          listByRole(await readTree(rec), filter as RoleFilter, {
+            values: liveValues,
+          }),
         );
       }),
   );
@@ -836,19 +873,30 @@ export function buildServer(
     .min(1)
     .max(64)
     .describe("Checkpoint label — the in-memory store key.");
+  // Persisted outputs leave field values out unless asked (ADR-0001): a
+  // checkpoint is exported as an artifact that gets committed and posted.
+  const checkpointValues = z
+    .boolean()
+    .default(false)
+    .describe(
+      redactInput
+        ? "Ignored: this server runs in strict mode (REAL_A11Y_REDACT_INPUT=1), so no field value is ever captured."
+        : 'Capture each field\'s value in the checkpoint\'s tree view (`textbox "Email" = "jane@x.com"`, sensitive fields "[redacted]"). Default false — a checkpoint becomes an artifact that may be exported, committed and posted, so what users typed stays out unless you ask. A checkpoint captured with values can only be exported with values: true.',
+    );
 
   server.registerTool(
     "checkpoint_findings",
     {
       title: "Save a11y checkpoint",
       description:
-        "Snapshot the CURRENT page's accessibility findings and store them under `name`. Later call diff_findings to see which findings are new / changed / fixed — the same identity semantics (fingerprints) the CI a11y-diff uses. Checkpoints survive navigation AND the session idle timeout (the browser may close and relaunch between saving and diffing; checkpoints remain), so you can checkpoint one deploy and diff another: save 'prod', open the preview URL, then diff_findings('prod'). They are held in memory and do NOT survive close_browser — call export_checkpoint first if you need one to outlive the session. Whole-document. Chromium only.",
+        "Snapshot the CURRENT page's accessibility findings and store them under `name`. Later call diff_findings to see which findings are new / changed / fixed — the same identity semantics (fingerprints) the CI a11y-diff uses. Checkpoints survive navigation AND the session idle timeout (the browser may close and relaunch between saving and diffing; checkpoints remain), so you can checkpoint one deploy and diff another: save 'prod', open the preview URL, then diff_findings('prod'). They are held in memory and do NOT survive close_browser — call export_checkpoint first if you need one to outlive the session. The stored tree view leaves field values out unless you pass values: true. Whole-document. Chromium only.",
       inputSchema: {
         name: checkpointName,
         rules: z
           .array(z.enum(RULES))
           .optional()
           .describe("Subset of rules for the findings. Omit to run all."),
+        values: checkpointValues,
         session: sessionParam,
       },
       annotations: {
@@ -858,21 +906,27 @@ export function buildServer(
         openWorldHint: false,
       },
     },
-    async ({ name, rules, session }) =>
+    async ({ name, rules, values, session }) =>
       withSession(session, async (rec) => {
         // Native, like `real-a11y snapshot`. These two write the SAME artifact
         // shape through the same assembler so a checkpoint captured by one can be
         // diffed by the other — which only holds while both read the same
         // producer. `tabOrder: false` is the other half: a native page omits the
         // tabs view rather than storing an empty one.
-        const snap = projectNativeTree(await rec.session.nativeTree(), {
+        const captureValues = values === true && !redactInput;
+        const snap = projectNativeTree(await readTree(rec), {
           rules,
+          values: captureValues,
         });
         const page = buildSnapshotPage(name, pageUrl(rec), snap, {
           root: "body",
           tabOrder: false,
         });
-        rec.checkpoints.save(name, { page, rules });
+        rec.checkpoints.save(name, {
+          page,
+          rules,
+          ...(captureValues ? { values: true } : {}),
+        });
         const treeKb = (page.tree.length / 1024).toFixed(1);
         return text(
           `"${name}" saved: ${page.findings.length} finding(s) (tree ${treeKb} KB). ${rec.checkpoints.size} checkpoint(s) stored.`,
@@ -899,10 +953,13 @@ export function buildServer(
         }
         // Re-snapshot with the SAME rule set the checkpoint was captured with, so
         // findings from rules the base never ran don't read as spurious NEW.
-        const snap = projectNativeTree(await rec.session.nativeTree(), {
+        const snap = projectNativeTree(await readTree(rec), {
           // Stored loosely as `string[]`; validated against the rule enum when
           // the checkpoint was saved.
           rules: base.rules as A11yRule[] | undefined,
+          // …and with values iff the base has them, or every filled field
+          // would read as a changed tree line.
+          values: base.values === true && !redactInput,
         });
         const head = buildSnapshotPage(name, pageUrl(rec), snap, {
           root: "body",
@@ -911,7 +968,17 @@ export function buildServer(
         // An imported base may have been captured at a narrow root; this side is
         // always whole-document. Say so — silently widening turns everything
         // outside the old subtree into NEW findings, the class that gates CI.
-        const note = scopeMismatch(base.page, head);
+        const scopeNote = scopeMismatch(base.page, head);
+        // A checkpoint captured (or imported) with values, diffed on a server
+        // running with REAL_A11Y_REDACT_INPUT: this side can carry none, so
+        // every filled field reads as a changed tree line. Say so rather than
+        // let it pass for a regression — the same warning the CLI's `diff`
+        // gives a one-sided pair. Findings carry no values and are unaffected.
+        const valuesNote =
+          base.values === true && redactInput
+            ? `Note: checkpoint "${name}" carries field values, but this server runs with REAL_A11Y_REDACT_INPUT, so the current tree has none — every filled field reads as a changed tree line. Findings are unaffected.`
+            : undefined;
+        const note = [scopeNote, valuesNote].filter(Boolean).join("\n\n");
         // Checkpoints survive navigation by design, so the agent may well have
         // moved to another page between saving and diffing.
         const body = renderDiff(diffCheckpointPages(base.page, head), {
@@ -970,7 +1037,7 @@ export function buildServer(
           .entries()
           .map(
             ([name, cp]) =>
-              `  ${name}: ${cp.page.findings.length} finding(s), tree ${(cp.page.tree.length / 1024).toFixed(1)} KB`,
+              `  ${name}: ${cp.page.findings.length} finding(s), tree ${(cp.page.tree.length / 1024).toFixed(1)} KB${cp.values ? " (with field values)" : ""}`,
           );
         return text(`${checkpoints.size} checkpoint(s):\n${lines.join("\n")}`);
       }),
@@ -982,13 +1049,31 @@ export function buildServer(
       title: "Export a checkpoint as JSON",
       annotations: READ_ONLY,
       description:
-        "Return a stored checkpoint as a Real A11y snapshot artifact — the same a11y-snapshot.json the CLI writes (same schemaVersion, same fingerprints). Persist it to your own file to diff across sessions, or feed it to the CI a11y-diff. Checkpoints are whole-document, and the artifact has to come back as one valid JSON string, so a large page can exceed the output cap and fail — use the CLI's `real-a11y snapshot --output` for those.",
-      inputSchema: { name: checkpointName, session: sessionParam },
+        "Return a stored checkpoint as a Real A11y snapshot artifact — the same a11y-snapshot.json the CLI writes (same schemaVersion, same fingerprints). Persist it to your own file to diff across sessions, or feed it to the CI a11y-diff. An artifact carries no field values unless the checkpoint was captured with values: true AND you export it with values: true. Checkpoints are whole-document, and the artifact has to come back as one valid JSON string, so a large page can exceed the output cap and fail — use the CLI's `real-a11y snapshot --output` for those.",
+      inputSchema: {
+        name: checkpointName,
+        values: z
+          .boolean()
+          .default(false)
+          .describe(
+            "Export a checkpoint that was captured with field values. Default false, which refuses one rather than write what users typed into an artifact that may be committed and posted. A checkpoint captured without values exports the same either way.",
+          ),
+        session: sessionParam,
+      },
     },
-    async ({ name, session }) =>
+    async ({ name, values, session }) =>
       withCheckpoints(session, (checkpoints) => {
         const cp = checkpoints.get(name);
         if (!cp) return errText(`No checkpoint named "${name}".`);
+        // A persisted output needs its own opt-in (ADR-0001): the capture's
+        // `values: true` was for diffing in-session, not a decision to write
+        // the values into a file. Refuse rather than strip, because a tree
+        // view can't be un-valued after the fact.
+        if (cp.values === true && values !== true) {
+          return errText(
+            `Checkpoint "${name}" was captured with field values, so its artifact would carry what users typed. Pass values: true to export it anyway, or re-capture it with checkpoint_findings (values: false) for an artifact without them.`,
+          );
+        }
         const artifact = buildArtifact([cp.page], {
           toolName: "@real-a11y-dev/mcp",
           toolVersion: packageVersion(),
@@ -1000,6 +1085,7 @@ export function buildServer(
           // vanished. The page is the only honest source.
           views: viewsOfPage(cp.page),
           ...(cp.rules ? { rules: cp.rules } : {}),
+          ...(cp.values ? { values: true } : {}),
         });
         const json = serializeArtifact(artifact);
         // Never truncate a JSON artifact into invalid JSON — the outer bounded()
@@ -1070,6 +1156,9 @@ export function buildServer(
           checkpoints.save(name, {
             page: src,
             rules: parsed.meta?.rules ?? undefined,
+            // Carried over so a diff re-snapshots the same way, and a
+            // re-export keeps asking before it writes them out again.
+            ...(carriesValues(parsed) ? { values: true } : {}),
           });
           const extra =
             parsed.pages.length > 1
@@ -1105,7 +1194,7 @@ export function buildServer(
     },
     async ({ session }) =>
       withSession(session, async (rec) => {
-        const tree = await rec.session.nativeTree();
+        const tree = await readTree(rec);
         rec.treeCheckpoint = captureNativeCheckpoint(tree, pageUrl(rec));
         return text(
           `Tree checkpoint captured — ${tree.nodes.size} node(s). Interact, then call diff_tree.`,
@@ -1119,7 +1208,10 @@ export function buildServer(
       title: "Diff the tree since the checkpoint",
       annotations: READ_ONLY,
       description:
-        "Diff the CURRENT accessibility tree against the one captured by checkpoint_tree: nodes added, removed, or changed, plus a focus move. This is the interaction diff — the precise answer to 'what did that click actually change for a screen reader?'.",
+        "Diff the CURRENT accessibility tree against the one captured by checkpoint_tree: nodes added, removed, or changed, plus a focus move. This is the interaction diff — the precise answer to 'what did that click actually change for a screen reader?'." +
+        (redactInput
+          ? " This server runs in strict mode (REAL_A11Y_REDACT_INPUT=1), so what a field holds never appears here."
+          : ' After type_text it shows what the field now holds — `~ textbox "Email": a11y.value (unset) → "jane@x.com"`, a sensitive field as "[redacted]".'),
       inputSchema: { session: sessionParam },
     },
     async ({ session }) =>
@@ -1132,8 +1224,9 @@ export function buildServer(
         }
         const outcome = diffNativeCheckpoint(
           checkpoint,
-          await rec.session.nativeTree(),
+          await readTree(rec),
           pageUrl(rec),
+          { values: liveValues },
         );
         // A navigation is a real outcome of a real click, not a failure. The
         // checkpoint itself survived — it lives here, not in the page — but the
@@ -1185,7 +1278,9 @@ export function buildServer(
     | { ok: true; nodeId: string; candidate: TargetCandidate }
     | { ok: false; res: ReturnType<typeof errText> }
   > {
-    const tree = await rec.session.nativeTree();
+    // The same tree the reads print, strict mode included — a target is aimed
+    // at by the name the agent was shown.
+    const tree = await readTree(rec);
     const resolved = resolveTarget(tree, { role, name, nth });
     switch (resolved.kind) {
       case "resolved":
@@ -1320,7 +1415,7 @@ export function buildServer(
     {
       title: "Type into a text field (by role + name)",
       description:
-        "Set the value of the text field matched by role + accessible name in the native accessibility tree (role is usually 'textbox', 'searchbox', or 'combobox'). REPLACES the field's current value — via the prototype value setter plus input/change events, so framework-controlled inputs (React et al.) register it. The result NEVER echoes the typed text or any field content. There is deliberately NO credential parameter and this tool must NOT be used to log in — a password or token typed here would enter the agent's context; for pages behind auth the user starts the server with REAL_A11Y_MCP_STORAGE_STATE or REAL_A11Y_MCP_CDP instead. Pair with checkpoint_tree / diff_tree to see what the input changed (a combobox popping options, an inline error appearing). Chromium only.",
+        "Set the value of the text field matched by role + accessible name in the native accessibility tree (role is usually 'textbox', 'searchbox', or 'combobox'). REPLACES the field's current value — via the prototype value setter plus input/change events, so framework-controlled inputs (React et al.) register it. The result NEVER echoes the typed text or any field content; diff_tree afterwards shows what the field holds the way a screen reader announces it (a sensitive field as \"[redacted]\"; nothing at all when the server runs with REAL_A11Y_REDACT_INPUT=1). There is deliberately NO credential parameter and this tool must NOT be used to log in — a password or token typed here would enter the agent's context; for pages behind auth the user starts the server with REAL_A11Y_MCP_STORAGE_STATE or REAL_A11Y_MCP_CDP instead. Pair with checkpoint_tree / diff_tree to see what the input changed (a combobox popping options, an inline error appearing). Chromium only.",
       inputSchema: {
         role: actRole,
         name: actName,

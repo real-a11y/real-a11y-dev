@@ -661,7 +661,8 @@ function touchedNames(code, names) {
  * The named gates that enforce R1 — which of a user's field values a tree, or
  * an act report, may carry. As of ADR-0001 that is none from a
  * sensitive field (`type="password"`, the credential and payment
- * `autocomplete` tokens) and never the text an act step typed.
+ * `autocomplete` tokens), none at all under the `redactInput` strict mode,
+ * and never the text an act step typed.
  *
  * Names, not paths: the gates live in four packages, and the files that hold
  * them are mostly about something else. A PR that adds a gate adds its name
@@ -689,6 +690,28 @@ const FIELD_VALUE_GATES = [
   "isSensitiveField",
   "SENSITIVE_AUTOCOMPLETE_TOKENS",
   "REDACTED_VALUE",
+  // Both producers finish a value through `finishAnnouncedValue`, which is
+  // where a sensitive field's text becomes `[redacted]`.
+  "finishAnnouncedValue",
+  // The native producer's sensitivity classification (ADR-0001): which values
+  // a sensitive field withholds — its own, one inside or around it — and
+  // which names built from them go with it. `holdsContent` decides that an
+  // empty field withholds nothing, so loosening it withholds less.
+  "fieldSensitivity",
+  "valueRegions",
+  "withholdRegionNames",
+  "withoutSelection",
+  "holdsContent",
+  // The strict mode (`redactInput`): every value and all rich-text editor
+  // content withheld. The switch itself — its option, the CLI flag and config
+  // key, the MCP server's env var — and the gates it turns on in the native
+  // producer.
+  "redactInput",
+  "REAL_A11Y_REDACT_INPUT",
+  "strictValueRoots",
+  "nodesInsideEditable",
+  "redactEditableContent",
+  "withoutEditableContent",
   // The extension's native path, which reads a live value and redacts it in
   // the page (`extension/src/native/native-core.ts`) for the roles in its
   // `VALUE_BEARING_ROLES`.

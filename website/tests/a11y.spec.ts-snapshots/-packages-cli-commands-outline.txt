@@ -35,6 +35,7 @@ h1 Commands & flags
     h3 --audit-origin <origin>
     h3 --session <name>
     h3 --session-idle-timeout <ms>
+    h3 --redact-input
     h3 --strict
   h2 Output
     h3 -f, --format <fmt>
@@ -54,6 +55,7 @@ h1 Commands & flags
     h3 --version <buildId>
     h3 --force
     h3 --include-generic
+    h3 --values
     h3 --md
     h3 --baseline <file>
     h3 --update-baseline
@@ -67,5 +69,6 @@ h1 Commands & flags
     h3 Socket and process isolation
     h3 Authenticated state
     h3 Origin pinning and the file:// gate
+    h3 Field values
     h3 Redaction
     h3 Daemon log

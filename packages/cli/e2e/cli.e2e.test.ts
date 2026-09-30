@@ -333,6 +333,59 @@ describe("the native producer is the only producer (built bin)", () => {
     expect(inspect.stdout).not.toContain("== Tab order ==");
   });
 
+  it("shows a rich-text editor's content by default; --redact-input keeps it out of tree, audit and json", async () => {
+    // What sits in a composer is page content a screen reader reads, so the
+    // default tree shows it (ADR-0001). The strict mode withholds it: the
+    // nodes inside must not carry it out as names, a link's URL, or a
+    // heading-order message.
+    // The page writes the editor's content at runtime from a split literal,
+    // so the sentinel is not in the data: URL — which stderr and the json
+    // envelope both echo, and which is this page's whole source.
+    const EDITOR_PAGE = dataUrl(`<main><h1>Compose</h1>
+      <div contenteditable="true" role="textbox" aria-label="Message">
+        <p>draft <span class="s">p</span> <a class="s-href"><span class="s">link</span></a></p>
+        <h3 class="s">heading</h3>
+      </div>
+      <article><div contenteditable="true" class="s">plain</div></article>
+      <script>
+        const S = "EDITOR-" + "SECRET-";
+        for (const el of document.querySelectorAll(".s")) el.textContent = S + el.textContent;
+        document.querySelector(".s-href").href = "https://x.test/?token=" + S + "href";
+      </script>
+    </main>`);
+    expect(EDITOR_PAGE).not.toContain("EDITOR-SECRET");
+
+    const shown = await runCli(["tree", EDITOR_PAGE]);
+    expect(shown.code).toBe(0);
+    expect(shown.stdout).toContain('heading "EDITOR-SECRET-heading" (level 3)');
+    // A role-less editor is a field of its own, holding its text.
+    expect(shown.stdout).toContain('generic = "EDITOR-SECRET-plain"');
+
+    for (const args of [
+      ["tree", EDITOR_PAGE],
+      ["tree", EDITOR_PAGE, "-f", "json"],
+      ["outline", EDITOR_PAGE],
+      ["audit", EDITOR_PAGE, "-f", "json"],
+    ]) {
+      const { stdout, stderr } = await runCli([...args, "--redact-input"]);
+      expect(stdout).not.toContain("EDITOR-SECRET");
+      expect(stderr).not.toContain("EDITOR-SECRET");
+    }
+    const { code, stdout } = await runCli([
+      "tree",
+      EDITOR_PAGE,
+      "--redact-input",
+    ]);
+    expect(code).toBe(0);
+    // The structure is all still there; only the typed words are withheld.
+    expect(stdout).toContain('textbox "Message"');
+    expect(stdout).toContain('link "[redacted]"');
+    expect(stdout).toContain('heading "[redacted]" (level 3)');
+    // …and the withheld link is not reported as unlabeled: its name exists.
+    const audit = await runCli(["audit", EDITOR_PAGE, "--redact-input"]);
+    expect(audit.stdout).not.toContain("no-unlabeled-interactive");
+  });
+
   it("tabs still reports the keyboard sequence, from the in-page walk", async () => {
     const { code, stdout } = await runCli(["tabs", ICON_BTN_PAGE]);
     expect(code).toBe(0);
@@ -368,15 +421,27 @@ describe("the native producer is the only producer (built bin)", () => {
     // mention chip, and can't focus the link typed into the composer at all.
     // That link used to be listed under its own text — here, a reset URL
     // with its token — while both editors were missing.
+    const STOPS = [
+      '01. textbox "Message"',
+      '02. link "Mention Alice"',
+      "03. generic",
+    ];
+    // By default the stops are the same, each editor showing what it holds
+    // (ADR-0001): the typed link is in the composer's value, not a stop.
     const { code, stdout } = await runCli(["tabs", COMPOSER_PAGE, "-q"]);
     expect(code).toBe(0);
-    expect(stdout.trimEnd()).toBe(
-      ['01. textbox "Message"', '02. link "Mention Alice"', "03. generic"].join(
-        "\n",
-      ),
-    );
-    expect(stdout).not.toContain("token=abc123");
-    expect(stdout).not.toContain("hunter2");
+    expect(stdout.trimEnd().replace(/ = ".*"$/gm, "")).toBe(STOPS.join("\n"));
+    expect(stdout).toContain('03. generic = "my password is hunter2"');
+    // --redact-input: no values, so neither the link nor the draft.
+    const strict = await runCli([
+      "tabs",
+      COMPOSER_PAGE,
+      "-q",
+      "--redact-input",
+    ]);
+    expect(strict.stdout.trimEnd()).toBe(STOPS.join("\n"));
+    expect(strict.stdout).not.toContain("token=abc123");
+    expect(strict.stdout).not.toContain("hunter2");
   });
 
   it("rejects --producer entirely — the axis is gone", async () => {
@@ -388,6 +453,128 @@ describe("the native producer is the only producer (built bin)", () => {
     ]);
     expect(code).toBe(2);
     expect(stderr).toMatch(/Unknown option/);
+  });
+});
+
+/**
+ * Field values (ADR-0001): the live views print what each field holds, the way
+ * a screen reader announces it; a sensitive field reads "[redacted]" and never
+ * its bullets; `--redact-input` withholds every value; `snapshot` artifacts
+ * carry values only with `--values`.
+ *
+ * The page fills its fields at runtime from split literals, so no sentinel is
+ * in the data: URL (which stderr and the json envelope both echo).
+ */
+describe("field values (built bin)", () => {
+  const FORM_PAGE = dataUrl(`<main><h1>Sign up</h1>
+    <label>Email <input id="email" type="email"></label>
+    <label>Password <input id="pw" type="password"></label>
+    <label>Card <input id="cc" autocomplete="cc-number"></label>
+    <label>Country <select><option>Spain</option><option selected>France</option></select></label>
+    <script>
+      document.getElementById("email").value = "VALUE-" + "email@example.com";
+      document.getElementById("pw").value = "PW-" + "SENTINEL-1";
+      document.getElementById("cc").value = "CC-" + "SENTINEL-4111";
+    </script>
+  </main>`);
+  const SENSITIVE = /PW-SENTINEL|CC-SENTINEL|•/;
+
+  it("tree prints each field's value, sensitive ones as [redacted]", async () => {
+    for (const format of [[], ["-f", "json"]]) {
+      const { code, stdout, stderr } = await runCli([
+        "tree",
+        FORM_PAGE,
+        ...format,
+      ]);
+      expect(code).toBe(0);
+      const tree =
+        format.length > 0
+          ? (JSON.parse(stdout) as { pages: { tree: string }[] }).pages[0].tree
+          : stdout;
+      expect(tree).toContain('textbox "Email" = "VALUE-email@example.com"');
+      expect(tree).toContain('textbox "Password" = "[redacted]"');
+      expect(tree).toContain('textbox "Card" = "[redacted]"');
+      expect(tree).toContain('combobox "Country" = "France"');
+      expect(stdout).not.toMatch(SENSITIVE);
+      expect(stderr).not.toMatch(SENSITIVE);
+    }
+  });
+
+  it("list and tabs print values too; audit never does", async () => {
+    const list = await runCli(["list", "form", FORM_PAGE]);
+    expect(list.stdout).toContain('= "VALUE-email@example.com"');
+    const tabs = await runCli(["tabs", FORM_PAGE]);
+    expect(tabs.stdout).toContain('= "VALUE-email@example.com"');
+    expect(tabs.stdout).toContain('= "[redacted]"');
+    const audit = await runCli(["audit", FORM_PAGE, "-f", "json"]);
+    expect(audit.stdout).not.toContain("VALUE-email");
+    for (const out of [list, tabs, audit]) {
+      expect(out.stdout).not.toMatch(SENSITIVE);
+    }
+  });
+
+  it("--redact-input (or defaults.redactInput) withholds every value", async () => {
+    const flagged = await runCli(["tree", FORM_PAGE, "--redact-input"]);
+    const dir = mkdtempSync(join(tmpdir(), "real-a11y-redact-"));
+    const config = join(dir, "a11y.config.json");
+    writeFileSync(config, JSON.stringify({ defaults: { redactInput: true } }));
+    const configured = await runCli(["tree", FORM_PAGE, "--config", config]);
+    for (const { code, stdout } of [flagged, configured]) {
+      expect(code).toBe(0);
+      expect(stdout).toContain('textbox "Email"\n');
+      expect(stdout).not.toContain(" = ");
+      expect(stdout).not.toContain("VALUE-email");
+      expect(stdout).not.toMatch(SENSITIVE);
+    }
+    const tabs = await runCli(["tabs", FORM_PAGE, "--redact-input"]);
+    expect(tabs.stdout).not.toContain(" = ");
+  });
+
+  it("snapshot leaves values out of the artifact unless --values asks", async () => {
+    const plain = await runCli(["snapshot", FORM_PAGE, "-q"]);
+    expect(plain.code).toBe(0);
+    expect(plain.stdout).not.toContain("VALUE-email");
+    expect(plain.stdout).not.toContain(' = \\"');
+    const plainArtifact = JSON.parse(plain.stdout) as {
+      meta: { values?: boolean };
+      pages: { tree: string }[];
+    };
+    expect(plainArtifact.meta.values).toBeUndefined();
+    expect(plainArtifact.pages[0].tree).toContain('textbox "Email"');
+
+    const withValues = await runCli(["snapshot", FORM_PAGE, "-q", "--values"]);
+    const artifact = JSON.parse(withValues.stdout) as typeof plainArtifact;
+    expect(artifact.meta.values).toBe(true);
+    expect(artifact.pages[0].tree).toContain(
+      'textbox "Email" = "VALUE-email@example.com"',
+    );
+    expect(artifact.pages[0].tree).toContain(
+      'textbox "Password" = "[redacted]"',
+    );
+    expect(withValues.stdout).not.toMatch(SENSITIVE);
+
+    // Strict mode wins over the opt-in.
+    const strict = await runCli([
+      "snapshot",
+      FORM_PAGE,
+      "-q",
+      "--values",
+      "--redact-input",
+    ]);
+    expect(strict.stdout).not.toContain("VALUE-email");
+    expect(
+      (JSON.parse(strict.stdout) as typeof plainArtifact).meta.values,
+    ).toBeUndefined();
+  });
+
+  it("diff says why when only one side carries values", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "real-a11y-values-diff-"));
+    const base = join(dir, "base.json");
+    const pr = join(dir, "pr.json");
+    await runCli(["snapshot", FORM_PAGE, "-q", "-o", base]);
+    await runCli(["snapshot", FORM_PAGE, "-q", "--values", "-o", pr]);
+    const { stderr } = await runCli(["diff", base, pr]);
+    expect(stderr).toContain("only the PR snapshot carries field values");
   });
 });
 

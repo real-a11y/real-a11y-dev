@@ -133,9 +133,14 @@ accessibility tree — never a CSS selector. That's the point: if a control can'
 be reached that way, assistive technology can't reach it either, and the refusal
 is a finding rather than a targeting inconvenience.
 
-The actions are real — they submit forms and can navigate. A typed value is
-never echoed back in any output format, and `type` is not a login mechanism;
-use [`login`](/packages/cli/commands#login-url-save-file) for that. Chromium
+The actions are real — they submit forms and can navigate. The text a step types
+is never echoed (the step prints as `= ‹hidden›`), and `type` is not a login
+mechanism; use [`login`](/packages/cli/commands#login-url-save-file) for that.
+The diff shows what the field then holds, the way a screen reader announces it
+— `a11y.value (unset) → "…"` — with a password, one-time code or payment field
+only ever `[redacted]`. [`--redact-input`](/packages/cli/commands#redact-input)
+keeps every field value and all rich-text editor content out of every view
+([how](/packages/cli/commands#tree-url)). Chromium
 only. Full contract in the
 [command reference](/packages/cli/commands#interact-url-step-step).
 

@@ -207,6 +207,18 @@ Return the page's accessibility tree as a deterministic, indented role + accessi
 
 This is the vocabulary the [act tools](#act) target in, so a node you aim at by role + name here is the same node they dispatch against.
 
+A field shows what it holds, the way a screen reader announces it — a text field's text, a `<select>`'s chosen option, a slider's `aria-valuetext` (else its number), a rich-text editor's content:
+
+```
+textbox "Email" = "jane@example.com"
+textbox "Password" = "[redacted]"
+combobox "Country" = "France"
+```
+
+A field whose markup marks it secret — `type="password"`, or an `autocomplete` of `current-password`, `new-password`, `one-time-code`, `cc-number`, `cc-csc`, `cc-exp`, `cc-exp-month` or `cc-exp-year` — reads `[redacted]` when it holds anything: never its text, never its length. [`inspect_page`](#inspect-page), [`list_elements`](#list-elements), [`get_tab_order`](#get-tab-order) and [`diff_tree`](#diff-tree) show values the same way; [findings checkpoints](#findings-checkpoints) leave them out unless asked.
+
+A server started with [`REAL_A11Y_REDACT_INPUT=1`](#real-a11y-redact-input) shows no value at all, and withholds what was typed into a rich-text editor (a `contenteditable` composer, a `designMode` document): the editor's structure is kept, a name computed from its text reads `[redacted]` and a paragraph inside it reads unnamed, while a name from the page's own markup (an `aria-label`, an image's `alt`) is kept. That holds for every tool built on this tree — `diff_tree`, `audit_page`, `inspect_page`, `list_elements`. [`get_tab_order`](#get-tab-order) is the in-page walk, not built on it: it shows no values there. A link typed into an editor is not a Tab stop, so it never appears in it; a `contenteditable="false"` island such as a mention chip is one, and keeps its name.
+
 Parameters:
 
 - **`includeGeneric`** — boolean — optional (default `false`) — include generic container nodes (`role=generic`).
@@ -288,6 +300,7 @@ Parameters:
 
 - **`name`** — string — required — the checkpoint label (the store key).
 - **`rules`** — array of the five rule ids — optional — subset for the findings. Omit to run all.
+- **`values`** — boolean — optional (default `false`) — capture each field's value in the checkpoint's tree view, as the live views show it (a sensitive field still `[redacted]`). Off by default because a checkpoint becomes an artifact that can be exported, committed and posted — the same opt-in as the CLI's `snapshot --values`. It covers each field's own value; a name Chromium builds from what a field or editor holds (a heading typed into an editor) stays, except for sensitive fields — [`REAL_A11Y_REDACT_INPUT=1`](#real-a11y-redact-input) withholds those too. A checkpoint captured with values is exported only when [`export_checkpoint`](#export-checkpoint) is asked for them too. Ignored under [`REAL_A11Y_REDACT_INPUT=1`](#real-a11y-redact-input).
 
 Whole-document, and built from the same producer `real-a11y snapshot` uses — which is what lets a checkpoint captured here be diffed by the CLI, and vice versa. The exported artifact records which views it measured (`meta.views`) and omits the tabs view rather than storing an empty one.
 
@@ -303,7 +316,7 @@ Parameters:
 
 - **`name`** — string — required — the checkpoint to diff against.
 
-The re-snapshot carries the same rule subset the checkpoint was captured with, so rules the base never ran can't surface as spurious NEW.
+The re-snapshot carries the same rule subset the checkpoint was captured with, so rules the base never ran can't surface as spurious NEW — and captures field values only if the checkpoint did, so a filled field never reads as structural drift.
 
 The header names the operation and the checkpoint it read, so an output can be traced back to its input when several are stored:
 
@@ -369,9 +382,12 @@ Return a stored checkpoint as a Real A11y snapshot artifact — the same `a11y-s
 
 The artifact has to come back as **one valid JSON string**, so it is never truncated — a checkpoint over the 40,000-character cap fails instead. Checkpoints are whole-document, so there is no scope to narrow (a `rules` subset shrinks the findings, never the tree); the error reports both sizes so you can tell which. To *compare* an oversized checkpoint, diff it in-session with [`diff_findings`](#diff-findings) / [`diff_checkpoints`](#diff-checkpoints), which need no export. To *keep* one, capture the page with the CLI instead — `real-a11y snapshot <url> --output a11y-snapshot.json` writes the identical artifact to a file, uncapped.
 
+An artifact carries field values only when the checkpoint was captured with them **and** you ask here too: exporting a checkpoint that holds values without `values: true` is refused, so values captured for an in-session diff can't slip into a file on a default. The exported artifact records `meta.values: true`, and importing it back keeps that.
+
 Parameters:
 
 - **`name`** — string — required.
+- **`values`** — boolean — optional (default `false`) — export a checkpoint that was captured with field values. A checkpoint captured without them exports the same either way.
 
 ### `import_checkpoint`
 
@@ -408,6 +424,15 @@ Diff the current accessibility tree against the one captured by `checkpoint_tree
 
 Takes no parameters beyond `session`: it re-reads the whole document and compares it against the captured tree.
 
+A field's value is part of what changed for a screen reader, so after a [`type_text`](#type-text) the diff shows what the field now holds — and a sensitive field only that it holds something:
+
+```
+~ textbox "Email": a11y.value (unset) → "jane@example.com"
+~ textbox "Password": a11y.value (unset) → "[redacted]"
+```
+
+Under [`REAL_A11Y_REDACT_INPUT=1`](#real-a11y-redact-input) no value line appears.
+
 If the page navigated or reloaded in between, this says so — naming where the page started and where it ended up — instead of emitting a diff in which every node was removed and every node added. Call `checkpoint_tree` again to start a new comparison.
 
 Errors if no checkpoint exists for the session yet.
@@ -421,7 +446,7 @@ Targeting is deliberately **role + accessible name**, never a CSS selector or a 
 All three tools share the targeting parameters:
 
 - **`role`** — string — required — ARIA role exactly as the tree prints it (`button`, `link`, `textbox`, `checkbox`, `menuitem`, …).
-- **`name`** — string — optional — accessible name; case-insensitive, whitespace-normalized **exact** match against the tree [`get_semantic_tree`](#get-semantic-tree) returns. Pass `""` to target an unlabeled control; omit to match any name.
+- **`name`** — string — optional — accessible name; case-insensitive, whitespace-normalized **exact** match against the tree [`get_semantic_tree`](#get-semantic-tree) returns. Pass `""` to target an unlabeled control; omit to match any name. A field's value is never its name, so target a field by its label, not what it holds. A node whose name was withheld reads `[redacted]` in the tree — inside a rich-text editor under [`REAL_A11Y_REDACT_INPUT=1`](#real-a11y-redact-input), or a cell named after a password field it contains — so it can't be told apart by its text; pick one with `nth`, or target the editor itself.
 - **`nth`** — integer ≥ 1 — optional — 1-based pick among the role+name-filtered matches, in document order.
 
 When several nodes match and no `nth` was given, the tool errors and **lists the candidates as `nth=1 · role "name"` lines** — the remedy is copy-paste. A **disabled** target is refused with the cause (the page would silently ignore the action, and the empty diff that followed would mislead). A match with no backing DOM element (a synthesized node such as the document root) is refused before any CDP traffic.
@@ -448,7 +473,7 @@ Set the value of the matched text field (role is usually `textbox`, `searchbox`,
 
 Additional parameter:
 
-- **`text`** — string — required — the text to enter. **Never echoed back in the result** (the same R1 redaction discipline the read path applies).
+- **`text`** — string — required — the text to enter. **Never echoed back in the result.** The field's value is page content, though: [`diff_tree`](#diff-tree) afterwards shows what the field holds — `a11y.value (unset) → "…"`, a password or payment field as `[redacted]` — so an agent can confirm the text landed. [`REAL_A11Y_REDACT_INPUT=1`](#real-a11y-redact-input) keeps every value out of every result.
 
 There is deliberately **no credential parameter**, and this tool must not be used to log in — a password typed here would enter the agent's context. For pages behind auth, start the server with [`REAL_A11Y_MCP_STORAGE_STATE`](#real-a11y-mcp-storage-state) or [`REAL_A11Y_MCP_CDP`](#real-a11y-mcp-cdp) instead.
 
@@ -530,5 +555,13 @@ How long the server keeps sessions alive with no tool call before closing them a
 Both variables must be non-negative integers; anything else — hex, a fraction, a stray character — refuses to start rather than run a limit nobody chose. Unset, empty, or whitespace-only means the default (never `0`, which would disable the timer).
 
 ::: tip Proxy
+### `REAL_A11Y_REDACT_INPUT`
+
+Set to `1` for the strict mode: **no field value and no rich-text editor content** in any tool result. By default the live reads show what each field holds, the way a screen reader announces it, and withhold only fields whose markup marks them secret (`type="password"`, a credential or payment `autocomplete`) as `[redacted]` — so what users entered in ordinary fields, and drafts in a composer, reach the agent's context and the model provider behind it. Turn this on when that is not acceptable: a page whose plain text fields hold secrets the markup doesn't mark, or a deployment where field contents must never leave the machine. Under it, `diff_tree` reports no value changes, `checkpoint_findings` ignores `values`, and inside an editor a name computed from the typed text reads `[redacted]`. `1` / `true` turn it on; unset, `0` or `false` leave it off; any other value refuses to start rather than guess.
+
+```json
+"env": { "REAL_A11Y_REDACT_INPUT": "1" }
+```
+
 There is no `REAL_A11Y_MCP_PROXY` variable — Chromium doesn't honor `HTTP_PROXY`/`HTTPS_PROXY` on its own, and a proxy is a **programmatic** `BrowserSession` constructor option, not read from the environment by the stdio server. Configure it only if you embed `BrowserSession` directly.
 :::

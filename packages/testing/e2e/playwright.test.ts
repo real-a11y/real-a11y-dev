@@ -215,6 +215,37 @@ test.describe("native tree", () => {
       attach(page, { tree: "native", rootSelector: "main" }),
     ).rejects.toThrow(/rootSelector/);
   });
+
+  test("a field's value is in the tree, printed only when a snapshot asks (ADR-0001)", async ({
+    page,
+  }) => {
+    await page.fill("#name", "Ada Lovelace");
+    // A password field, filled — its value must never print, nor its length.
+    await page.evaluate(() => {
+      const pw = document.createElement("input");
+      pw.type = "password";
+      pw.setAttribute("aria-label", "Password");
+      pw.value = "PW-SECRET-hunter2";
+      document.querySelector("form")!.append(pw);
+    });
+    const sn = await attach(page, { tree: "native" });
+
+    // Snapshot helpers are opt-in, so committed snapshots don't churn.
+    expect(await sn.treeSnapshot()).not.toContain("Ada Lovelace");
+
+    const withValues = await sn.treeSnapshot({ values: true });
+    expect(withValues).toContain('textbox "Full name" = "Ada Lovelace"');
+    expect(withValues).toContain('textbox "Password" = "[redacted]"');
+    expect(withValues).not.toContain("PW-SECRET");
+    expect(withValues).not.toContain("•");
+
+    const strict = await (
+      await attach(page, { tree: "native", redactInput: true })
+    ).treeSnapshot({ values: true });
+    expect(strict).toMatch(/textbox "Full name"( \[focused\])?\n/);
+    expect(strict).not.toContain("Ada Lovelace");
+    expect(strict).not.toContain("[redacted]");
+  });
 });
 
 // ─── Bad fixture (assertions must fail) ──────────────────────────────────────
@@ -273,6 +304,42 @@ test.describe("contenteditable rich-text widgets", () => {
     const sn = await attach(page);
     const snapshot = await sn.treeSnapshot();
     expect(snapshot).toContain('combobox "Search"');
+  });
+
+  test("native mode shows what was typed into the message box, and redactInput withholds it", async ({
+    page,
+  }) => {
+    // Quill keeps the draft in the editor's own <p>, as every model-driven
+    // editor does. A screen reader reads that draft, so native mode shows it
+    // by default (ADR-0001) — as the box's value and in the paragraph inside.
+    // The strict mode (the CLI's --redact-input, MCP's
+    // REAL_A11Y_REDACT_INPUT) withholds all of it.
+    await page.evaluate(() => {
+      document.querySelector(
+        '[aria-label="Message to general"] p',
+      )!.textContent = "draft EDITOR-SECRET";
+    });
+
+    const native = await (
+      await attach(page, { tree: "native" })
+    ).treeSnapshot({ values: true });
+    expect(native).toContain(
+      'textbox "Message to general" = "draft EDITOR-SECRET"',
+    );
+
+    const strict = await (
+      await attach(page, { tree: "native", redactInput: true })
+    ).treeSnapshot({ values: true });
+    expect(strict).toContain('textbox "Message to general"');
+    expect(strict).not.toContain("EDITOR-SECRET");
+
+    // The DOM tree is the developer inspecting their own page: no strict mode.
+    expect(await (await attach(page)).treeSnapshot()).toContain(
+      "EDITOR-SECRET",
+    );
+    await expect(attach(page, { redactInput: true })).rejects.toThrow(
+      /tree: "native"/,
+    );
   });
 
   test("a native <input role=combobox> serializes as a combobox (W3C APG example shape)", async ({

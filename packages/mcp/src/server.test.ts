@@ -81,8 +81,12 @@ class FakeSession implements A11ySession {
     rootId: "",
     source: { producer: "native" },
   };
-  async nativeTree() {
-    this.calls.push({ fn: "nativeTree", rootSelector: "", args: [] });
+  async nativeTree(options?: Parameters<A11ySession["nativeTree"]>[0]) {
+    this.calls.push({
+      fn: "nativeTree",
+      rootSelector: "",
+      args: options === undefined ? [] : [options],
+    });
     return this.nativeTreeResponse;
   }
 
@@ -112,13 +116,14 @@ class FakeSession implements A11ySession {
  *   and two trees are "different documents" iff their bases do not overlap.
  */
 function nativeTree(
-  children: { role: string; name?: string; level?: string }[],
+  children: { role: string; name?: string; level?: string; value?: string }[],
   idBase?: number,
 ): FakeSession["nativeTreeResponse"] {
-  const a11y = (role: string, name = "", level?: string) => ({
+  const a11y = (role: string, name = "", level?: string, value?: string) => ({
     role,
     name,
     description: "",
+    ...(value !== undefined ? { value } : {}),
     states: {},
     properties: level ? { level } : {},
     isExposedToAT: true,
@@ -145,7 +150,7 @@ function nativeTree(
         parentId: rootId,
         childIds: [],
         depth: 1,
-        a11y: a11y(c.role, c.name, c.level),
+        a11y: a11y(c.role, c.name, c.level, c.value),
       },
     ]),
   ];
@@ -2251,5 +2256,279 @@ describe("single-session embedder path (buildServer(session))", () => {
     });
     expect(res.isError).toBeFalsy();
     expect(session.opened).toHaveLength(1);
+  });
+});
+
+describe("field values (ADR-0001)", () => {
+  let session: FakeSession;
+  beforeEach(() => {
+    session = new FakeSession();
+  });
+
+  const form = (value?: string, password?: string) =>
+    nativeTree(
+      [
+        { role: "heading", name: "Sign up", level: "1" },
+        { role: "textbox", name: "Email", value },
+        { role: "textbox", name: "Password", value: password },
+      ],
+      100,
+    );
+  const nativeTreeOptions = () =>
+    session.calls
+      .filter((c) => c.fn === "nativeTree")
+      .map((c) => c.args[0] as { redactInput?: boolean } | undefined);
+
+  it("the live reads show what each field holds, sensitive ones as [redacted]", async () => {
+    session.nativeTreeResponse = form("jane@x.com", "[redacted]");
+    const client = await connect(session);
+    const tree = textOf(
+      await client.callTool({ name: "get_semantic_tree", arguments: {} }),
+    );
+    expect(tree).toContain('textbox "Email" = "jane@x.com"');
+    expect(tree).toContain('textbox "Password" = "[redacted]"');
+    const inspect = textOf(
+      await client.callTool({ name: "inspect_page", arguments: {} }),
+    );
+    expect(inspect).toContain('textbox "Email" = "jane@x.com"');
+    const list = textOf(
+      await client.callTool({
+        name: "list_elements",
+        arguments: { filter: "form" },
+      }),
+    );
+    expect(list).toContain('textbox "Email" = "jane@x.com"');
+    // Every read asked the producer for the default, non-strict tree.
+    expect(nativeTreeOptions()).toEqual([
+      { redactInput: false },
+      { redactInput: false },
+      { redactInput: false },
+    ]);
+  });
+
+  it("get_tab_order asks the in-page walk for values", async () => {
+    const client = await connect(session);
+    await client.callTool({ name: "get_tab_order", arguments: {} });
+    const call = session.calls.find((c) => c.fn === "tabSequenceSnapshot");
+    expect(call?.args).toEqual([{ values: true }]);
+  });
+
+  it("diff_tree reports a typed value as (unset) → the value", async () => {
+    session.nativeTreeResponse = form();
+    const client = await connect(session);
+    await client.callTool({
+      name: "open_page",
+      arguments: { url: "https://example.com/" },
+    });
+    await client.callTool({ name: "checkpoint_tree", arguments: {} });
+    session.nativeTreeResponse = form("hello", "[redacted]");
+    const diff = textOf(
+      await client.callTool({ name: "diff_tree", arguments: {} }),
+    );
+    expect(diff).toContain('~ textbox "Email": a11y.value (unset) → "hello"');
+    expect(diff).toContain(
+      '~ textbox "Password": a11y.value (unset) → "[redacted]"',
+    );
+  });
+
+  describe("strict mode (REAL_A11Y_REDACT_INPUT=1)", () => {
+    it("reads every tree in strict mode, and prints no value even if one arrived", async () => {
+      // The producer withholds them; the serializers are told not to print
+      // them either, so one layer failing doesn't leak.
+      session.nativeTreeResponse = form("jane@x.com", "[redacted]");
+      const client = await connect(session, { redactInput: true });
+      for (const name of ["get_semantic_tree", "inspect_page"]) {
+        const out = textOf(await client.callTool({ name, arguments: {} }));
+        expect(out, name).toContain('textbox "Email"');
+        expect(out, name).not.toContain("jane@x.com");
+        expect(out, name).not.toContain(" = ");
+      }
+      const list = textOf(
+        await client.callTool({
+          name: "list_elements",
+          arguments: { filter: "form" },
+        }),
+      );
+      expect(list).not.toContain("jane@x.com");
+      expect(nativeTreeOptions().every((o) => o?.redactInput === true)).toBe(
+        true,
+      );
+      await client.callTool({ name: "get_tab_order", arguments: {} });
+      expect(
+        session.calls.find((c) => c.fn === "tabSequenceSnapshot")?.args,
+      ).toEqual([{ values: false }]);
+    });
+
+    it("says so in the tool descriptions", async () => {
+      const client = await connect(session, { redactInput: true });
+      const tools = (await client.listTools()).tools;
+      const desc = (name: string) =>
+        tools.find((t) => t.name === name)?.description ?? "";
+      expect(desc("get_semantic_tree")).toContain("REAL_A11Y_REDACT_INPUT=1");
+      expect(desc("diff_tree")).toContain("REAL_A11Y_REDACT_INPUT=1");
+      const defaults = await connect(new FakeSession());
+      const dflt = (await defaults.listTools()).tools;
+      expect(
+        dflt.find((t) => t.name === "get_semantic_tree")?.description,
+      ).toContain('"[redacted]"');
+    });
+  });
+
+  describe("checkpoints are persisted outputs: values are opt-in twice", () => {
+    it("checkpoint_findings leaves values out by default", async () => {
+      session.nativeTreeResponse = form("jane@x.com");
+      const client = await connect(session);
+      await client.callTool({
+        name: "open_page",
+        arguments: { url: "https://example.com/" },
+      });
+      await client.callTool({
+        name: "checkpoint_findings",
+        arguments: { name: "cp" },
+      });
+      const exported = textOf(
+        await client.callTool({
+          name: "export_checkpoint",
+          arguments: { name: "cp" },
+        }),
+      );
+      expect(exported).not.toContain("jane@x.com");
+      const artifact = parseSnapshotArtifact(exported);
+      expect(artifact.pages[0].tree).toContain('textbox "Email"');
+      expect(artifact.meta.values).toBeUndefined();
+    });
+
+    it("a checkpoint captured with values exports only with values: true", async () => {
+      session.nativeTreeResponse = form("jane@x.com", "[redacted]");
+      const client = await connect(session);
+      await client.callTool({
+        name: "open_page",
+        arguments: { url: "https://example.com/" },
+      });
+      await client.callTool({
+        name: "checkpoint_findings",
+        arguments: { name: "cp", values: true },
+      });
+      expect(
+        textOf(
+          await client.callTool({ name: "list_checkpoints", arguments: {} }),
+        ),
+      ).toContain("(with field values)");
+
+      const refused = await client.callTool({
+        name: "export_checkpoint",
+        arguments: { name: "cp" },
+      });
+      expect(refused.isError).toBe(true);
+      expect(textOf(refused)).toContain("values: true");
+      expect(textOf(refused)).not.toContain("jane@x.com");
+
+      const exported = textOf(
+        await client.callTool({
+          name: "export_checkpoint",
+          arguments: { name: "cp", values: true },
+        }),
+      );
+      const artifact = parseSnapshotArtifact(exported);
+      expect(artifact.meta.values).toBe(true);
+      expect(artifact.pages[0].tree).toContain(
+        'textbox "Email" = "jane@x.com"',
+      );
+
+      // …and the opt-in travels with the artifact: imported, it still asks.
+      await client.callTool({
+        name: "import_checkpoint",
+        arguments: { name: "back", artifact: exported },
+      });
+      const again = await client.callTool({
+        name: "export_checkpoint",
+        arguments: { name: "back" },
+      });
+      expect(again.isError).toBe(true);
+    });
+
+    it("diff_findings re-snapshots with values iff the checkpoint has them", async () => {
+      session.nativeTreeResponse = form("jane@x.com");
+      const client = await connect(session);
+      await client.callTool({
+        name: "open_page",
+        arguments: { url: "https://example.com/" },
+      });
+      await client.callTool({
+        name: "checkpoint_findings",
+        arguments: { name: "cp", values: true },
+      });
+      const diff = textOf(
+        await client.callTool({
+          name: "diff_findings",
+          arguments: { name: "cp" },
+        }),
+      );
+      // Same page, same values: no structural change to report.
+      expect(diff).not.toMatch(/^[-+] .*textbox "Email"/m);
+    });
+
+    it("a strict server diffing a checkpoint that has values says why filled fields read as changed", async () => {
+      // Captured with values on a default server, then imported into a strict
+      // one: this side can hold no values, so the diff must not pass the
+      // missing values off as a regression.
+      session.nativeTreeResponse = form("jane@x.com");
+      const producer = await connect(session);
+      await producer.callTool({
+        name: "open_page",
+        arguments: { url: "https://example.com/" },
+      });
+      await producer.callTool({
+        name: "checkpoint_findings",
+        arguments: { name: "cp", values: true },
+      });
+      const exported = textOf(
+        await producer.callTool({
+          name: "export_checkpoint",
+          arguments: { name: "cp", values: true },
+        }),
+      );
+
+      const strictSession = new FakeSession();
+      strictSession.nativeTreeResponse = form("jane@x.com");
+      const strict = await connect(strictSession, { redactInput: true });
+      await strict.callTool({
+        name: "open_page",
+        arguments: { url: "https://example.com/" },
+      });
+      await strict.callTool({
+        name: "import_checkpoint",
+        arguments: { name: "base", artifact: exported },
+      });
+      const diff = textOf(
+        await strict.callTool({
+          name: "diff_findings",
+          arguments: { name: "base" },
+        }),
+      );
+      expect(diff).toContain("carries field values");
+      expect(diff).toContain("REAL_A11Y_REDACT_INPUT");
+      expect(diff).not.toContain("jane@x.com = ");
+    });
+
+    it("strict mode never captures values, even when asked", async () => {
+      session.nativeTreeResponse = form("jane@x.com");
+      const client = await connect(session, { redactInput: true });
+      await client.callTool({
+        name: "open_page",
+        arguments: { url: "https://example.com/" },
+      });
+      await client.callTool({
+        name: "checkpoint_findings",
+        arguments: { name: "cp", values: true },
+      });
+      const exported = textOf(
+        await client.callTool({
+          name: "export_checkpoint",
+          arguments: { name: "cp", values: true },
+        }),
+      );
+      expect(exported).not.toContain("jane@x.com");
+    });
   });
 });

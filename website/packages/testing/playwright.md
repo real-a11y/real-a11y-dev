@@ -46,6 +46,7 @@ test("page heading structure", async ({ page }) => {
 |---|---|---|---|
 | `rootSelector` | `string` | `"body"` | CSS selector for the audit root element. |
 | `tree` | `"dom" \| "native"` | `"dom"` | Which producer builds the tree. See [Auditing the native tree](#auditing-the-native-tree). |
+| `redactInput` | `boolean` | `false` | Native tree only: withhold every field value and all rich-text editor content. See [Strict mode](#strict-mode-redactinput). Throws with `tree: "dom"`. |
 
 ## Narrowing the root
 
@@ -77,8 +78,18 @@ Native mode is **read-only and whole-document** for now:
 
 - `tabSequenceSnapshot()` **throws** — a native tree carries no focus/interaction data, so tab order can't be computed. Use `{ tree: "dom" }` for tab-sequence snapshots.
 - `rootSelector` scoping is **not supported** — omit it (the default `"body"` audits the whole document); passing any other selector throws up front rather than silently ignoring it.
+Everything else — `treeSnapshot()`, `outlineSnapshot()`, and every `assert*` method — works identically. Both producers normalize to the *same* tree model, so a snapshot's `role "name"` grammar is the same and the two trees are directly comparable. That includes [field values](#field-values): a native tree holds what each field announces (Chromium's own value for it), sensitive fields as `"[redacted]"`, and prints them only with `treeSnapshot({ values: true })`.
 
-Everything else — `treeSnapshot()`, `outlineSnapshot()`, and every `assert*` method — works identically. Both producers normalize to the *same* tree model, so a snapshot's `role "name"` grammar is the same and the two trees are directly comparable.
+### Strict mode (`redactInput`)
+
+`attach(page, { tree: "native", redactInput: true })` withholds every field value — sensitive or not — and all rich-text editor content (`contenteditable`, `designMode`): the editor's nodes keep their roles but read `[redacted]` (or unnamed, for a paragraph) where Chromium named them from the typed text. It is the same strict mode as the CLI's `--redact-input` and the MCP server's `REAL_A11Y_REDACT_INPUT=1`.
+
+```ts
+const sn = await attach(page, { tree: "native", redactInput: true });
+expect(await sn.treeSnapshot({ values: true })).not.toContain("draft text");
+```
+
+It applies to the native tree only. The DOM tree is you inspecting your own page and has no strict mode, so `{ redactInput: true }` without `tree: "native"` throws rather than be silently ignored.
 
 ## Testing that assertions fail on broken pages
 
@@ -158,7 +169,7 @@ expect(await sn.treeSnapshot({ values: true })).toContain(
 );
 ```
 
-A password field, or one with a credential or payment `autocomplete`, prints `"[redacted]"`.
+A password field, or one with a credential or payment `autocomplete`, prints `"[redacted]"` — in both trees, and never its length. With `{ tree: "native" }` the value is Chromium's own; under [`redactInput`](#strict-mode-redactinput) there is none to print.
 
 ## How it works
 

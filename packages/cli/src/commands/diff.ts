@@ -17,6 +17,7 @@ import {
   diffArtifacts,
   noPagesMatched,
   assertFullArtifact,
+  carriesValues,
   parseSnapshotArtifact,
 } from "@real-a11y-dev/snapshot";
 
@@ -128,6 +129,19 @@ export const diffCommand: CommandFn = async (positionals, flags) => {
         "pages join on the URL's path (host and port are ignored), so this means " +
         "the two runs captured different routes; check the `url` of each entry on " +
         "both sides, or set a matching `id` if one side deliberately moved\n",
+    );
+  }
+
+  // Field values are an opt-in per capture (`snapshot --values`). Diffing a
+  // capture with them against one without reads every filled field as a
+  // changed line — say why, rather than leave a wall of `= "…"` churn to be
+  // mistaken for a regression. Findings are unaffected: they carry no values.
+  if (carriesValues(base) !== carriesValues(pr)) {
+    const which = carriesValues(base) ? "base" : "PR";
+    process.stderr.write(
+      `real-a11y: warning: only the ${which} snapshot carries field values ` +
+        "(captured with --values), so every filled field reads as a changed " +
+        "tree line; capture both sides the same way for a like-for-like diff\n",
     );
   }
 

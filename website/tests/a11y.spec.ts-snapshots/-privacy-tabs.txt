@@ -6,6 +6,7 @@ link "Data we might receive anyway"
 link "Your rights"
 link "Changes to this policy"
 link "Contact"
+link "Details"
 table
 link "GitHub's privacy policy"
 link "SECURITY.md"

@@ -1376,8 +1376,13 @@ export function isSensitiveField(element: Element): boolean {
   });
 }
 
-/** Roles announced by position in a range: `aria-valuetext`, else `valuenow`. */
-const RANGE_VALUE_ROLES: ReadonlySet<string> = new Set([
+/**
+ * Roles announced by position in a range: `aria-valuetext`, else `valuenow`.
+ * Exported with {@link STATE_ONLY_ROLES} and {@link finishAnnouncedValue} so
+ * the native producer applies the same rules to Chromium's value — one table,
+ * or the two producers drift apart.
+ */
+export const RANGE_VALUE_ROLES: ReadonlySet<string> = new Set([
   "slider",
   "spinbutton",
   "progressbar",
@@ -1386,7 +1391,7 @@ const RANGE_VALUE_ROLES: ReadonlySet<string> = new Set([
 ]);
 
 /** Roles whose checked/pressed STATE is what's announced — never a value. */
-const STATE_ONLY_ROLES: ReadonlySet<string> = new Set([
+export const STATE_ONLY_ROLES: ReadonlySet<string> = new Set([
   "checkbox",
   "radio",
   "switch",
@@ -1546,16 +1551,30 @@ export function getAnnouncedValue(
   styleCache?: StyleCache,
 ): string | undefined {
   try {
-    const raw = readFieldValue(element, role, styleCache);
-    const collapsed = (raw ?? "").replace(/\s+/g, " ").trim();
-    if (!collapsed) return undefined;
-    if (isSensitiveField(element)) return REDACTED_VALUE;
-    return collapsed.length > VALUE_MAX
-      ? collapsed.slice(0, VALUE_MAX - 1) + "…"
-      : collapsed;
+    return finishAnnouncedValue(readFieldValue(element, role, styleCache), () =>
+      isSensitiveField(element),
+    );
   } catch {
     return undefined;
   }
+}
+
+/**
+ * The shared tail of every announced value, whichever producer read it:
+ * collapse whitespace, read empty as no value, substitute
+ * {@link REDACTED_VALUE} for a sensitive field (asked lazily, only when there
+ * is something to withhold), and cap at {@link VALUE_MAX} characters with `…`.
+ */
+export function finishAnnouncedValue(
+  raw: string | undefined,
+  isSensitive: () => boolean,
+): string | undefined {
+  const collapsed = (raw ?? "").replace(/\s+/g, " ").trim();
+  if (!collapsed) return undefined;
+  if (isSensitive()) return REDACTED_VALUE;
+  return collapsed.length > VALUE_MAX
+    ? collapsed.slice(0, VALUE_MAX - 1) + "…"
+    : collapsed;
 }
 
 /**

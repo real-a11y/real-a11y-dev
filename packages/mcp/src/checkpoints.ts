@@ -36,6 +36,14 @@ export const MAX_CHECKPOINTS = 20;
 export interface Checkpoint {
   page: SnapshotPage;
   rules?: string[];
+  /**
+   * The page's tree view carries field values (`checkpoint_findings` with
+   * `values: true`, or an imported artifact that did). Remembered for the same
+   * reason as `rules` — `diff_findings` re-snapshots the same way, or every
+   * filled field reads as a changed line — and so `export_checkpoint` can
+   * refuse to write values into an artifact nobody asked to carry them.
+   */
+  values?: boolean;
 }
 
 /**

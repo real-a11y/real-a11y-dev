@@ -13,7 +13,7 @@
 export * from "./browser.js";
 export * from "./chrome.js";
 export { nativeTree, buildNativeTree } from "./native-tree.js";
-export type { NativeDomInfo } from "./native-tree.js";
+export type { NativeDomInfo, NativeTreeOptions } from "./native-tree.js";
 export { CdpActionBackend, backendNodeIdFrom } from "./cdp-action-backend.js";
 export {
   captureNativeCheckpoint,
@@ -23,6 +23,7 @@ export {
 export type {
   NativeCheckpoint,
   NativeCheckpointDiff,
+  NativeCheckpointDiffOptions,
 } from "./native-checkpoint.js";
 export { resolveTarget } from "./resolve-target.js";
 export type {

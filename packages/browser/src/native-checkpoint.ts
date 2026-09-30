@@ -133,6 +133,18 @@ function focusNode(tree: ExtractionResult) {
   return tree.focusedId ? (tree.nodes.get(tree.focusedId) ?? null) : null;
 }
 
+/** How {@link diffNativeCheckpoint} renders. */
+export interface NativeCheckpointDiffOptions {
+  /**
+   * Report what fields hold (ADR-0001): a value change renders as
+   * `~ textbox "Email": a11y.value (unset) → "hello"`, and an added or removed
+   * node carries its value. Default false — a change only to what a field
+   * holds then renders nothing, as it did before values were modelled. Live
+   * surfaces (the CLI's `interact`, MCP's `diff_tree`) turn it on.
+   */
+  values?: boolean;
+}
+
 /**
  * Diff a live native tree against a checkpoint. Pure — the caller supplies both
  * trees and the current URL, so this is unit-testable with no browser.
@@ -141,6 +153,7 @@ export function diffNativeCheckpoint(
   checkpoint: NativeCheckpoint,
   after: ExtractionResult,
   afterUrl: string,
+  options: NativeCheckpointDiffOptions = {},
 ): NativeCheckpointDiff {
   if (documentWasReplaced(checkpoint.tree, after)) {
     return { kind: "replaced", from: checkpoint.url, to: afterUrl };
@@ -148,6 +161,7 @@ export function diffNativeCheckpoint(
   const rendered = serializeTreeDiff(diffTrees(checkpoint.tree, after), {
     focusBefore: focusNode(checkpoint.tree),
     focusAfter: focusNode(after),
+    values: options.values === true,
   });
   // Match the serializer's literal sentinel rather than re-deriving "did
   // anything change" from the diff object. If the sentinel ever changes, the

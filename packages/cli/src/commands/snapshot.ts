@@ -33,6 +33,7 @@ import {
 } from "@real-a11y-dev/snapshot";
 
 import {
+  inputPolicy,
   parseFailOn,
   parseFormat,
   parseOnly,
@@ -194,6 +195,12 @@ export async function runSnapshotOnSession(
     typeof flags.baseline === "string" ? flags.baseline : undefined;
   const updateBaseline = flags["update-baseline"] === true;
 
+  // An artifact is committed, uploaded and posted into PR comments, so field
+  // values stay out of it unless this run asked (`--values` /
+  // `defaults.values`) — and never under strict mode (ADR-0001).
+  const { redactInput } = inputPolicy(flags);
+  const values = flags.values === true && !redactInput;
+
   const snapshotPages: SnapshotPage[] = [];
   let isFirstSnapshotTarget = true;
   for (const target of targets) {
@@ -229,6 +236,8 @@ export async function runSnapshotOnSession(
       }
       const snap = await nativeSnapshot(session, {
         ...(rules ? { rules } : {}),
+        values,
+        redactInput,
       });
       snapshotPages.push(
         buildSnapshotPage(target.name, target.url, snap, {
@@ -337,6 +346,7 @@ export async function runSnapshotOnSession(
     views: MEASURED_VIEWS,
     ...(rules ? { rules } : {}),
     ...(openOptions.device ? { device: openOptions.device } : {}),
+    ...(values ? { values } : {}),
   });
   // json + --only: a partial artifact — the filtered axis is stripped from
   // the pages and `meta.only` marks it so `diff` can refuse it outright.
@@ -356,6 +366,7 @@ export async function runSnapshotOnSession(
             views: MEASURED_VIEWS,
             ...(rules ? { rules } : {}),
             ...(openOptions.device ? { device: openOptions.device } : {}),
+            ...(values ? { values } : {}),
             only,
           },
         )

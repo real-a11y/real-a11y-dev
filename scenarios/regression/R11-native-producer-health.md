@@ -6,11 +6,12 @@ area: MCP
 type: Automated
 priority: P1
 status: Active
-validFrom: "browser ≥ 0.1.0-beta.12 · cli ≥ 0.1.0-beta.2 (locators + focusedId unreleased). The native producer itself: browser ≥ 0.1.0-beta.11"
+validFrom: "browser ≥ 0.1.0-beta.12 · cli ≥ 0.1.0-beta.2 (locators + focusedId unreleased). The native producer itself: browser ≥ 0.1.0-beta.11. Steps 6 / 6b as written (field values shown, sensitive ones redacted, --redact-input): cli ≥ 0.1.0-beta.7 (unreleased)"
 validUntil: ""
-expected: "native tree returns a document tree reaching UA-shadow media controls the in-page walk misses; every native FINDING carries a CSS locator identical to the DOM producer's for the same element (a shadow-root element stops its path at the boundary rather than faking a selector); the tree sets focusedId so [focused] renders; a value typed into a field NEVER appears anywhere in the tree (R1)."
+expected: "native tree returns a document tree reaching UA-shadow media controls the in-page walk misses; every native FINDING carries a CSS locator identical to the DOM producer's for the same element (a shadow-root element stops its path at the boundary rather than faking a selector); the tree sets focusedId so [focused] renders; a field shows what it holds the way a screen reader announces it, while a sensitive field (password, one-time code, payment) only ever reads [redacted]; --redact-input withholds every value and all rich-text editor content."
 covers:
   - packages.@real-a11y-dev/browser
+  - cli.commands.tree.flags.--redact-input
 notion: "https://app.notion.com/p/3aa1c354b0b581379ac1caea2338fb81"
 ---
 
@@ -19,7 +20,10 @@ notion: "https://app.notion.com/p/3aa1c354b0b581379ac1caea2338fb81"
 Use a page with a `<video controls>` (UA-shadow media controls), an image with no
 `alt`, an unlabeled `<button id="go">`, an image nested under
 `<section id="panel">`, a pair of sibling images, an element inside an open shadow
-root, and a text field.
+root, a text field, and a rich-text editor — `<div id="composer" contenteditable
+role="textbox" aria-label="Message">` holding a `<p>` with a link in it, an `<h3>`,
+and a `contenteditable="false"` mention chip `<a aria-label="Mention Alice">` — and a
+`<input type="password" aria-label="Password">`.
 
 **There is no `--producer` flag.** #258 removed the axis — every browser-driving read
 is native now — so these are plain invocations. An earlier version of this row spelled
@@ -31,7 +35,12 @@ is native now — so these are plain invocations. An earlier version of this row
    there is only one producer to ask. Step 8 is where this is still checked
 4. `real-a11y list image <url>` — locators present on every entry
 5. Focus a control, then `real-a11y tree <url>`
-6. Type a sentinel into the field, then re-read the tree
+6. Type a sentinel into the text field and a second one into the password field,
+   then `real-a11y tree <url>` and `real-a11y tree <url> --redact-input`
+   - **6b** — write a third sentinel into the editor's paragraph, link text and
+     heading (and one into the link's `href`), then `real-a11y tree <url>`; then
+     `real-a11y tree <url> --redact-input`, the same with `-f json`, and
+     `real-a11y audit <url> -f json --redact-input`
 7. `real-a11y audit <url> --root main`
 8. `pnpm --filter @real-a11y-dev/browser test:e2e`
 
@@ -51,9 +60,21 @@ is native now — so these are plain invocations. An earlier version of this row
   assertion, and step 8's parity harness is now its only home
 - **5** — `[focused]` marks the focused node. The tree sets `focusedId`; without it
   a focus action reports a bare `a11y.states.focused` flip instead of a focus move
-- **6** — the sentinel appears **nowhere** in the tree. The producer never reads
-  `.value`, drops the AX `value` field, excludes `valuenow`/`valuetext`, and copies
-  only an allowlist of attributes
+- **6** — the text field prints its sentinel as its **value**, never its name:
+  `textbox "<label>" = "<sentinel>"`. The password field prints
+  `textbox "Password" = "[redacted]"` — the password sentinel, and any `•` bullets
+  (which would give away its length), appear **nowhere**. With `--redact-input`
+  neither field prints a value (no ` = ` at all). Before cli 0.1.0-beta.7 the tree
+  withheld every value, so both fields printed bare
+- **6b** — by default the editor's content is page content: the paragraph, link
+  and heading read their sentinel text, and `textbox "Message" = "…"` holds it. With
+  `--redact-input` (all three commands) the editor sentinel appears **nowhere**,
+  while the structure survives: `textbox "Message"` keeps its label; inside it a
+  bare `paragraph`, `link "[redacted]"`, `heading "[redacted]" (level 3)`, and
+  `link "Mention Alice"` (a markup name, kept). `audit` does **not** report the
+  withheld link as `no-unlabeled-interactive` — it is named, just not shown. cli
+  0.1.0-beta.6 printed the editor text as those nodes' names and had no strict
+  mode
 - **4** — locators on every entry. Native `list_elements` used to carry none, and
   three docs stated that as intended; both were fixed together
 - **7** — refused: the read is whole-document, so it cannot be combined with a root
@@ -83,6 +104,16 @@ than loudly:
   defects with no address.
 - **`focusedId`.** The native tree knew where focus was (per-node `focused`) and had
   no way to say so, because every consumer reads the tree-level pointer.
+
+Steps 6 and 6b guard the field-value policy (ADR-0001), which has a privacy
+cost either way it fails. A field's value is what a screen reader announces, so
+the tree shows it — but a password must read `[redacted]` and never Chromium's
+masking bullets, whose count is the password's length. And what sits in a
+rich-text editor is its value too: Chromium reports it as the host's AX `value`
+*and* names the nodes inside the editor from it, so `--redact-input` has to close
+both paths or the strict mode leaks through names. A test with a plain `<input>`
+can never see the second path: it needs content-named nodes under an editable
+host.
 
 Parity itself is now a standing automated gate, so this row checks the things that
 gate can't see.

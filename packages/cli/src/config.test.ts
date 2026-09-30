@@ -422,3 +422,58 @@ describe("DEFAULTABLE_FLAGS lockstep", () => {
     }
   });
 });
+
+describe("field-value defaults (ADR-0001)", () => {
+  const cfg = (defaults: A11yConfig["defaults"]): A11yConfig => ({
+    urls: [],
+    defaults,
+    dir: "/repo",
+  });
+
+  it("loads redactInput and values as booleans, and rejects anything else", () => {
+    const file = writeConfig({ defaults: { redactInput: true, values: true } });
+    expect(loadConfig(file).defaults).toEqual({
+      redactInput: true,
+      values: true,
+    });
+    expect(() =>
+      loadConfig(writeConfig({ defaults: { redactInput: "yes" } })),
+    ).toThrow(/defaults\.redactInput must be true or false/);
+  });
+
+  it("seeds --redact-input on every command that reads a page", () => {
+    for (const command of [
+      "tree",
+      "tabs",
+      "list",
+      "audit",
+      "type",
+      "snapshot",
+    ]) {
+      const values: Record<string, unknown> = {};
+      mergeDefaults(
+        values,
+        cfg({ redactInput: true }),
+        new Set(Object.keys(COMMANDS[command].options)),
+      );
+      expect(values["redact-input"], command).toBe(true);
+    }
+  });
+
+  it("seeds --values only where a persisted output takes it: snapshot", () => {
+    const snapshot: Record<string, unknown> = {};
+    mergeDefaults(
+      snapshot,
+      cfg({ values: true }),
+      new Set(Object.keys(COMMANDS.snapshot.options)),
+    );
+    expect(snapshot.values).toBe(true);
+    const tree: Record<string, unknown> = {};
+    mergeDefaults(
+      tree,
+      cfg({ values: true }),
+      new Set(Object.keys(COMMANDS.tree.options)),
+    );
+    expect(tree.values).toBeUndefined();
+  });
+});

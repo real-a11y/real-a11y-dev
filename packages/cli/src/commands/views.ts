@@ -14,6 +14,7 @@ import { numberTabStops } from "@real-a11y-dev/serialize";
 import { redactUrl, sanitizeText } from "@real-a11y-dev/snapshot";
 
 import {
+  inputPolicy,
   parseFormat,
   parseListCategory,
   parseOpenOptions,
@@ -76,8 +77,13 @@ export async function runTreeOnSession(
   const target = singleTarget(positionals, flags, "tree");
   progress(`opening ${target.name} …`, { quiet: flags.quiet === true });
   const { url: finalUrl } = await ensurePageOpen(session, target, flags);
+  // A live view: each field prints what it holds (ADR-0001), unless the run
+  // is in strict mode.
+  const { redactInput, liveValues } = inputPolicy(flags);
   const snapshot = await nativeSnapshot(session, {
     includeGeneric: flags["include-generic"] === true,
+    values: liveValues,
+    redactInput,
   });
   return writeView("tree", target, flags, redactUrl(finalUrl), snapshot.tree);
 }
@@ -91,8 +97,11 @@ export async function runOutlineOnSession(
   const target = singleTarget(positionals, flags, "outline");
   progress(`opening ${target.name} …`, { quiet: flags.quiet === true });
   const { url: finalUrl } = await ensurePageOpen(session, target, flags);
+  // An outline prints no values, but strict mode still withholds a heading
+  // named from what was typed into an editor.
   const snapshot = await nativeSnapshot(session, {
     includeGeneric: flags["include-generic"] === true,
+    redactInput: inputPolicy(flags).redactInput,
   });
   return writeView(
     "outline",
@@ -112,9 +121,11 @@ export async function runTabsOnSession(
   const target = singleTarget(positionals, flags, "tabs");
   progress(`opening ${target.name} …`, { quiet: flags.quiet === true });
   const { url: finalUrl } = await ensurePageOpen(session, target, flags);
-  const text = await snapshotPage(session, rootOf(flags), {}).then(
-    (s) => s.tabOrder,
-  );
+  // The in-page walk has no strict mode of its own (ADR-0001: DOM surfaces
+  // get no switch); under --redact-input it just prints no values.
+  const text = await snapshotPage(session, rootOf(flags), {
+    values: inputPolicy(flags).liveValues,
+  }).then((s) => s.tabOrder);
   return writeView("tabs", target, flags, redactUrl(finalUrl), text);
 }
 
@@ -128,8 +139,9 @@ export async function runListOnSession(
   const target = singleTarget(positionals.slice(1), flags, "list");
   progress(`opening ${target.name} …`, { quiet: flags.quiet === true });
   const { url: finalUrl } = await ensurePageOpen(session, target, flags);
-  const raw = await nativeTree(session).then((tree) =>
-    listByRole(tree, category as RoleFilter),
+  const { redactInput, liveValues } = inputPolicy(flags);
+  const raw = await nativeTree(session, { redactInput }).then((tree) =>
+    listByRole(tree, category as RoleFilter, { values: liveValues }),
   );
   const text = sanitizeText(raw);
   if (format === "json") {
