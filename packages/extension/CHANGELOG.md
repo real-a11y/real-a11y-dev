@@ -18,6 +18,13 @@
 
 ## Unreleased
 
+- In NATIVE mode, a rich-text editor with no role (a ProseMirror-style
+  `<div contenteditable>`) now stays in the tree as a `generic`, empty or
+  filled, as DOM mode already shows it, so the A11y view has a node to show
+  its text on. It used to be dropped, leaving what was typed into it with no
+  field around it. (ADR-0001)
+  ([#432](https://github.com/real-a11y/real-a11y-dev/pull/432))
+
 - In DOM mode, the body of a closed `<details>` no longer shows in the tree,
   the Tab Sequence view, its copied export or the keyboard bar's Tab. Chromium
   renders a closed disclosure as its summary alone and never tabs into the
