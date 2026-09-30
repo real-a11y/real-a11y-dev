@@ -85,18 +85,20 @@ test("select on a custom role=option widget refuses cleanly", async ({
   );
 });
 
-/** A `<select>`'s own live value is read back, redaction rules applying the
- *  same as anywhere else — `pageReadValue` reads `HTMLSelectElement` too. */
-test("the select's live value is read back on the combobox row", async ({
+/** A `<select>` shows what a screen reader announces — its selected option's
+ *  LABEL (ADR-0001), live — while its raw `value` rides along only for a
+ *  retype. Redaction rules apply the same as anywhere else: `pageReadValue`
+ *  classifies `HTMLSelectElement` too. */
+test("the select's announced label is read back live on the combobox row", async ({
   nav,
 }) => {
   const { page, tabId } = await nav.open("listbox-select.html");
-  expect(node(await nav.readNodes(tabId), "combobox", "Department").value).toBe(
-    "all",
-  );
+  const before = node(await nav.readNodes(tabId), "combobox", "Department");
+  expect(before.value).toBe("All Departments");
+  expect(before.rawValue).toBe("all");
 
   await page.selectOption("#department", "music");
-  expect(node(await nav.readNodes(tabId), "combobox", "Department").value).toBe(
-    "music",
-  );
+  const after = node(await nav.readNodes(tabId), "combobox", "Department");
+  expect(after.value).toBe("Music");
+  expect(after.rawValue).toBe("music");
 });

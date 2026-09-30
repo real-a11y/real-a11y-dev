@@ -1,11 +1,17 @@
-import type { RawNativeAXNode } from "@real-a11y-dev/core";
+import {
+  SENSITIVE_AUTOCOMPLETE_TOKENS,
+  type RawNativeAXNode,
+} from "@real-a11y-dev/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   backendNodeIdFrom,
+  capText,
   dispatchNative,
+  fieldFacets,
   findNative,
   IN_PAGE_ACTION_SOURCE,
+  IN_PAGE_READ_VALUE_SOURCE,
   pageClick,
   pageReadValue,
   pageSelectOption,
@@ -14,6 +20,7 @@ import {
   readNativeTree,
   rootIdOf,
   SYNTHETIC_ROOT_ID,
+  withholdInsideSensitive,
   type CdpTransport,
   type EnrichedNativeNode,
 } from "./native-core.js";
@@ -174,7 +181,8 @@ describe("readNativeTree", () => {
   it("never surfaces valuenow/valuetext — R1", async () => {
     // These two AX properties ARE the user's current input for a value-bearing
     // control (spinbutton, slider). Letting them through the enrichment would
-    // carry a field value into the dogfood panel — the exact thing R1 forbids.
+    // carry a field value into the panel around `pageReadValue`'s in-page
+    // classification — a value reaches a node only as `value`, through it.
     const raw = [
       {
         nodeId: "1",
@@ -263,51 +271,245 @@ describe("readNativeTree", () => {
 
     expect(res.serialized).toBe('application\ndocument\napplication "Editor"');
     for (const node of res.nodes) expect(node.name).not.toContain("SECRET");
+    // Nothing classified these editors (this transport answers no in-page
+    // call), so no value either. Once one is classified its text IS its
+    // value — ADR-0001, pinned by "shows an editor's content as its value".
     expect(JSON.stringify(res.nodes)).not.toContain("SECRET");
   });
 
-  it("attaches a field value for a value-bearing role via the in-page read-back", async () => {
-    const raw = [
+  /** A one-node tree whose in-page classification answers `read`. */
+  function oneField(
+    node: Record<string, unknown>,
+    read: unknown,
+  ): FakeTransport {
+    const raw = [{ nodeId: "1", backendDOMNodeId: 10, ...node }];
+    return new FakeTransport((method) => {
+      if (method === "Accessibility.getFullAXTree") return { nodes: raw };
+      if (method === "DOM.resolveNode") return { object: { objectId: "obj" } };
+      if (method === "Runtime.callFunctionOn")
+        return { result: { value: read } };
+      return {};
+    });
+  }
+
+  it("shows a text field's AX value once the page classifies it", async () => {
+    const t = oneField(
       {
-        nodeId: "1",
-        backendDOMNodeId: 10,
         role: { value: "textbox" },
         name: { value: "Name:" },
+        value: { type: "string", value: "456465" },
+      },
+      { classified: true, value: "456465" },
+    );
+    const res = await readNativeTree(t);
+    const field = findNative(res.nodes, "textbox", "Name:");
+    expect(field?.value).toBe("456465");
+    expect(field?.rawValue).toBe("456465");
+  });
+
+  it("shows a select's announced option LABEL, keeping its raw value apart (ADR-0001)", async () => {
+    // Chromium 151's AX value for `<select>` with `<option value="es"
+    // selected>Spain</option>` is the label. The in-page read has only the
+    // raw `.value` — the retype prefill, never what the tree shows.
+    const t = oneField(
+      {
+        role: { value: "combobox" },
+        name: { value: "Country" },
+        value: { type: "string", value: "Spain" },
+      },
+      { classified: true, value: "es" },
+    );
+    const res = await readNativeTree(t);
+    const select = findNative(res.nodes, "combobox", "Country");
+    expect(select?.value).toBe("Spain");
+    expect(select?.rawValue).toBe("es");
+  });
+
+  it("reads a filled password as [redacted] — never Chromium's bullets, which are its length", async () => {
+    const t = oneField(
+      {
+        role: { value: "textbox" },
+        name: { value: "Password" },
+        value: { type: "string", value: "•••••••" },
+      },
+      { classified: true, sensitive: true, redacted: true },
+    );
+    const res = await readNativeTree(t);
+    const field = findNative(res.nodes, "textbox", "Password");
+    expect(field?.value).toBe("[redacted]");
+    expect(field?.redacted).toBe(true);
+    expect(field?.rawValue).toBeUndefined();
+    expect(JSON.stringify(res.nodes)).not.toContain("•");
+  });
+
+  it("reads a range widget's aria-valuetext even when Chromium reports no number", async () => {
+    // `<div role="progressbar" aria-valuetext="Step 2 of 5">`, no valuenow.
+    const t = oneField(
+      { role: { value: "progressbar" }, name: { value: "Setup" } },
+      { classified: true, valuetext: "Step 2 of 5" },
+    );
+    const res = await readNativeTree(t);
+    expect(findNative(res.nodes, "progressbar", "Setup")?.value).toBe(
+      "Step 2 of 5",
+    );
+  });
+
+  it("shows no value for a part of a sensitive field, whatever its own verdict", async () => {
+    // Chromium 151's `<input type="month" autocomplete="cc-exp">`: a
+    // `DateTime` whose Month/Year spinbuttons report the expiry. Here the
+    // parts' own reads come back not sensitive, as a page-side walk that
+    // missed them would — the tree's shape still withholds them.
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 10,
+        role: { value: "DateTime" },
+        name: { value: "Card expiry" },
+        value: { type: "string", value: "2031-11" },
+        childIds: ["2", "3"],
+      },
+      {
+        nodeId: "2",
+        parentId: "1",
+        backendDOMNodeId: 20,
+        role: { value: "spinbutton" },
+        name: { value: "Month" },
+        value: { type: "number", value: 11 },
+      },
+      {
+        nodeId: "3",
+        parentId: "1",
+        backendDOMNodeId: 30,
+        role: { value: "spinbutton" },
+        name: { value: "Year" },
+        value: { type: "number", value: 2031 },
       },
     ];
-    const t = new FakeTransport((method) => {
+    const t = new FakeTransport((method, params) => {
       if (method === "Accessibility.getFullAXTree") return { nodes: raw };
-      if (method === "DOM.resolveNode") return { object: { objectId: "obj" } };
+      if (method === "DOM.resolveNode") {
+        const id = (params as { backendNodeId: number }).backendNodeId;
+        return { object: { objectId: `obj-${id}` } };
+      }
       if (method === "Runtime.callFunctionOn") {
-        return { result: { value: { value: "456465" } } };
+        const { objectId } = params as { objectId: string };
+        return {
+          result: {
+            value:
+              objectId === "obj-10"
+                ? { classified: true, sensitive: true, redacted: true }
+                : { classified: true, valuetext: "November" },
+          },
+        };
       }
       return {};
     });
     const res = await readNativeTree(t);
-    expect(findNative(res.nodes, "textbox", "Name:")?.value).toBe("456465");
+    expect(findNative(res.nodes, "DateTime")?.value).toBe("[redacted]");
+    expect(findNative(res.nodes, "spinbutton", "Month")?.value).toBeUndefined();
+    expect(findNative(res.nodes, "spinbutton", "Year")?.value).toBeUndefined();
+    const wire = JSON.stringify(res);
+    expect(wire).not.toContain("2031");
+    expect(wire).not.toContain("November");
   });
 
-  it("carries a redacted marker through instead of a value", async () => {
+  it("resolves every field into one object group, and releases it", async () => {
+    const t = oneField(
+      {
+        role: { value: "textbox" },
+        name: { value: "Name:" },
+        value: { type: "string", value: "Ada" },
+      },
+      { classified: true, value: "Ada", announced: "Ada" },
+    );
+    await readNativeTree(t);
+    const resolve = t.calls.find((c) => c.method === "DOM.resolveNode");
+    const group = (resolve?.params as { objectGroup?: string }).objectGroup;
+    expect(group).toMatch(/^sn-field-values-\d+$/);
+    expect(t.calls.at(-1)).toEqual({
+      method: "Runtime.releaseObjectGroup",
+      params: { objectGroup: group },
+    });
+  });
+
+  it("withholds a sensitive text field Chromium sends in plaintext (cc-number)", async () => {
+    const t = oneField(
+      {
+        role: { value: "textbox" },
+        name: { value: "Card number" },
+        value: { type: "string", value: "4111111111111111" },
+      },
+      { classified: true, sensitive: true, redacted: true },
+    );
+    const res = await readNativeTree(t);
+    expect(findNative(res.nodes, "textbox", "Card")?.value).toBe("[redacted]");
+    expect(JSON.stringify(res)).not.toContain("4111111111111111");
+  });
+
+  it("shows no value for an empty sensitive field, even if Chromium reported one a moment earlier", async () => {
+    const t = oneField(
+      {
+        role: { value: "textbox" },
+        name: { value: "Card number" },
+        value: { type: "string", value: "4111111111111111" },
+      },
+      { classified: true, sensitive: true },
+    );
+    const res = await readNativeTree(t);
+    expect(findNative(res.nodes, "textbox", "Card")?.value).toBeUndefined();
+    expect(JSON.stringify(res)).not.toContain("4111111111111111");
+  });
+
+  it("fails closed: a node the page never classified shows no value, Chromium's included", async () => {
+    // The resolve misses, so nothing ever said whether this field is
+    // sensitive — and Chromium's payload is not redacted for us.
     const raw = [
       {
         nodeId: "1",
         backendDOMNodeId: 10,
         role: { value: "textbox" },
-        name: { value: "Password" },
+        name: { value: "Card number" },
+        value: { type: "string", value: "4111111111111111" },
       },
     ];
-    const t = new FakeTransport((method) => {
-      if (method === "Accessibility.getFullAXTree") return { nodes: raw };
-      if (method === "DOM.resolveNode") return { object: { objectId: "obj" } };
-      if (method === "Runtime.callFunctionOn") {
-        return { result: { value: { redacted: true } } };
-      }
-      return {};
-    });
-    const res = await readNativeTree(t);
-    expect(findNative(res.nodes, "textbox", "Password")?.value).toBe(
-      "[redacted]",
+    const t = new FakeTransport((method) =>
+      method === "Accessibility.getFullAXTree" ? { nodes: raw } : {},
     );
+    const res = await readNativeTree(t);
+    expect(t.calls.some((c) => c.method === "DOM.resolveNode")).toBe(true);
+    expect(findNative(res.nodes, "textbox", "Card")?.value).toBeUndefined();
+    expect(JSON.stringify(res)).not.toContain("4111111111111111");
+  });
+
+  it("shows an editor's content as its value — it is page content (ADR-0001)", async () => {
+    const t = oneField(
+      {
+        role: { value: "application" },
+        name: { value: "Message" },
+        value: { type: "string", value: "Hello   world\n\nSecond" },
+      },
+      { classified: true },
+    );
+    const res = await readNativeTree(t);
+    const editor = findNative(res.nodes, "application", "Message");
+    expect(editor?.value).toBe("Hello world Second");
+    expect(editor?.name).toBe("Message");
+  });
+
+  it("never resolves a checkbox or radio — their state says it", async () => {
+    const t = oneField(
+      {
+        role: { value: "checkbox" },
+        name: { value: "Subscribe" },
+        value: { type: "string", value: "on" },
+      },
+      { classified: true },
+    );
+    const res = await readNativeTree(t);
+    expect(findNative(res.nodes, "checkbox", "Subscribe")?.value).toBe(
+      undefined,
+    );
+    expect(t.calls.some((c) => c.method === "DOM.resolveNode")).toBe(false);
   });
 
   it("never resolves a node whose role isn't value-bearing — no wasted round trip", async () => {
@@ -431,6 +633,164 @@ function node(
  * same way the DOM producer always has exactly one root. Mirrors
  * `@real-a11y-dev/browser`'s own `native-tree.ts` root-synthesis exactly.
  */
+describe("fieldFacets", () => {
+  const classified = { classified: true };
+
+  it("prefers a range widget's aria-valuetext over its number", () => {
+    for (const role of ["slider", "spinbutton", "progressbar", "meter"]) {
+      expect(
+        fieldFacets(role, 60, { ...classified, valuetext: "60 percent" }).value,
+        role,
+      ).toBe("60 percent");
+    }
+  });
+
+  it("ignores aria-valuetext on a role that is not a range", () => {
+    expect(
+      fieldFacets("textbox", "typed", { ...classified, valuetext: "nope" })
+        .value,
+    ).toBe("typed");
+  });
+
+  it("falls back to the number, as the author wrote it — not Chromium's float32", () => {
+    // Chromium sends aria-valuenow="0.6" as 0.6000000238418579.
+    expect(fieldFacets("meter", 0.6000000238418579, classified).value).toBe(
+      "0.6",
+    );
+    expect(fieldFacets("slider", 40, classified).value).toBe("40");
+    expect(fieldFacets("progressbar", 0, classified).value).toBe("0");
+    expect(fieldFacets("slider", 12.25, classified).value).toBe("12.25");
+  });
+
+  it("collapses whitespace and caps at 240 characters with …", () => {
+    expect(fieldFacets("textbox", "  a \n\t b  ", classified).value).toBe(
+      "a b",
+    );
+    const long = "x".repeat(300);
+    const capped = fieldFacets("textbox", long, classified).value!;
+    expect(capped).toHaveLength(240);
+    expect(capped.endsWith("…")).toBe(true);
+  });
+
+  it("keeps the raw value whole — uncollapsed, uncapped — for a retype", () => {
+    const raw = "line one\nline   two " + "y".repeat(300);
+    const facets = fieldFacets("textbox", raw, { ...classified, value: raw });
+    expect(facets.rawValue).toBe(raw);
+    expect(facets.value).not.toBe(raw);
+  });
+
+  it("shows nothing for an empty or whitespace-only value", () => {
+    expect(fieldFacets("textbox", "   ", classified)).toEqual({});
+    expect(fieldFacets("textbox", undefined, classified)).toEqual({});
+  });
+
+  it("keeps the placeholder whatever the verdict — it is page-authored", () => {
+    expect(
+      fieldFacets("textbox", undefined, {
+        ...classified,
+        sensitive: true,
+        placeholder: "Password",
+      }),
+    ).toEqual({ placeholder: "Password" });
+  });
+
+  it("shows an input's in-page text over Chromium's earlier AX value", () => {
+    // A "show password" toggle flipped `type` between the two reads: the AX
+    // value is Chromium's bullet mask, the in-page read the field as it now
+    // is — and the verdict came from that same in-page call.
+    expect(
+      fieldFacets("textbox", "•••••••", {
+        ...classified,
+        value: "hunter2",
+        announced: "hunter2",
+      }).value,
+    ).toBe("hunter2");
+    // Emptied between the reads: no value, not the stale one.
+    expect(
+      fieldFacets("textbox", "4111111111111111", {
+        ...classified,
+        announced: "",
+      }),
+    ).toEqual({});
+  });
+
+  it("flags the redaction marker, so no consumer compares text", () => {
+    expect(
+      fieldFacets("textbox", "•••••••", {
+        ...classified,
+        sensitive: true,
+        redacted: true,
+      }),
+    ).toEqual({ value: "[redacted]", redacted: true });
+    // An editor that merely holds the words is not redacted.
+    expect(
+      fieldFacets("application", "[redacted]", classified).redacted,
+    ).toBeUndefined();
+  });
+
+  it("shows nothing at all without a verdict", () => {
+    expect(
+      fieldFacets("textbox", "4111111111111111", {
+        value: "4111111111111111",
+        placeholder: "Card",
+      }),
+    ).toEqual({});
+  });
+});
+
+describe("withholdInsideSensitive", () => {
+  const n = (
+    id: string,
+    childIds: string[],
+    extra: Partial<EnrichedNativeNode> = {},
+  ): EnrichedNativeNode => ({
+    id,
+    role: "generic",
+    name: "",
+    depth: 0,
+    backendDOMNodeId: null,
+    childIds,
+    states: {},
+    properties: {},
+    description: "",
+    ...extra,
+  });
+
+  it("clears every value below a sensitive node, but keeps a nested [redacted]", () => {
+    const nodes = [
+      n("wrap", ["field", "part"], { value: "outer" }),
+      n("field", ["deep"], { value: "[redacted]", redacted: true }),
+      n("part", [], { value: "11", rawValue: "11" }),
+      n("deep", [], { value: "2031" }),
+      n("elsewhere", [], { value: "Spain", rawValue: "es" }),
+    ];
+    withholdInsideSensitive(nodes, ["wrap"]);
+    const byId = new Map(nodes.map((x) => [x.id, x]));
+    // The sensitive node's own value is its verdict's business, not this.
+    expect(byId.get("wrap")?.value).toBe("outer");
+    expect(byId.get("field")?.value).toBe("[redacted]");
+    expect(byId.get("part")?.value).toBeUndefined();
+    expect(byId.get("part")?.rawValue).toBeUndefined();
+    expect(byId.get("deep")?.value).toBeUndefined();
+    expect(byId.get("elsewhere")?.value).toBe("Spain");
+  });
+});
+
+describe("capText", () => {
+  it("leaves a short text alone", () => {
+    expect(capText("abc", 240)).toBe("abc");
+  });
+
+  it("never cuts between the halves of a surrogate pair", () => {
+    // An emoji straddling the cut would leave a lone half, which JSON
+    // renders as a literal `\ud83d`.
+    const text = "x".repeat(238) + "😀" + "tail";
+    const cut = capText(text, 240);
+    expect(cut).toBe("x".repeat(238) + "…");
+    expect(JSON.stringify(cut)).not.toContain("\\ud83d");
+  });
+});
+
 describe("rootIdOf", () => {
   it("returns the single node's id when there's exactly one root", () => {
     const nodes = [node("a", ["b"]), node("b", [], 1)];
@@ -724,6 +1084,46 @@ describe("in-page actions — type", () => {
     expect(el.textContent).toBe("typed");
   });
 
+  it("asks a model-driven editor to delete everything when clearing", () => {
+    // Regression: clearing sent `insertText` with empty data, which asks an
+    // editor to insert nothing — it kept its content while the marker said
+    // success. Clearing has to be a deletion over the editor's whole content.
+    const el = document.createElement("div");
+    el.setAttribute("contenteditable", "true");
+    el.innerHTML = "<p>first</p><p>second</p>";
+    document.body.appendChild(el);
+    let seen: { inputType: string; data: string | null } | null = null;
+    let selected = "";
+    el.addEventListener("beforeinput", (e) => {
+      const event = e as InputEvent;
+      seen = { inputType: event.inputType, data: event.data };
+      selected = document.getSelection()?.toString() ?? "";
+      e.preventDefault(); // the editor deletes from its own model
+    });
+
+    expect(on(pageType, el, "")).toEqual({ ok: true });
+    // Not the spec's `deleteContent`: Chromium blanks an inputType it doesn't
+    // know, and jsdom passes any string through, so only the name pins it.
+    expect(seen).toEqual({ inputType: "deleteContentBackward", data: null });
+    expect(selected).toBe("firstsecond");
+    expect(el.textContent).toBe("firstsecond"); // the editor's call, not ours
+  });
+
+  it("empties contenteditable when nothing handled the deletion", () => {
+    const el = document.createElement("div");
+    el.setAttribute("contenteditable", "true");
+    el.innerHTML = "<p>draft</p>";
+    document.body.appendChild(el);
+    const inputTypes: string[] = [];
+    el.addEventListener("input", (e) => {
+      inputTypes.push((e as InputEvent).inputType);
+    });
+
+    expect(on(pageType, el, "")).toEqual({ ok: true });
+    expect(el.textContent).toBe("");
+    expect(inputTypes).toEqual(["deleteContentBackward"]);
+  });
+
   it("refuses a non-text element instead of reporting success", () => {
     const el = document.createElement("div");
     document.body.appendChild(el);
@@ -746,19 +1146,30 @@ describe("in-page actions — read value", () => {
     document.body.innerHTML = "";
   });
 
-  it("reads a plain text input's value", () => {
+  it("reads a plain text input's value, and announces the same text", () => {
     const el = document.createElement("input");
     el.value = "456465";
     document.body.appendChild(el);
-    expect(on(pageReadValue, el)).toEqual({ value: "456465" });
+    expect(on(pageReadValue, el)).toEqual({
+      classified: true,
+      value: "456465",
+      announced: "456465",
+    });
   });
 
   it("reads a textarea and a select the same way", () => {
     const textarea = document.createElement("textarea");
     textarea.value = "hello";
     document.body.appendChild(textarea);
-    expect(on(pageReadValue, textarea)).toEqual({ value: "hello" });
+    expect(on(pageReadValue, textarea)).toEqual({
+      classified: true,
+      value: "hello",
+      announced: "hello",
+    });
 
+    // The RAW value — "fr", not the label — and no `announced`: what the tree
+    // SHOWS for a select is Chromium's announced label; this read is only the
+    // retype prefill.
     const select = document.createElement("select");
     const option = document.createElement("option");
     option.value = "fr";
@@ -766,13 +1177,47 @@ describe("in-page actions — read value", () => {
     select.appendChild(option);
     select.value = "fr";
     document.body.appendChild(select);
-    expect(on(pageReadValue, select)).toEqual({ value: "fr" });
+    expect(on(pageReadValue, select)).toEqual({
+      classified: true,
+      value: "fr",
+    });
   });
 
-  it("returns nothing for an empty field — no value, not even a redacted marker", () => {
+  it("classifies an empty field without a value — not even a redacted marker", () => {
+    // `announced: ""` says "empty, as of this read" — so an AX value
+    // captured before the field was cleared is not shown instead.
     const el = document.createElement("input");
     document.body.appendChild(el);
-    expect(on(pageReadValue, el)).toEqual({});
+    expect(on(pageReadValue, el)).toEqual({ classified: true, announced: "" });
+  });
+
+  it("announces nothing for a valueless input type — a state or a name says it", () => {
+    for (const type of ["checkbox", "radio", "button", "submit", "reset"]) {
+      const el = document.createElement("input");
+      el.type = type;
+      el.value = "Send";
+      document.body.appendChild(el);
+      expect(on(pageReadValue, el).announced, type).toBe("");
+    }
+  });
+
+  // jsdom can't attach files; the e2e suite reads a chosen file's name back.
+  it("announces an empty file input as empty — never Chromium's 'No file chosen' or a fake path", () => {
+    const el = document.createElement("input");
+    el.type = "file";
+    document.body.appendChild(el);
+    const result = on(pageReadValue, el);
+    expect(result).toEqual({ classified: true, announced: "" });
+  });
+
+  it("still marks an EMPTY sensitive field sensitive, so no stale AX value can stand in for it", () => {
+    const el = document.createElement("input");
+    el.type = "password";
+    document.body.appendChild(el);
+    expect(on(pageReadValue, el)).toEqual({
+      classified: true,
+      sensitive: true,
+    });
   });
 
   /**
@@ -788,7 +1233,11 @@ describe("in-page actions — read value", () => {
     const el = document.createElement("input");
     el.placeholder = "you@example.com";
     document.body.appendChild(el);
-    expect(on(pageReadValue, el)).toEqual({ placeholder: "you@example.com" });
+    expect(on(pageReadValue, el)).toEqual({
+      classified: true,
+      placeholder: "you@example.com",
+      announced: "",
+    });
   });
 
   it("returns both value and placeholder together for a filled field", () => {
@@ -797,7 +1246,9 @@ describe("in-page actions — read value", () => {
     el.value = "ada@example.com";
     document.body.appendChild(el);
     expect(on(pageReadValue, el)).toEqual({
+      classified: true,
       value: "ada@example.com",
+      announced: "ada@example.com",
       placeholder: "you@example.com",
     });
   });
@@ -809,7 +1260,12 @@ describe("in-page actions — read value", () => {
     el.value = "hunter2";
     document.body.appendChild(el);
     const result = on(pageReadValue, el);
-    expect(result).toEqual({ redacted: true, placeholder: "Password" });
+    expect(result).toEqual({
+      classified: true,
+      sensitive: true,
+      redacted: true,
+      placeholder: "Password",
+    });
     expect(JSON.stringify(result)).not.toContain("hunter2");
   });
 
@@ -817,7 +1273,11 @@ describe("in-page actions — read value", () => {
     const el = document.createElement("textarea");
     el.placeholder = "Leave a comment";
     document.body.appendChild(el);
-    expect(on(pageReadValue, el)).toEqual({ placeholder: "Leave a comment" });
+    expect(on(pageReadValue, el)).toEqual({
+      classified: true,
+      placeholder: "Leave a comment",
+      announced: "",
+    });
   });
 
   it("omits placeholder for a select — it has no such attribute", () => {
@@ -827,7 +1287,10 @@ describe("in-page actions — read value", () => {
     select.appendChild(option);
     select.value = "fr";
     document.body.appendChild(select);
-    expect(on(pageReadValue, select)).toEqual({ value: "fr" });
+    expect(on(pageReadValue, select)).toEqual({
+      classified: true,
+      value: "fr",
+    });
   });
 
   it("redacts a password field instead of returning the typed secret (R1)", () => {
@@ -836,7 +1299,11 @@ describe("in-page actions — read value", () => {
     el.value = "hunter2";
     document.body.appendChild(el);
     const result = on(pageReadValue, el);
-    expect(result).toEqual({ redacted: true });
+    expect(result).toEqual({
+      classified: true,
+      sensitive: true,
+      redacted: true,
+    });
     expect(JSON.stringify(result)).not.toContain("hunter2");
   });
 
@@ -847,8 +1314,34 @@ describe("in-page actions — read value", () => {
     el.value = "4111111111111111";
     document.body.appendChild(el);
     const result = on(pageReadValue, el);
-    expect(result).toEqual({ redacted: true });
+    expect(result).toEqual({
+      classified: true,
+      sensitive: true,
+      redacted: true,
+    });
     expect(JSON.stringify(result)).not.toContain("4111111111111111");
+  });
+
+  it("redacts a select and a textarea with a sensitive token, as core does", () => {
+    const select = document.createElement("select");
+    select.setAttribute("autocomplete", "cc-exp-month");
+    const option = document.createElement("option");
+    option.value = "07";
+    option.textContent = "July";
+    select.appendChild(option);
+    select.value = "07";
+    document.body.appendChild(select);
+    expect(on(pageReadValue, select)).toEqual({
+      classified: true,
+      sensitive: true,
+      redacted: true,
+    });
+
+    const textarea = document.createElement("textarea");
+    textarea.setAttribute("autocomplete", "one-time-code");
+    textarea.value = "123456";
+    document.body.appendChild(textarea);
+    expect(JSON.stringify(on(pageReadValue, textarea))).not.toContain("123456");
   });
 
   it("does not treat a normal autocomplete token as sensitive", () => {
@@ -856,16 +1349,108 @@ describe("in-page actions — read value", () => {
     el.autocomplete = "given-name";
     el.value = "Ada";
     document.body.appendChild(el);
-    expect(on(pageReadValue, el)).toEqual({ value: "Ada" });
+    expect(on(pageReadValue, el)).toEqual({
+      classified: true,
+      value: "Ada",
+      announced: "Ada",
+    });
   });
 
-  it("returns nothing for a non-field element — a custom contenteditable widget is out of scope here", () => {
+  it("classifies a non-field element as never sensitive, without reading its content", () => {
+    // Its value is whatever Chromium announces for it — an editor's text —
+    // so this read only has to say it is not a sensitive field. The policy
+    // covers `input`/`textarea`/`select` alone (core's
+    // `isSensitiveFieldAttributes`).
     const el = document.createElement("div");
     el.setAttribute("role", "textbox");
     el.setAttribute("contenteditable", "true");
+    el.setAttribute("autocomplete", "current-password");
     el.textContent = "typed text";
     document.body.appendChild(el);
-    expect(on(pageReadValue, el)).toEqual({});
+    const result = on(pageReadValue, el);
+    expect(result).toEqual({ classified: true });
+    expect(JSON.stringify(result)).not.toContain("typed text");
+  });
+
+  it("withholds a wrapper's value when a sensitive field sits inside it", () => {
+    // Chromium 151 leaves a nested control's value out of its wrapper's AX
+    // value (measured), but the wrapper's value is Chromium's to compute, so
+    // it is withheld whole rather than trusted to exclude the secret.
+    const combobox = document.createElement("div");
+    combobox.setAttribute("role", "combobox");
+    const input = document.createElement("input");
+    input.setAttribute("autocomplete", "cc-number");
+    input.value = "4111111111111111";
+    combobox.appendChild(input);
+    document.body.appendChild(combobox);
+    expect(on(pageReadValue, combobox)).toEqual({
+      classified: true,
+      sensitive: true,
+    });
+
+    const editor = document.createElement("div");
+    editor.setAttribute("contenteditable", "true");
+    editor.append("Draft ");
+    const password = document.createElement("input");
+    password.type = "password";
+    editor.appendChild(password);
+    document.body.appendChild(editor);
+    expect(on(pageReadValue, editor).sensitive).toBe(true);
+
+    // A plain control inside a wrapper changes nothing.
+    const plain = document.createElement("div");
+    plain.setAttribute("contenteditable", "true");
+    plain.appendChild(document.createElement("input"));
+    document.body.appendChild(plain);
+    expect(on(pageReadValue, plain)).toEqual({ classified: true });
+  });
+
+  it("recognises a field by its tag, not instanceof — a swapped prototype still redacts", () => {
+    // A field `instanceof` missed would read as a non-field: never
+    // sensitive, and Chromium's plaintext value shown for it.
+    const el = document.createElement("input");
+    el.setAttribute("autocomplete", "cc-number");
+    el.value = "4111111111111111";
+    document.body.appendChild(el);
+    Object.setPrototypeOf(el, HTMLElement.prototype);
+    expect(el instanceof HTMLInputElement).toBe(false);
+    const result = on(pageReadValue, el);
+    expect(result).toEqual({
+      classified: true,
+      sensitive: true,
+      redacted: true,
+    });
+    expect(JSON.stringify(result)).not.toContain("4111111111111111");
+  });
+
+  it("returns aria-valuetext, which Chromium's CDP payload never carries", () => {
+    const slider = document.createElement("div");
+    slider.setAttribute("role", "slider");
+    slider.setAttribute("aria-valuenow", "60");
+    slider.setAttribute("aria-valuetext", "60 percent");
+    document.body.appendChild(slider);
+    expect(on(pageReadValue, slider)).toEqual({
+      classified: true,
+      valuetext: "60 percent",
+    });
+
+    const range = document.createElement("input");
+    range.type = "range";
+    range.value = "80";
+    range.setAttribute("aria-valuetext", "Loud");
+    document.body.appendChild(range);
+    expect(on(pageReadValue, range)).toEqual({
+      classified: true,
+      valuetext: "Loud",
+      value: "80",
+      announced: "80",
+    });
+  });
+
+  it("classifies nothing for a `this` that is not an element", () => {
+    const text = document.createTextNode("hello");
+    expect(pageReadValue.call(text as unknown as Element)).toEqual({});
+    expect(pageReadValue.call(null as unknown as Element)).toEqual({});
   });
 
   /**
@@ -892,7 +1477,11 @@ describe("in-page actions — read value", () => {
     // defends against.
     Object.defineProperty(el, "type", { value: "text", configurable: true });
     const result = on(pageReadValue, el);
-    expect(result).toEqual({ redacted: true });
+    expect(result).toEqual({
+      classified: true,
+      sensitive: true,
+      redacted: true,
+    });
     expect(JSON.stringify(result)).not.toContain("hunter2");
   });
 
@@ -904,8 +1493,60 @@ describe("in-page actions — read value", () => {
     document.body.appendChild(el);
     (el as unknown as { getAttribute: () => null }).getAttribute = () => null;
     const result = on(pageReadValue, el);
-    expect(result).toEqual({ redacted: true });
+    expect(result).toEqual({
+      classified: true,
+      sensitive: true,
+      redacted: true,
+    });
     expect(JSON.stringify(result)).not.toContain("4111111111111111");
+  });
+});
+
+/**
+ * ADR-0001: one sensitivity policy for every producer. `pageReadValue` runs
+ * in the page as source text, so it cannot import core's list and carries a
+ * copy. This reads that copy back out of the exact source text
+ * `Runtime.callFunctionOn` is handed, and pins it to core's export — so
+ * growing or shrinking either list alone fails here.
+ */
+describe("pageReadValue's sensitive-token list", () => {
+  /** The `SENSITIVE_AUTOCOMPLETE_TOKENS` array literal in the in-page
+   *  source, as its string elements. */
+  function inPageTokens(): string[] {
+    const match = /SENSITIVE_AUTOCOMPLETE_TOKENS\s*=\s*\[([^\]]*)\]/.exec(
+      IN_PAGE_READ_VALUE_SOURCE,
+    );
+    if (!match) {
+      throw new Error(
+        "pageReadValue's source no longer declares SENSITIVE_AUTOCOMPLETE_TOKENS as one array literal",
+      );
+    }
+    return [...match[1]!.matchAll(/(["'`])(.*?)\1/g)].map((m) => m[2]!);
+  }
+
+  it("is exactly core's SENSITIVE_AUTOCOMPLETE_TOKENS, in both directions", () => {
+    const inPage = inPageTokens();
+    expect(new Set(inPage).size).toBe(inPage.length);
+    expect([...inPage].sort()).toEqual(
+      [...SENSITIVE_AUTOCOMPLETE_TOKENS].sort(),
+    );
+  });
+
+  it("is the list the function actually applies — each of core's tokens redacts", () => {
+    // Guards the parse above against reading a list the body no longer uses.
+    for (const token of SENSITIVE_AUTOCOMPLETE_TOKENS) {
+      const el = document.createElement("input");
+      el.setAttribute("autocomplete", `section-x ${token.toUpperCase()}`);
+      el.value = "a-secret";
+      document.body.appendChild(el);
+      const result = on(pageReadValue, el);
+      expect(result, token).toEqual({
+        classified: true,
+        sensitive: true,
+        redacted: true,
+      });
+      el.remove();
+    }
   });
 });
 

@@ -242,3 +242,91 @@ describe("InputPanel focus restoration", () => {
     expect(() => close()).not.toThrow();
   });
 });
+
+/**
+ * `blockEmptySubmit` opens a field empty in place of a value the panel can't
+ * show (a redacted field, a native editor's content). Only the UNTOUCHED
+ * submit is blocked — that one says nothing about the value — while typing
+ * and then clearing the field is how a user deliberately empties it.
+ */
+describe("InputPanel blockEmptySubmit", () => {
+  const BLOCKED: InputPanelState = {
+    type: "text",
+    nodeId: "n1",
+    label: "Message",
+    value: "",
+    blockEmptySubmit: true,
+  };
+
+  function mount(state: InputPanelState) {
+    const submitted: string[] = [];
+    let cancelled = 0;
+    act(() => {
+      render(
+        h(InputPanel, {
+          state,
+          onSubmit: (_id: string, value: string) => submitted.push(value),
+          onCancel: () => {
+            cancelled += 1;
+          },
+        }),
+        container,
+      );
+    });
+    const input = container.querySelector<HTMLInputElement>(
+      "input.sn-input-panel-field",
+    )!;
+    const type = (text: string) =>
+      act(() => {
+        input.value = text;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    const enter = () =>
+      act(() => {
+        input.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+        );
+      });
+    const setValueButton = () =>
+      [...container.querySelectorAll("button")].find(
+        (b) => b.textContent?.trim() === "Set value",
+      )!;
+    return {
+      submitted,
+      cancelled: () => cancelled,
+      type,
+      enter,
+      setValueButton,
+    };
+  }
+
+  it("cancels an untouched empty submit instead of submitting it", () => {
+    const panel = mount(BLOCKED);
+    panel.enter();
+    act(() => panel.setValueButton().click());
+    expect(panel.submitted).toEqual([]);
+    expect(panel.cancelled()).toBe(2);
+  });
+
+  it("submits an empty value the user typed and then cleared — a deliberate clear", () => {
+    const panel = mount(BLOCKED);
+    panel.type("x");
+    panel.type("");
+    panel.enter();
+    expect(panel.submitted).toEqual([""]);
+    expect(panel.cancelled()).toBe(0);
+  });
+
+  it("submits a typed replacement normally", () => {
+    const panel = mount(BLOCKED);
+    panel.type("new text");
+    act(() => panel.setValueButton().click());
+    expect(panel.submitted).toEqual(["new text"]);
+  });
+
+  it("leaves an unflagged field's empty submit alone", () => {
+    const panel = mount({ ...BLOCKED, blockEmptySubmit: undefined });
+    panel.enter();
+    expect(panel.submitted).toEqual([""]);
+  });
+});

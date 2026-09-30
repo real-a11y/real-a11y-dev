@@ -19,11 +19,13 @@ test("a native multi-select surfaces as a listbox with per-option state", async 
   const tree = await nav.readNodes(tabId);
 
   const toppings = node(tree, "listbox", "Toppings");
-  // `pageReadValue` reads `HTMLSelectElement.value`, which on a multi-select is
-  // the FIRST selected option, not all of them. Worth pinning: the panel shows
-  // this as the control's value, and "cheese" alone under-reports a selection
-  // of cheese + basil.
-  expect(toppings.value).toBe("cheese");
+  // The listbox shows no value of its own: Chromium announces none for a
+  // multi-select (measured on Chromium 151), and the tree shows what Chromium
+  // announces (ADR-0001). The selection reads off the options' own
+  // `selected` states below. Before ADR-0001 this showed the raw
+  // `HTMLSelectElement.value` — the FIRST selected option alone, "cheese",
+  // which under-reported a selection of cheese + basil.
+  expect(toppings.value).toBeUndefined();
 
   expect(
     nodes(tree, "option")

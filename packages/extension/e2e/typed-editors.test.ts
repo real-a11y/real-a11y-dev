@@ -9,6 +9,10 @@
  * Core now refuses to promote a node's value into its name, for every
  * transport — this pins it through the real build, in real Chromium, with the
  * text typed through the keyboard.
+ *
+ * The text is not hidden, though: under ADR-0001 an editor's content is page
+ * content, shown as the editor's value — the place a screen reader reads it
+ * from.
  */
 
 import { expect, node, nodes, test } from "./harness";
@@ -39,7 +43,8 @@ test("an editor's typed text is never its name", async ({ nav }) => {
     // Named by its author, so Chromium's own name stands.
     "Message",
   ]);
-  expect(node(tree, "document").name).toBe("");
+  // Both `document`s: the synthetic root first, then the editor.
+  expect(nodes(tree, "document").map((n) => n.name)).toEqual(["", ""]);
   // The role-less editor inside it is dropped; its text is still not the
   // item's name.
   expect(node(tree, "listitem").name).toBe("");
@@ -47,6 +52,20 @@ test("an editor's typed text is never its name", async ({ nav }) => {
   // text.
   expect(node(tree, "log").name).toBe("Saved at 10:00");
 
-  // Nowhere on the wire: not a name, not the serialized tree, not a value.
-  expect(JSON.stringify(result)).not.toContain("SECRET");
+  // Never a name, and never the serialized structure.
+  for (const n of tree) expect(n.name).not.toContain("SECRET");
+  expect(result.serialized).not.toContain("SECRET");
+
+  // Its VALUE is where it belongs (ADR-0001): an editor's content is page
+  // content, and a screen reader reads it — so the tree shows it there.
+  expect(nodes(tree, "application").map((n) => n.value)).toEqual([
+    TYPED.app,
+    TYPED.labelled,
+  ]);
+  // Two `document`s: the synthetic root adopting this page's several
+  // top-level nodes comes first, the editor second.
+  expect(nodes(tree, "document").map((n) => n.value)).toEqual([
+    undefined,
+    TYPED.doc,
+  ]);
 });

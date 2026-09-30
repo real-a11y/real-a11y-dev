@@ -109,11 +109,13 @@ export interface InputPanelState {
   source?: "dom" | "native";
   /**
    * Set only when `value` was substituted empty for a native field whose
-   * real value is redacted (R1) — see `App.tsx`'s `handleNativeActivate`.
-   * Submitting with NO edit (still empty) is a no-op instead of a dispatch:
+   * real value is redacted (R1), or that a retype cannot start from (an
+   * editor's content) — see `App.tsx`'s `handleNativeActivate`.
+   * Submitting with NO edit (still empty) cancels instead of dispatching:
    * without this, a click-through submit would silently blank the user's
-   * real, still-live value on the page for a field they never touched. A
-   * typed replacement (any non-empty value) always submits normally.
+   * real, still-live value on the page for a field they never touched. Any
+   * edit submits normally — a typed replacement, and also text typed and
+   * then deleted, which is how a user deliberately empties the field.
    */
   blockEmptySubmit?: boolean;
 }
@@ -154,6 +156,11 @@ function TextInput({
   onCancel: () => void;
 }) {
   const [value, setValue] = useState(state.value);
+  // Whether the user has typed at all. `blockEmptySubmit` guards only the
+  // UNTOUCHED submit: a field that opened empty in place of a value it can't
+  // show says nothing about that value until the user types, but typing and
+  // then clearing it is a deliberate "empty this field".
+  const [edited, setEdited] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const fieldId = useId();
@@ -166,17 +173,22 @@ function TextInput({
     inputRef.current?.select();
   }, []);
 
+  const submit = useCallback(() => {
+    if (state.blockEmptySubmit && !edited && value === "") onCancel();
+    else onSubmit(value);
+  }, [state.blockEmptySubmit, edited, value, onSubmit, onCancel]);
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        onSubmit(value);
+        submit();
       } else if (e.key === "Escape") {
         e.preventDefault();
         onCancel();
       }
     },
-    [value, onSubmit, onCancel],
+    [submit, onCancel],
   );
 
   return (
@@ -197,7 +209,10 @@ function TextInput({
         type={state.inputType === "password" ? "password" : "text"}
         value={value}
         placeholder={state.placeholder || ""}
-        onInput={(e) => setValue((e.target as HTMLInputElement).value)}
+        onInput={(e) => {
+          setValue((e.target as HTMLInputElement).value);
+          setEdited(true);
+        }}
         onKeyDown={handleKeyDown}
       />
       <div class="sn-input-panel-actions">
@@ -206,7 +221,7 @@ function TextInput({
         </button>
         <button
           class="sn-input-panel-btn sn-input-panel-btn--primary"
-          onClick={() => onSubmit(value)}
+          onClick={submit}
         >
           Set value
         </button>

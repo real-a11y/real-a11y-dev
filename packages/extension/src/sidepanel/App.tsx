@@ -45,10 +45,7 @@ import {
   type TabCapability,
 } from "../native/capability.js";
 import { isTypableRole, type NativeNode } from "../native/native-actions.js";
-import {
-  NATIVE_REDACTED_VALUE,
-  type NativeAction,
-} from "../native/native-core.js";
+import type { NativeAction } from "../native/native-core.js";
 import {
   isTrustedSender,
   isUnreachablePageResponse,
@@ -58,6 +55,7 @@ import type { ContentToPanel, PanelToContent } from "../types.js";
 
 import { buildExportMarkdown, ALL_VIEWS } from "./export.js";
 import type { ExportView } from "./export.js";
+import { announcedValueLabel, rawValueLabel } from "./field-value.js";
 import { FilteredList } from "./FilteredList.js";
 import { InputPanel } from "./InputPanel.js";
 import type { InputPanelState } from "./InputPanel.js";
@@ -146,6 +144,27 @@ function getDisplayRole(node: DomSemanticNode): string {
   const override = TAG_DISPLAY_OVERRIDES[node.dom.tagName];
   if (override) return override;
   return node.a11y.role;
+}
+
+/**
+ * Whether a row may print the node's own text. Never a `<textarea>`'s, in
+ * either view: its text content is its markup DEFAULT, not what it holds now
+ * (the value line shows that), and for a sensitive field
+ * (`autocomplete="one-time-code"`) the default is the secret itself.
+ */
+function showsTextContent(node: DomSemanticNode): boolean {
+  return node.dom.tagName !== "textarea";
+}
+
+/**
+ * Whether the A11y view may print a leaf's text preview. Not for a node with
+ * an announced value (an editor, an ARIA textbox or combobox, a slider's
+ * fallback text): the value line already shows what a screen reader reads,
+ * and the two are computed differently (block spacing), so comparing them
+ * misses and an editor's text prints twice.
+ */
+function showsTextPreview(node: DomSemanticNode): boolean {
+  return node.a11y.value === undefined && showsTextContent(node);
 }
 
 /**
@@ -1339,13 +1358,23 @@ export function App() {
       // ever be submitted — and blockEmptySubmit (below) closes the other
       // half: an unedited (still empty) submit must not blank the real
       // value either, since that's just as silent and just as destructive.
-      const isRedacted = node.value === NATIVE_REDACTED_VALUE;
+      //
+      // Prefilled from `rawValue`, not `value`: `value` is what a screen
+      // reader announces, whitespace-collapsed and capped at 240 characters,
+      // so an unedited submit of it would flatten a textarea's line breaks
+      // or cut a long value short. `rawValue` is an input's or textarea's
+      // text as it is. An editor has none — the tree shows its text, but a
+      // retype replaces the whole of it — so it opens empty too, and gets
+      // the same empty-submit block: an unedited Enter must not wipe it.
+      const isRedacted = node.redacted === true;
+      const unprefillable =
+        isRedacted || (node.value !== undefined && node.rawValue === undefined);
       if (isTypableRole(node.role, node.states)) {
         setInputState({
           type: "text",
           nodeId: node.id,
           label: node.name || node.role,
-          value: isRedacted ? "" : (node.value ?? ""),
+          value: isRedacted ? "" : (node.rawValue ?? ""),
           placeholder: node.placeholder,
           source: "native",
           // Mask the retyped replacement the same way InputPanel already
@@ -1357,7 +1386,7 @@ export function App() {
           // rather than trying to distinguish which specific rule fired.
           // Erring toward masking more, never less.
           inputType: isRedacted ? "password" : undefined,
-          blockEmptySubmit: isRedacted,
+          blockEmptySubmit: unprefillable,
         });
         return;
       }
@@ -1370,10 +1399,9 @@ export function App() {
     (nodeId: string, value: string) => {
       if (inputState?.source === "native") {
         setInputState(null);
-        // See InputPanelState.blockEmptySubmit's own doc — a redacted field
-        // opened empty; submitting it still-empty is "didn't type anything",
-        // not "clear the field", so it's a no-op rather than a dispatch.
-        if (inputState.blockEmptySubmit && value === "") return;
+        // An untouched empty submit never gets here: InputPanel cancels it
+        // when `blockEmptySubmit` is set (see its doc). An empty value that
+        // does arrive was typed and cleared on purpose — "empty this field".
         void dispatchNativeAction(nodeId, "type", value);
         return;
       }
@@ -1562,6 +1590,11 @@ export function App() {
 
       // A scoped subtree serializes at its absolute depth; de-indent so the
       // scope root sits at column 0 in the report.
+      //
+      // Field values stay OUT of the report (the serializers' `values`
+      // option, off by default), although the tree on screen shows them: a
+      // report gets pasted into issues and PRs, and ADR-0001 leaves values
+      // out of anything posted unless asked.
       const scopeNode = scopedRootId ? nodes.get(scopedRootId) : null;
       const scopeDepth = scopeNode?.depth ?? 0;
       const treeStr =
@@ -2250,7 +2283,15 @@ export function App() {
                             {node.dom.tagName}
                             {">"}
                           </span>
-                          {node.dom.textContent && (
+                          {/* The raw DOM value — a select's `value`, not
+                              its label. A sensitive field's is already
+                              `[redacted]`. */}
+                          {node.dom.attributes.value !== undefined && (
+                            <span class="sn-field-value">
+                              {rawValueLabel(node.dom.attributes.value)}
+                            </span>
+                          )}
+                          {node.dom.textContent && showsTextContent(node) && (
                             <span class="sn-text-content">
                               {node.dom.textContent}
                             </span>
@@ -2280,10 +2321,12 @@ export function App() {
                               role=presentation spans flattened, `<svg>`
                               with descendant `<text>`, decorative
                               wrappers, etc. Mirrors the shared TreeNode
-                              in @real-a11y-dev/semantic-navigator-ui. */}
+                              in @real-a11y-dev/semantic-navigator-ui.
+                              Skipped for a field — see `showsTextPreview`. */}
                           {node.childIds.length === 0 &&
                             node.dom.descendantText !== "" &&
-                            node.dom.descendantText !== node.a11y.name && (
+                            node.dom.descendantText !== node.a11y.name &&
+                            showsTextPreview(node) && (
                               <span class="sn-name-preview">
                                 {node.dom.descendantText}
                               </span>
@@ -2299,25 +2342,16 @@ export function App() {
                                 : node.a11y.description}
                             </span>
                           )}
-                          {/* Current value for editable fields */}
-                          {node.interaction.isEditable &&
-                            (() => {
-                              const val = node.dom.attributes.value;
-                              const inputType =
-                                node.dom.attributes.type || "text";
-                              if (val) {
-                                const display =
-                                  inputType === "password"
-                                    ? "\u2022".repeat(val.length)
-                                    : val;
-                                return (
-                                  <span class="sn-field-value">
-                                    = "{display}"
-                                  </span>
-                                );
-                              }
-                              return null;
-                            })()}
+                          {/* The value a screen reader announces
+                              (ADR-0001) \u2014 on any node that has one, not only
+                              editable fields: a select's option label, a
+                              slider's valuetext, an editor's text. A
+                              sensitive field's is already `[redacted]`. */}
+                          {node.a11y.value !== undefined && (
+                            <span class="sn-field-value">
+                              {announcedValueLabel(node.a11y.value)}
+                            </span>
+                          )}
                           {/* State badges: disabled, checked, required, expanded, etc. */}
                           {(() => {
                             const states = node.a11y.states;

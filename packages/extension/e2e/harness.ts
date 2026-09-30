@@ -89,6 +89,7 @@ export interface NativeNode {
   states?: Record<string, string | boolean>;
   properties?: Record<string, string>;
   value?: string;
+  rawValue?: string;
   description?: string;
 }
 

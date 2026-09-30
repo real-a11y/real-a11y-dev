@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Field values — announced vs raw</title>
+  </head>
+  <body>
+    <h1>Field values</h1>
+
+    <!--
+      ADR-0001: the A11y view shows the value a screen reader announces, the
+      DOM view the raw DOM value, and a sensitive field reads [redacted] in
+      both. The select is the case that tells the two apart: it announces
+      "Spain" and holds "es".
+
+      The card field is the one Chromium does NOT mask in its own CDP payload
+      (it masks a password with bullets, not a cc-number text field), so it
+      proves the in-page classification is what withholds it.
+    -->
+    <form aria-label="Profile">
+      <label for="country">Country</label>
+      <select id="country">
+        <option value="fr">France</option>
+        <option value="es" selected>Spain</option>
+      </select>
+
+      <label for="email">Email</label>
+      <input id="email" type="email" value="jane@example.com" />
+
+      <label for="pw">Password</label>
+      <input
+        id="pw"
+        type="password"
+        value="hunter2"
+        autocomplete="current-password"
+      />
+
+      <label for="card">Card number</label>
+      <input
+        id="card"
+        type="text"
+        autocomplete="cc-number"
+        value="4111111111111111"
+      />
+
+      <label for="volume">Volume</label>
+      <input
+        id="volume"
+        type="range"
+        min="0"
+        max="100"
+        value="80"
+        aria-valuetext="Loud"
+      />
+
+      <!-- Longer than the 240-character cap on an announced value, so a
+           retype that started from the announced value would cut it short. -->
+      <label for="bio">Bio</label>
+      <input id="bio" />
+
+      <div
+        id="editor"
+        role="textbox"
+        contenteditable="true"
+        aria-label="Message"
+      >
+        Hello world
+      </div>
+
+      <!-- A sensitive field Chromium builds from its own parts: the month and
+           year are separate spinbuttons inside the input's UA shadow root,
+           each reporting its part of the value. They must read nothing. -->
+      <label for="expiry">Card expiry</label>
+      <input id="expiry" type="month" autocomplete="cc-exp" value="2031-11" />
+
+      <!-- Chromium announces "No file chosen" until a file is picked; the
+           value is the file's name, as the DOM producer reads it. -->
+      <label for="upload">Upload</label>
+      <input id="upload" type="file" />
+    </form>
+
+    <script>
+      document.getElementById("bio").value = "word ".repeat(60).trim();
+    </script>
+  </body>
+</html>

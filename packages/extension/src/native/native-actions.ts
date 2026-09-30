@@ -25,10 +25,20 @@ export type NativeNode = {
   childIds?: string[];
   states?: Record<string, string | boolean>;
   properties?: Record<string, string>;
-  /** The field's live value, redacted to `native-core.ts`'s
-   *  `NATIVE_REDACTED_VALUE` sentinel for a sensitive field by
-   *  `pageReadValue` — never the raw secret. */
+  /** What a screen reader announces for the node (ADR-0001): Chromium's AX
+   *  value — a `<select>`'s option label, an editor's text — or a range
+   *  widget's `aria-valuetext`, collapsed and capped. A sensitive field
+   *  reads `native-core.ts`'s `NATIVE_REDACTED_VALUE` sentinel — never the
+   *  raw secret. */
   value?: string;
+  /** Set when `value` is that sentinel for a sensitive field — the one
+   *  reliable test, since an editor can hold the sentinel's text as
+   *  ordinary content. */
+  redacted?: boolean;
+  /** The raw live value of a non-sensitive `<input>`/`<textarea>`/
+   *  `<select>` (`"es"` where `value` is `"Spain"`) — what a retype starts
+   *  from. Never displayed, never set for a sensitive field. */
+  rawValue?: string;
   /** The field's static placeholder hint — page-authored, never redacted.
    *  Present only for a value-bearing role that has one set. */
   placeholder?: string;
