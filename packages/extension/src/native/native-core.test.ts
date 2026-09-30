@@ -1084,6 +1084,46 @@ describe("in-page actions — type", () => {
     expect(el.textContent).toBe("typed");
   });
 
+  it("asks a model-driven editor to delete everything when clearing", () => {
+    // Regression: clearing sent `insertText` with empty data, which asks an
+    // editor to insert nothing — it kept its content while the marker said
+    // success. Clearing has to be a deletion over the editor's whole content.
+    const el = document.createElement("div");
+    el.setAttribute("contenteditable", "true");
+    el.innerHTML = "<p>first</p><p>second</p>";
+    document.body.appendChild(el);
+    let seen: { inputType: string; data: string | null } | null = null;
+    let selected = "";
+    el.addEventListener("beforeinput", (e) => {
+      const event = e as InputEvent;
+      seen = { inputType: event.inputType, data: event.data };
+      selected = document.getSelection()?.toString() ?? "";
+      e.preventDefault(); // the editor deletes from its own model
+    });
+
+    expect(on(pageType, el, "")).toEqual({ ok: true });
+    // Not the spec's `deleteContent`: Chromium blanks an inputType it doesn't
+    // know, and jsdom passes any string through, so only the name pins it.
+    expect(seen).toEqual({ inputType: "deleteContentBackward", data: null });
+    expect(selected).toBe("firstsecond");
+    expect(el.textContent).toBe("firstsecond"); // the editor's call, not ours
+  });
+
+  it("empties contenteditable when nothing handled the deletion", () => {
+    const el = document.createElement("div");
+    el.setAttribute("contenteditable", "true");
+    el.innerHTML = "<p>draft</p>";
+    document.body.appendChild(el);
+    const inputTypes: string[] = [];
+    el.addEventListener("input", (e) => {
+      inputTypes.push((e as InputEvent).inputType);
+    });
+
+    expect(on(pageType, el, "")).toEqual({ ok: true });
+    expect(el.textContent).toBe("");
+    expect(inputTypes).toEqual(["deleteContentBackward"]);
+  });
+
   it("refuses a non-text element instead of reporting success", () => {
     const el = document.createElement("div");
     document.body.appendChild(el);

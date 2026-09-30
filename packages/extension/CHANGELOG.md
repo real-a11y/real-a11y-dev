@@ -74,7 +74,11 @@
   its value; for a one-time-code field, that text was the code itself. The
   copied Markdown report still leaves values out. In NATIVE mode,
   a `<select>` shows its option label instead of its `value`, a custom slider
-  shows its `aria-valuetext`, and a rich-text editor shows its text.
+  shows its `aria-valuetext`, and a rich-text editor shows its text. Its edit
+  box opens empty, as a password field's does: submitting it untouched leaves
+  the editor alone, and submitting it after erasing what you typed empties
+  the editor, including an editor that keeps its own document model and
+  would have ignored a plain empty write.
   (ADR-0001) ([#431](https://github.com/real-a11y/real-a11y-dev/pull/431))
 
 - In DOM mode, the Tab Sequence view, its copied export and the keyboard bar's

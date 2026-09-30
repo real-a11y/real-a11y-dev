@@ -827,23 +827,52 @@ export function pageType(this: Element, text: string): Marker {
     editableAttr === "true" ||
     editableAttr === "plaintext-only";
   if (isEditable) {
-    // Model-driven editors consume this and insert into their own document
+    // Clearing is a deletion. An `insertText` carrying no data asks a
+    // model-driven editor to insert nothing, so its content stays while the
+    // marker reports success. Select everything first — Lexical reads the DOM
+    // selection, Slate the event's target range — so the deletion covers the
+    // whole editor rather than the character at the caret. It is Backspace
+    // over that selection: Chromium blanks an `inputType` it doesn't know,
+    // and the spec's `deleteContent` is one of them.
+    const clearing = text === "";
+    const init: InputEventInit = {
+      bubbles: true,
+      cancelable: true,
+      inputType: clearing ? "deleteContentBackward" : "insertText",
+      data: clearing ? null : text,
+    };
+    if (clearing) {
+      const doc = editable.ownerDocument;
+      const range = doc.createRange();
+      range.selectNodeContents(editable);
+      const selection = doc.getSelection();
+      if (selection) {
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+      if (typeof StaticRange === "function") {
+        init.targetRanges = [
+          new StaticRange({
+            startContainer: editable,
+            startOffset: 0,
+            endContainer: editable,
+            endOffset: editable.childNodes.length,
+          }),
+        ];
+      }
+    }
+    // Model-driven editors consume this and apply it to their own document
     // model; writing textContent anyway would be reverted underneath us.
     const notHandled = editable.dispatchEvent(
-      new InputEvent("beforeinput", {
-        bubbles: true,
-        cancelable: true,
-        inputType: "insertText",
-        data: text,
-      }),
+      new InputEvent("beforeinput", init),
     );
     if (notHandled) {
       editable.textContent = text;
       editable.dispatchEvent(
         new InputEvent("input", {
           bubbles: true,
-          inputType: "insertText",
-          data: text,
+          inputType: init.inputType,
+          data: init.data,
         }),
       );
     }
