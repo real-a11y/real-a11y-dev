@@ -45,6 +45,9 @@ const hiddenGetter = htmlElementProto
 const parentElementGetter = nodeProto
   ? Object.getOwnPropertyDescriptor(nodeProto, "parentElement")?.get
   : undefined;
+const parentNodeGetter = nodeProto
+  ? Object.getOwnPropertyDescriptor(nodeProto, "parentNode")?.get
+  : undefined;
 const assignedSlotGetter = elementProto
   ? Object.getOwnPropertyDescriptor(elementProto, "assignedSlot")?.get
   : undefined;
@@ -88,6 +91,13 @@ export function safeParentElement(node: Node): Element | null {
     ? parentElementGetter.call(node)
     : node.parentElement;
   return parent && parent.nodeType === 1 ? (parent as Element) : null;
+}
+
+/** Clobber-immune `node.parentNode`. See `safeParentElement`. */
+export function safeParentNode(node: Node): ParentNode | null {
+  return parentNodeGetter
+    ? (parentNodeGetter.call(node) as ParentNode | null)
+    : node.parentNode;
 }
 
 /** Clobber-immune `element.assignedSlot` (`<input name="assignedSlot">`). */

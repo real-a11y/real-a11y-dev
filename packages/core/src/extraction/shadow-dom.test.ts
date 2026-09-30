@@ -10,7 +10,7 @@ import { resetIdCounter } from "../utils/id-generator.js";
 
 import { extractA11yTree } from "./a11y-extractor.js";
 import { extractDomTree, getElementRefs } from "./dom-extractor.js";
-import { isRenderedInFlatTree } from "./flat-tree.js";
+import { flatParent, isRenderedInFlatTree } from "./flat-tree.js";
 
 let page: HTMLElement;
 
@@ -330,6 +330,73 @@ describe("description-target folding respects tree scope", () => {
     detached.innerHTML = `<input aria-label="Password" aria-describedby="pw"><p id="pw">8+ characters</p>`;
     const tree = extractDomTree(detached);
     expect(find(tree, "paragraph")).toBeUndefined();
+  });
+});
+
+// A <form> lets a control named after a DOM property shadow that property, so
+// the form's `parentElement`, `assignedSlot` or `parentNode` can read as the
+// control. A walk up the flat tree through such a form must still reach the
+// real ancestors: reading the control instead cycles back into the form, and a
+// loop over ancestors then never ends, hanging the page.
+describe("flat-tree ancestors of a clobbered <form>", () => {
+  /** Shadow `prop` on `form` with its control, as a browser's form does. */
+  function clobber(form: Element, prop: string): void {
+    const control = form.querySelector(`[name="${prop}"]`);
+    Object.defineProperty(form, prop, {
+      configurable: true,
+      get: () => control,
+    });
+  }
+
+  it.each(["parentElement", "assignedSlot"])(
+    "reads past a control named %s",
+    (prop) => {
+      page.innerHTML = `<div id="outer"><form aria-label="Pay"><input name="${prop}" aria-label="Card"></form></div>`;
+      const form = page.querySelector("form")!;
+      clobber(form, prop);
+      expect(flatParent(form)).toBe(page.querySelector("#outer"));
+    },
+  );
+
+  it("reads past a control named parentNode, up to a shadow host", () => {
+    page.innerHTML = `<x-checkout></x-checkout>`;
+    const host = page.querySelector("x-checkout")!;
+    const root = shadow(
+      host,
+      `<form aria-label="Pay"><input name="parentNode" aria-label="Card"></form>`,
+    );
+    const form = root.querySelector("form")!;
+    clobber(form, "parentNode");
+    expect(flatParent(form)).toBe(host);
+  });
+
+  it("passes aria-disabled down through such a form", () => {
+    page.innerHTML = `
+      <div role="group" aria-label="Checkout" aria-disabled="true">
+        <form aria-label="Pay">
+          <input name="parentElement" aria-label="Card">
+          <input name="assignedSlot" aria-label="Name">
+          <button>Pay</button>
+          <a href="/terms">Terms</a>
+        </form>
+      </div>`;
+    const form = page.querySelector("form")!;
+    clobber(form, "parentElement");
+    clobber(form, "assignedSlot");
+    const tree = extractDomTree(page);
+    expect(find(tree, "button", "Pay")?.a11y.states["disabled"]).toBe(true);
+    // A link asks whether it sits in editable content, a walk up of its own.
+    expect(find(tree, "link", "Terms")?.a11y.states["disabled"]).toBe(true);
+  });
+
+  it("scopes a <header> inside such a form", () => {
+    page.innerHTML = `
+      <form aria-label="Pay">
+        <input name="parentElement" aria-label="Card">
+        <header>Checkout</header>
+      </form>`;
+    clobber(page.querySelector("form")!, "parentElement");
+    expect(find(extractDomTree(page), "banner")).toBeTruthy();
   });
 });
 

@@ -26,6 +26,27 @@
   the `<details>` opens and goes when it closes.
   ([#433](https://github.com/real-a11y/real-a11y-dev/pull/433))
 
+- In DOM mode, an option in a disabled `<select>` or `<optgroup>`, and a
+  control inside an `aria-disabled="true"` container, now show as disabled in
+  the tree and in the Buttons and Forms lists, as NATIVE mode already showed
+  them. In `<div role="group" aria-disabled="true"><button>Quote</button></div>`,
+  `Quote` had no `disabled` badge, although Chromium and a screen reader
+  treat it as disabled. Only focusable elements take the state from a
+  container, rich-text editors included, so a paragraph or heading inside
+  one stays as it was, and a disabled `<fieldset>` still passes it to its
+  form controls only. A page whose `<form>` has a field named
+  `parentElement` or `assignedSlot` no longer hangs the DOM-mode tree when
+  the form holds a `<header>` or `<footer>`.
+  ([#429](https://github.com/real-a11y/real-a11y-dev/pull/429))
+
+- In DOM mode, a control disabled by its `<fieldset>` now shows as disabled in
+  the tree and in the Buttons and Forms lists, as NATIVE mode already
+  showed it. In `<fieldset disabled><button>Save</button></fieldset>`, `Save`
+  had no `disabled` badge, although Chromium and a screen reader treat it as
+  disabled. A control in the fieldset's first `<legend>` stays enabled, as
+  HTML defines it.
+  ([#425](https://github.com/real-a11y/real-a11y-dev/pull/425))
+
 - In DOM mode, the Tab Sequence view, its copied export and the keyboard bar's
   Tab now stop at the `<summary>` that toggles a `<details>`, as Chromium does,
   so a disclosure or an FAQ accordion question is no longer missing from the
