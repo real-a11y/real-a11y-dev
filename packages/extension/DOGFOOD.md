@@ -138,6 +138,54 @@ Add your qualitative read alongside the numbers. That verdict decides whether
 extension-native ships (and, per the RFC, whether the Electron desktop shell is
 ever built).
 
+## Native-mode changes not yet in the store
+
+`CHANGELOG.md` records what store users get, and native mode ships only in
+this build, so a change to what NATIVE mode shows is recorded here instead.
+Newest first. When native mode graduates to the store build, these describe
+what it does at that point, and its changelog entry can draw on them.
+
+- In NATIVE mode, a rich-text editor with no role (a ProseMirror-style
+  `<div contenteditable>`) now stays in the tree as a `generic`, empty or
+  filled, as DOM mode already shows it, so the A11y view has a node to show
+  its text on. It used to be dropped, leaving what was typed into it with no
+  field around it. (ADR-0001)
+  ([#432](https://github.com/real-a11y/real-a11y-dev/pull/432))
+
+- In NATIVE mode, a `<select>` shows its option label instead of its `value`,
+  a custom slider shows its `aria-valuetext`, and a rich-text editor shows its
+  text. Its edit box opens empty, as a password field's does: submitting it
+  untouched leaves the editor alone, and submitting it after erasing what you
+  typed empties the editor, including an editor that keeps its own document
+  model and would have ignored a plain empty write.
+  (ADR-0001) ([#431](https://github.com/real-a11y/real-a11y-dev/pull/431))
+
+- In NATIVE mode, an indeterminate progress bar and a static separator no
+  longer show their text as their name.
+  `<div role="progressbar">Loading files</div>` read
+  `progressbar "Loading files"` and `<div role="separator">Or</div>` read
+  `separator "Or"`; both now read bare, as Chromium names them. One labelled
+  with `aria-label` keeps its label.
+  ([#424](https://github.com/real-a11y/real-a11y-dev/pull/424))
+
+- In NATIVE mode, a rich-text editor no longer shows what was typed into it as
+  its name. A `<div role="application" contenteditable>` read
+  `application "<everything typed>"`, and so did a `role="document"` or
+  `role="log"` editor and a contenteditable `<p>`. Each now reads bare, as
+  Chromium names it; an editor labelled with `aria-label` keeps its label. A
+  list item or note around a plain `<div contenteditable>` no longer takes
+  its typed text as its name either, and a `role="progressbar"` no longer
+  shows its fallback text as its name.
+  ([#418](https://github.com/real-a11y/real-a11y-dev/pull/418))
+
+- In NATIVE mode, an image, dialog, landmark or form field that has no label
+  no longer shows its text as its name. `<span role="img">🎉</span>` read
+  `img "🎉"` and now reads a bare `img`, as Chromium names it. The same goes for
+  a text-only dialog or `<footer>`. An unlabeled text field no longer shows what
+  was typed into it as its name either; its value still shows as its value,
+  with sensitive fields masked as before.
+  ([#414](https://github.com/real-a11y/real-a11y-dev/pull/414))
+
 ## Findings from real-use dogfooding
 
 Bugs and gaps a real session turned up, distinct from the four instrumented
