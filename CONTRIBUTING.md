@@ -92,7 +92,8 @@ names one:
 - `testing → browser, audit, serialize, validate → core` (headless — no `ui` dep)
 - `inspector → ui → core`
 - `react → inspector → ui → core`
-- `storybook-addon → ui → core` (+ `testing`)
+- `storybook-addon → ui → core` (no published dependency: it imports nothing
+  from `testing`)
 - `extension → ui, serialize → core`
 - Among the internals: `browser → audit, serialize`, `snapshot → audit,
   serialize`, `session-registry → snapshot`. `validate` has no internal

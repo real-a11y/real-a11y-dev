@@ -49,18 +49,18 @@ export default defineConfig([
   },
 
   // ── Preview (runs inside the story iframe) ─────────────────────────────────
-  // Bundles @real-a11y-dev/core and @real-a11y-dev/testing so the iframe doesn't need
-  // them as separate script tags.
+  // Bundles @real-a11y-dev/core so the iframe doesn't need it as a separate
+  // script tag. The preview extracts and diffs the tree with core alone; it
+  // never imports `@real-a11y-dev/testing`, which is why the addon doesn't
+  // depend on it.
   {
     entry: { preview: "src/preview.ts" },
     format: ["esm", "cjs"],
-    // core is private, so its declarations are inlined too. `testing` is not —
-    // it is published, so npm resolves it and `dts` leaves the reference alone
-    // even though the JS is bundled.
+    // core is private, so its declarations are inlined too.
     dts: { resolve: ["@real-a11y-dev/core"] },
     sourcemap: true,
     clean: false,
-    noExternal: ["@real-a11y-dev/core", "@real-a11y-dev/testing"],
+    noExternal: ["@real-a11y-dev/core"],
     external: PEER_EXTERNALS,
   },
 
