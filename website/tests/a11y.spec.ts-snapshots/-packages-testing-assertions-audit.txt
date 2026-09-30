@@ -173,5 +173,5 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous pageSnapshots"
-    link "Next pageMatchers"
+    link "Previous page Snapshots"
+    link "Next page Matchers"

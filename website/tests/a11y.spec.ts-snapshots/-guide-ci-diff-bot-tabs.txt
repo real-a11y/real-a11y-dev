@@ -55,5 +55,5 @@ link "@real-a11y-dev/testing"
 button "Copy Code"
 generic
 link "Edit this page on GitHub"
-link "Previous pagePeer Dependencies"
-link "Next pageAuthenticated Pages"
+link "Previous page Peer Dependencies"
+link "Next page Authenticated Pages"

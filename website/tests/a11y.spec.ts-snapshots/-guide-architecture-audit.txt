@@ -590,5 +590,5 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous pageAccessible Names"
-    link "Next pageTroubleshooting"
+    link "Previous page Accessible Names"
+    link "Next page Troubleshooting"

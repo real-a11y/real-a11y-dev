@@ -262,4 +262,4 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous pageArchitecture"
+    link "Previous page Architecture"

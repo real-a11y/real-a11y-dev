@@ -189,5 +189,5 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous page@real-a11y-dev/inspector"
-    link "Next pageSnapshots"
+    link "Previous page @real-a11y-dev/inspector"
+    link "Next page Snapshots"

@@ -275,4 +275,4 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Next pageCore Concepts"
+    link "Next page Core Concepts"

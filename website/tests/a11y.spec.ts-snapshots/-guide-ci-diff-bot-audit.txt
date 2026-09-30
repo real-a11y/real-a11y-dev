@@ -476,5 +476,5 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous pagePeer Dependencies"
-    link "Next pageAuthenticated Pages"
+    link "Previous page Peer Dependencies"
+    link "Next page Authenticated Pages"

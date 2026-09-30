@@ -305,5 +305,5 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous pageMatchers"
-    link "Next pagePlaywright adapter"
+    link "Previous page Matchers"
+    link "Next page Playwright adapter"

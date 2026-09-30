@@ -8,5 +8,5 @@ link "Storybook addon"
 link "treeSnapshot()"
 table
 link "Edit this page on GitHub"
-link "Previous pageUnderstanding the Views"
-link "Next pageA11y View"
+link "Previous page Understanding the Views"
+link "Next page A11y View"

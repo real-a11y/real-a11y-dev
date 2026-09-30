@@ -820,13 +820,22 @@ function getAccessibleTextContent(
       text += child.textContent || "";
     } else if (child.nodeType === Node.ELEMENT_NODE) {
       const childEl = child as Element;
-      if (isAriaHiddenValue(childEl.getAttribute("aria-hidden"))) continue;
+      const childStyle = getCachedComputedStyle(childEl, styleCache);
+      // Checked before aria-hidden: a child with no box at all contributes no
+      // separator either, however it is hidden.
+      if (isSubtreeHidden(childEl, childStyle)) {
+        continue;
+      }
       // Chromium's tree puts an area under its image, never under the element
-      // its map sits in, so it adds nothing to that element's name.
+      // its map sits in, so it adds nothing to that element's name — and no
+      // separator either: it renders no box of its own.
       if (childEl.localName === "area") continue;
-      if (
-        isSubtreeHidden(childEl, getCachedComputedStyle(childEl, styleCache))
-      ) {
+      // A child that has a box of its own separates the text either side of it
+      // whether or not it contributes any text — Chromium reads
+      // `<h1>Save<div aria-hidden="true">x</div>now</h1>` as "Save now".
+      const spaced = needsSpaceAround(childEl, childStyle);
+      if (isAriaHiddenValue(childEl.getAttribute("aria-hidden"))) {
+        if (spaced) text += " ";
         continue;
       }
       const role = getImplicitRole(childEl);
@@ -847,16 +856,66 @@ function getAccessibleTextContent(
         continue;
       }
       if (NAME_BARRIER_ROLES.has(role) && !isImplicitDetailsGroup(childEl)) {
-        continue; // isNameBarrierElement, with the role already in hand
+        // isNameBarrierElement, with the role already in hand. It lends no
+        // text, but its box still keeps the neighbours apart: Chromium reads
+        // `<h1>Save<input>now</h1>` as "Save now".
+        if (spaced) text += " ";
+        continue;
       }
       const inner = getAccessibleTextContent(childEl, visited, styleCache);
-      // A summary renders as its own block, so its text never runs into the
-      // disclosure body beside it ("S Body", not "SBody") — Chromium spaces it.
-      text +=
-        childEl.tagName.toLowerCase() === "summary" ? ` ${inner} ` : inner;
+      // Padded per accname §2F, which appends each descendant's result "with a
+      // space"; the final normalization collapses the doubles. A child that
+      // flows inline is NOT padded, because that is what Chromium reads:
+      // `<button><span>Sa</span><span>ve</span></button>` is one word "Save",
+      // while `<button><div>Save</div><div>now</div></button>` is "Save now".
+      // The pad does not depend on `inner`: an empty block still separates its
+      // neighbours ("Save<div></div>now" is "Save now").
+      text += spaced ? ` ${inner} ` : inner;
     }
   }
   return text;
+}
+
+/**
+ * True when the child has a box of its own, so text beside it can't flow into it
+ * and the two must not read as one word. Chromium's name computation separates
+ * exactly these — whether or not the child lends any text — and this mirrors it
+ * against Chromium 141:
+ *
+ * - **Spaced:** blocks, list items, table parts, and the atomic inline-level
+ *   boxes — `inline-block`, `inline-flex`, `inline-table` — which Chromium
+ *   separates even though they sit on the line. Flex and grid items, floats and
+ *   absolutely positioned children need no special case: CSS blockifies their
+ *   computed `display`, so a `<span>` flex item arrives here as `block`.
+ * - **Not spaced:** the non-atomic inline boxes text really does flow into —
+ *   `inline`, `inline list-item`, and the `ruby` family. `display: contents`
+ *   generates no box at all, so its children decide their own spacing.
+ *
+ * Reading computed `display` rather than a tag list means an author's
+ * `display: inline` on a `<div>` (or `display: block` on a `<span>`) is honoured
+ * the way it renders. `<br>` is the one tag that needs naming: it is an inline
+ * box, but it ends the line, and Chromium spaces across it.
+ *
+ * With no computed style to read (no `window.getComputedStyle`), keep the
+ * unspaced concatenation rather than guessing — except for `<summary>`, which
+ * always renders as a block and was spaced before this check existed.
+ */
+function needsSpaceAround(
+  element: Element,
+  style: CSSStyleDeclaration | null,
+): boolean {
+  const tag = element.tagName.toLowerCase();
+  if (tag === "br") return true;
+  const display = style?.display;
+  if (!display) return tag === "summary";
+  // Compared in full, not by prefix: `inline-block` and the other atomic
+  // inline-level boxes must NOT match the bare `inline` case.
+  return !(
+    display === "inline" ||
+    display === "inline list-item" ||
+    display === "contents" ||
+    display.startsWith("ruby")
+  );
 }
 
 /** Compute the accessible name for an element (simplified) */

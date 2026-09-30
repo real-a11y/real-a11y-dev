@@ -2228,5 +2228,5 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous page@real-a11y-dev/cli"
-    link "Next pageConfiguration"
+    link "Previous page @real-a11y-dev/cli"
+    link "Next page Configuration"

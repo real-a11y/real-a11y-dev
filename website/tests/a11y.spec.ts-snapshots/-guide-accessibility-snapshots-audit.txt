@@ -157,5 +157,5 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous pageCore Concepts"
-    link "Next pageSnapshots vs. Other Tools"
+    link "Previous page Core Concepts"
+    link "Next page Snapshots vs. Other Tools"

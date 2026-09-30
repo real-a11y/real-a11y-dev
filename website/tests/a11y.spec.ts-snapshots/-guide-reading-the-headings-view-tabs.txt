@@ -22,5 +22,5 @@ button "Copy Code"
 generic
 table
 link "Edit this page on GitHub"
-link "Previous pageA11y View"
-link "Next pageTAB View"
+link "Previous page A11y View"
+link "Next page TAB View"

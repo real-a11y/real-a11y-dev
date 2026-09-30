@@ -113,5 +113,5 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous pageConfiguration"
-    link "Next pageStorybook + React 19"
+    link "Previous page Configuration"
+    link "Next page Storybook + React 19"

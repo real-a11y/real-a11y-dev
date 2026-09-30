@@ -135,5 +135,5 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous pageAccessibility Snapshots"
-    link "Next pageWhy Real A11y?"
+    link "Previous page Accessibility Snapshots"
+    link "Next page Why Real A11y?"

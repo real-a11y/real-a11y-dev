@@ -38,6 +38,16 @@
   showing it again brings them back.
   ([#453](https://github.com/real-a11y/real-a11y-dev/pull/453))
 
+- In DOM mode, a name split across children that render as their own boxes now
+  reads with the spaces a screen reader announces instead of one glued word.
+  `<button><div>Save</div><div>now</div></button>` shows as `Save now`, where it
+  used to show as `Savenow` — in the tree, the Buttons and Forms lists, the Tab
+  Sequence view and the copied export. Spacing follows how each child renders, so
+  a label built from inline `<span>`s still reads as one word, while a `<br>`, an
+  empty block, and a rendered child that lends no text of its own (a form
+  control, an `aria-hidden` block) now keep the text around them apart.
+  ([#PR_NUMBER](https://github.com/real-a11y/real-a11y-dev/pull/PR_NUMBER))
+
 - In DOM mode, a native checkbox, radio, `<select>` or `<summary>` now takes
   its state from what it is, as it does in NATIVE mode, not from an ARIA
   attribute on it. An unchecked `<input type="checkbox" aria-checked="true">`

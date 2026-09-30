@@ -184,5 +184,5 @@ contentinfo
   paragraph "Last updated:"
     time "[redacted]"
   navigation "Pager"
-    link "Previous pageAuthenticated Pages"
-    link "Next pageArchitecture"
+    link "Previous page Authenticated Pages"
+    link "Next page Architecture"
