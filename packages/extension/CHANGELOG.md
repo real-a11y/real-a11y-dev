@@ -22,6 +22,10 @@
 
 ## Unreleased
 
+## 0.1.14
+
+### Patch Changes
+
 - In DOM mode, the body of a closed `<details>` no longer shows in the tree,
   the Tab Sequence view, its copied export or the keyboard bar's Tab. Chromium
   renders a closed disclosure as its summary alone and never tabs into the
@@ -103,8 +107,7 @@
   `generic "draft text"` and now reads a bare `generic` that stays in the tree
   as a field, as Chromium leaves it unnamed. With a diff baseline captured, a
   field you type into is now marked **changed**, because the tree now records
-  each field's value (ADR-0001). The panel's value display is unchanged until
-  the A11y view learns the announced value.
+  each field's value (ADR-0001).
   ([#417](https://github.com/real-a11y/real-a11y-dev/pull/417))
 
 - A dialog, image, landmark or text field no longer shows its loose text as

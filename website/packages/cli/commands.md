@@ -16,26 +16,6 @@ ship — [`install`](#install), [`audit`](#audit-url), [`inspect`](#inspect-url)
 own flags.
 
 <!-- surface:begin cli-unreleased -->
-
-::: info Not in the published release yet
-Some of what this page documents is on `main` but not in `@real-a11y-dev/cli` 0.1.0-beta.6, so
-installing from npm today will not have it:
-
-- `audit --redact-input`
-- `click --redact-input`
-- `focus --redact-input`
-- `inspect --redact-input`
-- `interact --redact-input`
-- `list --redact-input`
-- `outline --redact-input`
-- `snapshot --redact-input`
-- `snapshot --values`
-- `tabs --redact-input`
-- `tree --redact-input`
-- `type --redact-input`
-
-:::
-
 <!-- surface:end cli-unreleased -->
 
 Findings and reports go to **stdout**; progress, warnings, and errors go to
