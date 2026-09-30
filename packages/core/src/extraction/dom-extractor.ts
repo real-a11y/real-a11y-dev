@@ -1255,6 +1255,8 @@ const POPUP_ROLES: ReadonlySet<string> = new Set([
  * option (only the chosen one is displayed, and it is the select's own
  * value), a `<textarea>`'s default value, a `<datalist>`'s suggestions. A
  * field's text walk skips them; the control carries its own `a11y.value`.
+ * Chromium's rendered text of an editor lists a nested `<select>`'s every
+ * option — a knowing divergence, since only the chosen one is on screen.
  */
 const CONTROL_TEXT_TAGS: ReadonlySet<string> = new Set([
   "select",
@@ -1265,12 +1267,22 @@ const CONTROL_TEXT_TAGS: ReadonlySet<string> = new Set([
 /**
  * The text a non-native field holds — a contenteditable editor, an ARIA
  * textbox or combobox — collapsed and capped like {@link getDescendantText},
- * but with block boundaries read as spaces. What a screen reader would not
- * announce is skipped: hidden subtrees (`display:none`, `hidden`,
- * `aria-hidden`), `visibility:hidden` text, a closed `<details>`'s body, and
- * a widget's own popup.
+ * but with block boundaries read as spaces. What isn't rendered is always
+ * skipped: `display:none` and `hidden` subtrees, `visibility:hidden` text,
+ * and a closed `<details>`'s body.
+ *
+ * Chromium reads the rest two ways, and so does this (measured on Chromium
+ * 151 over CDP). An editor's value, and any ARIA textbox's or searchbox's,
+ * is the text it renders (`rendered`), which knows nothing of ARIA:
+ * `aria-hidden` text and a popup inside it are part of the value. A
+ * combobox you can't type into is read as the accessible text of what it
+ * contains, which skips `aria-hidden` subtrees and the widget's own popup.
  */
-function getFieldText(element: Element, styleCache?: StyleCache): string {
+function getFieldText(
+  element: Element,
+  rendered: boolean,
+  styleCache?: StyleCache,
+): string {
   const state: CollapsedTextState = { text: "", phase: "start" };
   // `visibility` is per element and inherited, and a child may set it back to
   // `visible` — so a hidden element's own text is skipped but its children are
@@ -1288,9 +1300,11 @@ function getFieldText(element: Element, styleCache?: StyleCache): string {
     const rawTag = el.tagName;
     const tag = typeof rawTag === "string" ? rawTag.toLowerCase() : "";
     if (MEDIA_TAGS.has(tag) || CONTROL_TEXT_TAGS.has(tag)) return false;
-    if (isAriaHiddenValue(el.getAttribute("aria-hidden"))) return false;
-    const role = getExplicitRole(el);
-    if (role && POPUP_ROLES.has(role)) return false;
+    if (!rendered) {
+      if (isAriaHiddenValue(el.getAttribute("aria-hidden"))) return false;
+      const role = getExplicitRole(el);
+      if (role && POPUP_ROLES.has(role)) return false;
+    }
     const style = getCachedComputedStyle(el, styleCache);
     if (isSubtreeHidden(el, style)) return false;
     const breaks = LINE_BREAKING_TAGS.has(tag);
@@ -1541,7 +1555,11 @@ function readFieldValue(
   if (TEXT_VALUE_ROLES.has(role) || editingHost) {
     if (insideEditable(element)) return undefined;
     if (!editingHost && wrapsTextControl(element)) return undefined;
-    return getFieldText(element, styleCache);
+    return getFieldText(
+      element,
+      editingHost || role !== "combobox",
+      styleCache,
+    );
   }
   return undefined;
 }

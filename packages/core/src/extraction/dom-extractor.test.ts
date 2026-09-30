@@ -2950,6 +2950,117 @@ describe("a11y.value — what a screen reader announces (ADR-0001)", () => {
     ).toBe("Apple");
   });
 
+  // Chromium 151 reads an editor's value, and any ARIA textbox's or
+  // searchbox's, as its RENDERED text, which knows nothing of ARIA: the
+  // aria-hidden text and the popup stay in. Only a combobox you can't type
+  // into is read as accessible text, as above. Measured over CDP
+  // `Accessibility.getFullAXTree`.
+  it("keeps aria-hidden text in an editor's value, as Chromium does", () => {
+    expect(
+      valueOf(
+        `<div contenteditable="true" role="textbox" aria-label="C">Hello <span aria-hidden="true">[x]</span>world</div>`,
+        "[contenteditable]",
+      ),
+    ).toBe("Hello [x]world");
+    // A role-less host, a plaintext-only one, and a whole hidden paragraph.
+    expect(
+      valueOf(
+        `<div contenteditable="true">Hello <span aria-hidden="true">[x]</span>world</div>`,
+        "div",
+      ),
+    ).toBe("Hello [x]world");
+    expect(
+      valueOf(
+        `<div contenteditable="plaintext-only" role="textbox" aria-label="C"><p>one</p><p aria-hidden="true">two</p><p>three</p></div>`,
+        "[contenteditable]",
+      ),
+    ).toBe("one two three");
+    // Inside a contenteditable="false" island, and under a nested textbox
+    // whose text the host announces for it.
+    expect(
+      valueOf(
+        `<div contenteditable="true" role="textbox" aria-label="C">a <span contenteditable="false">b <span aria-hidden="true">c</span></span> d</div>`,
+        "[aria-label=C]",
+      ),
+    ).toBe("a b c d");
+    expect(
+      valueOf(
+        `<div contenteditable="true" role="textbox" aria-label="C"><p>intro</p><div role="textbox" aria-label="Cell">cell <span aria-hidden="true">[x]</span>text</div></div>`,
+        "[aria-label=C]",
+      ),
+    ).toBe("intro cell [x]text");
+  });
+
+  it("keeps aria-hidden text in an editable combobox's or searchbox's value", () => {
+    expect(
+      valueOf(
+        `<div contenteditable="true" role="combobox" aria-label="C">Hello <span aria-hidden="true">[x]</span>world</div>`,
+        "[role=combobox]",
+      ),
+    ).toBe("Hello [x]world");
+    expect(
+      valueOf(
+        `<div contenteditable="true" role="searchbox" aria-label="C">Hello <span aria-hidden="true">[x]</span>world</div>`,
+        "[role=searchbox]",
+      ),
+    ).toBe("Hello [x]world");
+  });
+
+  it("keeps aria-hidden text in an ARIA textbox's value even when it isn't editable", () => {
+    expect(
+      valueOf(
+        `<div role="textbox" aria-label="C" tabindex="0">Hello <span aria-hidden="true">[x]</span>world</div>`,
+        "[role=textbox]",
+      ),
+    ).toBe("Hello [x]world");
+    expect(
+      valueOf(
+        `<div role="searchbox" aria-label="C" tabindex="0">Hello <span aria-hidden="true">[x]</span>world</div>`,
+        "[role=searchbox]",
+      ),
+    ).toBe("Hello [x]world");
+  });
+
+  it("keeps a popup's text in an editor's or textbox's value", () => {
+    expect(
+      valueOf(
+        `<div contenteditable="true" role="textbox" aria-label="C">Apple<ul role="listbox"><li role="option">Pear</li></ul></div>`,
+        "[aria-label=C]",
+      ),
+    ).toBe("Apple Pear");
+    expect(
+      valueOf(
+        `<div contenteditable="true" role="combobox" aria-label="C">Apple<ul role="listbox"><li role="option">Pear</li></ul></div>`,
+        "[role=combobox]",
+      ),
+    ).toBe("Apple Pear");
+    expect(
+      valueOf(
+        `<div role="textbox" aria-label="C" tabindex="0">Apple<ul role="listbox"><li role="option">Pear</li></ul></div>`,
+        "[role=textbox]",
+      ),
+    ).toBe("Apple Pear");
+  });
+
+  it("still skips what isn't rendered in an editor, aria-hidden or not", () => {
+    expect(
+      valueOf(
+        `<div contenteditable="true" role="textbox" aria-label="C">Hi <span aria-hidden="true" hidden>[x]</span><span aria-hidden="true" style="visibility:hidden">[v]</span><span aria-hidden="true" style="display:none">[d]</span>there</div>`,
+        "[contenteditable]",
+      ),
+    ).toBe("Hi there");
+  });
+
+  it("never lets a sensitive control's text into an editor's value, even under aria-hidden", () => {
+    const root = createPage(
+      `<div contenteditable="true" role="textbox" aria-label="C">Pay <span aria-hidden="true"><textarea autocomplete="cc-number" aria-label="Card">4111111111111111</textarea><select autocomplete="cc-exp-month" aria-label="Month"><option selected>12</option></select><input type="password" aria-label="PIN" value="hunter2"></span> now</div>`,
+    );
+    expect(nodeFor(root, "[contenteditable]").a11y.value).toBe("Pay now");
+    expect(nodeFor(root, "textarea").a11y.value).toBe("[redacted]");
+    expect(nodeFor(root, "select").a11y.value).toBe("[redacted]");
+    expect(nodeFor(root, "input").a11y.value).toBe("[redacted]");
+  });
+
   it("skips visibility:hidden text, but reads a child that sets itself visible again", () => {
     expect(
       valueOf(
