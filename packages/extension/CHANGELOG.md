@@ -32,7 +32,7 @@
   `mixed` checkbox from the panel announces "Click", not a guessed "Checked"
   or "Unchecked", since the click's outcome depends on checkedness that
   `mixed` hides.
-  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR))
+  ([#443](https://github.com/real-a11y/real-a11y-dev/pull/443))
 
 - In DOM mode, ARIA state values now read the way Chromium, and NATIVE mode,
   read them. `aria-disabled="TRUE"`, `aria-pressed="MIXED"` and
