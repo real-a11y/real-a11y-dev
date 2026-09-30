@@ -2006,6 +2006,29 @@ describe("extractDomTree", () => {
       ).toBe("Savenow");
     });
 
+    it("does not space an inline named widget's contributed name", () => {
+      // The link lends the button its computed name; an inline link flows with
+      // the text beside it, so Chromium reads one word.
+      expect(nameOfTag('<button><a href="#">Sa</a>ve</button>', "button")).toBe(
+        "Save",
+      );
+    });
+
+    it("keeps an inline named widget out of the middle of a word", () => {
+      expect(
+        nameOfTag(`<h2>Signed in as <a href="/u">Ada</a>'s profile</h2>`, "h2"),
+      ).toBe("Signed in as Ada's profile");
+    });
+
+    it("spaces a named widget that renders as its own block", () => {
+      expect(
+        nameOfTag(
+          '<button><a href="#" style="display: block">Sa</a>ve</button>',
+          "button",
+        ),
+      ).toBe("Sa ve");
+    });
+
     it("does not space inline children, which read as one word", () => {
       expect(
         nameOfTag("<button><span>Sa</span><span>ve</span></button>", "button"),

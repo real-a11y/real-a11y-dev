@@ -93,7 +93,7 @@ main
       row
         cell "Engine"
         cell "The browser's native AX tree"
-        cell "Real A11y's own extraction — the same tree the extension , React panel , and Storybook addon render"
+        cell "Real A11y's own extraction — the same tree the extension, React panel, and Storybook addon render"
           link "extension"
           link "React panel"
           link "Storybook addon"

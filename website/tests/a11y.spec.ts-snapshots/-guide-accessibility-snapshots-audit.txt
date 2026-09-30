@@ -73,14 +73,14 @@ main
         columnheader "Catches"
     rowgroup
       row
-        cell "Tree ( treeSnapshot )"
+        cell "Tree (treeSnapshot)"
           strong "Tree"
           link "treeSnapshot"
             code "treeSnapshot"
         cell "Full role + name structure"
         cell "Missing labels, wrong roles, structural drift"
       row
-        cell "Outline ( outlineSnapshot )"
+        cell "Outline (outlineSnapshot)"
           strong "Outline"
           link "outlineSnapshot"
             code "outlineSnapshot"
@@ -88,7 +88,7 @@ main
         cell "Missing <h1>, skipped levels"
           code "<h1>"
       row
-        cell "Tab order ( tabSequenceSnapshot )"
+        cell "Tab order (tabSequenceSnapshot)"
           strong "Tab order"
           link "tabSequenceSnapshot"
             code "tabSequenceSnapshot"

@@ -69,7 +69,7 @@ main
       row
         cell "0"
           code "0"
-        cell "Clean — no findings at or above --fail-on ."
+        cell "Clean — no findings at or above --fail-on."
           link "--fail-on"
             code "--fail-on"
       row

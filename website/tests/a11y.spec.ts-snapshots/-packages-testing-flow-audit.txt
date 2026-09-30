@@ -128,7 +128,7 @@ main
       row
         cell ".expectChanges(spec | string | fn)"
           code ".expectChanges(spec | string | fn)"
-        cell "Assert what the interaction(s) changed in the tree since the diff window opened (see Asserting what an interaction changed )."
+        cell "Assert what the interaction(s) changed in the tree since the diff window opened (see Asserting what an interaction changed)."
           strong "what the interaction(s) changed"
           link "Asserting what an interaction changed"
       row

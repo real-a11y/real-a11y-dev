@@ -266,7 +266,7 @@ main
         cell "@real-a11y-dev/session-registry"
           link "@real-a11y-dev/session-registry"
             code "@real-a11y-dev/session-registry"
-        cell "Session registry — named browser sessions, one-command-at-a-time scheduling per session, identity and origin pinning on reuse, and the idle timeout that stops orphaned Chromiums. Consumer-neutral: it throws typed errors carrying a hint and lets the surface map them onto its own contract, which is what lets the CLI daemon and the MCP server share one scheduler. Never published — extracted from the CLI in pull request #290 , after the rule below was settled."
+        cell "Session registry — named browser sessions, one-command-at-a-time scheduling per session, identity and origin pinning on reuse, and the idle timeout that stops orphaned Chromiums. Consumer-neutral: it throws typed errors carrying a hint and lets the surface map them onto its own contract, which is what lets the CLI daemon and the MCP server share one scheduler. Never published — extracted from the CLI in pull request #290, after the rule below was settled."
           code "hint"
           strong "Never published"
           link "pull request #290"

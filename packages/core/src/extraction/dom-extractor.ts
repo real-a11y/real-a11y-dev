@@ -821,8 +821,16 @@ function getAccessibleTextContent(
     } else if (child.nodeType === Node.ELEMENT_NODE) {
       const childEl = child as Element;
       const childStyle = getCachedComputedStyle(childEl, styleCache);
-      // Checked before aria-hidden: a child with no box at all contributes no
-      // separator either, however it is hidden.
+      // Checked before aria-hidden so that `display: none` and `[hidden]`,
+      // which generate no box, contribute no separator either — Chromium reads
+      // `<h1>Save<div style="display:none">x</div>now</h1>` as "Savenow".
+      //
+      // Known gap, left alone deliberately: `inert` and
+      // `content-visibility: hidden` are hidden from AT but still RENDER, so
+      // Chromium spaces across them ("Save now") where this returns "Savenow".
+      // Closing it means telling the two kinds of hidden apart here, which is
+      // more bytes than `core`'s remaining size-limit headroom; it is its own
+      // change, not this one.
       if (isSubtreeHidden(childEl, childStyle)) {
         continue;
       }
@@ -839,9 +847,11 @@ function getAccessibleTextContent(
         continue;
       }
       const role = getImplicitRole(childEl);
-      // Named widgets contribute their computed name (accname §2F.iii) —
-      // padded with spaces so adjacent text doesn't glue; the final
-      // whitespace normalization collapses any doubles.
+      // Named widgets contribute their computed name (accname §2F.iii), spaced
+      // by the same box rule as everything else: Chromium reads
+      // `<h2>Signed in as <a href="/u">Ada</a>'s profile</h2>` as
+      // "Signed in as Ada's profile", not "… Ada 's profile", and only spaces
+      // the link when it renders as its own block.
       if (NAMED_WIDGET_ROLES.has(role)) {
         // An editing host takes no name from its own content, but Chromium
         // still reads that text into an ancestor's name:
@@ -852,7 +862,7 @@ function getAccessibleTextContent(
           (isEditingHost(childEl)
             ? getAccessibleTextContent(childEl, visited, styleCache)
             : "");
-        text += ` ${name} `;
+        text += spaced ? ` ${name} ` : name;
         continue;
       }
       if (NAME_BARRIER_ROLES.has(role) && !isImplicitDetailsGroup(childEl)) {
